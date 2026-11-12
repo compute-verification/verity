@@ -88209,3 +88209,127 @@ Mailbox read 12:50Z: last section 12:44Z. #9234 stands as in my 12:43Z ready lin
 - **Not said yet, because no run says it:** "no lock record moves". [read] No file under `security/Definitions/` is in the diff, and the lock names none of the moved or new declarations.
 - **The unread count** [derived, not run]: `eventX_le_cls_at` is one more declaration in a module no guarantee reads (`TwoOffClassAt.lean`), so `Proofs/Flock` should go up by one declaration; `RegTrace.lean` is read (`compilerKSReg` is in the lock). [relayed: #9265's ready line of 12:19Z, its run `1415`] that head counts 2,025 of 2,141 allowed, so one more is within the limit and I did not edit `unread-caps.json`.
 - **Item 2:** I have read your 12:06Z section. I am on it now, while the two runs go.
+
+## WIRED, Thu 12 Nov 12:55Z: `SpotKSTwo` and `SpotExfilTwo`, old and new side by side, for your word; nothing restated is committed; pull request 3's branch is `cursor/proofs-wired-9d3e` at `2b77dc50d89f`, pushed and not opened
+
+Mailbox read at 12:53Z (newest section: yours of 12:23Z, #9274 marked and based on `main`). I restate nothing and regenerate no lock before your word.
+
+### 0. Where things are
+
+- [run] Pull request 3's branch: `cursor/proofs-wired-9d3e`, branched from #9274's head `2b77dc50d89f`, pushed at 12:33Z, not opened. It holds no commit of mine yet.
+- [run] #9043's body: the one edit, at 12:23Z, head still `b2585b1f5bb6`. The corrected sentence is in, `Refs PRF-528` is back, and the goal line is `Goal proofs/weight-security-bridge`. One sentence of the same bullet I left as it was and flag here: it says the verifier's check of a file against its Program accepts a parameter laid on rows `π#0`, `π#1` and names `Spot.Bits.check`, a function no verifier calls [read]. Say if you want it out.
+- [run] A trial branch, `cursor/proofs-wired-a07c`, holds the new statements as two proved theorems the lock does not list (`SpotFlock.ksTwo_connected`, `SpotFlock.exfilTwo_connected`), word for word the new statements below. It does not touch `SamplingGeneric/Guarantees.lean` or any lock. `r20261112-124010-f67a` (rc 0) tried its three new files at `37731cdd048c`, each exit 0 with no axiom beyond `propext`, `Classical.choice` and `Quot.sound`: `SpotFlock/WiredCode.lean` (3 theorems), `SpotFlock/WiredKS.lean` (17 theorems), `SpotFlock/WiredRegX.lean` (4 theorems, the committed-trace pair under the same five premises). Its head is now `8d290b243320`: one commit after the run, a module docstring only.
+
+### 1. `SpotKSTwo`
+
+Old, on `main` (`security/Proofs/Flock/SamplingGeneric/Guarantees.lean`; the file at `2b77dc50d89f` is `main`'s at `5456b937e7e5`) [read]:
+
+```lean
+def SpotKSTwo : Prop :=
+  ∀ h : SpotFlock.Held, SpotFlock.Built h → SpotFlock.Addresses h →
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
+      SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h) (SpotFlock.cap h)).KS FlockDeploy.sha512
+```
+
+New:
+
+```lean
+def SpotKSTwo : Prop :=
+  ∀ h : SpotFlock.Held, SpotFlock.WiresFirst h → SpotFlock.WiresMove h → SpotFlock.SourcesNamed h →
+    SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) → SpotFlock.AddressesConnected h →
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).KS FlockDeploy.sha512
+```
+
+### 2. `SpotExfilTwo`
+
+Old, on `main` (same file) [read]:
+
+```lean
+def SpotExfilTwo : Prop :=
+  ∀ h : SpotFlock.Held, SpotFlock.Built h → SpotFlock.Addresses h →
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
+      SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h) (SpotFlock.cap h)).Exfil FlockDeploy.sha512
+```
+
+New:
+
+```lean
+def SpotExfilTwo : Prop :=
+  ∀ h : SpotFlock.Held, SpotFlock.WiresFirst h → SpotFlock.WiresMove h → SpotFlock.SourcesNamed h →
+    SpotFlock.BuiltWired h (SpotFlock.wireMap h) (SpotFlock.returned h) → SpotFlock.AddressesConnected h →
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.codeConnected h)
+      SpotFlock.iroots (SpotFlock.twoConnected h) (SpotFlock.rsConnected h) (SpotFlock.cap h)).Exfil FlockDeploy.sha512
+```
+
+The two proofs would read `fun h hF hM hS hB hA => SpotFlock.ksTwo_connected h hF hM hS hB hA` and the same with `exfilTwo_connected`.
+
+### 3. What changed, term by term
+
+| | old | new |
+|---|---|---|
+| premises | `Built h`, `Addresses h` | `WiresFirst h`, `WiresMove h`, `SourcesNamed h`, `BuiltWired h (wireMap h) (returned h)`, `AddressesConnected h` |
+| the code | `code h`: the statement's program is the members' programs side by side (`bitsProgs h.ms`) | `codeConnected h`: the same verifier `V h`, sessions, rounds, samples and frame; the statement's program is the members' programs wired by `wireMap h` and returning `returned h` (`Prog.wired`); each proof block and replay block is without the gates the wiring moves; a session reveals each opening at the gate the wiring sends it to |
+| the design | `two h` | `twoConnected h`: `two h`'s, each replay block without the gates the wiring moves |
+| the replay sample | `rs h` | `rsConnected h`: `rs h`'s shape at the connected code |
+| unchanged | | `iroots`, `cap h`, Flock's masked record over the readable relation, SHA-512, `CompiledTwo.KS` and `CompiledTwo.Exfil` themselves, and the scope they read (`CompiledTwo.Scope`, `InScopeTwo`) |
+
+`wireMap h` sends a source bit at a port a wire names to the gate on the same bit of its writer unit's output row, and every other position to itself. `returned h` holds of a written bit at an output port a link names for its template. Both are computed from the auditor's copies (`h.links`, `h.wires`, `h.rows`, `h.names`), and both are on `main` once #9043 is [read].
+
+### 4. The five premises, each with its definition and the lock line I would write
+
+| premise | says | defined | lock |
+|---|---|---|---|
+| `SpotFlock.WiresFirst h` | `writersFirst h = true`: each wire's writer's template comes before its reader's among round 2's parts | new, `SpotFlock/WiredCode.lean` (mine); `writersFirst` is #9274's | `open`, PRF-570, due 2026-11-18. Reason: "decided by the deployed round 2 (`SecondStage.wiresOk`, fourth clause, refused as `second-wires`); the verifier this guarantee is stated about, `V h`, does not run that check" |
+| `SpotFlock.WiresMove h` | `wiresMove h = true`: each source bit at a port a wire names and no link names has a gate to go to | new, same file; `wiresMove` is #9043's | `open`, PRF-571, due 2026-11-30. Reason: "decided by nothing the verifier runs; `SecondWiresMove` and its three conditions in the check would discharge it" |
+| `SpotFlock.SourcesNamed h` | `sourcesNamed h = true`: each source bit with a commitment position is at a port a link or a wire names | new, same file; `sourcesNamed` is #9080's | `open`, PRF-572, due 2026-11-30. Reason: "decided by nothing the verifier runs" |
+| `SpotFlock.BuiltWired h (wireMap h) (returned h)` | the held code's frame is `frameAt` at the addresses' slots and the reveal at the wired program | #9080's `SpotFlock/RevealsWired.lean` | `domain`, met by `builtWired_spot`, with `Built`'s why reworded for the connected program |
+| `SpotFlock.AddressesConnected h` | `sourcesNamed h = true → AddressesWired h (wireMap h) (returned h)`: each gate's value has one address at the connected program, which holds at every accepted run's checked unit that needs it | #9080's `SpotFlock/AddressesWired.lean` | `open`, PRF-460, due 2026-11-30 |
+
+Three things about them a reader should have beside the statement.
+
+- [derived] `SourcesNamed h` and `AddressesConnected h` together say `AddressesWired h (wireMap h) (returned h)` at a held code whose every source bit is named. That is the form you ruled at 03:55Z (the guarantee takes `AddressesConnected h`, with `sourcesNamed h` as its own hypothesis). The statement would read the same to a prover if it took `SourcesNamed h` and `AddressesWired h (wireMap h) (returned h)`; I keep your form unless you say otherwise.
+- [run] `WiresMove h` enters no step of the proof: `ksTwo_connected` binds it and does not use it. It is there for what the statement means, as you ruled at 04:43Z: under it every wired read is sent to its writer's output and none stays an input of the connected program. Without it the theorem is still proved, and is a statement about a program in which a wired read may be a free input.
+- [read] `SpotFlock.Built` and `SpotFlock.Addresses` stay defined, with `FrameIsBuilt.lean`, `SlotsAt.lean` and the ten theorems, as you ruled at 02:25Z. No listed guarantee reads them after the restatement, so their two lock entries (`domain`, and `open` under PRF-460) go stale and the records run drops them. PRF-460's line moves to `AddressesConnected`.
+
+### 5. What the new statements say that the old did not, and what they no longer say
+
+1. **What is served** (your ruled paragraph, word for word, for the body's first paragraph). "The guarantee now speaks of what a replay block returns: its served outputs are the written bits at an output port a link names, where before they were every written bit of every proof block. At a design with no link it says nothing, though the Lean verifier it is stated about accepts such a run." Then the 05:05Z sentence: "The pull request that makes the statement's verifier ask `designOk` refuses a registration whose links or wires were not derived; one that holds an empty list of links is still accepted and covered by no statement."
+2. **The old statement is not a case of the new one** [derived]. At a held code with no wire the wiring map moves nothing, but the connected program still returns only the written bits at a linked output port, where the old program returns every written bit. `addressesWired_id` (in #9080) relates the two premises only at the wiring that moves nothing and returns everything, which is never the code's own.
+3. **Three conditions the verifier does not decide** are now premises. At a held code that fails one, the new statement says nothing, and `V h` still accepts its runs [read]: `stmtOk` holds each session's reads to the links and wires the verifier holds (`readsOk`), and does not run round 2's check of the design itself (`SecondStage.designOk`).
+4. **No instance at a registration exists**, for the new statement as for the old (PRF-460): no held code is shown to meet `BuiltWired` and `AddressesConnected` together with an accepted run. The lock's `missing: honest` line stays, with its reason; its type hash moves with the statement.
+5. **The premise is false at the served design today** [relayed, FRAME's 02:13Z entry, by your 02:25Z section]: since #8448 and #8875 the served second-stage driver reads every parameter of a replay block at a value the interior record registers, so `AddressesWired` (and `Addresses`) is false at the served design. The body says so in FRAME's words.
+6. **No statement covers a supplied input or an opened row** (PRF-572): `SourcesNamed h` excludes a held code with a source bit at a port neither a link nor a wire names.
+7. **A member's size**: against `main`'s scope the restated statements ask nothing more of a member's size (item 5, in #9274). [run] One hypothesis of `rewires_wireMap`, that a member with a unit has a computed row, is now derived where the design evaluates: the two-stage scope refuses an empty proof block, and a unit of a member with no computed row has one (`rows_of_two`). So it is not a premise.
+
+### 6. The two `frozen` reasons, as I would write them
+
+`Flock.SecurityProofs.SpotKSTwo`: "frozen (obligation,no-function): ksTwo_connected at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected: the members' programs wired by the code's own wiring map, SpotFlock.wireMap, returning the written bits at an output port a link names, SpotFlock.returned), knowledge sound at SHA-512 with that code's facts, its coins' bytes and its sessions' runs proved, at a built session frame there (SpotFlock.BuiltWired, part of what it says) and from four facts nothing proves: an address for each gate a needed unit opens at the connected program (SpotFlock.AddressesConnected), open until the frame's slots prove it; each wire's writer's part before its reader's (SpotFlock.WiresFirst), decided by the deployed round 2 (SecondStage.wiresOk, fourth clause, refused as second-wires), a check the verifier this guarantee is stated about, V h, does not run; every wired source bit with a gate to go to (SpotFlock.WiresMove) and every source bit at a port a link or a wire names (SpotFlock.SourcesNamed), each decided by nothing the verifier runs; it reads SpotKSTwo (security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec."
+
+`Flock.SecurityProofs.SpotExfilTwo`: "frozen (obligation,no-function): exfil_of_ks on SpotKSTwo at SPOT[Flock]'s two-stage code at the connected program (SpotFlock.codeConnected): what an accepted run serves, the values it opens at the connected program's returned gates, which are the written bits at an output port a link names (SpotFlock.returned), is in the influence set at δ at SpotKSTwo's errors, and that set has at most Σ_{T admissible} 2^{b(T)} members; at a held code with no link nothing is returned and the bound is on nothing; at SpotKSTwo's premises (SpotFlock.BuiltWired, part of what it says; SpotFlock.AddressesConnected, SpotFlock.WiresFirst, SpotFlock.WiresMove and SpotFlock.SourcesNamed, open, each as SpotKSTwo's reason says); it reads SpotExfilTwo (security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec."
+
+### 7. What is established and what is not
+
+Established:
+
+- [read] The old statements are `main`'s, and unchanged on pull request 3's branch.
+- [run] The new statements elaborate and are proved under exactly these five premises, as `SpotFlock.ksTwo_connected` and `SpotFlock.exfilTwo_connected` at `37731cdd048c` (`r20261112-124010-f67a`: exit 0, no axiom beyond the three). Of the four checks of "proved" these are the first two. A full Lean check has not replayed them, and no agent but me has read this form.
+- [run] The committed-trace pair, `ksRegTwoX_connected` and `exfilRegTwoX_connected`, is proved under the same five premises in the same run, with `Definitions/Claims/SamplingTwoServedX.lean` and `SamplingGeneric/TwoCountX.lean` built as its imports.
+- [run] `rows_of_two` and `rewires_of_two` (the wiring map rewires the members' programs where the design evaluates and `WiresFirst h` holds), in the same run.
+- [run] #9080's two files build on #9274's files once one line is mended (section 8, item 2): the same run built `AddressesWired` and `RevealsWired` as imports.
+- [read] With no wire held, the wiring map moves nothing (`wireCell` is `none` without a wire), which item 2 of section 5 rests on.
+
+Not established:
+
+- No records run has read the new statements: that the lock names each of the five premises by its head, as EXTFORM read and you took as right until a run says otherwise, is not shown.
+- No second reader has read this form. EXTFORM read the earlier form, with `wiredOk h = true`, at `f8df31eb0807`.
+- No instance at a registration (item 4 above), and the premise is false at the served design today (item 5 above).
+- The lemma stating the refusal and the `#guard` with reads `x#0`, `x#1` are not written.
+- `--siblings` was not run (LEAN-290's note).
+
+### 8. Two things beside the statements that need your word
+
+1. **Pull request 3 needs #9080.** `AddressesConnected`, `sourcesNamed`, `BuiltWired` and `builtWired_spot` are in FRAME's #9080 (`cursor/proofs-frame-8fb5` at `9e10a010f9ff`, open, not marked) and nowhere on `main`, #9043 or #9274 [read]. So the restated statements cannot build on a branch from #9274's head alone. On the trial branch I merged #9080's head (it carries `main` at `5456b937e7e5`; one conflict, the `Proofs/Flock` cap, set to both sides' additions). I did not do that on pull request 3's branch: a merge there makes my pull request carry another lane's unlanded head. Which do you want: (a) its branch merges #9080's head so it builds, and it opens, based on `main` as your 12:23Z section says, once #9043 is on `main` and #9080 is marked or landed, the queue ordering it after the pull requests it contains; or (b) it waits, with no commit, for #9080 on `main`? I recommend (a): the trial branch is that already and fast-forwards onto `cursor/proofs-wired-9d3e`.
+2. **#9080 breaks at one line once #9274 is on `main`** [derived; the mended line compiles on the trial branch, `r20261112-124010-f67a`]. `SpotFlock/RevealsWired.lean:620` calls `decoded_rewired … hW` and #9274's `decoded_rewired` asks one more hypothesis, the unit's decoded values' agreement. The line becomes `(fun hag => decoded_rewired h hx hP hd hin hok hu hck (List.getElem?_eq_getElem hlt) hρ hrb hW hag) val ι hv`. #9274 is marked and #9080 is not, so by your 21:39Z rule the line is #9080's to carry; FRAME should have it before its ready line.
+
+I end my turn here and wait for your word on sections 1 and 2.
