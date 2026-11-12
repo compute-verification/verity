@@ -49,19 +49,20 @@ bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothi
 the check's verdict in its words and its counts; of each connection its request's name, its release number, its cells'
 kinds, the ids it was sent, whether and why it failed, the bits planted on it and whether the front's response to
 it was whole; the egress record's cells, each as
-(bucket, slot, kind, stream, id); the releases its watermark named lost; and the size and SHA-256 of every file of the
-try's run directory. The table is made
+(bucket, slot, kind, stream, id); what the network certifier logged of its watermark (`watermark_log`); and the size
+and SHA-256 of every file of the try's run directory. The table is made
 from these files alone. The run directory itself (the relay's records and their salts, the traffic, the logs) is under
 ``--scratch``, by default a temporary directory removed when the command ends. No key is in either: `rehearse` keeps
 its own in a directory it removes.
 
 **A lost release stops the tries** (`lost_stop`). Under ``--watermark`` (a flag of the rehearsal's, after ``--``)
 the network certifier names on its watermark each release that its server connection lost
-(`release.watermark_chunk`), and its own log of the run keeps them (the log's `watermark`, `lost_releases`). A server
+(`release.watermark_chunk`), and its own log of the run keeps them (the log's `watermark`, `watermark_log`). A server
 whose gate reads a watermark line as ``t n`` alone stops ordering at such a line, for every run after it too, so no
 try after it would be served in the release order. After each try the log is read, whether or not the try wrote a
 check: when it names a lost release, or when the network certifier ran with the watermark and wrote no log, no later
-class is tried, the command says which try it stopped at and exits `LOST_EXIT`.
+class is tried, the command says which try it stopped at and which classes it left, and exits `LOST_EXIT`. A watermark
+that stopped with an error is kept and shown in the try's row, and stops nothing.
 
     python deviations.py try (--stand-in | --front-env NAME) --out DIR [--class all|CLASS] [--ids FILE] [--seed S]
         [--tag T] [--requests 8] [--bucket-requests 64] [--rate 2] [--max-tokens 16] [--tail 8] [--hold-ms 500]
@@ -352,8 +353,8 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
     `DATA` and `END` cells of the egress record, where their SHA-256 is the one its client logged of what it got
     (`held`; else none). An egress cell is [bucket, slot, kind, stream, id] where `io_tie.parse_cell` reads it, else
     [bucket, slot, its bytes in hex without their zero fill]; stream 0's padding isn't listed. Under `stand_in` a
-    connection also has the stand-in endpoint's own ids of its request (`warden_serve.fake_ids`). `lost` is the
-    releases the network certifier's watermark named lost (`lost_releases`)."""
+    connection also has the stand-in endpoint's own ids of its request (`warden_serve.fake_ids`). `watermark` is
+    what the network certifier logged of its watermark (`watermark_log`)."""
     dep = json.loads((run / "deployment.json").read_text())
     params = WardenParams(**dep["params"])
     B, blank = params.cell_bytes, IT.pad_cell(params.cell_bytes)
@@ -400,17 +401,21 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
             "windows": dep.get("windows"), "hold_ms": hold_ms,
             "seconds": None if seconds is None else round(seconds, 1),
             "check": {k: v for k, v in check.items() if k != "upstream"} | {"words": ws.table(check)},
-            "connections": connections, "egress": egress, "lost": lost_releases(run), "files": digests(run)}
+            "connections": connections, "egress": egress, "watermark": watermark_log(run), "files": digests(run)}
 
 
-def lost_releases(run: Path) -> list[int] | None:
-    """The releases a try's network certifier named lost on its watermark, by its own log in the run directory `run`
-    (the `watermark` of `RELAY_LOG`, which the relay's `serve` writes at the run's end): none where the run sent no
-    watermark, and None where it wrote no log."""
+def watermark_log(run: Path) -> dict | None:
+    """What a try's network certifier logged of its watermark, by its own log in the run directory `run` (the
+    `watermark` of `RELAY_LOG`, which the relay's `serve` writes at the run's end): the last line's (t, n), the
+    releases its lines named lost, and the kind of error that stopped the stream, if one did (the error's first
+    word: its text can hold an address). Each is empty where the run sent no watermark; None where it wrote no log."""
     path = run / RELAY_LOG
     if not path.exists():
         return None
-    return [int(n) for n in (json.loads(path.read_text()).get("watermark") or {}).get("lost") or []]
+    mark = json.loads(path.read_text()).get("watermark") or {}
+    error = mark.get("error")
+    return {"last": mark.get("last"), "lost": [int(n) for n in mark.get("lost") or []],
+            "error": error and str(error).split(":")[0]}
 
 
 def lost_words(cls: str, lost: Sequence[int]) -> str:
@@ -425,10 +430,10 @@ def lost_stop(cls: str, run: Path, watermark: bool) -> str | None:
     stops the tries"), None when they go on: its network certifier's log names a lost release, or, under `watermark`,
     the network certifier ran (it wrote its `deployment.json`) and left no log, so what its watermark named isn't
     known."""
-    lost = lost_releases(run)
-    if lost:
-        return lost_words(cls, lost)
-    if lost is None and watermark and (run / "deployment.json").exists():
+    mark = watermark_log(run)
+    if mark and mark["lost"]:
+        return lost_words(cls, mark["lost"])
+    if mark is None and watermark and (run / "deployment.json").exists():
         return (f"{cls}: STOPPED: its network certifier ran with the watermark and wrote no log ({RELAY_LOG}), so "
                 "whether a line named a lost release isn't known")
     return None
@@ -619,7 +624,8 @@ def deviated(cls: str, kept: dict, committed: Mapping[int, Sequence[int]]) -> tu
 
 def row(kept: dict, committed: Mapping[int, Sequence[int]] | None) -> dict:
     """A try's row from what it kept (`keep`): what is changed, the check that refuses it, each check's verdict and
-    the refusal's own words, the receiver's score, what the bound charges, and `ok`: the class did what its check
+    the refusal's own words, the receiver's score, what the bound charges, the releases its watermark named lost and
+    the error that stopped it, and `ok`: the class did what its check
     says, by the deviation alone (the module docstring's "A refusal counts only where it is the deviation's"; None:
     the tie it aims at wasn't run, or the deviation changed no response)."""
     cls, check, conns = kept["class"], kept["check"], kept["connections"]
@@ -670,10 +676,12 @@ def row(kept: dict, committed: Mapping[int, Sequence[int]] | None) -> dict:
     cost = charged(cls, len(conns), params)
     if cls == "tokens" and tied["verdict"] != "refused":
         cost = "nothing, and the tie that refuses it " + ("wasn't run" if tied["verdict"] == NOT_RUN else "accepted")
+    mark = kept.get("watermark") or {}
     return {"class": cls, "changed": CASES[cls][0], "check": CASES[cls][1],
             "relay": "accepted" if accepted else "refused", "tie": tied["verdict"], "words": words,
             "refusals": refusals, **result, "charged": cost, "connections": len(conns), "seconds": kept["seconds"],
-            "run_id": kept["run_id"], "lost": list(kept.get("lost") or ()), "ok": ok}
+            "run_id": kept["run_id"], "lost": list(mark.get("lost") or ()), "watermark_error": mark.get("error"),
+            "ok": ok}
 
 
 def lane_seconds(args) -> float:
@@ -756,6 +764,10 @@ def tries(classes: Sequence[str], args, attempt: Callable[[str, Path, Any], floa
     sampled = None if args.ids is None else read_commit(args.ids)
     args.out.mkdir(parents=True, exist_ok=True)
     tried, watermark = [], "--watermark" in args.rehearse
+
+    def left(cls: str) -> str:
+        return f"; not tried: {', '.join(classes[classes.index(cls) + 1:]) or 'none, it was the last'}"
+
     try:
         for cls in classes:
             try:
@@ -763,7 +775,7 @@ def tries(classes: Sequence[str], args, attempt: Callable[[str, Path, Any], floa
             except NoCheck as e:
                 print(f"{e}\n{cls}: no row", flush=True)
                 if stop := lost_stop(cls, scratch / cls, watermark):
-                    return tried, stop
+                    return tried, stop + left(cls)
                 if cls == "honest" and len(classes) > 1:
                     return tried, HONEST_STOP
                 continue
@@ -772,7 +784,7 @@ def tries(classes: Sequence[str], args, attempt: Callable[[str, Path, Any], floa
             tried.append(cls)
             print(f"{cls}: tried in {seconds:.1f} s, the certifier's run {str(kept['run_id'])[:12]}", flush=True)
             if stop := lost_stop(cls, scratch / cls, watermark):
-                return tried, stop
+                return tried, stop + left(cls)
             if cls == "honest" and len(classes) > 1 and not row(kept, committed_of(kept, sampled, args.stand_in))["ok"]:
                 return tried, HONEST_STOP
     finally:
@@ -800,6 +812,9 @@ def table(rows: Sequence[dict]) -> str:
         if r.get("lost"):
             out.append(f"    lost:    {len(r['lost'])} release(s) named lost on the watermark: no class was tried after "
                        "this one")
+        if r.get("watermark_error"):
+            out.append(f"    watermark: stopped with an error ({r['watermark_error']}): its server had no line after "
+                       "it")
     return "\n".join(out)
 
 

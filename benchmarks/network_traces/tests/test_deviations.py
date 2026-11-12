@@ -383,8 +383,8 @@ def test_what_a_try_keeps_holds_no_salt_or_address_and_the_table_is_made_from_it
     kept = _kept(tmp_path, "tokens", [1, 0] * 60)
     run, text = tmp_path / "tokens", (tmp_path / "tokens.json").read_text()
     assert set(kept) == {"class", "run_id", "digest", "params", "windows", "hold_ms", "seconds", "check",
-                         "connections", "egress", "lost", "files"}
-    assert kept["lost"] == []
+                         "connections", "egress", "watermark", "files"}
+    assert kept["watermark"] == {"last": None, "lost": [], "error": None}
     assert "upstream" not in kept["check"] and "127.0.0.1" not in text and "salt" not in text.replace(".salts", "")
     digest = dv.hashlib.sha256((run / "deployment.json").read_bytes()).hexdigest()
     assert kept["files"]["deployment.json"] == {"bytes": (run / "deployment.json").stat().st_size, "sha256": digest}
@@ -485,10 +485,12 @@ def test_a_server_connection_that_fails_loses_its_release_and_the_tries_stop_at_
 
     tried, stopped = dv.tries(["honest", "tokens", "fail"], args, attempt)
     assert (tried, seen) == (["honest", "tokens"], ["honest", "tokens"])
-    assert stopped == ("tokens: STOPPED at a lost release: its network certifier's log names 1 lost on the watermark "
-                       "(2), a line a server that reads `t n` alone stops ordering at")
+    words = ("tokens: STOPPED at a lost release: its network certifier's log names 1 lost on the watermark (2), a "
+             "line a server that reads `t n` alone stops ordering at")
+    assert stopped == words + "; not tried: fail"
     run = args.scratch / "tokens"
-    assert dv.lost_releases(run) == [2] and dv.lost_releases(args.scratch / "honest") == []
+    assert dv.watermark_log(run)["lost"] == [2]
+    assert dv.watermark_log(args.scratch / "honest") == {"last": [PARAMS.window - 1, N], "lost": [], "error": None}
     log = json.loads((run / dv.RELAY_LOG).read_text())["connections"]
     lost = next(c for c in log if c["release"] == 2)
     assert lost["upstream"].startswith("ConnectionRefusedError") and lost["failed"] == "upstream"
@@ -498,19 +500,25 @@ def test_a_server_connection_that_fails_loses_its_release_and_the_tries_stop_at_
     honest = (args.scratch / "honest" / "watermark.bin").read_bytes()
     assert all(len(x.split()) == 2 for x in honest.split(b"\r\n") if b" " in x and not x.startswith(b"POST"))
     kept = json.loads((args.out / "tokens.json").read_text())
-    assert kept["lost"] == [2] and json.loads((args.out / "honest.json").read_text())["lost"] == []
+    assert kept["watermark"] == {"last": [PARAMS.window - 1, N], "lost": [2], "error": None}
+    assert json.loads((args.out / "honest.json").read_text())["watermark"]["lost"] == []
     assert sorted(p.name for p in args.out.iterdir()) == ["honest.json", "tokens.json"]
 
     assert dv.main(["table", "--out", str(args.out), "--stand-in"]) == dv.LOST_EXIT == 5
     out = capsys.readouterr().out
-    assert out.rstrip().endswith(stopped) and "    lost:    1 release(s) named lost on the watermark" in out
-    assert [r["lost"] for r in json.loads((args.out / "rows.json").read_text())] == [[], [2]]
+    assert out.rstrip().endswith(words) and "    lost:    1 release(s) named lost on the watermark" in out
+    rows = json.loads((args.out / "rows.json").read_text())
+    assert [(r["lost"], r["watermark_error"]) for r in rows] == [([], None), ([2], None)]
+    assert "stopped with an error" not in out
+    assert "    watermark: stopped with an error (closed): its server had no line after it" \
+        in dv.table([rows[0] | {"watermark_error": "closed"}])
 
     monkeypatch.setattr(dv, "tries", lambda classes, args, real=dv.tries: real(classes, args, attempt))
     monkeypatch.setattr(dv.signal, "signal", lambda *_: None)
     seen.clear()
     assert dv.main([*flags[:3], str(tmp_path / "again"), *WATERMARK]) == dv.LOST_EXIT
-    assert seen == ["honest", "tokens"] and capsys.readouterr().out.rstrip().endswith(stopped)
+    assert seen == ["honest", "tokens"]
+    assert capsys.readouterr().out.rstrip().endswith(words + "; not tried: length, fail, extra, bucket")
 
 
 def test_a_try_with_no_check_is_read_for_a_lost_release_too_and_a_missing_log_stops_the_tries(tmp_path, capsys):
@@ -547,12 +555,27 @@ def test_a_try_with_no_check_is_read_for_a_lost_release_too_and_a_missing_log_st
     tried, stopped, ran = tries("no-log", "no log", *WATERMARK)
     assert (tried, ran) == (["honest"], ["honest", "tokens"])
     assert stopped == (f"tokens: STOPPED: its network certifier ran with the watermark and wrote no log "
-                       f"({dv.RELAY_LOG}), so whether a line named a lost release isn't known")
+                       f"({dv.RELAY_LOG}), so whether a line named a lost release isn't known; not tried: fail")
 
     # the network certifier never ran: nothing was sent, and the classes after it are tried, as without the watermark
     assert tries("never-ran", "never ran", *WATERMARK) == (["honest", "fail"], None, ["honest", "tokens", "fail"])
     assert tries("plain", "no log") == (["honest", "fail"], None, ["honest", "tokens", "fail"])
-    assert dv.lost_releases(tmp_path / "none") is None and dv.lost_stop("fail", tmp_path / "none", True) is None
+    assert dv.watermark_log(tmp_path / "none") is None and dv.lost_stop("fail", tmp_path / "none", True) is None
+
+
+def test_a_watermark_that_stopped_with_an_error_is_kept_by_its_kind_and_stops_nothing(tmp_path):
+    """The network certifier's log gives the error that stopped its watermark as text, which can hold the address it
+    connected to: what is kept is the error's first word. An error with no lost release stops no try."""
+    run = tmp_path / "run"
+    run.mkdir()
+    mark = {"last": [3, 1], "lost": [], "error": "ConnectionResetError: [Errno 104] reset by 192.0.2.7:8000"}
+    (run / dv.RELAY_LOG).write_text(json.dumps({"connections": [], "watermark": mark}))
+    assert dv.watermark_log(run) == {"last": [3, 1], "lost": [], "error": "ConnectionResetError"}
+    assert dv.lost_stop("honest", run, True) is None
+    mark |= {"error": "closed", "lost": [4]}
+    (run / dv.RELAY_LOG).write_text(json.dumps({"connections": [], "watermark": mark}))
+    assert dv.watermark_log(run) == {"last": [3, 1], "lost": [4], "error": "closed"}
+    assert dv.lost_stop("honest", run, False).startswith("honest: STOPPED at a lost release")
 
 
 def test_a_tail_shorter_than_a_connection_is_refused_before_any_try(tmp_path):

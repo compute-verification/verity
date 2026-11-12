@@ -169,7 +169,8 @@ Then the table again, once the server's record of the tries' sampled ids is ther
 - The front's address has no default. Only the deviating process reads it, from its environment, and nothing a try
   writes holds it: the relay's upstream is the deviating process on the loopback.
 - A try keeps `DIR/CLASS.json`: the schedule, the check's verdict and its words, each connection's request name,
-  release number, cells' kinds, the ids it was sent and the bits planted on it, the egress record's cells, and the
+  release number, cells' kinds, the ids it was sent and the bits planted on it, the egress record's cells, the
+  watermark's last line, lost releases and error, and the
   size and SHA-256 of every file of its run directory. The run directory, with the relay's records and their salts,
   is under `--scratch`, by default a temporary directory that is removed. The table is made from `DIR` alone.
 - The relay's check refuses `fail`, `extra` and a `bucket` hold past a cell's deadline, in its audit's words; a
@@ -196,8 +197,9 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   its watermark each release that its server connection lost, and a server whose gate reads a line as `t n` alone
   stops ordering there, for every run after it too. So after each try the command reads the network certifier's own
   log of the run, in the try's run directory: when its `watermark` names a lost release, or the network certifier ran
-  with the watermark and wrote no log, no later class is tried, the command says which try it stopped at, and it
-  exits 5.
+  with the watermark and wrote no log, no later class is tried, the command says which try it stopped at and which
+  classes it left, and it exits 5. A try keeps what that log says of the watermark: its last line, the lost releases
+  and the kind of error that stopped it, if one did. An error is shown in the try's row and stops nothing.
 
 ## The chain's run of record
 
