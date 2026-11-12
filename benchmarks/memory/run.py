@@ -10,9 +10,11 @@ The node run is `benchmarks/remote_session/gate_run.sh PERIOD` with one honest s
 node serving ROLE (default Llama 3.2 1B as upstream holds it, the role core's pin names `LLAMA32_1B_BF16`), each
 engine's weights arena the store, the verifier on the auditor's verifier host bound to that role's pinned checkpoint,
 the coins from the challenger host. PACED is the session (default seven credited stretches of a second, each pass
-under a live coin of its own), and `gate_run.sh`'s own variables (COMMIT, ARENA_GIB, UTIL, LEASE_BY, FETCH, ...) pass
-through. It waits for the fire run to reach the evidence store and prints from it as `--from` does; `--dry-run` sends
-nothing to either gate and prints no number.
+under a live coin of its own); UNPACED asks for a session of one coin a window in its place, as
+WINDOWS:WINDOW_MS:SAMPLES (`7:60000:33273` is seven windows of a minute with 33,273 openings each). `gate_run.sh`'s
+own variables (COMMIT, ARENA_GIB, UTIL, HOST_GIB, LEASE_BY, FETCH, ...) pass through: with HOST_GIB the store holds
+that many GiB of the node's host memory beside the arenas. It waits for the fire run to reach the evidence store and
+prints from it as `--from` does; `--dry-run` sends nothing to either gate and prints no number.
 
 `--from RUN` reads the verifier's record of a run in the store: a gate run's fire run (its host run's `verifier.json`)
 or a run of `remote_session/run.sh` that held the verifier. The number is the verifier's alone: nothing the prover
@@ -49,8 +51,11 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 RS = ROOT / "benchmarks" / "remote_session"
 
-#: this directory's registry: PACED, and the variables a research run sets
+#: this directory's registry: PACED, UNPACED, and the variables a research run sets
 SETTINGS = of(__file__)
+#: UNPACED's word: the windows, a window's milliseconds (to three places, as the verifier host takes them) and the
+#: openings a window
+UNPACED = re.compile(r"([1-9]\d*):(\d+(?:\.\d{1,3})?):([1-9]\d*)")
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
 ROLE = "LLAMA32_1B_BF16"
 REFERENCES = HERE / "references.json"
@@ -245,14 +250,29 @@ def loopback(run: Callable = subprocess.run) -> dict:
     return document(s, source_commit(run), SETTINGS.RESEARCH_RUN_ID, loopback=True)
 
 
+def form() -> dict[str, str]:
+    """The node run's one session as `gate_run.sh`'s variables: UNPACED's session of one coin a window where it is
+    set, else PACED's paced one."""
+    unpaced = SETTINGS.UNPACED
+    if unpaced is None:
+        paced = SETTINGS.PACED
+        if len(paced.split()) != 1:
+            raise Unreadable(f"PACED is {paced!r}: the bench runs one session, one word")
+        return {"PACED": paced}
+    if SETTINGS.is_set("PACED"):
+        raise Unreadable("UNPACED and PACED are both set: the bench runs one session, in one form, so unset one")
+    if not (m := UNPACED.fullmatch(unpaced)):
+        raise Unreadable(f"UNPACED is {unpaced!r}: the bench runs one session of one coin a window, one word "
+                         "WINDOWS:WINDOW_MS:SAMPLES (7:60000:33273 is seven windows of a minute with 33,273 openings "
+                         "each)")
+    return dict(zip(("SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES"), ("1", *m.groups())))
+
+
 def node(store, period: str, dry: bool, k: int | None, run: Callable = subprocess.run,
          wait: Callable[[float], None] = time.sleep) -> dict | int:
     """The gate run of one honest session under `period`, then its printed document from the store; `gate_run.sh`'s
     exit status when it launched nothing or ran dry."""
-    paced = SETTINGS.PACED
-    if len(paced.split()) != 1:
-        raise Unreadable(f"PACED is {paced!r}: the bench runs one session, one word")
-    env = {"ROLE": ROLE, **SETTINGS.environ(), "PLAN": "honest", "PACED": paced}
+    env = {"ROLE": ROLE, **SETTINGS.environ(), "PLAN": "honest", **form()}
     rc = run(["bash", str(RS / "gate_run.sh"), *(["--dry-run"] if dry else []), period], cwd=ROOT, env=env,
              stdout=sys.stderr).returncode
     if dry:
