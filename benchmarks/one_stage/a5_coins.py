@@ -6,7 +6,9 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
   (`verity/composite/device/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone, so its samples show the path, not an auditor's coins; and since that key is
-  not at `Lms.deployed`, sampled proofs' v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Its pins log pins main's
+  not at `Lms.deployed`, SPOT's v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Where its
+  caller asks (`start`'s ``deployed``) the key is made at `lms.DEPLOYED` instead, its whole tree, over this
+  machine's cores: still this run's alone, and one v2 reads signatures under. Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins the challenger host only to such a commit; its code is this
   tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: the challenger host through infra's gate with the lane's gate key: `reserve` with this machine as its
@@ -47,6 +49,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 import re
 import secrets
 import shutil
@@ -159,11 +162,16 @@ class Draws:
     Once every rank has planned or ended (`wait_planned`), the session either opens (`connect`: its client, one
     `ChallengerCoins` for every rank) or is refused (`refuse`). The session's evidence follows once published. A rank's
     sample holds the client from its `commit` to its `drawn` (its turn), so no other rank's coins open between its commitment
-    and its reads."""
+    and its reads.
+
+    A rank whose sessions take their coin trees from this session (`member_trees`) holds it open past the last sample
+    (`hold`, before its sample ends) until its sessions have closed (`release`): `tree` and `tree_open` are the client's
+    (`remote.RemoteChallenger`'s), one request and its answer at a time among the ranks' reads."""
 
     def __init__(self, window_root: str, ranks: list[int]) -> None:
-        self._root = window_root
+        self._root, self._ranks = window_root, sorted(ranks)
         self._lock, self._left, self._closed, self._ready = threading.Lock(), set(ranks), threading.Event(), threading.Event()
+        self._io, self._held = threading.Lock(), set()
         self._unplanned, self._needs, self._planned = set(ranks), {}, threading.Event()
         self._opened, self._refused = threading.Event(), None
         self._client = self._coins = self._pre = None
@@ -224,7 +232,7 @@ class Draws:
         self._client, self._coins, self._pre = client, coins, pre
         self._opened.set()
         with self._lock:
-            if not self._left and self._current is None:
+            if not self._left and self._current is None and not self._held:
                 self._close()
 
     def refuse(self, why: str) -> None:
@@ -255,7 +263,8 @@ class Draws:
     def read(self, rank: int, n: int) -> bytes:
         if self._current != rank or self._segment is None:
             raise Ch.CoinError(f"rank {rank} reads coins only in its turn, after its commitment")
-        return self._coins(n)
+        with self._io:
+            return self._coins(n)
 
     def drawn(self, rank: int) -> dict | None:
         """The end of rank `rank`'s turn: its segment (None when it committed none). No-op outside its turn."""
@@ -265,20 +274,70 @@ class Draws:
         self._current, self._segment = None, None
         self._turn.release()
         with self._lock:
-            if not self._left:
+            if not self._left and not self._held:
                 self._close()
         return segment
 
     def skip(self, rank: int) -> None:
-        """Rank `rank` samples nothing (refused before its sample, or its process failed), ending its turn if it holds one: no-op
-        once it has sampled."""
+        """Rank `rank` samples nothing (refused before its sample, or its process failed), ending its turn if it holds one,
+        and holds the session open no longer (`hold`): no-op once it has sampled and released it."""
         self.drawn(rank)
         with self._lock:
             self._left.discard(rank)
+            self._held.discard(rank)
             if rank in self._unplanned:
                 self._settled(rank)
-            if not self._left and self._current is None and self._client is not None:
+            if not self._left and self._current is None and not self._held and self._client is not None:
                 self._close()
+
+    def ranks(self) -> list[int]:
+        """The step's ranks, whose samples this session's coins are."""
+        return list(self._ranks)
+
+    def hold(self, rank: int) -> None:
+        """Rank `rank`'s sessions take their coin trees from this session (`tree`, `tree_open`), so it stays open past
+        the last rank's sample, until `release(rank)` (or the rank's `skip`). Raises `CoinError` once the session has
+        closed: a rank holds it before its own sample ends; and for a step of several ranks, whose sessions' trees
+        the one release log would interleave."""
+        if self._ranks != [rank]:
+            raise Ch.CoinError(f"the challenger's session is ranks {self._ranks}'s: one rank's sessions take their coin "
+                               "trees from it, in the order they run")
+        with self._lock:
+            if self._closed.is_set():
+                raise Ch.CoinError(f"the challenger's session has closed: rank {rank} holds it for its sessions' coin "
+                                   "trees before its sample ends")
+            self._held.add(rank)
+
+    def release(self, rank: int) -> None:
+        """Rank `rank`'s sessions have closed (`hold`): the session closes once every rank has sampled and none holds it."""
+        with self._lock:
+            self._held.discard(rank)
+            if not self._left and self._current is None and not self._held and self._client is not None:
+                self._close()
+
+    def _open_client(self) -> R.RemoteChallenger:
+        if self._refused is not None:
+            raise Ch.CoinError(self._refused)
+        if self._client is None or self._closed.is_set():
+            raise Ch.CoinError("the challenger's session is not open: a session's coin tree is sampled and opened between "
+                               "the session's open and its close, by a rank that holds it (hold)")
+        return self._client
+
+    def layout(self) -> dict:
+        """The open session's layout (`remote.RemoteChallenger.layout`)."""
+        return self._open_client().layout()
+
+    def tree(self, spec: dict, nonce: bytes | None = None) -> tuple[bytes, bytes, bytes]:
+        """A ``--zk`` session's coin tree, sampled in this session (`remote.RemoteChallenger.tree`): its nonce, root
+        and key."""
+        with self._io:
+            return self._open_client().tree(spec, nonce)
+
+    def tree_open(self, root: bytes, stream: str, rnd: int, n: int, after: bytes) -> tuple[list[int], list[int]]:
+        """A round of a coin tree this session sampled (`tree`), opened after `after`
+        (`remote.RemoteChallenger.tree_open`): its coins and their opening words."""
+        with self._io:
+            return self._open_client().tree_open(root, stream, rnd, n, after)
 
     def _close(self) -> None:
         """Close the session, then settle every segment's coins to the full openings a withheld session released at its
@@ -287,7 +346,8 @@ class Draws:
             return
         try:
             if self._client is not None:
-                self._client.close()
+                with self._io:
+                    self._client.close()
                 self._coins.settle()
         except Ch.CoinError as e:
             self._ended = str(e)
@@ -484,9 +544,10 @@ def opened_reason(got: dict, withhold: bool) -> str | None:
 
 class Local:
     """A development session on this machine (module docstring), its auditor host's root in scratch `root`, pinned on the
-    verifier's copy of main's first-parent line `main`."""
+    verifier's copy of main's first-parent line `main`, its key at `params` (W, H), made in `workers` processes."""
 
-    def __init__(self, root: Path, main: list[str], by: str = "circuits") -> None:
+    def __init__(self, root: Path, main: list[str], by: str = "circuits", params: tuple[int, int] = LOCAL_PARAMS,
+                 workers: int = 1) -> None:
         A = _module("a5_auditor", TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
         self.A, self.by = A, by
         self.host = A.Host(root=root / "var", peers=root / "peers", name=LOCAL_HOST, pins=root / "pins.jsonl")
@@ -495,8 +556,8 @@ class Local:
         (root / "coin-ports").write_text(f"{LOCAL_PEER} {A.PORTS.start}-{A.PORTS.stop - 1}\n")
         self.pin = on_main(main)
         self.host.pins.write_text(A.pin_line(self.pin, main[0] if main else self.pin, A.utc(datetime.now(timezone.utc))) + "\n")
-        self.params = lms.Params(64, *LOCAL_PARAMS)
-        self.signer = A.key_signer(self.host, self.params, workers=1)
+        self.params = lms.Params(64, *params)
+        self.signer = A.key_signer(self.host, self.params, workers=workers)
         self.thread: threading.Thread | None = None
         self.session: str | None = None
 
@@ -505,7 +566,7 @@ class Local:
         body = A.sessions_of(A.read_ledger(host.ledger))[session]["open"]["body"]
         argv = A.serve_argv(host, session, body)
         argv[argv.index("--port") + 1] = "0"
-        argv += ["--params", ",".join(map(str, LOCAL_PARAMS)), "--keygen-workers", "1"]
+        argv += ["--params", f"{self.params.W},{self.params.H}", "--keygen-workers", "1"]
         A.run(host, session, signer=self.signer, pinned=self.pin, now=lambda: datetime.now(timezone.utc), argv=argv)
 
     def open(self, root: str, layout: list, minutes: int = MINUTES, scheme: str = SCHEME,
@@ -665,7 +726,7 @@ def opened_pin(ledger: list[str], session: str) -> str | None:
 
 def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | Path, *, ssh_key: str | None = None,
           peer: str | None = None, key_record: str | None = None,
-          reserve: Callable[[Mapping[int, int]], list] = families):
+          reserve: Callable[[Mapping[int, int]], list] = families, deployed: bool = False):
     """The step's session on `root` (``local`` or ``gate:USER@HOST``, module docstring) and its samples' manager: (the manager, a
     `Draws` proxy, and the thread that opens the session and publishes its evidence). The thread waits until every rank of
     `ranks` has planned its sample (`Draws.plan`), then opens the session with the layout `reserve` gives their needs
@@ -673,10 +734,11 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     rank's sample, when a rank ended before planning (refused before its sample, or failed) or `reserve_reason` refuses the
     layout. The evidence's `plan` is the needs, the layout and the session's id (None when none opened). `main` is the
     verifier's own copy of main's first-parent history (`remote.main_lines`'s file: ``git rev-list --first-parent
-    origin/main``)."""
+    origin/main``). With `deployed`, a ``local`` session's key is made at `lms.DEPLOYED` (module docstring)."""
     first_parent = R.main_lines(main)
     if challenger == "local":
-        session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")), first_parent)
+        at = dict(params=(lms.DEPLOYED.W, lms.DEPLOYED.H), workers=len(os.sched_getaffinity(0))) if deployed else {}
+        session = Local(Path(tempfile.mkdtemp(prefix="a5-challenger-")), first_parent, **at)
     elif challenger.startswith("loopback:"):
         session = Loopback(challenger.removeprefix("loopback:"))
     elif challenger.startswith("gate:") and peer and key_record:

@@ -16,7 +16,7 @@ REQUIRED = frozenset({"id", "title", "owner", "unit", "better", "command", "ever
 OPTIONAL = frozenset({"floor", "goal", "tags"})
 _ID = re.compile(r"^[a-z][a-z0-9-]*/[a-z0-9][a-z0-9.-]*$")
 _EVERY = re.compile(r"^[1-9][0-9]*[hd]$")
-_SCRIPT = re.compile(r"(?:^|\s)((?:benchmarks|tools|examples)/\S+\.(?:sh|py))(?:\s|$)")
+_SCRIPT = re.compile(r"(?:^|\s)((?:benchmarks|tools|demos)/\S+\.(?:sh|py))(?:\s|$)")
 
 
 def _metrics() -> list[dict]:
@@ -43,7 +43,7 @@ def _problems(m: dict, handles: set[str]) -> list[str]:
         out.append("tags is not a list of words")
     scripts = _SCRIPT.findall(str(m.get("command", "")))
     if not scripts:
-        out.append("its command names no script under benchmarks/, tools/ or examples/")
+        out.append("its command names no script under benchmarks/, tools/ or demos/")
     for s in scripts:
         path = ROOT / s
         if not path.is_file():
@@ -78,4 +78,4 @@ def test_a_row_that_breaks_a_rule_is_refused() -> None:
         "'infra/serving-cost-glm53'"]
     assert _problems({**good, "owner": "nobody", "command": "echo"}, {"vllm"}) == [
         f"owner 'nobody' is no handle in {HANDLES}",
-        "its command names no script under benchmarks/, tools/ or examples/"]
+        "its command names no script under benchmarks/, tools/ or demos/"]
