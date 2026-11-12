@@ -76844,3 +76844,82 @@ def certifier : Account :=
 - **Not established:** that the file compiles and its guards hold; which lock records reach `Loc` itself; the lock counts at `main` rather than at tree `0b6bdb0352e1`; memory-accounting's exact field; whether the certifier's execution phase has one length across runs.
 - **Next:** the try's errors, then the push of `cursor/proofs-accounts-e4bb`, the interface's records run, and the pull request by 13:00Z.
 - **I wait on nothing from you.** A word on section 2's rows on the head and on a moment's period row would save a later change.
+
+## GATHER, Thu 12 Nov 07:44Z: #9075 is NOT ready to mark yet: both runs passed at `8189d2a7fd12`, but `main` had moved under `catalog_ids.json`, so by your step 3 I merged it (new head `7b4513ce8842`) and repeat two runs (`e00e`, `9361`, about 09:00Z); lean's merge: no stop at `8189d2a7fd12`, five files at the new head, all five `main`'s own and two of them from my landed #9121
+
+**1. The two runs' own output, both at `8189d2a7fd12`.**
+
+- `r20261112-055045-9201`, `suites.py --changed d6075b75d289 --quick`: its last line is "64 suites: 64 passed (2 cached), 0 failed; 115.7 min of test time" [read: the run's `out/suites-changed-quick.log`, line 149]. 62 suites ran and 2 came from the cache, `benchmarks/unit_lowering` and `verity/definitions/private_circuits`, each "passed at 125ad8ea89 2026-11-12 03:11 (traced: every file its run read is as it was)" [read: the same log, lines 9 and 10]. The suites that take this change's tests ran, none cached: `verity/definitions` 894 passed, `verity-vllm` 14,149 passed and 414 skipped, the circuit-check suite 367 passed and 2 skipped, `verity/protocols/spot/verifier` 859 passed, `benchmarks/one_stage` 545, `benchmarks/sampling_plan` 52, `repository` 310 [read: the same log]. It took its check slot at 06:18Z and ended at 07:12Z, rc 0 [read: `research inspect`].
+- `r20261112-055113-c5e9`, circuit-check under the default budgets on the greedy sidecar, the served select and `TokenSelect_v1` at both vocabularies: "33 target(s), 0 failure(s), 32 unchecked (warnings, which never fail) on 32 Definition(s)" and "vectors a realization compared with the reference on: 11 random, 0 edge-only, 22 none" [read: the run's `out/circuit-check-greedy.log`]. None of the 33 was reused from a cache: "0 of 33 targets reused … 33 stored" [read: the same log]. rc 0 and `greedy.rc` 0 [read: `research inspect`, the run's `out/greedy.rc`].
+- Each target's line, as the log prints it less its timings [read: the same log; the 33 lines are also in #9075's body]:
+
+```text
+unchecked definition GreedyChunk_v2{N=8,OFF=0}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition GreedyChunk_v2{N=8,OFF=8}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition GreedyChunk_v2{N=8,OFF=16}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition GreedyChunk_v2{N=16,OFF=0}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition GreedyChunk_v2{N=16,OFF=48}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition GreedyChunk_v2{N=24,OFF=65520}  failures=0 unchecked=1 q_call=98u/833b
+unchecked definition GreedyChunk_v2{N=7744,OFF=61952}  failures=0 unchecked=1 q_call=30978u/263313b
+unchecked definition GreedyChunk_v2{N=7744,OFF=123904}  failures=0 unchecked=1 q_call=30978u/263313b
+unchecked definition GreedyChunk_v2{N=7744,OFF=…}, the other 17 served chunks, each:  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition GreedyCombine_v2{V=32,N=8}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition GreedyCombine_v2{V=320,N=16}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition GreedyCombine_v2{V=154880,N=7744}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition GreedySelect_v1{V=32,N=8}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition GreedySelect_v1{V=154880,N=7744}  failures=0 unchecked=1 q_call=1u/32b   (twice: by its pin and by name)
+unchecked definition TokenSelect_v1{V=200}  failures=0 unchecked=1 q_call=1u/32b
+unchecked definition TokenSelect_v1{V=154880}  failures=0 unchecked=1 q_call=1u/32b
+unchecked redundant-gates/boolean: 1192 over 9 target(s)
+unchecked vectors/none: 21 over 21 target(s)
+unchecked dead-gates/ir: 6 over 2 target(s)
+```
+
+- What each target's one warning is [read: the run's `out/circuit-check-greedy.json`, `targets[].warnings` and `correspondence.realizations`]. The 9 small bindings (6 chunks, 2 combines, the select at V = 32): each lowered whole by `c-flock:ir_lower` and compared on 64 vectors, 0 mismatches; their warning is `redundant-gates/boolean`. The 20 served units and the served select: `vectors/none`, no realization compared them, since each is past the default budgets (38,717 to 38,817 IR gates a unit, 774,556 the select); the select's digest has status `ok` against its pin. `TokenSelect_v1{V=154880}`: `kernel:rows` 4 compared and `kernel:twin` 4, 0 mismatches; `TokenSelect_v1{V=200}`: 38 and 64, 0 mismatches; their warning is `dead-gates/ir`, 3 gates each.
+- Blocks [read: the same JSON, `targets[].block`]: each served chunk fits 2^24 bits, the served combine 2^25, the served select by its units 2^25.
+- One thing in those lines I had not written down before: `Q_call{X=32}` gives a Call of each of the two served chunks with a carry (`OFF=61952`, `OFF=123904`) as 30,978 proof blocks committing 263,313 bits, where every other served chunk is 1 committing 32 [read: the same JSON, `partition.q_call`]. Its `codes` are empty and `recomputed_across` is 0, so it is a figure the query reports and not a failure [read: the same JSON; `checks.py`'s `q_call` docstring]. A chunk with a carry has 3 computed outputs where the others have 2 [read: `partition.by_kind`]; that this is why the query takes it apart is my reading of `frontier_pieces`, not something I tested [guess]. It is not new at this head: run `3e89`'s reports at `18cc34b8eb2e` hold the same `q_call` figures [run by me 07:38Z on my VM: a script comparing gates, vectors, realizations, `q_call`, blocks, failures, warnings and the digest of all 32 targets between `c5e9`'s report and `3e89`'s first two: none differs]. Circuits' yes was at `c0d7c3ace97f`, after `3e89` [read: #9075's body]; whether circuits looked at this figure I do not know [guess]. It is now in #9075's body under Circuit-check.
+
+**2. Lean's remote merge (your 07:21Z step).** Lean's branch was `1ab0a942376e` when I ran these, moved from `de28a691126b` [run by me 07:39Z: `git fetch`, `git rev-parse`].
+
+- Against `8189d2a7fd12`, the head both runs checked: exit 0, tree `e9c449e75232`. No stop against lean's merge [run by me 07:39Z: `git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-landing-fc8d 8189d2a7fd12`].
+- Against the new head `7b4513ce8842` (3 below): exit 1, naming five files [run by me 07:39Z: the same command with `HEAD`]:
+  - `adapters/vllm/tests/dead_code_keep.json` (`merge_allowlist.py` refuses it: "modules.verity_vllm.protocols.linear.vllm_site: changed on both sides, differently")
+  - `adapters/vllm/verity_vllm/pipeline/serve_commit.py`
+  - `benchmarks/one_stage/a5.py`
+  - `benchmarks/one_stage/tests/test_a5_wiring.py`
+  - `verity/protocols/poub/verifier/PROTOCOL.md`
+- All five are `main`'s own, not #9075's. Lean's branch against `origin/main` (`bcaf58a45d53`) alone names the same five [run by me 07:39Z: the same command with `origin/main`]. None of the five is among #9075's 16 files [run by me 07:38Z: `git diff --name-only origin/main HEAD`]. Lean's branch forks from `main` at `d6075b75d289` [run: `git merge-base`], which is why `8189d2a7fd12`, with `main` merged only up to there, shows none.
+- So every head that holds `main` at `bcaf58a45d53` shows these five, and nothing I could change in #9075 would remove them; I changed nothing to avoid them [derived from the three runs above].
+- Which landed pull request moved each file on `main` since `d6075b75d289` [run by me 07:39Z: `git log --first-parent d6075b75d289..origin/main -- FILE`]: `dead_code_keep.json` #8995; `serve_commit.py` #9110; `a5.py` #9124 and #9121; `test_a5_wiring.py` #9121; PoUB's `PROTOCOL.md` #9137 and #9140.
+- #9121 is mine, so here is its close for lean. Lean's branch already holds a fix of the same bug, commit `99d517fc4d` of 27 Oct: `body[WI.string_at(m, body, p, 0)] ^= 1` with `wiring.string_at` and its own test [read: `git show origin/cursor/lean-remote-merge-landing-fc8d:benchmarks/one_stage/a5.py` line 515; `git merge-base --is-ancestor`]. #9121 put the same fix on `main` in another form, eight lines that compute the offset in `a5.py` itself [read: `origin/main`'s `a5.py` lines 510 to 512]. Both flip the same byte, the drawn unit's own wired value at unit 0 [derived by reading both; not run side by side]. Lean can keep its own line and drop #9121's eight in `a5.py`, and in `test_a5_wiring.py` keep both tests, which have different names, or drop mine [guess: lean's to choose]. I did not know of `99d517fc4d` when I wrote #9121; it was on no branch I read [read: my own entries].
+
+**3. #9075's head and `main`.**
+
+- At 07:34Z #9075's head on origin was still `8189d2a7fd12` [run by me: `git ls-remote`].
+- `main` was `bcaf58a45d53`, not `d6075b75d289`: 31 `Queue:` merges later [run by me 07:30Z: `git fetch`, `git log --first-parent --oneline d6075b75d289..origin/main`]. It merged into `8189d2a7fd12` with no conflict, exit 0, tree `f533b67b915c` [run by me: `git merge-tree --write-tree 8189d2a7fd12 origin/main`].
+- `main` had moved under one file #9075 changes, `verity/definitions/tests/catalog_ids.json`: #9098 added 35 ids, all `Dsa…`, in another place than my three Greedy lines [run by me: `git diff 8189d2a7fd12 7b4513ce8842 -- verity/definitions/tests/catalog_ids.json`, 35 insertions].
+- So by your step 3 I merged it: `7b4513ce8842`, tree `f533b67b915c`, the same tree `merge-tree` gave, pushed at 07:34Z as a fast-forward, hooks on [run by me: `git merge`, `git push`; `gh pr view 9075` shows the head]. At 07:39Z `main` was still `bcaf58a45d53` and merges into the new head as a no-op, tree `f533b67b915c` [run by me].
+- Runs I repeat at `7b4513ce8842`, both launched and both waiting for a check slot at 07:43Z with 2 checks ahead of each [run by me: `research run`, `research inspect`]:
+  - `r20261112-073506-e00e` on vy-nebius-cpu-8: `suites.py --changed bcaf58a45d53 --quick`.
+  - `r20261112-073546-9361` on vy-nebius-cpu-11: the same circuit-check as `c5e9`.
+  - When they end: the last pair took 82 and 52 minutes from launch, 55 and 3 of them running [read: `research inspect` of `9201` and `c5e9`], so about 09:00Z for the suites and about 08:30Z for the circuit-check [guess].
+- Runs I do not repeat, and why:
+  - The description sizes' `update` job (`a32d`): between `d6075b75d289` and `bcaf58a45d53`, `main` changed no partition file and none of the tool, the record or the list [run by me 07:31Z and again 07:44Z: `git diff --stat d6075b75d289 origin/main` on those paths, empty]. The 20 greedy templates measured again at the merge equal the record, 0 differ, and the description sizes' four read-only cases pass there [run by me 07:32Z on my VM: `description_sizes.py one` on each of the 20; `pytest` on `adapters/vllm/tests/tools/test_description_sizes.py` by name].
+  - Circuits' whole-unit lowering (`b35b`, at `c0d7c3ace97f`): since that head, the Python the greedy Definitions, their lowering and the evaluator read differs by one line of a docstring in `verity/definitions/ops/boolean/rolled.py` [run by me 07:38Z: `git diff --stat c0d7c3ace97f HEAD` over `verity/circuits`, `verity/definitions/ops`, the greedy registry files, `verity/definitions/boolean`, Flock's prover and circuit-check; the rest it lists is Lean, Rust, docs, tests and two `pyproject.toml`]. Circuit-check's source does not call the Rust binary that changed [run: `rg` for it under `tools/verity/circuit_check/src`, no hit].
+- On my VM at the merge: `test_catalog.py` 5 passed and the carry's test 3 passed [run by me 07:31Z: `pytest` on each file by name].
+
+**4. The ready line.** Not yet: the head is `7b4513ce8842` and no suites run or circuit-check has ended at it [derived]. What stands now:
+
+- Head `7b4513ce8842` = `8189d2a7fd12` plus one merge of `main` at `bcaf58a45d53`; against `main`, 16 files [run by me].
+- At `8189d2a7fd12`: suites 64 of 64 passed (`9201`), circuit-check 33 targets and 0 failures (`c5e9`), description sizes written by `a32d`, the 20 units lowered whole by circuits (`b35b`, at `c0d7c3ace97f`) [read, as in 1].
+- At `7b4513ce8842`: `e00e` and `9361` waiting [run by me].
+- Lean's merge: no stop at `8189d2a7fd12`; at `7b4513ce8842` the five files in 2, all `main`'s, none #9075's [run by me].
+- #9075's body holds all of this: the new head, both runs' results, the circuit-check report's lines (its two summary lines, a table by target, the 33 target lines and the `Q_call` figures) and rows for the two repeats [run by me 07:42Z: `research queue edit 9075 --body-file`, 30,024 bytes; `gh pr view` shows it].
+
+When the two repeats end I read their output, put their results in the body, run both merge-tree checks again and write the ready line here; you mark [derived from your steps].
+
+**One question, since it can cost an hour each time.** `catalog_ids.json` is a list every pull request that adds a Definition appends to, so `main` will move under it again [run by me 07:44Z: `git log --first-parent -6 origin/main -- verity/definitions/tests/catalog_ids.json` lists #9098, #9064, #8426, #8786, #8713 and #8925, each adding Definitions; that it moves again before you mark is a guess]. If `main` moves under that one file again before you mark, and `git merge-tree` is clean, do I merge and repeat both runs once more, or does the queue's own merge onto `main` and its check stand for it? Until you answer I follow your step 3 as written: merge and repeat.
+
+**5. #9128.** #9128 is superseded by #9075, whose head holds #9128's one commit, `6ef9e427d69b` (the test of a carry at a lane among the subnormal words), so #9128 has nothing #9075 lacks [run by me 07:44Z: `git merge-base --is-ancestor 6ef9e427d69b 7b4513ce8842`; `gh pr view 9128` shows it open, head `6ef9e427d69b`]. I have not closed it and will not.
+
+**What I do next.** I end my turn now, waiting on `r20261112-073506-e00e` (about 09:00Z) and `r20261112-073546-9361` (about 08:30Z) [guess for both hours]. Mailbox read at 07:39Z: 146 lines, newest section yours of 07:21Z [run by me].
