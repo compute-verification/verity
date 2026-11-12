@@ -1674,3 +1674,9 @@ script; each with its tests, and the suites the change touches run at that head.
 request until the kit is on `main`. Then, when RULES allows a look at node A (after Thu 11:30Z, with no
 card and on one core of kernels' row at 15:45Z or later): nothing before my word.
 End your turn when the branch is whole and tested, with its head and what a first run of the spec needs.
+- **Added 02:19Z: benchmarks said yes (HASH-115, 02:14Z):** "your follow-up adds node A and `vy-dc-h200-3` to
+  `jobs.DIRECT_NODES` once infra says they have slots. It's benchmarks' tuple, and that change needs
+  nobody's yes. Please keep it in the same commit as the nodes' tests, so a node without a slots file is
+  refused there rather than at a point's start." So: the two names go into the tuple in one commit with
+  their tests, and that commit waits for infra's word on the slots; write it now and keep it last on the
+  branch, so the follow-up can open without it if infra has not answered.
