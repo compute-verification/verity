@@ -580,6 +580,7 @@ def consulted_facts(vllm_config) -> dict:
 def no_fx_stack_traces():
     """Export without FX stack traces: nothing reads `node.meta["stack_trace"]`, and recording one per node was a tenth of a derive."""
     import torch.fx.config as fx_config
+
     from verity_vllm.engine import hooks
     with hooks.Hooks() as h:
         h.patch(fx_config, "do_not_emit_stack_traces", True)
@@ -594,6 +595,7 @@ def export_module(mod: nn.Module, inputs: tuple, vllm_config, num_tokens: int, s
     export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile).
     Under a declared launch batch the graph keeps each node's `launch_region` tag."""
     import torch.fx.traceback as fxt
+
     from .export_compat import export_compat, read_back_applied
     from .rules.vllm_bindings.observations import launch_batch_declared
     from .triton_capture import intercept_triton_launches
@@ -740,6 +742,7 @@ def mean_dim_override_facts() -> dict | None:
     try:
         import hashlib
         import inspect
+
         from vllm.model_executor.determinism import batch_invariant as bi
         k = bi.mean_kernel
         fn = getattr(k, "fn", k)

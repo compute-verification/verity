@@ -382,7 +382,10 @@ EXPECTED_KERNEL = {"cutlass": ("auto", "CutlassFp8BlockScaledMMKernel"), "triton
 def _linear_kernel(K: int, N: int, name: str | None = None):
     import torch
     from vllm.model_executor.kernels.linear import init_fp8_linear_kernel
-    from vllm.model_executor.layers.quantization.utils.quant_utils import GroupShape, create_fp8_quant_key
+    from vllm.model_executor.layers.quantization.utils.quant_utils import (
+        GroupShape,
+        create_fp8_quant_key,
+    )
 
     return init_fp8_linear_kernel(activation_quant_key=create_fp8_quant_key(static=False, group_shape=GroupShape(1, GROUP)),
                                   weight_quant_key=create_fp8_quant_key(static=True, group_shape=GroupShape(GROUP, GROUP)),
@@ -406,9 +409,19 @@ def selection() -> dict[str, Any]:
                                  for v in got.values())
     try:
         from vllm.model_executor.layers.fused_moe.activation import MoEActivation
-        from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig, FusedMoEParallelConfig, RoutingMethodType
-        from vllm.model_executor.layers.fused_moe.oracle.fp8 import select_fp8_moe_backend
-        from vllm.model_executor.layers.quantization.utils.quant_utils import GroupShape, create_fp8_quant_key, kFp8Dynamic128Sym
+        from vllm.model_executor.layers.fused_moe.config import (
+            FusedMoEConfig,
+            FusedMoEParallelConfig,
+            RoutingMethodType,
+        )
+        from vllm.model_executor.layers.fused_moe.oracle.fp8 import (
+            select_fp8_moe_backend,
+        )
+        from vllm.model_executor.layers.quantization.utils.quant_utils import (
+            GroupShape,
+            create_fp8_quant_key,
+            kFp8Dynamic128Sym,
+        )
 
         cfg = FusedMoEConfig(num_experts=NUM_EXPERTS, experts_per_token=TOP_K, hidden_dim=HIDDEN, intermediate_size=MOE_I,
                              num_local_experts=NUM_EXPERTS, num_logical_experts=NUM_EXPERTS, activation=MoEActivation.SILU, device="cuda",
@@ -439,7 +452,9 @@ def _cuda_kernels(fn) -> list[str]:
 
 def triton_config(K: int, N: int, M: int) -> dict[str, Any]:
     """The config `w8a8_triton_block_scaled_mm` launches at (M, K, N): a tuned file's nearest entry, else its default."""
-    from vllm.model_executor.layers.quantization.utils.fp8_utils import get_w8a8_block_fp8_configs
+    from vllm.model_executor.layers.quantization.utils.fp8_utils import (
+        get_w8a8_block_fp8_configs,
+    )
 
     tuned = get_w8a8_block_fp8_configs(N, K, GROUP, GROUP)
     if tuned:
@@ -574,7 +589,9 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
 
 def quant_launch(work: Path, K: int, Gq: int, seed: int) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     import torch
-    from vllm.model_executor.layers.quantization.utils.fp8_utils import per_token_group_quant_fp8
+    from vllm.model_executor.layers.quantization.utils.fp8_utils import (
+        per_token_group_quant_fp8,
+    )
 
     gen = torch.Generator(device="cuda").manual_seed(seed)
     x = _activation(gen, QUANT_M, K, Gq)

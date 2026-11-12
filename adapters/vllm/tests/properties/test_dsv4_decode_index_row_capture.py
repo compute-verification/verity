@@ -10,13 +10,13 @@ import copy
 import hashlib
 import json
 import sys
-import types
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 from verity.definitions.numerics import dsv4_decode_indices_twin as T
 
+from tests import fake_vllm
 from tests.properties import dsv4_decode_index_row_capture_gpu as X
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
@@ -175,12 +175,12 @@ def _stand_in_cache_utils(monkeypatch, calls: list) -> None:
                 lens.copy_(n)
             return run
 
-    cu = types.ModuleType("vllm.models.deepseek_v4.common.ops.cache_utils")
-    vars(cu).update(compute_global_topk_indices_and_lens=wrapper, _compute_global_topk_indices_and_lens_kernel=Kernel())
-    for name in ("vllm", "vllm.models", "vllm.models.deepseek_v4", "vllm.models.deepseek_v4.common",
-                 "vllm.models.deepseek_v4.common.ops"):
-        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
-    monkeypatch.setitem(sys.modules, cu.__name__, cu)
+    cu = "vllm.models.deepseek_v4.common.ops.cache_utils"
+    stood_in = {f"{cu}:compute_global_topk_indices_and_lens": wrapper,
+                f"{cu}:_compute_global_topk_indices_and_lens_kernel": Kernel()}
+    fake = fake_vllm.install(monkeypatch, extra=stood_in)
+    for key, value in stood_in.items():
+        fake.set(key, value)
     monkeypatch.setattr(X, "DEVICE", "cpu")
     monkeypatch.setattr(torch.cuda, "synchronize", lambda: None)
 
@@ -382,11 +382,10 @@ def test_main_end_to_end_on_stubbed_launches(observed, tmp_path, monkeypatch, ca
     ob = observed["c4-4096"]
     for k in ("TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
         monkeypatch.setenv(k, "")
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "bind_check", lambda: {"bindings": {}, "ok": True})
@@ -419,11 +418,10 @@ def test_a_failed_gate_writes_a_sealed_record_and_exits_3(tmp_path, monkeypatch,
     """The device gate failing writes the sealed NO-GO record, prints GATE-FAIL and exits 3 before any launch."""
     for k in ("TRITON_CACHE_DIR", "VLLM_ENABLE_V1_MULTIPROCESSING"):
         monkeypatch.setenv(k, "")
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": False, "sms": 114})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "gpu", lambda *a: pytest.fail("launched past a failed gate"))

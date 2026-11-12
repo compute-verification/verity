@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 
+from verity_vllm.check.match.rank_match import same_module_path
 from verity_vllm.records.schema_ids import TP_LINKS_SCHEMA
 
 
@@ -23,15 +24,6 @@ def module_in_model_vocabulary(module_path: str | None, model_root: str | None) 
         if mp.startswith(head):
             return mp[len(head):]
     return mp
-
-
-def same_module_path(a: str | None, b: str | None) -> bool:
-    """Two dotted module paths name the same module when equal, or when one is the other's dotted suffix (the same
-    `named_modules()` path read from a wrapper's root vs the model's root).  Structural: no vocabulary prefix is spelled."""
-    if a is None or b is None:
-        return False
-    a, b = a.split(" (", 1)[0].strip(), b.split(" (", 1)[0].strip()
-    return a == b or a.endswith("." + b) or b.endswith("." + a)
 
 
 def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_root: str | None = None) -> dict:
