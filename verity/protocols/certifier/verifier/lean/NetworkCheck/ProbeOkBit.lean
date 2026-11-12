@@ -117,6 +117,10 @@ def okCarried (cs : Array Const) (reg : Json) (T : Nat) (entriesPort : String �
   let es ← publicEntries reg T entriesPort
   es.toList.forM fun e => unless cs.any (fun c => c.names e && c.root == e.root) do throw (refused e)
 
+/-- The comparison alone, over public `o0` entries already read: each one's root is its carried constant. -/
+def carriedOn (cs : Array Const) (es : Array Entry) : Bool :=
+  es.all fun e => cs.any (fun c => c.names e && c.root == e.root)
+
 def verdict {α : Type} (v : V α) : String :=
   match v with
   | .ok _ => "ACCEPT"

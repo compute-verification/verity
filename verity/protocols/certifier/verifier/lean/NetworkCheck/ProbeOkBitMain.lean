@@ -50,6 +50,8 @@ def ruleMain (path : String) (T reps : Nat) : IO UInt32 := do
     let many := 1000 * reps
     let (ns, n) ← timed many fun k => accepts (okCarried cs reg (T + k - k))
     IO.println s!"OKBIT carried-compare verdict={verdict (okCarried cs reg T)} ns={ns} accepted={n}/{many} calls=0"
+    let (ns, n) ← timed many fun k => carriedOn (cs.extract 0 (cs.size + k - k)) pub
+    IO.println s!"OKBIT carried-compare-read entries={pub.size} ns={ns} accepted={n}/{many} calls=0"
   return 0
 
 def constMain (leaves reps : Nat) : IO UInt32 := do
