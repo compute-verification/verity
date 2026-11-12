@@ -24,7 +24,7 @@ import ast
 import json
 import re
 from collections.abc import Collection
-from functools import lru_cache
+from functools import cache
 from pathlib import Path, PurePosixPath
 
 from . import _ratchet as R
@@ -37,7 +37,7 @@ SCRIPTS = frozenset({".sh", ".toml", ".yaml", ".yml"})
 PUBLIC = "public"
 
 
-@lru_cache(maxsize=None)
+@cache
 def public_commands() -> dict[str, str]:
     """The list's ``public`` table: each command run from outside adapters/vllm, or only from a file the public export
     doesn't copy, with the file that runs it."""
@@ -47,7 +47,7 @@ def public_commands() -> dict[str, str]:
     return table
 
 
-@lru_cache(maxsize=None)
+@cache
 def commands() -> dict[str, str]:
     """``COMMANDS``: name -> the module it runs."""
     for node in R.parse(CLI).body:
@@ -62,7 +62,7 @@ def commands() -> dict[str, str]:
     raise AssertionError(f"{R.rel(CLI)}: no COMMANDS table")
 
 
-@lru_cache(maxsize=None)
+@cache
 def invocation(names: frozenset[str]) -> re.Pattern:
     alt = "|".join(sorted(map(re.escape, names), key=len, reverse=True))
     return re.compile(r"(?:\bverity-vllm|verity_vllm\.pipeline\.cli)[\"']?\s+(?:--?\w[\w-]*\s+)*(" + alt + r")(?![\w-])")
@@ -113,7 +113,7 @@ def scanned() -> list[Path]:
     return out
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     cmds = commands()
     names = frozenset(cmds)
@@ -143,8 +143,7 @@ def test_allowlist_has_no_stale_entries() -> None:
 
 def test_public_commands_are_commands() -> None:
     gone = sorted(set(public_commands()) - set(commands()))
-    assert not gone, f"{RULE}: allowlists/{NAME}.json's {PUBLIC!r} table names commands COMMANDS no longer has; delete them: " \
-                     f"{gone}"
+    assert not gone, f"{RULE}: allowlists/{NAME}.json's {PUBLIC!r} table names commands COMMANDS no longer has; delete them: {gone}"
 
 
 def test_detectors_on_examples() -> None:

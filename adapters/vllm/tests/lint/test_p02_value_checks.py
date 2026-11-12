@@ -10,7 +10,7 @@ test (mutate the retained buffer after commit, and the value check must FAIL) co
 """
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 import pytest
 
@@ -25,7 +25,7 @@ def forbidden(dst: str) -> bool:
     return I.in_group(dst, ("verity_vllm.acquire", "verity_vllm.commit.committer"))
 
 
-@lru_cache(maxsize=None)
+@cache
 def scan() -> tuple[R.Violation, ...]:
     hits = I.unique_edges(lambda e: I.in_group(e.src, I.VALUE_CHECK_MODULES) and forbidden(e.dst))
     return tuple(R.Violation(e.file, "import", "<module>", f"{e.src} -> {e.dst}", e.line) for _, e in sorted(hits.items()))
