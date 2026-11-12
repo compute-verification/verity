@@ -12,7 +12,8 @@ answer for the tick after, two buckets (`coin_link.CoinLinkParams.bucket_ms`); o
 tick costs one. At an allowance below two buckets, a session of one pass a coin whose every exchange costs two is
 rejected `few` at group 1 with every root in time: each boundary is due before the exchange before it returns, so the
 loop reads no root until the last coin has left. At one bucket an exchange the same session is accepted, and so is a
-session of 64 passes a coin at two."""
+session of 64 passes a coin at two, each of whose round trips asks for one coin. The clock charges every round trip
+the same: the link takes a cell a bucket each way, so a round trip for two coins costs it a bucket more."""
 from __future__ import annotations
 
 import os
@@ -182,39 +183,42 @@ class Timed(prover.CpuBackend):
 
 
 class Exchanged(C.LiveChallenger):
-    """A challenger each of whose round trips, an `open` or an `open_many`, costs the verifier `exchange_ns`."""
+    """A challenger each of whose round trips, an `open` or an `open_many`, costs the verifier `exchange_ns`; `trips`
+    has the coins each asked for."""
 
-    def __init__(self, clock: ExchangeClock, exchange_ns: int, *args) -> None:
+    def __init__(self, clock: ExchangeClock, exchange_ns: int, trips: list[int], *args) -> None:
         super().__init__(*args)
-        self.clock, self.exchange_ns = clock, exchange_ns
+        self.clock, self.exchange_ns, self.trips = clock, exchange_ns, trips
 
     def open(self, label, index, after):
-        self.clock.sleep(VERIFIER, self.exchange_ns)
-        return C.LiveChallenger.open(self, label, index, after)
+        return self.open_many([(label, index, after)])[0]
 
     def open_many(self, requests):
+        self.trips.append(len(requests))
         self.clock.sleep(VERIFIER, self.exchange_ns)
         return [C.LiveChallenger.open(self, *r) for r in requests]
 
 
 class Paid(challengers.Local):
     def __init__(self, clock: ExchangeClock, exchange_ns: int) -> None:
-        self.clock, self.exchange_ns = clock, exchange_ns
+        self.clock, self.exchange_ns, self.trips = clock, exchange_ns, []
 
     def open(self, registration: bytes, k: int, windows: int, appends: int, per_coin: int = 1) -> Exchanged:
-        return Exchanged(self.clock, self.exchange_ns, coins.SCHEME, k, coins.families(windows, appends, per_coin),
-                         secrets.token_bytes)
+        return Exchanged(self.clock, self.exchange_ns, self.trips, coins.SCHEME, k,
+                         coins.families(windows, appends, per_coin), secrets.token_bytes)
 
 
-def session(spec: str, exchange_ns: int, blocks: int = 16) -> tuple[dict, dict, dict]:
+def session(spec: str, exchange_ns: int, blocks: int = 16) -> tuple[dict, dict, dict, list[int]]:
     """One honest session paced `spec` at `ALLOWANCE_NS` over a store of `blocks` blocks, each round trip to its
-    challenger `exchange_ns`: the verifier's result, the prover's, and each root's arrival, {(group, pass): ns}."""
+    challenger `exchange_ns`: the verifier's result, the prover's, each root's arrival, {(group, pass): ns}, and the
+    coins each round trip asked for."""
     clock = ExchangeClock()
     vconn, pconn = clock.conns()
     p = ProverSide(pconn, Timed(clock, blocks, random.Random(7), read_bytes_per_s=1e20), b"test-node",
                    prover.parse_plan("honest"), seed=11, log=lambda m: None)
+    paid = Paid(clock, exchange_ns)
     v = Verifier(vconn, source=os.urandom(32), windows=3, window_ns=20, samples=6, delta=2.0 ** -40, jitter_ns=10 ** 9,
-                 clock=clock, log=lambda m: None, challenger=Paid(clock, exchange_ns))
+                 clock=clock, log=lambda m: None, challenger=paid)
     results = []
 
     def prove() -> None:
@@ -231,7 +235,7 @@ def session(spec: str, exchange_ns: int, blocks: int = 16) -> tuple[dict, dict, 
         th.join()
     finally:
         v.stop()
-    return r, results[0], vconn.roots
+    return r, results[0], vconn.roots, paid.trips
 
 
 def test_one_pass_a_coin_is_rejected_few_at_group_1_when_each_exchange_outlasts_the_allowance():
@@ -242,7 +246,7 @@ def test_one_pass_a_coin_is_rejected_few_at_group_1_when_each_exchange_outlasts_
     the last deadline: group 1 is closed with no root read."""
     E, W = 2 * BUCKET_NS, 12 * 8
     assert E > ALLOWANCE_NS > BUCKET_NS + PASS_NS
-    r, pr, roots = session(ONE, E)
+    r, pr, roots, trips = session(ONE, E)
     assert r["pace"]["groups"] == 12 and r["windows"] == W
     assert not r["accepted"] and r["failure"] == {"t": 1, "failure": "few", "at": None}
     assert r["verdict"] == "lean" and r["disagreement"] is None
@@ -255,28 +259,33 @@ def test_one_pass_a_coin_is_rejected_few_at_group_1_when_each_exchange_outlasts_
     assert all(roots[g, 0] < seen[g]["deadline_ns"] for g in range(W))
     assert [w["arrivals_ns"] for w in seen] == [[roots[0, 0]]] + [[]] * (W - 1)
     assert seen[0]["draws_sent_ns"] == seen[-1]["boundary_ns"] + E > seen[-1]["deadline_ns"]
+    assert trips == [1] * (W + 1)
 
 
 def test_one_pass_a_coin_is_accepted_when_each_exchange_fits_the_allowance():
-    """At one bucket an exchange the exchange for coin g + 1 returns before group g − 1's deadline, so the loop reads
-    each root and closes its group before the next boundary: one exchange a group, every group with its pass."""
+    """At one bucket a round trip, coin 1's returns before group 0's deadline, so the loop reads each root and closes
+    its group before the next boundary: one round trip a group, for its openings coin and the challenge two groups
+    on (`coins.SessionCoins.ahead`), and every group with its pass."""
     W = 12 * 8
-    r, pr, roots = session(ONE, BUCKET_NS)
+    r, pr, roots, trips = session(ONE, BUCKET_NS)
     assert r["accepted"] and pr["accepted"] and r["failure"] is None and r["windows"] == W
     assert r["verdict"] == "lean" and r["disagreement"] is None
     seen = r["windows_seen"]
     assert [w["arrivals_ns"] for w in seen] == [[roots[g, 0]] for g in range(W)] and len(roots) == W
     assert pr["passes"] == [1] * W and pr["discarded"] == 0
     assert all(w["slack_ns"] > 0 for w in seen)
+    assert trips == [1, 1] + [2] * (W - 2) + [1, 1]
 
 
 @pytest.mark.slow
 def test_64_passes_a_coin_are_accepted_when_each_exchange_outlasts_the_allowance():
     """A group's boundary leaves at its 63rd root and is due only 63 allowances after its coin, so an exchange of two
     buckets delays the next group's coin and starves nothing: the group's last root arrives a pass after its
-    boundary, during that exchange, and is read once it returns. Every group holds its 64 passes, none discarded."""
+    boundary, during that exchange, and is read once it returns. Every group holds its 64 passes, none discarded,
+    and every round trip asks for one coin, a group's challenge or its openings coin, so two buckets is the most
+    the link takes for one."""
     E, K, W = 2 * BUCKET_NS, 64, 11 * 8
-    r, pr, roots = session(SIXTY_FOUR, E)
+    r, pr, roots, trips = session(SIXTY_FOUR, E)
     assert r["pace"]["groups"] == 11 and r["windows"] == W
     assert r["accepted"] and pr["accepted"] and r["failure"] is None
     assert r["verdict"] == "lean" and r["disagreement"] is None
@@ -287,3 +296,4 @@ def test_64_passes_a_coin_are_accepted_when_each_exchange_outlasts_the_allowance
     assert all(w["arrivals_ns"][K - 1] == w["boundary_ns"] + PASS_NS < w["deadline_ns"] for w in seen)
     assert all(b["released_ns"] == a["boundary_ns"] and b["arrivals_ns"][0] == b["released_ns"] + E + PASS_NS
                for a, b in zip(seen, seen[1:]))
+    assert trips == [1] * (2 * W)
