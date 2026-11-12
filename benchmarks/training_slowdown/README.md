@@ -254,10 +254,11 @@ where the counter can't see makes the run invalid, as for a weight. |C| counts t
 each product by its shape and each elementwise multiplication at one MAC an element (`flops.py`), and a fused attention
 kernel as the ops the math kernel computes attention by, which are the ones a trace runs: the forward's two scalings and
 two products, and in the backward the products and scalings of the gradients the step asks for. The card's fused
-backward computes the scores again, a fifth product, which this count leaves out because a circuit reads the
-forward's. A job's record has the same ops, shapes and MACs under either kernel, in the dtype its kernel ran them in
-(a fused kernel in the query's, the math kernel in float32 for a 16-bit call), and its counted step is its trace's,
-which prices a call's ops in the query's dtype too (`tests/test_run.py`). A fused optimizer kernel is one op,
+backward computes the scores again, a fifth product: this count, and the library's table with it, holds six of the
+kernel's seven products, and a circuit of the kernel as it runs holds seven. A job's record has the same ops, shapes and
+MACs under either kernel, in the dtype its kernel ran them in (a fused kernel in the query's, the math kernel in float32
+for a 16-bit call), and its counted step is its trace's, which prices a call's ops in the query's dtype too
+(`tests/test_run.py`). A fused optimizer kernel is one op,
 priced at a constant per parameter (`opnames.FUSED_OPTIMIZER_MACS`, which the counter and the trace both read). Choosing
 a fused kernel never lowers a step's count, at any setting of the optimizer's options (`tests/test_flops.py`): AdamW
 counts 8 multiplications a parameter and Adam 7, where their unfused steps make 6 at most, and SGD and Adagrad count 4,

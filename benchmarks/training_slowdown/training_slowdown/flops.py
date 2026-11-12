@@ -849,8 +849,8 @@ class Counter(TorchDispatchMode):
           by [n, Ev, S]) where q, k or the mask asks, and with it dropout's scaling; and for each of q and k its
           product ([n, L, S] by [n, S, E]; [n, E, L] by [n, L, S]) and its scaling.
 
-        The card's fused backward computes the scores again, a fifth product, which this count leaves out because a
-        circuit reads the forward's.
+        The card's fused backward computes the scores again, a fifth product: this count, and the library's table with
+        it, holds six of the kernel's seven products, and a circuit of the kernel as it runs holds seven.
 
         What the step asks for is the kernel's own word where it takes one (`grad_input_mask`), else which of q, k and v
         require a gradient. A kernel that takes no such word computes all three gradients whatever `autograd.grad` was
