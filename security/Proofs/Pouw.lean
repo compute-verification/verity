@@ -128,6 +128,7 @@ public import Proofs.Pouw.PearlC.HiddenTileGame
 public import Proofs.Pouw.PearlC.HonestWords
 public import Proofs.Pouw.PearlC.Instance
 public import Proofs.Pouw.PearlC.KernelWrefGap
+public import Proofs.Pouw.PearlC.NoiseSha512Fp4Checks
 public import Proofs.Pouw.PearlC.Peel
 public import Proofs.Pouw.PearlC.PeelExactChecks
 public import Proofs.Pouw.PearlC.PeelExactProofs

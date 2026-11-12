@@ -71,6 +71,7 @@ public import Definitions.Pouw.PearlC.Hidden
 public import Definitions.Pouw.PearlC.HiddenTileGame
 public import Definitions.Pouw.PearlC.Instance
 public import Definitions.Pouw.PearlC.NoiseSha512
+public import Definitions.Pouw.PearlC.NoiseSha512Fp4
 public import Definitions.Pouw.PearlC.PeelExact
 public import Definitions.Pouw.PearlC.PeelExactP
 public import Definitions.Pouw.PearlC.PeelExactVectors
