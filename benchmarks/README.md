@@ -16,7 +16,7 @@ says. These are the directories that have one:
 | --- | --- |
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench certifier_term` | the network certifier's term for GLM-5.3 at a scope's load, in bits and GB |
-| `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside `rho`'s shape-derived ones |
+| `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside the slowdown calculator's shape-derived ones |
 | `verity bench codec_tensor` | the tensor-core wide-word codec's gates and timings on one GPU |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
 | `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |

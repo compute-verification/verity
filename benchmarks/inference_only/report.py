@@ -25,7 +25,7 @@ from verity_config.settings import SHARED
 
 UNIT = ("the least slowdown of training run inside one inference block of the policy, max(1, N / limit): N the block's "
         "work and limit the most training work one block finishes (the bound's macs_a_block), in the policy's own MACs")
-#: rho's command for a deployment's slowdown per monitoring period
+#: the slowdown calculator's command for a deployment's slowdown per monitoring period
 CALCULATOR = "uv run python verity/protocols/inference_only/slowdown/periods.py"
 
 
