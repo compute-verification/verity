@@ -25,9 +25,11 @@ saved words without one:
            indices before and after vLLM's conversion, all 64 heads' output words, the lse and the planner's metadata.
   compare  no GPU.  The planner's metadata against `flashmla_twin.sched_meta` at num_sm_parts = max(132 // T, 1); every output
            word of every token against `flashmla_v32_twin.decode` at the step's SPLITS: the 8 real heads and one pad head
-           against the twin, the other 55 pad heads against that pad head's words; and the probes.  Writes
-           `<out>/glm53_flashmla_fp8_capture.json` and prints, per case and in total, the words compared and the words that
-           differ; exit 1 unless every check held and no word differs.
+           against the twin, the other 55 pad heads against that pad head's words; the probes; and, for ``--definition N``
+           tokens a case (every token of `edge`), the 8 real heads against `FlashMlaV32Decode_v1` itself, bound at GLM-5.3's
+           statics and the step's SPLITS and run through the reference evaluator (about two minutes a token on one core).
+           Writes `<out>/glm53_flashmla_fp8_capture.json` and prints, per case and in total, the words compared and the words
+           that differ; exit 1 unless every check held and no word differs.
 
 The cases.  `dT`: T decode tokens, one query row a request (a third of them requests of 2048 rows or more), each with the 2048
 rows its request's indexer would name (all of them, in a random order, then -1, when the request has fewer), at every T where
@@ -44,7 +46,7 @@ one cache row agree.
     cd adapters/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_flashmla_fp8_capture_gpu.py sass --out DIR
     $PY tests/properties/glm53_flashmla_fp8_capture_gpu.py launch --out DIR [--quick]
-    $PY tests/properties/glm53_flashmla_fp8_capture_gpu.py compare --out DIR [--workers N]
+    $PY tests/properties/glm53_flashmla_fp8_capture_gpu.py compare --out DIR [--workers N] [--definition N]
 """
 from __future__ import annotations
 
@@ -96,6 +98,8 @@ REQS, QUICK_REQS = (133, 40), (67, 20)
 PLANT_BLOCKS = 2
 PLANT_ROWS = PLANT_BLOCKS * PBS
 JOB_TOKENS = 4
+#: the cases whose every token is held to the Definition's own evaluator, whatever ``--definition`` (above 0) says: the planted rows
+DEFINITION_WHOLE = ("edge",)
 SASS_KEEP = re.compile(r"fp8_sparse|sparse_fp8|mla_combine_kernel|get_mla_metadata_kernel")
 #: the V32, 64-head instance's template arguments as the Itanium ABI mangles them (`ModelType::V32` is 0)
 SASS_INSTANCE = re.compile(r"flash_fwd_splitkv_mla_fp8_sparse_kernel.*ModelTypeE0ELi64E")
@@ -694,6 +698,43 @@ def compare_tokens(job: dict[str, Any]) -> dict[str, Any]:
     return rec
 
 
+def definition_tokens(tokens: int, n: int, whole: bool) -> list[int]:
+    """The tokens of a case of ``tokens`` held to the Definition's evaluator: all of them, or ``n`` spread from first to last."""
+    if whole or n >= tokens:
+        return list(range(tokens)) if n > 0 else []
+    return sorted({round(i * (tokens - 1) / max(n - 1, 1)) for i in range(n)})
+
+
+def definition_token(job: dict[str, Any]) -> dict[str, Any]:
+    """One token's 8 real heads against `FlashMlaV32Decode_v1` at GLM-5.3's statics and the step's SPLITS, through the
+    reference evaluator: on the captured queries, the cache rows the token's indices name (any row for an index of -1) and
+    the indices."""
+    rec = {"case": job["case"], "token": job["token"], "words": 0, "differ": 0, "first": None}
+    try:
+        from verity.circuits.defs import bind
+        from verity.circuits.evaluation import evaluate
+        from verity.definitions.registry import flashmla_v32 as R
+
+        outdir, t = Path(job["dir"]), job["token"]
+        a, cache = _case(outdir, job["case"]), np.load(outdir / "cache.npy", mmap_mode="r")
+        metas = [T.SchedMeta(*(int(v) for v in m)) for m in np.asarray(a["metas"])]
+        splits = T.request_splits(metas, [int(v) for v in np.asarray(a["num_splits"])], 0, TOPK // BN)
+        target = bind(R.FlashMlaV32Decode, NH=NH, SPLITS=splits, DN=DN, DR=DR, QT=QT, BN=BN, DOT=R.FLASHMLA_GLM53["DOT"], SCALE=SCALE)
+        g = np.asarray(a["gidx"][t])
+        nope, scale, rope = rows_at(cache, g)
+        y = np.asarray(evaluate(target, np.asarray(a["q"][t], dtype=np.uint16).reshape(-1), nope.reshape(-1), scale.reshape(-1),
+                                rope.reshape(-1), g.astype(np.int64).astype(U32)), dtype=np.uint16).reshape(NH, DV)
+        got = np.asarray(a["out"][t][:NH], dtype=np.uint16)
+        bad = np.argwhere(y != got)
+        rec.update(target=target.id, words=int(y.size), differ=int(bad.shape[0]))
+        if bad.shape[0]:
+            h, i = (int(v) for v in bad[0])
+            rec["first"] = {"token": t, "head": h, "word": i, "definition": int(y[h, i]), "kernel": int(got[h, i])}
+    except Exception as e:  # noqa: BLE001
+        rec["error"] = D._error(e)
+    return rec
+
+
 def dense_rows(nope, scale) -> np.ndarray:
     """The read-back's arithmetic as its source states it (cache_kernels.cu:1360-1385, quant_utils.cuh:152-176): each E4M3
     element times its tile's f32 scale in f32, then rounded to bf16."""
@@ -756,7 +797,7 @@ def compare_probes(outdir: Path, cases: list[str]) -> dict[str, Any]:
     return rec
 
 
-def compare(out: str, workers: int) -> dict[str, Any]:
+def compare(out: str, workers: int, definition: int = 0) -> dict[str, Any]:
     root, outdir = Path(out), Path(out) / "capture"
     doc = json.loads((outdir / "launch.json").read_text())
     try:
@@ -780,6 +821,26 @@ def compare(out: str, workers: int) -> dict[str, Any]:
             for k in keys:
                 agg[k] += res[k]
             agg["first"] = agg["first"] or res["first"]
+        djobs = [{"dir": str(outdir), "case": x["case"], "token": t} for x in doc["launches"]
+                 for t in definition_tokens(x["tokens"], definition, x["case"] in DEFINITION_WHOLE)]
+        print(f"[glm53-flashmla-fp8] holding {len(djobs)} tokens to FlashMlaV32Decode_v1's evaluator", flush=True)
+        held: dict[str, Any] = {"asked": definition, "tokens": 0, "words": 0, "differ": 0, "targets": [], "cases": {}, "first": None}
+        for res in (ex.map(definition_token, djobs) if workers else map(definition_token, djobs)):
+            if "error" in res:
+                doc["errors"].setdefault(f"definition/{res['case']}/{res['token']}", res["error"])
+                continue
+            c = held["cases"].setdefault(res["case"], {"tokens": [], "words": 0, "differ": 0})
+            c["tokens"].append(res["token"])
+            for d in (held, c):
+                d["words"] += res["words"]
+                d["differ"] += res["differ"]
+            held["tokens"] += 1
+            held["first"] = held["first"] or (res["first"] and {"case": res["case"], **res["first"]})
+            if res["target"] not in held["targets"]:
+                held["targets"].append(res["target"])
+            print(f"[glm53-flashmla-fp8] definition {res['case']:10s} token {res['token']} words={res['words']} "
+                  f"differ={res['differ']}", flush=True)
+    doc["definition"] = held
     doc["comparisons"] = list(comps.values())
     doc["totals"] = {k: sum(c[k] for c in comps.values()) for k in keys}
     try:
@@ -795,7 +856,8 @@ def compare(out: str, workers: int) -> dict[str, Any]:
               f"first={json.dumps(c['first'])}", flush=True)
     ok = bool(doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("ok") is True and doc["sass"].get("ok") is True
               and doc.get("write", {}).get("ok") is True and done == doc["cases"] and all(launches_ok.values())
-              and doc.get("readback", {}).get("rerun") is True and doc["totals"]["words"] > 0 and doc["totals"]["differ"] == 0)
+              and doc.get("readback", {}).get("rerun") is True and doc["totals"]["words"] > 0 and doc["totals"]["differ"] == 0
+              and held["differ"] == 0 and (definition == 0 or held["words"] > 0))
     body = {**{k: v for k, v in doc.items() if k != "digest"}, "ok": ok}
     doc = {**body, "digest": digest_of(body)}
     (root / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
@@ -806,6 +868,8 @@ def compare(out: str, workers: int) -> dict[str, Any]:
               f"hand={json.dumps(r.get('hand'))} rope {r['rope_words']}/{r['rope_differ']} sparse_model_differ="
               f"{r['sparse_model_differ']} dense_model_differ={r['dense_model_differ']} examples={json.dumps(r['examples'][:3])}",
               flush=True)
+    print(f"[glm53-flashmla-fp8] FlashMlaV32Decode_v1's evaluator: tokens={held['tokens']} words={held['words']} "
+          f"differ={held['differ']} first={json.dumps(held['first'])}", flush=True)
     print(f"GLM53-FLASHMLA-FP8 {'HOLDS' if ok else 'FAILS'} {doc['digest']} words={doc['totals']['words']} "
           f"differ={doc['totals']['differ']} cases={len(done)}/{len(doc['cases'])} launches_failing="
           f"{[c for c, v in launches_ok.items() if not v]} errors={sorted(doc['errors'])}", flush=True)
@@ -822,13 +886,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--want-sms", type=int, default=132)
     ap.add_argument("--workers", type=int, default=C.cpu_workers(), help="comparison processes; 0 compares in this one")
     ap.add_argument("--quick", action="store_true", help="fewer requests and cases: a first signal in a few minutes")
+    ap.add_argument("--definition", type=int, default=0, metavar="N",
+                    help="compare: also hold N tokens a case (and every token of the planted rows' case) to FlashMlaV32Decode_v1's "
+                         "own evaluator, about two minutes a token on one core")
     a = ap.parse_args(argv)
     if a.stage == "sass":
         return 0 if sass(a.out)["ok"] else 1
     if a.stage == "launch":
         doc = launch(a.out, a.quick, a.min_driver, a.want_cc, a.want_sms)
         return 0 if not doc["errors"] and len(doc["launches"]) == len(doc["cases"]) else 1
-    return 0 if compare(a.out, a.workers)["ok"] else 1
+    return 0 if compare(a.out, a.workers, a.definition)["ok"] else 1
 
 
 if __name__ == "__main__":

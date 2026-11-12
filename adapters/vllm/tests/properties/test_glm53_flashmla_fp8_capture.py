@@ -199,6 +199,37 @@ def test_the_comparison_takes_the_kernel_words(made) -> None:
         np.save(d / "d3" / "out.npy", good)
 
 
+def test_the_tokens_held_to_the_definition_are_spread_over_a_case() -> None:
+    from verity.definitions.registry import flashmla_v32 as R
+
+    S = R.FLASHMLA_GLM53
+    assert (S["NH"], S["DN"], S["DR"], S["QT"], S["BN"], S["SCALE"]) == (X.NH, X.DN, X.DR, X.QT, X.BN, X.SCALE)
+    assert R.GLM53_TOPK == 2048 and V.step_splits(14, topk=2048) == _planner(14, 2048)[2]
+    assert X.definition_tokens(24, 2, False) == [0, 23] and X.definition_tokens(24, 3, False) == [0, 12, 23]
+    assert X.definition_tokens(16, 1, True) == list(range(16)) and X.definition_tokens(16, 0, True) == []
+    assert X.definition_tokens(1, 2, False) == [0] and X.definition_tokens(5, 1, False) == [0]
+
+
+@pytest.mark.slow
+def test_the_definitions_evaluator_takes_the_kernel_words(made) -> None:
+    """A token through `FlashMlaV32Decode_v1` itself, bound at the capture's statics and the step's SPLITS: with one kernel
+    word flipped, that word and no other differs, so the Definition, not only its twin, gives the fabricated words.  One
+    evaluation of 8 heads over 128 rows of 512 bytes, which no smaller binding stands for: the statics are the capture's."""
+    d = made / "capture"
+    out = np.load(d / "d3" / "out.npy")
+    good = out.copy()
+    try:
+        out[FLIP] ^= 1
+        np.save(d / "d3" / "out.npy", out)
+        r = X.definition_token({"dir": str(d), "case": "d3", "token": FLIP[0]})
+    finally:
+        np.save(d / "d3" / "out.npy", good)
+    assert "error" not in r and (r["words"], r["differ"]) == (X.NH * X.DV, 1)
+    assert r["target"].startswith("FlashMlaV32Decode_v1{NH=8,SPLITS=(0,1,2),DN=512,DR=64,QT=128,BN=64,")
+    assert r["first"] == {"token": FLIP[0], "head": FLIP[1], "word": FLIP[2], "definition": int(good[FLIP]),
+                          "kernel": int(good[FLIP]) ^ 1}
+
+
 def test_the_probes_count_the_rows_the_two_reads_stage_differently(made) -> None:
     r = X.compare_probes(made / "capture", ["probe"])
     assert r["hand"] == {"byte": X.HAND_BYTE, "scale": X.HAND_SCALE, "sparse": 0x3FE2, "readback": 0x3FE1,
@@ -233,3 +264,32 @@ def test_the_record_holds_only_when_no_word_differs(made, capsys) -> None:
     finally:
         launch.write_text(good)
     assert "FAILS" in capsys.readouterr().out
+    assert doc["definition"] == {"asked": 0, "tokens": 0, "words": 0, "differ": 0, "targets": [], "cases": {}, "first": None}
+
+
+def test_the_record_counts_the_tokens_held_to_the_definition(made, monkeypatch) -> None:
+    """`compare`'s count of the tokens held to the Definition, the evaluator stood in for: one token a case, a word that
+    differs fails the record, and so does an evaluation that raised or none at all."""
+    def stub(differ: int, error: bool = False):
+        def run(job):
+            r = {"case": job["case"], "token": job["token"], "words": X.NH * X.DV, "differ": differ if job["case"] == "d3" else 0,
+                 "first": {"token": job["token"], "head": 2, "word": 9, "definition": 5, "kernel": 4} if differ else None,
+                 "target": "FlashMlaV32Decode_v1{...}"}
+            return {**r, "error": "boom"} if error and job["case"] == "probe" else r
+        return run
+
+    monkeypatch.setattr(X, "definition_token", stub(0))
+    doc = X.compare(str(made), 0, definition=1)
+    held = doc["definition"]
+    assert doc["ok"] and (held["asked"], held["tokens"], held["words"], held["differ"]) == (1, 2, 2 * X.NH * X.DV, 0)
+    assert {c: v["tokens"] for c, v in held["cases"].items()} == {"d3": [0], "probe": [0]}
+    assert held["targets"] == ["FlashMlaV32Decode_v1{...}"] and held["first"] is None
+    monkeypatch.setattr(X, "definition_token", stub(1))
+    doc = X.compare(str(made), 0, definition=1)
+    assert not doc["ok"] and doc["totals"]["differ"] == 0 and doc["definition"]["differ"] == 1
+    assert doc["definition"]["first"] == {"case": "d3", "token": 0, "head": 2, "word": 9, "definition": 5, "kernel": 4}
+    monkeypatch.setattr(X, "definition_token", stub(0, error=True))
+    doc = X.compare(str(made), 0, definition=1)
+    assert not doc["ok"] and doc["errors"] == {"definition/probe/0": "boom"} and doc["definition"]["tokens"] == 1
+    monkeypatch.setattr(X, "definition_tokens", lambda tokens, n, whole: [])
+    assert not X.compare(str(made), 0, definition=1)["ok"]
