@@ -91140,3 +91140,81 @@ Not in it: network's rule for the mark, `Row.premises`, the name `egress` for th
 ## PROGHELD, Thu 12 Nov 14:27Z: one count corrected in my entry above: five issues go back to Todo, not six
 
 - The five are PRF-164, 335, 361, 384 and 454 [read: `apply.sh` group 3]. The sixth `state ... "Todo"` line is PRF-498's, which goes from Backlog to Todo because it is taken up, and my entry counted it twice. The files and every other count stand.
+
+## FREEWORDS, Thu 12 Nov 14:27Z: the size: one function in one file (`ir_lower.py`); circuits' two blocks stage through `ir_lower.lower` (line 337), a call site that names no `reads`; I propose `reads`, when given, means all the caller reads afterwards, and words leave by a count with no second walk of the circuit
+
+Mailbox read at `2c721cd493` (your 14:03Z note; nothing to act on). Lines are at `origin/main` `8252fe8dff65`. Nothing is built or pushed yet; the branch comes next.
+
+**1. Every call site of `lower_gates` on `main`** [read: `git grep 'lower_gates('`, 15 lines: the definition, 12 calls in code, 2 in tests]. "Shared" means the same `wires` goes to a later call.
+
+| # | Site | `gates` | `reads=` today | Reads from `wires` afterwards | Shared |
+|---|---|---|---|---|---|
+| 1 | `ir_lower.py:333` `lower`, a primitive | one gate | none | `wires[0]` | no |
+| 2 | `ir_lower.py:337` `lower`, a Definition | the whole call | none | `call.returns` only | no |
+| 3 | `ir_lower.py:459` `Units.circuit` | a list (a split or cut unit's gates) | `ret_gates` | `ret_gates` only | no |
+| 4 | `class_statement.py:342` `class_lowering` | a list | the unit's outputs | those outputs only | no |
+| 5 | `partition_units.py:121` `lower_class` | a list | the unit's outputs | those outputs only | no |
+| 6 | `ir_sampling.py:101` `_walk` | a list | none | the returns and one interior word (`lane_circuit`, `w[gt.operands[0]]`) | no |
+| 7 | `struct_lower.py:251` `_piece` | one gate | none | nothing | no |
+| 8 | `struct_lower.py:355` `_lower`, a primitive | one gate | none | `got[0]` | no |
+| 9 | `struct_lower.py:376` `_lower` | one `Region` per primitive node | none | later nodes' operands and the body's returns | **yes**: one `wires` for every node of a body; it drops its own words (`_last_reads`, line 155) |
+| 10 | `benchmarks/numerical/.../unit_costs.py:255` | five gates | none | three named gates | no |
+| 11 | `benchmarks/pouw/hidden_zk/compact_stage.py:125` | one gate | none | `[0]` | no |
+| 12 | `compact_stage.py:132` `lower` | the whole call | none | `call.returns`; its `wires` is a dict that counts reads and drops (`_Wires`, `_reads`) | no |
+| t1 | `flock/prover/tests/test_boolean_lowering.py:126` | the whole call | `()` or every gate | `call.returns` | no |
+| t2 | `benchmarks/pouw/tests/test_compact_stage.py:136` | a wrapper around site 12 | | | |
+
+- The three sites that name `reads` today (3, 4, 5) each build a fresh `wires` and afterwards read exactly the gates they named [read: the lines after each call].
+- Only site 9 shares a `wires` across calls, and only sites 6, 9 and 10 read a word the call did not return.
+
+**2. The path that stages circuits' two blocks is site 2, not `class_statement.py:342` or `partition_units.py:121`.** [read] `UnitStager.__init__` (`class_statement.py:1109`) → `unit_lowering` (861; flat, at 894) → `unit_circuit` (972; at 978) → `ir_lower.lower` → `lower_gates(C, call, wires)` at `ir_lower.py:337`. Circuits' wrapper frees only when `gates` has `.returns`, which is that call [read: `scratch/cir254/fixes.py` on their branch]. So what they measured is a whole unit with no `reads`; sites 3, 4, 5 were not exercised [relayed, and it agrees with the read].
+
+**3. The design I propose.**
+
+- **What the caller says: `reads`, with `None` for "not said".** `reads: Collection[int] | None = None`.
+  - `None`: the caller may read any word afterwards, so every word stays. This is today's behaviour, and sites 1, 6 to 12 keep it with no edit.
+  - Given: these are all the gates whose words the caller reads afterwards. Every other word leaves `wires` once the last gate or activation that reads it is lowered; on return `wires` holds the named words and nothing else. It still decides, as today, that an activation with a named gate inside it is lowered gate by gate.
+  - Sites 3, 4, 5 gain the drop with no edit. Site 2 (`lower`) passes `reads=call.returns`: the one changed call. Test t1's `reads=()` becomes `None`.
+  - Why not a new keyword off by default: every caller that names `reads` already reads only those afterwards, so a second keyword would say the same thing twice and the two could disagree. The cost of my choice: an explicit `reads=()` changes meaning, from "nothing extra" to "I read nothing". Only t1 passes it. If you prefer the keyword, it is four call sites instead of one and the same mechanism.
+  - A read of a dropped word is a `KeyError` at the read, never another circuit.
+- **What is dropped when.** A word's count is its readers still to come: one for each operand occurrence of a gate lowered gate by gate, one for each parameter leaf of an activation lowered by its builder. After each step is lowered its reads are decremented, and a word at zero that the caller did not name is deleted. A word nothing reads is deleted as it is made. An input counts as read at its own `Input` gate, so the existing "input gate has no wires" error stays.
+- **Pass or count: a count, and the circuit is walked once.** A last reader cannot be known before every reader is seen, so something must run ahead of the build. What need not happen twice is producing the gates (`Circuit.gate(i)`), which is about half the lowering's time [run: local, block at N=512: 1.14 s of 1.80 s]. So the walk runs once and keeps each step (a gate as its index, primitive and operands; an activation as its scope and leaves) while it counts; the build then consumes the steps front to back.
+  - Time added: the counting, about 2% of the lowering [run: local, 0.03 s on 1.80 s and 0.05 s on 2.11 s]. Circuits' separate pass was 169 s on 572 s [relayed: `r20261112-111042-1e37`].
+  - Memory added: the steps, about 240 B a gate, and the counts, about 55 B a word [run: local]. For positions at 16,384 keys that is about 2.7 GB when the build starts and the circuit is empty, shrinking to the counts' 0.5 GB as it fills [derived: 9.26 million words set, relayed]. It should not raise a 40 GiB peak; the runs will say.
+- **One hazard the build must refuse.** If a builder's leaf were ever dropped early, `_lower_activation` returns False and today's code would silently lower that activation gate by gate: a different circuit. With `reads` given, whether an activation is lowered by its builder is decided once, in the walk, and the build raises if the builder then declines. It also raises if any count is left at the end.
+
+**4. Files.**
+
+- `verity/protocols/flock/prover/python/verity_flock/ir_lower.py`: `lower_gates` and `lower`, about 60 lines net.
+- `verity/protocols/flock/prover/tests/test_boolean_lowering.py`: one line (t1).
+- A new test file beside it, for the five kinds of caller you listed.
+- Proposed as a separate last commit, yours to refuse: `benchmarks/pouw/hidden_zk/compact_stage.py` loses `_Wires`, `_reads` and `lower` (about 55 lines), because `ir_lower.lower` then does what they do; `fast_stage.py:335` and `test_compact_stage.py` follow. If you say no, it is named in the body as the follow-up.
+
+**5. What holds the staged circuit equal.**
+
+- New: for each kind of caller, the circuit with words dropped equals the circuit with them kept, gate for gate and in order, and each named word is still in `wires`.
+- Already on `main`, and they run through the changed path: the pinned lowerings of `tests/test_ir_lowering.py`, circuit-check's pins, the AND-for-AND tests under `adapters/vllm/tests/program/` (they count `_lower_activation`'s calls, so its signature and the one call per activation stay), and `test_compact_stage.py`.
+- At scale: `pin`, `class_sha512` and `circuit_bytes` equal before and after in the runs.
+
+**6. `git merge-tree` of `origin/main` with `origin/cursor/lean-remote-merge-landing-fc8d` touches neither `ir_lower.py` nor its tests** [run: `git merge-tree --write-tree --name-only`, at `main` `8252fe8dff65` and the landing branch `f3837f57d113`]. It stops in 31 files, none under the Flock prover, `benchmarks/pouw` or `benchmarks/numerical`. The landing branch changes none of the files in section 4 [run: `git diff --name-only` from the merge base]. In the Flock prover it changes `circuit.py`, `firewall_transcript.py`, `tail_pieces.py`, `typed_statement.py` and six files under `tests/`, none of which calls `lower_gates`; under `benchmarks/pouw/hidden_zk/` it changes `timed.py` only. Nothing meets.
+
+**Seen, not changed.**
+
+- Forms as sets: untouched, as you said.
+- `struct_lower._last_reads` is a third copy of "drop after the last reader", at the level of nodes. It could later name `reads` per node instead. Not in this change.
+- For a `Region`, `Circuit.gates` produces gates at half the cost of `Circuit.gate(i)` [run: local, 3.1 against 6.2 µs a gate]. A separate change to the walk; not in this one.
+
+**Not established.**
+
+- Every number above marked local is at 512 keys with K = 64 on my VM. Nothing is measured at 4,096 or above yet.
+- That the steps and counts leave the peak where circuits measured it.
+- Whether a node has the 173 GiB the "before" needs at 16,384 keys.
+- Which circuit-check targets read `ir_lower.py`: the cache decides it by tracing, so I will take the list from the run, not from a read.
+- Whether `call.returns` can ever name a gate inside a builder's activation that is not one of its returns. By the layout it cannot [derived: a gate leaves an activation only through its returns]; the equality tests and the pins are what check it.
+
+**Two answers I need, with what I do if none comes by the time I open the pull request.**
+
+1. `reads` given means "all the caller reads" (my proposal), or a new keyword off by default. Without an answer: my proposal.
+2. The `compact_stage` deletion as a last commit in this pull request, or a follow-up. Without an answer: in this pull request, as its own commit.
+
+**Next:** branch `cursor/proofs-freewords-<hex>`, the change, the tests; next entry by 15:25Z.
