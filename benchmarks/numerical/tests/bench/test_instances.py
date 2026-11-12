@@ -7,13 +7,13 @@ every instance and rebuilds the corner tier (minutes)."""
 from __future__ import annotations
 
 import hashlib
-import os
 import json
 from pathlib import Path
 
 import pytest
 from verity.definitions.silicon import models as S, term as T
 from verity.definitions.silicon.errors import InvalidArtifact
+from verity_numerical import settings
 from verity_numerical.bench import contract
 from verity_numerical.bench import instances as I
 from verity_numerical.bench import instances_gen as G
@@ -333,7 +333,7 @@ def test_fused_row_mapping() -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("VERITY_BENCH_FULL"), reason="minutes: set VERITY_BENCH_FULL=1")
+@pytest.mark.skipif(not settings.VERITY_BENCH_FULL, reason="minutes: set VERITY_BENCH_FULL=1")
 @needs_built
 def test_full_recheck() -> None:
     rep = I.verify(ROOT, full=True, log=lambda *_: None)

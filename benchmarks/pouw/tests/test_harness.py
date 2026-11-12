@@ -17,16 +17,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
-import arm as A  # noqa: E402
-import baselines as B  # noqa: E402
-import bench as H  # noqa: E402
-import chain as CH  # noqa: E402
-import derive as DV  # noqa: E402
-import fill as F  # noqa: E402
-import identity as I  # noqa: E402
-import report as R  # noqa: E402
-import schedule as S  # noqa: E402
-import shapes as SH  # noqa: E402
+import arm as A
+import baselines as B
+import bench as H
+import chain as CH
+import derive as DV
+import fill as F
+import identity as I
+import report as R
+import schedule as S
+import shapes as SH
 import torch_baselines as TB
 
 UUID5 = "GPU-0a1b2c3d-0000-1111-2222-333344445555"
@@ -710,7 +710,8 @@ def test_the_card_must_be_an_rtx_pro_6000_sm120_with_188_sms_or_an_h200_sm90_wit
     assert I.check_card("NVIDIA RTX PRO 6000 Blackwell Server Edition", "12.0", 188, "595.91.07")["arch"] == "sm_120a"
     assert I.check_card("NVIDIA H200", "9.0", 132, "570.133.20")["arch"] == "sm_90a"
     for bad in (("NVIDIA GeForce RTX 5090", "12.0", 170, "575.1"), ("NVIDIA RTX PRO 6000", "12.0", 188, "570.86"),
-                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "9.0", 132, "570.1")):
+                ("NVIDIA H200", "9.0", 114, "570.1"), ("NVIDIA H100 80GB HBM3", "9.0", 132, "570.1"),
+                ("NVIDIA H200", "9.0", 132, "unknown"), ("NVIDIA H200", "9.0", 132, "")):
         with pytest.raises(I.IdentityError, match="not the card"):
             I.check_card(*bad)
 
