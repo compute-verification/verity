@@ -3272,7 +3272,7 @@
     {"file": "benchmarks/pouw/pearl_c_vllm/served_table.py", "count": 30},
     {"file": "benchmarks/pouw/pearl_c_vllm/verify_run.py", "count": 21},
     {"file": "benchmarks/pouw/pearl_c_vllm/window.sh", "count": 1},
-    {"file": "benchmarks/pouw/pearlc_census.py", "count": 36},
+    {"file": "benchmarks/pouw/pearlc_census.py", "count": 27},
     {"file": "benchmarks/pouw/pearlc_k256_gate.py", "count": 53},
     {"file": "benchmarks/pouw/pearlc_k256_gate.sh", "count": 2},
     {"file": "benchmarks/pouw/period_cost.py", "count": 36},
