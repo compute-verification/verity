@@ -102845,3 +102845,39 @@ Plan, five lines:
 5. Every Lean file goes to `research run` as soon as it is written; nothing is built on this VM.
 
 Not established: whether `heldOf i` can be built from the run's input alone (the model's `xS₀ t` must be a Flock statement the auditor holds; the run holds only each template's header and registered reads, `templateCircuits`), which may be a second GAP; nothing is compiled.
+
+## FIXEDCOST, Thu 12 Nov 21:33Z: checkpoint, ending my turn as told: the launcher's entry is pushed (21:30Z), no run of mine is out, and the reading for NET-329 is started but its entry is not written
+
+Your message to end the turn is headed 21:50Z; my clock read 21:32Z when it reached me. [run: `date -u`]
+
+**Where I am**
+
+- The 21:03Z order's points 1, 2, 3 and 5 are answered in my 21:30Z entry (the tree hash and recipe, the launcher's dry run with `--mem-gb 100 --mem-wait 300`, the label, #9251). [run: the push, commit `5d54065e56` on the inbox's branch]
+- Point 4, the reading for NET-329, is started: `r20261112-135528-7404` is fetched whole, and what I have so far is below. The entry headed `FOR NET-329` is not written.
+- The kit as changed, the dry run, the rehearsal's record and both entries are in the team's notes. [run: `research notes sync`]
+
+**Branch and SHA**
+
+- `cursor/proofs-fixedcost-46fc` at `8a5aebc549a65e018ba78c728627c859ddc29721` (#9251), untouched this turn; FOLD has its runs and its line.
+- My checkout is on `main`, clean. Nothing of this turn is in the repository's tree; the kit lives in the notes.
+- Friday's tree `774b31eca17c1495fd4451f615540a44ab305ed2` is not on a branch. It exists only on my VM and is rebuilt by `scratch-tree.sh` after a restart.
+
+**Runs still out:** none. This turn's one run, `r20261112-211938-7969` (the rehearsal), is done, exit 0.
+
+**NET-329 so far** (network's run `r20261112-135528-7404`, commit `4d784714a84d`, vy-nebius-cpu-4, a CPU prover; nothing here runs on the served engine)
+
+- The 23 to 26 s are `e2e_s − tp_s` of each session's prover: 24.605, 26.079, 25.580 and 23.204 s for the members `first` (1 block), `ingress-0` (30), `last` (1) and `egress-0` (32); 99.468 s a round. [run: `out/scan_cost.json`; read: `benchmarks/scan_cost/result.py` line 115]
+- That span runs from just before the prover sends `Register` to just before `Hello`. [read: `flock-circuit.rs` 4070 and 4266 at `4d784714a84d`]
+- In it, in order: `Register`'s round trip; the sampled statement's tables; the connect to the Lean session loop's finish, which writes `finish` with the sample and blocks on one line, `ok 0`; the witness build; the wait for level 0's salts. [read: `flock-circuit.rs` 4070 to 4266; `firewall.rs` 353 to 366]
+- The record times one of those, the witness build: 0.391, 0.748, 0.632 and 0.148 s. So 22.6 to 25.3 s of each session are in steps this record does not time. [run: each `prove.log`'s `LIVE` line; derived]
+- This record's `t.lean_finish` (0.011 to 0.033 s a repetition) is another timer: each repetition's request at its end, not the connect. So `7404` cannot say the connect is the 24 s; NET-396's later run, which times it, does. [read: `flock-circuit.rs` 2515 to 2531; run: the four `prove.log`]
+- **Not the same seconds as my 1.93 s.** Mine is one `HostSlots::pack_units` call inside the witness build, at `FC_FIREWALL=0`, where the prover opens no Lean finish at all (it opens one only for a zero-knowledge statement with the ZK server asked for). Theirs has a witness build under 0.8 s and the rest outside it. [run: `r20261112-110333-4c33`; read: `flock-circuit.rs` 4095 to 4100, `firewall_on`]
+- A lead, not yet checked in the Lean: the Lean verifier's own process on the same four sessions spends 9.83, 10.33, 10.37 and 8.60 s reading its inputs and 10.51, 10.97, 10.60 and 10.40 s setting the sampled statement up, so 19.0 to 21.3 s together. [run: `out/scan_cost.json`] If the loop's finish reads the same files and does the same setup, those are most of the 24 s, and the loop does them once more than the verifier that follows. [guess]
+
+**The exact next step**
+
+1. Read the Lean session loop's `finish` handler at `4d784714a84d` (`Flock.Firewall.Session` and `Flock.Firewall.Finish` under `verity/protocols/flock/verifier/`): what it does between `finish` and `ok 0`, which part grows with the circuit file and which with the sample, and whether a kept loop would already hold any of it.
+2. Read the four sessions' `lean-verify.log` for what `inputs` and `setup` are, and set them beside step 1.
+3. Write the `FOR NET-329` entry, with the one measurement that would split the 24 s. Build nothing.
+
+**Waiting on:** you, to resume me. Friday's launch is by 15:39Z for the row at 15:45Z on card 7.
