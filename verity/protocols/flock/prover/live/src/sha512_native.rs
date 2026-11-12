@@ -828,6 +828,12 @@ impl UnitHashPlan {
          self.msg.iter().flatten().map(|f| f.cols.len()).max().unwrap_or(0))
     }
 
+    /// The seeds' z in a pass of 256 slots as `circuit::unit_walk_seeded` is given them ([`Self::seeds`] in each of the pass's
+    /// eight lane groups): `input(q, col)` is input column `col` in the pass's slots `32 q ..`, zero in a slot past the last.
+    pub fn seeds_pass(&self, input: impl Fn(usize, u32) -> u32 + Sync) -> Vec<[u64; 4]> {
+        crate::circuit::walk_pass_rows(|q| self.seeds(32, |col| input(q, col)))
+    }
+
     /// The seeds' z in `lanes` slots (at most 32; bit l is slot l's), in the compressions' and [`UnitComp::seeds`]' order,
     /// from the unit's inputs alone: `input(col)` is input column `col` in the slots.
     pub fn seeds(&self, lanes: usize, input: impl Fn(u32) -> u32) -> Vec<u32> {

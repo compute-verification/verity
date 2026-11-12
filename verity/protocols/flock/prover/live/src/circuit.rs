@@ -2678,11 +2678,26 @@ pub(crate) fn transpose32(m: &mut [u32; 32]) {
 /// a's and b's `u32` words, `uw32` a slot, zero past the unit's rows: a's and b's are [`unit_ab_into`]'s, and z is a & b
 /// where every assertion holds.
 pub fn unit_walk_words(net: &IrUnitNet, sched: &UnitSched, rows: &crate::ir_block::WalkRows, uw32: usize, ins: &[Vec<F128>]) -> [Vec<u32>; 3] {
+    unit_walk_seeded(net, sched, rows, uw32, ins, &[], |_| Vec::new()).0
+}
+
+/// [`unit_walk_words`] on a cut schedule (`ir_block::schedule_seeded(net, seeds)`, `rows` its [`WalkRows`]), which no device
+/// kernel takes yet: the steps one would. `given(pass)` is each of `seeds`' rows of z in that pass's 256 slots, the slots
+/// past `ins` among them (their inputs are zero), written after the input rows and before any level. A level's rows then
+/// read a seed as given, and the seed's own row is written at its level as any row: its z is the walk's again. After the
+/// levels every seed's row is held to the one given, in all 256 slots. The flag is whether every one was it; then every row
+/// read what the walk as written reads, and z's, a's and b's words are [`unit_walk_words`]'s on the whole schedule. Else the
+/// first seed in row order that is not its row's z is found off, since the rows before it read right seeds only: one
+/// seed off is never missed, and the words then say nothing.
+pub fn unit_walk_seeded(net: &IrUnitNet, sched: &UnitSched, rows: &crate::ir_block::WalkRows, uw32: usize, ins: &[Vec<F128>], seeds: &[u32],
+                        given: impl Fn(usize) -> Vec<[u64; 4]>) -> ([Vec<u32>; 3], bool) {
     const UNITS: usize = 256;
     const POISON: [u64; 4] = [0xa5a5_a5a5_a5a5_a5a5; 4];
     let (u, cp, first) = (net.useful, net.const_pos, net.in_words * WORD);
     assert!(u <= 32 * uw32, "unit_walk_words: the unit's rows are more than a slot's");
     assert!(rows.own.len() == first && rows.st.len() == sched.order.len() + 1, "unit_walk_words: the rows are not this net's");
+    assert!(seeds.iter().all(|&r| (first..cp).contains(&(r as usize))), "unit_walk_seeded: a seed is no row past the inputs");
+    let mut held = true;
     let mut out = [vec![0u32; uw32 * ins.len()], vec![0u32; uw32 * ins.len()], vec![0u32; uw32 * ins.len()]];
     let fold = |z: &[[u64; 4]], cols: &[u32], i: u32| {
         cols.iter().fold(([0u64; 4], 0u64), |(mut x, o), &c| {
@@ -2707,6 +2722,9 @@ pub fn unit_walk_words(net: &IrUnitNet, sched: &UnitSched, rows: &crate::ir_bloc
             }
         }
         (z[cp], a[cp], b[cp]) = ([!0; 4], [!0; 4], [!0; 4]);
+        let given = if seeds.is_empty() { Vec::new() } else { given(pass) };
+        assert_eq!(given.len(), seeds.len(), "unit_walk_seeded: a row of z per seed");
+        seeds.iter().zip(&given).for_each(|(&r, w)| z[r as usize] = *w);
         for l in 0..sched.levels() {
             let (k0, k1) = (sched.level_off[l] as usize, sched.level_off[l + 1] as usize);
             let level: Vec<(usize, [[u64; 4]; 3])> = (k0..k1).into_par_iter().with_min_len(256).map(|k| {
@@ -2719,6 +2737,7 @@ pub fn unit_walk_words(net: &IrUnitNet, sched: &UnitSched, rows: &crate::ir_bloc
                 (z[i], a[i], b[i]) = (zi, ai, bi);
             }
         }
+        held &= seeds.iter().zip(&given).all(|(&r, w)| z[r as usize] == *w);
         for (v, dst) in [&z, &a, &b].into_iter().zip(out.iter_mut()) {
             for q in 0..UNITS / 32 {
                 for rb in 0..u.div_ceil(32) {
@@ -2734,7 +2753,7 @@ pub fn unit_walk_words(net: &IrUnitNet, sched: &UnitSched, rows: &crate::ir_bloc
             }
         }
     }
-    out
+    (out, held)
 }
 
 /// [`unit_ab_into`]'s words by the walk a device kernel takes, on the host: 32 slots a lane group (a row's `u32`, bit l slot
@@ -2817,6 +2836,13 @@ pub fn unit_ab_seeded(net: &IrUnitNet, sched: &UnitSched, seeds: &[u32], seed_z:
         }
         ok
     }))
+}
+
+/// A pass's rows as [`unit_walk_seeded`] is given them, from its eight lane groups': `group(q)` is each row's `u32` in the
+/// pass's slots `32 q ..` (bit l slot l's).
+pub fn walk_pass_rows(group: impl Fn(usize) -> Vec<u32> + Sync) -> Vec<[u64; 4]> {
+    let groups: Vec<Vec<u32>> = (0..8).into_par_iter().map(group).collect();
+    (0..groups[0].len()).map(|s| std::array::from_fn(|g| u64::from(groups[2 * g][s]) | u64::from(groups[2 * g + 1][s]) << 32)).collect()
 }
 
 /// `rows`' z in the slots `grp` (at most 32, bit l slot l's) by the host's evaluation: what [`unit_ab_seeded`]'s seeds are
@@ -4241,6 +4267,50 @@ mod tests {
                     z
                 };
                 assert_eq!(unit_ab_seeded(net, &cut, seeds, off, uw, &ins, &mut got), Some(false), "net {k}, {slots} slots: a seed that is not its row's z");
+            }
+        }
+    }
+
+    #[test]
+    fn unit_walk_seeded_is_unit_walk_words() {
+        use crate::ir_block::{WalkRows, schedule, schedule_seeded};
+        let mut s = 0x0ddc_0de5_eed5_a11du64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        let every = |net: IrUnitNet, n: usize| {
+            let seeds: Vec<u32> = (net.in_words * WORD..net.const_pos).filter(|i| i % n == 0).map(|i| i as u32).collect();
+            (net, seeds)
+        };
+        let (blocks, per, waist) = (40, 150, 24);
+        let series: Vec<u32> = (1..=blocks).flat_map(|j| (WORD + j * per - waist..WORD + j * per).map(|i| i as u32)).collect();
+        let nets: [(IrUnitNet, Vec<u32>); 4] = [every(walk_net(1, 1, 300, false), 3), every(walk_net(0x5eed, 2, 4099, false), 3),
+                                              every(walk_net(9, 1, 2600, true), 64), (chained_net(11, blocks, per, waist), series)];
+        for (k, (net, seeds)) in nets.iter().enumerate() {
+            let (full, cut) = (schedule(net), schedule_seeded(net, seeds));
+            let (rows, cut_rows) = (WalkRows::of(net, &full).unwrap(), WalkRows::of(net, &cut).unwrap());
+            assert!(k < 2 || cut.levels() < full.levels(), "net {k}: {} levels after the cut, {} before", cut.levels(), full.levels());
+            let uw = 1usize << (net.unit_log - 7);
+            for slots in [1, 100, 256, 300] {
+                let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|w| F128::new(r() & !u64::from(w == 0), r())).collect()).collect();
+                // a pass's seeds by the host's evaluation, the slots past the last among them: their inputs are zero
+                let given = |pass: usize| walk_pass_rows(|q| {
+                    let grp: Vec<Vec<F128>> = (0..32).map(|l| ins.get(256 * pass + 32 * q + l).cloned().unwrap_or_else(|| vec![F128::ZERO; net.in_words])).collect();
+                    unit_rows_z(net, seeds, &grp)
+                });
+                let want = unit_walk_words(net, &full, &rows, 4 * uw, &ins);
+                let (got, held) = unit_walk_seeded(net, &cut, &cut_rows, 4 * uw, &ins, seeds, given);
+                assert!(held && got == want, "net {k}, {slots} slots: the cut walk's words, every seed held ({held})");
+                assert!(!unit_walk_seeded(net, &cut, &cut_rows, 4 * uw, &ins, seeds, |_| vec![[0; 4]; seeds.len()]).1, "net {k}, {slots} slots: every seed 0");
+                // one seed off in one slot of the last pass: the last slot with inputs, and the pass's last slot, which has
+                // none where the pass is short
+                let last = (slots - 1) / 256;
+                for (seed, slot) in [(seeds.len() - 1, (slots - 1) % 256), (0, 255), (seeds.len() / 2, 0)] {
+                    let off = |pass: usize| {
+                        let mut z = given(pass);
+                        z[seed][slot / 64] ^= u64::from(pass == last) << (slot % 64);
+                        z
+                    };
+                    assert!(!unit_walk_seeded(net, &cut, &cut_rows, 4 * uw, &ins, seeds, off).1, "net {k}, {slots} slots: seed {seed} off in slot {slot}");
+                }
             }
         }
     }

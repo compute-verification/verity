@@ -13,7 +13,7 @@
 //!   flock-circuit unit-levels --circuit FILE [--net N] [--widths]   (the unit's level schedule, `unit_levels`; nothing proved)
 //!   flock-circuit walk-twin --instances FILE --circuit FILE [--slots N]   (the device's level walk on the host against the host's
 //!       builder on the statement's own unit slots, `walk_twin`; nothing proved)
-//!   flock-circuit unit-cut --instances INST --circuit FILE [--widths] [--walk [--native] [--plan] [--sources [--random N]] [--slots N]]   (the unit's level schedule cut at its
+//!   flock-circuit unit-cut --instances INST --circuit FILE [--widths] [--walk [--native] [--plan [--passes]] [--sources [--random N]] [--slots N]]   (the unit's level schedule cut at its
 //!                          SHA-512 compressions' chaining values, `unit_cut`; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
@@ -5006,7 +5006,11 @@ fn level_widths(widths: &[usize]) -> serde_json::Map<String, Value> {
 /// which are still read off the host's evaluation at the compression's first rounds; the seed bits that differ from the
 /// host evaluator's; and one of those seeds off. With `--plan` too, a `PLAN` line: the same walk and compare on seeds from
 /// the unit's inputs alone, by a plan derived from the unit's rows (`sha512_native::UnitHashPlan`), with what the plan is
-/// and one of its seeds off; or why no plan was derived. With `--sources`, a `SOURCES` line: each compression's inputs (read the
+/// and one of its seeds off; or why no plan was derived. With `--passes` too, a `PASSES` line: the plan's seeds and the cut
+/// schedule in the steps a device would take (`circuit::unit_walk_seeded`: 256 slots a pass, arrays of 0xA5 bytes, the seeds
+/// held to their rows after the levels), a's and b's words against `unit_ab_into`'s and z's against a & b, and three
+/// controls on the last pass, none of which may hold: a seed off in its last slot with inputs, a seed off in its last slot,
+/// no seed written. With `--sources`, a `SOURCES` line: each compression's inputs (read the
 /// same way) by where they come from, by their values in the statement's slots (`sha512_native::unit_sources`), and with
 /// `--random N` a second one on N slots of random unit inputs. Exits 1 unless every compare a line makes is `same` and every seed off is
 /// refused.
@@ -5189,6 +5193,58 @@ fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                 }, uw, &ins[n..], &mut got[4 * uw * n..]);
                 let same = host && walk == Some(true) && differing == 0;
                 ok = ok && same && seed_bits_differing == 0 && off == Some(false);
+                if flag("--passes") {
+                    // the same in the steps a device would take: 256 slots a pass in arrays of 0xA5 bytes, the plan's seeds
+                    // written before the levels, the slots past the last among them, and held to their rows after
+                    use flock_live::circuit::unit_walk_seeded;
+                    match flock_live::ir_block::WalkRows::of(net, &cut) {
+                        None => {
+                            println!("PASSES\t{}", json!({"net": ni, "walk": false, "why": "the net has no one-pass form, or its rows' columns are more than a u32 counts"}));
+                            ok = false;
+                        }
+                        Some(wr) => {
+                            let bit = |x: usize, col: u32| -> u32 {
+                                let (w, i) = (col as usize / 128, col as usize % 128);
+                                ins.get(x).map_or(0, |v| ((if i < 64 { v[w].lo } else { v[w].hi }) >> (i % 64)) as u32 & 1)
+                            };
+                            let pass_seeds = |pass: usize| plan.seeds_pass(|q, col| (0..32).fold(0u32, |v, l| v | bit(256 * pass + 32 * q + l, col) << l));
+                            let t = Instant::now();
+                            let given: Vec<Vec<[u64; 4]>> = (0..slots.div_ceil(256)).map(pass_seeds).collect();
+                            let seeds_s = t.elapsed().as_secs_f64();
+                            let t = Instant::now();
+                            let ([z, a, b], held) = unit_walk_seeded(net, &cut, &wr, 4 * uw, &ins, &seeds, |pass| given[pass].clone());
+                            let walk_s = t.elapsed().as_secs_f64();
+                            // a's and b's u32 words against the host builder's, and z's against a & b
+                            let half = |w: &[u64], j: usize| (w[j / 2] >> (32 * (j % 2))) as u32;
+                            let n: [usize; 3] = (0..slots).into_par_iter().map(|x| {
+                                let (wa, wb) = (&want[4 * uw * x..4 * uw * x + 2 * uw], &want[4 * uw * x + 2 * uw..4 * uw * (x + 1)]);
+                                (0..4 * uw).fold([0usize; 3], |[na, nb, nz], j| {
+                                    let at = 4 * uw * x + j;
+                                    [na + usize::from(a[at] != half(wa, j)), nb + usize::from(b[at] != half(wb, j)), nz + usize::from(z[at] != a[at] & b[at])]
+                                })
+                            }).reduce(|| [0; 3], |x, y| [x[0] + y[0], x[1] + y[1], x[2] + y[2]]);
+                            let silent = (0..slots).into_par_iter().filter(|x| z[4 * uw * x..4 * uw * (x + 1)].iter().all(|w| *w == 0)).count();
+                            drop((z, a, b));
+                            // the controls, on the last pass alone: one seed off in its last slot with inputs, one off
+                            // in its last slot of all, and no seed written (the arrays' bytes stay where a seed is read)
+                            let (last, n0) = (given.len() - 1, 256 * (given.len() - 1));
+                            let held_with = |seed: usize, slot: usize| {
+                                let mut g = given[last].clone();
+                                g[seed][slot / 64] ^= 1 << (slot % 64);
+                                unit_walk_seeded(net, &cut, &wr, 4 * uw, &ins[n0..], &seeds, |_| g.clone()).1
+                            };
+                            let (off_used, off_last) = (held_with(seeds.len() / 5, slots - 1 - n0), held_with(4 * seeds.len() / 5, 255));
+                            let unwritten = unit_walk_seeded(net, &cut, &wr, 4 * uw, &ins[n0..], &seeds, |_| vec![[0xa5a5_a5a5_a5a5_a5a5; 4]; seeds.len()]).1;
+                            let same = host && held && n == [0; 3] && silent == 0;
+                            ok = ok && same && !off_used && !off_last && !unwritten;
+                            println!("PASSES\t{}", json!({"net": ni, "slots": slots, "passes": given.len(), "levels": cut.levels(), "columns": wr.cols.len(),
+                                "seeds": seeds.len(), "seed_words_a_pass": 4 * seeds.len(), "words": 3 * 4 * uw * slots, "seeds_held": held,
+                                "a_differing": n[0], "b_differing": n[1], "z_differing": n[2], "slots_with_no_z": silent, "same": same,
+                                "held_with_a_seed_off_in_the_last_slot_with_inputs": off_used, "held_with_a_seed_off_in_the_pass_last_slot": off_last,
+                                "held_with_no_seed_written": unwritten, "seeds_s": seeds_s, "walk_s": walk_s, "host_s": host_s}));
+                        }
+                    }
+                }
                 let (rows, inputs, longest) = plan.size();
                 println!("PLAN\t{}", json!({"net": ni, "derived": true, "derive_s": derive_s, "derived_on": "256 slots of random unit inputs",
                     "compressions": comps.len(), "chaining_values": {"a_constant": plan.cv.iter().filter(|x| matches!(x, CvFrom::Const(_))).count(),
