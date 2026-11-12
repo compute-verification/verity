@@ -762,6 +762,7 @@
 "ForeachNorm_v1",
 "Fp8ActQuant_v1",
 "Fp8ActQuant_v2",
+"Fp8DsMlaUpconvertRow_v1",
 "Fp8GroupQuantUe8m0GroupCore_v2",
 "Fp8GroupQuantUe8m0GroupIn_v2",
 "Fp8GroupQuantUe8m0GroupOut_v2",
