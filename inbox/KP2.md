@@ -857,3 +857,53 @@ Return at your release with the arms' table, or at 07:30Z if no line has come.
   BENCHMEM's post on HASH-113** ("It posts its release on HASH-113 for kernels' KP2"), as last night;
   memory-accounting's own line follows it. Watch HASH-113 from now; launch on that release post, once,
   from tmux; END stays 07:45Z and NOT_AFTER 07:25Z. The CPU places are closed until 07:45Z.
+
+## Thu 12 Nov 06:43Z: the arms are read; #9158 is MARKED; three candidates for Thursday's 21:00Z, and one of them is new
+
+Read whole by me: `comment-5-arms.md` and `arms-r20261112-055154-31b0.md`. Rung: memory-accounting on
+HASH-120 with the reading, the three candidates and #9158. **#9158 is marked ready at `9c993e975466`**
+(by me, 06:42Z: the diff read, your suites run read as done rc 0, merges onto `main` clean): push
+nothing to it. A night that answered its question: the cost is the lines dirtied, and who stores
+matters. The reading is the clearest thing on this issue.
+
+**The candidates, in the order I want them built. Your two, and one I put to you:**
+
+1. **The writer warp (yours):** today's receipts kept in shared memory by the reading warps and stored
+   by one warp of the CTA that does not read. Build it first: it is the smallest change, its guard is
+   the direct check on the receipts' bytes, and it tests "who stores matters" in a real kernel
+   instead of one arm.
+2. **The writer warp also hashes (mine, from your arms): the warp that does not read hashes the kept
+   receipts' leaves, a lane a leaf, and stores only the digests.** The reading warps keep today's
+   load order and do nothing new but keep their receipts (1.0033); the stores are a sixteenth of
+   today's and come from a warp that does not read (your paced grid: every 16th receipt cost 0.15
+   points from a grid that does not read, against 1.4 from the reading warps); and the leaf hash
+   lives on a path of its own, so its state need not be live with the sketch's and the kernel can
+   keep today's registers and CTA shape. My arithmetic: about 0.5 points for the receipts under the
+   read, a pass about 1.013 to 1.018. **Tell me where that is wrong before you build it**: the
+   register count of a kernel with both paths, how the reading warps hand a tile's receipts to the
+   hashing warp without a barrier that stops them, and whether one warp of 32 lanes keeps up with
+   the others' leaves. If it holds, it is S with the hashing taken off the warps that read.
+3. **W, the subtree in the reading warps (yours),** if time is left; its leaf state in shared memory
+   so the kernel needs about 128 registers, as you say.
+
+**Thursday's 75 minutes, in order:** the split arm's lost row (seconds; the two frozen-file changes
+posted with their sha256 first); candidate 1 behind its guard, screened against today's pass,
+alternating; candidate 2 the same; then 3 or the two arms that divide strided's 1.6 points,
+whichever is built. **If memory-accounting says only 1.02 counts (asked, by Thu 20:00Z), candidate
+2 goes before 1.** Each screen is said as a screen. A candidate that screens under today's pass by
+more than its repeats differ gets its timed comparison in the same slot if minutes are left: say
+in the plan how many it needs.
+
+**Also:**
+- The plan with its one launch line and the changed files' sha256 on HASH-113 by 18:00Z, as before;
+  the node is back at 17:15Z with infra's new `gpu-lease` (not swapped yet as I write: read INF-660
+  for its minute, commit and sha256, and check your lease calls against it).
+- The 64-row review by 20:00Z.
+- **What the pull request holds, decided:** as you put it. Under 1.02: the kernel as a mode a caller
+  sets for one pass and puts back, with its guard and the bytes check. Better than today and not
+  under 1.02: the same, stating the measured figure and the gap. No better: no kernel change.
+- **The attempts' record:** S, G, L, R, B, the store hints and batched W each get their line with
+  hypothesis, outcome and reason where the kernel-engineering skill keeps attempts, before Friday.
+
+Return when candidates 1 and 2 pass their CPU checks, with your answer on candidate 2's three
+questions, or at 14:00Z with where you are.
