@@ -21,9 +21,9 @@
 # 3. The guard, on every exit: the job fails (exit 9), naming the file, if a file of $OUT holds an IPv4 address other
 #    than loopback's, an `@` before a name, or the serving node's host as PEER_AUTHORITY gave it. Everything the job
 #    prints is also $OUT/job.log.
-# The exit is try's: 0 every class did what its check says; 1 one didn't, or honest was refused and the rest weren't
-# tried; 2 a row is shown neither way. Else 3, the front wasn't reached; 4, a variable or the python is wrong; or
-# 9, the guard.
+# The exit is try's: 0 every class did what its check says; 1 one didn't, honest was refused and the rest weren't
+# tried, or a try wrote no check; 2 a row is shown neither way, as tokens and length are until `table --ids` has the
+# server's record. Else 3, the front wasn't reached; 4, a variable or the python is wrong; or 9, the guard.
 # PY is a python with numpy; by default uv makes one in the temporary directory, at the tree's lock.
 set -uo pipefail
 RUN=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$RUN/out; mkdir -p "$OUT"

@@ -37,16 +37,18 @@ certifier's run id and the request's release number, so the server's own record 
 
 **A refusal counts only where it is the deviation's** (`row`). The tie's content refuses exactly the ids the planted
 bits changed, or exactly the connections whose last event was dropped, in a try the relay's check accepts. The relay
-failed exactly the connections withheld (late), every connection at the cell after its last id (format or limit), or
-held connections alone (late). A refusal of anything else, or a connection that failed undeviated, is a row that
-didn't do what its check says.
+failed exactly the connections withheld (late), every connection at the cell after its last id (format or limit) of
+a response the front sent whole, or held connections alone (late). A refusal of anything else, or a connection that
+failed undeviated, is a row that didn't do what its check says: a server that answers out of the id form, or stops,
+is never a deviation refused.
 
 **What the bound charges** (`leak_bounds.terms`): a connection's schedule and its fail cell, each ⌈log2(cells + 1)⌉
 bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothing.
 
 **What a try keeps** (`keep`). ``--out`` gets a file a class, ``CLASS.json``: the schedule, the certifier's run id,
 the check's verdict in its words and its counts; of each connection its request's name, its release number, its cells'
-kinds, the ids it was sent, whether and why it failed and the bits planted on it; the egress record's cells, each as
+kinds, the ids it was sent, whether and why it failed, the bits planted on it and whether the front's response to
+it was whole; the egress record's cells, each as
 (bucket, slot, kind, stream, id); and the size and SHA-256 of every file of the try's run directory. The table is made
 from these files alone. The run directory itself (the relay's records and their salts, the traffic, the logs) is under
 ``--scratch``, by default a temporary directory removed when the command ends. No key is in either: `rehearse` keeps
@@ -65,9 +67,10 @@ its own in a directory it removes.
   the table, a class a row: what is changed, the check that refuses it, the refusal's own words, the bits planted,
   read right and charged, and the try's seconds end to end; `rows.json` holds the rows and `table.txt` the table. It
   exits 0 when every class did what its row's check says: honest accepted, and each other class refused by that check
-  or not shown to the client. It exits 1 when a class didn't, or honest was refused and the rest weren't tried, and 2
-  when none didn't and a row is shown neither way: the tie it aims at wasn't run (no ``--ids`` yet), or its deviation
-  changed no response. ``--tail`` covers a connection admitted at the last request's time, the delay and its cells.
+  or not shown to the client. It exits 1 when a class didn't, when honest was refused and the rest weren't tried, or
+  when a try wrote no check (it has no row, and the classes after it are still tried); and 2 when none of those and a
+  row is shown neither way: the tie it aims at wasn't run (no ``--ids`` yet), or its deviation changed no response.
+  ``--tail`` covers a connection admitted at the last request's time, the delay and its cells.
   `deviations.sh` is `try` as a job, behind one ssh forward to a front that listens on its own node's loopback.
 - A try's request i is named ``<class>-<tag>-<i>`` (its `user`), the tag ``--tag`` or a random one a command: the
   server's record names a request by its `user`, so one record over every try, and over what the server served before
@@ -173,15 +176,16 @@ def events_of(data: bytes, payload: int) -> tuple[list[int], bytes]:
 class Deviation:
     """One connection's deviation of class `cls` (the module docstring's): `feed` takes the front's bytes as they
     arrive and gives the bytes to send on now, `end` those to send once the front has ended. `delay` is the seconds
-    every byte is held, `withhold` whether nothing is sent and the connection is left open, and `planted` the bits it
-    planted, in the order the receiver reads them. `bit` gives the planted string's next bit."""
+    every byte is held, `withhold` whether nothing is sent and the connection is left open, `planted` the bits it
+    planted, in the order the receiver reads them, and `whole` whether what the front has sent ends with a response's
+    trailer. `bit` gives the planted string's next bit."""
 
     def __init__(self, cls: str, bit: Callable[[], int], payload: int, hold_s: float = 0.0) -> None:
         if cls not in CLASSES:
             raise ValueError(f"a class is one of {', '.join(CLASSES)}, not {cls!r}")
         self.cls, self.payload, self._bit = cls, payload, bit
         self.planted: list[int] = []
-        self.buffer, self.held, self.events = bytearray(), b"", 0
+        self.buffer, self.held, self.events, self.tail = bytearray(), b"", 0, b""
         self.delay, self.withhold, self.extra = 0.0, False, b""
         if cls in ("length", "bucket", "fail"):
             self.bit = self._plant()
@@ -195,7 +199,12 @@ class Deviation:
         self.planted.append(self._bit())
         return self.planted[-1]
 
+    @property
+    def whole(self) -> bool:
+        return self.tail == IT.TRAILER
+
     def feed(self, data: bytes) -> bytes:
+        self.tail = (self.tail + data)[-len(IT.TRAILER):]
         if self.withhold:
             return b""
         if self.cls not in ("tokens", "length"):
@@ -295,7 +304,7 @@ async def deviate(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, *,
         if dev is not None:
             log({"release": None if release is None else release[0], "class": cls,
                  "planted": "".join(map(str, dev.planted)), "bytes_read": read, "bytes_sent": wrote,
-                 "hold_ms": round(delay * 1000, 3), "withheld": dev.withhold})
+                 "hold_ms": round(delay * 1000, 3), "withheld": dev.withhold, "whole": dev.whole})
 
 
 async def serve(listen: tuple[str, int], *, front: tuple[str, int], cls: str, payload: int, bit: Callable[[], int],
@@ -334,6 +343,7 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
     log = {c["ordinal"]: c for c in json.loads((run / "warden.json").read_text())["connections"]}
     lines = [json.loads(x) for x in (run / PLANTED).read_text().splitlines()] if (run / PLANTED).exists() else []
     bits = {d["release"]: d["planted"] for d in lines if d.get("release") is not None}
+    whole = {d["release"]: bool(d.get("whole")) for d in lines if d.get("release") is not None}
     data: dict[int, bytearray] = defaultdict(bytearray)
     egress = []
     for record in sorted(ws.read_records(run, params)[ws.EGRESS], key=lambda r: r.window):
@@ -361,7 +371,8 @@ def keep(cls: str, run: Path, *, stand_in: bool = False, seconds: float | None =
         kept = {"index": conn["index"], "ordinal": o, "user": fields["user"], "max_tokens": fields["max_tokens"],
                 "release": entry.get("release"), "admitted": entry.get("admitted"), "failed": entry.get("failed"),
                 "failed_at": entry.get("failed_at"), "kinds": conn["kinds"], "held": held, "ids": ids,
-                "rest": rest.hex(), "planted": bits.get(entry.get("release"), "")}
+                "rest": rest.hex(), "planted": bits.get(entry.get("release"), ""),
+                "whole": whole.get(entry.get("release"), False)}
         if stand_in:
             request = id_request(**fields, frame_bytes=B, offset=0)
             kept["stand_in"] = ws.fake_ids(json.loads(request.partition(BLANK)[2]))
@@ -598,8 +609,10 @@ def row(kept: dict, committed: Mapping[int, Sequence[int]] | None) -> dict:
         reasons = {"format", "limit"} if cls == "extra" else {"late"}
         mine = bool(failed) and set(failed.values()) <= reasons and (set(failed) <= want if cls == "bucket" else
                                                                      set(failed) == want)
-        if cls == "extra":
-            mine = mine and not shown and all(c["failed_at"] == len(c["ids"]) for c in conns)
+        if cls == "extra":   # the cell after a whole response's last id, and before it the Commit's ids where given
+            mine = mine and not shown and all(
+                c["whole"] and c["planted"] and c["failed_at"] == len(c["ids"]) and
+                (committed is None or c["ids"] == list(committed.get(c["ordinal"], ()))) for c in conns)
         ok = not accepted and mine
         if accepted and not want and not failed:
             ok = None
@@ -617,7 +630,10 @@ def lane_seconds(args) -> float:
     """The seconds a connection admitted at a try's last request's time may last, at the rehearsal's schedule: its
     delay, its response's cells and a bucket each side."""
     flags = ["rehearse", "--fake", "--ids", "--out", ".", "--cell-bytes", str(args.cell_bytes), *args.rehearse]
-    params = ws._params(ws.parser().parse_args(flags))
+    try:
+        params = ws._params(ws.parser().parse_args(flags))
+    except ValueError as e:
+        raise SystemExit(f"the rehearsal's flags: {e}") from None
     return (params.delay + args.max_tokens // params.slots + 2) * params.bucket_ms / 1000
 
 
@@ -625,6 +641,10 @@ def last_lines(path: Path, n: int = 5) -> str:
     """A log's last lines, each address in them cut out."""
     lines = path.read_text(errors="replace").splitlines()[-n:] if path.exists() else []
     return "\n".join("    " + ADDRESS.sub("<address>", x)[:300] for x in lines) or "    (none)"
+
+
+class NoCheck(Exception):
+    """A try that didn't run to its check."""
 
 
 def _stop(procs: Sequence[subprocess.Popen]) -> None:
@@ -638,7 +658,7 @@ def _stop(procs: Sequence[subprocess.Popen]) -> None:
 def one_try(cls: str, run: Path, args, clock=time.monotonic) -> float:
     """One try of class `cls` in the run directory `run` (the module docstring's `try`): the stand-in front when
     asked, the deviating process before the front, and `warden_serve.py rehearse` through it; the seconds it took end
-    to end."""
+    to end. `NoCheck` when it wrote no check."""
     run.mkdir(parents=True, exist_ok=True)
     payload = WardenParams(cell_bytes=args.cell_bytes).payload
     requests = args.bucket_requests if cls == "bucket" else args.requests
@@ -658,8 +678,8 @@ def one_try(cls: str, run: Path, args, clock=time.monotonic) -> float:
         procs.append(deviating)
         line = deviating.stdout.readline()
         if not line:
-            raise SystemExit(f"the deviating process ended before it listened (exit {deviating.wait()}):\n"
-                             + last_lines(run / "relay.log"))
+            raise NoCheck(f"{cls}: the deviating process ended before it listened (exit {deviating.wait()}):\n"
+                          + last_lines(run / "relay.log"))
         upstream = "%s:%d" % tuple(json.loads(line)["listening"])
         with open(run / "rehearse.log", "w") as log:
             subprocess.run(relay + ["rehearse", "--upstream", upstream, "--ids", "--users", f"{cls}-{args.tag}",
@@ -670,22 +690,29 @@ def one_try(cls: str, run: Path, args, clock=time.monotonic) -> float:
     finally:
         _stop(procs)
     if not (run / "check.json").exists():
-        raise SystemExit(f"{cls}: the rehearsal wrote no check; its log's last lines:\n"
-                         + last_lines(run / "rehearse.log"))
+        raise NoCheck(f"{cls}: the rehearsal wrote no check; its log's last lines:\n"
+                      + last_lines(run / "rehearse.log"))
     return clock() - start
 
 
 def tries(classes: Sequence[str], args, attempt: Callable[[str, Path, Any], float] = one_try) -> tuple[list[str], bool]:
     """Each class of `classes` as one try (`attempt`) in the scratch directory, what it keeps written to ``--out``
-    (`keep`): the classes tried, and whether the tries stopped at an honest control that was refused, the rest
-    untried."""
+    (`keep`): the classes tried to their check, and whether the tries stopped at an honest control that was refused
+    or had no check, the rest untried. A deviation's try with no check (`NoCheck`) has no row, and the classes after
+    it are still tried."""
     scratch = args.scratch or Path(tempfile.mkdtemp(prefix="deviations-"))
     sampled = None if args.ids is None else read_commit(args.ids)
     args.out.mkdir(parents=True, exist_ok=True)
     tried = []
     try:
         for cls in classes:
-            seconds = attempt(cls, scratch / cls, args)
+            try:
+                seconds = attempt(cls, scratch / cls, args)
+            except NoCheck as e:
+                print(f"{e}\n{cls}: no row", flush=True)
+                if cls == "honest" and len(classes) > 1:
+                    return tried, True
+                continue
             kept = keep(cls, scratch / cls, stand_in=args.stand_in, seconds=seconds, hold_ms=args.hold_ms)
             (args.out / f"{cls}.json").write_text(json.dumps(kept))
             tried.append(cls)
@@ -782,7 +809,7 @@ def main(argv=None) -> int:
         asyncio.run(serve(args.listen, front=front, cls=args.cls, payload=args.payload, bit=bits_of(args.seed),
                           hold_s=args.hold_ms / 1000, log=log))
         return 0
-    classes = list(CLASSES if args.cls == "all" else (args.cls,))
+    classes = asked = list(CLASSES if args.cls == "all" else (args.cls,))
     stopped = False
     if args.command == "try":
         if not args.stand_in:
@@ -805,8 +832,9 @@ def main(argv=None) -> int:
     if args.command == "try":
         print(f"{len(rows)} tries in {sum(r['seconds'] for r in rows):.1f} s")
     if stopped:
-        print("the honest control was refused: no deviation was tried")
-    return 1 if stopped or any(r["ok"] is False for r in rows) else 2 if any(r["ok"] is None for r in rows) else 0
+        print("the honest control was refused or had no check: no deviation was tried")
+    untried = args.command == "try" and len(classes) < len(asked)
+    return 1 if untried or any(r["ok"] is False for r in rows) else 2 if any(r["ok"] is None for r in rows) else 0
 
 
 if __name__ == "__main__":

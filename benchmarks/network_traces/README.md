@@ -206,11 +206,13 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   one a command). Either way one record of the server over every try, and over what it served before them, holds
   each request once.
 - A refusal counts only where it is the deviation's: the tie refuses exactly the ids the planted bits changed or the
-  connections whose last event was dropped, and the relay failed exactly the connections withheld or held. A row
-  refused for anything else didn't do what its check says.
+  connections whose last event was dropped, and the relay failed exactly the connections withheld or held, or each
+  connection at the cell after a response the front sent whole. A row refused for anything else didn't do what its
+  check says: a server that answers out of the id form, or stops, is never a deviation refused.
 - The command exits 0 when honest was accepted and each other class was refused by its check, or wasn't shown to the
-  client; 1 when a class did otherwise, or honest was refused; and 2 when none did and a row is shown neither way, as
-  `tokens` and `length` are until the tie has the server's record.
+  client; 1 when a class did otherwise, honest was refused, or a try wrote no check (it has no row, and the classes
+  after it are still tried); and 2 when none of those and a row is shown neither way, as `tokens` and `length` are
+  until the tie has the server's record.
 
 ## The chain's run of record
 

@@ -113,19 +113,19 @@ FIELDS, REQUESTS, HONEST = _requests()
 
 
 def _attempt(run: Path, cls: str, bits: list[int], chunk: int = 300, users: str = "user", late: bool = False,
-             down: tuple[int, ...] = (), params=PARAMS) -> float:
+             down: tuple[int, ...] = (), params=PARAMS, answers: dict[int, bytes] | None = None) -> float:
     """Class `cls` through the relay on a virtual clock, its run directory `run` as a try leaves it: eight id requests
     named ``<users>-<k>``, each answered by the stand-in's own ids as the class deviates them, the k-th connection
     planting from `bits` in turn. Under `late` a held response comes past its deadline, so never; the servers of
-    `down` send nothing, whatever the class."""
+    `down` send nothing, whatever the class, and connection k's server answers `answers[k]` where given."""
     fields, requests, honest = _requests(users)
     bit, served, lines = _bits(bits), [], []
     for k in range(len(requests)):
         dev = dv.Deviation(cls, bit, P, 0.5)
-        out = _through(dev, ws.id_response(honest[k], P), chunk)
+        out = _through(dev, (answers or {}).get(k, ws.id_response(honest[k], P)), chunk)
         gone = dev.withhold or (late and dev.delay > 0) or k in down
         served.append((b"" if gone else out, not gone))
-        lines.append({"release": k, "class": cls, "planted": "".join(map(str, dev.planted))})
+        lines.append({"release": k, "class": cls, "planted": "".join(map(str, dev.planted)), "whole": dev.whole})
     log = sc.relay_run(run, run.parent / f"key-{run.name}", {}, params, requests=requests, served=served)
     assert [c["release"] for c in sorted(log, key=lambda c: c["ordinal"])] == list(range(sc.REQUESTS))
     (run / "traffic.json").write_text(json.dumps([{"at": 0.0, "ids": f} for f in fields]))
@@ -194,6 +194,25 @@ def test_under_a_response_cap_bytes_after_a_full_response_fail_at_its_limit(tmp_
     assert (row["relay"], row["ok"], row["refusals"], row["read"]) == ("refused", True, sc.REQUESTS, 0)
     kept["connections"][0]["failed_at"] -= 1
     assert dv.row(kept, None)["ok"] is False
+
+
+def test_a_server_that_answers_out_of_the_id_form_or_stops_short_is_no_extra_bytes_refused(tmp_path):
+    """The relay fails a connection whose server answers out of the id form, or ends a response without its trailer,
+    at the very cell the extra bytes' would fail at. Neither counts as the deviation refused: the front's response
+    wasn't whole. Nor does a response that was whole and isn't the Commit's."""
+    _, _, honest = _requests("user")
+    bits = [1, 0, 0, 1] * 16
+    short = ws.id_response(honest[2], P)[:-len(IT.TRAILER)]
+    for name, answer in (("form", b"HTTP/1.1 502 Bad Gateway\r\n\r\n"), ("short", short)):
+        kept = _kept(tmp_path / name, "extra", bits, answers={2: answer})
+        two = next(c for c in kept["connections"] if c["index"] == 2)
+        assert (two["failed"], two["whole"], two["failed_at"]) == ("format", False, len(two["ids"]))
+        row = dv.row(kept, None)
+        assert (row["relay"], row["ok"], row["refusals"]) == ("refused", False, sc.REQUESTS)
+    kept = _kept(tmp_path / "whole", "extra", bits)
+    assert dv.row(kept, dv.stand_in_ids(kept))["ok"] is True
+    other = {o: [x + 2 for x in ids] for o, ids in dv.stand_in_ids(kept).items()}
+    assert dv.row(kept, other)["ok"] is False
 
 
 def test_a_hold_that_is_on_time_is_accepted_and_not_seen_and_one_past_the_deadline_fails_late(tmp_path):
@@ -295,6 +314,26 @@ def test_honest_is_tried_first_and_a_refused_control_stops_the_tries(tmp_path):
     assert dv.tries(["honest", "tokens", "fail"], args, down) == (["honest"], True)
     assert [p.name for p in args.out.iterdir()] == ["honest.json"] and not seen[0].exists()
     assert dv.tries(["honest"], args, down) == (["honest"], False)
+
+
+def test_a_try_with_no_check_has_no_row_and_the_classes_after_it_are_tried(tmp_path, capsys):
+    flags = ["try", "--stand-in", "--out", str(tmp_path / "out")]
+    args = dv.parser().parse_args(flags)
+
+    def attempt(cls, run, _):
+        if cls == "tokens":
+            raise dv.NoCheck("tokens: the rehearsal wrote no check")
+        return _attempt(run, cls, [0, 1, 1, 0, 0, 0, 1, 0])
+
+    assert dv.tries(["honest", "tokens", "fail"], args, attempt) == (["honest", "fail"], False)
+    assert "tokens: the rehearsal wrote no check\ntokens: no row" in capsys.readouterr().out
+    assert sorted(p.name for p in args.out.iterdir()) == ["fail.json", "honest.json"]
+
+    def none(cls, run, _):
+        raise dv.NoCheck(f"{cls}: the deviating process ended before it listened")
+
+    args = dv.parser().parse_args([*flags[:3], str(tmp_path / "none")])
+    assert dv.tries(["honest", "tokens"], args, none) == ([], True)
 
 
 def test_a_tail_shorter_than_a_connection_is_refused_before_any_try(tmp_path):
