@@ -286,8 +286,6 @@
     {"file": "tests/engine/collectives/test_all_reduce.py", "kind": "attr-defined", "symbol": "test_it_wraps_vllms_cuda_communicator_when_given_none", "detail": ""},
     {"file": "tests/engine/collectives/test_all_reduce.py", "kind": "func-returns-value", "symbol": "test_a_wrap_above_the_seam_still_sees_every_call", "detail": ""},
     {"file": "tests/engine/fake_scheduler.py", "kind": "var-annotated", "symbol": "FakeScheduler.schedule", "detail": ""},
-    {"file": "tests/engine/fattn_oracle.py", "kind": "arg-type", "symbol": "attention", "detail": ""},
-    {"file": "tests/engine/fattn_oracle.py", "kind": "return-value", "symbol": "quant", "detail": ""},
     {"file": "tests/engine/int8_attention_cut.py", "kind": "var-annotated", "symbol": "cut", "detail": ""},
     {"file": "tests/engine/int8_attention_cut.py", "kind": "var-annotated", "symbol": "image", "detail": ""},
     {"file": "tests/engine/int8_attention_sass.py", "kind": "arg-type", "symbol": "div_full_mutant", "detail": ""},
