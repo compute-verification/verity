@@ -39,7 +39,7 @@ pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None,
 
 A, B = f"{PAIR.id}/c0", f"{TRIPLE.id}/c0"
 UNITS = {A: [[0, 2]], B: [[2, 5]]}
-LAW = {"k": 2, "law": "subset"}
+DESIGN = {"k": 2, "law": "subset"}
 
 
 def _sha(b: bytes) -> str:
@@ -61,8 +61,8 @@ class Audit:
         s = self.s = Setup(P.mixed_population_program([(PAIR, 2), (TRIPLE, 3)]),
                            P.template_instances_query([PAIR.id, TRIPLE.id]), names=ports)
         roots = [{"port": p, "root": rng.randbytes(64).hex(), **s.ports[p]} for p in s.ports]
-        self.rec = R.record(s.program, s.query, LAW, SCHEME, roots, WINDOW, leaf_layer=LEAF)
-        ch, drawn, _ = _challenger_draw(rng, s, LAW, self.rec, trees=0)
+        self.rec = R.record(s.program, s.query, DESIGN, SCHEME, roots, WINDOW, leaf_layer=LEAF)
+        ch, sample, _ = _challenger_draw(rng, s, DESIGN, self.rec, trees=0)
         self.files: dict[str, bytes] = {}
         sessions = {}
         for name in opened:
@@ -77,17 +77,17 @@ class Audit:
         ch.s.close = ch.s.signed(None)
         ch.ledger = Ledger(rng, ch.s, withheld=True)
         ch.pins, ch.main = _pinned(rng, ch.ledger, "honest")
-        proved = DR.proved(drawn)
+        proved = DR.proved(sample)
         statements = [{"member": name, "sessions": [sessions[name]]} for name in (A, B)]
         self.evidence = {"coins": {k: v for k, v in ch.evidence(ch.segment.to_json()).items() if k != "key"},
-                         "draw": drawn, "instances": len(proved), "proved_units": proved,
+                         "draw": sample, "instances": len(proved), "proved_units": proved,
                          "receipt": R.receipt(self.rec, "v", received=RECEIVED), "served": None, "session_roots": None,
                          "statement": {}, "proofs": {"statements": statements}, "sessions": ["s0", "s1"]}
         members = {name: {"circuit": self.put(STAND_IN_CIRCUIT + name.encode()),
                           "public": self.put(json.dumps({"member": name}).encode() + b"\nnot a public file"),
                           "registered": None, "units": UNITS[name], "vus_per_block": 4} for name in (A, B)}
         self.params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
-                       "law": LAW, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                       "law": DESIGN, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
                        "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
                        "window_root": ch.ledger.window["root"], "work_table": None, "proofs": {"members": members}}
 

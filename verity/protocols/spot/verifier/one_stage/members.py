@@ -14,7 +14,7 @@ its session's evidence before the next is opened, the members laid over the regi
 value one tree, the registration's roots each one member's, then each statement's session verified on its member's own
 files. It refuses with Lean's reason where Lean refuses, and accepts nothing either: its `Run` is the sessions'
 findings, which the audit above it (v1's check at the coins, then the refusal) reads. Each session's verdict is the
-Flock verifier's own (`flock_verdict`, ``flock-verify verify --zk``, as `proofs.verify` runs it).
+Flock verifier's own (`flock_verdict`: its executable's ``verify --zk``, as `proofs.verify` runs it).
 
 Where it is not Lean's step for step, each on a case neither side accepts:
 
@@ -27,7 +27,7 @@ Where it is not Lean's step for step, each on a case neither side accepts:
   reads the file's META alone, so it refuses both.
 * **A session's coin-tree key, fresh among the earlier sessions'** (`Flock.CoinTree.checkFresh`): implied here by the
   trees' check, which holds each session to a logged tree of its own, no key twice in the log.
-* **Lengths past a statement's 8-byte word** (`OneStageZk.fitsWhy`, `drawFitsWhy`, `EVIDENCE_FITS`), which no file
+* **Lengths past a statement's 8-byte word** (`OneStageZk.fitsWhy`, `EVIDENCE_FITS`), which no file
   reaches.
 * **Inputs the per-member parsers refuse** raise `Outside`: this reads parameters and evidence as
   `membersParamsOfJson` and `membersEvidenceOf` parsed them.
@@ -198,6 +198,8 @@ def _count(m: Mapping[str, Any]) -> int:
 def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dict[str, Any], list[Any]]:
     """The parameters' members and the evidence's statements, as the per-member parsers leave them; `Outside` where
     they are not in that form."""
+    form = Outside("the parameters and the evidence are not in the per-member form as its parsers read it "
+                   "(`OneStageZk.membersParamsOfJson`, `membersEvidenceOf`)")
     try:
         ms, sts = params["proofs"]["members"], evidence["proofs"]["statements"]
         ok = (set(params["proofs"]) == {"members"} and set(evidence["proofs"]) == {"statements"} and isinstance(ms, dict)
@@ -219,10 +221,9 @@ def _parsed(params: Mapping[str, Any], evidence: Mapping[str, Any]) -> tuple[dic
                 ok = ok and (set(s) == {"name", "record", "reps"} and type(s["name"]) is str and type(s["record"]) is str
                              and isinstance(s["reps"], dict) and all(type(d) is str for d in s["reps"].values()))
     except (KeyError, TypeError, AttributeError):
-        ok = False
+        raise form from None
     if not ok:
-        raise Outside("the parameters and the evidence are not in the per-member form as its parsers read it "
-                      "(`OneStageZk.membersParamsOfJson`, `membersEvidenceOf`)")
+        raise form
     return {name: ms[name] for name in sorted(ms)}, sts
 
 
@@ -446,7 +447,7 @@ def population_why(units: Sequence[Sequence[int]], strata: Sequence[tuple[str, S
 
 
 def flock_verdict(st: Statement) -> dict[str, Any]:
-    """The Flock verifier's verdict on the statement `st`'s one session: ``flock-verify verify --zk`` on its files, as
+    """The Flock verifier's verdict on the statement `st`'s one session: its executable's ``verify --zk`` on its files, as
     `proofs.verify` runs it, with the lookup tables `st` holds (``--tables``); the verdict's line. `Outside` where the
     verifier answers none."""
     with tempfile.TemporaryDirectory(prefix="verity-members-") as d:
@@ -503,7 +504,7 @@ def _session(name: str, member: str, m: Mapping[str, Any], st: Statement, record
             indices = _header(st.public)["units"]["indices"]
             units = tuple(sorted(indices[i] for i in record["unit_draw"]["units"]))
         except (ValueError, KeyError, TypeError, IndexError):
-            raise Outside(f"session {name} is accepted and its record's draw names no units of its public file") from None
+            raise Outside(f"session {name} is accepted and its record's sample names no units of its public file") from None
     return PF.Finding(name, ok, why, sha if type(sha) is str else None, v.get("registered") or {}, units,
                       v.get("openings"))
 

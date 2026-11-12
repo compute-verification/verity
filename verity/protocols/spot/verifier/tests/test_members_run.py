@@ -38,7 +38,7 @@ SPEC = {"block": 8, "rounds_log": 1, "scheme": CT.SCHEME, "streams": [CT.SESSION
 ROOTS = {A: ("11" * 64, "aa" * 64), B: ("22" * 64, "bb" * 64)}
 RECORD = {"population": 5, "scheme": SCHEME,
           "roots": [{"domain": ROOTS[m][1], "leaves": 4, "port": f"{m}/out", "root": ROOTS[m][0]} for m in (A, B)]}
-DRAWN = {A: [1], B: [0, 2]}
+SAMPLED = {A: [1], B: [0, 2]}
 
 
 def header(member: str, **changes) -> dict:
@@ -54,7 +54,7 @@ class Window:
 
     def __init__(self, at, headers: dict | None = None) -> None:
         self.at, self.files = at, []
-        challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("draw", 1)], entropy("members-run"))
+        challenger = C.LiveChallenger("verity/test/coins/v1", 0, [("sample", 1)], entropy("members-run"))
         log = [json.dumps({"event": "commitment", "root": challenger.commitment.root.hex()})]
         statements, members = [], {}
         for k, name in enumerate((A, B)):
@@ -69,7 +69,7 @@ class Window:
             points = opened(CT.SESSION, 0, 2, C.link_after(root_f, {"circuit": root_b}))
             coins = opened("circuit/rep0", 0, 3, message)
             record = json.dumps({
-                "coin_tree": tree.record(), "unit_draw": {"units": DRAWN[name]},
+                "coin_tree": tree.record(), "unit_draw": {"units": SAMPLED[name]},
                 "link": {"points": [[f"{c:032x}"] for c in points], "root_b": {"circuit": root_b.hex()},
                          "root_f": root_f.hex()},
                 "streams": [{"stream": "circuit/rep0", "rounds": [{"coins": [f"{c:032x}" for c in coins], "k": 0,
@@ -82,7 +82,7 @@ class Window:
             public = json.dumps((headers or {}).get(name) or header(name)).encode() + b"\nthe rows"
             members[name] = {"circuit": self.put(b"flock-circuit/v1 u\nMETA {\"vus_per_block\": 4}\n" + name.encode()),
                              "public": self.put(public), "registered": None, "units": UNITS[name], "vus_per_block": 4}
-        self.params = {"challenger": {"key": {"W": 8, "H": 5, "public": "00" * C.PUBLIC_BYTES}, "label": "draw"},
+        self.params = {"challenger": {"key": {"W": 8, "H": 5, "public": "00" * C.PUBLIC_BYTES}, "label": "sample"},
                        "partition": PARTITION, "program": json.loads(json.dumps(codec.encode_program(PROGRAM))),
                        "query": QUERY, "window_root": "ee" * 64, "proofs": {"members": members}}
         self.evidence = {"coins": {"ledger": [], "main": [], "pins": [], "segment": {}, "session": {"log": log}},

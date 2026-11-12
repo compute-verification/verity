@@ -31,7 +31,7 @@ import shutil
 import socket
 import tempfile
 import threading
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
