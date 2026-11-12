@@ -15,24 +15,23 @@ import zlib
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
+from verity.circuits import codec
 from verity.circuits import evaluation as E
+from verity.circuits.boolean import trace as TR
+from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import standalone_call
-from verity.circuits import boolean as BL
-from verity.circuits import codec
-from verity.circuits.defs import PrimitiveDefinition, bind
 from verity.circuits.parts import n_members
+from verity.definitions import word as QW
+from verity.definitions.cross_call import members_check
 from verity.definitions.ops.boolean import elementwise as EW
-from verity.definitions.silicon import fp
 from verity.definitions.ops.boolean import mufu as MU
-from verity.circuits.boolean import trace as TR
 from verity.definitions.registry import b1
 from verity.definitions.registry import boolean_norms as BN
 from verity.definitions.registry import prims as P
-from verity.definitions import word as QW
-from verity.definitions.cross_call import members_check
+from verity.definitions.silicon import fp
 
 FULL = os.environ.get("VERITY_VLLM_BOOLEAN_NORMS_FULL")
 

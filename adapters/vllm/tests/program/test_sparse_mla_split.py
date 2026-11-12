@@ -12,7 +12,6 @@ import re
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
@@ -22,11 +21,12 @@ from verity.definitions import boolean as SW
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import boolean_sparse_mla_split as BX
-from verity_vllm.program import mla_capture as MC
 from verity.definitions.registry import sparse_mla as M
 from verity.definitions.registry import sparse_mla_split as W
+
 from tests.program.test_boolean_fp8 import F32_SPECIALS, _flat, _inputs
 from tests.program.test_sparse_mla import FA3, _bf16, _case, _run_head, _val
+from verity_vllm.program import mla_capture as MC
 
 GLM = M.SPARSE_MLA_GLM53
 U32 = np.uint32
@@ -238,10 +238,10 @@ def test_statics_are_checked() -> None:
         with pytest.raises(ValueError, match="selected keys in NS"):
             W.check_split_statics(T, NS)
         with pytest.raises(ValueError, match="selected keys in NS"):
-            bind(W.SparseMlaHeadSplit, T=T, NS=NS, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
+            _ = bind(W.SparseMlaHeadSplit, T=T, NS=NS, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
     for n in (0, W.LANES + 1):
         with pytest.raises(ValueError, match="the warp holds 1 to 32"):
-            bind(W.SparseMlaCombine, NSPLIT=n, DV=16, INV=FA3["INV"]).body
+            _ = bind(W.SparseMlaCombine, NSPLIT=n, DV=16, INV=FA3["INV"]).body
         with pytest.raises(ValueError, match="the warp holds 1 to 32"):
             TW.combine_rows(np.zeros((1, n), U32), np.zeros((1, n, 4), U32))
 
@@ -410,7 +410,7 @@ def test_a_head_is_its_parts_at_the_served_statics() -> None:
 
 def test_a_part_has_keys() -> None:
     with pytest.raises(ValueError, match="T=0 keys"):
-        bind(W.SparseMlaSplitPart, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
+        _ = bind(W.SparseMlaSplitPart, T=0, DR=16, DV=16, BN=16, SCALE=0.0625, **FA3).body
 
 
 def test_one_split_combines_to_its_bf16() -> None:

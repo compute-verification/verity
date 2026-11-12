@@ -15,8 +15,10 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-from verity.commitments import Commitment, Opening as FrameOpening, VerificationLimits, verify_opening
+from verity.commitments import Commitment, VerificationLimits, verify_opening
+from verity.commitments import Opening as FrameOpening
 from verity.commitments.multiproof import multiproof_root
+
 from verity_vllm.commit import step_rows
 
 # A leaf a `--retain device` window's draw-gated release did not keep (`committer.device_pool`): refused, never replayed.
@@ -56,7 +58,7 @@ def open_range_levels(levels: list, lo: int, hi: int) -> tuple:
         need.append((lo - 1 if lo % 2 else None, hi if (hi - 1) % 2 == 0 and hi < width else None))
         lo, hi = lo // 2, (hi + 1) // 2
     if not levels or not hasattr(levels[0], "shape"):
-        return tuple((None if l is None else levels[d][l], None if r is None else levels[d][r]) for d, (l, r) in enumerate(need))
+        return tuple((None if left is None else levels[d][left], None if right is None else levels[d][right]) for d, (left, right) in enumerate(need))
     import torch
 
     idx = [(d, i) for d, pair in enumerate(need) for i in pair if i is not None]
@@ -65,7 +67,7 @@ def open_range_levels(levels: list, lo: int, hi: int) -> tuple:
         parts = [p.cpu() for p in parts]
     rows = torch.stack(parts).cpu().numpy() if parts else None
     got = {di: rows[k].tobytes() for k, di in enumerate(idx)}
-    return tuple((None if l is None else got[(d, l)], None if r is None else got[(d, r)]) for d, (l, r) in enumerate(need))
+    return tuple((None if left is None else got[(d, left)], None if right is None else got[(d, right)]) for d, (left, right) in enumerate(need))
 
 
 def level_sizes(leaf_count: int, levels: int) -> list[int]:

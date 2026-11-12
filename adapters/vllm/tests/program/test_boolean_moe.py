@@ -16,23 +16,22 @@ import json
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
+from verity.circuits import evaluation as E
 from verity.circuits import partition_object as PO
-from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
-from verity.circuits.refs import array_of, tuple_of
-from verity.circuits.types import Array, Tuple
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import ZERO
 from verity.circuits.cut import separable
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.circuits.refs import array_of, tuple_of
+from verity.circuits.types import Array, Tuple
 from verity.definitions import boolean as SW
+from verity.definitions.numerics import moe_twins
 from verity.definitions.registry import boolean_moe as BM
 from verity.definitions.registry import moe as M
-from verity.definitions.numerics import moe_twins
 from verity.definitions.registry.prims import F32, I32
 
 #: id -> (And, Xor, Not gates, standalone program digest)

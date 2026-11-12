@@ -112,7 +112,7 @@ def record(name: str, log: str, profile_name: str, *, decision: str | None = Non
 
 
 def _utc() -> str:
-    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 @dataclass(frozen=True, kw_only=True)
