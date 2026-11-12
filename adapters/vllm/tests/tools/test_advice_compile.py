@@ -14,6 +14,8 @@ from typing import Any
 import pytest
 
 from tests.pipeline.test_window_advice import W1, W2
+from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+from verity_vllm.engine.served_seed import DEFAULT_SEED, derived
 from verity_vllm.pipeline import window_advice as WA
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "advice_compile.py"
@@ -73,7 +75,6 @@ def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_wi
     The compile is read at its plan (`plan_steps`: `compile_steps` up to building Programs), which settles each request's seed
     and refuses a request that has none; the test below builds the Program."""
     from tests.program.predict.test_steps import _registered
-    from verity_vllm.engine.served_seed import derived
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import plan_steps
 
@@ -108,7 +109,6 @@ def test_the_session_compiled_under_the_windows_coin_carries_the_seed_the_window
     """`compile_steps` on the same inputs builds the request's Program, seconds in a process that has built none, and hands
     on its plan's seed: the Program is of the window's one request, whose `seed` Input takes the seed the window committed."""
     from tests.program.predict.test_steps import _registered
-    from verity_vllm.engine.served_seed import derived
     from verity_vllm.program.predict.steps import compile_steps
 
     run, rec, advice = _served(tmp_path)
@@ -119,7 +119,6 @@ def test_the_session_compiled_under_the_windows_coin_carries_the_seed_the_window
 
 
 def test_the_registered_default_seed_is_the_public_one_and_a_run_that_used_another_is_refused():
-    from verity_vllm.engine.served_seed import DEFAULT_SEED
     assert AC.registered_seed({"default_seed": DEFAULT_SEED}) == DEFAULT_SEED
     for seed in (7, 0, None, str(DEFAULT_SEED), float(DEFAULT_SEED)):
         why = f"filled in default seed {seed!r}, and the registered one is engine.served_seed."
@@ -143,7 +142,6 @@ def test_the_registration_takes_the_engines_world_at_the_rank_and_the_engine_arg
 def test_the_registration_states_the_dsa_top_k_environment_the_engines_build_set():
     """A run whose engine record has the environment its build set states the DSA top-k's, set or not, and nothing else of it:
     `predict.dsa` compiles a row past INDEX_TOPK only under the canonical row, and refuses it for an engine built without."""
-    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.program.predict import build
 
     kw = {"tensor_parallel_size": 8, "max_model_len": 131072}
@@ -168,7 +166,6 @@ H200 = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, 
 
 
 def test_an_fp8_checkpoint_reaches_predict_dsa_as_float8_e4m3fn_and_a_config_stating_none_is_refused_as_before():
-    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
     from verity_vllm.program.predict import build, dsa
     from verity_vllm.program.predict.build import Unexpressible
 
