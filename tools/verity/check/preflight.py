@@ -14,7 +14,8 @@ One line per fact on stdout, one per failure on stderr. It checks:
   clones them from GitHub; for a shard (`check.py`'s `SHARD_PARTS` among its inputs), only each package the shard audits;
 - that the store answers: every bundle still to restore, or else one pinned object, is read with the run's custody key
   (RESEARCH_PREFLIGHT_CUSTODY), else through its sent URL;
-- that the CPU has `avx512f` when the run carries the pinned upstream build (so lean-agreement runs) and its RUSTFLAGS need it;
+- that the CPU has `avx512f` when the run carries the pinned upstream build's URL (so lean-agreement runs) and its RUSTFLAGS
+  need it;
 - that the tree's and the cache's filesystems have the space a check takes: 45 GB, or 1.25 times the most the recent checks
   recorded on this machine took (their `resources.jsonl`) when that is more, plus 1.25 times each dependency tree to restore.
   A machine with check slots (`slot.py`) shares its disk with other work, which a recorded drop in free space counts, so
@@ -196,14 +197,17 @@ def cpu_flags(cpuinfo: Path) -> set[str]:
 
 
 def _sent(inputs: Path | None, sha256: str) -> bool:
-    """Whether a file among the run's `--send` files is the one with this sha256 (the smallest hashed first)."""
-    if inputs is None or not inputs.is_dir():
+    """Whether the run's `--send` files list a URL of the upstream build with this sha256 (check.py's `AGREEMENT_URLS`)."""
+    sent = inputs / CHECK.AGREEMENT_URLS if inputs is not None else None
+    try:
+        doc = json.loads(sent.read_text()) if sent is not None and sent.is_file() else {}
+    except (OSError, ValueError):
         return False
-    return any(CHECK._sha256(p) == sha256 for p in sorted((q for q in inputs.iterdir() if q.is_file()), key=lambda q: q.stat().st_size))
+    return isinstance(doc, dict) and isinstance(up := doc.get("upstream"), dict) and up.get("sha256") == sha256
 
 
 def cpu(root: Path, inputs: Path | None, cpuinfo: Path) -> tuple[list[str], list[str]]:
-    """avx512f, when the run carries the pinned upstream build (lean-agreement runs) and that build needs it."""
+    """avx512f, when the run carries the pinned upstream build's URL (lean-agreement runs) and that build needs it."""
     pin = root / "verity" / "ml" / "flock" / "verifier" / "upstream.json"
     if not pin.is_file() or not (root / "verity" / "core" / "service" / "flock" / "lakefile.toml").exists():
         return ["cpu: no lean-agreement on this tree"], []
@@ -212,7 +216,8 @@ def cpu(root: Path, inputs: Path | None, cpuinfo: Path) -> tuple[list[str], list
     if not AVX512.search(flags):
         return [f"cpu: the pinned upstream build ({flags}) needs no AVX-512"], []
     if not _sent(inputs, up["sha256"]):
-        return [f"cpu: the run carries no upstream build, so lean-agreement skips and its AVX-512 ({flags}) is not needed"], []
+        return [f"cpu: the run carries no URL of the upstream build, so lean-agreement skips and its AVX-512 ({flags}) is not "
+                f"needed"], []
     if "avx512f" in cpu_flags(cpuinfo):
         return [f"cpu: avx512f, which the pinned upstream build ({flags}) needs"], []
     return [], [f"cpu: no avx512f, which the pinned upstream build the run carries needs ({flags}): its replays would die of SIGILL; "

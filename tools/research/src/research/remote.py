@@ -90,8 +90,8 @@
                     member by member off the pipe (a big run is never in the launcher's memory); remote.json keeps observed_utc.
                     Unreachable means "last observed at T; current status unknown", never "failed".
     adopt           a run another VM launched has no local dir: `research inspect|fetch|status RUN` (a full run id) finds
-                    <root>/runs/<id> on `--on NAME`, else on each ssh machine (a pod belongs to the VM that made it), writes the
-                    remote.json launch would have and fetches it as above (`adopt`).
+                    <root>/runs/<id> on `--on NAME`, else on each ssh machine but the auditor hosts (`restricted`; a pod belongs to
+                    the VM that made it), writes the remote.json launch would have and fetches it as above (`adopt`).
     preservation    --all verifies every file's sha256 against the machine and writes preserved.json LAST.  Until then the only copy
                     is on the machine; this is stated, not hidden.  Then it writes <run>/.fetched ON THE MACHINE (research/fetched/v0.1:
                     verified_from = the machine's clock before hashing, file count, bytes, manifest sha256), which the guard requires.
@@ -233,6 +233,19 @@ def load_machines(path: Path | None = None) -> dict[str, dict[str, Any]]:
 
 #: a machine's runs root when its entry names none (a pod `research pods register` wrote without --root)
 DEFAULT_ROOT = "/workspace/research"
+#: infra's manifest of the Nebius nodes, beside this package wherever it is installed: its `admin = true` nodes are the auditor hosts
+DEPLOY_MANIFEST = Path(__file__).resolve().parent / "pods" / "nebius" / "deploy.toml"
+
+
+def restricted(machines: dict[str, dict[str, Any]]) -> set[str]:
+    """The auditor hosts among `machines`: an entry that names its gate (`auditor`), or a node DEPLOY_MANIFEST marks `admin = true`
+    (reached only by an admin login, which is why `research deploy drift` reads one only when --on names it). They refuse lanes'
+    keys by design, so a search over every machine (`adopt`, `research doctor`) leaves them out before any ssh rather than leave a
+    refused login in their auth logs; `--on NAME` still asks one, for whoever holds its key. Without the manifest the entries'
+    `auditor` alone tells."""
+    nodes = tomllib.loads(DEPLOY_MANIFEST.read_text()).get("nodes", {}) if DEPLOY_MANIFEST.is_file() else {}
+    admin = {n for n, c in nodes.items() if isinstance(c, dict) and c.get("admin") is True}
+    return {n for n, m in machines.items() if isinstance(m, dict) and (m.get("auditor") or n in admin)}
 
 
 def resolve_machine(name: str, project: str | None, machines: dict[str, dict[str, Any]] | None = None) -> dict[str, Any]:
@@ -2132,10 +2145,11 @@ ADOPT_CONNECT_S, ADOPT_PROBE_S, ADOPT_JOBS = 5, 20, 16
 
 def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict[str, dict[str, Any]] | None = None,
           unique: bool = False) -> Path:
-    """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine, write
-    the remote.json `launch` would have (phase `adopted`), and fetch its records.  Refused when the id is not a full run id, when no
-    machine holds it (each machine's answer in the reason), or when the local dir already exists; with `unique` (a cancel), every
-    machine is asked and an id more than one holds is refused rather than taken from the first."""
+    """The local run dir of a run another VM launched: find <root>/runs/<run_id> on machine `on`, else on each ssh machine but the
+    auditor hosts (`restricted`: never asked unless `on` names one), write the remote.json `launch` would have (phase `adopted`), and
+    fetch its records.  Refused when the id is not a full run id, when no machine holds it (each machine's answer in the reason), or
+    when the local dir already exists; with `unique` (a cancel), every machine is asked and an id more than one holds is refused
+    rather than taken from the first."""
     from .store import ids
 
     if not ids.is_run_id(run_id):
@@ -2144,7 +2158,11 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
     if local.exists():
         raise Refused(f"{local} exists already")
     ms = load_machines() if machines is None else machines
-    names = [on] if on else sorted(n for n, m in ms.items() if m.get("provider") == "ssh")
+    ssh = {n: m for n, m in ms.items() if isinstance(m, dict) and m.get("provider") == "ssh"}
+    skipped = [] if on else sorted(restricted(ssh))
+    names = [on] if on else sorted(n for n in ssh if n not in skipped)
+    not_asked = (f"; not asked: the auditor hosts {', '.join(skipped)}, which refuse lanes' keys (--on NAME asks one)"
+                 if skipped else "")
     answers: dict[str, str] = {}
     targets = []
     for name in names:
@@ -2158,8 +2176,9 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
             continue
         m = {**m, "root": m.get("root") or DEFAULT_ROOT}
         targets.append((name, m, tgt, f"{m['root']}/runs/{run_id}"))
-    if len(targets) > 1:
-        print(f"research: looking for {run_id} on {len(targets)} machines (--on NAME skips this)", file=sys.stderr, flush=True)
+    if len(targets) > 1 or skipped:
+        print(f"research: looking for {run_id} on {len(targets)} machine{'s' if len(targets) != 1 else ''} (--on NAME skips this)"
+              f"{not_asked}", file=sys.stderr, flush=True)
 
     def probe(t: tuple) -> str | None:
         name, _, tgt, rd = t
@@ -2199,8 +2218,8 @@ def adopt(runs_root: Path, run_id: str, *, on: str | None = None, machines: dict
             "remote_run_dir": rd})
         fetch(local)
         return local
-    raise Refused(f"no machine holds run {run_id}" + (f" ({'; '.join(answers[n] for n in sorted(answers))})" if answers
-                                                       else " (no ssh machine is registered)"))
+    why = "; ".join(answers[n] for n in sorted(answers)) or ("" if skipped else "no ssh machine is registered")
+    raise Refused(f"no machine holds run {run_id}" + (f" ({why})" if why else "") + not_asked)
 
 
 def _runner_gone(ssh: list[str], local_dir: Path, pid: int, *, timeout: float = 120) -> str | None:

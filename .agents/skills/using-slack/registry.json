@@ -342,6 +342,7 @@
         "benchmarks/codec_tensor/",
         "benchmarks/kv_filler/",
         "benchmarks/live_verifier/",
+        "benchmarks/memory/",
         "benchmarks/pous/",
         "benchmarks/property_redteam/",
         "benchmarks/rate_squaring/",

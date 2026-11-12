@@ -6,13 +6,13 @@ the statement binds the given partition and program digests. Run in the circuit 
 
 ``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.chunked`: a
 ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, a
-``SPLITS`` split part or combine, or a row template the partition's ``chunk_cap`` names), composed by Flock's `UnitStager` on
+``CHAINS`` key block, end, column end or combine, or a row template the partition's ``chunk_cap`` names), composed by Flock's `UnitStager` on
 the rows the window commits (`verity_vllm.pipeline.chunk_rows.unit_rows`) as the template's statement (`chunk_rows.statement`:
 a table read's is the templated statement of the verifier's read template), bound to the partition and program; no input set
 is read. ``--reads slots``: a flat statement's `UnitStager` ``reads``, a unit reading a pinned MUFU table laid out in lookup slots
 (``MoeRouterSigmoidBias``'s sigmoid inline is about 5e10 nonzeros), with the MUFU tables the prover reads written beside the
 circuit (``tables/``); a unit reading none keeps its flat circuit. The default is the template's own (`chunk_rows.reads`), the
-circuit a5 composes: slots for a ``SPLITS`` part of whole blocks (`verity_vllm.pipeline.split_rows`) and for a whole attention
+circuit a5 composes: slots for a ``CHAINS`` key block of a whole block (`verity_vllm.pipeline.chain_rows`) and for a whole attention
 row (``chunk_rows.SLOT_ROWS``), else inline.
 """
 from __future__ import annotations
