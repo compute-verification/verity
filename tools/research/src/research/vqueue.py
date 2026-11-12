@@ -445,6 +445,10 @@ def decide(s: Snapshot) -> list[Action]:
                                             f"{base[:12]}, main's chain's top now: its other members are built again"))
             kept.remove(passed[0])
             kept += _restack(s, ready, chain, [passed[0]], landed | ejected | out, main, acts, kept)
+            base, room = chain[-1].sha if chain else main, len(chain) < s.depth
+            flying = {m for c in chain for m in c.members if m in built}
+            if any(built[m].move for m in flying):
+                return acts
         scripts = any(built[m].scripts for m in flying)
         pool = [r for r in _pool(ready, landed | ejected | {m for c in chain for m in c.members}, kept)
                 if not (r.move and scripts)]

@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 import research.queue as Q
 from research.queue import path_rows
-from research.vqueue import PASS, Advance, Build, Drop, Ready, Snapshot, _moves_last, decide
+from research.vqueue import PASS, Advance, Build, Drop, Ready, RecordsRun, Snapshot, _moves_last, decide
 from test_vqueue import MAIN, SEEDS, World, cand, lean, pr, snap, ticks, waiting
 from research.executor import Executor
 from test_vqueue_loop import Env, Fake, _acts, _git, _main_to, _move, env, policy  # noqa: F401 -- env is a fixture
@@ -78,6 +78,15 @@ def test_a_move_dropped_for_a_leaver_below_it_is_built_again_last_and_nothing_on
                  depth=3)
         assert [a for a in decide(s) if isinstance(a, Build)] == [Build((2,), MAIN, 3, replaces="q1"),
                                                                   Build((3,), "q1", 2, replaces="q2"), *above]
+
+
+def test_a_staged_batch_rebuilt_on_the_chain_holding_a_move_has_nothing_built_on_it():
+    """A passed staged batch whose Lean member isn't marked at the head it was staged at is built again without it on the
+    chain's top; holding a move, nothing is built on that rebuild, as on any candidate holding one."""
+    passed = waiting("s1", MAIN, 1, 2, records=RecordsRun(PASS))
+    for two, above in ((mv(2), []), (pr(2), [Build((4,), "s1", 1)])):
+        s = snap(passed, cand("c2", MAIN, 3), ready=[pr(1, "h1b", lean=True), two, pr(3), pr(4)], records=True, depth=3)
+        assert [a for a in decide(s) if isinstance(a, Build)] == [Build((2,), "c2", 2, replaces="s1"), *above]
 
 
 def test_a_staged_batch_dropped_in_the_tick_that_advances_main_to_a_move_is_not_built_again_in_it():
