@@ -4,18 +4,11 @@ n under 1%, the period only shortens with load, the sample and nodes, and every 
 from __future__ import annotations
 
 import dataclasses
-import importlib.util
 import json
-import sys
 from dataclasses import replace
-from pathlib import Path
 
+import period_cost as PC
 import pytest
-
-spec = importlib.util.spec_from_file_location("pouw_period_cost", Path(__file__).parents[1] / "period_cost.py")
-PC = importlib.util.module_from_spec(spec)
-sys.modules["pouw_period_cost"] = PC
-spec.loader.exec_module(PC)
 
 LINE = PC.configurations()[0]
 #: the ε_♭ INT-PERIOD's figures (and ComposeMonitoringPeriod's, which quote them) are stated at

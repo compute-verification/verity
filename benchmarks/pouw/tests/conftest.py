@@ -1,8 +1,70 @@
+"""The suite's set-up: where a test gets a benchmark's script from, and the fixtures more than one test file uses.
+
+A directory under ``benchmarks/pouw/`` is scripts, not a package, and a test imports a script as a module by its file's
+name. This file puts every script directory on ``sys.path``, once, so a test neither edits ``sys.path`` nor loads a file
+itself.
+
+A name one directory holds is imported by that name. A name two directories hold is imported by name from one of them at
+most, the one whose own scripts import it so: `AHEAD` lists those directories and puts them first, so the name is theirs
+whoever imports it. Another holder's module comes from `load`, under a name of its own. ``test_script_imports.py`` holds
+the tree to this.
+"""
+from __future__ import annotations
+
 import asyncio
+import importlib.util
+import sys
 import threading
+from pathlib import Path
+from types import ModuleType
 
 import pytest
 from verity.protocols.certifier.verifier import active
+
+POUW = Path(__file__).resolve().parents[1]
+#: what under ``benchmarks/pouw/`` this suite takes no script from: the tests, the two packages the environment installs,
+#: and ``edited_gemm``, a suite of its own whose files this suite's inputs do not hold
+NOT_SCRIPTS = frozenset({"tests", "machine_model", "exact_kit", "edited_gemm"})
+#: the directories whose own scripts import by name a module whose name another directory holds too (``harness``:
+#: derive and report; ``h1_lanes``: run)
+AHEAD = ("harness", "h1_lanes")
+
+
+def scripts() -> list[Path]:
+    """Every script under ``benchmarks/pouw/``."""
+    return sorted(p for p in POUW.rglob("*.py") if not NOT_SCRIPTS.intersection(p.relative_to(POUW).parts[:-1]))
+
+
+def script_dirs() -> list[Path]:
+    """The directories that hold a script, in their order on ``sys.path``: `AHEAD`'s, then the rest by name."""
+    ahead = [POUW / d for d in AHEAD]
+    return [*ahead, *sorted({p.parent for p in scripts()}.difference(ahead))]
+
+
+def load_name(file: str | Path) -> str:
+    """The module name `load` gives ``benchmarks/pouw/FILE``: its directory and its file (``gpu_kit/sass_gate.py`` is
+    ``gpu_kit_sass_gate``), and ``pouw_NAME`` for a file directly under ``benchmarks/pouw/``."""
+    parts = Path(file).with_suffix("").parts
+    return "_".join(parts if len(parts) > 1 else ("pouw", *parts))
+
+
+def load(file: str) -> ModuleType:
+    """``benchmarks/pouw/FILE`` as a module named `load_name` of it, run once however many tests ask. For a module whose
+    name another directory holds and `AHEAD` gives to that one, and for one its own directory's scripts load from its
+    file under this name."""
+    name = load_name(file)
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, POUW / file)
+        sys.modules[name] = module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except BaseException:
+            del sys.modules[name]
+            raise
+    return sys.modules[name]
+
+
+sys.path[:0] = map(str, script_dirs())
 
 
 @pytest.fixture(autouse=True)
