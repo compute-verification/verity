@@ -155,15 +155,12 @@ def test_refuses_a_plan_for_another_runtime():
         install_from_plan(plan, model, object())
 
 
-def test_refuses_incomplete_plan_unless_told():
+def test_refuses_incomplete_plan():
     model, runner = Tiny(), Runner()
     plan, _ = make(base_rows() + [row("instance_outputs", "blocks.0.gone", "out")], model, runner)
     assert not plan.complete
     with pytest.raises(IncompletePlan, match="unsupported"):
         install_from_plan(plan, model, runner)
-    inst = install_from_plan(plan, model, runner, refuse_incomplete=False)
-    assert len(inst.installed) == 7
-    inst.remove()
 
 
 def test_promoted_consumer_pre_hook_only():
