@@ -199,7 +199,7 @@ def expected_written(layout: StreamLayout, src: int, rows: Iterator[tuple[int, i
     Word 3 of a ROW entry is written only by a guarded-max build (`row3` 1), at every visited block; the MS class (`layout.ms`) likewise."""
     HB, M, N, NB, D = layout.HB, layout.M, layout.N, layout.NB, layout.D
     o = layout.offsets
-    w = np.zeros(layout.padded_words(), dtype=bool)
+    w: np.ndarray = np.zeros(layout.padded_words(), dtype=bool)
     S, P = w[o["S"]:o["P"]].reshape(HB, M, N), w[o["P"]:o["RP"]].reshape(HB, M, N)
     RP, ROW = w[o["RP"]:o["ROW"]].reshape(HB, M, N // 2), w[o["ROW"]:o["O"]].reshape(HB, M, NB, 8)
     OUT, FIN = w[o["O"]:o["FIN"]].reshape(HB, M, NB, D), w[o["FIN"]:o["FIN"] + HB * M * 4].reshape(HB, M, 4)
@@ -233,7 +233,7 @@ def masked_digest(words: np.ndarray, layout: StreamLayout) -> str:
     for a guarded-max build and the default build on the same launch iff they write the same six classes but for that word (the MS
     class follows FIN and is not in it)."""
     six = dataclasses.replace(layout, ms=False)
-    w = np.full(six.padded_words(), FILL, dtype=np.uint32)
+    w: np.ndarray = np.full(six.padded_words(), FILL, dtype=np.uint32)
     w[:six.total_words] = np.asarray(words, dtype=np.uint32)[:six.total_words]
     _row_plane(w, six)[..., ROW_GUARD_FIELD] = FILL
     return hashlib.sha256(w.tobytes()).hexdigest()
