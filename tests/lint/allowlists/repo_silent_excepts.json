@@ -87,7 +87,6 @@
     {"file": "benchmarks/pouw/floored_gemm/table.py", "count": 2},
     {"file": "benchmarks/pouw/fp_exact/fp_exact.py", "count": 1},
     {"file": "benchmarks/pouw/h1_prove/layer.py", "count": 1},
-    {"file": "benchmarks/pouw/harness/ledger.py", "count": 1},
     {"file": "benchmarks/pouw/harness/refs.py", "count": 1},
     {"file": "benchmarks/pouw/harness/sass_gate.py", "count": 3},
     {"file": "benchmarks/pouw/hidden_zk/summarize.py", "count": 2},

@@ -145,16 +145,15 @@ def test_a_variant_is_named_by_its_sources_digest_in_any_order_and_a_changed_sou
         L.source_sha256([], d)
 
 
-def test_the_variant_and_the_groups_are_verity_pouw_serving_s_when_it_is_importable(tmp_path):
-    S = L.serving()
-    if S is None:
-        pytest.skip("verity.protocols.pouw.verifier.serving (#567) isn't on this tree yet")
+def test_the_variant_the_groups_and_the_gate_record_are_verity_pouw_serving_s(tmp_path):
+    S = L.serving
     v = variant(tmp_path)
     kv = S.KernelVariant(family="pearl-c", device="sm120", schemes=frozenset(v["schemes"]), schedules=frozenset(v["schedules"]),
                          shapes=S.ShapeRule(), source_sha256=v["source_sha256"], binary_sha256=v["binary_sha256"],
                          loader=v["loader"], prices=v["prices"])
     assert kv.id == v["id"]
-    assert tuple(S.GROUPS) == L.GROUPS
+    with pytest.raises(L.LedgerError, match=r"phase_groups names \['warp'\]: .*groups \('row_seeds', "):
+        L._steps({}, None, {"phase_groups": {"before": ["a_tree", "warp"]}})
     gate = records_of(tmp_path)[PREFILL]["meta"]["gate"]
     assert set(gate) == set(S.GateRecord.__dataclass_fields__)
 

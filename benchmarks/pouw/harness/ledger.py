@@ -18,8 +18,9 @@ is kept as ``arm_claim`` and never published.
 
 `verify.py` builds the records (`records`), writes them under the run's ``ledger/`` (so they are preserved with the run's
 files wherever the store isn't reachable) and publishes them with ``--publish``. `rows` is what `panel.py` reads beside
-``attempts.jsonl``. Stdlib only; `research.store` and `verity.protocols.pouw.verifier.serving` are imported when present (from this checkout's
-``tools/research/src`` and ``verity/protocols/pouw/verifier`` otherwise), so a node-2 job without them still writes its records.
+``attempts.jsonl``. `verity.protocols.pouw.verifier.serving` is imported outright, so a job where `verity` doesn't import
+stops there; `research.store` is imported when present (from this checkout's ``tools/research/src`` otherwise), so a node-2
+job without it still writes its records.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import price_twins as P
+from verity.protocols.pouw.verifier import serving
 from verity_config.settings import of
 
 HERE = Path(__file__).resolve().parent
@@ -52,8 +54,6 @@ TIERS = ("1", "2a", "2b", "3")
 OUTCOMES = ("screened", "frontier", "kept", "dropped", "voided", "superseded")
 #: label keys (`research.store.vocab`): the producing lane about its own attempt
 KERNEL_OUTCOME, KERNEL_REASON = "kernel_outcome", "kernel_reason"
-#: a call's step groups, as `verity.protocols.pouw.verifier.serving.GROUPS` names them; checked against it when it is importable
-GROUPS = ("row_seeds", "a_tree", "forming", "gemm", "cleanup", "tile_hash", "screen")
 PHASES = ("before", "gemm", "after")
 ONE_LINE = 240
 
@@ -66,15 +66,6 @@ def _import_path(rel: str) -> None:
     p = str(REPO / rel)
     if (REPO / rel).is_dir() and p not in sys.path:
         sys.path.append(p)
-
-
-def serving():
-    """`verity.protocols.pouw.verifier.serving` when importable, else None."""
-    try:
-        from verity.protocols.pouw.verifier import serving as S
-    except ImportError:
-        return None
-    return S if hasattr(S, "KernelVariant") else None
 
 
 def store_module():
@@ -152,11 +143,10 @@ def variant_record(*, family: str, device: str, schemes: Iterable[str], sources:
     rec = {"id": variant_id(family, device, src), "family": family, "device": device, "schemes": sorted(set(schemes)),
            "schedules": sorted(set(schedules)), "source_sha256": src, "binary_sha256": binary, "loader": loader,
            "prices": prices, "config": dict(sorted((config or {}).items())) or None}
-    S = serving()
-    if S is not None and binary is not None:
-        v = S.KernelVariant(family=family, device=device, schemes=frozenset(rec["schemes"]),
-                            schedules=frozenset(rec["schedules"]), shapes=S.ShapeRule(), source_sha256=src,
-                            binary_sha256=binary, loader=loader, prices=prices)
+    if binary is not None:
+        v = serving.KernelVariant(family=family, device=device, schemes=frozenset(rec["schemes"]),
+                                  schedules=frozenset(rec["schedules"]), shapes=serving.ShapeRule(), source_sha256=src,
+                                  binary_sha256=binary, loader=loader, prices=prices)
         if v.id != rec["id"]:
             raise LedgerError(f"variant id {rec['id']} disagrees with verity.protocols.pouw.verifier.serving's {v.id}")
     return rec
@@ -288,7 +278,7 @@ def _metrics(r: dict, p: dict) -> dict:
 
 def _steps(r: dict, chain: dict | None, lineage: dict) -> dict:
     """The call's time split: hashing against the hash-free call, extra flag roles, and at decode the chain's phases
-    (before, during, after the GEMM, and on a side stream), each mapped to `GROUPS` when the lineage says how."""
+    (before, during, after the GEMM, and on a side stream), each mapped to `serving.GROUPS` when the lineage says how."""
     g = r.get("graph") or {}
     out: dict = {"hashing_ms": g.get("hashing_ms"), "extra_roles_x": g.get("extra_roles_x") or None, "phases": None,
                  "phase_groups": None}
@@ -299,10 +289,9 @@ def _steps(r: dict, chain: dict | None, lineage: dict) -> dict:
                          "derive": s.get("derive_ms"), "side": s.get("side_ms"), "hidden_by_side": s.get("hidden_by_side_ms")}
     pg = lineage.get("phase_groups")
     if pg:
-        groups = serving().GROUPS if serving() else GROUPS
-        bad = sorted({x for v in pg.values() for x in v} - set(groups)) + sorted(set(pg) - set(PHASES))
+        bad = sorted({x for v in pg.values() for x in v} - set(serving.GROUPS)) + sorted(set(pg) - set(PHASES))
         if bad:
-            raise LedgerError(f"phase_groups names {bad}: phases are {PHASES}, groups {groups}")
+            raise LedgerError(f"phase_groups names {bad}: phases are {PHASES}, groups {serving.GROUPS}")
         out["phase_groups"] = {k: list(v) for k, v in pg.items()}
     return {k: v for k, v in out.items() if v is not None}
 
