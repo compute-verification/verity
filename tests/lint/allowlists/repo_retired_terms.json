@@ -2108,14 +2108,12 @@
     {"file": "security/Proofs/Flock/Soundness/assumption-notes/a4-prf-sha512.md", "count": 1},
     {"file": "security/Proofs/Flock/Soundness/assumption-notes/lock-listed-premises.md", "count": 10},
     {"file": "security/Proofs/Flock/Soundness/assumption-notes/trusted-components.md", "count": 1},
-    {"file": "security/Proofs/Flock/SpotFlock/AddressesAt.lean", "count": 4},
     {"file": "security/Proofs/Flock/SpotFlock/AddressesWired.lean", "count": 1},
     {"file": "security/Proofs/Flock/SpotFlock/Code.lean", "count": 13},
     {"file": "security/Proofs/Flock/SpotFlock/Facts.lean", "count": 3},
     {"file": "security/Proofs/Flock/SpotFlock/Opens.lean", "count": 5},
     {"file": "security/Proofs/Flock/SpotFlock/Reads.lean", "count": 1},
     {"file": "security/Proofs/Flock/SpotFlock/RevealsWired.lean", "count": 1},
-    {"file": "security/Proofs/Flock/SpotFlock/WireMap.lean", "count": 3},
     {"file": "security/Proofs/Flock/VBridge/AccChain.lean", "count": 2},
     {"file": "security/Proofs/Flock/VBridge/AccUnits.lean", "count": 2},
     {"file": "security/Proofs/Flock/VBridge/AlgHolds.lean", "count": 3},
@@ -5620,6 +5618,8 @@
     {"file": "benchmarks/machine_model/verity_machine_model/eps.py", "count": 2},
     {"file": "benchmarks/machine_model/verity_machine_model/lp.py", "count": 7},
     {"file": "benchmarks/machine_model/verity_machine_model/redteam.py", "count": 8},
-    {"file": "benchmarks/machine_model/verity_machine_model/theta.py", "count": 5}
+    {"file": "benchmarks/machine_model/verity_machine_model/theta.py", "count": 5},
+    {"file": "security/Proofs/Flock/SpotFlock/AddressesAt.lean", "count": 4},
+    {"file": "security/Proofs/Flock/SpotFlock/WireMap.lean", "count": 3}
   ]
 }
