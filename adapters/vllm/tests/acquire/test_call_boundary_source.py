@@ -260,7 +260,7 @@ def test_a_body_that_reads_a_program_input_or_another_step_is_refused_by_name(tm
 # ------------------------------------------------------------------------------------------------------------------------------ FP8
 @pytest.fixture(scope="module")
 def fp8(tmp_path_factory):
-    from tests.check.test_sampled_replay_fp8 import G, H as HF, INTER as I, _e4m3, _program_fp8
+    from tests.check.test_sampled_replay_fp8 import G, H as HF, I, _e4m3, _program_fp8
 
     inst, woff, wbits = _program_fp8()
     rng = np.random.default_rng(23)

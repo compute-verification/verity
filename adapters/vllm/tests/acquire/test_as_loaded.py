@@ -28,7 +28,7 @@ from tests.check.test_weights_of_record_dsv4_experts import (  # noqa: F401  (ds
     WORLD,
     E,
     H,
-    INTER as I,
+    I,
     dsv4,
 )
 from tests.check.test_weights_of_record_routed_experts import _program

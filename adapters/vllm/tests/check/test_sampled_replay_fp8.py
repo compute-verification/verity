@@ -22,6 +22,7 @@ from verity_vllm.query.required import Q_MODULE_BODY_ID
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 V, H, INTER, LP, T, G = 8, 256, 128, 2, 2, 128     # H, INTER multiples of the 128 block; gate_up N = 2 INTER = 256
+I = INTER                                          # the width's old name, which tests of two other directories import
 
 
 
