@@ -196,6 +196,63 @@ def test_a_trains_audit_passes_on_regenerated_records_names_them_and_keeps_no_su
     assert rc == 0 and ran == ["pkg/b"], "a pass on a regenerated record is not kept"
 
 
+#: a stand-in for check.py where the sources of a package whose policy says "stopped" fail before its build
+#: (`unbuilt_by_sources`): its report holds its failures and nothing of a build, and nothing is built in its directory;
+#: every other package builds in the sandbox and passes with the replay
+STOPPED_AUDIT = r'''
+import json, sys
+from pathlib import Path
+a = sys.argv[1:]
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--facts-cache"))]
+out.mkdir(parents=True, exist_ok=True)
+reps, failed = [], []
+for pkg in named:
+    with open(out / "ran.txt", "a") as f:
+        f.write(f"{pkg.relative_to(root)}\n")
+    if json.loads((pkg / "lean-audit.json").read_text()).get("stopped"):
+        reps.append({"package": str(pkg), "seconds": {}, "failures": ["orphan: Planted.lean is not imported by the roots"],
+                     "failure_codes": ["orphan.file"]})
+        failed.append(str(pkg))
+    else:
+        (pkg / ".lake" / "build" / "lib" / "lean").mkdir(parents=True, exist_ok=True)
+        reps.append({"package": str(pkg), "seconds": {"build": 1.0, "replay": 2.0}, "failures": [], "failure_codes": [],
+                     "sandbox": True})
+(out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
+sys.exit(1 if failed else 0)
+'''
+
+
+def test_a_package_its_sources_stopped_before_its_build_fails_the_run_and_leaves_nothing_of_a_build(tmp_path, monkeypatch):
+    """check.py builds no package whose sources already fail, and its report then holds `package`, `seconds` (empty),
+    `failures` and `failure_codes`, nothing of a build. Beside a package that built and passed, the stopped one fails the
+    run with that report as check.py left it; `--regenerate` regenerates no record for it; only the built package's build
+    is offered to the artifact cache; and the built package's pass is kept while the stopped one is audited again."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "tools/verity/lean/check.py").write_text(STOPPED_AUDIT)
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"stopped": True}))
+    cache, deps = tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps"
+    put: list[list[str]] = []
+    monkeypatch.setattr(LA.LakeArtifacts, "put",
+                        lambda self, reports, since=None, log=print: put.append(sorted(p.name for p in reports)) or 0)
+
+    def go(n: int) -> tuple[int, list[str], dict, list[str]]:
+        out, said = tmp_path / f"run{n}" / "lean-audit", []
+        rc = LA.run(out, cache, deps, log=said.append, regenerate=True)
+        return rc, (out / "ran.txt").read_text().split(), json.loads((out / "audit.json").read_text()), said
+    rc, ran, doc, said = go(1)
+    assert rc == 1 and sorted(ran) == ["pkg/a", "pkg/b"] and doc["failed"] == ["pkg/b"] and not doc["passed"]
+    assert [r for r in doc["packages"] if r["package"] == "pkg/b"] == [
+        {"package": "pkg/b", "seconds": {}, "failures": ["orphan: Planted.lean is not imported by the roots"],
+         "failure_codes": ["orphan.file"]}], "the report as check.py left it: its failures and their codes, nothing added"
+    assert doc["regenerated"] == {} and doc["rekeyed"] == {}, "no record is regenerated for a package that was not built"
+    assert put == [["a"]], "the stopped package says nothing of a build (`built`), so none of it is indexed"
+    assert "lean-audit: FAIL (pkg/b): 0 of 2 packages reused" in said
+    assert CHECK.lean_fast(tmp_path / "run1") is None, "a stopped package's report is a failure, not a pass without the replay"
+    rc, ran, doc, _ = go(2)
+    assert rc == 1 and ran == ["pkg/b"] and list(doc["cached"]) == ["pkg/a"], "a's pass is kept; b keeps none and runs again"
+
+
 #: a stand-in for check.py --regenerate [--bookkeeping warn]: pkg/b's lock fails on bookkeeping, which only the flag repairs,
 #: in a regenerated lock listing two guarantees under `unwitnessed` and one warning
 BOOK_AUDIT = r'''
