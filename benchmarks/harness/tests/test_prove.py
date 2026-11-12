@@ -716,7 +716,19 @@ STRICT = [
     ({"statements_per_s": None}, "`not_void` (fail): no rate: its `statements_per_s` is None"),
     ({"flat": None}, "`flat` (fail): its statement cache's hit rate wasn't flat"),
     ({"flat": DROP}, "`flat` (cannot tell): its row lacks `flat`"),
+    ({"throttled": {"nr_throttled": 3, "throttled_usec": 250000}},
+     "`no_throttling` (fail): its CPUs were throttled 3 times while it ran, for 0.25 s"),
+    ({"throttled": DROP}, "`no_throttling` (cannot tell): its row lacks `throttled.nr_throttled`"),
+    ({"warm_per_prover": {"prover-gpu0": 0}},
+     "`every_prover_warmed` (fail): 0 of its 1 provers finished a warm session before the timed ones"),
+    ({"warm_per_prover": DROP}, "`every_prover_warmed` (cannot tell): its row lacks `warm_per_prover`"),
+    ({"idle_provers": 1}, "`every_prover_warmed` (fail): 1 of its 1 provers filed no session in the window"),
+    ({"idle_provers": DROP}, "`every_prover_warmed` (cannot tell): its row lacks `idle_provers`"),
 ]
+#: the checks of the steady-state rules the reader holds a row to, by the rules' names, and those it doesn't: three read
+#: a run's other files, and a labelled row may lack what `one_numa_node` reads
+GATES = ("accepted", "exits", "not_void", "flat", "no_throttling", "every_prover_warmed")
+NO_GATES = ("one_lease_own_card", "card_clear_start_end", "level", "one_numa_node")
 
 
 def changed(row: dict, change: dict) -> dict:
@@ -724,18 +736,21 @@ def changed(row: dict, change: dict) -> dict:
 
 
 def test_a_row_is_judged_by_the_steady_state_rules_own_checks_and_by_no_rule_of_the_readers():
-    """The reader's answer on a row is `verity_bench.steady`'s on `accepted`, `exits`, `not_void` and `flat`, check for
-    check and word for word: on the fixture's rows, on rows those checks are strict about (`STRICT`: a session never
-    filed, a row that names no exit code, a rate that isn't finite, a row that also holds an `error`, a count that isn't
-    one) and on a row several of them fail, which names each. Only a row that passed all four is a measurement, so
-    "cannot tell" prices nothing. The rules' other checks are no condition here: a row they fail is still priced."""
+    """The reader's answer on a row is `verity_bench.steady`'s on `GATES` (`accepted`, `exits`, `not_void`, `flat`,
+    `no_throttling` and `every_prover_warmed`), check for check and word for word: on the fixture's rows, on rows those
+    checks are strict about (`STRICT`: a session never filed, a row that names no exit code, a rate that isn't finite,
+    a row that also holds an `error`, a count that isn't one, throttled CPUs, a prover that never warmed or sat idle)
+    and on a row several of them fail, which names each. Only a row that passed all six is a measurement, so "cannot
+    tell" prices nothing. `one_numa_node` is no condition here: a row that fails it, or can't show it, is still
+    priced."""
 
-    assert R.CHECKS == (S.accepted, S.exits, S.not_void, S.flat) == tuple(getattr(S, name) for name in S.CHECKS[:4])
+    assert R.CHECKS == tuple(getattr(S, name) for name in GATES)
+    assert S.CHECKS == tuple(sorted(GATES + NO_GATES, key=S.CHECKS.index)) and S.one_numa_node not in R.CHECKS
     good = {row["type"]: row for row in REFUSALS}["good"]
     rows = [row for row in REFUSALS if "stage" in row] + [changed(good, change) for change, _ in STRICT]
     for row in rows:
         got = R.judged(row)
-        assert got.checks == (S.accepted(row), S.exits(row), S.not_void(row), S.flat(row))
+        assert got.checks == tuple(getattr(S, name)(row) for name in GATES)
         assert R.steady_row(row, "r1").measured == (got.passed and R.unpriced(row) is None)
         assert (R.row_why(row) is None) == R.steady_row(row, "r1").measured
     for change, why in STRICT:
@@ -752,11 +767,17 @@ def test_a_row_is_judged_by_the_steady_state_rules_own_checks_and_by_no_rule_of_
                                                                    "exited nonzero: 1 rc 1")
     # a check the row fails outranks one its fields can't show, as in the rules
     assert R.judged(changed(killed, {"unfiled": DROP})).status == S.FAIL
-    # the rules' other checks, on a row whose fields show them failing, change nothing here
-    other = good | {"throttled": {"nr_throttled": 3, "throttled_usec": 250000}, "idle_provers": 1,
-                    "warm_per_prover": {"prover-gpu0": 0}, "cores": {"count": 10, "list": "8-17", "numa_nodes": [0, 1]}}
-    assert [check(other).status for check in (S.no_throttling, S.every_prover_warmed, S.one_numa_node)] == [S.FAIL] * 3
-    assert R.row_why(other) is None and R.steady_row(other, "r1").gpu_seconds == R.steady_row(good, "r1").gpu_seconds
+    # throttled CPUs and a prover that never warmed are gates: a row that fails both names both and prices nothing
+    cold = good | {"throttled": {"nr_throttled": 3, "throttled_usec": 250000}, "warm_per_prover": {"prover-gpu0": 0}}
+    assert R.row_why(cold) == ("`no_throttling` (fail): its CPUs were throttled 3 times while it ran, for 0.25 s; "
+                               "`every_prover_warmed` (fail): 0 of its 1 provers finished a warm session before the "
+                               "timed ones")
+    assert not R.steady_row(cold, "r1").measured
+    # `one_numa_node` is none: a row whose cores span two NUMA nodes, and one that doesn't say, are priced as the good row
+    for cores, status in (({"count": 10, "list": "8-17", "numa_nodes": [0, 1]}, S.FAIL), ({"count": 10}, S.CANNOT_TELL)):
+        row = good | {"cores": cores}
+        assert S.one_numa_node(row).status == status
+        assert R.row_why(row) is None and R.steady_row(row, "r1").gpu_seconds == R.steady_row(good, "r1").gpu_seconds
 
 
 def test_a_row_is_a_steady_state_measurement_only_when_every_session_was_accepted_and_its_cache_flat():
@@ -773,7 +794,8 @@ def test_a_row_is_a_steady_state_measurement_only_when_every_session_was_accepte
     good = read["good"]
     assert (good.type, good.definition, good.k_log, good.blocks, good.full, good.provers) == ("good", "Good_v1{N=1}", 20, 8, 8, 1)
     assert (good.gpu_seconds, good.verifier_seconds, good.report) == (1 / 0.125, 4.0, "out/rate/rate.json")
-    assert R.steady_row(rows["good"] | {"gpus": 2, "provers": 4, "accepted": 12}, "r1").gpu_seconds == 2 / 0.125
+    four = {"gpus": 2, "provers": 4, "accepted": 12, "warm_per_prover": {f"prover-gpu{i}": 1 for i in range(4)}}
+    assert R.steady_row(rows["good"] | four, "r1").gpu_seconds == 2 / 0.125
     cost = P.Flock((good,)).table(P.Census((P.Block("Good_v1{N=1}", "Good_v1", 1.0, 20),), 1.0, 1.0)).rows[0].cost
     assert (cost.source, 1e3 * cost.seconds, cost.verifier_seconds, cost.provers) == (P.STEADY, 1000.0, 0.5, 1)
     # the verifier's seconds are optional, and a row whose rate isn't one is refused
@@ -783,7 +805,8 @@ def test_a_row_is_a_steady_state_measurement_only_when_every_session_was_accepte
     assert R.row_why(rows["good"] | {"stage": rows["good"]["stage"] | {"blocks": 16}}).startswith(
         "its `provers` (1), `stage.blocks` (16) and `stage.full` (8) aren't")
     # a row no session of which ran has no prover count to price at
-    assert R.row_why(rows["good"] | {"provers": 0, "accepted": 8}).startswith("its `provers` (0), `stage.blocks` (8) and")
+    none = rows["good"] | {"provers": 0, "accepted": 8, "warm_per_prover": {}}
+    assert R.row_why(none).startswith("its `provers` (0), `stage.blocks` (8) and")
     # a row that names no staged Definition goes on no block type's row: it is its reason
     assert R.steady_row(rows["failed"], "r1") == "its row `failed` at 2 provers: failed: RuntimeError: the server didn't start"
     assert R.steady_row(rows["late"], "r1") == "its row `late` at 4 provers: skipped: past the deadline"

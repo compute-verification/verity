@@ -103,11 +103,13 @@ rows, one a staged type and prover count. The command reads, by the script's nam
 | `warm`, `sessions`, `accepted`, `refused_n`, `unfiled` | the warm sessions a prover and the timed sessions, those accepted, those refused and those their verifier never filed |
 | `exits`, `void` | each process's exit code, and why the row has no rate (only on a row that has none) |
 | `flat` | whether the statement cache's hit rate was flat |
+| `throttled.nr_throttled` | the times its CPUs were throttled while it ran |
+| `warm_per_prover`, `idle_provers` | each prover's warm sessions, and the provers that filed no session in the window |
 | `verify_s` | the verifier's seconds a statement (optional: "not measured" without it) |
 
 A statement's GPU-seconds are `gpus / statements_per_s`, and a block's ms are that over `stage.blocks`, times 1000.
 
-A row is a steady-state measurement when it passes four checks of the proof server's steady-state rules, the
+A row is a steady-state measurement when it passes six checks of the proof server's steady-state rules, the
 harness's `verity_bench.steady`, which the command calls and never restates:
 
 - **`accepted`:** every session it ran was accepted (`accepted` is `provers` times `warm` plus `sessions`), none was
@@ -115,13 +117,16 @@ harness's `verity_bench.steady`, which the command calls and never restates:
 - **`exits`:** every process exited 0.
 - **`not_void`:** it has a rate: no `void`, `error` or `skipped`, and a finite `statements_per_s` above 0.
 - **`flat`:** `flat` is true.
+- **`no_throttling`:** its CPUs were never throttled (`throttled.nr_throttled` is 0).
+- **`every_prover_warmed`:** each of its provers finished a warm session before the timed ones (`warm_per_prover`),
+  and none filed no session in the window (`idle_provers` is 0).
 
 Only a pass counts. A row that fails a check, or whose fields can't show it ("cannot tell": a field it lacks, a count
 that isn't one), prices nothing, as does one that lacks a field its price needs. It is named on its block type's row
 with each check it didn't pass, the check's answer and its reason, as `` `flat` (cannot tell): its row lacks `flat` ``.
-The rules' six other checks (throttling, the lease and the card, a level window, warm provers, one NUMA node) read the
-run's other files or fields the command doesn't: they are no condition of a row's price here. A row with no
-`stage.definition`, one that failed or was skipped, is listed under "Refused".
+The rules' four other checks are no condition of a row's price here: three read the run's other files (the lease and
+the card, the card at its start and end, a level window), and `one_numa_node` reads `cores.numa_nodes`, which a row
+may lack. A row with no `stage.definition`, one that failed or was skipped, is listed under "Refused".
 
 A row's cores are the CPU cores its provers held for its card. A row states them as `cores`: the count, or a mapping
 that holds it as `count` beside what else it says of them (their list, their NUMA nodes). A run's row that states

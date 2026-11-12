@@ -18,16 +18,18 @@ says which and how to label it. A steady-state run or art that is superseded, a 
 report and an art that names no run are left out and listed under "Refused", as is a row that names no staged Definition (one that
 failed or was skipped).
 
-A row is a steady-state measurement when it passes four checks of the proof server's steady-state rules
-(`verity_bench.steady`) and holds what prices it (`unpriced`). The four are `CHECKS`, the rules' own `accepted`,
-`exits`, `not_void` and `flat`: every session it ran was accepted, none refused and each filed by its verifier, every
-process exited 0, it has a rate, and its statement cache's hit rate was flat. This reader states none of them itself,
-so it and the harness give one answer on each. Only a pass counts: a row that fails a check, or whose fields can't show
-it ("cannot tell"), prices nothing, and is named on its block type's row with each check it didn't pass, the check's
-answer and its reason, in the rules' words, then with what it lacks to be priced (`row_why`). The rules' six other
-checks (the row's CPUs, its card and lease, its window, its provers' warm sessions) are no condition here: a labelled
-row is priced whatever they say (`steady.verdict` gives all ten, from the row and its run's files). `report_why` judges
-a report.
+A row is a steady-state measurement when it passes six checks of the proof server's steady-state rules
+(`verity_bench.steady`) and holds what prices it (`unpriced`). The six are `CHECKS`, the rules' own `accepted`,
+`exits`, `not_void`, `flat`, `no_throttling` and `every_prover_warmed`: every session it ran was accepted, none refused
+and each filed by its verifier, every process exited 0, it has a rate, its statement cache's hit rate was flat, its
+CPUs were never throttled, and each of its provers finished a warm session and filed one in the window. This reader
+states none of them itself, so it and the harness give one answer on each. Only a pass counts: a row that fails a
+check, or whose fields can't show it ("cannot tell"), prices nothing, and is named on its block type's row with each
+check it didn't pass, the check's answer and its reason, in the rules' words, then with what it lacks to be priced
+(`row_why`). The rules' four other checks are no condition here: three read a run's other files (its lease and card,
+the card at its start and end, its window's sessions), and `one_numa_node` reads `cores.numa_nodes`, which a row may
+lack. A labelled row is priced whatever they say (`steady.verdict` gives all ten, from the row and its run's files).
+`report_why` judges a report.
 
 A type is priced at the stated prover count (`--provers`), from the rows at that count only, and at
 the stated host CPU cores a card (`--cores`): from the rows whose provers held that many, else from those that held
@@ -71,8 +73,8 @@ HOST, HOST_CORES_FIELD = "out/host.json", "cpus_used"
 #: (`server-kK`) the provers it ran; read only where a run holds no `RATES`
 REPORTS, TYPES = "*/server-k*/server.json", "types.json"
 #: the checks of the proof server's steady-state rules (`steady.CHECKS`) a row is held to here, each the rules' own
-#: function of the row, in the rules' order
-CHECKS = (steady.accepted, steady.exits, steady.not_void, steady.flat)
+#: function of the row, in the rules' order: every check of theirs that reads the row alone, but `one_numa_node`
+CHECKS = (steady.accepted, steady.exits, steady.not_void, steady.flat, steady.no_throttling, steady.every_prover_warmed)
 #: what a row holds, beside what those checks read, for the command to price it, by the script's names (`stage.word`,
 #: the census type it was staged for, names its block type, and `stage.definition`, the form staged, where it has no
 #: `stage.word`; `verify_s` is there only where the verifier was timed, and `cores`, the CPU cores its provers held for
