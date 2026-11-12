@@ -63,7 +63,8 @@ group = 3
 needs = ["lean-build"]
 # parts named apart from their directory: a move that sends one elsewhere keeps it under the gate
 merge_requires = ["verity/protocols/flock/prover/", "verity/protocols/flock/pod/", "verity/protocols/flock/agreement/", "verity/protocols/flock/tool.py",
-                  "verity/protocols/flock/verifier/", "!README.md", "!PROTOCOL.md"]
+                  "verity/protocols/flock/verifier/", "verity/circuits/base/", "verity/circuits/lean/",
+                  "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"]
 
 # Group 4: every Lake package's audit. It builds only in scratch trees of its own, so nothing in group 3 waits on it.
 [[job]]
@@ -79,6 +80,8 @@ owner = "lean"
 part = "lean"
 group = 5
 halts = true
+# Off the merge gate by drive's policy (policy.toml's `off_gate`) and in no shard, of these plans or an auto one
+# (`shards.NO_SHARD`): it catches nothing the audit doesn't.
 
 # Group 6: the suites that use Lean, on the verifier lean-build built, beside the partition check and the agreement.
 [[job]]
@@ -134,7 +137,7 @@ shards = [
      "lean-suites:verity/protocols/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
-     "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement", "lean-changed"],
+     "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement"],
     ["flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-suites:verity-core-composition:2/3",
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*"],
 ]
@@ -148,7 +151,7 @@ shards = [
      "lean-suites:verity/protocols/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
     ["lean-build", "lean-unit-cut", "lean-audit:*", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
-     "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement", "lean-changed", "circuit-check:2/4"],
+     "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement", "circuit-check:2/4"],
     ["pytest", "circuit-check:3/4"],
     ["flock-circuit-build", "flock-rust-tests", "circuit-check:*", "lean-suites:verity-core-composition:2/3",
      "lean-suites:verity-pouw-benchmarks:1/3", "lean-suites:*"],
@@ -161,7 +164,7 @@ shards = [
      "lean-suites:verity/protocols/recursion/verifier/vstar_cli", "lean-suites:verity-core-evaluate", "lean-suites:pous-check",
      "lean-suites:verity/protocols/certifier/verifier", "lean-suites:verity-pouw-check-difftest",
      "lean-suites:verity-core-composition:3/3", "lean-suites:verity-pouw-benchmarks:3/3"],
-    ["lean-audit:*", "lean-changed"],
+    ["lean-audit:*"],
     ["lean-build", "lean-unit-cut", "lean-suites:verity-flock", "lean-suites:verity-core-composition:1/3",
      "lean-suites:verity-pouw-benchmarks:2/3", "lean-agreement"],
     ["pytest"],

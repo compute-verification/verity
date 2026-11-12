@@ -1,5 +1,5 @@
 """`verity.circuits.layout`'s scope walk (`resolve_gate`) on a scan of no iterations, as Lean's `Flock.Program.resolve`
-walks it (`verity/protocols/flock/verifier/Flock/Program.lean`): a gate reading the scan's output is refused by name, and a
+walks it (`verity/circuits/lean/Circuits/Program.lean`): a gate reading the scan's output is refused by name, and a
 program that holds such a scan without reading it resolves every gate. `Circuit.gates` over any range is `Circuit.gate` of
 each index in it: the same gates, operands and scopes, and the same exception where the range leaves the circuit or a gate
 reads a scan of no iterations; its lazy walk (``lazy=True``) is the same again, a lazy reader's operands resolved on demand."""

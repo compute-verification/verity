@@ -1,7 +1,8 @@
 """The served partitions' chunked templates (``chunk_cap`` of ``SERVED``, GLM-5.3's at TP 8: step 16's every family, its sparse
-MLA's split chains, and step 0's prefill) keep their statements in ``circuit.json`` (`serving_rows.circuit_record`: the rows
-Flock's stager stages, `chunk_rows.unit_rows`, and their `chunk_rows.statement`) byte for byte, at the SHA-512 vLLM's own chunk
-and chain rows gave them. The window stands in: its population program would lower them."""
+MLA's split chains, and step 0's prefill, both with their greedy select's stages) keep their statements in ``circuit.json``
+(`serving_rows.circuit_record`: the rows Flock's stager stages, `chunk_rows.unit_rows`, and their `chunk_rows.statement`) byte
+for byte, at the SHA-512 vLLM's own chunk and chain rows gave them. The window stands in: its population program would lower
+them."""
 import hashlib
 import json
 from pathlib import Path
@@ -12,8 +13,8 @@ from verity_vllm.pipeline import serving_rows as SRW, weight_rows as WT
 
 SERVED = [Path(__file__).resolve().parents[4] / "benchmarks/one_stage" / f"glm53_{p}.json"
           for p in ("all_families_tp8_step16", "sparse_mla_tp8_step16", "prefill_tp8_step0")]
-STATEMENTS = ("82fa7ef1f80d9d888c1ecc6c7a5b9cd1eb39f0fa1f6e6f0b50e9a5dd0d9bc9d4"
-              "0518f80e286d6f6075e557eb02f660890987dc73e154fde73f84c99f42b385e0")
+STATEMENTS = ("eed75699e3df3e72e98379acfda035f1b2a72d19482b103a1f0d1a8e083833fc"
+              "083efb3005628542c59f613d48082ae5b1ff58f2df9eed86cd8646e380d7110a")
 
 
 def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monkeypatch):
@@ -24,4 +25,4 @@ def test_the_served_templates_statements_are_the_bytes_vllm_s_own_rows_gave(monk
     members = [SimpleNamespace(template=t, schemas=True) for t in tmpls]
     sts = SRW.circuit_record(SimpleNamespace(members=members, row_tables=()), [])
     got = hashlib.sha512(IF.circuit_bytes(sts)).hexdigest()
-    assert len(sts) == 35 and got == STATEMENTS, got
+    assert len(sts) == 43 and got == STATEMENTS, got

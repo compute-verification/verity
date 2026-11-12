@@ -25,10 +25,11 @@ public import Definitions.Accounting.Joint
 public import Definitions.Accounting.JointBlocks
 public import Definitions.Accounting.JointPeriod
 public import Definitions.Accounting.JointBridge.CreditedWords
-public import Definitions.Accounting.JointBridge.H200
 public import Definitions.Accounting.JointBridge.SpaceOfPeriodHeld
 public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
 public import Definitions.Accounting.JointBridge.CommOfPeriodLeakAccepted
+public import Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted
+public import Definitions.Accounting.JointBridge.CommOfPooledLeakAcceptedWitness
 public import Definitions.Accounting.JointLive
 public import Definitions.Accounting.Memory
 public import Definitions.Accounting.PerRun
@@ -126,8 +127,9 @@ This module imports the area's definitions; the lock's `layers` lists what they 
   registered circuit, and `Requirement` what a registered circuit needs of a device's memory.
 * The joint audit. `Joint` is a joint audit's run and what each audit's guarantee says about it, and `PerRun` the
   per-run audits. `JointPeriod` and `JointBridge` are a period audited by every subprotocol, with each per-period
-  guarantee read as its account. `JointLive` is a period as a causal game, `NetWitness` the run the network
-  certifier's bridge fails at.
+  guarantee read as its account. `JointLive` is a period as a causal game. `NetWitness` is the run the network
+  certifier's bridge fails at, and `JointBridge.CommOfPooledLeakAcceptedWitness` an honest run of its monitoring
+  period, pooled.
 * Server blocks and reads. `JointBlocks` and `Wipe` are server blocks, each opened by a memory wipe, and the
   streamed-label wipe on the device model. `ReadUnit` is a unit that returns one row of a registered table at an index
   another unit picks.
