@@ -1,5 +1,5 @@
 """[GLM-5.3] The dense prefill's read-back of an `fp8_ds_mla` cache row on the H200: vLLM d9105ea80's
-`cp_gather_and_upconvert_fp8_kv_cache` (csrc/libtorch_stable/cache_kernels.cu:1624-1704), whose kernel
+`cp_gather_and_upconvert_fp8_kv_cache` (csrc/libtorch_stable/cache_kernels.cu:1624-1703), whose kernel
 `cp_gather_and_upconvert_fp8_kv_cache_page` (:1387-1425) writes each context row of a chunk into the bf16 workspace by
 `gather_and_upconvert_fp8_token` (:1360-1385).  The model calls it from `_compute_prefill_context`
 (vllm/model_executor/layers/attention/mla_attention.py:2833-2841) when the cache is `fp8_ds_mla`, on a step whose prefill
@@ -14,9 +14,11 @@ The row (DN NoPE values, DR RoPE values; GLM-5.3: DN = 512, DR = 64, 656 bytes, 
     bytes [DN + 4 DN/QT, ROW_BYTES)     the DR RoPE values, one bf16 word each
 
 QT = 128 is the kernel's own grouping, not a static: lane l of a warp converts the 8-byte chunks c = l and c = 32 + l with
-`scales[c >> 4]` (:1371-1373).  The output is the row's DN + DR bf16 words, NoPE first.
+`scales[c >> 4]` (:1368-1371).  The output is the row's DN + DR bf16 words, NoPE first.
 
-A NoPE value is `scaled_vec_conversion<__nv_bfloat16, uint8_t>` (quantization/w8a8/fp8/nvidia/quant_utils.cuh:112-124):
+A chunk is `scaled_vec_conversion<bf16_8_t, uint2>` (quantization/w8a8/fp8/nvidia/quant_utils.cuh:152-166), which takes its
+bytes one at a time, through the bf16x4 and bf16x2 forms (:128-150), to `scaled_vec_conversion<__nv_bfloat16, uint8_t>`
+(:111-123), one NoPE value:
 `__nv_cvt_fp8_to_halfraw`, `half_to_float` (an `asm volatile` `cvt.f32.f16`, attention/dtype_float16.cuh:87-95), `tmp * scale`,
 `__float2bfloat16`.  The SASS has, for each value, exactly
 
@@ -26,7 +28,7 @@ A NoPE value is `scaled_vec_conversion<__nv_bfloat16, uint8_t>` (quantization/w8
     F2FP.BF16.F32.PACK_AB    w, y1, y0      RN to bf16, every NaN 0x7FFF
 
 and no FFMA: the multiply and the conversion do not contract.  The RoPE words are copied as 32 4-byte words (LDG then STG,
-:1381-1384).  So a NoPE value is `F2fpBf16(F32Mul_v2(E4m3ToF32(b), s))`: the E4M3 -> f16 -> f32 chain is `E4m3ToF32` on every
+:1382-1384).  So a NoPE value is `F2fpBf16(F32Mul_v2(E4m3ToF32(b), s))`: the E4M3 -> f16 -> f32 chain is `E4m3ToF32` on every
 non-NaN code, and a NaN code (0x7F, 0xFF), like a NaN or infinite scale, is a NaN product, which `F2fpBf16` writes 0x7FFF
 whatever its payload.
 
