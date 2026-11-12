@@ -210,7 +210,8 @@ UNITS: dict[str, Unit] = {
 
 _QGMMA = 'DOT={"fn":"HopperE4m3QgmmaDot32_v1"}'
 #: the types that were `Q_word` classes of a word Definition, each with what stages in its place (a type's name or a census
-#: name; none where the census has no Definition of it) and why that, as `parse` says when one is asked for
+#: name; none where the census has no Definition of it) and why that, as `parse` says when one is asked for: all of them
+#: (a cut of the type), or one of them for the types in `RETIRED_EITHER`
 RETIRED: dict[str, tuple[tuple[str, ...], str]] = {
     "moe-gemmw": ((f"census:MoeExpertFp8GemmW_v1{{E=256,K=256,N=1,G=128,KB=128,SWAP=true,{_QGMMA}}}",), "its own Definition"),
     "moe-chunk": ((f"census:MoeExpertFp8CoordinateChunk_v1{{E=256,K=512,G=128,KB=128,SWAP=true,{_QGMMA},FIRST=false,LAST=false}}",),
@@ -238,6 +239,7 @@ RETIRED: dict[str, tuple[tuple[str, ...], str]] = {
     "rmsnorm-triton": ((), "the census has no Definition of it"),
     "silu-quant": ((), "the census has no Definition of it"),
 }
+RETIRED_EITHER = {"moe-w13", "router"}
 
 
 @dataclass(frozen=True)
@@ -316,7 +318,7 @@ def parse(spec: str) -> tuple[str, Unit | Census | Read, dict]:
         instead, why = RETIRED[name]
         raise SystemExit(f"stage.py: {name} is retired: it was a Q_word class of a word Definition, whose statement claims proof "
                          "blocks the Lean verifier cannot derive; "
-                         + (f"stage {' and '.join(instead)} in its place ({why})" if instead
+                         + (f"stage {(' or ' if name in RETIRED_EITHER else ' and ').join(instead)} in its place ({why})" if instead
                             else f"nothing stages in its place ({why})"))
     if name not in UNITS and name not in CENSUS and name not in READS:
         raise SystemExit(f"stage.py: unit type {name!r} is not one of {sorted(UNITS) + sorted(CENSUS) + sorted(READS)}")

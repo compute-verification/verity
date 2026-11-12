@@ -181,7 +181,8 @@ RETIRED = {"moe-gemmw", "moe-chunk", "moe-w13", "dsa-krow", "dsa-logits", "moe-s
 
 
 def test_retired(stage):
-    """Each retired type is refused by name, and the refusal names what stages in its place, or says that nothing does; each
+    """Each retired type is refused by name, and the refusal names what stages in its place (all of it, or one of two for
+    `RETIRED_EITHER`), or says that nothing does; each
     replacement is a type `parse` takes, and a census replacement is a serving rows' template whose statement `verify --zk`
     takes (`chunk_rows.zk_refusal`). The census's own head block at 64 keys reads in lookup slots, which `verify --zk`
     refuses, and its refusal names the Boolean version `RETIRED` stages instead."""
@@ -195,6 +196,7 @@ def test_retired(stage):
         said = str(stop.value)
         assert said.startswith(f"stage.py: {name} is retired") and why in said
         assert all(r in said for r in instead) and (bool(instead) != ("nothing stages in its place" in said)), said
+        assert (" or ".join(instead) in said) == (name in stage.RETIRED_EITHER) or len(instead) < 2, said
         for r in instead:
             got, cen, S = stage.parse(r)
             assert got not in stage.RETIRED
