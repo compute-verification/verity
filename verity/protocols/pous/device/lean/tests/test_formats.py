@@ -1,7 +1,7 @@
 """The memory challenger's record formats and crypto in Lean (`memory-challenger-difftest`) against `memory_challenger.py`,
 `streamed_wipe.py` and `verity.commitments.crypto.lms`: the coins and their tree, the round records' root, the header and the
 signed message, the label digest, LMS signing at a leaf and verification, and the streamed wipe's signed message, start
-and end messages and egress count, each on sampled inputs that include what both sides must refuse (`test_verdict.py` and
+and end messages and an egress count's unit, each on sampled inputs that include what both sides must refuse (`test_verdict.py` and
 `test_wipe_verdict.py` hold the verdicts)."""
 
 from __future__ import annotations
@@ -266,16 +266,16 @@ WIPE_MARK = hexed(mostly(st.one_of(st.just(b""), st.binary(min_size=sw.MARK_BYTE
 #: A signed session's fields; `MemoryChallenger.StreamedWipe.Signed.ofJson` refuses a start mark of another length.
 WIPE_SIGNED = st.fixed_dictionaries({
     "commitment": mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 9), "ended": ENDED, "start_mark": WIPE_MARK,
-    "fill_start_ns": SIGNED, "fill_end_ns": SIGNED, "batches": WIPE_BATCHES, "egress_bits": SIGNED,
+    "fill_start_ns": SIGNED, "fill_end_ns": SIGNED, "batches": WIPE_BATCHES,
     "scheme": st.sampled_from([mc.LMS, M.ts.scheme(1), "none", ""]), "public_key": hexed(st.binary(max_size=70)),
     "signature": hexed(st.binary(max_size=140))})
-WIPE_MESSAGE_KEYS = ("commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches", "egress_bits")
+WIPE_MESSAGE_KEYS = ("commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches")
 
 
 def wipe_message(v) -> str:
     return sw.message(W.commitment_of(M._get(v, "commitment")), M._str(v, "ended"), M.hex_(v, "start_mark"),
                       W.int_(v, "fill_start_ns"), W.int_(v, "fill_end_ns"),
-                      [W.batch_of(r) for r in M.list_(v, "batches")], W.int_(v, "egress_bits")).hex()
+                      [W.batch_of(r) for r in M.list_(v, "batches")]).hex()
 
 
 def wipe_start_message(v) -> str:
@@ -288,13 +288,13 @@ def wipe_end_message(v) -> str:
 
 def test_wipe_message(server):
     """The signed message over sampled commitments (tier names past ASCII among them), batch records of either sign and
-    width, start marks of any length, and fill times and egress of either sign; commitments `WipeParams` refuses and
+    width, start marks of any length, and fill times of either sign; commitments `WipeParams` refuses and
     records past a field's width refused by both."""
     commitment = mostly(WIPE_COMMITMENT, malformed(WIPE_COMMITMENT), 4)
     inputs = with_malformed(st.fixed_dictionaries({"commitment": commitment, "ended": ENDED, "start_mark": WIPE_MARK,
                                                    "fill_start_ns": SIGNED, "fill_end_ns": SIGNED,
-                                                   "batches": WIPE_BATCHES, "egress_bits": SIGNED}))
-    stats = D.run(port("wipe_message", wipe_message, inputs), examples=300, server=server)
+                                                   "batches": WIPE_BATCHES}))
+    stats = D.run(port("wipe_message", wipe_message, inputs), examples=400, server=server)
     assert stats.outputs > 100 and stats.rejects > 30, stats
 
 

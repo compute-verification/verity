@@ -31,9 +31,9 @@
 #                        labels, or fM, one label past the foreign_bits published at the reads; a cheat's run
 #                        expects reject
 #   --expect accept|reject  the verdict that exits 0 (default accept; reject with --foreign-gb)
-#   --egress-bits N      the network certifier's egress count over the session, which a challenger here signs
-#                        (default: UNCOUNTED, the bound vacuous); a challenger on its own host signs the count its
-#                        --challenger-command starts it with
+#   --egress-bits N      the network certifier's egress count over the session, in bits, which the verifier's check
+#                        takes as evidence in whole MiB, wherever the challenger runs (default: none, the bound
+#                        vacuous); no challenger is given it and the session signs none
 #   --link NAME=TO@VIA   a link leaving this node besides the control link and the challenger's, which the record names
 #                        uncounted (repeatable); the control link (`control`: the default route's NIC, which ssh and
 #                        research run reach the node by) is always named, and the challenger's from the connection made
@@ -125,8 +125,6 @@ else
   [ -z "$TRUSTED" ] || [[ $TRUSTED =~ ^[0-9a-f]{128}$ ]] || {
     echo "demo.sh: --trusted-sha512 is a key's SHA-512 in 128 lowercase hex digits, not $TRUSTED"; exit 2; }
   [ "$SIMULATED" = 1 ] && [ -n "$CH" ] && { echo "demo.sh: --simulated runs the challenger here, not on --challenger"; exit 2; }
-  [ -n "$EGRESS" ] && [ -n "$CH" ] && {
-    echo "demo.sh: --egress-bits reaches only a challenger here; the one on $CH signs the count its --challenger-command starts it with"; exit 2; }
   read -r CTRL_DEV CTRL_SRC < <(ip -o route get 1.1.1.1 2>/dev/null | sed -nE 's/.* dev ([^ ]+).* src ([^ ]+).*/\1 \2/p') || true
   CTRL_MBPS=$(cat "/sys/class/net/${CTRL_DEV:-none}/speed" 2>/dev/null || echo)
   [ -n "$EXPECT" ] || { [ "$FOREIGN" = 0 ] && EXPECT=accept || EXPECT=reject; }

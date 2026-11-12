@@ -232,7 +232,7 @@ def session(name: str, make: Callable[[int, sw.Challenger], Any], *, n: int, k: 
     for start, data in c.fill(1 << 14):
         prover.receive(start, data)
     c.run(prover.answer)
-    signed = c.close(egress_bits=0)
+    signed = c.close()
     v, sides = judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=decide)
     kept = prover.keep()
     out = {"prover": name, "labels": n, "k": k, "limit_ns": limit_ns, "ended": signed.ended,

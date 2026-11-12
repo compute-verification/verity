@@ -68,7 +68,7 @@ def main() -> int:
             extra["fill"] = streamer.stream(key, n, conn.fileno())
 
         with conn, conn.makefile("rwb") as f:
-            c = WP.serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"), egress_bits=WP.UNCOUNTED,
+            c = WP.serve(f, request, signer=signer, log=mc.SessionLog(device / "sessions"),
                          clock=itertools.count(10 ** 9, 1_000).__next__, fill=None if streamer is None else native)
     print(json.dumps(WP.report(c, signer.public_key, WINDOW) | extra, sort_keys=True), flush=True)
     return 0

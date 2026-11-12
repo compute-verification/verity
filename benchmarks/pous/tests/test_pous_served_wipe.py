@@ -127,7 +127,8 @@ def _decided(case: dict) -> dict:
     evidence = json.loads(bytes.fromhex(case["evidence"]))
     return W.answer(bytes.fromhex(p["server"]), bytes.fromhex(p["session"]), [bytes.fromhex(t) for t in p["trusted"]],
                     WP.commitment_of(json.loads(bytes.fromhex(case["commitment"]))),
-                    None if evidence["signed"] is None else WP.signed_of(evidence["signed"]))
+                    None if evidence["signed"] is None else WP.signed_of(evidence["signed"]),
+                    egress_mib=evidence["egress_mib"])
 
 
 def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> None:

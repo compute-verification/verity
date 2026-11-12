@@ -311,7 +311,7 @@ def session(port: int, verdict: str) -> dict:
         finally:
             s.close()
             prover.wait(timeout=60)
-        signed = c.close(egress_bits=0)
+        signed = c.close()
     t3 = time.perf_counter_ns()
     v, sides = wv.judge(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES, decide=verdict)
     t4 = time.perf_counter_ns()

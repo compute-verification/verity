@@ -2,7 +2,7 @@
 JSON formats (`MemoryChallenger.WipeJudge`), and the sessions the tests sample.
 
 The decoders mirror the Lean's: byte strings lowercase hex, the parameters naturals that `WipeParams` accepts, a batch
-record's fields, the fill's times and the egress integers of either sign, a start mark empty or 64 bytes, and the record
+record's fields and the fill's times integers of either sign, a start mark empty or 64 bytes, and the record
 exactly the canonical JSON of what it decodes to. Past decoding every reference is the Python's own function on the
 decoded objects.
 
@@ -75,7 +75,7 @@ def mark_of(j: Any) -> bytes:
 def signed_of(j: Any) -> sw.SignedWipe:
     return sw.SignedWipe(commitment_of(M._get(j, "commitment")), M._str(j, "ended"), mark_of(j),
                          int_(j, "fill_start_ns"), int_(j, "fill_end_ns"),
-                         tuple(batch_of(r) for r in M.list_(j, "batches")), int_(j, "egress_bits"),
+                         tuple(batch_of(r) for r in M.list_(j, "batches")),
                          M._str(j, "scheme"), M.hex_(j, "public_key"), M.hex_(j, "signature"))
 
 
@@ -109,7 +109,7 @@ def tiers_of(labels: int, cuts: list[int], names: list[str], outside: int = 0) -
 
 
 def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], session_id: bytes = bytes(32),
-        start: int = 1_000, fill_ns: int = 7, spends=lambda b: 1, tampered=frozenset(), egress_bits: int = 1234,
+        start: int = 1_000, fill_ns: int = 7, spends=lambda b: 1, tampered=frozenset(),
         coins: bytes = b"coins", certificate: bytes | None = None) -> Session:
     """One session of `Challenger` against the honest `Prover`: batch `b`'s answer takes `spends(b)` ns, and the batches in
     `tampered` have their first answer's last bit flipped. With `certificate`, the challenger's mark source returns it,
@@ -133,12 +133,13 @@ def run(params: sw.WipeParams, signer: M.AtLeaf, *, server: bytes = SERVERS[0], 
         return out
 
     c.run(answer)
-    return Session(c.close(egress_bits), c.commitment, (signer.public_key,), signer)
+    return Session(c.close(), c.commitment, (signer.public_key,), signer)
 
 
-#: Egress counts: none, one bit, whole MiB and one past, past the 15-bit saturation.
-EGRESS = st.one_of(st.integers(0, 4 * U), st.sampled_from([0, 1, U, U + 1, sw.EGRESS_MAX_UNITS * U,
-                                                           sw.EGRESS_MAX_UNITS * U + 1, 10 ** 15]))
+#: The evidence's egress, in MiB: none given, a count in range, the range's ends, and now and then one outside it.
+EGRESS = st.one_of(st.none(), st.integers(0, 4), st.integers(0, sw.EGRESS_MAX_UNITS),
+                   st.sampled_from([None, 0, 1, sw.EGRESS_MAX_UNITS - 1, sw.EGRESS_MAX_UNITS,
+                                    sw.EGRESS_MAX_UNITS + 1, -1, 10 ** 15]))
 #: A sampled session's start certificate, by the number its coins are sampled under: none (no mark source, an empty
 #: mark), or the bytes its mark source returns.
 CERTIFICATES = [None, b"a start certificate", b"\0", bytes(range(256)) * 3]
@@ -167,7 +168,7 @@ def sessions(draw, signer: M.AtLeaf | None = None) -> Session:
     return run(params, signer, server=draw(st.sampled_from(SERVERS)),
                session_id=hashlib.sha512(b"wipe session %d" % draw(st.integers(0, 3))).digest()[:32],
                start=draw(st.integers(0, 2 ** 40)), fill_ns=draw(st.integers(0, 10 ** 6)), spends=lambda b: spend[b],
-               tampered=frozenset({at} if fault == "wrong" else ()), egress_bits=draw(EGRESS),
+               tampered=frozenset({at} if fault == "wrong" else ()),
                coins=b"coins %d" % (n := draw(st.integers(0, 3))), certificate=CERTIFICATES[n])
 
 
@@ -228,7 +229,7 @@ def _other_mark(s: Session, x: int) -> bytes:
 #: One adversarial edit of a session, `(session, x) -> session`, `x` a sampled natural: a signature or key that isn't the
 #: session's, a commitment that isn't the published one, a wrong label, a late or early answer, a wrong batch number,
 #: first index or count, a batch dropped or added, a session that didn't complete, the fill not before the first batch,
-#: a field past its width, the egress edited, and the start mark edited under the old signature or signed anew (a mark
+#: a field past its width, and the start mark edited under the old signature or signed anew (a mark
 #: the judge reads as any other).
 MUTATIONS = [
     lambda s, x: _signature(s, M._flip(s.signed.signature, x)),
@@ -267,8 +268,6 @@ MUTATIONS = [
     lambda s, x: s.resign(batches=s.signed.batches[:-1]),
     lambda s, x: s.resign(batches=()),
     lambda s, x: s.resign(ended=[sw.LATE, sw.WRONG, sw.COMPLETE, "", "ünïcode\n\x01"][x % 5]),
-    lambda s, x: s.resign(egress_bits=[0, 1, U, U + 1, sw.EGRESS_MAX_UNITS * U + 1, 10 ** 30, -1, -U, -U - 1][x % 9]),
-    lambda s, x: _unsigned(s, egress_bits=s.signed.egress_bits + 1),
     lambda s, x: _unsigned(s, start_mark=_other_mark(s, x)),
     lambda s, x: s.resign(start_mark=_other_mark(s, x)),
 ]
@@ -291,9 +290,10 @@ def _tiers(f):
 
 
 def _v1(j: dict, x: int) -> dict:
-    """The record as the v1 format wrote it: no start mark, and the v1 protocol in both commitments."""
+    """The record as the v1 format wrote it: no start mark, a signed egress count, and the v1 protocol in both
+    commitments."""
     v1 = {"protocol": "verity-pous/streamed-wipe/v1"}
-    signed = {k: v for k, v in j["signed"].items() if k != "start_mark"}
+    signed = {k: v for k, v in j["signed"].items() if k != "start_mark"} | {"egress_bits": x}
     return j | {"commitment": j["commitment"] | v1, "signed": signed | {"commitment": signed["commitment"] | v1}}
 
 
@@ -304,8 +304,8 @@ def _marks(mark: str, x: int) -> str:
 
 
 #: One edit of a valid record's JSON: a field extra or missing, a header constant not the protocol's, the v1 format,
-#: parameters `WipeParams` refuses, a tier not a pair, hex not lowercase, a start mark of another length, a boolean or
-#: string where an integer goes, a scheme id the port doesn't verify.
+#: parameters `WipeParams` refuses, a tier not a pair, hex not lowercase, a start mark of another length, a signed
+#: session that names an egress, a boolean or string where an integer goes, a scheme id the port doesn't verify.
 JSON_MUTATIONS = [
     lambda j, x: j | {"extra": x},
     _drop,
@@ -342,7 +342,7 @@ JSON_MUTATIONS = [
     _at(("signed", "batches"), lambda b, x: [b[0] | {"receipt_ns": [str(b[0]["receipt_ns"]), True, None][x % 3]}]
         + b[1:] if b else [None]),
     _at(("signed", "batches"), lambda b, x: {"0": b}),
-    _at(("signed",), lambda s, x: s | {"egress_bits": [True, "0", None, [0]][x % 4]}),
+    _at(("signed",), lambda s, x: s | {"egress_bits": [0, x, True, None][x % 4]}),
     _at(("signed",), lambda s, x: s | {"fill_end_ns": False}),
     _at(("signed",), lambda s, x: s | {"ended": 1}),
     _at(("signed",), lambda s, x: s | {"signature": s["signature"].upper() if s["signature"] else "0"}),

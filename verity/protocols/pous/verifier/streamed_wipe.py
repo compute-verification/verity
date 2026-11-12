@@ -28,9 +28,10 @@ session has five steps:
    (`challenge`), reads the receipt time before it hashes anything (`receive`), and checks every 64-byte answer against
    `L_{c_j}`.  The first late or wrong batch ends the session: no batch is retried, and no index is redrawn.
 5. **Sign.** One signature over `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`, where the header is the
-   commitment, how the session ended, the start mark, the fill's times and the egress the network certifier counted over
-   the session (`close`), and the records root is the frame-v3-sha512 root of the batch records.  `end_message(signed)`
-   is the end message, what the challenger hands the network certifier after its last read.
+   commitment, how the session ended, the start mark and the fill's times (`close`), and the records root is the
+   frame-v3-sha512 root of the batch records.  `end_message(signed)` is the end message, what the challenger hands the
+   network certifier after its last read.  No egress count is signed: the count of what left between the two marks
+   exists only after the signature, and the challenger never sees it.
 
 The two marks are 64 bytes each, and neither is signed:
 
@@ -43,9 +44,10 @@ A batch record is `u32 b ‖ u32 first ‖ u32 count ‖ u64 send_ns ‖ u64 rec
 answers)` (96 bytes).  The guarantee (`PROTOCOL.md`; Lean `Pous.Guarantees.StreamedWipe`) covers the sequential reveal,
 batch size 1 (`WipeParams.covered`); a larger batch lets an answer depend on the whole batch, which the proof doesn't
 cover yet, so `verdict` refuses it.  `verdict` is what a verifier checks of a signed session; its public output is the
-verdict and the egress the network certifier counted, in whole MiB (15 bits), which the bound reads.  Its Lean port decides it
-(`MemoryChallenger.StreamedWipe` and `wipe_verdict.judge` in `verity/protocols/pous/device/lean/`, reading the
-records' `to_json`), and `verdict` here is the reference that port is difftested against.  `retained_bits` and
+verdict alone.  Its Lean port decides it (`MemoryChallenger.StreamedWipe` and `wipe_verdict.judge` in
+`verity/protocols/pous/device/lean/`, reading the records' `to_json`), and `verdict` here is the reference that port is
+difftested against.  The egress the bound reads is not the session's: the wipe's check takes it as evidence beside the
+signed session, in whole MiB (`egress_units`, 15 bits), and publishes it (`wipe_period`).  `retained_bits` and
 `challenges_for` are the guarantee's bound, which says how much of the prior content can survive an accepted wipe.
 """
 
@@ -225,8 +227,8 @@ def records_root(session: bytes, batches: Sequence[BatchRecord]) -> bytes:
 @dataclass(frozen=True, slots=True)
 class SignedWipe:
     """A closed session: its commitment, how it ended, its start mark (the SHA-512 of the start certificate the
-    challenger held before the fill, empty when it had no mark source), the fill's times, the batch records, the egress
-    the network certifier counted over the session in bits, and the one signature over them."""
+    challenger held before the fill, empty when it had no mark source), the fill's times, the batch records, and the
+    one signature over them.  It holds no egress count."""
 
     commitment: WipeCommitment
     ended: str
@@ -234,20 +236,18 @@ class SignedWipe:
     fill_start_ns: int
     fill_end_ns: int
     batches: tuple[BatchRecord, ...]
-    egress_bits: int
     scheme: str
     public_key: bytes
     signature: bytes
 
     def message(self) -> bytes:
-        return message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, self.batches,
-                       self.egress_bits)
+        return message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, self.batches)
 
     def to_json(self) -> dict[str, Any]:
         """The signed session as the Lean verdict reads it (`MemoryChallenger.StreamedWipe.Signed.ofJson`)."""
         return {"commitment": self.commitment.to_json(), "ended": self.ended, "start_mark": self.start_mark.hex(),
                 "fill_start_ns": self.fill_start_ns, "fill_end_ns": self.fill_end_ns,
-                "batches": [r.to_json() for r in self.batches], "egress_bits": self.egress_bits, "scheme": self.scheme,
+                "batches": [r.to_json() for r in self.batches], "scheme": self.scheme,
                 "public_key": self.public_key.hex(), "signature": self.signature.hex()}
 
 
@@ -259,11 +259,11 @@ def mark_of(text: str) -> bytes:
 
 
 def message(commitment: WipeCommitment, ended: str, start_mark: bytes, fill_start_ns: int, fill_end_ns: int,
-            batches: Sequence[BatchRecord], egress_bits: int) -> bytes:
+            batches: Sequence[BatchRecord]) -> bytes:
     """What the session's one signature signs: `SHA-512(SESSION_TAG ‖ u64 len ‖ header ‖ records root)`."""
     head = json.dumps({**commitment.header(), "ended": ended, "start_mark": start_mark.hex(),
-                       "fill_start_ns": fill_start_ns, "fill_end_ns": fill_end_ns, "batches": len(batches),
-                       "egress_bits": egress_bits}, sort_keys=True, separators=(",", ":")).encode()
+                       "fill_start_ns": fill_start_ns, "fill_end_ns": fill_end_ns, "batches": len(batches)},
+                      sort_keys=True, separators=(",", ":")).encode()
     return _sha512(SESSION_TAG, len(head).to_bytes(8, "big"), head, records_root(commitment.session, batches))
 
 
@@ -399,19 +399,16 @@ class Challenger:
         while self.ended is None:
             self.receive(respond(self.challenge()))
 
-    def close(self, egress_bits: int) -> SignedWipe:
-        """Sign the ended session, once, with the egress the network certifier counted over it, in bits."""
+    def close(self) -> SignedWipe:
+        """Sign the ended session, once."""
         if self.ended is None:
             raise RuntimeError("the session has not ended")
-        if egress_bits < 0:
-            raise ValueError("egress is a count of bits")
         if self.signed is None:
             assert self.fill_start_ns is not None and self.fill_end_ns is not None
             batches = tuple(self.batches)
-            m = message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, batches,
-                        egress_bits)
+            m = message(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns, batches)
             self.signed = SignedWipe(self.commitment, self.ended, self.start_mark, self.fill_start_ns, self.fill_end_ns,
-                                     batches, egress_bits, self.signer.scheme, self.signer.public_key,
+                                     batches, self.signer.scheme, self.signer.public_key,
                                      self.signer.sign(self.commitment.session, m))
         return self.signed
 
@@ -438,26 +435,26 @@ class Prover:
 EGRESS_UNIT_BITS = 8 << 20
 """The public egress count's unit: one MiB."""
 EGRESS_MAX_UNITS = (1 << 15) - 1
-"""The verdict's unit stays in the least public size class, 16 bits: the verdict's one and the count's 15, so the count
-saturates at 32 GiB less one MiB."""
+"""The wipe's public unit stays in the least public size class, 16 bits: the verdict's one and the count's 15, so the
+count saturates at 32 GiB less one MiB."""
 
 
 def egress_units(egress_bits: int) -> int:
-    """The certified egress in whole MiB, rounded up, saturating at `EGRESS_MAX_UNITS`: what the bound reads as `E`."""
+    """A count of egress bits in whole MiB, rounded up, saturating at `EGRESS_MAX_UNITS`: the unit the wipe's check
+    takes its egress in, which the bound reads as `E`.  A saturated count (`EGRESS_MAX_UNITS`) bounds nothing."""
     return min(-(-egress_bits // EGRESS_UNIT_BITS), EGRESS_MAX_UNITS)
 
 
 @dataclass(frozen=True, slots=True)
 class Verdict:
-    """Whether a signed session passes, and its egress in MiB; `reasons` are witness, and only `public()` is
-    published.  The guarantee's `E` is `egress_mib` MiB, and a saturated count (`EGRESS_MAX_UNITS`) bounds nothing."""
+    """Whether a signed session passes; `reasons` are witness, and only `public()` is published.  It carries no
+    egress: the session signs none."""
 
     accepted: bool
     reasons: tuple[str, ...]
-    egress_mib: int
 
     def public(self) -> dict[str, Any]:
-        return {"accepted": self.accepted, "egress_mib": self.egress_mib}
+        return {"accepted": self.accepted}
 
 
 def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozenset[bytes] | set[bytes],
@@ -494,7 +491,7 @@ def verdict(signed: SignedWipe, commitment: WipeCommitment, *, trusted: frozense
             reasons.append(f"batch {b} is past its deadline of {p.limit_ns} ns")
         if b == 0 and r.send_ns < signed.fill_end_ns:
             reasons.append("the first batch was sent before the fill completed")
-    return Verdict(not reasons, tuple(reasons), egress_units(signed.egress_bits))
+    return Verdict(not reasons, tuple(reasons))
 
 
 def _log2_choose(n: int, r: int) -> float:

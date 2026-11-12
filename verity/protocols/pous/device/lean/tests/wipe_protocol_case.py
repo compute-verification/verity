@@ -4,14 +4,16 @@ mirror, `answer` (and `reference(id, schemes)`), and its cases, `build`, `case` 
 `reference(id, schemes)(case)` is the outcome of one `serve` line in the core interface's answer format
 (`verity_difftest.protocol.answer`): it decodes the protocol's formats as `MemoryChallenger/WipeProtocol.lean` does, each
 input exactly the canonical JSON of what it decodes to (the commitment and the signed session as `wipe_cases` decodes
-them), and checks with the period hook's own Python, `wipe_period.outcome` over `streamed_wipe.verdict`. Its verdict,
+them, the evidence's egress null or an integer of either sign), and checks with the period hook's own Python, `wipe_period.outcome` over `streamed_wipe.verdict`. Its verdict,
 public, profile and digest are the Lean's exactly, and past decoding its reasons are the Lean's word for word. `answer`
 is `verity/wipe/v0`'s, under S1's LMS; `test_answer` the test signers' protocol's.
 
 `build(m, seed)` makes one wipe with the change `m` (`EXPECT`), signed by the memory challenger's tests' key at S1's
 deployed parameters (`mc_cases.deployed_signer`) so that `verity/wipe/v0` itself takes it: an honest wipe at a small fill
 and `READS` reads, one 32 MiB segment at `READS` reads and one at `REMOTE_READS` with a MiB declared past the fill (each
-accepted and certified at `StreamedWipeMeetsReads`' threshold for its `k`, its egress counted), a prover keeping one
+accepted and certified at `StreamedWipeMeetsReads`' threshold for its `k`, its evidence giving an egress count), an
+honest wipe whose evidence gives no egress (accepted and not certified), one whose evidence gives an egress outside 0 to
+`EGRESS_MAX_UNITS` (rejected), a prover keeping one
 label past that threshold of foreign content, a read past its deadline, a session the prover left before it ended
 (unsigned), a commitment of another server or session, an untrusted key, a record edited after it was signed, and
 malformed params, commitment and evidence. `case(kind, seed)` is a wipe aimed at a verdict or at a decoding failure
@@ -76,15 +78,23 @@ def decode_commitment(b: bytes) -> sw.WipeCommitment:
     return _exactly(WC.commitment_of, sw.WipeCommitment.to_json, P.canonical_json(b))
 
 
-def _evidence_json(s: sw.SignedWipe | None) -> dict:
-    return {"signed": None if s is None else s.to_json()}
+@dataclass(frozen=True)
+class Evidence:
+    """The signed session, none while unsigned, and the egress the evidence gives in MiB, none when it gives none."""
+
+    signed: sw.SignedWipe | None
+    egress_mib: int | None
+
+    def to_json(self) -> dict:
+        return {"egress_mib": self.egress_mib, "signed": None if self.signed is None else self.signed.to_json()}
 
 
-def decode_evidence(b: bytes) -> sw.SignedWipe | None:
-    def of(j: Any) -> sw.SignedWipe | None:
+def decode_evidence(b: bytes) -> Evidence:
+    def of(j: Any) -> Evidence:
         s = M._get(j, "signed")
-        return None if s is None else WC.signed_of(s)
-    return _exactly(of, _evidence_json, P.canonical_json(b))
+        return Evidence(None if s is None else WC.signed_of(s),
+                        None if M._get(j, "egress_mib") is None else WC.int_(j, "egress_mib"))
+    return _exactly(of, Evidence.to_json, P.canonical_json(b))
 
 
 def digest(c: sw.WipeCommitment) -> bytes:
@@ -94,8 +104,8 @@ def digest(c: sw.WipeCommitment) -> bytes:
 def reference(protocol_id: str, schemes) -> Callable[[Any], dict]:
     """`MemoryChallenger.WipeProtocol.mkProtocol protocol_id schemes` in Python."""
 
-    def check(p: Params, c: sw.WipeCommitment, signed: sw.SignedWipe | None) -> tuple:
-        return WP.outcome(p.server, p.session, p.trusted, c, signed, schemes)
+    def check(p: Params, c: sw.WipeCommitment, e: Evidence) -> tuple:
+        return WP.outcome(p.server, p.session, p.trusted, c, e.signed, schemes, egress_mib=e.egress_mib)
 
     return lambda case: P.answer(protocol_id, case, params=decode_params, commitment=decode_commitment,
                                  evidence=decode_evidence, check=check, digest=digest)
@@ -108,7 +118,7 @@ test_answer = reference(TEST_ID, M.ts.SCHEMES)
 
 
 def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipeParams], sw.Prover] = sw.Prover,
-         spends: Callable[[int], int] = lambda b: 1, stop_after: int | None = None, egress_bits: int = 1234,
+         spends: Callable[[int], int] = lambda b: 1, stop_after: int | None = None,
          coins: bytes = b"coins", session_id: bytes = bytes(32), server: bytes = SERVER,
          start: int = 1_000) -> tuple[sw.WipeCommitment, sw.SignedWipe | None]:
     """One wipe of `Challenger` against `prover(params)` on an injected clock: read `b` takes `spends(b)` ns, and with
@@ -124,21 +134,21 @@ def wipe(params: sw.WipeParams, signer: M.AtLeaf, *, prover: Callable[[sw.WipePa
         idx = c.challenge()
         clock.now += spends(len(c.batches))
         c.receive(p.answer(idx))
-    return c.commitment, None if c.ended is None else c.close(egress_bits)
+    return c.commitment, None if c.ended is None else c.close()
 
 
 def wipe_case(commitment: sw.WipeCommitment, signed: sw.SignedWipe | None, trusted: tuple[bytes, ...], *,
-              server: bytes | None = None, session: bytes | None = None) -> dict:
+              server: bytes | None = None, session: bytes | None = None, egress_mib: int | None = None) -> dict:
     """The period hook's case for a wipe (`wipe_period.case`), the params' server and session the commitment's unless
-    given."""
+    given, its evidence's egress `egress_mib`."""
     return WP.case(commitment.server if server is None else server,
-                   commitment.session if session is None else session, trusted, commitment, signed)
+                   commitment.session if session is None else session, trusted, commitment, signed, egress_mib)
 
 
 EXPECT = {
-    "honest": ACCEPT, "segment": ACCEPT, "reads": ACCEPT,
+    "honest": ACCEPT, "segment": ACCEPT, "reads": ACCEPT, "uncounted": ACCEPT,
     "foreign": REJECT, "late": REJECT, "other-server": REJECT, "other-session": REJECT, "untrusted": REJECT,
-    "tampered": REJECT,
+    "tampered": REJECT, "egress-range": REJECT,
     "unsigned": UNDECIDED,
     "params": REJECT, "commitment": REJECT, "evidence": REJECT,
 }
@@ -157,7 +167,12 @@ def _build(m: str, seed: int) -> dict:
     trusted = (signer.public_key,)
     params = {"segment": WP.params_for(),
               "reads": WP.params_for(k=REMOTE_READS, tier_bytes=WP.SEGMENT_BYTES + (1 << 20))}.get(m) or _small(r)
-    kw: dict[str, Any] = {"coins": r.randbytes(16), "session_id": r.randbytes(32), "egress_bits": r.randrange(1, 4 << 23)}
+    kw: dict[str, Any] = {"coins": r.randbytes(16), "session_id": r.randbytes(32)}
+    egress: int | None = sw.egress_units(r.randrange(1, 4 << 23))
+    if m == "uncounted":
+        egress = None
+    elif m == "egress-range":
+        egress = r.choice([-1, -1 - r.randrange(1 << 20), sw.EGRESS_MAX_UNITS + 1, 10 ** 15])
     if m == "foreign":
         kw["prover"] = WP.keeping(WP.foreign_labels("fM", params))
     elif m == "late":
@@ -167,15 +182,16 @@ def _build(m: str, seed: int) -> dict:
         kw["stop_after"] = r.randrange(params.k)
     commitment, signed = wipe(params, signer, **kw)
     if m == "other-server":
-        return wipe_case(commitment, signed, trusted, server=b"another node")
+        return wipe_case(commitment, signed, trusted, server=b"another node", egress_mib=egress)
     if m == "other-session":
-        return wipe_case(commitment, signed, trusted, session=M._flip(commitment.session, r.randrange(256)))
+        return wipe_case(commitment, signed, trusted, session=M._flip(commitment.session, r.randrange(256)),
+                         egress_mib=egress)
     if m == "untrusted":
-        return wipe_case(commitment, signed, (M.test_signer(M.STRANGER, 1, 0).public_key,))
+        return wipe_case(commitment, signed, (M.test_signer(M.STRANGER, 1, 0).public_key,), egress_mib=egress)
     if m == "tampered":
         assert signed is not None
-        signed = dataclasses.replace(signed, egress_bits=signed.egress_bits + 1)
-    c = wipe_case(commitment, signed, trusted)
+        signed = dataclasses.replace(signed, fill_start_ns=signed.fill_start_ns - 1)
+    c = wipe_case(commitment, signed, trusted, egress_mib=egress)
     if m == "params":
         c["params"] = [c["params"] | {"extra": 1}, {k: v for k, v in c["params"].items() if k != "trusted"},
                        c["params"] | {"server": c["params"]["server"].upper()}][r.randrange(3)]
@@ -186,7 +202,7 @@ def _build(m: str, seed: int) -> dict:
     elif m == "evidence":
         j = json.loads(bytes.fromhex(c["evidence"]))
         c["evidence"] = [D.canonical(j | {"extra": None}).encode().hex(), D.canonical({}).encode().hex(),
-                         D.canonical({"signed": 1}).encode().hex(), b"\xff".hex()][r.randrange(4)]
+                         D.canonical(j | {"signed": 1}).encode().hex(), b"\xff".hex()][r.randrange(4)]
     return c
 
 

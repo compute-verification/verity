@@ -11,7 +11,7 @@ public import MemoryChallenger.WipeJudge
 The functions `tests/` holds to `memory_challenger.py` and `streamed_wipe.py` through `verity_difftest.Port`, each over JSON
 in the formats of `MemoryChallenger.Protocol` (byte strings lowercase hex, integers naturals) and
 `MemoryChallenger.WipeJudge`: the crypto and record formats, LMS signing at a leaf and verification, the streamed wipe's
-signed message, its start and end messages and its egress count, and a device's HSS role digests and checks (`Lms.Hss`, `Attest.Period`: the
+signed message, its start and end messages and an egress count's unit, and a device's HSS role digests and checks (`Lms.Hss`, `Attest.Period`: the
 `range-u64` domain id, the period tree's root, the verifier's acceptance of a period and the liveness check).
 `memory-challenger-difftest` serves them (`Difftest.serve`). Each verdict's own difftest drives the executable its callers
 run, `memory-challenger-verdict` and `streamed-wipe-verdict`.
@@ -88,13 +88,13 @@ def lmsVerifyFn (j : Json) : V Json := do
   let some p := (SCHEMES ++ TEST_SCHEMES).lookup scheme | throw s!"no scheme {scheme}"
   pure (.bool (← lmsVerify p (← hex j "public_key") (← hex j "session") (← hex j "record") (← hex j "signature")))
 
-/-- `streamed_wipe.message(commitment, ended, start_mark, fill_start_ns, fill_end_ns, batches, egress_bits)`. -/
+/-- `streamed_wipe.message(commitment, ended, start_mark, fill_start_ns, fill_end_ns, batches)`. -/
 def wipeMessageFn (j : Json) : V Json := do
   let c ← StreamedWipe.Commitment.ofJson (← J.get j "commitment" "input")
   let batches ← (← J.arr j "batches" "input").mapM StreamedWipe.Batch.ofJson
   let intAt := fun (k : String) => do J.asInt (← J.get j k "input") k
   pure (hexJ (← StreamedWipe.message c (← J.str j "ended" "input") (← hex j "start_mark") (← intAt "fill_start_ns")
-    (← intAt "fill_end_ns") batches (← intAt "egress_bits")))
+    (← intAt "fill_end_ns") batches))
 
 /-- `streamed_wipe.start_message(commitment)`. -/
 def wipeStartMessageFn (j : Json) : V Json := do

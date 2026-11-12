@@ -1,9 +1,9 @@
 """`wipe_period` and `wipe_party`: one wipe in one process, on an injected clock, and the memory challenger's side and
 the prover's over a socket pair, each verdict of `verity/wipe/v0` (the Lean's is `MemoryChallenger.WipeProtocol`,
 difftested in `verity/protocols/pous/device/lean/tests/test_wipe_protocol.py`): an honest segment certified at
-`StreamedWipeMeetsReads`' threshold at the challenger's `k` (11,709,069 + E bits at `k = 2152`, `r = 24`), its bound
-vacuous when the egress is uncounted, a prover keeping one label past it and a late read rejected, a session the prover
-left undecided; the challenger chooses `k` (`wipe_party --reads`) and refuses a request that names it. The certificate
+`StreamedWipeMeetsReads`' threshold at the challenger's `k` (11,709,069 + E bits at `k = 2152`, `r = 24`) with `E` the
+egress its evidence gives, its bound vacuous when the evidence gives none, an egress out of range rejected, a prover
+keeping one label past it and a late read rejected, a session the prover left undecided; the challenger chooses `k` (`wipe_party --reads`) and refuses a request that names it. The certificate
 is checked at `k = 5231`, the H200's (`StreamedWipeMeets141GB5`), and against the streamed wipe's own bound. The leg runs
 whole against a challenger side on a host of its own (`wipe_side.py`), its record naming what the bound doesn't cover
 (the links leaving the node, the undeclared tiers, an uncounted egress, what a joint store's disks leave outside the
@@ -47,7 +47,7 @@ SEGMENT_2152 = 11_709_069
 
 
 def test_an_honest_segment_is_certified_at_its_reads() -> None:
-    w = _run(W.params_for(), egress_bits=3 * sw.EGRESS_UNIT_BITS - 5)
+    w = _run(W.params_for(), egress_mib=sw.egress_units(3 * sw.EGRESS_UNIT_BITS - 5))
     key, = w.case["params"]["trusted"]
     assert w.verdict == "accept" and w.report == {"ended": sw.COMPLETE, "host": "n0", "reads": W.READS,
                                                   "key_sha512": hashlib.sha512(bytes.fromhex(key)).hexdigest(),
@@ -60,15 +60,34 @@ def test_an_honest_segment_is_certified_at_its_reads() -> None:
                                                   "r": 24, "reads": W.READS}
     evidence = json.loads(bytes.fromhex(w.case["evidence"]))
     assert evidence["signed"]["ended"] == sw.COMPLETE and w.case["params"]["server"] == b"n0".hex()
+    assert sorted(evidence) == ["egress_mib", "signed"] and evidence["egress_mib"] == 3
+    assert "egress_bits" not in evidence["signed"] and w.signed.to_json() == evidence["signed"]
 
 
 def test_an_uncounted_egress_bounds_nothing() -> None:
-    w = _run(W.params_for())
-    assert w.verdict == "accept"
-    assert w.answer["public"] == {"certified": False, "egress_mib": sw.EGRESS_MAX_UNITS, "eps": "0", "foreign_bits": M,
-                                  "k": W.READS, "memory_bits": M, "r": 24}
-    assert w.answer["profile"]["gaps"] == [f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to "
-                                           f"{sw.EGRESS_MAX_UNITS - 1}: it bounds nothing"]
+    """With no egress in the evidence the check takes `EGRESS_MAX_UNITS`: the wipe is accepted and not certified, as
+    it is when the evidence says `EGRESS_MAX_UNITS` itself; one MiB less is certified."""
+    vacuous = {"certified": False, "egress_mib": sw.EGRESS_MAX_UNITS, "eps": "0", "foreign_bits": M, "k": W.READS,
+               "memory_bits": M, "r": 24}
+    gaps = [f"the egress count is {sw.EGRESS_MAX_UNITS} MiB, outside 0 to {sw.EGRESS_MAX_UNITS - 1}: it bounds nothing"]
+    for egress in (None, sw.EGRESS_MAX_UNITS):
+        w = _run(W.params_for(), egress_mib=egress)
+        assert w.verdict == "accept" and w.answer["public"] == vacuous and w.answer["profile"]["gaps"] == gaps
+        assert json.loads(bytes.fromhex(w.case["evidence"]))["egress_mib"] == egress
+    assert W.egress_of(None) == sw.EGRESS_MAX_UNITS and W.egress_of(0) == 0
+    last = _run(W.params_for(), egress_mib=sw.EGRESS_MAX_UNITS - 1)
+    assert last.verdict == "accept" and last.answer["public"]["certified"] and last.answer["profile"]["gaps"] == []
+
+
+@pytest.mark.parametrize("egress", [-1, -(1 << 40), sw.EGRESS_MAX_UNITS + 1, 10 ** 15])
+def test_an_egress_out_of_range_is_refused(egress: int) -> None:
+    """An egress outside 0 to `EGRESS_MAX_UNITS` rejects the wipe, signed or not, and publishes nothing."""
+    for stop_after in (None, 7):
+        w = _run(egress_mib=egress, stop_after=stop_after)
+        assert (w.signed is None) == (stop_after is not None)
+        assert w.verdict == "reject" and w.answer["public"] is None and w.answer["profile"] is None
+        assert w.answer["reason"] == f"the evidence's egress is {egress} MiB, outside 0 to {sw.EGRESS_MAX_UNITS}"
+        assert json.loads(bytes.fromhex(w.case["evidence"]))["egress_mib"] == egress
 
 
 def test_a_prover_keeping_one_label_past_the_threshold_is_rejected() -> None:
@@ -77,7 +96,7 @@ def test_a_prover_keeping_one_label_past_the_threshold_is_rejected() -> None:
     p = W.params_for()
     f = W.foreign_labels("fM", p)
     assert f == SEGMENT_2152 // sw.LABEL_BITS + 1 and (W.SEGMENT_LABELS - f) ** W.READS << 128 < W.SEGMENT_LABELS ** W.READS
-    w = _run(p, egress_bits=0, prover=W.keeping(f))
+    w = _run(p, egress_mib=0, prover=W.keeping(f))
     assert w.verdict == "reject" and w.report["ended"] == sw.WRONG, w.answer
     assert "wrong answers" in w.answer["reason"] and w.answer["public"] is None
 
@@ -129,7 +148,7 @@ def test_a_late_read_is_rejected() -> None:
             clock.now += SMALL.limit_ns if self.reads == 6 else 0
             return super().answer(indices)
 
-    w = _run(clock=clock, prover=Late, egress_bits=0)
+    w = _run(clock=clock, prover=Late, egress_mib=0)
     assert w.verdict == "reject" and w.report == {"ended": sw.LATE, "host": "n0", "reads": 6,
                                                   "key_sha512": w.report["key_sha512"], "key_pinned": False}
     assert "batch 5 is past its deadline of 1000 ns" in w.answer["reason"]
@@ -138,7 +157,7 @@ def test_a_late_read_is_rejected() -> None:
 def test_a_session_the_prover_left_is_undecided() -> None:
     w = _run(stop_after=7)
     assert w.verdict == "undecided" and w.answer["reason"] == W.UNSIGNED and w.report["reads"] == 7
-    assert json.loads(bytes.fromhex(w.case["evidence"])) == {"signed": None}
+    assert json.loads(bytes.fromhex(w.case["evidence"])) == {"egress_mib": None, "signed": None}
 
 
 def _split(params: sw.WipeParams, prover: sw.Prover, signer, stop_after: int | None = None):
@@ -147,7 +166,7 @@ def _split(params: sw.WipeParams, prover: sw.Prover, signer, stop_after: int | N
 
     def side() -> None:
         with a, a.makefile("rwb") as f:
-            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(), egress_bits=0,
+            got["c"] = WP.serve(f, WP.request_of("n0", params), signer=signer, log=ts.session_log(),
                                 clock=Clock(10 ** 9, 1))
 
     t = threading.Thread(target=side)
@@ -163,7 +182,8 @@ def test_the_split_wipe(how: str) -> None:
     signer = ts.TestSigner(b"challenger host " + how.encode(), 1)
     prover = W.Keeping(SMALL, W.foreign_labels("fM", SMALL)) if how == "foreign" else sw.Prover(SMALL)
     c, answered = _split(SMALL, prover, signer, stop_after=3 if how == "left" else None)
-    a = W.answer(b"n0", c.commitment.session, (signer.public_key,), c.commitment, c.signed, ts.SCHEMES, TEST_ID)
+    a = W.answer(b"n0", c.commitment.session, (signer.public_key,), c.commitment, c.signed, ts.SCHEMES, TEST_ID,
+                 egress_mib=0)
     want = {"honest": "accept", "foreign": "reject", "left": "undecided"}[how]
     assert a["verdict"] == want, a
     if how == "honest":
@@ -213,7 +233,7 @@ def _side(tmp_path, monkeypatch, wipe: dict) -> Path:
 def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> None:
     """The leg whole: period.json read, the wipe of one segment against a challenger side that isn't this node's
     (`wipe_side.py`), its case and record written, the premise recorded as held. No network certifier counted the
-    egress, so its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
+    egress and period.json names no count, so the check is given none and its bound is vacuous. The record names what the bound doesn't cover: the egress, the host's DRAM and
     the two links leaving the node (period.json's control link, and the challenger's as the prover connected), and
     carries the session's window on the challenger's clock."""
     period = _side(tmp_path, monkeypatch, {"links": [CONTROL]})
@@ -224,6 +244,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     assert answer["profile"]["placement"]["trusted-host"] == "holds: the memory challenger ran on auditor, not the developer's n0"
     case = json.loads((out / "wipe.case.json").read_text())
     assert sorted(case) == ["commitment", "evidence", "params"]
+    assert json.loads(bytes.fromhex(case["evidence"]))["egress_mib"] is None
     record = json.loads((out / "wipe.json").read_text())
     assert record["lean"] is None and record["report"]["reads"] == W.READS and record["report"]["ended"] == sw.COMPLETE
     assert record["prover"] is None and record["session"]["reads"]["n"] == W.READS
@@ -243,7 +264,7 @@ def test_the_leg_with_the_challenger_on_its_own_host(tmp_path, monkeypatch) -> N
     assert record["window"]["challenger"] == record["report"]["window"] and set(record["window"]["prover"]) == {
         "clock", "t0", "t1"}
     gaps = record["uncertified"]
-    assert not any(g.startswith("key custody") for g in gaps) and gaps[0].startswith("egress: signed UNCOUNTED")
+    assert not any(g.startswith("key custody") for g in gaps) and gaps[0].startswith("egress: uncounted, the check was")
     assert any(g.startswith("tier host-dram: the host's DRAM outside the declared tier (") for g in gaps)
     assert [g.split(":")[0] for g in gaps if g.startswith("link ")] == ["link control", "link challenger"]
     s = W.summary(record)
@@ -275,10 +296,19 @@ def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None
     assert extras == [("--reads", "5231")]
 
 
-def test_a_challenger_on_its_own_host_takes_no_egress_from_the_prover(tmp_path, monkeypatch) -> None:
-    period = _side(tmp_path, monkeypatch, {"egress_bits": 0})
-    with pytest.raises(ValueError, match="reaches only a challenger on this node"):
-        W.leg(period, "n0", tmp_path / "out")
+def test_the_periods_egress_goes_to_the_check_and_never_to_the_challenger(tmp_path, monkeypatch) -> None:
+    """period.json's `wipe.egress_bits` is evidence: the leg gives it to the check in whole MiB, wherever the
+    challenger runs, and the challenger's command names no egress. The check publishes `certify` at it."""
+    period = _side(tmp_path, monkeypatch, {"egress_bits": 3 * sw.EGRESS_UNIT_BITS - 5})
+    extras, of = [], WP.side_of
+    monkeypatch.setattr(WP, "side_of", lambda doc, node, d, extra=(): extras.append(extra) or of(doc, node, d, extra))
+    out = tmp_path / "out"
+    answer = W.leg(period, "n0", out)
+    assert extras == [()]
+    assert answer["verdict"] == "accept" and answer["public"] == W.certify(W.params_for(), 3) and answer["public"]["certified"]
+    evidence = json.loads(bytes.fromhex(json.loads((out / "wipe.case.json").read_text())["evidence"]))
+    assert evidence["egress_mib"] == 3 and "egress_bits" not in evidence["signed"]
+    assert not any(g.startswith("egress") for g in json.loads((out / "wipe.json").read_text())["uncertified"])
 
 
 UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"

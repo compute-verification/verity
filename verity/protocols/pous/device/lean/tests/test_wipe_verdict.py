@@ -1,9 +1,10 @@
 """The streamed wipe's verdict on a record (`streamed-wipe-verdict`, `MemoryChallenger.StreamedWipe`) against
-`streamed_wipe.verdict`: the whole verdict (accepted, reasons word for word, and the egress in MiB) on records as
+`streamed_wipe.verdict`: the whole verdict (accepted, and the reasons word for word) on records as
 `wipe_verdict.py` writes them from honest sessions at every batch size (each above 1 refused as uncovered), sessions
 under one adversarial edit (`wipe_cases.MUTATIONS`), records under one JSON edit, and each accepted-schemes mapping a
 caller passes; then the named negative controls through `wipe_verdict.verdict` and `judge`, the calls a caller makes, the
-format (a v1 session and a start mark that is not one refused, an empty mark and a digest read), and the switch itself."""
+format (a v1 session, a session that names an egress and a start mark that is not one refused, an empty mark and a
+digest read), and the switch itself."""
 
 from __future__ import annotations
 
@@ -102,65 +103,62 @@ def _params(batch: int = 1, k: int = 3, labels: int = 8) -> sw.WipeParams:
 CERTIFICATE = b"a start certificate, as the network certifier returned it"
 
 
-def _honest(batch: int = 1, spends=(1, 1, 1), tampered=frozenset(), egress_bits: int = 1234,
+def _honest(batch: int = 1, spends=(1, 1, 1), tampered=frozenset(),
             certificate: bytes | None = None) -> W.Session:
     """A three-challenge session over 8 labels in two tiers, its deadline 1000 ns, signed at leaf 1 of a height-1 key;
     with `certificate`, its start mark is that certificate's SHA-512."""
     return W.run(_params(batch), M.test_signer(M.SECRETS[0], 1, 1), spends=lambda b: spends[b], tampered=tampered,
-                 egress_bits=egress_bits, certificate=certificate)
+                 certificate=certificate)
 
 
 def _uncovered(batch: int) -> str:
     return f"batch size {batch} is uncovered: the guarantee covers the sequential reveal, batch size 1"
 
 
-def controls() -> dict[str, tuple[W.Session, tuple[str, ...], int]]:
-    """The negative controls, each a session, the reasons its verdict gives and its egress in MiB, beside the honest
+def controls() -> dict[str, tuple[W.Session, tuple[str, ...]]]:
+    """The negative controls, each a session and the reasons its verdict gives, beside the honest
     session at batch size 1, with no start mark and with one; an otherwise honest session at batch size 2 is one,
     rejected as uncovered."""
     s = _honest()
     marked = _honest(certificate=CERTIFICATE)
     other = hashlib.sha512(CERTIFICATE + b"x").digest()
-    mib = 1
     return {
-        "honest": (s, (), mib),
-        "honest, with a start mark": (marked, (), mib),
-        "another mark, signed": (marked.resign(start_mark=other), (), mib),
-        "mark edited": (W._unsigned(marked, start_mark=other), ("the signature does not verify",), mib),
-        "mark dropped": (W._unsigned(marked, start_mark=b""), ("the signature does not verify",), mib),
-        "mark added": (W._unsigned(s, start_mark=other), ("the signature does not verify",), mib),
-        "honest, batch 2": (_honest(batch=2), (_uncovered(2),), mib),
+        "honest": (s, ()),
+        "honest, with a start mark": (marked, ()),
+        "another mark, signed": (marked.resign(start_mark=other), ()),
+        "mark edited": (W._unsigned(marked, start_mark=other), ("the signature does not verify",)),
+        "mark dropped": (W._unsigned(marked, start_mark=b""), ("the signature does not verify",)),
+        "mark added": (W._unsigned(s, start_mark=other), ("the signature does not verify",)),
+        "honest, batch 2": (_honest(batch=2), (_uncovered(2),)),
         "late answer, batch 2": (_honest(batch=2, spends=(1, LIMIT + 1)),
                                  (_uncovered(2), "the session ended late after 2 of 2 batches",
-                                  f"batch 1 is past its deadline of {LIMIT} ns"), mib),
-        "bad signature": (W._signature(s, M._flip(s.signed.signature, 100)), ("the signature does not verify",), mib),
+                                  f"batch 1 is past its deadline of {LIMIT} ns")),
+        "bad signature": (W._signature(s, M._flip(s.signed.signature, 100)), ("the signature does not verify",)),
         "untrusted signer": (dataclasses.replace(s, trusted=()),
-                             ("the session is signed by a key that is not a trusted memory challenger's",), mib),
+                             ("the session is signed by a key that is not a trusted memory challenger's",)),
         "stranger's signature": (W._stranger(s, 0),
-                                 ("the session is signed by a key that is not a trusted memory challenger's",), mib),
-        "unknown scheme": (W._unsigned(s, scheme="none"), ("signature scheme 'none' is not accepted",), mib),
+                                 ("the session is signed by a key that is not a trusted memory challenger's",)),
+        "unknown scheme": (W._unsigned(s, scheme="none"), ("signature scheme 'none' is not accepted",)),
         "wrong header": (s.resign(commitment=W._params(s, limit_ns=LIMIT + 1)),
-                         ("the signed header is not the session's commitment",), mib),
+                         ("the signed header is not the session's commitment",)),
         "wrong label": (_honest(tampered={1}), ("the session ended wrong after 2 of 3 batches",
-                                                "batch 1 has 1 wrong answers"), mib),
+                                                "batch 1 has 1 wrong answers")),
         "late answer": (_honest(spends=(1, LIMIT + 1, 1)), ("the session ended late after 2 of 3 batches",
-                                                            f"batch 1 is past its deadline of {LIMIT} ns"), mib),
+                                                            f"batch 1 is past its deadline of {LIMIT} ns")),
         "answer before its challenge": (W._batch(s, 2, receipt_ns=lambda r: r.send_ns - 1),
-                                        (f"batch 2 is past its deadline of {LIMIT} ns",), mib),
-        "answer at the deadline": (W._batch(s, 2, receipt_ns=lambda r: r.send_ns + LIMIT), (), mib),
-        "wrong count": (W._batch(s, 1, count=lambda r: 2), ("batch 1 is not the session's batch 1",), mib),
-        "wrong batch number": (W._batch(s, 0, b=lambda r: 1), ("batch 0 is not the session's batch 0",), mib),
-        "wrong first index": (W._batch(s, 2, first=lambda r: 1), ("batch 2 is not the session's batch 2",), mib),
+                                        (f"batch 2 is past its deadline of {LIMIT} ns",)),
+        "answer at the deadline": (W._batch(s, 2, receipt_ns=lambda r: r.send_ns + LIMIT), ()),
+        "wrong count": (W._batch(s, 1, count=lambda r: 2), ("batch 1 is not the session's batch 1",)),
+        "wrong batch number": (W._batch(s, 0, b=lambda r: 1), ("batch 0 is not the session's batch 0",)),
+        "wrong first index": (W._batch(s, 2, first=lambda r: 1), ("batch 2 is not the session's batch 2",)),
         "incomplete session": (s.resign(batches=s.signed.batches[:-1]),
-                               ("the session ended complete after 2 of 3 batches",), mib),
+                               ("the session ended complete after 2 of 3 batches",)),
         "extra batch": (s.resign(batches=s.signed.batches + s.signed.batches[-1:]),
-                        ("the session ended complete after 4 of 3 batches", "batch 3 is not the session's batch 3"), mib),
+                        ("the session ended complete after 4 of 3 batches", "batch 3 is not the session's batch 3")),
         "sent before the fill completed": (W._first_before_fill(s, 0),
-                                           ("the first batch was sent before the fill completed",), mib),
+                                           ("the first batch was sent before the fill completed",)),
         "record past its width": (W._batch(s, 0, b=lambda r: 2 ** 32),
-                                  ("the signature does not verify", "batch 0 is not the session's batch 0"), mib),
-        "egress edited": (W._unsigned(s, egress_bits=2 ** 20 * 8 + 1), ("the signature does not verify",), 2),
-        "egress saturated": (_honest(egress_bits=10 ** 15), (), sw.EGRESS_MAX_UNITS),
+                                  ("the signature does not verify", "batch 0 is not the session's batch 0")),
     }
 
 
@@ -168,10 +166,11 @@ def test_negative_controls(server):
     """Each negative control by name, through `wipe_verdict.verdict`, `judge` under each mode and the difftest port: the
     Lean's verdict is the Python's, reasons word for word, and each control is rejected for its own reason."""
     port_ = port(st.none())
-    for name, (s, reasons, mib) in controls().items():
+    for name, (s, reasons) in controls().items():
         kw = {"trusted": set(s.trusted), "schemes": M.ts.SCHEMES}
         python = sw.verdict(s.signed, s.commitment, **kw)
-        assert python == sw.Verdict(not reasons, reasons, mib), (name, python)
+        assert python == sw.Verdict(not reasons, reasons), (name, python)
+        assert python.public() == {"accepted": not reasons}, name
         assert V.verdict(s.signed, s.commitment, **kw) == python, name
         lean = V.lean(s.signed, s.commitment, **kw)
         assert s.commitment.params.covered == ("batch 2" not in name), name
@@ -185,20 +184,25 @@ def test_negative_controls(server):
 
 
 def test_the_format_is_v2(server):
-    """A record of an honest session, with a start mark or none, is read; the same session as the v1 format wrote it
-    (no start mark, the v1 protocol in its commitments), and a start mark in upper case or of another length, are
-    refused by the Lean and by the reference."""
+    """A record of an honest session, with a start mark or none, is read, and its signed session names no egress; the
+    same session as the v1 format wrote it (no start mark, a signed egress, the v1 protocol in its commitments), a
+    signed session that names an egress, and a start mark in upper case or of another length, are refused by the Lean
+    and by the reference."""
     port_ = port(st.none())
     for s in (_honest(), _honest(certificate=CERTIFICATE)):
         rec = record(s)
         mark = rec["signed"]["start_mark"]
         assert mark == s.signed.start_mark.hex() and len(mark) in (0, 128)
+        assert sorted(rec["signed"]) == ["batches", "commitment", "ended", "fill_end_ns", "fill_start_ns", "public_key",
+                                         "scheme", "signature", "start_mark"]
         assert D.replay(port_, rec, server)[0] == "output"
         v1 = {"protocol": "verity-pous/streamed-wipe/v1"}
         unmarked = {k: v for k, v in rec["signed"].items() if k != "start_mark"}
         digest = mark or hashlib.sha512(CERTIFICATE).hexdigest()
         refused = [W._v1(rec, 0),
                    rec | {"signed": unmarked},
+                   rec | {"signed": rec["signed"] | {"egress_bits": 0}},
+                   rec | {"signed": rec["signed"] | {"egress_bits": 1234}},
                    rec | {"commitment": rec["commitment"] | v1},
                    rec | {"signed": rec["signed"] | {"commitment": rec["signed"]["commitment"] | v1}},
                    rec | {"commitment": rec["commitment"] | v1,
@@ -211,22 +215,22 @@ def test_the_format_is_v2(server):
 
 
 def test_a_disagreement_is_refused(monkeypatch):
-    """Under `both`, a Python verdict that differs from the Lean's in any field rejects the session, naming both, with the
-    egress saturated; under `lean` the Python isn't consulted."""
+    """Under `both`, a Python verdict that differs from the Lean's in any field rejects the session, naming both; under
+    `lean` the Python isn't consulted."""
     s = _honest()
     kw = {"trusted": set(s.trusted), "schemes": M.ts.SCHEMES}
     real = V.python(s.signed, s.commitment, **kw)
-    for edit in ({"accepted": False}, {"reasons": ["x"]}, {"egress_mib": 2}):
+    for edit in ({"accepted": False}, {"reasons": ["x"]}):
         monkeypatch.setattr(V, "python", lambda *a, edit=edit, **k: real | edit)
         v, sides = V.judge(s.signed, s.commitment, decide="both", **kw)
-        assert not v.accepted and v.egress_mib == sw.EGRESS_MAX_UNITS and v.reasons[0].startswith(V.DISAGREE), (edit, v)
+        assert not v.accepted and v.reasons[0].startswith(V.DISAGREE), (edit, v)
         assert sides == {"lean": real, "python": real | edit}
         v, sides = V.judge(s.signed, s.commitment, decide="lean", **kw)
         assert v.accepted and set(sides) == {"lean"}
 
 
 def test_refusals():
-    """The Lean refuses, `verdict` raises and `judge` rejects (egress saturated), where the record names a scheme the port
+    """The Lean refuses, `verdict` raises and `judge` rejects, where the record names a scheme the port
     doesn't verify or holds a field `to_json` can't have written: it fails closed, never to an answer."""
     s = _honest()
     unknown = {**M.ts.SCHEMES, "an unknown scheme": None}
@@ -234,7 +238,7 @@ def test_refusals():
         V.verdict(s.signed, s.commitment, trusted=set(s.trusted), schemes=unknown)
     for decide in ("lean", "both"):
         v, sides = V.judge(s.signed, s.commitment, trusted=set(s.trusted), schemes=unknown, decide=decide)
-        assert not v.accepted and v.egress_mib == sw.EGRESS_MAX_UNITS and "refuses the record" in v.reasons[-1], v
+        assert not v.accepted and "refuses the record" in v.reasons[-1], v
     bad = dataclasses.replace(s.signed, ended=None)
     with pytest.raises(ValueError, match="refuses the record"):
         V.verdict(bad, s.commitment, trusted=set(s.trusted), schemes=M.ts.SCHEMES)

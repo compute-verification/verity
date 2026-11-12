@@ -51,7 +51,7 @@ def run(c: sw.Challenger, respond=None, *, clock: Clock | None = None, spend=lam
         return (respond or prover.answer)(idx)
 
     c.run(answer)
-    return c.close(egress_bits=1234)
+    return c.close()
 
 
 def test_label_format():
@@ -86,7 +86,7 @@ def test_honest_session_is_accepted_at_batch_1_and_refused_above(batch):
     v = sw.verdict(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES)
     uncovered = f"batch size {batch} is uncovered: the guarantee covers the sequential reveal, batch size 1"
     assert v.reasons == (() if batch == 1 else (uncovered,))
-    assert v.public() == {"accepted": batch == 1, "egress_mib": 1}
+    assert v.public() == {"accepted": batch == 1}
     assert c.coins() == sw.draw_indices(b"coins", SERVER, SESSION, N, K)
     assert c.params.covered == (batch == 1)
 
@@ -107,7 +107,7 @@ def test_wrong_answer_ends_the_session():
     with pytest.raises(RuntimeError, match="no batch is retried"):
         c.challenge()
     v = sw.verdict(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES)
-    assert not v.accepted and v.public() == {"accepted": False, "egress_mib": 1}
+    assert not v.accepted and v.public() == {"accepted": False}
 
 
 def test_late_batch_ends_the_session():
@@ -178,15 +178,16 @@ def session(certificate: bytes | None = CERTIFICATE, server: bytes = SERVER):
 
 
 def signed_bytes(s: sw.SignedWipe) -> bytes:
-    """What a session signs, rebuilt here from the format: the header's 17 keys in sorted order, with no spaces."""
+    """What a session signs, rebuilt here from the format: the header's 16 keys in sorted order, with no spaces, and no
+    egress count among them."""
     p = s.commitment.params
-    header = {"batch": p.batch, "batches": len(s.batches), "clock": "CLOCK_MONOTONIC ns", "egress_bits": s.egress_bits,
+    header = {"batch": p.batch, "batches": len(s.batches), "clock": "CLOCK_MONOTONIC ns",
               "ended": s.ended, "fill_end_ns": s.fill_end_ns, "fill_start_ns": s.fill_start_ns, "k": p.k,
               "label_bytes": 64, "labels": p.labels, "limit_ns": p.limit_ns, "protocol": "verity-pous/streamed-wipe/v2",
               "records_tree": "verity-pous/streamed-wipe/batch-records/frame-v3-sha512/v1",
               "server": s.commitment.server.hex(), "session": s.commitment.session.hex(),
               "start_mark": s.start_mark.hex(), "tiers": [[t, b] for t, b in p.tiers]}
-    assert list(header) == sorted(header) and len(header) == 17
+    assert list(header) == sorted(header) and len(header) == 16 and "egress_bits" not in header
     head = json.dumps(header, separators=(",", ":")).encode()
     return hashlib.sha512(b"verity-pous/streamed-wipe/session/v2\0" + len(head).to_bytes(8, "big") + head
                           + sw.records_root(s.commitment.session, s.batches)).digest()
@@ -309,7 +310,6 @@ def test_the_end_message_is_the_signed_message_and_its_signature():
     others = [dataclasses.replace(signed, signature=bytes([sig[0] ^ 1]) + sig[1:]),
               dataclasses.replace(signed, signature=sig[:-1] + bytes([sig[-1] ^ 0x80])),
               dataclasses.replace(signed, signature=sig[:-1]), dataclasses.replace(signed, signature=b""),
-              dataclasses.replace(signed, egress_bits=signed.egress_bits + 1),
               dataclasses.replace(signed, fill_end_ns=signed.fill_end_ns + 1),
               dataclasses.replace(signed, start_mark=b""),
               dataclasses.replace(signed, start_mark=bytes([signed.start_mark[0] ^ 1]) + signed.start_mark[1:]),
@@ -324,10 +324,10 @@ def test_the_reader_refuses_another_format_or_mark():
     for certificate in (CERTIFICATE, None):
         signed = session(certificate)[1]
         j = json.loads(json.dumps(signed.to_json()))
-        assert set(j) == {"commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches", "egress_bits",
+        assert set(j) == {"commitment", "ended", "start_mark", "fill_start_ns", "fill_end_ns", "batches",
                           "scheme", "public_key", "signature"}
         assert WP.signed_of(j) == signed
-        v1 = {k: v for k, v in j.items() if k != "start_mark"}
+        v1 = {k: v for k, v in j.items() if k != "start_mark"} | {"egress_bits": 1234}
         v1["commitment"] = j["commitment"] | {"protocol": "verity-pous/streamed-wipe/v1"}
         for old in (v1, v1 | {"start_mark": j["start_mark"]}):
             with pytest.raises(ValueError, match="a signed wipe is verity-pous/streamed-wipe/v2, not "
@@ -370,13 +370,30 @@ def test_verdict_fails_closed():
     r = signed.batches[0]
     forged = dataclasses.replace(signed, batches=(dataclasses.replace(r, receipt_ns=r.receipt_ns + 1), *signed.batches[1:]))
     assert "the signature does not verify" in sw.verdict(forged, c.commitment, trusted=trusted, schemes=ts.SCHEMES).reasons
-    more = dataclasses.replace(signed, egress_bits=0)
+    more = dataclasses.replace(signed, fill_start_ns=signed.fill_start_ns - 1)
     assert not sw.verdict(more, c.commitment, trusted=trusted, schemes=ts.SCHEMES).accepted
 
 
+def test_the_session_signs_no_egress():
+    """`close` takes no egress count, the signed session holds none and its verdict returns no amount."""
+    clock = Clock(1_000_000)
+    signer = ts.TestSigner(b"wipe challenger", height=2)
+    c = challenger(clock=clock, signer=signer)
+    signed = run(c, clock=clock)
+    with pytest.raises(TypeError):
+        c.close(0)
+    with pytest.raises(TypeError):
+        c.close(egress_bits=0)
+    assert c.close() is signed
+    assert not hasattr(signed, "egress_bits") and "egress_bits" not in signed.to_json()
+    assert signed.message() == signed_bytes(signed)
+    v = sw.verdict(signed, c.commitment, trusted={signer.public_key}, schemes=ts.SCHEMES)
+    assert v == sw.Verdict(True, ()) and v.public() == {"accepted": True} and not hasattr(v, "egress_mib")
+
+
 def test_public_egress_is_15_bits_of_mib_rounded_up():
-    """The bound reads the egress `E`, so the verdict publishes it, rounded up to whole MiB and saturating at 15 bits:
-    with the verdict, 16 bits, the least public size class."""
+    """The bound reads the egress `E`, so the wipe's check publishes it, rounded up to whole MiB and saturating at 15
+    bits: with the verdict, 16 bits, the least public size class."""
     mib = sw.EGRESS_UNIT_BITS
     assert [sw.egress_units(e) for e in (0, 1, mib, mib + 1)] == [0, 1, 1, 2]
     assert sw.egress_units(sw.EGRESS_MAX_UNITS * mib) == sw.egress_units(10**15) == sw.EGRESS_MAX_UNITS == 2**15 - 1

@@ -26,11 +26,11 @@ STORE = {"backend": "cuda", "device": "NVIDIA H200", "tier": WM.HBM, "uuid": "GP
 LINK = WP.link("control", "n0", "outside", "eth0")
 
 
-def _answer(egress_bits: int) -> dict:
-    """An accepted HBM-only wipe of `HBM`, its egress signed as `egress_bits`, with the placement a GPU leg records."""
+def _answer(egress_mib: int | None) -> dict:
+    """An accepted HBM-only wipe of `HBM`, its evidence's egress `egress_mib`, with the placement a GPU leg records."""
     w = W.run("n0", HBM, signer=ts.TestSigner(b"wipe monitoring", 2), log=ts.session_log(), schemes=ts.SCHEMES,
               protocol=mc.TEST_PREFIX + W.PROTOCOL, clock=iter(range(10 ** 9, 10 ** 10)).__next__,
-              coin_secret=b"coins", egress_bits=egress_bits)
+              coin_secret=b"coins", egress_mib=egress_mib)
     assert w.verdict == "accept"
     where = WP.placement("n0", "auditor", store=STORE, links=[LINK])
     return w.answer | {"profile": w.answer["profile"] | {"placement": where}}
@@ -38,12 +38,12 @@ def _answer(egress_bits: int) -> dict:
 
 @pytest.fixture(scope="module")
 def counted():
-    return _answer(2 * sw.EGRESS_UNIT_BITS)
+    return _answer(2)
 
 
 @pytest.fixture(scope="module")
 def uncounted():
-    return _answer(W.UNCOUNTED)
+    return _answer(None)
 
 
 @pytest.mark.parametrize("t,p,delta,m", [
