@@ -88,7 +88,8 @@
 #     class circuit's units, the weights it serves under the committer's key, so each served as registered has the
 #     registration's root; its circuit.json less its run fields is held to the verifier's own window-circuit record at the
 #     class; then `records_audit.py audit --circuit --registered`, within V3C_AUDIT_TIMEOUT (default 30m), samples the
-#     registration's members (V3C_LAW, default subset:1, stratified:1 under H1_TIE) on a local development challenger
+#     registration's members by its rule V3C_LAW, a rate (records_audit.py refuses a fixed count): by default the rate that
+#     samples one proof block of class 4,32,4's window, under H1_TIE one of each template's, on a local development challenger
 #     session's coins (--challenger local, pinned on main's first-parent line: MAIN_FILE's, kept as
 #     $OUT/v3c-audit/main.txt, else MAIN_SHA's) and proves them, its composes made before it with V3C_WARM_JOBS (at
 #     `v3c_audit`); then
@@ -283,7 +284,10 @@ EOF
 }
 V3C=${V3C_CLASS-4,32,4} v3c_ok=0
 [ "${1:-}" = v3c ] && V3C=${V3C:-4,32,4}
-[ -z "${H1_TIE:-}" ] || V3C_LAW=${V3C_LAW:-stratified:1}
+# V3c's rule, a rate: window-commit commits the window under the sampling design it names over the class circuit, and the
+# audit states it to its stream. The defaults sample one proof block of class 4,32,4's window and, under H1_TIE, one of
+# each of its templates'; a window of more proof blocks is sampled in proportion
+if [ -n "${H1_TIE:-}" ]; then V3C_LAW=${V3C_LAW:-stratified-rate:1/3481648}; else V3C_LAW=${V3C_LAW:-rate:1/3481648}; fi
 vtag=${V3C//,/-}
 if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-180m}
 elif [ -n "${H1_TIE:-}" ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-60m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}
@@ -304,7 +308,7 @@ window_commit() {  # window K of $D committed as V3C's class circuit's units in 
   # path, the reference
   (cd "$TREE" && CUDA_VISIBLE_DEVICES='' timeout -k 1m "$V3C_TIMEOUT" "$PY" benchmarks/prove_path/prove_path.py window-commit --serve-run "$D" \
     --window "$K" --row-dir "$D/windows/w$K" --advice "$D/advice/w$K/private/advice.bin" --class "$V3C" \
-    --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --out "$VW/window" "$@") > "$json" 2> "$err"
+    --key "$D/private/weights.key" --registration "$WREG" --checkpoint-dir "$CKPT" --law "$V3C_LAW" --out "$VW/window" "$@") > "$json" 2> "$err"
   rc=$?
   if [ "$rc" = 124 ] || [ "$rc" = 137 ]; then echo "timed out after V3C_TIMEOUT=$V3C_TIMEOUT (exit $rc)"
   elif [ "$rc" != 0 ]; then echo "refused (exit $rc): $(grep -v '^ ' "$err" | tail -2 | cut -c1-800)"; fi
@@ -357,13 +361,13 @@ EOF
   [ "${PIPESTATUS[0]}" = 0 ] && v3c_ok=1
 }
 # The audit's sessions listen on V3C_PORTS ports (default 16, a5's RANK_PORTS), a sample needing more refused before any
-# listens: a subset:K sample opens one for each of at most K members, and records_audit's own default, a port for every
+# listens: a sample of K proof blocks opens one for each of at most K members, and records_audit's own default, a port for every
 # member, finds no free span in `records_audit.PORTS` at a class window. Under H1_TIE the audit is tied to H1's W
 # (records_audit's --tie W --tie-prefix h1/, `tie_of`): the tables the circuit reads are W's, R registers them as its
-# outputs, and each sampled reader proves its rows at W's roots. Its sampling design is then stratified:K (V3C_LAW,
-# default stratified:1), a stratum of each table's readers, so every table W registers has a sampled reader
+# outputs, and each sampled reader proves its rows at W's roots. Its rule is then a stratified rate (V3C_LAW), which
+# samples a stratum of each table's readers, so every table W registers has a sampled reader
 # (Record.checks), and V3C_PORTS defaults to the size of R's sample, its strata's k summed: at most a session for each
-# sampled proof block. The preflight refuses H1_TIE on a tree whose records_audit.py takes no --tie, or at another design.
+# sampled proof block. The preflight refuses H1_TIE on a tree whose records_audit.py takes no --tie, or at another rule.
 # With V3C_WARM_JOBS=N, `records_audit.py warm` first composes every template of the committed window into
 # $VW/compose-cache, N at a time, each in a process of its own, within V3C_WARM_TIMEOUT (default V3C_AUDIT_TIMEOUT): the
 # templates and their binding are public, so this precedes the audit's coins, and the audit, taking the cache, composes
@@ -383,7 +387,7 @@ EOF
 # circuit is held to that line before its prover reads it (`a5.held`), and nothing else says what a template's circuit is.
 v3c_warm() {  # every template of the committed window composed into $VW/compose-cache, V3C_WARM_JOBS at a time
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_WARM_TIMEOUT" \
-    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
+    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py warm --window "$VW/window" --law "$V3C_LAW" \
     --compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}" --jobs "$V3C_WARM_JOBS") > "$OUT/v3c-audit/warm.log" 2> "$OUT/v3c-audit/warm.err"
   local rc=$? why
   if [ "$rc" = 0 ]; then why=$(grep -m1 '^WARM' "$OUT/v3c-audit/warm.log" | cut -c1-600)
@@ -418,7 +422,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     cache=(--compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}")
   fi
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
-    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "${V3C_LAW:-subset:1}" \
+    "$TREE/.venv/bin/python" benchmarks/prove_path/records_audit.py audit --window "$VW/window" --law "$V3C_LAW" \
     --circuit "$(sha512sum "$VW/window/circuit.json" | cut -c1-128)" --run "$run" --registered "$WREG" "${tie[@]}" "${cache[@]}" \
     --challenger local --main "$main" --m0-pythonpath "$m0" --bin "$FW/flock-gpu-link/flock/target/release/flock-circuit" --lean "$leanb/flock-verify" \
     --firewall "$leanb/flock-firewall" --ports "$ports" --out "$VW/audit") > "$OUT/v3c-audit/audit.log" 2> "$OUT/v3c-audit/audit.err"
@@ -489,7 +493,7 @@ tie() {  # serve-openai's --h1-window-commit (`serve_tie`) at window $2's close,
   fi
   [ -f "$D/advice/w$K/private/advice.bin" ] || { echo "TIE: no advice (verity-vllm advice exit $rc; the serve dir's advice.log)"; return 14; }
   why=$(window_commit "$D/h1/w$K/window-commit.json" "$D/h1/w$K/window-commit.err" --window-registration "$3" \
-    --h1-key "$5/key" --law "${V3C_LAW:-subset:1}") || { echo "TIE: window-commit class $V3C $why"; return 16; }
+    --h1-key "$5/key") || { echo "TIE: window-commit class $V3C $why"; return 16; }
   cp "$VW/window/registration.json" "$4" || { echo "TIE: window-commit class $V3C wrote no registration"; return 16; }
   echo "TIE: window-commit class $V3C: its registration is the window's record R"
 }
@@ -698,7 +702,7 @@ defer() {  # step 6 on a node short of V3c's audit's memory ($1, why), left to a
   # listed (inputs.txt, what a prover-side copy takes) and hashed (inputs.sha256, what the follow-on holds the copy to)
   (umask 077; rm -rf "$DEFER_DIR" && mkdir -p "$DEFER_DIR/pieces") || return 1
   [ ! -d "$OUT/pieces" ] || cp -a "$OUT/pieces/." "$DEFER_DIR/pieces/" || return 1
-  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "${V3C_LAW:-subset:1}" H1_TIE "${H1_TIE:-}" \
+  printf '%s=%q\n' K "$K" PRODUCT "$PRODUCT" V3C_CLASS "$V3C" V3C_LAW "$V3C_LAW" H1_TIE "${H1_TIE:-}" \
     COMPOSITE "${COMPOSITE-1}" ALPHA "${ALPHA:-}" GAMMA "${GAMMA:-}" SERVED_NODE "$(hostname)" DEFERRED_TREE "$(tree_sha)" \
     > "$DEFER_DIR/deferred.env" || return 1
   deferred_inputs > "$DEFER_DIR/inputs.txt"
@@ -778,9 +782,12 @@ fi
 if [ -n "${H1_TIE:-}" ]; then  # V3c's audit tied to H1's W, in the serve's run and in `served_verdicts.sh v3c` alike
   grep -q -- '"--tie"' "$TREE/benchmarks/prove_path/records_audit.py" \
     || { say "PREFLIGHT: under H1_TIE V3c's audit is tied to H1's W, whose tables the circuit reads, with records_audit's --tie, which this tree's records_audit.py doesn't take"; exit 3; }
-  [[ ${V3C_LAW:-} == stratified:* ]] \
-    || { say "PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, which only stratified:K, a stratum of each table's readers, gives: V3C_LAW is ${V3C_LAW:-unset}"; exit 3; }
+  [[ $V3C_LAW == stratified-rate:* ]] \
+    || { say "PREFLIGHT: under H1_TIE every table H1's W registers needs a sampled reader, which only a stratified rate (stratified-rate:NUM/DEN), a stratum of each table's readers, gives: V3C_LAW is $V3C_LAW"; exit 3; }
 fi
+# V3c's rule is a rate: window-commit and the audit's stream take no fixed count, and the class circuit has no work table
+[ -z "$V3C" ] || [[ $V3C_LAW == rate:* || $V3C_LAW == stratified-rate:* ]] \
+  || { say "PREFLIGHT: V3C_LAW is the rate V3c's window is committed under and its audit states to its stream, rate:NUM/DEN or stratified-rate:NUM/DEN, not $V3C_LAW: in place of a fixed count K, state K over the proof blocks the class's window registers (rate:K/N or stratified-rate:K/N)"; exit 3; }
 if [ -n "${H1_TIE:-}" ] && [ "${1:-}" != v3c ]; then  # V3c's window commit at each H1 window's close, before its sample coin
   [ -n "$H1_GATE" ] && [ -n "${H1_CIRCUITS:-}" ] \
     || { say "PREFLIGHT: H1_TIE ties H1's windows, and H1_GATE or H1_CIRCUITS (whose prover state window-commit reads) is unset"; exit 3; }
