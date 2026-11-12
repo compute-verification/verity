@@ -56,6 +56,8 @@ from typing import Any
 from verity_vllm.config import option, row_batch
 from verity_vllm.query.manifest.format import tp_ranks_fold_digest
 
+__all__ = ["COMMANDS", "main"]
+
 SCHEMA = "research/outputs/v0.1"
 MAX_FILE = 512 << 20                      # per file; the required-value manifest of a long row is ~100+ MB
 NEVER = ("instances.json.gz", "log.jsonl.gz")
