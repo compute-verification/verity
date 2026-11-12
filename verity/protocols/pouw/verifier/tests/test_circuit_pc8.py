@@ -14,6 +14,7 @@ import random
 import struct
 from collections import Counter
 from dataclasses import replace
+from functools import partial
 
 import pytest
 
@@ -187,20 +188,26 @@ def test_the_programs_are_the_scheme_on_sm120(dev, k):
 
 
 def _scheme_row(words: list[int], side: str, dev: str):
-    """The scheme on one row: its codes and peel row, or None where it refuses the row (encode's rejections, then
+    """The scheme on one row: its codes and peel row, or `P.Reject` where it refuses the row (encode's rejections, then
     `admissible`'s floor and liveness)."""
     d, fa, fb = DEVICES[dev], C._basis(SEED, 0, K, C.LINE_NORM_V1), C._basis(SEED, 1, K, C.LINE_NORM_V1)
     e = [P.sample_line(SEED, 0 if side == "row_a" else 1, 0, 5)]
-    try:
-        x = C.parse_f32_row(C.f32_row(words), K)
-        formed = C.form_v1([x], e, fa if side == "row_a" else fb, d)
-        be = C.scaled_noise(formed, e)
-        peel = (C.peel_factors_a if side == "row_a" else C.peel_factors_b)(formed.codes, be, SEED, K, C.LINE_NORM_V1, d)
-    except P.Reject:
-        return None
+    x = C.parse_f32_row(C.f32_row(words), K)
+    formed = C.form_v1([x], e, fa if side == "row_a" else fb, d)
+    be = C.scaled_noise(formed, e)
+    peel = (C.peel_factors_a if side == "row_a" else C.peel_factors_b)(formed.codes, be, SEED, K, C.LINE_NORM_V1, d)
     if not (P.f32_of_bits(formed.rho[0]) * P.f32_of_bits(formed.alpha[0]) >= P.SIGMA_MIN and C.live_row(x)):
-        return None
+        raise P.Reject("the row is under the noise floor or not live")
     return formed.codes[0], peel[0]
+
+
+def _admitted(words: list[int], dev: str) -> bool:
+    """Whether the scheme admits the row as a row of A."""
+    try:
+        _scheme_row(words, "row_a", dev)
+    except P.Reject:
+        return False
+    return True
 
 
 def _flip(words: list[int], at: int, admitted) -> tuple[list[int], list[int]]:
@@ -222,7 +229,7 @@ def _rows(dev: str) -> dict[str, list[int]]:
     honest row with +0 and −0 words at sampled and unsampled positions."""
     base = [C.parse_f32_row(r, K) for r in V.rows_f32("pc8-circuit", "A", 3, K)]
     at = lambda w, updates: [updates.get(t, v) for t, v in enumerate(w)]  # noqa: E731
-    ok = lambda w: _scheme_row(w, "row_a", dev) is not None  # noqa: E731
+    ok = partial(_admitted, dev=dev)
     floor_in, floor_out = _flip(base[0], 1, ok)
     ones = [_bits(1.0)] * K
     two_dead = at(ones, {1: _bits(9.0), 2: _bits(9.0)})
@@ -248,11 +255,13 @@ def test_the_row_units_admission_is_the_schemes_and_their_outputs_the_schemes(si
     admitted = set()
     for name, words in _rows(dev).items():
         out = evaluate(fn, words, e, _flat(own), _flat(other), *extra)
-        want = _scheme_row(words, side, dev)
-        assert out[-1] == (want is not None), name
-        if want is not None:
-            admitted.add(name)
-            assert list(out[:K]) == want[0] and list(out[K:-1]) == want[1], name
+        try:
+            codes, peel = _scheme_row(words, side, dev)
+        except P.Reject as refused:
+            assert out[-1] == 0, (name, refused)
+            continue
+        admitted.add(name)
+        assert out[-1] == 1 and list(out[:K]) == codes and list(out[K:-1]) == peel, name
     assert admitted == {"honest-0", "honest-1", "negated", "mixed-zero", "floor-in", "live-in", "live-below"}
 
 
