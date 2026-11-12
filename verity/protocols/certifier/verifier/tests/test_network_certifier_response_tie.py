@@ -465,11 +465,10 @@ def test_a_refused_rows_ids_are_still_the_gates():
 def test_the_blocks_ands():
     """Each Definition's ANDs are its shape's formula at every size of row, and at the bindings circuit-check pins
     they are these."""
-    memo: dict = {}
     for O in SIZES:
         for stop, _ in FORMS:
             sh = RT.Shape(O, stop)
-            assert HC.ands(RT.block(sh), memo) == sh.ands, (O, stop)
+            assert HC.ands(RT.block(sh)) == sh.ands, (O, stop)
     pinned = [RT.Shape(O, stop) for O, stop in ((16, True), (16, False), (1024, True), (2, False), (4096, True))]
     assert {RT.block(sh).id: sh.ands for sh in pinned} == ANDS
     assert RT.Shape(1024, True).ands - 33 * 1024 == 2 * 32 + 10 + 49
