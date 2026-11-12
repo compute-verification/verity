@@ -133,12 +133,14 @@ template-major, so each cell is a range of the interior's proof blocks and the s
 `C(n − w, k) / C(n, k)`, a replay block's cells independently; the profile at the footprint reads a replay block as
 `Subset(min k_t)` over `T·n_max` proof blocks, which bounds that product. The verifier samples both stages
 (`Select.select`, `Select.selectSecond`), and the two-stage certificate's knowledge soundness at Flock's masked record
-holds of that code (`SamplingDeploy.ksTwo_code`, `security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
+holds of that code (`SamplingDeploy.ksTwo_code`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
 rounds don't move them, and the refusals, interior roots and sessions that one-stage's `SamplingDeploy.ks_masked` takes.
+A bound of S served bits charges a replay block at most F S, F the grain's fan-out (`partition.fanout`; the capped form at N = F),
+1 when every replay block is closed.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
-step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of positions of its requests), which round 2
-refuses unless it covers the replay blocks in order and each request's positions in order (`second-schedule`).
+step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
+refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`).
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
@@ -159,13 +161,13 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `Harm`), the compiled layer (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`). The challenger's
   coins are the named assumption `Assumptions.UniformRandomBytes`.
-- **The executable sample** is the Lean verifier's `verity/protocols/flock/verifier/Flock/Draw.lean` (`flock-verify draw`): the
+- **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the sample object and its checks U1 to U3. Soundness's `ExecDraw.lean`,
   `ExecStratified.lean` and `ExecDrawOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
 - **The verifier.** `one_stage.verifier` runs the Lean port of the one-stage audit (the Lake package
-  `verity/protocols/spot/verifier/lean`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R7
-  (`check`), `matches_public`, the challenger's sample (`select`), `check_draw`, `check_proved`, the whole audit record
+  `verity/protocols/spot/verifier/lean`, its `sampled-proofs-verifier`) and the Python beside it on every check: R1-R8
+  (`check`, with the fan-out its verdict publishes), `matches_public`, the challenger's sample (`select`), `check_draw`, `check_proved`, the whole audit record
   (`audit_record`), and the service's public-items rule (`check_public`), hold on an outcome's verdicts
   (`check_verdicts`), stream rules (`stream`) and fleet rules (`fleet`). Its one line
   `RECORD_VERDICT = "lean"` names whose verdict is the record's (`"python"` switches back); both outcomes are recorded
@@ -177,7 +179,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   partitions. It is the `Stream`'s sample of record: `Stream.select` hands it the bytes of the challenger's coins the
   Python sample read, and refuses the sample (`disagree`) unless the Lean samples the same object from exactly those bytes.
   The Lean also runs a registration whole, from the registration through the verdict (`Spot/Run.lean`,
-  `verifier.run`): the public-items rule, R1-R7, the receipt, the sample from those bytes and its checks, the hold on
+  `verifier.run`): the public-items rule, R1-R8, the receipt, the sample from those bytes and its checks, the hold on
   the verdicts and the audit record. `Stream.outcome` holds each outcome on a sample from the coins to it, and an outcome the two don't make alike
   is a reject whose audit record fails `run`. `Spot/Slots.lean` puts that sample in the claims' terms
   (`Claims.Sampling.Partition`, `Deploy.checked`): the partition as two classes, the population's strata and then the
@@ -202,6 +204,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   what the session proved, and hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Onsite and remote read v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuse v1.
+  A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
+  `statements`; `one_stage.proofs.members_v2` writes it), which the audit parses and refuses. The executable's
+  `members PARAMS EVIDENCE` (`Spot/MembersParse.lean`, `proofs.members_parsed`) prints what its parsers read of the two
+  files, with the words `parsed, not checked` and no verdict.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).

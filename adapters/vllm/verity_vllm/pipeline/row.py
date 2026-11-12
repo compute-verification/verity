@@ -192,8 +192,6 @@ def run_row(o: Run | Stage, stages: str) -> int:
         world = o.world if o.world is not None else R.tp_world(_workload(o.row))
         if world < 2:
             raise UsageError(f"--world {world}: a tensor-parallel row needs a world of at least 2 ranks")
-        if o.commit.group:
-            raise UsageError(f"--commit-group: {o.row} is a tensor-parallel row; a grouped Commit is a single-GPU row's")
         if o.commit.replay_deferred == "slim" and world in DEFER_WORLDS:     # at any other world the TP Commit replays in process
             raise UsageError(f"--replay-deferred slim: {o.row} is a tensor-parallel row; the slim plan is a single-GPU Commit's (TP defers with 1)")
         return TpRow(row=o.row, role=o.role, repo=o.repo, rev=o.rev, stages=stages, env=o.env, world=world, gpu_util=o.gpu_util,

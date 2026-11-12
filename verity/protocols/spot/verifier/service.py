@@ -165,7 +165,7 @@ import hashlib
 import math
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Mapping, NoReturn, Sequence, TypeVar
 
@@ -414,7 +414,9 @@ class Check:
     from the sample; a proof delivered later, or none by then, is a reject (`late`), and a `Stream` refuses a check
     without one. `registration_deadline`: seconds on the challenger's clock from
     the salt coin's release (`Stream.salt`, or `Stream.salt_released`'s `released_at`); a registration received later,
-    or before any salt, is refused (`late-registration`) and ends the epoch."""
+    or before any salt, is refused (`late-registration`) and ends the epoch. `tied`: the window Program's parameters, run
+    Inputs, whose rows a later check ties to the registrations that computed them, which R8 lets through though several
+    proof blocks read them (`registration.check`'s `tied`); the stream's digest binds them."""
 
     program: str | tuple[str, ...]
     query: Mapping[str, Any]
@@ -423,6 +425,7 @@ class Check:
     deadline: Mapping[str, Any] | None = None
     proof_deadline: float | None = None
     registration_deadline: float | None = None
+    tied: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         digests = self.program if isinstance(self.program, tuple) else (self.program,)
@@ -437,6 +440,9 @@ class Check:
         if not (isinstance(self.public_outputs, tuple) and all(isinstance(o, str) and o for o in self.public_outputs)
                 and len(set(self.public_outputs)) == len(self.public_outputs)):
             raise ValueError("a check's public outputs are distinct names")
+        if not (isinstance(self.tied, tuple) and all(isinstance(t, str) and t for t in self.tied)
+                and len(set(self.tied)) == len(self.tied)):
+            raise ValueError("a check's tied values are distinct parameter names")
         for name, d in (("proof", self.proof_deadline), ("registration", self.registration_deadline)):
             if d is not None and not (isinstance(d, (int, float)) and not isinstance(d, bool) and d > 0):
                 raise ValueError(f"a {name} deadline is a positive number of seconds, not {d!r}")
@@ -445,7 +451,8 @@ class Check:
         return {"program": list(self.program) if isinstance(self.program, tuple) else self.program,
                 "query": dict(self.query), "window": self.window,
                 "public_outputs": list(self.public_outputs), "deadline": None if self.deadline is None else dict(self.deadline),
-                "proof_deadline": self.proof_deadline, "registration_deadline": self.registration_deadline}
+                "proof_deadline": self.proof_deadline, "registration_deadline": self.registration_deadline,
+                **({"tied": list(self.tied)} if self.tied else {})}
 
 
 @dataclass(frozen=True)
@@ -552,7 +559,11 @@ class WindowCommitmentRecord:
     `order`, its audit's index in the stream. It is Verification's, not an entry of the registration log, which registers
     only the site, θ and the registered compiler. The receipt's `received` is the record's position in
     the stream's log; the challenger's clock stays its own. Under `Check.registration_deadline`, `salted_at` and
-    `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise)."""
+    `received_at` are its readings of the salt's release and of this registration's receipt (None otherwise). `fanout`
+    is the fan-out F its registration verdict published on the challenger's program (R8, `Verdict.fanout`): a two-stage
+    registration's is its replay grain's, the N at which `plancheck.two` prices it in the capped form.
+    `rests_on_period_check` is the tied values its verdict let through (`Verdict.rests_on_period_check`): its acceptance
+    rests on the network period check."""
 
     record: Mapping[str, Any]
     receipt: Mapping[str, Any]
@@ -560,6 +571,8 @@ class WindowCommitmentRecord:
     order: int
     salted_at: float | None = None
     received_at: float | None = None
+    fanout: int | None = field(default=None, compare=False)
+    rests_on_period_check: tuple[str, ...] = field(default=(), compare=False)
 
 
 @dataclass(frozen=True)
@@ -975,7 +988,7 @@ class _Entry:
     law: Mapping[str, Any]
     program: Program
     work_table: Mapping[str, Any] | None = None
-    #: what `register` handed R1-R7 besides the record and its window's seed salt: (ports, leaf_layer, anchors, the log's
+    #: what `register` handed R1-R8 besides the record and its window's seed salt: (ports, leaf_layer, anchors, the log's
     #: records, registered, supplied, pinned, schemas, window_root, held, outputs), and its history tables
     copies: tuple[Any, ...] = ()
     history: Mapping[str, Any] | None = None
@@ -987,7 +1000,7 @@ class _Entry:
     outcome: Outcome | None = None
     session: Session | None = None
     #: under a two-stage design: the interior registration, its population program and what `register_interiors`
-    #: handed R1-R7 (as `copies` and `history`), then the second stage's sample and the coins it read
+    #: handed R1-R8 (as `copies` and `history`), then the second stage's sample and the coins it read
     interior: WindowCommitmentRecord | None = None
     interior_program: Program | None = None
     interior_copies: tuple[Any, ...] = ()
@@ -1895,7 +1908,7 @@ class Stream:
                  counts: Mapping[str, int] | None = None,
                  outputs: Mapping[str, Mapping[str, str]] | None = None,
                  history: Mapping[str, Any] | None = None) -> WindowCommitmentRecord:
-        """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R7 (`registration.check`),
+        """Receive a registration: the public-items rule (`check_public`), then one-stage's R1-R8 (`registration.check`),
         each by the verifier (`verifier.check_public`, `verifier.check`), against the challenger's own copies:
         the population program it builds from `unit` and the record's N (a window's: the mixed population of its
         templates, in its order, at `counts`, the challenger's own `{template's descriptor id: instances}` of the window,
@@ -1913,7 +1926,7 @@ class Stream:
         aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
         (`population`), when the rule's rate sampling design
         samples none or more than N proof blocks or a stratified rate's strata don't apply (`rate`, `selection_law`, before
-        R1-R7) or a work rate's strata or work table don't apply (`rate`, `selection_table`, R1-R7 then reading its table),
+        R1-R8) or a work rate's strata or work table don't apply (`rate`, `selection_table`, R1-R8 then reading its table),
         when either check fails, or, after both,
         when the sampling design is `bernoulli` at any p (`bernoulli`, `BERNOULLI`), when the program's proof blocks read stratum by stratum
         are not its N proof blocks in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
@@ -1950,7 +1963,8 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs, seed_salt=seed_salt, history=history)
+                            outputs=outputs, seed_salt=seed_salt, tied=self.spec.check.tied or None,
+                            history=history)
                 if v.ok and bernoulli(law):
                     v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
@@ -1965,7 +1979,8 @@ class Stream:
             if not v.ok:
                 return list(v.codes)
             salted_at = None if deadline is None else self._salted_at
-            got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"))
+            got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
+                                                     v.fanout, v.rests_on_period_check)
             op["registration"] = _registration_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
@@ -2016,9 +2031,10 @@ class Stream:
         return boundary_values(self.spec.values) if self.n_rho is not None else self.spec.values
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
-                      received_at: float | None = None) -> WindowCommitmentRecord:
+                      received_at: float | None = None, fanout: int | None = None,
+                      rests_on_period_check: tuple[str, ...] = ()) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      R.digest(record), order, salted_at, received_at)
+                                      R.digest(record), order, salted_at, received_at, fanout, rests_on_period_check)
 
     def _append(self, reg: WindowCommitmentRecord) -> None:
         self._logged(dict(reg.record), reg.digest)
@@ -2067,7 +2083,7 @@ class Stream:
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, template-major
         (`interior_program`): template t's Q·n_t from off_t = Q·Σ_{t'<t} n_t', replay block `draw.units[i]`'s instances
         of it [off_t + i·n_t, off_t + (i+1)·n_t). The public-items rule on the interior values under the check's
-        query, its population (`interior-population`: Q·n_rho), then one-stage's R1-R7 against the challenger's own copies
+        query, its population (`interior-population`: Q·n_rho), then one-stage's R1-R8 against the challenger's own copies
         (`interior_program`, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
@@ -2098,7 +2114,7 @@ class Stream:
             got["checks"] = v
             if not v.ok:
                 return list(v.codes)
-            got["registration"] = self._registration(record, first.registration.order)
+            got["registration"] = self._registration(record, first.registration.order, fanout=v.fanout)
             op["interior"] = _registration_token(got["registration"])
             return None
         self._held(self._decide(op, {"checks": checks}), got.get("checks"))
@@ -2405,7 +2421,8 @@ class Stream:
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
-                      value_outputs=given, seed_salt=seed_salt, history=e.history)
+                      value_outputs=given, seed_salt=seed_salt, tied=self.spec.check.tied or None,
+                      history=e.history)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2472,6 +2489,7 @@ class Stream:
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
                       held=held, coins=coins, value_outputs=given, seed_salt=seed_salt, history=e.history,
+                      tied=self.spec.check.tied or None,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
                                 "seed_salt": interior_seed_salt, "history": e.interior_history,

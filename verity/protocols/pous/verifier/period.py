@@ -47,6 +47,7 @@ import hashlib
 import json
 import os
 import secrets
+import socket
 import subprocess
 import time
 from collections.abc import Callable, Collection, Mapping, Sequence
@@ -374,6 +375,12 @@ def serve(exe: str | os.PathLike, cases: Sequence[Mapping[str, Any]], *args: str
     lines = b"".join(canonical_json_bytes(dict(c)) + b"\n" for c in cases)
     p = subprocess.run([str(exe), *args, "serve"], input=lines, capture_output=True, check=True)
     return [json.loads(x) for x in p.stdout.splitlines()]
+
+
+def decided_by(exe: str | os.PathLike | None) -> dict[str, str]:
+    """Who decided a case, as a piece's summary names it under `decided_by`: the program, `exe`'s file name (a
+    component's Lean, as `serve` runs it) or `python` with none, and the host it ran on, this one."""
+    return {"program": "python" if exe is None else Path(exe).name, "host": socket.gethostname()}
 
 
 def challenger(directory: str | os.PathLike, *, workers: int | None = None) -> mc.LmsSigner:

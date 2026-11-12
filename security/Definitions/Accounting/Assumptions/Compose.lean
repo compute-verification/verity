@@ -194,9 +194,10 @@ It is taken at `κ = 4`, not at the live luck `p = 7/8`: from `p = 7/8` alone no
 point mass.
 
 The premium's `T_q` and the binding's `δ_b` and `δ_bind` are priced at one prover budget `T`, the same cheater's: at
-`T = 2^128` a fork finder of that cost gives `δ_bind ≈ |L|·2^-64` (`Guarantees.Compose.BindingOfECR` at its best
-`δ'`), not negligible beside `δ_s = 2^-40` for `|L|` past `2^24`, and at `T = 2^80` it gives `|L|·2^-88`, where the
-premium is `0.73` of its `2^128` value. -/
+`T = 2^128` a fork finder of that expected cost gives `δ_bind ≈ |L|·2^-64` (`Guarantees.Compose.BindingOfECR` at its
+best `δ'` and at `κ = 0`; the finder there runs the window twice, which is `√2` more), not negligible beside
+`δ_s = 2^-40` for `|L|` past `2^24`, and at `T = 2^80` it gives `|L|·2^-88`, where the premium `ln(T_q/δ_g)/θ` is
+`0.73` of its `2^128` value at `δ_g = 2^-40/(2·rounds)` over 47 to 4,488 rounds. -/
 def SeedLuckAt {B V : Type} [Fintype B] [Fintype V] {Tq M : ℕ} (rd : V → ℕ)
     (R : JointRun (Paths (Fin Tq → B) M) V) (w : V → ℝ) (s : Mode) (κ : ℝ) (θ : ℕ → ℝ)
     (sq : Paths (Fin Tq → B) M → Fin M → Option (Fin Tq)) (δb : ℝ) : Prop :=

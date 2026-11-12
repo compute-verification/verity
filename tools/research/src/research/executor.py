@@ -437,7 +437,7 @@ def old_verdicts(run_dirs: Iterable[Path]) -> dict[str, str]:
     id (`pytest:NAME`, `lean-suites:NAME`), each Lake package its lean-audit log names (`lean-audit:PKG`).  A part failed in any
     shard fails; one stopped or never run is absent, and so are the preflight steps, which no after-landing graph holds
     (`tasks.py` runs a part without them), and a suite a step skipped by name (`SUITE_NO_VERDICT`)."""
-    from .drive import PREFLIGHT, step_records, suite_rows
+    from .landing import PREFLIGHT, step_records, suite_rows
 
     got: dict[str, set[str]] = {}
 

@@ -10,6 +10,8 @@ public import Proofs.Flock.Bridge.V5.Honest
 public import Proofs.Flock.Bridge.V5.Refused
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Bridge.V5.Session
+public import Proofs.Flock.Bridge.V5.QsRows
+public import Proofs.Flock.Bridge.V5.Rows
 
 /-! `Statement`: `Flock.Guarantees.SampledKSLiveV5`, V2 at the verifier's public inputs with or without shared rows, and
 the targets its assembly takes (stated). `EndToEndHidden`: `endToEndHiddenV5_of`, from `OpeningsCanonTargetV5`.
@@ -24,6 +26,8 @@ file hypotheses `HmIn.parse`, `HmIn.loadPublic` and `RootFixesDomainL` at the ci
 passes the registration's population, without its hypotheses on the files' rows, names and roots or on the population
 order. `Session`: the openings a witness of a sampled proof block's table reveals (`revealV5`, from the message packing
 it, `packZ`), which make the unit's proof block correct (`correct_of_revealV5`), and the sampled table at one table
-(`tabOfZHJP_one`). -/
+(`tabOfZHJP_one`). `QsRows`: `Q_s` at public inputs by the rows and public gates a sample reads, at any sampling
+design on strata (`qs_vbP_execSel_le`). `Rows`: `SampledKSLiveV5`'s bound with that count in place of the average
+number of commit strings a sample reads (`sampledKSLiveV5_rows`). -/
 
 @[expose] public section

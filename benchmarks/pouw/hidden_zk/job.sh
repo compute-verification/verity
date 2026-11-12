@@ -9,17 +9,19 @@
 #      sampling all N (subset:N; HZ_WARM warm + HZ_RUNS timed proofs) with the proving build, the selftest build's recorded
 #      controls, sampled the same way, and the Lean
 #      verifier on all of them:
-#        honest-own     the honest session, the verifier's own anchors file                         ACCEPT
+#        honest-own     the honest session, the verifier's own anchors file                REFUSED (below)
 #        honest-wrong   the honest session, one bit of one anchor wrong in the verifier's file      REJECT
 #        honest-chosen  the honest session, the same anchor bit chosen by the prover (public file)  REJECT
 #        st-<case>      the selftest build's records under verity/flock-circuit+seed-injection, a statement flock-verify
-#                       refuses once every check has passed (`ProvedScope.servedForm`): honest passes every check;
-#                       output_row_committed_false (a tampered output row), output_claim_false, unit_internal_bit_flipped
-#                       and public_input_claim_false (a false anchor claim, the verifier's file agreeing with it) REJECT
+#                       refuses once every check has passed (`ProvedScope.servedForm`): honest gets through every check
+#                       before its config's refusal (below); output_row_committed_false (a tampered output row),
+#                       output_claim_false, unit_internal_bit_flipped and public_input_claim_false (a false anchor
+#                       claim, the verifier's file agreeing with it) REJECT
 #      until T4 the verifier refuses --public-inputs, so summarize.py expects each row-unit check REFUSED; once every
 #      check has passed it refuses a plain tile's output row of two output ports, so a plain tile's honest checks are
 #      REFUSED, and so are a hiding tile's, whose rows (row-seg/v1, row/v2) are covered, for the tile's want of a Program
-#      (no --program, NO_PROGRAM)
+#      (no --program, NO_PROGRAM): summarize.py holds an honest check as expected only with its config's refusal, and
+#      counts a NO_PROGRAM refusal in lean_refused_no_program, never in lean_accepted
 #      A tile has no public input, so it runs honest-own without --public-inputs and none of the anchor controls.
 #   3. summarize.py: out/<role>-k<K>/summary.json and out/summary.json
 # A staged config is kept under $HZ_CACHE/stage, keyed by its role, K, N, HZ_STAGE, the venv and every source stage.py
@@ -75,19 +77,27 @@ build_circuit() {   # build_circuit DEST: DEST/flock-circuit-prove and DEST/floc
     -j "$TH" && cp "$W/target/release/flock-circuit" "$D.tmp/flock-circuit-selftest" || return 1
   rm -rf "$D" && mv "$D.tmp" "$D"
 }
+lean_key() {        # lean_key [FILE...]: the key of the Lean verifier's package, the packages it requires by path, and FILEs
+  python3 "$SRC/verity/protocols/flock/pod/lake_closure.py" key "$SRC/verity/protocols/flock/verifier" "$@"
+}
+lean_copy() {       # lean_copy DEST: those packages copied under DEST, with DEST/.lake the verifier's build directory; its directory on stdout
+  local P
+  P=$(python3 "$SRC/verity/protocols/flock/pod/lake_closure.py" copy "$SRC/verity/protocols/flock/verifier" "$1") \
+    && ln -s "${P#"$1/"}/.lake" "$1/.lake" && echo "$P"
+}
 build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  local D=$1
-  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/protocols/flock/verifier" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
-    && (cd "$D.tmp" && lake build) && rm -rf "$D" && mv "$D.tmp" "$D"
+  local D=$1 P
+  rm -rf "$D.tmp" && P=$(lean_copy "$D.tmp") \
+    && (cd "$P" && lake build) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit, the prover's placement of a templated unit
   command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
-  local D=$1
-  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/protocols/flock/verifier" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
-    && cp "$SRC/verity/protocols/flock/prover/tests/lean/TmplUnit.lean" "$D.tmp/" \
-    && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$D.tmp/lakefile.toml" \
-    && (cd "$D.tmp" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
+  local D=$1 P
+  rm -rf "$D.tmp" && P=$(lean_copy "$D.tmp") \
+    && cp "$SRC/verity/protocols/flock/prover/tests/lean/TmplUnit.lean" "$P/" \
+    && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$P/lakefile.toml" \
+    && (cd "$P" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
 build_python() {    # build_python DEST: a venv
   local D=$1
@@ -110,7 +120,7 @@ setup() {
     taskset -pc $$; df -h "${HZ_CACHE:-$W}" "$W"; } > "$OUT/host.txt" 2>&1
   local fail=0 p
   [ -n "${FLOCK_PROVE:-}" ] || cached flock "$(tree_key verity/protocols/flock/prover/live verity/protocols/flock/prover/*.patch)" build_circuit > "$W/flock.dir" &
-  [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(tree_key verity/protocols/flock/verifier)" build_lean > "$W/lean.dir" &
+  [ -n "${FLOCK_VERIFY:-}" ] || cached lean "$(lean_key)" build_lean > "$W/lean.dir" &
   [ -n "${HZ_PYTHON:-}" ] || cached venv numpy2.5.3-blake3-1.0.9 build_python > "$W/venv.dir" &
   wait
   [ -n "${FLOCK_PROVE:-}" ] || { FLOCK_PROVE=$(cat "$W/flock.dir")/flock-circuit-prove; FLOCK_SELFTEST=$(cat "$W/flock.dir")/flock-circuit-selftest; }

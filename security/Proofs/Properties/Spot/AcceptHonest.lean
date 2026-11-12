@@ -4,6 +4,7 @@ public import Proofs.Properties.Spot
 import Proofs.Flock.Claims.CanonOk
 import Proofs.Pouw.Period.Sort
 import all Init.Data.Array.DecidableEq
+import all Init.Data.Array.QSort.Basic
 import all Init.Data.Range.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Repr
@@ -18,8 +19,9 @@ import all Lean.Data.Json.FromToJson.Basic
 /-! # `AcceptMeans`' witnesses at an honest one-stage audit (`Properties.Spot.Honest`)
 
 `acceptMeans_honest`: the check accepts the honest audit, by completeness (`acceptMeans_complete`), each of whose
-premises is proved at the instance. Its partition is evaluated to its one unit (`units_program`), R1–R6 are kept against
-the verifier's copies, its sample is drawn and its unit proved, and its verdict accepts. The record's partition and
+premises is proved at the instance. Its partition is evaluated to its one unit (`units_program`), R1–R6 are kept
+against the verifier's copies and R8 by its one Call, which reads no run Input, its sample is drawn and its unit
+proved, and its verdict accepts. The record's partition and
 query digests and the commitment's digest stay the SHA-512s the check computes: they are compared only with themselves.
 The parameters name no challenger, so the window names no seed salt.
 
@@ -177,7 +179,7 @@ theorem units_program : Partition.units program query = .ok 1 := by
   rw [evaluate_program]
   rfl
 
-/-! ## The registration: R1–R6 -/
+/-! ## The registration: R1–R6 and R8 -/
 
 theorem canon_query : ∃ t, Flock.canon query = .ok t := by
   apply canon_mkObj
@@ -303,8 +305,25 @@ theorem r6 : R6 record verifier :=
     by unfold WindowPoolWeek; decide +kernel, by unfold WindowPoolSpent; decide +kernel,
     by simp [PoolResetOnce, verifier]⟩
 
+theorem templateRanges_program : Partition.templateRanges? program query = some #[⟨0, "T", 0, 1⟩] := by
+  have hn : (query.getObjValAs? String "name").toOption.getD "" = "Q_template_instance" := rfl
+  have hv : nat? (getD query "version") = some 0 := by decide +kernel
+  unfold Partition.templateRanges?
+  simp only [hn, hv, evaluate_program]
+  rfl
+
+/-- R8: the verifier ties no value, and the one unit's Call takes no argument, so it reads no run Input. Every array
+`Partition.sharedInputs` sorts is empty, which the kernel evaluates. -/
+theorem r8 : R8 verifier := by
+  have ht : Partition.templateRanges? verifier.program verifier.query = some #[⟨0, "T", 0, 1⟩] :=
+    templateRanges_program
+  refine ⟨by decide +kernel, ?_⟩
+  unfold Partition.readAlone
+  rw [ht]
+  decide +kernel
+
 theorem registered : Registered verifier record law :=
-  ⟨r1, r2, r3, r4, r5, r6, fun h => by simp [ExpectsV2, verifier] at h⟩
+  ⟨r1, r2, r3, r4, r5, r6, fun h => by simp [ExpectsV2, verifier] at h, r8⟩
 
 /-! ## The sample, the units and the verdicts -/
 
@@ -395,8 +414,8 @@ public section
 namespace Properties.Spot
 
 /-- **`AcceptMeans`' honest lemma**: the check accepts the honest one-stage audit (`Honest`), a program of one Call of a
-one-gate template whose one unit is sampled and proved, under a record keeping R1–R6, and publishes `publicOf` and
-`profileOf` for its `subset` sample of one unit; by completeness, each of its premises proved at the instance. -/
+one-gate template whose one unit is sampled and proved, under a record keeping R1–R6 and R8, and publishes `publicOf`
+and `profileOf` for its `subset` sample of one unit; by completeness, each of its premises proved at the instance. -/
 theorem acceptMeans_honest :
     OneStage.check Honest.params Honest.commitment Honest.evidence =
       .accept (publicOf Honest.params Honest.evidence Honest.law (.subset 1) 1)

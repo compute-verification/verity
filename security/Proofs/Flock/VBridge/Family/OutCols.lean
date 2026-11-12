@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.VBridge.Family
-public import Proofs.Flock.VBridge.Family.Names
+public import Proofs.Flock.VBridge.Family.UnitName
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

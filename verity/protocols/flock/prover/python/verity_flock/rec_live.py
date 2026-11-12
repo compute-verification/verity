@@ -1463,8 +1463,11 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     opens a recursive session on ``stream`` with its V* statements in their order (``parts``, public, from K: L0–L6 and the
     algebra at K = 4096), its id in the session directory's ``firewall.json``: a stop is that recursive session's stop, so
     the ZK server serves none of its outer sessions, and a finished session lets them be served, in that order, each once.
-    ``budget`` is the stream's failure budget (the challenger's stream's ``budget``); once the stream has stopped at it, a
-    connection is closed before anything is served and ``serve`` returns. ``release`` (``{"windows_ms": [one a
+    ``budget`` is the stream's failure budget (the challenger's stream's ``budget``, a public parameter of the deployment,
+    at least `verity_flock.firewall.BUDGET_MIN`), which a ZK server needs: without one, or with a lesser one, ``serve``
+    raises before it listens, since a stream without a budget bounds none of its recursive sessions; once the stream has
+    stopped at it, or its unended recursive sessions and its failures reach it, a connection is closed before anything is
+    served and ``serve`` returns. ``release`` (``{"windows_ms": [one a
     statement]}``, public) is each recursive session's release schedule, its ``start_ms`` the time (``now_ms``) its
     connection was accepted, so that no release time depends on how long the inner session took. A recursive session the
     ZK server cannot open as given (other than `Refused`: the caller's fault, such as a schedule for other statements)
@@ -1477,6 +1480,12 @@ def serve(listen: str, out: Path, rand: Callable[[int], bytes] = os.urandom, rea
     res: list[dict] = []
     if firewall is not None and parts is None:
         raise ValueError("serve with a firewall opens each recursive session with its statements in their order (parts)")
+    if firewall is not None:
+        from .firewall import BUDGET_MIN, budget_ok
+        if budget is None:
+            raise ValueError(f"serve with a firewall opens its stream with a failure budget (budget, at least {BUDGET_MIN}): "
+                             "a stream without one bounds none of its recursive sessions")
+        budget_ok(budget)
     check_schedule(schedule)
     lean_tree = None if tree is None else tree.to_json()
     if lean is not None:
@@ -1605,7 +1614,9 @@ def main(argv=None) -> int:
     ap.add_argument("--stream", default="rec", help="the stream the recursive sessions are on (--firewall)")
     ap.add_argument("--parts", metavar="L0,L1,...,alg",
                     help="each recursive session's V* statements in their order, the only order served (required with --firewall)")
-    ap.add_argument("--budget", type=int, help="the stream's failure budget, the challenger's stream's (--firewall)")
+    ap.add_argument("--budget", type=int,
+                    help="the stream's failure budget, the challenger's stream's, a public parameter of the deployment, "
+                         "at least 1 (required with --firewall)")
     ap.add_argument("--release-windows-ms", metavar="W0,W1,...",
                     help="the release schedule's public window a statement, in ms: statement j leaves at the connection's time "
                          "plus W0 + ... + Wj (--firewall)")
@@ -1630,6 +1641,9 @@ def main(argv=None) -> int:
         ap.error("--parts, --budget and --release-windows-ms need --firewall")
     if a.firewall and a.parts is None:
         ap.error("--firewall needs --parts: each recursive session's V* statements in their order (L0–L6,alg at K = 4096)")
+    if a.firewall and a.budget is None:
+        ap.error("--firewall needs --budget: the stream's failure budget, the challenger's stream's, at least 1; a stream "
+                 "without one bounds none of its recursive sessions")
     fw = None
     if a.firewall:
         from .firewall import Firewall

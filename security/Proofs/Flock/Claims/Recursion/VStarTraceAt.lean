@@ -36,7 +36,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.PubRows.Shape
 import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.SlotsDeployed
-import Proofs.Flock.Claims.Recursion.VStarNets
+import Proofs.Flock.Claims.Recursion.VStarNetsStaged
 
 /-!
 # `TraceOkAt` and `TraceAt` at the deployed V\*'s staged parts

@@ -14,3 +14,20 @@ Each script's header says how to run it, from the source tree's root, and on wha
 run writes its results to `$RESEARCH_RUN_DIR/out` (`OUT` where a header names it) and reads the files it is given, a
 build's libraries or a source archive, from `$RESEARCH_RUN_DIR/inputs` or the directory a header's variable names. GPU
 work runs under a GPU lease (`gpu-lease`, owned by `GPU_LEASE_WHO`).
+
+## Interface
+
+What code outside `benchmarks/hash` loads. Nothing else here is an interface: any other file may change or go without a
+word to another directory. The vLLM integration loads nothing from here.
+
+| File | What is loaded | Loaded by |
+|---|---|---|
+| `dither/h1u.cu` | the source, compiled by path with the caller's flags, and the library's entry points `kh_digits`, `kh_words`, `kh_seeds`, `kh_seeds_at`, `kh_seeds_j10r`, `kh_unit`, `kh_units_multi`, `kh_units_multi_j10r`, `kh_units_multi_j10r_sm`, `kh_ucall_bytes`, `kh_ucallr_bytes`, `kh_smc_words`, `kh_j10r_row_fault_word`, `kh_lanes` | `benchmarks/pouw/served_h1` (`producer.py`, `partials.py`, and the builds in `commit_legs.sh`, `j10r_gpu.sh` and `producer_gpu.sh`); `benchmarks/torch_gpu/j10r_sm90` (`job.sh`, `units.py`) |
+| `dither/j10r_ws.py` | `flags`, `workspace_bytes`, `JW`: the workspace a build of `h1u.cu` takes | `benchmarks/pouw/served_h1/producer.py`; `benchmarks/torch_gpu/j10r_sm90/units.py` |
+| `dither/pin.sh` | run as a script: the int8 pin in a node's model cache | `benchmarks/harness/setup/int8_pin.sh` |
+| `dither/numabind.py` | run as a script, from a copy sent with a job | `benchmarks/pouw/pearl_c_sm120/card.sh`; `benchmarks/pouw/pearl_c_vllm/served_step.sh` |
+| `exactlin/kbench.py` | `timed`, `copies_for`, `nvml`, `ITEM_MS` | `benchmarks/torch_gpu/s8_linear` |
+| `exactlin/kgate.py` | `MODELS` | `benchmarks/torch_gpu/s8_linear` |
+
+Tests of `benchmarks/pouw` import `dither/dither_one.py`, `dither_a.py`, `j10r_units.py` and `forms.py` by name, and its
+suite declares them and what they import as inputs. A test's import fixes a file's path, nothing more.

@@ -8,8 +8,7 @@ shards (`weights_of(prefix)`: the weights the rank registered, or the checkpoint
 The seed is `seed_of`'s: the driver's targeted seed, else the verifier's challenge with the rank's run root, else the run root.
 
 `in_process` and `defer` take the worker's commit state (`TP2CaptureWorkerExtension._tp2_commit`: rank, world, committer, engine,
-the weights it registered, binding map, replay config).  Under ``tp-commit --memory-map`` each first writes the rank's memory map
-from the live committer (`memory_map`), which changes no verdict.  Under ``tp-commit --replay-ranks-at-once K`` each runs in one of
+the weights it registered, binding map, replay config).  Under ``tp-commit --replay-ranks-at-once K`` each runs in one of
 K host slots (`host_slot`)."""
 from __future__ import annotations
 
@@ -155,8 +154,9 @@ def xrank_facts(st: dict[str, Any], p: Loaded) -> None:
 
 
 def seed_of(cfg: dict[str, Any], run_root: bytes) -> tuple[int, str]:
-    """[O6] seed from the rank's run root AFTER commitment unless the driver targets one; under a
-    VERIFIER-ISSUED post-commitment challenge the seed is sha256(challenge | this rank's run root)[:8] (no grind by recommitting)."""
+    """[O6] the seed and its source text: the driver's targeted one, else sha256(`--replay-challenge` | this rank's run root)[:8], else the
+    rank's run root's first 8 bytes.  That last form has no coin (a prover steers the sample by committing again, in about the lesser of 1/p
+    and 2^64 tries): a measurement.  The rank replays before the pair's coins exist, so a challenger gate's coin does not reach this seed."""
     from verity_vllm.check.replay import driver as SR
 
     if cfg.get("seed") is not None:
@@ -219,7 +219,7 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
     arr = p.arrivals
     wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])], "prompt_token_ids": list(r.get("prompt_token_ids") or []), "seed": r.get("seed"),
              "steps": list(range(arr[str(r["request_id"])], arr[str(r["request_id"])] + int(r.get("max_tokens") or 1)))} for r in p.reqs]
-    lk = SR.boundary_linkage(bmap, committed, wreq, embed_op_path=p.index.embed_op_path(), splits_of_record=SR.splits_of_record(p.loaded))
+    lk = SR.boundary_linkage(bmap, committed, wreq, embed_op_path=p.index.embed_op_path())
     lk["rank"] = rank
     sr["value_source"] = dict(committed.record(), forked_children=sr.pop("value_reads_in_children", None))
     return sr, lk
@@ -230,28 +230,6 @@ def not_run(rank: int, e: BaseException, trace: str) -> tuple[dict, dict]:
     return ({"schema": "verity-sweep/sampled-replay/v1", "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated", "rank": rank,
              "why": f"rank {rank}: sampled replay not run: {e!r}"[:400], "error": repr(e)[:400], "trace": trace[-1500:]},
             {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "rank": rank, "why": f"rank {rank}: boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0})
-
-
-def memory_map(st: dict[str, Any], p: Loaded, committed: Any, indices: dict | None = None,
-               index_kw: dict[str, Any] | None = None) -> dict[str, Any] | None:
-    """`tp-commit --memory-map`: the rank's memory map (PoUB's `commit_map.after_commit` at the rank) from its Programs of record,
-    its committed slots and KV words (``committed``) and its KV-slots source's caches, its Program indices built under ``index_kw``
-    (`index_query`: the manifest's spelling) and read from and put in the replay's ``indices`` when given; what its record keeps
-    of it (counts and the engine's agreement, or the failure), None without a request.  It changes no verdict."""
-    from verity_vllm import protocols
-    from verity_vllm.acquire.sources.kv_slots_source import caches_of
-
-    request = (st.get("replay") or {}).get("memory_map")
-    if not request:
-        return None
-    try:
-        CM = protocols.driver("remote-bandwidth", "commit_map")
-        got = CM.after_commit(request, loaded=p.loaded, bmap=st["bmap"], committed=committed, manifest=manifest_of_rank(st.get("manifest_doc"), p.rank),
-                              arrivals=p.arrivals, caches=caches_of(st["com"]), tp=p.tp, attention_paths=p.attn_paths, indices=indices,
-                              index_kw=index_kw)
-    except Exception as e:  # noqa: BLE001
-        return {"error": repr(e)[:400]}
-    return got if "error" in got else {k: got[k] for k in ("map", "tp", "blocks", "page", "steps", "written", "freed", "engine", "seconds")}
 
 
 @contextmanager
@@ -292,7 +270,6 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
     bmap = st.get("bmap")
     if not bmap:
         return base | no_map()
-    mm = None
     try:
         from verity_vllm.check import oracle_compare as OC
         from verity_vllm.check.replay import driver as SR
@@ -305,7 +282,6 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
         rd = OC.OpenedReader(com, rc)
         man = manifest_of_rank(st.get("manifest_doc"), rank)
         memo = index_memo(p, man)
-        mm = memory_map(st, p, rd, memo, index_query(man))
         # [O5] the shards the relations consume must be the COMMITTED shards: re-register the live parameters now vs the run's weights root
         try:
             w_saved = getattr(com, "weights", None)
@@ -328,7 +304,7 @@ def in_process(st: dict[str, Any], rc: Any) -> dict[str, Any]:
                           weights_check=wc, run_root=rc.run_root, manifest_doc=st.get("manifest_doc"), memo=memo)
     except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
         sr, lk = not_run(rank, e, traceback.format_exc())
-    return base | {"sampled_replay": sr, "boundary_linkage": lk, "wall_s": round(time.perf_counter() - t0, 3)} | ({"memory_map": mm} if mm else {})
+    return base | {"sampled_replay": sr, "boundary_linkage": lk, "wall_s": round(time.perf_counter() - t0, 3)}
 
 
 def defer(st: dict[str, Any], rc: Any, to: dict[str, Any]) -> dict[str, Any]:
@@ -347,15 +323,11 @@ def defer(st: dict[str, Any], rc: Any, to: dict[str, Any]) -> dict[str, Any]:
     bmap = st.get("bmap")
     if not bmap:
         return base | no_map()
-    mm = None
     try:
-        from verity_vllm.check import oracle_compare as OC
         from verity_vllm.check.replay.driver import engine_facts_of_record
 
         p = load(cfg, rank, st.get("world"), definitions=False)
         xrank_facts(st, p)
-        if cfg.get("memory_map"):
-            mm = memory_map(st, p, OC.OpenedReader(st["com"], rc), index_kw=index_query(manifest_of_rank(st.get("manifest_doc"), rank)))
         hashed: dict[str, str] = {}
         part = RB.write_store(out, pair, st["com"], rc, digests=hashed, rank=rank)
         (part / "binding_map.json").write_text(json.dumps(bmap, default=str) + "\n")
@@ -366,4 +338,4 @@ def defer(st: dict[str, Any], rc: Any, to: dict[str, Any]) -> dict[str, Any]:
     except Exception as e:  # noqa: BLE001  -- fail closed, as the in-process replay that could not run
         RB.discard(out, pair, rank=rank)
         (sr, lk), bundle = not_run(rank, e, traceback.format_exc()), None
-    return base | {"sampled_replay": sr, "boundary_linkage": lk, "bundle": bundle, "wall_s": round(time.perf_counter() - t0, 3)} | ({"memory_map": mm} if mm else {})
+    return base | {"sampled_replay": sr, "boundary_linkage": lk, "bundle": bundle, "wall_s": round(time.perf_counter() - t0, 3)}

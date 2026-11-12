@@ -7,7 +7,7 @@ check the stream ran on it, in the stream's order.
   the rule's rate over it and the program's strata (`Select.Rule.over`, `Select.strataSizes`: `rate`, a count of none or
   more than the population) and the work table it is expanded over (`Select.Rule.tableOver`: `rate`, a work rate law
   whose strata or table don't apply), the window's seed salt read from the challenger's log (`seedSaltOf`: `seed-salt`
-  where its evidence doesn't read, or is missing on a window), then R1–R7 (`Registration.check`) against the
+  where its evidence doesn't read, or is missing on a window), then R1–R8 (`Registration.check`) against the
   challenger's copies and that salt under the sampling design the rule names over that population
   (`Select.Rule.lawOver`, whatever law the copies carry) and that work table, a `bernoulli` sampling
   design at any `p` (`Draw.bernoulli`: `bernoulli`), a
@@ -28,7 +28,7 @@ check the stream ran on it, in the stream's order.
   (`Select.replayCells` of the challenger's replay block Program under the check's query), template-major, replay block
   `sample[i]`'s instances of template `t` being `[off_t + i·n_t, off_t + (i+1)·n_t)`, `off_t = Q · Σ_{t'<t} n_t'`: the
   public-items rule on the interior values, the population (else `interior-population`), its window's seed salt from
-  its own evidence on its copies' window (`seed-salt`), R1–R7 against its copies and that salt under `subset:Q·n` (all
+  its own evidence on its copies' window (`seed-salt`), R1–R8 against its copies and that salt under `subset:Q·n` (all
   of them committed), `population-order`, and its receipt; and `second`: the second stage on its own coins
   (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
   registration's digest and carrying their evidence as the first stage's do (`coins`);

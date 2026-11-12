@@ -301,7 +301,8 @@ theorem stage_zk_at {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment} 
     (h : Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ r : Spot.OneStageZk.Run,
       Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } = .accept pub prof := by
-  unfold Spot.OneStageZk.checkBlobsAt at h
+  replace h := (Spot.OneStageZk.checkBlobsAt_accept h).1
+  unfold Spot.OneStageZk.checkOneAt at h
   dsimp only at h
   split at h
   · cases h

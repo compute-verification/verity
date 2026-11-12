@@ -72,6 +72,7 @@ def lora_new():
     return m, {n for n, p in m.named_parameters() if p.requires_grad}
 
 
+@pytest.mark.slow
 def test_a_trace_is_of_its_runs_program_where_its_product_shapes_are_the_counters():
     """training_slowdown.formalism.other_program on the counter's op log (`macs_log`) and the capture's product rows of
     the same program: LoRA at rank 2, trained from scratch,

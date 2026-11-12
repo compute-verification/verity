@@ -100,7 +100,8 @@ The `2^-40` event is split in two: binding and soundness cost at most `2^-41` ov
 `δ′ = 2^-41`, so both branches' logarithm is `ln(1/δ′) = 41 ln 2`. Compose puts its logarithm at its
 `δ_s = 2^-40` instead; at this convention its 0.744% is 0.748%.
 Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, with no advantage bound) and read at `√δ_fork`
-(`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves.
+(`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round, and less by what `δ_ZK` takes (*A cap on
+the cheater's hash calls*, below); no ε moves.
 
 The unfolded branch binds on sm_120's sheet (`5.860%`); on sm_120's measured vector the folded branch binds (`0.591%`).
 The proof system's pieces are named premises: binding's fork form (`BindingForkAt`), proof soundness (`ProofSoundAt`,
@@ -136,9 +137,12 @@ enforce on every window:
 * **Equal rounds.** `RightFixed` charges each round `1/S` of the window's words: the equal shares are the protocol's.
 * **Fresh coins.** Each round's coin is uniform and independent of the earlier ones (the product measure on `Ω^S`
   that the luck premises' "whatever the past" is over); one salt an epoch expanded into the rounds' coins isn't.
-* **A cap on the cheater's hash calls over the window.** The budget asks `δ_ZK ≤ 2^-41/(48,000·n_π)` a proof and
-  `δ_fork ≤ (2^-41/48,000)²` a round, and Flock's soundness and `cr/sha-512` give such bounds only for a cheater
-  whose hash calls are bounded: against Flock's `t·2^-λ`, `t ≤ 2^(λ − 56.6)/n_π` over the window.
+* **A cap on the cheater's hash calls over the window.** The budget is the statements' hypothesis
+  `48,000·(√δ_fork + n_π·δ_ZK) ≤ 2^-41`, and no statement here gives `δ_fork` or `δ_ZK` a value. Alone, each term
+  needs `δ_ZK ≤ 2^-41/(48,000·n_π)` a proof or `δ_fork ≤ (2^-41/48,000)²` a round; together, at an even split, `2^-42`
+  in place of `2^-41`. Flock's soundness and `cr/sha-512` give such bounds only for a cheater whose hash calls are
+  bounded: against a bound of `t·2^-λ` a proof, `t ≤ 2^(λ − 57.6)/n_π` over the window at the even split
+  (`2^(λ − 56.6)/n_π` with nothing left for binding).
 
 The sheet reading's ε rests on A2u (`SheetDispatch`: each uniform-datapath instruction takes an issue slot), which no
 vendor document states. DS-120 has no uniform-pipe row, so without A2u the machine model's LP gives 2.79% with a
