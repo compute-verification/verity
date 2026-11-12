@@ -50,6 +50,7 @@ _CALLS: dict[tuple, Any] = {}
 def ir_row(E: int, TOPK: int, VPT: int, renormalize: bool, logits: list[int]) -> tuple[list[int], list[int], list[int]]:
     """(tap words, weights, ids) of one row in the circuit: evaluate the ordered router as a standalone Call and read its committed interior
     gates (`query.router_softmax.slots`) from the trace."""
+    # inside the function: these load numpy, and importing this module must not
     from verity.circuits.evaluation import evaluate_call
     from verity.circuits.evaluation.reference import standalone_call
 

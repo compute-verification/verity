@@ -41,6 +41,7 @@ def ir_values(vs: int, start: int, tok: int) -> tuple[int, int, int]:
     """(local, ge, le) of one token id in the circuit: evaluate `EmbeddingShard_v1{VS,H=2,START}` as a standalone Call over a zero table and read
     its committed interior gates (`query.vocab_range.slots`).  The three values depend on the id alone, not on H or the table; H = 2 is the
     smallest width whose output words are separate units reading them, as at every served width."""
+    # inside the function: these load numpy, and importing this module must not
     from verity.circuits.evaluation import evaluate_call
     from verity.circuits.evaluation.reference import standalone_call
 
