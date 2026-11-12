@@ -161,7 +161,7 @@ class WorkLaw:
         check_work_strata(strata)
         work, n = sum(s.work for s in strata), sum(len(s.units) for s in strata)
         if work < 1 or self.k < 1:
-            raise ValueError("the work law needs some work and K >= 1")
+            raise ValueError("the work sampling design needs some work and K >= 1")
         share = self.k if self.window_work is None else -(-self.k * work // self.window_work)
         return min(n, max(1, share))
 
