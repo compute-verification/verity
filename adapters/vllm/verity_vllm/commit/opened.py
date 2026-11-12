@@ -11,6 +11,9 @@ from collections import Counter
 from collections.abc import Callable, Iterable
 from typing import Any
 
+__all__ = ["OPENED_METHOD", "ORDINAL_SEP", "OpenedReader", "OpeningNotVerified", "UnverifiedUnlinked", "filed",
+           "meta_by_name", "opened_check", "opened_in_children"]
+
 ORDINAL_SEP = "#ord"      # `<member name>#ord<tensor_ordinal>`: the reader's exact meta of a shared module's k-th invocation
 
 

@@ -44,8 +44,9 @@ from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import served as SV
 from verity_vllm.protocols.pouw.h1 import window as PHW
+from verity_vllm.records.schema_ids import POUW_H1_HANDOFF_SCHEMA
 
-SCHEMA = "verity-vllm/pouw-h1-handoff/v1"
+SCHEMA = POUW_H1_HANDOFF_SCHEMA
 FILE = "h1-window.pkl"
 #: what the stream's descriptor travels with, and the holder's answer once it has it
 STREAM, TAKEN = b"verity/pouw/h1/stream/v1", b"taken"

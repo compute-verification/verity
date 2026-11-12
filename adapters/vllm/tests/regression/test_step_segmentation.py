@@ -57,7 +57,7 @@ def test_collapsed_and_segmented_documents_differ_on_the_segmentation_only():
     assert sorted(x.split(":")[0] for x in d) == ["$.component_steps_equal_cap", "$.requests.r0.step_nodes_sha256", "$.requests.r0.steps",
                                                    "$.unsegmented_members"], d
     assert SS._consistent(segmented["requests"], {"build_request": True}) == {
-        "r0": {"steps_eq_cap": True, "steps_eq_sampling_events": True, "segments_end_at_sampling_event": True}}
+        "r0": {"steps_eq_declared": True, "steps_eq_sampling_events": True, "segments_end_at_sampling_event": True}}
     assert SS._consistent(collapsed["requests"], {})["r0"]["steps_eq_sampling_events"] is False
 
 
@@ -111,7 +111,7 @@ def test_the_self_check_decodes_each_component_the_workload_program_names(tmp_pa
     got = act["requests"]["r0"]
     assert act["source"] == "request_component" and act["component_steps_equal_cap"] is True and act["unsegmented_members"] == 0
     assert (got["cap"], got["component"], got["n_nodes"], got["steps"], got["sampling_events"]) == (2, "build_request", 3, 2, 2)
-    assert act["consistent"] == {"r0": {"steps_eq_cap": True, "steps_eq_sampling_events": True, "segments_end_at_sampling_event": True}}
+    assert act["consistent"] == {"r0": {"steps_eq_declared": True, "steps_eq_sampling_events": True, "segments_end_at_sampling_event": True}}
     wp.write_text(json.dumps({"inputs": {"derived": {"1,1": "/pod/row/build_request/"}}, "requests": [dict(request, cap=3)]}))
     with pytest.raises(resolver.NotResolvable, match="request r0 names no derived component dir"):
         SS.actual(row)

@@ -100,7 +100,8 @@ class CommittedStore:
     def entries(self, rid: str, step: int, op_path: str, member: str) -> tuple[list[dict], str, int, list[int]]:
         """The entries of the RESOLVED (canonical path, invocation) -> (entries, canonical, invocation, invocations bound under the key)."""
         canon, inv = self.resolve(op_path)
-        es_all = self.idx.get((rid, int(step), canon, member)) or []
+        bound = self.idx.get((rid, int(step), canon, member))
+        es_all = [] if bound is None else bound                                  # None: the map binds nothing under the key
         return [x for x in es_all if _invocation(x) == inv], canon, inv, sorted({_invocation(x) for x in es_all})
 
     def has(self, rid: str, step: int, op_path: str, member: str) -> bool:
