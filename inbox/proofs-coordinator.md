@@ -109941,3 +109941,22 @@ Not established: that any of `9af21118fe`, `6caa280aed` or `052eb3aba5` elaborat
 **When resumed:** read the five runs; commit the lock records exactly as `aceb` wrote them and list each changed record; the quick tier at that final head; retired terms, Markdown caps, merged-tree sentence; open the pull request unmarked; the ready line. Then the design.
 
 For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `8592d9d7c429` | records `aceb`, quick tier `58bf`, tries `3394`, base suites `3471` and `1e8b` | ready line by Fri 06:00Z | resume me when `aceb` and `58bf` end.
+
+## HELDOF, Thu 12 Nov 23:59Z: first entry: I hold `heldOf` and the lemma that the form's check decides `two h`; my branch is cut and pushed, nothing written yet
+
+**In plain words.** I am the worker that builds the proved model's copies of the registration (`SpotFlock.Held`) out of what the two-round check holds for a run, and proves those copies match the run (RUNCOINS's `HeldMatches`). I also own the lemma that the copies built that way pass the model's design check (`two h`), so that RUNCOINS's premise `TwoHolds` is decided by the form rather than assumed. My branch is cut from TWOLEG's head with RUNCOINS's and RUNSAS's branches merged in; one conflict, in `Spot/Run.lean`, was resolved by keeping both sides (TWOLEG's `form` argument and RUNCOINS's new `Own` fields).
+
+Clock: `date -u` read 23:59Z. Agent id `bc-3ddfb587-549a-5964-9ddf-80547065f684`; my mailbox doesn't exist yet. Branch `cursor/proofs-heldof-4c7b` at `64f8d9c868`, pushed (base `052eb3aba5` on `cursor/proofs-twoleg-c5e5`, plus `01321f0c3b` of RUNCOINS and `4cf375876a` of RUNSAS).
+
+**Plan, in five lines.**
+1. New file `security/Proofs/Flock/SpotFlock/HeldOf.lean`, a root on its own line: `heldOf` over the form's `Params`, the run's `Input`/`Interior` and the blobs, returning `Option Held`, `none` where any template's reference statement fails `zkOk`.
+2. By 02:00Z: `heldOf`'s signature and `HeldMatches i it h` at `i = inputOf …` as a statement in a try, every field but `xS₀`, `frame` and `desc` defined.
+3. Then `xS₀`, `frame`, `desc` from the members' files (or named `Prop` hypotheses with owners), by 08:00Z.
+4. The lemma `heldOf … = some h → the form's check passed → two h = true`, with what deciding `two` costs measured against the verifier-cost rule; the one line the form must gain goes to TWOLEG under NEEDS.
+5. RUNSAS's four points met in the statement (`OwnAgrees`' reset of `reads`, `recordsOk`, `NamesDistinct` as a hypothesis, `RegistersNone` as a named premise at the second try's design).
+
+[read] `Held`'s fields at `64f8d9c868` (`SpotFlock/Code.lean:131`): `desc`, `vus`, `query`, `reg`, `k`, `names`, `links`, `wires`, `rows`, `boundaryNames`, `interiorNames`, `xS₀`, `xS₀_ok`, `refReads`, `frame`, `more`. `HeldMatches` (`RunsAs/Statement.lean:63`) constrains `reg.first`, `reg.ns`, `reg.ks`, `links`, `wires`, `rows`, the parts, `refsOf` and `refRegisteredOf`; `boundaryNames` and `interiorNames` are not in it but `RecordsHeld` reads them.
+
+**STOP RULE.** None. **NEEDS.** None yet. **To post.** Nothing.
+
+**Not established.** Everything: nothing is written or compiled. Whether `xS₀` can be built from the members' files at all in the shape `pinOk` and `refsOf` read is the first thing I check.
