@@ -4,3 +4,4 @@
 - 2026-11-12T15:51Z FP8WRITE: suites run r20261112-140537-334e 48 of 57 passed, none failed; verity-vllm at 88%; capture waits for the 17:30Z row.
 - 2026-11-12T17:35Z FP8WRITE: capture r20261112-172953-93dc on node A card 2 (H200): GO, 12,512 cache rows compared, 0 differ; norm and RoPE 0 differ; lease 12 s; quotable comment posted on CIR-260; suites: 49 of 57 passed before the first run's timeout, the 8 left rerunning as r20261112-173053-7c83.
 - 2026-11-12T18:25Z FP8WRITE: suites rerun r20261112-173053-7c83: flock prover suite at 63%, 7 more after it; capture done (GO, 0 rows differ); nothing else open.
+- 2026-11-12T19:26Z FP8WRITE: suites rerun r20261112-173053-7c83: verity-flock, research, verity/definitions/ops passed; circuit-check's suite running; 4 after it.
