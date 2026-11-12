@@ -907,3 +907,17 @@ in the plan how many it needs.
 
 Return when candidates 1 and 2 pass their CPU checks, with your answer on candidate 2's three
 questions, or at 14:00Z with where you are.
+- **Added 06:57Z: THE NODE DOES NOT STOP AT MIDNIGHT** (infra on INF-660, 06:56Z): `vy-nebius-2` stays up
+  until Thu 4 PM PST (Fri 00:00Z). **`gpu-lease` there is `main`'s since 06:47:50Z:**
+  `/usr/local/bin/gpu-lease`, sha256 `5bfd43d8ce7fec493d3b8a8ca3f398dd9585c628fceb1ad2c4551bbc5836f73b`,
+  commit `704d63176000…` (node A has the same file); the old one is kept beside it; the CPU places
+  are open again. On Thursday the six research places close at 16:30Z and the two check slots at
+  18:15Z.
+  **So I asked memory-accounting (INF-660) for up to three leases of at most 20 minutes each between
+  now and Thu 16:30Z, one as each candidate is ready.** NOT GRANTED YET: nothing is sent without its
+  word for that lease. **Work as if it will be:** check your lease calls against `704d631760` now;
+  when candidate 1 passes its CPU checks, post its files' sha256 and its one launch line on HASH-113
+  and return to me (or keep building candidate 2 and post in a worker comment, which I see: I am
+  subscribed to HASH-113's comments). Each lease: the guard, then the screen against today's pass,
+  alternating; the node's load recorded; no lease asked while one of memory-accounting's is held.
+  If the leases are granted, Thursday's 21:00Z slot times the winner.
