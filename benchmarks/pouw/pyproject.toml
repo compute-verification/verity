@@ -72,6 +72,7 @@ untraced = [
 # package, on pytest's `pythonpath`), with what that package imports of core: the registration log (registration.py, over
 # site and wire) and PoUB's block size (its codec.py); its census imports the Boolean versions' lookup
 # (verity/definitions' boolean.py), which loads no registry module for a Program already Boolean.
+# test_pearl_c_vllm holds a Pearl+ answer's named assumption to its def in Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean.
 inputs_only = true
 inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", 
           "verity/claims/__init__.py",
@@ -163,6 +164,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "security/Definitions/Accounting/Headline", "security/Definitions/Accounting/HeadlineDc",
           "security/Definitions/Pouw/Guarantees", "security/Definitions/Accounting/Guarantees/HeadlineDc.lean",
           "security/Definitions/Pouw/Guarantees/PearlCFlockTile.lean", "security/lean-audit.json",
+          "security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean",
           "security/Proofs/Accounting/Gates/Rows.lean",
           "benchmarks/pouw/exact_kit/exact_kit", "verity/protocols/pouw/receipts", "benchmarks/pouw/filler",
           "benchmarks/machine_model", "benchmarks/pouw/README.md",

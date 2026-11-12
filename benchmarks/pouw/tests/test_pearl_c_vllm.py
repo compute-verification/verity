@@ -1201,10 +1201,33 @@ def served_verify(d: Path, out: Path, *more: str) -> tuple[int, dict, dict]:
     return rc, json.loads(out.read_text()), answer
 
 
+def test_answer_names_its_schemes_assumption():
+    """An accepted Pearl+ answer's ``public.assumption`` (`verify_run.assumption_of`) is the named Prop its scheme's credit,
+    (1 − ρ)·`creditDevRev1`, is at: TT_OUT(1/400) per audit tile, rev1, at the scheme's device record. The served scheme,
+    ``pearl-c-h100-v1-h3``, is at `TTOutTilePearlCH100Rev1`, every other scheme the device path runs at
+    `TTOutTilePearlCDevRev1` at its record, and each is a def of `TTOutRev1.lean`; the Lean port's `ASSUMPTION` is the
+    H100's. Neither Pearl's own Assumption 1 (`pearl_kw`, which names no gap or constant) nor a v0 scheme, which has no
+    TT_OUT accounting, is ever named."""
+    root = Path(__file__).resolve().parents[3]
+    lean = (root / "security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean").read_text()
+    for name in (VR.ASSUMPTION_H100, VR.ASSUMPTION_DEV):
+        assert f"def {name.rsplit('.', 1)[1]} " in lean and name.startswith("Pouw.PearlC.Assumptions."), name
+    assert VR.assumption_of(PPD.scheme_of("pearl-c-h100-v1-h3")) == VR.ASSUMPTION_H100
+    for scheme in map(PPD.scheme_of, PPD.SCHEMES):
+        got = VR.assumption_of(scheme)
+        assert got == (VR.ASSUMPTION_H100 if scheme.device.name == "h100" else f"{VR.ASSUMPTION_DEV} at {scheme.device.name}")
+        assert "pearl_kw" not in got
+    with pytest.raises(ValueError, match="only a v1 scheme"):
+        VR.assumption_of(C.PearlC(forming="v0"))
+    run = (root / "verity/protocols/pouw/verifier/lean/pearlplus/PouwPearlPlus/Run.lean").read_text()
+    assert f'def ASSUMPTION : String := "{VR.ASSUMPTION_H100}"' in run
+
+
 @pytest.mark.slow
 def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepted(honest_pass, tmp_path):
     """``served_passes.py verify`` draws over the passes with calls that the serve's served.json names, skipping the empty
-    one the run left open: it accepts an honest pass and credits its MACs at Pearl's assumption in a core answer, and the
+    one the run left open: it accepts an honest pass and credits its MACs at its scheme's named assumption in a core
+    answer (`test_answer_names_its_schemes_assumption`), and the
     same pass with a weight row flipped (opened on the excluded row's tile, whatever the draw) fails the whole run.  A
     test instance's verdict credits nothing."""
     path, *_ = honest_pass
@@ -1216,6 +1239,8 @@ def test_served_passes_verify_accepts_only_when_every_pass_with_calls_is_accepte
     work = answer["public"]["work"]
     assert work["credited"] == 0 < work["macs"] and work["credited_tiles"] > 0 and answer["profile"]["delta"] == "1/100"
     assert answer["profile"]["test_instance"] and "a test instance's, credited nothing" in doc["line"]
+    named = VR.assumption_of(PPD.scheme_of(answer["public"]["scheme"]))
+    assert answer["public"]["assumption"] == named and f"({named})" in doc["line"]
     assert len(answer["profile"]["tiles"]) == 4 and {i for i, _ in answer["profile"]["tiles"]} == {0}
     man = json.loads(path.read_text())
     assert answer["public"]["passes"][0]["y"] == [u["y"]["root"] for u in man["matmuls"]]

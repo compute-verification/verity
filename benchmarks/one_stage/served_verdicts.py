@@ -113,7 +113,7 @@ under the key ``--key-sha512`` pins), and a challenger draw (the coin record's `
 is its draw session's (`pearlplus_draw`: that session fetched the same way, held to the signed ledger and session); a
 run whose coins are an in-process challenger's claims no verdict where nothing
 failed (`UNCLAIMED`, `PEARLPLUS_WHY_IN_PROCESS`), and one served under the gate whose coins are not live rejects. Its
-document carries the passes, that verdict's line and credit at Pearl's Assumption 1, where its coins came from
+document carries the passes, that verdict's line and credit at the scheme's named assumption, where its coins came from
 (`PEARLPLUS_COINS`) and its shares (`served_shares.pearlplus_shares`), and says why it credits nothing (`PEARLPLUS_WHY`:
 its passes are not the window sampled proofs audited; under PEARLPLUS_TIE, ``--tie W``, the window's own epoch, the
 Pearl-C period its live salt session joined, `pearlplus_why_tied`). ``record`` composes an accepted one as PoUW's verdict of record
@@ -1419,7 +1419,7 @@ def pearlplus(out: Path, served: Mapping[str, Any] | None, verified: Mapping[str
     epoch's salt coin is its live session's (`pearlplus_coins` through the gate `gate`, the key pin `key` and main's line
     `main`; `PEARLPLUS_COINS`); with an in-process challenger's coins (`PEARLPLUS_COINS_IN_PROCESS`) a run where nothing
     failed is `UNCLAIMED`, and a run served under the gate whose coins are not live rejects. It carries that verdict's
-    line, credit at Pearl's Assumption 1 (``credit``, the answer's ``public.work``) and the rounds the prover dropped from
+    line, credit at the scheme's named assumption (``credit``, the answer's ``public.work``) and the rounds the prover dropped from
     its retention before the coin (``dropped``, which credit nothing and stay declared), its shares are
     `served_shares.pearlplus_shares`'s wherever the run served within its caps, whatever the verdict (a rejected or
     missing one credits 0), and it credits nothing (`PEARLPLUS_WHY`, or `PEARLPLUS_WHY_IN_PROCESS`). ``unretained``, the

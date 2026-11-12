@@ -3,7 +3,7 @@
 Each case proves passes on the CPU as verify_run's tests do (`test_pearl_c_vllm.proved_pass`: the H100 record's -h3 scheme
 at k = 128 in 16 x 16 tiles, a call with filler rows and an excluded row, y committed), changes them as those tests do, and
 holds the Lean's verdict to the Python's on the same files and coin: the verdict, the reason, the refusal, the run's
-commitment and source, every opened tile's verdict in order, and an accepted run's work (its credit at Pearl's assumption,
+commitment and source, every opened tile's verdict in order, and an accepted run's work (its credit at its scheme's named assumption,
 `credit_at_assumption`: the credited MACs, tiles and MACs, ρ, ε and the draws over the inert-work bound) under each
 `over_cap` rule, `uncredited` (the default: a tile over its bound is credited nothing and the run goes on) and `reject`,
 and the window record W it held the passes to (`verify_run.tie`, ``--tie W``: each call's A rows and y, and each

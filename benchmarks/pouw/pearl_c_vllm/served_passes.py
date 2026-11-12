@@ -98,7 +98,7 @@ uncredits its whole band of 64 rows, and a B row its block of 64 columns (`pearl
 or more of an honest run's credit, where the over-cap tiles it would spare cost under half a percent.  The passes are
 of one salt and, but under ``--test-instance`` (a test instance's passes, whose verdict credits nothing), of the served instance, k_min 1,024 at 64 x 64 tiles.  It writes the details to ``--out``, with, where
 ``served.json`` says which passes the timed call made and no ``--manifest`` names others, the credit over those retained
-alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at Pearl's Assumption 1 at ``--delta``) to ``--answer``
+alone (`timed_credit`), and the core answer (`answer_of`'s form, ``public.work.credited`` the MACs credited at the scheme's named assumption (TT_OUT rev1) at ``--delta``) to ``--answer``
 (default ``answer.json`` beside ``--out``, the file `served_verdicts.sh` reads as a piece's core answer), prints one line
 and exits 0 only on accept.  An ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof,
 PouwCheck).

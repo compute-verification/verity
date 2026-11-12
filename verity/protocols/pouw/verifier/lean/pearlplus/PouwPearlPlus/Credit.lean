@@ -4,9 +4,9 @@ public import PouwPearlPlus.Rule
 public import PouwPearlPlus.Run
 
 /-!
-# The run's credit at Pearl's assumption (`verify_run.credit_at_assumption`)
+# The run's credit at its scheme's named assumption (`verify_run.credit_at_assumption`)
 
-At Pearl's Assumption 1 (`pearl_kw`), a tile that passes the rule cost its credited cells' MACs, (1 − ρ) of them at the
+At the scheme's named assumption (TT_OUT(1/400) per audit tile, rev1, `verify_run.assumption_of`), a tile that passes the rule cost its credited cells' MACs, (1 − ρ) of them at the
 scheme's cap. Over every pass's records, a record whose tiles credit any cell is one unit: its MACs are its credited cells
 at its kept width |K|, its ticket weight is those cells at the cell's ticket `wref(1, |K|, n)/n` (`clear_work.ticket_cell`
 at the H100's record), and its MACs a ticket are |K|·n/`wref(1, |K|, n)`. Of t draws by ticket weight, X_O landed on tiles

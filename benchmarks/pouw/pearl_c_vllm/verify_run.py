@@ -32,7 +32,8 @@
 
 `verify_passes` is a served run's verdict over all its passes (`served_passes.py verify`): one draw source ("The run's
 draw" below), drawn once every pass's roots are read, keys t draws over all the passes' tickets together, and an accept credits
-the run's credited MACs at Pearl's Assumption 1, less what ε of the tickets' weight could hold at δ, in core's answer form.
+the run's credited MACs at the scheme's named assumption (`assumption_of`), less what ε of the tickets' weight could hold
+at δ, in core's answer form.
 With a window record W (`tie`, Pearl+'s ``verity/registration/v2`` record of the retained rounds, written after the
 retention, whose values the one-stage registration takes as outputs), W is held to the passes before the coin: round s's call c (the served run's
 s-th pass with calls, its manifest's c-th call) is W's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>``
@@ -151,7 +152,11 @@ DRAWS = 3
 PROTOCOL = "verity/pouw/pearl-plus/v1"
 RUN_TAG = "verity/pouw/pearl-plus/run/v1"
 RUN_DRAW_DOMAIN = "verity/pouw/pearl-plus-run-draw/v1"
-ASSUMPTION = "Pearl's Assumption 1 (pearl_kw)"
+#: the named assumption an accepted run's credit is at, TT_OUT(1/400) per audit tile, rev1, at the scheme's device record
+#: (`security/Definitions/Pouw/Assumptions/PearlC/TTOutRev1.lean`): the scheme credits (1 − ρ)·`creditDevRev1`
+#: (`pearl_c.PearlC.credit_of`). At the H100's record it is its own named Prop.
+ASSUMPTION_DEV = "Pouw.PearlC.Assumptions.TTOutTilePearlCDevRev1"
+ASSUMPTION_H100 = "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1"
 DELTA = Fraction(1, 100)
 #: `verify_passes`' rules on an opened tile over its inert-work bound (``over_cap``): the run is rejected, or the tile is
 #: credited nothing; `served_passes.OVER_CAP` names the same two
@@ -618,8 +623,20 @@ def pass_macs(p: Pass) -> int:
     return sum(sum(credited_cells(p.scheme, r)) * r.k_kept for r in p.records)
 
 
+def assumption_of(scheme: Any) -> str:
+    """The named assumption a run of `scheme` is credited at (`ASSUMPTION_H100`, else `ASSUMPTION_DEV` at its device
+    record, and at its prices where they are another device's). Only a v1 scheme has TT_OUT accounting; any other is
+    refused."""
+    if scheme.forming != "v1":
+        raise ValueError(f"{scheme.name}: only a v1 scheme is credited at a named assumption (TT_OUT rev1)")
+    own = scheme.prices == scheme.device.prices
+    if scheme.device.name == "h100" and own:
+        return ASSUMPTION_H100
+    return f"{ASSUMPTION_DEV} at {scheme.device.name}" + ("" if own else f", priced at {scheme.prices.device}")
+
+
 def credit_at_assumption(passes: list[Pass], t: int, delta: Fraction, over: int = 0) -> dict:
-    """The run's credit at Pearl's Assumption 1 (`pearl_kw`): a tile that passes the rule cost its credited cells' MACs,
+    """The run's credit at the scheme's named assumption (`assumption_of`): a tile that passes the rule cost its credited cells' MACs,
     (1 − ρ) of them at the scheme's cap.  Of t draws by ticket weight, ``over`` (X_O) landed on tiles over their
     inert-work bound, credited nothing, and the rest passed: the tiles wrong or over the bound hold at most ε of the
     tickets' weight except with δ (`epsilon`); the most MACs that weight can hold, filled from the records whose cells hold
@@ -658,7 +675,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
     and held to what it published, and to the window record `window` where there is one (`tie`), then one source of the
     verifier's coins (`pouw.verifier.coins`), drawn after, keys `draws` work-weighted tiles over every pass's tickets
     together (`clear_work.draw` on their records in order), and each pass opens one tile per excluded row.  It accepts iff
-    every opened tile passes the tile rule, and credits the run at Pearl's assumption (`credit_at_assumption`) at δ.
+    every opened tile passes the tile rule, and credits the run at its scheme's assumption (`credit_at_assumption`) at δ.
 
     ``over_cap`` is the rule on an opened tile that passes every check but its inert-work bound (`clear_work.cap_failure`):
     ``uncredited`` (CMP-311 option A, the default) accepts it with its bound's reason and credits it nothing, the credit
@@ -772,7 +789,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                          for i, t, g, r, over, _ in verdicts])
     if bad:
         return reject("; ".join(bad))
-    public = {"work": credit, "unit": "MAC", "assumption": ASSUMPTION, "scheme": scheme.name,
+    public = {"work": credit, "unit": "MAC", "assumption": assumption_of(scheme), "scheme": scheme.name,
               "passes": [{"transcript": p.man["commitment"]["root"], "records": p.man["records_root"], "salt": p.epoch.salt.hex(),
                           "activations": [u["root_a"] for u in p.man["matmuls"]], "y": y_roots(p)} for p in passes],
               **({"tie": tied} if tied is not None else {}),
@@ -795,7 +812,7 @@ def verify_passes(paths: list[Path], draws: int, jobs: int, commit: str, coins: 
                      f"{len(passes)} passes, y committed and checked on {sum(r is not None for r in ys)} of {len(ys)} calls"
                      f"{tie_clause}; "
                      f"{credit['credited']:,} of {credit['macs']:,} MACs credited at ε {float(Fraction(credit['epsilon'])):.4g}, "
-                     f"δ {delta} (Pearl's Assumption 1); run {root.hex()[:16]}, source {source.hex()[:16]}; verifier {commit}"))
+                     f"δ {delta} ({assumption_of(scheme)}); run {root.hex()[:16]}, source {source.hex()[:16]}; verifier {commit}"))
     return out
 
 

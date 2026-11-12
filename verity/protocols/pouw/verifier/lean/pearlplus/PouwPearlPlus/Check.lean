@@ -27,7 +27,7 @@ public import PouwPearlPlus.Credit
   with every other check passed under `over_cap` `uncredited` (the default, and the run of record's, whose passes hold
   no voluntary row; `reject` rejects such a run). A rejected
   tile's reason is `pass i tile t: why`, joined by `; `.
-* **The work** an accepted run publishes: its credit at Pearl's assumption at δ = 1/100 (`creditAtAssumption`), at X_O,
+* **The work** an accepted run publishes: its credit at its scheme's named assumption at δ = 1/100 (`creditAtAssumption`), at X_O,
   the number of draws on tiles over their bound, which are credited nothing. A test instance's credits nothing
   (`credited` 0), as `--recorded`'s salt claims nothing.
 

@@ -19,7 +19,7 @@ clock's), side by side. The declared utilization is the steps' ideal seconds ove
 the three terms' own shares, which sum to it.
 
 The credited share reads Pearl+'s verdict (``--credit``: ``served_passes.py verify``'s ``answer.json``, core's answer
-form): its ``public.work.credited``, the linears' MACs credited at Pearl's Assumption 1 less what the draw leaves at its
+form): its ``public.work.credited``, the linears' MACs credited at the scheme's named assumption (TT_OUT rev1) less what the draw leaves at its
 δ, at θ, over the same wall, and beside it that credit's share of the declared linears. Only the linears are Pearl+'s
 work, so attention and the LM head are never credited. A rejected answer credits 0, and so does a run with no
 ``--credit``. The credited share is not part of the declared share, and the two are never added.
