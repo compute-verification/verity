@@ -1,1 +1,1 @@
-2026-11-12T14:09Z FP8READBACK: PR #9317 open (unmarked), head bcb669caa5; circuit-check ok on both bindings (r20261112-134850-f540); suites run r20261112-140436-e34f running; first CIR-261 comment posted; capture on node A card 3 at 17:30Z.
+2026-11-12T14:14Z FP8READBACK: VM was reset; branch restored at bcb669caa5; launcher kept on scratch; waiting on suites r20261112-140436-e34f; capture at 17:31Z.
