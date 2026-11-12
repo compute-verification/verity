@@ -74,7 +74,7 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
     except Exception as e:  # noqa: BLE001
         doc["compilation_error"] = repr(e)[:200]
     try:
-        vc = llm.llm_engine.vllm_config
+        vc = handle.engine_of(llm).vllm_config
         cc, sc, mc = vc.cache_config, vc.scheduler_config, vc.model_config
         doc["enable_prefix_caching"] = bool(getattr(cc, "enable_prefix_caching", None)) if getattr(cc, "enable_prefix_caching", None) is not None else None
         doc["enable_chunked_prefill"] = bool(getattr(sc, "enable_chunked_prefill", None)) if getattr(sc, "enable_chunked_prefill", None) is not None else None
@@ -346,7 +346,7 @@ def resolved_async_scheduling(llm: Any) -> bool | None:
     value the harness passed -- usually nothing -- says nothing about execution.  Read back from `llm.llm_engine.vllm_config.scheduler_config`
     after the build; None means the engine did not expose a resolved bool (unattested), never "off"."""
     try:
-        v = llm.llm_engine.vllm_config.scheduler_config.async_scheduling
+        v = handle.engine_of(llm).vllm_config.scheduler_config.async_scheduling
     except AttributeError:
         return None
     return None if v is None else bool(v)
@@ -360,7 +360,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
     from verity_vllm.engine import engine_profile as prof
     out: dict[str, Any] = {}
     try:
-        vc = llm.llm_engine.vllm_config
+        vc = handle.engine_of(llm).vllm_config
         cc = vc.compilation_config
         mode = getattr(cc, "mode", getattr(cc, "level", None))
         out["mode"] = getattr(mode, "name", None) or str(mode)

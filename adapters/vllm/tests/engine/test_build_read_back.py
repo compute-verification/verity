@@ -189,6 +189,18 @@ def test_compilation_facts_of_a_config_that_cannot_be_read_hold_the_error_and_wh
     assert part["error"].startswith("ValueError(") and len(part["error"]) <= 200
 
 
+def test_the_three_readers_take_the_engine_the_handle_gives(stand_in: fake_vllm.FakeVllm) -> None:
+    """An object that holds its ``vllm.LLM`` under ``vllm`` (the integration's own `LLM`) is read as that engine is, and an
+    ``LLMEngine`` itself as the ``LLM`` that holds it: `verity_vllm.engine.handle.engine_of`, as `effective_compilation` reads."""
+    stand_in["vllm.envs"].VLLM_BATCH_INVARIANT = True
+    held = _engine(_full())
+    for given in (held, NS(vllm=held), held.llm_engine):
+        assert build.effective_execution_doc(given) == build.effective_execution_doc(held)
+        assert "config_error" not in build.effective_execution_doc(given)
+        assert build.compilation_facts(given) == build.compilation_facts(held) and "error" not in build.compilation_facts(given)
+        assert build.resolved_async_scheduling(given) is True
+
+
 def test_the_flash_attention_versions_a_models_layers_carry() -> None:
     assert build.flash_attn_versions(_Model()) == set()
     assert build.flash_attn_versions(_Model(_Layer(), NS(impl=None), NS(impl=NS()))) == set()
