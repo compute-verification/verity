@@ -8,7 +8,7 @@ words under the profile's statics.
     `GEMM` and `ATTENTION` only; the cross binding is a different program.
 §3  Standalone on captured operands is `test_composition_of_record`: the captures it reads were made on GPU pods.
 
-Everything runs without torch in well under a minute; the authored (`b1_authored`) v2 check needs torch and skips.
+Everything runs without torch in well under a minute.
 """
 
 from __future__ import annotations
@@ -155,38 +155,6 @@ def test_partial_specialisations_are_not_static_values():
     with pytest.raises(TypeError):
         encode_program(Program(bind(b1.ServeV2, C=TINY, LP=1, STEPS=0, GEMM=b1.GEMM_AMPERE, ATTENTION=b1.ATTENTION_FA2,
                                     NORM={"L0": b1.RMSNormTriton, "FUSED": b1.RMSNormFusedCuda})))
-
-
-# =====================================================================================================================
-# the authored (torch) v2 functions against the registry's — pod only
-# =====================================================================================================================
-
-AUTHORED_CASES = [
-    ("AttnBlock_v2{D=16,NVIS=37,FA2}", "AttnBlockV2", {"D": 16, "NVIS": 37, "FIRST": False, "BN": 64, "DOT": P.AmpereBF16TcDot16}),
-    ("AttnBlock_v2{D=16,NVIS=100,FA3}", "AttnBlockV2", {"D": 16, "NVIS": 100, "FIRST": True, "BN": 128, "DOT": H.HopperBF16WgmmaDot16}),
-    ("AttentionHead_v2{T=70,FA2}", "AttentionHeadV2", {"T": 70, "D": 16, **b1.ATTENTION_FA2}),
-    ("AttentionHead_v2{T=130,FA3}", "AttentionHeadV2", {"T": 130, "D": 16, **H.ATTENTION_FA3}),
-    ("Attention_v2{T=5,FA3}", "AttentionV2", {"T": 5, "NH": 2, "KVH": 1, "D": 16, **H.ATTENTION_FA3}),
-    ("LayerPre_v2{TINY,L0,Ampere}", "LayerPreV2", {"C": TINY, "L0": True, "GEMM": b1.GEMM_AMPERE, "NORM": b1.norm_bundle(TINY)}),
-    ("LayerPost_v2{TINY,Hopper}", "LayerPostV2", {"C": TINY, "GEMM": H.GEMM_HOPPER, "NORM": b1.norm_bundle(TINY)}),
-    ("Final_v2{TINY,Ampere}", "FinalV2", {"C": TINY, "GEMM": b1.GEMM_AMPERE, "NORM": b1.norm_bundle(TINY)}),
-    ("Serve_v2{TINY,Ampere}", "ServeV2", {"C": TINY, "LP": 3, "STEPS": 2, "GEMM": b1.GEMM_AMPERE, "ATTENTION": b1.ATTENTION_FA2, "NORM": b1.norm_bundle(TINY)}),
-    ("Serve_v2{TINY,Hopper}", "ServeV2", {"C": TINY, "LP": 3, "STEPS": 2, "GEMM": H.GEMM_HOPPER, "ATTENTION": H.ATTENTION_FA3, "NORM": b1.norm_bundle(TINY)}),
-]
-
-
-@pytest.mark.parametrize("label,name,statics", AUTHORED_CASES, ids=[c[0] for c in AUTHORED_CASES])
-def test_authored_v2_corresponds_to_registry_v2(label, name, statics):
-    """`b1_authored` v2 functions take the same statics and elaborate to the registry's v2 bodies (digest-equal or
-    same-references across the broadcast encodings, as FE2's v1 test). Needs torch (pod)."""
-    pytest.importorskip("torch")
-    from tests.program import b1_authored as A
-    from verity_vllm.program.frontend import export_report
-    rep = export_report(getattr(A, name), static=statics, dead_gates="ignore")
-    P_t = Program(bind(getattr(b1, name), **statics))
-    r = correspond(rep.program, P_t)
-    assert r.corresponds, (label, [m.to_json() for m in r.mismatches][:3], [u.to_json() for u in r.unverified][:3])
-    assert r.root_out == "identical" and rep.gates == P_t.gates
 
 
 # =====================================================================================================================

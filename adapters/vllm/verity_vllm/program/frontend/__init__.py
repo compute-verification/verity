@@ -1,11 +1,11 @@
-"""verity_vllm.program.frontend — authoring frontends to `Program`.
+"""verity_vllm.program.frontend: the Torch-to-circuit translator.
 
     Gate -> exactly one Value<w>.
     Composite interfaces -> ordered collections of value references.
     Commitment positions -> physical authentication locations for those values,
                             not semantic components of gate outputs.
 
-`torch_frontend` (needs torch) is the PyTorch authoring frontend. `correspond` (program correspondence across
+`derive` (needs torch) turns a traced torch model into a `Program`. `correspond` (program correspondence across
 reference encodings) and `provenance` (export/derivation provenance records) are pure `verity.circuits` and import
 without torch. Dead gates are `verity.circuits.liveness`.
 
@@ -52,20 +52,4 @@ else:
         FrontendError,
     )
     from verity_vllm.program.frontend.program_identity import check_identity  # noqa: F401
-    from verity_vllm.program.frontend.schemas import Arr, Dep, Tup  # noqa: F401
-    from verity_vllm.program.frontend.torch_frontend import (  # noqa: F401
-        Bound,
-        ExportReport,
-        Function,
-        Ops,
-        Prim,
-        Registered,
-        batch,
-        bind,
-        export,
-        export_report,
-        function,
-        ops,
-        scan,
-    )
     from verity_vllm.program.frontend.value_types import type_of  # noqa: F401

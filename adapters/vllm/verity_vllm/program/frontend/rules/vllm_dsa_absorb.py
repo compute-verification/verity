@@ -18,7 +18,7 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
     active_target_profile,
 )
 from verity_vllm.program.frontend.rules.vllm_dsa import BF16, _missing, _rows, _value
-from verity_vllm.program.frontend.torch_frontend import _permute
+from verity_vllm.program.frontend.strided_views import _permute
 
 aten = torch.ops.aten
 
