@@ -158,22 +158,16 @@ def test_a_trees_copy_says_so_in_one_line_only_where_the_machine_has_none_and_a_
     assert lines() == []
 
 
-def test_slot_py_names_the_check_cache_as_common_py_does_and_reads_no_file_beside_it(machine, tmp_path, monkeypatch):
-    """slot.py is whole wherever it runs: the machine's copy is one file, so it names the check cache itself. The two names
-    must stay one, and a common.py beside a copy is never loaded."""
-    spec = importlib.util.spec_from_file_location("check_common_for_slot_copy", SOURCE.with_name("common.py"))
-    common = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(common)
+def test_the_machines_copy_stands_alone_and_names_the_default_check_cache(machine, tmp_path, monkeypatch):
+    """The machine's copy is one file with nothing beside it. Where a tree's copy asks the common.py beside it for the
+    check cache's name, this one finds none and names the default, so its read of the cache's disk goes on."""
     machine.install(SOURCE.read_text(), V1)
-    (machine.copy.parent / "common.py").write_text("raise SystemExit('a copy of slot.py loaded the common.py beside it')\n")
+    assert [p.name for p in machine.copy.parent.iterdir()] == ["slot.py"]
     slot = machine.load("slot_machine_cache")
-    for cache in (str(tmp_path / "cache" / "verity-check"), ""):
-        monkeypatch.setenv("CHECK_CACHE", cache)
-        monkeypatch.setenv("HOME", str(tmp_path / "home"))
-        assert slot.cache_dir() == common.cache_dir()
-    monkeypatch.delenv("CHECK_CACHE")
-    assert slot.cache_dir() == common.cache_dir() == tmp_path / "home" / ".cache" / "verity-check"
-    assert slot.cache_disk() == tmp_path
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    assert slot.cache_disk() == tmp_path, "the default cache's nearest directory that is there"
+    (tmp_path / "home" / ".cache" / "verity-check").mkdir(parents=True)
+    assert slot.cache_disk() == tmp_path / "home" / ".cache" / "verity-check"
     assert slot.blocked(slot.parse("a 0")[0], NOW) is None
 
 
@@ -225,8 +219,8 @@ def test_a_line_holding_tickets_of_an_older_copy_and_a_newer_one_is_read_whole(m
 
 def test_a_copy_replaced_while_a_waiter_waits_leaves_that_waiter_its_rules_and_its_place(machine, tmp_path, monkeypatch):
     """An install renames a new file over the machine's copy between two admissions. A waiter that started under the old copy
-    read it whole when it started: it waits on by the old copy's rules and reads neither the new file nor anything beside
-    it, and it keeps its place, ahead of a waiter that starts under the new copy, which the new copy admits after it.
+    read it whole when it started: it waits on by the old copy's rules and never reads the new file, and it keeps its
+    place, ahead of a waiter that starts under the new copy, which the new copy admits after it.
 
     Each waiter is a thread here where the machine has a process, stopped at each of its polls until the test lets it go
     on, so nothing waits on a clock."""
@@ -290,9 +284,8 @@ def test_a_copy_replaced_while_a_waiter_waits_leaves_that_waiter_its_rules_and_i
     assert not failed and new.polls == [7] and new.record()["copy"] == {"of": "machine", "blob": new_blob, "commit": V2}
     assert new.record()["why"] == "1 check(s) ahead in line"
 
-    # from here on neither waiter may read its copy's file again, nor a file beside it
+    # from here on neither waiter may run its copy's file again
     machine.copy.write_text("raise SystemExit('a waiter read its copy again')\n")
-    (machine.copy.parent / "common.py").write_text("raise SystemExit('a waiter loaded the common.py beside its copy')\n")
     os.close(held)                                            # the slot frees: the line decides who takes it
     new.step()
     assert not new.ended.is_set() and new.polls == [7, 7], "the slot is free, and the waiter ahead of it has not taken it yet"

@@ -63,7 +63,7 @@ def own_ramlock(monkeypatch, tmp_path):
 def no_copy_named(monkeypatch):
     """Which copy of slot.py took a run's place is test_slot_copy.py's to test: these tests compare a run's slot record whole,
     and this file's bytes, which the record names, change with every edit of slot.py."""
-    monkeypatch.setattr(SLOT, "copy", lambda: {})
+    monkeypatch.setattr(SLOT, "copy", lambda commit=None: {})
 
 
 @pytest.fixture(autouse=True)

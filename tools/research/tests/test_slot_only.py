@@ -303,13 +303,17 @@ def test_a_pool_run_is_sent_by_the_machines_own_slot_py_where_it_has_one_and_say
 
 def test_deploy_installs_slot_py_whole_as_each_pool_machines_own_copy_where_slot_py_and_the_launch_look_for_it():
     """One entry installs slot.py, at the path the launch names and slot.py knows itself by, on both nodes and every CPU
-    node, whose record is the one slot.py reads its commit from. The copy is one file, which one rename replaces whole, so
-    slot.py imports the standard library alone and loads no file by path; and a run that waits by it is its own process,
-    which no install restarts."""
+    node, whose record is the one slot.py reads its commit from. The copy is one file, which one rename replaces whole:
+    slot.py imports the standard library alone, and the one file it looks for beside itself (common.py, for the check
+    cache's name) is never installed there, nor is anything else, so a waiter reads nothing an install replaces. A run
+    that waits by the copy is its own process, which no install restarts."""
     manifest = tomllib.loads((NEBIUS / "deploy.toml").read_text())
     rows = [e for e in manifest["file"] if e.get("src") == S.SLOT_PATHS[0]]
     assert [e["path"] for e in rows] == [S.NODE_SLOT], "one copy a machine"
-    assert not [e["path"] for e in manifest.get("tree", []) if S.NODE_SLOT.startswith(e["path"].rstrip("/") + "/")]
+    beside = S.NODE_SLOT.rsplit("/", 4)[0] + "/"               # .../check-slot/, which holds the copy below its repository path
+    assert beside.endswith("/check-slot/") and S.NODE_SLOT == beside + S.SLOT_PATHS[0]
+    assert [e["path"] for e in [*manifest["file"], *manifest.get("tree", [])]
+            if e["path"].startswith(beside) or beside.startswith(e["path"].rstrip("/") + "/")] == [S.NODE_SLOT], "and nothing beside it"
     (row,) = rows
     cpu = {n for n in manifest["nodes"] if re.fullmatch(r"vy-nebius-cpu-\d+", n)}
     assert set(row["nodes"]) == cpu | {"vy-nebius-1", "vy-nebius-2"} and len(row["nodes"]) == len(set(row["nodes"]))
@@ -322,9 +326,11 @@ def test_deploy_installs_slot_py_whole_as_each_pool_machines_own_copy_where_slot
     tree = ast.parse((REPO / S.SLOT_PATHS[0]).read_text())
     imported = {a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names} | {
         (n.module or ".").split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.ImportFrom)}
-    assert imported <= set(sys.stdlib_module_names) and "importlib" not in imported, sorted(imported - set(sys.stdlib_module_names))
-    assert [n.id for n in ast.walk(tree) if isinstance(n, ast.Name) and n.id == "__file__"] == ["__file__"], \
-        "slot.py reads its own file once, to say which copy it is (`copy`), and no file beside it"
+    assert imported <= set(sys.stdlib_module_names), sorted(imported - set(sys.stdlib_module_names))
+    reads = {f.name: [ast.unparse(c) for c in ast.walk(f) if isinstance(c, ast.Call) and "__file__" in ast.unparse(c)]
+             for f in tree.body if isinstance(f, ast.FunctionDef) and "__file__" in ast.unparse(f)}
+    assert set(reads) == {"cache_disk", "copy"}, "slot.py names its own path to say which copy it is, and to look for common.py"
+    assert any("with_name('common.py')" in c for c in reads["cache_disk"]) and not any("with_name" in c for c in reads["copy"])
 
 
 def _run(runs, rid, state, command, *, pgid=None, runner=None):

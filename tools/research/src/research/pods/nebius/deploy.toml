@@ -386,7 +386,8 @@ owner = "infra"
 # reads a run's command there knows it (the machine's slot_only.py above where it has one, which may be installed before or
 # after this file; else, on a machine that starts a run only through a check slot, the research package the run ships). On
 # both nodes and every CPU node, which keep the pools. One file below its repository path, which is how a run's command is
-# known as slot.py's; slot.py reads no other file of the repository, so one rename replaces the copy whole.
+# known as slot.py's, with nothing beside it: alone, slot.py names the default check cache and reads no other file, so one
+# rename replaces the copy whole. No entry places a file under check-slot/ but this one.
 [[file]]
 path = "/usr/local/lib/vy-monitoring/check-slot/tools/verity/check/slot.py"
 src = "tools/verity/check/slot.py"
