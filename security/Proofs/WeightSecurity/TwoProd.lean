@@ -6,9 +6,10 @@ public import Proofs.WeightSecurity.TwoReg
 # A period of two-stage verification phases: one failure probability for the whole period
 
 `PeriodTwoReg` weighs every incorrect replay block alike, at the least rate of any cell, and `two_undetected` pays a
-failure probability and a cap in each verification phase. Here the period pays one failure probability `δ`: each
-verification phase's record carries the probability that its sample misses, as the two-stage design gives it at the
-boundary trace the phase's strategy fixes, and those probabilities multiply across the period's verification phases.
+failure probability in each verification phase and bounds the replay blocks each phase marks. Here the period pays one
+failure probability `δ`: each verification phase's record carries the probability that its sample misses, as the
+two-stage design gives it at the boundary trace the phase's strategy fixes, and those probabilities multiply across the
+period's verification phases.
 
 The boundary trace is a parameter `val`, one per verification phase and per release, statement and prover that the
 phase's strategy sends before the phase's coins, so the statement reads the same at the committed boundary trace
@@ -204,8 +205,8 @@ def PeriodTwoLead (H : Msg → Msg) (Lv : ℕ → CompiledTwo Coin A)
       ENNReal.ofReal δ + ∑ t ∈ Finset.range T, ENNReal.ofReal (ε t)
 
 /-- **The period's one failure probability from the verification phases' verifiers**: when every verification phase's
-verifier meets the two-stage compiler's contract (`CompiledTwo.Sessions`: the two stages' draw laws and the refusal of
-what is out of scope), `PeriodTwoLead` and `PeriodTwoProd` hold at every boundary traces. It takes no knowledge
+verifier meets the two-stage compiler's contract (`CompiledTwo.Sessions`: the two stages sample by the design, and what
+is out of scope is refused), `PeriodTwoLead` and `PeriodTwoProd` hold at every boundary traces. It takes no knowledge
 soundness of the argument: a caller meets their hypothesis with its own bound on the event at the trace it reads. -/
 def CompilerPeriodTwoProd : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (O V Tick Adv : Type)

@@ -20,8 +20,9 @@ the product of the escapes below `δ`, at most `δ` by `period_prod`.
 
 `period_prod` asks that the strategy that plays a verification phase fix its escape before the phase's coins and that
 the escape bound the phase's miss. Both hold at `escAt`: it reads the statement and the boundary values that strategy
-fixes, and the two stages' draw laws bound the miss by `P̄_a` at the boundary values' footprint at best interiors
-(`CompiledTwo.pr_missTwo_le_Pa`), whatever interiors the prover commits after the first stage's coins.
+fixes, and the two stages, sampling by the design, miss with probability at most `P̄_a` at the boundary values'
+footprint at best interiors (`CompiledTwo.pr_missTwo_le_Pa`), whatever interiors the prover commits after the first
+stage's coins.
 
 * `Design.Two.Pa_congr_esc`, `Design.Two.paBestAt_eq`: `P̄_a` reads a footprint through its replay blocks' escapes, so
   it is one value at every best interiors.
@@ -144,8 +145,8 @@ theorem twoAtRec_accepted_le (H : Msg → Msg) (L : CompiledTwo Coin A)
     exact zero_le
 
 /-- **A verification phase's sample misses** the proof blocks incorrect at its boundary values with probability at most
-the escape there (`escAt`): in scope, the two stages' draw laws bound the miss by `P̄_a` at the boundary values'
-footprint at best interiors (`CompiledTwo.pr_missTwo_le_Pa`); out of scope the escape is `1`. -/
+the escape there (`escAt`): in scope, the two stages, sampling by the design, miss with probability at most `P̄_a` at
+the boundary values' footprint at best interiors (`CompiledTwo.pr_missTwo_le_Pa`); out of scope the escape is `1`. -/
 theorem twoAtRec_missed_le (H : Msg → Msg) (L : CompiledTwo Coin A) (hS : L.Sessions H)
     (val : (O → V) × Tick × Adv → Msg → Prover Unit → ℕ → Option Bool) (n : ℕ) (e : ℝ≥0∞)
     (τ : Strategy (twoGame L ((O → V) × Tick × Adv))) :
