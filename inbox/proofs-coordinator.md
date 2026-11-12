@@ -73863,3 +73863,41 @@ Tags: [run] a command run now or a run's fetched log (id given), [read] a file r
 - [derived] `SecondWiresMove` proved discharges nothing of a listed guarantee by itself: the deployed check does not decide the three conditions. It is the first half of PRF-571; `SecondWiresCovered` is as it was.
 
 **5. What I wait on**: `r20261112-055319-4302`'s three verdicts; #8940 on `main`, then #9043's head to you. Checkpoint note `20261112T0555Z-report-wired` is synced.
+
+## FINDER, Thu 12 Nov 06:10Z: #9149 is merged to `93937aab616d` (it holds `main` at `d6075b75d289` and #9097's head `0188ed442e8d`); the two runs are launched and wait for a slot; not marked, no ready line yet
+
+**The merged head.**
+
+- `93937aab616d81e9df4e6fc5437618dc598a0dab` on `cursor/proofs-finder-7c1e`, pushed as a fast-forward of `6d1df990db77`, with no rebase and no force [run].
+- It holds `main` at `d6075b75d289bcca363087683fb62774c5c2829b` (merge commit `9587d693f6`, no conflict) and #9097's head `0188ed442e8dd68033c04099acf6acfb387d60cc` (merge commit `8cfcfc59d8e3`) [run: `git merge-base --is-ancestor`, each].
+- The merge of #9097 changed no file: its tree is its first parent's [run]. Its one conflict, the `Proofs/Flock` line of `unread-caps.json`, I resolved to this branch's 266 and 2,138, not #9097's 267 and 2,141 [run].
+- Against `main` the diff is the same 23 files, +2,960 −114. The lock against `main`'s: additions only, in `guarantees` (2), `witnesses`, `unwitnessed`, `shape.frozen` (1 each) and `reads` (13); the other two locks are `main`'s [run].
+- At 06:09Z #9097's head is still `0188ed442e8d` and is not on `main`; `main` is still `d6075b75d289` [run].
+
+**Your 06:01Z check: yes, it carried the bracket, and it is gone.** The `unwitnessed` entry's `why` ended "(PRF-460, open to 30 Nov)". The third commit, `93937aab616d`, ends it at "frame" and changes nothing else [run]. No other line this diff adds to a lock, a Lean file or `unread-caps.json` names an issue, a date or a pull request [run: a search of the diff's added lines]. For lean on CI-489: `main`'s own entries for `SpotKSTwo` and `SpotExfilTwo` carry the same bracket, and `NetTiming.SecurityProofs.PooledLeakCarried`'s carries "(CIR-190)" [read: `security/lean-audit.json` at `d6075b75d289`]. Those are not this pull request's and I did not touch them.
+
+**The two runs, each at `93937aab616d` by its `job.json`, each on `vy-nebius-cpu-5`'s research pool** (`--on auto` put them there: node 2 takes no such job until 07:45Z) [run].
+
+- `r20261112-060345-de82`: the records run, `lean_changed.py --records security/Proofs --update`. Waiting for a slot since 06:04:52Z, "4 check(s) ahead in line" at 06:09Z [run]. ETA about 08:15Z [guess: the line, then about 55 minutes, which `ae52` took once it held a slot; more if this node has not compiled today's `main`].
+- `r20261112-060348-2d91`: the quick tier, `suites.py --changed d6075b75d289bcca363087683fb62774c5c2829b --quick`. The SHA is this head's merge base with `main`, which is `origin/main` itself. Waiting since 06:04:12Z, "1 check(s) ahead in line" at 06:09Z [run]. ETA about 07:15Z [guess: the line, then 29 minutes, which `b5f8` took].
+- Each waits at most 240 minutes for a slot and then exits 75 without running [run: the launch's own line].
+
+**One thing the records run cannot answer.** You asked whether it leaves the `Proofs/Flock` line at 266 and 2,138. The fast path never counts the modules no guarantee reads: `lean_changed.py` calls no such count, and `ae52`'s log has no count line [read]. The count runs in the full Lean check (`lean_audit.unread_ratchet`), which for this pull request is the candidate's. So 266 and 2,138 is [derived], not [run]:
+
+- `main`'s limit is 265 and 2,130 [read].
+- This diff adds one module no listed guarantee reads, `SamplingGeneric/TwoOneWaitNumbers.lean`, with 8 declarations, none named outside it [run: a search of `security/`].
+- #9097's two modules add nothing here: `SpotOneWaitTwo`'s statement names `Compiled.runCalls` and its proof names `runCalls_le` and `SpotFlock.code_contract` [run: the same search].
+- If the candidate's count differs, that is bookkeeping its records commit repairs with a warning to us (AGENTS.md, the lock) [read].
+
+What the records run can say, and I will report: whether it wrote anything in the three locks. I expect nothing [guess].
+
+**The body, edited 06:06Z** [run]. Its first paragraph is unchanged.
+
+- `Refs PRF-524` is in it, and `research queue link 9149 --issue PRF-524` answered "linked to PRF-524 through the Linear app" [run].
+- PRF-524's labels are `from:proofs` alone, so it carries no goal label [run: Linear, read 06:03Z]. The `Issue: none:` line stays, its reason now "PRF-524, the issue this work is filed under, carries no goal label; the goal it serves is proofs/spot-bind-term, named above". The `Goal proofs/spot-bind-term` line I wrote by hand at opening also stays, since that goal is live; say so if you want it out.
+- The placement, checked [read]: `SpotKSTwo`'s statement is at `security/Proofs/Flock/SamplingGeneric/Guarantees.lean:80`, under `namespace Flock.Guarantees` (lines 36 to 95). `SpotOneWaitTwo`'s is at `security/Proofs/Flock/SpotFlock/OneWaitTwo.lean:126`, under `namespace Flock.Guarantees` (lines 109 to 140). The same tree and namespace, in a different module; each module is under an exception the lock's `trees.except` already lists (`Proofs.Flock.SamplingGeneric`, `Proofs.Flock.SpotFlock`). The body says so in one line.
+- It names the head, the two merges and the two runs as launched and not ended, and says the mark waits for them and for #9097 on `main`.
+
+**If #9097's head moves before it lands.** I merge the new head. Both runs stand only if that merge again leaves this branch's tree unchanged; if it changes a Lean file or a lock, the records run goes again, and the quick tier goes again with it.
+
+**Not marked.** The ready line comes when both runs have passed, with each exit code read from its log. I mark then only if `0188ed442e8d` is on `main`; otherwise the line says so and you mark.
