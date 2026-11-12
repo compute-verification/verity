@@ -104785,3 +104785,106 @@ To the workers you launch on P1 to P8, B2 and the instance: section 3, unchanged
 - That one-stage's hiding term carries to P1: the two-stage play opens more trees, so its leaf count may need a new bound.
 - That `Reading.dev`'s type (`FlockDeploy.Coin` per round) matches how the device's releases are bytes; P1 decides it.
 - Every size.
+
+## PROVED, Thu 12 Nov 22:15Z: A14 is a refusal: the one-statement theorem has a session only at a `subset` design, the compiled check also takes `stratified` and `work`, and one new line in `Spot.OneStageZk.paramsOfJson` refuses them; it cannot touch Friday's two-round run, and it does refuse a one-stage audit run under the tie to the weights' window, whose setting is `stratified:1`
+
+**In plain words, for Daniel.** The auditor's coins choose which proof blocks get proved, and the rule for that choice is called the sampling design. The check we compile from Lean takes three designs: a uniform sample of a fixed count over all the blocks ("subset"), a sample taken separately inside each group of like blocks ("stratified"), and one sized by each group's work ("work"). The theorem for an audit of one statement covers only the first. At the other two it is still true, but it bounds nothing: the number it publishes there is "no bound". Your rule says the check must refuse what the proof does not cover, so the answer is a refusal, and it is small: one function gains one test. It does not get in the way of Friday's two-round run, which never goes through that function. It does get in the way of one setting of the one-stage run: when the audit is tied to the window in which the weights were registered, the scripts insist on the "stratified" design, and the refusal would turn that audit away. So Friday's one-stage accept has to be sampled the plain way, or wait for the theorem for several statements, which already takes any design.
+
+Clock: `date -u` read 22:15Z before the push. Mailbox read at `9edca491c1`: 3 messages, the newest headed "Coordinator, Thu 12 Nov 21:50Z: the whole list by 22:30Z,"; your 22:05Z message came through the session. `origin/main` is `783b526ab6`, two commits past the tree I read (`5f0c008aa040`), both under `benchmarks/compute/` [run: `git diff --stat`]. No file of the tree changed; no run of mine is out.
+
+### 1. Where the model has a session [read]
+
+- The session's design is `designAt` of its registration (`Live.design`, `security/Proofs/Properties/Verity/Sampled.lean:227`), and the session carries the equation that this design is a subset one (`Live.hsub`, `:161-163`). `SetsUp` holds the session's design to the parameters': `lawAt p.base.verifier A.n = .ok A.design` (`:680`, `lawAt` at `:663-666`).
+- `lawAt` and `drawnLaw` (`security/Proofs/Flock/Bridge/DrawnLaw.lean:45-49`) read the law's kind the same way. After the parameters are parsed the law is an object of one of four kinds (`OneStage.rule`, `verity/protocols/spot/verifier/lean/Spot/OneStage.lean:137-147`; a rate's text is resolved first, `design`, `:153-160`).
+
+| the parameters' law | what `drawnLaw` returns | a session the model can set up | the compiled check |
+|---|---|---|---|
+| `subset`, `1 ≤ k ≤ n` | `.subset k` (`Spot.Draw.flockLaw`, `Spot/Draw.lean:263-270`) | yes | takes it |
+| `stratified` | `.stratified k strata`, never a subset: `Flock.Draw.derive` returns only that constructor (`verity/commitments/lean/Commitments/Draw.lean:134-138`) | no: `hsub` is false of it | takes it |
+| `work` | `.work k strata` (`deriveWork`, `:143-152`) | no | takes it |
+| `bernoulli` | an error (`coveredDesign`, `Spot/OneStage.lean:485-487`), so `designAt` is `subset 0` | only the empty one | refuses, at the parameters (`OneStage.paramsOfJson`, `:401-404`) |
+
+- [derived] So the model has a session exactly at parameters whose law is `subset` with `1 ≤ k ≤ n`. The other clause on the count, `hdiv`, is no limit: the session has one table (`SetsUp.count`, `Sampled.lean:686`; `nTab`, `security/Proofs/Flock/Soundness/Discharge/Composed/DefsJ.lean:48`).
+- [read] What the check takes: its only refusal by design is Bernoulli (`coveredDesign`, reached from `OneStageZk.checkOneAt` through `OneStage.checkAt`, `Spot/OneStageZk.lean:764`). The difftest says so in its own loop: at `subset`, `stratified`, `work` and `all`, v2's answer does not begin `params:` (`verity/protocols/spot/verifier/lean/tests/test_difftest.py:7371-7376`).
+- [read] What the theorem says there: where the instance runs no session, the published δ is `⊤` (`deltaOf`, `security/Proofs/Properties/Verity/Sampled/Instance.lean:308-311`; `Covers`, `:566-574`). So at `stratified` and `work` the theorem holds and bounds nothing. **Accepted and not covered.**
+- [read] Why it is subset only: the check hands the session's verifier no stratified or work input (`SetsUp.work`, `.stratified`, `Sampled.lean:687-688`), so every session's record prints a subset sample, and the custody fact the proof uses is proved at that print (`Live.hCust`, `:303-305`; used with `hsub` at `Sampled/Target.lean:117`).
+- [read, one line, on soundness's branch `cursor/soundness-multileg-8fb2` at `3e26cac759`] The theorem for several statements does not have this limit: its window carries any law (`Window.law : Flock.Draw.Law` with `LawOn`, `Sampled/Window.lean:236-240`), each member's part printed as a subset. I did not read further than the structure.
+
+### 2. The refusal, exactly
+
+**Lean, `verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean`.** Today (`:245-259`) `paramsOfJson` parses `proofs`, calls v1's parser, then refuses no challenger, a key off the deployed parameters and a null partition. `membersParamsOfJson` (`:825-831`) calls it too, so the test cannot simply be added to it: the form for several statements must keep `stratified`. The change is a split, the same shape v1 has for Bernoulli (`paramsParsed` and `paramsOfJson`, `Spot/OneStage.lean:399-404`):
+
+```lean
+-- before
+def paramsOfJson (j : Json) : V Params := do
+  … (today's 14 lines) …
+
+def membersParamsOfJson (j : Json) : V Params := do
+  …
+  let p ← paramsOfJson (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
+
+-- after
+/-- The refusal of a sampling design that is no `subset` one, at the one statement's form: its soundness statement
+covers a uniform `k`-subset only. -/
+def SUBSET_ONLY (kind : String) : String :=
+  s!"the law is {kind}, which the one-statement audit's soundness statement doesn't cover: it covers a subset law"
+
+/-- The parameters as parsed, before `paramsOfJson`'s refusal of a design that is no subset one. -/
+def paramsParsed (j : Json) : V Params := do
+  … (today's 14 lines, unchanged) …
+
+def paramsOfJson (j : Json) : V Params := do
+  let p ← paramsParsed j
+  let kind := match getD p.base.verifier.law "law" with | .str s => s | _ => ""
+  if kind != "subset" then throw (SUBSET_ONLY kind)
+  pure p
+
+def membersParamsOfJson (j : Json) : V Params := do
+  …
+  let p ← paramsParsed (Json.mkObj (without j "proofs" ++ [("proofs", one)]))
+```
+
+- [derived] Why here and not in the composite's parser (`VStar.Recursive.Sampled.paramsOfJson`, `verity/protocols/recursion/verifier/recursive/VStarRecursive/Sampled.lean:58-64`): the standalone executable `sampled-proofs-one-stage-zk check`, which the first accept is being made on, reads `OneStageZk.paramsOfJson` and not the composite's. The composite reads it too, so one place binds both.
+- [derived] Why at the parameters and not in the check: the theorem's session is built from the parameters alone (`Instance.session : ByteArray → Option Live`), so the fact has to follow from `ParamsAt θ p` (`Sampled.lean:645-648`), with no accepting play. It then gives `hsub` in three steps: the kind is `subset`, so `deriveLaw` returns none (`Spot/Draw.lean:24-26`, the same `kind` expression), so `drawnLaw` is `flockLaw`'s subset or an error.
+- [derived] Why last in the function: the refusals before it keep their words, so tests of them at a stratified law do not change.
+- **Lean proofs that walk the function** [run: `rg`]: `paramsOfJson_members` (`OneStageZk.lean:1334`), `Limits.paramsOfJson_deployed` (`security/Proofs/Properties/Challenger/Limits.lean:38`) and the uses in `Sampled/Binding.lean`; each gains one bind. The `#guard`s at `OneStageZk.lean:1523-1532` compare the two parsers' refusals on parameters that hold `proofs` alone; they stand if those are refused before the law is read, which I did not check. The new lemma premise 4 needs: `paramsOfJson j = .ok p → getD p.base.verifier.law "law" = .str "subset"`.
+
+**Python.** There is no Python verifier of the whole one-statement audit; the twins are the two reference parsers the difftests hold Lean to:
+
+- `decode_params_v2` (`verity/protocols/spot/verifier/lean/tests/test_difftest.py:2386-2397`): after the key check, `if p["law"]["law"] != "subset": raise D.Reject(SUBSET_ONLY(p["law"]["law"]))`, with the text as a function beside `KEY_PARAMS` (`:2382`).
+- `_one_stage_params` (`verity/protocols/remote/verifier/composition/tests/reference.py:181-197`) calls `decode_params_v2` before its own partition test, so there the new test goes after `:196`, to refuse in Lean's order; `decode_params_v2` then needs the test as a separate step its two callers place. Not established: whether another caller of `decode_params_v2` holds a null partition with a stratified law, where the order would show.
+- The drivers need no change to obey the rule. `a5.case_v2` (`benchmarks/one_stage/a5.py:1235-1256`) writes the case at any law and the check answers.
+
+**Tests that change, on `main`** [read]:
+
+| test | today | after |
+|---|---|---|
+| `test_the_audit_refuses_what_soundness_does_not_cover` (`test_difftest.py:7339-7376`) | at `stratified` and `work`, v2's reason must not begin `params:` | at those two it is `params: ` and the new text; `subset` and `all` as today |
+| `test_v2_reads_its_draw_from_the_challengers_coins` (`:2683`) | every case is at `{"k": 3, "law": "stratified"}` (`:2697`) | moves to a subset law, or every case answers the new refusal and none of its own |
+| the other four v2 tests (`:2429`, `:2550`, `:2570`, `:2644`) | at `{"k": 2, "law": "subset"}` where I read the law (`:2444`, `:2532`, `:2653`) | none |
+
+- [relayed, from the ready line of the pull request that adds the case writer] one of its three kept audits is `stratified:1` with one unit; after the refusal the compiled check answers it at the parameters.
+
+### 3. Friday's runs
+
+- **Two-round.** [read] The first stage is a rate over the replay blocks, which is a subset (`Select` module docstring, `Spot/Select.lean:8-17`; the rehearsals ran `rate:2/6` [relayed]). The interior registration is held under `subset:Q·n` (`Spot/Run.lean:210`). The second stage's law is `work` at `k = 1` and unit work by construction (`Select.secondLaw`, `Spot/Select.lean:273-276`; `service.second_law`), because the stratified rule cannot give cells of several templates their own counts. [run: `rg 'OneStageZk|one_stage.proofs'` over `Spot/Run.lean`, `Spot/SecondStage.lean`, `service.py`, `second_stage.py`: no match] None of it passes through `OneStageZk.paramsOfJson`, so the refusal cannot refuse it.
+- [derived] What follows for the two-round leg: its second stage is `work`, so its theorem must cover that design, and the new form's parser must not be routed through the one-statement parser. With the split above it reads `paramsParsed`.
+- **One-stage.** Three settings are in the tree, and I do not know which Friday's run uses:
+  - [read] the audit's own driver with a challenger samples by the partition file's rule, a rate's text (`benchmarks/one_stage/a5.py:1688`): `rate:NUM/DEN` is a subset and passes; `stratified-rate:` and `work-rate:` are refused.
+  - [read] the served script's default is `subset:1` (`benchmarks/one_stage/served_verdicts.sh:701`): passes.
+  - [read] under the tie to the weights' window the script sets `stratified:1` (`:286`) and its preflight refuses any other design, because "every table H1's W registers needs a sampled reader, which only stratified:K … gives" (`:782`). **The refusal refuses this audit**, at one member as at several.
+- [derived] So a one-stage audit that is both tied and fully proved cannot come from the one-statement theorem. It needs the theorem for several statements at a window of one member, or the tie dropped for that run.
+
+### Not established
+
+- Which setting Friday's one-stage run uses, and whether its record is meant to be tied.
+- That the two-round theorem covers `work` at unit work: I read the verifier's side only.
+- That the window theorem's proof, not only its structure, is free of a subset premise.
+- The full list of Lean proofs that unfold `paramsOfJson`: I searched names, not uses of `unfold`.
+- I ran nothing: no test and no Lean.
+
+### To post
+
+- For the file's holder: "A14: refuse `stratified` and `work` at the one statement's form. `OneStageZk.paramsOfJson` splits into `paramsParsed` (today's body, which `membersParamsOfJson` reads) and a wrapper that throws `SUBSET_ONLY kind` unless the parsed law's kind is `subset`. Twins: `decode_params_v2` and `_one_stage_params`. Tests: the last loop of `test_the_audit_refuses_what_soundness_does_not_cover`, and `test_v2_reads_its_draw_from_the_challengers_coins` moves to a subset law. New lemma for premise 4: an accepted parse has kind `subset`."
+- For the first accept's worker: "aim at a `rate:` rule; the `stratified:1` audit will be refused at the parameters once A14 lands."
+- A question for you: is Friday's one-stage run tied to the weights' window? If yes, A14 as a refusal and that run cannot both stand, and the row becomes "the window theorem at one member".
