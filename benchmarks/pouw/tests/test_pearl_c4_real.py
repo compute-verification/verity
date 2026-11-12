@@ -1,6 +1,6 @@
-"""benchmarks/pouw/pearl_c4/real.py, the verifier on a capture directory, on a synthetic one-linear capture: the
+"""benchmarks/pouw/pearl_c4/real.py, the verifier on a `pearlc_capture.py` directory, on a synthetic one-linear capture: the
 stand-in split removes the massive-activation channel that fails D-NF, a chunk out of budget exits 99 with its tasks'
-checkpoints, and the next run finishes the tile's replayed inert work under its bound."""
+checkpoints, and the next run finishes the tile's replayed debit under the cap."""
 
 from __future__ import annotations
 
@@ -52,18 +52,18 @@ def capture(root: Path) -> Path:
     rng = np.random.default_rng(3)
     x = bf16(rng.standard_normal((M, K)))
     x[:, 5] = bf16(np.full(M, 2.0 ** 16))                    # a massive activation at an unsampled position
-    src, snap = root / "capture", root / "snap"
-    src.mkdir()
+    cap, snap = root / "cap", root / "snap"
+    cap.mkdir()
     snap.mkdir()
-    np.save(src / "L000-attn.npy", (x.astype(np.uint32) << 16).view(np.float32))
+    np.save(cap / "L000-attn.npy", (x.astype(np.uint32) << 16).view(np.float32))
     w = bf16(rng.standard_normal((N, K)) * 0.02).tobytes()
     header = json.dumps({NAME + ".weight": {"dtype": "BF16", "shape": [N, K], "data_offsets": [0, len(w)]}}).encode()
     (snap / "model.safetensors").write_bytes(len(header).to_bytes(8, "little") + header + w)
     (snap / "model.safetensors.index.json").write_text(json.dumps({"weight_map": {NAME + ".weight": "model.safetensors"}}))
-    entry = {"file": "L000-attn.npy", "sha256": hashlib.sha256((src / "L000-attn.npy").read_bytes()).hexdigest(), "shape": [M, K]}
-    (src / "manifest.json").write_text(json.dumps({"model": "synthetic", "revision": "0", "snapshot": str(snap),
+    entry = {"file": "L000-attn.npy", "sha256": hashlib.sha256((cap / "L000-attn.npy").read_bytes()).hexdigest(), "shape": [M, K]}
+    (cap / "manifest.json").write_text(json.dumps({"model": "synthetic", "revision": "0", "snapshot": str(snap),
                                                    "inputs": {NAME: entry}}))
-    return src
+    return cap
 
 
 @pytest.fixture(scope="module")
@@ -102,20 +102,20 @@ def test_real_activation_replay(tmp_path, replayed):
     (row,) = RT.rows([s], RT.Fraction(1, 1000))
     assert row["x_rows"] == M and row["x_dnf_fail_split"] == 0 and row["w_rows"] == N and row["debited"] == 1
     assert abs(sum(row["mean_share"].values()) - t["ratio"]) < 1e-9 and "flag" not in row
-    assert row["macs"] == M * N * (K - K // 100) and RT.mac_shares([row])["synthetic"]["over_bound"] == 0
+    assert row["macs"] == M * N * (K - K // 100) and RT.mac_shares([row])["synthetic"]["over_cap"] == 0
     elsewhere = s | {"capture": str(tmp_path / "not-here")}
     assert RT.rows([elsewhere], RT.Fraction(1, 1000))[0]["x_rows"] is None
     assert RT.rows([elsewhere], RT.Fraction(1, 1000), cap / "manifest.json")[0]["x_rows"] == M
     assert NAME in RT.markdown([row], RT.Fraction(1, 1000))
 
 
-def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_bounds():
-    """A tile's bound scales with ρ: at ρ = 1/1,000 it is over when its ratio at 1/400 exceeds 0.4; a model's share over
-    the bound weighs each linear's fraction of tiles over it by its MACs."""
+def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_caps():
+    """A tile's cap scales with ρ: at ρ = 1/1,000 it is over when its ratio at 1/400 exceeds 0.4; a model's over-cap share
+    weighs each linear's fraction of tiles over the cap by its MACs."""
     def tile(ratio: float) -> dict:
-        items = {term: "0" for term in RT.TERMS} | {"forming": str(RT.Fraction(ratio).limit_denominator(10 ** 6)),
+        debit = {term: "0" for term in RT.TERMS} | {"forming": str(RT.Fraction(ratio).limit_denominator(10 ** 6)),
                                                     "counts": {}}
-        return {"ratio": ratio, "cap": "1", "debit": items, "rejected": "", "m": 256, "n": 1024, "k_kept": 8111}
+        return {"ratio": ratio, "cap": "1", "debit": debit, "rejected": "", "m": 256, "n": 1024, "k_kept": 8111}
 
     names = [f"model.layers.{i}.mlp.down_proj" for i in (0, 8, 72)] + ["model.layers.0.self_attn.q_proj"]
     s = {"capture": "x.npz", "model": "m", "inputs": {}, "weights": {},
@@ -124,11 +124,10 @@ def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_bounds():
     rows = {r["linear"]: r for r in table}
     assert rows[names[0]]["flag"] == "first down_proj" and rows[names[2]]["flag"] == "last down_proj"
     assert "flag" not in rows[names[1]] and "flag" not in rows[names[3]]
-    assert rows[names[2]]["over_bound"] == 0 and rows[names[2]]["over_bound_tight"] == 1 and rows[names[0]]["over_bound_tight"] == 0
+    assert rows[names[2]]["over_cap"] == 0 and rows[names[2]]["over_cap_tight"] == 1 and rows[names[0]]["over_cap_tight"] == 0
     share = RT.mac_shares(table)["m"]
-    assert share["macs"] == 4 * 256 * 1024 * 8111 and share["over_bound"] == 0 and share["over_bound_tight"] == 1 / 8
-    text = RT.markdown(table, RT.Fraction(1, 1000))
-    assert "12.50% at 1/1000" in text and "| Over the bound at 1/400 | Over the bound at 1/1000 |" in text
+    assert share["macs"] == 4 * 256 * 1024 * 8111 and share["over_cap"] == 0 and share["over_cap_tight"] == 1 / 8
+    assert "12.50% at 1/1000" in RT.markdown(table, RT.Fraction(1, 1000))
 
 
 @pytest.mark.slow
