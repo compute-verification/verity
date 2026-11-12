@@ -1278,7 +1278,10 @@ def test_a_verdicts_record_whose_field_holds_what_it_cant_is_refused(tmp_path):
     for change, why in (({"piece": "stop"}, "`piece` is one of stop_record, response_tie, request_tie, second_stage"),
                         ({"control": "length"}, "`control` is null on the honest run, else one of id, max_tokens"),
                         ({"run": ""}, "`run` is the id of the run that produced the verdict"),
-                        ({"verdict": "pass"}, "`verdict` is one of accept, not complete, refuse"),
+                        ({"verdict": "pass"}, "`verdict` is one of accept, not complete, refuse, withheld"),
+                        ({"verdict": "withheld", "proved_by": "G", "open": None},
+                         "`open` states what the verifier withheld its accept for, on a `withheld` verdict"),
+                        ({"verdict": "withheld", "open": "PRF-456"}, "`open` names an issue, .*"),
                         ({"proved_by": ""}, "`proved_by` is null, or the Lean guarantee whose proof covers the verifier"),
                         ({"open": None}, "`open` states what stands between the verdict and proved, while `proved_by` is "
                                          "null"),
@@ -1299,7 +1302,8 @@ def test_a_verdicts_record_whose_field_holds_what_it_cant_is_refused(tmp_path):
 def test_without_both_negative_controls_refused_the_class_is_not_complete_and_says_what_is_missing(tmp_path):
     """The class is complete only with every piece accepted, a changed id and a changed `max_tokens` each refused, and
     each refusal by the verifier that accepted the honest run's verdict on its piece. Short of that the inputs print as
-    they do with no verdicts, and the output count's line names what is missing."""
+    they do with no verdicts, and the output count's line names what is missing. A `withheld` verdict is neither an
+    accept nor a refusal: a withheld piece or control keeps the class short, printed `withheld: <open>`."""
 
     base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
     honest = complete()[:4]
@@ -1318,6 +1322,11 @@ def test_without_both_negative_controls_refused_the_class_is_not_complete_and_sa
              ["the request tie is `not complete` on r20261113-000000-a003",
               "the control with a changed `max_tokens` is refused on r20261113-000000-a011 by `made_up.stop_verifier` at "
               f"{VERIFIER['commit']}, not by a verifier that accepted the honest run's verdict on the request tie"]),
+            ("withheld", [*complete()[:3], made_up_verdict("second_stage", verdict="withheld"), *complete()[4:]],
+             [f"the compute audit's second stage on r20261113-000000-a004, withheld: {OPEN}"]),
+            ("withheld control", [*complete()[:5], made_up_verdict("request_tie", "max_tokens", verdict="withheld")],
+             [f"the control with a changed `max_tokens` on the request tie on r20261113-000000-a011, withheld: {OPEN}, "
+              "not refused"]),
             ("missing", complete()[1:], ["no verdict on the stop record"])):
         doc = E.build(store=with_verdicts(tmp_path / name, verdicts).store, root=REPO)
         stop = doc["stop_class"]

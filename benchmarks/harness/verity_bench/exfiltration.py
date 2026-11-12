@@ -183,8 +183,10 @@ PIECES = {"stop_record": "the stop record", "response_tie": "the response tie", 
 #: the negative controls (a verdict's `control`; null on the honest run): a run on the same path with one thing changed,
 #: each refused by the verifier that accepted the honest run's verdict on the same piece
 CONTROLS = {"id": "a changed id", "max_tokens": "a changed `max_tokens`"}
-#: a verdict: accepted and complete, accepted and not complete (which moves no figure), or refused
-VERDICT_READS = ("accept", "not complete", "refuse")
+#: a verdict: accepted and complete, accepted and not complete (which moves no figure), refused, or withheld: the
+#: verifier held back its last accept itself because the form it would accept is not yet proved (every sampled proof
+#: accepted, every check before the sample held, every tampered input refused), which is neither an accept nor a refusal
+VERDICT_READS = ("accept", "not complete", "refuse", "withheld")
 #: a verdict's record: its `piece` and `control`, the `run` that produced it, the `verifier` that checked it (its
 #: `module` and `commit`), the `verdict`, `proved_by` (the Lean guarantee whose proof covers that verifier, null until
 #: one does) and `open` (while `proved_by` is null, what stands between the verdict and proved, stated in words)
@@ -503,6 +505,8 @@ def verdict(x: Any, where: str) -> dict:
                      "`proved_by` is null, or the Lean guarantee whose proof covers the verifier"),
                     (x["proved_by"] is not None or text("open"),
                      "`open` states what stands between the verdict and proved, while `proved_by` is null"),
+                    (x["verdict"] != "withheld" or text("open"),
+                     "`open` states what the verifier withheld its accept for, on a `withheld` verdict"),
                     (not (isinstance(x["open"], str) and ISSUE_ID.search(x["open"])),
                      "`open` names an issue, and the print carries no issue's id: state what is open in words (e.g. "
                      "`the two-round form's soundness is not proved`), and put the issue on the board")):
@@ -560,10 +564,15 @@ def _by(v: Mapping) -> str:
     return f"`{v['verifier']['module']}` at {v['verifier']['commit']}"
 
 
+def _read(v: Mapping) -> str:
+    return f"on {v['run']}, withheld: {v['open']}" if v["verdict"] == "withheld" else f"is `{v['verdict']}` on {v['run']}"
+
+
 def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
     """Whether the stop class's ``verdicts`` (`stop_verdicts`) let the sums under the rows whose schedules are 0 take a
     response's output count at 0 on a run (`complete`): each of `PIECES` accepted and complete on its honest run, and
-    each of `CONTROLS` refused, on a piece, by the verifier that accepted that piece, and none accepted. Where it is,
+    each of `CONTROLS` refused, on a piece, by the verifier that accepted that piece, and none accepted; a `withheld`
+    verdict is neither, so it keeps the class short of complete and names what it was withheld for. Where it is,
     `mark` is what the output count's 0 is marked: `measured` only where every piece's record names the Lean guarantee
     that proves its verifier (`proved_by`), else `RUN_NOT_PROVED`. Where it is not, `lacks` names what is missing, the
     mark is None and the output count keeps its own. `said` is what the print says of the class."""
@@ -574,7 +583,7 @@ def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
         if piece not in honest:
             lacks.append(f"no verdict on {what}")
         elif (v := honest[piece])["verdict"] != "accept":
-            lacks.append(f"{what} is `{v['verdict']}` on {v['run']}")
+            lacks.append(f"{what} {_read(v)}")
     for control, what in CONTROLS.items():
         tried = [v for v in verdicts if v["control"] == control]
         if not tried:
@@ -582,8 +591,7 @@ def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
         for v in tried:
             accepted = honest.get(v["piece"])
             if v["verdict"] != "refuse":
-                lacks.append(f"the control with {what} on {PIECES[v['piece']]} is `{v['verdict']}` on {v['run']}, not "
-                             "refused")
+                lacks.append(f"the control with {what} on {PIECES[v['piece']]} {_read(v)}, not refused")
             elif accepted is None or accepted["verdict"] != "accept" or accepted["verifier"] != v["verifier"]:
                 lacks.append(f"the control with {what} is refused on {v['run']} by {_by(v)}, not by a verifier that "
                              f"accepted the honest run's verdict on {PIECES[v['piece']]}")
