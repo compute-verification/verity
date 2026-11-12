@@ -2438,7 +2438,7 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
     def source(k: int) -> bytes:
         at[0] += k
         return d.read[at[0] - k:at[0]]
-    coins = {k: v for k, v in d.evidence(d.segment.to_json()).items() if k != "key"}
+    coins = d.evidence(d.segment.to_json())
     return d, draw_first(OwnRandomness(source), mine, s.population), coins
 
 
@@ -2817,7 +2817,7 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
             "an opening's path at its limit": ("coins", audit_of(d, draw, path_of(coins, MAX_PATH))),
             "other draw": ("draw", audit_of(d, other, coins)),
             "no coins": ("coins", audit_of(d, draw, None)),
-            "the record's own key": ("coins", audit_of(d, draw, d.evidence(d.segment.to_json()))),
+            "the record's own key": ("coins", audit_of(d, draw, {**coins, "key": d.s.key.to_json()})),
             "another key": ("coins", audit_of(d, draw, coins, challenger={"key": stranger.s.key.to_json(),
                                                                              "label": "draw"})),
             "another window": ("coins", audit_of(d, draw, coins, window_root=d.other_window(rng))),
@@ -2826,9 +2826,9 @@ def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
             "forged record": ("coins", audit_of(d, draw, signed(coins, "record"))),
             "forged close": ("coins", audit_of(d, draw, signed(coins, "close"))),
             "released after another digest": ("coins", audit_of(
-                elsewhere, draw, {k: v for k, v in elsewhere.evidence(elsewhere.segment.to_json()).items() if k != "key"})),
+                elsewhere, draw, elsewhere.evidence(elsewhere.segment.to_json()))),
             "not withheld": ("coins", audit_of(
-                bare, draw, {k: v for k, v in bare.evidence(bare.segment.to_json()).items() if k != "key"})),
+                bare, draw, bare.evidence(bare.segment.to_json()))),
             "a family with a root before the sample's": ("coins", audit_of(*again["before"])),
             "a family with a root after the sample's": ("coins", audit_of(*again["later"])),
             "before": ("coins", audit_of(again["before"][0], again["before"][1], {
@@ -4010,7 +4010,8 @@ def _two_stage_text(seed: int, again: int | None = None, elsewhere: bool = False
     params naming its template's circuit file, reference header (`_second_reference`) and the registered reads its
     reference statement reads, the statement's, which round 2 compares but for the run's fields
     (`second_stage.blank_reads`). Each stage's coins are its own session's `draw` family's alone, both sessions under
-    one key, the run's, and main's history one that holds both sessions' pins; `again`: the stage
+    one key, the run's, and main's history one that holds both sessions' pins, which each stage's evidence carries;
+    `again`: the stage
     (0 or 1) whose family holds a root before its registration's (`Drawn`'s `before`)."""
     rng = random.Random(f"two-stage/{seed}")
     rule, b, i = _rule(TWO_STAGE_RULE), BOUNDARY, INTERIOR
@@ -4062,9 +4063,10 @@ def _two_stage_text(seed: int, again: int | None = None, elsewhere: bool = False
                          "registered": {p: {"value": e["value"], "root": e["root"]} for p, e in linked.items()},
                          **_checked_names(statements[0])},
                 "upstream": {"accepted": True, "of_record": False}}
+    main = [*d1.main, *d2.main]
     return D.canonical({
-        "challenger": "verifier-test", "closure": None, "coins": d1.evidence(d1.segment.to_json()), "delta": "1/4",
-        "family": "draw", "key": d1.s.key.to_json(), "main": [*d1.main, *d2.main],
+        "challenger": "verifier-test", "closure": None, "coins": {**d1.evidence(d1.segment.to_json()), "main": main},
+        "delta": "1/4", "family": "draw", "key": d1.s.key.to_json(), "main": main,
         "instances": None, "outputs": ["credited"], "params": params(b, first_law, [], d1), "proved_units": None,
         "public": public, "received": RECEIVED, "record": rec, "rule": TWO_STAGE_RULE, "served": None,
         "session_roots": dict(BOUNDARY_ROOTS), "sessions": RUN_SESSIONS, "source": d1.read.hex(),
@@ -4075,7 +4077,8 @@ def _two_stage_text(seed: int, again: int | None = None, elsewhere: bool = False
                           "registered": statements[0]["registered"]}]}},
                      "replay": _json(codec.encode_program(Program(BLOCK))),
                      "values": ivalues, "record": irec, "received": "2026-10-07T00:01:00Z", "source": d2.read.hex(),
-                     "coins": d2.evidence(d2.segment.to_json()), "family": "draw", "proved_units": None,
+                     "coins": {**d2.evidence(d2.segment.to_json()), "main": main}, "family": "draw",
+                     "proved_units": None,
                      "instances": None,
                      "served": None, "session_roots": dict(ROOTS), "statements": statements}})
 
@@ -6277,9 +6280,9 @@ def test_the_run_reaches_every_step(pieces):
     session, a verdict of record about other sessions) and rejected (a verdict that ran and did not accept), which the
     sampled runs reach only probably. A run that read coins is refused at its select step without their evidence, with
     empty evidence, without the family the stream read them from or under another, without the challenger's key or
-    under another than the session is signed under, on a history of main without the session's pin, and on evidence
-    that names a key and a history of its own (`coins`): the provenance check is never skipped, and it is under the
-    key the verifier holds. Evidence that holds but for a root other than the registration's digest in the family, before the
+    under another than the session is signed under, on another copy of main's history than the evidence carries, and
+    on evidence that names a key of its own (`coins`): the provenance check is never skipped, and it is under the key
+    and the history the verifier holds. Evidence that holds but for a root other than the registration's digest in the family, before the
     sample's coins or after them, is refused for that (`family`): a family's coins follow one registration. A run asked
     to sample from the verifier's own coins is refused before it starts: the verifier samples no coins of its own."""
     v2 = _v2_audit(REGISTERED_SETUPS[0], REGISTERED_SETUPS[0].values[1])
@@ -6297,8 +6300,8 @@ def test_the_run_reaches_every_step(pieces):
                         {**case, "coins": {"segment": None}}, {k: v for k, v in case.items() if k != "family"},
                         {**case, "family": "other"}, {k: v for k, v in case.items() if k != "key"},
                         {**case, "key": {**case["key"], "public": _flip(case["key"]["public"], -1)}},
-                        {**case, "main": []},
-                        {**case, "coins": {**case["coins"], "key": case["key"], "main": case["main"]}}):
+                        {**case, "main": [*case["main"], "0" * 40]},
+                        {**case, "coins": {**case["coins"], "key": case["key"]}}):
             out = run(copy.deepcopy(changed))
             assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out)), (a["params"]["law"], out)
             seen.append(out.get("step") or out["symbol"])
@@ -6401,12 +6404,11 @@ def test_a_two_stage_run_reaches_every_step(pieces):
         (_inner_params(window_root=case["params"]["window_root"])(case, 0), ("second", ["coins"])),
         (_inner(lambda it, x: {**it, "family": None})(case, 0), ("second", ["coins"])),
         (_inner(lambda it, x: {**it, "family": "other"})(case, 0), ("second", ["coins"])),
-        (_inner(lambda it, x: {**it, "coins": {**it["coins"], "key": case["key"], "main": case["main"]}})(case, 0),
-         ("second", ["coins"])),
+        (_inner(lambda it, x: {**it, "coins": {**it["coins"], "key": case["key"]}})(case, 0), ("second", ["coins"])),
         ({**case, "family": "other"}, ("select", ["coins"])),
         ({**case, "key": None}, ("select", ["coins"])),
         ({**case, "key": {**case["key"], "public": _flip(case["key"]["public"], -1)}}, ("select", ["coins"])),
-        ({**case, "main": []}, ("select", ["coins"])),
+        ({**case, "main": [*case["main"], "0" * 40]}, ("select", ["coins"])),
         (_two_stage_case(again=0), ("select", ["family"])),
         (_two_stage_case(again=1), ("second", ["family"])),
     ]
@@ -7120,7 +7122,8 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
                     {**honest, "family": "other"}, {**honest, "key": None},
                     {**honest, "key": {**honest["key"], "public": _flip(honest["key"]["public"], -1)}},
                     {**honest, "main": [c for c in honest["main"] if c != d.ledger.opened["pinned"]]},
-                    {**honest, "coins": {**honest["coins"], **d.held()}}]
+                    {**honest, "main": [*honest["main"], "0" * 40]},
+                    {**honest, "coins": {**honest["coins"], "key": honest["key"]}}]
         for c in selects:
             out = ran(c)
             assert (out.get("step"), out.get("codes")) == ("select", ["coins"]), out
@@ -7189,26 +7192,26 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
     for seed in range(3):
         rng = random.Random(f"one-stage-coins/{seed}")
         d = Drawn(rng, after=after, reads=reads)
-        coins = {k: v for k, v in d.evidence(d.segment.to_json()).items() if k != "key"}
+        coins = d.evidence(d.segment.to_json())
         draw = drawn_from(d.read)
         accepts(audit_of(d, draw, coins))
         other = next(x for x in (drawn_from(rng.randbytes(4 * len(d.read) + 256)) for _ in range(64)) if x["units"] != draw["units"])
         stranger = next(x for x in (Drawn(rng, after=after, reads=reads) for _ in range(16))
                         if x.s.key != d.s.key)
         elsewhere = Drawn(rng, reads=reads)
-        rejected = [audit_of(d, other, coins), audit_of(d, draw, d.evidence(d.segment.to_json())),
+        rejected = [audit_of(d, other, coins), audit_of(d, draw, {**coins, "key": d.s.key.to_json()}),
                     audit_of(d, draw, None), audit_of(d, draw, coins, challenger={"key": stranger.s.key.to_json(),
                                                                                  "label": "draw"}),
                     audit_of(d, draw, coins, window_root=d.other_window(rng)),
                     audit_of(d, draw, coins, challenger={"key": d.s.key.to_json(), "label": "other"}),
                     audit_of(elsewhere, drawn_from(elsewhere.read),
-                             {k: v for k, v in elsewhere.evidence(elsewhere.segment.to_json()).items() if k != "key"}),
+                             elsewhere.evidence(elsewhere.segment.to_json())),
                     audit_of(d, draw, coins, challenger=None)]
         rejected += [audit_of(d, draw, {**coins, "segment": _mutated(rng, d, name)[0]}) for name in DRAW_MUTATIONS
                      if name not in ("before", "unread", "read-tampered", "other-after")]
         for shape in ("before", "later"):
             again = Drawn(rng, after=after, reads=reads, **{shape: True})
-            held = {k: v for k, v in again.evidence(again.segment.to_json()).items() if k != "key"}
+            held = again.evidence(again.segment.to_json())
             rejected.append(audit_of(again, drawn_from(again.read), held))
             with pytest.raises(CoinError, match=re.escape(FAMILY_ROOT)):
                 draw_coins(again.s.key, again.ledger.window["root"], "draw", after, held, lms_verify)
@@ -7216,7 +7219,7 @@ def test_the_audit_reads_its_draw_from_the_challengers_coins(server):
                 rejected.append(audit_of(again, drawn_from(again.read),
                                          {**held, "segment": _mutated(rng, again, "before")[0]}))
         bare = Drawn(rng, after=after, reads=reads, withheld=False)
-        bare_coins = {k: v for k, v in bare.evidence(bare.segment.to_json()).items() if k != "key"}
+        bare_coins = bare.evidence(bare.segment.to_json())
         rejected.append(audit_of(bare, drawn_from(bare.read), bare_coins))
         with pytest.raises(CoinError, match="withhold"):
             draw_coins(bare.s.key, bare.ledger.window["root"], "draw", after, bare_coins, lms_verify)

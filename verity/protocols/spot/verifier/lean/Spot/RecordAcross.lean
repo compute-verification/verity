@@ -32,9 +32,10 @@ family's than the later sample's, and no one family's roots show both receipts.
 module
 
 public import Spot.Record
-public import Spot.ChallengerCoins
+public import Spot.ChallengerDraw
 meta import Spot.Record
 meta import Spot.ChallengerCoins
+meta import Spot.ChallengerDraw
 
 @[expose] public section
 set_option backward.privateInPublic true

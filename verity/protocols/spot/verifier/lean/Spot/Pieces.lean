@@ -80,9 +80,10 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
 * `challenger_read`, `challenger_draw_coins`, `challenger_within`: a sample's coins from one challenger family
-  (`ChallengerCoins`): `read_reason`, the bytes a sample read against its segment, `coins_reason`, against the segment
-  and the session the auditor's ledger opens for the verifier's window (`trusted_session_of`), and `coins_within`, the
-  sizes the evidence holds against v2's limits.
+  (`ChallengerCoins`, `ChallengerDraw`): `read_reason`, the bytes a sample read against its segment, `coins_reason`,
+  against what `draw_coins` reads from the evidence under the verifier's key, the session the auditor's ledger opens
+  for the verifier's window (`trusted_session_of`), and `coins_within`, the sizes the evidence holds against v2's
+  limits.
 * `challenger_seed_salt`: a window's seed salt as the verifier reads it from the challenger's log (`seed_salt_of`,
   `Challenger.seedSaltOf`): the one coin of the seed-salt family released after the window's open root.
 * `challenger_coin_trees`, `challenger_session_trees`, `challenger_sample_link_first`: a `--zk` session's coins

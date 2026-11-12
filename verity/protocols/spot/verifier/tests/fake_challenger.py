@@ -123,8 +123,8 @@ class Challenger(T.ChallengerCoins):
             session.lines.extend(lines)
             R.close_session(session, None)
             ledger.end(session.id, session.directory, True)
-            self._evidence[after] = {"ledger": ledger.lines, "pins": HOST_PINS, "segment": segment.to_json(),
-                                     "session": R.session_files(session.directory)}
+            self._evidence[after] = {"ledger": ledger.lines, "main": MAIN, "pins": HOST_PINS,
+                                     "segment": segment.to_json(), "session": R.session_files(session.directory)}
         return self._evidence[after]
 
 

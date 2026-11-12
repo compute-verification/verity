@@ -1520,9 +1520,9 @@ class Stream:
     sample from (`family`: the coins' `label` at the sample; a family's coins follow one registration, so each
     registration's sample, and a second stage's, reads a family of its own). `key` is the challenger's key and `main`
     the verifier's copy of main's first-parent history, which the stream is made with and holds every outcome's evidence
-    to: the evidence names neither (`coins.coins_reason`), so whoever wrote it, an accepted sample's coins are a session's
-    under the key the stream holds, and a stream made without a key rejects every sample that read coins (failing
-    `run`). A stream that reads no coins (`All`, or one a
+    to: the evidence names no key, and the copy of main's history it carries must be the stream's
+    (`coins.coins_reason`), so whoever wrote it, an accepted sample's coins are a session's under the key the stream
+    holds, and a stream made without a key rejects every sample that read coins (failing `run`). A stream that reads no coins (`All`, or one a
     `sampler` samples for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
     their own. `sampler`, when given, samples instead of the coins (`flock-verify draw` in a process of its own, say), never
     beside the challenger's: it takes the challenger's sampling design and N, and its sample is held to them like any
@@ -2317,7 +2317,7 @@ class Stream:
         held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
         registration on): where they differ the outcome is a reject, its audit record failing `run`. The verifier has
         no coins of its own, so the Lean's run refuses every sample that read coins unless `coins` is their evidence
-        (`coins.coins_reason`'s `{ledger, pins, segment, session}`) and the bytes it read are exactly the
+        (`coins.coins_reason`'s `{ledger, main, pins, segment, session}`) and the bytes it read are exactly the
         coins of the family the stream read them from (`family`) that the session the ledger opens for the
         registration's window (`register`'s `window_root`) under the stream's key (`Stream(key=)`), from main's code
         (`challenger.pinned_session`, on the stream's copy of main's history, `Stream(main=)`), released

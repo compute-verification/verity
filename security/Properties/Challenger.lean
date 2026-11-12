@@ -425,13 +425,13 @@ def FamilyOneCommitment : Prop :=
 
 /-- **`FamilyOneCommitment` of the bytes a stream's run read.** `Spot.Run.run` holds a sample's coins through
 `Challenger.coinsReason`, under the challenger key `key` and the copy `main` of main's first-parent history its caller
-hands it, over the evidence `{ledger, pins, segment, session}`. For every challenger device, every key and every such
-copy, if `coinsReason key main coins w label after read` gives no reason, then a run of the device under `key`, which
-its own ledger opens withheld on `w`, released coins of `label` after `after` that `read` is the start of, with every
-coin read (`read` ends inside the last), and every root that run's own log shows a coin of `label` released after is
-`after`; or the fixed finder outputs a break from the run. The key is the reader's argument, as `drawCoins`'s is:
-nothing in the evidence names one, so the run is the device's under the key the verifier holds, whoever wrote the
-evidence. -/
+hands it, over the evidence `drawCoins` reads (`{ledger, main, pins, segment, session}`, its `main` held to the
+caller's). For every challenger device, every key and every such copy, if `coinsReason key main coins w label after
+read` gives no reason, then a run of the device under `key`, which its own ledger opens withheld on `w`, released coins
+of `label` after `after` that `read` is the start of, with every coin read (`read` ends inside the last), and every
+root that run's own log shows a coin of `label` released after is `after`; or the fixed finder outputs a break from
+the run. The key is the reader's argument, as `drawCoins`'s is: nothing in the evidence names one, so the run is the
+device's under the key the verifier holds, whoever wrote the evidence. -/
 def FamilyOneCommitmentRead : Prop :=
   ∀ (dev : History) (key : ChallengerKey) (main : Json) (w label : String) (after read : ByteArray) (coins : Json),
     coinsReason key main coins w label after read = none →
