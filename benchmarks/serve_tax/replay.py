@@ -7,11 +7,9 @@ The window is the load's requests: its step trace's steps from the first one's a
 the load's own (each load starts from an empty prefix cache and ends drained). The replay builds the served engine again
 in this process (``VLLM_ENABLE_V1_MULTIPROCESSING=0``) from the trace's header (its batch caps, chunked prefill, prefix
 caching, async scheduling, block size and block count, and where the header holds them the long-prefill threshold, the KV
-cache's format and the speculative decoding: `HEADER_ARGS`; its context limit, or where the served launch left that to vLLM
-the same launch on the header's block count, refused unless vLLM fits the served limit to it), compiled unless ``--eager``,
-and adds each request, under its served engine id with its served prompt and sampling, right before the scheduled step it
-arrived before in the trace (a wrapper of the scheduler's ``schedule``); the scheduler decides the rest as it did while
-serving. Its own step trace (`StepTrace`) is
+cache's format and the speculative decoding: `HEADER_ARGS`), compiled unless ``--eager``, and adds each request, under its served
+engine id with its served prompt and sampling, right before the scheduled step it arrived before in the trace (a wrapper of
+the scheduler's ``schedule``); the scheduler decides the rest as it did while serving. Its own step trace (`StepTrace`) is
 then compared with the served one, step by step: the rows (request, first position, tokens) that differ and the first step
 that does, and each request's sampled tokens against the ones the client received. replay.json has the counts, the
 differing requests (each one's lengths and first differing position) and the replay's wall time beside the served window's
@@ -86,6 +84,10 @@ HEADER_ARGS = {"long_prefill_token_threshold": "long_prefill_token_threshold", "
 
 
 def engine(checkpoint: Path, header: dict, eager: bool, tp: int = 1) -> Any:
+    """The served engine again, from the trace's header. Its context limit is the header's, launched as the served one was:
+    where that launch left the limit to vLLM (the header's ``max_model_len_auto``), at -1 on the header's block count, so
+    that vLLM builds the model at the checkpoint's own limit and fits the served limit to the pool, as it did while serving
+    (`replay` refuses an engine it fitted another to)."""
     from vllm import EngineArgs
     from vllm.v1.engine.llm_engine import LLMEngine
 
