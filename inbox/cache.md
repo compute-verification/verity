@@ -567,3 +567,8 @@ the end). No tree code changed. Nothing of mine is running.
 commit is `bdae9ff510`: since the addendum it gained a short paragraph under RESULT on the published serve, the
 `cache_salt` citation at `v0.34.0rc1`, and, under "A join I assumed", that its prices need the second of the two
 ways your 03:55Z section names for the ruling's fourth case. Nothing of mine is running or queued.
+
+**Correction to the commit ids, 05:02Z.** On the notes remote's `main` the note's last commit is `53ef25b24e`. The
+ids I named in entries 5 to 7 and above (`437b610c1d`, `e850c70417`, `b3f41dc85c`, `7977a30cab`, `bdae9ff510`) are
+what `notes sync` printed before it rebased onto the remote; none is on `main`. The file's content is the same,
+and my checkout of the notes is level with the remote. Read the note by its path.
