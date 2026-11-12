@@ -2563,7 +2563,6 @@
     {"file": "verity_vllm/program/frontend/seed_rule.circuit-check.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`"},
     {"file": "verity_vllm/program/frontend/seed_rule.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/seed_rule.py", "kind": "ISC004", "symbol": "check", "detail": "Unparenthesized implicit string concatenation in collection"},
-    {"file": "verity_vllm/program/frontend/serve_families.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/stop_rule.py", "kind": "SIM300", "symbol": "of", "detail": "Yoda condition detected"},
     {"file": "verity_vllm/program/frontend/strided_views.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/strided_views.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Sequence`"},
@@ -2942,6 +2941,7 @@
     {"file": "verity_vllm/commitments/vllm_v1/__init__.py", "kind": "UP031", "symbol": "thread_ctx_digest", "detail": "Use format specifiers instead of percent format"},
     {"file": "verity_vllm/commitments/vllm_v1/vectors.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/commitments/vllm_v1/vectors.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/commitments/vllm_v1/vectors_sha512.py", "kind": "T201", "symbol": "main", "detail": "`print` found"}
+    {"file": "verity_vllm/commitments/vllm_v1/vectors_sha512.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
+    {"file": "tests/check/capture_map_check.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"}
   ]
 }
