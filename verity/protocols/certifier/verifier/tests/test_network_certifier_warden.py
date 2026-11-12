@@ -1178,7 +1178,8 @@ def test_the_parameters_digest_binds_every_parameter():
     moved += [dataclasses.replace(PARAMS, egress="id"), CAPPED, dataclasses.replace(CAPPED, max_tokens_cap=5)]
     digests = {PARAMS.digest, GATED.digest} | {p.digest for p in moved}
     assert len(digests) == len(moved) + 2 and all(len(d) == 64 for d in digests)
-    assert {*INTEGER_FIELDS, "egress", "max_tokens_cap", "lengths"} == {f.name for f in dataclasses.fields(WardenParams)}
+    assert {*INTEGER_FIELDS, "egress", "max_tokens_cap", "lengths", "content"} == {
+        f.name for f in dataclasses.fields(WardenParams)}
     assert set(KIND_NAMES) == {PAD, DATA, END, FAIL, REFUSED} and len(set(REASONS)) == len(REASONS)
     assert WardenParams().egress == "id" and WardenParams().max_tokens_cap is None and REASONS[-2:] == ("format", "cap")
     assert GATED.reasons == REASONS[:-1] and CAPPED.reasons == REASONS

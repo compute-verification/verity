@@ -595,23 +595,28 @@ def _run(out: Path, key: Path, requests: list[bytes], responses: list[bytes], *,
     """A run of the network certifier at `params` for `windows` windows on a `VirtualClock`, published as `serve` and
     `client` publish one: its records and certificates through `Publisher` inline (`serve`'s `PublisherProcess` when
     `process`, which first signs the load's heads `load_heads` when given), the session's start certified at base 0
-    before any record, each window committed by `commit`,
-    `deployment.json`, and `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response
-    read id-form at P = `id_payload` when given; `servers` gets the server's side of each connection, in connect order.
-    Returns the network certifier."""
+    before any record, each window committed by `commit`, its connection rows kept as the publisher process keeps
+    them when the schedule has lengths rows (its key then a height taller, for their heads), `deployment.json`, and
+    `client.json` with every cell's arrival 1 ms into the bucket it was sent in, each response read id-form at
+    P = `id_payload` when given; `servers` gets the server's side of each connection, in connect order. Returns the
+    network certifier."""
     tau = params.bucket_ms / 1000
+    height = 5 if load_heads or params.lengths else 4
     if process:
         import warden_serve  # by name, so that the spawned process finds its functions
 
-        ws.cs.load_key(key, 5 if load_heads else 4)
+        ws.cs.load_key(key, height)
         publisher = warden_serve.PublisherProcess(out, key, SESSION, params, commit, load_heads=load_heads, base_ms=0)
-        hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release}
+        hooks = {"publish": publisher, "withhold": publisher.withhold, "release": publisher.release,
+                 "lengths": publisher.lengths}
         public, start = publisher.key, publisher.start
     else:
-        signer = ws.cs.signer(key, 4)
-        publisher = ws.Publisher(out, ws.Issuer(signer, SESSION), params, commit or WR.Cells.of)
-        hooks, public = {"publish": publisher, "withhold": publisher.withhold}, signer.public_key()
-        start = ws.start_json(ws.certify_start(publisher.issuer, 0, params))
+        signer = ws.cs.signer(key, height)
+        issuer = ws.Issuer(signer, SESSION)
+        publisher = ws.Publisher(out, issuer, params, commit or WR.Cells.of)
+        hooks, public = {"publish": publisher, "withhold": publisher.withhold,
+                         "lengths": ws.crr.Keeper(out, issuer, params, ws.LINK).keep}, signer.public_key()
+        start = ws.start_json(ws.certify_start(issuer, 0, params))
     answers = iter(responses)
 
     async def connect():

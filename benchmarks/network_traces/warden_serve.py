@@ -120,6 +120,13 @@ prover starts on the weights its sink wrote, and runs `serve --load-heads`: the 
 the run's session before its first window (`sign_load`), so one LMS key and one session carry the load and the windows,
 and writes `load.json`, the client's kept registrations of the load. `check` reads it under the deployment's key and
 session (`check_load`) at the relay's roots.
+
+**The connection rows** (`connection_rows_run`). `serve` and `rehearse` take `--lengths 1 [--content P,O,ROWS ...]`,
+the schedule's lengths rows and its content rows' classes, which `rehearse` passes to its `serve`; without them a
+run is what it was. With them the network certifier hands each execution phase's releases once the next one's records
+are published, and the publisher process lays that execution phase's tables, commits them and signs their one head:
+`rows.jsonl` (the registration and the cost) and `rows.salts` (witness). `check` holds every execution phase that has
+connection rows to a registration that verifies and whose head is the tables laid from the records.
 """
 
 from __future__ import annotations
@@ -151,6 +158,7 @@ from pathlib import Path
 
 import active_replay as ar
 import certifier_serve as cs
+import connection_rows_run as crr
 import load_relay as lr
 import stall_probe
 from verity.commitments.crypto import lms
@@ -626,12 +634,16 @@ def _publisher_main(rows, results, out: Path, key: Path, session: bytes, params:
         results.send(("start", start_json(certify_start(issuer, base_ms, params))))
         results.send(("key", own.public_key()))
         publisher = Publisher(out, issuer, params, commit or WR.Cells.of)
+        keeper = crr.Keeper(out, issuer, params, LINK)
         grids = {INGRESS: params.grid, EGRESS: params.grid, FAILS: params.fails_grid}
         filling: dict[str, list] = {link: [] for link in grids}
         B = params.cell_bytes
         while (item := rows.get()) is not None:
             link, n, data = item
             if link is None:
+                continue
+            if link == crr.HAND:
+                keeper(n, data)
                 continue
             grid = grids[link]
             if n is not None:
@@ -736,6 +748,13 @@ class PublisherProcess:
         self.process.join()
         self.usage = done["usage"]
         return done["refused"]
+
+    def lengths(self, window: int, strides) -> None:
+        """The network certifier's `lengths`: an execution phase's hand, queued a slot stride an item
+        (`connection_rows_run.hand`); the process lays its tables, commits them and signs their head
+        (`connection_rows_run.Keeper`)."""
+        for item in crr.hand(window, strides):
+            self.rows.put(item)
 
 
 def _quantiles(xs: list[float]) -> dict:
@@ -889,6 +908,7 @@ async def serve(params: WardenParams, out: Path, *, upstream: tuple[str, int], l
                                        upstream=upstream, slack=slack, run_id=warden.run_id, start=publish.start,
                                        origin_raw=origin)
         (out / "deployment.json").write_text(json.dumps(deployment, indent=1))
+        warden.hand_lengths = publish.lengths
         announce({"listening": deployment["listen"], "deployment": str(out / "deployment.json")})
         try:
             await warden.run()
@@ -1111,6 +1131,8 @@ def check(run: Path) -> dict:
                 problems.append(f"{name} window {w}: {r.status.reason.value}")
     cells_summary, cells_problems = check_cells(run, dep, params, records)
     problems += cells_problems
+    rows_summary, rows_problems = crr.check(run, dep, params, records[INGRESS], records[EGRESS], records[FAILS], LINK)
+    problems += rows_problems
     verdict = audit(params, records[INGRESS], records[EGRESS], records[FAILS])
     if not verdict["accepted"]:
         problems += [f"audit: {p}" for w in verdict["windows"] for p in w["problems"]]
@@ -1164,6 +1186,7 @@ def check(run: Path) -> dict:
         "finish_reasons": {f: sum(r.get("finish_reason") == f for r in served)
                            for f in sorted({str(r.get("finish_reason")) for r in served})},
         **({} if load is None else {"load": load}),
+        **({} if rows_summary is None else {"connection_rows": rows_summary}),
     }
     return {"accepted": not problems, "problems": problems[:50], "summary": summary, "windows": windows,
             "connections": rows}
@@ -1254,7 +1277,7 @@ def rehearse(args) -> int:
         raise SystemExit("--load-store: with --load-sinks and --load-program, the reading program's digest in hex")
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
-    params = _params(args)
+    params = crr.schedule(_params(args), args)
     me = [sys.executable, str(HERE / "warden_serve.py")]
     scratch = Path(tempfile.mkdtemp(prefix="warden-serve-"))
     procs: list[subprocess.Popen] = []
@@ -1293,7 +1316,7 @@ def rehearse(args) -> int:
                                              "--out", str(out), "--key", str(scratch / "warden"), "--session",
                                              secrets.token_hex(32), "--windows", str(windows), "--start-in",
                                              str(args.start_in), "--slack", str(args.slack), "--paced-ms",
-                                             str(args.paced_ms), *_flags(args),
+                                             str(args.paced_ms), *_flags(args), *crr.flags_of(params),
                                              *(["--watermark"] if args.watermark else []),
                                              *(["--load-heads", str(out / "load-heads.json")] if load else [])],
                                        stdout=subprocess.PIPE, stderr=log, text=True)
@@ -1364,6 +1387,8 @@ def parser() -> argparse.ArgumentParser:
                             "each l is one of its releases that the release's server connection lost")
     schedule_flags(s, "id")
     schedule_flags(r, None)
+    for q in (s, r):
+        crr.flags(q)
     s.add_argument("--upstream", required=True, type=cs._address, help="the server's HOST:PORT")
     s.add_argument("--key", required=True, type=Path, help="the network certifier's key directory (keys)")
     s.add_argument("--session", required=True, help="the certifier session, 32 bytes in hex")
@@ -1439,7 +1464,7 @@ def main(argv=None) -> int:
         if own and os.environ.get("PYTHONMALLOC") != "malloc" and C_ALLOCATOR not in os.environ:
             os.execve(sys.executable, [sys.executable, *sys.orig_argv[1:]],
                       os.environ | {"PYTHONMALLOC": "malloc", C_ALLOCATOR: "1"})
-        params = _params(args)
+        params = crr.schedule(_params(args), args)
         ar._quiet_runtime()
         process = prepare_process(params)
         for name in ("PYTHONMALLOC", C_ALLOCATOR):

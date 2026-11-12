@@ -22,6 +22,7 @@ from verity.circuits.program import Program
 from verity.definitions.ops.prims import F32ToE2m1Sat, F32ToE4m3Sat, HopperBF16WgmmaDot16
 from verity.definitions.ops.scalar import F32Fabs, F32Fmaxf, I32Le
 from verity.definitions.silicon import fp32
+from verity.definitions.silicon.models import HOPPER_BF16_M16N8K16
 from verity.commitments.randomness import derive
 from verity.protocols.pouw.prover.circuit import pc4, plan
 from verity.protocols.pouw.prover.circuit.anchors import TileAnchors, region_bytes
@@ -98,7 +99,7 @@ def test_core_bf16_step_is_the_schemes_peel_step():
     for _ in range(200):
         acc = P.f32_bits(rng.uniform(-1e4, 1e4))
         a, b = [bf16() for _ in range(16)], [bf16() for _ in range(16)]
-        assert evaluate(HopperBF16WgmmaDot16, acc, a, b) == (F.HOPPER_BF16_M16N8K16.step(acc, a, b),)
+        assert evaluate(HopperBF16WgmmaDot16, acc, a, b) == (HOPPER_BF16_M16N8K16.step(acc, a, b),)
 
 
 # ---- the units against the scheme -------------------------------------------------------------------------------------
