@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -27,15 +28,17 @@ from . import census
 __all__ = ["SUITES", "generate", "main", "register_command", "suite", "workload_suite"]
 
 
+def _git_head() -> str | None:
+    """The commit of the checkout this file is in; None where there is no git, or the file is in no checkout."""
+    if shutil.which("git") is None:
+        return None
+    r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent, capture_output=True, text=True,
+                       check=False, timeout=10)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
 def _versions() -> dict[str, Any]:
-    head = settings.RESEARCH_SOURCE_COMMIT
-    if not head:
-        try:
-            head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).resolve().parent, capture_output=True, text=True,
-                                  timeout=10).stdout.strip() or None
-        except (OSError, subprocess.SubprocessError):
-            head = None
-    return SY.versions(head)
+    return SY.versions(settings.RESEARCH_SOURCE_COMMIT or _git_head())
 
 
 def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: int = 1, chunk: int = 64,
