@@ -105,8 +105,8 @@ def _metas_by_name(layouts: list) -> dict[str, list]:
 
 
 def _nth(by_name: dict[str, list], name: str, k: int):
-    ms = by_name.get(name) or []
-    return ms[k] if k < len(ms) else None
+    ms = by_name.get(name)
+    return None if ms is None or k >= len(ms) else ms[k]
 
 
 class TPPartialSource:
@@ -543,7 +543,8 @@ class TPPartialSource:
             v = torch.load(pt)
             xs = sorted(by_step[step], key=lambda x: int(x["k"]))
             # a truncated / inconsistent oracle (the .pt holds fewer tensors than the jsonl names) is a named verdict, not a crash string
-            n_part, n_out = len(v.get("part") or []), len(v.get("out") or [])
+            part, out = v.get("part"), v.get("out")
+            n_part, n_out = (0 if part is None else len(part)), (0 if out is None else len(out))
             if n_part < len(xs) or (any(x.get("module") in received for x in xs) and n_out < len(xs)):
                 res["oracle_inconsistent"].append({"step": step, "jsonl_names": len(xs), "pt_part": n_part, "pt_out": n_out})
                 continue
