@@ -60,10 +60,10 @@ from verity.ml.circuits.library import TABLES
 
 from ..challenger import SAMPLE_LINK_FIRST, sample_link_first
 from .registration import digest as registration_digest
-from .verifier import BUILD_LOCK, CORE
+from .verifier import BUILD_LOCK, ROOT
 from .verifier import PACKAGE as V2_PACKAGE
 
-PACKAGE = CORE.parents[1] / "verity/core/service/flock"
+PACKAGE = ROOT / "verity/core/service/flock"
 EXE = "flock-verify"
 #: the statement every sampled proof block's session proves
 STATEMENT = "verity/flock-circuit"

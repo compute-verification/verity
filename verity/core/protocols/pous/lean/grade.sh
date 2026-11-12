@@ -7,11 +7,11 @@
 #   1. The trusted sources match TRUSTED.sha256, and the trusted layer and the grader build, before any submission code
 #      runs. The hashes of the grader binary, the toolchain's `lean`, the trusted sources and every `.olean` on the
 #      grader's LEAN_PATH (the security packages, Mathlib and their other dependencies, the toolchain's core) are recorded.
-#      The trusted layer is built in `Security/Proofs`, and the grader here; TRUSTED.sha256's paths are relative
-#      to this directory.
+#      The trusted layer is built in the proofs package (`security_proofs`, the directory whose lakefile TRUSTED.sha256
+#      lists), and the grader here; TRUSTED.sha256's paths are relative to this directory.
 #   2. The submission may import only the trusted layer (`Definitions.Pous`, `Definitions.Pous.Assumptions`,
-#      `Definitions.Pous.Guarantees`, in `Security`, and the lemmas' statements `Proofs.Pous.Statements`, which proves
-#      nothing), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers` (in `Security/Proofs`), and
+#      `Definitions.Pous.Guarantees`, in the spec package, and the lemmas' statements `Proofs.Pous.Statements`, which
+#      proves nothing), the proved `Proofs.Pous.Sanity` and `Proofs.Pous.Accounting.Numbers` (in the proofs package), and
 #      `Mathlib.*`; the grader's trusted environment is exactly those imports.
 #   3. It compiles in a throwaway directory, inside a user, mount, PID and network namespace where every other mount is
 #      read-only. Compile-time IO (`#eval`, `run_cmd`) can write nothing outside that directory, and every process it
@@ -25,7 +25,11 @@
 # 5.3 GB resident and 17.9 GB mapped.
 set -uo pipefail
 root=$(cd "$(dirname "$0")" && pwd)
-proofs=$(cd "$root/../../../../../Security/Proofs" && pwd)
+# The proofs package is where TRUSTED.sha256 lists its lakefile, so this file, whose digest that list pins, names no
+# directory a move renames.
+listed=$(sed -n 's|^[0-9a-f]\{64\}  \(.*/Proofs\)/lakefile\.toml$|\1|p' "$root/TRUSTED.sha256")
+[ -n "$listed" ] && [ -d "$root/$listed" ] || { echo "grade.sh: TRUSTED.sha256 lists no proofs package" >&2; exit 2; }
+proofs=$(cd "$root/$listed" && pwd)
 cd "$root"
 export PATH="$HOME/.elan/bin:$PATH"
 file=${1:?usage: grade.sh SUBMISSION.lean Pous.Guarantees.NAME}

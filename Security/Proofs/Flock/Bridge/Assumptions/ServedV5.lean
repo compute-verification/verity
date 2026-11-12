@@ -32,8 +32,9 @@ don't read), the circuit file parses to a descriptor `D` (`Desc.parse`), `D` is 
 (`HmIn.loadPublic`), and no two of `D`'s ports' published domains are one (`PortRoots.dupId`).
 
 Assumption record. It assumes a computation's result: each conjunct evaluated with these functions, built from the
-source this module is checked at, on that session's two files (the circuit has no public input ports, and the public
-file loads with 32 instances and its shared-row tables); `flock-verify ks-form` reruns the form check on them
+source this module is checked at, on that session's two files (the circuit has no public input ports, the public
+file loads with 32 instances and its shared-row tables, and it publishes a 64-byte domain for each of the circuit's three
+ports, no two equal); `flock-verify ks-form` reruns the form check on them
 (`verity/ml/flock/tests/test_lean_ks_form.py`). It asks nothing of a hash or of the prover; a change to any of these
 functions or to the files makes it a new premise, to be checked by a new run. -/
 def ServedFilesParseV5 : Prop :=
