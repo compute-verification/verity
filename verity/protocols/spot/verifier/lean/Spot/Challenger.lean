@@ -47,7 +47,7 @@ open Flock (V)
 def BINDING : String := "verity/challenger/coins/v1"
 def COIN_BYTES : Nat := 64
 def SALT_BYTES : Nat := 192
-def MAX_COINS : Nat := 2 ^ 20
+def MAX_COINS : Nat := 2 ^ 24
 def COMMITMENT_FORM : String :=
   "a live coin commitment is {epoch, families, root, scheme}: families a list of [label, count], root lowercase hex"
 def OPENING_FORM : String :=

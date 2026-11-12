@@ -3,7 +3,8 @@
 `verity bench overhead` is the one front door for an overhead measurement: a scheme's prover overhead γ over stock, at a
 card's operating points, from labelled runs of record alone. Its code is `verity-bench`'s (`benchmarks/harness`:
 `verity_bench/overhead.py` holds the rules, `overhead_node.py` and `overhead_node.sh` the node side, `overhead_records.py`
-the store side and the table); this directory holds its runner.
+the store side and the table, and `kit.py`, the harness's kit, the run's lease, γ's pairing and the result's measurements
+with their host stamp); this directory holds its runner.
 
 ```text
 verity bench overhead points [--card h200] [--on NODE]       sweep m on one GPU of NODE for C and L (a research run)
@@ -49,7 +50,7 @@ may have run traced), or if a traced item is in no report.
 Rep r of the layer is every linear's rep r, summed. γ's numerator is the scheme's busy SM-time plus the host CPU
 core-seconds it spends above stock's, at the node's weight (0.48 SM-s a core-second on the H200 node, 1.64 on the
 RTX PRO 6000's); its denominator is the stock arm's busy SM-time. γ is the median over the reps of their ratio, less one,
-with a 95% interval from the ratios' order statistics.
+with a 95% interval from the ratios' order statistics (`kit.paired`).
 
 - The stock arm is each linear's fastest by wall time; the least-SM-time arm's γ is beside it, and so is γ with the arm's
   weight side added, a bound.
