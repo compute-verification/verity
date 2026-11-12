@@ -212,7 +212,7 @@ def test_a_record_whose_members_and_declared_tables_disagree_on_the_row_seg_rows
     with pytest.raises(ValueError, match=r"\['o1'\] is no row of its"):
         CR.unit_rows(SRW.template(LAT), [(LAT, "o1")])
     assert CR.unit_rows(SRW.template(LAT), [(READ, "o1")]) == CR.unit_rows(SRW.template(LAT))
-    for bare in (lambda: CR.unit_rows(SRW.template(LAT), [HR.OUT]), lambda: SRW.unit_member(LAT, 1, seg=[HR.OUT])):
+    for bare in (lambda: CR.unit_rows(SRW.template(LAT), [HR.OUT]), lambda: CR.unit_member(SRW.template(LAT), 1, seg=[HR.OUT])):
         with pytest.raises(TypeError, match=r"names each row as \(template, row\)"):
             bare()
 
