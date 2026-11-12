@@ -21,10 +21,10 @@ value beside a protocol, never a field of it: for each amount the protocol publi
   read rate of some tiers' memory, a link), whose capacity is a function of the Site (`Part.capacity`), so a row's
   capacity is read from the registration and never copied from an answer;
 * the form the amount is published in: its key, its unit, which side of the capacity it bounds (`Side`: the verified
-  amount from below, or the free amount from above), a moment or the key of its span (`Time`), the key of its error,
-  the key of the share of the amount the error leaves out where the protocol reports one (ε at δ), how a period's error
-  forms from its answers' (`Pool`), the key of the capacity where the answer carries one, and what an answer holds when
-  nothing is certified (`Uncertified`);
+  amount from below, or the free amount from above), a moment or the keys of its span (`Time`), the key of its
+  error, the key of the share of the amount the error leaves out where the protocol reports one (ε at δ), how a
+  period's error forms from its answers' (`Pool`), the key of the capacity where the answer carries one, and what an
+  answer holds when nothing is certified (`Uncertified`);
 * the terms the error names beside it and does not price (`unpriced`);
 
 and, for the protocol, the key under which an accepted answer names the registration's head (`Account.head`).
@@ -34,8 +34,11 @@ An answer counts only when it accepts and names that head. Each amount certified
 at each reading of the registration its capacity can be read at: the capacity, the certified amount with its error,
 and the other, which follows.
 
-* A flow (compute, reads, a link's bits) has one row for the period. A verified amount is its answers' summed. A free
-  amount is its answers' summed plus the capacity of the ticks no certified answer's span covers.
+* A flow (compute, reads, a link's bits) has one row for the period. Two answers' amounts add only where both name
+  their spans (`Steps`) and the spans share no step: a verified amount is the largest total over answers whose spans are
+  pairwise disjoint, or the largest single amount of an answer that names none, whichever is more. A free amount is its
+  answers' summed plus the capacity of the ticks no certified answer's span covers, each tick's cover counted once:
+  the named spans' steps, or the longest span that names none.
 * An amount at a moment (memory) has one row for each accepted answer, a session, and one for the period, which states
   the least verified (or the most free) of its sessions at their errors summed and counts them (`Row.sessions`).
 * A row whose error is 1 or more is `Status.noBound`: it prints "no bound at this period" in place of a number.
@@ -179,11 +182,23 @@ inductive Side where
   | free
   deriving DecidableEq, Repr
 
+/-- How an answer names the steps its span covers, on a count of steps its protocol's answers share, so that two
+answers' spans can be shown disjoint: by the index of its one step (an epoch); by the indices of its first and last
+steps, both included; or by the index of its first step and the count of its steps (a list counts its entries). -/
+inductive Steps where
+  | index (key : Key)
+  | range (first last : Key)
+  | run (first count : Key)
+  deriving DecidableEq, Repr
+
 /-- When an amount holds: at a moment; over a span whose length the answer holds under `key`, as a count of steps of
-`seconds` seconds each (a list counts its entries); or over a span the answer does not state, which covers no tick. -/
+`seconds` seconds each (a list counts its entries), without saying which steps; over a span whose steps, of `seconds`
+seconds each, the answer names (`Steps`); or over a span the answer does not state, which covers no tick. Only spans
+that name their steps can be shown disjoint, so only their amounts and their cover add (`Amount.rows`). -/
 inductive Time where
   | moment
   | span (key : Key) (seconds : Ratio)
+  | steps (name : Steps) (seconds : Ratio)
   | unstated
   deriving DecidableEq, Repr
 
@@ -252,13 +267,15 @@ def Formed (c : Account) : Prop := (∀ m ∈ c.amounts, m.Formed) ∧ (c.amount
 instance instDecidableFormed (c : Account) : Decidable c.Formed := by unfold Formed; infer_instance
 
 /-- What one accepted answer certifies of one amount, in its part's unit: the place it names, whether it certifies
-anything, the amount with its share taken off, its error, the ticks its span covers, and the capacity it carries. -/
+anything, the amount with its share taken off, its error, the ticks its span covers, the steps it names its span by
+(the first, and the one after the last; none where it names none), and the capacity it carries. -/
 structure Reading where
   place : Option String
   certified : Bool
   amount : Nat
   error : Ratio
   ticks : Nat
+  steps : Option (Nat × Nat) := none
   capacity : Option Nat
   deriving DecidableEq, Repr
 
@@ -295,7 +312,20 @@ private def kept (n : Nat) : Option Ratio → Nat
 def ticksOf (count : Nat) (seconds : Ratio) (tick : Figure) : Nat :=
   count * seconds.num * tick.1.den / (seconds.den * tick.1.num.toNat)
 
-/-- **An answer read by an amount's form**: none when the answer does not hold what the form names. -/
+/-- The steps answer `a` names its span by: its first, and the one after its last. None where it does not hold the
+keys, or names no step. -/
+def Steps.read (name : Steps) (a : Answer) : Option (Nat × Nat) :=
+  match name with
+  | .index k => ((k.read a).bind natOf).map fun i => (i, i + 1)
+  | .range first last =>
+    ((first.read a).bind natOf).bind fun i => ((last.read a).bind natOf).bind fun j =>
+      if i ≤ j then some (i, j + 1) else none
+  | .run first count =>
+    ((first.read a).bind natOf).bind fun i => ((count.read a).bind countOf).bind fun n =>
+      if 0 < n then some (i, i + n) else none
+
+/-- **An answer read by an amount's form**: none when the answer does not hold what the form names. An answer that does
+not name the steps its form asks for is read as one that names no span: it covers no tick. -/
 def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   let place : Option String ← match m.place with
     | none => some none
@@ -309,14 +339,18 @@ def Amount.read (m : Amount) (tick : Figure) (a : Answer) : Option Reading := do
   let certified : Bool ← match m.uncertified with
     | .flagged k => (k.read a).bind fun j => j.getBool?.toOption
     | _ => some true
+  let steps : Option (Nat × Nat) := match m.time with
+    | .steps name _ => name.read a
+    | _ => none
   let ticks : Nat ← match m.time with
     | .moment => some 0
     | .unstated => some 0
     | .span k seconds => ((k.read a).bind countOf).map fun n => ticksOf n seconds tick
+    | .steps _ seconds => some ((steps.map fun s => ticksOf (s.2 - s.1) seconds tick).getD 0)
   let capacity : Option Nat ← match m.capacity with
     | none => some none
     | some k => (k.read a).bind fun j => (natOf j).map fun n => some (n * m.unit.base)
-  pure { place, certified, error, ticks, capacity,
+  pure { place, certified, error, ticks, steps, capacity,
          amount := m.unit.base * ((ns.zip es).map fun x => kept x.1 x.2).sum }
 
 /-- A row's standing: an amount certified, an error of 1 or more ("no bound at this period"), or a resource no accepted
@@ -356,6 +390,21 @@ private def whole : Ratio := ⟨1, 1⟩
 
 private def plus (a b : Ratio) : Ratio := (Ratio.mk' (a.num * b.den + b.num * a.den) (a.den * b.den)).getD whole
 
+/-- The largest total of the amounts of spans no two of which share a step. Each span is its first step, the step
+after its last, and its amount. -/
+private def disjointMost (xs : List (Nat × Nat × Nat)) : Nat :=
+  let sorted : List (Nat × Nat × Nat) := xs.mergeSort fun a b => decide (a.2.1 ≤ b.2.1)
+  let table : List (Nat × Nat) := sorted.foldl (fun t x =>
+    let before : Nat := ((t.filter fun e => e.1 ≤ x.1).map fun e => e.2).foldl max 0
+    let sofar : Nat := (t.map fun e => e.2).foldl max 0
+    t ++ [(x.2.1, max sofar (x.2.2 + before))]) []
+  (table.map fun e => e.2).foldl max 0
+
+/-- The steps the spans cover, each counted once. Each span is its first step and the step after its last. -/
+private def stepsCovered (xs : List (Nat × Nat)) : Nat :=
+  ((xs.mergeSort fun a b => decide (a.1 ≤ b.1)).foldl (fun (acc : Nat × Nat) x =>
+    (acc.1 + (x.2 - max x.1 acc.2), max acc.2 x.2)) (0, 0)).1
+
 /-- The row of amount `m` certified as `n` at `error`, against capacity `total`: the other amount follows, and neither
 is printed at an error of 1 or more. A free amount is at most the capacity. -/
 private def certifiedRow (m : Amount) (place reading : String) (total : Option Nat) (n : Nat) (error : Ratio)
@@ -373,8 +422,17 @@ private def certifiedRow (m : Amount) (place reading : String) (total : Option N
     unpriced := m.unpriced }
 
 /-- The rows of amount `m` at `place`, from its accepted answers' readings `rs`, at each reading of the capacity of the
-leaves it is about. None when the site holds no such leaf. A free amount of a flow charges the ticks no certified answer
-covers at the capacity, so where the registration holds none for them it prints no amount. -/
+leaves it is about. None when the site holds no such leaf.
+
+A flow's amounts add only over spans shown disjoint. Its verified amount is the largest total over certified answers
+whose named spans are pairwise disjoint, or the largest amount of one that names no span, whichever is more: two
+answers of one span, or of overlapping spans, count the larger once, and an answer that names no span adds to none. Its
+free amount is the certified answers' amounts summed, plus the capacity of the ticks they do not cover, a tick's cover
+counted once: the steps of the named spans, or the longest span that names none, whichever is more. Where the
+registration holds no capacity for those ticks it prints no amount.
+
+An amount at a moment has a row for each session and one for the period: the least verified, or the most free, of its
+sessions, at their errors summed. -/
 def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
     (ticks : Nat) (place : Option String) (rs : List Reading) : List Row :=
   let xs := m.part.leavesAt S place
@@ -390,11 +448,17 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
         | .once, [r] => r.error
         | .once, _ => whole
         | .sum, _ => rs.foldl (fun e r => plus e r.error) ⟨0, 1⟩
-      let amount : Nat := (good.map fun r => r.amount).sum
-      let uncovered : Nat := ticks - (good.map fun r => r.ticks).sum
+      let named : List (Nat × Nat × Nat) := good.filterMap fun r => r.steps.map fun s => (s.1, s.2, r.amount)
+      let unnamed : List Reading := good.filter fun r => r.steps.isNone
+      let seconds : Ratio := match m.time with
+        | .steps _ s => s
+        | _ => ⟨0, 1⟩
+      let cover : Nat := max (ticksOf (stepsCovered (named.map fun x => (x.1, x.2.1))) seconds tick)
+        ((unnamed.map fun r => r.ticks).foldl max 0)
+      let uncovered : Nat := ticks - cover
       let n : Nat := match m.side with
-        | .verified => amount
-        | .free => amount + total.getD 0 * uncovered
+        | .verified => max (disjointMost named) ((unnamed.map fun r => r.amount).foldl max 0)
+        | .free => (good.map fun r => r.amount).sum + total.getD 0 * uncovered
       let row : Row := certifiedRow m at_ reading (total.map fun c => c * ticks) n error rs.length none
       if m.side = .free ∧ total = none ∧ 0 < uncovered then
         [{ row with status := .notAudited, verified := none, free := none }]
@@ -502,9 +566,10 @@ private def accept (protocol : String) (published profile : List (String × Json
   { protocol, verdict := .accept, reason := none, digest := none, published := some (Json.mkObj published),
     profile := some (Json.mkObj profile) }
 
-/-- Toy accounts in the four shapes a row takes: memory held, at a moment, from below; memory after a wipe, at a moment,
-from above, with its own capacity and a flag; a link's bits, over a span, from above, summed; and work, over a span,
-from below, with a share, pooled once. -/
+/-- Toy accounts in the shapes a row takes: memory held, at a moment, from below; memory after a wipe, at a moment,
+from above, with its own capacity and a flag; a link's bits, over a span named by its first step and its count, from
+above, summed; work, over a span that is only counted, from below, with a share, pooled once; and work over a span
+named by its first and last steps, from below. -/
 private def held : Account :=
   { protocol := "toy/held", head := some (.profile "registration")
     amounts := [{ metric := "held", part := .memory [.hbm], place := some (.profile "device"),
@@ -521,7 +586,8 @@ private def wiped : Account :=
 private def sent : Account :=
   { protocol := "toy/sent", head := some (.profile "registration")
     amounts := [{ metric := "sent", part := .link, place := some (.profile "link"), key := .published "K",
-                  unit := bits, side := .free, time := .span (.published "span_ns") ⟨1, 1000000000⟩,
+                  unit := bits, side := .free,
+                  time := .steps (.run (.published "start_ns") (.published "span_ns")) ⟨1, 1000000000⟩,
                   error := .published "eps", uncertified := .refused }] }
 
 private def worked : Account :=
@@ -529,6 +595,12 @@ private def worked : Account :=
     amounts := [{ metric := "work", part := .compute, key := .published "work", unit := macs, side := .verified,
                   time := .span (.published "windows") ⟨1, 1000000⟩, share := some (.published "eps"),
                   error := .published "delta", pool := .once, uncertified := .safe }] }
+
+private def ranged : Account :=
+  { protocol := "toy/ranged", head := some (.profile "registration")
+    amounts := [{ metric := "audited", part := .compute, key := .published "work", unit := macs, side := .verified,
+                  time := .steps (.range (.published "first") (.published "last")) ⟨1, 1000000⟩,
+                  error := .published "delta", uncertified := .safe }] }
 
 /-- A read rate bounded from above over two tiers, one of them a host's, whose rate no sheet states. -/
 private def spare : Account :=
@@ -548,9 +620,17 @@ private def wipe (foreign memory : Nat) (certified : Bool := true) : Answer :=
   accept "toy/wiped" [("certified", .bool certified), ("eps", .str "1/1000"), ("foreign_bits", Lean.toJson foreign),
     ("memory_bits", Lean.toJson memory)] (at_ "h")
 
-private def check (k ns : Nat) (eps : String) (head : String := "h") : Answer :=
-  accept "toy/sent" [("K", Lean.toJson k), ("eps", .str eps), ("span_ns", Lean.toJson ns)]
-    (at_ head [("link", .str "up0")])
+private def check (k ns : Nat) (eps : String) (head : String := "h") (start : Option Nat := some 0) : Answer :=
+  accept "toy/sent" ([("K", Lean.toJson k), ("eps", .str eps), ("span_ns", Lean.toJson ns)] ++
+    (start.map fun s => ("start_ns", Lean.toJson s)).toList) (at_ head [("link", .str "up0")])
+
+/-- An audit of `work` MACs over the steps `span` names, first and last; over no named span where it is none. -/
+private def audit (work : Nat) (span : Option (Nat × Nat)) : Answer :=
+  accept "toy/ranged" ([("delta", .str "1/1000"), ("work", Lean.toJson work)] ++
+    (span.map fun s => [("first", Lean.toJson s.1), ("last", Lean.toJson s.2)]).getD []) (at_ "h")
+
+private def firstVerified (rs : List Row) : List (Option Nat × String) :=
+  (rs.take 1).map fun r => (r.verified, r.error.toString)
 
 private def unread (k ns : Nat) : Answer :=
   accept "toy/spare" [("K", Lean.toJson k), ("eps", .str "1/1000"), ("span_ns", Lean.toJson ns)] (at_ "h")
@@ -565,17 +645,18 @@ private def table (accounts : List Account) (answers : List Answer) (A : Site.Re
     (ticks : Nat := 1000) : List Row :=
   rows site digest A "h" tick ticks accounts answers
 
-private def cells (rs : List Row) : List (String × String × String × Option Nat × Option Nat × Option Nat × String) :=
+private def cells (rs : List Row) :
+    List (String × String × String × Option Nat × Option Nat × Option Nat × String) :=
   rs.map fun r => (r.metric, r.place, r.reading, r.capacity, r.verified, r.free, r.error.toString)
 
 /-- The example's site with a DRAM leaf under its host. -/
 private def hosted : Site :=
-  ⟨[sheet], locs ++ [{ id := "dram0", kind := .memory, parent := some "node0", tier := some .dram, bytes := 1 <<< 31 }],
-    links⟩
+  ⟨[sheet],
+    locs ++ [{ id := "dram0", kind := .memory, parent := some "node0", tier := some .dram, bytes := 1 <<< 31 }], links⟩
 
 private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacity S digest auditor tick (p.leaves S)
 
-#guard account.Formed ∧ held.Formed ∧ wiped.Formed ∧ sent.Formed ∧ worked.Formed
+#guard account.Formed ∧ held.Formed ∧ wiped.Formed ∧ sent.Formed ∧ worked.Formed ∧ ranged.Formed
 #guard account.amounts.all fun m => ¬ ({ m with time := .moment } : Amount).Formed
 #guard account.amounts.all fun m => ¬ ({ m with part := .read [] } : Amount).Formed
 -- a part over two tiers: their leaves' bytes summed; a leaf under a host has no registered read rate, so neither has a
@@ -624,8 +705,33 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
 #guard ((table [wiped] [wipe 1000 8000000000]).take 1).map (fun r => r.unpriced) ==
   [["the keyed stream's PRF advantage"]]
 -- a link: its checks' bits and errors summed, and the ticks no check covers charged at the link's capacity
-#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000"]).take 1) ==
+#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" (some 400)]).take 1) ==
   [("sent", "up0", "registered", some 100000, some 65000, some 35000, "1/500")]
+-- a tick's cover counts once: two checks of one span cover it once, two that overlap cover the steps of both once,
+-- and a check that names no span covers no tick
+#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 400 "1/1000"]).take 1) ==
+  [("sent", "up0", "registered", some 100000, some 35000, some 65000, "1/500")]
+#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" (some 200)]).take 1) ==
+  [("sent", "up0", "registered", some 100000, some 45000, some 55000, "1/500")]
+#guard cells ((table [sent] [check 3000 400 "1/1000", check 2000 300 "1/1000" "h" none]).take 1) ==
+  [("sent", "up0", "registered", some 100000, some 35000, some 65000, "1/500")]
+-- verified amounts add only over spans shown disjoint: two audits of one span, or of overlapping spans, count the
+-- larger once; two of disjoint spans add; of three in a chain, the two ends add where they outweigh the middle
+#guard firstVerified (table [ranged] [audit 700 (some (0, 9)), audit 500 (some (0, 9))]) == [(some 700, "1/500")]
+#guard firstVerified (table [ranged] [audit 700 (some (0, 9)), audit 500 (some (5, 14))]) == [(some 700, "1/500")]
+#guard firstVerified (table [ranged] [audit 700 (some (0, 9)), audit 500 (some (10, 19))]) == [(some 1200, "1/500")]
+#guard firstVerified (table [ranged] [audit 700 (some (0, 9)), audit 900 (some (5, 14)), audit 500 (some (10, 19))])
+  == [(some 1200, "3/1000")]
+#guard firstVerified (table [ranged] [audit 700 (some (0, 9)), audit 1300 (some (5, 14)), audit 500 (some (10, 19))])
+  == [(some 1300, "3/1000")]
+-- an audit that names no span adds to none: beside one that names its span the larger counts, and of two the larger
+#guard firstVerified (table [ranged] [audit 700 (some (0, 9)), audit 500 none]) == [(some 700, "1/500")]
+#guard firstVerified (table [ranged] [audit 300 (some (0, 9)), audit 500 none]) == [(some 500, "1/500")]
+#guard firstVerified (table [ranged] [audit 300 none, audit 500 none]) == [(some 500, "1/500")]
+-- a span named by one step, an epoch; by its first and last steps; and one whose last step is before its first
+#guard (Steps.index (.published "first")).read (audit 1 (some (7, 9))) == some (7, 8)
+#guard (Steps.range (.published "first") (.published "last")).read (audit 1 (some (7, 9))) == some (7, 10)
+#guard (Steps.range (.published "first") (.published "last")).read (audit 1 (some (9, 7))) == none
 -- a check under another registration's head counts for nothing
 #guard cells (table [sent] [check 3000 400 "1/1000" "g"]) == cells (table [] [])
 -- errors that sum to 1 or more: no bound at this period
