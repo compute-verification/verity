@@ -2133,21 +2133,40 @@ zeros to O) and its end (a fails slot's layout: (0, n) after an `END` and (1, n)
 released before it, where a fails slot counts them before a `FAIL` alone). A row's size is its class's, a size of
 prompt ids and a size of ids released, each a power of two.
 
-- **The classes** are the schedule's: a list of (P, O, rows), in order, which may hold two of one (P, O), a stop
-  class and a no-stop class of one size. Class i has three tables, `request.i`, `response.i` and `end.i`, each of
-  `rows` rows whatever the load. The head lists them after `lengths` and `fails`, in the schedule's order, and is
-  signed once. `rows` is at most the lengths table's slots, since an execution phase releases no more.
+- **The classes** are the schedule's: a list, in order, which may hold two of one (P, O), a stop class and a no-stop
+  class of one size. Class i has three tables, `request.i`, `response.i` and `end.i`. The head lists them after
+  `lengths` and `fails`, in the schedule's order, and is signed once. Under the lengths rows' form 1 a class is
+  (P, O, rows) and each of its tables is of `rows` rows whatever the load; `rows` is at most the lengths table's
+  slots, since an execution phase releases no more. Under form 2 a class is (P, O) and each of its tables is its
+  held rows and no other. The schedule refuses a class of the other form's numbers, naming the change.
 - **A row's place.** Row r of class i's tables is the execution phase's r-th release, in release order, among those
   filed in class i. A release has its three rows at one r.
 - **The filing** is one function with one caller (`content_rows.file`, which `connection_rows.tables` calls): the
   first listed class that holds the request's bytes and the ids released. It reads the release's own sizes and
   nothing the server says, and `content_rows.tables`, which lays the tables, takes each release's class as an
-  argument. A release that fits no class, or whose class's rows are all held, has no content row, and no later class
-  takes it; its lengths slot holds its lengths all the same.
-- **A row of zero bytes** is what every row past the held ones is (`content_rows.empty_rows`). As a request row it
-  reads as no request: a held row's byte count is at least 1, and `request_of` refuses it. As a response row it
-  reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held connection that
-  ended before any id have the same response row and the same end row, and only the request row tells them apart.
+  argument. A release that fits no class, or under form 1 one whose class's rows are all held, has no content row,
+  and no later class takes it; its lengths slot holds its lengths all the same.
+- **A row of zero bytes** is what every row past the held ones is under form 1 (`content_rows.empty_rows`). As a
+  request row it reads as no request: a held row's byte count is at least 1, and `request_of` refuses it. As a
+  response row it reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held
+  connection that ended before any id have the same response row and the same end row, and only the request row
+  tells them apart. Under form 2 no table has an unheld row.
+- **The count under form 2.** A class's three tables have one count of rows, the execution phase's releases filed
+  in the class. Its three entries in the head hold that count as their rows, and each one's domain binds it. A table
+  of no row has no leaf: its domain is the one of 0 rows and its root is 64 zero bytes
+  (`connection_rows.NO_ROWS_ROOT`), which no read opens.
+  - **The bound.** A count is at most R = `WardenParams.phase_releases` = `lanes` · ⌈(T + `ingress_buckets` −
+    1)/(D + 1)⌉. A release is at most `ingress_buckets` − 1 buckets after its connection's admission, so an
+    execution phase's releases are of connections admitted in T + `ingress_buckets` − 1 buckets in a row; a
+    connection holds its lane through its admission's bucket + D, so those admitted in any D + 1 buckets in a row
+    hold a lane each at once. R is the schedule's own number and a bound: at some schedules a load releases R in an
+    execution phase, and at others none does.
+  - **The verifier's read** (`connection_rows.check_registration`) takes a class's count from the registration:
+    from 0 to R, the same in the class's three entries, and at 0 only with the zero root. It derives each domain at
+    the count it read, and the certificate over the head holds the counts as it holds the roots. A registration of
+    another schedule, of either form, has that schedule's digest for its parameters and is refused by it.
+  - **The port** (`connection_rows.port`) of a class's table has a population of its count, proof block j reading
+    held row j, so a proof block is one a held row. A table of no row has no port.
 - **Where they are built.** The network certifier keeps each released connection's request bytes and its `DATA`
   cells' ids, as it cut and released them and never from the server's report, four bytes an id, from the release to
   the hand that carries it: the lengths rows' hand, at the close of the next execution phase, or under form 2 at
@@ -2158,8 +2177,16 @@ prompt ids and a size of ids released, each a power of two.
 - **An execution phase that is not handed** (the lengths rows' forms say which) has no content rows and no head: no
   read of a row of it opens. Under form 2 it has the network certifier's word that it has none.
 - **What is public.** The head and the registration hold each table's name, rows, row size, domain and root. The
-  classes, their order and their rows are the schedule's, in the parameters' digest, and the roots are hiding.
-  Nothing in them is a function of the load: not how many rows are held, in which class, or any length.
+  classes and their order are the schedule's, in the parameters' digest, and the roots are hiding.
+  - **Under form 1** a class's rows are the schedule's too, and nothing in the head is a function of the load: not
+    how many rows are held, in which class, or any length.
+  - **Under form 2** a class's rows are its count, so the head makes public how many of the execution phase's
+    releases were filed in each class: one of R + 1 values a class, at most log₂(R + 1) bits, and no length, order
+    or content of any. At a schedule where no load releases R in an execution phase that figure is more than a
+    count can say. The lengths and fails entries, every row's size, the tables' names and order and the head's
+    length in bytes are the schedule's whatever the load.
+  - **The work under form 2** of laying and committing an execution phase's tables follows its counts, and so may
+    the time its head is signed and published. Nothing here charges the counts or that time to a bound.
 
 The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
 digest, records, heads and certificates. As for the lengths rows, that the tables say what the records say rests on

@@ -25,8 +25,8 @@ the rest zero, every field little-endian:
   class says the server failed it or nobody did. These rows are not the `fails` record (`warden`'s "The records"),
   whose frames hold each `FAIL`'s reason in its bucket and stay witness.
 
-So a table's size is the schedule's whatever the load, and which slots hold a request, each one's bytes, n and outcome
-are values. `releases` reads the two tables back and refuses rows that aren't of this form.
+So each of the two tables' size is the schedule's whatever the load, and which slots hold a request, each one's bytes,
+n and outcome are values. `releases` reads the two tables back and refuses rows that aren't of this form.
 
 **The content tables** of the same execution phase are made from the same hand, in which each release then carries
 its request's bytes and its ids (`content_rows`' "The tables"): `request.i`, `response.i` and `end.i` for each class
