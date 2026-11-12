@@ -2,6 +2,7 @@
 user, a pass sent by one client a user, and the cost on such a load, on synthetic records."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 import math
@@ -409,6 +410,88 @@ def test_an_arms_sessions_pass_is_read_from_its_users_own_results(tmp_path: Path
     assert (one["output_tok_per_s"], one["users_output_tok_per_s"], one["users_s"]) == (125.0, 150.0, 140.0)
 
 
+def kept_ids(d: Path, lines: list[tuple[str, list[int]]], gz: bool = False) -> None:
+    """An arm's server's kept ids (`servetax_plugin.ServedIds`'s lines): each request's id and the ids it was served."""
+    (d / "server").mkdir(parents=True, exist_ok=True)
+    text = "".join(json.dumps({"id": rid, "prompt_ids": [1, 2, 3], "output_ids": out}) + "\n" for rid, out in lines)
+    if gz:
+        with gzip.open(d / "server" / "ids.7.jsonl.gz", "wt", encoding="utf-8") as f:
+            f.write(text)
+    else:
+        (d / "server" / "ids.7.jsonl").write_text(text)
+
+
+def test_the_requests_that_went_on_past_an_end_of_text_token_are_counted_where_the_server_kept_its_ids(tmp_path: Path):
+    # a checkpoint's end-of-text ids: its generation configuration's, one or a list, else its model configuration's
+    ck = tmp_path / "ck"
+    ck.mkdir()
+    assert S.end_of_text_ids(ck) == []
+    (ck / "config.json").write_text(json.dumps({"eos_token_id": 9}))
+    assert S.end_of_text_ids(ck) == [9]
+    (ck / "generation_config.json").write_text(json.dumps({"eos_token_id": [9, 7, 8]}))
+    assert S.end_of_text_ids(ck) == [7, 8, 9]
+    (ck / "generation_config.json").write_text(json.dumps({"temperature": 1.0}))
+    assert S.end_of_text_ids(ck) == [9]
+    # a pass's requests by its tag: one that served an end-of-text id and went on for three tokens, one whose last
+    # token is one, which did not go on, and one that served none; another pass's and the warm-up's are not its own
+    d = tmp_path / "prod-record"
+    lines = [("cmpl-agentic@2-r1-u0-0-0-aa", [5, 9, 5, 7, 5]), ("cmpl-agentic@2-r1-u1-0-0-bb", [5, 5, 8]),
+             ("cmpl-agentic@2-r1-u1-1-0-cc", [5, 5, 5, 5]), ("cmpl-agentic@2-r10-u0-0-0-dd", [7, 5]),
+             ("cmpl-warm-u0-0-0-ee", [9, 5])]
+    kept_ids(d, lines)
+    want = {"agentic@2-r1": {"ids_kept": 3, "past_end": 1, "after_end_tokens": 3},
+            "agentic@2-r10": {"ids_kept": 1, "past_end": 1, "after_end_tokens": 1}}
+    assert S.past_end(d, ["agentic@2-r1", "agentic@2-r10"], [7, 8, 9]) == want
+    assert S.past_end(d, ["agentic@2-r1"], [7, 8, 9]) == {"agentic@2-r1": want["agentic@2-r1"]}
+    # no end-of-text id named, or no ids kept: nothing; a gzipped file reads as a plain one
+    assert S.past_end(d, ["agentic@2-r1"], []) == {} == S.past_end(tmp_path / "prod", ["agentic@2-r1"], [9])
+    (d / "server" / "ids.7.jsonl").unlink()
+    kept_ids(d, lines, gz=True)
+    assert S.past_end(d, ["agentic@2-r1", "agentic@2-r10"], [7, 8, 9]) == want
+    # an arm's metrics have them for each rep whose ids its server kept, where its meta names the ids
+    rep = d / "agentic@2" / "rep-1"
+    users = [result(1, 60.0, 100.0, 1.0), result(2, 80.0, 50.0, 1.0)]
+    for j, u in enumerate(users):
+        (rep / f"user-{j}").mkdir(parents=True)
+        (rep / f"user-{j}" / S.RESULT).write_text(json.dumps(u))
+    (rep / S.RESULT).write_text(json.dumps(S.merged(users)))
+    (rep / "meta.json").write_text(json.dumps({"rate": None, "concurrency": 2, "unfinished": 0, "tag": "agentic@2-r1"}))
+    meta = {"arm": "prod-record", "model_id": "glm53", "rates": {}, "passes": {"agentic@2": {"load": "agentic", "concurrency": 2}}}
+    (d / "meta.json").write_text(json.dumps(meta | {"end_of_text_ids": [7, 8, 9]}))
+    (one,) = S.arm_metrics(d)["loads"]["agentic@2"]
+    assert (one["ids_kept"], one["past_end"], one["after_end_tokens"]) == (3, 1, 3)
+    (d / "meta.json").write_text(json.dumps(meta))            # a directory served before its meta named them
+    assert "past_end" not in S.arm_metrics(d)["loads"]["agentic@2"][0]
+
+
+def test_a_sessions_cost_says_how_many_requests_went_on_past_an_end_of_text_token_for_the_side_that_kept_its_ids():
+    ref, ours = served("prod", [2.0] * 3), served("prod-record", [2.0 / 1.01] * 3)
+    for rep, past in zip(ours["loads"]["agentic@4"], (20, 24, 28)):
+        rep |= {"ids_kept": 96, "past_end": past, "after_end_tokens": 12000}
+    r = S.session_cost([ref, ours], "prod-record", "prod")
+    assert r["sides"]["arm"]["past_end"] == {"requests": 72, "of": 288, "tokens_after_share": 20.0}
+    assert r["sides"]["reference"]["past_end"] is None
+    assert ("; each greedy; each request decoded to its recorded length, past any end-of-text token\n"
+            "  past an end-of-text token, in the passes counted: 72 of prod-record's 288 requests served an end-of-text "
+            "token before their end and went on, 20.00% of its output tokens after one; prod's server keeps no ids, so "
+            "the count is prod-record's alone\n") in S.session_text(r)
+    # a side that kept the ids of some of its counted passes only has no count, and with none kept there is no line
+    del ours["loads"]["agentic@4"][1]["ids_kept"]
+    r = S.session_cost([ref, ours], "prod-record", "prod")
+    assert r["sides"]["arm"]["past_end"] is None and "in the passes counted" not in S.session_text(r)
+    assert S.past_end_text(r) == []
+    # both sides' where both kept them
+    for arm in (ref, ours):
+        for rep in arm["loads"]["agentic@4"]:
+            rep |= {"ids_kept": 96, "past_end": 24, "after_end_tokens": 6000}
+    r = S.session_cost([ref, ours], "prod-record", "prod")
+    assert S.past_end_text(r) == [
+        "  past an end-of-text token, in the passes counted: 72 of prod's 288 requests served an end-of-text token "
+        "before their end and went on, 10.00% of its output tokens after one; 72 of prod-record's 288 requests served "
+        "an end-of-text token before their end and went on, 10.00% of its output tokens after one"]
+    assert S.past_end_text(r)[0] + "\n" in S.session_text(r)
+
+
 def test_a_cost_over_lifetimes_is_the_mean_of_theirs_with_students_t_over_them():
     # three pairs of lifetimes of two passes each: ours costs 0.4%, 0.5% and 0.6% in them, a pass 0.1 points either side
     pairs = [[(1.0, 1 / (1 + c + d)) for d in (-0.001, 0.001)] for c in (0.004, 0.005, 0.006)]
@@ -467,12 +550,16 @@ def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work
     both = [served("prod", [2.0] * 6, plan=sampled), served("prod-record", OURS, plan=sampled) | {"seeded": True}]
     cost = S.session_cost(both, "prod-record", "prod")
     assert cost["seeded"] == {"reference": False, "arm": True}
+    # sampled or greedy, a request is decoded to its recorded length, and the cost's line on the load says so
+    assert S.TO_LENGTH == "each request decoded to its recorded length, past any end-of-text token"
+    past = f"; {S.TO_LENGTH}\n"
     assert ("planned to repeat; each sampled at temperature 1 and top-p 0.95, prod-record's under a seed its client "
-            "sends, one a user, and prod's under none\n") in S.session_text(cost)
+            "sends, one a user, and prod's under none" + past) in S.session_text(cost)
     both[0]["seeded"] = True                              # arms served when every sampled arm was sent a seed
-    assert ("planned to repeat; each sampled at temperature 1 and top-p 0.95 under a seed its client sends, one a user\n"
-            in S.session_text(S.session_cost(both, "prod-record", "prod")))
-    assert "planned to repeat; each greedy\n" in S.session_text(S.session_cost([ref, served("prod-record", OURS)], "prod-record", "prod"))
+    assert ("planned to repeat; each sampled at temperature 1 and top-p 0.95 under a seed its client sends, one a user"
+            + past in S.session_text(S.session_cost(both, "prod-record", "prod")))
+    assert "planned to repeat; each greedy" + past in S.session_text(
+        S.session_cost([ref, served("prod-record", OURS)], "prod-record", "prod"))
     with pytest.raises(SystemExit, match="prod served load agentic and prod-record did not"):
         S.session_cost([ref], "prod-record", "prod")
     with pytest.raises(SystemExit, match="no directory of arm prod "):

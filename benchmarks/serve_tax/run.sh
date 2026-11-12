@@ -2,7 +2,7 @@
 # The serve tax on one node (README.md), from the shipped tree's root under `research run`, the C4 shard sent with
 # --send (or C4=PATH) unless a ready plan is:
 #   ARMS="compiled eager ..." RATES=light=R,medium=R,saturated=R [MODEL_ID=moonlight] [REPS=3] [SPAN_S=60]
-#     [REQUESTS=N] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR]
+#     [REQUESTS=N] [DRAIN_S=600] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR]
 #     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"] [REPLAY_LOGPROBS=1]] [MAX_MIN=240]
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
@@ -80,6 +80,9 @@
 # under the node's scratch, removed at the end); RESTORE=FROM:TO then restores each RESTORE_ARM's edge FROM into a fresh
 # engine (warmed first on RESTORE_WARM of the replay block's prompts) and replays to edge TO (restore.py) into
 # OUT/<arm>-replay. RESTORE_FROM=OUT_DIR with KV_DIR and no ARMS restores an earlier job's arms alone.
+# DRAIN_S is how long the trace corpus's client waits, after a load's last arrival, for the answers still out (600 s):
+# a request unanswered by then is cut and counted unserved, so a load whose last request is very long (a prompt at
+# the model's context limit) names more. It is that client's alone: a pass of vLLM's own client reads none.
 # One plan (OUT/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
 # server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease; the tick arms
 # take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
@@ -124,6 +127,7 @@ export CLIENT ${MODEL_ID:+MODEL_ID} ${REPS:+REPS} ${DATASETS:+DATASETS}
   || { echo "serve-tax: LEAVE_OUT=$LEAVE_OUT: the passes each lifetime leaves out, fewer than its REPS=${REPS:-3}"; exit 2; }
 [[ "${TURNED:-0}" =~ ^[01]$ ]] || { echo "serve-tax: TURNED=$TURNED: 1 begins with the arms' order turned round, 0 with the order named"; exit 2; }
 [[ "${WARM_S:-0}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "serve-tax: WARM_S=$WARM_S: the warm-up's seconds, 0 for none"; exit 2; }
+[[ "${DRAIN_S:-600}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "serve-tax: DRAIN_S=$DRAIN_S: the seconds the corpus client waits for answers after a load's last arrival"; exit 2; }
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
@@ -218,6 +222,7 @@ if [ "${1:-}" = leased ]; then
   [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
   [ -n "${EDGES_EVERY_S:-}" ] && count+=(--edges-every-s "$EDGES_EVERY_S" ${SAVE_KV:+--save-kv "$SAVE_KV"} --kv-copy "${KV_COPY:-all}")
   [ -n "${WARM_S:-}" ] && count+=(--warm-s "$WARM_S")
+  [ -n "${DRAIN_S:-}" ] && count+=(--drain-s "$DRAIN_S")
   # the server lifetimes in order: the arms as named, then turned round, and so on (LIFETIMES), so that two arms'
   # lifetimes of one number are neighbours in time, or the turned order first (TURNED=1); with one lifetime an arm's
   # directory is its name

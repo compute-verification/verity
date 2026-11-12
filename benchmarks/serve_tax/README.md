@@ -334,7 +334,12 @@ floor, stock over stock a lifetime apart, saying so where the floor's own interv
 of prompt tokens the load plans to repeat beside the share each side's prefix cache served, and gives no verdict where
 a side left a request unserved, the sides served different counts of output tokens in a rep or the two caches served
 different shares in it: the sides then did not do the same work. The same work is the same requests and as many
-tokens, not the same token ids: two passes of the same prompts can serve other tokens, sampled or greedy. Beside each
+tokens, not the same token ids: two passes of the same prompts can serve other tokens, sampled or greedy. The count of
+output tokens is the same because every request is decoded to its recorded length whatever it generates, past any
+end-of-text token, as vLLM's own client measures; the cost's line on the load says so, and where an arm's server kept
+the served ids (`ids` in its plugin's configuration, which no stock arm has) the next line counts that arm's requests
+that served one of the checkpoint's end-of-text ids before their end and went on, with the share of its output tokens
+after one: text an agent's client would not have asked for. Beside each
 side's output tokens a second it prints its prompt and output tokens a second a GPU, the output tokens a second a
 user gets at the P90 time a token, the engine steps a pass took, and the share of its draft tokens the model accepted
 with the tokens a draft gave (the engine's own counters), so a reader sees whether a cost came with more steps or

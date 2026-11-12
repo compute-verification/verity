@@ -153,6 +153,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import functools
+import gzip
 import hashlib
 import json
 import math
@@ -1652,7 +1653,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             "commit": source_commit(),
             "plan_sha256": file_digest(Path(a.plan)) if a.plan and Path(a.plan).is_file() else None,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "sampled": SAMPLED if a.sampled else None,
-            "seeded": a.sampled and sends_seed(arm),
+            "seeded": a.sampled and sends_seed(arm), "end_of_text_ids": end_of_text_ids(checkpoint),
             "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges,
             "gpu_busy": lib is not None, "no_gpu_busy": no_nvml, "versions": versions(), "host": os.uname().nodename,
             "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
@@ -1923,13 +1924,52 @@ def edge_summary(edges: list[dict]) -> dict | None:
             "copied_bytes": es[0]["kv"].get("copied_bytes"), "roots_equal": all(r["kv"].get("roots_equal", True) for r in es)}
 
 
+def end_of_text_ids(checkpoint: Path) -> list[int]:
+    """The token ids a checkpoint's generation configuration ends a text at (``eos_token_id``, one or a list; its
+    model configuration's where it names none), in order; none where neither file names any."""
+    for name in ("generation_config.json", "config.json"):
+        f = checkpoint / name
+        ids = json.loads(f.read_text()).get("eos_token_id") if f.is_file() else None
+        if ids is not None:
+            return sorted({ids} if isinstance(ids, int) else set(ids))
+    return []
+
+
+def past_end(d: Path, tags: Sequence[str], ends: Sequence[int]) -> dict[str, dict]:
+    """For each pass of an arm's run dir whose server kept its ids (`servetax_plugin.ServedIds`), by the pass's tag:
+    the requests it kept, how many of them served an end-of-text id (``ends``) before their last token and went on,
+    as every request does that is decoded to its length whatever it generates, and the output tokens after a
+    request's first such id. Empty where the server kept none or ``ends`` is."""
+    out: dict[str, dict] = {}
+    marks = set(ends)
+    for path in sorted((d / "server").glob("ids.*.jsonl*")) if marks else ():
+        with (gzip.open if path.suffix == ".gz" else open)(path, "rt", encoding="utf-8") as f:
+            for line in f:
+                head = line.partition(",")[0]                 # a line opens with its request's id
+                tag = next((t for t in tags if f"-{t}-" in head), None)
+                if tag is None:
+                    continue
+                ids = json.loads(line)["output_ids"]
+                first = next((i for i, x in enumerate(ids) if x in marks), None)
+                went_on = first is not None and first < len(ids) - 1
+                n = out.setdefault(tag, {"ids_kept": 0, "past_end": 0, "after_end_tokens": 0})
+                n["ids_kept"] += 1
+                n["past_end"] += went_on
+                n["after_end_tokens"] += len(ids) - first - 1 if went_on else 0
+    return out
+
+
 def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
     """An arm's run dir: its meta and each load's metrics by rep, with the GPUs' busy time and the edges that fell in
-    it, and its edges' summary (`edge_summary`)."""
+    it, and its edges' summary (`edge_summary`). Where the arm's server kept the served ids and its meta names the
+    checkpoint's end-of-text ids, a rep also has how many of its requests served one before their end and the
+    output tokens after it (`past_end`)."""
     meta = json.loads((d / "meta.json").read_text())
     ran = MODELS[meta["model_id"]].slo
     slo = slo or ran
     edges = edge_records(d)
+    tags = {json.loads(f.read_text()).get("tag"): f.parent for f in d.glob("*/rep-*/meta.json")}
+    ended = {tags[t]: n for t, n in past_end(d, [t for t in tags if t], meta.get("end_of_text_ids") or ()).items()}
     loads: dict[str, list[dict]] = {}
     for name in meta.get("passes") or meta["rates"]:
         for rep in sorted((d / name).glob("rep-*"), key=lambda p: int(p.name.split("-")[1])):
@@ -1952,7 +1992,8 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
                                                "concurrency": m.get("concurrency"),
                                                "unfinished": m.get("unfinished"), **lm,
                                                **schedule_metrics(m.get("schedule")),
-                                               **gpu_metrics(m, lm.get("output_tokens")), **load_edges(edges, m)})
+                                               **gpu_metrics(m, lm.get("output_tokens")), **load_edges(edges, m),
+                                               **ended.get(rep, {})})
     return {"schema": SCHEMA + "/metrics", "arm": meta["arm"], "parent": meta.get("parent"), "what": meta.get("what"),
             "run_id": meta.get("run_id"), "commit": meta.get("commit"), "vllm": (meta.get("versions") or {}).get("vllm"),
             "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
@@ -2535,7 +2576,10 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
     its prompt and output tokens a second a GPU, the output tokens a second a user gets at the P90 time a token
     (`merged`), the engine steps a pass took (``steps``) and, where it decodes speculatively, the share of its draft
     tokens accepted and the tokens a draft gave (`schedule_metrics`): a reader sees whether a cost came with more
-    steps or fewer accepted drafts, and no figure is adjusted for either. None where ``reference`` served no sessions
+    steps or fewer accepted drafts, and no figure is adjusted for either. A side whose server kept the served ids
+    also has ``past_end``: of the requests of its counted passes, how many served an end-of-text id before their
+    end and went on, as a request decoded to its recorded length does, and the share of its output tokens after one
+    (`past_end`); None for a side that kept none, as stock does. None where ``reference`` served no sessions
     load; refused where ``arm`` did not serve it or served another plan, or where the arms were served by different
     builds of vLLM."""
     by = joined(arms)
@@ -2582,12 +2626,17 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
             return None if None in xs else statistics.fmean(xs)
 
         whole, slow, accepted = mean("total_tok_per_s"), mean("tpot_p90_s"), mean("accepted_per_draft")
+        kept = [rs[k] for k in reps if rs[k].get("ids_kept")]
+        tokens = sum(r.get("output_tokens") or 0 for r in kept)
         return {**of, "cached_share": _pct(mean("prompt_cached_share")),
                 "served_all": all(rs[k].get("ok") == rs[k].get("sent") == sent for k in reps),
                 "tok_per_s_a_gpu": None if whole is None else whole / gpus,
                 "user_tok_per_s_p90": 1 / slow if slow else None, "steps": mean("steps"),
                 "draft_accepted_share": _pct(mean("draft_accepted_share")),
-                "tokens_per_draft": None if accepted is None else 1 + accepted}
+                "tokens_per_draft": None if accepted is None else 1 + accepted,
+                "past_end": {"requests": sum(r["past_end"] for r in kept), "of": sum(r["ids_kept"] for r in kept),
+                             "tokens_after_share": _pct(sum(r["after_end_tokens"] for r in kept) / tokens)
+                             } if tokens and len(kept) == len(reps) else None}
 
     def reading(work: Callable[[dict], float | None]) -> float | None:
         """The cost under another figure of a pass's rate of work, the same passes paired the same way."""
@@ -2630,6 +2679,26 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
             "reference_commit": of[reference]["commit"], "reference_run": of[reference]["run"]}
 
 
+#: what a sessions cost says of its requests' lengths: `bench_argv` has vLLM's client send each with its recorded
+#: output length and ``ignore_eos``, in every arm, so the sides' counts of output tokens are equal
+TO_LENGTH = "each request decoded to its recorded length, past any end-of-text token"
+
+
+def past_end_text(r: dict) -> list[str]:
+    """The line of a sessions cost (`session_cost`'s result) on the requests that went on past an end-of-text token
+    (`past_end`), where a side's server kept the served ids; it names a side that kept none. No line where neither
+    did."""
+    sides = [r["sides"][k] for k in ("reference", "arm")]
+    kept = [x for x in sides if x.get("past_end")]
+    if not kept:
+        return []
+    has = [f"{x['past_end']['requests']:,} of {x['arm']}'s {x['past_end']['of']:,} requests served an end-of-text "
+           f"token before their end and went on, {x['past_end']['tokens_after_share']:.2f}% of its output tokens "
+           "after one" for x in kept]
+    none = [f"{x['arm']}'s server keeps no ids, so the count is {kept[0]['arm']}'s alone" for x in sides if x not in kept]
+    return ["  past an end-of-text token, in the passes counted: " + "; ".join(has + none)]
+
+
 #: what else a sessions load's passes can be read by, beside the cost and in no verdict (`session_cost`'s
 #: ``readings``): the seconds the GPUs were busy in a pass, the seconds its users each took, summed, and the sum of
 #: its users' own rates (`merged`)
@@ -2662,7 +2731,9 @@ def session_text(r: dict) -> str:
         f"  the load: {r['what']}; {plan['requests']:,} requests of {plan['prompt_tokens']:,} prompt tokens, "
         f"{plan['repeated_share']:.2f}% of them planned to repeat"
         + (f"; each sampled at temperature {plan['sampled']['temperature']:g} and top-p {plan['sampled']['top_p']:g}"
-           + _seeds(r) if plan.get("sampled") else "; each greedy"),
+           + _seeds(r) if plan.get("sampled") else "; each greedy")
+        + f"; {TO_LENGTH}",
+        *past_end_text(r),
         f"  the cost is the mean of the lifetimes' costs, a lifetime's being {r['arm']}'s seconds for the passes both arms "
         f"counted in it over {r['reference']}'s, less one, a pass's seconds from its users' first send to the last one's "
         "last answer; "
@@ -3232,7 +3303,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="a warm-up load at the lowest rate first, or a short pass of vLLM's client (0: none)")
     r.add_argument("--commit-wait-s", type=float, default=900.0,
                    help="the boundary-rows arm: how long the server is held after its loads for its commits (await_commits)")
-    r.add_argument("--drain-s", type=float, default=600.0)
+    r.add_argument("--drain-s", type=float, default=600.0,
+                   help="the trace corpus's client: how long after a load's last arrival it waits for the answers still "
+                        "out; a request unanswered by then is cut and counted unserved")
     r.add_argument("--startup-s", type=float, default=1800.0)
     r.add_argument("--window-s", type=float, default=600.0, help="the Commit period the tokens arm closes at")
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
