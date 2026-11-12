@@ -29,6 +29,7 @@ import hashlib
 import json
 import sys
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -158,8 +159,10 @@ def _dtype_variant(v: str) -> str:
     return v
 
 
-FEATURE_VARIANTS = {"chunked": int,           # key -> value parser; the value is recorded under `feature_variant`
-                    "dtype": _dtype_variant}  # [fp16 via integ] the numerical-format column; recorded under `dtype` / `numerical_format`
+#: key -> value parser; the value is recorded under `feature_variant`
+FEATURE_VARIANTS: dict[str, Callable[[str], int | str]] = {
+    "chunked": int,
+    "dtype": _dtype_variant}                  # [fp16 via integ] the numerical-format column; recorded under `dtype` / `numerical_format`
 DEFAULT_MAX_NUM_SEQS = 8                      # cov_pod.sh runs every cell with --max-num-seqs 8
 
 
@@ -268,7 +271,7 @@ def simulate_schedule_chunked(reqs: list[dict], budget: int, max_num_seqs: int =
         steps_mixed += 1 if (any_prefill and any_decode) else 0
         step += 1
     spans = [(admitted_step[i], finish_step[i]) for i in range(n)]
-    active = [frozenset(i for i, (a, b) in enumerate(spans) if a <= s <= b) for s in range(step)]
+    active = [frozenset(i for i, (a, b) in enumerate(spans) if a is not None and b is not None and a <= s <= b) for s in range(step)]
     return {"expected_engine_steps": step, "peak_concurrent": max(len(x) for x in active),
             "membership_changes": sum(1 for s in range(1, step) if active[s] != active[s - 1]),
             "steps_with_mixed_prefill_decode": steps_mixed, "steps_with_partial_prefill": steps_with_partial,
