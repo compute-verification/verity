@@ -219,7 +219,8 @@ def test_case_members_names_every_member_and_a_statement_for_each_sampled_one(tm
     assert got["evidence"] == RP.DT.canonical(e).encode().hex()
     assert got["blobs"] == [str(f) for f in (
         tmp_path / "m0" / "circuit.txt", tmp_path / "m0" / "pub-3.bin", s0 / "session.json", s0 / "rep-0.bin",
-        tmp_path / "m2" / "circuit.txt", tmp_path / "m2" / "pub-4.bin", s2 / "session.json", s2 / "rep-0.bin")]
+        tmp_path / "m2" / "circuit.txt", tmp_path / "m2" / "pub-4.bin", s2 / "session.json", s2 / "rep-0.bin",
+        tmp_path / "m1" / "circuit.txt", tmp_path / "m1" / "pub-2.bin")]
 
 
 def test_case_members_refuses_sessions_out_of_the_members_order(tmp_path, RP):

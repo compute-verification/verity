@@ -1191,7 +1191,8 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     when it was staged before the sample, its registered file, its units and its circuit's ``vus_per_block``; the
     evidence with its ``verdicts`` replaced by the statements, one for each member with a session, in the members' order
     (`proofs.members_v2`), each session under the name v1's ``sessions`` gives it, its ``session.json``'s SHA-512; and
-    ``blobs``, the paths of the statements' files and of the pinned lookup ``tables`` their circuits look up. The
+    ``blobs``, the paths of the statements' files, of the circuit and public files of each member with no session, which
+    v2's check of the form reads too, and of the pinned lookup ``tables`` the statements' circuits look up. The
     statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
     (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
     RP = own_replay()

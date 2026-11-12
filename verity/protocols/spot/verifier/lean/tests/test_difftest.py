@@ -2593,7 +2593,7 @@ def test_the_per_member_form_as_written_is_what_v2_parses_and_never_checks(tmp_p
     names = [x["name"] for st_ in pe["statements"] for x in st_["sessions"]]
     assert names == ["s0", "s1"] and [st_["member"] for st_ in pe["statements"]] == [ms[0].name, ms[2].name]
     assert blobs == [f for m in (ms[0], ms[2]) for f in (m.proof.circuit, m.proof.public, m.proof.sessions[0] / "session.json",
-                                                         m.proof.sessions[0] / "rep-0.bin")]
+                                                         m.proof.sessions[0] / "rep-0.bin")] + [ms[1].proof.circuit, ms[1].proof.public]
     p2, e2 = params | {"proofs": pm}, base | {"proofs": pe, "sessions": names}
     got, refused = PF.members_parsed(p2, e2)
     assert refused is None, refused

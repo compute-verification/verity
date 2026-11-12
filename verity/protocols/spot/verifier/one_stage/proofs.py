@@ -545,10 +545,11 @@ def members_v2(members: Sequence[Member],
     """v2's per-member form of ``proofs`` for a window's `members`, every one of them: the parameters'
     (``{"members": {name: {circuit, public, registered, units, vus_per_block}}}``), the evidence's
     (``{"statements": [{member, sessions}]}``: one statement for each member with a session, in the members' order by
-    first unit, its session as `evidence_v2` names it, under `names`' for that member), and the blobs that hold the
-    statements' files. Two members of one name, a member of no unit or one with several sessions raise: a statement is
-    exactly one session on live coins. `Spot.OneStageZk` parses this form and refuses it (`MULTI_REFUSED`);
-    `members_parsed` holds these keys to its parsers."""
+    first unit, its session as `evidence_v2` names it, under `names`' for that member), and the blobs: the
+    statements' files, then the circuit and public files of each member with no session, since the form's check reads
+    every member's files, sampled or not (`OneStageZk.membersFiles`). Two members of one name, a member of no unit or
+    one with several sessions raise: a statement is exactly one session on live coins. `Spot.OneStageZk` parses this
+    form and refuses it (`MULTI_REFUSED`); `members_parsed` holds these keys to its parsers."""
     if len({m.name for m in members}) != len(members):
         raise ValueError("two members have one name: a member's name is its own")
     for m in members:
@@ -566,6 +567,7 @@ def members_v2(members: Sequence[Member],
         pr, files = evidence_v2(m.proof, None if names is None else names[m.name])
         statements.append({"member": m.name, "sessions": pr["sessions"]})
         blobs += files
+    blobs += [f for m in members if not m.proof.sessions for f in (m.proof.circuit, m.proof.public)]
     return params, {"statements": statements}, blobs
 
 
