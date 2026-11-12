@@ -326,6 +326,25 @@ def test_a_persons_ask_off_track_rings_its_lane_once_a_window_until_it_holds(tmp
     assert sorted(again) == ["ci", "compute-accounting"] and "(unstaffed 1, slipped 1)" in again["ci"]
 
 
+def test_an_issue_waiting_only_on_landing_is_no_finding_of_the_sweeps_as_in_the_command_its_ring_names(tmp_path, monkeypatch):
+    slip = finding("NET-1", "slipped", "network-accounting")
+
+    class Lin:
+        def audit(self, owners, teams=None, now=None, waiting=None):         # the slipped issue is In Review on pull request 20 alone
+            return FOUND + ([] if waiting and waiting([20]) else [slip])
+
+        def unread(self, teams):
+            return []
+
+    monkeypatch.setattr(T.linear, "Linear", Lin)
+    monkeypatch.setattr(T.linear, "owners", lambda reg: {"NET": "network-accounting"})
+    monkeypatch.setattr(T, "volume_json", lambda: VOLUME)
+    monkeypatch.setattr("research.queue.landing_waiter", lambda: lambda numbers: numbers == [20])    # #20 is marked ready
+    ring = Ring()
+    T.linear_check({}, ring, {}, at(19, 12, 30), tmp_path / T.AUDIT_LOG)
+    assert [to for to, _, _ in ring.rings] == ["top", "infra", "proofs"]
+
+
 def test_a_clean_audit_rings_nobody_and_tops_daily_line_gives_the_change_from_the_line_24_h_earlier(tmp_path):
     state, ring, log = {}, Ring(), tmp_path / T.AUDIT_LOG
     T.linear_audit(state, ring, at(19, 20), lambda: FOUND, lambda: VOLUME, log)
