@@ -22,7 +22,9 @@ each from an output of the row's bits whose leaves' width divides the reader's (
 word) or, into a closed row, from any output of the row's bits, written unit by unit and merged into runs
 (`verity.commitments.windows.interface.coalesce`, as a lowering states them); registered reads, a table with its table reads and
 opening, and ingress; a registration log in R6's chain whose first record registers some of the parameters, under the
-root the run's own record commits or another; and pins of most templates' Definitions, among other digests. Two in
+root the run's own record commits or another; row formats (`formats`): 32-bit leaves, of either schema, of
+parameters the run's own record or the first one registers in those leaves, and 16-bit leaves in segment rows of
+parameters the first one registers; and pins of most templates' Definitions, among other digests. Two in
 five are broken in one way, each refused at one stage (`BROKEN`, every way in turn, `WAYS`). Then `shaped()`:
 circuits in the shape of a served class (`lowered`: a slot scan, an embedding read through a table opening, a norm,
 matmul rows over registered weights, an attention template per position reading every earlier position's rows by a
@@ -55,6 +57,9 @@ read, a table read, an opening's port and ingress, each refused. Then a template
 templates. Then a template keyed as an input id (`KEYED`), bound per run and bound at registration: a composite, so
 its gates are computed and a root node of it is no input. The record of that one template, and the served shape's
 record with a unit of it more at the Program's root that the record does not list, each refused with its templates.
+Then a row format (`FORMATS`): the scan state and a weight registered in 32-bit leaves, their formats right, taken
+with the served shape's verdict; the weight with no format, its rows fresh; and formats the log does not hold, each
+refused (`formats`), and formats the form's shape refuses, each refused with the declarations (`inputs`).
 
 Every wire of every case is one `Record.sameSlot`'s search decides within its fuel (`searched`, the search
 mirrored and held to the expansion as the cases are made), so the Lean's count of a wire is the reference's.
@@ -113,7 +118,9 @@ BROKEN = {
     "wires": ["overlap", "bounds", "width", "wire-port", "wire-template", "wire-cut", "cycle", "order", "no-wires"],
     "leaf-widths": ["leaf-wider", "leaf-short"],
     "inputs": ["read-param", "read-leaves", "read-on-wire", "table-param", "root-port", "verdict", "ingress-units",
-               "registered-keys"],
+               "registered-keys", "format-schema", "format-bits", "format-keys", "format-table", "format-param",
+               "format-default", "format-whole", "format-read"],
+    "formats": ["format-width", "format-none", "format-unregistered", "format-weight", "format-root"],
     "blocks": ["no-blocks", "slot-radix", "two-slots", "gap", "twice", "entry-template"],
     "reader-layout": ["reader-other"],
     "reader-roles": ["key-port", "key-row", "root-row", "domain-row", "rows-swapped", "port-out", "ports-order",
@@ -260,7 +267,8 @@ class Circuit:
     """A circuit as its record states it, built declaration by declaration: `templates`, each `(Definition, units)`;
     `cuts`; `wires` and `reads`, `verity.commitments.windows.interface` patterns; the registered `params`, `tables`, `roots`
     (table reads) and `openings`; `ingress`; the inference `entries` with the class's `slots` and `steps`; the `order`
-    it states, or None; and `values`, the registered parameters its Program takes as inputs of its own."""
+    it states, or None; `values`, the registered parameters its Program takes as inputs of its own; and `formats`, by
+    registered parameter the format of its rows where they are not 16-bit leaves in `hm96-sha512/row/v2` rows."""
 
     def __init__(self, name: str, slots: int, steps: int = 1) -> None:
         self.name, self.slots, self.steps = name, slots, steps
@@ -276,6 +284,7 @@ class Circuit:
         self.entries: list[dict] = []
         self.order: list | None = None
         self.values: list[str] = []
+        self.formats: dict[str, dict] = {}
         self.registered = True
 
     def add(self, fn, entries: list[tuple[list[int], list[str], int]]) -> str:
@@ -300,7 +309,8 @@ class Circuit:
     def doc(self, digest: str) -> dict:
         """The circuit's record (`verity/window-circuit/v1`), as far as a stated record's description goes."""
         reg = {"params": dict(self.params), "tables": self.tables, "reads": [r.doc() for r in self.reads],
-               "roots": self.roots, "openings": self.openings, **({"values": self.values} if self.values else {})}
+               "roots": self.roots, "openings": self.openings, **({"values": self.values} if self.values else {}),
+               **({"formats": self.formats} if self.formats else {})}
         return json.loads(json.dumps({
             "format": IF.CIRCUIT, "name": self.name, "templates": [[t, n] for t, n in self.units.items()],
             "program": digest, "wires": [w.doc() for w in self.wires],
@@ -396,15 +406,22 @@ def digest_of(text: str) -> str:
     return hashlib.sha512(text.encode()).hexdigest()
 
 
-def trusted(rng, digest: str, text: str, held: dict[str, tuple[str, int, int]], roots: dict[str, str],
-            before: int = 2, after: int = 0) -> dict:
+def _entries(rng, held: dict[str, tuple]) -> list[dict]:
+    """Registration entries of the values `held`, `(root, leaves, words)` or `(root, leaves, words, word_bits)` each:
+    an entry has `word_bits` where its value is given one."""
+    return [{"value": v, "root": r, "leaves": n, "words": w, "domain": _hex(rng), **({"word_bits": h[0]} if h else {})}
+            for v, (r, n, w, *h) in held.items()]
+
+
+def trusted(rng, digest: str, text: str, held: dict[str, tuple], roots: dict[str, str],
+            before: int = 2, after: int = 0, ran: dict[str, tuple] | None = None) -> dict:
     """A deployment's registration log in R6's chain and the run's digest: the first record registers each value of
-    `held` (`(root, leaves, words)`), `before - 1` records follow it, then the run's own, of the Program `digest` and
-    the record `text`, committing the registered parameters under `roots`; `after` records follow. With `before` 0 the
-    run's record opens the log, and registers `held` itself."""
-    entries = [{"value": v, "root": r, "leaves": n, "words": w, "domain": _hex(rng)} for v, (r, n, w) in held.items()]
+    `held` (`_entries`), `before - 1` records follow it, then the run's own, of the Program `digest` and the record
+    `text`, committing the registered parameters under `roots` and registering each value of `ran`; `after` records
+    follow. With `before` 0 the run's record opens the log, and registers `held` itself, before `ran`."""
+    entries = _entries(rng, held)
     run = {"format": V2, "protocol": "verity/sampled-proofs/one-stage/v1", "program": digest,
-           "window": {"circuit": digest_of(text), "registered_roots": dict(roots)}, "registered": []}
+           "window": {"circuit": digest_of(text), "registered_roots": dict(roots)}, "registered": _entries(rng, ran or {})}
     log: list[dict] = []
     for k in range(before + 1 + after):
         rec = copy.deepcopy(run) if k == before else {"format": V2, "registered": [
@@ -825,6 +842,45 @@ KEYED: dict[str, str] = {
     "a template keyed as an input bound at registration": "RegisteredInput7",
 }
 
+SEG32 = {"row_schema": "hm96-sha512/row-seg/v1", "word_bits": 32}
+#: a row format (`registered.formats`) and the registration beside it: the stage that refuses the case (None where it
+#: is not refused), the circuit (`lowered(2, 3)` where None, else `passed_on` of that way with its one weight held
+#: and committed) and what `shaped`'s `one` takes besides: the record's `formats`, the parameters the run's own record
+#: registers (`ran`, each with its leaves' bits) and the weights the log's first record registers in 32-bit leaves
+#: (`wide`). The scan state is the run's own input: no record before the run's registers it.
+FORMATS: dict[str, tuple] = {
+    "the scan state in 32-bit leaves, its format right": (None, None, {"formats": {"scan-state": SEG32},
+                                                                       "ran": {"scan-state": 32}}),
+    "the scan state in 32-bit leaves of v2 rows, its format right":
+        (None, None, {"formats": {"scan-state": {**SEG32, "row_schema": "hm96-sha512/row/v2"}},
+                      "ran": {"scan-state": 32}}),
+    "the scan state in 32-bit leaves, its format another width":
+        ("formats", None, {"formats": {"scan-state": {**SEG32, "word_bits": 16}}, "ran": {"scan-state": 32}}),
+    "the scan state in 32-bit leaves, no format": ("formats", None, {"ran": {"scan-state": 32}}),
+    "the scan state in 16-bit leaves, its format 32 bits":
+        ("formats", None, {"formats": {"scan-state": SEG32}, "ran": {"scan-state": 16}}),
+    "a format on a value the run's record does not register": ("formats", None, {"formats": {"scan-state": SEG32}}),
+    "a weight in 16-bit leaves, its format 32 bits": ("formats", None, {"formats": {"weights/query": SEG32}}),
+    "a weight in 32-bit leaves, its format right": (None, None, {"formats": {"weights/query": SEG32},
+                                                                 "wide": ("weights/query",)}),
+    "a weight in 32-bit leaves, no format": (None, None, {"wide": ("weights/query",)}),
+    "a format of another schema":
+        ("inputs", None, {"formats": {"scan-state": {**SEG32, "row_schema": "hm96-sha512/row/v3"}}}),
+    "a 16-bit format in v2 rows":
+        ("inputs", None, {"formats": {"weights/query": {"row_schema": "hm96-sha512/row/v2", "word_bits": 16}}}),
+    "a 24-bit format": ("inputs", None, {"formats": {"weights/query": {**SEG32, "word_bits": 24}}}),
+    "a format with a key more": ("inputs", None, {"formats": {"weights/query": {**SEG32, "rows": 2}},
+                                                  "wide": ("weights/query",)}),
+    "a format on the table's parameter":
+        ("inputs", None, {"formats": {"weights/embed/table": {**SEG32, "word_bits": 16}}}),
+    "a format on no registered parameter": ("inputs", None, {"formats": {"weights/nope": SEG32}}),
+    "a 32-bit format on an odd number of leaves":
+        ("inputs", None, {"formats": {"scan-state": SEG32},
+                          "edit": lambda d: d["registered"]["params"].update({"scan-state": 9})}),
+    "a 32-bit format on a weight read in rows of one 16-bit leaf":
+        ("inputs", "gates", {"formats": {"weights/wide": SEG32}, "wide": ("weights/wide",)}),
+}
+
 
 def shaped() -> list[dict]:
     """The cases on `lowered` circuits, at two slots and three positions and at four slots and 35, each size under one
@@ -870,7 +926,12 @@ def shaped() -> list[dict]:
     Then a template keyed as an input id (`KEYED`), a composite of one gate over a word: the accepted case with its
     Program and record those of that one template, a unit a slot (`_alone`), and the accepted case with a unit of
     it more at its Program's root, which its record does not list (`_unlisted`). Each is refused with its templates
-    (`templates`): a root node of a composite is no input, whatever its key reads as."""
+    (`templates`): a root node of a composite is no input, whatever its key reads as.
+
+    Then a row format (`FORMATS`), each at two slots and three positions under the same policy and pin but the last,
+    a `passed_on` weight under the policy of exactly what its blocks hold. A format the registration log holds is
+    taken; one it does not is refused (`formats`), and the case is counted without that stage; one the form's shape
+    refuses is edited into the accepted record and refused with the declarations (`inputs`)."""
     out = []
     first = None
     for n, (S, T) in enumerate([(2, 3), (4, 35)]):
@@ -879,21 +940,26 @@ def shaped() -> list[dict]:
 
         def one(what: str, c: Circuit, seed: int, *, held=WEIGHTS, committed=WEIGHTS, moved=(), beside=False,
                 before=2, policy=policy, pins=pins, n=n, edit=None, pinned=None, broken=None, refused=None,
-                reroot=None, alone=None, unlisted=None) -> None:
+                reroot=None, alone=None, unlisted=None, formats=None, ran=None, wide=()) -> None:
             """The case on `c`; with `edit`, its record then edited; with `reroot`, its Program's root then edited;
             with `alone`, its Program and record then those of a circuit of that one template (`_alone`); with
             `unlisted`, its Program's root then with a unit of that template more, which its record does not list
             (`_unlisted`); with `pinned`, its pins then those; `broken`, the stage that refuses it; `refused`, that
-            stage where it refuses the circuit as built."""
+            stage where it refuses the circuit as built. With `formats`, its record's row formats; `ran`, the
+            parameters the run's own record registers, each in leaves of the bits it gives; `wide`, the `held`
+            weights the log's first record registers in 32-bit leaves."""
             rng = random.Random(50_000 + 100 * n + seed)
             roots = {p: _hex(rng) for p in c.params}
             order = None
             if beside:
                 order, c.order = c.order, None
-            made = finish(rng, c, {p: (_hex(rng) if p in moved else roots[p], c.params[p] // 2, 2)
+            c.formats = dict(formats or {})
+            made = finish(rng, c, {p: _registered(_hex(rng) if p in moved else roots[p], c.params[p],
+                                                  32 if p in wide else 16)
                                    for p in held if p in c.params},
                           {p: roots[p] for p in (*committed, "scan-state") if p in c.params}, pins, before=before,
-                          order=order, policy=policy, refused=refused)
+                          order=order, policy=policy, refused=refused,
+                          ran={p: _registered(roots[p], c.params[p], b) for p, b in (ran or {}).items()})
             if edit is not None:
                 _rewrite(made, edit)
             if reroot is not None:
@@ -1010,7 +1076,32 @@ def shaped() -> list[dict]:
         seed = 47 + len(TWICE) + len(BITLESS) + 2 * k
         first(f"2x3 {what}, alone", lowered(2, 3), seed, broken="templates", alone=keyed)
         first(f"2x3 {what}, unlisted", lowered(2, 3), seed + 1, broken="templates", unlisted=keyed)
+    for k, (what, (stage, shape, more)) in enumerate(FORMATS.items()):
+        c = lowered(2, 3) if shape is None else passed_on(how=shape)
+        place = {} if shape is None else {"held": ("weights/wide",), "committed": ("weights/wide",), "pins": [],
+                                          "policy": {}}
+        if stage == "inputs":
+            more = dict(more)
+            fm, edit = more.pop("formats"), more.pop("edit", None)
+
+            def put(d: dict, fm=fm, edit=edit) -> None:
+                d["registered"]["formats"] = copy.deepcopy(fm)
+                if edit is not None:
+                    edit(d)
+            more.update(edit=put, broken=stage)
+        else:
+            more = {**more, "refused": stage}
+        first(f"2x3 {what}" if shape is None else what, c, 47 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + k,
+              **place, **more)
     return out
+
+
+def _registered(root: str, n: int, bits: int) -> tuple:
+    """A registration entry's root and shape for a parameter of `n` 16-bit leaves, in rows of two leaves of `bits`
+    bits (of one where `bits` takes `n` to an odd number of leaves); its width beside them where it is not 16."""
+    leaves = 16 * n // bits
+    words = 2 if leaves % 2 == 0 else 1
+    return (root, leaves // words, words) + (() if bits == 16 else (bits,))
 
 
 def listed(c: Circuit):
@@ -1031,10 +1122,12 @@ def listed(c: Circuit):
 # Cases
 
 
-def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[str, str], pins: list[str], *,
-           before: int = 2, after: int = 0, order=None, policy: dict | None = None, refused: str | None = None) -> dict:
+def finish(rng, c: Circuit, held: dict[str, tuple], roots: dict[str, str], pins: list[str], *,
+           before: int = 2, after: int = 0, order=None, policy: dict | None = None, refused: str | None = None,
+           ran: dict[str, tuple] | None = None) -> dict:
     """The case on circuit `c`: its instance (the Program, the record, `Γ`, `α` and the pins), the trusted input
-    (`trusted`), the wires as SPOT reads them, up to six of its units' input rows and the count's limits; with what it
+    (`trusted`, the run's record registering `ran`), the wires as SPOT reads them, up to six of its units' input rows
+    and the count's limits; with what it
     was made from. The limits are at, just under or just over what the circuit's blocks hold; or `policy`'s, which an
     empty `policy` is first filled with: a table of every primitive and exactly what the blocks hold; a primitive a
     later circuit computes that the policy's table lacks costs nothing. The reference takes the circuit as built;
@@ -1057,7 +1150,7 @@ def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[s
         table = dict.fromkeys(prims, 0) | policy.get("table", {p: 3 + 2 * k for k, p in enumerate(prims)})
     inst = {"program": text, "record": record, "gamma": BIG, "alpha": [BIG, 1], "pins": pins,
             **({"order": order} if order is not None else {})}
-    tr = trusted(rng, digest, record, held, roots, before, after)
+    tr = trusted(rng, digest, record, held, roots, before, after, ran)
     probe = ref.check_detail(inst, tr)
     assert probe.get("error") == refused, (c.name, probe)
     with _without(refused):
@@ -1078,22 +1171,30 @@ def finish(rng, c: Circuit, held: dict[str, tuple[str, int, int]], roots: dict[s
     return {"case": {"instance": inst, "trusted": tr, "spot": spot_of(c, json.loads(record), order),
                      "rows": [list(r) for r in rng.sample(rows, min(6, len(rows)))],
                      "count": {"table": table, **{k: limits["count"][k] for k in ("c", "k", "n")}}},
-            "circuit": c, "inside": inside,
-            "theta": sorted(p for p, (root, n, w) in held.items() if roots.get(p) == root and n * w == c.params[p])}
+            "circuit": c, "inside": inside, "ran": sorted(ran or {}),
+            "theta": sorted(p for p, (root, n, w, *bits) in {**held, **(ran if before == 0 else {})}.items()
+                            if roots.get(p) == root and n * w * _width(c, p) == 16 * c.params[p]
+                            and (bits or [16])[0] == _width(c, p))}
+
+
+def _width(c: Circuit, p: str) -> int:
+    """Registered parameter `p`'s leaf width in circuit `c`: its format's, 16 without one."""
+    return c.formats.get(p, {}).get("word_bits", 16)
 
 
 @contextlib.contextmanager
 def _without(stage: str | None):
-    """The reference without the stage `stage` (`leaf-widths`, or None: the reference whole)."""
+    """The reference without the stage `stage` (`leaf-widths`, `formats`, or None: the reference whole)."""
     if stage is None:
         yield
         return
-    assert stage == "leaf-widths", stage
-    whole, ref.leaf_widths = ref.leaf_widths, lambda *_a: None
+    name, off = {"leaf-widths": ("leaf_widths", lambda *_a: None), "formats": ("formats_held", lambda *_a: True)}[stage]
+    whole = getattr(ref, name)
+    setattr(ref, name, off)
     try:
         yield
     finally:
-        ref.leaf_widths = whole
+        setattr(ref, name, whole)
 
 
 def spot_of(c: Circuit, doc: dict, order=None) -> dict | None:
@@ -1118,6 +1219,40 @@ def _slots(c: Circuit, w):
     slot = c.slot()
     for u, _, v in ref.entries({**w.doc(), "c0": w.cut[0], "C": w.cut[1]}):
         yield slot[w.reader][u], slot[w.writer][v]
+
+
+def _wide(c: Circuit, p: str) -> bool:
+    """Whether registered parameter `p` of circuit `c` may be read in 32-bit leaves: no table lies in it, its 16-bit
+    leaves are whole 32-bit ones, and so is every row a registered read of it reads."""
+    by = {codec.descriptor_id(fn): ref.Template(codec.descriptor_id(fn), fn, n) for fn, n in c.templates}
+    return (p not in {t["param"] for t in c.tables} and c.params[p] % 2 == 0
+            and all(16 * (by[r.reader].port(r.port, outs=True) // c.cuts.get(r.reader, {}).get(r.port, 1)) % 32 == 0
+                    for r in c.reads if r.param == p))
+
+
+def formats(fr, c: Circuit, held: dict[str, tuple], roots: dict[str, str], before: int) -> tuple[dict, dict]:
+    """A random circuit's row formats, drawn with `fr`, and the registration they need: the log's first record's values
+    `held` and the run's own record's (`ran`). About a third of the registered parameters that `_wide` allows and the
+    run commits get a 32-bit format, of either schema, registered in 32-bit leaves by the run's own record or else by
+    the first record (θ, at its width); about a third of those `held` registers as θ in 16-bit leaves get a 16-bit
+    format in `hm96-sha512/row-seg/v1` rows. Where the run's record opens the log (`before` 0) it registers `held`
+    too, and the form holds each of its entries to the record (`Record.formatsHeld`): only those `held` registers
+    under the root the run commits and in the record's leaves stay."""
+    if before == 0:
+        held = {p: h for p, h in held.items() if roots.get(p) == h[0] and h[1] * h[2] == c.params[p]}
+    held, ran = dict(held), {}
+    for p in sorted(c.params):
+        if fr.random() >= 0.35:
+            continue
+        n = c.params[p]
+        if p in roots and _wide(c, p):
+            words = fr.choice([d for d in range(1, n // 2 + 1) if n // 2 % d == 0])
+            c.formats[p] = {"row_schema": fr.choice(ref.SCHEMAS), "word_bits": 32}
+            (ran if fr.random() < 0.5 else held)[p] = (roots[p], n // 2 // words, words, 32)
+        elif (p in held and len(held[p]) == 3 and roots.get(p) == held[p][0] and held[p][1] * held[p][2] == n
+              and p not in {t["param"] for t in c.tables}):
+            c.formats[p] = {"row_schema": ref.SCHEMAS[1], "word_bits": 16}
+    return held, ran
 
 
 @functools.cache
@@ -1149,7 +1284,9 @@ def case(seed: int) -> dict:
         pins = ([ref.closure_digest(desc, t) for t in c.units if rng.random() < 0.7]
                 + [_hex(rng) for _ in range(rng.randint(0, 2))])
         rng.shuffle(pins)
-        made = finish(rng, c, held, roots, pins, before=rng.choice([0, 1, 2, 2, 3]), after=rng.choice([0, 0, 1]))
+        before, after = rng.choice([0, 1, 2, 2, 3]), rng.choice([0, 0, 1])
+        held, ran = formats(random.Random(f"formats/{seed}/{attempt}"), c, held, roots, before)
+        made = finish(rng, c, held, roots, pins, before=before, after=after, ran=ran)
         if how is None or _break(rng, made, how):
             break
     else:
@@ -1224,6 +1361,75 @@ def _commit(case: dict, record: str, program: str | None = None) -> None:
         case["spot"] = {"templates": case["spot"]["templates"], "cuts": doc.get("cuts", {}), "wires": doc.get("wires"),
                         **({"order": doc["order"]} if "order" in doc else
                            {"order": case["instance"]["order"]} if "order" in case["instance"] else {})}
+
+
+def _misformat(rng, made: dict, doc: dict, how: str) -> bool:
+    """Break the case's row formats (`registered.formats`) in the way `how` names: the `inputs` ways give a format the
+    form's shape refuses, and the `formats` ways one the registration log does not hold (`Record.formatsHeld`); False
+    where the circuit has no parameter to break that way."""
+    case, c = made["case"], made["circuit"]
+    tr = case["trusted"]
+    if "registered" not in doc:
+        return False
+    reg = doc["registered"]
+    params, have = reg["params"], reg.get("formats", {})
+    tables = {t["param"] for t in reg["tables"]}
+    free = [p for p in sorted(params) if p not in tables]
+    T = reference.trusted_of(tr)
+    at = [reference.record_digest(r) for r in tr["log"]].index(tr["run"])
+    run = {e["value"]: e for e in tr["log"][at]["registered"]}
+    seg, v2 = ref.SCHEMAS[1], ref.SCHEMAS[0]
+    if how == "format-root":
+        if not run:
+            return False
+        run[rng.choice(sorted(run))]["root"] = _hex(rng)
+        for k in range(1, len(tr["log"])):
+            tr["log"][k]["previous"] = reference.record_digest(tr["log"][k - 1])
+        tr["run"] = reference.record_digest(tr["log"][at])
+        return True
+    pick = {
+        "format-schema": free,
+        "format-bits": free,
+        "format-keys": sorted(params),
+        "format-table": sorted(tables),
+        "format-param": ["weights/nope"],
+        "format-default": free,
+        "format-whole": [p for p in free if params[p] % 2],
+        "format-read": [p for p in free if not params[p] % 2 and not _wide(c, p)],
+        "format-width": [p for p in sorted(have) if have[p]["word_bits"] == 32],
+        "format-none": [p for p in sorted(have) if p in run and run[p].get("word_bits") == 32],
+        "format-unregistered": [p for p in free if p not in have and p not in run and not ref.theta(T, params, p, 16)],
+        "format-weight": [p for p in free if p not in have and ref.theta(T, params, p, 16) and _wide(c, p)],
+    }[how]
+    if not pick:
+        return False
+    p = rng.choice(pick)
+    f = {
+        "format-schema": {"row_schema": rng.choice(["hm96-sha512/row/v3", "", 5]), "word_bits": 32},
+        "format-bits": {"row_schema": seg, "word_bits": rng.choice([8, 64, 0, "32", True, 32.5])},
+        "format-keys": rng.choice([{"word_bits": 32}, {"row_schema": seg, "word_bits": 32, "rows": 1}, "row", None]),
+        "format-table": {"row_schema": seg, "word_bits": 16},
+        "format-param": {"row_schema": seg, "word_bits": 32},
+        "format-default": {"row_schema": v2, "word_bits": 16},
+        "format-whole": {"row_schema": seg, "word_bits": 32},
+        "format-read": {"row_schema": seg, "word_bits": 32},
+        "format-width": {"row_schema": seg, "word_bits": 16},
+        "format-unregistered": {"row_schema": seg, "word_bits": 16},
+        "format-weight": {"row_schema": rng.choice(ref.SCHEMAS), "word_bits": 32},
+    }.get(how)
+
+    def edit(d: dict) -> None:
+        r = d["registered"]
+        if how == "format-none":
+            del r["formats"][p]
+            if not r["formats"]:
+                del r["formats"]
+        elif how == "format-keys" and rng.random() < 0.3:
+            r["formats"] = rng.choice([[], None, "formats"])
+        else:
+            r.setdefault("formats", {})[p] = f
+    _rewrite(made, edit)
+    return True
 
 
 def _break(rng, made: dict, how: str) -> bool:
@@ -1448,6 +1654,8 @@ def _break(rng, made: dict, how: str) -> bool:
                 or how == "verdict" and not reg["openings"]):
             return False
         _rewrite(made, edit)
+    elif how.startswith("format-"):
+        return _misformat(rng, made, doc, how)
     elif how in (*BROKEN["reader-layout"], *BROKEN["reader-roles"]):
         desc = json.loads(inst["program"])
         lays = {t: ref.layout(ref.Template(t, fn, n)) for (fn, n), t in zip(c.templates, ids, strict=True)}
@@ -1583,7 +1791,7 @@ NAMES = ("cases", "python")
 
 def total() -> int:
     """How many cases the audit's data has: the random ones and `shaped()`'s."""
-    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED)
+    return COUNT + 50 + len(TWICE) + len(BITLESS) + 2 * len(KEYED) + len(FORMATS)
 
 
 def results(case: dict) -> dict:
