@@ -45,16 +45,18 @@ def _toy_circuit(width: int, partition: str, program: str, rule: str) -> bytes:
 
 #: records_audit.py's `warm` and `audit` over the toy window TOY_WINDOW names (its partition, program and templates),
 #: through a5's own warm and take: each compose a composer makes is a line of $ORDER.composed
-PRELUDE = '''import hashlib, json, os, sys
+PRELUDE = '''import hashlib, importlib, json, os, sys
 from pathlib import Path
 from types import SimpleNamespace
 sys.path.insert(0, os.environ["ONE_STAGE"])
 import a5
-from verity.ml.circuits.boolean import BIT
-from verity.ml.circuits.boolean.trace import definition
-from verity.ml.circuits.defs import bind
-from verity.ml.circuits.types import Array
 from verity_flock import circuit as FC
+
+circuits = a5.Program.__module__.rsplit(".", 1)[0]  # the circuits package, by the name a5 imports it under
+BIT = importlib.import_module(circuits + ".boolean").BIT
+definition = importlib.import_module(circuits + ".boolean.trace").definition
+bind = importlib.import_module(circuits + ".defs").bind
+Array = importlib.import_module(circuits + ".types").Array
 
 
 ''' + inspect.getsource(_toy_circuit) + '''
