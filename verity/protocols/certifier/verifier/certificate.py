@@ -485,8 +485,10 @@ class Certificate:
     def decode(cls, data: bytes) -> Certificate:
         """The certificate whose bytes `data` is, `encode`'s inverse. Raises `ValueError`, saying which, on bytes that
         end inside a fixed-width part (a short buffer), on a length that names more bytes than are left (a length that
-        does not fit), on bytes left after the signature (trailing bytes), on a direction code other than 0 and 1 and
-        on a link that is not UTF-8."""
+        does not fit), on bytes left after the signature (trailing bytes), on a direction code other than 0 and 1, on
+        a link that is not UTF-8 and on anything that is not bytes."""
+        if not isinstance(data, (bytes, bytearray, memoryview)):
+            raise ValueError(f"a certificate's bytes are bytes, not a {type(data).__name__}")
         data, at = bytes(data), 0
 
         def fixed(n: int, what: str) -> bytes:

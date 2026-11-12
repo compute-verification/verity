@@ -618,11 +618,15 @@ def test_a_certificates_bytes_are_those_inside_both_record_encoders(tmp_path):
 def test_a_certificates_bytes_are_refused_by_name():
     """`Certificate.decode` refuses bytes left after the signature, bytes that end inside a fixed-width part, and a
     length that names more bytes than are left, each saying which; every proper prefix of a certificate's bytes is
-    one of the last two. It refuses a direction code other than 0 and 1 and a link that is not UTF-8. `encode`
-    refuses a certificate the layout cannot hold."""
+    one of the last two. It refuses a direction code other than 0 and 1, a link that is not UTF-8 and anything that
+    is not bytes: a number is not that many zero bytes. `encode` refuses a certificate the layout cannot hold."""
     c = Certificate(b"I" * 16, "responses-marks", EGRESS, 5, bytes(range(64)), b"signature")
     data = c.encode()
-    assert Certificate.decode(data) == c
+    assert Certificate.decode(data) == c and Certificate.decode(memoryview(data)) == c
+    assert Certificate.decode(bytes(81)) == Certificate(b"", "", EGRESS, 0, bytes(64), b"")
+    for other in (81, data.hex(), None, [data]):
+        with pytest.raises(ValueError, match=f"a certificate's bytes are bytes, not a {type(other).__name__}"):
+            Certificate.decode(other)
     for more in (b"\0", data):
         with pytest.raises(ValueError, match=f"{len(more)} bytes are left after a certificate's signature"):
             Certificate.decode(data + more)
