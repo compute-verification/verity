@@ -2,8 +2,7 @@
 
 The engine is built in `engine.build`, the run's profile manifest and versions in `engine.run_facts`, and code identity in
 `engine.code_identity`; the stages reach all of them through this module's names.  The capture and its run header are
-`observe.capture`'s, above the engine, and its callers import them from there.  `load_workload` and what it calls stay in this
-file: tests execute them from its source, without importing torch.
+`observe.capture`'s, above the engine, and its callers import them from there.
 """
 
 from __future__ import annotations
