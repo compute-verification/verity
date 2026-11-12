@@ -1,0 +1,2 @@
+head1w	census:SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	
+head1b	census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v2"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	session
