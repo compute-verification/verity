@@ -3,13 +3,14 @@
 request of 1 + K rows a launch, at GLM-5.3's vocabulary (V = 154,880, tiles of 8192) and K = 5 draft tokens.
 
 One GPU process writes `<out>/sampled_accept_capture.json`, each case's operands and every word the kernels stored for it
-under `<out>/cases/`, and the four kernels' PTX from Triton's cache under `<out>/ptx/`; it prints one line a case and a last
-line `SAMPLED-ACCEPT GO` or `NO-GO`.  The cases are `tests.program.sampled_accept_vectors`' hand vectors and ``--random`` of
+under `<out>/cases/`, and the four kernels' PTX and cubins from Triton's cache under `<out>/ptx/`; it prints one line a case
+and a last line `SAMPLED-ACCEPT GO` or `NO-GO`.  The cases are `tests.program.sampled_accept_vectors`' hand vectors and ``--random`` of
 its `random_rows`.  No model is loaded: the operands are a request's logits after top-p, its draft tokens, seed, positions
 and temperature.
 
-  gate       cc 9.0, the installed vLLM's version holding the pin, Triton 3.7.1, and the two installed files the Definition was
-             read from (`SOURCES`, by sha256).  Nothing is launched when it fails (exit 3).
+  gate       a cc 9.0 card (without one nothing is launched: exit 3); the installed vLLM's version holding the pin, Triton
+             3.7.1, and the two installed files the Definition was read from (`SOURCES`, by sha256).  Where only these
+             differ the cases are still launched and kept, and the verdict is NO-GO.
   wrapper    `rejection_sample` as the sampler calls it for such a request (`draft_logits` None, `use_fp64` False, no synthetic
              rates, no block verification), the request alone in its launch, twice: ``sampled[:num_sampled]`` and
              ``num_sampled``, the two launches the same words.
@@ -23,15 +24,17 @@ and temperature.
   reference  `sampled_accept.sampled_accept` on the same operands, word for word: the tile maxima and sums of the K draft
              rows, the accepted count, the appended tokens, lane 0's log-sum-exp of the last position tested, and 0.0 for the
              draft's.
-  ptx        Triton's cache holds each kernel's PTX for these launches, and its instructions (`ptx_body`: the text to the
-             entry's closing brace without its `.loc` lines) are the ones the Definition was read from (`PTX_BODY`).
+  ptx        Triton's cache holds each kernel's PTX and cubin for these launches: the PTX's instructions (`ptx_body`: the
+             text to the entry's closing brace without its `.loc` lines) are the ones the Definition was read from
+             (`PTX_BODY`), and the cubin's machine code (`cubin_text`) is the SASS it was read from (`CUBIN_TEXT`).
 
 A case whose reference reports ``halves_split`` is outside the Definition's domain (lane 0 of `_rejection_kernel` accepts a
 draft token that is not the last while lanes 16-31 refuse it, and the next position's shuffles read lanes that stopped).  It is
 launched and kept like the others and reported apart: its words decide nothing.
 
 GO needs the gate, every case inside the domain compared with 0 differing words, the two wrapper launches, the kernels'
-launch and the batch agreeing, and the PTX.  The exit status is 0 on GO, 1 on NO-GO, 3 when the gate fails.
+launch and the batch agreeing, and the PTX and the machine code.  The exit status is 0 on GO, 1 on NO-GO, 3 when there is
+no cc 9.0 card.
 
 ``--replay DIR`` needs no card: it reads a kept `<out>` and compares the stored words with the reference again, and with
 ``--definition N`` evaluates the registered `SampledAccept_v1{K,V,TILE=8192}` on the first N cases against the stored tokens
@@ -51,6 +54,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import sys
 import tempfile
 from pathlib import Path
@@ -86,6 +90,12 @@ PTX_BODY = {"_compute_local_logits_stats_kernel": "137a82dafc43a5e04d2c644050100
             "_rejection_kernel": "efb21b0aca5e403897a9614bab0bebeee659af248fe323e2153d99414e3bf5ce",
             "_resample_kernel": "0d096db8b8d6c0f0055bdf5ebe735761c635f21edea877ab92ec9b919e55137e",
             "_insert_resampled_kernel": "dbab4c6dc030a2f5b7ee2ff08496d4aeb932eb92a95610f4bd1dbc68d2de89af"}
+#: sha256 of each kernel's machine code, the `.text.<kernel>` section of the cubin Triton 3.7.1's ptxas (12.8.93) assembles
+#: from that PTX: the SASS the Definition was read from
+CUBIN_TEXT = {"_compute_local_logits_stats_kernel": "98c93ee47961e762dcdc20e9a4a901b1bdc7b9f26ac5882deaefa4847bc6d652",
+              "_rejection_kernel": "dd215db9893566b7ed02ba53343ec9f2d26542789a090d77774bcf52ba8f00f5",
+              "_resample_kernel": "77905dc429852e3d556a02e835f4fb541e9db7fd23210c1d02a831734121c11b",
+              "_insert_resampled_kernel": "0dc0a4d86ae47391499eb2c61ca5ee6b6f90a7628cf98c04701145ea1194d572"}
 #: what a case keeps of the kernels' launch, and of those what the reference states
 STORED = ("target_local_max", "target_local_sumexp", "target_local_argmax", "draft_local_max", "draft_local_sumexp", "sampled",
           "num_sampled", "num_sampled_after_rejection", "target_rejected_logsumexp", "draft_rejected_logsumexp",
@@ -104,6 +114,21 @@ def ptx_body(text: str) -> str:
         if line.startswith("}"):
             break
     return "\n".join(out)
+
+
+def cubin_text(blob: bytes, name: str) -> bytes | None:
+    """A kernel's machine code: the `.text.<name>` section of its cubin (a little-endian ELF64), or None without one."""
+    if blob[:6] != b"\x7fELF\x02\x01":
+        return None
+    (shoff,), (size, count, strings) = struct.unpack_from("<Q", blob, 0x28), struct.unpack_from("<HHH", blob, 0x3A)
+    heads = [struct.unpack_from("<IIQQQQ", blob, shoff + i * size) for i in range(count)]
+    if strings >= count:
+        return None
+    table = blob[heads[strings][4]:heads[strings][4] + heads[strings][5]]
+    for h in heads:
+        if table[h[0]:table.find(b"\0", h[0])] == f".text.{name}".encode():
+            return blob[h[4]:h[4] + h[5]]
+    return None
 
 
 def _w32(a) -> np.ndarray:
@@ -208,8 +233,8 @@ def gate(torch) -> dict[str, Any]:
     out.update(torch=torch.__version__, triton=triton.__version__, vllm=vllm.__version__, numpy=np.__version__)
     base = Path(vllm.__file__).resolve().parent
     out["sources"] = {f: hashlib.sha256((base / f).read_bytes()).hexdigest() if (base / f).is_file() else None for f in SOURCES}
-    out["ok"] = bool(out["cuda"] and out.get("capability") == [9, 0] and PIN in out["vllm"] and out["triton"] == TRITON
-                     and out["sources"] == SOURCES)
+    out["card"] = bool(out["cuda"] and out.get("capability") == [9, 0])
+    out["ok"] = bool(out["card"] and PIN in out["vllm"] and out["triton"] == TRITON and out["sources"] == SOURCES)
     return out
 
 
@@ -297,8 +322,8 @@ def kernels(torch, triton, RU, op: dict[str, Any]) -> dict[str, np.ndarray]:
 
 
 def keep_ptx(cache: Path, dest: Path) -> dict[str, Any]:
-    """Each kernel's PTX in Triton's cache directory, copied under ``dest``, with whether there is one and every one's
-    instructions are the read ones (`PTX_BODY`)."""
+    """Each kernel's PTX and cubin in Triton's cache directory, copied under ``dest``, with whether there is one and every
+    one's instructions and machine code are the read ones (`PTX_BODY`, `CUBIN_TEXT`)."""
     out: dict[str, Any] = {}
     for name in KERNELS:
         found = sorted(cache.rglob(f"{name}.ptx"))
@@ -308,9 +333,15 @@ def keep_ptx(cache: Path, dest: Path) -> dict[str, Any]:
             kept = dest / name / f"{f.parent.name[:12]}-{f.name}"
             shutil.copy(f, kept)
             text = f.read_text(errors="replace")
-            files.append({"file": str(kept.relative_to(dest)), "sha256": hashlib.sha256(text.encode()).hexdigest(),
-                          "body_sha256": hashlib.sha256(ptx_body(text).encode()).hexdigest()})
-        out[name] = {"files": files, "ok": bool(files) and all(f["body_sha256"] == PTX_BODY[name] for f in files)}
+            entry = {"file": str(kept.relative_to(dest)), "sha256": hashlib.sha256(text.encode()).hexdigest(),
+                     "body_sha256": hashlib.sha256(ptx_body(text).encode()).hexdigest(), "cubin_text_sha256": None}
+            if (cubin := f.with_suffix(".cubin")).is_file():
+                shutil.copy(cubin, kept.with_suffix(".cubin"))
+                code = cubin_text(cubin.read_bytes(), name)
+                entry["cubin_text_sha256"] = hashlib.sha256(code).hexdigest() if code is not None else None
+            files.append(entry)
+        out[name] = {"files": files, "ok": bool(files) and all(f["body_sha256"] == PTX_BODY[name] for f in files),
+                     "code_ok": bool(files) and all(f["cubin_text_sha256"] == CUBIN_TEXT[name] for f in files)}
     return out
 
 
@@ -331,10 +362,12 @@ def capture(a: argparse.Namespace) -> int:
 
     record: dict[str, Any] = {"schema": SCHEMA, "statics": {"K": K, "V": V, "TILE": A.STATS_TILE}, "seed": a.seed,
                               "random": a.random, "gate": gate(torch)}
-    if not record["gate"]["ok"]:
+    if not record["gate"]["card"]:
         (out / RECORD).write_text(json.dumps({**record, "ok": False}, indent=1) + "\n")
-        print(f"SAMPLED-ACCEPT NO-GO: the gate fails: {json.dumps(record['gate'])}")
+        print(f"SAMPLED-ACCEPT NO-GO: no cc 9.0 card: {json.dumps(record['gate'])}")
         return 3
+    if not record["gate"]["ok"]:
+        print(f"the gate fails, so the verdict is NO-GO; launching and keeping the cases: {json.dumps(record['gate'])}", flush=True)
     from vllm.v1.worker.gpu.spec_decode import rejection_sampler_utils as RU
 
     device = torch.device("cuda")
@@ -367,9 +400,9 @@ def capture(a: argparse.Namespace) -> int:
     record["launches_disagree"] = [e["case"] for e in entries if not e["launches_agree"]]
     record["cases"] = entries
     inside_batch = [n for n in batch_differ if n in {e["case"] for e in entries if e["in_domain"]}]
-    record["ok"] = bool(not s["words_differ"] and s["cases_in_domain"] and not inside_batch
+    record["ok"] = bool(record["gate"]["ok"] and not s["words_differ"] and s["cases_in_domain"] and not inside_batch
                         and not [e for e in entries if e["in_domain"] and not e["launches_agree"]]
-                        and all(p["ok"] for p in record["ptx"].values()))
+                        and all(p["ok"] and p["code_ok"] for p in record["ptx"].values()))
     (out / RECORD).write_text(json.dumps(record, indent=1) + "\n")
     if not a.scratch:
         shutil.rmtree(scratch, ignore_errors=True)
@@ -390,6 +423,10 @@ def report(record: dict[str, Any]) -> str:
                      f"their own launch; launches that disagree: {len(record['launches_disagree'])}")
         lines.append("ptx: " + ", ".join(f"{k} {'the read instructions' if p['ok'] else 'DIFFERS (' + str(len(p['files'])) + ' files)'}"
                                          for k, p in record["ptx"].items()))
+        lines.append("machine code: " + ", ".join(f"{k} {'the read SASS' if p.get('code_ok') else 'DIFFERS'}"
+                                                  for k, p in record["ptx"].items()))
+    if "gate" in record and not record["gate"].get("ok", True):
+        lines.append(f"the gate fails: {json.dumps(record['gate'])}")
     if "definition" in record:
         d = record["definition"]
         lines.append(f"definition: {d['cases']} cases, {d['words_compared']} words compared, {d['words_differ']} differ")
