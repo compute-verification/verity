@@ -216,14 +216,21 @@ def test_a_pass_of_a_sessions_load_is_one_client_a_user_and_its_rates_are_the_us
                       run=lambda argv, stdout, stderr, env: NS(returncode=1), clock=lambda: 0.0, now=lambda: 0.0)
 
 
-def test_a_sampled_pass_sends_the_recipes_sampling_and_each_users_name_and_seed(tmp_path: Path, monkeypatch):
+def test_a_sampled_pass_sends_the_recipes_sampling_and_each_users_name_and_ours_its_seed(tmp_path: Path, monkeypatch):
     load, user = S.LOADS[S.AGENTIC], "agentic@4-r1-u0"
     greedy = S.bench_argv(GLM, Path("/ck"), 1, load, 1, tmp_path, user, dataset="/u0.jsonl", prompts=24)
-    argv = S.bench_argv(GLM, Path("/ck"), 1, load, 1, tmp_path, user, dataset="/u0.jsonl", prompts=24, sampled=True)
+    stock = S.bench_argv(GLM, Path("/ck"), 1, load, 1, tmp_path, user, dataset="/u0.jsonl", prompts=24, sampled=True)
+    argv = S.bench_argv(GLM, Path("/ck"), 1, load, 1, tmp_path, user, dataset="/u0.jsonl", prompts=24, sampled=True,
+                        seeded=True)
     at = greedy.index("--temperature")
     assert greedy[at:at + 2] == ["--temperature", "0"] and not {"--extra-body", "--top-p"} & set(greedy)
     assert argv[at:at + 5] == ["--temperature", "1.0", "--top-p", "0.95", "--extra-body"]
     assert json.loads(argv[at + 5]) == {"user": user, "seed": S.user_seed(user)}
+    # a stock arm's requests name their user and carry no seed, as a served request carries none; the arms that keep
+    # the record, which a replay samples again from, are sent one
+    assert json.loads(stock[at + 5]) == {"user": user} and stock[:at + 5] == argv[:at + 5] and stock[at + 6:] == argv[at + 6:]
+    assert [S.sends_seed(S.ARMS[a]) for a in ("prod", "prod-again", "published", "compiled", "prod-record", "record")] == [
+        False, False, False, False, True, True]
     # the rest of the pass is the greedy one's: its requests, their lengths, its ids
     assert argv[:at] == greedy[:at] and argv[at + 6:] == greedy[at + 2:] and "--ignore-eos" in argv
     # a seed is its user's own, 63 bits of SHA-512 over the user's name
@@ -242,9 +249,13 @@ def test_a_sampled_pass_sends_the_recipes_sampling_and_each_users_name_and_seed(
         return NS(returncode=0)
 
     S.drive_bench(8000, GLM, Path("/ck"), load, 2, "agentic@2-r1", tmp_path / "rep-1", dataset=whole, prompts=3,
-                  sampled=True, run=run, clock=lambda: 0.0, now=lambda: 0.0)
+                  sampled=True, seeded=True, run=run, clock=lambda: 0.0, now=lambda: 0.0)
     assert sorted(bodies, key=lambda b: b["user"]) == [{"user": u, "seed": S.user_seed(u)}
                                                        for u in ("agentic@2-r1-u0", "agentic@2-r1-u1")]
+    del bodies[:]
+    S.drive_bench(8000, GLM, Path("/ck"), load, 2, "agentic@2-r1", tmp_path / "rep-1-stock", dataset=whole, prompts=3,
+                  sampled=True, run=run, clock=lambda: 0.0, now=lambda: 0.0)
+    assert sorted(bodies, key=lambda b: b["user"]) == [{"user": u} for u in ("agentic@2-r1-u0", "agentic@2-r1-u1")]
 
 
 #: what a job's arms planned for load agentic: four users of 24 turns each
@@ -333,7 +344,12 @@ def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work
     sampled = PLAN | {"sampled": S.SAMPLED}
     with pytest.raises(SystemExit, match="prod and prod-record served load agentic from different plans"):
         S.session_cost([ref, served("prod-record", OURS, plan=sampled)], "prod-record", "prod")
-    both = [served("prod", [2.0] * 6, plan=sampled), served("prod-record", OURS, plan=sampled)]
+    both = [served("prod", [2.0] * 6, plan=sampled), served("prod-record", OURS, plan=sampled) | {"seeded": True}]
+    cost = S.session_cost(both, "prod-record", "prod")
+    assert cost["seeded"] == {"reference": False, "arm": True}
+    assert ("planned to repeat; each sampled at temperature 1 and top-p 0.95, prod-record's under a seed its client "
+            "sends, one a user, and prod's under none\n") in S.session_text(cost)
+    both[0]["seeded"] = True                              # arms served when every sampled arm was sent a seed
     assert ("planned to repeat; each sampled at temperature 1 and top-p 0.95 under a seed its client sends, one a user\n"
             in S.session_text(S.session_cost(both, "prod-record", "prod")))
     assert "planned to repeat; each greedy\n" in S.session_text(S.session_cost([ref, served("prod-record", OURS)], "prod-record", "prod"))

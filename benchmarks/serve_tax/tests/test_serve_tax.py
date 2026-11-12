@@ -1161,7 +1161,12 @@ def test_an_arm_served_by_vllms_client_reads_each_pass_result(tmp_path: Path, mo
     with pytest.raises(SystemExit, match="serve it again"):
         S.arm_metrics(d, (1.0, 0.05))
     # a server lifetime of an arm (run --lifetime, --leave-out) says which it is, what it leaves out and its reps
-    assert (m["lifetime"], m["left_out"], m["reps"]) == (None, 0, None)
+    assert (m["lifetime"], m["left_out"], m["reps"], m["seeded"]) == (None, 0, None, False)
+    # a sampled arm says whether its client sent a seed; one served before the arms differed in it was sent one
+    sampled = {"chat@8": [result(good=150.0)]}
+    assert [S.arm_metrics(bench_arm(tmp_path / str(i), "compiled", sampled, **meta))["seeded"] for i, meta in enumerate(
+        ({"sampled": S.SAMPLED, "seeded": False}, {"sampled": S.SAMPLED, "seeded": True}, {"sampled": S.SAMPLED}))] == [
+            False, True, True]
     passes = {"chat@8": [result(good=150.0), result(good=160.0), result(good=155.0)]}
     two = S.arm_metrics(bench_arm(tmp_path / "second", "compiled", passes, lifetime=2, left_out=1, reps=3))
     assert (two["lifetime"], two["left_out"], two["reps"]) == (2, 1, 3)
