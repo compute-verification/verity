@@ -617,7 +617,7 @@ theorem stmtOpensWired (hB : BuiltWired h ω keep) (hA : AddressesWired h ω kee
   have hr : CheckedRun.Ok h ⟨x, s, m₀, m₁, m₂, c₀, c₁, rest, wF, u, Pt.blocks[u], ρ, rb, ins, sts⟩ :=
     ⟨Pt, d, spec, hx, hP, hd, hin, hok, hu, hck, List.getElem?_eq_getElem hlt, hρ, hrb, hset⟩
   exact CheckedRun.correct_wired hr hB hA hW
-    (fun _ => decoded_rewired h hx hP hd hin hok hu hck (List.getElem?_eq_getElem hlt) hρ hrb hW) val ι hv
+    (fun hag => decoded_rewired h hx hP hd hin hok hu hck (List.getElem?_eq_getElem hlt) hρ hrb hW hag) val ι hv
 
 /-- **Every held code whose frame is set to SPOT's own at the wired program is built there**: the address map
 doesn't read the frame. -/
