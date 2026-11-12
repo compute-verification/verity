@@ -219,10 +219,13 @@ class RepeatedRows(ValueError):
             definition, node, operand, rows, member, scan
         if scan is not None:
             what = (f"reads the outputs of scan node {scan.node} of {scan.fn}, which the point runs {scan.ran} of its "
-                    f"{scan.n} iterations")
+                    f"{scan.n} iterations; fix: carry the weight through the outer scan rather than out of a scan "
+                    "whose contexts repeat")
         else:
-            what = f"holds rows {rows[0]} and {rows[1]} equal at the point" + \
-                (f" in member {member}" if member is not None else "")
+            what = (f"holds rows {rows[0]} and {rows[1]} equal at the point"
+                    + (f" in member {member}" if member is not None else "")
+                    + "; fix: compute it from a weight one to one (a shift, a rounding, a multiply by a word no input "
+                    "reaches) or let it read the inputs, which leaves its product out as gathered")
         super().__init__(f"{definition} node {node}: operand {operand!r}, whose rows the reading shows distinct, {what}")
 
 
