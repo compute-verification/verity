@@ -47,8 +47,9 @@ status is its callee's returned runs. A value depends on θ′ only where every 
 where any may, and two arrays are one where any references overlap. A rule's branch that a Program can't decide is
 the one with the smaller bound: a product with an activation is token-indexed by every dim its activations span, of
 the branches of `_gemm_rate` the least the Program doesn't exclude, from `HEAD_K` no bound, since a Program doesn't
-say which products are the head's. So every error of the reading is less work or a smaller `β` than the trace's
-reading of the same step, and a bound true but weak: a product the tables don't name is not counted, a value with any
+say which products are the head's. So, under the reading's three premises (`SHARED_PREFIX`'s, carried words and θ′
+by data flow, below), every error of the reading is less work or a smaller `β` than the trace's reading of the same
+step, and a bound true but weak: a product the tables don't name is not counted, a value with any
 word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F may be higher).
 
 A value is specific where, at an input whose rows hold one token at two positions, its words take different values at
@@ -74,11 +75,15 @@ gives a gathered value:
   op with a specific argument is not specific by that alone, and none is where another argument is an input's whose
   values the Program doesn't state (a rope table, which may hold a 0).
 
-The rule rests on one premise, the one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens): past
+The reading rests on three premises, each held as a fact by a test where a Program breaks it. The rule rests on the
+one `SHARED_PREFIX` takes (a longer shared prefix needs the batch's tokens): past
 each row's first position, no two positions of the batch hold equal words. A batch breaks it three ways, each making
 two positions' values equal at every layer, under this rule and the trace's reading alike: two rows sharing a prefix
 of two tokens or more, a row starting with a run of one token, and, where no positional table reaches the rows, two
-positions whose prefixes hold the same tokens in the same proportions.
+positions whose prefixes hold the same tokens in the same proportions. Carried words: every carried word is a
+parameter's or the optimizer's, a weight that reads no input and carries no rows (`carried`), so a Program that
+carries an iteration's rows into the next has them charged as weights. θ′ by data flow: a carried word an input
+reaches is θ′, even where the update can't change it, as W plus an input times a stated 0.
 
 The rule doesn't reach a softmax's backward or a table the Program doesn't state, so the input gradients of the
 attention's queries and keys (dQ·Wq and dK·Wk, behind a rope table's product or the softmax's backward) stay gathered,

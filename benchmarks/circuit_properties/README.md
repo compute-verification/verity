@@ -56,7 +56,9 @@ The rule rests on one premise, `SHARED_PREFIX`'s: past each row's first position
 equal words. Its limits: a Program with no scan has no bound; the rule doesn't reach a softmax's backward or a table
 the Program doesn't state (a rope table), so dQ·Wq and dK·Wk stay gathered; and a dense step, a batch of values into
 linear layers, is charged nothing, since two rows of values may be equal, as two tokens may, and a product of its rows
-by a shared weight would then read one pair of values twice.
+by a shared weight would then read one pair of values twice. Two more premises hold the reading below the work, each
+held as a fact by a test: every carried word is a parameter's or the optimizer's, so rows carried into the next
+iteration are charged as weights, and θ′ is by data flow, so an update that changes nothing still makes θ′.
 `work.bound(work, c)` is the most blocks over its
 sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
 has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a

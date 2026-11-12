@@ -1,7 +1,7 @@
 """The work the min-cut bound reads off a Program (`circuit_properties.work`), on word circuits of the reference
 registry's products whose work is known by hand: a training loop's scan, whose carried weights are charged from
 their second iteration, whose batch is free, and whose value input's rows are left out however the Program writes
-them; a lookup whose table is the registered one or the loop's own; a Program with
+them; the two premises on carried words, held as facts; a lookup whose table is the registered one or the loop's own; a Program with
 no scan; one array times itself; two activations; the largest set of arrays a work multiplies pairwise; a weight
 decoded from a ternary code; a one-hot row; a rank-4 bottleneck between two carried weights; each operand's β at
 min(16, β(k)); and |C| in Boolean gates."""
@@ -386,6 +386,49 @@ def test_a_value_inputs_rows_are_left_out_however_the_program_writes_them(form):
     w = WK.read(_rows_loop(form), KB)
     assert w.groups == []
     assert w.left_out == {"theta": PN * K * N, "gathered": (T - 1) * PN * K * N, "self": 0, "activations": 0}
+
+
+def _carried_rows_loop(carried: bool) -> Program:
+    """Each iteration looks up PN rows of the carried table by its tokens and multiplies rows by the carried W: those it
+    looked up, or (``carried``) those the iteration before looked up and returned in the carry."""
+    def step(B, c, tok, z):
+        table, w = c[:2]
+        rows = Coll(ROWS_T, concat([B.call(EMB, tok[p], table).refs for p in range(PN)]))
+        y = B.batch(LIN, c[2] if carried else rows, w, axes=(0, None))
+        return (_add(B, table, z), _add(B, w, z), *((rows,) if carried else ())), y
+
+    carry = (("table", TABLE_T), ("w", W_T), *((("prev", ROWS_T),) if carried else ()))
+    return _loop("CarriedRows" if carried else "Rows", carry, (("tok", Array(PN, I32)), ("z", X_T)), Array(PN, Y_T),
+                 step)
+
+
+def test_rows_carried_into_the_next_iteration_are_charged_as_weights():
+    """The carried-words premise, held as a fact: the reading takes every carried word as a parameter's or the
+    optimizer's, so a gather's rows carried into the next iteration are charged as a product of two weights, where the
+    same product in the iteration that looked them up is left out."""
+    w = WK.read(_carried_rows_loop(True), KB)
+    (g,) = w.groups
+    assert g.weight == (True, True) and w.N == (T - 1) * PN * K * N
+    assert w.left_out == {"theta": PN * K * N, "gathered": 0, "self": 0, "activations": 0}
+    same = WK.read(_carried_rows_loop(False), KB)
+    assert same.groups == [] and same.left_out["gathered"] == (T - 1) * PN * K * N
+
+
+def test_an_update_that_changes_nothing_still_makes_theta_prime():
+    """The premise that θ′ is by data flow, held as a fact: W plus z times a stated 0 is W, but z reaches it, so W is
+    θ′ from the second iteration and u W^T, u carried, is charged; with W carried unchanged it is `θ`'s."""
+    def make(update: bool) -> Program:
+        def step(B, c, z):
+            w, u = c
+            zero = _mul(B, Coll(W_T, concat([z.refs] * N)), B.call(const(32, 0)))
+            return (_add(B, w, zero) if update else w, _add(B, u, z)), B.call(LIN, u, w)
+        return _loop("Zero" if update else "Still", (("w", W_T), ("u", X_T)), (("z", X_T),), Y_T, step)
+
+    w = WK.read(make(True), KB)
+    (g,) = w.groups
+    assert g.weight == (True, True) and w.N == (T - 1) * K * N and w.left_out["theta"] == K * N
+    still = WK.read(make(False), KB)
+    assert still.groups == [] and still.left_out["theta"] == T * K * N
 
 
 def test_clique():
