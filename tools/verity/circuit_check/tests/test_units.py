@@ -6,6 +6,7 @@ circuit_check suite's catalog, each binding built in a process of its own and ma
 (`units.built_apart`, `units.from_manifest`), against `targets.suite` built whole."""
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -1165,3 +1166,144 @@ def test_one_xdist_worker_builds_the_catalog_and_the_others_take_it(tmp_path, mo
     monkeypatch.setattr(UN, "built_apart", lambda *a: pytest.fail("built again"))
     with pytest.raises(RuntimeError, match="the xdist worker that built circuit-check's catalog failed: RuntimeError: _core"):
         conftest._built(["a"], tmp_path, 3)
+
+
+#: `HARNESS`'s setup, then ``circuit-check --all --records-only -j 2`` as the command line runs it (`cli._records_main`) into the
+#: tree's cache: its report at ``argv[3]``, its exit status the command's, and with ``argv[4]`` its ``--records-manifest`` there
+RECORDS_MAIN = HARNESS[:HARNESS.index("rep = cli.run(")] + """
+import argparse
+sys.exit(cli._records_main(argparse.Namespace(quiet=True, mem_gb=None, slices=None, out=Path(sys.argv[3]),
+                                              records_manifest=Path(sys.argv[4]) if len(sys.argv) > 4 else None),
+                           root / "cache", 2))
+"""
+
+#: the suite's session over the synthetic bindings, in a process no tracer started in, as a pytest's is: conftest.py's catalog
+#: from the records in the tree's cache (`conftest._taken`), its build of the records `RECORDS_MAIN`; prints the catalog's
+#: line, how many times that build was started, and each suite target's descriptor and units
+SESSION = HARNESS[:HARNESS.index("rep = cli.run(")].replace("CC.trace(root)\n", "") + """
+sys.path.insert(0, sys.argv[3])
+import conftest
+
+ran = []
+conftest._records_argv = lambda cache, jobs, mem_gb, out, listed: ran.append(1) or [
+    sys.executable, "-c", sys.argv[4], str(root), str(repo), str(out), *([listed] if listed else [])]
+built = conftest._taken(root / "cache", None, 2)
+print(json.dumps({"how": built.how, "builds": len(ran), "targets": {fid: CC.descriptor(fn) for fid, fn in built.suite.items()},
+                  "units": {fid: sorted(TG.BINDINGS.get(fid, ())) for fid in built.suite}}))
+"""
+
+
+def _session(root: Path, listed: Path | None = None) -> dict:
+    env = {k: v for k, v in os.environ.items() if not k.startswith("CIRCUIT_CHECK_RECORDS")}
+    r = subprocess.run([sys.executable, "-c", SESSION, str(root), str(REPO), str(Path(__file__).parent), RECORDS_MAIN],
+                       capture_output=True, text=True, cwd=REPO,
+                       env={**env, "PYTHONDONTWRITEBYTECODE": "1",
+                            **({"CIRCUIT_CHECK_RECORDS_MANIFEST": str(listed)} if listed is not None else {})})
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+
+def _listed(root: Path, listed: Path) -> dict[str, tuple[str, bool]]:
+    """``listed`` (`units.listing`'s, written for ``root``'s cache) as binding -> (its record's path, whether the run built
+    it), once every file it names is in the cache under the name its bytes digest to and the read records it lists are the
+    ones its entries need."""
+    doc = json.loads(listed.read_text())
+    assert doc["schema"] == "circuit-check-records/v1" and doc["unstored"] == [], doc
+    rows = {r["binding"]: (r["record"], r["built"]) for r in doc["records"]}
+    assert len(rows) == len(doc["records"]) and {rec.split("/")[0] for rec, _ in rows.values()} == {doc["version"]}
+    assert "CIRCUIT_CHECK_RECORDS_MANIFEST" not in doc["environment"]
+    todo, needs = [rec for rec, _ in rows.values()], set()
+    while todo:
+        p = root / "cache" / todo.pop()
+        data = p.read_bytes()
+        assert hashlib.sha512(data).hexdigest() == p.stem, p
+        for n in json.loads(data).get("needs", []):
+            rel = Path(os.path.normpath(p.parent / n)).relative_to(root / "cache").as_posix()
+            if rel not in needs:
+                needs.add(rel)
+                todo.append(rel)
+    assert needs and sorted(needs) == doc["needs"], doc
+    return rows
+
+
+@pytest.mark.slow
+def test_a_session_with_one_stale_record_builds_that_binding_once_and_its_record_counts_from_then_on(tmp_path):
+    """Over the records a ``--records-only`` stored, with a module one binding read edited since: the session takes the four
+    records that count and has the fifth binding built once, by the records' own program, which stores its record beside the
+    stale one.  The catalog is the one built whole, and its line counts both.  The stale record is never taken: the listing
+    names the new one, and the old one counts again only once the module is as it was.  The record the session's build
+    wrote counts in the next session, which starts no build, and in a ``--records-only`` and a ``--catalog-units`` run."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    assert _records_only(root)["stored"] == 5
+    (stale,) = _records(root, ("_xor_roots",))
+    before = set(_records(root))
+    first = tmp_path / "first.json"
+    assert _session(root, first)["how"] == "from records: 5 of 5 bindings reused, 0 built"
+    assert {rec for rec, _ in _listed(root, first).values()} == {p.relative_to(root / "cache").as_posix() for p in before
+                                                                 if json.loads(p.read_text())["key"]["request"]["target"][1] != ["<roots>"]}
+
+    _edit(root, "syn/xdef.py", "B.call(SynXor, a, b)", "B.call(SynXor, b, a)")
+    listed = tmp_path / "listed.json"
+    out = _session(root, listed)
+    assert out["builds"] == 1
+    assert out["how"].startswith("from records: 4 of 5 bindings reused, 1 built and stored in "), out["how"]
+    assert out["how"].endswith("s by one process for the session (1 of them held a record that did not count): _xor_roots")
+    whole = _apart(root, "whole")
+    assert out["targets"] == whole["targets"] and out["units"] == whole["units"]
+    # the stale record is still there, and the listing names the one built now
+    (new,) = set(_records(root, ("_xor_roots",))) - {stale}
+    assert stale.exists() and set(_records(root)) - before >= {new}
+    rows = _listed(root, listed)
+    assert rows["_xor_roots"] == (new.relative_to(root / "cache").as_posix(), True)
+    assert [b for b, (_, built) in rows.items() if built and b != "<roots>"] == ["_xor_roots"] and len(rows) == 6
+
+    again = _session(root, listed)
+    assert again["builds"] == 0 and again["how"] == "from records: 5 of 5 bindings reused, 0 built"
+    assert again["targets"] == whole["targets"]
+    rows = _listed(root, listed)
+    assert rows["_xor_roots"] == (new.relative_to(root / "cache").as_posix(), False) and "<roots>" not in rows
+    step = _records_only(root)
+    assert step["reused"] == 5 and step["rebuilt"] == [] and step["stored"] == 0, step
+    assert _run(root, FORKED)["stats"]["units"] == {"reused": 5, "rebuilt": [], "stored": 0}
+
+    _edit(root, "syn/xdef.py", "B.call(SynXor, b, a)", "B.call(SynXor, a, b)")
+    back = _session(root, listed)
+    assert back["builds"] == 0 and back["how"] == "from records: 5 of 5 bindings reused, 0 built"
+    assert _listed(root, listed)["_xor_roots"] == (stale.relative_to(root / "cache").as_posix(), False)
+
+
+@pytest.mark.slow
+def test_a_record_whose_bytes_are_not_the_ones_its_name_digests_is_never_taken(tmp_path):
+    """A record a store handed back under its name with other bytes (here the same record, a newline after it, which still
+    parses and whose reads still hold) is passed over, by a session and by a run: its binding is built, and the record stored
+    then, under that name, is the one the name digests."""
+    root = _tree(tmp_path / "t")
+    _bindings(root, *BINDINGS)
+    _records_only(root)
+    (rec,) = _records(root, ("_sized_roots",))
+    whole = rec.read_bytes()
+    rec.write_bytes(whole + b"\n")
+    out = _session(root)
+    assert out["builds"] == 1 and "4 of 5 bindings reused, 1 built" in out["how"] and out["how"].endswith(": _sized_roots")
+    assert rec.read_bytes() == whole
+    rec.write_bytes(whole + b"\n")
+    assert _records_only(root)["rebuilt"] == ["_sized_roots"] and rec.read_bytes() == whole
+
+
+def test_no_key_holds_the_variables_that_say_where_records_are_or_how_a_suite_runs(monkeypatch):
+    """A record a session's build stores is the one `check`'s circuit-check takes only when both key it alike: the variables
+    only the suite's runner and conftest.py read are in no key, and any other of the keyed prefixes still is."""
+    from circuit_check import units as UN
+
+    for k in [k for k in os.environ if k.startswith(("VERITY_", "CIRCUIT_CHECK_"))]:
+        monkeypatch.delenv(k)
+    bare = UN.key(("_x_roots",), 0)
+    assert bare["environment"] == {}
+    for k in ("CIRCUIT_CHECK_RECORDS", "CIRCUIT_CHECK_RECORDS_MANIFEST", "VERITY_SUITE_READS", "VERITY_SUITE_MODULE",
+              "VERITY_SUITE_ROOT", "VERITY_SUITE_TEST", "VERITY_TEST_CACHE", "VERITY_CIRCUIT_CHECK_SLOW"):
+        monkeypatch.setenv(k, "x")
+    assert UN.key(("_x_roots",), 0) == bare
+    monkeypatch.setenv("VERITY_REGRESSION", "1")
+    monkeypatch.setenv("CIRCUIT_CHECK_OTHER", "1")
+    assert UN.key(("_x_roots",), 0)["environment"] == {"CIRCUIT_CHECK_OTHER": "1", "VERITY_REGRESSION": "1"}
