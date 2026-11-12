@@ -16,9 +16,11 @@ class, proof block j the class's j-th release. Its Program's parameters are the 
 Its second output, ``o1``, is committed as row j of the class's `response` table through the other registered port
 (`ResponseTie.reads`), so a proof block's proof opens the signed root only where the row its gates return is the
 row the network certifier signed. Its first output, ``o0``, the proof blocks' verdict words, is the record's one
-port (`PORT`), under a domain that binds the Program, the count and the head's digest (`ResponseTie.ports`). The
-record registers the class's two tables as certified values, under the names the head's registration gives them
-(`connection_rows.value_name`), beside the compute side's.
+port (`PORT`), under a domain that binds the Program, the count and the head's digest (`ResponseTie.ports`). Nothing
+holds a verdict word to accept: a proof block that refuses returns a row the network certifier signs none of, so its
+proof opens no signed root (the Definitions' "Where a check fails"). The record registers the class's two tables
+as certified values, under the names the head's registration gives them (`connection_rows.value_name`), beside the
+compute side's.
 
 **What the verifier holds** (`ResponseTie.check`), in order:
 
