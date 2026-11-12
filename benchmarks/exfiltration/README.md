@@ -2,7 +2,7 @@
 
 `verity bench exfiltration` prints GLM-5.3's exfiltration capacity in GB over a monitoring period, at 10% of total
 compute: the most bits about the weights that can leave over the world's year, as two parts side by side, with every
-input labelled measured, modeled or assumed. It computes neither part. It composes the two calculators that do, so it
+input labelled measured, modeled, assumed, missing or run, not proved. It computes neither part. It composes the two calculators that do, so it
 needs no GPU and no node, only the evidence store. Its code is `benchmarks/harness/verity_bench/exfiltration.py`; this
 directory holds its runner.
 
@@ -59,6 +59,33 @@ block, sampled on a served audit, holds that count to the response's ids. Until 
 server chooses the count, and the network certifier's row `design, no stop block` charges it, as its schedules.
 The command reads the output count from that row and prints it beside those sums, marked assumed, in every
 monitoring period and where it says no advice is priced.
+
+## The stop class's verdicts
+
+The output count's 0 in those sums stays assumed until a run backs it: the four verdicts a stop class needs, each
+accepted and complete, are the stop record, the response tie, the request tie and the compute audit's second stage.
+The command reads them from the store, from every run that carries
+`run_of_record=exfiltration-glm53-stop-verdicts` and no `superseded_by`, in the file `out/verdicts.jsonl` of its run
+files, one verdict's record a line (`VERDICT_FIELDS` in `exfiltration.py`). A record lacking a field is refused by the
+field's name:
+
+- `piece`: `stop_record`, `response_tie`, `request_tie` or `second_stage`.
+- `control`: null on the honest run, or the negative control it is: `id` (a changed id) or `max_tokens` (a changed
+  `max_tokens`), a run on the same path with that one thing changed.
+- `run`: the id of the run that produced the verdict.
+- `verifier`: `{"module": ..., "commit": ...}`, the verifier that checked it and the commit it ran at.
+- `verdict`: `accept` (accepted and complete), `not complete` (accepted, which moves no figure) or `refuse`.
+- `proved_by`: null until a Lean proof covers that verifier, then the Lean guarantee's name.
+- `open`: while `proved_by` is null, what that proof waits on.
+
+The class is complete when every piece's honest run is `accept`, and a changed id and a changed `max_tokens` are each
+refused, on a piece, by the verifier that accepted that piece's honest run, and no control is accepted. Then the
+output count's 0 is marked `run, not proved`, printed "run (Python verifier, not proved)" with each verdict's run and
+verifier and counted apart from measured, and the class prints as `complete (run, not proved: OPEN open; Python
+verifier for PIECES)`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
+from the field, never from a flag or a name. Short of complete, the inputs print as with no verdicts and the output
+count's line names what is missing. With no run carrying the record the print is as it was before the command read
+any.
 
 ## The share of compute
 
@@ -170,6 +197,7 @@ plan of record is read.
 
 ```text
 research data label RUN run_of_record exfiltration-glm53-compute-audit --by LANE     a run that holds the rows, or a plan
+research data label RUN run_of_record exfiltration-glm53-stop-verdicts --by LANE     a run that holds stop verdicts
 research data label RUN superseded_by NEWER --by LANE                                a run a newer one replaces
 ```
 
@@ -193,7 +221,8 @@ plan of the case, is left out and listed under "Refused".
   network check's own proving taken off the audit budget (`--network-check-share`, assumed: no run measures it and
   the planner's rows don't count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
-  (derived from other figures), `assumed`, or `missing` (a field a served run's record lacks, with its gap). The compute audit's come from its rows of record: δ, λ and the most
+  (derived from other figures), `assumed`, `missing` (a field a served run's record lacks, with its gap), or `run, not
+  proved` (the stop class's verdicts, a run's, checked by a verifier no Lean proof covers yet). The compute audit's come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
   pricing a block family covers (measured statements, computed, or both). The network certifier's are its
   calculator's own marks. The fleet, the request counted, a request of the plan and the weights are read by both.
