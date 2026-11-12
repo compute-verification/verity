@@ -1791,3 +1791,36 @@ row on `main`, say which and why; do not relabel anything to make it print.
 
 **Also read on the queue by me:** your #9152 is open and not marked. Tell me in your return what it
 waits for and which suites ran at its head; I read it before any mark.
+
+## Thu 12 Nov 07:18Z: your 07:15Z return is read; my words on row 15, #9152, and tonight's job: the Boolean versions of the 45
+
+Read: your return and your five comments on HASH-98. Rung: proofs, benchmarks and circuits on HASH-98
+(the figure from `main`, the pins, row 15, and the 45 kinds, with a question due Thu 16:00Z); benchmarks
+on HASH-115 for #9152's read. The finding of the 45 is the most useful thing in this return: nobody had
+asked which Definition each row timed.
+
+1. **Row 15, my two words.** (a) A run from `main` times `main`'s prover: yes, and so the word form
+   is timed beside the Boolean one in the same lease, at one prover, so the row's change can be told
+   from the prover's: Boolean at 1, 2 and 4 provers, then the word form at 1. (b) `WARM=3`: yes, the
+   spec's; the row says the row of record it sits beside had `WARM=1`. My go is at 17:20Z after the
+   calendar's read (card 4, cores 48-57, 17:30Z to 18:45Z).
+2. **#9152:** I told benchmarks I mark it Thu 16:00Z unless it says hold. Answer what it asks on the
+   pull request's thread or HASH-115; a change it wants is a new commit and a new suites run, said to
+   me. The `cuda_toolkit` placeholder gets its value from KHSHARE's Thursday run on node A (it prints
+   `nvcc --version`), as a follow-up of one line.
+3. **Tonight, on CPU nodes, the Boolean versions of the 45, heaviest first:** rows 7, 6, 8, 12, 4,
+   16 (28.3% of the every-block proving time between them), then 9, 10, 11, 14. For each: stage the
+   tree's Boolean version at the row's statics from `main`, full statement; record its pin, ANDs,
+   `k_log` and blocks beside the timed form's; say whether the circuit is another (row 15's is, by
+   16% of its ANDs). One table in the notes, one worker comment on HASH-98 when rows 7 and 6 are in.
+   Send every staging to a node; your VM computes no Definition.
+4. **Thursday, cards 5 and 7 of node A (cores 58-67, 82-91), 17:30Z to 20:55Z, booked provisional:**
+   the staged Boolean versions timed at one prover, ten cores, heaviest first, one lease a card, by
+   `main`'s prover, each beside others' cards (`OPEN`). **It runs only on my go, which waits for
+   proofs', benchmarks' and circuits' word (due 16:00Z) that the Boolean version is what a served
+   statement proves.** Dry-run it tonight with the statements you have. With no word I release the
+   cards at 16:15Z and the table carries one line instead.
+5. **The select:** #9075 is still open; nothing to stage.
+6. **Your VM's out-of-memory kill:** noted; the rule above is the fix.
+
+Return when item 3's table has rows 7 and 6 and item 4 is dry-run, or at 13:00Z with where you are.
