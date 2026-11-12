@@ -1,0 +1,3 @@
+[2026-11-12T06:45Z] fb1521dcacd8
+ci 10:4x PM PST, a change to items 4 and 5: do NOT push to #8513 or #8661. The loop carries their old 'ready' and 'reviewed' labels across the moves by patch-id (#8513 at 1ec00740 takes them from 9c3067d5; #8661 at 6af8db9b from e9dc75cc), so #8513 may ride the next batch as it is, and a new head would take it out of a batch in check. For both, only REPORT: still needed on main, or covered (#8661's tests test_drive_config.py / test_drive_lowrisk.py and drive.py are gone from main, so its merge conflicts and the loop will refuse it). Items 1-3 (#9044 #9036 #8823) unchanged.
+
