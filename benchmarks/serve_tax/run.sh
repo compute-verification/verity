@@ -2,7 +2,7 @@
 # The serve tax on one node (README.md), from the shipped tree's root under `research run`, the C4 shard sent with
 # --send (or C4=PATH) unless a ready plan is:
 #   ARMS="compiled eager ..." RATES=light=R,medium=R,saturated=R [MODEL_ID=moonlight] [REPS=3] [SPAN_S=60]
-#     [REQUESTS=N] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR]
+#     [REQUESTS=N] [DRAIN_S=600] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR]
 #     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"] [REPLAY_LOGPROBS=1]] [MAX_MIN=240]
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
@@ -29,11 +29,29 @@
 # four, each sent as it arrives: the row then says whether stock kept up, and which of its figures is the cost.
 # PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own, and
 # NAME=Kx K prompts for each request its rung holds in flight (serve_tax.parse_pass_prompts): for a ladder past the
-# rungs the load's own prompts can hold, and the same for every arm of a cost. After the table it prints the cost of
-# ARMS's last arm over compiled (serve_tax.py cost) and writes OUT/serving_cost.{json,txt} and the run's result.json (each
+# rungs the load's own prompts can hold, and the same for every arm of a cost. SAMPLED=1 has every request sampled at
+# the recipe's temperature and top-p in place of greedy, each naming its user; an arm that keeps the record is sent
+# that user's seed too (serve_tax.user_seed, sends_seed), under which its replay samples the request again, and a
+# stock arm none, as a served request carries none; under LIFETIMES the seed is another in each lifetime, so that no
+# two lifetimes of the arm serve one sample of text. After the table it prints the cost of
+# ARMS's last arm over the stock arm it is made from, compiled or, for the arms at vLLM's recipe's settings, prod
+# (serve_tax.py cost, serve_tax.stock_of; --arms "prod prod-record prod-again" --loads agentic is that cost on an
+# agent's sessions, where a rung is the users and PASS_PROMPTS the turns each sends) and writes
+# OUT/serving_cost.{json,txt} and the run's result.json (each
 # load's cost a measurement, and the number one under the model's metric id once every load has run); --json prints the
 # JSON object last. In this form REPS is 6 and WINDOW_S 30 by default, and OUT/gpus.csv names the cards.
 # WITH="OUT_DIR ..." adds earlier jobs' arms to the cost: a load they served and this job didn't joins the number.
+# LIFETIMES=L serves the arms L times, each time a server of its own, in ARMS's order and then that order turned round,
+# and so on ("prod prod-record" three times: prod, prod-record, prod-record, prod, prod, prod-record), so that a slow
+# change of the node over the job falls on both arms alike; lifetime K of an arm is OUT/<arm>.K, and the cost pairs
+# pass R of lifetime K of its two arms (serve_tax.lifetimes), its noise floor stock's own lifetimes where no twin of
+# stock is served. TURNED=1 begins with ARMS's order turned round ("prod prod-record" twice: prod-record, prod, prod,
+# prod-record), so the last arm named is served first. A cost's interval is over the lifetimes an arm, so its verdict
+# needs two at least. LEAVE_OUT=N leaves each lifetime's first N passes, its warm-up, out of every figure: they are served
+# and recorded like the rest, and the table and the cost say how many were left out. WARM_S is the seconds of the
+# warm-up load every lifetime begins with (20; a short pass of vLLM's client under it), and WARM_S=0 sends none: a
+# pass LEAVE_OUT leaves out warms the server as it does. A replay names the lifetime it replays
+# (REPLAY_FROM=OUT/<arm>.K).
 # The number is not given without the row on a repeated prefix under it, which is load prefix's, served in a job of its
 # own (--loads prefix --arms "compiled no-prefix-cache two-stage": its cost is the row alone) and joined with WITH.
 # PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
@@ -63,14 +81,21 @@
 # under the node's scratch, removed at the end); RESTORE=FROM:TO then restores each RESTORE_ARM's edge FROM into a fresh
 # engine (warmed first on RESTORE_WARM of the replay block's prompts) and replays to edge TO (restore.py) into
 # OUT/<arm>-replay. RESTORE_FROM=OUT_DIR with KV_DIR and no ARMS restores an earlier job's arms alone.
+# DRAIN_S is how long the trace corpus's client waits, after a load's last arrival, for the answers still out (600 s):
+# a request unanswered by then is cut and counted unserved, so a load whose last request is very long (a prompt at
+# the model's context limit) names more. It is that client's alone: a pass of vLLM's own client reads none.
 # One plan (OUT/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
 # server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease; the tick arms
 # take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
 # REPLAY then replays LOAD's first rep of the record arm (by default this job's) in each of REPLAY_MODES (replay.py)
 # into OUT/replay-<mode>; a mode listed again replays into OUT/replay-<mode>-<k>, its tokens compared with the first's too
-# (REPLAY_MODES="compiled compiled": does the replay agree with itself?). Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
+# (REPLAY_MODES="compiled compiled": does the replay agree with itself?). A pass vLLM's client sent is named with its
+# rung (REPLAY=agentic@4) and replayed from an arm whose server kept each request's ids (REPLAY_FROM=$OUT/prod-record:
+# that client keeps none). The replay of an arm that served on the canonical top-k loads that plugin too, and keeps its
+# counters in PRIVATE/replay-<mode> where PRIVATE is set. Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
 # checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b and
-# qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be d9105ea80, the integration's pin.
+# qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
+# pin, unless set.
 set -uo pipefail
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
   flag=$1; shift
@@ -99,9 +124,27 @@ if [ "$CLIENT" = vllm-bench ]; then
   export ARMS LOADS
 fi
 export CLIENT ${MODEL_ID:+MODEL_ID} ${REPS:+REPS} ${DATASETS:+DATASETS}
+[[ "${LIFETIMES:-1}" =~ ^[1-9][0-9]*$ ]] || { echo "serve-tax: LIFETIMES=$LIFETIMES: how many times the arms are served, 1 or more"; exit 2; }
+{ [[ "${LEAVE_OUT:-0}" =~ ^[0-9]+$ ]] && [ "${LEAVE_OUT:-0}" -lt "${REPS:-3}" ]; } \
+  || { echo "serve-tax: LEAVE_OUT=$LEAVE_OUT: the passes each lifetime leaves out, fewer than its REPS=${REPS:-3}"; exit 2; }
+[[ "${TURNED:-0}" =~ ^[01]$ ]] || { echo "serve-tax: TURNED=$TURNED: 1 begins with the arms' order turned round, 0 with the order named"; exit 2; }
+[[ "${WARM_S:-0}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "serve-tax: WARM_S=$WARM_S: the warm-up's seconds, 0 for none"; exit 2; }
+[[ "${DRAIN_S:-600}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "serve-tax: DRAIN_S=$DRAIN_S: the seconds the corpus client waits for answers after a load's last arrival"; exit 2; }
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-[ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
+# SERVE_VLLM: the vLLM build to serve on, one of the adapter's engine.stock.BUILDS. The pin's environment is the node's
+# own; another build's is ops/vllm_env.sh's, which installs it beside the pin's the first time, before any GPU is held
+SERVE_VLLM=${SERVE_VLLM:-d9105ea80}
+if [ "$SERVE_VLLM" = d9105ea80 ]; then
+  [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
+else
+  venv=$(SERVE_VLLM=$SERVE_VLLM OUT= bash "$here/../../adapters/vllm/verity_vllm/ops/vllm_env.sh" | tail -n 1)
+  [ -n "$venv" ] || { echo "serve-tax: no environment for SERVE_VLLM=$SERVE_VLLM"; exit 2; }
+  # what this build compiles (vLLM's graphs, DeepGEMM and autotune files, FlashInfer's JIT, Triton) goes to caches of its
+  # own under its environment: the node's, which the pin's engines read, get no file from it
+  export VLLM_CACHE_ROOT=$venv/cache/vllm FLASHINFER_WORKSPACE_BASE=$venv/cache TRTLLM_DG_CACHE_DIR=$venv/cache/tensorrt_llm \
+    TRITON_CACHE_DIR=$venv/cache/triton
+fi
 VENV=${VENV:-$venv}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
@@ -139,15 +182,17 @@ export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0
 replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY_FROM:-}${RESTORE_FROM:-}" ] && replay_only=1
 [ -f "$C4" ] || [ $replay_only = 1 ] || [ -n "$PLAN_FILE" ] || [ "$CLIENT" = vllm-bench ] || { echo "serve-tax: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 [ -d "$CK" ] || { echo "serve-tax: no checkpoint at $CK"; exit 2; }
-v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
-case $v in *+gd9105ea8*) ;; *) echo "serve-tax: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
+v=$("$PY" -c 'from vllm._version import __commit_id__ as c; print(c.removeprefix("g"))') || exit 2
+[ "$v" = "$SERVE_VLLM" ] || { echo "serve-tax: $VENV holds vLLM $v, not SERVE_VLLM=$SERVE_VLLM"; exit 2; }
 mkdir -p "$OUT"
+[ ! -f "$VENV/freeze.txt" ] || cp "$VENV/freeze.txt" "$OUT/vllm_env.freeze.txt"   # ops/vllm_env.sh's: what it installed
 
-# FlashInfer's caches every engine reads, by their files' digests: its JIT GEMMs (~/.tensorrt_llm/cache) and vLLM's
-# autotune file per config hash (VLLM_CACHE_ROOT's flashinfer_autotune_cache), which the arms share, as they share the hash
+# FlashInfer's caches every engine reads, by their files' digests: its JIT GEMMs (TRTLLM_DG_CACHE_DIR, else
+# ~/.tensorrt_llm/cache) and vLLM's autotune file per config hash (VLLM_CACHE_ROOT's flashinfer_autotune_cache), which the
+# arms share, as they share the hash
 fi_cache() {
   local kv c
-  for kv in "tensorrt_llm_cache:$HOME/.tensorrt_llm/cache" \
+  for kv in "tensorrt_llm_cache:${TRTLLM_DG_CACHE_DIR:-$HOME/.tensorrt_llm/cache}" \
             "autotune_cache:${VLLM_CACHE_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/vllm}/flashinfer_autotune_cache"; do
     c=${kv#*:}
     if [ -d "$c" ]; then
@@ -176,6 +221,7 @@ if [ "${1:-}" = leased ]; then
     ${PUBLISHED_ARGS:+"--published-args=$PUBLISHED_ARGS"})
   if [ "$CLIENT" = vllm-bench ]; then
     load=(--client vllm-bench --loads "$LOADS" ${PASS_PROMPTS:+--pass-prompts "$PASS_PROMPTS"})
+    [ "${SAMPLED:-0}" = 1 ] && load+=(--sampled)
     for f in ${DATASETS:-}; do load+=(--dataset "$f"); done
   else
     common+=(--c4 "$C4")
@@ -192,9 +238,21 @@ if [ "${1:-}" = leased ]; then
   [ -n "${NUM_GPU_BLOCKS:-}" ] && count+=(--num-gpu-blocks "$NUM_GPU_BLOCKS")
   [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
   [ -n "${EDGES_EVERY_S:-}" ] && count+=(--edges-every-s "$EDGES_EVERY_S" ${SAVE_KV:+--save-kv "$SAVE_KV"} --kv-copy "${KV_COPY:-all}")
-  last=; to_serve=$(wc -w <<< "${ARMS:-}")
+  [ -n "${WARM_S:-}" ] && count+=(--warm-s "$WARM_S")
+  [ -n "${DRAIN_S:-}" ] && count+=(--drain-s "$DRAIN_S")
+  # the server lifetimes in order: the arms as named, then turned round, and so on (LIFETIMES), so that two arms'
+  # lifetimes of one number are neighbours in time, or the turned order first (TURNED=1); with one lifetime an arm's
+  # directory is its name
+  order=()
+  for k in $(seq "${LIFETIMES:-1}"); do
+    names=(${ARMS:-}); [ $(((k + ${TURNED:-0}) % 2)) = 0 ] && names=($(printf '%s\n' "${names[@]}" | tac))
+    for arm in "${names[@]}"; do order+=("$arm:$k"); done
+  done
+  last=; to_serve=${#order[@]}
   [ -z "${STOP_AT:-}" ] || stop_at=$(date -d "$STOP_AT" +%s) || { echo "serve-tax: STOP_AT=$STOP_AT is not a time"; exit 2; }
-  for arm in ${ARMS:-}; do
+  for item in "${order[@]}"; do
+    arm=${item%%:*}; dir=$arm; life=()
+    [ "${LIFETIMES:-1}" -gt 1 ] && { dir=$arm.${item##*:}; life=(--lifetime "${item##*:}"); }
     reps=$REPS
     if [ -n "${BUDGET_MIN:-}" ] && [ -n "$last" ]; then
       # this arm's share of the time left, the arms still to serve sharing it equally: a cost compares the reps both
@@ -208,13 +266,14 @@ if [ "${1:-}" = leased ]; then
       echo "== $arm and the arms after it: not served, STOP_AT=$STOP_AT has passed" | tee -a "$OUT/arms.txt"
       break
     fi
-    echo "== $arm $(date -u +%FT%TZ)"
+    echo "== $dir $(date -u +%FT%TZ)"
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
-      --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" \
-      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$arm"} --out "$OUT/$arm" || rc=1
-    echo "after $arm: $(fi_cache)" >> "$OUT/engine_env.txt"
-    echo "== $arm done $(date -u +%FT%TZ): $reps reps, $((($(date +%s) - t_leased) / 60)) min since the GPUs were held" | tee -a "$OUT/arms.txt"
-    last=$arm; to_serve=$((to_serve - 1))
+      --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" "${life[@]}" \
+      ${LEAVE_OUT:+--leave-out "$LEAVE_OUT"} \
+      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$dir"} --out "$OUT/$dir" || rc=1
+    echo "after $dir: $(fi_cache)" >> "$OUT/engine_env.txt"
+    echo "== $dir done $(date -u +%FT%TZ): $reps reps, $((($(date +%s) - t_leased) / 60)) min since the GPUs were held" | tee -a "$OUT/arms.txt"
+    last=$dir; to_serve=$((to_serve - 1))
   done
   for ra in ${RESTORE:+${RESTORE_ARM:-restore}}; do
     echo "== restore $ra ${RESTORE} $(date -u +%FT%TZ)"
@@ -232,7 +291,8 @@ if [ "${1:-}" = leased ]; then
       dir="replay-$mode"; [ "$n" -gt 1 ] && { dir="replay-$mode-$n"; flag+=(--against "$OUT/replay-$mode"); }
       echo "== replay $REPLAY $mode #$n $(date -u +%FT%TZ)"
       "$PY" "$here/replay.py" --arm-dir "${REPLAY_FROM:-$OUT/record}" --load "$REPLAY" --checkpoint "$CK" --tp "$GPUS" \
-        "${flag[@]}" ${REPLAY_CAPTURE:+--capture "$REPLAY_CAPTURE"} --out "$OUT/$dir" > "$OUT/$dir.log" 2>&1 \
+        "${flag[@]}" ${REPLAY_CAPTURE:+--capture "$REPLAY_CAPTURE"} ${PRIVATE:+--private "$PRIVATE/$dir"} \
+        --out "$OUT/$dir" > "$OUT/$dir.log" 2>&1 \
         || { tail -n 40 "$OUT/$dir.log"; rc=1; }
       tail -n 1 "$OUT/$dir.log"
     done
@@ -263,8 +323,8 @@ export PLAN DOCS WINDOW_S KV_WINDOW_S KV_DIR
 # LDCONFIG=1: the linker cache refreshed first, so libnvrtc and the rest resolve to the toolkit the node's dev packages
 # were installed for, the same for every engine of the job
 [ "${LDCONFIG:-0}" = 1 ] && ldconfig
-for k in FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK MAX_MODEL_LEN PUBLISHED_FRONTEND \
-    PUBLISHED_ARGS PLAN_FILE; do
+for k in SERVE_VLLM VLLM_CACHE_ROOT FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK MAX_MODEL_LEN \
+    PUBLISHED_FRONTEND PUBLISHED_ARGS PLAN_FILE; do
   echo "$k=${!k-unset}"; done > "$OUT/engine_env.txt"
 { command -v nvcc && nvcc --version | tail -1
   echo "has_flashinfer=$("$PY" -c 'from vllm.utils.flashinfer import has_flashinfer; print(has_flashinfer())')"
@@ -286,14 +346,16 @@ else
   fi
 fi
 [ $fresh_kv = 1 ] && rm -rf "$KV_DIR"
-gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
+gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/ids.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
-# the cost of the last arm over compiled; a job that ends on stock has none: compiled alone (a calibration of its
-# rungs), or published, which is stock under other settings and no arm of ours. WITH: the out/ directories of earlier
-# jobs on this node whose arms served another load, which joins the number
-if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ]; then
+# the cost of the last arm over the stock arm it is made from (compiled, or prod); a job that ends on stock has
+# none: compiled alone (a calibration of its rungs), or published or prod, which are stock under other settings and
+# no arm of ours. WITH: the out/ directories of earlier jobs on this node whose arms served another load, which
+# joins the number
+if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ] \
+    && [ "${ARMS##* }" != prod ]; then
   for o in ${WITH:-}; do for d in "$o"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done; done
   cost=("$PY" "$here/serve_tax.py" cost "${dirs[@]}" --arm "${ARMS##* }" ${TARGET:+--target "$TARGET"})
   "${cost[@]}" --out "$OUT" --result || rc=1

@@ -7,13 +7,14 @@ every instance and rebuilds the corner tier (minutes)."""
 from __future__ import annotations
 
 import hashlib
-import os
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
 from verity.definitions.silicon import models as S, term as T
 from verity.definitions.silicon.errors import InvalidArtifact
+from verity_numerical import settings
 from verity_numerical.bench import contract
 from verity_numerical.bench import instances as I
 from verity_numerical.bench import instances_gen as G
@@ -285,6 +286,13 @@ def test_nonfinite_negative_is_rejected_not_computed() -> None:
             S.tc_dot_chain(G.PIPELINE, 0, x, w)
 
 
+def test_in_domain_is_false_exactly_on_the_negatives_silicon_rejects() -> None:
+    neg = I.load("vu-k1536-neg")
+    verdicts = [row[5] for row in neg.index]
+    assert set(verdicts) == {"wrong", "reject"}
+    assert [I._in_domain(*neg.instance(i)[:2]) for i in range(neg.n)] == [v == "wrong" for v in verdicts]
+
+
 def test_sensitivity_table_matches_the_negatives_and_hides_what_real_data_hides() -> None:
     sens = MANIFEST["sensitivity"]
     assert set(sens) == {m.name for m in G.MISTAKES} | set(G.REJECT_CLASSES)
@@ -321,6 +329,24 @@ def test_ieee_fma_chain_is_binary32_sequential() -> None:
     assert G.ieee_fma_chain([big, one, one], [one, one, one], 0) != S.tc_dot(G.PIPELINE, 0, [big, one, one] + [0] * 13, [one] * 3 + [0] * 13)
 
 
+def test_the_manifests_commit_is_gits_answer_and_none_without_git_or_a_checkout(monkeypatch: pytest.MonkeyPatch) -> None:
+    def git(code: int, out: str):
+        def run(cmd, **kw):
+            assert cmd == ["git", "rev-parse", "HEAD"] and kw["cwd"] == I.REPO
+            return subprocess.CompletedProcess(cmd, code, stdout=out, stderr="")
+
+        return run
+
+    monkeypatch.setattr(I.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(I.subprocess, "run", git(0, "0123456789abcdef0123456789abcdef01234567\n"))
+    assert I._git_head() == "0123456789abcdef0123456789abcdef01234567"
+    monkeypatch.setattr(I.subprocess, "run", git(128, "HEAD\n"))
+    assert I._git_head() is None
+    monkeypatch.setattr(I.shutil, "which", lambda name: None)
+    monkeypatch.setattr(I.subprocess, "run", None)
+    assert I._git_head() is None
+
+
 def test_fused_row_mapping() -> None:
     assert G.tensor_of("qkv_proj", "5", 1014) == ("model.layers.5.self_attn.q_proj.weight", 1014)
     assert G.tensor_of("qkv_proj", "5", 1536 + 3) == ("model.layers.5.self_attn.k_proj.weight", 3)
@@ -333,7 +359,7 @@ def test_fused_row_mapping() -> None:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not os.environ.get("VERITY_BENCH_FULL"), reason="minutes: set VERITY_BENCH_FULL=1")
+@pytest.mark.skipif(not settings.VERITY_BENCH_FULL, reason="minutes: set VERITY_BENCH_FULL=1")
 @needs_built
 def test_full_recheck() -> None:
     rep = I.verify(ROOT, full=True, log=lambda *_: None)
