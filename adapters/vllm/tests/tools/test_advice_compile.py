@@ -69,7 +69,7 @@ def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_wi
     """Serving derives the seed from the window's seed coin and the body's ``user``, the window's line names the coin, and
     `compile_steps` given that coin as the window's seed salt (`window_coin`) and the certified body derives the seed the window
     committed. Another coin gives another seed for the same id, the rest of the body none; a window whose line names no coin (a
-    server that filled in `DEFAULT_SEED`) is refused by name, and a seed the engine drew is not the one the compile derives."""
+    server that filled in `DEFAULT_SEED`) is refused by name, and a seed of the engine's own is not the one the compile derives."""
     from tests.program.predict.test_steps import _registered
     from verity_vllm.engine.served_seed import derived
     from verity_vllm.program.predict.build import Unexpressible
@@ -93,8 +93,8 @@ def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_wi
                                             r"no window seed salt to derive one from: a seed serving fills in "
                                             r"\(`served_seed.DEFAULT_SEED`\)"):
         compile_steps(reg, advice, bodies, salt=None)
-    (tmp_path / "drawn").mkdir()
-    run, rec, advice = _served(tmp_path / "drawn", seed_override=7)
+    (tmp_path / "own").mkdir()
+    run, rec, advice = _served(tmp_path / "own", seed_override=7)
     key = bytes.fromhex(AC.window_coin(run, 0)["coin"])
     assert rec["committed_seeds"] == [7] and not rec["check"]["passed"]
     assert compile_steps(reg, advice, AC.served_inputs(run, 0)[2], salt=key).requests[0].seed == derived(key, "q0") != 7

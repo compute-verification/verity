@@ -10,11 +10,15 @@ import hashlib
 import json
 import os
 import random
+from typing import TYPE_CHECKING
 
 import pytest
 
 pytestmark = pytest.mark.pod
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 if not torch.cuda.is_available():
     pytest.skip("the rows-sha512 kernels need a GPU", allow_module_level=True)
 
