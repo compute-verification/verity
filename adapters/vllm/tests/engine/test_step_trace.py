@@ -163,9 +163,9 @@ def test_max_model_len_is_the_schedulers_where_its_scheduler_config_no_longer_ho
     assert ST.scheduler_config(sched)["max_model_len"] == 1024
 
 
-def test_an_arrival_after_an_empty_schedule_says_how_many_where_the_engine_holds_other_requests():
-    """A replay puts such a request back after as many empty schedules, with the requests the step in flight released; an
-    arrival at an idle engine, or right after a step, says nothing more than its step."""
+def test_an_arrival_after_an_empty_schedule_says_how_many():
+    """A replay puts such a request back after an empty schedule or into an idle engine, so the step in flight has finished its
+    requests and cached their blocks first; an arrival right after a step, or before any, says nothing more than its step."""
     class Sched:
         def __init__(self):
             self.requests, self.tokens = {}, 0
@@ -194,9 +194,9 @@ def test_an_arrival_after_an_empty_schedule_says_how_many_where_the_engine_holds
     arrive("b", (3, 0, 0))                      # a step, then two schedules that held every request back
     arrive("c", (2,))
     sched.requests.clear()
-    arrive("d", (0,))                           # the engine drained: nothing a later schedule could run with it
+    arrive("d", (0,))                           # the engine drained: the schedule that held its last request back still counts
     assert [(r["request"], r["before_step"], r.get("after_empty")) for r in trace.records if r["kind"] == "arrive"] == [
-        ("a", 0, None), ("b", 1, 2), ("c", 2, None), ("d", 2, None)]
+        ("a", 0, None), ("b", 1, 2), ("c", 2, None), ("d", 2, 1)]
 
 
 def test_the_header_holds_the_cache_format_and_speculative_settings_an_engine_was_built_with():
