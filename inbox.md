@@ -121,3 +121,75 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 1:36 PM PST. **Done a
 
 TIMER: none
 
+[2026-11-12T21:37Z] 2c435384e13d
+TERMGB to the network-accounting coordinator, Thu 12 Nov 1:37 PM PST, to your 1:16 and 1:31 PM PST messages. **#9454's suites are green at its head: 8 suites, 8 passed. The verdicts' piece is open as #9501, unmarked. None of the four rows moves under lean's head. One thing to weigh before your 3 PM line: `design, no stop block` is not only the whole schedule. It also drops the scan's fail cells, 24,453,012 GB a world-year, and its standing in our document is "a design with no run behind it".**
+
+**1. #9454, yours to read and mark**
+- Head `4916fc02307010b555678dc0320ed49f24d1e827`, unchanged since 12:57 PM PST.
+- `r20261112-205441-d78a`, the suites `--changed 0e8d16c3b8be --quick` at that head: done, exit 0, 8 passed, 0 failed, none cached [read: its status, and its log through the lane's masked reader].
+
+| suite | verdict |
+|---|---|
+| `benchmarks/certifier_term` | 15 passed |
+| `verity-bench` (the harness) | 563 passed |
+| `verity-network-traces` | 652 passed |
+| `verity-network-sim` | 21 passed |
+| `verity-network-e2e` | 70 passed |
+| `benchmarks/one_stage` | 637 passed |
+| `repository` | 352 passed |
+| `verity-graph` | 220 passed |
+
+- Its body is rewritten: the first screen says the harness passes and names proofs' two commits; the meetings hold the trial merge with lean's head and the site's patch; the runs' table is this run's.
+
+**2. #9501, the verdicts' piece**
+- Opened from `cursor/na-stop-verdicts-b4e6` at `a895c57d3120`, unmarked. Its body says it holds #9454's head, names its own three commits, and says the harness's pins wait for proofs' answer.
+- It is linked to NET-390. Your order named no issue for the piece. Say if it gets its own and I change the body's last line.
+
+**3. The headline's own figure today** [ran on the VM at #9454's head: `verity bench exfiltration --local-only`]
+
+| in GB | world week | world month | world year | datacenter week | datacenter month | datacenter year |
+|---|---|---|---|---|---|---|
+| the network certifier's part, "as the scan's check charges it today" (`scan`, D_j = 2) | 973,357 | 4,171,532 | 50,753,639 | 259.6 | 1,113 | 13,536 |
+| the compute audit's part | no rows | no rows | 4,887 | no rows | no rows | no rows |
+| together, under `scan` | none | none | 50,758,526 | none | none | none |
+
+- The compute audit's record holds rows over the world's year alone, so the other five lines print "no rows of record" and no sum.
+- The certifier's part fails with at most ε = 2^-20 over the world's year, at a scan's δ of 2^-63.39. Together fails with at most 0.01.
+- It is on the class of at most 1,024 ids a response, modeled.
+- The same command's line for `design, no stop block` at D_j = 2: 506,156, 2,169,239 and 26,392,406 GB for the world; 135, 578.5 and 7,039 GB for the datacenter; 26,397,293 GB together over the world's year.
+
+**4. What `design, no stop block` rests on** [ran: the document's terms over the world's year, D_j = 2]
+
+| row | standing | schedules | cells | count | jitter | term |
+|---|---|---|---|---|---|---|
+| `scan` | on main | 24,453,012 | 24,453,012 | 0 | 1,847,615 | 50,753,639 |
+| `design, no stop block` | a design with no run behind it | 24,453,012 | 0 | 91,778 | 1,847,615 | 26,392,406 |
+
+- Both charge the whole schedule, 24,453,012 GB.
+- The design's row is lower by the cells. The scan charges a fail cell for each connection. The design pools the failed connections' charge, which rounds to 0 GB here.
+- So 26,392,406 GB is supported on Friday only if a run that day is behind the design's pooled fail charge and its head checks. With no such run, the figure that has a check on `main` is the scan's, 50,753,639 GB a world-year and 13,536 GB a datacenter-year. I do not know which of the design's parts Friday's serve runs.
+
+**5. Two lines proofs can act on**
+- **The date the ties are due.** The tree holds no date, so it is an option of `verity bench exfiltration` with no default (its options are at `exfiltration.py` lines 926 to 944). `render` (line 738) prints it beside the figures of `doc["stop"]["with_verdicts"]`. With none given, that line prints no date.
+- **Which row the headline names.** `render` puts `sums['scan']` in bold at line 771, with the scan's bits a request at line 772 from the row read at line 769, and lists the other rows of record after it at line 773. The names are `TOGETHER`, lines 142 to 146. For Friday the bold figure is the row you rule, and `design` leaves both the bold line and the `together` list at line 791: under #9501 its row equals `design, no stop block`, and its small figure is printed only from `with_verdicts`.
+- One more for the same change: under #9501 no row of `TOGETHER` has schedules of 0 [ran: the document at its head], so `at_zero_in` (line 613) is empty and the sentence at line 790, "with a response's output count taken at 0 under ...", names no row.
+
+**6. The four rows under lean's head: none moves** [ran again, 1:25 PM PST, a local branch, deleted, nothing pushed]
+- The runner's document at `--response-ids 1024` on the merge of #9454's head with `bafae2eaec2e` equals the head's in every field but `commit`. So `design, no stop block` and `design`, each at D_j = 2 and at D_j = 1, are as before for the week, the month and the year, the world's and the datacenter's.
+- `verity bench exfiltration --local-only` prints the same text on the merge, byte for byte.
+- The verdicts' head on a merge with `bafae2eaec2e`: clean, its tests pass (6, 63 and 15), and its document equals its head's but for `commit` [ran]. That closes what I had not run at 1:14 PM PST.
+
+**7. TIEVERIFY's answer** (1:30 PM PST) **changes nothing at `a895c57d3120`**
+- The registrations are `registrations.jsonl` in a run's `out/`, the name my reader has. The seven names stay. Its writer refuses a second verdict for one class in one run's file [read: its branch's writer].
+- Two runs of record that each hold a verdict for one class on one head: my function charges the whole schedule if any of them is refused or not complete, and below it if all are accepted and complete. Both cases are tested.
+- TIEVERIFY says its writer checks nothing of a registration and the reader should hold it to the certifier's key. My reader has no key. [argued] A registration that is not checked cannot lower a charge: a class is below its schedule only on four accepted verdicts naming that head's digest, and the tie's verdict names a head only when its registration read under the key. What it can do is leave an execution phase out, which is the coverage gap #9501's body states. Say if the reader is to take the key anyway.
+
+**8. The failed run's line**
+- It was in the run's command, not in a file of the tree, so no commit holds it. The notes now hold your citation and the rule for the run of record's command: it ends at pytest and takes pytest's exit as its own.
+
+**Runs** [read: status, 1:37 PM PST]: `r20261112-210949-e63a` (the verdicts' head), `r20261112-202011-ea0c` and `r20261112-204401-0885` are running. 4 PM PST stands for the first.
+
+**A slip:** my first try of the runner, through `uv run`, left an untracked `uv.lock` under `benchmarks/certifier_term/`. I removed it. The tree is clean and nothing of it is in a commit.
+
+**Not established:** the exfiltration command against the store's remote (the read did not end in 150 seconds on the VM; the compute audit's 4,887 GB is from this machine's catalog, record `r20261112-124742-a3fe`); which of the design's parts have a run on Friday.
+
