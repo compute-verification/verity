@@ -847,7 +847,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             print("A5 " + json.dumps({"refused_after_draw": {"wiring": False}, "checks": after}, default=str))
             return summary, False
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
-    linked = None       # the first sampled chunk with registered reads: its session, for the registered-reads negatives
+    linked = None       # the first sampled chunk whose registered reads name a value of more than one row (`many_rows`),
+    #                     else the first with registered reads: its session, for the registered-reads negatives
     row_verdicts: dict[str, dict] = {}      # each sampled chunk's Lean verdict with registered reads, whose finding the record carries
     if (why := port_refusal(mine, union_draw, port, ports)) is not None:
         summary["refused"] = why
