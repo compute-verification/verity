@@ -33,6 +33,7 @@ from verity_vllm.commit import executed_prefix as EPX
 from verity_vllm.commit import opened as OV
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.log import init_logger
+from verity_vllm.pipeline import commit_plan as CP
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import vu_store as VUX
 from verity_vllm.query.manifest import format as MF
@@ -155,6 +156,30 @@ def cache_key(s: ReplaySources) -> str | None:
         return None
 
 
+def sample_of(sr: dict[str, Any]) -> dict[str, Any]:
+    """A replay record's sample; an empty one where the replay did not come to sample."""
+    sample = sr.get("sample")
+    return sample if sample else {}
+
+
+def population_of(sr: dict[str, Any]) -> dict[str, Any]:
+    """A replay record's population; an empty one where the replay derived none."""
+    population = sr.get("population")
+    return population if population else {}
+
+
+def strata_n(sr: dict[str, Any]) -> int:
+    """How many strata a replay record holds: none where it holds no strata."""
+    strata = sr.get("strata")
+    return len(strata) if strata else 0
+
+
+def alias_layers(check: dict[str, Any]) -> int:
+    """How many layers a plane alias check names: none where it names no layer."""
+    per_layer = check.get("per_layer")
+    return len(per_layer) if per_layer else 0
+
+
 def run(s: ReplaySources, replay_cache: dict[str, dict[str, Any]]) -> None:
     """The replay + linkage of the run on `s`, their artifact (`sampled_replay_p<pair>.json`) and their components on `s.row`.  A
     replay this host cannot hold (`driver.PoolDoesNotFit`) is raised, not recorded: it says nothing about the run."""
@@ -175,7 +200,7 @@ def run(s: ReplaySources, replay_cache: dict[str, dict[str, Any]]) -> None:
             sr, lk = evaluate(s, held)
             if _rc_key is not None and sr.get("result") is not None:
                 replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(s.out / f"sampled_replay_p{pair}.json"),
-                                         "seed": (sr.get("sample") or {}).get("seed"), "code": s.versions.get("git_head")}
+                                         "seed": sample_of(sr).get("seed"), "code": s.versions.get("git_head")}
         except SR.PoolDoesNotFit:
             raise
         except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
@@ -185,7 +210,7 @@ def run(s: ReplaySources, replay_cache: dict[str, dict[str, Any]]) -> None:
     _art = s.out / f"sampled_replay_p{pair}.json"
     _art.write_text(json.dumps({"sampled_replay": sr, "boundary_linkage": lk}, indent=1, default=str) + "\n")
     free_programs(sr, held, pair)
-    s.tl.end("validate.sampled_replay", pair=pair, ok=sr.get("result"), n=(sr.get("sample") or {}).get("evaluated"), linkage=lk.get("result"),
+    s.tl.end("validate.sampled_replay", pair=pair, ok=sr.get("result"), n=sample_of(sr).get("evaluated"), linkage=lk.get("result"),
              reused=("reused_from" in sr))
     record(s, sr, lk, _art)
 
@@ -217,14 +242,7 @@ def programs_of_record(s: ReplaySources | ProgramSources, _rl: dict[str, str], *
     rows by must be the ones their Builds bound (`check.replay.definitions`); else REFUSED by name.  ``definitions=False`` for a
     caller that evaluates no row (the replay's plan, the serving rows): the replay that grades the picks checks them."""
     args, required_manifest, reqs, sampling = s.args, s.manifest, s.reqs, s.sampling
-    _of_record = set()
-    if getattr(args, "program_digest", None):
-        _of_record.add(str(args.program_digest))
-    if isinstance(required_manifest, dict):
-        _of_record.update(str(x) for x in (required_manifest.get("component_digests") or []))
-        for _c in (required_manifest.get("components") or {}).values():
-            if isinstance(_c, dict) and _c.get("program_digest"):
-                _of_record.add(str(_c["program_digest"]))
+    _of_record = CP.digests_of_record(args, required_manifest if isinstance(required_manifest, dict) else None)
     if getattr(args, "programs_root", None):
         _fx = {"requests": [{"request_id": _rl[str(r.get("request_id"))], "prompt_len": len(r["prompt_token_ids"]),
                              "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "cached": int(r.get("cached") or 0)}
@@ -233,7 +251,7 @@ def programs_of_record(s: ReplaySources | ProgramSources, _rl: dict[str, str], *
     else:
         _l1 = MF.load_program(args.program_dir)
         _loaded = {_rl[str(r.get("request_id"))]: _l1 for r in reqs}
-    _digs = {k: str((v.get("result") or {}).get("program_digest") or (v.get("instances") or {}).get("digest") or "") for k, v in _loaded.items()}
+    _digs = {k: CP.program_digest(v) for k, v in _loaded.items()}
     if not _of_record:
         raise RuntimeError("no Program digest of record to check the replay Programs against (pass --program-digest / --required-manifest)")
     _bad = {k: d for k, d in _digs.items() if d not in _of_record}
@@ -250,13 +268,22 @@ def request_labels(reqs: list[dict[str, Any]]) -> dict[str, str]:
     return {str(r.get("request_id")): f"r{int(r.get('index', i))}" for i, r in enumerate(reqs)}
 
 
+def schedule_of_record(row: dict[str, Any]) -> dict[str, Any]:
+    """The schedule a run's Commit placed its population on (`commit.binding.coverage.schedule`); an empty one where the row
+    records none."""
+    commit = row.get("commit")
+    binding = commit.get("binding") if commit else None
+    coverage = binding.get("coverage") if binding else None
+    schedule = coverage.get("schedule") if coverage else None
+    return schedule if schedule else {}
+
+
 def arrivals(s: Any, rl: dict[str, str]) -> tuple[dict[str, int], bool]:
     """Each request's arrival step, and whether it moved off the declared one.  One schedule of record for every consumer: when the
     population was placed on the engine's committed-step axis (binding.coverage.schedule.use == observed), the replay's, the
     linkage's and the serving rows' arrivals are the same observed ones."""
     declared = {rl[str(r.get("request_id"))]: int(r.get("arrive_step") or 0) for r in s.reqs}
-    sched = (((s.row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
-    return SR.arrivals_of_record(declared, sched)
+    return SR.arrivals_of_record(declared, schedule_of_record(s.row))
 
 
 def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
@@ -285,9 +312,15 @@ def linkage_facts(loaded: dict, progs: dict, index: Any) -> dict[str, Any]:
     return {"program_steps": program_steps(loaded, progs), "embed_op_path": index.embed_op_path()}
 
 
+def build_t(program: dict[str, Any]) -> Any:
+    """The `T` of a loaded Program's Build result; None where it holds no result, or the result no `T`."""
+    result = program.get("result")
+    return result.get("T") if result else None
+
+
 def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
     """Each request Program's steps of record: its Build result's T + 1, else its rows' segment steps."""
-    return {k: (int(v["result"]["T"]) + 1) if (v.get("result") or {}).get("T") is not None else (len(MF.segment_steps(progs[k]["rows"], progs[k].get("checks"))) if k in progs else None)
+    return {k: (int(v["result"]["T"]) + 1) if build_t(v) is not None else (len(MF.segment_steps(progs[k]["rows"], progs[k].get("checks"))) if k in progs else None)
             for k, v in loaded.items()}
 
 
@@ -325,7 +358,8 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
     the `executed_prefix=` kwarg nothing bounds the replay population: an EOS-stopped request's rows past the stop are sampled and grade 'not
     evaluated' -> partial, never PASS.  An older signature receives only the arithmetic's facts."""
     _sr_kw: dict[str, Any] = {}
-    _ep_facts = EPX.executed_prefix_facts(_epr_r, s.row["commit"].get("binding") or {}, lk, _arr, s.stop_of_record,
+    binding = s.row["commit"].get("binding")
+    _ep_facts = EPX.executed_prefix_facts(_epr_r, binding if binding else {}, lk, _arr, s.stop_of_record,
                                           served_tokens={_rl[str(k)]: [int(t) for t in v] for k, v in s.tokens.items() if str(k) in _rl})
     if hasattr(SR, "executed_prefix_of_record") and "executed_prefix" in inspect.signature(SR.sampled_replay).parameters:
         _ep_facts = EPX.facts_accepted_by(SR.executed_prefix_of_record, _ep_facts)
@@ -395,8 +429,8 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     held["progs"] = _progs = {k: v["instances"] for k, v in _loaded.items()}
     _arr, _moved = arrivals(s, _rl)
     if _moved:
-        _sched_r = (((row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
-        logger.info("[delta] replay/linkage arrivals follow the engine schedule of record: %s (declared %s)", _arr, _sched_r.get("declared_arrive_steps"))
+        logger.info("[delta] replay/linkage arrivals follow the engine schedule of record: %s (declared %s)", _arr,
+                    schedule_of_record(row).get("declared_arrive_steps"))
     if facts is None:
         _k0 = next(iter(_progs))
         held["pi0"] = _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
@@ -487,8 +521,11 @@ def reconcile(s: ReplaySources, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr
     batch-level / named-input family is outside the population split's reach and is named, not equal."""
     row, pair = s.row, s.pair
     if "executed_prefix" in _sr_kw and _epr_r["any_eos_stop"]:
-        _cc = (((row["commit"].get("binding") or {}).get("population") or {}).get("manifest") or {}).get("not_executed_by_rule")
-        _recon = EPX.reconcile_not_executed(_cc, (sr.get("population") or {}).get("not_executed_by_rule"), _epr_r, manifest_identities=s.ids_full)
+        binding = row["commit"].get("binding")
+        population = binding.get("population") if binding else None
+        manifest = population.get("manifest") if population else None
+        _cc = manifest.get("not_executed_by_rule") if manifest else None
+        _recon = EPX.reconcile_not_executed(_cc, population_of(sr).get("not_executed_by_rule"), _epr_r, manifest_identities=s.ids_full)
         sr["not_executed_reconciliation"] = _recon
         row["commit"]["not_executed_reconciliation"] = _recon
         (logger.info if _recon["ok"] else logger.warning)(
@@ -530,16 +567,16 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
 def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
     """The replay's and the linkage's records and components on the run's row (graded by finalize.grade_sampled_replay), and their lines."""
     row, pair, components = s.row, s.pair, s.components
-    row["commit"]["sampled_replay"] = {k: v for k, v in sr.items() if k not in ("strata",)} | {"artifact": str(_art), "strata_n": len(sr.get("strata") or {})}
+    row["commit"]["sampled_replay"] = {k: v for k, v in sr.items() if k not in ("strata",)} | {"artifact": str(_art), "strata_n": strata_n(sr)}
     row["commit"]["boundary_linkage"] = lk
     vc = row["commit"]["value_correspondence"]
     vc["method"] = f"sampled-exact-replay({sr.get('grade')}) + boundary-linkage + " + vc["method"]
-    _pop, _smp = sr.get("population") or {}, sr.get("sample") or {}
+    _pop, _smp = population_of(sr), sample_of(sr)
     components["sampled_replay"] = {"result": sr.get("result"), "grade": sr.get("grade"), "why": sr.get("why"),
                                     "population": {"n": _pop.get("vus"), "source": _pop.get("source"), "by_family": _pop.get("by_family"),
                                                    "not_evaluable_by_family": _pop.get("not_evaluable_by_family")},
                                     "n": _smp.get("evaluated"), "equal": _smp.get("equal"), "mismatch_n": _smp.get("mismatch_n"), "picked": _smp.get("picked"),
-                                    "per_stratum": _smp.get("per_stratum"), "strata": sr.get("strata_keys"), "strata_n": len(sr.get("strata") or {}),
+                                    "per_stratum": _smp.get("per_stratum"), "strata": sr.get("strata_keys"), "strata_n": strata_n(sr),
                                     "strata_unevaluated": sr.get("strata_unevaluated"), "seed": _smp.get("seed"), "seed_source": _smp.get("seed_source"),
                                     "unreplayable": sr.get("unreplayable"), "weights": sr.get("weights"), "programs": sr.get("programs"),
                                     "evaluators": sr.get("evaluators"), "artifact": str(_art),
@@ -559,9 +596,9 @@ def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
         vc["result"] = True
     logger.info("[delta] C2 SAMPLED REPLAY (pair %s): %s evaluated %s equal %s mismatch %s not-evaluated %s of population %s VUs in %s strata "
                 "(per-stratum %s, seed %s); not-evaluable %s%s", pair, str(sr.get("grade")).upper(), _smp.get("evaluated"), _smp.get("equal"),
-                _smp.get("mismatch_n"), _smp.get("not_evaluated_n"), (sr.get("population") or {}).get("vus"),
-                (sr.get("population") or {}).get("strata_n"), _smp.get("per_stratum"), _smp.get("seed"),
-                (sr.get("population") or {}).get("not_evaluable"), (" -- " + str(sr.get("why"))) if sr.get("why") else "")
+                _smp.get("mismatch_n"), _smp.get("not_evaluated_n"), _pop.get("vus"),
+                _pop.get("strata_n"), _smp.get("per_stratum"), _smp.get("seed"),
+                _pop.get("not_evaluable"), (" -- " + str(sr.get("why"))) if sr.get("why") else "")
     if _smp.get("mismatch_n") and isinstance(sr.get("mismatch_by"), dict):        # every mismatch by name
         logger.warning("[delta] C2 SAMPLED REPLAY (pair %s): mismatches by family|request|phase %s", pair,
                        sr["mismatch_by"].get("by_family_request_phase"))
@@ -569,10 +606,12 @@ def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
                 "OK" if lk.get("result") else ("FAIL" if lk.get("result") is False else "NOT RUN"), lk.get("linked"), lk.get("pairs"),
                 (" -- " + str(lk.get("why"))) if lk.get("why") else "")
     # one line: the committed up plane != the committed down plane, per (request, step, layer)
-    _ac = (sr.get("moe_planes") or {}).get("alias_check") or {}
+    planes = sr.get("moe_planes")
+    alias = planes.get("alias_check") if planes else None
+    _ac: dict[str, Any] = alias if alias else {}
     if _ac.get("compared"):
         logger.info("[delta] C2 MOE PLANE ALIAS CHECK (pair %s): %s up != down bytes on %s/%s (request, step, layer) triples, %s layers, plane words "
                     "%s%s%s", pair, "OK" if _ac.get("result") else "ALIAS", int(_ac.get("compared", 0)) - int(_ac.get("identical_n", 0)),
-                    _ac.get("compared"), len(_ac.get("per_layer") or {}), _ac.get("plane_words"),
+                    _ac.get("compared"), alias_layers(_ac), _ac.get("plane_words"),
                     (" -- " + str(_ac.get("why"))) if _ac.get("why") else "",
                     (" (read errors " + str(_ac.get("read_errors_n")) + ")") if _ac.get("read_errors_n") else "")
