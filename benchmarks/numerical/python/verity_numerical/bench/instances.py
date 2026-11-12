@@ -44,11 +44,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity.definitions.silicon import models as S
+from verity.definitions.silicon import cast, models as S
 from verity.definitions.silicon.errors import InvalidArtifact
 from verity.definitions.circuits.targets.target import FIRST
 
 from .. import settings
+from ..reference import hawkeye_close
 from . import instances_gen as G
 
 __all__ = [
@@ -56,15 +57,17 @@ __all__ = [
     "COMMITTED_FILES",
     "DATASET",
     "DEFAULT_ROOT",
+    "K",
     "N_TU",
     "N_VU",
+    "STEP",
     "STEPS",
     "TIERS",
-    "K",
     "TuTier",
     "VuTier",
     "build",
     "load",
+    "main",
     "manifest_sha256",
     "read_u16",
     "read_u32",
@@ -353,16 +356,12 @@ def _git_head() -> str | None:
 
 
 def _source_digests() -> dict[str, str]:
-    import verity.definitions.silicon.cast as cast_mod
-
-    import verity_numerical.reference.hawkeye_close as hk_mod
-
     files = {
         "verity_numerical/bench/instances.py": Path(__file__),
         "verity_numerical/bench/instances_gen.py": Path(G.__file__),
         "verity/definitions/silicon/models.py": Path(S.__file__),
-        "verity/definitions/silicon/cast.py": Path(cast_mod.__file__),
-        "verity_numerical/reference/hawkeye_close.py": Path(hk_mod.__file__),
+        "verity/definitions/silicon/cast.py": Path(cast.__file__),
+        "verity_numerical/reference/hawkeye_close.py": Path(hawkeye_close.__file__),
     }
     return {k: sha256_file(p) for k, p in files.items()}
 
@@ -371,8 +370,8 @@ def build(out: Path | str = DEFAULT_ROOT, procs: int = 1, seeds_dir: Path | str 
           log=print) -> dict:
     """Regenerate every array of the dataset under ``out`` (built and committed alike) and write ``manifest.json``.
     Needs network access to Hugging Face for the real weight rows (cached under ``cache``, default ``<out>/.cache/hf``).
-    Stops with ``RuntimeError`` on any seed check failure, silicon domain error or hawkeye_close disagreement -- those
-    are discrepancy-log entries for the coordinator, not things to fix here."""
+    Stops with ``RuntimeError`` on any seed check failure, silicon domain error or hawkeye_close disagreement: each is an
+    entry for the discrepancy log, not a thing to fix here."""
 
     t_start = time.time()
     out = Path(out)

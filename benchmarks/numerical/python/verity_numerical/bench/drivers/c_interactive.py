@@ -17,9 +17,14 @@ TCP-connect RTT probe to ``RTT_TARGET`` (the verifier pod's sshd) before the swe
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+import tarfile
+import tempfile
 from pathlib import Path
+
+__all__ = ["BACKEND", "FAMILY", "INTERACTIVE", "RESULT", "jobs", "register", "unmet"]
 
 BACKEND = "C-interactive"
 FAMILY = "C-Flock"
@@ -45,9 +50,6 @@ def supports_relation(relation: str, sub, scheme: str):
 
 def set_tarball(cell) -> str:
     """The cell's input set as one tarball both pods receive (``research run --send``), under ``$TMPDIR/verity-cell-sets``."""
-    import tarfile
-    import tempfile
-
     src = Path(cell.input_set["path"])
     out = Path(tempfile.gettempdir()) / "verity-cell-sets" / f"{cell.input_set['content_digest']}.tar"
     if not out.exists():
@@ -114,8 +116,6 @@ def register(cell, prover_run: Path, verifier_run: Path | None, out: Path) -> li
 def ir_binary(prover_run: Path) -> str:
     """An IR cell's verifier binary: the prover's own (the result's ``software.backend.name``: ``flock-ir-frame``, or
     ``flock-ir-sampling`` for the sampling statement), ``flock-ir-frame`` when the result does not say."""
-    import json
-
     for p in (Path(prover_run) / "result.json", *Path(prover_run).glob("**/result.json")):
         try:
             return json.loads(p.read_text())["workload_fingerprint"]["software"]["backend"]["name"] or "flock-ir-frame"
