@@ -80,9 +80,10 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     eng = RowEngine.of(doc)
     # an optional top-level `sampling` block selects the variant and the request seeds / fan-out:
     # {"variant": "greedy", "seed": null, "n": 1} (defaults = the greedy runs); a request may override `seed` / `n`.
-    samp = dict(doc.get("sampling") or {})
+    block, variants, sweep = doc.get("sampling"), doc.get("variants"), doc.get("sweep")    # each may be absent, null or empty
+    samp = dict(block) if block else {}
     variant = str(samp.get("variant", "greedy"))
-    params = (doc.get("variants") or {}).get(variant)
+    params = variants.get(variant) if variants else None
     if params is None:
         if variant != "greedy":
             raise KeyError(f"workload {path}: sampling variant {variant!r} is not in `variants`")
@@ -108,7 +109,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
         if r.get("variant") is not None:
             # a request may pin ANOTHER variant (mixed batch: one greedy row next to a sampled row); the
             # request record then carries its own temperature / top_p / top_k and the manifest lists them per request
-            rp = (doc.get("variants") or {}).get(str(r["variant"]))
+            rp = variants.get(str(r["variant"])) if variants else None
             if rp is None:
                 raise KeyError(f"workload {path}: request {r['request_id']} variant {r['variant']!r} is not in `variants`")
             req.update({"variant": str(r["variant"]), "temperature": float(rp.get("temperature", 0.0)),
@@ -138,7 +139,7 @@ def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
             "expected_engine_steps": doc.get("expected_engine_steps"),
             # the workload's row id and the execution it declares (row-id suffix / explicit field): the
             # GPU stages hand `execution` to build_engine so enforce_eager is the workload's, never the harness's literal
-            "row_id": (doc.get("sweep") or {}).get("row_id") if isinstance(doc.get("sweep"), dict) else doc.get("row_id"),
+            "row_id": sweep.get("row_id") if isinstance(sweep, dict) else doc.get("row_id"),
             "execution": execution_of_workload(doc),
             # the workload's declared TargetProfile overrides (`engine.target`, written by pipeline/workload.py --target): the channel
             # `target_of_workload` documents -- rc3 dropped it here, so every GPU stage built its engine with target=None (engine ARGS
