@@ -48,6 +48,9 @@ was served, naming each differing request and its first position, and where a re
 (``--expect-replay``) and the tokens line is not measured; 0 otherwise: any other line that is not measured is not a
 failure, and the last line counts the lines that are measured.
 
+Under research run, where OUT is the run's own out/, the run's result.json names what the report rests on among its
+artifacts (`declare`: the report, the replay's record, the replayed pass's served ids and step trace).
+
 ``arms`` prints the three arms a job serves by default (`default_arms`): the arms at vLLM's published serving settings
 (`PROD`) for a model whose recipe the benchmark holds, else stock compiled vLLM, stock again and the step record
 (`TODAY`); with ``--out``, the three an earlier job's out/ is read as, which ``report`` reads it as too where none is
@@ -61,6 +64,7 @@ import argparse
 import gzip
 import importlib.util
 import json
+import os
 import re
 import sys
 from collections import Counter
@@ -766,6 +770,43 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
             if ours in dirs else not_measured(f"{ours} was not served")}
 
 
+#: the schema of a run's result.json, whose ``artifacts`` and ``measurement_files`` the store keeps as the run's files
+RESULT = "research/result/v0.1"
+
+
+def outputs(out: Path, ours: str, replay_dir: Path) -> list[str]:
+    """What a job's report rests on, as paths from the run's directory (``out``'s parent): the report, the replay's
+    record with the tokens and steps it kept, and the served ids and step trace of ours's directory the replayed
+    pass is in (`replayed_dir`). Only the files that are there."""
+    arm = replayed_dir(arm_dirs(out, ours), replay_dir) if replay_dir.is_dir() else None
+    files = [out / "prod_repro.txt", out / "prod_repro.json", *sorted(f for f in replay_dir.glob("replay*") if f.is_file()),
+             *(sorted(f for kind in ("ids", "step_trace") for f in (arm / "server").glob(f"{kind}.*.jsonl*")) if arm else [])]
+    return [str(f.relative_to(out.parent)) for f in files if f.is_file()]
+
+
+def declare(out: Path, r: dict, replay_dir: Path) -> Path | None:
+    """Under research run, where ``out`` is the run's own out/: the run's result.json names `outputs` among its
+    artifacts, so the store keeps them as the run's files. A result the benchmark's cost wrote stays as it is with
+    them added; a job that has none, one that served ours alone, gets one whose validation is the tokens line's.
+    None for an out/ that is not the run's, which is another job's read again."""
+    run_dir = os.environ.get("RESEARCH_RUN_DIR")
+    if not run_dir or out.resolve() != (Path(run_dir) / "out").resolve():
+        return None
+    f, t = Path(run_dir) / "result.json", r["tokens"]
+    doc = json.loads(f.read_text()) if f.is_file() else {
+        "schema": RESULT, "run_id": os.environ.get("RESEARCH_RUN_ID") or Path(run_dir).name,
+        "workload_fingerprint": {"benchmark": "prod_repro", "model": r["model"], "arm": r["arms"]["ours"], "load": r["load"]},
+        "validation": {"status": "not_run" if not t["measured"] else "passed" if t["reproduces"] else "failed",
+                       "checker": "verity bench prod_repro", "evidence": ["out/prod_repro.json"],
+                       "detail": next(x for x in text(r).splitlines() if x.startswith("tokens:"))},
+        "measurements": [], "measurement_files": [], "artifacts": []}
+    doc["artifacts"] = sorted({*(doc.get("artifacts") or ()), *outputs(out, r["arms"]["ours"], replay_dir)})
+    tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
+    tmp.write_text(json.dumps(doc, indent=1) + "\n")
+    os.replace(tmp, f)
+    return f
+
+
 def failed(r: dict) -> list[str]:
     """Why the job failed: each request whose replayed tokens differ from the served ones, with its first position,
     the steps that differ, and a replay whose record and kept tokens disagree; or a replay that was asked for and
@@ -1147,6 +1188,7 @@ def main(argv: list[str] | None = None) -> int:
     r["failed"] = failed(r)
     (a.out / "prod_repro.json").write_text(json.dumps(r, indent=1))
     (a.out / "prod_repro.txt").write_text(text(r))
+    declare(a.out, r, a.replay or a.out / "replay-compiled")
     print(json.dumps(r) if a.json else text(r), end="\n" if a.json else "")
     return 1 if r["failed"] else 0
 

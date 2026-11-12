@@ -66,9 +66,13 @@ verity bench prod_repro --replay-of OUT --load NAME --replay PASS [--model ...] 
   advice, by the scheduler replay's loader (`benchmarks/network_e2e/encodings/replay.py`), which reads the pass's
   records out of ours's step trace with each request's prompt ids and served ids.
 
-The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. The job fails where an arm or the replay
-fails, where a replay was asked for and its tokens were not compared, and where a replayed token or step differs from
-the served one. One kind of served step is no difference, and the report counts and prints it: a step after a
+The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. Under `research run` the run's
+`result.json` names, among its artifacts, the report, the replay's record with the tokens and steps it kept, and the
+served ids and step trace of ours's directory the replayed pass is in, so the store keeps them as the run's files; a
+job with no result of the benchmark's cost (one that served ours alone) gets one whose validation is the tokens line.
+
+The job fails where an arm or the replay fails, where a replay was asked for and its tokens were not compared, and
+where a replayed token or step differs from the served one. One kind of served step is no difference, and the report counts and prints it: a step after a
 request's end, which emitted no token, whose requests had all ended in an earlier step, and which the replay did not
 run (the scheduler had planned it before it learned of the end, and serving dropped what it computed; the replay ends
 with its last request). A job that ends early still has its report, also one whose time ended (SIGTERM: the arm or the

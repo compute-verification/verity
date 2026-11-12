@@ -936,6 +936,42 @@ def test_the_advice_line_is_the_replayed_passs_schedule_as_the_scheduler_replays
     assert r["advice"]["measured"] and "\n  the pass: record's burst rep 1, the one a replay re-runs, and none ran; 2,040 steps" in txt
 
 
+def test_under_research_run_the_runs_result_names_what_the_report_rests_on(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    out = job(tmp_path)
+    replayed(out)
+    monkeypatch.setattr(P, "encodings", Loader)
+    # not under research run, and another job's out/ read again under it: no result is written
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    run(out)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "elsewhere"))
+    run(out)
+    assert not (tmp_path / "result.json").exists() and not (tmp_path / "elsewhere").exists()
+    # the run's own out/: a job with no result gets one, whose validation is the tokens line's
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-1")
+    run(out)
+    doc = json.loads((tmp_path / "result.json").read_text())
+    files = ["out/prod_repro.json", "out/prod_repro.txt", "out/record/server/step_trace.9.jsonl.gz",
+             "out/replay-compiled/replay.json", "out/replay-compiled/replay_steps.jsonl", "out/replay-compiled/replay_tokens.jsonl.gz"]
+    assert doc["artifacts"] == files and (doc["schema"], doc["run_id"]) == ("research/result/v0.1", "r-1")
+    assert doc["validation"] == {
+        "status": "passed", "checker": "verity bench prod_repro", "evidence": ["out/prod_repro.json"],
+        "detail": "tokens: reproduced: 2 requests replayed, 4 served tokens compared with 4 replayed, 0 differ in 0 requests"}
+    assert all((tmp_path / f).is_file() for f in files)
+    # a result the benchmark's cost wrote keeps what it says, with the files added to its own
+    (tmp_path / "result.json").write_text(json.dumps({"schema": "research/result/v0.1", "run_id": "r-1", "validation": {"status": "failed"},
+                                                      "measurement_files": ["out/serving_cost.json"], "artifacts": ["out/kept"]}))
+    run(out)
+    doc = json.loads((tmp_path / "result.json").read_text())
+    assert doc["artifacts"] == ["out/kept", *files] and doc["validation"] == {"status": "failed"}
+    assert doc["measurement_files"] == ["out/serving_cost.json"]
+    # replayed tokens that differ fail the validation of a result the report writes
+    (tmp_path / "result.json").unlink()
+    shutil.rmtree(out / "replay-compiled")
+    replayed(out, tokens={rid(f"{LOAD}1", 0): [8, 0]})
+    assert run(out)[0] == 1 and json.loads((tmp_path / "result.json").read_text())["validation"]["status"] == "failed"
+
+
 def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_benchmark_holds(
         tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture):
     assert all(a in S.ARMS for a in P.PROD + P.TODAY) and all(S.ARMS[a].published for a in P.PROD)
@@ -972,10 +1008,15 @@ exit "${STAND_IN_RC:-0}"
 
 
 def runner(tmp_path: Path) -> Path:
-    """A tree with this directory's files and, in the serving cost benchmark's place, its two modules and the stand-in."""
+    """A tree with this directory's files and, in the serving cost benchmark's place, its two modules and the stand-in;
+    the scheduler replay's loader and the adapter it reads are the tree's own."""
     here, tax = tmp_path / "tree/benchmarks/prod_repro", tmp_path / "tree/benchmarks/serve_tax"
     here.mkdir(parents=True)
     tax.mkdir()
+    (tmp_path / "tree" / P.ENCODINGS.parent.relative_to(P.ROOT)).mkdir(parents=True)
+    (tmp_path / "tree" / P.ENCODINGS.relative_to(P.ROOT)).symlink_to(P.ENCODINGS)
+    (tmp_path / "tree/adapters").mkdir()
+    (tmp_path / "tree/adapters/vllm").symlink_to(P.ROOT / "adapters/vllm")
     for f in ("run.sh", "prod_repro.py", "limits.json"):
         shutil.copy(Path(P.__file__).parent / f, here / f)
     for f in ("serve_tax.py", "replay.py"):
