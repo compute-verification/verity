@@ -1,21 +1,12 @@
-"""`engine.arrivals`' scheduler reads give None, never raise, on an engine that doesn't expose the in-process V1 scheduler and on
-a snapshot they can't read: the arrivals loop then counts forwards by the lag rule instead."""
+"""`engine.arrivals`' read of the scheduler's requests gives None, never raises, on a snapshot it can't read: the arrivals loop
+then counts forwards by the lag rule instead."""
 from __future__ import annotations
 
 from types import SimpleNamespace as NS
 
 import pytest
 
-from verity_vllm.engine.arrivals import _snapshot_computed, scheduler_of
-
-
-def test_scheduler_of_reads_the_in_process_scheduler_or_none():
-    sched = NS(requests={})
-    assert scheduler_of(NS(llm_engine=NS(engine_core=NS(scheduler=sched)))) is sched
-    assert scheduler_of(NS(llm_engine=NS(engine_core=NS(engine_core=NS(scheduler=sched))))) is sched
-    assert scheduler_of(NS()) is None
-    assert scheduler_of(NS(llm_engine=None)) is None
-    assert scheduler_of(NS(llm_engine=NS(engine_core=NS(scheduler=NS(requests=[]))))) is None
+from verity_vllm.engine.arrivals import _snapshot_computed
 
 
 @pytest.mark.parametrize("sched, want", [
