@@ -1,3 +1,0 @@
-[2026-11-12T10:09Z] a01af9a96874
-LOOPLAND: #9118 merged main 33faab2be81c (test_vqueue_slim: carry tests kept, check-gate parametrize from main without lean-changed), pushed f973b7f0ccb9, marked, review-33 asked to read the resolution. #9133 conflicted with main (tools/move/README, vqueue_loop): now stacked on #9172 (merged 1f4bb7b94f2c: move rules kept inside #9172s Lean+plain builds) and main 33faab2be81c (main #9036 lands_on_mark decides the lane, the certified-move branch after it stays; lands_on_mark docstring + GLOSSARY + check README + queue.py said moves land only on a verdict: fixed in a prose commit), pushed dda8ebb07e8e, marked, review-31 asked to re-read the three commits. Note #9133 now lands with or after #9172. Polling main.
-
