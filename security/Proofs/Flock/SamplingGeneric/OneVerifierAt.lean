@@ -138,7 +138,7 @@ variable (L : Compiled Coin (Arg.ofFlock D)) (N : Msg → ℕ → ℕ) (ε : Msg
   (enc : ℕ → Msg → Msg) (tab : Msg → ℕ → ℕ) (sh : Msg → ℕ → ℕ × ℕ × ℕ × ℕ) (κb γb : Msg → ℕ → ℝ)
   (reveal : AuditStatement → ℕ → Seen → Claims.Flock.Wit → List (List Msg × Opening Bool))
 
-omit [DecidableEq Col] in
+omit [Nonempty Coin] [DecidableEq Col] in
 /-- **Completeness is the session one's**: `Compiled.Complete` reads the verifier, the reference prover, the
 commitment, the parser, the partition, the scope and the completeness error, which reading at tables keeps. -/
 theorem Compiled.atTables_complete (H : Msg → Msg) :
