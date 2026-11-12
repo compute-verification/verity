@@ -1,7 +1,7 @@
 """PoUB over a monitoring period: a week, a month and a year of every machine of a
 deployment, at δ = 1% and 10⁻⁶, the pooled total first and the per-window figure beside it, from one accepted session's
 answer as `RemoteAudit.Protocol.certify` publishes it: `q_bytes` certified, except with `eps` = δ₀ + S/2^64 (δ₀ the
-openings' pooled bound's δ, 2^-40, and S the session's samples).
+openings' pooled bound's δ, 2^-40, and S the session's draws).
 
 A deployment of `machines` machines, each running one session every `window_s` seconds audited as this one was, has
 T = machines·⌊period/window_s⌋ sessions in a period, each on its own live coins, against one adaptive prover.
@@ -29,7 +29,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-# The count bound is the wipe's too, held in pous: poub may import pous, and pous not it.
+# The count bound is the wipe's too, held in pous: remote_bandwidth may import pous, and pous not it.
 from verity.protocols.pous.verifier.wipe_monitoring import short_sessions
 from verity.protocols.reporting import DELTAS, PERIODS
 
@@ -68,9 +68,9 @@ def per_window(t: int, windows: Sequence[tuple[int, int]], delta: Fraction) -> d
     b = pooled.bound(windows, delta / t)
     wrong = -(-b.wrong.numerator // b.wrong.denominator)
     each = (sum(u for u, _ in windows) - wrong) * codec.BLOCK_BYTES
-    sampled = sum(s for _, s in windows)
+    draws = sum(s for _, s in windows)
     return {"q_bytes_each": each, "q_bytes": t * each, "at": f"δ/T = {delta}/{t} a session",
-            "except_with": f"δ + T·S/2^64 = {float(delta + Fraction(t * sampled, 2 ** 64)):.3g}"}
+            "except_with": f"δ + T·S/2^64 = {float(delta + Fraction(t * draws, 2 ** 64)):.3g}"}
 
 
 def table(answer: Mapping[str, Any], machines: int, window_s: int, *, deployment: str | None = None) -> dict[str, Any]:

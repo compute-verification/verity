@@ -1,5 +1,5 @@
-"""Check 3 through the opening unit, on the honest witness: each receipt the remote session samples is staged as the
-witness of PoUB's opening unit (`verity.protocols.poub.verifier.commitments.gates.block_check`, PROTOCOL.md §8's checks
+"""Check 3 through the opening unit, on the honest witness: each receipt the remote session draws is staged as the
+witness of the remote bandwidth audit's opening unit (`verity.protocols.poub.verifier.commitments.gates.block_check`, PROTOCOL.md §8's checks
 1-3 and 5 as one unit) in place of its opening, and decided by the unit's verdict.
 
 This module is the stand-in for the unit's proofs, not zero knowledge: `check` evaluates the unit's reference on the
@@ -8,7 +8,7 @@ caller's hands.  Proved, the verifier would hold them only inside the unit's pro
 session proves its openings: `period` and `verifier_party` send them to the verifier party in the clear
 (`audit.AuditRun.verify`), and only `benchmarks/one_stage/a8.py` proves one window's units in zero knowledge.
 
-For a sample (pass i of window t at step s, position p, block j = plan_i[p]) the prover stages one `BlockOpeningCheck`:
+For a draw (pass i of window t at step s, position p, block j = plan_i[p]) the prover stages one `BlockOpeningCheck`:
 the receipt leaf on its path to the pass's receipt root and the plan row holding j at p, the block decoding to its
 payload under b_j(c_a) (under the seed's key for a registered block), the payload on its path to its append's root (the
 registration's payload root for a registered block) and, appended, to the canonical payload commitment at row j - NR (the
@@ -19,8 +19,8 @@ domain ids, ranks and depths), and its verdict row; it holds the one witness row
 canonical plan row of step s by ``b || c`` (`plan_link`). No block, payload, receipt leaf or plan is opened.
 
 `Session` is `audit.AuditRun` with check 3's outcome in place of `verify`'s openings (`drawn`, `decide`), and `Store` is
-`audit.Store` keeping the payloads it appends (the prover's witness, `witness`). `check` decides one sample by the
-unit's reference on the prover's arguments and the plan link, and `reference` a session's windows by it."""
+`audit.Store` keeping the payloads it appends (the prover's witness, `witness`). `check` decides one draw by the unit's
+reference on the prover's arguments and the plan link, and `reference` a session's windows by it."""
 from __future__ import annotations
 
 import bisect
@@ -73,7 +73,7 @@ class Values:
 
 @dataclass(frozen=True)
 class PositionSample:
-    """What the verifier knows of one sample: window t, pass i at step s, position p, block j = plan_i[p], the pass's seed,
+    """What the verifier knows of one draw: window t, pass i at step s, position p, block j = plan_i[p], the pass's seed,
     plan and root, and the commitment block j's payload is a leaf of: the registration's payload tree (``coin`` None) or
     its append's, under the append's coin."""
 
@@ -99,7 +99,7 @@ class PositionSample:
 
 
 class Session(audit.AuditRun):
-    """`audit.AuditRun` with check 3 decided by proofs: `drawn` is what the verifier knows of window t's samples, and
+    """`audit.AuditRun` with check 3 decided by proofs: `drawn` is what the verifier knows of window t's draws, and
     `decide` takes check 3's outcome on each in place of `verify`'s openings."""
 
     def drawn(self, t: int) -> tuple[PositionSample, ...]:
@@ -119,8 +119,8 @@ class Session(audit.AuditRun):
         return tuple(out)
 
     def decide(self, t: int, failures: Sequence[str | None]) -> audit.Verdict:
-        """Window t's verdict from check 3's outcome on each of its samples, in the order sampled: the first failure (one of
-        `audit.FAILURES`) rejects it, and a window with no samples is `malformed`, as `verify` has it."""
+        """Window t's verdict from check 3's outcome on each of its draws, in the order sampled: the first failure (one of
+        `audit.FAILURES`) rejects it, and a window with no draws is `malformed`, as `verify` has it."""
         self._live()
         w = self.windows[t] if 0 <= t < len(self.windows) else None
         if w is None or w.draws is None or w.verdict is not None:
@@ -151,7 +151,7 @@ class Store(audit.Store):
 
 
 def public(d: PositionSample, codec_seed: bytes, S, values: Values) -> dict[str, list[int]]:
-    """The verifier's own copy of sample ``d``'s public rows (`BC.opening_public`): block j's codec key, bound under its
+    """The verifier's own copy of draw ``d``'s public rows (`BC.opening_public`): block j's codec key, bound under its
     append's coin if appended; the pass's chaining value, sign rows and p; the pass's receipt root under its seed and plan
     (`receipts.domain`); the payload's tree, at rank j - first; and, appended, the canonical payload commitment at row
     j - base."""
@@ -165,7 +165,7 @@ def public(d: PositionSample, codec_seed: bytes, S, values: Values) -> dict[str,
 
 def witness(d: PositionSample, ps: audit.Pass, store: Store, plan_row: Sequence[int], S,
             values: Values) -> dict[str, list[int]]:
-    """The honest prover's arguments for sample ``d`` of pass ``ps``: its block and payload from its store, the receipt leaf
+    """The honest prover's arguments for draw ``d`` of pass ``ps``: its block and payload from its store, the receipt leaf
     under its salt and path in the pass's tree, the payload under its salt and path in its append's tree (or the
     registration's), the step's certified plan row, and, appended, the payload's path in the canonical payload commitment."""
     j, c = d.block, d.leaf
@@ -193,7 +193,7 @@ def plan_link(plan_bc: bytes, certified_bc: bytes) -> str | None:
 
 def check(d: PositionSample, args: dict, codec_seed: bytes, S, values: Values, plan_salt: bytes,
           certified_bc: bytes) -> str | None:
-    """Check 3 on one sample by the unit's reference (`BC.opening_check`) on the prover's arguments, its public rows the
+    """Check 3 on one draw by the unit's reference (`BC.opening_check`) on the prover's arguments, its public rows the
     verifier's own, then `plan_link` on the plan row's ``b || c`` under ``plan_salt``: None, or the failure (one of
     `audit.FAILURES`)."""
     if any(args[k] != v for k, v in public(d, codec_seed, S, values).items()):
@@ -205,7 +205,7 @@ def check(d: PositionSample, args: dict, codec_seed: bytes, S, values: Values, p
 
 
 def reference(session: Session, store: Store, passes: dict, c3) -> list[audit.Verdict]:
-    """Every window of a session that has its samples, decided by `check` on the honest prover's witness: the stand-in
+    """Every window of a session whose draws are sampled, decided by `check` on the honest prover's witness: the stand-in
     for the units' proofs. Stops at the first rejected window. ``c3`` holds the codec, the plan row's P and the depths DR,
     DP and DV, each step's plan row (``plan_rows``), its salt (``plan_salts``) and certified ``b || c`` (``plan_bcs``), and
     the value commitment (``values``)."""
