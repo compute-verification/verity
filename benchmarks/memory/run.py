@@ -86,8 +86,8 @@ BYTES = "bytes over the session's span"
 OWN_RATE = "the verifier's own figure for the node (its timing.py), not the registered hardware's"
 #: the result's error: which of the record's two it is, and what it leaves out
 ERROR = ("probability that the verified amount doesn't hold, read window by window as the share is: the ledger's error "
-         "with the sketch's term and the draw's added; the windows' PRF advantages, which the record names with no "
-         "value, are not in it")
+         "with the sketch's term and the sample's rejection and binding terms added; the windows' PRF advantages, "
+         "which the record names with no value, are not in it")
 #: the wipe run's label states its bound in words
 WIPE = re.compile(r"foreign <= ([\d,]+) bits\b.*\bM = ([\d,]+) B\b")
 #: minutes the node run waits for a launched run's record: the fire run's own bound and its publish
@@ -397,8 +397,8 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
       printed number; all of it at a share of 1 or more. Verified and free are the capacity but for the float's last
       place.
     - `error`: the probability the verified amount doesn't hold, read window by window as γ is: the record's declared
-      error at the first reading, which adds the sketch's term and the draw's to the ledger's own and holds no PRF
-      advantage (`ERROR`). The rate isn't in it, so every reading's is the same.
+      error at the first reading, which adds the sketch's term and the sample's rejection and binding terms to the
+      ledger's own and holds no PRF advantage (`ERROR`). The rate isn't in it, so every reading's is the same.
 
     A measurement whose keys the record doesn't hold as numbers is left out."""
     run = [doc["run"]] if doc["run"] else []

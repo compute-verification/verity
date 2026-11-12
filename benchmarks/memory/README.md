@@ -60,13 +60,13 @@ the ledger holds, the data sheet's read bandwidth and the measured read rate, th
 and `free at measured` (γ of that capacity, so free over capacity is the reading's γ, the printed number at the first,
 and verified and free are the capacity but for the float's last place); and `error` (the probability the verified
 amount doesn't hold, read window by window as the share is: the record's declared error, which adds the sketch's term
-and the draw's to the ledger's own and holds no PRF advantage; no rate is in it, so it is one number for both
-readings). A capacity's rate is the verifier's own figure for the node (`timing.py`), not the registered hardware's,
-and its unit says so. At a share of 1 or more, verified is 0 and free the whole capacity. An amount whose keys the
-record doesn't hold as numbers is left out of the result. The two references are other runs' numbers and are not in
-it; a loopback writes none, since it certifies nothing, and a session that wasn't accepted writes none, as it prints
-no number. A result holds one measurement a name, so a run that prints a second session keeps its first one's result
-and says so on stderr.
+and the sample's rejection and binding terms to the ledger's own and holds no PRF advantage; no rate is in it, so it
+is one number for both readings). A capacity's rate is the verifier's own figure for the node (`timing.py`), not the
+registered hardware's, and its unit says so. At a share of 1 or more, verified is 0 and free the whole capacity. An
+amount whose keys the record doesn't hold as numbers is left out of the result. The two references are other runs'
+numbers and are not in it; a loopback writes none, since it certifies nothing, and a session that wasn't accepted
+writes none, as it prints no number. A result holds one measurement a name, so a run that prints a second session
+keeps its first one's result and says so on stderr.
 
 - `run.py`: the command.
 - `references.json`: the two references' runs.
