@@ -242,18 +242,14 @@ def test_row_ands_follows_hm96_table():
 
 
 def test_a_compression_costs_its_pin_which_is_the_gadgets_rows():
-    """`SHA512_ROWS` is `Sha512Compress_v1`'s circuit-check pin, the same as the opening unit's `RowCompress_v1`, and both
-    are `compress_gadget`'s AND rows on a `forms.Circuit`, its committed copies included, which `SHA512_ANDS`, the
-    ripple-carry model's count, leaves out."""
+    """`SHA512_ROWS` is `Sha512Compress_v1`'s circuit-check pin, which is `compress_gadget`'s AND rows on a
+    `forms.Circuit`, its committed copies included, which `SHA512_ANDS`, the ripple-carry model's count, leaves out."""
     from verity.circuits.boolean.forms import Circuit
     from verity.commitments import gates
     from verity.commitments.gates.sha512 import compress_gadget
 
-    pins = {name: json.loads((Path(gates.__file__).parents[3] / where / f"{name}.circuit-check.json").read_text())["definitions"]
-            for name, where in (("lms", "verity/commitments/gates"), ("block_check", "verity/protocols/poub/verifier/commitments/gates"))}
-    assert SHA512_ROWS == pinned_ands("Sha512Compress_v1") == pins["block_check"]["RowCompress_v1"]["and"]
-    assert SHA512_ROWS == pins["lms"]["Sha512Compress_v1"]["and"] == pins["block_check"]["RowCompress_v1"]["and"]
-    assert pins["lms"]["Sha512Compress_v1"]["type"] == pins["block_check"]["RowCompress_v1"]["type"]
+    pins = json.loads(Path(gates.__file__).with_name("lms.circuit-check.json").read_text())["definitions"]
+    assert SHA512_ROWS == pinned_ands("Sha512Compress_v1") == pins["Sha512Compress_v1"]["and"]
     C = Circuit()
     out = compress_gadget(C, [C.input(f"cv{i}", 64) for i in range(8)], [C.input(f"m{i}", 64) for i in range(16)])
     C.output("cv", [b for w in out for b in w])

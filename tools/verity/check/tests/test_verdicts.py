@@ -53,8 +53,8 @@ def _fill(r: dict[str, Path]) -> None:
     _write(r["check"] / "lean-agreement" / "k3.json", '{"key": "k3"}')
     _write(r["check"] / "lean-deps" / "m" / "manifest.json", "{}")           # fetched dependencies
     _write(r["check"] / "lean-audit-scratch-x1" / "p" / "lake-manifest.json", "{}")  # an audit's scratch tree
-    _write(r["check"] / "lean-changed" / "p" / "lean-audit.json", "{}")      # lean_changed.py's built tree
-    _write(r["check"] / "lean-changed" / "links.json", "{}")                 # check's early Lean step's tree
+    _write(r["check"] / "lean-changed" / "p" / "lean-audit.json", "{}")      # a tree a node may still hold, which no step
+    _write(r["check"] / "lean-changed" / "links.json", "{}")                 # builds in
     _write(r["check"] / "lean-records" / "build-0" / "p" / "lean-audit.json", "{}")   # the Lean fast path's
     _write(r["check"] / "lean-builds" / "k" / "ir" / "P" / "M.setup.json", "{}")  # the Lean audit's kept builds
     _write(r["check"] / "lean-artifacts" / "outputs" / "p" / "h.json", "{}")   # Lake's cache of built modules
