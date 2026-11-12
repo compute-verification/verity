@@ -7,8 +7,9 @@ line is posted nowhere) leads with top's handle, and rings top's inbox thread as
 own route can't ring it). A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
 the doorbell also counts toward the coordinator's own ready-to-wake rule). A worker the watch could place under no lane
-(`unplaced`: no Task call it saw by an agent a handle owns, no registration) leads with infra's handle once, saying so, for
-infra to find its launcher; its alerts, which the watch marks `quiet`, are posted with no handle and no lane and ring no one.
+(`unplaced`: no launcher it can follow up to an agent a handle owns, no registered lane) leads with infra's handle once,
+saying so, for infra to find its launcher; its alerts, which the watch marks `quiet`, are posted with no handle and no lane
+and ring no one.
 An alert of a worker whose registered lane no handle owns, which the watch doesn't mark, leads with infra's handle and says
 its lane is unknown. A silent worker (ACTIVE 90 min with no note
 and no push) leads with the record's handle and rings it the same way; a silent coordinator (in one turn, with no note, no
@@ -19,7 +20,7 @@ sender's handle (a coordinator's own, a worker's launcher's, for a run whose sen
 often it is called, with `--to` the watch's resolved handle for all but a coordinator's own run. A worker's run that ended rc 0
 is posted but rings no one: the watch resumes the worker itself, and rings its coordinator only if it stays idle (run
 ends were 47% of all doorbells, most of them workers' successes). The run at whose end the watch placed its sender, which no
-handle owned, as a lane's worker by the issue key or the handle its name starts with (the record's `placed_by`: `name`, with
+handle owned, as a lane's worker by an issue key in its name or the handle it starts with (the record's `placed_by`: `name`, with
 its `issue`, or `handle`) rings that lane
 whatever its result and its sender's status, and says how the lane was found, so a wrong placement shows where it rings; the
 worker's later runs are any worker's. The runs of one read whose sender
@@ -104,8 +105,8 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
                  "{every_min} min until it comes back; a person may need to report it to Cursor or relaunch them",
        "held_unread": "did nothing itself for {minutes} min since {since} while a worker it waits on streamed, so its "
                       "follow-ups sat unread ({reason}); the watch {action}",
-       "unplaced": "is under no lane: the watch saw no Task call for it by an agent a handle owns, and no workers.d entry "
-                   "or note names its launcher or a lane"}
+       "unplaced": "is under no lane: no Task call the watch saw, workers.d entry or brief gives it a launcher that a "
+                   "handle owns, however many workers up, and no workers.d entry or note gives it a lane"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived"}       # rung to the record's handle
@@ -189,7 +190,7 @@ def unknown(rec: dict) -> str:
     if not is_worker(rec) or lane_of(rec) is not None:
         return ""
     if rec.get("kind") == "unplaced":
-        by = (f" The Task call it saw came from <https://cursor.com/agents/{p}|{str(p)[:11]}>, which no handle owns."
+        by = (f" The launcher the watch has for it is <https://cursor.com/agents/{p}|{str(p)[:11]}>, which no handle owns."
               if (p := rec.get("parent")) else "")
         return (f"{by} @{UNROUTED} is rung this once, to find its launcher: until a Task call the watch sees, a workers.d entry "
                 "or a note places it (or, at the end of a run it sent, its name), its alerts are posted and ring no one.")

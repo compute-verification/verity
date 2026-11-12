@@ -242,9 +242,10 @@ def test_a_worker_the_watch_cant_place_rings_infra_once_and_what_follows_rings_n
          "runs": [run], "quiet": True}]) + "\n"
     relay.once()
     assert relay.posts[0] == (
-        f"{infra} *Agent watch:* worker review-9 ({link}) is under no lane: the watch saw no Task call for it by an agent a "
-        "handle owns, and no workers.d entry or note names its launcher or a lane. The Task call it saw came from "
-        f"<https://cursor.com/agents/{p}|bc-99999999>, which no handle owns. @infra is rung this once, to find its launcher: "
+        f"{infra} *Agent watch:* worker review-9 ({link}) is under no lane: no Task call the watch saw, workers.d entry or "
+        "brief gives it a launcher that a handle owns, however many workers up, and no workers.d entry or note gives it a "
+        f"lane. The launcher the watch has for it is <https://cursor.com/agents/{p}|bc-99999999>, which no handle owns. "
+        "@infra is rung this once, to find its launcher: "
         "until a Task call the watch sees, a workers.d entry or a note places it (or, at the end of a run it sent, its "
         "name), its alerts are posted and ring no one.")
     assert relay.posts[1] == (

@@ -3251,19 +3251,44 @@ def by_key(handle, key, **named):
     return handle, {"placed_by": "name", "issue": key, **named}
 
 
-def test_an_issue_key_names_a_lane_only_at_a_names_start_and_only_when_one_lane_has_its_team(tmp_path):
+def test_an_issue_key_at_a_names_start_names_its_lane_only_when_one_lane_has_its_team(tmp_path):
     coordinators(tmp_path, [], {})
     reg = linear_teams(tmp_path)
     assert W.name_lane("VLLM-97 KFLAGS: the committer's flag, byte comparison", reg) == by_key("vllm", "VLLM-97")
     assert W.name_lane("CIR-206: one calibration", reg) == by_key("circuits", "CIR-206")
     assert W.name_lane("VLLM-7", reg) == by_key("vllm", "VLLM-7")
-    for name in ("KFORK: the forked committer (VLLM-61)", "graph2 CIR-489 fixes", "[VLLM-97] KFLAGS", " VLLM-97 KFLAGS",
-                 "VLLM-97x KFLAGS", "VLLM97 KFLAGS", "VLLM- KFLAGS", "XVLLM-97 KFLAGS", "Fix the audit", ""):
-        assert W.name_lane(name, reg) is None, f"{name!r} starts with no issue key of a team a lane has"
+    assert W.name_lane("VLLM-97 KFLAGS, after CIR-3 landed", reg) == by_key("vllm", "VLLM-97"), \
+        "the key it starts with is its issue"
+    for name in ("VLLM-97x KFLAGS", "VLLM97 KFLAGS", "VLLM- KFLAGS", "XVLLM-97 KFLAGS", "Fix the audit", ""):
+        assert W.name_lane(name, reg) is None, f"{name!r} holds no issue key of a team a lane has"
     assert W.name_lane("CMP-377 HARDNESS-SPEC", reg) is None, "two lanes file under this team: never a guess"
     assert W.name_lane("NOPE-12 a team no handle has", reg) is None
     assert W.name_lane("CON-12 the goals page", reg) is None, "its team's handle is a desktop agent's: no lane"
     assert W.name_lane("VLLM-97 KFLAGS", None) is None and W.name_lane("VLLM-97 KFLAGS", tmp_path / "absent.json") is None
+
+
+def test_issue_keys_further_in_a_name_name_its_lane_when_they_are_all_one_teams(tmp_path):
+    """A worker named with its label first (`LABEL: TEAM-7 step 2`) went to infra to place by hand, though anyone reading
+    the name knew its issue. Keys further in are read when the name holds one team's only: with two teams' keys nothing
+    says which is its issue, and what the name starts with, a key or a handle, is read before any of them."""
+    coordinators(tmp_path, [], {})
+    reg = linear_teams(tmp_path)
+    for name, key in (("TRIM: VLLM-522 step 2", "VLLM-522"), ("KFORK: the forked committer (VLLM-61)", "VLLM-61"),
+                      ("graph2 CIR-489 fixes", "CIR-489"), ("[VLLM-97] KFLAGS", "VLLM-97"), (" VLLM-97 KFLAGS", "VLLM-97"),
+                      ("ROWS: VLLM-3, then VLLM-9", "VLLM-3"), ("FOLD: SHA-512 rows for VLLM-8", "VLLM-8"),
+                      ("seat of NOPE-12: VLLM-8", "VLLM-8"), ("KFORK/VLLM-61-retry", "VLLM-61")):
+        assert W.name_lane(name, reg) == by_key({"VLLM": "vllm", "CIR": "circuits"}[key.split("-")[0]], key), name
+    for name in ("REVIEW: VLLM-61 against CIR-489", "ROWS: CIR-3 (was VLLM-9)", "PAGE: VLLM-8 for CON-12"):
+        assert W.name_lane(name, reg) is None, f"{name!r} holds keys of two teams"
+    for name in ("ROWS: xVLLM-9", "ROWS: pre-VLLM-9", "ROWS: VLLM-9x", "ROWS: VLLM_9", "ROWS: vllm-9", "ROWS: SEAT-VLLM-9",
+                 "ROWS: NOPE-12", "PAGE: CON-12"):
+        assert W.name_lane(name, reg) is None, f"{name!r} holds no whole issue key of a team a lane has"
+    assert W.name_lane("SEAT-A: CMP-377", reg) is None, "two lanes file under this team: never a guess"
+    assert W.name_lane("SEAT-A: CMP-377 (compute-research)", reg) == by_key(
+        "compute-research", "CMP-377", named="compute-research"), "a shared team's key places by the one lane the name names"
+    assert W.name_lane("vllm-metrics: the flat list for CIR-389", reg) == ("vllm", {"placed_by": "handle"}), \
+        "the handle it starts with is its lane, and the key further in an issue it works with"
+    assert W.name_lane("TRIM: VLLM-522 step 2", None) is None
 
 
 def test_a_key_of_a_team_two_lanes_share_places_only_when_the_name_also_names_exactly_one_of_them(tmp_path):
@@ -3303,11 +3328,12 @@ def test_a_leading_handle_names_its_lane_whole_the_longest_first_and_only_a_lane
     assert W.name_lane("vllm-longrow-s1b: x", None) is None
 
 
-def test_an_unowned_sender_named_after_one_lanes_issue_is_placed_as_that_lanes_worker(tmp_path):
+@pytest.mark.parametrize("name", ["VLLM-97 KFLAGS: the committer's flag, byte comparison", "KFLAGS: VLLM-97 step 2"])
+def test_an_unowned_sender_named_after_one_lanes_issue_is_placed_as_that_lanes_worker(tmp_path, name):
     """A worker its coordinator never registered, whose brief names no coordinator, went to infra to place by hand at its
-    first run's end, though its name began with its lane's issue. The watch places it: its workers.d entry, marked as
-    inferred, and that run recorded for the lane with how it was found. From then on it is any worker of that lane."""
-    name = "VLLM-97 KFLAGS: the committer's flag, byte comparison"
+    first run's end, though its name began with its lane's issue, or held it after its label. The watch places it: its
+    workers.d entry, marked as inferred, and that run recorded for the lane with how it was found. From then on it is any
+    worker of that lane."""
     api, clock, w, sh, roots = nodes_setup(tmp_path)
     linear_teams(tmp_path)
     api.workers[KEYED] = worker("IDLE", W.iso(T0 - 600), name)
@@ -3335,10 +3361,10 @@ def test_an_unowned_sender_named_after_one_lanes_issue_is_placed_as_that_lanes_w
 
 
 def test_a_name_that_names_no_one_lane_places_nobody_and_infra_is_rung_once(tmp_path):
-    """No guess: a name with no issue key at its start, a key of a team no handle has, a key of a team two lanes share, a
+    """No guess: a name with issue keys of two lanes, a key of a team no handle has, a key of a team two lanes share, a
     name that starts with part of a handle, with a retired name, or with a handle that is no lane leave the sender unowned,
     its runs one record for infra and nothing written; a later run of a sender infra was rung for rings no one."""
-    senders = {"bc-a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1": "KFORK: the forked committer (VLLM-61)",
+    senders = {"bc-a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1": "KFORK: the forked committer (VLLM-61, for CIR-9)",
                "bc-a2a2a2a2-a2a2-a2a2-a2a2-a2a2a2a2a2a2": "NOPE-12 a team no handle has",
                "bc-a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3": "CMP-377 HARDNESS-SPEC",
                "bc-a4a4a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a4": "computex: z",
@@ -3477,6 +3503,139 @@ def test_a_listed_sender_is_placed_by_the_name_the_list_gives_and_owned_by_its_l
     assert f"/v1/agents/{KEYED}" not in api.gets and w.owners[KEYED] == "circuits" and KEYED not in w.workers
     sends(roots, clock, w, KEYED, "r20261105-120000-0002")
     assert [(r["handle"], r["role"], r.get("placed_by")) for r in ended(tmp_path)][-1] == ("circuits", "worker", None)
+
+
+MID, SEAT = "bc-0a0a0a0a-0a0a-0a0a-0a0a-0a0a0a0a0a0a", "bc-0b0b0b0b-0b0b-0b0b-0b0b-0b0b0b0b0b0b"
+PERSON = "bc-99999999-9999-9999-9999-999999999999"
+
+
+def unplaced(tmp_path):
+    return [r["agent"] for r in records(tmp_path) if r["kind"] == "unplaced"]
+
+
+def registers(tmp_path, agent, **entry):
+    """A workers.d entry as a coordinator, or a worker for the workers it launches, writes it."""
+    (tmp_path / "workers.d").mkdir(exist_ok=True)
+    (tmp_path / "workers.d" / f"{agent}.json").write_text(json.dumps({"agent_id": agent, **entry}))
+
+
+def launches(w, clock, parent, agent, name=""):
+    """`parent`'s Task call for `agent`, as a run the watch follows streams it."""
+    w.child(parent, {"args": {"agentId": agent, "description": name}}, clock.t)
+
+
+@pytest.mark.parametrize("link", ["task", "registration", "brief"])
+def test_a_sender_a_worker_launched_is_placed_under_that_workers_coordinator(tmp_path, link):
+    """A swarm's seats, launched by its integrator, itself a worker, each went to infra to place by hand: a launcher's
+    handle was read only where the launcher was a coordinator, or where an earlier sweep had written its handle down. A
+    worker is its launcher's coordinator's however far up that is, by the one rule its run's end and its idle are both
+    placed by, whether the watch knows its launcher from a Task call, its registration or its brief."""
+    names = {MID: "INTEGRATE: the swarm's integrator", SEAT: "SEAT-A: the first seat"}
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    for agent, name in names.items():
+        api.workers[agent] = worker("ACTIVE", W.iso(T0 - 600), name)
+    w.sweep(lambda r: None)
+    if link == "task":
+        launches(w, clock, MID, SEAT, names[SEAT])          # seen before the call that launched its launcher
+    elif link == "registration":
+        registers(tmp_path, SEAT, launched_by=MID)
+    else:
+        api.convs[SEAT] = [("user_message", f"You are SEAT-A ({SEAT}), asked for by {PERSON}; report to the integrator "
+                                            f"(agent {MID}) and to no one else.")]
+    launches(w, clock, NEW, MID, names[MID])
+    sends(roots, clock, w, SEAT, "r20261105-110000-0001", state="failed", rc=1)
+    assert [(r["agent"], r["handle"], r["role"], r["name"], r.get("parent"), r.get("placed_by")) for r in ended(tmp_path)] == [
+        (SEAT, "vllm", "worker", names[SEAT], MID, None)]
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert {a: (w.workers[a]["lane"], w.workers[a]["handle"]) for a in names} == dict.fromkeys(names, ("vllm", "vllm"))
+    goes_idle(api, clock, w, SEAT, names[SEAT])
+    assert [(r["lane"], r["handle"], r.get("quiet")) for r in idles(tmp_path, SEAT)] == [("vllm", "vllm", None)]
+    assert unplaced(tmp_path) == [] and placed_files(tmp_path) == {}, "infra is never rung for it, and no name placed it"
+
+
+def test_a_registered_launcher_places_over_the_registrations_lane_and_a_worker_keeps_a_lane_of_its_own(tmp_path):
+    """A registration's `launched_by` placed its worker only when it named a coordinator; with a worker there the entry's
+    lane decided, or nothing. The launcher's coordinator places it, as a coordinator named there does: over a lane that is
+    another handle's, and beside a lane that is no handle. A note's origin names whom its author worked for, not who
+    launched it: a coordinator there never moves a worker out of its note's lane."""
+    port, review, lone, noted = W1_, W2_, W3_, W4_
+    registers(tmp_path, MID, launched_by=NEW)
+    registers(tmp_path, port, lane="zk-port", launched_by=MID)
+    registers(tmp_path, review, lane="circuits", launched_by=MID)
+    registers(tmp_path, lone, launched_by=port)
+    note(tmp_path / "notes", "vllm", "rows.md", f"ROWS ({noted}), asked for by circuits ({CO})")
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    for agent in (MID, port, review, lone, noted):
+        api.workers[agent] = worker("ACTIVE", W.iso(T0 - 600), "a worker")
+    w.sweep(lambda r: None)
+    assert {a: (w.workers[a]["lane"], w.workers[a]["handle"]) for a in (port, review, lone, noted)} == {
+        port: ("zk-port", "vllm"), review: ("vllm", "vllm"), lone: ("vllm", "vllm"), noted: ("vllm", "vllm")}
+    sends(roots, clock, w, lone, "r20261105-110000-0001")
+    assert [(r["agent"], r["handle"], r["role"], r["parent"]) for r in ended(tmp_path)] == [(lone, "vllm", "worker", port)]
+    assert unplaced(tmp_path) == []
+
+
+def test_a_sender_with_a_shared_teams_key_is_placed_by_its_launcher_and_one_with_no_launcher_rings_infra_once(tmp_path):
+    """Two lanes file under one Linear team, so a seat named after its issue in that team is placed by no name. One whose
+    launcher the watch knows is its launcher's lane's all the same; one nothing places is infra's to find, rung once: at
+    its first run's end, or when the watch first read it as a worker whose launcher no handle owns."""
+    lone, kid = "bc-0c0c0c0c-0c0c-0c0c-0c0c-0c0c0c0c0c0c", "bc-0d0d0d0d-0d0d-0d0d-0d0d-0d0d0d0d0d0d"
+    seats = {SEAT: "CMP-41 SEAT-A", lone: "CMP-42 SEAT-B", kid: "CMP-43 SEAT-C"}
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    linear_teams(tmp_path)
+    registers(tmp_path, MID, lane="compute-research", launched_by=W5_)
+    for agent, name in {MID: "CMP-40 INTEGRATE", **seats}.items():
+        api.workers[agent] = worker("IDLE", W.iso(T0 - 600), name)
+        api.convs[agent] = [("user_message", f"You are a seat of the swarm. Report to the integrator (agent {MID})."
+                             if agent == SEAT else "You are a seat of the swarm. Read the note and go on.")]
+    launches(w, clock, PERSON, kid, seats[kid])
+    w.sweep(lambda r: None)
+    assert unplaced(tmp_path) == [kid], "a worker whose launcher no handle owns: rung once, as it is first read"
+    for i, agent in enumerate(seats):
+        sends(roots, clock, w, agent, f"r20261105-11000{i}-000{i}")
+    by_seat = {r["agent"] or r["senders"][0][-len(SEAT):]: (r["handle"], r["role"], r.get("placed_by"), r.get("quiet"))
+               for r in ended(tmp_path)}
+    assert by_seat == {SEAT: ("compute-research", "worker", None, None), lone: (None, "unknown", None, None),
+                       kid: (None, "unknown", None, True)}
+    assert W.stray(w.children[lone]) and w.children[kid]["parent"] == PERSON and placed_files(tmp_path) == {}
+    for i, agent in enumerate(seats):
+        sends(roots, clock, w, agent, f"r20261105-12000{i}-001{i}")
+    assert [(r["role"], r.get("quiet")) for r in ended(tmp_path)[3:]] == [("worker", None), ("unknown", True), ("unknown", True)]
+    assert unplaced(tmp_path) == [kid], "one ring for each of the two nothing places, and none for the one its launcher does"
+
+
+def test_launchers_that_name_each_other_place_nobody_and_a_chain_is_followed_only_so_far(tmp_path):
+    """Following a launcher's launcher must end: a worker resumed by the worker it launched, or two registrations naming
+    each other, are a loop with no coordinator on it, and place nobody; one of them placed some other way places both. A
+    chain is followed `LAUNCHERS_MAX` agents up in one asking."""
+    a, b = W1_, W2_
+    api, clock, w, _, roots = nodes_setup(tmp_path)
+    for agent in (a, b):
+        api.workers[agent] = worker("ACTIVE", W.iso(T0 - 600), "one of a pair")
+    launches(w, clock, a, b)
+    launches(w, clock, b, a)
+    registers(tmp_path, a, launched_by=b)
+    registers(tmp_path, b, launched_by=a)
+    api.convs[a] = [("user_message", f"Report to {b}, and to yourself ({a}).")]
+    coords = W.holders(tmp_path / "registry.json", tmp_path / "routes.d")
+    asked, placed = [], w.placed
+    w.placed = lambda agent, *args, **kw: asked.append(agent) or placed(agent, *args, **kw)
+    assert w.placed(a, coords) is None and len(asked) <= 7, "a loop is left where it closes, not walked as far as a chain is"
+    assert w.placed(b, coords) is None
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, a, "r20261105-110000-0001")
+    assert sorted(unplaced(tmp_path)) == [a, b] and [(r["role"], r.get("quiet")) for r in ended(tmp_path)] == [("unknown", True)]
+    assert {(w.workers[x]["lane"], w.workers[x]["handle"]) for x in (a, b)} == {("", None)}
+    registers(tmp_path, b, lane="vllm")
+    sends(roots, clock, w, a, "r20261105-120000-0002")
+    assert [(r["agent"], r["handle"], r["role"]) for r in ended(tmp_path)][1:] == [(a, "vllm", "worker")]
+    assert {(w.workers[x]["lane"], w.workers[x]["handle"]) for x in (a, b)} == {("vllm", "vllm")}
+    chain = [f"bc-{i:08x}-0000-0000-0000-00000000000c" for i in range(W.LAUNCHERS_MAX + 1)]
+    for kid, parent in zip(chain, [*chain[1:], NEW]):
+        launches(w, clock, parent, kid)
+    assert w.placed(chain[1], coords) == "vllm", "its coordinator is the last agent a chain this long reaches"
+    assert w.placed(chain[0], coords) is None, "one agent further: not followed"
 
 
 def test_a_relaunched_worker_routes_as_its_lanes_worker_and_the_watch_resumes_it(tmp_path):
