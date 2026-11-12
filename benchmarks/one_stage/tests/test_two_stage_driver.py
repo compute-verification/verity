@@ -10,8 +10,10 @@ import hashlib
 import importlib
 import json
 import sys
+import threading
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace as NS
 
 import numpy as np
 import pytest
@@ -21,19 +23,20 @@ from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat
 from verity.circuits.types import Array, Value as Bits
-from verity.protocols.spot.device import challenger as Ch
+from verity.protocols.spot.device import challenger as Ch, coins as CC
 from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.commitments import history as HT
 from verity.commitments.gates import embedding as E
-from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
-                                  serving_rows as SRW)
+from verity_vllm.pipeline import (boundary_rows as BR, boundary_stop as BS, boundary_tables as BT, chunk_rows as CR,
+                                  interior_rows as IR, serving_rows as SRW)
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 sys.path.insert(0, str(HERE.parents[2] / "verity" / "protocols" / "spot" / "verifier" / "tests"))
 TS = importlib.import_module("two_stage")
 FC = importlib.import_module("fake_challenger")
+AC = importlib.import_module("a5_coins")
 
 XOR8 = PrimitiveDefinition("TwoStageDriverTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
@@ -88,9 +91,9 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"))
     assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
     assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q and got.read
-    stage1 = json.loads(json.dumps(got.stage1()))
-    assert stage1["units"] == list(got.draw.units) and stage1["spec"] == got.stream.spec.digest()
-    again = TS.resume(stage1, PAIR, FC.Challenger("second"))
+    handoff = json.loads(json.dumps(got.stage1()))
+    assert handoff["units"] == list(got.draw.units) and handoff["spec"] == got.stream.spec.digest()
+    again = TS.resume(handoff, PAIR, FC.Challenger("second"))
     assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
     ireg, second = again.second(*_interior(again.layout, again.registration.digest))
     assert ireg.order == again.registration.order and again.coins.live
@@ -350,3 +353,196 @@ def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_inte
     assert [(v.name, v.phase) for v in spec.values] == [("b.ingress", "serve"), ("b.egress", "serve"),
                                                         ("x", "interior"), ("out", "interior")]
     assert spec.selection == S.TwoStage(_class().layout.grain, RULE.replay, K)
+
+
+def test_a_class_under_a_stop_rule_registers_its_boundary_values_and_is_sampled_like_any_other():
+    """A serve's stop rule cuts a class's boundary rows into `b.request`, `b.prompt` and `b.egress`: the class's Spec
+    names those, its first stage registers their record and samples its spans, and its stop word, the stop record's
+    port, is no value of this stream. Its spans set ``ignore_eos``, so the stop id one of them serves ends none."""
+    stop = BS.Stop((3,), 64, 4)
+    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
+    c = BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), stop=stop), 0)
+    assert list(c.public()["values"]) == [*BR.PARTS, BR.STOP]
+    got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"), stop=stop)
+    assert [v.name for v in got.stream.spec.values if v.phase == "serve"] == list(BR.PARTS)
+    assert [r["port"] for r in got.registration.record["roots"]] == list(BR.PARTS)
+    assert got.registration.record["population"] == N and len(got.draw.units) == Q
+
+
+#: a serve's stop rule: one stop id, a model of 64 ids, responses of at most 4
+STOP = BS.Stop((3,), 64, 4)
+ROOT = FC.WINDOW["root"]
+
+
+def _stop_class(held: bool = True) -> BR.Committed:
+    """A class of N spans under `STOP` on the window `ROOT`: a stop class, each span ended at the stop id or at
+    ``max_tokens``; or (not ``held``) one of aborted spans, which has no stop block."""
+    sampling = {**GREEDY, "ignore_eos": False}
+    ends = [((7, 8, 3), "stop"), ((7, 8, 9, 9), "length")] if held else [((7, 8), "abort")]
+    spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), sampling, *ends[i % len(ends)]) for i in range(N)]
+    return BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4 if held else 2, N, ROOT, stop=STOP, held=held), 0)
+
+
+class OneSession(FC.Challenger):
+    """`fake_challenger.Challenger` with every commitment on one session, as a window's first stage has: its signed
+    release log holds each commitment's coins in the order they were read."""
+
+    def commit(self, after: bytes) -> CC.Segment:
+        if not self.sessions:
+            return super().commit(after)
+        self.sessions[bytes(after)] = next(iter(self.sessions.values()))
+        return CC.ChallengerCoins.commit(self, after)
+
+    def evidence(self, digest: str) -> dict:
+        """`coins.coins_reason`'s evidence for the sample after ``digest``; the first call closes the session."""
+        closed = super().evidence(next(iter(self.sessions)).hex())
+        return {**closed, "segment": next(s for s in self.segments if s.after == bytes.fromhex(digest)).to_json()}
+
+
+def _start(one: OneSession):
+    """`a5_coins.start` in process: its ranks' turns on ``one``, opened and published as `start`'s thread does a served
+    session's, and refused, as it refuses, when a rank ended before it planned."""
+    def start(challenger: str, root: str, ranks: list[int], dest: Path, main: object, **kwargs: object):
+        turns = AC.Draws(root, ranks)
+
+        def finish() -> None:
+            needs = turns.wait_planned()
+            plan = {"needs": {str(r): n for r, n in sorted(needs.items())}}
+            missing = sorted(set(ranks) - set(needs))
+            if missing:
+                why = f"rank(s) {missing} ended before planning their draw (refused before it, or failed)"
+                turns.refuse(f"{why}: the root's one session was not opened")
+                turns.publish({"error": f"the challenger's session was not opened: {why}", "plan": plan})
+                return
+            turns._client, turns._coins = NS(close=lambda: None, commitment=None), one
+            turns._pre = one.commit(bytes.fromhex(root))
+            one(Ch.COIN_BYTES)
+            turns._opened.set()
+            turns.wait_closed()
+            closed = one.evidence(root)
+            turns.publish({**{k: closed[k] for k in ("key", "ledger", "main", "pins", "session")},
+                           "segments": [s.to_json() for s in one.segments], "trusted": {}, "plan": plan})
+        finisher = threading.Thread(target=finish, daemon=True)
+        finisher.start()
+        return NS(shutdown=lambda: None), turns, finisher
+    return start
+
+
+def _args(tmp_path: Path, **more: object) -> NS:
+    return NS(**{"challenger": "test", "out": str(tmp_path), "main": None, "ssh_key": None, "peer": None,
+                 "challenger_key": None, "replay": f"rate:{Q}/{N}", "k": K, "proof_deadline": 60.0, "delta": 0.5,
+                 "stop_design": None, **more})
+
+
+def test_a_stop_classs_stop_blocks_register_after_its_boundary_record_and_are_sampled_on_a_stream_of_their_own():
+    """After a stop class's first stage its stop record registers on a one-stage stream of the verifier's stop block
+    whose log starts with the class's boundary record: one stop block a span, `b.stop` its one port, its inputs that
+    record's `b.request` and `b.egress` as output values. It is sampled at a rate over the class's N stop blocks on
+    coins opened after its own registration's digest. Refused: a boundary record that is another class's, another
+    rule than the commitment's, and a sampling design that is a fixed count."""
+    pub = json.loads(json.dumps(_stop_class().public()))
+    got = TS.first(pub, PAIR, RULE, FC.Challenger("first"), stop=STOP)
+    coins = FC.Challenger("stop")
+    s = TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", coins, got.record)
+    assert s["record"]["previous"] == got.registration.digest and s["record"]["population"] == N
+    assert [r["port"] for r in s["record"]["roots"]] == [BR.STOP]
+    assert sorted(e["value"] for e in s["record"]["registered"]) == sorted(BS.STOP_READS)
+    assert s["record"]["window"] == {**got.record["window"], "population": "stop"}
+    assert s["sample"]["population"] == N and len(s["units"]) == Q and set(s["units"]) <= set(range(N))
+    assert s["spec"] == TS.stop_spec(got.layout, f"rate:{Q}/{N}").digest() != got.stream.spec.digest()
+    read, after = bytes.fromhex(s["read"]), bytes.fromhex(s["registration"])
+    assert read and CC.coins_reason(coins.evidence(s["registration"]), ROOT, after, read, AC.lms_verify) is None
+    other = TS.first(json.loads(json.dumps(_stop_class().public())), PAIR, RULE, FC.Challenger("other"), stop=STOP)
+    with pytest.raises(ValueError, match="not this commitment's values"):
+        TS.stop_first(pub, PAIR, STOP, f"rate:{Q}/{N}", FC.Challenger("x"), other.record)
+    with pytest.raises(ValueError, match="not the verifier's own"):
+        TS.stop_first(pub, PAIR, BS.Stop((7,), 64, 4), f"rate:{Q}/{N}", FC.Challenger("y"), got.record)
+    with pytest.raises(ValueError, match="a fixed count samples each proof block with K/N"):
+        TS.stop_first(pub, PAIR, STOP, "subset:2", FC.Challenger("z"), got.record)
+
+
+def test_a_stop_samples_order_is_read_from_the_challengers_signed_log():
+    """`stop_order` on a session's published evidence: it holds when the log shows the boundary registration's coins,
+    then the stop registration's, and the stop sample read exactly the latter. It names why otherwise: no published
+    log; a coin released after the stop registration left unread, or bytes that are not those coins'; the boundary
+    registration's coins handed in as the stop sample's; another window's root; a log the challenger's close does not
+    sign (a prover's own ordering of the same lines); the stop registration's coins released first; and no coin after
+    the boundary registration at all."""
+    b, s = "b0" * 64, "c0" * 64
+
+    def session(seed: str, *commitments: str) -> tuple[OneSession, bytes]:
+        one, read = OneSession(seed), {}
+        for c in commitments:
+            one.commit(bytes.fromhex(c))
+            read[c] = one(2 * Ch.COIN_BYTES)
+        return one, read[s]
+
+    def order(evidence: dict | None, read: bytes, root: str = ROOT) -> str | None:
+        return TS.stop_order(evidence, root, b, s, read, AC.lms_verify)
+
+    one, read = session("order", b, s)
+    ev = one.evidence(s)
+    assert order(ev, read) is None
+    assert "published no signed log" in order(None, read)
+    assert "a coin opened and not read" in order(ev, read[:Ch.COIN_BYTES])
+    assert "are not its coins'" in order(ev, bytes(len(read)))
+    assert "not opened after the prover's commitment the verifier holds" in order(one.evidence(b), read)
+    assert order(ev, read, "22" * 64) is not None
+    log = ev["session"]["log"]
+    assert len(log) == 9
+    forged = {**ev, "session": {**ev["session"], "log": [log[0], *log[5:], *log[1:5]]}}
+    assert "release log" in order(forged, read)
+    early, read = session("early", s, b)
+    assert "the boundary registration's coins come first" in order(early.evidence(s), read)
+    alone, read = session("alone", s)
+    assert "no coin released after the class's boundary registration" in order(alone.evidence(s), read)
+
+
+def test_each_stop_class_is_a_rank_more_of_the_windows_session_and_a_wrong_order_refuses_the_window(tmp_path, monkeypatch):
+    """A window of a stop class and a class without a stop block, under the verifier's rule, on one session: three
+    ranks, the stop class's stop blocks the third, registered and sampled after its first stage at the rate given (the
+    first stage's when none is), and its order held by the session's signed log. A stop sample whose order does not
+    hold refuses every class of the window, each by name, with no sample handed on. A stop class whose stop blocks
+    register nothing is refused itself and the other class goes on. A stop class that cannot plan its stop sample (a
+    sampling design that is no rate; a verifier holding no rule) refuses the window's whole first stage, and no
+    session opens. The sessions here are what no cheaper test has: the ranks' turns on one session and its log's
+    order."""
+    pubs = [json.loads(json.dumps(_stop_class(held).public())) for held in (True, False)]
+
+    def run(seed: str, stop: BS.Stop | None = STOP, **more: object) -> list[dict]:
+        monkeypatch.setattr(AC, "start", _start(OneSession(seed)))
+        return TS._first_all(_args(tmp_path, **more), pubs, PAIR, RULE, None, stop)
+
+    stopped, plain = run("window", stop_design=f"rate:1/{N}")
+    assert len(stopped["units"]) == len(plain["units"]) == Q and "stop" not in plain
+    mine = stopped["stop"]
+    assert len(mine["units"]) == 1 and mine["order"] == {"held": True, "reason": None}
+    assert mine["record"]["previous"] == stopped["registration"] and mine["design"] == f"rate:1/{N}"
+    assert sorted(stopped["session"]["plan"]["needs"]) == ["0", "1", "2"]
+    received = [bytes.fromhex(json.loads(x)["root"]) for x in mine["evidence"]["session"]["log"] if '"event":"root"' in x]
+    at = {name: [i for i, r in enumerate(received) if r == bytes.fromhex(d)]
+          for name, d in (("boundary", stopped["registration"]), ("stop", mine["registration"]))}
+    assert at["boundary"] and at["stop"] and at["boundary"][-1] < at["stop"][0]
+
+    with monkeypatch.context() as m:
+        m.setattr(TS, "stop_order", lambda *a: "the log shows otherwise")
+        out = run("wrong")
+    assert [o["refused"] for o in out] == [[TS.ORDER_REFUSED]] * 2 and not any("units" in o for o in out)
+    assert all("class 0 (prompt 4, outputs 4): the log shows otherwise" in o["error"] for o in out)
+    assert out[0]["stop"]["order"] == {"held": False, "reason": "the log shows otherwise"}
+    assert out[0]["stop"]["design"] == f"rate:{Q}/{N}" and len(out[0]["stop"]["units"]) == Q
+
+    def nothing(*a: object, **k: object) -> dict:
+        raise ValueError("no stop record")
+    with monkeypatch.context() as m:
+        m.setattr(TS, "stop_first", nothing)
+        stopped, plain = run("unregistered")
+    assert stopped["refused"] == [TS.STOP_REFUSED] and "units" not in stopped and "no stop record" in stopped["error"]
+    assert len(plain["units"]) == Q
+
+    stopped, plain = run("no-rate", stop_design="subset:2")
+    assert "units" not in stopped and "units" not in plain and "session was not opened" in plain["session"]["error"]
+    assert "a fixed count samples" in stopped["error"] and "planned no sample" in stopped["stop"]["error"]
+    assert "rank(s) [0, 2] ended before planning" in plain["error"]
+    for o in run("no-rule", stop=None):
+        assert "units" not in o and "not the verifier's own" in o["error"] and "was not opened" in o["session"]["error"]

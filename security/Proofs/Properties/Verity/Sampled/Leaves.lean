@@ -194,7 +194,7 @@ theorem play_lines_le {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} 
   simpa [treeLines] using h1
 
 /-- **A play's coin trees hold at most `maxLeaves` leaves**: every run of the play after `θ`, `F` and `c` ends with a
-log whose `Hello`s sampled coin trees of at most `maxLeaves` (`2^46`) leaves in all. -/
+log whose `Hello`s sampled coin trees of at most `maxLeaves` (`2^49`) leaves in all. -/
 theorem play_leaves_le {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {o : Exchange} (h : Game.Reaches (play fs D θ F c) o) : logLeaves o.log ≤ maxLeaves := by
   obtain ⟨_, ha⟩ := h
