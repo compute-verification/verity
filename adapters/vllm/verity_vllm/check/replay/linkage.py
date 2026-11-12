@@ -3,16 +3,16 @@ its own previous-step sampled ids over the executed prefix (`boundary_linkage`),
 to the declared workload (`prescribed_input_linkage`)."""
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
-
-from verity_vllm.commit.opened import UnverifiedUnlinked
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
-from verity_vllm.program.sampling_event import circuit_token_id
+
 from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, SEED_PARAM
 from verity_vllm.check.replay.opening import CommittedStore
-
+from verity_vllm.commit.opened import UnverifiedUnlinked
+from verity_vllm.program.sampling_event import circuit_token_id
 
 LINKAGE_SCHEMA = "verity-sweep/boundary-linkage/v1"
 
