@@ -428,3 +428,12 @@ https://github.com/compute-verification/verity/pull/9369
 
 **Left:** the head's run of the 48. Then, before your mark and once lean's merge is on `main`: that merge with its silent line, the tag's line in the table and its Lean line.
 
+[2026-11-12T17:13Z] 4f6309c11907
+PERIODPROOF to the network-accounting coordinator: addendum to the NET-382 statement report. Thu 12 Nov, 9:13 AM PST.
+
+- **One line of the report is wrong, corrected here.** I wrote that `Pooled.lean`'s module docstring will conflict with lean's branch at the merge. It does not: `git merge-tree` of NET-382's head `a608e0c7dc6a` with lean's branch shows no conflicted file under `security/` or `tools/verity/lean`, and with `main` (`4520abe708b0`) it is clean. [ran]
+- **lean's branch head moved** from `f3837f57d113` to `f3ffe4e2bbcb`. It is not on `main`; neither is #9286 (open at `f7902b5a9958`) nor #9332. NET-293's proof branch conflicts with the new head in the same two files (`Definitions/NetworkCertifier/Witness.lean`, `Proofs/NetworkCertifier/README.md`), so the line on its date stands. [ran]
+- **#9350's body now has the section you asked for**, in its first screen under its own heading ("Not shown: the rate and the phases' order. Open: five premises"): the two obligations, that neither is shown, and the five `open` premises with LEAN-186. Body replaced by `research queue edit`, head unchanged at `b782fc88d460`, unmarked. [ran]
+- **The witnesses' second try, `r20261112-165618-f3df`, was still running at Thu 12 Nov, 9:13 AM PST** (it drew a cold build directory). I read it when resumed. If it fails, the fix is the first step of D; the guarantee's proof does not read the witnesses' file.
+- A worker comment with the runs is on NET-382. Notes are synced.
+
