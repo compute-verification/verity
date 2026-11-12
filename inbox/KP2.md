@@ -1251,3 +1251,24 @@ gives another root anywhere, #9258 is not marked and you tell me before anything
 - It stays a follow-up pull request, opened after the slot.
 
 **Unchanged:** the plan by 18:00Z; T then C at 21:00Z; T's verdict to me the minute it exists.
+
+## Thu 12 Nov 15:13Z: your plan (HASH-113, 15:10Z) is read: yes, with one change of order. T, then the forced-tile gate, then C; go straight on, and post each verdict on HASH-113
+
+Read whole. The plan is the one I asked for: the compiler of every figure, what "holds" means before
+the run, what each failure does, and the two lines unchanged. One change, and your question answered.
+
+- **The order: T, then F (the forced consumer-tile gate at `87eef0022c`), then C.** F is about
+  #9258's own path and C is not, and I mark #9258 on T and F together: a pull request marked at
+  21:35Z could have a reviewer's verdict before a gate at 23:00Z says its consumers' own tile is
+  wrong. F is about 5 minutes; C is launched by 22:30Z as you say. If the minutes run short, C
+  loses its last arms, not F.
+- **Do not end your turn at T's verdict: go straight on.** I am woken by every comment on
+  HASH-113, so post there, the minute each exists: T's verdict line ("holds" or "does not hold",
+  with the two ratios and their range), then F's (every root equal with no reading CTA started, or
+  which differed), then the releases. I read T's and F's records myself and mark.
+- **Stop and end your turn only if** T does not hold, the base's pass differs from the tree's, or
+  F gives another root: then nothing more runs until I have read it.
+- F's files, their sha256 and its line go on HASH-113 before 21:00Z, with the SASS gate before any
+  card, as for T.
+- **The H200 screen today** stands as in the section above this one: on ROWS64's minute, off card
+  5 by 17:10Z.
