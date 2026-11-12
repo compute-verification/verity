@@ -1510,3 +1510,23 @@ and changes the `pd_setup`, `pd_commit_*` and `pd_tree_*` launches. Not read by 
    with the file, the line and the cure, and return at once; I ring lean.
 
 Then the build at `main` (the section above), then #8671 on the merge head.
+
+## Thu 12 Nov 17:07Z: A CHANGE OF ORDER for after your screen: #8671 goes to KSLICE (now); HASH-124 starts TODAY on lean's merge head, not on Friday
+
+Daniel today, through top (TOP-402, 17:04Z): "let's make sure that everyone is parallelized and
+thinking ahead"; top's first point: **what is dated "after lean's merge" is built today on that
+branch's tip and marked the hour its base is on `main`.** So:
+
+- **#8671 is not yours any more.** KSLICE is free (both its pull requests landed) and rebuilds it
+  on the merge head from 17:08Z. Nothing of #8671 in your return.
+- **Your order after the screen:** (1) lean's ask on #9225's four merged files, by 19:15Z (the
+  section above); (2) the build at `main` with its gate, for the cubin's digest; (3) **HASH-124,
+  started today on `cursor/lean-remote-merge-landing-fc8d`'s head** (it holds the serving side's
+  code the measuring arm must match; after MAINMERGE's next push it holds #9225 too): the
+  overhead arm commits y as serving does, checked against the verifier off a GPU, on a branch
+  of yours cut from that head; a pull request opened unmarked when it holds, for
+  compute-accounting's read; marked the hour #9363 is on `main`.
+- **The goal's first step is restated from Mon 16 Nov to Sat 14 Nov, 10 AM PST** (the measuring
+  code hashing the output rows, checked off a GPU, read by compute-accounting). That date is my
+  guess from your starting a day early: **say in your return whether it holds, or the date that
+  does.** Tue 17 Nov's H200 slot is unchanged.
