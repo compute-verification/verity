@@ -2,8 +2,8 @@
 
 Each read here is of a document a file brings: a checkpoint's config.json, the Build's roles and its result.json, a
 replay's record, a verdict document, the checkpoints manifest's entry, a shard pin another process took, the required
-manifest's rows, the facts of the Programs of record, the binding map, a run directory's manifest and its artifacts.
-The field may be absent, null or empty, and each means the same thing."""
+manifest's rows, the facts of the Programs of record, the binding map, a run directory's manifest and its artifacts,
+and the reports each gate reads.  The field may be absent, null or empty, and each means the same thing."""
 from __future__ import annotations
 
 import json
@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 import pytest
 
+from tests.check.test_gates_fixtures import gate, passing_artifacts, query_use_doc
 from tests.check.test_oracle_compare import make_bmap, make_match, reader
 from tests.check.test_oracle_compare_v2_producers import gemma_like_program
 from tests.check.test_weights_of_record import write_safetensors
@@ -37,6 +38,10 @@ ROW = {"family": "instance_outputs", "op_path": "model", "output_member": "out",
 NO_ENTRIES: list[dict[str, Any]] = [{}, {"entries": None}, {"entries": []}]
 NO_IDENTITY: list[dict[str, Any]] = [{"name": "x"}, {"identity": None, "name": "x"}, {"identity": {}, "name": "x"}, {"identity": {"request_id": "r0"}, "name": "x"}]
 HOST_UNSTATED = {"cpu": None, "nproc": None, "cpu_quota": None, "clocksource": None, "clock_read_us": None}
+ABSENT = object()   # a field its document leaves out, beside the null and the empty one
+NONINT, CENSUS, RESOLUTION, FOLD, ROOTS = "nonint/noninterference.json", "census_reconcile.json", "resolution.json", "fold_summary.json", "root_policy.json"
+REPLAY, WIRING, CHAIN, GOLDEN, HOLDOUTS, QUERY_USE = "replay_a.json", "wiring.json", "replay_chain.json", "golden.json", "holdouts.json", "query_use.json"
+HOLDOUT = "qwen15_2req"
 FOREIGN = {"requests": [{"request_id": "cccccccc-2222-2222-2222-222222222222", "index": 0, "prompt_len": 5, "max_tokens": 1}]}
 
 
@@ -332,3 +337,254 @@ def test_the_overhead_ladder_reads_the_host_from_the_capture_and_else_from_its_o
     assert own["host"] == {**HOST_UNSTATED, "cpu": "recorded", "clock_read_us": 0.5}
     assert own["rungs"] == {"r0": {"label": "x", "step_wall_ms": 2000.0, "x_baseline": 2.0, "events_per_step": 2.0, "overhead_per_event_us": 500000.0,
                                    "overhead_per_event_us_minus_clock": 499998.0}}
+
+
+def unstated(*path: Any, empty: Any) -> list[tuple[tuple, Any]]:
+    """The three ways a document states nothing at `path`: the field absent, null, and `empty`."""
+    return [(path, ABSENT), (path, None), (path, empty)]
+
+
+def gate_over(tmp_path, gid: str, rel: str, path: tuple, value: Any, arts: dict[str, Any] | None = None) -> G.GateResult:
+    """Gate `gid` over the fixtures' passing run (or `arts`) whose artifact `rel` leaves `path` out or holds `value` there."""
+    arts = passing_artifacts() if arts is None else arts
+    at = arts[rel]
+    for key in path[:-1]:
+        at = at[key]
+    if value is ABSENT:
+        del at[path[-1]]
+    else:
+        at[path[-1]] = value
+    return gate(tmp_path / "run", arts, gid)
+
+
+@pytest.mark.parametrize("path, value", unstated("tokens", empty={}))
+def test_a_noninterference_report_that_states_no_tokens_misses_every_variant(tmp_path, path, value):
+    r = gate_over(tmp_path, "G1", NONINT, path, value)
+    assert (r.status, r.reason) == ("fail", "tokens missing for variants ['a_observer', 'b_hooks', 'c_bare']")
+    assert r.detail["noninterference"]["tokens_equal_control"] == {"a_observer": None, "b_hooks": None, "c_bare": None}
+
+
+@pytest.mark.parametrize("path, value", unstated("tokens", "b_hooks", empty={}))
+def test_a_variant_whose_tokens_the_report_leaves_out_is_missing_by_name(tmp_path, path, value):
+    r = gate_over(tmp_path, "G1", NONINT, path, value)
+    assert (r.status, r.reason) == ("fail", "tokens missing for variants ['b_hooks']")
+    assert r.detail["noninterference"]["tokens_equal_control"] == {"a_observer": True, "b_hooks": None, "c_bare": True}
+
+
+@pytest.mark.parametrize("path, value", unstated("steps", empty=[]))
+def test_a_noninterference_report_that_states_no_step_compared_none(tmp_path, path, value):
+    r = gate_over(tmp_path, "G1", NONINT, path, value)
+    assert (r.status, r.reason) == ("fail", "0 steps, expected 4 (control run engine steps, else workload max_tokens)")
+    assert r.detail["noninterference"]["steps"] == 0
+
+
+@pytest.mark.parametrize("rel, path, value", [(NONINT, *case) for field in ("mismatches", "problems") for case in unstated(field, empty=[])]
+                         + [(CENSUS, *case) for case in unstated("steps", empty=[])])
+def test_a_report_that_lists_no_mismatch_problem_or_census_step_counts_none(tmp_path, rel, path, value):
+    r = gate_over(tmp_path, "G1", rel, path, value)
+    assert (r.status, r.reason) == ("pass", None)
+    assert (r.detail["noninterference"]["n_mismatches"], r.detail["noninterference"]["n_problems"]) == (0, 0)
+
+
+def test_the_mismatches_and_problems_a_report_lists_are_counted_and_fail(tmp_path):
+    arts = passing_artifacts()
+    arts[NONINT]["mismatches"] = [{"step": 1}, {"step": 2}]
+    r = gate_over(tmp_path, "G1", NONINT, ("problems",), ["p1", "p2", "p3"], arts)
+    assert (r.status, r.reason) == ("fail", "2 hash mismatches; 3 problems recorded: ['p1', 'p2']")
+    assert (r.detail["noninterference"]["n_mismatches"], r.detail["noninterference"]["n_problems"]) == (2, 3)
+    r = gate_over(tmp_path, "G1", CENSUS, ("steps",), [{"step": 0}, {"error": "no log step"}, "junk"])
+    assert (r.status, r.reason) == ("fail", "1 census steps without a resolved log step")
+
+
+@pytest.mark.parametrize("path, value", unstated("primary_report", empty={}) + unstated("primary_report", "unsupported_ops", empty={}))
+def test_unsupported_resolutions_are_counted_without_the_ops_a_report_leaves_out(tmp_path, path, value):
+    arts = passing_artifacts()
+    arts[RESOLUTION]["totals"]["unsupported"] = 2
+    r = gate_over(tmp_path, "G2", RESOLUTION, path, value, arts)
+    assert (r.status, r.reason) == ("fail", "2 Unsupported resolutions ([])")
+
+
+def test_unsupported_resolutions_name_the_first_ops_the_report_lists(tmp_path):
+    arts = passing_artifacts()
+    arts[RESOLUTION]["totals"]["unsupported"] = 6
+    r = gate_over(tmp_path, "G2", RESOLUTION, ("primary_report", "unsupported_ops"), {f"aten::op{i}": 1 for i in range(6)}, arts)
+    assert r.reason == "6 Unsupported resolutions (['aten::op0', 'aten::op1', 'aten::op2', 'aten::op3'])"
+
+
+@pytest.mark.parametrize("path, value", unstated("totals", empty={}))
+def test_a_resolution_report_without_totals_is_refused_by_the_first_count_it_lacks(tmp_path, path, value):
+    r = gate_over(tmp_path, "G2", RESOLUTION, path, value)
+    assert (r.status, r.reason) == ("error", "resolution: key 'totals.unsupported' missing")
+
+
+def test_the_resolutions_compute_counts_are_carried_as_the_totals_state_them(tmp_path):
+    r = gate_over(tmp_path, "G2", RESOLUTION, ("totals", "computes"), ABSENT)
+    assert r.status == "pass" and (r.detail["computes"], r.detail["compute_rows"]) == (None, 1200)
+    r = gate_over(tmp_path, "G2", RESOLUTION, ("totals", "compute_rows"), None)
+    assert r.status == "pass" and (r.detail["computes"], r.detail["compute_rows"]) == (1000, None)
+
+
+@pytest.mark.parametrize("rel, path, value, read", [(FOLD, *case, ("unknown_roots", [])) for case in unstated("unknown_roots", empty=[])]
+                         + [(RESOLUTION, *case, ("unknown_roots", [])) for case in unstated("roots", empty={}) + unstated("roots", "unknown", empty=[])]
+                         + [(ROOTS, *case, ("new_root_classes", [])) for case in unstated("new_root_classes", empty=[])]
+                         + [(ROOTS, *case, ("classes", {})) for case in unstated("classes", empty={})]
+                         + [(ROOTS, *case, ("roots", 0)) for case in unstated("roots", empty=[])]
+                         + [(ROOTS, *case, ("alias_claims", 0)) for case in unstated("alias_claims", empty=[])])
+def test_a_root_report_that_lists_nothing_under_a_field_has_none_of_it(tmp_path, rel, path, value, read):
+    r = gate_over(tmp_path, "G3", rel, path, value)
+    assert (r.status, r.reason) == ("pass", None)
+    assert r.detail[read[0]] == read[1] and (r.detail["roots_failed"], r.detail["alias_unproven"]) == (0, 0)
+
+
+def test_the_roots_a_report_lists_are_counted_and_fail(tmp_path):
+    arts = passing_artifacts()
+    arts[RESOLUTION]["roots"]["unknown"] = ["r1"]
+    arts[ROOTS].update(new_root_classes=["c1"], alias_claims=[{"name": "al", "status": "open"}, {"name": "ok", "status": "pass"}, "junk"])
+    r = gate_over(tmp_path, "G3", FOLD, ("unknown_roots",), ["u1", "u2"], arts)
+    assert r.reason == ("fold: 2 unknown roots: ['u1', 'u2']; resolution: 1 unknown roots: ['r1']; 1 new root classes: ['c1']; "
+                        "1 alias claims unproven: ['al']")
+    assert (r.detail["unknown_roots"], r.detail["new_root_classes"], r.detail["alias_claims"], r.detail["alias_unproven"]) == (["u1", "u2"], ["c1"], 3, 1)
+
+
+@pytest.mark.parametrize("res", [None, [], {}, {"primary_report": None}, {"primary_report": {}}, {"by_spec": None}, {"by_spec": {}},
+                                 {"spec_modules": None, "primary_report": {"spec_modules": None}}])
+def test_a_resolution_report_that_names_no_module_or_specialization_has_no_quarantine_spec(res):
+    assert G.quarantine_specs(res) == []
+
+
+def test_quarantine_specs_are_read_at_the_top_of_the_report_and_else_under_the_resolvers_own():
+    own = {"spec_modules": {"A_v1": "registry.quarantine.a", "B_v1": "registry.core"}, "registries": {"C_v1": "quarantine"}}
+    assert G.quarantine_specs({"primary_report": own}) == ["A_v1", "C_v1"]
+    assert G.quarantine_specs({"spec_modules": {"D_v1": "quarantine"}, "primary_report": own}) == ["C_v1", "D_v1"]
+    assert G.quarantine_specs({"quarantine_specs": ["Q_v1"], "by_spec": {"Quarantine_v1{N=2}": 3, "Gemm_v1": 1}}) == ["Q_v1", "Quarantine_v1{N=2}"]
+
+
+@pytest.mark.parametrize("path, value, read", [(*case, {"specs": 2, "covered": 2, "uncovered_specs": []}) for case in unstated("uncovered_specs", empty=[])]
+                         + [(*case, {"specs": 0, "covered": 0, "pass": 0, "fail": 0, "skipped": 0}) for case in unstated("coverage", empty={})])
+def test_a_sample_report_that_lists_no_uncovered_spec_or_no_coverage_passes_on_its_status(tmp_path, path, value, read):
+    r = gate_over(tmp_path, "G4", REPLAY, path, value)
+    assert (r.status, r.reason) == ("pass", None)
+    assert {k: r.detail[k] for k in read} == read
+
+
+@pytest.mark.parametrize("path, value", unstated("differential", empty={}))
+def test_a_quarantine_report_that_states_no_differential_count_fails(tmp_path, path, value):
+    arts = passing_artifacts()
+    arts["quarantine.json"] = {"status": "pass", "differential": {"passed": 12, "total": 12}, "negative_matcher_tests": "pass"}
+    r = gate_over(tmp_path, "G4", "quarantine.json", path, value, arts)
+    assert (r.status, r.reason) == ("fail", "quarantine differential tests: None/None (need total > 0)")
+    assert r.detail["quarantine"]["differential"] == {"passed": None, "total": None}
+
+
+@pytest.mark.parametrize("path, value", unstated("streams", empty={}))
+def test_a_wiring_report_without_a_stream_census_fails_by_name(tmp_path, path, value):
+    r = gate_over(tmp_path, "G5", WIRING, path, value)
+    assert (r.status, r.reason) == ("fail", "wiring: stream census absent (run provenance with the raw log)")
+    assert (r.detail["provenance"]["single_stream"], r.detail["provenance"]["streams"]) == (None, None)
+
+
+@pytest.mark.parametrize("path, value", unstated("schema", empty={}))
+def test_a_wiring_report_without_a_schema_census_counts_no_write_outside_it(tmp_path, path, value):
+    r = gate_over(tmp_path, "G5", WIRING, path, value)
+    assert (r.status, r.reason) == ("pass", None)
+    assert [r.detail["provenance"][k] for k in ("writes_outside_schema", "schema_roots", "triton_roots", "declared_unwritten")] == [None] * 4
+
+
+@pytest.mark.parametrize("path, value", unstated("failures", empty=[]))
+def test_a_failed_wiring_report_that_names_no_failure_fails_on_its_status_alone(tmp_path, path, value):
+    arts = passing_artifacts()
+    arts[WIRING]["status"] = "fail"
+    assert gate_over(tmp_path, "G5", WIRING, path, value, arts).reason == "wiring status 'fail': "
+    arts[WIRING]["failures"] = ["f1", "f2"]
+    assert gate(tmp_path / "run", arts, "G5").reason == "wiring status 'fail': f1; f2"
+
+
+@pytest.mark.parametrize("path, value", unstated("tokens", empty={}))
+def test_a_sample_report_without_a_tokens_section_fails_by_name(tmp_path, path, value):
+    r = gate_over(tmp_path, "G5", REPLAY, path, value)
+    assert (r.status, r.reason) == ("fail", "tier a report has no `tokens` section (served-token reproduction)")
+    assert "tokens" not in r.detail
+
+
+@pytest.mark.parametrize("path, value", unstated("tokens", "steps", empty=[]))
+def test_served_tokens_checked_at_no_step_miss_the_prefill_and_the_decode_steps(tmp_path, path, value):
+    r = gate_over(tmp_path, "G5", REPLAY, path, value)
+    decode = f"served tokens checked at 0 decode step(s) < MIN_DECODE_TOKEN_STEPS={G.MIN_DECODE_TOKEN_STEPS}"
+    assert (r.status, r.reason) == ("fail", f"served tokens: step 0 (prefill) not checked; {decode}")
+    assert r.detail["tokens"]["steps"] == []
+
+
+@pytest.mark.parametrize("path, value", unstated("tokens", "mismatch", empty=[]))
+def test_served_tokens_without_a_mismatch_list_have_none(tmp_path, path, value):
+    r = gate_over(tmp_path, "G5", REPLAY, path, value)
+    assert (r.status, r.reason, r.detail["tokens"]["mismatch"]) == ("pass", None, [])
+
+
+def test_the_served_tokens_a_report_lists_as_unequal_fail_and_the_first_five_are_kept(tmp_path):
+    unequal = [{"step": s} for s in range(7)]
+    r = gate_over(tmp_path, "G5", REPLAY, ("tokens", "mismatch"), unequal)
+    assert r.reason == f"7 served token(s) not reproduced from the logits boundary: {unequal[:3]}"
+    assert r.detail["tokens"]["mismatch"] == unequal[:5]
+
+
+@pytest.mark.parametrize("path, value, read", [(*case, []) for case in unstated("slices", empty=[])]
+                         + [(*case, [{"step": 0, "status": "pass", "edges": 5, "specs": []}]) for case in unstated("slices", 0, "specs", empty=[])])
+def test_a_chain_report_that_lists_no_slice_or_a_slice_no_spec_passes_on_its_counts(tmp_path, path, value, read):
+    r = gate_over(tmp_path, "G5", CHAIN, path, value)
+    assert (r.status, r.reason) == ("pass", None)
+    assert r.detail["chain"]["slices"][:1] == read and r.detail["chain"]["n_slices"] == 3
+
+
+def test_a_chained_slice_without_an_edge_fails_and_its_specs_lose_their_parameters(tmp_path):
+    r = gate_over(tmp_path, "G5", CHAIN, ("slices", 1, "edges_chained"), None)
+    assert (r.status, r.reason) == ("fail", "a chained slice chained no producer->consumer edge")
+    assert r.detail["chain"]["slices"][1] == {"step": 1, "status": "pass", "edges": None, "specs": ["Gemm_v1", "RMSNormFusedCuda_v2"]}
+
+
+@pytest.mark.parametrize("stated, equal", [({}, None), ({"tokens": None}, None), ({"tokens": {}}, None), ({"tokens": {"equal": 4}}, 4)])
+def test_a_full_replay_that_states_no_tokens_carries_no_equal_count(tmp_path, stated, equal):
+    arts = passing_artifacts()
+    arts[G.replay_b_rel(1)] = {"status": "pass", "n_instances": 57, **stated}
+    r = gate(tmp_path / "run", arts, "G5")
+    assert r.status == "pass" and r.detail["full_replay"]["1"]["tokens_equal"] == equal
+
+
+@pytest.mark.parametrize("path, value", unstated("entries", empty=[]))
+def test_a_golden_report_that_lists_no_entry_passes_on_its_status(tmp_path, path, value):
+    r = gate_over(tmp_path, "G6", GOLDEN, path, value)
+    assert (r.status, r.reason, r.detail["golden"]) == ("pass", None, {"status": "pass", "entries": 0, "changed": []})
+
+
+@pytest.mark.parametrize("path, value", unstated("holdouts", empty=[]))
+def test_a_holdouts_report_that_lists_none_fails(tmp_path, path, value):
+    r = gate_over(tmp_path, "G7", HOLDOUTS, path, value)
+    assert (r.status, r.reason) == ("fail", "no holdouts")
+    assert (r.detail["n_holdouts"], r.detail["holdouts"]) == (0, {})
+
+
+@pytest.mark.parametrize("path, value", unstated("holdouts", 0, "gates", empty={}))
+def test_a_holdout_that_states_no_gate_passes_none(tmp_path, path, value):
+    r = gate_over(tmp_path, "G7", HOLDOUTS, path, value)
+    assert (r.status, r.reason) == ("fail", f"holdout {HOLDOUT}: {list(G.HOLDOUT_GATES)} not passing")
+    assert r.detail["holdouts"][HOLDOUT]["gates"] == dict.fromkeys(G.HOLDOUT_GATES) and r.detail["holdouts"][HOLDOUT]["pass"] is False
+
+
+@pytest.mark.parametrize("path, value", unstated("verdict", "partition", "codes", empty=[]) + unstated("verdict", "width", "violators", empty=[])
+                         + unstated("verdict", "width", "unsupported", empty=[]) + unstated("verdict", "readiness_32", "violators", empty=[]))
+def test_a_query_use_verdict_that_lists_no_code_violator_or_undecided_class_has_none(tmp_path, path, value):
+    arts = passing_artifacts()
+    arts[QUERY_USE] = query_use_doc()
+    r = gate_over(tmp_path, "G8", QUERY_USE, path, value, arts)
+    assert (r.status, r.reason) == ("pass", None)
+    assert r.detail["partition"]["codes"] == [] and r.detail["readiness_32"] == {"ok": True, "max_w": 32, "n_violators": 0}
+    assert [r.detail["width"][k] for k in ("n_violators", "violators", "n_unsupported", "unsupported")] == [0, [], 0, []]
+
+
+def test_the_codes_violators_and_undecided_classes_a_query_use_verdict_lists_are_carried(tmp_path):
+    arts = passing_artifacts()
+    arts[QUERY_USE] = query_use_doc(partition="overlap", codes=["P1", "P2"], width="over", violators=["V_v1"], unsupported=["W_v1"])
+    r = gate_over(tmp_path, "G8", QUERY_USE, ("verdict", "readiness_32", "violators"), ["V_v1", "X_v1"], arts)
+    assert r.status == "fail" and r.reason.startswith("partition 'overlap' ['P1', 'P2']; width 'over'; 1 member class(es) with w_out > w_max=32: ['V_v1']")
+    assert r.detail["partition"]["codes"] == ["P1", "P2"] and r.detail["readiness_32"]["n_violators"] == 2
+    assert [r.detail["width"][k] for k in ("n_violators", "violators", "n_unsupported", "unsupported")] == [1, ["V_v1"], 1, ["W_v1"]]
+    assert r.detail["undecided"] == ["1 member class(es) with undecidable w_out: ['W_v1']"]
