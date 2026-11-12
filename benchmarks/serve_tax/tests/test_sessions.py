@@ -479,14 +479,17 @@ def test_a_sessions_cost_says_how_many_requests_went_on_past_an_end_of_text_toke
     del ours["loads"]["agentic@4"][1]["ids_kept"]
     r = S.session_cost([ref, ours], "prod-record", "prod")
     assert r["sides"]["arm"]["past_end"] is None and "in the passes counted" not in S.session_text(r)
+    assert S.past_end_text(r) == []
     # both sides' where both kept them
     for arm in (ref, ours):
         for rep in arm["loads"]["agentic@4"]:
             rep |= {"ids_kept": 96, "past_end": 24, "after_end_tokens": 6000}
-    assert ("in the passes counted: 72 of prod's 288 requests served an end-of-text token before their end and went "
-            "on, 10.00% of its output tokens after one; 72 of prod-record's 288 requests served an end-of-text token "
-            "before their end and went on, 10.00% of its output tokens after one\n"
-            ) in S.session_text(S.session_cost([ref, ours], "prod-record", "prod"))
+    r = S.session_cost([ref, ours], "prod-record", "prod")
+    assert S.past_end_text(r) == [
+        "  past an end-of-text token, in the passes counted: 72 of prod's 288 requests served an end-of-text token "
+        "before their end and went on, 10.00% of its output tokens after one; 72 of prod-record's 288 requests served "
+        "an end-of-text token before their end and went on, 10.00% of its output tokens after one"]
+    assert S.past_end_text(r)[0] + "\n" in S.session_text(r)
 
 
 def test_a_cost_over_lifetimes_is_the_mean_of_theirs_with_students_t_over_them():
@@ -548,7 +551,8 @@ def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work
     cost = S.session_cost(both, "prod-record", "prod")
     assert cost["seeded"] == {"reference": False, "arm": True}
     # sampled or greedy, a request is decoded to its recorded length, and the cost's line on the load says so
-    past = "; each request decoded to its recorded length, past any end-of-text token\n"
+    assert S.TO_LENGTH == "each request decoded to its recorded length, past any end-of-text token"
+    past = f"; {S.TO_LENGTH}\n"
     assert ("planned to repeat; each sampled at temperature 1 and top-p 0.95, prod-record's under a seed its client "
             "sends, one a user, and prod's under none" + past) in S.session_text(cost)
     both[0]["seeded"] = True                              # arms served when every sampled arm was sent a seed

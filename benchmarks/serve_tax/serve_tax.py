@@ -2679,9 +2679,15 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
             "reference_commit": of[reference]["commit"], "reference_run": of[reference]["run"]}
 
 
-def _past_end(r: dict) -> list[str]:
-    """The line of a sessions cost on the requests that went on past an end-of-text token (`past_end`), where a
-    side's server kept the served ids; it names a side that kept none."""
+#: what a sessions cost says of its requests' lengths: `bench_argv` has vLLM's client send each with its recorded
+#: output length and ``ignore_eos``, in every arm, so the sides' counts of output tokens are equal
+TO_LENGTH = "each request decoded to its recorded length, past any end-of-text token"
+
+
+def past_end_text(r: dict) -> list[str]:
+    """The line of a sessions cost (`session_cost`'s result) on the requests that went on past an end-of-text token
+    (`past_end`), where a side's server kept the served ids; it names a side that kept none. No line where neither
+    did."""
     sides = [r["sides"][k] for k in ("reference", "arm")]
     kept = [x for x in sides if x.get("past_end")]
     if not kept:
@@ -2726,8 +2732,8 @@ def session_text(r: dict) -> str:
         f"{plan['repeated_share']:.2f}% of them planned to repeat"
         + (f"; each sampled at temperature {plan['sampled']['temperature']:g} and top-p {plan['sampled']['top_p']:g}"
            + _seeds(r) if plan.get("sampled") else "; each greedy")
-        + "; each request decoded to its recorded length, past any end-of-text token",
-        *_past_end(r),
+        + f"; {TO_LENGTH}",
+        *past_end_text(r),
         f"  the cost is the mean of the lifetimes' costs, a lifetime's being {r['arm']}'s seconds for the passes both arms "
         f"counted in it over {r['reference']}'s, less one, a pass's seconds from its users' first send to the last one's "
         "last answer; "
