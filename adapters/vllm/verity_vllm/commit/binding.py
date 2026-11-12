@@ -37,7 +37,11 @@ from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, runtime_place, split_name
 from verity_vllm.query.manifest.format import MOE_PLANES, batch_launch_shortfall
 from verity_vllm.query.manifest.format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
-from verity_vllm.query.manifest.format import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
+from verity_vllm.query.manifest.format import promoted_observation as promoted_input_acquisition
+
+__all__ = ["HIDDEN_FAMILIES", "RULES_VERSION", "build_binding_map", "challenge_identities", "composition_check", "coverage_check",
+           "expected_population", "identity_dict", "load_required_manifest", "logical_request", "map_context_check",
+           "population_digest", "promoted_input_acquisition", "require_build_program_digest", "structure_of"]
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 RULES_VERSION = "r14-v1"

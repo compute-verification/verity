@@ -32,6 +32,8 @@ import numpy as np
 
 from verity_vllm.commit import scheme
 
+__all__ = ["ROW_GUARD_FIELD", "SRC_BITS", "StreamLayout"]
+
 TAG = scheme.FA2H_TAG
 VERSION = scheme.FA2H_VERSION
 KBLOCK_N = 128
