@@ -53,7 +53,8 @@ roots the boundary values are committed under (`portRoots`).
   order (`stmtsOf`), which the verifier checks (`stmtOk`): the run's statement decodes and its partition and design
   evaluate, and template `t`'s statement sets up as a masked Flock statement with `k₀ t` rounds, in Flock's masked
   scope, in the scope Flock's soundness proof covers and with hidden outputs, and with `xS₀ t`'s table shapes
-  (`sessionOk`); round 1's record lists the replay sample in its order (`SecondStage.interiorOrderOk`); round 2's
+  (`sessionOk`); round 1's record lists the replay sample in its order (`SecondStage.interiorOrderOk`) and registers
+  no value of a name the statement's record has (`SecondStage.namesOk`); round 2's
   statement check passes the statement against template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public
   file's header is `xS₀ t`'s placed in the run (`SecondStage.atRun`) but for the run's fields, names the part's slots
   and the interior record's roots, its sample is the second stage's draw within the part, each registered read is one it
@@ -477,15 +478,18 @@ def codesOk (own : Spot.SecondStage.Own) (t : ℕ) (S : Spot.SecondStage.Stmt) :
 
 /-- **Template `t`'s session statement reads the run's**, at the run's statement `x`, the round-1 message `m₁`, round
 0's coin and the second stage's coins: round 1's record lists the replay sample in its order
-(`SecondStage.interiorOrderOk`, round 2's `second-interior-order`); round 2's statement check passes the statement
-against template `t`'s part (`codesOk`: its public file's header is `xS₀ t`'s placed in the run but for the run's
+(`SecondStage.interiorOrderOk`, round 2's `second-interior-order`) and registers no value of a name the statement's
+record has, a port or a registered value (`SecondStage.namesOk`, round 2's `second-interior-names`), so each name a
+session reads is one record's; round 2's statement check passes the statement against template `t`'s part
+(`codesOk`: its public file's header is `xS₀ t`'s placed in the run but for the run's
 fields, names the part's slots and the interior record's roots, its sample is the second stage's draw within the part,
 and each registered read is one it may read); and it is otherwise template `t`'s reference statement (`pinOk`). -/
 def readsOk (t : ℕ) (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) : Bool :=
   match decode x, jsonMsg m₁, secondDraw h c₀ c₁, FlockDeploy.decode xS with
   | some st, some rec, some draw, some w =>
     let own := ownOf h st rec draw c₀
-    Spot.SecondStage.interiorOrderOk own && ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
+    Spot.SecondStage.interiorOrderOk own && Spot.SecondStage.namesOk own &&
+      ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
   | _, _, _, _ => false
 
 /-- **The session statements a message states**, one per template in template order, each a byte string; kept only

@@ -119,7 +119,8 @@ def readsOkHash (t : ℕ) (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : St
   match decode x, jsonMsg m₁, secondDraw h c₀ c₁, FlockDeploy.decode xS with
   | some st, some rec, some draw, some w =>
     let own := ownOf h st rec draw c₀
-    Spot.SecondStage.interiorOrderOk own && ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinHash h t w
+    Spot.SecondStage.interiorOrderOk own && Spot.SecondStage.namesOk own &&
+      ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinHash h t w
   | _, _, _, _ => false
 
 /-- `stmtOk` with each template's reads checked by `readsOkHash`. -/
