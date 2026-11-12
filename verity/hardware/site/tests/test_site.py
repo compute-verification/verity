@@ -371,6 +371,7 @@ def test_the_encoding_round_trips_and_is_pinned() -> None:
     """A rational is the string `n` or `n/d` in lowest terms, so a sheet has one encoding and one digest."""
     log = grown()
     assert Registration.of_json(log.to_json()) == log and Auditor.of_json(AUDITOR["onsite"].to_json()) == AUDITOR["onsite"]
+    assert Site.of_json(Site.of_log(log.entries).to_json()) == Site.of_log(log.entries)
     assert genesis("onsite") == GENESIS_ONSITE
     assert genesis("remote") != genesis("onsite") and log.head == log.entries[-1].digest()
     half = figures(SHEET_A, clock=Fraction(1, 2), zero=Fraction(64 * GHZ, 3))
@@ -401,6 +402,7 @@ def _sheet_json(**f: object) -> Sheet:
     (lambda: Registration("hybrid"), "composite"),
     (lambda: Entry.of_json({**LATER.to_json(), "format": "verity/registration/information/v1"}), "format"),
     (lambda: Registration.of_json({"composite": "onsite", "entries": [], "extra": 1}), "keys"),
+    (lambda: Site.of_json({"links": [], "locs": [], "sheets": [], "extra": 1}), "keys"),
     (lambda: DeviceFigures("x", -1, 1), "rational"),
     (lambda: DeviceFigures("x", 1, 0.5), "rational"),
     (lambda: DeviceFigures("x", 1, (1, 2)), "one for each"),
