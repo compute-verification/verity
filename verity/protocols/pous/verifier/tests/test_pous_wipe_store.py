@@ -1,16 +1,16 @@
 """`wipe_store`, the streamed wipe's prover keeping the fill in device memory, here on its host-memory stand-in: it keeps
 each frame where its labels go and answers each read from there, its gate writes both sides of every power-of-two byte
 boundary and refuses a store whose addresses wrap, its cheat keeps prior content in the first labels' places and is
-rejected one label past the published threshold, a host without the CUDA driver is refused by name, and a period's wipe
-runs whole on it against a challenger side of its own host that streams natively, recording the prover's, the session's
-and the streamer's figures and the store in the placement, and against a simulated placement's side on the cheat,
+rejected one label past the published threshold, a host without the CUDA driver is refused by name, and the leg runs
+whole on it against a challenger side of its own host that streams natively, recording the prover's, the session's and
+the streamer's figures and the store in the placement, and against a simulated placement's side on the cheat,
 rejecting. On a stand-in CUDA driver and NVML (`wipe_store.load`), a device is the larger of the two totals, NVML's
-read at the PCI bus id CUDA reports, so the wipe's `R` counts the driver's reserve, and without NVML the record names
+read at the PCI bus id CUDA reports, so the leg's `R` counts the driver's reserve, and without NVML the record names
 the reserve uncertified. On a disk (`Disk`, a small fill file in the test's directory) it keeps the fill in a file of
 its own, written in whole blocks and patched where a frame isn't, on the file once synced, and removed at close,
 refuses a fill it can't keep and never takes an existing file; one session over a disk and host memory (`Joint`)
-accepts the honest server and rejects the one keeping its own content on the disk, and a period's wipe runs it whole,
-the disk declared."""
+accepts the honest server and rejects the one keeping its own content on the disk, and the leg runs it whole, the disk
+declared."""
 
 from __future__ import annotations
 
@@ -221,8 +221,8 @@ def test_without_nvmls_total_the_device_is_cudas_and_says_why(monkeypatch) -> No
 
 
 @pytest.mark.parametrize("nvml", [True, False], ids=["nvml", "no-nvml"])
-def test_a_periods_wipe_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvml: bool) -> None:
-    """A wipe on a GPU (`wipe.store` `cuda`, on `cuda_on_host`) of 64 MiB by CUDA's count and an H200's driver reserve
+def test_the_leg_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypatch, nvml: bool) -> None:
+    """The leg on a GPU (`wipe.store` `cuda`, on `cuda_on_host`) of 64 MiB by CUDA's count and an H200's driver reserve
     more by NVML's: the tier declared is NVML's total, so `R`, and `M` with it, counts the reserve (on Demo B's H200,
     the 5,159,518,208 bits CUDA's count leaves out), and none of the device is undeclared. Without NVML the tier is
     CUDA's, and the record names the reserve uncertified, with the reason."""
@@ -247,15 +247,15 @@ def test_a_periods_wipe_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypat
     assert _totals(store) == ((cuda, tier, tier, "nvml") if nvml else (cuda, None, cuda, "cuda"))
     assert [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "gpu-hbm"] == []
     reserve = [g for g in record["uncertified"] if "driver reserves" in g]
-    assert reserve == ([] if nvml else [
-        (f"tier gpu-hbm: the memory NVIDIA H200's driver reserves is undeclared: the tier is CUDA's total ({cuda} "
-         f"bytes), which leaves it out, since NVML gave none ({store['nvml_error']}); the fill doesn't cover it and M "
-         "doesn't count it")])
+    assert reserve == ([] if nvml else [(
+        f"tier gpu-hbm: the memory NVIDIA H200's driver reserves is undeclared: the tier is CUDA's total ({cuda} bytes), "
+        f"which leaves it out, since NVML gave none ({store['nvml_error']}); the fill doesn't cover it and M doesn't "
+        "count it")])
     assert W.summary(record)["uncertified"] == record["uncertified"]
 
 
 @pytest.mark.parametrize("nvml", [True, False], ids=["nvml", "no-nvml"])
-def test_a_periods_wipe_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, monkeypatch, nvml: bool) -> None:
+def test_the_leg_on_a_disk_and_a_gpu_declares_the_gpus_driver_reserve(tmp_path, monkeypatch, nvml: bool) -> None:
     """The disks ahead of a GPU in one joint store, the whole-node session's shape: the GPU part is declared at NVML's
     total, and without NVML the record names that part's reserve uncertified."""
     cuda = 64 << 20
@@ -288,8 +288,8 @@ def test_percentiles() -> None:
     assert WS.percentiles([]) == {"n": 0} and WS.gbps(10, 0) is None and WS.gbps(3_000, 1_000) == 3.0
 
 
-def test_a_periods_wipe_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_streamer) -> None:
-    """The wipe whole as the H200's will run: period.json's wipe on a `wipe_store` prover (host memory standing in for
+def test_the_leg_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wipe_streamer) -> None:
+    """The leg whole as the H200's will run: period.json's wipe on a `wipe_store` prover (host memory standing in for
     the device) gated first, against a challenger side of its own host (`wipe_side.py`) streaming natively. The record
     holds the prover's fill and device reads, the signed session's fill and round trips, and the streamer's gate and
     figures; the placement names the store."""
@@ -318,7 +318,7 @@ def test_a_periods_wipe_on_a_store_with_a_native_fill(tmp_path, monkeypatch, wip
     assert s["tier"] == "host-dram"
 
 
-def test_the_cheats_wipe_rejects_under_a_simulated_placement(tmp_path, monkeypatch) -> None:
+def test_the_cheats_leg_rejects_under_a_simulated_placement(tmp_path, monkeypatch) -> None:
     """`main` on period.json's cheat (`foreign_bytes` `fM`) with the challenger a process of its own on the developer's
     node named `simulated`: the wipe rejects, `--expect reject` exits 0, and the record names the placement and what
     the prover kept."""
@@ -429,7 +429,7 @@ def test_one_session_over_a_disk_and_host_memory(tmp_path, foreign: int) -> None
         assert w.answer["profile"]["tiers"] == [list(t) for t in joint.declared()]
 
 
-def test_a_periods_wipe_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
+def test_the_leg_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None:
     """period.json's wipe on host memory and a disk directory in one session against a challenger side of its own
     host: it accepts, both tiers declared, the disk's filesystems no longer undeclared, and the fill file removed."""
     period = tmp_path / "periods" / "p0"
@@ -458,7 +458,7 @@ def test_a_periods_wipe_on_a_disk_and_host_memory(tmp_path, monkeypatch) -> None
     assert _fills(target) == []
 
 
-def test_a_periods_wipe_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
+def test_the_leg_on_a_disk_and_the_whole_dram(tmp_path, monkeypatch) -> None:
     """wipe.dram after a disk store: the DRAM is a tier declared at all the host's physical memory, so none of it is
     undeclared, and the fill's last segment is in it."""
     period = tmp_path / "periods" / "p0"
