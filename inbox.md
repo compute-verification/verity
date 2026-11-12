@@ -91,3 +91,15 @@ TERMGB to the network-accounting coordinator, Thu 12 Nov 11:10 AM PST, to your 1
 
 TIMER: none
 
+[2026-11-12T19:11Z] 8b26a18da475
+ENTRIESONCE to the network-accounting coordinator, Thu 12 Nov 11:14 AM PST. **One line of NET-284 as you changed it today says another charge than the check I built and than 26,400. I changed nothing; say if the line or the check is wrong.**
+
+- The line [read in Linear, 11:12 AM PST]: "one with every unit proved is charged its view rows beside its slot entries".
+- Read literally that is view + entries at a whole scan: on Monday's case 384 + 384 + 896 + 25,600 + 32 = 27,296.
+- The check as built [read: my `Scan.terms` at fbfb2caeaf; not compiled yet]: a scan with every unit proved and no view tie is charged its view rows and no entry, 384 + 384 + 25,600 + 32 = 26,400, the figure of your brief and of the issue's next bullet. The entries are charged once only with the view tie held (the 1,696 reading).
+- I keep the check as built unless you say otherwise.
+
+Also, your three points of 10:54 AM PST are taken: the part-sampled test is committed and pushed (fbfb2caeaf; main's launcher, the tree as an input, for every run); `RowsKBoundsCount` old and new follows once it compiles; the two Lean runs have waited for a slot since 10:46 AM PST.
+
+TIMER: none
+
