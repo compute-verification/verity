@@ -89544,3 +89544,51 @@ under 0.2% (entry 2: the page hash modeled at 0.036% to 0.045% of a card), 3 bit
 **When woken:** if `e3ca` or `80e5` has all six plus `verity-vllm` passed: merge `main` once, both merge-trees, push, open PRF-585's pull request unmarked, the ready line here. Then the lever's the same way on PRF-585's new head when `2767` and `e765` pass.
 
 **Needs your ruling:** nothing blocks. One choice is open for PRF-586's code (13:22Z): a value that is both a root's port and a `registered` value, held to both trees or refused.
+
+## WIDEZK, Thu 12 Nov 13:34Z: #9108 is at `16757e170166` by the one fast-forward and `247c` passed 68 of 68; the ready line holds on one run: `main` has moved Lean and both locks under that head, so the records run reruns at the merge with it (`8cae`, in line; about 15:10Z, a guess)
+
+**Do not mark on this entry.** Everything a ready line needs is below and stands, except the one thing your 11:24Z rule asks for when `main` moves a file the records run covers. Mailbox read at 13:31Z: nothing after your 11:55Z section. [read]
+
+**1. The push.**
+
+- [read] `git push origin 16757e170166:refs/heads/cursor/proofs-wideleaf-masked-782c` at 13:19Z: `8428b506e6..16757e1701`, a fast-forward, no force. The branch read `8428b506e6b9` just before and reads `16757e170166` after; `gh pr view 9108` gives that head. The hand-over is used: I push nothing more there without your order.
+
+**2. The quick tier, read whole.**
+
+- [run r20261112-113306-247c] rc 0 at `16757e170166` (its `tree_sha`), `suites.py --changed origin/main --quick`, merge base `33faab2be81c`: 68 suites, 68 passed, 0 from the cache, 0 failed; 186.3 min of test time; ended 12:57:44Z, wall 5,058 s. Among them `repository` 346 passed, `verity-flock` 1,450 passed 30 skipped, `verity-vllm` 14,263 passed 400 skipped, `research` 4,465 passed 3 skipped, `verity-check` 898 passed, the sampled-proof verifier's 863 passed.
+- [read] Your 11:55Z question: its lint test (`tests/lint/test_repo_retired_terms.py`, in `repository`) saw the list as the head has it, which is `main`'s at `33faab2be81c` with this change's four counts. It did **not** see the list as `main` now has it. The run that does is `9769` (item 4).
+
+**3. `main` moved under the head, and this time it is Lean and the locks.**
+
+- [read] `main` is `3498d4ad6546` (13:31Z): 85 landings and 661 files past the `33faab2be81c` the head holds. Since your 11:50Z read it has changed both locks this change regenerates (`security/lean-audit.json`, `security/Properties/lean-audit.json`), 16 Lean files, `tests/test_lean_packages.py` (caps: `UNWITNESSED` 247 to 251 and 191 to 185, `INLINE` 915 to 902), `tools/verity/lean/unread-caps.json` (modules 267 to 272, declarations 2,141 to 2,283) and files of `tools/verity/lean`. By your rule `00de` no longer covers the two locks on the tree that lands.
+- [read] The 16 Lean files: #9043 adds five proof files under `security/Proofs/Flock` (`Claims/Sampling/Rewire`, `SamplingGeneric/WiredScope`, `SpotFlock/AddressesAt`, `SpotFlock/WireMap`, `SpotFlock/WiredAt`) and changes five (`SessionLoop/SampledAuditTwo`, `SessionLoop/SampledChosenTwo`, `ZkAny/SampledChosenTwo`, `Soundness/ExecDraw`, the root's import list); #8510 rewords comments in four files of `security/Definitions`; #9233 changes two of PoUS's proofs. None is a file this change edits. Three files are on both sides: the two locks and `tests/lint/allowlists/repo_retired_terms.json`.
+- [read] `git merge-tree --write-tree --name-only origin/main 16757e170166`: exit 0, no stop, nothing on stderr.
+- [derived, a walk of the base's, `main`'s, the head's and the merged lock] In `security`'s lock `main` moved `domain` (4 reasons), `four_names_except` (3), `layers` (4), `shape` (40), `trees` (2), `unwitnessed` (3 reasons), `witnesses_assumed` (1) and removed `reads_exempt`; in Properties' it only removed `reads_exempt`. It moved no `guarantees` entry and no `reads` entry. This change moved only `reads` entries. No entry is moved by both, and each merged lock equals `main`'s with this change's `reads` section (equal as data, at `04499b92996d`; `main`'s one landing since touches neither lock).
+- [derived, by text] Of `main`'s 16 Lean files only the root's import list imports a module this change edits. None of their added lines names one of the 113 read definitions that move, nor one of the 477 declarations whose statement this change alters or the 23 it removes from their file. The tool is `tools/widezk_sigdelta.py.txt` in the lane's notes.
+- [guess] So I expect the merge to build and the records run to keep both locks. What only a build can say: whether #9043's ten files, which read the retyped definitions through their imports, compile against them.
+
+**4. What I did about it, on my branch only.**
+
+- [read] Merged `main` `04499b92996d` into `16757e170166` on `cursor/proofs-widezk-onmain-e2b7`: `eaf0fd921fa4`, no stop, pushed 13:21Z. Its tree differs from `main`'s in the same 305 files as before the merge, and from `16757e170166` in exactly the 659 files `main` had moved. `main` has landed one more since (#9276, two files, neither Lean, a lock nor this change's).
+- [run r20261112-132236-8cae] The records run at `eaf0fd921fa4`, the same command as `00de`, placed by `--on auto` on vy-nebius-cpu-9. In line for a slot since 13:25Z; every slot of its pool was taken at 13:31Z. Expect about 15:10Z [guess: a slot by 14:00Z, as `e716` waited 33 min, then `00de`'s 64 min].
+- [run r20261112-132518-9769] `suites.py --quick repository` at `eaf0fd921fa4`, on vy-nebius-cpu-4. In line since 13:25Z. About ten minutes from its slot [guess: 303 s of tests in `247c`]. It is the whole root suite where your 11:55Z section says the one file: since you wrote, `main` also moved the locks and the caps, which that suite's other tests read. The lint's file is in it, with its own line.
+
+**5. What must rerun, what I left, and where this stops.**
+
+- [derived] Must rerun: the records run (`8cae`). If it keeps both locks (outcome `pass`), `16757e170166` is the head to mark and nothing more is pushed: the candidate's merge gives the same locks by the driver. If it regenerates one, I commit the kept lock on `eaf0fd921fa4`, and #9108 needs a second fast-forward to that commit, which is yours to order.
+- [read] Not rerun at the merge: the other 67 suites of the quick tier. `--changed origin/main` there is the same 305 files, so the same 68 suites, about 85 min. Yours to rule.
+- [derived] `main` took 85 landings in about three hours, Lean and locks among them, and a records run is over an hour from its slot, so the next one would be behind as well. I stop at `8cae` unless you say otherwise; the candidate's own records run is the one on the tree that lands.
+
+**6. The ready line's items, as they stand at `16757e170166`.**
+
+- [run] Runs at it: `247c` rc 0 (item 2). `r20261112-101722-00de` rc 0 at `d7db58522f0e`, which is this head less its last commit: every package's build and the run's audit on the fast path; it regenerated the two locks the last commit holds byte for byte, and passed the verifier's package, the network certifier's Lean and `security/Proofs`. The control `r20261112-092800-e716` rc 0 at `6160c59e6c22`, without `main`: the same two locks, the same read definitions at the same hashes.
+- [read] Against `origin/main` `3498d4ad6546`: no stop (item 3).
+- [read] Against `origin/cursor/lean-remote-merge-landing-fc8d` (`f3837f57d113`, which holds `main` up to `d6075b75d289`, 181 landings back): 23 files stop, the same 23 as `main` at `33faab2be81c` alone. At the merge `eaf0fd921fa4`: 31, the same 31 as `main`'s tip alone. **Beyond `main`'s own: none, at either.** No stop is a file of this change, so no file of mine needs a close on `cursor/proofs-landing-closes-99d1`. Both locks merge there. The driver's notes beyond `main`'s are the five of my 11:46Z entry: read definitions of `NetworkCheck.Period` that branch removed, taken as removed.
+- [run r20261112-101722-00de] Lock records: no guarantee's own record moves in any lock (none added or removed; no signature, statement hash, unfolded-statement hash or premise list). Only `reads`: 97 definitions change and 16 are new in `security`, 14 and 10 in `security/Properties`. Six deployed guarantees read some; your 11:55Z ruling: not a stop. The three points are at the top of the body's Locks section.
+- [read] A precision on my 11:46Z "only `reads` differs": that is as data. In `security`'s lock `00de` also wrote one map with its last two keys in the other order than `main`'s, `shape.inline[NetTiming.SecurityProofs.PooledLeakAccepted]`: same keys, same reasons. A merge with `main` as its first side gives `main`'s order; my merge commit has the head's.
+- [read] For lean (CI-489): no `why` in either lock holds a bracket with an issue and a date, at the head, at the merge or on `main`'s tip (152 and 72 `why` fields each).
+- [read] The no-growth lint is red as before and lands so by your 11:55Z ruling: at `eaf0fd921fa4` against `main`'s tip, `repo_retired_terms.json` grows 107,120 to 107,129, the same three files (`Firewall/Level0.lean` 43 to 47, `Test/ZkIdentity.lean` 0 to 2, `DecodeZL/LIG.lean` 54 to 55).
+- [read] Not run at this head or any: the kernel replay, the axiom check, the Lean check's own tests, `lean-agreement`, `circuit-check`, the unread ratchet on built facts. Not rerun at this head: `TwoGuard.lean`'s compile (`1368`, exit 0 at `6160c59e6c22`).
+- [read] #9108's body, replaced at 13:31Z by `research queue edit` (39,814 bytes): it says not ready, names `8cae` and `9769` as what is missing, has `247c`'s verdict under Checks and `main`'s move under Merges.
+
+I end the turn here. On resume I read `8cae` and `9769` whole and write the one line: the head to mark, or the commit that needs your second fast-forward.
