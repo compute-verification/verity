@@ -95416,3 +95416,68 @@ This run measures that a process holding the served program pays its read once (
 3. **Run 2 on the new program**, once 1 has ended.
 
 **Held:** nothing pushed to a PR head, nothing marked, nothing on Linear or Slack, nothing quoted to another lane. No body edited.
+
+## REFUSE, Thu 12 Nov 18:43Z: PRF-504's branch is pushed at `78ba937e65a0` and stops nowhere against `main` or lean's heads; #9091 has `main` in at `bc68ae1efece`, the pin made again, and `ceffc70c0052` still its close; four runs wait in line, no ready line for either yet
+
+My mailbox's newest section is yours of 18:30Z [read, 18:43Z]. Checkpoint note 19 is synced
+(`lanes/proofs/20261112T1840Z-report-refuse-checkpoint.md`).
+
+**PRF-504: `cursor/proofs-prf504-tied-b41c` at `78ba937e65a0dd0d7fc106c41accf25d180edddf`** (from `main`
+`30d6fcc92ff7`; two commits, three files, +103 -12; no pull request yet)
+
+- [read] `Spot/OneStage.lean`: `Public` gains `restsOnPeriodCheck : Array String`, with no default, so each place
+  that builds a `Public` must name it; `check` sets it to `Registration.tiedThrough v`; `publicJson` writes
+  `rests_on_period_check` after `per_template` exactly when the list is not empty. The field's name corrects my
+  18:25Z entry, which called it `tied`.
+- [read] `security/Properties/Spot.lean`: `publicOf` carries the field; `AcceptMeans`'s text is as it was.
+  `security/Proofs/Properties/Spot.lean` is not changed [guess that `acceptMeans_iff`'s `rfl` still closes; the
+  records run builds it].
+- [read] `tests/test_difftest.py`: the reference `check` carries the list; three programs of two run Inputs,
+  `prog` and `state` (both read by two proof blocks, `prog` alone, neither); one test replays ten cases, one runs
+  the tied change at random (200 examples). `CASES` and the existing ports are untouched, so their samples are.
+- [read] `Spot/Registration.lean`, `replay.py`, `served_integrity.py` and `scan_zk.py` are as `main` has them.
+- [run, on the VM, Lean stood in by the reference] the ten cases answer as the test expects: both shared with
+  `["prog", "state"]` accepts with that list, and with `["state", "prog"]` in that order; both shared with
+  `["prog"]` or nothing refuses at the registration; `prog` alone shared with `["prog"]` or `["prog", "state"]`
+  accepts with `["prog"]`; neither shared accepts with no key. The random run's samples: 74 accept, 126 reject, 20
+  accepts carrying the key. Ruff clean. **Nothing yet shows that the Lean builds or agrees.**
+- [run] Launched 18:35Z at that head, both `submitted` at 18:43Z in vy-nebius-cpu-3's line:
+  `r20261112-183508-cafc`, `lean_changed.py --records verity/protocols/spot/verifier/lean --update` (the fast path:
+  it builds that package and what requires it, the certifier's verifier, `security`, `security/Properties`, with
+  `security/Proofs`; no kernel replay); `r20261112-183509-dd6c`, `suites.py --changed 30d6fcc92ff7 --quick`.
+  [derived, from the imports] 256 modules sit under `OneStage.lean`, 212 of them in `security/Proofs`, and all
+  build again. Ends [guess]: `dd6c` about 20:15Z, `cafc` about 20:45Z.
+- [run, drivers registered] `git merge-tree` of the head: with `main` at `0582899c4392`, no stop. With
+  `origin/cursor/lean-remote-merge-landing-fc8d` at `f3ffe4e2bbcb`, no file beyond `main`'s own stops:
+  `test_difftest.py` has one stop there and it is `main`'s own, byte for byte (the `CASES` list). With lean's
+  #9375 head `e209a56847d4` (`cursor/lean-remote-merge-onmain-fc8d`, which holds `main` `30d6fcc92ff7`), no stop at
+  all. **So no close is owed** [derived].
+- [read] In the tree merged with lean's branch, `check` and `publicOf` both name the field beside lean's changes
+  (`ranOut`; `publicOf`'s new `def` line), and no third place builds a `Public`. That tree is not built.
+- The stop stands: no pull request if `cafc`'s review prints a guarantee as changed, or a record beyond
+  `Spot.OneStage.Public`, `.check`, `.publicJson` and `Properties.Spot.publicOf` with their modules' digests.
+
+**#9091: `cursor/proofs-refuse-a2c0` now at `bc68ae1efece7acf89f76cafe1b29d86356d352a`** (a merge of `675dea740d6a`
+and `main` `0582899c4392`, pushed 18:37Z; your mark of 15:51Z was at the old head)
+
+- [run] One stop, PoUS's pin. Taken from `main` and made again by its command (`pins.py --regen`): blob
+  `aaee7ad643d0`, one line beyond `main`'s, the digest of `security/Proofs/lakefile.toml`.
+  **The head carries the pin made on `main` with the head in, not `ceffc70c0052`'s.**
+- [run] With lean's line in as well: a trial merge, not pushed, of lean's #9375 head `e209a56847d4` with
+  `bc68ae1efece` stops in four files, three of them `main`'s own (`pyproject.toml` and two files under
+  `benchmarks/harness/specs/`, from #9189) and the pin. The pin's command on that tree writes blob `7be654194625`,
+  byte for byte `ceffc70c0052`'s. **So CROSSCLOSE's close `ceffc70c0052` stands at the new head.**
+- [run] `pins.py --stale` rc 0; `tests/test_pins.py` and `test_pous_trusted.py`, 13 passed, on the VM.
+- [run] In the six files both sides changed, the merged tree beyond `main`'s is the head's own:
+  `security/Proofs/lean-audit.json` differs from `main`'s by one root (`Proofs.Properties.Spot.SecondRefused`),
+  `security/Proofs/lakefile.toml` by that root's line, the two `pyproject.toml` files by the inputs the head adds;
+  `test_h1device_cards.py` is `main`'s. `git merge-tree` with `main` `0582899c4392`: no stop.
+- [run] Launched 18:38Z at the new head, both `submitted` at 18:43Z: `r20261112-183818-6cf3` (vy-nebius-cpu-14),
+  `suites.py --changed 0582899c4392 --quick`; `r20261112-183818-a789` (vy-nebius-cpu-11), a Lean try of
+  `security/Proofs/Properties/Spot/SecondRefused.lean`, since `main` changed 217 Lean files after the head's last
+  merge base. Ends [guess]: `a789` about 19:40Z, `6cf3` about 20:15Z.
+- The body is not edited yet (it names the old merge of `main`); I edit it with the ready line.
+
+**Not established:** that the changed Lean builds; that Lean's answers equal the reference's on the new cases; which
+records regenerate; #9091's suites and Lean on the merged head. I watch the four runs' starts for a build error and
+then end my turn on them.
