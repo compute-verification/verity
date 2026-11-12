@@ -52,7 +52,7 @@
   research data fetch-fixtures [PATH ...] [--repo DIR] [--check] [--stubs] [--public-url URL] [--no-private] [--jobs N] [--json]
                                                    make the registry's fetched entries under PATH (default: all) present and exact, from the
                                                    private remote when reachable, else the public export; every byte checked; exit 1 if any is missing
-  research data export [--repo DIR] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
+  research data export [--repo DIR | --no-registry] [--dry-run [--write-check]] [--fresh] [--no-previous] [--blobs FILE] [--id ART]... [--jobs N] [--json]
   research data export --verify-url URL [--repo DIR] [--no-previous] [--blobs FILE] [--jobs N] [--json]
                                                    copy every registry entry (and its `previous` ids, and each --id) to the public export bucket,
                                                    each a PUT If-None-Match: * (412 = already there), never reading it; --verify-url
@@ -1324,8 +1324,8 @@ def cmd_fetch_fixtures(argv: list[str]) -> int:
 
 
 def cmd_export(argv: list[str]) -> int:
-    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs`, to the
-    public export (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
+    """Copy every `fixtures/artifacts.json` entry, with the ids under its `previous` block, each `--id` and any `--blobs` (with
+    `--no-registry`, the `--id`s and `--blobs` alone), to the public export (`remote.load_export`: the `[export]` table of store.toml, `$RESEARCH_EXPORT_DIR`, or `$RESEARCH_EXPORT_BUCKET`), taking the
     bytes from the repo, the local store or the private remote.  `--verify-url URL` exports nothing: it fetches all of it back
     through URL into a scratch store and checks every byte against its id (the end-to-end test of a public front end)."""
     from . import fetchset, fixtures as F  # noqa: PLC0415
@@ -1341,12 +1341,18 @@ def cmd_export(argv: list[str]) -> int:
     ap.add_argument("--no-previous", action="store_true", help="leave out the ids under the map's `previous` block")
     ap.add_argument("--blobs", default=None, metavar="FILE", help="also these blobs: one `<sha256> <bytes>` per line (history stubs)")
     ap.add_argument("--id", action="append", default=[], metavar="ART", help="also this artifact, which the registry doesn't hold; repeatable")
+    ap.add_argument("--no-registry", action="store_true",
+                    help="only the --id artifacts and --blobs: read no fixtures/artifacts.json (the verified queue's export of "
+                         "the fixtures a candidate registers)")
     ap.add_argument("--verify-url", default=None, metavar="URL", help="fetch everything back through URL and check it; export nothing")
     ap.add_argument("--jobs", type=int, default=fetchset.JOBS)
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
+    if ns.no_registry and ns.verify_url:
+        print("research data export: --verify-url reads the registry back; it takes no --no-registry", file=sys.stderr)
+        return 2
     st = LocalStore(ns.store, repo=Path(ns.repo).expanduser().resolve() if ns.repo else None)
-    root = _fixture_repo(st, "export", ns.repo)
+    root = Path.cwd() if ns.no_registry else _fixture_repo(st, "export", ns.repo)
     if root is None:
         return 1
     blobs = _blob_list(ns.blobs)
@@ -1368,7 +1374,8 @@ def cmd_export(argv: list[str]) -> int:
         print("research data export: no export configured ([export] in store.toml, RESEARCH_EXPORT_DIR or RESEARCH_EXPORT_BUCKET)", file=sys.stderr)
         return 1
     rep = F.export(st, root, dest, srcs=fetchset.sources(st, public=""), include_previous=not ns.no_previous, blobs=blobs,
-                   arts=ns.id, jobs=ns.jobs, dry_run=ns.dry_run, write_check=ns.write_check, fresh=ns.fresh)
+                   arts=ns.id, jobs=ns.jobs, dry_run=ns.dry_run, write_check=ns.write_check, fresh=ns.fresh,
+                   registry=not ns.no_registry)
     if ns.json:
         _dump(rep)
     else:

@@ -339,6 +339,28 @@ def test_export_also_copies_an_artifact_it_is_named_and_reports_one_nobody_holds
     assert not rep["ok"] and any(nobody in e for e in rep["errors"])
 
 
+def test_export_with_no_registry_sends_only_the_ids_it_is_named_and_names_one_no_source_holds(tmp_path, monkeypatch, capsys):
+    """The verified queue's export of a candidate's new fixtures (`vqueue_loop.World.export_fixtures`): from a directory with no
+    registry, `--no-registry --id` sends that id alone, not the registry's other entries."""
+    origin, private = _store(tmp_path, "origin"), FsRemote(tmp_path / "private")
+    repo, a = _repo(tmp_path, origin, private)
+    public = tmp_path / "public"
+    rep = F.export(_store(tmp_path, "exporter"), tmp_path / "nowhere", FsRemote(public), srcs=[private], arts=[a["big"]],
+                   registry=False)
+    assert rep["ok"] and rep["ids"] == rep["manifests"] == 1
+    assert sorted(public.joinpath("manifests").rglob("*.json")) == [public / manifest_key(a["big"].split(":")[1])]
+    (config := tmp_path / "store.toml").write_text(f'[remote]\ntype = "fs"\npath = "{tmp_path / "private"}"\n')
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(config))
+    monkeypatch.setenv("RESEARCH_EXPORT_DIR", str(cli := tmp_path / "cli-public"))
+    monkeypatch.chdir(tmp_path)
+    assert data_main(["export", "--store", str(tmp_path / "cli"), "--no-registry", f"--id={a['big']}"]) == 0
+    assert sorted(cli.joinpath("manifests").rglob("*.json")) == [cli / manifest_key(a["big"].split(":")[1])]
+    capsys.readouterr()
+    nobody = "art:" + "3" * 64
+    assert data_main(["export", "--store", str(tmp_path / "cli"), "--no-registry", f"--id={nobody}"]) == 1
+    assert f"{F.UNSOURCED}: {nobody}" in capsys.readouterr().out
+
+
 def test_export_recovers_superseded_ids_from_history_and_warns_on_lost_ones(tmp_path):
     origin, private = _store(tmp_path, "origin"), FsRemote(tmp_path / "private")
     repo, a = _repo(tmp_path, origin, private)
