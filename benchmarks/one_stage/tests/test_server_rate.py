@@ -7,12 +7,15 @@ verifier's mean seconds over the window, and whether the provers' statement cach
 quarters' hit rates and the rule), which a prover still building statements in its last quarter fails without voiding the
 row; and the CPUs its processes could run on (``cores``: this process's affinity as a count, a list and the NUMA nodes
 that hold them, on a made-up node directory). A templated staging is proved with its unit placed, and verified under its
-own statement. A row whose sessions ran another statement version than it asked for (a prover that ignores
-``--wide-leaf``, or one that runs the wide leaf unasked) or name none is void."""
+own statement. The Lean verdict is on the row's Program when one is given, and the row keeps what the verdict says of it.
+A row whose sessions ran another statement version than it asked for (a prover that ignores ``--wide-leaf``, or one that
+runs the wide leaf unasked) or name none is void."""
 from __future__ import annotations
 
+import io
 import json
 import os
+import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -61,7 +64,10 @@ class Server:
         os.utime(d, (FILED0 + i, FILED0 + i))
         mine = range(i % self.k, i + 1, self.k)
         cache = {"lookups": len(mine), "held": sum(1 for j in mine if j in self.built)}
-        return Session(label, f"prover-gpu0-{i % self.k}", d, i not in self.refuse, cache, i / 8, self.profile)
+        s = Session(label, f"prover-gpu0-{i % self.k}", d, i not in self.refuse, cache, i / 8, self.profile)
+        if verdict is not None:
+            s.verdict = lambda: verdict(s)
+        return s
 
     def close(self) -> dict[str, int]:
         return dict(self.exits)
@@ -302,7 +308,7 @@ def test_a_wide_leaf_rows_lean_verdict_is_under_the_versions_statement(monkeypat
     got = []
 
     class Lean:
-        def __init__(self, lean, d, out, statement):
+        def __init__(self, lean, d, out, statement, program):
             got.append(statement)
 
         def close(self):
@@ -317,7 +323,7 @@ def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch,
     got = []
 
     class Lean:
-        def __init__(self, lean, d, out, statement):
+        def __init__(self, lean, d, out, statement, program):
             got.append(statement)
 
         def close(self):
@@ -326,6 +332,50 @@ def test_a_templated_statements_lean_verdict_is_under_its_statement(monkeypatch,
     monkeypatch.setattr(SR, "Lean", Lean)
     run(monkeypatch, tmp_path, "--lean", "flock-verify", tmpl_unit=tmp_path / "unit.placed")
     assert got == [SR.FC.TMPL_STATEMENT]
+
+
+def test_lean_is_handed_the_rows_program_and_the_row_keeps_what_its_verdict_says_of_it(monkeypatch, tmp_path):
+    """`--lean-program`'s descriptor is archived with the circuit and the public file and handed to `verify` by its key
+    (`--program`), and the row's Lean verdict keeps what it says of the Program: here, as on a statement under the
+    provisional unit cover, its digest as handed and the note that it was not held to the circuit, and no
+    `program_sha512`. Without `--lean-program`, `verify` is handed no program and the row keeps its refusal. `verify` and
+    `archive-put` are stand-ins: `archive-put` names each file `key-<its name>`."""
+    note = "the Program was handed and not held to the circuit: the provisional unit cover binds no Program descriptor"
+    refusal = "refused: a session without the verifier's program (--program)"
+    cmds = []
+
+    class Child:
+        pid = 0
+
+        def __init__(self, cmd, **kw) -> None:
+            cmds.append(cmd)
+            v = ({"accepted": True, "why": "", "program_handed_sha512": "ab", "program_note": note} if "--program" in cmd
+                 else {"accepted": False, "why": refusal})
+            self.stdout = io.StringIO(f"VERDICT {json.dumps(v)}\n")
+
+    def put(cmd, **kw):
+        cmds.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "".join(f"key-{Path(f).name} {f}\n" for f in cmd[3:]), "")
+
+    monkeypatch.setattr(SR.tempfile, "tempdir", str(tmp_path))
+    monkeypatch.setattr(SR.subprocess, "run", put)
+    monkeypatch.setattr(SR.subprocess, "Popen", Child)
+    monkeypatch.setattr(SR.os, "wait4", lambda pid, options: (pid, 0, SimpleNamespace(ru_utime=0.0, ru_stime=0.0, ru_maxrss=0)))
+    for d in ("handed", "none"):
+        (tmp_path / d).mkdir()
+    program = tmp_path / "program.json"
+    lean = ("--lean", "verifier", "--lean-sessions", "1")
+    _, row = run(monkeypatch, tmp_path / "handed", *lean, "--lean-program", str(program))
+    [v] = row["lean"]
+    assert v["accepted"] and (v["program_handed_sha512"], v["program_note"]) == ("ab", note) and "program_sha512" not in v
+    archived, verify = cmds
+    assert archived[-1] == str(program) and verify[verify.index("--program") + 1] == "key-program.json"
+    del cmds[:]
+    _, row = run(monkeypatch, tmp_path / "none", *lean)
+    [v] = row["lean"]
+    assert (v["accepted"], v["why"]) == (False, refusal) and not set(SR.PROGRAM_FIELDS) & set(v)
+    archived, verify = cmds
+    assert str(program) not in archived and "--program" not in verify
 
 
 @pytest.mark.parametrize("statement", [SR.STATEMENT_ID + SR.WIDE_LEAF, SR.STATEMENT_ID])

@@ -5,9 +5,11 @@ joint row takes a convergence margin, and the census is in the machine model's s
 from __future__ import annotations
 
 import csv
+import importlib.util
 import io
 import json
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -17,8 +19,6 @@ SM80 = POUW / "tensor_kinds" / "sm80.py"
 
 
 def _load(name: str, path: Path):
-    import importlib.util
-    import sys
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, path)
