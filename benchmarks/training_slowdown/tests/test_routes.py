@@ -12,7 +12,7 @@ from training_slowdown import config, run, starts
 from training_slowdown.codecs import ScaledQuant, SparseTernary
 from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
-from training_slowdown.routes import ema, qat, subset
+from training_slowdown.routes import ema, grow, qat, subset
 from training_slowdown.routes._optimizers import newton_schulz
 from training_slowdown.traced import trace_step
 
@@ -75,6 +75,78 @@ def test_newton_schulz_brings_a_matrixs_singular_values_near_one():
     assert 0.6 < s.min() and s.max() < 1.3
     a, _, b = torch.linalg.svd(g, full_matrices=False)
     assert (u - a @ b).norm() / (a @ b).norm() < 0.3
+
+
+def test_newton_schulz_of_a_stack_is_the_same_update_in_another_op():
+    """`stack`: the matrix normalized by its norm over the last two dimensions kept, as a program that orthogonalizes
+    a stack writes it; the update is the same to bf16's rounding."""
+    g = torch.randn(8, 16, generator=torch.Generator().manual_seed(0))
+    u, stacked = newton_schulz(g), newton_schulz(g, stack=True)
+    assert torch.equal(newton_schulz(g.T, stack=True), stacked.T)
+    assert (stacked - u).abs().max() <= 0.02 * u.abs().max()
+
+
+def test_grows_blocks_copy_the_starts_in_order_with_each_repeats_output_projections_zero():
+    """8 blocks grown to 12: block j copies the start's ⌊8j/12⌋, and blocks 1, 4, 7 and 10, each the second copy of
+    one, start with `wo` and `w_down` zero; the rest of each repeat, and every tensor outside the blocks, is the
+    start's. Without `zero` each repeat is a plain copy. A depth that grows nothing is refused, and `build` refuses
+    it too."""
+    dials = grow.DIALS | {"depth": 12}
+    shape = SHAPE | {"n_layer": 8}
+    assert grow.sources(shape, dials) == [0, 0, 1, 2, 2, 3, 4, 4, 5, 6, 6, 7]
+    origin = grow.origin(shape, dials)
+    assert sorted({int(k.split(".")[1]) for k, v in origin.items() if v is None}) == [1, 4, 7, 10]
+    assert all(origin[f"blocks.{j}.{t}"] is None for j in (1, 4, 7, 10) for t in grow.ZEROED)
+    assert origin["blocks.1.wq.weight"] == "blocks.0.wq.weight" and origin["blocks.11.w_down.weight"] == (
+        "blocks.7.w_down.weight")
+    assert "blocks.0.wq.weight" not in origin and all(k.startswith("blocks.") for k in origin)
+    plain = grow.origin(shape, dials | {"zero": False})
+    assert None not in plain.values() and plain["blocks.1.wo.weight"] == "blocks.0.wo.weight"
+    for depth in (8, 4):
+        with pytest.raises(ValueError, match=f"depth {depth} doesn't grow the start's 8 blocks"):
+            grow.origin(shape, dials | {"depth": depth})
+    with pytest.raises(ValueError, match="depth is the grown model's blocks"):
+        grow.plan(grow.DIALS)
+    with pytest.raises(ValueError, match="doesn't grow"):
+        grow.build(SHAPE, dials | {"depth": SHAPE["n_layer"]})
+
+
+def test_grow_trains_its_blocks_matrices_under_muon_and_its_gains_and_embedding_under_adamw():
+    """The grown model's every matrix of the blocks under Muon at `lr`, decayed and normalized as a stack; the gains at
+    `adam_lr` and the embedding at `embed_lr` under one undecayed fused AdamW, a group each, the embedding frozen
+    where its rate is 0."""
+    dials = grow.DIALS | {"depth": 3, "lr": 0.01, "adam_lr": 0.002, "embed_lr": 0.003, "weight_decay": 0.05}
+    torch.manual_seed(0)
+    model, (muon, adamw) = grow.build(SHAPE, dials)
+    assert len(model.blocks) == 3 and muon.defaults["stack"] and muon.defaults["weight_decay"] == 0.05
+    gains = ["norm"] + [f"blocks.{j}.{n}" for j in range(3) for n in ("attn_norm", "mlp_norm")]
+    matrices = [f"blocks.{j}.{w}.weight" for j in range(3) for w in ("wq", "wk", "wv", "wo", "w_gate", "w_up",
+                                                                     "w_down")]
+    assert [(r, sorted(n)) for r, n in grouped(model, muon)] == [(0.01, sorted(matrices))]
+    assert [(r, sorted(n)) for r, n in grouped(model, adamw)] == [(0.002, sorted(gains)), (0.003, ["embed"])]
+    assert adamw.defaults["fused"] is True and adamw.defaults["weight_decay"] == 0.0
+    model, (_, adamw) = grow.build(SHAPE, dials | {"embed_lr": 0.0})
+    assert not model.embed.requires_grad and [r for r, _ in grouped(model, adamw)] == [0.002]
+
+
+def test_the_grown_model_gives_the_starts_logits_bit_for_bit_at_its_first_step():
+    """With `zero`, each repeated block adds zero to the residual stream: its attention's and its MLP's output
+    projections are zero, so each adds an exact zero, and the stream reaching the next block is the start's. The grown
+    model's start, built from θ by `origin` as the harness builds it, gives θ's logits bit for bit, in float32 and
+    under bf16 autocast. Without `zero` it doesn't."""
+    torch.manual_seed(0)
+    theta = LM.of(SHAPE)
+    rows = torch.randint(0, SHAPE["vocab"], (2, 9), generator=torch.Generator().manual_seed(1))
+    for depth in (SHAPE["n_layer"] + 1, 2 * SHAPE["n_layer"] + 1):
+        for zero in (True, False):
+            dials = grow.DIALS | {"depth": depth, "zero": zero}
+            model, _ = grow.build(SHAPE, dials)
+            model.load_state_dict(run.start_state(theta.state_dict(), model.state_dict(), grow.origin(SHAPE, dials)))
+            with torch.no_grad():
+                same = torch.equal(model(rows), theta(rows))
+                with torch.autocast("cpu", dtype=torch.bfloat16):
+                    same_bf16 = torch.equal(model(rows), theta(rows))
+            assert same == same_bf16 == zero, (depth, zero)
 
 
 def test_muon_takes_the_matrices_and_adamw_the_gains():

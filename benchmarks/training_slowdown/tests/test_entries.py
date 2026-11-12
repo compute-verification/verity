@@ -19,7 +19,7 @@ import torch.nn.functional as F
 from synthetic import SHAPE as TINY
 from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 
-from training_slowdown import config, library
+from training_slowdown import config, library, run
 from training_slowdown.model import LM
 from training_slowdown.routes import subset
 from training_slowdown.routes._optimizers import Muon, newton_schulz
@@ -57,9 +57,14 @@ def batches(steps: int = STEPS) -> list[torch.Tensor]:
 
 def routed(route, dials: dict) -> dict:
     """The output model after the route's own steps. A weight the route hands over as its trained parts is the one
-    the route's plan rebuilds on the start from its packing of them, as a job's checkpoint takes it."""
+    the route's plan rebuilds on the start from its packing of them, as a job's checkpoint takes it. A route whose
+    model starts otherwise than as the start (`origin`) starts from what the harness builds of the start by it."""
+    torch.manual_seed(0)
+    theta = LM.of(SHAPE).state_dict()
     torch.manual_seed(0)
     model, optimizers = route.build(SHAPE, dials)
+    if hasattr(route, "origin"):
+        model.load_state_dict(run.start_state(theta, model.state_dict(), route.origin(SHAPE, dials)))
     start = {k: v.clone() for k, v in model.state_dict().items()}
     steps = steps_of(dials)
     for t, rows in enumerate(batches(steps)):
@@ -200,6 +205,48 @@ def qat(dials: dict) -> dict:
     return theta | built()
 
 
+def deepened(dials: dict) -> tuple[dict, dict]:
+    """The start and the model `grow` starts from, written out: block j of `depth` a copy of the start's block
+    j·L/depth rounded down, and where it repeats the block before it, with `zero`, its two output projections zero."""
+    torch.manual_seed(0)
+    theta = LM.of(SHAPE).state_dict()
+    n, blocks = dials["depth"], SHAPE["n_layer"]
+    start = {k: v.clone() for k, v in theta.items() if not k.startswith("blocks.")}
+    for j in range(n):
+        i = j * blocks // n
+        for k, v in theta.items():
+            if k.startswith(f"blocks.{i}."):
+                rest = k.removeprefix(f"blocks.{i}.")
+                zero = dials["zero"] and j and (j - 1) * blocks // n == i and rest in ("wo.weight", "w_down.weight")
+                start[f"blocks.{j}.{rest}"] = torch.zeros_like(v) if zero else v.clone()
+    return theta, start
+
+
+def grown(dials: dict) -> dict:
+    """`grow` written out: the deepened model, its blocks' matrices under the published Muon at `lr` with the decay
+    decoupled, its gains at `adam_lr` and its embedding at `embed_lr` under torch's AdamW, undecayed, the gradient
+    clipped at 1, the rate a linear ramp over `warmup` steps falling linearly to 0, one forward and backward over the
+    whole batch."""
+    model = LM.of(SHAPE | {"n_layer": dials["depth"]})
+    model.load_state_dict(deepened(dials)[1])
+    model.embed.requires_grad_(dials["embed_lr"] > 0)
+    matrices = [p for n, p in model.named_parameters() if p.ndim == 2 and n != "embed"]
+    adam = [{"params": [p for p in model.parameters() if p.ndim == 1], "lr": dials["adam_lr"]}] + (
+        [{"params": [model.embed], "lr": dials["embed_lr"]}] if dials["embed_lr"] else [])
+    opts = [Rule(matrices, muon_rule, lr=dials["lr"], weight_decay=dials["weight_decay"]),
+            torch.optim.AdamW(adam, betas=(0.9, 0.95), weight_decay=0.0)]
+    for t, rows in enumerate(batches()):
+        F.cross_entropy(model(rows[:, :-1]).flatten(0, 1), rows[:, 1:].flatten()).backward()
+        torch.nn.utils.clip_grad_norm_([p for p in model.parameters() if p.requires_grad], 1.0)
+        for o in opts:
+            for g in o.param_groups:
+                ramp = min(1.0, (t + 1) / dials["warmup"]) if dials["warmup"] else 1.0
+                g["lr"] = g.setdefault("rate", g["lr"]) * ramp * (1 - t / STEPS)
+            o.step()
+            o.zero_grad()
+    return model.state_dict()
+
+
 def adamw(d: dict):
     return lambda matrices, beside: [torch.optim.AdamW(matrices + beside, lr=d["lr"], betas=(0.9, 0.95),
                                                       weight_decay=d["weight_decay"])]
@@ -285,6 +332,7 @@ REFERENCES = {
     "m-t20-1.1x-shallow-depthshare-4": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-shallow-depthshare-8": (under(muon), CLOSE_BF16),
     "m-t20-1.1x-wildcard-topcode": (under(muon), CLOSE_BF16),
+    "m-t20-2x-hybrid-grow-depth": (grown, CLOSE_BF16),
     "s-t20-1.1x-accumulate": (under(adamw), CLOSE),
     "s-t20-1.1x-adafactor": (under(adafactor), CLOSE),
     "s-t20-1.1x-adamw": (under(adamw), CLOSE),
@@ -328,7 +376,7 @@ def test_an_entrys_steps_end_at_its_references_weights(name):
     reference, close = REFERENCES[name]
     got, want = routed(route, dials), reference(dials)
     torch.manual_seed(0)
-    start = LM.of(SHAPE).state_dict()
+    start = deepened(dials)[1] if reference is grown else LM.of(SHAPE).state_dict()
     moved = [k for k in got if not torch.equal(got[k], start[k])]
     assert moved and set(moved) == {k for k in want if not torch.equal(want[k], start[k])}
     for k in moved:

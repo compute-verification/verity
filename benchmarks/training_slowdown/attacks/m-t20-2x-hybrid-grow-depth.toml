@@ -1,0 +1,20 @@
+# The start deepened from 8 to 12 blocks, each block a copy of the start's ⌊8j/12⌋-th with a repeated copy's output
+# projections zeroed, so the grown model is the start's function at its first step; Muon on every matrix of the
+# blocks and AdamW on the gains and the embedding at rates of their own, in four forwards of 32 rows a step, the rate
+# rising over 200 steps and then falling linearly to 0. The output is the grown model; E is every tensor of it.
+start = "m-t20"
+route = "grow"
+target = { gain = 2.0 }
+budget = { steps = 7713, batch = 128 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+depth = 12
+zero = true
+lr = 0.008
+adam_lr = 3e-3
+embed_lr = 6e-3
+weight_decay = 0.05
+warmup = 200
+micro_batches = 4

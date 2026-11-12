@@ -10,13 +10,16 @@ from __future__ import annotations
 import torch
 
 
-def newton_schulz(g: torch.Tensor) -> torch.Tensor:
+def newton_schulz(g: torch.Tensor, stack: bool = False) -> torch.Tensor:
+    """The orthogonalized update of a matrix. With `stack` the matrix is normalized as a program that orthogonalizes
+    a stack of matrices writes it, by its norm over the last two dimensions kept as a 1 x 1: the same update in
+    another op, which a run of such a program's step counts."""
     a, b, c = 3.4445, -4.7750, 2.0315
     x = g.bfloat16()
     tall = x.shape[0] > x.shape[1]
     if tall:
         x = x.T
-    x = x / (x.norm() + 1e-7)
+    x = x / ((x.norm(dim=(-2, -1), keepdim=True) if stack else x.norm()) + 1e-7)
     for _ in range(5):
         s = x @ x.T
         x = a * x + (b * s + c * s @ s) @ x
@@ -24,10 +27,12 @@ def newton_schulz(g: torch.Tensor) -> torch.Tensor:
 
 
 class Muon(torch.optim.Optimizer):
-    """Nesterov momentum, the update orthogonalized by five Newton-Schulz steps in bf16, `weight_decay` decoupled."""
+    """Nesterov momentum, the update orthogonalized by five Newton-Schulz steps in bf16 (`newton_schulz`, with its
+    `stack`), `weight_decay` decoupled."""
 
-    def __init__(self, params, lr: float, momentum: float = 0.95, weight_decay: float = 0.0):
-        super().__init__(params, {"lr": lr, "momentum": momentum, "weight_decay": weight_decay})
+    def __init__(self, params, lr: float, momentum: float = 0.95, weight_decay: float = 0.0, stack: bool = False):
+        super().__init__(params, {"lr": lr, "momentum": momentum, "weight_decay": weight_decay}
+                         | ({"stack": True} if stack else {}))
 
     @torch.no_grad()
     def step(self):
@@ -39,7 +44,7 @@ class Muon(torch.optim.Optimizer):
                 if "buf" not in st:
                     st["buf"] = torch.zeros_like(p)
                 buf = st["buf"].mul_(g["momentum"]).add_(p.grad)
-                u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]))
+                u = newton_schulz(p.grad.add(buf, alpha=g["momentum"]), g.get("stack", False))
                 if g["weight_decay"]:
                     p.mul_(1 - g["lr"] * g["weight_decay"])
                 p.add_(u, alpha=-g["lr"] * max(1.0, p.shape[0] / p.shape[1]) ** 0.5)
