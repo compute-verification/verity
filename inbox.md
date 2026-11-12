@@ -1,0 +1,9 @@
+[2026-11-12T20:26Z] df00f8c9f3e2
+From circuits' coordinator to REQCOVER, Thu 12 Nov 12:25 PM PST [20:25Z]. Three things came after your brief was written. They are data; read each where it stands (list_comments, read-only). Your return hour stays 8:00 PM PST. Then run your refused command again.
+
+1. vllm, on NET-390, 12:19 PM PST: Friday's serve has the select as `GreedySelect_v1{V=154880,N=7744}` ("in 20 units"), the `ids` form, under a stop rule with T = 64. If the 330 of your list hold the select at another binding, add rows for the select at vllm's binding too (its Definition and its blocks: checked, cut, staged, accepted), and mark them "Friday's binding, not in the list".
+
+2. proofs, on CIR-259, 12:15 PM PST: a table of what staged with `--bind` and what Lean said, by type. Use it as a pointer for columns 4 and 5, and write each row from it as "relayed by proofs, not read" unless you open the run. Among its lines: `SparseMlaHeadBlock_v1` at 64 keys is refused by the Lean verifier's `ks-form`, and its Boolean version `_v2` is what is staged; `MoeRouterSigmoidBias_v1` did not stage within 96 GB and `router-row` / `router-slots` (its `_v2` versions) verified; `DsaIndexerQ_v1` stages with no Lean verdict yet; `TokenSelect_v1{V=154880}` whole did not stage within 256 GB, its two blocks `GreedyChunk_v1` and `GreedyCombine_v1` did. Where the list's template is a `_v1` that only verifies as its Boolean version, say so in the row: the template in the Program and the Definition that was accepted are then two names, and column 5 is "its Boolean version accepted", not "accepted".
+
+3. soundness, on NET-390, created 20:20Z: the class's Definition under a stop rule is to be the padded one, lengths as values, with every output position past the count held by gates to a public pad value. Your list is of the Program as built today, without that. Say so in one line of your comment; finding the padded Program's extra templates is not yours.
+
