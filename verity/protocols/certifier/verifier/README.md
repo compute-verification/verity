@@ -302,7 +302,7 @@ A spec-level reference for network accounting's timing channel:
   (`WardenParams.lengths`): each execution phase's releases as two tables a row a slot stride, `lengths` and `fails`,
   and, with content rows (`WardenParams.content`), three tables a class of what each filed release carried
   (`content_rows`: its request, response and end rows; under form 2 a class's held rows alone, whose count the head
-  makes public), all committed as the cells' rows are and listed under one
+  makes public; with `request_words`, a fourth of its request's words), all committed as the cells' rows are and listed under one
   head the network certifier signs once; the registration the verifier reads (`check_registration`) and its
   `--registered` port of the proof blocks that read a table, one a row (`port`); under form 2, the signed word
   that an execution phase has no head (`check_no_head`);
