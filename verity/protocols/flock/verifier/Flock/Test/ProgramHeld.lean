@@ -10,13 +10,14 @@ meta import Flock.Registered
 namespace Flock.Test.ProgramHeld
 
 /-!
-The verifier's own program (`--program`) against the circuit, under `--zk`.
+The verifier's own program (`--program`) against the circuit, in every mode.
 
 What the setup compares at a `verity/partition/v1` binding: the partition object's `program` with META's
 `program_sha512` (`HmRow.checkPartition`), and the handed program with the object's `program` only where it evaluates the
 query on it (`HmRow.deriveTemplateUnits` here); for a query it does not evaluate, `HmRow.qwordFinding` returns the
-finding as it stands, whatever program it was handed. `ProvedScope.programZ` refuses a handed program whose digest is
-not META's for every query, in `ProvedScope.programWhyP`'s words, and refuses nothing under the provisional unit cover.
+finding as it stands, whatever program it was handed. `ProvedScope.programBound` refuses a handed program whose digest
+is not META's for every query, in `ProvedScope.programWhyP`'s words, and refuses nothing under the provisional unit
+cover. It takes no mode: `verify` runs it on every session, `--zk` or plain.
 
 What the verdict says (`ProvedScope.programFields`): `program_sha512` only for a program whose digest is META's; for any
 other, its digest under `program_handed_sha512` and a `program_note`, neither of which a reader looking for
@@ -99,15 +100,16 @@ def stated : HmRow.PartitionFinding := { rule := HmRow.PARTITION_V1, note := "as
   | .ok (some f) => f.note == "as stated" && !f.derived
   | _ => false
 
-/-! `verify --zk`'s refusals on the program, in its order: `programHeld`, then `programZ`. -/
+/-! `verify`'s refusals on the program, on every session and in its order: `programHeld`, then `programBound`. -/
 
-def refused (parsed : V Circuit) (program : Option ByteArray) : String :=
-  let both : Except String Unit := do
-    ProvedScope.programHeld program
-    ProvedScope.programZ parsed program
-  match both with
+def why : Except String Unit → String
   | .error e => e
   | .ok () => ""
+
+def refused (parsed : V Circuit) (program : Option ByteArray) : String :=
+  why (do
+    ProvedScope.programHeld program
+    ProvedScope.programBound parsed program)
 
 def NOT_THE_CIRCUITS : String :=
   s!"refused: the verifier's program (--program, program_sha512 {sha other}) is not the circuit's (META program_sha512 {sha mine})"
@@ -121,15 +123,27 @@ def NOT_THE_CIRCUITS : String :=
 -- the circuit's program is accepted, under either query
 #guard refused (.ok (bound unread)) (some mine) == ""
 #guard refused (.ok (bound template)) (some mine) == ""
--- a session without the program is `programHeld`'s, and `programZ` alone passes it
+-- a session without the program is `programHeld`'s, and `programBound` alone passes it
 #guard refused (.ok (bound unread)) none == ProvedScope.NO_PROGRAM
-#guard ProvedScope.programWhyZ (bound unread) none == none
+#guard ProvedScope.programWhyBound (bound unread) none == none
 -- under the provisional unit cover, or with no program bound, nothing is compared
 #guard refused (.ok (cover (some (sha mine)))) (some other) == ""
 #guard refused (.ok (cover none)) (some other) == ""
 #guard refused (.ok (circuit none HmRow.PARTITION_V1 (some unread))) (some other) == ""
 #guard refused (.error "e") (some mine) ==
   "refused: a circuit that does not parse (e): a statement form the soundness proof does not cover"
+
+/-! A plain session beside a `--plain-tables` one, whose own refusal (`programP`) `verify` runs first. -/
+
+-- under verity/partition/v1 a session of any mode is held as a `--plain-tables` one is: the same programs refused, in
+-- the same words
+#guard [mine, other, "not json".toUTF8].all fun p =>
+  why (ProvedScope.programBound (.ok (bound unread)) (some p)) ==
+    why (ProvedScope.programP (.ok (bound unread)) (some p))
+-- under the provisional unit cover only `--plain-tables` refuses another program; any other mode's verdict says it was
+-- not held
+#guard why (ProvedScope.programP (.ok (cover (some (sha mine)))) (some other)) == NOT_THE_CIRCUITS
+#guard why (ProvedScope.programBound (.ok (cover (some (sha mine)))) (some other)) == ""
 
 /-! The verdict's program fields. -/
 

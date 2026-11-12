@@ -574,8 +574,9 @@ def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json �
 
 /-- **The verifier was handed a program**: a session verified without one (`--program`) is refused (`NO_PROGRAM`),
 whatever else it passes. It compares nothing. A handed program is held to the circuit when its digest is META's
-`program_sha512`: `programP` refuses any other under `--plain-tables`, `programZ` under `--zk` where META binds a
-`verity/partition/v1` partition, and a verdict says whether it was held (`programFields`). -/
+`program_sha512`: `programBound` refuses any other where META binds a `verity/partition/v1` partition, in every mode,
+`programP` under `--plain-tables` whatever partition META binds, and a verdict says whether it was held
+(`programFields`). -/
 def programHeld (program : Option ByteArray) : Except String Unit :=
   if program.isSome then .ok () else .error NO_PROGRAM
 
@@ -590,37 +591,38 @@ when META binds no partition. -/
 def metaRule (c : Circuit) : String :=
   ((c.metaJ.getObjVal? "partition").toOption.bind fun p => (p.getObjValAs? String "rule").toOption).getD ""
 
-/-- What `--zk` refuses of the verifier's own program against the circuit, in `programWhyP`'s words: where META binds a
-`program_sha512` under `verity/partition/v1`, bytes that are not a JSON descriptor and a program whose digest is not
-META's. The setup holds the program only to the partition object's, and only for a query it evaluates
-(`HmRow.qwordFinding`); this holds it for every query. Under the provisional unit cover it refuses nothing, and the
-verdict says whether the program was held (`programFields`). A session without the program is `programHeld`'s. -/
-def programWhyZ (c : Circuit) (program : Option ByteArray) : Option String :=
+/-- What `verify` refuses of the verifier's own program against the circuit in every mode, in `programWhyP`'s words:
+where META binds a `program_sha512` under `verity/partition/v1`, bytes that are not a JSON descriptor and a program
+whose digest is not META's. The setup holds the program only to the partition object's, and only for a query it
+evaluates (`HmRow.qwordFinding`); this holds it for every query. Under the provisional unit cover, which binds no
+program descriptor to compare with, it refuses nothing, and the verdict says whether the program was held
+(`programFields`). A session without the program is `programHeld`'s. -/
+def programWhyBound (c : Circuit) (program : Option ByteArray) : Option String :=
   if program.isSome && metaRule c == HmRow.PARTITION_V1 && (metaProgram c).isSome then programWhyP c program else none
 
-/-- **The verifier's own program is the circuit's** (`--zk`, where META binds a `verity/partition/v1` partition):
-`programWhyZ` on the circuit `verify` parsed. -/
-def programZ (parsed : V Circuit) (program : Option ByteArray) : Except String Unit :=
+/-- **The verifier's own program is the one META binds** (every mode, where META binds a `verity/partition/v1`
+partition): `programWhyBound` on the circuit `verify` parsed. -/
+def programBound (parsed : V Circuit) (program : Option ByteArray) : Except String Unit :=
   match parsed with
   | .error e => .error (refusal s!"a circuit that does not parse ({e})")
-  | .ok c => match programWhyZ c program with
+  | .ok c => match programWhyBound c program with
     | some why => .error why
     | none => .ok ()
 
-/-- **An accepted `programZ` holds a handed program to META's under `verity/partition/v1`**: the circuit parsed, and
+/-- **An accepted `programBound` holds a handed program to META's under `verity/partition/v1`**: the circuit parsed, and
 where its META binds a `program_sha512` under that rule, the handed bytes' digest is it. -/
-theorem programZ_ok {parsed : V Circuit} {b : ByteArray} (h : programZ parsed (some b) = .ok ()) :
+theorem programBound_ok {parsed : V Circuit} {b : ByteArray} (h : programBound parsed (some b) = .ok ()) :
     ∃ c, parsed = .ok c ∧
       (metaRule c = HmRow.PARTITION_V1 → (metaProgram c).isSome = true → programDigest b = metaProgram c) := by
   cases parsed with
-  | error e => simp [programZ] at h
+  | error e => simp [programBound] at h
   | ok c =>
     refine ⟨c, rfl, fun hr hm => ?_⟩
-    have hz : programWhyZ c (some b) = none := by
-      cases hw : programWhyZ c (some b) with
+    have hz : programWhyBound c (some b) = none := by
+      cases hw : programWhyBound c (some b) with
       | none => rfl
-      | some w => simp [programZ, hw] at h
-    have hp : programWhyP c (some b) = none := by simpa [programWhyZ, hr, hm] using hz
+      | some w => simp [programBound, hw] at h
+    have hp : programWhyP c (some b) = none := by simpa [programWhyBound, hr, hm] using hz
     obtain ⟨b', hb, _, hd⟩ := programWhyP_none hp
     cases hb
     exact hd

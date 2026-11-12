@@ -905,10 +905,10 @@ over an inner session whose record (`--rec-inner-session`) holds no sample (`Rec
 holo or sparse inner shape, since `RecursiveKS` covers the dense form only (`RecSetup.denseOnly`), and a session with
 a `--rec-*` flag but no `--zk`, since it covers the masked verifier only (`RecSetup.zkOnly`), and a session
 verified without a `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
-cannot know what it verifies; the check is that a program was handed, and compares nothing), and under `--zk`, where
+cannot know what it verifies; the check is that a program was handed, and compares nothing), and in every mode, where
 META binds a `program_sha512` under `verity/partition/v1`, a session whose `--program` has another digest
-(`ProvedScope.programZ`; under the provisional unit cover nothing is compared, the session is not refused for it, and
-its verdict says the program was not held), then a record not in its canonical text (`RecordText.check`, S0), and last under
+(`ProvedScope.programBound`, which compares nothing under the provisional unit cover: the session is not refused for
+it, and its verdict says the program was not held), then a record not in its canonical text (`RecordText.check`, S0), and last under
 `--zk` files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that is not a
 `sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, two
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
@@ -1164,7 +1164,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
     -- tables' sizes), then a draw-less session's, then a recursive session's without --rec-inner or a V* session's
     -- short of every unit, then a session's over an inner record without a sample, then a session's at a holo or sparse
     -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
-    -- the program, then under --zk one whose program is not the one META binds under verity/partition/v1,
+    -- the program, then one whose program is not the one META binds under verity/partition/v1,
     -- then a record not in its canonical text (S0), then under --zk files whose rows, names, widths, domains or port
     -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
     -- circuit, a public file or a sample outside its form (`KsScope.checkOf`), then a statement version other than
@@ -1179,7 +1179,7 @@ def verifyCmd (args : List String) (upstream : Option Lean.Json := none) : IO UI
       RecSetup.denseOnly recInner
       RecSetup.zkOnly zk (args.any (·.startsWith "--rec-"))
       ProvedScope.programHeld program
-      if zk then ProvedScope.programZ parsed program
+      ProvedScope.programBound parsed program
       RecordText.check record
       ksFiles
       if zk && recInner.isNone then KsScope.checkOf ksParsed tags pubB count draw
