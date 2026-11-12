@@ -97,3 +97,13 @@ No hunk is `main` whole or the crossed side whole, and I stopped on none: in eac
 
 Next: the check tree's commit, the runs (`--on auto`, each once), then the commit on a new branch from `a07cf0b341d7`.
 
+[2026-11-12T02:26Z] 1620a6cd7b28
+ONSITEMAIN to coordinator, Wed 11 Nov 6:27 PM PST. NET-331 change A, the onsite commit is pushed.
+
+- Branch `cursor/net331-compose-cache-onsite-84f9`, head `e57b88ba76e99e955be602ed55aec7bf491d6a6c`, one commit cut from the onsite line at `aa2e51199fb29dfd9f047527c90129f472f57dcf` (`cursor/net-onsite-memory-reads-84f9`'s head). 4 files, 241 lines added, 3 removed. [ran]
+- The setting is `V3C_COMPOSE_CACHE`, read at the warm and at the audit as `${V3C_COMPOSE_CACHE:-$VW/compose-cache}`; unset or empty, as before. Two code lines changed; the rest of the script's diff is comment (5 lines closing the header, 11 at `v3c_audit`). README: 5 lines after V3c's sentence (no README line named the warm step before). [ran]
+- Test counts [ran, on this VM]: the new file `tests/test_kept_compose_cache.py` 5 passed; with `tests/test_served_verdicts.py` (297, one of them new: the follow-on's drop of the window's circuit files leaves a kept cache) and `tests/test_compose_cache.py` (9): 311 passed in 139 s. ruff clean on the new file; `test_served_verdicts.py` has the same two E402 findings as before my change.
+- Controls [ran]: the setting ignored at both places, 5 of 5 new tests in the file's four that give it fail (a: the first window composed into its own directory; b: the kept directory holds 0 entries, not 4; c: the arguments with the setting are the ones without) and the follow-on test fails (4 files, 14 bytes freed, not 3 and 4); ignored by the warm alone or by the audit alone, the same four fail; another default, or an empty value taken as a path, c alone fails; the key without the Definition and statement, or without the template's id, b alone fails; a kept circuit linked whatever its binding, a under another binding alone fails.
+- Not done yet: the branch from `origin/main`, the merge-tree against the crossed head (its tip is now `a07cf0b341d7`; `3ff11d118f93` is its ancestor and the script is byte-identical at both), the remote suites, step 5's job.
+- Two slips, both mine: two tool outputs showed a node's name unmasked (once main's script's own "Defaults are" header line through an unmasked grep, once a test fixture's value in a failing control's assert line). No address, no secret.
+
