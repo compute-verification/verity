@@ -1,7 +1,7 @@
 module
 
 public import Properties.Verity.Game
-public import Proofs.Properties.Verity.Composite
+public import Proofs.Properties.Verity.Soundness.Composite
 public import Properties.Spot.Draw
 public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.Bridge.CircuitOf

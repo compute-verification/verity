@@ -3,7 +3,7 @@ module
 public import Properties.Verity.Soundness
 public import Properties.Verity.Idle
 public import Proofs.Properties.Composition
-public import Proofs.Properties.Verity.Composite
+public import Proofs.Properties.Verity.Soundness.Composite
 public import Proofs.Core.Game.Prob
 public import Proofs.Core.Game.Seq
 public import Proofs.Flock.Claims.Prob
@@ -12,7 +12,7 @@ public import Proofs.Flock.Claims.Prob
 # Soundness at the verifier, from its subprotocols' targets
 
 A composite is the list of its subprotocols' ids, and its verifier composes them under one rule
-(`Proofs.Properties.Verity.Composite`). So at every list, a composite's acceptance is its acceptance as a `same`
+(`Proofs.Properties.Verity.Soundness.Composite`). So at every list, a composite's acceptance is its acceptance as a `same`
 composition and every component's on its own case (`accepts_same`, `accepts_components`, from
 `Properties.Composition`'s `answerAccepts` at the composite, `acceptTied` at its ties and `acceptSame`), and the event
 `Verity.SoundnessOf` bounds at a composite lies inside the union of its subprotocols' events, each at most its target's
