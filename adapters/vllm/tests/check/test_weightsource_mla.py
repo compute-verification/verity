@@ -124,7 +124,7 @@ def test_a_top_field_is_its_checkpoint_tensors_and_cos_sin_is_the_fixture(tmp_pa
     """`embed`, `norm` and `lm_head` are their checkpoint tensors' words. `cos_sin` names no checkpoint tensor: it is the fixture's
     words, under the base tables and under the GPT-NeoX family's (a `config` whose `NORM` is `layernorm`), whose `norm_b` is read too."""
     cos_sin = tmp_path / "cos_sin.npy"
-    fixture = np.arange(MAX_POS * DR, dtype=np.uint16) + 7
+    fixture: np.ndarray = np.arange(MAX_POS * DR, dtype=np.uint16) + 7
     np.save(cos_sin, fixture)
     wt = _mla_weights_type()
     words = _write(tmp_path / "base.safetensors", _tensors())
