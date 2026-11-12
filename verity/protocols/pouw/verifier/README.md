@@ -42,7 +42,7 @@ every product, is a reference, not an answer.
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
 one-stage audit, PoUW as Pearl+'s run verdict, `PouwCheck.PearlPlus.Protocol.protocol` (`verity/pouw/pearl-plus/v1`,
 `lean/pearlplus`), and the inference-only policy's check (`Core.Remote.V1.components` in
-`verity/protocols/remote/verifier/CoreRemote.lean`, id `verity/remote/v1`). It accepts only when every subprotocol accepts
+`verity/configurations/remote/verifier/CoreRemote.lean`, id `verity/remote/v1`). It accepts only when every subprotocol accepts
 its own case, its commitment binds the subprotocols' commitments, the policy and the one-stage audit committed to one
 record, and Pearl+'s run commitment names that record (`Core.Remote.V1.run`); any one's rejection rejects it
 (`Core.Composition.tiedSameB`, `verity/protocols/compose/README.md`). H1's development executable
@@ -52,7 +52,7 @@ Commit record (`Core.Remote.windows`). In the remote demo, on that development e
 (`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
-`verity/protocols/remote/verifier/`; PoUW is also a subprotocol of the onsite protocol (`verity/protocols/onsite/verifier`).
+`verity/configurations/remote/verifier/`; PoUW is also a subprotocol of the onsite protocol (`verity/configurations/onsite/verifier`).
 
 ## What runs
 

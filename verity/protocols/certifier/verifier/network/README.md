@@ -72,7 +72,7 @@ bits a covert sender in the server can move through the network certifier in the
 - `lean_audit.Audit` is `audit.Audit` with every verdict taken from one `network-records verdicts` process.
   `VERITY_NETWORK_RECORDS_EXE` names a built executable; without it, the first request runs `lake build
   network-records` here.
-- The onsite configuration (`verity/protocols/onsite/verifier`) composes `verity/certifier/v0` as its communication
+- The onsite configuration (`verity/configurations/onsite/verifier`) composes `verity/certifier/v0` as its communication
   component (`Core.Onsite.components`). The composition's difftest takes the period's mirror and cases from
   `tests/period_case.py`.
 

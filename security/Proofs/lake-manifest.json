@@ -65,7 +65,7 @@
    "name": "core_onsite",
    "manifestFile": "lake-manifest.json",
    "inherited": true,
-   "dir": "../Properties/../../verity/protocols/onsite/verifier",
+   "dir": "../../verity/configurations/onsite/verifier",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -179,7 +179,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/protocols/onsite/verifier/../../interface",
+   "../../verity/protocols/interface",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -187,7 +187,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/protocols/onsite/verifier/../../remote/verifier/../../pouw/verifier/lean/pearlplus/../window/../../../../../difftest/lean",
+   "../../verity/difftest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -269,7 +269,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/protocols/onsite/verifier/../../remote/verifier",
+   "../../verity/configurations/remote/verifier",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -277,7 +277,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/protocols/onsite/verifier/../../remote/verifier/../../pouw/verifier/lean/pearlplus/../window/../../../../spot/verifier/lean/../../../../commitments/lms/lean",
+   "../../verity/commitments/lms/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -285,7 +285,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/protocols/onsite/verifier/../../remote/verifier/../../pouw/verifier/lean/pearlplus/../window/../commit/../../../../../commitments/identity",
+   "../../verity/commitments/identity",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",
@@ -293,7 +293,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/protocols/onsite/verifier/../../pous/device/lean/../../../../commitments/attest/lean",
+   "../../verity/commitments/attest/lean",
    "configFile": "lakefile.toml"},
   {"type": "path",
    "scope": "",

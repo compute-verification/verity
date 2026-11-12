@@ -439,7 +439,7 @@ def lean(toy, written, tmp_path_factory) -> SimpleNamespace:
     SC = one.SC
     exes = SimpleNamespace(v1=SC.build(*SC.V1_LEAN), policy=SC.build(*SC.INFERENCE_ONLY_LEAN),
                            period=SC.build(ROOT / "verity/protocols/pouw/verifier/lean/check", "pouw-period"),
-                           remote=SC.build(ROOT / "verity/protocols/remote/verifier", "remote"))
+                           remote=SC.build(ROOT / "verity/configurations/remote/verifier", "remote"))
     W, R = toy.h1.W, written.R
     serve = _serve(one, tmp_path_factory.mktemp("serve"), _v1_case(one, toy, written, W, R), W, R, exes.period)
     out = io.StringIO()

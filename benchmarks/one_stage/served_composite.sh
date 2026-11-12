@@ -73,7 +73,7 @@ PRODUCT=${PRODUCT:-onsite}
 case $PRODUCT in
   onsite) products=(remote onsite) ;;
   remote) products=(remote)
-    [ "${POUW:-}" = pearlplus ] && [ -f verity/protocols/remote/verifier/RemoteV1Main.lean ] && products=(remote-v1) ;;
+    [ "${POUW:-}" = pearlplus ] && [ -f verity/configurations/remote/verifier/RemoteV1Main.lean ] && products=(remote-v1) ;;
   *) say "COMPOSITE: not run, PRODUCT is onsite or remote, not $PRODUCT"; exit 1 ;;
 esac
 [ -f benchmarks/one_stage/composite.py ] || { say "COMPOSITE: not run, this tree has no benchmarks/one_stage/composite.py"; exit 1; }
@@ -87,8 +87,8 @@ fi
 mkdir -p "$P" && chmod 700 "$D/private" "$P"
 package() {  # the Lake package directory of product $1
   case $1 in
-    remote | remote-v1) echo verity/protocols/remote/verifier ;;
-    onsite) echo verity/protocols/onsite/verifier ;;
+    remote | remote-v1) echo verity/configurations/remote/verifier ;;
+    onsite) echo verity/configurations/onsite/verifier ;;
   esac
 }
 exe() {  # Lean executable $1 of package dir $2, built, its path printed

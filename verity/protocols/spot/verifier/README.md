@@ -9,9 +9,9 @@ applied to its committed inputs. The protocol is stated in Lean (see "Where thin
 points to the code, and lists what the Lean does not state yet.
 
 SPOT (`verity/sampled-proofs/v1`) is a protocol of both configurations: remote (`verity/remote/v1`,
-`verity/protocols/remote/verifier/`) composes it with Pearl+'s run (`verity/pouw/pearl-plus/v1`; H1's development executable
+`verity/configurations/remote/verifier/`) composes it with Pearl+'s run (`verity/pouw/pearl-plus/v1`; H1's development executable
 `verity/remote/v0`, with PoUW's period `verity/pouw/period/v1`) and the inference-only policy, and onsite
-(`verity/protocols/onsite/verifier/`) with the other protocols. Each configuration's verifier runs
+(`verity/configurations/onsite/verifier/`) with the other protocols. Each configuration's verifier runs
 `VStar.Recursive.Sampled`'s Lean check: one-stage v2 (`verity/sampled-proofs/one-stage/v2`, the audit on the proofs).
 One-stage v1, whose verdicts are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or
 evidence name no `proofs`), and so is the recursive audit (`verity/sampled-proofs/recursive/v1`, `RECURSIVE_REFUSED` at

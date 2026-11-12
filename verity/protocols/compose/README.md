@@ -10,7 +10,7 @@ subprotocols' packages:
   `same id ss components`, the product whose subprotocols `ss` must commit to one record (`Same.lean`), and `tiedSame id
   ss ties components`, `same` whose subprotocols of each tie must name one value (`Tie.lean`); all over blobs
   (`Blobs.lean`); the stub subprotocols (`Stubs.lean`); and the `#guard`s that pin the rules (`Guards.lean`).
-- `core_onsite` (`../onsite/verifier`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, the inference-only policy,
+- `core_onsite` (`../../configurations/onsite/verifier`, `Core.Onsite.protocol`, `verity/onsite/v0`): sampled proofs, the inference-only policy,
   PoUW, PoUS, PoUB-P2 (on PoUS's store), network certification and the memory challenger's
   wipe, the policy and sampled proofs on one registration record and every window of the period on it, as at remote,
   and PoUS and PoUB-P2 on one store (a `tiedSameB`).
@@ -23,13 +23,13 @@ The rule and the formats are written once, over any list of subprotocols, and th
 differ in their id and subprotocols. Each composite's executable is the core CLI (`onsite id | check | serve`,
 `remote id | check | serve`), and its `serve` is what the difftest drives.
 
-These are the only composites a verifier runs. `product IDS id | check | serve` (`../onsite/verifier/CoreComposites.lean`,
+These are the only composites a verifier runs. `product IDS id | check | serve` (`../../configurations/onsite/verifier/CoreComposites.lean`,
 `Core.Composites.ofIds`), which `verity run`'s verifier runs over a configuration's subprotocols, is each composite's
 CLI for its subprotocols, in any order, and refuses every other set, since protocol soundness covers only onsite and
 `verity/remote/v1`: H1's `verity/remote/v0` is refused, and runs only as its development executable.
 
 Their security argument, layer by layer from one proof to the training slowdown, is the remote protocol's README
-(`../remote/verifier/README.md`, "The security argument, end to end"); onsite shares its layers and adds its own subprotocols'.
+(`../../configurations/remote/verifier/README.md`, "The security argument, end to end"); onsite shares its layers and adds its own subprotocols'.
 
 ## The protocol
 

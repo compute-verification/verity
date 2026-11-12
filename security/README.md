@@ -539,7 +539,7 @@ PoUW has other guarantees, outside protocol soundness.
 
 ## The remote protocol in Lean
 
-Remote (`verity/protocols/remote/verifier`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
+Remote (`verity/configurations/remote/verifier`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
 site. It composes three subprotocols, SPOT (one-stage v2; the recursive audit refused), PoUW's period check
 (`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`NciCheck.Protocol`), and
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the

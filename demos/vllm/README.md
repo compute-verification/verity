@@ -1,7 +1,7 @@
 # The vLLM demo: the remote protocol on a served H200
 
 The vLLM demo is the runnable form of the **remote protocol**'s H1 development executable (`verity/remote/v0`, H1's
-period as its work, which no configuration names, in `verity/protocols/remote/verifier/`; the composite of record, `verity/remote/v1`, has Pearl+'s run instead):
+period as its work, which no configuration names, in `verity/configurations/remote/verifier/`; the composite of record, `verity/remote/v1`, has Pearl+'s run instead):
 what an auditor with no devices at the site establishes about a datacenter serving a model. One served run of
 Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the onsite protocol's subprotocols beside it.
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
@@ -25,7 +25,7 @@ is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is prove
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol's composed theorem, `Verity.remote_soundness_of_subprotocols`, takes its three subprotocols'
 targets as open premises, and no Lean statement carries the acceptance of remote's one-stage form, one-stage v2, which runs the proof check
-itself, to `SampledKSLiveV3`'s event (`verity/protocols/remote/verifier/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
+itself, to `SampledKSLiveV3`'s event (`verity/configurations/remote/verifier/README.md`, "What's open"). PoUW's proof layer needs `AcceptedLive`, which no served path
 meets. Onsite's chain has a gap of its own: network certification's `NetTiming.Guarantees.SampledAuditAccepted` takes
 `Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and the theorem that gives it at the deployed record,
 `SamplingDeploy.ks_compiled`, is not a lock guarantee and takes the verifier's own facts as hypotheses
@@ -52,7 +52,7 @@ directory holds what is the demo's own: its placement and its commands.
 
 ## The onsite protocol on the same run
 
-Onsite (`verity/onsite/v0`, in `verity/protocols/onsite/verifier/`) is remote's superset: it adds PoUS, PoUB
+Onsite (`verity/onsite/v0`, in `verity/configurations/onsite/verifier/`) is remote's superset: it adds PoUS, PoUB
 (`verity/remote-bandwidth/v0`) and network certification. The memory wipe has its piece on the same run too, and
 isn't yet a subprotocol of either composite. Each runs on the served run as its piece where `served_verdicts.sh` names
 its command (`POUS_CMD`, `BANDWIDTH_CMD`, `CERTIFIER_CMD`, `WIPE_CMD`). A piece that doesn't run is named `MISSING` and

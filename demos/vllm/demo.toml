@@ -4,7 +4,7 @@
 # challenger's development key and credits nothing, and an H1 commitment's served execution blocks aren't yet a
 # verity/pouw/period/v1 case, so the composite can't accept. Its proof is none: sampled proofs' guarantee
 # (Flock.Guarantees.SampledKSLiveV3) is proved, but the remote protocol has no guarantee in Lean for it to instantiate
-# (verity/protocols/remote/verifier/README.md, "The open gap"), and PoUW's proof layer needs AcceptedLive, which no served
+# (verity/configurations/remote/verifier/README.md, "The open gap"), and PoUW's proof layer needs AcceptedLive, which no served
 # path meets.
 protocol = "remote"
 workload = "vllm"

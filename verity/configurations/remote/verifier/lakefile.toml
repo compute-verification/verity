@@ -12,40 +12,40 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
-path = "../../flock/verifier"
+path = "../../../protocols/flock/verifier"
 
 [[require]]
 name = "core_protocol"
-path = "../../interface"
+path = "../../../protocols/interface"
 
 [[require]]
 name = "core_composition"
-path = "../../compose"
+path = "../../../protocols/compose"
 
 # The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's period (work).
 [[require]]
 name = "core_spot"
-path = "../../spot/verifier/lean"
+path = "../../../protocols/spot/verifier/lean"
 
 [[require]]
 name = "pouw_check"
-path = "../../pouw/verifier/lean/check"
+path = "../../../protocols/pouw/verifier/lean/check"
 
 # The inference-only policy: its check as a core protocol (`NciCheck.Protocol`).
 [[require]]
 name = "nci_check"
-path = "../../inference_only/verifier/nci/lean"
+path = "../../../protocols/inference_only/verifier/nci/lean"
 
 # Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
 [[require]]
 name = "core_vstar_recursive"
-path = "../../recursion/verifier/recursive"
+path = "../../../protocols/recursion/verifier/recursive"
 
 # Work in the composite of record: Pearl+'s run verdict as a core protocol (`PouwCheck.PearlPlus.Protocol`).
 [[require]]
 name = "pouw_pearlplus"
-path = "../../pouw/verifier/lean/pearlplus"
+path = "../../../protocols/pouw/verifier/lean/pearlplus"
 
 [[lean_lib]]
 name = "CoreRemote"

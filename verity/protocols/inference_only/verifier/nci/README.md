@@ -6,7 +6,7 @@ The inference-only policy's check, in Lean only. This directory is `lean/` and t
 and no console script.
 
 - **Lean**: `lean/` is the Lake package `nci_check`, whose library `NciCheck` the packages at `../../../certifier/verifier/lean`,
-  `verity/protocols/onsite/verifier`, `verity/protocols/remote/verifier` and `security/Properties` require by path.
+  `verity/configurations/onsite/verifier`, `verity/configurations/remote/verifier` and `security/Properties` require by path.
 - **Commands** (`lake exe`, in `lean/`):
   - `inference-only id | check PARAMS COMMITMENT EVIDENCE | serve`: the core protocol `verity/inference-only/v0`,
     which both composites compose;
@@ -38,7 +38,7 @@ every value outside the registered information θ, the models, code and data fix
 a protocol with no rounds. Setup fixes θ and the registered compiler B. At the start of each verification phase, before
 any coin, B's output on the reported advice partitions that execution block into inference blocks, and the developer's
 ZK proof that B ran correctly and explains the committed trace can also show that each has at most c gates and reads
-at most k bits outside θ (`verity/protocols/remote/verifier/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`; its
+at most k bits outside θ (`verity/configurations/remote/verifier/README.md`, "Lifecycle"). In Lean it is `Nci.Complies`; its
 check decides the policy at a rate, `Nci.CompliesRate` (below).
 
 The inference-only policy is a subprotocol of both composites, onsite and remote (`verity/protocols/compose`):

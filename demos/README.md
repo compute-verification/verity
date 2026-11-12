@@ -8,7 +8,7 @@ or `run.sh`.
 
 ## The remote protocol
 
-Remote Verity (`verity/remote/v1`, `Core.Remote.V1` in `verity/protocols/remote/verifier/CoreRemote.lean`) is what the
+Remote Verity (`verity/remote/v1`, `Core.Remote.V1` in `verity/configurations/remote/verifier/CoreRemote.lean`) is what the
 verifier establishes with no hardware of its own at the developer's site. It composes three protocols
 (`Core.Remote.V1.components`):
 
@@ -35,7 +35,7 @@ remote composite, H1's development one, on CPU with a stand-in prover. Its demo 
 and PoUW on the served model, whose PoUW verdict is a development run that credits nothing. The inference-only policy
 runs in `lifecycle/` only: no served run produces the declared
 division yet. Five other things are called "remote" (PoUB among them);
-`verity/protocols/remote/verifier/README.md`, "Which remote", lists them.
+`verity/configurations/remote/verifier/README.md`, "Which remote", lists them.
 
 ## How far a demo runs, and how far it's proved
 

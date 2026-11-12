@@ -738,8 +738,8 @@
       "linear": "PRF",
       "linear_label": "lane:soundness",
       "owns": [
-        "verity/protocols/onsite/verifier/",
-        "verity/protocols/remote/verifier/"
+        "verity/configurations/onsite/verifier/",
+        "verity/configurations/remote/verifier/"
       ],
       "branch_suffixes": [
         "9c4d"

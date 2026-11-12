@@ -51,8 +51,8 @@ KNOWN = {
     ("tools/research/README.md", "research keeper set NAME --on NODE"):
         "infra: names set, stop and status at once, and `set` takes its command after `--`",
     ("tools/research/src/research/slack.py", "research msg router"): "comms: a subcommand to come, named as one",
-    ("verity/protocols/remote/verifier/README.md", "verity verify proof"): "soundness: a command to come, named as one",
-    ("verity/protocols/remote/verifier/README.md", "verity verify remote"): "soundness: a command to come, named as one",
+    ("verity/configurations/remote/verifier/README.md", "verity verify proof"): "soundness: a command to come, named as one",
+    ("verity/configurations/remote/verifier/README.md", "verity verify remote"): "soundness: a command to come, named as one",
 }
 
 SPAN = re.compile(r"`([^`\n]+)`")

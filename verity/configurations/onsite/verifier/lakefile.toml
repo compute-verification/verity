@@ -13,57 +13,57 @@ backward.proofsInPublic = true
 
 [[require]]
 name = "flock_verifier"
-path = "../../flock/verifier"
+path = "../../../protocols/flock/verifier"
 
 [[require]]
 name = "core_protocol"
-path = "../../interface"
+path = "../../../protocols/interface"
 
 [[require]]
 name = "core_composition"
-path = "../../compose"
+path = "../../../protocols/compose"
 
 # The ported subprotocols: sampled proofs' one-stage audit (integrity) and PoUW's period credit (work,
 # `PouwCheck.Period`).
 [[require]]
 name = "core_spot"
-path = "../../spot/verifier/lean"
+path = "../../../protocols/spot/verifier/lean"
 
 [[require]]
 name = "pouw_check"
-path = "../../pouw/verifier/lean/check"
+path = "../../../protocols/pouw/verifier/lean/check"
 
 # The inference-only policy: its check as a core protocol (`NciCheck.Protocol`).
 [[require]]
 name = "nci_check"
-path = "../../inference_only/verifier/nci/lean"
+path = "../../../protocols/inference_only/verifier/nci/lean"
 
 # Communication: the network certifier's period check (`NetworkCheck.Period`), with the certifier program and the LMS
 # verifier it reads certificates with.
 [[require]]
 name = "network_check"
-path = "../../certifier/verifier/lean"
+path = "../../../protocols/certifier/verifier/lean"
 
 # Space: PoUS's check of a run, on the memory challenger's Lean.
 [[require]]
 name = "pous_check"
-path = "../../pous/verifier/check"
+path = "../../../protocols/pous/verifier/check"
 
 # Bandwidth: the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Protocol`).
 [[require]]
 name = "remote_audit"
-path = "../../poub/verifier/lean"
+path = "../../../protocols/poub/verifier/lean"
 
 # Integrity: sampled proofs in the form its params name, one-stage v2's audit or the recursive audit, V*'s compiled
 # check (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`).
 [[require]]
 name = "core_vstar_recursive"
-path = "../../recursion/verifier/recursive"
+path = "../../../protocols/recursion/verifier/recursive"
 
 # The wipe: the memory challenger's streamed-label wipe verdict (`MemoryChallenger.WipeProtocol`, `verity/wipe/v0`).
 [[require]]
 name = "core_memory_challenger"
-path = "../../pous/device/lean"
+path = "../../../protocols/pous/device/lean"
 
 # Remote, the other composite `product` names, whose tie of PoUW's windows to the run's record onsite reads
 # (`Core.Remote.windows`).

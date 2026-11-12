@@ -65,7 +65,7 @@ Open premises (`open`):
   and vector script (`lean/scripts`) import it too. `../../spot`, `../../flock` and `../../recursion` import none.
 - **Command**: `network-certifier-calibrate` (`calibration:main`), a console script of the root `pyproject.toml`.
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
-  packages at `../device/lean`, `../../onsite/verifier` and `security/Properties` require by path. Its executables:
+  packages at `../device/lean`, `../../../configurations/onsite/verifier` and `security/Properties` require by path. Its executables:
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
     core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
     tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which

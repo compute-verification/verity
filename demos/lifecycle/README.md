@@ -231,6 +231,6 @@ In a noun-based layout, each part of the demo goes where its noun is:
 - `verity/commitments`: `commit`, `opens`, the row and frame commitments (today split between `one_stage.registered`,
   `verity.commitments` and the certifier's own).
 - `verity/flock`: `prove` and `verify`, replacing the stand-in, plain or zero-knowledge behind the ZK server.
-- `verity/protocols/onsite` and `verity/protocols/remote`: the parties and manifests, each composite's per-declaration
+- `verity/configurations/onsite` and `verity/configurations/remote`: the parties and manifests, each composite's per-declaration
   subprotocol checks and `account`, over the composition's rule.
 - The model, its load and `operate` stay with the integration that serves them (`adapters/`).
