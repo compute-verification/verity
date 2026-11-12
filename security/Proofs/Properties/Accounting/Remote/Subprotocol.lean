@@ -8,7 +8,8 @@ public import Properties.Accounting.Remote.SubprotocolDeployed
 `check` matches on `replay`, which binds `sessionOf` and then `Shared.run g` (`replay_ok`), and accepts only at a state
 that ended accepted with a record, publishing `certify` of it at the session's parameters and g (`acceptIsVerified`).
 `plays_verified` reads `Plays` as `Verified`: the session `sessionOf` decodes is the one it decodes, so it is the
-record's at the node, at the node's windows a draw. `publishedEps` reads `certify`'s `eps` at the node's parameters
+record's at the node, at the node's windows a draw; `plays_iff_publishes` reads it as `Publishes` at some public
+outputs. `publishedEps` reads `certify`'s `eps` at the node's parameters
 and g: `ratio` of a nonnegative rational is that rational (`ratio_val`), and `openingsCoins` is `Node.samples`.
 -/
 
@@ -68,6 +69,12 @@ theorem plays_verified {node : Node} {rec : Record} {a b e : ByteArray} (h : Pla
   simp only [Except.ok.injEq, Prod.mk.injEq] at hs'
   obtain ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩ := hs'
   exact ⟨rs, s, hrun, hout⟩
+
+/-- `Plays` is `Publishes` at some public outputs. -/
+theorem plays_iff_publishes {node : Node} {rec : Record} {a b e : ByteArray} :
+    Plays node rec a b e ↔ ∃ pub, Publishes node rec a b e pub :=
+  ⟨fun ⟨p, ev, ha, hb, he, hs, pub, prof, hc⟩ => ⟨pub, p, ev, ha, hb, he, hs, prof, hc⟩,
+    fun ⟨pub, p, ev, ha, hb, he, hs, prof, hc⟩ => ⟨p, ev, ha, hb, he, hs, pub, prof, hc⟩⟩
 
 /-- The ratio the component publishes of a nonnegative rational is that rational. -/
 theorem ratio_val {q : ℚ} (hq : 0 ≤ q) :
