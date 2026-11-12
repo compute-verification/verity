@@ -1268,8 +1268,10 @@ theorem tabOfLevel0_alike (st : _root_.Flock.Setup) {wideLeaf : Bool} {m : ℕ} 
     rw [hll]
     exact commitRows_capAlike _ _ _ _ _ hd
   unfold _root_.Flock.Firewall.Finish.tabOfLevel0
-  rw [hm, hm', ← htp]
+  rw [hm, hm', _root_.Flock.Firewall.Level0.ofDraws_wideLeaf h, _root_.Flock.Firewall.Level0.ofDraws_wideLeaf h',
+    ← htp]
   dsimp only
+  refine relV_ite _ (fun _ => True.intro) fun _ => ?_
   refine relV_ite _ (fun _ => True.intro) fun _ => ?_
   refine relV_ite _ (fun _ => True.intro) fun _ => ?_
   refine relV_bind (relV_refl _) fun p p' hp => ?_
