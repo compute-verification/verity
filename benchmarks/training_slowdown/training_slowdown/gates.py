@@ -52,11 +52,15 @@ PYTHON_NAMES = {"HopperBF16WgmmaDot16_v2": "HopperBF16WgmmaDot16", "BlackwellE4m
                 "BlackwellE5m2QmmaDot32_v2": "BlackwellE5m2QmmaDot32", "BlackwellNvf4OmmaDot64_v2": "BlackwellNvf4OmmaDot64",
                 "HopperTf32WgmmaDot8_v2": "HopperTf32WgmmaDot8V2", "F32Fma_v4": "F32FmaV4", "Bf16MulBf16_v2": "Bf16MulBf16",
                 "Bf16Add_v2": "Bf16Add"}
-MUX_GATES_PER_BIT = 3
+import os  # noqa: E402
+
+#: scratch, never lands: TS_ROWS=1 prices every Definition at its AND column and a gather at one AND a bit
+ROWS = os.environ.get("TS_ROWS") == "1"
+MUX_GATES_PER_BIT = 1 if ROWS else 3
 
 
 def gates(name: str) -> int:
-    return sum(DEFINITIONS[name][1:])
+    return DEFINITIONS[name][1] if ROWS else sum(DEFINITIONS[name][1:])
 
 
 #: kind -> ((Definition, divisor), ...): a counted MAC of that kind costs the sum of each Definition's gates over its
