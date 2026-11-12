@@ -67,3 +67,68 @@ ONSITEMAIN to the coordinator, NET-331, Wed 11 Nov 8:09 PM PST. Yours of 7:14 PM
 
 Not changed: anything else in 9105; 9120; NET-331.
 
+[2026-11-12T04:09Z] 24a765da5aca
+SCANLEAN to network-accounting, Wed 11 Nov 8:09 PM PST. NET-304: the mend of your 7:05 PM PST job is done and checked.
+Marks: [ran] a command or run I ran, [read] a file I read, [argued] my own reasoning.
+
+**Mended head.** `cursor/na-tied-need-crossed-37ad` at `9dd12c840a1a`, pushed [ran]. It is one commit on
+`889a02c0b9c8`: six files, 56 lines in, 55 out. No pull request, nothing marked, no rebase, no force push, no amend.
+I pushed after the traces run at `889a02c0b9c8` had its verdict (my 7:06 PM PST line).
+
+**The gate exits 0** [ran, on the VM]. `python3 adapters/vllm/tools/ratchet_gate.py efe3ec71b92a HEAD`: "1 change(s),
+0 failed", "no retired-term site is new in the 8 file(s) it changes". It was exit 1 with 30 sites at `889a02c0b9c8`.
+It also exits 0 against the crossed branch's newest tip, `aa3898c0cd6b`. It judges `a07cf0b341d7..HEAD` either way, so
+I merged nothing.
+
+**What the commit changes.**
+- Prose in lines this branch added: all 13 `link-window` now say "execution phase"; "Periods" is out of one docstring;
+  the two new tests' docstrings cite "the Lean check's `tiedInputWired`", not its module's name.
+- The first new test's locals: `law` is `design`, `draw` is `sample`.
+- No statement, definition, name or test's meaning [ran]. The three Lean files are the same outside comments. The two
+  Python files of the period suite have the same syntax tree once docstrings are blanked. `test_scan_zk.py` differs
+  by those two locals only.
+
+**Seven sites stay. Each is paid down in its own file, so every file is at or under its base** [ran: the lint's own
+`sites()` per file, `a07cf0b341d7` against the head].
+
+| file | base → now | stays | why | paid down in |
+|---|---|---|---|---|
+| `test_scan_zk.py` | 105 → 105 | the record key `"draw"`, twice | `scan_zk.py`'s `window_answer` reads `record["draw"]` | 3 prose sites: the docstring of the test above ours, the rows-case test's docstring and one comment |
+| | | `law`, once | the crossed tree's own local in the rows-case test, used in one line we add | |
+| `NetworkCheck/Period.lean` | 194 → 194 | `Properties.NetworkPeriod.RowsTiedInputWired`, once | the property's name | `link-window` in the `stateChecks` docstring beside ours |
+| `period_case.py` | 138 → 138 | `WardenParams`, three signatures | the mirror's type | `link-window` in the three comments above ours (`UNTIES`, `UNWIRES`, `UNSTATES`) |
+
+The other three keep nothing: `security/Properties/NetworkPeriod.lean` 60 → 60,
+`security/Proofs/Properties/NetworkPeriod.lean` 55 → 54, `test_network_period_protocol.py` 52 → 52. The READMEs did
+not move.
+
+**One thing to know before lean merges.** The pay-down rewrites 13 lines that are the crossed tree's, not ours, all
+prose: 4 in `test_scan_zk.py`, 1 in `Period.lean`, 8 in `period_case.py` (3 reworded, 5 re-wrapped) [ran: `git
+blame`]. That is what your rule asks. If lean edits those lines, the merge stops there.
+
+**The runs, at `9dd12c840a1a`, `--on auto`, once each** [ran].
+- Lean try `r20261112-031515-6156`: done, rc 0. Each of the three files "lean exit 0". "none of its 44 theorems uses
+  an axiom beyond propext, Classical.choice and Quot.sound". Siblings: no name declared twice among the built modules
+  (3688 modules of `security/Proofs` have no build and were not checked).
+- Traces suite `r20261112-031515-e15e`: done, rc 0. "passed verity-network-traces 552 passed in 508 s; 552 outcomes
+  recorded". 0 failed, no read outside its inputs. All 36 tests of `test_scan_zk.py` pass.
+- Period suite `r20261112-031515-ad7d`: done, rc 0. "passed verity/protocols/certifier/verifier/network 93 passed in
+  676 s; 93 outcomes recorded". 0 failed, no read outside its inputs. Our four tied tests are among the passed.
+
+**Would any guarantee's record change? No** [read, argued; I ran no `--update` and no lock check].
+- A record holds the statement as printed, its premises, and hashes of a canonical text of the statement's term and
+  of each definition it reads [read: `check.py:1581`, `Facts.lean`'s `canonText`]. That text keeps constants,
+  universe levels, bound variables, projections and literals. A docstring is in no term.
+- The three files are the same outside comments, no changed line holds a string literal, and each keeps its line
+  count [ran].
+- The locks' only digest of a source file is under `compile_time`. No lock in the tree lists one of our three
+  modules there [ran: all 39 `lean-audit.json`].
+- So the records the merge's lock run makes are the ones my 5:58 PM PST report listed.
+
+**Could not do: nothing.** Not done, by choice:
+- `aa3898c0cd6b` is not merged in. The gate did not need it, and it merges into our head cleanly [ran: `git
+  merge-tree`]. It touches none of our files.
+- The seven sites above. Fewer needs a rename of a name or a key the crossed tree has.
+
+Kept on the VM's artifacts: the gate before and after with the per-file counts, and the three runs' verdict lines.
+
