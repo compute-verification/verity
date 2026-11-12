@@ -106432,3 +106432,56 @@ Clock: `date -u` read 22:46Z. Branch `cursor/proofs-runcoins-2d88` at `bec48593e
 - `Steps`, `Coins`, `Proved` and the new `Statement` text compile only if their runs pass.
 - `checkBlobsAt` is not on my base, so `RunAcceptsPlay` (the outer statement) is not written.
 - Part 4's pointwise lemma: the NEEDS from my 22:33Z entry stands.
+
+## FIRSTACCEPT, Thu 22:46Z: the one-member slice change is pushed (`cursor/proofs-firstaccept-5a1c` at `55978f017b`), unmarked; run `7cc7` on cpu-8 builds it and runs its proofs, difftest and the accept test
+
+Read: the mailbox, nothing new after 22:21Z.
+
+**Pushed** [run, `git push`]: branch `cursor/proofs-firstaccept-5a1c`, head `55978f017b`, on `d7ed22a0e3`. No pull request opened; it stays unmarked. One commit, holding:
+- The Lean:
+  - `Record.matchesPublicBy`, with `matchesPublic` defined from it.
+  - `OneStageZk.commonMember`, `NOT_ONE_MEMBER`, `publicPorts`, and `publicHeld` over them.
+  - The piece `public_ports`, in `Pieces.lean`.
+- The proofs, each with its statement unchanged:
+  - `indicesHeld_of_publicHeld` (`OneStageZk.lean`).
+  - `population_of_matchesPublic` and the `publicHeld` step at `:455` (`Credited.lean`, ours).
+  - `matchesPublic_population` and `publicHeld_population` (`Held.lean`, soundness's): one more bind, and over `matchesPublicBy`.
+- The Python twin: `registration.public_ports` and `matches_public(…, reg=)`.
+- The difftest: a `PUBLIC_PORTS` port in `PIECE_RUNS` (300 examples), drawn from bare roots, one member's, and mixes with row-table ports.
+- `test_audit_one_member.py` on this branch expects the accept outright, with no xfail.
+
+**A correction to 22:34Z, which changes what the change accepts** [read, my own code]. The 22:34Z design took the longest name common to every port. That would have read two chunks of one template, `T{K=1}/c0/x` beside `T{K=1}/c1/x`, as one member `T{K=1}`. What's pushed instead requires each port's last split to be the same name (`commonMember`), so those two stay refused.
+
+**The narrowest form, and the tests that hold it** [read; not yet run]. Accepted are only:
+- a record whose ports are all bare, which is today's behaviour;
+- a record whose ports are all `<one member>/<port>`.
+
+Everything else is refused with `NOT_ONE_MEMBER`, held by the `#guard`s after `heldRecord`'s in `OneStageZk.lean`:
+- two chunks of one template;
+- two templates;
+- a bare port beside a member's;
+- a member's port beside a row table.
+
+The one-member record against a bare public file is accepted (a `#guard`). The same record with two ports swapped, or the public file naming ports with the member prefix, is refused at "roots, domains". Python agrees per the difftest port.
+
+**Runs**
+- `r20261112-224340-7cc7` (cpu-8, `55978f017b`): waiting for a slot, 2 ahead at 22:44Z. It runs, in order:
+  1. `lake build` of the spot package (the `#guard`s);
+  2. `lake build` of `Proofs.Properties.Spot.Credited` and `…Verity.Sampled.Held`;
+  3. `verity lean try` on both (the axiom probe);
+  4. the difftest (`-k "public_ports or matches_public or v2"`);
+  5. `test_audit_one_member.py` and `test_composite.py`, which is A2 as the coordinator asked;
+  6. last, `lake build` of the whole `security/Proofs` (every importer of `OneStageZk`).
+- `r20261112-222107-6544` (cpu-12, `d7ed22a0e3`): still waiting at 22:44Z. It is the unpatched branch's test run; expected xfail at `PUBLIC_PORTS`. If it hasn't started by 07:00Z, I cancel it rather than start on cpu-12; 7cc7 covers the same tests.
+
+**Lock records** [derived]: no guarantee's statement moved. The definitions `publicHeld` and `matchesPublic` changed bodies, so any record whose `unfolded_hash` reaches them may move. The candidate's records run regenerates those; 7cc7 doesn't run `--update`.
+
+**Expected hour** [guess]: 7cc7's spot build and accept test by about 01:00Z if the slot frees soon; the full `security/Proofs` build after that.
+
+**Not established**
+- That anything on `5a1c` compiles.
+- That the difftest agrees.
+- That the accept holds under the real change, rather than 871c's scratch patch.
+- That the records stay.
+
+**NEEDS**: the A25 question to infra (22:34Z entry), unchanged. **To post**: none.
