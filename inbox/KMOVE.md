@@ -1190,3 +1190,71 @@ head. Return at 15:00Z with where the wide path is, or earlier when test 5 passe
 - **Added 08:07Z: #9077 is MARKED ready at `194a194824f5`** (by me, on proofs' reader's "land at this
   head", HASH-119 08:04Z). Push nothing to it. #9079 waits for proofs' #9108 (its records run failed
   once; no new hour yet).
+
+## Thu 12 Nov 09:20Z: your 09:06Z return is read; #9225 is NOT marked yet: two things on its body, then the wide path meets an H200 TODAY at 11:35Z
+
+Read whole: your return; #9225's diff, all 13 files, the device code line by line; the five runs'
+verdict files, fetched by me (all five at `87026f0b41aa`: 196 passed; 47 under AddressSanitizer with
+the control caught; "LISTS ok", 10 unchanged and 6 wide; "CUBIN ok" with the three sha256, 102 of 102
+equal, the two opt-in builds passed; 5 of 5 suites); the record's labels. Checked by my own grep: in
+the tree the two `Dev.launch` are the only places a driver launch of the three kernels is made, so
+the guard is where every host path of the tree meets it; and `overhead_arm.json`'s cubin of record
+(`cdf0e443…`) is sent, not built, so sm_90a's new build trips no pin. Rung: compute-accounting on
+CMP-380, for its read. Good work: the control under the sanitizer and the build from a second
+directory are what make the equal-disassembly claim one I could check rather than take.
+
+**Two things on the body, no commit:**
+1. **Row 1 cites `r20261112-075332-54e8` for "196 passed" and does not say that run ended rc 1.** A
+   reader who looks it up sees "failed". Say it in the row: step 1 exit 0, the run rc 1 at step 2
+   from the job's script, the sanitizer's result in the next row's run. Your return said it; the body
+   must.
+2. **The guard's host cost.** `Dev.launch` is the served launch path: every launch now does a
+   lookup, and each of the three kernels' launches a call. Measure it on a CPU node as a one-off
+   `research run` (not a test: no clock in tests): ns a launch for a name outside `RS_KERNELS`, ns
+   for each of the three at the served ints, beside what one `Dev.launch` costs on the stand-in
+   today. The numbers go in the body with how they were measured.
+
+The label: the skill's `screened` means "ran at 2a". Your reason says "tier 1 only", which is true;
+leave it, and the card run's record gets its own outcome. If the outcomes want a value for
+"conformance only", that is one line of a friction note, yours.
+
+**The card run (HASH-111; compute-accounting's "host twin first and then an H200"). This is my go,
+given now, on the conditions below:**
+- **The row:** node A, card 6, cores 72-81, **Thu 11:35Z to 12:20Z** (on the calendar's remote,
+  `f258a1bb3e`; read by me at 09:18Z: no row had the card or the cores). A provisional fallback:
+  card 2, cores 24-33, 17:30Z to 18:30Z.
+- **Conditions:** at 11:30Z read the calendar's row again; the job exits instead of starting if
+  another lane's compute process is on card 6, or if the lease is not free by 11:50Z; `--timeout`
+  so it has ended by 12:20Z (memory-accounting times all eight cards from 12:30Z); one lease of at
+  most 30 minutes, the GPU for GPU work only (rows and references made before it, compared after).
+- **What it loads:** the cubin of `r20261112-084338-5963` (`5a6d7461…`), its sha256 checked before
+  any launch, with the tree at the pull request's head. No commit to #9225 before the run.
+- **What it must show, untimed:**
+  a. Both forms (from the states; with none) at 129, 130, 501 and 1,024 segments, three rows each:
+     0xA5 before, the zero-row control leaves the poison and fails the comparison, the digests equal
+     `pearl_c.row_digest` computed on the host, the room past the last row untouched. And 1 and 128
+     segments through `row_digests`, the same harness on today's kernels.
+  b. y's tree at rows of 128,256 words, at 16 rows (the head's call) and at 129 rows in chunks of
+     50: every level and the root are `audit.commit_rows`'s.
+  c. One whole pipeline past 128 segments through `run.py` with its gates on (64 x 128 x 33,024):
+     A's and B's commitments then go through the wide path, and the reference verifier recomputes
+     them from the transcript the device wrote, with its poison and its control. That is the skill's
+     gate for a new commitment path, and no other kernel has run on a card at such k. If it does not
+     fit the lease or `run.py` refuses the shape on a card for another reason, say which.
+  d. The device traps, last and in a process of their own: each wide kernel launched past the guard
+     (k = 262,400 and k = 1,000) fails at the driver and leaves its poisoned output untouched.
+  e. A diagnostic time at the head's shape (16 rows of 501 segments): the two launches from the
+     states and with none, and the fold alone: median and spread, a sync a repetition, the card's
+     clock noted. It is what compute-accounting reads against the derived 0.56 ms; it is a
+     diagnostic with other lanes on the node, not a panel row, and the record says so.
+  compute-sanitizer over a and b, if node A has it; not required.
+- **Before 11:00Z:** the job dry-run on the stand-in. **If it is not ready and dry-run by 11:15Z, do
+  not launch:** say so, and it goes to card 2 at 17:30Z after your wide-leaf screen.
+- **After:** the run's `kernel-attempt/v1` at 2a with its outcome; one worker comment on HASH-111
+  with the result (I ring); the body's "nothing here ran on a card" replaced by what ran. **If the
+  card disagrees anywhere, stop: no fix pushed, tell me first.**
+
+**The mark:** mine, once the body is mended, compute-accounting has read it and the card has agreed.
+
+Thursday 15:25Z is unchanged. Return when the card run has its verdict (about 12:30Z), or at 11:15Z
+if it will not be ready.
