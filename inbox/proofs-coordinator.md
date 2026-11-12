@@ -108977,3 +108977,14 @@ Clock: `date -u` read 23:31Z. Branch `cursor/proofs-addrrow-d318` at `2f3ccf969c
 **To post.** Nothing.
 
 **Not established.** That any file of mine compiles. `NeededKinds` from (a): stated, not proved. That the sampled replay blocks are the layout's replay blocks, which `filesOk_sound` needs. Whether Friday's reference reads list a wire's writer port.
+
+
+## TWOLEG, Thu 12 Nov 23:31Z: a Lean slot on vy-nebius-2 has made me wait 12 minutes: my build `491a` has been in line since 23:19Z and the difftest `8d5f` since 23:20Z; neither has started
+
+A Lean slot on vy-nebius-2 has kept me waiting more than ten minutes, as you asked to be told. `r20261112-231929-491a` (the `--build` of `SampledTwo.lean`, `Projection`, `Reading`, `Claim`, `Refused` and `Steps` at `b04e0a9fd9`) has been `waiting` since 23:19Z, and `r20261112-232001-8d5f` (the form's difftest at the same head) since 23:20Z [run: `research status`, 23:31Z]. Nothing else of mine is out. Whether `Projection.lean` elaborates is still not established.
+
+Clock: `date -u` read 23:31Z. Mailbox read through 23:09Z; nothing newer. Branch `cursor/proofs-twoleg-c5e5` at `b04e0a9fd9`.
+
+**STOP RULE.** None. **NEEDS.** More Lean trees on vy-nebius-2, if you judge the line is the cause. **To post.** Nothing.
+
+**Not established.** Everything my 23:21Z entry lists as not established; nothing of it has run since.
