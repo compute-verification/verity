@@ -1267,7 +1267,8 @@ def unkeep(q: str, pkg: str | None, out: Path) -> None:
 def settled(p: str, pkg: str, got: int, mine_out: Path, base: Path, out: Path, new: dict[str, bytes],
             own: bytes | None = None, log=print, allow: frozenset[tuple[str, str]] = frozenset()) -> str:
     """``p``'s outcome once check.py on it exited ``got``, its reports under ``mine_out`` and its packages under ``base``,
-    ``own`` the record its `--update` wrote where that differs from the committed one (`checked`; in ``new``): `PASS`;
+    ``own`` the record its `--update` wrote where that says something else than the committed one (`checked`; in ``new``):
+    `PASS`;
     `REGENERATED` when ``own`` or every failure in its reports is a record difference (`differences`), each such record then
     kept under `record/` (`keep`) and put in ``new``; `ALLOWED` when every failure left in its reports is a record
     difference of another package or one ``allow`` names, its own record then kept under `ALLOWED_RECORD` and never under
