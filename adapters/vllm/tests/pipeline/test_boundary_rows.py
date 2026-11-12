@@ -403,7 +403,7 @@ def _step(sched: Scheduler, served: dict[str, tuple[list[int], str | None]]) -> 
 def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(tmp_path):
     """Three requests: at the first schedule a window's length after it opened, window 0 closes with the two finished,
     by class, and carries the third; the third's finish, the only one running, closes window 1; each class's files
-    reopen to the roots its sink line holds; an abort finishes a request; and prefix caching is refused."""
+    reopen to the roots its sink line holds; and an abort finishes a request."""
     now, lines = [0.0], []
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-rows")
     bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: now[0], serve="s").install(sched, hooks)
@@ -436,8 +436,30 @@ def test_the_hook_commits_each_windows_finished_requests_by_class_as_it_closes(t
     finally:
         bw.stop()
         hooks.uninstall()
-    with pytest.raises(ValueError, match="prefix caching off"):
-        BW.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, clock=lambda: 0.0).install(Scheduler(caching=True), Hooks())
+
+
+def test_a_scheduler_that_caches_prefixes_commits_the_same_spans(tmp_path):
+    """A request served from the prefix cache commits what one served without it commits: its whole prompt, the cached
+    part too, and the ids it was served. The boundary holds nothing of the request whose pages it read."""
+    spans = {}
+    for caching in (False, True):
+        sched, hooks = Scheduler(caching=caching), Hooks(tag=f"test-boundary-rows-caching-{caching}")
+        bw = BW.BoundaryWindows(tmp_path / str(caching), PAIR, 0, 1, 10.0, clock=lambda: 0.0, serve="s")
+        try:
+            bw.install(sched, hooks)
+            first, hit = Request("a", [1, 2, 3, 4, 5]), Request("b", [1, 2, 3, 4, 9])
+            hit.num_cached_tokens = 4 if caching else 0       # vLLM's count of the prompt ids its prefill skipped
+            sched.add_request(first)
+            sched.add_request(hit)
+            _step(sched, {"a": ([7], "length"), "b": ([8, 9], "stop")})
+            bw.stop()
+            spans[caching] = BR.reopen(tmp_path / str(caching) / "w0" / "p8-o2", PAIR).spans
+        finally:
+            bw.stop()
+            hooks.uninstall()
+    assert spans[True] == spans[False]
+    assert [(x.engine_id, x.prompt, x.served, x.finish) for x in spans[True]] == [
+        ("a", (1, 2, 3, 4, 5), (7,), "length"), ("b", (1, 2, 3, 4, 9), (8, 9), "stop")]
 
 
 def test_the_hook_commits_the_return_of_a_serve_whose_check_returns_verdicts(tmp_path):

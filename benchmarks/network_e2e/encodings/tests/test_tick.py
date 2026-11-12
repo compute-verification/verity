@@ -419,6 +419,16 @@ def test_the_table_reads_a_tick_trace_on_its_own_buckets(tmp_path):
     assert [q.end for q in rec.requests] == [b - a[0] for b in a]
     with pytest.raises(V.AdviceCodeError, match="250000 µs"):
         V.record_of(tr, (EOS,))
+    # and its row says what was served beside what was charged: the window in seconds on that tick, the rows the cache
+    # served, which no charge shows, and each window's length terms, which every book's charge holds
+    row = V.measure("tick", str(d), (EOS,), T=8)
+    hits = [x.cache_hit for st in V.advice_of(tr, rec).steps for x in st.rows if x.cache_hit]
+    assert (row["window_s"], row["prefix_caching"]) == (2.0, True)
+    assert (row["cache_hit_rows"], row["cache_hit_tokens"]) == (len(hits), sum(hits)) and hits
+    by = row["length_by_window"]
+    assert list(by) == list(range(row["windows"])) == sorted(row["uniform"]["by_window"])
+    assert sum(by.values()) == sum(q.max_tokens.bit_length() + 1 for q in rec.requests)
+    assert all(row[book]["by_window"][w] >= n for book in ("held_out", "uniform") for w, n in by.items())
 
 
 def test_what_the_tick_refuses():
