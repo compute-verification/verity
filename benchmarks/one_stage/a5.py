@@ -815,7 +815,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             mm["st"]["registered_file"].write_text(json.dumps(reads[mm["m"].key], sort_keys=True))
 
     # one sample over the whole population; each member serves its share under --zk
-    trees = drawn is None and window_trees(a, members)
+    trees = False
     if drawn is not None:
         union_draw, drawn_law, receipt = (dict(x) for x in drawn)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
@@ -824,6 +824,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                {"law": "subset", "k": law["k"]}, n_all, R.digest(rec), out / "draw.log")
         union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     else:
+        trees = window_trees(a, members)
         stream, draw, counts_of, coins, segment, refused, need = coins_draw(a, rank, rec, mine, members, want, leaf_layer,
                                                                             hist, hold=trees)
         read = bytes(coins.read)
