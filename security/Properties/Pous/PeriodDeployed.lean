@@ -67,7 +67,10 @@ def RING_Q : ℕ := 2 ^ 20
 /-- The deployed ring operations an answer (`pous-ring-speed`). -/
 def RING_L : ℕ := 2 ^ 64
 
-/-- **PoUS's per-period guarantee at the deployed ring budget.** `PeriodHeld` with `P2RingAuditSecure` and
+/-- **PoUS's per-period guarantee at the deployed point and ring budget**: one audit of 105 rounds a period, on
+`2^19` blocks of 16,448 bits, with probability at most `δ + ε_max` (`Params.δ`, `Params.εMax`; `1% + 2^-128`) for that
+one audit, not pooled over a monitoring period's audits; a break is excluded from the event, not bounded. Another
+point or block count is `PeriodHeldAt`'s. It is `PeriodHeld` with `P2RingAuditSecure` and
 `DeviceModel` at `(RING_D, RING_Q, RING_L) = (16,446, 2^20, 2^64)`, the budget `pous-ring-speed` derives from
 `Δ + RTT` and the round floor (this module's header): given the coin commitments' hiding, for every joint run whose
 capacity coins are the ring game's, every period's audit `P`, every prover strategy `τ` of its device under the device

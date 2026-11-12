@@ -3,10 +3,8 @@
 server's engine.
 
 ~~~text
-preflight  refused before the model loads (`refusal`): an address that isn't HOST:PORT, a plan other than serve, a
-           store read in place (--remote-session-lib) without kv.cu (--remote-kv-lib), prefix caching (a hit brings a
-           page back with its KV), and a store read in place under PoUW H1 (--protocols), whose windows hash the weights
-           where the engine holds them, which that store holds encoded while its session lasts
+preflight  refused before the model loads (`refusal`): an address that isn't HOST:PORT, a plan other than serve, and
+           prefix caching (a hit brings a page back with its KV)
 build      before the engine is built, the session's engine arguments (synchronous scheduling, no prefix caching; the KV
            pool the engine's own, outside the store) and the store binder on vLLM (`CommitSession.engine_args`,
            `install`); after it, `CommitSession.check`, which registers --remote-filler-gib of zeros beside the weights.
@@ -14,8 +12,7 @@ build      before the engine is built, the session's engine arguments (synchrono
            false, as a declared Commit's row does under its session (`CommitSession.target`)
 begin      once the committer has read every weight a seal reads, its weights tree at its build (`serve_seal.committer`)
            and the registered tensors' bytes (`serve_commit.CommitWindows.read_extras`), and before the first request:
-           the session registers the store, which a store read in place holds encoded from then until the session
-           closes (`in_place`), and waits for the server's first engine step
+           the session registers the store and waits for the server's first engine step
 serving    the engine loop's steps through `Paced`: while the session lasts each is a pass's (`Lockstep.step`), so the
            engine steps as the session asks and the memory map is of the server's steps from its first; once the
            session has ended its record is written (`end`) and the later steps are unaudited. A server that idles
@@ -49,9 +46,6 @@ class RemoteOptions:
     remote_kv_lib: str | None = option("--remote-kv-lib", default=None,
                                        help="kv.cu built at the codec's field and mask: the store's encode on the GPU "
                                             "(default: the CPU reference)")
-    remote_session_lib: str | None = option("--remote-session-lib", default=None,
-                                            help="session.cu's build: the session reads the store where the engine holds it, "
-                                                 "encoded in place by --remote-kv-lib (in_place)")
     remote_step_ms: float = option("--remote-step-ms", type=float, default=0.0,
                                    help="the engine step a paced session's pass waits on, in ms, added to the calibration's "
                                         "pass times")
@@ -68,9 +62,6 @@ def refusal(opts: Any) -> str | None:
         return f"--remote-verifier: {e}"
     if opts.prefix_caching:
         return "--remote-verifier refuses --prefix-caching: a prefix hit brings a page back with its KV"
-    if r.remote_session_lib and opts.protocols:
-        return ("--remote-session-lib holds the weights encoded where the engine holds them while its session lasts, and "
-                "--protocols' H1 windows hash them there: serve both with the store's host mirror (no --remote-session-lib)")
     return None
 
 
@@ -141,7 +132,7 @@ class ServeSession:
     def describe(self) -> dict[str, Any]:
         cs = self.cs
         return {"verifier": cs.verifier, "plan": cs.plan, "async_scheduling": False, "weight_blocks": cs.weight_blocks,
-                "filler_gib": cs.filler_gib, "step_ms": cs.step_ms, "in_place": cs.backend_of is not None,
+                "filler_gib": cs.filler_gib, "step_ms": cs.step_ms,
                 "kv_lib": cs.kv_lib, "store": cs.binder.stats() if cs.binder is not None else None}
 
 

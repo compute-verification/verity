@@ -217,7 +217,6 @@ class _Pool:
     filler: str
     page_of: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))   # region block -> page
     slot_of: np.ndarray = field(default_factory=lambda: np.zeros(0, np.int64))   # region block -> block of its page
-    released: np.ndarray = field(default_factory=lambda: np.zeros((0, 0), bool))   # freed, its bytes still the block's
 
     @property
     def per_page(self) -> int:
@@ -317,7 +316,6 @@ class NodeMemory:
         self.filler_plan, self.chaining = filler_plan, chaining
         self.counters = Counters()
         self.memory_map: mm.MemoryMap | None = None
-        self.on_write: Callable[[int, np.ndarray], None] | None = None
 
     # --- registration -----------------------------------------------------------------------------------------------
 
@@ -404,7 +402,7 @@ class NodeMemory:
         pool = _Pool(name, names, layout, ids, lo, hi, np.zeros(layout.pages, bool), np.zeros(layout.pages, np.int64),
                      np.zeros(shape, bool), np.zeros(shape, np.uint32), np.full(shape, -1, np.int64), filler_name)
         nb = self._by_name[names[0]].info.blocks if names else 0
-        pool.page_of, pool.slot_of, pool.released = np.full(nb, -1, np.int64), np.full(nb, -1, np.int64), np.zeros(shape, bool)
+        pool.page_of, pool.slot_of = np.full(nb, -1, np.int64), np.full(nb, -1, np.int64)
         pool.page_of[ids.ravel()] = np.repeat(np.arange(layout.pages), ids.shape[1])
         pool.slot_of[ids.ravel()] = np.tile(np.arange(ids.shape[1]), layout.pages)
         self._pool = pool
@@ -445,7 +443,7 @@ class NodeMemory:
         ``on_line`` (`memory_map.record`).  The registration took every block as its bytes are, so none is dirty now."""
         m = mm.record(self, path, registration, lifetime, on_line, on_append)
         if self._pool is not None:
-            self._pool.dirty[:] = self._pool.released[:] = False
+            self._pool.dirty[:] = False
         return m
 
     def audit_store(self) -> requirement.Store:
@@ -483,13 +481,13 @@ class NodeMemory:
         if self.memory_map is not None:
             keys = (ix[:, None] * p.per_page + np.arange(p.per_page))[~p.dirty[ix]]
             gone = keys[self.memory_map.free(keys)]
-            p.dirty[gone // p.per_page, gone % p.per_page] = p.released[gone // p.per_page, gone % p.per_page] = True
+            p.dirty[gone // p.per_page, gone % p.per_page] = True
         self.counters.add("kv_free", time.perf_counter() - t)
 
     def kv_append(self, appends: Sequence[Append], step: int) -> None:
         """The step's KV writes: each block a write reaches turns dirty, and each it completes is registered again
-        (epoch + 1, under ``step``).  Those it reaches while registered or released with their bytes as they were (a
-        plan may still hold them) go first to ``on_write(step, pool blocks)``, if set, before the forward writes them.  One registration record for the step.  A memory map closes the last step's line, opens this one's (`memory_map`).  A store with no KV pool takes steps with no appends."""
+        (epoch + 1, under ``step``).  One registration record for the step.  A memory map closes the last step's line,
+        opens this one's (`memory_map`).  A store with no KV pool takes steps with no appends."""
         t, p, m = time.perf_counter(), self.pool if appends else self._pool, self.memory_map
         if m is not None:
             m.flush(step)
@@ -505,10 +503,7 @@ class NodeMemory:
             blk = pg[:, None] * p.per_page + np.arange(p.per_page)
             reached = np.unique(blk[touched & ~p.dirty[pg]])
             np.maximum.at(p.fill, pg, end)
-            if self.on_write is not None:
-                self.on_write(step, np.unique(blk[touched & (~p.dirty[pg] | p.released[pg])]))
             p.dirty[pg] |= touched
-            p.released.flat[blk[touched]] = False
             done = p.dirty[pg] & (p.hi[None, :] <= p.fill[pg][:, None])
             rows, cols = np.nonzero(done)
             key = np.unique(pg[rows] * p.per_page + cols)

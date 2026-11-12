@@ -35,7 +35,7 @@ def launched(monkeypatch):
     monkeypatch.setattr(CHECK.subprocess, "run", run)
     monkeypatch.setattr(CHECK, "landable", lambda base: True)
     monkeypatch.setattr(CHECK, "lean_deps_url_file", lambda d: None)
-    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d: None)
+    monkeypatch.setattr(CHECK, "verdict_url_file", lambda d, **k: None)
     monkeypatch.setenv("RESEARCH_LANE", "ci")
     monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     return out

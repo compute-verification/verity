@@ -14,10 +14,10 @@ its node's output unless said otherwise: the embedding; layer 0's input norm (`t
 (`fused_add_rms_norm`, L > 0), the q/k/v linear, the rotary embedding (one node: every row's query, then every row's key, named
 `<node>/query[r]` and `<node>/key[r]`), the attention (named `<node>[t=p0+r]`), the o linear, the post-attention norm, the
 gate/up linear, `silu_and_mul` and the down linear; the final norm; then the sampled row's logits (`triton_launch`, row 0 of
-[1, V]) and its select (`argmax`, or `gumbel_topp_token_select` with its constants `top_p`, `pos`, `temperature` and, at a
-constant split count, `splits`, named `<node>/<member>`, before its row 0), under the root module. A stochastic request then
-has its seed rule's Call (`frontend.seed_rule`), `seed_rule`, and a request under a length rule (`frontend.stop_rule`) ends with
-its Call, `stop_rule`; no fx node lowers either: no occurrence. A linear is one
+[1, V]) and its select (`argmax`, or `gumbel_topp_token_select` with its constants `top_p`, `pos`, `temperature` and `splits`,
+named `<node>/<member>`, before its row 0), under the root module. A stochastic request then has its seed rule's Call
+(`frontend.seed_rule`), `seed_rule`, and a request under a length rule (`frontend.stop_rule`) ends with its Call, `stop_rule`; no fx
+node lowers either: no occurrence. A linear is one
 `triton_launch` GEMM, or under the exact-int8 linears `row_quant` then `scaled_mm`. An fx node is named by its op, counted over
 the request (`embedding`, `embedding_1`, ...). Every node of the emitted body is held to the kind its place names
 (`build._Specs`), so a body these names don't fit is refused, never misnamed; the dead units' Calls are named, then dropped with
@@ -216,11 +216,9 @@ def _sample(w: _Walk, S: Any, C: Any, sampling: dict) -> None:
         select = _family(kind("token_select", V=C.V))
         w.call(lambda f: _family(f) == select, "token select", occ, f"{node}[0]", w.slots([_view((1,), "int64")], 0, False), row=0)
         return
-    derived = sampling["splits"] == "derived"
-    select = _family(kind("token_select_stochastic", V=C.V, CONSTRUCTION=S.tp.effective_sampler_construction()) if derived
-                     else kind("token_select_stochastic_split", V=C.V, S=int(sampling["splits"])))
+    select = _family(kind("token_select_stochastic_split", V=C.V, S=int(sampling["splits"])))
     occ, node = w.site("gumbel_topp_token_select", "", [_view((1,), "int32")])
-    for member, W in (("top_p", 32), ("pos", 64), ("temperature", 32), *(() if derived else (("splits", 32),))):
+    for member, W in (("top_p", 32), ("pos", 64), ("temperature", 32), ("splits", 32)):
         const = _family(kind("const", W=W, BITS=0))
         w.call(lambda f, c=const: _family(f) == c, f"{W}-bit constant", occ, f"{node}/{member}",
                [{"port": 0, "output": None, "leaves": None}], member=member)

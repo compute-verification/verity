@@ -9,7 +9,7 @@ def _boolean_roots() -> list[Any]:
     """Each σ Definition with statics at the smallest statics its word body takes: b1's GEMM at one k16 step and two rows
     (reaching its coordinate and dot), the collectives at two ranks, MNNVL's fused
     norm one-shot over one warp and its two parts (the all-reduce and residual add of two elements, the norm as the fused
-    one's), mHC's post + pre layer at hidden 64 (two splits, one thread a column), the Inductor norms at
+    one's), that norm's scale and its apply unit of 8 elements at each shot, mHC's post + pre layer at hidden 64 (two splits, one thread a column), the Inductor norms at
     one warp a row over one 64-column chunk, FA3's split decode at two splits of a 20-token context (the second partial) on the
     H200's k16 step, the MoE router, expert GEMMs and align at 2 to 4 experts, and the served CUDA fused norm at the smallest
     statics that reach each of its batches (two vectors a thread and one more, a full warp and a partial one), and the training
@@ -32,6 +32,8 @@ def _boolean_roots() -> list[Any]:
         bind(SG.AllReduceRmsNormMnnvl, WORLD=2, N=256, SHOT=1, CLUSTER=1, EPS=1e-5, FMA=False),
         bind(SG.AllReduceResidualMnnvl, WORLD=2, N=2, SHOT=1),
         bind(SG.RmsNormMnnvl, N=256, SHOT=1, CLUSTER=1, EPS=1e-5, FMA=False),
+        bind(SG.RmsNormMnnvlSumSq, N=256, SHOT=1, CLUSTER=1, EPS=1e-5, FMA=False),
+        *[bind(SG.RmsNormMnnvlApply, G=8, SHOT=shot) for shot in (1, 2)],
         bind(SG.MhcFusedPostPre, HC=2, H=64, NS=2, TH=8, TN=4, REPEAT=2, EPS=1e-6, HC_EPS=1e-6),
         *[bind(d, **norm) for d in (SG.InductorRMSNorm, SG.InductorAddRMSNorm, SG.InductorAdd2RMSNorm, SG.InductorAdd2RMSNormFinal)],
         bind(SG.InductorSiluMul, I=1),
