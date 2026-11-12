@@ -1066,6 +1066,21 @@ def test_the_runner_replays_an_earlier_jobs_pass_and_serves_nothing(tmp_path: Pa
     assert "prod_repro: load chat; stock not served, stock again not served, ours prod-record; run r-1" in p.stdout
     assert "tokens: reproduced: 2 requests replayed" in p.stdout
     assert "cost: not measured: no stock arm was served: the job serves prod-record alone\n" in p.stdout
+    # the top-k's counters of the arm's serving are the earlier job's, carried; the replay's are this job's own
+    served = {"processes": 9, "calls": 65536, "rows_long": 20496064}
+    (earlier / "topk_counters.json").write_text(json.dumps({"replay": {"processes": 9, "calls": 1, "rows_long": 1}, "served": served}))
+    p = bash(script, *argv, run_dir=run_dir, PRIVATE=str(tmp_path / "private"), STAND_IN_TOPK="1")
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert ("  the canonical top-k in the replay: 1 process kept counters: at least 7 calls of the indexer's top-k, 5 rows "
+            "of more than its keys rewritten\n"
+            "  the canonical top-k while serving: 9 processes kept counters: at least 65,536 calls of the indexer's top-k, "
+            "20,496,064 rows of more than its keys rewritten\n") in p.stdout
+    assert json.loads((run_dir / "out/topk_counters.json").read_text()) == {
+        "replay": {"processes": 1, "calls": 7, "rows_long": 5}, "served": served}
+    # and where this job's replay kept none, the earlier job's replay's are not shown as its own
+    p = bash(script, *argv, run_dir=run_dir, PRIVATE=str(tmp_path / "private-2"))
+    assert "  the canonical top-k in the replay: NO process kept counters: nothing shows it ran there\n" in p.stdout
+    assert "  the canonical top-k while serving: 9 processes kept counters" in p.stdout
     # a replay that fails is the job's failure, whatever --stock says
     shutil.rmtree(run_dir / "out/replay-compiled")
     p = bash(script, *argv, "--stock", "none", run_dir=run_dir, STAND_IN_RC="1")

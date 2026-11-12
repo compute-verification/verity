@@ -112,6 +112,10 @@ if [ -n "$REPLAY_OF" ]; then
   else
     mkdir -p "$OUT" && cp -r "$REPLAY_OF/$OURS" "$OUT/$OURS" || { echo "prod_repro: could not copy $REPLAY_OF/$OURS into $OUT"; exit 2; }
   fi
+  # the canonical top-k's counters of the arm's serving are the earlier job's; its replay's are not this replay's
+  [ ! -f "$REPLAY_OF/topk_counters.json" ] || "$PY" -c 'import json, sys
+json.dump({"replay": None, "served": json.load(open(sys.argv[1])).get("served")}, open(sys.argv[2], "w"), indent=1)' \
+    "$REPLAY_OF/topk_counters.json" "$OUT/topk_counters.json" || { echo "prod_repro: could not read $REPLAY_OF/topk_counters.json"; exit 2; }
   STOCK=; AGAIN=; alone=0
   ( unset ARMS LOADS; export CLIENT=corpus REPLAY=$REPLAYED REPLAY_FROM=$OUT/$OURS REPLAY_MODES; bash "$tax/run.sh" ); rc=$?
 else

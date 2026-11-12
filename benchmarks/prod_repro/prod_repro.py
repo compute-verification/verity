@@ -218,13 +218,17 @@ def topk_kept(out: Path, private: Path | None, ours: str, replay: str) -> dict:
     """The canonical top-k's counters of the replay's processes and of serving's (`topk_counters`). The processes keep
     them on the node, outside the run's directory, under the job's private one (the benchmark's PRIVATE: an arm's
     under its name, a replay's under its directory's). With ``private`` they are read there and kept in OUT
-    (`TOPK_KEPT`); without, they are the ones an earlier report of the job kept. ``kept`` says whether either holds."""
+    (`TOPK_KEPT`); without, they are the ones an earlier report of the job kept. Serving's are also the kept ones where
+    the private directory holds none for the arm: the arm's processes ended with it, in this job or in the earlier one
+    whose arm this job replays (run.sh --replay-of, which carries that job's). ``kept`` says whether either holds."""
     f = out / TOPK_KEPT
+    before = json.loads(f.read_text()) if f.is_file() else {}
     if private is None:
-        return {"kept": True, **json.loads(f.read_text())} if f.is_file() else {"kept": False, "replay": None, "served": None}
+        return {"kept": True, **before} if before else {"kept": False, "replay": None, "served": None}
     log = S.ARMS[ours].env.get(TOPK_LOG) if ours in S.ARMS else None
     kept = {name: topk_counters(Path(log.replace(S.PRIVATE, str(private / d)))) if log else None
             for name, d in (("replay", replay), ("served", ours))}
+    kept["served"] = kept["served"] or before.get("served")
     f.write_text(json.dumps(kept, indent=1))
     return {"kept": True, **kept}
 
