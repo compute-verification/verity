@@ -34,7 +34,7 @@ whatever its payload.
 
 `upconvert_rows` is the same function over numpy rows, registered as the Definition's numpy kernel; `split_rows` cuts rows of
 bytes into its three inputs, and `reference_word` is one NoPE value in exact rational arithmetic, rounded once to f32 and once
-to bf16.
+to bf16.  `HAND_VECTORS` are single NoPE values worked by hand, `EDGE_SCALES` scale words at the edges.
 """
 from __future__ import annotations
 
@@ -196,6 +196,48 @@ def reference_word(b: int, scale: int) -> int:
     if abs(z) >= Fraction(2) ** 128:
         return 0xFF80 if neg else 0x7F80
     return _bf16_word(z, neg)
+
+
+# ---- vectors ---------------------------------------------------------------------------------------------------------------
+
+_ONE, _NEG_ONE, _INF, _NAN = 0x3F800000, 0xBF800000, 0x7F800000, 0x7FC00000
+
+#: (E4M3 byte, f32 scale word, the bf16 word of their NoPE value, what it shows), each worked by hand
+HAND_VECTORS = [
+    (0x7E, _ONE, 0x43E0, "largest code: 448 = 1.75 * 2^8"),
+    (0xFE, _ONE, 0xC3E0, "largest negative code: -448"),
+    (0x01, _ONE, 0x3B00, "smallest code: 2^-9, an E4M3 subnormal, a bf16 normal"),
+    (0x81, _ONE, 0xBB00, "smallest negative code: -2^-9"),
+    (0x07, _ONE, 0x3C60, "largest E4M3 subnormal: 7/8 * 2^-6"),
+    (0x08, _ONE, 0x3C80, "smallest E4M3 normal: 2^-6"),
+    (0x00, _ONE, 0x0000, "+0"),
+    (0x80, _ONE, 0x8000, "-0 keeps its sign through cvt.f32.f16 (HADD2.F32 -RZ + h)"),
+    (0x00, _NEG_ONE, 0x8000, "+0 * -1 = -0"),
+    (0x80, _NEG_ONE, 0x0000, "-0 * -1 = +0"),
+    (0x7F, _ONE, 0x7FFF, "NaN code"),
+    (0xFF, _ONE, 0x7FFF, "negative NaN code: F2FP writes 0x7FFF whatever the sign and payload"),
+    (0x7F, 0x00000000, 0x7FFF, "NaN code times 0"),
+    (0x3E, 0x3F808008, 0x3FE1, "scale 1 + 2^-8 + 2^-20, not a power of two: 1.75 * s = 1.7568359... exact in f32, RN to 1.7578125"),
+    (0x38, _NEG_ONE, 0xBF80, "negative scale: 1 * -1"),
+    (0x38, 0x3F808000, 0x3F80, "tie to bf16: 1 + 2^-8 is halfway, to even (down)"),
+    (0x38, 0x3F818000, 0x3F82, "tie to bf16: 1 + 2^-7 + 2^-8 is halfway, to even (up)"),
+    (0x3C, 0x3FACAAAA, 0x4002, "double rounding: 1.5 * s = 2.0234375 - 2^-23 is an f32 tie, to 2.0234375, a bf16 tie, to "
+                               "even 2.03125; rounding the exact product once would give 0x4001"),
+    (0x08, 0x00800000, 0x0002, "subnormal product: 2^-6 * 2^-126 = 2^-132, kept (FMUL has no .FTZ)"),
+    (0x01, 0x01000000, 0x0000, "subnormal product on a tie: 2^-9 * 2^-125 = 2^-134, half the least bf16 subnormal, to even 0"),
+    (0x03, 0x01000000, 0x0002, "subnormal product on a tie: 1.5 * 2^-133, to even 2 * 2^-133"),
+    (0x7E, 0x00000200, 0x0004, "subnormal scale 2^-140: 448 * 2^-140 = 3.5 * 2^-133, to even 4 * 2^-133"),
+    (0x7E, 0x00400000, 0x0460, "subnormal scale 2^-127, normal product 1.75 * 2^-119 (DAZ would give 0)"),
+    (0x7E, 0x7B800000, 0x7F80, "f32 overflow: 448 * 2^120 = 1.75 * 2^128 -> +inf"),
+    (0x38, 0x7F7FFFFF, 0x7F80, "finite f32, bf16 overflow: the largest f32 rounds to +inf in bf16"),
+    (0x00, _INF, 0x7FFF, "0 * inf is NaN"),
+    (0x38, _NAN, 0x7FFF, "NaN scale"),
+    (0xB8, _INF, 0xFF80, "-1 * inf = -inf"),
+]
+
+#: f32 scale words at the edges: ±1, the vectors' odd scales, subnormals, the largest finite, ±0, inf, NaN
+EDGE_SCALES = [_ONE, _NEG_ONE, 0x3F808008, 0x3FACAAAA, 0x3B800000, 0x00800000, 0x00000200, 0x00400000, 0x7B800000, 0x7F7FFFFF,
+               0x00000000, 0x80000000, _INF, _NAN, 0x3E2AAAAB, 0x4C000000]
 
 
 def glm53_row():
