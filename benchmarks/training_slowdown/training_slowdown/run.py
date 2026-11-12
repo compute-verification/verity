@@ -27,7 +27,9 @@ plan that keeps them whole, the model the kept bits give under one that keeps le
 its trained parts (the route contract) is packed by the plan's codec as they are, and is scored as that codec decodes
 it on θ. Tokens computed outside a step, or a run with no step,
 make the run invalid. c is `C_PER_FORWARD_TOKEN` times the start's forward MACs per token (`block_c`), measured on
-the registered model.
+the registered model: of a route that states an `origin` (a grown model), the record's `forward_macs_per_token` and
+`c` are the registered model's, the one its tokens run through, and the record's `origin` states the map, θ′'s digest
+and the output's blocks. Nothing that prices a policy reads them: the grade's (c, k) and C0 are the start's.
 
 With `--state DIR` a stopped job continues (`Kept`). After each checkpoint but the last, which is the job's end, the
 job's own process keeps in DIR what continuing needs: the tensors the route's process hands it (the model the route
@@ -161,6 +163,43 @@ def theta_sha256(state: dict[str, torch.Tensor]) -> str:
     return state_sha256({k: digest(v) for k, v in state.items()})
 
 
+def start_state(theta: dict[str, torch.Tensor], state: dict[str, torch.Tensor],
+                origin: dict[str, str | None]) -> dict[str, torch.Tensor]:
+    """The start θ′ of a route that states one (`origin`, the route contract): each tensor of the route's model
+    (`state`, its state dict, of which only names, shapes and dtypes are read) as θ's tensor `origin` maps it to,
+    zeros of its shape and dtype where it maps to None, and θ's tensor of its own name where it maps to none. Refused
+    by name: a map that names a tensor the model lacks or maps from one θ lacks, a tensor of the model that is neither
+    θ's nor mapped, one of θ's that the model lacks and nothing maps from, and a tensor whose source is of another
+    shape."""
+    where = "training_slowdown: the route's origin"
+    if lacks := sorted(set(origin) - set(state)):
+        raise SystemExit(f"{where} maps {lacks[:3]}, which the route's model lacks")
+    sources = {v for v in origin.values() if v is not None}
+    if lacks := sorted(sources - set(theta)):
+        raise SystemExit(f"{where} maps from {lacks[:3]}, which θ lacks")
+    if unmapped := sorted(k for k in state if k not in origin and k not in theta):
+        raise SystemExit(f"{where} leaves {unmapped[:3]} of the route's model unmapped, and θ has no tensor of the "
+                         f"name: map each to θ's tensor it starts as, or to None for zeros")
+    if dropped := sorted(k for k in theta if k not in state and k not in sources):
+        raise SystemExit(f"{where}: θ's {dropped[:3]} are in neither the route's model nor the map")
+    out = {}
+    for k, t in state.items():
+        source = origin.get(k, k)
+        if source is None:
+            out[k] = torch.zeros(t.shape, dtype=t.dtype)
+        elif tuple(theta[source].shape) != tuple(t.shape):
+            raise SystemExit(f"{where} starts {k}, of shape {tuple(t.shape)}, as θ's {source}, of shape "
+                             f"{tuple(theta[source].shape)}")
+        else:
+            out[k] = theta[source]
+    return out
+
+
+def blocks_of(state: dict) -> int:
+    """How many blocks a model's state holds, by its tensors' names (`blocks.{i}.`)."""
+    return len({k.split(".")[1] for k in state if k.startswith("blocks.")})
+
+
 def file_sha256(path: Path) -> str:
     with open(path, "rb") as f:
         return hashlib.file_digest(f, "sha256").hexdigest()
@@ -236,6 +275,7 @@ class Harness:
         kept = kept or {}
         self.stream = stream
         self.theta, self.out = theta, Path(out)
+        self.base, self.origin = theta, None
         self.record = Path(record) if record else self.out / "run.json"
         self.families_root = Path(families) if families else self.out / "families"
         self.seed, self.tier, self.device = seed, tier, device
@@ -324,10 +364,19 @@ class Harness:
 
     # -- what the counted code runs through
 
-    def load(self, model: torch.nn.Module) -> torch.nn.Module:
-        """Load θ into `model`, move it to the run's device and register it."""
+    def load(self, model: torch.nn.Module, origin: dict[str, str | None] | None = None) -> torch.nn.Module:
+        """Load θ into `model`, move it to the run's device and register it. With a route's `origin` (the route
+        contract) the model starts as the start θ′ that map builds from θ (`start_state`), and θ′ stands where θ
+        does in the job: it is what is loaded and registered, so a product with a copied tensor not yet written is
+        θ's kind and a zeroed tensor is held as a constant is (`register`), and E and a family encode against it. θ
+        stays the registered start: the record's `theta_sha256` and the evaluator's base are θ's."""
+        if origin is not None:
+            self.origin = dict(origin)
+            self.base = start_state(self.theta, model.state_dict(), self.origin)
+            self.counter.theta_cpu = self.base
+            self.counter.constants |= {k for k, v in self.origin.items() if v is None}
         with self.counter.pause():
-            model.load_state_dict(self.theta)
+            model.load_state_dict(self.base)
             model.to(self.device)
         return self.register(model)
 
@@ -433,19 +482,20 @@ class Harness:
         self.checkpoint_state(step, state, {"source": "output"}, trained)
 
     def _encode(self, step: int, state: dict[str, torch.Tensor | tuple], digests: dict[str, str]) -> tuple[dict, bytes | None, dict]:
-        """E of `state`: its weights that differ from θ (a weight θ lacks against zeros) and each weight handed over
-        as its trained parts (`digests` has none of it), by `encoding`, with its size, digest and rebuild MACs; E's
-        bytes; and the weights E rebuilds to other bits than `state`'s, as it rebuilds them: none under a plan that
-        keeps the weights whole, and every weight handed over as parts."""
+        """E of `state`: its weights that differ from the start the model trained from (θ, or θ′ where the route
+        states an origin; a weight it lacks against zeros) and each weight handed over as its trained parts
+        (`digests` has none of it), by `encoding`, with its size, digest and rebuild MACs; E's bytes; and the weights
+        E rebuilds to other bits than `state`'s, as it rebuilds them: none under a plan that keeps the weights whole,
+        and every weight handed over as parts."""
         if self.theta_digests is None:
-            self.theta_digests = {k: digest(v) for k, v in self.theta.items()}
+            self.theta_digests = {k: digest(v) for k, v in self.base.items()}
         parts = [k for k in state if k not in digests]
         changed = sorted(k for k in state if k in parts or digests[k] != self.theta_digests.get(k))
-        if lacks := [k for k in parts if k not in self.theta]:
+        if lacks := [k for k in parts if k not in self.base]:
             self.problems.append(f"checkpoint {step}: the output hands over the trained parts of {lacks[:3]}, which θ "
                                  f"lacks: parts are of a weight of the start; hand a new weight over whole")
             return {"e_bytes": None}, None, {}
-        bases = {k: self.theta[k] if k in self.theta else torch.zeros(state[k].shape, dtype=state[k].dtype)
+        bases = {k: self.base[k] if k in self.base else torch.zeros(state[k].shape, dtype=state[k].dtype)
                  for k in changed}
         try:
             enc = self.encoding.encode({k: state[k] for k in changed}, bases)
@@ -538,6 +588,8 @@ class Harness:
             "flags": flags(rec["totals"], float(meta.get("peak_macs_per_s", 0))) + list(notes or []),
             "invalid": problems, "families": [],
         }
+        if self.origin is not None:
+            rec["origin"] = {"blocks": blocks_of(self.base), "sha256": theta_sha256(self.base), "map": self.origin}
         if self.stream is not None and (served := self.stream.record()) is not None:
             rec["windows"] = served
         return self._self_cpu(rec)
@@ -556,7 +608,7 @@ class Harness:
         n = SAMPLE_FINAL if self.tier >= 2 else SAMPLE_SEARCH
         with self.counter.pause():
             for fam in self.families:
-                v = check(fam.dir, rec, self.theta, rec["c"], n_sample=n, device=self.device, plan=fam.plan)
+                v = check(fam.dir, rec, self.base, rec["c"], n_sample=n, device=self.device, plan=fam.plan)
                 (fam.dir / "verified.json").write_text(json.dumps(v.to_json(), indent=1) + "\n")
                 rec["families"].append(v.to_json())
         self.write(rec)
@@ -689,10 +741,12 @@ def stream_of(cfg: config.Config, data: Data, seed: int, root: Path | None = Non
 def train(te: Harness, cfg: config.Config, route, stream: Stream, model, optimizers, state: dict | None = None,
           steps: int | None = None) -> None:
     """The route loop (module docstring) on the route's `build`, from the first step or, with a kept `state`, from
-    the step the harness continues at. A route with an `output` gives each checkpoint its output model; what that
+    the step the harness continues at. A route with an `origin` starts from the θ′ it maps out of θ (`Harness.load`),
+    in a continued job too, before the kept state is put back. A route with an `output` gives each checkpoint its
+    output model; what that
     computes is counted, in the step after the checkpoint or in the tail. `steps` stops the loop after the budget's
     first `steps` steps, each run as the whole budget's, with a checkpoint after the last."""
-    te.load(model)
+    te.load(model, route.origin(cfg.start.shape, cfg.dials) if hasattr(route, "origin") else None)
     te.encode_with(route.plan(cfg.dials))
     if hasattr(route, "output"):
         te.output(lambda: route.output(model, cfg.dials))
@@ -1175,8 +1229,13 @@ def ended(status: int) -> str:
 
 def with_scores(rec: dict, scores: list[tuple[str, dict]]) -> dict:
     """The route's process's record with each checkpoint's score in, where the states scored, each by the digest the
-    job's own process hashed it to, are its checkpoints' outputs one for one; else the record, invalid."""
-    if [sha for sha, _ in scores] == [cp["output_sha256"] for cp in rec["checkpoints"]]:
+    job's own process hashed it to, are its checkpoints' outputs one for one, each of the blocks the record states
+    its output has (its `origin`'s, else its start's); else the record, invalid."""
+    blocks = (rec.get("origin") or {}).get("blocks") or ((rec.get("start") or {}).get("shape") or {}).get("n_layer")
+    if other := sorted({s["blocks"] for _, s in scores if s.get("blocks") not in (None, blocks)}):
+        rec["invalid"].append(f"the evaluator scored states of {other} blocks, and the record states its output has "
+                              f"{blocks}")
+    elif [sha for sha, _ in scores] == [cp["output_sha256"] for cp in rec["checkpoints"]]:
         for cp, (_, score) in zip(rec["checkpoints"], scores):
             cp["bpb"], cp["score"] = score["bpb"], score
     else:

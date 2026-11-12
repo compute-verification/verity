@@ -17,7 +17,7 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `config.py` | an attack config: its schema, its digest and its jobs (`Job.label`), each refusal by name |
 | `screen.py` | the screen of a route's source: the names a route may not contain (`FORBIDDEN`), read before the route is imported |
 | `sandbox.py` | the training job's sandbox: namespaces with no network and an empty directory over each final set, over /run and over the user's tmux directory (`enter`), and what a process can still reach of them (`refusals`) |
-| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`; under Muon and Shampoo the gains, and the embedding unless the config puts it among the matrices, train under AdamW beside it), a rate each for the matrices, the gains and the embedding, on a linear, cosine or constant schedule, AdamW in torch's default step or its fused kernel, E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights, at one decay or reaching back a share of the steps so far; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in; `qat`, quantization-aware training, each matrix a pattern names read as the start's plus the sparse ternary rounding of a latent that Muon trains straight through, the output the start with the last codes, handed over as codes: E is each matrix's scales and codes as one xz stream of its own, at xz's strongest preset and no other |
+| `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`; under Muon and Shampoo the gains, and the embedding unless the config puts it among the matrices, train under AdamW beside it), a rate each for the matrices, the gains and the embedding, on a linear, cosine or constant schedule, AdamW in torch's default step or its fused kernel, E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights, at one decay or reaching back a share of the steps so far; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in; `qat`, quantization-aware training, each matrix a pattern names read as the start's plus the sparse ternary rounding of a latent that Muon trains straight through, the output the start with the last codes, handed over as codes: E is each matrix's scales and codes as one xz stream of its own, at xz's strongest preset and no other; `grow`, the start deepened by copies of its blocks, each repeated copy's output projections zero so the grown model starts as the start's function, and trained whole under Muon with AdamW beside it, E every tensor of it |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
 | `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
@@ -103,7 +103,8 @@ prices its matrix products in (`priced in`), and reads the
 slowdown on the traced step from the one entry point (`calculator.slowdown`): the least slowdown of any partition of
 that step into the policy's blocks, on the products whose two operands both depend on the update. `trains` is read from
 the trace, the parameters the step writes over the start's: an entry that trains less charges fewer products, so its
-slowdown is not its optimizer's. Where a step has dense linear algebra (Shampoo's roots), which the capture counts at
+slowdown is not its optimizer's. A grown model (`grow`) trains more parameters than the start has, so its share is
+above 1. Where a step has dense linear algebra (Shampoo's roots), which the capture counts at
 n³ MACs a matrix and not as the gates of the algorithm that computes it, the row says what share of the step's gates
 that count is. Below the rows it prints each statement with what it rests on, each entry's planned run at its
 slowdown (the config's steps times the traced step's gates) as a share of one datacenter's and of the world's compute
@@ -127,7 +128,9 @@ another file, is refused with that line.
 
 For each entry (every held one, or the ones named) the command counts two steps of the entry's route under the
 harness's counter, on a CPU, at the model's own initialisation and on random tokens, one row a forward, and sets the
-second beside the step structure most of the record's steps have, the record's rows a forward divided out. The count
+second beside the step structure most of the record's steps have, the record's rows a forward divided out. An entry
+whose trained weights leave θ later (a grown model's gains behind a zeroed matrix get no gradient at the first step)
+states the step compared and why (`step` in `of_record.toml`), and the output prints it. The count
 reads operand shapes and which weights have left θ, never a value, so it is the step a job of the entry takes
 wherever that step is one fixed graph: the step is traced too, and an entry whose trace the capture refuses, or
 whose step reads a value back, is refused. It prints, an entry:
@@ -144,7 +147,7 @@ whose step reads a value back, is refused. It prints, an entry:
   It is never assumed: an entry whose record needs it and has none is refused, naming the key. A stated ask that is
   wrong writes products the entry's step doesn't have, so it shows as a difference;
 - the start and the steps, which must be the record's, and E: its plan's kinds, each of which must be one of the
-  record's format's (`E_KINDS`), with its size after the two steps beside the record's last checkpoint's, and how a
+  record's format's (`E_KINDS`), with its size after the counted steps beside the record's last checkpoint's, and how a
   codec packs the same encoding another way than the record's program did (`E_PACKING`);
 - `expected`: a difference named by the rule that covers it, with the MACs on each side. A rule fires on its exact
   case alone. The device's: the norm as elementwise ops where CUDA's fused kernel is counted at an updated gain
@@ -245,7 +248,13 @@ owns the loop, the batches, the checkpoints and each checkpoint's E, the weights
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. A route that trained a
 weight in a codec's own form hands over those parts (`qat`, its codes), the plan's codec packs them as they are, and
-the weight scored is that codec's decode of them on θ; no route brings a codec. Everything a route computes
+the weight scored is that codec's decode of them on θ; no route brings a codec. A route whose model doesn't start
+as θ (`grow`, a deeper one) states which of θ's tensors each tensor of its model starts as, or zeros (`origin`):
+the harness builds that start θ′ from θ and it stands where θ does in the job, in the count and as E's base, while
+the record's `theta_sha256` and the evaluator's base stay θ's. The record states the map, θ′'s digest and the
+output's blocks (`origin`), and its `forward_macs_per_token` and `c` are the grown model's; the grade's (c, k) and C0
+are the start's. The evaluator scores a state at the depth its names give, and refuses one that is not the start's
+architecture at some depth. Everything a route computes
 through torch is counted; the harness's own work (loading, evaluating, encoding) isn't. The count calls a forward
 product updated when it reads a weight that has left θ. A buffer of the model that θ doesn't hold (a position table, in
 the state dict or not) is held at the value it has when the model is registered and checked like θ's weights: a product

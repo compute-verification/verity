@@ -198,8 +198,9 @@ def test_the_cpus_norm_is_expected_where_the_step_trains_no_gain_and_the_record_
 def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch):
     """A record's format may have several codec kinds (here a made-up second one for `quant`). A plan of either, or
     of both, is that kind; one that keeps a tensor whole is not, and neither is any plan beside a format this table
-    doesn't know."""
+    doesn't know. A program's own model's tensors whole (`model`) are the whole tensors a plan of `identity` keeps."""
     assert of_record.e_kind(["scaledquant"], "quant") == [] == of_record.e_kind(["identity"], "full")
+    assert of_record.e_kind(["identity"], "model") == [] and of_record.e_kind(["scaledquant"], "model") != []
     monkeypatch.setitem(of_record.E_KINDS, "quant", ("scaledquant", "coded"))
     for kinds in (["scaledquant"], ["coded"], ["scaledquant", "coded"]):
         assert of_record.e_kind(kinds, "quant") == []
@@ -207,8 +208,8 @@ def test_a_plans_codecs_must_each_be_of_the_records_kind_of_encoding(monkeypatch
         "E's kind: the config's plan is identity, coded, the record's format quant (scaledquant or coded)"]
     assert of_record.e_kind(["coded"], "full") == [
         "E's kind: the config's plan is coded, the record's format full (identity)"]
-    assert of_record.e_kind(["identity"], "model") == [
-        "E's kind: the config's plan is identity, the record's format model (none known here)"]
+    assert of_record.e_kind(["identity"], "codes") == [
+        "E's kind: the config's plan is identity, the record's format codes (none known here)"]
     assert of_record.e_kind([], "full") == ["E's kind: the config's plan is empty, the record's format full (identity)"]
     # the sizes are printed and not compared
     assert of_record.e_sizes(["scaledquant"], 1200, {"format": "quant", "e_bytes": 1000}, 30) == (
@@ -337,7 +338,8 @@ def test_every_held_entry_is_an_entry_of_the_library_with_its_record_named():
     runs = of_record.held()
     assert set(runs) <= {p.stem for p in library.entries()}
     for h in runs.values():
-        assert set(h) - {"record_only", "partial"} == {"run", "art", "path", "sha256"}
+        assert set(h) - {"record_only", "partial", "step"} == {"run", "art", "path", "sha256"}
+        assert "step" not in h or (set(h["step"]) == {"counted", "why"} and h["step"]["counted"] > of_record.STEPS)
         assert len(h["sha256"]) == 64 and h["art"].startswith("art:")
         assert "partial" not in h or as_math.parse(h["partial"])  # an ask `as_math` reads
         assert all(set(line) == {"phase", "kind", "op", "shapes", "count", "macs", "why"}
@@ -406,9 +408,10 @@ def as_cuda(struct: dict, rows: int) -> dict:
     return {"updated": struct["updated"], "log": out + fused(rows, forward.pop(), backward.pop())}
 
 
-def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None):
+def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = None, step: dict | None = None):
     """`rec` as `entry`'s run of record under `root`: where its records are, and the data file naming it, the
-    gradients `partial` says its attention backward asked for and the lines `record_only` of its program."""
+    gradients `partial` says its attention backward asked for, the lines `record_only` of its program and the step
+    `step` says is compared."""
     run, path = "r-made-up", "out/run/run.json"
     (root / "records" / run / "out" / "run").mkdir(parents=True)
     raw = json.dumps(rec).encode()
@@ -417,7 +420,9 @@ def held_to(root, entry: str, rec: dict, record_only=(), partial: str | None = N
                     for line in record_only)
     (root / "held.toml").write_text(f'[held."{entry}"]\nrun = "{run}"\nart = "art:{"0" * 64}"\npath = "{path}"\n'
                                     f'sha256 = "{hashlib.sha256(raw).hexdigest()}"\n'
-                                    + (f'partial = "{partial}"\n' if partial else "") + lines)
+                                    + (f'partial = "{partial}"\n' if partial else "")
+                                    + (f'step = {{ counted = {step["counted"]}, why = {json.dumps(step["why"])} }}\n'
+                                       if step else "") + lines)
     return root / "records", root / "held.toml"
 
 
@@ -488,6 +493,38 @@ def test_the_command_names_each_expected_difference_and_exits_1_on_any_other(tmp
     assert "  DIFFERS   the steps: the config's 3, the record's 6" in out
     assert "  DIFFERS   updated, the record's step only: " in out and "1 entry: 0 equal, 1 differ" in out
     assert "  DIFFERS   log, the record's step only: fwd/updated _fused_rms_norm" in out
+
+
+def test_an_entry_that_states_its_step_is_counted_to_it_and_the_output_says_which_and_why(tmp_path, capsys,
+                                                                                         monkeypatch):
+    """An entry whose trained weights leave θ after the second step states the step compared (`step`): the config is
+    counted to it, that step is the one set beside the record's, and the output prints it with the entry's why. An
+    entry that states none is counted to `STEPS`."""
+    reg = tiny_registry(tmp_path / "reg")
+    path = write_config(tmp_path / "a.toml")
+    cfg = config.load(path, starts.registry(reg))
+    mine, asked = count(), []
+
+    def counted(cfg, rows, out, n=of_record.STEPS):
+        asked.append(n)
+        other = {"updated": [], "log": []}
+        return mine | {"steps": [{"struct": "o"}] * (n - 1) + [{"struct": "s"}],
+                       "structures": mine["structures"] | {"o": other}}
+
+    monkeypatch.setattr(of_record, "counted", counted)
+    rec = {"start_record": {"name": "tiny", "digest": cfg.start.digest}, "structures": dict(mine["structures"]),
+           "steps": [{"struct": "s"}] * cfg.budget["steps"], "checkpoints": [{"format": "full", "e_bytes": 20}]}
+    why = "a gain behind a zero matrix gets no gradient at the first step"
+    records, held = held_to(tmp_path, "a", rec, step={"counted": 3, "why": why})
+    assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 0
+    out = capsys.readouterr().out
+    assert asked == [3] and out.startswith("a, held to r-made-up (out/run/run.json): equal\n")
+    assert ("  step      the config's step 3, 2 forwards of one row, counted on a CPU, beside the record's modal "
+            f"structure, which 3 of its 3 steps have, 1 row a forward divided out; of_record.toml states step 3: "
+            f"{why}\n") in out and "identity, 10 B after 3 steps" in out
+    records, held = held_to(tmp_path / "unstated", "a", rec)
+    assert of_record.main([str(path), "--records", str(records), "--held", str(held), "--starts", str(reg)]) == 0
+    assert asked == [3, of_record.STEPS] and "the config's step 2," in capsys.readouterr().out
 
 
 def test_a_difference_no_rule_names_is_printed_and_the_command_exits_1(tmp_path, capsys, monkeypatch):

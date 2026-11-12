@@ -318,6 +318,44 @@ def test_a_record_whose_checkpoints_arent_the_states_scored_is_invalid():
                                   f"outputs, one for one"]
 
 
+def test_a_score_of_other_blocks_than_the_record_states_its_output_has_is_refused_by_name():
+    """The evaluator states the blocks it scored a state at; where the scores join the record, a state of other blocks
+    than the record states its output has (its `origin`'s, else its start's) makes the record invalid, unscored."""
+    def unscored(origin=None):
+        return {"invalid": [], "start": {"shape": {"n_layer": 2}}, "checkpoints": [
+            {"step": 0, "bpb": None, "score": None, "output_sha256": "a"}]} | ({"origin": origin} if origin else {})
+    assert run.with_scores(unscored(), [("a", {"bpb": 1.5, "blocks": 2})])["invalid"] == []
+    assert run.with_scores(unscored({"blocks": 3}), [("a", {"bpb": 1.5, "blocks": 3})])["invalid"] == []
+    for rec, blocks, stated in ((unscored(), 3, 2), (unscored({"blocks": 3}), 2, 3)):
+        rec = run.with_scores(rec, [("a", {"bpb": 1.5, "blocks": blocks})])
+        assert rec["invalid"] == [f"the evaluator scored states of [{blocks}] blocks, and the record states its output "
+                                  f"has {stated}"] and rec["checkpoints"][0]["score"] is None
+
+
+def test_a_routes_origin_builds_its_start_from_theta_and_refuses_a_map_that_doesnt_cover_both_by_name():
+    """`start_state`: each tensor of the route's model as θ's tensor the map names, zeros where it names None, θ's of
+    its own name where it names none; the copies are θ's tensors bit for bit. Refused by name: a map that names a
+    tensor the model lacks or maps from one θ lacks, a model tensor neither θ's nor mapped, a θ tensor that is neither
+    in the model nor mapped from, and a tensor whose source is of another shape."""
+    theta = {"a": torch.randn(2, 3), "b": torch.randn(3)}
+    state = {"a": torch.empty(2, 3), "b": torch.empty(3), "c": torch.empty(2, 3), "d": torch.empty(2, 3, dtype=torch.bfloat16)}
+    got = run.start_state(theta, state, {"c": "a", "d": None})
+    assert got["a"] is theta["a"] and got["b"] is theta["b"] and torch.equal(got["c"], theta["a"])
+    assert not got["d"].any() and got["d"].dtype == torch.bfloat16 and got["d"].shape == (2, 3)
+    where = "training_slowdown: the route's origin"
+    for origin, state_, why in (
+            ({"c": "a", "d": None, "e": "a"}, state, rf"{where} maps \['e'\], which the route's model lacks"),
+            ({"c": "z", "d": None}, state, rf"{where} maps from \['z'\], which θ lacks"),
+            ({"c": "a"}, state, rf"{where} leaves \['d'\] of the route's model unmapped"),
+            ({"c": "a", "d": None}, {k: v for k, v in state.items() if k != "b"},
+             rf"{where}: θ's \['b'\] are in neither the route's model nor the map"),
+            ({"c": "b", "d": None}, state, rf"{where} starts c, of shape \(2, 3\), as θ's b, of shape \(3,\)")):
+        with pytest.raises(SystemExit, match=why):
+            run.start_state(theta, state_, origin)
+    moved = {"a2": torch.empty(2, 3), "b": torch.empty(3)}
+    assert run.start_state(theta, moved, {"a2": "a"})["a2"] is theta["a"], "a tensor of θ's mapped from is covered"
+
+
 def test_a_job_keeps_no_weights_but_its_last_e(ran, tmp_path, theta, monkeypatch):
     """By default a job's output is its record and its last checkpoint's E, which rebuilds that checkpoint's output
     from θ bit for bit; an E at or over the size a job keeps stays out too."""
@@ -507,16 +545,18 @@ def counted_and_traced(root: Path, steps: int, **over):
     return rec, *traced_step(cfg, route, model, optimizers, "cpu"), model
 
 
-@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 3)])
+@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 3),
+                                       ("grow", 3)])
 def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, steps):
     """What a job's trace says of a step (`traced.traced_step`: the capture's graph of it, from shapes alone) against
     what the job's counter recorded of that same step as it ran: the step's tokens, its GEMMs' MACs, its elementwise
     MACs and all its MACs are equal; the trace's rows, which the slowdown's products are read from, hold exactly the
     GEMMs' MACs; the forward's GEMMs are equal apart; and every shape the rows run is one the counter's op log ran
     (`formalism.other_program`). At a step that reads the step before's update, and for the whole model at a run's
-    only step, which reads none: there the trained embedding is θ's and its lookup counts nothing, and from the next
+    only step, which reads none: there a trained embedding is θ's and its lookup counts nothing, and from the next
     step on the counter holds it at the gather Definition's multiplexers, which |C| counts and no product is, so the
-    counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work.
+    counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work. A grown model
+    (`grow`) is counted against the θ′ its map builds, and is held to this as it is.
 
     As a job runs: under torch's fused attention kernel, which the counter counts as the ops the math kernel computes
     attention by (`flops.Counter._attention`), the ones the trace holds.
@@ -533,7 +573,7 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     forward = sum(r["count"] * r["macs"] for r in rows if r["phase"] == "forward" and r["token_dims"])
     assert sum(r[5] for r in log if gemm_like(r[2])) == forward > 0
     lookup = gather_macs("embedding", tuple(model.embed.shape), None, step["tokens"] * model.embed.shape[1])
-    assert [r[5] for r in log if r[2] == "embedding"] == ([lookup] if job == "whole" and tr["step"] else [])
+    assert [r[5] for r in log if r[2] == "embedding"] == ([lookup] if model.embed.requires_grad and tr["step"] else [])
     assert sum(v for k, v in step["by"].items() if k.startswith("fwd/")) == forward + sum(
         r[5] for r in log if not gemm_like(r[2]))
     assert formalism.other_program(rows, grade.macs_log(rec, None)) is None

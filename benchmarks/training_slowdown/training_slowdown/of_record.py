@@ -13,7 +13,8 @@ What is held is the step and the kind of the encoding, not the weights, E's byte
   bits]` for each use of an updated weight, and `log`, one `[phase, kind, op, operand shapes, count, MACs]` for each
   product. The config's side is the same count of its own step: its route built on the start's shape and stepped
   twice under the harness's counter (`run.train`), the second step read, since by then every trained weight has left
-  θ as in every later step. Both sides are stated per row a forward (`per_row`): the record's rows a forward are
+  θ as in every later step. An entry whose trained weights leave θ later states the step read and why (`step` in
+  `of_record.toml`: `counted` and `why`), and the output prints it. Both sides are stated per row a forward (`per_row`): the record's rows a forward are
   divided out of its token shapes and their MACs, and the config is stepped at one row a forward, its batch over the
   record's rows a forward, so a step has the config's own forwards. `updated` must be equal as its `(MACs a token,
   upstream)` pairs and in the bits each use reads its weight at (a route casts to bf16 on a CPU as on CUDA), and
@@ -73,14 +74,15 @@ from .model import LM
 HELD = Path(__file__).with_name("of_record.toml")
 SCHEMA = "of-record/v1"
 #: a record's E `format` beside the codec kinds (`codecs.Codec.kind`) that are the same kind of encoding: the trained
-#: tensors whole, and their deltas in codes with a scale a group, the codes a rounding of the trained delta
-#: (`scaledquant`) or the ternary ones the run trained (`sparseternary`). A format may have several kinds
-E_KINDS = {"full": ("identity",), "quant": ("scaledquant", "sparseternary")}
+#: tensors whole (`full`, and `model`, a program's own model's tensors whole where they aren't the start's), and their
+#: deltas in codes with a scale a group, the codes a rounding of the trained delta (`scaledquant`) or the ternary ones
+#: the run trained (`sparseternary`). A format may have several kinds
+E_KINDS = {"full": ("identity",), "model": ("identity",), "quant": ("scaledquant", "sparseternary")}
 #: a codec that packs the same encoding another way than the records' program did, so that its size is expected to
 #: differ from a record's by the packing alone: named in the entry's E line
 E_PACKING = {"sparseternary": "one xz stream a matrix at one setting, where the record's program kept the smallest "
                               "of several settings' streams of all its matrices"}
-#: how many of a config's steps are counted; the last is the one compared
+#: how many of a config's steps are counted, where its entry states no `step`; the last is the one compared
 STEPS = 2
 FAIR = ("Each config's step was counted at the model's own initialisation on random tokens, one row a forward, on a "
         "CPU: the count reads operand shapes and which weights have left the start, never a value, and the capture "
@@ -99,8 +101,9 @@ NUMBER = re.compile(r"[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?")
 
 def held(path: Path = HELD) -> dict:
     """Each held entry's run of record: `{entry: {"run", "art", "path", "sha256"}}`; where its record holds fused
-    attention backward rows and no trace, `"partial"`, the gradients those calls asked for (`as_math.parse`); and
-    where its record's program computes lines the route rightly doesn't, `"record_only"`, those lines (`named`)."""
+    attention backward rows and no trace, `"partial"`, the gradients those calls asked for (`as_math.parse`); where
+    its record's program computes lines the route rightly doesn't, `"record_only"`, those lines (`named`); and where
+    its config's trained weights leave θ after the second step, `"step"`, the step compared and why (`steps`)."""
     return tomllib.loads(Path(path).read_text())["held"]
 
 
@@ -420,17 +423,22 @@ class Tokens:
         return torch.randint(0, self.vocab, (n // self.rows, self.ctx + 1), generator=self.generator)
 
 
-def counted(cfg: config.Config, rows: int, out: Path) -> dict:
-    """The record of `cfg`'s first `STEPS` steps as a job counts them (`run.train` under `run.Harness`, with the
-    job's trace), θ the model's own initialisation and the stream `Tokens` at the record's `rows` a forward.
-    Written to `out/run.json`."""
+def steps(h: dict) -> int:
+    """How many of an entry's config's steps are counted, the last compared: its `step`'s `counted`, else `STEPS`."""
+    return int((h.get("step") or {}).get("counted", STEPS))
+
+
+def counted(cfg: config.Config, rows: int, out: Path, n: int = STEPS) -> dict:
+    """The record of `cfg`'s first `n` steps as a job counts them (`run.train` under `run.Harness`, with the job's
+    trace), θ the model's own initialisation and the stream `Tokens` at the record's `rows` a forward. Written to
+    `out/run.json`."""
     route, shape = config.route(cfg.route), cfg.start.shape
     torch.manual_seed(0)
     theta = {k: v.detach().clone() for k, v in LM.of(shape).state_dict().items()}
     te = run.Harness(theta, out, start={"shape": dict(shape)}, digests=False)
     with te.counter:
         model, optimizers = route.build(shape, cfg.dials)
-        run.train(te, cfg, route, Tokens(shape, rows), model, optimizers, steps=STEPS)
+        run.train(te, cfg, route, Tokens(shape, rows), model, optimizers, steps=n)
     return te.finish({"trace": run.trace_step(cfg, route, model, optimizers, "cpu")})
 
 
@@ -469,7 +477,8 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
         r["differences"].append(f"the batch: the config's {batch} rows are no whole number of the record's {rows} "
                                 "rows a forward")
         return r
-    mine = counted(cfg, rows, out)
+    n_counted = steps(h)
+    mine = counted(cfg, rows, out, n_counted)
     if why := refusal(mine):
         return r | {"refused": why, "expected": [], "differences": []}
     start, cp, last = rec.get("start_record") or rec["start"], mine["checkpoints"][-1], rec["checkpoints"][-1]
@@ -478,7 +487,7 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
                                 f"record's {start['name']} ({start['digest'][:12]})")
     if len(rec["steps"]) != cfg.budget["steps"]:
         r["differences"].append(f"the steps: the config's {cfg.budget['steps']}, the record's {len(rec['steps'])}")
-    found = compare(per_row(mine["structures"][mine["steps"][STEPS - 1]["struct"]], shape), theirs, shape,
+    found = compare(per_row(mine["structures"][mine["steps"][n_counted - 1]["struct"]], shape), theirs, shape,
                     h.get("record_only", []), rec.get("script_args") or [])
     kinds = sorted({c.kind for _, c in route.plan(cfg.dials).rules})
     found["differences"] += e_kind(kinds, last["format"])
@@ -488,22 +497,24 @@ def row(cfg: config.Config, h: dict, rec: dict, out: Path) -> dict:
     r["facts"] = [
         ("start", f"{cfg.start.name} ({cfg.start.digest[:12]})"),
         ("steps", f"{cfg.budget['steps']}"),
-        ("step", f"the config's step {STEPS}, {_plural(batch // rows, 'forward')} of one row, counted on a CPU, "
+        ("step", f"the config's step {n_counted}, {_plural(batch // rows, 'forward')} of one row, counted on a CPU, "
                  f"beside the record's modal structure, which {n} of its {len(rec['steps'])} steps have, "
-                 f"{_plural(rows, 'row')} a forward divided out"),
+                 f"{_plural(rows, 'row')} a forward divided out"
+                 + (f"; {HELD.name} states step {n_counted}: {h['step']['why']}" if "step" in h else "")),
         ("updated", f"{found['uses']} of the record's {len(theirs['updated'])} uses of an updated weight, by MACs a "
                     "token and updated MACs upstream"),
         *([("attention", attention)] if attention else []),
         ("log", f"{found['products']} of the record's {len(theirs['log'])} products, by phase, kind, op, operand "
                 "shapes, count and MACs"),
-        ("E", e_sizes(kinds, cp["e_bytes"], last, len(rec["steps"])))]
+        ("E", e_sizes(kinds, cp["e_bytes"], last, len(rec["steps"]), n_counted))]
     return r
 
 
-def e_sizes(kinds: list[str], e_bytes: int, last: dict, steps: int) -> str:
-    """An entry's E line: the plan's `kinds` and E's size after the counted steps beside the record's format and its
-    last checkpoint's size after its `steps`, which are not compared, and each packing that differs (`E_PACKING`)."""
-    return (f"{', '.join(kinds)}, {e_bytes:,} B after {STEPS} steps; the record's {last['format']}, "
+def e_sizes(kinds: list[str], e_bytes: int, last: dict, steps: int, n: int = STEPS) -> str:
+    """An entry's E line: the plan's `kinds` and E's size after the `n` counted steps beside the record's format and
+    its last checkpoint's size after its `steps`, which are not compared, and each packing that differs
+    (`E_PACKING`)."""
+    return (f"{', '.join(kinds)}, {e_bytes:,} B after {n} steps; the record's {last['format']}, "
             f"{last['e_bytes']:,} B after {steps}"
             + "".join(f"; expected to differ in size by the packing too: {k} is {E_PACKING[k]}"
                       for k in kinds if k in E_PACKING))

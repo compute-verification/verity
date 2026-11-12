@@ -160,12 +160,17 @@ def run_job(root: Path, *more: str, split: str = "search", read: tuple[int, ...]
 
 
 LORA = {"targets": "blocks.0.wq.weight,blocks.0.w_up.weight", "rank": 2, "alpha": 4.0, "lr": 1e-2}
-#: the whole model, one block, LoRA's adapters, one block's average, and one block under Muon in two micro-batches
+#: the tiny start's one block grown to three, the two copies of it with their output projections zero, trained whole
+GROW = {"depth": 3, "lr": 1e-2, "adam_lr": 2e-3, "embed_lr": 3e-3, "weight_decay": 0.05, "warmup": 1,
+        "micro_batches": 2}
+#: the whole model, one block, LoRA's adapters, one block's average, one block under Muon in two micro-batches, and
+#: the model grown by copies of its block
 JOBS = {"whole": {"dials": {"trainable": "*", "lr": 1e-2}},
         "block": {"dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2}},
         "lora": {"route": "lora", "dials": LORA},
         "ema": {"route": "ema", "dials": {"trainable": "blocks.0.*,norm", "lr": 1e-2, "ema_decay": 0.5}},
-        "muon": {"dials": {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "micro_batches": 2}}}
+        "muon": {"dials": {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 1e-2, "micro_batches": 2}},
+        "grow": {"route": "grow", "dials": GROW}}
 
 
 def job_counted(root: Path, steps: int, math: bool = False, **over):

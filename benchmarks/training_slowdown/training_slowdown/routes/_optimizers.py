@@ -11,9 +11,10 @@ import torch
 
 
 def newton_schulz(g: torch.Tensor, stack: bool = False) -> torch.Tensor:
-    """The orthogonalized update of a matrix. With `stack` the matrix is normalized as a program that orthogonalizes
-    a stack of matrices writes it, by its norm over the last two dimensions kept as a 1 x 1: the same update in
-    another op, which a run of such a program's step counts."""
+    """The orthogonalized update of a matrix. With `stack` the matrix is divided by its norm over its last two
+    dimensions kept as a 1 x 1, as a program that orthogonalizes a stack of matrices writes it, where without it the
+    norm is a scalar: on a matrix the two forms compute one value and differ only in the divisor's shape the count
+    logs, which is what a ported run's record holds."""
     a, b, c = 3.4445, -4.7750, 2.0315
     x = g.bfloat16()
     tall = x.shape[0] > x.shape[1]

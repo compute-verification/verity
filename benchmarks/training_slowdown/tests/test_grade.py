@@ -270,6 +270,24 @@ def test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it():
     assert at["S"]["why"] == at["rho"]["why"] and at["p"] == s["p"] and at["per_period"] is None
 
 
+def test_a_grown_models_own_numbers_price_neither_the_policy_nor_c0():
+    """A job of a route that grows the start (`grow`) records the grown model's forward MACs a token and c, and its
+    map (`origin`). Nothing that prices the policy reads them: the grade's (c, k), at the console's rule and at a
+    registry's policy, is the policy's at the start's shape, and C0 and the fit are the starts registry's, as for a
+    job of the start's own shape."""
+    search = traced([OVER, UNDER, UNDER])
+    grown = copy.deepcopy(search)
+    fwd = 3 * grown["record"]["forward_macs_per_token"]
+    grown["record"] |= {"forward_macs_per_token": fwd, "c": 4096 * fwd, "origin": {"blocks": 24, "sha256": "0" * 64,
+                                                                                 "map": {"blocks.23.wo.weight": None}}}
+    runs, ref = [job([OVER, OVER, UNDER], 0), job([OVER, OVER, UNDER], 1)], [job([OVER, UNDER])]
+    for name in ("console", "v4-pro-session"):
+        plain, deep = (graded(runs + [s], ref, CONFIG | {"policy": name}) for s in (search, grown))
+        assert plain["policy"] == deep["policy"] == policy.named(name, SHAPE)
+        assert plain["fit"] == deep["fit"] and plain["p"] == deep["p"]
+    assert policy.c0(registry()["starts"]["s"])[0] == 1e15 * PER_MAC
+
+
 def test_the_trace_is_priced_by_the_capture_over_the_steps_after_the_first_update():
     """What ρ reads of a record's trace: each raw row priced by `capture.products.priced` by the rule of the capture
     that traced it, which gives back the row that capture states (a stored record's float32 attention products in

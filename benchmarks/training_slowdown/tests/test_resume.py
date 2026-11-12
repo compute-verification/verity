@@ -11,7 +11,7 @@ import signal
 
 import pytest
 import torch
-from synthetic import SCORE_REL, tiny_registry, write_config
+from synthetic import GROW, SCORE_REL, tiny_registry, write_config
 
 from training_slowdown import NOTHING, TOLD, VERSION, config, grade, run, starts, stop_record, told
 from training_slowdown.data import Data
@@ -193,6 +193,24 @@ def test_a_job_of_a_route_with_an_output_keeps_the_model_it_trains_and_continues
     assert (whole["tail"]["macs"] > 0) == (route == "lora")
     other = segment(tiny, {"step": 2}, bare(kept))
     assert all(a["output_sha256"] != b["output_sha256"] for a, b in zip(other["checkpoints"], rest["checkpoints"]))
+
+
+def test_a_stopped_job_of_a_grown_model_starts_from_its_map_again_and_continues_as_the_unbroken_job(tmp_path):
+    """The harness alone, in one process. A job of route `grow` keeps the grown model it trains; the segment that
+    continues builds θ′ from θ by the same map, puts the kept state back over it and ends at the unbroken job's
+    outputs bit for bit, and the two records joined are the unbroken job's, the map and θ′'s digest among them."""
+    reg = tiny_registry(tmp_path / "reg")
+    tiny = tmp_path, reg, write_config(tmp_path / "a.toml", route="grow", budget=BUDGET, dials=GROW)
+    whole = run.joined(None, segment(tiny))
+    assert whole["invalid"] == [] and whole["origin"]["blocks"] == 3
+    assert len({cp["output_sha256"] for cp in whole["checkpoints"]}) == 4
+    cut = segment(tiny, stop_after=1)
+    assert run.blocks_of(cut["state"]["model"]) == 3
+    assert run.theta_sha256(cut["state"]["model"]) == cut["record"]["checkpoints"][-1]["output_sha256"]
+    rest = segment(tiny, {"step": 2}, cut["state"])
+    both = run.joined(run.joined(None, cut["record"]), rest)
+    assert both["invalid"] == [] and both["origin"] == whole["origin"]
+    assert_continues(whole, both, at=2)
 
 
 def test_the_generators_a_step_may_read_come_back_as_they_were_kept():
