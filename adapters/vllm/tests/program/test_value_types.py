@@ -7,10 +7,10 @@ import pytest
 
 pytest.importorskip("torch")
 
-from verity.circuits.types import Array, RecordType, Value  # noqa: E402
-from verity.circuits.types import Tuple as TupleT  # noqa: E402
+from verity.circuits.types import Array, RecordType, Value
+from verity.circuits.types import Tuple as TupleT
 
-from verity_vllm.program.frontend.value_types import flat_types  # noqa: E402
+from verity_vllm.program.frontend.value_types import flat_types
 
 V16 = Value(16)
 ROW = Array(3, V16)

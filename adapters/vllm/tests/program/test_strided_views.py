@@ -5,9 +5,10 @@ from __future__ import annotations
 
 import pytest
 
-torch = pytest.importorskip("torch")
+pytest.importorskip("torch")
 
-from verity.circuits.refs import (  # noqa: E402
+import torch
+from verity.circuits.refs import (
     Affine,
     Coll,
     Concat,
@@ -15,10 +16,10 @@ from verity.circuits.refs import (  # noqa: E402
     Strided,
     array_of,
 )
-from verity.circuits.types import Value  # noqa: E402
+from verity.circuits.types import Value
 
-from verity_vllm.program.frontend import strided_views as sv  # noqa: E402
-from verity_vllm.program.frontend.errors import FrontendError  # noqa: E402
+from verity_vllm.program.frontend import strided_views as sv
+from verity_vllm.program.frontend.errors import FrontendError
 
 V16 = Value(16)
 WHERE = "test"
