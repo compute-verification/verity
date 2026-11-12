@@ -1028,6 +1028,7 @@
     {"file": "verity_vllm/program/frontend/examples.py", "kind": "valid-type", "symbol": "identity_pair.F", "detail": ""},
     {"file": "verity_vllm/program/frontend/examples.py", "kind": "valid-type", "symbol": "identity_pair.Top", "detail": ""},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "assignment", "symbol": "_AnswerCudaFinder.find_spec", "detail": ""},
+    {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "assignment", "symbol": "host_facts", "detail": "", "count": 2},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "attr-defined", "symbol": "tensor_data_as_detach.fget", "detail": ""},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "attr-defined", "symbol": "tensor_data_as_detach.fset", "detail": ""},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "no-redef", "symbol": "default_fp8_linear_leaf", "detail": ""},
