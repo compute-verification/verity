@@ -10,7 +10,7 @@ whose 16-slot session at the workload's least ρ is in range and fits one node):
 each rare type its own bucket, the body's units over the cap one bucket of their pieces at the cap, the tail's samplers each
 their own bucket and its other large units one bucket at their largest Z, their units over the cap one bucket of pieces.
 
-**Each bucket at each B** of :data:`B_MENU`: the inner session (``shape``, or ``pieces_shape`` for pieces; F6's law plus the
+**Each bucket at each B** of :data:`B_MENU`: the inner session (``shape``, or ``pieces_shape`` for pieces; F6's fit plus the
 slot sumcheck), its sessions at the mean and at the public 1 − 2⁻⁴⁰ count, and the inner prover hours. The outer proof of
 one inner session is an input (``--outer``): circuits' ``nonzero_cost.py --proofs-c3`` output, ``{"buckets": [...]}``, one
 row per (bucket, B) with its ``prove_s`` and ``rss_gib`` on the composed layout, matched by the row id in its
@@ -20,13 +20,13 @@ for each (bucket, B), its templates by proofs' ``buckets.template`` at the cap a
 log2 D, from proofs' ``vstar_c3.py`` and ``buckets.py`` in VSTAR_DIR.
 
 **The choice** (:func:`pick`): of the B whose inner session is in range (k_log ≤ 27), fits one node (peak ≤
-:data:`~unit_costs_prover.NODE_GIB`), has D within the sampling design's fitted range (≤ 2^:data:`D_FIT_LOG`) and whose outer proof
+:data:`~unit_costs_prover.NODE_GIB`), has D within the fit's range (≤ 2^:data:`D_FIT_LOG`) and whose outer proof
 fits one node, the least public inner + outer hours (ties to the smaller B). Without ``--outer`` it chooses on the public
 inner hours alone, and the output says so. Openings are not batched across sessions.
 
 **One session per shape** (:func:`one_session_per_shape`): a model's
 entries that share a shape, (slots, bound), all take the largest inner session among them (a smaller entry's units are
-costed in it by the sampling design) and the largest outer proof, and are priced at them. V*'s statements are public, so a shape
+costed in it by the fit) and the largest outer proof, and are priced at them. V*'s statements are public, so a shape
 whose entries had different sessions would tell which entry a session holds. B is still chosen per bucket, before the
 shapes are merged.
 
@@ -56,7 +56,7 @@ from . import unit_costs_padding as P
 from . import unit_costs_prover as U
 
 B_MENU = (1, 4, 16, 64, 256, 1024)
-#: the sampling design's largest fitted D: 2^35 (a 4096-instance session)
+#: the fit's largest D: 2^35 (a 4096-instance session)
 D_FIT_LOG = 35
 
 

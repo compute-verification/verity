@@ -1,5 +1,5 @@
 """F6's pinned menu: each bucket's B is the cheapest at its public session count among those that are in range, fit one
-node and stay in the sampling design's fitted D, with the outer proof's cost when given and on the inner alone without it."""
+node and stay in the fit's D, with the outer proof's cost when given and on the inner alone without it."""
 from __future__ import annotations
 
 import math
