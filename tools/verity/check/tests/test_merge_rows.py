@@ -54,6 +54,15 @@ def test_a_row_both_sides_rewrote_under_a_new_first_cell_is_not_kept_twice():
     assert MR.rows([base, A], [ours, A], [ours, A, C]) == [ours, A, C], "the same rewrite on both sides is one row"
 
 
+def test_a_conflict_that_holds_the_row_under_a_header_stays_gits_conflict():
+    """One side gave every row a new column while the other added a row, or each side added a table at one place: merged by
+    rows, the first is a table with a short row and the second one table under two headers."""
+    wider = [row[:-1] + f" {cell} |\n" for row, cell in zip([*HEAD, A], ("Owner", ":-:", "top"))]
+    assert MR.rows([*HEAD, A], wider, [*HEAD, A, C]) is None
+    assert MR.rows([], [*HEAD, A], ["| Name | What it holds | Unit |\n", HEAD[1], C]) is None
+    assert MR.rows([A], [A, B], [A, "| - | - | - |\n"]) is None, "a row of dashes alone reads as the row under a header"
+
+
 def _sides(tmp_path: Path, base: list[str], ours: list[str], theirs: list[str]) -> tuple[Path, Path, Path]:
     paths = []
     for name, table in (("base", base), ("ours", ours), ("theirs", theirs)):

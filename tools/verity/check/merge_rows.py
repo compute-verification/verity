@@ -7,8 +7,9 @@ start and end with `|`) is merged, row by row under each row's first cell: a row
 that side's change, in ours' order with each of theirs' new rows below the row it followed (in the place of the row it
 renames, where theirs renamed one).  Everything else stays git's conflict: a row both sides changed differently, or that one
 removed and the other changed, a row both dropped while each brings a new one (each may have rewritten it under a new
-first cell), a first cell that a side holds twice, and any conflict with a line that is not a row (prose, a list, a
-heading).  Exit 0: merged, written to OURS.  Exit 1: conflicts left, OURS holding git's text with their markers.  A merged
+first cell), a first cell that a side holds twice, a conflict that holds the row under a table's header (one side changed
+the table's columns, or each added a table), and any conflict with a line that is not a row (prose, a list, a heading).
+Exit 0: merged, written to OURS.  Exit 1: conflicts left, OURS holding git's text with their markers.  A merged
 table is a candidate: a test that holds a table to the tree (`tests/test_benchmarks_index.py`) runs on it as on any other.
 """
 from __future__ import annotations
@@ -19,6 +20,8 @@ import sys
 from pathlib import Path
 
 ROW = re.compile(r"\s*\|.*\|\s*\n")
+#: the row under a table's header (`| --- | :-: |`): a conflict holding one changes a table's columns, or adds a table
+DELIMITER = re.compile(r"\s*\|(\s*:?-+:?\s*\|)+\s*\n")
 LABELS = ("ours", "base", "theirs")
 
 
@@ -33,7 +36,7 @@ def rows(o: list[str], a: list[str], b: list[str]) -> list[str] | None:
     sides = []
     for side in (o, a, b):
         cells = {key(s): s for s in side}
-        if len(cells) != len(side) or not all(ROW.fullmatch(s) for s in side):
+        if len(cells) != len(side) or not all(ROW.fullmatch(s) and not DELIMITER.fullmatch(s) for s in side):
             return None
         sides.append(cells)
     base, ours, theirs = sides
