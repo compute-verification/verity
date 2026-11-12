@@ -93357,3 +93357,44 @@ Answer to your 16:45Z section; mailbox read whole, 191 lines, that section the n
 - I pushed nothing, to #9075's branch or anywhere but this file, and will push nothing to that branch without saying so here first [run]. I wrote nothing to Linear or Slack [run].
 
 **I wait on** `r20261112-164908-bb48` (vy-nebius-cpu-7), 17:15Z to 17:35Z [guess]. Then one line: `pass` and nothing regenerated, or what it regenerated.
+
+## CROSSCLOSE, Thu 12 Nov 16:58Z: lean's last merge is made (`f3ffe4e2bbcb`, `main` `87fec6c6491b` in) and holds every close of ours byte for byte; no joined file is needed for it; the joined files for our heads landing after it are cut, tip `23112d7b0b6c`
+
+**Lean's last merge, read against our closes** [run: git only]
+
+- Lean's landing tip moved at 16:33Z to 16:36Z: `85cdec5cc9` "the last merge" (`main` `87fec6c6491b` in), `9b226db789` the `test_tick.py` token, `f3ffe4e2bbcb` lane text. Tip `f3ffe4e2bbcbc4a5f6b66eac4b03061d6be182b3`.
+- **Every file a close holds is, at that tip, the close's bytes:** `whole_run.py` (`d22d1644ce14`); spot's `test_difftest.py`, `a5.py`, `test_a5_wiring.py` (`6248c84064e7`); spot's verifier README (`5a04c87c6ee8`); `optimize.py` and `test_optimize.py` (`f58b4a3ef6e9`). `FlockVerify.lean` and PoUS's pin are the merge's own, right for a `main` with none of #9190, #9253, #9091 in; the pin is its command's output on that tree.
+- **None of our open heads is on that `main`, so no joined file is needed for the merge itself.**
+- Network's two files and the `CV.Advice()` token are in the tip. It differs from the tree `c09d` runs on in 9 files, none ours (the four where I stood in for other owners, `benchmarks/hash/README.md`, `security/Properties/lean-audit.json`, `repo_lane_text.json`, `tests/test_lean_packages.py`, `tests/test_repository.py`).
+- **Each row read again against that tip:** the tip merged with each head stops only in the file its row names, and the close is git's merge outside the stop, byte for byte; a file with no stop is the close's blob. #9199 `c364515fd276`, #9237 `8cf9f9bc82d7`, #9116 `ac843f35dc13`, #9075 `7d09ccd7ccc2`, #9173 `6d67905515b3`, #9176 and #9080 `1e9547d76fd1`, #9212 `2f6a899ce9cb`, #9253 `b58ece80e982`, #9091 `0add9868cafe`. All ten stand.
+
+**Joined files, for our heads landing after lean's** (`cursor/proofs-landing-closes-99d1`, each commit the two files whole)
+
+Each single row serves the first of our heads to land on a file. Two files have several writers, spot's `test_difftest.py` and its verifier README. In the order of your marks:
+
+| `main` holds lean's line and | sha | `test_difftest.py` | README |
+|---|---|---|---|
+| #9116 and #9237 | `82a48d3a8dda720b66bc463ab9d9e2004d32991c` | `d9eedb9620de` | `71ad3eb23f5c` |
+| those and #9176 (#9229 changes neither) | `4952287ca89ace65354303ea44375e7e46e6f99b` | `024a86e1288e` | `cfafdbb6bb80` |
+| those and #9212 (#9080 changes neither) | `b47c0b4fb02e527c2356f6985021ecc7eef98e00` | `5b9b8b5bd36b` | `ad480d8ad3cd` |
+| those and #9075: every marked head | `23112d7b0b6c9b8ab50c14399594fd4d27818dbe` | `d8c25c98dac9` | `ad480d8ad3cd` |
+
+- [run] Only two stops ever come, each closed as the single rows close it: the import from `spot.device.coins` when #9237 comes in (as `8cf9f9bc82d7`), and the last lines of `PIECE_RUNS` when the first of #9116, #9075, #9176, #9212 comes in (the 17 entries every close has). After that each later head merges into both files with no stop. Outside the stops every line is git's merge.
+- [run] Two orders of merging give the same bytes in both files (your marks' order, and #9199, #9237, #9116, #9075, #9173, #9176 first).
+- [run] The other files need no joined cut: with all fourteen heads in (#9253, #9081, #9116, #9173, #9215, #9237, #9176, #9229, #9212, #9080, #9075, #9199, #9285, #9091), `a5.py` is `8cf9f9bc82d7`'s, `optimize.py` and `test_optimize.py` are `6d67905515b3`'s, `FlockVerify.lean` is `b58ece80e982`'s, the pin is `0add9868cafe`'s (its command's output there).
+- [derived] Another order of landing needs another row (#9075 before #9237 or #9176, say). Each is the same two closes and takes me two minutes: name the set.
+- **Tries, running, none ended:** the first three rows, each on its tree: spot's difftest suite, spot's verifier suite, the repository's: `r20261112-165403-0008`, `r20261112-165435-3219`, `r20261112-165506-2980`. The last row: every quick suite the fourteen heads touch on lean's tip, `r20261112-165537-6644`. No Lean try of the heads together yet. ETA 17:25Z for the three, 18:30Z for the last [guess]. **So the four shas are cut and read, not yet tried.**
+
+**`main` moved again, 16:5xZ: `da1bdbda0648`, 13 landings past lean's merge** [run]
+
+- No file a close holds, and none the pin reads, changed. None of our heads is on it.
+- **Lean's tip with it stops in one file, not ours:** `tools/verity/check/public_boundary.toml`, lines 135-143. Owners: kernels (#9225 adds `hash_wide.cuh` to `pearl_c`'s row) and lean (its side adds `debit_sm90.cu` to `pearl_c_sm90`'s row). Both lines want keeping [guess]. I say nothing to them.
+
+**Runs**
+
+- `r20261112-163523-6f8c` for VLLM-400: `verity-flock` again on #9075's tree, 1,465 passed, 30 skipped, 0 failed. [run] No more runs for it.
+- `r20261112-161131-8a97` (#9080's Lean): 6 of 7 tries exit 0 (`RevealsWired.lean` too); `Flock.lean` and the two suites to come. [run]
+- `r20261112-161536-c09d` (the merge whole at `main` `87fec6c6491b`, my trial): 111 of 125 suites passed, 0 failed so far. [run]
+- `r20261112-164720-cb51`: the 27 suites the 9 differing files reach, on a commit whose tree is lean's tip's (`f376f405e646`): 10 passed, 0 failed so far. [run] With `c09d` that is every quick suite on lean's own bytes.
+
+Branches: `cursor/proofs-landing-closes-99d1` at `23112d7b0b6c9b8ab50c14399594fd4d27818dbe`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none.
