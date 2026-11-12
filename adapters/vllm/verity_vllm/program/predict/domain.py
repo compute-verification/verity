@@ -6,7 +6,7 @@ from __future__ import annotations
 from verity.definitions.registry.topp_geometry import registered_splits
 
 from .common import Unexpressible
-from .phi import Phi
+from .phi import STATED_KV_CACHE, Phi, checkpoint_kv_cache
 
 
 class UnregisteredSplits(Unexpressible):
@@ -35,6 +35,24 @@ _ENV_MODELLED = ("VLLM_ALLREDUCE_USE_SYMM_MEM", "VLLM_ALLREDUCE_USE_FLASHINFER",
 #: the engine args a component Program does not read but through `settings_of` (the scheduler's: a component is one request's)
 _ARGS_MODELLED = ("disable_custom_all_reduce", "max_model_len", "max_num_batched_tokens", "max_num_seqs", "enable_prefix_caching",
                   "enable_chunked_prefill", "long_prefill_token_threshold")
+#: the engine args a Program reads only through what refuses or shapes it: the KV cache format (`cache_refusal`), and the
+#: drafts a decode row carries, which a request's draft schedule holds (`draft_rows`)
+_ARGS_HELD = ("kv_cache_dtype", "num_speculative_tokens")
+
+
+def cache_refusal(phi: Phi) -> str | None:
+    """Why no request Program is the prediction of φ's KV cache, or None: a launch that names a format outside
+    `phi.STATED_KV_CACHE` (engine arg ``kv_cache_dtype``: an FP8 cache), or a checkpoint whose config turns a quantized cache
+    on at vLLM's default (`phi.checkpoint_kv_cache`: a ``modelopt`` one that names a KV cache scheme). A Program's history
+    rows are the bf16 rows its attention wrote; a quantized cache stores and reads other values."""
+    stated = (phi.engine or {}).get("kv_cache_dtype", "auto")
+    if stated not in STATED_KV_CACHE:
+        return (f"an FP8-cache launch (engine arg kv_cache_dtype {stated!r}): a request Program's history is the KV cache of a "
+                f"launch at kv_cache_dtype {' or '.join(STATED_KV_CACHE)}, and a quantized cache isn't modelled")
+    if stated == "auto" and (cache := checkpoint_kv_cache(phi.hf_config)) is not None:
+        return (f"a modelopt checkpoint whose quantization_config names a KV cache scheme: vLLM serves it on a {cache} KV cache at "
+                f"kv_cache_dtype auto, and a quantized cache isn't modelled")
+    return None
 
 
 def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str | tuple[str, ...], tuple[str, ...]]) -> None:
@@ -66,10 +84,13 @@ def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str | tuple[str, ...], tu
 def engine_facts(phi: Phi, world: int) -> list[str]:
     """What of φ's engine the Program would not be the prediction of: a target whose execution label is not the row's, an env
     switch the target sets to another value or none models (`_ENV_MODELLED`), an engine arg the target applies at another value, the
-    eager execution contradicted, another world, or an arg none models (`_ARGS_MODELLED`)."""
+    eager execution contradicted, another world, an arg none models (`_ARGS_MODELLED`), or a KV cache no Program states
+    (`cache_refusal`)."""
     tp, eng = phi.target_profile(), dict(phi.engine or {})
     facts = [] if tp.execution_label == phi.execution else [
         f"a target labelled {tp.execution_label!r} (batch invariant {tp.batch_invariant}) for the {phi.execution!r} row"]
+    if why := cache_refusal(phi):
+        facts.append(why)
     target_env = tp.env()
     for k, v in sorted((eng.pop("env", None) or {}).items()):
         if k in target_env and str(v) != target_env[k]:
@@ -80,6 +101,6 @@ def engine_facts(phi: Phi, world: int) -> list[str]:
     for k, v in sorted(eng.items()):
         if k in want and v != want[k]:
             facts.append(f"engine arg {k}={v!r} where the {phi.execution!r} target applies {want[k]!r}")
-        elif k not in want and k not in _ARGS_MODELLED:
+        elif k not in want and k not in _ARGS_MODELLED and k not in _ARGS_HELD:
             facts.append(f"engine arg {k}={v!r} (not modelled)")
     return facts

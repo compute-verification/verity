@@ -111,6 +111,54 @@ def load_phi(path: str | Path) -> Phi:
 #: the prefix cache). A request Program's length rule reads ``max_model_len`` (`steps.compile_steps`), so two compiles of one
 #: served engine's requests that read them differently compile different Programs
 REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "max_num_seqs", "enable_prefix_caching")
+#: the ``kv_cache_dtype`` values a launch's request Programs are stated at: vLLM's default, and bf16 by name, the default's
+#: format for a model computed in bf16
+STATED_KV_CACHE = ("auto", "bfloat16")
+#: the engine args that turn speculative decoding on: the config, and vLLM's short forms of its method, model and token count
+SPECULATIVE = ("speculative_config", "spec_method", "spec_model", "spec_tokens")
+#: the KV cache formats vLLM reads off a ``modelopt`` checkpoint's `quantization_config` (its `MODELOPT_TO_VLLM_KV_CACHE_DTYPE_MAP`)
+MODELOPT_KV_CACHE = {"fp8": "fp8_e4m3", "nvfp4": "nvfp4"}
+
+
+def checkpoint_kv_cache(hf_config: Mapping[str, Any]) -> str | None:
+    """The KV cache format vLLM serves a checkpoint on where the launch leaves ``kv_cache_dtype`` at its default, ``auto``, and
+    the checkpoint's config turns a quantized one on; None where the cache stays the default's. It is vLLM's
+    `get_kv_cache_quant_algo_string`: a `quantization_config` whose ``quant_method`` starts with ``modelopt`` and that names a
+    KV cache scheme (``kv_cache_scheme`` or ``kv_cache_quant_algo``, under its ``quantization`` block first), an 8-bit static
+    float scheme or the name ``fp8`` an FP8 cache, a 4-bit float one or ``nvfp4`` an NVFP4 cache. A scheme vLLM doesn't know
+    leaves the default."""
+    q = hf_config.get("quantization_config")
+    if not isinstance(q, Mapping) or not str(q.get("quant_method", "")).startswith("modelopt"):
+        return None
+    inner = q.get("quantization", q)
+    inner = inner if isinstance(inner, Mapping) else q
+    algo = inner.get("kv_cache_scheme") or q.get("kv_cache_scheme") or inner.get("kv_cache_quant_algo") or q.get("kv_cache_quant_algo")
+    if isinstance(algo, Mapping):
+        if algo.get("dynamic") is False and algo.get("num_bits") == 8 and algo.get("type") == "float":
+            algo = "fp8"
+        elif algo.get("num_bits") == 4 and algo.get("type") == "float":
+            algo = "nvfp4"
+        else:
+            return None
+    return MODELOPT_KV_CACHE.get(algo.lower()) if isinstance(algo, str) else None
+
+
+def _refuse_unstated(kw: Mapping[str, Any]) -> None:
+    """A ValueError for engine args that serve what no request Program of this engine states: a KV cache format the launch
+    names (a ``kv_cache_dtype`` outside `STATED_KV_CACHE`), whose cache other kernels than the default's may write and read, or
+    speculative decoding (an arg of `SPECULATIVE`), whose decode rows hold draft positions. φ carries neither
+    (`REGISTERED_ENGINE`): a request Program holds draft rows only under a registration that names a stand-in for the
+    model's draft layer (`draft_rows`), which no engine ran. So the compile of such a launch would be Programs it did not run."""
+    cache = kw.get("kv_cache_dtype")
+    if cache is not None and cache not in STATED_KV_CACHE:
+        raise ValueError(f"engine kv_cache_dtype={cache!r}: a request Program models the KV cache of a launch at kv_cache_dtype "
+                         f"{' or '.join(STATED_KV_CACHE)} and no other format (an FP8 KV cache is not modelled), so the compile of "
+                         "this launch would be Programs it did not run. Serve with kv_cache_dtype at vLLM's default to compile it")
+    for k in SPECULATIVE:
+        if kw.get(k) is not None:
+            raise ValueError(f"engine {k}={kw[k]!r}: a served engine's request Programs model no draft tokens (speculative "
+                             "decoding): no Definition of the model's draft layer is registered, so the compile of this launch "
+                             "would be Programs it did not run. Serve with speculative decoding off to compile it")
 
 
 def engine_of(meta: Mapping[str, Any], rank: int) -> tuple[dict, dict]:
@@ -118,11 +166,14 @@ def engine_of(meta: Mapping[str, Any], rank: int) -> tuple[dict, dict]:
     (``meta``'s ``engine_record``: `LLM.engine_record`'s ``engine_kwargs``; where the launch left ``max_model_len`` to vLLM, -1,
     the length the built engine reads back, ``effective``), and, from a record of the environment its build set
     (``env_flags``), the DSA top-k's (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK
-    the engine served in the kernels' own order; a ValueError for a rank the world doesn't have."""
+    the engine served in the kernels' own order; a ValueError for a rank the world doesn't have, and for a launch that names
+    another KV cache format or decodes speculatively (`_refuse_unstated`)."""
     from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 
     rec = meta.get("engine_record")
     kw = None if rec is None else rec.get("engine_kwargs")
+    if kw is not None:
+        _refuse_unstated(kw)
     world = 1 if kw is None else int(kw.get("tensor_parallel_size") or 1)
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
@@ -153,8 +204,18 @@ def served_phi(meta: Mapping[str, Any], hf_config: Mapping[str, Any], rank: int 
     with the checkpoint dtype that config states (`checkpoint_dtype`), on the run's target at its execution, at the engine's
     tensor-parallel world at ``rank`` with the engine args class G states (`engine_of`, whose ValueError it raises); no workload.
     A served window's registered compiler and the Builds its row dir holds both compile under it, so the Programs the one
-    compiles are the Programs the other wrote."""
+    compiles are the Programs the other wrote. A ValueError too for a checkpoint whose config turns a quantized KV cache on
+    at vLLM's default (`checkpoint_kv_cache`) under a launch that leaves ``kv_cache_dtype`` there: the launch's args don't name
+    the cache, and no request Program states it. A launch of such a checkpoint that names the bf16 cache keeps that arg in φ."""
     tp, engine = engine_of(meta, rank)
+    if (cache := checkpoint_kv_cache(hf_config)) is not None:
+        stated = ((meta.get("engine_record") or {}).get("engine_kwargs") or {}).get("kv_cache_dtype") or "auto"
+        if stated == "auto":
+            raise ValueError(f"the checkpoint's quantization_config turns a {cache} KV cache on at kv_cache_dtype auto (a modelopt "
+                             "checkpoint that names a KV cache scheme): a request Program models the cache of a launch at "
+                             f"{' or '.join(STATED_KV_CACHE)} and no quantized one, so the compile of this launch would be "
+                             "Programs it did not run")
+        engine["kv_cache_dtype"] = stated
     dtype = checkpoint_dtype(hf_config)
     return Phi(model={"repo": meta["model"], "revision": meta["revision"], "hf_config": dict(hf_config), **({"dtype": dtype} if dtype else {})},
                target=dict(meta["target"]), execution=meta.get("execution") or "eager", tp=tp, engine=engine)
