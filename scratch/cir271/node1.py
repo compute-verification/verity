@@ -8,6 +8,7 @@ manifest requests. Writes OUT/node_<ex>.json after every stage and prints one RE
 """
 import importlib.util
 import json
+import os
 import resource
 import sys
 import time
@@ -30,9 +31,9 @@ from verity_vllm.program.predict.node import build_node_program, check_ranks
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import plan_steps, request_program
 
-LP, T = 256, 31
+LP, T = 256, int(os.environ.get("OUTPUTS") or 32) - 1
 rec: dict = {"execution": ex, "LP": LP, "T": T, "layers": layers}
-path = out / f"node_{ex}.json"
+path = out / f"node_{ex}_o{T + 1}.json"
 
 
 def peak() -> float:
@@ -110,6 +111,9 @@ def build():
             "summary": r.summary(), "root_nodes": len(r.program.root.body.nodes), "body_nodes": len(body),
             "body_forms": dict(Counter(n.form for n in body)), "templates": len(tc), "instances": sum(tc.values()),
             "body_nodes_per_rank": dict(sorted(per_rank.items())),
+            "selects": {k: v for k, v in tc.items() if "Select" in names[k]},
+            "params": len(r.program.fn.body.params) if hasattr(r.program.fn, "body") else None,
+            "params_not_prompt_or_weights": [n for n, _ in r.node_fn.body.params if n != "prompt" and not n.startswith("rank")],
             "top": [(v, names[k], k[:24]) for k, v in tc.most_common(25)]}
 
 
@@ -167,8 +171,10 @@ def d1f1():
     u = [x for x in plan_steps(reg, advice, ingress).requests if x is not None][0]
     S["u"] = u
     p = request_program(reg, u)
+    ps = [n for n, _ in p.program.fn.body.params]
+    sel, _ = templates([n for n in p.program.fn.body.nodes if "Select" in name(n.fn)])
     return {"digest": p.digest, "unit": {"LP": u.LP, "T": u.T, "C": u.C, "chunks": list(u.chunks), "launch": u.batch()[:3], "stop": u.stop},
-            **against(p.program)}
+            "params": len(ps), "peer_params": sum(n.startswith("peers_") for n in ps), "selects": dict(sel), **against(p.program)}
 
 
 stage("rank0_registered_form", d1f1)
