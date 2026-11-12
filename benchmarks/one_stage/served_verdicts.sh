@@ -93,10 +93,11 @@
 #     $OUT/v3c-audit/main.txt, else MAIN_SHA's) and proves them, its composes made before it with V3C_WARM_JOBS (at
 #     `v3c_audit`), its sessions one at a time and Lean's checks of finished members beside them, V3C_LEAN_WORKERS at a
 #     time: on a node it shares default 1, within V3C_AUDIT_MEM_GB beside the running session's estimate
-#     (`a5.SESSION_BYTES_PER_CIRCUIT_BYTE`), a follow-on's default a5's LEAN_WORKERS, 3, within what its node has free
-#     beside that estimate (`a5.LeanPool`); its negatives after the audit record one after another, or with
-#     V3C_NEGATIVE_WORKERS that many at once, each in a worker process with its own Lean verifier process, started only
-#     while its memory estimate, read then, fits (`a5.NegativeWorkers`); then
+#     (`a5.SESSION_BYTES_PER_CIRCUIT_BYTE`), a follow-on's default a5's LEAN_WORKERS, 3, within the V3C_AUDIT_MEM_GB its
+#     command sets, else what its node has free, beside that estimate (`a5.LeanPool`); its negatives after the audit
+#     record one after another, or with V3C_NEGATIVE_WORKERS that many at once, each in a worker process with its own
+#     Lean verifier process, started only while its memory estimate, read then, fits that memory
+#     (`a5.NegativeWorkers`); then
 #     `records_audit.py period` writes the audit as the network certifier's period reads it ($D/v3c-w<K>-<class>/period.json,
 #     and a copy in $OUT/v3c-audit: the registration, the Program, its answer and its free inputs), and V3c fails where it
 #     writes none. Under H1_TIE (below and at `v3c_audit`) the window commit is the one made at H1's close, its
@@ -294,7 +295,7 @@ if [ "${1:-}" = v3c ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-120m} V3C_AUDIT_TIMEOUT=$
 elif [ -n "${H1_TIE:-}" ]; then V3C_TIMEOUT=${V3C_TIMEOUT:-60m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}
 else V3C_TIMEOUT=${V3C_TIMEOUT:-15m} V3C_AUDIT_TIMEOUT=${V3C_AUDIT_TIMEOUT:-30m}; fi
 V3C_WARM_TIMEOUT=${V3C_WARM_TIMEOUT:-$V3C_AUDIT_TIMEOUT}
-V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290}
+V3C_AUDIT_MEM_GIVEN=${V3C_AUDIT_MEM_GB:+1} V3C_AUDIT_MEM_GB=${V3C_AUDIT_MEM_GB:-290}
 NODE_MEM_GB=${NODE_MEM_GB:-$(awk '/^MemTotal:/ {print int($2 / 1048576)}' /proc/meminfo)}
 short_of_memory() {  # 0 iff this node has less memory than V3c's audit needs, saying both
   [ "$NODE_MEM_GB" -lt "$V3C_AUDIT_MEM_GB" ] || return 1
@@ -422,7 +423,7 @@ v3c_audit() {  # the committed window audited from its records alone: its circui
     v3c_warm
     cache=(--compose-cache "${V3C_COMPOSE_CACHE:-$VW/compose-cache}")
   fi
-  local pool=(${V3C_LEAN_WORKERS:+--lean-workers "$V3C_LEAN_WORKERS"})
+  local pool=(${V3C_LEAN_WORKERS:+--lean-workers "$V3C_LEAN_WORKERS"} ${V3C_AUDIT_MEM_GIVEN:+--audit-mem-gb "$V3C_AUDIT_MEM_GB"})
   [ -n "$FOLLOW" ] || pool=(--lean-workers "${V3C_LEAN_WORKERS:-1}" --audit-mem-gb "$V3C_AUDIT_MEM_GB")
   pool+=(${V3C_NEGATIVE_WORKERS:+--negative-workers "$V3C_NEGATIVE_WORKERS"})
   (cd "$TREE" && env -u PYTHONPATH RAYON_NUM_THREADS="$(nproc)" RUST_MIN_STACK=$((64 << 20)) timeout -k 1m "$V3C_AUDIT_TIMEOUT" \
