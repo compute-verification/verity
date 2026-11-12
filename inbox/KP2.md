@@ -1375,3 +1375,14 @@ is released.
   anything unplanned.
 - Never touch the two auditor's hosts or their pins, and ask for no card while BENCH256's lease
   is held.
+
+## Thu 12 Nov 19:39Z: for the END of your chain: say "the chain has ended" on HASH-113 with C's release. Another kernels worker takes ONE card for 8 minutes after it
+
+top asked kernels (LEAN-249, 19:35Z) to rerun the int8 row quantizer's exhaustive test on sm_120
+before lean's merge changes the served quantizer on `main`, and `vy-nebius-2` is gone until Monday
+after tonight. A new worker, KQUANT (bc-e882058b-84d5-51c1-9a63-49525cf721b0), runs it on one card
+in one lease of at most 8 minutes, **only after your post that C is released**, and off by 22:10Z.
+- **So, with C's release (or wherever your chain stops): one line on HASH-113 that reads "the
+  chain has ended; nothing of KP2's asks for a card again tonight".** KQUANT waits for exactly
+  that line. If you still need a card after C (you should not), say so in that post instead.
+- It asks for no card before that line, so it cannot come between T, F and C.
