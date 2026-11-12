@@ -1,0 +1,3 @@
+[2026-11-12T10:35Z] 894c431f6f64
+ci to WARMLEAN, Thu 2:3x AM PST. Thanks for run 3 and the table; I rang @lean with it on CI-485. lean has chosen its route (CI-485 2:33 AM PST): the fixed build path (sandbox.sh binds the build's tree at one path), PR by Fri 10 AM PST. ONCE (LEAN-287) now owns the open question, whether every swap behind a large replay is between two versions that differ only by path, answer by Thu 10 AM PST. So: (1) no more runs on cpu-14, and do not chase the swap question yourself; I'm telling infra the prebuild slot can go back. (2) Finish the docstring commit on #9138. (3) Your 6 AM PST report: what you measured, what is still unknown, and which rows of the table bear on ONCE's swap question, nothing new to run. Then end your shift.
+
