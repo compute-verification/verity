@@ -35,7 +35,7 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable
 
@@ -222,22 +222,20 @@ def _idle(s: dict) -> bool:
     return s.get("holder") is None and not s.get("blocked")
 
 
-def _disjoint(slots: list[dict], pool: str) -> None:
-    """Two idle slots that overlap are one place: each idle slot sharing a core with an idle one before it is marked blocked."""
+def _disjoint(slots: list[dict]) -> list[dict]:
+    """Two idle slots that overlap are one place: ``slots`` without each one that shares a core with one kept before it."""
     kept: list[dict] = []
     for s in slots:
-        if not _idle(s):
-            continue
-        if (o := next((k for k in kept if _cores(k.get("cpus")) & _cores(s.get("cpus"))), None)) is not None:
-            s["blocked"] = f"shares cores with {pool}'s idle slot {o['name']}"
-        else:
+        if not any(_cores(k.get("cpus")) & _cores(s.get("cpus")) for k in kept):
             kept.append(s)
+    return kept
 
 
 def _working(pools: dict[str, dict]) -> dict[str, dict]:
     """A machine's pool documents as places are dealt from: a copy, each idle slot that a held slot closes marked blocked with
-    why (a lane pool's by any held slot on the machine, a check slot's by a held check slot), overlapping idle slots made one,
-    and each check slot's `lane_cores`, its cores that lane runs hold."""
+    why (a lane pool's by any held slot on the machine, a check slot's by a held check slot), a lane pool's overlapping idle
+    slots made one, and each check slot's `lane_cores`, its cores that lane runs hold. The check pool's overlapping idle slots
+    are made one among those that fit a job (`_check_free`), since a lane's check takes no only=trains slot."""
     held = _held(pools)
     out = {}
     for p, d in pools.items():
@@ -252,7 +250,12 @@ def _working(pools: dict[str, dict]) -> dict[str, dict]:
                       None)
             if by:
                 s["blocked"] = f"shares cores with {by[0]}'s slot {by[1]}"
-        _disjoint(w["slots"], p)
+        if p != CHECK:
+            kept = _disjoint([s for s in w["slots"] if _idle(s) and not s.get("trains")])
+            for s in w["slots"]:
+                if _idle(s) and not s.get("trains") and s not in kept:
+                    o = next(k for k in kept if _cores(k.get("cpus")) & _cores(s.get("cpus")))
+                    s["blocked"] = f"shares cores with {p}'s idle slot {o['name']}"
         out[p] = w
     return out
 
@@ -269,7 +272,7 @@ def _check_free(check: dict, priority: bool, ask: float) -> list[dict]:
     if least:
         mine = [s for s in mine if s.get("mem") is None or s["mem"] >= least]
     ahead = len([w for w in check.get("waiters") or [] if w.get("priority") or not priority])
-    return [s for s in mine if _idle(s)][ahead:]
+    return _disjoint([s for s in mine if _idle(s)])[ahead:]
 
 
 def _lean_room(lean: Any) -> float:
@@ -306,7 +309,7 @@ def _reason(why: str) -> str:
 
 
 def _iso(t: float) -> str:
-    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    return datetime.fromtimestamp(t, UTC).strftime("%Y-%m-%dT%H:%MZ")
 
 
 def _end(start: str, minutes: int) -> str | None:
@@ -454,7 +457,7 @@ def analyse(docs: dict[str, dict | str], now: float, cpu_machines: list[str] | N
         idle = {}
         for m, pools in work.items():
             for q, doc in pools.items():
-                if q != p and (n := sum(1 for x in doc["slots"] if _idle(x))):
+                if q != p and (n := sum(1 for x in doc["slots"] if _idle(x) and not x.get("lane_cores"))):
                     idle[q] = idle.get(q, 0) + n
         out["pools"][p] = {"in_line": len(line), "stranded": sum(w["stranded"] for w in line), "places": s["places"],
                            "blocked": dict(sorted(s["blocked"].items())), "idle_in_other_pools": dict(sorted(idle.items())),
@@ -517,7 +520,7 @@ def text(doc: dict, with_moves: bool = False) -> str:
     for p, s in doc["pools"].items():
         blocked = ", ".join(f"{r} {n}" for r, n in s["blocked"].items()) or "none"
         idle = ", ".join(f"{q} {n}" for q, n in s["idle_in_other_pools"].items()) or "none"
-        out.append(f"  {p}: {s['in_line']} in line, {s['stranded']} stranded, {s['places']} places; idle slots blocked: {blocked}; "
+        out.append(f"  {p}: {s['in_line']} in line, {s['stranded']} stranded, {s['places']} place{'' if s['places'] == 1 else 's'}; idle slots blocked: {blocked}; "
                    f"idle in other pools: {idle}" + (f"; unread on {', '.join(s['unread'])}" if s["unread"] else ""))
     sections = (
         ("stalled lines (a waiter beside an idle slot, for more memory than is left unreserved)", "stalled",
