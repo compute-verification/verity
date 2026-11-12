@@ -1,7 +1,7 @@
 """egemm.cu's gate judged on the CPU: each dumped tile recomputed from x (bf16), W and the per-call key alone.
 
 From the key (meta.json's four big-endian words, 32 bytes): b, the dither bits (tag 7, sha_noise.cuh's NS 1 patch
-layout), and U (tag 6, lpgemm.cu's LP_UW 64, derive.py's u_noise64 on the weights' rows). Then
+layout), and U (tag 6, lpgemm.cu's LP_UW 64, on the weights' rows: `u_rows`). Then
     X  = clamp(floor(x inv_s), -127, 126) + b            Xq = clamp(rint(x inv_s), -127, 127)   (the plain quantizer)
     S  = X Id (S_ic = sum_t X_{i, 32 t + c}),  P_A = [S_1 | S_2 | S_0 | 0],  S = 256 (S_1 + S_2) + S_0, S_0 the low byte
          as s8, S_1 the rest clamped to ±127
