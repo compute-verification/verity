@@ -41,6 +41,12 @@ Each acceptance statement's two lemmas:
   `runAccepts_meets`, an honest run of setup's own accepted store (two 8-byte blocks) and one round, which the kernel
   evaluates (`decide +kernel`) once `Flock.canonUtf8`'s sort is shown to leave the manifest's sorted keys as they are
   (`Verity.QSort.qsort_sorted`); `runBinds_meets`, that run twice; and `wipeAccepts_meets`, an honest wipe.
+
+The wipe's two statements the lock holds to witnesses carry them in its form, each at one instance it builds:
+`wipeAccepts_honest` (an honest wipe under a derived key is `WipeChecked` and accepted) for `wipeAccepts` and
+`wipeAccepts_complete`, `wipeAccepts_nontrivial` (the default session is not `WipeChecked` where no key is trusted)
+for `wipeAccepts`, and `wipeAccepts_complete_nontrivial` (the check that trusts no key does not accept it) for
+`wipeAccepts_complete`.
 -/
 
 @[expose] public section
@@ -533,6 +539,15 @@ theorem wipeAccepts_fails : ∀ check, AcceptsAll check → ¬ WipeAcceptsBy che
   obtain ⟨-, -, s, -, ⟨⟨-, -, hk, -⟩, -⟩, -⟩ := h _ _ _ _ _ hc
   simp at hk
 
+/-- **`WipeAccepts`' conclusion is false where the verifier trusts no key** (its nontrivial witness): the default
+signed session is not `WipeChecked` against an empty list of trusted keys. A check that accepts everything accepts it
+there (`wipeAccepts_fails`), so `WipeAccepts` is not true of every check. -/
+theorem wipeAccepts_nontrivial :
+    ¬ WipeChecked SCHEMES ([] : List ByteArray) (default : StreamedWipe.Signed)
+        (default : StreamedWipe.Commitment) := by
+  rintro ⟨⟨-, -, hk, -⟩, -⟩
+  simp at hk
+
 /-- **The compiled check accepts every run `AcceptedAt` accepts** (the honest lemma of `RunAccepts` and of `RunBinds`),
 publishing `certify` of the point: `RunAccepts`' hypothesis holds exactly where the decision of record does, and two
 runs it accepts are two accepted runs. That every honest run is `AcceptedAt` is setup's completeness
@@ -599,15 +614,18 @@ private theorem wpre_nil (schemes : Schemes) (trusted : List ByteArray) (s : Str
   exact ite_eq_left ht
 
 /-- **The wipe's compiled check accepts every signed session `WipeChecked` describes** (the honest lemma of
-`WipeAccepts`, with `wipeAccepts_meets` its instance), on the period's server and session and with the evidence's
-egress within 0 to `EGRESS_MAX_UNITS`, publishing `certify` of the commitment's parameters and the evidence's egress:
-`WipeAccepts`' hypothesis holds where its conclusion does and the egress is in that range. -/
+`WipeAccepts`, with `wipeAccepts_meets` its instance), on the period's server and session, publishing `certify` of the
+commitment's parameters and the evidence's egress, unless that egress is outside 0 to `EGRESS_MAX_UNITS`, which the
+check refuses: `WipeAccepts`' hypothesis holds where its conclusion does and the egress is in that range. -/
 theorem wipeAccepts_complete : ∀ (p : WipeProtocol.Params) (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence)
     (s : StreamedWipe.Signed), c.server = p.server → c.session = p.session → e.signed = some s →
-      0 ≤ e.egress → e.egress ≤ StreamedWipe.EGRESS_MAX_UNITS →
       WipeChecked SCHEMES p.trusted.toList s c →
-      WipeProtocol.protocol.check p c e = .accept (WipeProtocol.certify c.params e.egress) (c.params, e.egress) := by
-  intro p c e s hsv hss hse he0 he1 ⟨hk, hcm, hcov, hend, hsize, hb⟩
+      WipeProtocol.protocol.check p c e = .accept (WipeProtocol.certify c.params e.egress) (c.params, e.egress) ∨
+        e.egress < 0 ∨ StreamedWipe.EGRESS_MAX_UNITS < e.egress := by
+  intro p c e s hsv hss hse ⟨hk, hcm, hcov, hend, hsize, hb⟩
+  by_cases he : e.egress < 0 ∨ StreamedWipe.EGRESS_MAX_UNITS < e.egress
+  · exact .inr he
+  refine .inl ?_
   have hv : StreamedWipe.verdict SCHEMES p.trusted.toList s c =
       (MemoryChallenger.StreamedWipe.Findings.mk #[], Core.Verdict.accept) := by
     rw [wverdict_eq, wpre_nil _ _ s c hk hcm hcov hend hsize,
@@ -620,6 +638,23 @@ theorem wipeAccepts_complete : ∀ (p : WipeProtocol.Params) (c : StreamedWipe.C
   unfold WipeProtocol.check
   simp only [hs, hr, hse, hv]
   rfl
+
+/-- **`wipeAccepts_complete`'s conclusion is false where the verifier trusts no key** (its nontrivial witness): the
+wipe's compiled check of a verifier with no trusted key does not accept the default signed session, with an egress of
+0 MiB in the evidence, which is within 0 to `EGRESS_MAX_UNITS`. So the lemma's premise `WipeChecked` is what makes
+the check accept. -/
+theorem wipeAccepts_complete_nontrivial :
+    ¬ (WipeProtocol.protocol.check ⟨.empty, .empty, #[]⟩ (default : StreamedWipe.Commitment)
+          (⟨some default, some 0⟩ : WipeProtocol.Evidence) =
+        .accept (WipeProtocol.certify (default : StreamedWipe.Commitment).params 0)
+          ((default : StreamedWipe.Commitment).params, 0) ∨
+      WipeProtocol.Evidence.egress ⟨some default, some 0⟩ < 0 ∨
+      StreamedWipe.EGRESS_MAX_UNITS < WipeProtocol.Evidence.egress ⟨some default, some 0⟩) := by
+  rintro (h | h | h)
+  · obtain ⟨-, -, s, -, ⟨⟨-, -, hk, -⟩, -⟩, -⟩ := wipeAccepts _ _ _ _ _ h
+    simp at hk
+  · exact absurd h (Int.lt_irrefl 0)
+  · exact absurd h (show ¬ StreamedWipe.EGRESS_MAX_UNITS < (0 : Int) by decide)
 
 /-- The honest wipe's commitment: one 64-byte label, `k = 1` read revealed one index a batch, a 1 ns deadline, and one
 tier the fill covers exactly (valid: `StreamedWipe.Params.check`). -/
@@ -638,17 +673,12 @@ private theorem honest_message :
   rw [Array.mapM_eq_mapM_toList]
   exact ⟨_, rfl⟩
 
-/-- **An honest wipe is accepted** (the instance of `WipeAccepts`' honest lemma): for every key `Lms.key` derives at
-S1's deployed LMS parameters (`Lms.deployed`, the one scheme `SCHEMES` accepts), the session of one batch at `k = 1`,
-answered with no wrong answer and on time after the fill, ended complete and signed at leaf 0 with `Lms.signAt` on its
-message, is accepted by the wipe's compiled check of a verifier that trusts that key, on the session's server and
-session, with an egress of 0 MiB in the evidence. The signature verifies by LMS's correctness
+/-- The honest session is `WipeChecked` against the key that signed it: for a key `Lms.key` derives at S1's deployed
+LMS parameters, the session signed at leaf 0 with `Lms.signAt` on its message passes every check of the wipe judge
+against its commitment. The signature verifies by LMS's correctness
 (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). -/
-theorem wipeAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.key Lms.deployed I seed = .ok k →
-    ∃ (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence) (out : WipeProtocol.Public)
-      (prof : StreamedWipe.Params × Int),
-      WipeProtocol.protocol.check ⟨c.server, c.session, #[k.publicKey]⟩ c e = .accept out prof := by
-  intro I seed k hk
+private theorem honest_checked {I seed : ByteArray} {k : Lms.PrivateKey} (hk : Lms.key Lms.deployed I seed = .ok k) :
+    ∃ sig : ByteArray, WipeChecked SCHEMES [k.publicKey] (honestSession k.publicKey sig) honestCommitment := by
   obtain ⟨-, hIk, -, hIs, -, -, -⟩ := Properties.CertifierDevice.Proofs.Lms.key_spec hk
   subst hIk
   have hroot : (k.tree[1]!).size = Lms.deployed.N :=
@@ -668,14 +698,51 @@ theorem wipeAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.k
   have hlms : lmsVerify Lms.deployed k.publicKey honestCommitment.session m sig.encode = .ok true := by
     unfold lmsVerify
     simp only [hpub, ne_eq, not_true_eq_false, ↓reduceIte, hdec, hI, hM, hver, bind, Except.bind] <;> rfl
-  refine ⟨honestCommitment, ⟨some (honestSession k.publicKey sig.encode), some 0⟩, _, _,
-    wipeAccepts_complete ⟨honestCommitment.server, honestCommitment.session, #[k.publicKey]⟩ honestCommitment
-      ⟨some (honestSession k.publicKey sig.encode), some 0⟩ (honestSession k.publicKey sig.encode)
-      rfl rfl rfl (Int.le_refl 0) (show (0 : Int) ≤ StreamedWipe.EGRESS_MAX_UNITS by decide)
-      ⟨⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩, rfl, rfl, rfl, rfl, ?_⟩⟩
+  refine ⟨sig.encode, ⟨Lms.deployed, rfl, List.mem_singleton.2 rfl, m, hm, hlms⟩, rfl, rfl, rfl, rfl, ?_⟩
   intro b hb
   obtain rfl : b = 0 := by simp [honestSession] at hb; omega
   simp [honestSession, honestBatch, honestCommitment, StreamedWipe.Batch.elapsedNs]
+
+/-- The wipe's compiled check of a verifier that trusts the key `pk` accepts the honest session it finds
+`WipeChecked`, on the session's server and session, with an egress of 0 MiB in the evidence
+(`wipeAccepts_complete`, whose range holds at 0). -/
+private theorem honest_accepted {pk sig : ByteArray}
+    (hw : WipeChecked SCHEMES [pk] (honestSession pk sig) honestCommitment) :
+    WipeProtocol.protocol.check ⟨honestCommitment.server, honestCommitment.session, #[pk]⟩ honestCommitment
+        ⟨some (honestSession pk sig), some 0⟩ =
+      .accept (WipeProtocol.certify honestCommitment.params 0) (honestCommitment.params, 0) := by
+  rcases wipeAccepts_complete ⟨honestCommitment.server, honestCommitment.session, #[pk]⟩ honestCommitment
+      ⟨some (honestSession pk sig), some 0⟩ (honestSession pk sig) rfl rfl rfl hw with h | h | h
+  · exact h
+  · exact absurd h (Int.lt_irrefl 0)
+  · exact absurd h (show ¬ StreamedWipe.EGRESS_MAX_UNITS < (0 : Int) by decide)
+
+/-- **An honest wipe is accepted** (the instance of `WipeAccepts`' honest lemma): for every key `Lms.key` derives at
+S1's deployed LMS parameters (`Lms.deployed`, the one scheme `SCHEMES` accepts), the session of one batch at `k = 1`,
+answered with no wrong answer and on time after the fill, ended complete and signed at leaf 0 with `Lms.signAt` on its
+message, is accepted by the wipe's compiled check of a verifier that trusts that key, on the session's server and
+session, with an egress of 0 MiB in the evidence. -/
+theorem wipeAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.key Lms.deployed I seed = .ok k →
+    ∃ (c : StreamedWipe.Commitment) (e : WipeProtocol.Evidence) (out : WipeProtocol.Public)
+      (prof : StreamedWipe.Params × Int),
+      WipeProtocol.protocol.check ⟨c.server, c.session, #[k.publicKey]⟩ c e = .accept out prof := by
+  intro I seed k hk
+  obtain ⟨sig, hw⟩ := honest_checked hk
+  exact ⟨honestCommitment, ⟨some (honestSession k.publicKey sig), some 0⟩, _, _, honest_accepted hw⟩
+
+/-- **An honest wipe is `WipeChecked` and accepted** (the honest witness of `WipeAccepts` and of
+`wipeAccepts_complete`): there is a key `Lms.key` derives at S1's deployed LMS parameters and a session it signed
+that is `WipeChecked` against that key under S1's schemes, which `wipeAccepts_complete` takes as its premise, and
+that the wipe's compiled check of a verifier trusting that key accepts, on the session's server and session, with an
+egress of 0 MiB in the evidence. It is `wipeAccepts_meets`' session under one key, from a seed of zeros. -/
+theorem wipeAccepts_honest : ∃ (k : Lms.PrivateKey) (s : StreamedWipe.Signed) (c : StreamedWipe.Commitment)
+    (out : WipeProtocol.Public) (prof : StreamedWipe.Params × Int),
+    WipeChecked SCHEMES [k.publicKey] s c ∧
+      WipeProtocol.protocol.check ⟨c.server, c.session, #[k.publicKey]⟩ c ⟨some s, some 0⟩ = .accept out prof := by
+  obtain ⟨k, hk⟩ := Properties.CertifierDevice.Proofs.Lms.key_ok Lms.deployed
+    (show (ByteArray.mk (Array.replicate 16 0)).size = 16 from rfl) (ByteArray.mk (Array.replicate 64 0))
+  obtain ⟨sig, hw⟩ := honest_checked hk
+  exact ⟨k, _, _, _, _, hw, honest_accepted hw⟩
 
 /-! ## An honest run
 
