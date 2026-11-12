@@ -242,7 +242,7 @@ def test_a_layer_with_planes_of_both_classes_is_mixed_and_a_sequence_planes_head
 
 def test_a_window_that_is_no_number_is_no_window():
     impl = {"num_heads": 8, "num_kv_heads": 4, "head_size": 256}
-    windows = ([], "wide", [None, 0])
+    windows: list[object] = [[], "wide", [None, 0]]
     ds = declarations_from_attention_impls({f"model.layers.{k}.self_attn.attn": {**impl, "sliding_window": w} for k, w in enumerate(windows)})
     assert [(d.layer, d.window) for d in ds] == [(0, None), (1, None), (2, None)]
 
