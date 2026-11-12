@@ -6,7 +6,9 @@
 * `lift` re-emits a derived function's Calls on bits, every word run mapped to the bits it occupies (affine, strided, explicit,
   concatenated and `PartLog`-cut operands, a record of mixed widths), and computes the word function's outputs (bit-sliced
   evaluation of the lift against the plain-integer reference of the word function);
-* a Definition with no Boolean version is refused by name, at `lift` and at derive;
+* a Definition with no Boolean version is refused by name, at `lift` and at derive, and so is a named version (`family`) that
+  does not name the word, where a reader of a Program asks for the version that Program names and not the newest (a Boolean
+  primitive is its own version under its own family only);
 * `purity` counts the not-Boolean Definitions a Program reaches: zero for the lift, every one for the word Program;
 * the default target derives on words: `ir` is absent from its serialisation, so no profile digest moves.
 """
@@ -119,6 +121,39 @@ def test_a_static_the_word_lacks_is_bound_to_the_boolean_version_of_its_word_sta
     with pytest.raises(BB.NoBooleanVersion, match=r"Twice_v2's ADD: no Boolean version of LonelyWord_v1") as e:
         BB.boolean_version(bind(word, N=4))
     assert list(e.value.missing) == ["Twice_v1{N=4}"]
+
+
+def test_a_reader_of_a_program_takes_the_version_it_names_and_not_the_newest(monkeypatch):
+    """Two registered Boolean versions name one word: the newest is its Boolean version, ``family`` takes the other, and a
+    family that does not name the word is refused by name.  The two answers are kept apart.  The registry has no word with two
+    Boolean Definitions, so the test makes one."""
+    def sig(t):
+        return lambda S: ((("x", Array(S.N, t)),), Array(S.N, t))
+
+    word = CompositeDefinition("Twice", 1, ("N",), sig(F32), lambda B, S, x: B.batch(W.F32AddFtz, x, x, axes=(0, 0)), register=False)
+    add = BB.boolean_version(W.F32AddFtz)
+    older, newer = (CompositeDefinition("Twice", v, ("N",), sig(BL.bit_type(F32)), lambda B, S, x: B.batch(add, x, x, axes=(0, 0)),
+                                        register=False) for v in (2, 3))
+    older.word = newer.word = lambda b: bind(word, N=b["N"])
+    exact, by_name, errors = BB._load()
+    monkeypatch.setattr(BB, "_TABLE", [(exact, {**by_name, "Twice": [older, newer]}, errors)])
+    monkeypatch.setattr(BB, "_VERSIONS", {})
+    w = bind(word, N=3)
+    assert descriptor_id(BB.boolean_version(w)) == "Twice_v3{N=3}"
+    assert descriptor_id(BB.boolean_version(w, family="Twice_v2")) == "Twice_v2{N=3}"
+    assert descriptor_id(BB.boolean_version(w)) == "Twice_v3{N=3}" and BB.boolean_version(w, family="Twice_v3") is BB.boolean_version(w)
+    with pytest.raises(BB.NoBooleanVersion, match=r"no Boolean version of Twice_v1: Twice_v1\{N=3\}: no registered Twice_v4 names it"):
+        BB.boolean_version(w, family="Twice_v4")
+
+
+def test_a_boolean_primitive_is_its_own_version_under_its_own_family_only():
+    """A Boolean primitive is its own Boolean version, and ``family`` is honoured there too: its own family returns it, and
+    another is refused by name."""
+    assert BB.boolean_version(BL.AND) is BL.AND and BB.boolean_version(BL.AND, family="And2_v1") is BL.AND
+    with pytest.raises(BB.NoBooleanVersion, match="no Boolean version of And2_v1: And2_v1: a Boolean primitive is its own Boolean "
+                                                  "version, and it is no Xor2_v1"):
+        BB.boolean_version(BL.AND, family="Xor2_v1")
+    assert BB.boolean_version(BL.AND) is BL.AND
 
 
 @pytest.mark.slow
