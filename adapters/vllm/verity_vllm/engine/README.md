@@ -27,7 +27,8 @@ what it holds.
   benchmarks read state no `__all__` yet: `build`, `env`, `runner_step` (the one wrap of the model runner's step,
   and the parts that run around it), `int8_fused`, `int8_vllm` and `profiles.layer_classes`; `served_seed`'s does
   not yet list `DERIVED`, `UNSEEDED`, `param_of` and `rule_of`, nor `step_trace`'s `SERVED` and `scheduler_config`,
-  which other packages read.
+  which other packages read; and `observe.fold.profiles.generic` reads one private name that no `__all__` lists,
+  `profiles.dense_generic._sha256`.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `properties`, `check`
   and `commit` packages, its `llm` and `glue`; and the benchmarks that build, serve or time the engine
   (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`, `benchmarks/vllm_encoded`
