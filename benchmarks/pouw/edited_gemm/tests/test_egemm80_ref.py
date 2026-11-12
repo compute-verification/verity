@@ -12,14 +12,18 @@ import egemm80_ref as R
 import numpy as np
 import pytest
 
-M, N, K, SEED = R.TM, 2 * R.BN, 128, 0x80A1
-TILES = N // R.BN
-ARMS = ["plain", *R.SPACING]
+M, N, K, SEED = 2 * R.TM, 2 * R.BN, 128, 0x80A1
+TILES_M, TILES_N = M // R.TM, N // R.BN
+#: each receipted arm's commit spacing in columns, egemm80.cu's L of the arm. Written out, so the spacings a gate directory
+#: is made with are not the ones the judge under test binds
+SPACING = {"e16": 16, "e32": 32, "e64": 64}
+ARMS = ["plain", *SPACING]
 
 
 def write_gate(d: Path) -> None:
-    """Two 128 x 128 tiles as the device would dump them if it were right. An arm's receipts absorb the words of
-    X[:, :j] W'[:, :j]^T at j = its spacing, twice its spacing, ..., K."""
+    """Four 128 x 128 tiles, two rows of two, as the device would dump them if it were right. An arm's receipts absorb
+    the words of X[:, :j] W'[:, :j]^T at j = its spacing, twice its spacing, ..., K, and the tile in row tm and column tn
+    is the call's tile tm TILES_N + tn."""
     rng = np.random.default_rng(80)
     X = rng.integers(-127, 128, (M, K), dtype=np.int8)
     W = rng.integers(-96, 97, (N, K), dtype=np.int8)
@@ -30,12 +34,13 @@ def write_gate(d: Path) -> None:
     wp = w + np.tile(U.astype(np.int64), (1, K // 32))
     for arm in ARMS:
         (x @ w.T).astype(np.int32).tofile(d / f"Y_{arm}.bin")
-    for arm, spacing in R.SPACING.items():
+    for arm, spacing in SPACING.items():
         rec = []
-        for t in range(TILES):
-            b = wp[t * R.BN:(t + 1) * R.BN]
-            words = [((x[:, :j] @ b[:, :j].T) & 0xFFFFFFFF).astype(np.uint32) for j in range(spacing, K + 1, spacing)]
-            rec.append(R.tile_receipts(SEED, words, t))
+        for tm in range(TILES_M):
+            for tn in range(TILES_N):
+                a, b = x[tm * R.TM:(tm + 1) * R.TM], wp[tn * R.BN:(tn + 1) * R.BN]
+                words = [((a[:, :j] @ b[:, :j].T) & 0xFFFFFFFF).astype(np.uint32) for j in range(spacing, K + 1, spacing)]
+                rec.append(R.tile_receipts(SEED, words, tm * TILES_N + tn))
         np.stack(rec).astype(np.uint32).tofile(d / f"R_{arm}.bin")
     (d / "meta.json").write_text(json.dumps({"M": M, "N": N, "K": K, "seed": SEED, "arms": ARMS}))
 
@@ -55,9 +60,10 @@ def test_a_right_gate_passes(tmp_path):
     r = R.check(tmp_path)
     assert r["ok"] and failed(r) == [], r
     assert list(r["arms"]) == ARMS and "receipt_words" not in r["arms"]["plain"]
-    for arm in R.SPACING:
+    for arm in SPACING:
         v = r["arms"][arm]
-        assert v["receipt_words"] == TILES * R.NCT * 8 and v["receipt_words_wrong"] == 0 and v["control_rejected"]
+        assert v["receipt_words"] == TILES_M * TILES_N * R.NCT * 8
+        assert v["receipt_words_wrong"] == 0 and v["control_rejected"]
 
 
 @pytest.mark.parametrize("arm", ARMS)
@@ -68,7 +74,7 @@ def test_a_wrong_served_word_fails_its_arm(tmp_path, arm):
     assert not r["ok"] and failed(r) == [arm] and not r["arms"][arm]["y_equal"]
 
 
-@pytest.mark.parametrize("arm", list(R.SPACING))
+@pytest.mark.parametrize("arm", list(SPACING))
 def test_a_wrong_receipt_word_fails_its_arm(tmp_path, arm):
     write_gate(tmp_path)
     flip(tmp_path / f"R_{arm}.bin", R.NCT * 8 + 5, np.uint32)   # a word of the second tile
