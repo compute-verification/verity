@@ -190,10 +190,12 @@ def test_each_member_gets_the_verdict_verify_gives_it_alone_and_nothing_of_anoth
     assert (alone["refused"][0], only("refused")["accepted"]) == (1, False)
     # other bytes of the same descriptor are read anew and give the kept program's digest
     assert alone["spaced"][0] == 0 and only("spaced") == only("accepted")
-    # another program is the member's own, never the kept one: refused, and the digest named is not the kept program's
+    # another program is the member's own, never the kept one: refused, and the digest named is not the kept program's.
+    # It is named as handed (`program_handed_sha512`), a program the circuit does not bind having no `program_sha512`
     assert (alone["other"][0], only("other")["accepted"]) == (1, False), only("other")
     assert "the verifier's program is not the one the partition object names" in only("other")["why"], only("other")
-    assert only("other").get("program_sha512") != only("accepted")["program_sha512"]
+    assert "program_sha512" not in only("other"), only("other")
+    assert only("other")["program_handed_sha512"] != only("accepted")["program_sha512"]
     # an exception and a usage error print no verdict; their statuses are `verify`'s
     assert alone["no circuit"] == (1, b"") and alone["usage"] == (2, b"")
     # a session's coin key is used once inside a member and is fresh for the next member

@@ -47,7 +47,7 @@ the verifier follows upstream because the paper is silent are listed below.
 | sessions of several tables | `Stmt.setupTables`, `Draw.tablesWhy` |
 | `--zk` sessions: the mask slot, and Δ and regions kept off it | `Flock.Zk` (`shapeOk`, `maskFree`, `SLOT_LOG_MIN`) |
 | plain leaves, a recursive session's inner statement | `Tags.withPlainLeaves`, `Registered.checkDescription` |
-| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `drawLaw`, `programHeld`) |
+| fail-closed: the forms the soundness proof covers | `Flock.ProvedScope` (`check`, `checkP`, `scopeOkI`, `drawLaw`, `programHeld`, `programBound`) |
 | the ZK server's contract, frames, coins, `Hello` and session loop | `Flock.Firewall` and `Flock/Firewall/` |
 
 `verify` fails closed: after every check passes, `Flock.ProvedScope` refuses each statement form, sampling design or setting
@@ -113,6 +113,12 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
   Under `--upstream-plain`, upstream's builds' form, which no soundness theorem covers, it refuses every session before
   it reads a file; only `agree` reads that form (Agreement with upstream, below).
 
+The refusal of a session without `--program` (`programHeld`) is that a Program was handed, and compares nothing. A
+handed Program is held to the circuit when its digest is META's `program_sha512`: any other is refused in every mode
+where META binds a `verity/partition/v1` partition (`programBound`), and under `--plain-tables` whatever partition META
+binds (`programP`). Otherwise, under the provisional unit cover, which binds no Program descriptor to compare with, the
+session is not refused for it, and its verdict says the Program was not held.
+
 Each session `DIR` holds `session.json` (the `flock-live-session/v1` record) and each table's `<table>.rep0.bin` and
 `<table>.rep1.bin`. `verify` prints one `VERDICT {"accepted", "session", "why", …}` line per session and exits 0 iff all
 are accepted. A verdict names the public file it checked the session against by the SHA-512 of its header's canonical JSON
@@ -120,7 +126,10 @@ are accepted. A verdict names the public file it checked the session against by 
 `--registered` file by the SHA-512 of its canonical JSON (`registered_sha512`), a sampled session's sample (`unit_draw`,
 its record's) and the number of tables it set the session up as (`session_tables`: `--session-tables J`, else 1), so a
 caller holds a statement of the session to the files, sample and tables that were checked, never to ones the prover
-names.
+names. With `--program` a verdict names the Program's digest as `program_sha512` only when the Program is held to the
+circuit, so that field alone is the circuit's Program. Otherwise the digest is `program_handed_sha512`, and
+`program_note` says the Program was handed and not held to the circuit, why, and that the registered-read refusals
+(`Registered.checkProgram`, `Registered.checkCover`) read the handed Program only (`ProvedScope.programFields`).
 
 `verify-members [--archive DIR] --program F` is `verify` for each member of a run in one process, the run's program
 read once (`Flock.VerifyMembers`, whose module text is its contract). Standard input holds a line a member, the JSON
