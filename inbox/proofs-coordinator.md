@@ -85280,3 +85280,103 @@ Tags: [run] a command I ran and read now (a run's id, or the git command on the 
 - `r20261112-110219-e495` (the served-size held memory, vy-nebius-cpu-14): about 12:35Z [guess]; limit 13:32Z.
 - `r20261112-111653-9c21` (the quick tier on the local trial merge, vy-nebius-cpu-2): about 12:40Z [guess]; limit 14:17Z. Its verdict changes nothing on a branch: it says whether the joined line and the two changes pass the suites together.
 - Ended: `r20261112-110622-6ad1` (the try, exit 0); `r20261112-110958-2192` (no verdict, as section 5 says).
+
+## REDRAW, Thu 12 Nov 11:23Z: NET-365: (b) for the bounds pooled over a monitoring period (a common rate `q` is their hypothesis, the refusal of fixed counts is the only thing that makes an auditor's `q` hold, and a `rule_of` window meets it only at its own K/N); (a) for every one-window bound and every deployed guarantee; no run of record or figure found that rests on a `rule_of` record; #9237: quick suites and all nine rehearsals exit 0, records run `0553` is in its second pass
+
+Mailbox read to the 11:02Z section. `main` read for part 1: `33faab2be81c` (its tip when I began; it is `33866d93e66e` at 11:17Z [run: `git fetch`]). I built nothing, marked nothing, posted nothing.
+
+**0. First, your line "no record is wrong for this".**
+
+- It stands as far as I could search, with one thing to add [derived]. Every accepted records audit writes an absolute count: `wrong_units.bound`, "except with probability delta, an accepted transcript has at most `bound` wrong units" [read: `verity/protocols/spot/verifier/one_stage/audit.py:72-83`]. Through `rule_of` that count is the bound of `subset:K` over the window's own N. It is true at its δ for that N, so the number is not wrong. It is not a bound the auditor fixed: at K fixed it grows in step with N.
+- So any records audit made since `d454c847e8` (Wed 11 Nov 07:47Z, the commit that added `rule_of` [run: `git log -S`]) at a fixed-count `--law` states an absolute bound from a `rule_of` window, by construction. `served_verdicts.sh` does this for V3c at its default `V3C_LAW`, `subset:1`: one proof block of the window, whatever N is [read: `benchmarks/one_stage/served_verdicts.sh:386`, `:421`]. At `records_audit.py`'s default δ of 0.5 (`:978`) that bound is about half the window [derived].
+- I found no run of record, figure or table of ours that is such an audit (section 5 says what I searched and what I could not).
+- My own rehearsal `r20261112-094938-3edd` (`scan_zk.sh`, `SC_DRAW=4`) went through `scan_zk.py`'s copy of the function (`:1109`), as every scan rehearsal has since `b632873555` (Sun 8 Nov) [run: `git log -S`; read: `:1126`, `:1272`]. It is a rehearsal and states no figure.
+
+### For NET-365
+
+Read on `main` at `33faab2be81c`. Nothing was built or run but searches.
+
+**The answer.** For a single window: no. For bounds pooled over a monitoring period: yes, the refusal of fixed counts stands in for a hypothesis, and nothing in Lean states the step between them.
+
+1. **One window.** Every guarantee about one window's sample reads the design that ran, which is a count K over the population N the window registered, and bounds the chance of missing a set B of wrong proof blocks by that design's own miss probability for B. None reads a rate, and none reads the rule's text except to work out K.
+   - `Flock.Guarantees.SampledKSLiveV5` (deployed; `security/Proofs/Flock/Bridge/V5/Statement.lean:324`) and `SampledKSLiveV3` (deployed; `security/Proofs/Flock/Bridge/ScopeGate.lean:116`): the sample is `subset kd` over `n`, with `kd ≤ n`. Their `rateZ … ≤ ρ` is the extractor's rate, `2^logLen / (e·k)` (`security/Proofs/Flock/Soundness/Discharge/ZkLink/Compiled.lean:404`), not a sampling rate.
+   - `Verity.Sampled.Live` (`security/Proofs/Properties/Verity/Sampled.lean:128`), which the deployed `Verity.remote_soundness_of_subprotocols` reads through its open premise `SpotSound`: its `hlaw` (`:163`) says the design is the registered one at count `kd` (`Flock.Bridge.LawOn`, `security/Proofs/Flock/Bridge/Draw.lean:84`), and its sampling term `drawMiss` (`:402`) is the largest miss probability over sets of more than an ε share of the n blocks. There is no field `hsub`, there or anywhere on `main`.
+   - `Properties.Spot.DrawMisses` (`security/Properties/Spot/Draw.lean:113`): for every rule the verifier accepts, the sample misses B with at most the miss probability of the design that rule resolves to. No premise.
+   - `NetTiming.Guarantees.PeriodLeakAccepted` (deployed; `security/Definitions/NetworkCertifier/Guarantees/Period.lean:100`): it counts each window's sets of wrong blocks at δ under that window's own design and partition. No rate.
+   - A window whose rule is `rate:K/N` at its own N resolves to `subset:K` over N, so each of these holds for it truly. The ε at δ it publishes is the sample's own. Read as a share of N it is honest; read as a count it grows as N is padded.
+
+2. **Pooled over a period.** These take one rate `q` for every window as a hypothesis and conclude a count, about `ln(1/δ)/q` wrong proof blocks over the whole period. All are in `security/lean-audit.json`; none is deployed.
+   - `NetTiming.Guarantees.PooledIncorrectBlocksLe` (`security/Definitions/NetworkCertifier/Guarantees/Pooled.lean:71`): `hq : ∀ i, q * n i ≤ k i` (`:80`).
+   - `NetTiming.Guarantees.PooledLeakAccepted` (`…/PooledLeak.lean:110`): `hesc`, each window accepts with probability at most `(1 - q)^|W_i| + e_i` (`:130`), and `hF : ln(1/δ) ≤ q * Fmax` (`:134`). `PooledLeakCarried` (`…/Carried.lean:97`, `:121`) and `Accounting.Guarantees.Bridge.CommOfPooledLeakAccepted` (`security/Definitions/Accounting/Guarantees/JointBridge/CommOfPooledLeakAccepted.lean:80`, `:86`) take the same, as `NetTiming.PeriodEscapes` (`security/Definitions/NetworkCertifier/Checked.lean:180`).
+   - `Flock.Guarantees.IntegrityPeriodLog` and `IntegrityHorizon` (`security/Proofs/Flock/EndToEnd/Period/Statement.lean:220`, `:240`): `∀ t < T, q ≤ kd_t / n_t` (`:222`, `:242`). The same line is in `IntegrityBlock`, `IntegrityBlocks`, `IntegrityHorizonBlocks` (`…/Blocks/Statement.lean:105`, `:123`, `:142`) and `IntegrityBlockCarried`, `IntegrityHorizonCarried` (`…/Carry/Statement.lean:274`, `:297`).
+   - `Nci.Guarantees.DampenerRemotePeriod` (`security/Definitions/Nci/Guarantees/RemotePeriod.lean:107`), through its open premise `Nci.Assumptions.SampledPerWindow … q` (`security/Definitions/Nci/Assumptions/Remote.lean:84`): each window misses m wrong blocks with at most `(1 − q)^m`.
+   - Two stages: `Claims.Sampling.Design.Two.FirstRate` and `SecondRate` (`security/Definitions/Claims/SamplingTwo.lean:158`, `:163`), and `Properties.Spot.FirstStageAt d q` (`security/Properties/Spot/TwoStageCheck.lean:42`), which the planner's two-stage checks read (`TwoStageCheckSound`, `:69`, and its two siblings). The two-stage form is off in the verifier.
+   - The planner's one-stage checks (`Properties.Spot.LeakCheckSound`, `LeakCountSound`, `WorkCheckSound`, `security/Properties/Spot/PlanCheck.lean:33-46`) are stated for a design that samples every block independently at `num/den`. They say nothing of a served window.
+
+3. **How a `rate:K/N` window meets them.** Each hypothesis is about numbers (`k_i`, `n_i`, or a miss probability), never about the rule's text. So relabelling makes no false hypothesis true. A window at K of its own N meets `q * n_i ≤ k_i` truly for `q ≤ K/N_i` and not for any larger `q`. Over a period the one `q` that holds is the least `K/N_i`, which the prover sets by padding N; the bound `ln(1/δ)/q` then grows with the padding. A `q` the auditor fixed before the windows registered is not met once N passes `K/q`.
+
+4. **Where the refusal comes in.** The only facts that a window accepted under `rate:NUM/DEN` samples at least `NUM/DEN` of whatever N the prover registers are four lemmas in the verifier's own package: `Spot.Rate.count_ge`, `floor_ge`, `workK_ge`, `stratK_ge` (`verity/protocols/spot/verifier/lean/Spot/Rate.lean:32`, `:74`, `:93`, `:156`). No file under `security/` names any of them, and the verifier package's lock lists no guarantee. The verifier's refusal is `Select.Rule.ofJson` throwing `Select.FIXED` when `Select.rate?` is false (`…/Spot/Select.lean:93`, `:101`, `:166`), and `service.Law` in Python (`verity/protocols/spot/verifier/service.py:282-320`); nothing else reads `rate?` or `FIXED`. So the refusal, with those four lemmas, is what would discharge the pooled hypotheses at the auditor's rate, and no guarantee says so. `rule_of` passes the refusal and leaves `q` the prover's.
+
+**Not known.** I did not open the statements of the other sixteen deployed guarantees one by one (PoUB's remote audit, PoUS, the recursion and ZK ones, PoUW's period credit beyond its header). I searched `security/Definitions`, `security/Properties` and Flock's end-to-end and bridge statements for the shapes of a rate hypothesis, and each lock's premise lists for the named ones; no deployed guarantee showed one. PoUW's deployed period credit (`Properties.Pouw.Period.H1CheckedCreditPeriod`, `security/Properties/Pouw/Period.lean`) fixes both numbers in its statement, 24 sampled of 144, so it reads no rule. Whether `scan_zk.py`'s n is the schedule's or the prover's I did not establish: its members are laid out by `members_of(templates, G, T, …)` (`:330`), from the class's lanes and buckets, and I read no further.
+
+(end of the section for NET-365)
+
+**1. Tags for the section above.** Every file and line in it is [read] on `main` `33faab2be81c` in this turn; the deployed and listed status of each guarantee and its premise lists are [run: the two locks parsed with Python]; "no file under `security/` names them" and "nothing else reads `rate?` or `FIXED`" are [run: `rg` over `security/` and over the verifier's package]; point 3 is [derived] from the hypotheses as written; "the two-stage form is off" is [relayed: my earlier reading of `SecondStage.FORM`, not reread now].
+
+**2. Which letter, and why not the others.**
+
+- Not (a) [derived]: guarantees do read a rate as a premise, the pooled family of section 2 above.
+- (b), with its limit [derived]: the premise is named (`hq` of `PooledIncorrectBlocksLe`, and the same `q` in the others). It is "met by relabelling" only in this sense: the relabelled rule passes the verifier's one check, and the hypothesis then holds at the window's own K/N and no higher. No Lean hypothesis is met falsely. No deployed guarantee is touched.
+- Not (c): what I did not read is in "Not known" above.
+
+**3. Downstream readers of an absolute count** (each takes a window's bound at δ and its N). All [read] on `main` `33faab2be81c`.
+
+- `verity/protocols/spot/verifier/one_stage/audit.py:72` `wrong_units`: `bound`, and each template's own. Written into every accepted `audit.json` (`:168`). Reads a `rule_of` window whenever `records_audit.py audit` ran: yes.
+- The Lean one-stage check's public `bound` (`Spot.Bound.boundOf`, `verity/protocols/spot/verifier/lean/Spot/Bound.lean:104`): the same count, from the same design. Yes, by the same path.
+- `benchmarks/one_stage/served_integrity.py:91-97` `answer`: copies `wrong_units.bound` to `public.bound`. Called by `records_audit.py period` (`benchmarks/prove_path/records_audit.py:697`), which writes `period.json`. Yes.
+- The network certifier's period check, `verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean`: `factsOf` reads the answer's `bound` (`:1057-1063`) and charges `faulty_bits = b · bits` and `faulty_sets` into K (`:172-183`, `:1268`). A sum over the period's audits, each at its own design; no common rate. Yes, when `served_verdicts.sh` runs its period check on V3c's `period.json` (`:432-437`).
+- `benchmarks/prove_path/prove_path.py:1142-1164` `charge_terms`: `harm_bound` and `exfiltration_bound` in bits from the accepted audit's profile; printed on the `PROVE-PATH` line (`:1278-1280`). Yes under `PP_RECORDS=1` [relayed: network-accounting on NET-365, that only that path passes today].
+- `benchmarks/network_traces/chain_record.py:735-748` `pooled_k`: the pooled count, `Fmax = ⌈ln(1/δ)/q⌉`, with `q` the least `k/n` it reads from each audit's `registration.json` (`audit_of`, `:676-712`). It reads the registered design, not the rule's text, so its `q` is true and is the prover's. It reads a `rule_of` window if `--audit` names one; I found no run that did.
+- `benchmarks/network_traces/leak_bounds.py:331` `fmax`: the pooled form at `q = 1`, every block sampled. Reads no served record.
+- The exfiltration bound's driver, `benchmarks/harness/verity_bench/exfiltration.py` (`benchmarks/exfiltration/run.py` calls it): reads the planner's rows of record, not a served audit (`:6-16`, `:146-155`). No.
+- The planner: `benchmarks/spot_figures/total_cost.py`, `figure1.py` (`lean_check` `:594`, `lean_two` `:617-625`, the row's `q`), `verity/protocols/spot/plancheck.py` (a leak design is blocks "each sampled independently at `rate`", `:5-6`), `optimize.py`. Every figure it gives assumes the served windows sample at the plan's rate. Nothing I found compares a served record's rule with the plan's `q` [run: `rg` for readers of a rule's rate text: only `service.py` and `adapters/vllm/verity_vllm/pipeline/window_law.py:15`].
+
+**4. Other places that write K of N as a rate** [run: `rg` for a rate text built from variables; read each].
+
+- `benchmarks/prove_path/records_audit.py:792`, used at `:861`: N is the window's own population. The one NET-365 is about.
+- `benchmarks/network_traces/scan_zk.py:1109`, used at `:1126` and `:1272`: n is the sum of the round's members. Its docstring says "each proof block is sampled with probability at least k/n however many the prover registers", which a rate over the registered n does not give. Whether n is the schedule's: not established (above).
+- `benchmarks/pouw/served_zk/served_commit.py:272`: `rate:K′/N` with N the level's padded tiles from the parameters, stated before the prover registers; a true rate if the parameters are the verifier's [read: its docstring, `:260-262`].
+- `verity/protocols/certifier/verifier/service.py:1191`: `rate:k/n` over the link's n windows, in `period_draw`. This one is verifier code. n is the count of roots the caller commits (`:1182`); I did not read who fixes it.
+- `benchmarks/two_stage/toy.py:190` and `benchmarks/two_stage/audit.py:119`: the toy's q of n spans.
+
+**5. Runs of record, figures and tables: what I searched.**
+
+- [run] The store's labels, pulled at 11:13Z (209,515): 18 records carry `run_of_record`. None is a records audit of a served window. The three newest I opened: `prove-glm53-lean-verify` is `r20261112-033326-ef6c` (`benchmarks/prove/lean_verify.sh`); `prove-glm53-flock-steady`'s newest is `r20261111-083025-3a29` (a proving throughput script); `exfiltration-glm53-compute-audit` is `r20261111-052546-d670` (the break-even planner's rows, made before `rule_of` landed). `prove-glm53-spot-sampling` is two plans (`mix.json`), the first from `r20261110-054052-9a23`; I opened one.
+- [run] Labels on runs of 11 and 12 Nov (248): none names a records audit, V3c, `served_verdicts`, `PP_RECORDS` or a rate text.
+- [run] Run ids of 11 and 12 Nov named in the tree: `r20261112-012233-2622`, `r20261111-173741-8cdb`, `r20261111-162328-f498`, `r20261111-125507-9911`, in the adapter's description sizes and the serving cards. None is an audit.
+- **Not searched** [run: `research data sql --index` answers "no index here"]: attempts that carry no label. I could not list the store's runs by command from this VM, so a served rehearsal since Wed 11 Nov 07:47Z that ran V3c's audit would not show here; vllm knows its own. I did not read Notion or any published table outside the tree, nor the other 450 targets of `prove-glm53-flock-steady`.
+
+**6. #9237: where it stands** (head `36909d392ed7`; the head to mark is one records commit after it).
+
+- [run: `research status`, 11:16Z and 11:20Z] `r20261112-093634-2002`, the quick suites, ended exit 0: 64 suites, 63 passed, 1 cached, none failed [read: `out/suites.json`]. Among them `benchmarks/network_traces`, `benchmarks/prove_path`, `benchmarks/network_e2e`, `benchmarks/one_stage`, `verity/protocols/spot/verifier`, and `verity-core-sampled-proofs`, which holds the `test_difftest.py` I mended by hand.
+- [run] All nine rehearsals at the head are exit 0: `bdc5`, `ec8e`, `f4e1`, `68a1`, `638f` (ended since my last entry), `3edd`, `c8df`, `17f7`, `d054`. I read exit codes only.
+- [run] `r20261112-093344-0553`, the records run in two passes, is still out. Its first pass ended as expected (the checker reads `failed`, the two entries' missing hash) and its second took a Lean slot at 11:13Z. My guess for its end is 11:45Z to 12:20Z [guess]. The records commit, the plain records run at it and the ready line wait on it.
+- **What stops the ready line now: only `0553`.** The seven Lean tries lost in my VM's restart are not relaunched; the records run builds those files, and I say in the ready line which claim rests on it.
+
+**7. The two merge-trees at `36909d392ed7`** [run, 11:18Z, after `merge.py --install`]. I run both again at the records commit.
+
+- Against `main` `33866d93e66e`: exit 0, no file.
+- Against lean's `f3837f57d113`: 12 files; `main` alone stops on 23; beyond `main`'s: none. `a5_coins.py` is not among them: lean's branch and `main` have no change to it since the base `d6075b75d289` [run: `git diff --stat`].
+- **The `a5_coins.py` stop is with #9199** (CLOSEROUND's `ce7dab0ab39c`), not with lean's branch [run: `git merge-tree` of the two heads: one file, two hunks]. #9199 puts its lock `_io` around the session's reads and its close; mine keeps a coin source for each rank. **The close** keeps both:
+  - in `Draws.read`: `with self._io:` then `return self._coins[rank](n)`;
+  - in `Draws._close`: `with self._io:` then `self._client.close()`, and after the lock `for coins in (self._window, *self._coins.values()): coins.settle()`.
+  - #9199 locks four places (`read`, `tree`, `tree_open`, the close) and no commit, so nothing else of mine needs the lock [read: `ce7dab0ab39c`'s file]. I have not run the closed file.
+
+**8. NET-365 and #9237's files.**
+
+- [run: `git diff --name-only 19fb19a21e40 36909d392ed7`, 30 files] #9237 touches none of `benchmarks/prove_path/records_audit.py`, `benchmarks/one_stage/served_verdicts.sh`, or any partition file. So TERMGB's second pull request and #9237 share no file I can name.
+- Two of #9237's files could meet a change that makes stand-ins or scans state rates: `benchmarks/one_stage/a5.py` (my hunks: `coins_outcome`, lines 429 to 447) and `benchmarks/network_traces/scan_zk.py` (my hunks: `coins_outcome`, lines 1170 to 1188; its `rule_of` is at 1109 and its uses at 1126 and 1272, which I do not touch) [run: `git diff -U0`]. Either order merges if TERMGB stays out of `coins_outcome`.
+- **Which of #9237's files read a law's text** [run: `rg`; read]: `service.py` (`Law`, `fixed`, `rate`, `selection_law`, `params_law`), `a5.py` (the stand-ins' rule), `a5_coins.py` (`need` plans the coins a rule's table reads), `two_stage.py` (a class's replay law, a rate), `stop_audit.py`, `benchmarks/two_stage/audit.py` (`:119`), `scan_zk.py`, the Lean `Spot/Run.lean` and `Spot/Pieces.lean`, and their tests. In each, #9237 changes the coin family's lines and no line that parses or builds a law: in `service.py` my hunks are in `_Entry` and `Stream` (lines 996 to 2500), none at 282 to 320, 760, 799 or 832 [run].
+- **For Friday's command** [relayed: my 07:51Z entry, not rerun]: `verity bench prod_repro` calls none of the drivers #9237 changes; the adapter reads one name of `service.py`, `params_law` (`serving_rows.py:133`), which #9237 does not touch. So when the partition files and `V3C_LAW` state rates, the law reaches the verifier by a path #9237 leaves as it is, and #9237 changes nothing in what Friday's command samples. What the family rule refuses is unchanged by NET-365: records whose sample read a challenger's coins under `main`'s drivers.
+
+**Runs out:** `r20261112-093344-0553` (records, second pass since 11:13Z).
