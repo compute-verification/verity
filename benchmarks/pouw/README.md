@@ -27,8 +27,8 @@ a run's result (`run_result.py`), the settings (`settings.py`) and the CPU calcu
 names its readers take, but four. `pearlc_census.py` states none: its readers are `pearlc_k256_gate.py`,
 `pearlc_k256_gate.sh` and their tests. `settings.py` states none either: code reads a setting it declares through
 `verity_config.settings.of(__file__)`, and only its test imports it. `lean_headline.py` and `lean_headline_dc.py` state
-none of their own: each gives the names of the machine model's modules it stands for (their `__all__`) to the files
-that load it by this path. Outside `benchmarks/pouw/` one file reads one of these: the harness kit's test
+none of their own: each gives the names of the modules of `verity_machine_model` it stands for (their `__all__`) to the
+files that load it by this path. Outside `benchmarks/pouw/` one file reads one of these: the harness kit's test
 (`benchmarks/harness/tests/test_kit.py`) loads `run_result.py` by its path, to hold the kit's result to the keys it
 writes. Inside it their readers are each other, three scripts of `pearl_c_vllm/` (`run_result`), `theory/cpw_floor.py`
 (`lean_headline`) and the tests.
