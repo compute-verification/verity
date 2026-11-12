@@ -368,15 +368,16 @@ def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_p
 
 # ---------------------------------------------------------------------------------------------------------------- what the run store brings
 
-def _shows(monkeypatch, *docs: Any, publish: str = "") -> tuple[tuple[list[str], dict[str, str]], list[list[str]]]:
+def _shows(monkeypatch, *docs: Any, publish: str = "", rc: int = 0) -> tuple[tuple[list[str], dict[str, str]], list[list[str]]]:
     """The research CLI as a stand-in: ``data show`` answers with the newest of ``docs`` (a str as it is, else its JSON), and any
-    other command with ``publish`` as its stdout.  Returns the CLI as `research_argv` gives it, and the commands asked."""
+    other command with ``publish`` as its stdout and ``rc`` as its exit.  Returns the CLI as `research_argv` gives it, and the
+    commands asked."""
     asked: list[list[str]] = []
 
     def run(argv, **kw):
         asked.append(list(argv))
         if asked[-1][1:3] != ["data", "show"]:
-            return subprocess.CompletedProcess(argv, 0, stdout=publish)
+            return subprocess.CompletedProcess(argv, rc, stdout=publish)
         return subprocess.CompletedProcess(argv, 0, stdout=docs[-1] if isinstance(docs[-1], str) else json.dumps(docs[-1]))
 
     monkeypatch.setattr(RS.subprocess, "run", run)
@@ -484,3 +485,76 @@ def test_a_record_is_published_only_from_a_commit_attempt_that_ran_a_clean_commi
     assert words[1:5] == [*RS.CLI, "records", "publish"] and words[words.index("--tree") + 1] == "main@c0ffee" and "--tier" not in words
     assert json.loads((tmp_path / "row.json").read_text())["record"] == {"artifact": record, "rc": 0}
     assert f"publish - {record} rc=0" in capsys.readouterr().out
+
+
+def test_a_stage_that_cites_a_build_is_held_to_the_program_digest_of_the_build_in_its_row_dir(tmp_path, monkeypatch):
+    """A Match or a Commit that cites a Build artifact asks ``research-outputs digest`` for the Program digest of the Build in its
+    row dir, and the store for the cited artifact's.  A row dir with no Build, an artifact whose digest does not read and two
+    digests that differ each stop the stage by name; the store is asked only once there is a Build here."""
+    d, art, here, other = str(tmp_path), "art:" + "b" * 64, "ab" * 32, "cd" * 32
+    digest = ["py", "-m", "verity_vllm.pipeline.cli", "research-outputs", "digest", d, ROW]
+    show = ["research", "data", "show", art, "--json"]
+
+    def held(shown: dict[str, Any], said: str, rc: int = 0) -> tuple[tuple[str | None, str], list[list[str]]]:
+        research, asked = _shows(monkeypatch, shown, publish=said, rc=rc)
+        return RS.build_input("py", d, ROW, art, {}, lambda: research), asked
+
+    assert held({"meta": {"program_digest": here}}, here + "\n") == ((None, here), [digest, show])
+    absent = f"PRECHECK_FAIL_BUILD_INPUT_ABSENT (cited {art} but {d} has no Build; run the build stage on this pod first)"
+    assert held({"meta": {"program_digest": here}}, "\n") == ((absent, ""), [digest])
+    assert held({"meta": {"program_digest": here}}, here + "\n", rc=1) == ((absent, ""), [digest])
+    unreadable = f"PRECHECK_FAIL_BUILD_INPUT_UNREADABLE (cited {art}: manifest not readable here, or no program_digest in meta)"
+    assert held({"meta": {}}, here + "\n") == ((unreadable, here), [digest, show])
+    differs = f"PRECHECK_FAIL_BUILD_INPUT_MISMATCH (cited {art} program_digest={other[:16]} != this dir's Build {here[:16]})"
+    assert held({"meta": {"program_digest": other}}, here + "\n") == ((differs, here), [digest, show])
+
+
+def _staged(tmp_path: Path, stage: str, inputs: dict[str, str] | None) -> SimpleNamespace:
+    """One stage's options as `research.stage` reads them: under a research run whose ``job.json`` recorded ``inputs``, or under
+    none (None)."""
+    run_dir = tmp_path / "run"
+    if inputs is not None:
+        run_dir.mkdir(exist_ok=True)
+        (run_dir / "job.json").write_text(json.dumps({"store": {"inputs": inputs}}))
+    env = SimpleNamespace(sweep_dir=str(tmp_path / "sweep"), environ={}, py="py", guard_preserve_file=str(tmp_path / "guard" / "kept"),
+                          research_run_dir=None if inputs is None else str(run_dir), research_run_id=None if inputs is None else "r1")
+    return SimpleNamespace(env=env, row=ROW, stage=stage, research_bin="research", research_py="python3")
+
+
+def test_a_stage_under_a_research_run_declares_its_outputs_and_keeps_its_run_whatever_its_exit(tmp_path, monkeypatch):
+    """`research.stage` runs one stage of a row as the workload of a research Attempt.  A Match or a Commit that cites a Build is
+    held to it first: exit 3, the reason by name in stages.txt, and the stage does not run.  On its way out, whatever the exit, it
+    declares the stage's outputs with the inputs its run cited (``research-outputs write``) and puts the run on the pod guard's
+    list.  Outside a research run it only runs the stage."""
+    monkeypatch.setattr(RS, "utc", lambda: "T")
+    here, other, build, match = "ab" * 32, "cd" * 32, "art:" + "b" * 64, "art:" + "c" * 64
+    d, ran = f"{tmp_path}/sweep/{ROW}", []
+    outputs = ["py", "-m", "verity_vllm.pipeline.cli", "research-outputs"]
+
+    def run(o: SimpleNamespace, stage: str) -> int:
+        ran.append(stage)
+        return 7
+
+    def staged(stage: str, inputs: dict[str, str] | None, cited: str = here) -> tuple[int, list[list[str]]]:
+        _, asked = _shows(monkeypatch, {"meta": {"program_digest": cited}}, publish=here + "\n")
+        return RS.stage(_staged(tmp_path, stage, inputs), run), asked
+
+    assert staged("build", {}) == (7, [[*outputs, "write", d, ROW, "build"]]) and ran == ["build"]
+    rc, asked = staged("match", {"build": build})
+    assert (rc, ran) == (7, ["build", "match"])
+    assert asked == [[*outputs, "digest", d, ROW], ["research", "data", "show", build, "--json"],
+                     [*outputs, "write", d, ROW, "match", "--input", f"build={build}"]]
+    consumes = f"T [row {ROW}] v2 match: consumes Build {build} (program_digest {here[:16]} verified)"
+    assert Path(d, "row.log").read_text().splitlines()[-1] == consumes
+    rc, asked = staged("commit", {"build": build, "match": match})
+    assert asked[-1] == [*outputs, "write", d, ROW, "commit", "--input", f"build={build}", "--input", f"match={match}"]
+    assert Path(d, "row.log").read_text().splitlines()[-1].endswith(f"(program_digest {here[:16]} verified), Match {match}")
+    assert not Path(d, "stages.txt").exists() and ran == ["build", "match", "commit"]
+    rc, asked = staged("commit", {"build": build}, cited=other)
+    assert (rc, ran) == (3, ["build", "match", "commit"])
+    refused = f"PRECHECK_FAIL_BUILD_INPUT_MISMATCH (cited {build} program_digest={other[:16]} != this dir's Build {here[:16]})"
+    assert Path(d, "stages.txt").read_text() == f"precheck FAIL T {refused}\n"
+    assert asked[-1] == [*outputs, "write", d, ROW, "commit", "--input", f"build={build}"]
+    assert Path(tmp_path, "guard", "kept").read_text() == "r1\n"
+    assert staged("match", None) == (7, []) and ran[-1] == "match"
+    assert Path(tmp_path, "guard", "kept").read_text() == "r1\n"
