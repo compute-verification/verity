@@ -20,6 +20,7 @@ from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
 from verity_vllm.query.program_view import spec_base
+from verity.definitions.registry import b1 as B1
 from verity.definitions.registry import boolean_sigma as SG
 from verity.definitions.registry import cuda_rmsnorm as C
 from verity.definitions.registry import deepgemm as DG
@@ -175,6 +176,66 @@ def test_the_parts_cover_the_row_s_outputs_and_compute_them(row, w):
     assert dn["outs"]["out.normed"].reshape(-1).tolist() == x["normed"].tolist()
     assert ev(resid(w), dr["rows"]["in0"], dr["rows"]["in1"])[0].tolist() == dr["outs"]["out.residual"].tolist()
     assert ev(norm(), dn["rows"]["in0"], dn["rows"]["in1"])[0].tolist() == dn["outs"]["out.normed"].tolist()
+
+
+@pytest.mark.parametrize("wa", [N // 4, N // 16])
+def test_the_residual_part_reads_a_partial_s_committed_words_whatever_blocks_prove_its_writer(monkeypatch, wa):
+    """Rank 0's partial is a ``ResidualAdd_v1`` row's output.  The add is proved in column blocks of ``wa`` and the fused row's
+    all-reduce and residual add in blocks of another width: each reads its operands as words of the committed members
+    (`serving_rows._slices`), never as another unit's rows, so the residual part's rows are the same at every ``wa``, and the
+    add's blocks' outputs in order are the member they read."""
+    wc = N // 8
+    rng = np.random.default_rng(2)
+    vals = {"x": bf16s(rng, N, 0.5), "r": bf16s(rng, N, 0.5), "peers": bf16s(rng, (WORLD - 1) * N, 0.5), "res": bf16s(rng, N, 2.0)}
+    w = bf16s(rng, N, 0.1)
+    (vals["out"],) = (a[0] for a in ev(bind(B1.ResidualAdd, N=N), vals["x"][None], vals["r"][None]))
+    parts = np.concatenate([vals["out"], vals["peers"]])
+    (both,) = ev(fused(), parts[None], vals["res"][None], w[None])
+    vals |= {"normed": both[0, :N], "residual": both[0, N:]}
+    add = {"i": 5, "spec": descriptor_id(bind(B1.ResidualAdd, N=N)), "args": [[["n", 2, 0, N]], [["n", 3, 0, N]]]}
+    row = {"i": 9, "spec": descriptor_id(fused()),
+           "args": [[["n", 5, 0, N], ["n", 0, 0, (WORLD - 1) * N]], [["n", 1, 0, N]], [["p", 0, 0, N]]]}
+    descs = {5: {"statics": {"N": N}, "op_path": "model.layers.3.mlp", "members": [("out", N, "bf16")], "row": 0, "step": 16},
+             9: {"statics": dict(STATICS), "op_path": OP, "members": MEMBERS, "row": 0, "step": 16}}
+    written = {0: "peers", 1: "res", 2: "x", 3: "r", 5: "out"}
+
+    class Index:
+        pnames = ["weights"]
+        by_i = {5: add, 9: row}
+
+        def __init__(self, *_a, **_k):
+            pass
+
+        def describe(self, r):
+            return descs[r["i"]]
+
+        def member_at(self, a, lo, hi):
+            nm = written[a]
+            return {"members": [(nm, vals[nm].size, "bf16")], "step": 16, "op_path": f"m.{nm}", "row": 0}, nm, lo, hi, None
+
+        def weight_slice(self, lo, hi):
+            return "w", lo, hi, None
+
+    class Store:
+        def words(self, rid, step, op, member, lo, hi):
+            return vals[member][lo:hi], None
+
+    monkeypatch.setattr(SRW, "ProgramIndex", Index)
+    monkeypatch.setattr(SRW, "index_of", lambda inst, _reuse, **kw: Index(inst, **kw), raising=False)
+    tmpls = [descriptor_id(bind(SG.ResidualAdd, N=wa)), descriptor_id(resid(wc, boolean=True))]
+    rows, _defs, counts = SRW.member_rows({"r0": {}}, tmpls)
+    assert counts == [N // wa, N // wc] and [[r["i"] for _rid, _pi, r, _d in rs] for rs in rows] == [[5], [9]]
+    ma, mc = SRW.members(tmpls, rows, counts)
+    assert (ma.rows, ma.outs) == ((("in0", wa), ("in1", wa)), (("out.out", wa),))
+    assert (mc.rows, mc.outs) == ((("in0", WORLD * wc), ("in1", wc)), (("out.residual", wc),))
+    da, _ea = SRW.read(ma, rows[0], Store(), lambda f, lo, hi: w[lo:hi])
+    dc, _ec = SRW.read(mc, rows[1], Store(), lambda f, lo, hi: w[lo:hi])
+    assert da["outs"]["out.out"].reshape(-1).tolist() == vals["out"].tolist()
+    for j in range(N // wc):
+        assert dc["rows"]["in0"][j][:wc].tolist() == vals["out"][j * wc:(j + 1) * wc].tolist()
+        assert dc["rows"]["in0"][j][wc:].tolist() == vals["peers"].reshape(WORLD - 1, N)[:, j * wc:(j + 1) * wc].reshape(-1).tolist()
+    assert ev(resid(wc), dc["rows"]["in0"], dc["rows"]["in1"])[0].tolist() == dc["outs"]["out.residual"].tolist()
+    assert dc["outs"]["out.residual"].reshape(-1).tolist() == vals["residual"].tolist()
 
 
 @pytest.mark.parametrize("tmpls", [lambda: [resid(N // 2, True), resid(N // 4, True)], lambda: [fused(True), norm(True)]],
