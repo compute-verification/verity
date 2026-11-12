@@ -19,6 +19,11 @@ behind the ZK server otherwise is, one `serve` and one `prove` process on a chal
   coins and the verdict follows the proofs, so a member's verdict follows its closing round's receipt. The stream starts
   member i + 1's loop only once member i's verdict is emitted, so no line of member i + 1's tree, the one that samples
   it at its `Hello` included, is before member i's closing round.
+* **Both paths' lines name their seconds** (`seconds_reason`). A proved session's `LIVE` line holds ``steps_s``: the
+  prover's seconds from the instant before `Register` to the start of its repetitions, a lap of one clock a step
+  (`STEPS`) and their ``total``. Its server's `SESSION` line holds where the session's thread spent its seconds
+  (`BUSY`). Each is a float on the stream's lines and on the pair's, whatever the session ran: a step a session did not
+  take reads 0.0, never null and never an integer, so `differ` and every reader take it as a clock's reading.
 * **It refuses to verify ahead**: with ``FC_VERIFY_AHEAD`` above 0 a session would start before the verdict of the one
   before it.
 
@@ -69,6 +74,16 @@ TEXT = "wire_recv"
 DECIDED = ("circuit_sha512", "statement_digest", "public_sha512", "public_file_sha512")
 #: a field word, or a digest, root, key or message of them, in a record's hex
 WORDS = re.compile(r"[0-9a-f]{32,}")
+#: the steps of a `LIVE` line's ``steps_s``, in the prover's order: the `Register` round trip, the drawn statement's
+#: tables, connecting the ZK server's Lean finish, the session's configuration and what it starts beside the witness, the
+#: witness (``witness_s`` is inside it), the waits for level 0's salts and for rep 0's pads, the next session's level 0
+#: started, and the wait for the previous session's repetitions
+STEPS = ("register", "tables", "lean_finish", "config", "witness", "level0_wait", "zk_pads_wait", "level0_next", "device_wait")
+#: a `SESSION` line's seconds of its session's thread: building its server, writing its record and proofs, waiting for
+#: the prover's frames, and all of it but that wait
+BUSY = ("build_s", "record_s", "prover_wait_s", "busy_s")
+#: what the clock reads between two laps may add up to, in seconds
+SLACK = 1e-3
 
 
 def differ(a, b, at: tuple = ()) -> list[str]:
@@ -113,6 +128,58 @@ def order_reason(log: Sequence[str], roots: Sequence[str]) -> str | None:
         if first < closing:
             return f"member {k}'s first line is line {first}, before member {k - 1}'s closing round, line {closing}"
     return None
+
+
+def seconds_reason(live: dict, served: dict) -> str | None:
+    """Why a proved session's `LIVE` line `live` and its server's `SESSION` line `served` don't name their seconds as
+    every session's do; None when they do. ``steps_s`` holds each step of `STEPS` and ``total`` and nothing else, and
+    the `SESSION` line each field of `BUSY`: every one a float, none below 0. The steps are laps of one clock, so they
+    add up to the total, which is inside ``e2e_s`` and holds what ``e2e_s`` has before ``tp_s`` starts; the witness's
+    lap holds ``witness_s``; and the busy seconds hold the build's, the record's, ``handle_s`` and ``verify_s``."""
+    steps = live.get("steps_s")
+    if not isinstance(steps, dict) or set(steps) != {*STEPS, "total"}:
+        return f"the LIVE line's steps_s is {sorted(steps) if isinstance(steps, dict) else steps!r}, not {[*STEPS, 'total']}"
+    seconds = {**{f"steps_s/{k}": v for k, v in steps.items()}, **{k: served.get(k) for k in BUSY}}
+    for name, v in seconds.items():
+        if type(v) is not float or v < 0:
+            return f"{name} is {v!r}, not a float of 0 or more"
+    laps = sum(steps[k] for k in STEPS)
+    if abs(laps - steps["total"]) > SLACK:
+        return f"steps_s's steps add up to {laps}, not its total {steps['total']}"
+    if not live["e2e_s"] - live["tp_s"] - SLACK <= steps["total"] <= live["e2e_s"]:
+        return f"steps_s/total {steps['total']} is not between e2e_s - tp_s = {live['e2e_s'] - live['tp_s']} and e2e_s = {live['e2e_s']}"
+    if live["witness_s"] > steps["witness"] + SLACK:
+        return f"witness_s {live['witness_s']} is not inside steps_s/witness {steps['witness']}"
+    parts = sum(served[k] for k in ("build_s", "record_s", "handle_s", "verify_s"))
+    if parts > served["busy_s"] + SLACK:
+        return f"the SESSION line's build_s, record_s, handle_s and verify_s add up to {parts}, above its busy_s {served['busy_s']}"
+    return None
+
+
+def test_seconds_reason_names_a_field_that_is_missing_or_no_float_or_a_sum_that_is_off():
+    steps = {**dict.fromkeys(STEPS, 0.0), "register": 0.5, "lean_finish": 20.0, "witness": 0.75, "total": 21.25}
+    live = {"e2e_s": 60.0, "tp_s": 39.0, "witness_s": 0.5, "steps_s": steps}
+    served = {"handle_s": 0.125, "verify_s": 0.25, "build_s": 0.5, "record_s": 0.125, "prover_wait_s": 59.0, "busy_s": 1.0}
+    assert seconds_reason(live, served) is None
+    names = [*STEPS, "total"]
+    assert seconds_reason({**live, "steps_s": None}, served) == f"the LIVE line's steps_s is None, not {names}"
+    less = {k: v for k, v in steps.items() if k != "level0_next"}
+    assert seconds_reason({**live, "steps_s": less}, served) == f"the LIVE line's steps_s is {sorted(less)}, not {names}"
+    more = {**steps, "hello": 0.0}
+    assert seconds_reason({**live, "steps_s": more}, served) == f"the LIVE line's steps_s is {sorted(more)}, not {names}"
+    # a step the session did not take is 0.0: never null, and never an integer
+    for v in (None, 0, -0.5, "0.0"):
+        assert seconds_reason({**live, "steps_s": {**steps, "device_wait": v}}, served) \
+            == f"steps_s/device_wait is {v!r}, not a float of 0 or more"
+        assert seconds_reason(live, {**served, "record_s": v}) == f"record_s is {v!r}, not a float of 0 or more"
+    assert seconds_reason(live, {k: v for k, v in served.items() if k != "busy_s"}) == "busy_s is None, not a float of 0 or more"
+    assert seconds_reason({**live, "steps_s": {**steps, "config": 0.25}}, served) \
+        == "steps_s's steps add up to 21.5, not its total 21.25"
+    assert seconds_reason({**live, "tp_s": 38.5}, served) \
+        == "steps_s/total 21.25 is not between e2e_s - tp_s = 21.5 and e2e_s = 60.0"
+    assert seconds_reason({**live, "witness_s": 1.0}, served) == "witness_s 1.0 is not inside steps_s/witness 0.75"
+    assert seconds_reason(live, {**served, "busy_s": 0.5}) \
+        == "the SESSION line's build_s, record_s, handle_s and verify_s add up to 1.0, above its busy_s 0.5"
 
 
 def test_differ_takes_a_sessions_own_coins_and_seconds_and_nothing_else():
@@ -190,7 +257,7 @@ def _verdict(st: Statement, stage: Path, session: Path) -> dict:
 
 def _pair(env: dict, st: Statement, sample: dict, d: Path) -> dict:
     """One member as a process pair: `serve` for one session at `sample` on a challenger of its own, and `prove`. Its
-    `LIVE` line, its record's directory and its challenger's audit."""
+    `LIVE` line, its server's `SESSION` line, its record's directory and its challenger's audit."""
     d.mkdir(parents=True, exist_ok=True)
     (d / "sample.json").write_text(json.dumps(sample))
     ch, flags = CH.start(d / "challenger")
@@ -219,8 +286,9 @@ def _pair(env: dict, st: Statement, sample: dict, d: Path) -> dict:
         records = CH.records(d / "sessions")
         audit = CH.end(d / "challenger", ch, records)
     lives = [json.loads(x.split("\t", 1)[1]) for x in p.stdout.splitlines() if x.startswith("LIVE\t")]
-    assert len(lives) == 1 and len(records) == 1, (p.returncode, p.stdout[-600:], p.stderr[-600:])
-    return {"live": lives[0], "dir": Path(records[0]), "challenger": audit, "loops": _loops(d)}
+    served = [json.loads(x.split("\t", 1)[1]) for x in (d / "serve.out").read_text().splitlines() if x.startswith("SESSION\t")]
+    assert len(lives) == 1 and len(served) == 1 and len(records) == 1, (p.returncode, p.stdout[-600:], p.stderr[-600:])
+    return {"live": lives[0], "served": served[0], "dir": Path(records[0]), "challenger": audit, "loops": _loops(d)}
 
 
 @pytest.fixture(scope="module")
@@ -256,7 +324,7 @@ def window(tmp_path_factory):
         for s in sessions:
             s.result()
     (name,) = server.challengers
-    stream = [{"live": s.live, "dir": s.dir, "challenger": s.challenger} for s in sessions]
+    stream = [{"live": s.live, "served": s.served, "dir": s.dir, "challenger": s.challenger} for s in sessions]
     pairs = [_pair(env(d / f"pair-m{k}"), st, sample, d / f"pair-m{k}") for k, (st, sample) in enumerate(members)]
     for (st, _), *both in zip(members, stream, pairs):
         for one in both:
@@ -278,6 +346,7 @@ def test_a_member_through_the_stream_is_the_process_pairs_member_less_the_second
         for one in (got, pair):
             assert one["live"]["accepted"] is True and one["verdict"]["accepted"] is True and one["challenger"]["ok"] is True, (k, one["live"].get("why"), one["verdict"].get("why"), one["challenger"])
             assert one["record"]["unit_draw"] == sample, k
+            assert seconds_reason(one["live"], one["served"]) is None, k
         assert differ(pair["record"], got["record"]) == [], k
         # Lean's verdict names the record it read, each side's own
         assert [one["verdict"]["session"] for one in (pair, got)] == [str(one["dir"]) for one in (pair, got)], k
