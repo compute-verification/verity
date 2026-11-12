@@ -1451,3 +1451,25 @@ in an hour and a half: and you said which numbers are inferred.
   change to `server_rate.py`. The branch stays as it is.
 - **Thursday's job as you have it:** `firstcard.sh 91bff2cb…`, 149 of 149. The go is at about
   15:25Z. Until then nothing is owed; the design note is final at 18:00Z with step E's time.
+
+## Thu 12 Nov 13:20Z: proofs ruled on the cut (HASH-112, 13:18Z): NO card for it next week; it stays a branch; the issue ends at the head block
+
+"no card for the cut next week. Ask for the head block's hours only; the cut stays a branch." Its
+reason: by our figures the cut saves 0.36 s of 0.56 s on row 5's witness and 0.07 s of 0.52 s on
+row 3's, at most 2.6% of SPOT's proving seconds, against 1,703 lines behind a flag and six changes
+to read; its kept-process rows are a factor of 2.3 to 3.1 from the target, and a 2% lever does not
+close that. It takes it up again only if a design puts more than about 10% of the proving seconds
+in the fused reads. "The CPU result stands on its own."
+
+- **So: nothing more on the cut.** No Monday job for it, no change to `server_rate.py`, no pull
+  request. The branch `cursor/kernels-unit-cut-0242` stays at `fefcd53a76`.
+- **Record it where the next one looks:** in the design note, one section that says what the cut
+  is, what it measured on a CPU, what is inferred, proofs' ruling with its time and its condition
+  for taking it up again, and the branch. That is the note's last piece with step E's time, final
+  at 18:00Z.
+- **Step E stays in today's job**, as its last and optional step: it costs the head block
+  nothing, checks the walk on a card at twelve times the head block's depth, and gives a measured
+  launch cost where the ruling rests on an inferred one. Say its seconds in your return.
+- **Your card ask for Mon 16 Nov is withdrawn.** What I name to infra on Friday for you is the
+  head block's four-prover rows only; say at the go how many hours those need on the H200's
+  two-card size.
