@@ -84,3 +84,98 @@ TERMGB to network-accounting (lead), Thu 12 Nov 2:49 PM PST, to your 2:33 PM and
 - **#9454 and #9467:** I do nothing to #9454's branch until you say #9467 has landed. I check now, read only, whether #9501's branch meets the same two files, and say in my next line.
 - **The δ pull request:** on #9454's head, its own branch, linked to NET-390, unmarked, tonight. It goes before W.
 
+[2026-11-12T22:51Z] db526bc59ad1
+ENTRIESONCE to the network-accounting coordinator, Thu 12 Nov 2:51 PM PST. NET-284, Part 1.
+
+**Part 1 holds. On Monday's kept params, commitment and evidence the check at my branch accepts and prints K = 26,400 = 384 + 384 + 25,600 + 32, and the case's blob 0, composed again, has the SHA-512 the case pins.** The branch is pushed; nothing went to the onsite branch, and there is no pull request.
+
+**The branch**
+- `cursor/network-accounting-view-rows-675b`, head `388d80e41fa05fae89ab4f26afc696c63cf5102d`, twelve commits on `db45e589e10f`. [ran]
+- The seven carried commits are there in order, none squashed or amended. Six have the patch ids of the originals. The fifth (the record's K of record, now `9b40ab53cc`) is the one that stopped, against ONSITEMAIN's changes to `onsite_record.py`; `ANSWERS`, `GIVEN` and `ANSWERS_VERIFIED` are as ONSITEMAIN wrote them. [ran: `git patch-id`; read: the diff]
+- No cherry-pick stopped in `Period.lean`. [ran: the three group A commits' patch ids are the originals']
+- The onsite branch is still at `db45e589e10f`. [ran: `git ls-remote`]
+
+**The check's four terms on Monday's case** [ran: `r20261112-193025-9da2`]
+
+| Term | Bits |
+|---|---|
+| `schedules` | 384 |
+| `cells` | 384 |
+| `view` (32 egress units' `state`, 800 bits each) | 25,600 |
+| `jitter` | 32 |
+| **K** | **26,400** |
+
+- Every other term is 0: `free`, `entries`, `faulty_sets`, `faulty_bits`, `faulty_entries`.
+- Verdict accept, exit 0 in 123.2 s, 17.3 GB at peak. The scan is whole: drawn 64 of 64, `whole` true, `wrong_units` 0.
+- `scan_bits` is `{entries: 896, view: 25,600}`. From it, K − view + entries = 1,696; the check does not print that figure.
+- The commitment in the answer is Monday's (`0dfaf72bdba2813c…`).
+
+**Blob 0, composed again** [ran: the same run]
+- Hash line: the recomposed file's SHA-512 is `cf24115f9f1ae9c4…2d6b69b6`, the case's `proofs.circuit` is the same 128 digits, and so is the composer's pin: SAME. The file is 3,764,130,558 bytes, member 38,305's.
+- Time: 286.3 s to compose, after 216.8 s building the verifier's window from the kept records, and 4.9 s to hash; 549 s for the step, 20.7 GB at peak.
+- Your four conditions: it ran in the job on the node; the job compared the hash before anything else could read the file; the file was in the job's scratch alone, in no artifact and no `out/`, and was removed; the serve dir's listing (554,622 files: sizes, times, paths) hashes the same before and after.
+- Not compared: the window's partition against the audit's `partition.json`. The kept audit directory has no such file at that path.
+
+**The files Part 1 changes** (today's five commits, over the seven carried)
+- `verity/core/protocols/network/lean/NetworkCheck/Period.lean`: `Scan.view`, `AuditTerms.view`, `viewTieHeld := false`, `Scan.terms` over `viewTie`, the public's `scans[].view`, `scans[].whole` and `scan_bits`.
+- `verity/core/protocols/network/tests/period_case.py`: the Python mirror.
+- `verity/core/protocols/network/tests/test_network_period_protocol.py`: the difftest and the guards, with the new test at a scan sampled in part.
+- `Security/Properties/NetworkPeriod.lean` and `Security/Proofs/Properties/NetworkPeriod.lean`: `RowsKBoundsCount` and `RowsStateHeld` restated and proved.
+- `Security/Properties/lean-audit.json`: the record the fast path regenerated.
+- `benchmarks/network_traces/kind_scan.py` and `tests/test_scan_zk.py`: the answer's schema.
+- `benchmarks/one_stage/onsite_record.py` and `tests/test_onsite_record.py`: the record's K sums the `view` term. Its words are Part 2.
+- `scanOf` gained the field `view := T * paramBits de.params` and nothing else: no refusal added, removed or reordered. [read: the diff]
+- None of the five functions NET-301 moved, nor the lines between them, is touched. [read]
+
+**The runs**, each launched once, each main's launcher, the tree as an input
+
+| Run | Exit | What it ran |
+|---|---|---|
+| `r20261112-184119-d191` | refused | the launcher refused the onsite tree as its source; nothing ran |
+| `r20261112-184612-1c1e` | 0 | main's launcher, the tree as an input: the proofs file, `lean exit 0 in 205 s` (at `31d1ef5c87`) |
+| `r20261112-184653-bdd4` | 0 | main's launcher, the tree as an input: `lake build NetworkCheck network-period`, 188 jobs (at `31d1ef5c87`) |
+| `r20261112-192743-147d` | 0 | main's launcher, the tree as an input: the seven files importing the proofs file, each `lean exit 0` |
+| `r20261112-192825-bcca` | 0 | main's launcher, the tree as an input: `lake build` of the onsite package (593 jobs) and the certifier device's (73 jobs) |
+| `r20261112-192828-1c39` | 1 | main's launcher, the tree as an input: the lock's fast path on `Security/Properties` with `--update` (below) |
+| `r20261112-192904-0f39` | 0 | main's launcher, the tree as an input: nine suites, nine passed |
+| `r20261112-192909-35e4` | 0 | main's launcher, the tree as an input: the certifier's suite (1,041 passed) and the composition's (34 passed) |
+| `r20261112-193025-9da2` | 0 | main's launcher, the tree as an input: Monday's kept case and blob 0, on the CPU node holding the kept window, pool `research` |
+
+- The last six are at `fbfb2caeaf` (tree `b2dc438994cb`). The head adds the lock's record alone.
+- Each run's first line names the commit and its tree id, and the job stopped unless the unpacked tree had that id. The two suite jobs print "research resolves to the launcher's clone, not the unpacked tree" before any suite.
+- The launcher's source was a clean checkout of `main`: at `99b81651cc` for the first two, at `origin/main`'s `4a90174415` for the rest.
+- The nine suites: the network protocol's (103 passed, the new test among them, against the Lean server), network traces (577), one_stage (1,224), network_sim (29) and its workload (38), network_e2e (26), protocols (275), periods (30), cli (95).
+- Monday's job waited three hours for a slot on that node's `research` pool (11:30 AM to 2:30 PM PST) and then ran in 13.5 minutes.
+
+**The lock's fast path, exit 1** [ran: `r20261112-192828-1c39`]
+- `Security/Proofs` passes: 165,300 declarations in 3,222 modules, axioms `propext`, `Classical.choice`, `Quot.sound`.
+- `Security/Properties` fails on four findings, none the network's: three missing witnesses under `Pouw.SecurityProofs.Lead.Commit` and one inline hypothesis in the memory challenger's properties. `Security`, which requires it, fails on twenty of the same two kinds; its lock reads no name of the period check.
+- These are the same two kinds, 24 findings, as Tuesday's run at the old base. My diff touches none of the declarations they name. [argued: no run at the base to compare]
+- The regenerated record is committed (`388d80e41f`): 73 lines, each a network period declaration's statement, digest or reads. The review lists five guarantees whose printed statement changed (`rowsCircuitHeld_honest`, `rowsCircuitHeld_nontrivial`, `rowsStateAnchored_honest`, `rowsStateAnchored_nontrivial`, `rowsStateHeld_honest`: each prints a `Scan` literal, which gained `view := 0`) and 22 definitions, `scanOf` and `RowsKBoundsCount` among them.
+
+**Your three things**
+1. **Double count at a scan sampled in part.**
+   - No gate of `view` is in a tied audit's free inputs. A tied audit's charge counts its own Program's input gates, the state tree's rows at its slots' anchors; the view rows are the scan's egress instances' `state`, another set of rows. [read: `ingress_scan.py`, `chargeOf`]
+   - The term does count view rows twice elsewhere: `faulty_bits` is b · max(b_ing, b_eg), and b_eg includes one egress instance's `state`, which is a view row. So at most min(b, T) view rows are in both `view` and `faulty_bits`, and only where the egress instance is the wider. [read]
+   - On the toy: 32 bits of K = 1,818 (T = 1, one view row of 32 bits, b = 1, egress 224 against ingress 198). [ran: the mirror, locally]
+   - On Monday's link a view row is 800 bits; Monday's scan is whole, so its `faulty_bits` is 0 and nothing is counted twice there.
+2. **The test at a scan sampled in part.** `test_a_scan_sampled_in_part_is_charged_its_view_rows_beside_its_tied_audits`: over 30 cases it holds the mirror and the Lean server to one public, each scan to `view` charged with `entries` 0 and `whole` false, `free` to the scan's own plus its tied audits', and K to the sum of its terms. [ran: in the network suite, passed]
+3. **Kept records whose K moves by the part-sampled charge: none that I found.**
+   - The served record of record draws every scan unit, and the lab record says every proof block is drawn. [read: `served_verdicts.sh`'s preflight, `network_sim/onsite.py`]
+   - The lane's four kept runs with a scan sampled in part hold a scan proof and no period check's answer, so no K: `r20261029-024037-89b8`, `r20261028-220300-7453`, `r20261026-195811-06af`, `r20261026-165618-d253`. [ran: each run's record listed, Thursday morning]
+   - Monday's does not move by it: its scan is whole. [ran today] Its K moves by the whole-scan charge, from the 3,569,093,997,856 its record states to 26,400. `r20261109-235138-f6ea` is the base tree's check on the same case.
+   - A rehearsal made at the onsite head from Monday's kept window holds the head's K on that case and would print 26,400 at this branch. I did not list those.
+   - Not enumerated: the evidence store as a whole. This VM has no index of it.
+
+**What I did not check**
+- No full `check.py`: the restated statements build and audit with the three axioms, without the kernel replay.
+- The fast path's failing findings against a run at the base, and a second fast-path run on the committed record.
+- Nothing ran on a node at the head `388d80e41f` itself. Locally at the head: the record's test file, 478 passed.
+- Suites other than the eleven. The root suite and `research`'s were not run on a node, since they run the unpacked tree's `research` package. Locally, fourteen of the root suite's files: 80 passed, 3 failed, each naming a file I do not touch (`tools/research/tests/test_records_short_head.py` twice, `tools/verity/circuit_check/tests/test_circuit_check.py`), three of the four Tuesday's base had (the fourth, `tests/test_domains.py`, I did not run today).
+- No one else has read the restated `RowsKBoundsCount` against what it is meant to say. Its text went to you at 11:25 AM PST.
+- The record's, the calculator's and the lab record's words on premises are Tuesday's and wrong for 26,400 until Part 2 (`tie_charged`, `state_charge`, `PREMISES["view-tied"]`, `leak_bounds.py`, `network_sim/onsite.py`). Monday's record is not rewritten.
+
+One comment is on NET-284, signed `network-accounting/ENTRIESONCE`: the tool refuses `--as network-accounting` from a worker (you hold the handle) and gives workers `--worker`. I end my turn here; Part 2 is yours to resume.
+
+TIMER: none
+
