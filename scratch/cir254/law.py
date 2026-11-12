@@ -1,8 +1,11 @@
 """CIR-254: a unit's staging peak against its keys, from `stage_profile.py`'s records, and what the fitted laws give at a size.
 
-    python law.py KIND [--at N] RECORD.json...     e.g. law.py positions --at 40960 out/positions.*.json
+    python law.py KIND [--at N] [--fix NAME] RECORD.json...     e.g. law.py positions --at 40960 out/positions.*.json
 
-Three laws through the records of one kind (the peak in GiB against N keys), least squares on the peak itself:
+The peak is the run's high-water mark without the profiler's own counting (`report.phases`), and beside it the resident memory
+at the end of `lower_gates`, read before the counting.  ``--fix NAME`` takes the records staged with that change of `fixes.py`
+in place of the plain ones.  Three laws through the records of one kind (the peak in GiB against N keys), least squares on the
+peak itself:
 ``quadratic`` c0 + c1 N + c2 N^2; ``power`` c N^p (a line through log peak against log N); ``pure-square`` c N^2 through the
 largest size alone.  Beside the peak: the unit's nonzeros, the entries of the forms the lowering holds at the end of its gates
 and their bytes, each with its ratio to the size before.
@@ -34,33 +37,41 @@ def least_squares(xs: list[list[float]], ys: list[float]) -> list[float]:
 
 
 def main(argv: list[str]) -> int:
+    sys.path.insert(0, str(Path(__file__).parent))
+    import report
+
     kind = argv[0]
     at = int(argv[argv.index("--at") + 1]) if "--at" in argv else 40960
+    fix = argv[argv.index("--fix") + 1] if "--fix" in argv else None
     recs = []
     for a in argv[1:]:
-        if a.startswith("--") or a == str(at):
+        if a.startswith("--") or a in (str(at), fix):
             continue
         r = json.loads(Path(a).read_text())
-        if r.get("case", "").split(".")[0] == kind and r.get("staged") and not r.get("fix") and not r.get("trace_frames"):
+        c = r.get("case", "").split(".")
+        if c[0] == kind and len(c) == 2 and r.get("staged") and r.get("fix") == fix and not r.get("trace_frames"):
             recs.append(r)
     recs.sort(key=lambda r: int(r["case"].split(".")[1]))
     rows = []
     for r in recs:
         n = int(r["case"].split(".")[1])
         w = r.get("wires", {})
-        rows.append({"n": n, "id": r["id"], "peak": r["peak_gib"], "seconds": r["seconds"], "ands": r["nets"]["ands"],
+        ph = report.phases(r)
+        low = next(m for m in r["marks"] if m["mark"] == "< lower_gates")
+        rows.append({"n": n, "id": r["id"], "peak": max(p["so_far"] for p in ph) / 2**30, "lowered": low["rss"] / 2**30,
+                     "seconds": sum(p["seconds"] for p in ph), "ands": r["nets"]["ands"],
                      "nnz": r["nets"]["nnz_a"] + r["nets"]["nnz_b"], "wire_entries": w.get("set_entries"),
                      "wire_gib": (w.get("set_bytes") or 0) / 2**30, "circuit_bytes": r["circuit_bytes"]})
-    print("| N | peak GiB | x | ANDs | nonzeros | x | forms' entries held | x | their GiB | seconds | circuit file GiB |")
-    print("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+    print("| N | peak GiB | x | at the end of the gates | ANDs | nonzeros | x | forms' entries held | x | their GiB | seconds | circuit file GiB |")
+    print("|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
     prev = None
     for q in rows:
         x = lambda k: "" if prev is None or not prev[k] else f"{q[k] / prev[k]:.2f}"  # noqa: E731
-        print(f"| {q['n']:,} | {q['peak']:.2f} | {x('peak')} | {q['ands']:,} | {q['nnz']:,} | {x('nnz')} | {q['wire_entries'] or 0:,} | "
-              f"{x('wire_entries')} | {q['wire_gib']:.2f} | {q['seconds']:.0f} | {q['circuit_bytes'] / 2**30:.2f} |")
+        print(f"| {q['n']:,} | {q['peak']:.2f} | {x('peak')} | {q['lowered']:.2f} | {q['ands']:,} | {q['nnz']:,} | {x('nnz')} | "
+              f"{q['wire_entries'] or 0:,} | {x('wire_entries')} | {q['wire_gib']:.2f} | {q['seconds']:.0f} | {q['circuit_bytes'] / 2**30:.2f} |")
         prev = q
     ns, ps = [q["n"] for q in rows], [q["peak"] for q in rows]
-    out = {"kind": kind, "sizes": ns, "peaks": ps, "at": at}
+    out = {"kind": kind, "fix": fix, "sizes": ns, "peaks": [round(p, 3) for p in ps], "at": at}
     if len(rows) >= 3:
         c = least_squares([[1.0, n, n * n] for n in ns], ps)
         fit = lambda n: c[0] + c[1] * n + c[2] * n * n  # noqa: E731
@@ -73,7 +84,15 @@ def main(argv: list[str]) -> int:
         out["last_two_exponent"] = math.log(ps[-1] / ps[-2]) / math.log(ns[-1] / ns[-2])
     if rows:
         out["pure_square"] = {"c": ps[-1] / ns[-1] ** 2, "at": ps[-1] * (at / ns[-1]) ** 2}
-    print(json.dumps(out, indent=1))
+    if len(rows) >= 2:
+        # the nonzeros' own law, for what the statement holds at the size
+        zs = [q["nnz"] for q in rows]
+        b = least_squares([[1.0, math.log(n)] for n in ns], [math.log(z) for z in zs])
+        out["nonzeros"] = {"p": round(b[1], 3), "power_at": round(math.exp(b[0] + b[1] * math.log(at))),
+                           "pure_square_at": round(zs[-1] * (at / ns[-1]) ** 2), "last_two_exponent": round(math.log(zs[-1] / zs[-2]) / math.log(ns[-1] / ns[-2]), 3)}
+    rnd = lambda v: round(v, 3 if abs(v) > 1e-2 else 12) if isinstance(v, float) else v  # noqa: E731
+    out = {k: ({a: rnd(b) for a, b in v.items()} if isinstance(v, dict) else rnd(v)) for k, v in out.items()}
+    print(json.dumps(out))
     return 0
 
 
