@@ -144,8 +144,6 @@ the vector fails its check or doesn't reproduce a published number.
 - `sheet`: a card's data sheet (`sheet.toml`): `sheet(data) -> Sheet`, `lines`, `differences` against the census,
   `reading` and `moves` (the headline's sheet reading and how far a tensor line can slow before it moves), `lean`.
 - `cover`: the opcode table: `load() -> Cover`, `problems`, `counts`, `holes`.
-- `strassen`: naive tiled against Strassen in the tensor-core model: per-product costs (`costs`), uniform-depth tables
-  (`depth`) and the least cost over every recursion tree (`sched`).
 - `cli` and `commands/`: the command. `cli.main(argv)` only dispatches. Each command is a module of `commands/` whose
   docstring is its usage, `add(sub)` its arguments and `run(args)` its body, so a new command is a new module and
   touches no other.

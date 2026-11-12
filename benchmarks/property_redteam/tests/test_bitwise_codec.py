@@ -7,18 +7,12 @@ of its ANDs on two run-time bits is a data product and costs a unit, and its wor
 from __future__ import annotations
 
 import random
-import sys
-from pathlib import Path
 
+import bitwise_codec as BC
+import free_codec as FC
+import gates as G
 import pytest
-
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import bitwise_codec as BC  # noqa: E402
-import free_codec as FC  # noqa: E402
-import gates as G  # noqa: E402
-import squaring as S  # noqa: E402
+import squaring as S
 
 # security/Proofs/Accounting/Gates.lean's `codecRows`: (n, c, cs, K, τ, i, m, encodeWord).
 CODEC_ROWS = [

@@ -702,7 +702,7 @@ A program's rounds are counted by `oracle.run`, never claimed. `audit.simulate` 
 `(Δ + rtt_allowance) / call_ns`. Here `call_ns` is the fastest whole oracle call, the ideal-permutation model's unit
 and not an adversary's floor at the reference `Π₂` ("Main caveat"), and its 242 µs default is
 `P_T`'s Feistel-SHAKE256 floor at 64 KB (a `Π₂` call is at least 480 µs), so the budget is 2 rounds at Δ = 0.5 ms.
-`CERTIFIED_ROUNDS = 10` is what P3 is certified for at the operating point, counted in `P` and `Π₂` calls:
+P3 is certified for 10 rounds per answer at the operating point, counted in `P` and `Π₂` calls:
 `Pous.SecurityProofs.P3ConcreteMeets64` holds at `D = 10` on `B(220, 12)`, and `P3ConcreteMeets64D12` at 12 on
 `B(220, 16)`, both for Lean's `h_0`, not yet the code's ("P3 (research)"). The column-game certificate
 `band_twoWay_220_12` covers 10 game levels, which the instantiation's rule of 3 calls per level (`Π₂` of the oldest

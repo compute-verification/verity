@@ -88,7 +88,7 @@ class Node:
 
     def __post_init__(self) -> None:
         for name in ("spec_bytes_per_s", "read_bytes_per_s", "gpu_write_bytes_per_s", "host_write_bytes_per_s"):
-            if not 0 < _rate(getattr(self, name), name):
+            if not _rate(getattr(self, name), name) > 0:
                 raise ValueError(f"{name} is positive")
         if type(self.chip_bytes) is not int or self.chip_bytes < 0:
             raise ValueError("chip_bytes is a nonnegative integer")
@@ -470,3 +470,7 @@ def declared(record: audit.Record, node: Node, *,
     once = lambda p: bounds[id(p)]  # noqa: E731
     return Declared(len(record.windows), gamma(record, node, node.spec_bytes_per_s, wrong=once),
                     gamma(record, node, node.read_bytes_per_s, wrong=once), memory(record, node))
+
+
+__all__ = ["DELTA_PARTS", "FORMS", "Node", "PRF_CLAIM", "REJECTION_LOG2", "SNAPSHOT", "TIME_HELD", "binding_over",
+           "hiding_over", "window_receipts"]
