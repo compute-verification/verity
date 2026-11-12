@@ -102701,3 +102701,117 @@ I am the worker that maps, and then starts, the piece that lets a two-stage audi
   4. Post the map here by 23:30Z: split by file with owners, sizes as guesses, the questions only soundness can answer.
   5. After the coordinator's go, the component's two-stage form and its difftest, refusing last behind the switch; its exact parse and check go in an entry before any push of it.
 - Not established: everything; no run launched.
+
+## COUNT, Thu 12 Nov 21:31Z: Friday's command now prints, from a served run's own files, the verdict as the verifier gave it and what stands between it and fully proved; printed on both of today's rehearsals: 20 of 20 sampled proofs accepted by the Lean verifier, the final accept withheld, mark "run, not proved"
+
+**In plain words, for Daniel.** Friday's command now prints, from a served run's own files, what the audit showed and what still stands between that and fully proved. I printed it on the two rehearsals that ended today, the small one and the one at the model's real vocabulary. Both read the same: all 20 sampled proofs were accepted by the Lean verifier, and the verifier withheld its final accept because the soundness of the two-round form is not proved. The print never says accepted for it, and its mark is "run, not proved". Under "to fully proved" it lists what it read from the run's files and from the tree, nothing typed by hand: the replay block is a stand-in that checks only the choice of each token from captured scores, not the model's layers; seven kinds of check in the audit are decided by Python or Rust code, not by a Lean verifier; the proof behind the Lean verifier's own verdicts still takes open premises; and the final accept is withheld. The word proved prints only when all of that is closed, and a test holds it both ways. Neither rehearsal's files say how many GPUs a prover held, so the print claims no cost share for them; the driver's change that writes it is due Friday morning. The reader's suites are running, and its pull request opens when they pass, ahead of Friday 16:00Z.
+
+Clock: `date -u` read 21:29Z before I wrote this. Mailbox read at 21:31Z: 49 sections, the two new ones your 20:50Z and 21:12Z messages, which also came by the shell hook [read]. Tags: [run] a run id; [read] the place; [local] a command on my VM, on fetched files; [derived]; [relayed]; [guess].
+
+### 1. Where it is
+
+- [local] Branch `cursor/proofs-count-9fb0` at `3a92f216b7c9`, pushed 21:27Z. It holds, by merge commits and never a rebase: benchmarks' verdict words with `withheld` (`cursor/verity-benchmarks-6193-run-mark` at `7069b093a77e`, two commits past the `cc46c3268496` you named), their resampling holes at the marked head (`cursor/verity-benchmarks-6193-spot-holes` at `ce3606121338`), and the security level (`cursor/proofs-count-70d5` at `067486626b07`).
+- [run] Its suites: `r20261112-212919-6339` on vy-nebius-cpu-13, launched 21:29Z at that head (`suites.py --changed origin/main`). [guess] ETA 22:15Z: the same command on the security level's branch ran 29 minutes once it had a slot, 44 from its launch [run: `r20261112-200346-7fa0`]. A first ask for 64 GB was refused there (56.9 GB free), so this one asks 48 GB; nothing else of mine is out.
+- [local] On my VM, one file a command: `tests/test_served_row.py` 16 passed, `tests/test_served_record.py` 9 passed, `tests/test_exfiltration.py` 35 passed, `tests/test_spot_status.py` 13 passed; ruff clean on the changed files.
+- The reader's pull request opens, unmarked, when `6339` passes. The date stands: before Fri 13 Nov 16:00Z.
+
+### 2. How the reader plugs in (your 20:50Z point 2: it is that way)
+
+- `python -m verity_bench.served_record --second DIR [--first DIR] [--serve DIR] [--replay DIR] [--serving META] [--stock META] > record.json`, each `DIR` one of the served run's four runs as it is fetched; then `verity bench exfiltration --served-run record.json`. No third command.
+- The reader computes no share and decides no verdict. The record keeps benchmarks' names (`run`, `prove`, `staging`, `replay`, `interior`, `serving`, `stock`, `serving_cost`) and adds four fields:
+  - `prove_seconds_source`, passed on. A session's seconds are the ones its own `prove_seconds_source` names in `audit.timing` (`busy_s` or `session_s`); the record says `busy` only where every session does, `session` where any does, and is named as absent where a session names none (its seconds are then `session_s`). Today's rehearsals name none.
+  - `commit`: the commit the second stage's run ran. **This is the field for benchmarks' check of the two holes; please name it to them on the board.** `runs` beside it holds each of the four runs' id, commit and machine.
+  - `audit`: what the audit showed, counted from the files.
+- It reads the names the worker on the driver posted at 20:52Z: `audit.timing[member].gpus`, `.busy_s`, `.prove_seconds_source`, `audit.proof_server.busy[*]` (`device`, `seconds`, `sessions`), `audit.staging`, `replay`, `interior_commit`. I dropped a name of my own for busy seconds; it was never pushed.
+- From a record that holds `audit`, the command prints one more section between its own print and benchmarks' block on the holes and the theorem. The hook is nine lines of `exfiltration.main` on my branch, in benchmarks' file; the section is its own module (`verity_bench/served_row.py`) with a data table (`verity_bench/data/served_row.json`). **Benchmarks may want those nine lines in their follow-up instead; I take whichever they say.**
+- **One stop for benchmarks.** `exfiltration._gpu_s` refuses an entry on 0 GPUs, and the driver writes `gpus: 0` for the staging, the interior commitment and a session proved on the CPU. So the command exits 2 on a record as the driver writes it and prints nothing. My branch changes one comparison (0 GPUs is read and adds no GPU-seconds; a count under 0 and a window served on no GPU-seconds are still refused), with its test, in commit `bc0441c015`. It is their file: they take the commit or write their own.
+- [local] The command whole, with the store's rows of record, did not print on my VM: reading the store's labels from here had printed nothing after 240 s, and a second try is still out. I will run it through `research run` for the 23:30Z entry. What is below is the section's own print, from the same functions the command calls.
+
+### 3. What the section prints, and what it does not
+
+- No line on the two resampling holes and none on the theorem: those are the next block's. No issue id is in the print, the code or the data table, and a test holds the print to the command's own pattern for an id.
+- The verdict line is the verifier's own. The final accept is `withheld` only where every check of the second stage held and the outcome is refused by one code the data table names a reason for; the form's code beside another code, or under a check that did not hold, prints as refused. The reason is your words: "the two-round form's soundness is not proved".
+- The mark is `proved` only where the list under "to fully proved" is empty, the final accept is given, the cited theorem's lock entry lists no open premise and each hole is closed at the run's commit. It reads the last two through benchmarks' own functions (`spot_status.theorem`, `spot_status.holes`), so the two blocks cannot disagree; they are in the `--json` document (`mark_reads`), not in the print. One fixture each way holds the word, and eight more each open one thing and hold `run, not proved`.
+- [local] What it read for the mark at the rehearsals' commit `7c2636e740e0`: the theorem's entry lists 6 open premises; `redrawn sample` closed, `re-committed execution phase` open.
+- The verdict as a record: one line in benchmarks' fields for the piece `second_stage`, verdict `withheld`, `proved_by` null, `open` in plain words. Each record the section writes is held to their own reader (`exfiltration.verdict`). The switch you asked for is gone, since their branch holds the word and mine merges it.
+- The hot card: the data table holds one note, for card 1 of the machine `vy-spot-glm53`. Where the second stage ran there and a prover's `device` is 1, the print says beside the figure that a proving time taken on it is not a figure of the card's model. Delete the entry when the card is fixed. Today's rehearsals proved on CPUs, so it does not print below.
+
+**Three things in the print that are my reading, for you to correct:**
+
+1. Which lock entry a kind of verdict rests on is mine, in the data table. `lean-verify` names `FlockSoundness.Discharge.FailClosed.flock_verify_sound`, the theorem over every mode the verifier takes: 19 open premises in the lock [read: `security/lean-audit.json` on my branch]. The deployed entry for zero-knowledge sessions with public inputs, `Flock.SecurityProofs.SampledKSLiveV5`, lists 1. I do not know which one a session's verdict in this audit rests on. It is one word in the table; the worker listing the open items can say.
+2. `lean-draw` names no lock entry: I found none stated of `flock-verify draw-test`. `m0-verifier` is the proof server's own verdict (Rust) compared in Python, so it is listed as not Lean.
+3. The stand-in is read by form: the layout has no field that says "this is a Definition of the request", so the replay block is the stand-in where the layout's check is a template instanced once for each output token over the replay's own value. A layout whose check is a Definition of the class's own prints as that.
+
+### 4. The print on the rehearsal at Friday's design and the served vocabulary
+
+[run: `r20261112-191841-86b4`, fetched; local: the reader and the section at `3a92f216b7c9`.] It is a stand-in rehearsal, one run: no serve and no replay run are given, and its provers ran on CPUs. V = 154,880, 2 outputs a request, 20 sessions.
+
+~~~text
+## What the audit showed on r20261112-191841-86b4, and what stands between it and fully proved
+
+- **verdict: run, not proved.** Every sampled proof accepted by the Lean verifier (20 of 20 sessions); the final accept withheld, reason `two-stage-form` (the two-round form's soundness is not proved).
+- **what the audit covered**: the replay block is the stand-in, `TemplateInlined_v1{template="GreedySelect_v1{V=154880,N=7744}",N=2}`: instances of the check template `GreedySelect_v1{V=154880,N=7744}`, 1 for each output token, each one in place; what it reads is the replay's own value, `logits`, registered after the first stage's sample. It checks the choice of each token from a row of scores, under no stop rule, and nothing of the model's layers that produced the scores.
+- **to fully proved**:
+  - the replay block is the stand-in (`GreedySelect_v1{V=154880,N=7744}`), not a Definition of the request: the model's layers are not covered
+  - decided by a verifier that is not Lean: `m0-verifier` (flock-circuit serve, compared in benchmarks/one_stage/a5.py), `checks_before_draw` (benchmarks/one_stage/a5.py), `pins` (benchmarks/one_stage/two_stage.py), `negatives` (benchmarks/one_stage/a5.py), `registered_reads` (verity/commitments/windows/tables.py), `complete` (verity/protocols/spot/verifier/one_stage/audit.py), `round_two` (verity/protocols/spot/verifier/second_stage.py)
+  - `lean-draw` (flock-verify draw-test): the table names no lock entry for it
+  - `lean-verify` (flock-verify verify): its lock entry `FlockSoundness.Discharge.FailClosed.flock_verify_sound` takes 19 open premises
+  - the final accept is withheld by `sampled-proofs-verifier`: `two-stage-form`, the two-round form's soundness is not proved
+
+| verdict | what | true | decided by | what proves its verifier |
+| --- | --- | --- | --- | --- |
+| `lean-draw` | each session's sample, checked against its statement | 20 of 20 | lean: flock-verify draw-test | the table names no lock entry for it |
+| `lean-verify` | each session's proof | 20 of 20 | lean: flock-verify verify | its lock entry `FlockSoundness.Discharge.FailClosed.flock_verify_sound` takes 19 open premises |
+| `m0-verifier` | each session's own verdict, its roots held to its statement's and its sample checked | 20 of 20 | rust and python: flock-circuit serve, compared in benchmarks/one_stage/a5.py | none: not a Lean verifier's |
+| `checks_before_draw` | the checks before the sample | 22 of 22 | python: benchmarks/one_stage/a5.py | none: not a Lean verifier's |
+| `pins` | each session's circuit file is the one its template's params name | 20 of 20 | python: benchmarks/one_stage/two_stage.py | none: not a Lean verifier's |
+| `negatives` | the audit's negative controls, each a changed input the audit must refuse | 18 of 18 | python: benchmarks/one_stage/a5.py | none: not a Lean verifier's |
+| `registered_reads` | each session's Lean verdict reports the registered values and roots the verifier's own file names | 1 of 1 | python: verity/commitments/windows/tables.py | none: not a Lean verifier's |
+| `complete` | no verdict of the audit's record is left unrun | 1 of 1 | python: verity/protocols/spot/verifier/one_stage/audit.py | none: not a Lean verifier's |
+| `round_two` | round 2's statement check with the two-stage form allowed | 1 of 1 | python: verity/protocols/spot/verifier/second_stage.py | none: not a Lean verifier's |
+| the final accept | the stream's outcome of the second stage's sample | withheld (`two-stage-form`) | lean: sampled-proofs-verifier | the theorem the next block cites |
+
+- the serve: not given
+- the first stage: r20261112-191841-86b4 at `7c2636e740e0`
+- the replay of the sampled spans: not given
+- the second stage: r20261112-191841-86b4 at `7c2636e740e0`
+- the first stage sampled 2 of 6 spans at `rate:2/6`.
+- the first stage's registration is the one the second stage read: yes.
+- both stages name the same sampled spans: yes.
+- the first stage's check is of that registration: not checked, a file is not given.
+- the first stage's class is the serve's published one, field for field: not checked, a file is not given.
+- the sessions' proving: at most 5,958.9 s over 20 sessions, by the audit's clock on each session (`session_s`), which counts a session's wait behind the others of its prover; no session says which seconds are its proving's (`prove_seconds_source`). The files hold no count of GPUs for a session.
+- as the files hold them, summed over the sessions: `session_s` 5,958.9 s; `busy_s` not written; the prover's own timer over its tables (`timing.prove_total_s`) 450.6 s; the Lean verifier (`lean_verify_s`) 1,382.1 s, on 30 cores.
+- the security level at the run's own sizes (modeled): the probability that an accepted run opens a value off the committed trace, by the bound Lean states of a two-stage sample counted by classes of gates (`CompiledTwo.eventTwoX_le_cls_at_budget`), every run at 2^80.00 calls of SHA-512, over this run's one verification phase: **at most 2^-125.39** counted in calls, as the Lean counts, and 2^-116.39 in compressions. Read from the run: 20 sessions and 40 sampled proof blocks.
+- the security level assumes: 4,130 classes of gates a sampled proof block; 8,388,608 symbols of a table's level-0 codewords; one commitment, one sample; every committed window is presented; one table a session, the files holding no count of a session's tables. It counts each session's knowledge error and the run's own opening checks as 0.
+- what Lean proves of the security level: counted in calls, `Claims.Flock.Numbers.εclsAt_le_table1` holds the part of it that is linear in the prover's calls to at most 2^-100, beside each session's knowledge error and the rewinding part. Counted in compressions, `Claims.Flock.Numbers.εclsAt_le_table1_513` holds the part of it that is linear in the prover's calls to at most 2^-100, beside each session's knowledge error and the rewinding part.
+
+The verdict as a record of the stop class's verdicts of record (a line of `out/verdicts.jsonl`, the piece `second_stage`):
+
+    {"piece": "second_stage", "control": null, "run": "r20261112-191841-86b4", "verifier": {"module": "sampled-proofs-verifier", "commit": "7c2636e740e0930422bdf1e18bc03f968bf1374e"}, "verdict": "withheld", "proved_by": null, "open": "the two-round form's soundness is not proved"}
+~~~
+
+What the reader named as missing from this run's files [local: its stderr]: `prove_seconds_source` and `prove.gpus` (the driver's change), `staging`, `replay`, `interior` (the same change, and vllm's copy into `second.json`), `serving` and `stock` (the load's `wall_s` and `gpu.gpus`, vllm's to publish). With any of them missing the command claims no share.
+
+### 5. The small rehearsal beside it
+
+[run: `r20261112-191810-df04`, fetched; local.] V = 2,560, 4 outputs a request, 20 sessions, the same commit. Its print differs from the one above in four lines and nowhere else [local: `diff`]:
+
+- the replay block: `TemplateInlined_v1{template="GreedySelect_v1{V=2560,N=128}",N=4}`, in both lines that name it;
+- the sessions' proving: at most 441.2 s over 20 sessions by `session_s` (5,958.9 s above);
+- as the files hold them: the prover's own timer 38.9 s (450.6 s above); the Lean verifier 114.6 s (1,382.1 s above), on 30 cores.
+
+The verdict line, the list under "to fully proved", every count in the table and the security level are the same. [derived] The security level is the same because it reads only the counts of sessions (20) and sampled proof blocks (40), and assumes the rest at the planner's sizes, as its own line says: it does not yet move with V.
+
+This morning's served run prints too, from its four runs' directories [run: `r20261112-104451-3dfe` and the three before it; local]: 2 of 2 sampled proofs accepted by the Lean verifier, the final accept refused, `second-wires`. That run is before today's fixes, and I show it only because it is the one set of files with all four runs.
+
+### 6. The security level's pull request
+
+- **#9479** (https://github.com/compute-verification/verity/pull/9479), opened 21:01Z, unmarked: "verity bench exfiltration: the security level each row assumes, beside its GB". Ready line: head `067486626b0703f4ff6853d53b7b41bc6d703fea` on `cursor/proofs-count-70d5`; suites 6 of 6 passed in `r20261112-200346-7fa0` [run]; `git merge-tree` clean against `origin/main` at `5f0c008aa040`, and against the Lean landing branch at `f3ffe4e2bbcb` the 10 files in conflict are the ones `main` itself conflicts on, none a file this branch changes [local].
+- It and benchmarks' #9467 both move the pin of the print with no verdicts of record (`NO_VERDICTS` in `tests/test_exfiltration.py`). Whichever lands second re-pins it; my reader's branch already holds both and its pin is the one for both.
+
+### 7. Next
+
+1. `6339` to its end; then the reader's pull request, unmarked, with its ready line.
+2. The whole command on the rehearsal's record through `research run`, for the 23:30Z entry.
+3. Nothing of mine waits on you except the three readings in section 3 and the two words for benchmarks in section 2.
