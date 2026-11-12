@@ -19,7 +19,7 @@ import hashlib
 import os
 from dataclasses import replace
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -45,6 +45,8 @@ ENV = ("VERITY_RETAIN", "VERITY_WINDOW_MB", "VERITY_WINDOW_SLOTS", "VERITY_STAGI
 
 
 class _Runner:
+    committer: Any                                              # the committer under test, once `committer()` has built it
+
     def __init__(self) -> None:
         self.committer = None
         self.tensors: list[tuple[str, object]] = []
