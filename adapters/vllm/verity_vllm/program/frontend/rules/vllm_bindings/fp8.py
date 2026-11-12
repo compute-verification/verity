@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import numpy as np
 import torch
 from verity.circuits.refs import Coll, array_of
 from verity.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
 
+from verity_vllm.program.frontend import targets as T
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import (
     InPlaceRule,
@@ -45,8 +47,7 @@ FP8_QUANT_PINS = {"group_size": 128, "eps": 1e-10, "fp8_min": -448.0, "fp8_max":
 
 
 def _f32_equal(a, b: float) -> bool:
-    import numpy as _np
-    return isinstance(a, (int, float)) and not isinstance(a, bool) and _np.float32(a) == _np.float32(b)
+    return isinstance(a, (int, float)) and not isinstance(a, bool) and np.float32(a) == np.float32(b)
 
 
 class DynamicDeepGemmFp8LinearRule(OpRule):
@@ -286,7 +287,6 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         return _C_op("cutlass_scaled_mm")
 
     def applies(self, node, ctx):
-        from verity_vllm.program.frontend import targets as T
         try:
             T.fp8_block_dot(active_target_profile())
         except T.UnregisteredTarget as e:
@@ -339,7 +339,6 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         srows, _ = rows_of(ctx.coll(a_s))
         if len(rows) != len(srows):
             refuse("shape", node, ctx.module_path(node), f"a has {len(rows)} rows but a_scales {len(srows)}")
-        from verity_vllm.program.frontend import targets as T
         tp = active_target_profile()
         scale = tp.effective_fp8_scale_construction()
         dot = T.fp8_block_dot(tp)

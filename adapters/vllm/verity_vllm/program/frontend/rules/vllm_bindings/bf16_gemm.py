@@ -14,6 +14,7 @@ import torch
 from verity.circuits.refs import Coll
 from verity.definitions.registry import bf16_gemm_check
 
+from verity_vllm.program.frontend import targets
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import (
     from_rows,
@@ -242,8 +243,6 @@ class CublasRouterRule(OpRule):
         return True
 
     def emit(self, node, ctx):
-        from verity_vllm.program.frontend import targets
-
         x, wt = node.args[:2]
         rows_n, K = known(shape(ctx, x))
         M, N = launch_tokens_of(node, rows_n), known(shape(ctx, wt))[1]

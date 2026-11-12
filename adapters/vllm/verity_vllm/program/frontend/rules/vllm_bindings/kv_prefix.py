@@ -11,6 +11,7 @@ from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
 from verity_vllm.program.frontend.rules.common import CACHED_PREFIX as STATE
 from verity_vllm.program.frontend.rules.common import dtype_is, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16
+from verity_vllm.program.frontend.rules.vllm_iface import targets_for
 
 
 class KvPrefixRule(StateRule):
@@ -26,7 +27,6 @@ class KvPrefixRule(StateRule):
                     evidence_domain="structural: the cached rows are the Program's input, bound by Match to the producing request's rows")
 
     def targets(self):
-        from verity_vllm.program.frontend.rules.vllm_iface import targets_for
         return targets_for("kv_prefix")
 
     def applies(self, node, ctx):

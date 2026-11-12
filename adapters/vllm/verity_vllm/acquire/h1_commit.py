@@ -206,8 +206,11 @@ class RankCommit(RankExtension):
         `protocols.pouw.h1.ranks.RankTap` naming each of the rank's H1 linears as the window does; returns the committer's name, its
         scheme and the port it acquires the step's input ids under. A site the rank's source acquires that the window has
         no name for (a routed expert's included) is refused: under its rank-local name it would meet no call, or another
-        rank's site of the same name."""
-        st = self._h1rank  # type: ignore[attr-defined]
+        rank's site of the same name. A rank that holds no H1 window (before `h1rank_install`, after `h1rank_release`) is
+        refused."""
+        st = self._h1rank
+        if st is None:
+            raise RuntimeError("this rank holds no H1 window: h1rank_install has not run on it, or h1rank_release has")
         run: RankRun = st["run"]
         model, layers = self._h1rank_layers()
         names = {name: run.modules[run.lo + int(i)] for i, name in pouw._named(model, layers).items()}
