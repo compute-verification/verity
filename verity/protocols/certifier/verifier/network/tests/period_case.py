@@ -1529,13 +1529,24 @@ UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra",
 #: `<member>/o0` entry at another root (a tree with a row that is not the ok row, or under other salts), domain or
 #: leaf count; no entry for it, or for any member; its entry under another port; a second entry for it at another
 #: root, or an entry at a port ending `/o0` that is no member's; every member's at another schedule's constants; its
-#: root or domain no string; or the entries by value under `registered`, which the period reads no ok bit from
-UNOKS = ("root", "domain", "leaves", "missing", "renamed", "extra", "other", "untyped", "registered")
+#: root or domain no string; the entries by value under `registered`, which the period reads no ok bit from; or the
+#: members of a group of two execution phases' scan (`PAIR`), each at the root of its ok rows
+UNOKS = ("root", "domain", "leaves", "missing", "renamed", "extra", "other", "untyped", "registered", "group")
 #: The T `rows-ok-equal` runs at: the least where two members, `ingress-0` and `last`, are one proof block of one
 #: template each, so their ok bits are at one domain and one root
 EQUAL_T = 3
 #: The T `rows-one-tick` runs at: its one bucket would be the scan's first and its last, so it has no constants
 ONE_TICK = 1
+
+
+def PAIR(T: int) -> tuple[tuple[str, str, int], ...]:
+    """The members (name, template, proof blocks) of one scan over a group of two execution phases of `T` ticks, as
+    the staging names them: bucket 0's `first`; `ingress-0`, buckets 1 … T − 1, and `ingress-1`, buckets T … 2T − 2;
+    `last`, bucket 2T − 1; and `egress-0` and `egress-1`, T buckets each. The rows form reads one execution phase a
+    registration, so such a registration is refused: `ingress-0` is over T − 1 buckets, not T − 2, and `ingress-1`
+    and `egress-1` are no member of one execution phase's scan."""
+    return (("first", "first", 1), ("ingress-0", "ingress", T - 1), ("ingress-1", "ingress", T - 1),
+            ("last", "ingress", 1), ("egress-0", "egress", T), ("egress-1", "egress", T))
 
 
 def _present(e: dict) -> dict:
@@ -1620,6 +1631,9 @@ def _ok_entries(ro: random.Random, T: int, unok: str | None) -> tuple[str, list[
         e[ro.choice(["root", "domain"])] = ro.choice([None, 7, False])
     elif unok == "registered":
         return "registered", [{("value" if k == "port" else k): v for k, v in x.items()} for x in es]
+    elif unok == "group":
+        es = [{"domain": c.domain, "leaves": c.leaves, "port": c.port, "root": c.root}
+              for c in (scan_ok.constant(*m) for m in PAIR(T))]
     ro.shuffle(es)
     return "roots", [_present(x) for x in es]
 

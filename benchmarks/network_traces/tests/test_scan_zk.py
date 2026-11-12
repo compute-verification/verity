@@ -271,6 +271,29 @@ def test_every_rounds_own_o0_rows_meet_one_set_of_frame_domains_its_templates_an
         m.ports["x"]["domain"] for m in other.rounds["block"]}
 
 
+def test_a_group_of_two_execution_phases_scan_is_not_held_at_the_schedules_constants():
+    """The constants are one execution phase's scan's, and the rows form reads one execution phase a registration. A
+    group of two's scan has the group's members (`members_of` at two, which the period's cases name too,
+    `period_case.PAIR`): `ingress-0` over T − 1 buckets, and `ingress-1` and `egress-1` beside it. Its registration,
+    every member's ok bits at the root of its ok rows under the public salts, is not held (`scan_ok.held`), and on
+    each count alone: without the second execution phase's two members `ingress-0` is still at another count's
+    constant (at two ticks, a port that is no member's), and with every member the schedule names at its constant
+    the two are ports ending ``/o0`` that are no member's."""
+    import scan_period as SP
+
+    K, PC = sz.scan_ok, SP.mirror(PERIOD_CASE)
+    for T in (2, 3, 4, sz.TEST.params.window):
+        pair = [(m.name, m.template, len(m.buckets)) for m in sz.members_of(sz.TEMPLATES, 2, T)]
+        assert tuple(pair) == PC.PAIR(T)
+        consts, entries = K.constants(T), [asdict(K.constant(*m)) for m in pair]
+        own = {c.port: asdict(c) for c in consts}
+        assert K.held(consts, {"roots": list(own.values())})
+        assert not K.held(consts, {"roots": entries})
+        assert not K.held(consts, {"roots": [e for e in entries if e["port"] not in ("ingress-1/o0", "egress-1/o0")]})
+        assert not K.held(consts, {"roots": [own.get(e["port"], e) for e in entries if e["port"] != "ingress-0/o0"]
+                                   + ([own["ingress-0/o0"]] if T > 2 else [])})
+
+
 def test_a_public_o0_is_under_the_public_salts_so_an_ok_members_root_is_the_schedules_constant(tmp_path):
     """A proof block's public word is its ok bit, and the staging commits a member's o0 rows under the verifier's
     public salts (`scan_zk.ok_salts`, `scan_ok.salt`), in every round. So the verifier's table of one execution

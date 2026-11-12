@@ -213,8 +213,10 @@ def test_a_scan_whose_ok_bits_are_not_the_schedules_constants_is_refused(server,
     each way an execution phase's scan's registration can name another (`PC.UNOKS`): a member's `<member>/o0` at another
     root (a tree with a row that is not the ok row, or under other salts), domain or leaf count, with no entry or
     under another port, named a second time at another root, beside a port ending `/o0` that is no member's, every
-    member at another schedule's constants, a root or domain that is no string, and the entries by value under
-    `registered`; and a mirror that skips the comparison accepts what Lean refuses."""
+    member at another schedule's constants, a root or domain that is no string, the entries by value under
+    `registered`, and the members of a group of two execution phases' scan (`PC.PAIR`), which the rows form, one
+    execution phase a registration, does not read; and a mirror that skips the comparison accepts what Lean
+    refuses."""
     unok = PC.UNOKS
     for u in unok:
         monkeypatch.setattr(PC, "UNOKS", (u,))
