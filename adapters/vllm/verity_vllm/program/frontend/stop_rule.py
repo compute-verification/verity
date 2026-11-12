@@ -36,9 +36,9 @@ def spec(stops: Iterable[int], *, max_tokens: int, prompt_len: int, max_model_le
     ids = [int(x) for x in stops]
     s = {"stops": ids, "max_tokens": max_tokens, "prompt_len": prompt_len, "max_model_len": max_model_len,
          "outputs": outputs, "finish": finish}
-    if not (type(outputs) is int and outputs >= 1) or (why := SC.refuse({"STOP": tuple(ids), "MAX_TOKENS": max_tokens,
-                                                                         "PROMPT_LEN": prompt_len, "MAX_MODEL_LEN": max_model_len,
-                                                                         "FINISH": finish})):
+    why = SC.refuse({"STOP": tuple(ids), "MAX_TOKENS": max_tokens, "PROMPT_LEN": prompt_len, "MAX_MODEL_LEN": max_model_len,
+                     "FINISH": finish})
+    if why or not (type(outputs) is int and outputs >= 1):
         raise ValueError(f"the stop rule's config {s}: {why or 'outputs must be a positive integer'}")
     return s
 

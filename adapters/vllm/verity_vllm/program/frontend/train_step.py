@@ -33,19 +33,19 @@ import keyword
 import os
 import re
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 import torch
 from torch.func import functional_call, grad_and_value
 from torch.overrides import TorchFunctionMode
-
 from verity.circuits import parts
 from verity.circuits.boundary import gate_width, in_gates
-from verity.definitions.circuits.census import census
 from verity.circuits.defs import PrimitiveDefinition
 from verity.circuits.program import Program, is_input
 from verity.circuits.query_ast import GateSet
+from verity.definitions.circuits.census import census
+
 from verity_vllm.engine import hooks
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
@@ -74,7 +74,7 @@ class AdamW:
     SCALARS = ("decay", "neg_step_size", "bc2_sqrt")
 
     @classmethod
-    def from_torch(cls, opt: torch.optim.Optimizer) -> "AdamW":
+    def from_torch(cls, opt: torch.optim.Optimizer) -> AdamW:
         """The hyperparameters of a `torch.optim.AdamW` with one parameter group and the defaults this function computes."""
         if not isinstance(opt, torch.optim.AdamW) or len(opt.param_groups) != 1:
             raise ValueError("a torch.optim.AdamW with one parameter group")
@@ -235,7 +235,9 @@ def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, exa
     the step's TF32 setting at a `cc`). `exported`: `export_step`'s result, at a `cc` traced as the GPU runs it (`gpu=True`).
     `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole (`rules.training_survey.survey`)."""
     from verity_vllm.program.frontend.rules.training import training_rules
-    from verity_vllm.program.frontend.rules.training_survey import survey as survey_graph
+    from verity_vllm.program.frontend.rules.training_survey import (
+        survey as survey_graph,
+    )
 
     if rules is not None and cc is not None:
         raise ValueError("step_report: pass rules or cc, not both (training_rules(cc=...) is the rule set cc names)")
