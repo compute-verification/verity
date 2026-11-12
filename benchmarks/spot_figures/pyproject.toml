@@ -14,7 +14,8 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # The figure of record's driver (breakeven/headline.py) counts GLM-5.3's sparse-MLA heads from the registry
 # (`sparse_mla.SPARSE_MLA_GLM53`): that module and what its import opens. Its 128k lever (breakeven/mla128.py) counts
 # the serve plan's requests (`serve_tax/prefix_plan.jsonl`) by the registry's split rule (`sparse_mla_split.py`): that
-# module, what its import opens, and the table a split row's bind reads.
+# module, what its import opens, and the table a split row's bind reads. The binding bound's instances
+# (`binding.LEAN`) are held to the Lean theorems they name, read from their file.
 inputs = ["verity/__init__.py", "verity/errors.py", 
           "verity/hardware/record.py", "verity/protocols/spot/verifier/profile.py", "verity/protocols/reporting.py",
           "verity/protocols/spot", "verity/claims", "verity/circuits",
@@ -46,4 +47,5 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "benchmarks/serve_tax/prefix_plan.jsonl", "verity/definitions/registry/sparse_mla_split.py",
           "verity/definitions/ops/boolean/__init__.py", "verity/definitions/ops/boolean/mufu.py",
           "verity/definitions/ops/boolean/softmax.py", "verity/definitions/ops/tables/mufu_rcp_delta_int8.xz",
-          "verity/definitions/silicon/fp.py"]
+          "verity/definitions/silicon/fp.py",
+          "security/Proofs/Flock/SamplingGeneric/TwoFirstHitClassNumbers.lean"]
