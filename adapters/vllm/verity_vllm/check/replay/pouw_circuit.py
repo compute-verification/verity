@@ -50,6 +50,7 @@ from typing import Any
 import numpy as np
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics.kernel_registry import Declined
+from verity.protocols.pouw.prover.circuit import SCHEMES
 from verity.protocols.pouw.prover.circuit import anchors as CA
 from verity.protocols.pouw.prover.circuit import plan as CPL
 from verity.protocols.pouw.prover.circuit.ncp2 import D
@@ -356,7 +357,7 @@ def around(comp: Any) -> Iterator[dict[str, Any] | None]:
     when it has one. The run's ``tamper`` setting makes it a negative control: ``tile`` replays the calls as `tamper_tiles`
     commits them, ``bias`` the executor's wrong-bias call (`pouw.Settings.tamper`). Yields None without such an entry."""
     entry = next((e for e in (getattr(comp, "entries", None) or ()) if e.split(":", 1)[0] == pouw.NAME
-                  and e.split(":", 1)[1] in PC.C.SCHEMES), None)
+                  and e.split(":", 1)[1] in SCHEMES), None)
     live = pouw.circuit_run(entry) if entry else None
     if live is None:
         yield None
