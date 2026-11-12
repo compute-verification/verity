@@ -21,10 +21,17 @@ dev-mode-exact = true
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
-[tool.verity.tests]
 # The tests read this directory (the package and data/, with the SASS opcode tables `machine-model cover` holds a row
-# for each of), the perplexity arms the designs name, the README, which holds no table (`machine-model render` prints
-# them), and the Lean sheets `machine-model sheet --lean` prints. θ and the opcode table read the card files through
-# `verity.hardware.cards`, which the workspace environment brings.
-inputs = ["benchmarks/ppl/specs", "benchmarks/pouw/machine_model/README.md", "security/Definitions/Accounting/Sheets",
-          "verity/__init__.py", "verity/errors.py", "verity/hardware/__init__.py", "verity/hardware/cards"]
+# for each of) and what `inputs` lists.
+[tool.verity.tests]
+inputs = [
+    # the perplexity arms the designs name
+    "benchmarks/ppl/specs",
+    # the README, which holds no table (`machine-model render` prints them)
+    "benchmarks/pouw/machine_model/README.md",
+    # the Lean sheets `machine-model sheet --lean` prints
+    "security/Definitions/Accounting/Sheets",
+    # θ and the opcode table read the card files through `verity.hardware.cards`, which the workspace environment
+    # brings
+    "verity/__init__.py", "verity/errors.py", "verity/hardware/__init__.py", "verity/hardware/cards",
+]

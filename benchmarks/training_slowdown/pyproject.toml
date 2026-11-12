@@ -9,15 +9,22 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # a test file that starts a program the read guard can't trace (bash, around the queued job's script): keyed on the
 # suite's whole tree
 untraced = ["tests/test_job_shell.py"]
-# `verity`: the circuits' Definitions the gate prices compile and the Boolean gather the counter's tests price;
-# `adapters/vllm/verity_vllm`: the training-step frontend `capture.lower` lowers a step to; the lf model
-# (`train_step_lf.py`), loaded by path, whose shapes the policy states; the slowdown calculator (`verity/protocols/inference_only/rho`), whose
-# registry, fleets and periods `calculator.py` reads and whose min-cut module and rows of β(k) test_min_cut holds
-# formalism's copy to; the inference-only policy's calibrations, which the calculator's registry loads from outside its
-# directory; and the census's deployments, whose reference window `calculator.py` reads
-# The command's and the config's: of that registry too, the [policy.*] tables, whose names are the policies a config
-# may give (`config.py`); and `verity/configuration/config/verity_config`, the command's $OUT through its SHARED settings
-inputs = ["verity", "adapters/vllm/verity_vllm", "adapters/vllm/tests/program/train_step_lf.py",
-          "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py",
-          "verity/protocols/inference_only/rho", "benchmarks/census/deployments.json",
-          "verity/protocols/inference_only/nci/calibrations.json", "verity/configuration/config/verity_config"]
+inputs = [
+    # the circuits' Definitions the gate prices compile and the Boolean gather the counter's tests price
+    "verity",
+    # the training-step frontend `capture.lower` lowers a step to
+    "adapters/vllm/verity_vllm",
+    # the lf model, loaded by path, whose shapes the policy states
+    "adapters/vllm/tests/program/train_step_lf.py",
+    "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/program/__init__.py",
+    # the slowdown calculator, whose registry, fleets and periods `calculator.py` reads and whose min-cut module and
+    # rows of β(k) test_min_cut holds formalism's copy to; of that registry too, the [policy.*] tables, whose names are
+    # the policies a config may give (`config.py`)
+    "verity/protocols/inference_only/rho",
+    # the census's deployments, whose reference window `calculator.py` reads
+    "benchmarks/census/deployments.json",
+    # the inference-only policy's calibrations, which the calculator's registry loads from outside its directory
+    "verity/protocols/inference_only/nci/calibrations.json",
+    # the command's $OUT through its SHARED settings
+    "verity/configuration/config/verity_config",
+]
