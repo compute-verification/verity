@@ -41,7 +41,12 @@ from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm import settings
-from verity_vllm.records.schema_ids import CENSUS_RANK_SCHEMA, ENGINE_PROFILE_SCHEMA, LATE_READ_CHECK_SCHEMA
+from verity_vllm.records.schema_ids import (
+    CENSUS_RANK_SCHEMA,
+    ENGINE_PROFILE_SCHEMA,
+    LATE_READ_CHECK_SCHEMA,
+    TP_PARAM_HASHES_SCHEMA,
+)
 
 __all__ = ["EXTENSION"]
 
@@ -361,7 +366,7 @@ class TP2CaptureWorkerExtension:
                  "reduce_results", "gather_output", "skip_bias_add", "use_fused_embedding")
         for name, m in model.named_modules():
             cls = type(m).__name__
-            if not (cls.endswith(("ParallelLinear", "Embedding", "LMHead")) or cls == "LogitsProcessor"):
+            if not (cls.endswith(("ParallelLinear", "Embedding", "LMHead")) or cls == LC.LOGITS):
                 continue
             d = {k: getattr(m, k, None) for k in attrs if hasattr(m, k)}
             si = getattr(m, "shard_indices", None)
@@ -369,7 +374,7 @@ class TP2CaptureWorkerExtension:
                 d["shard_indices"] = {k: getattr(si, k) for k in dir(si) if not k.startswith("_") and isinstance(getattr(si, k), int)}
             d["class"] = f"{type(m).__module__}.{cls}"
             mods[name] = d
-        doc = {"schema": "verity-capture/tp2-param-hashes/v0", "rank": rank, "world_size": int(_tp_facts(self)["tp"]["world_size"]),
+        doc = {"schema": TP_PARAM_HASHES_SCHEMA, "rank": rank, "world_size": int(_tp_facts(self)["tp"]["world_size"]),
                "n_params": sum(1 for v in params.values() if v["kind"] == "param"), "n_buffers": sum(1 for v in params.values() if v["kind"] == "buffer"),
                "total_bytes": sum(v["nbytes"] for v in params.values()), "tensors": params, "modules": _jsonable(mods)}
         out = Path(out_dir)
