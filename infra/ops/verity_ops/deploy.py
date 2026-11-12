@@ -17,8 +17,10 @@ yet only when named with --on; `install` takes it as any other), and gives each 
   missing   not there
   absent    the manifest lists it and REF lacks its source (a checkout's manifest ahead of REF)
   held      the entry's `hold` says why it isn't deployed yet (its owner's yes is pending); install skips it
-and `restart` when a process running the file started before it was installed: it still runs the old code. A file that a
-`managed` pattern matches and no entry lists is a `stray`: a backup (`*.bak-*`, `*.prev-*`) or a script outside the repository.
+and `restart` when a process running the file started before it was installed: it still runs the old code. An entry's
+`no_restart` says why such a process is left to end instead (a run's own process, which nothing restarts): drift and install
+then say nothing of it. A file that a `managed` pattern matches and no entry lists is a `stray`: a backup (`*.bak-*`,
+`*.prev-*`) or a script outside the repository.
 A file in a tree that REF lacks is `ahead` instead when a recent origin branch has it (a PR adding the file).
 Each one should move into the repository and the manifest, or into the attic: `attic` moves strays (`--backups`: every one named
 as a backup) to <the record's directory>/attic/<when>/<path>, refusing a file a process runs, and records each move, so
@@ -261,6 +263,7 @@ class Entry:
     owner: str | None = None           # a Slack handle (.agents/skills/using-slack/registry.json)
     hold: str | None = None            # why it isn't deployed yet: install skips it
     required: bool = False             # (a tree) what runs from it can't run without any of its files
+    no_restart: str | None = None      # why a process that started before an install is left to end: never `restart`
 
 
 @dataclass
@@ -288,12 +291,16 @@ def load(manifest: Path = MANIFEST, text: str | None = None) -> dict[str, Node]:
                 raise ValueError(f"deploy.toml: {e['path']!r} is held, which only an entry install copies (src) can be")
             if "required" in e and (kind != "tree" or not isinstance(e["required"], bool)):
                 raise ValueError(f"deploy.toml: {e['path']!r}: `required` is a tree's, true or false (a file always is)")
+            if "no_restart" in e and (kind != "file" or not e.get("src") or e.get("run") or not isinstance(e["no_restart"], str)
+                                      or not e["no_restart"].strip()):
+                raise ValueError(f"deploy.toml: {e['path']!r}: `no_restart` says why, for a file install copies (src) that names "
+                                 "no service to restart (run)")
             for n in e["nodes"]:
                 if n not in nodes:
                     raise ValueError(f"deploy.toml: {e['path']!r} names node {n!r}, which has no [nodes.{n}]")
                 mode = int(e["mode"], 8) if e.get("mode") else None
                 nodes[n].entries.append(Entry(e["path"], e.get("src"), e.get("by"), list(e.get("run", [])), kind == "tree", mode,
-                                              e.get("owner"), e.get("hold"), e.get("required", False)))
+                                              e.get("owner"), e.get("hold"), e.get("required", False), e.get("no_restart")))
     for node in nodes.values():
         seen = set()
         for e in node.entries:
@@ -481,7 +488,7 @@ def drift(node: Node, ref: str, run: Runner, repo: Path = REPO) -> dict:
         started = seen["procs"].get(path)
         if e.hold:
             state, detail = "held", f"{e.hold} ({'not installed' if got is None else 'installed: ' + state})"
-        elif got and "mtime" in got and started is not None and started < got["mtime"] - 1:
+        elif not e.no_restart and got and "mtime" in got and started is not None and started < got["mtime"] - 1:
             restart = (f"a process started {time.strftime('%m-%d %H:%MZ', time.gmtime(started))}, before the file "
                        f"({time.strftime('%m-%d %H:%MZ', time.gmtime(got['mtime']))})" + (f"; restart {', '.join(e.run)}" if e.run else ""))
         entries.append({"path": path, "src": rp, "owner": e.owner, "state": state, "detail": detail, "restart": restart,
@@ -652,9 +659,10 @@ def install(node: Node, ref: str, by: str, only: list[str], run: Runner, apply: 
                                    f"failed (exit {r.returncode}): {r.stderr.decode(errors='replace').strip()[-400:]}")
 
     def old(after: dict) -> dict[str, list]:
-        """path -> the services (None outside one) of the processes that started before it was installed"""
+        """path -> the services (None outside one) of the processes that started before it was installed, but those an
+        entry's `no_restart` leaves to end"""
         return {p: [u for start, u in after["running"].get(p, []) if "mtime" in (after["files"].get(p) or {})
-                    and start < after["files"][p]["mtime"] - 1] for p in now}
+                    and start < after["files"][p]["mtime"] - 1] for p in now if not want[p][3].no_restart}
 
     after = probe(node, now, run) if now else {"files": {}, "running": {}}
     done = restart(node, restarts(node, {p: want[p][3] for p in now}, old(after)), run, apply=True)
