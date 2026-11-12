@@ -17,6 +17,7 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Flat
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
 
 /-!
 # The copy fact of an address
@@ -145,6 +146,24 @@ theorem rowsFitS_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh 
       exact hok.2.2
   exact HiddenExec.rowsFit_of_committed ht' (Hidden.setupHidden_specCC hd).committed hrows
 
+/-- **Each table of a parsed, checked, hidden-output statement is set up by `setupHidden`** at its tags and some
+sample (`accepted_check`'s steps). -/
+theorem setupHidden_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh : p.tags.hiddenOutputs = true)
+    {j : ℕ} (hj : j < p.sts.size) :
+    ∃ d, Stmt.setupHidden (tagsAt p.tags p.I.count j) p.I.circuitFile p.I.publicFile p.coins p.I.tables d
+      p.I.partition p.I.program = .ok p.sts[j] := by
+  obtain ⟨hRu, -⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
+  have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hRu.2.2.2.2.2])
+  obtain ⟨spec, hset⟩ := setup_of_tablesOf (tablesOf_of_parses hP)
+  unfold Read.setup at hset
+  rw [hpi] at hset
+  obtain ⟨-, hall⟩ := HiddenExec.setupTables_setupOne hset
+  obtain ⟨d, hd, -⟩ := hall j hj
+  unfold HiddenExec.setupOne at hd
+  rw [tagsAt_hiddenOutputs, hh] at hd
+  simp only [↓reduceIte] at hd
+  exact ⟨d, hd⟩
+
 end RowsFit
 
 namespace CheckedRun
@@ -255,7 +274,8 @@ theorem copy_of_copies (hr : r.Ok h) (hblk : r.InBlock h) {g q i : ℕ} {m : _ro
     rcases hx with ⟨hxl, hq, hkey⟩ | hout
     · have hnIn : a.rows.nIn = a.st.c.upv * (a.st.c.unit.inWords * _root_.Flock.WORD) := by
         show a.st.c.upv * (FlockSoundness.unitRows a.st a.L.unit_built).nIn = _
-        rw [a.L.unitRows_nIn]
+        rw [show (FlockSoundness.unitRows a.st a.L.unit_built).nIn = a.st.c.unit.inWords * _root_.Flock.WORD from
+          a.L.unitRows_nIn]
       let cx : Fin a.rows.w := ⟨r.pick h g, by show _ < a.rows.nIn + a.rows.nComp + 1; omega⟩
       have hin := FlockSoundness.Discharge.Hidden.Committed.msgCol_lt a.ht a.committed hgi hq (i / 8) (i % 8)
         (Nat.mod_lt _ (by norm_num))
@@ -292,6 +312,35 @@ theorem copy_of_copies (hr : r.Ok h) (hblk : r.InBlock h) {g q i : ℕ} {m : _ro
       exact key cx _ _ _ rfl hin
         (FlockSoundness.Discharge.HiddenExec.out_copyH a hce ho hrf hz o hgi cx hu' hj' ht h1 h2 hxe hjo hk2
           (by rw [hw]; exact getElem!_pos _ j hj'))
+
+/-- **A counted unit's block is in its table** (`InBlock` from `Counted`): the session's first table holds its
+`pub.n` instances in `g · 2^nbl` slots (`Integrate.fits_blocks`), and `m = kLog + nbl`. -/
+theorem inBlock_of_counted (hr : r.Ok h) (hn : r.Counted h) : r.InBlock h := by
+  have hj := sts_pos hr
+  have e0 : r.sts[0]! = r.sts[0] := getElem!_pos r.sts 0 hj
+  obtain ⟨_, _, _, hx', -, -, -, hok, hu, hck, -, -, -, hset⟩ := hr
+  obtain ⟨hpp, -⟩ := relS_setupOf hset hck
+  cases hS : FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h r.m₂ r.u) with
+  | none => simp [Claims.Flock.check, hS] at hck
+  | some S =>
+    obtain ⟨p, hpb, -, -, hc, hh⟩ := parsed_of_stmtOkAt h (stmtOkAt_unit h hx' hok hu) hS
+    obtain ⟨rfl, -⟩ := parsed_setupOf hset hpb
+    obtain ⟨T, a, hst0, -, -, -⟩ := accepted_check hpp hc hh hj
+    obtain ⟨hty, ⟨ls, hcc⟩, -⟩ := FlockSoundness.Discharge.Hidden.Committed.check a.ht a.committed
+    have hg0 : 0 < a.st.c.g := FlockSoundness.Discharge.Hidden.check_g_pos hty hcc
+    obtain ⟨d, hd⟩ := setupHidden_check hpp hc hh hj
+    rw [← hst0] at hd
+    obtain ⟨hn', hnbl⟩ := FlockSoundness.Discharge.HiddenExec.setupHidden_n hd
+    have hm := (FlockSoundness.Discharge.Hidden.setupHidden_wf hd).2.hm
+    have e1 : r.sts[0]! = a.st := e0.trans hst0.symm
+    unfold Counted at hn
+    unfold InBlock
+    rw [e1] at hn ⊢
+    rw [Nat.div_lt_iff_lt_mul hg0, hm, Nat.add_sub_cancel_left, Nat.mul_comm]
+    calc r.n h < a.st.pub.n := hn
+      _ = a.st.n := hn'.symm
+      _ ≤ a.st.c.g * 2 ^ a.st.nbl := by
+        rw [hnbl]; exact FlockSoundness.Discharge.Integrate.fits_blocks hg0
 
 end CheckedRun
 
