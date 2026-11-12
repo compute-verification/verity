@@ -124,9 +124,9 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
     exception, named and exact: the trace prices an attention call's products at the width the card's fused kernel computes
     them at, the 16 bits of the call's query (its raw rows' `attention`), and the step's circuit computes them on torch's
     math path, in the 32 bits that path casts the call's operands up to, until it wires that kernel. So on the rows whose
-    `attention` is narrower than the dtype they were traced in, and on no other, the circuit's operands are 32 bits wide
-    against the trace's 16 and its O is 32 bits a word against the trace's 16, twice the trace's; the float32 step has no
-    such row. On sm_120, priced at the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a
+    `attention` is narrower than the dtype they were traced in, and on no other, the circuit's O is 32 bits a word against
+    the trace's 16, twice the trace's, and its operands are 32 bits wide each, where the trace has at 16 every one its
+    capture passes at the call's width (at least one a product); the float32 step has no such row. On sm_120, priced at the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a
     bf16 MAC that dot's over 16) times their routes' factor (`route_factor`: the zeros grid.z slices pad their residue
     tiles with are dots the trace doesn't count)."""
     dtype, cc = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}[step]
@@ -154,7 +154,8 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
         circuit, trace = r["circuit"], r["trace"]
         assert all(circuit[x] == trace[x] for x in ("count", "N", "token_dims")), r
         if r in excepted:
-            assert r["op"] == "bmm" and (circuit["widths"], trace["widths"]) == ([(32, 32)], [(16, 16)]), r
+            (passed,) = trace["widths"]
+            assert r["op"] == "bmm" and circuit["widths"] == [(32, 32)] and set(passed) <= {16, 32} > {min(passed)} == {16}, r
             assert circuit["O"] == 2 * trace["O"] == 32 * (trace["O"] // 16) > 0, r
         else:
             assert (circuit["O"], circuit["widths"]) == (trace["O"], trace["widths"]), r
