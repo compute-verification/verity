@@ -64,7 +64,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
 - ``two-stage``: the two-stage serve's launch line, everything its engine turns on over stock: ``boundary-rows``, the
   canonical DSA top-k and one attention layer's latent history tables in the boundary commitment (`TABLES`). The line
   is this arm's data and is stated nowhere else: a job that serves the two-stage audit serves this arm.
-- ``prod``: stock vLLM at production settings, vLLM's own recipe for GLM-5.3 on eight H200s as the pin spells it
+- ``prod``: stock vLLM at the recipe's settings, vLLM's own recipe for GLM-5.3 on eight H200s as the pin spells it
   (`PROD`): prefix caching, an FP8 KV cache, speculative decoding by the checkpoint's own MTP layer, and the model's
   parsers. It has no parent: the arms on it are costed over it, at the same settings (`root_of`);
 - ``prod-again``: ``prod`` in a second server lifetime, the noise floor of a cost over ``prod``;
@@ -212,7 +212,7 @@ ROWS = {"inline": True, "per_prompt": 0, "per_output": 1, "drained": True}
 #: one attention layer's latent history tables in the boundary commitment (its ``tables``): the first layer's, their
 #: rows and salts kept on the node
 TABLES = {"layers": 1, "private": PRIVATE}
-#: production settings: what vLLM's own recipe for GLM-5.3 on eight H200s adds to its serve line, as the pin spells it:
+#: the recipe's settings: what vLLM's own recipe for GLM-5.3 on eight H200s adds to its serve line, as the pin spells it:
 #: prefix caching (the engine's default, said), an FP8 KV cache, 95% of each card's memory, speculative decoding by the
 #: checkpoint's own MTP layer at five draft tokens a step, and the model's tool-call and reasoning parsers. The README
 #: lists where an arm of these differs from the recipe, each with its reason
@@ -259,10 +259,10 @@ ARMS = {
     "two-stage": Arm("boundary-rows", "the two-stage serve's launch line: + the canonical DSA top-k and one attention "
                      "layer's history tables in the boundary commitment", ("--no-enable-prefix-caching",),
                      plugin=("record", "boundary_rows"), env=TOPK_ENV, general=TOPK, rows={**ROWS, "tables": TABLES}),
-    "prod": Arm(None, "stock vLLM at production settings: vLLM's recipe for the model on these cards (PROD)", PROD),
-    "prod-again": Arm("prod", "stock vLLM at production settings in a second server lifetime: what two starts of that "
+    "prod": Arm(None, "stock vLLM at the recipe's settings: vLLM's own recipe for the model on these cards (PROD)", PROD),
+    "prod-again": Arm("prod", "stock vLLM at the recipe's settings in a second server lifetime: what two starts of that "
                       "engine differ by", PROD),
-    "prod-record": Arm("prod", "production settings + the scheduler's step trace (StepTrace)", PROD, plugin=("record",)),
+    "prod-record": Arm("prod", "the recipe's settings + the scheduler's step trace (StepTrace)", PROD, plugin=("record",)),
 }
 #: the changes of ours an arm's engine can have on, each read from the arm's data: what a serving cost is made of, and
 #: what a part of a model's target (`Part`) is of
@@ -288,7 +288,7 @@ def root_of(arm: str) -> str:
 
 
 def check_model(arm: str, model_id: str | None) -> None:
-    """Refuse an arm of production settings (`PROD`) for a model they are not the recipe of."""
+    """Refuse an arm of the recipe's settings (`PROD`) for a model they are not the recipe of."""
     if ARMS[arm].args[:len(PROD)] == PROD and model_id != PROD_MODEL:
         raise SystemExit(f"arm {arm} holds vLLM's recipe for {PROD_MODEL} (PROD), and the model is {model_id or 'not named'}: "
                          f"serve it with --model-id {PROD_MODEL}")
@@ -2177,7 +2177,8 @@ def prefix_row(by: dict[str, dict], reference: str, arm: str) -> dict | None:
             "rung": rung, **over(arm), "cache_off": over(CACHE_OFF) if arm != CACHE_OFF else None}
 
 
-#: the most a production serve with our changes may cost over stock at the same settings and load, in percent
+#: the most a serve at the recipe's settings may cost with our changes over stock at the same settings and load, in
+#: percent
 SESSION_TARGET = 1.0
 #: a cost report's ``metric`` where it is a sessions load's (`session_cost`)
 SESSION_COST = "session_cost"

@@ -24,9 +24,9 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`) | `boundary-rows` |
-| `prod` | stock vLLM at production settings: vLLM's recipe for GLM-5.3 on eight H200s as the pin spells it (`serve_tax.PROD`) | — |
+| `prod` | stock vLLM at the recipe's settings: vLLM's own recipe for GLM-5.3 on eight H200s as the pin spells it (`serve_tax.PROD`) | — |
 | `prod-again` | nothing: `prod` in a second server lifetime, the noise floor of a cost over `prod` | `prod` |
-| `prod-record` | the scheduler's step trace on production settings, as `record` is on `compiled` | `prod` |
+| `prod-record` | the scheduler's step trace at the recipe's settings, as `record` is on `compiled` | `prod` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -223,7 +223,7 @@ requests are sent as they arrive, and its figures' readings are beside it (`cost
 `ttft`, `itl_p99`). A job in which a load of the
 number or load `prefix` has not run writes no entry under the metric's id. `gpus.csv` names the cards the job measured on.
 
-## Production settings and the agentic load
+## The recipe's settings and the agentic load
 
 `prod` is stock vLLM as vLLM's own recipe for GLM-5.3 on eight H200s starts it
 ([recipes.vllm.ai/zai-org/GLM-5.3](https://recipes.vllm.ai/zai-org/GLM-5.3), the FP8 line), and the arms whose parent
@@ -245,7 +245,7 @@ refuses another model. Where it differs from the recipe, and why:
 
 The loads `agentic` and `agentic-full` are a coding agent's recorded sessions: SemiAnalysis's AgentX traces
 (`serve_tax.AGENTX`, Apache-2.0), a line a session, each request its prompt's and its output's tokens and an id for
-each 64-token block of its prompt, with no token and no text. vLLM's client draws a block's tokens from its id
+each 64-token block of its prompt, with no token and no text. vLLM's client makes a block's tokens from its id
 (its `timed_trace` dataset), so a turn's prompt begins with the tokens of the turn before it and the engine's prefix
 cache serves them; the tokens are synthetic, so a draft token is accepted less often than on text. A session is its
 own chain of requests, without the groups its subagents sent, up to the first request that does not fit the load's

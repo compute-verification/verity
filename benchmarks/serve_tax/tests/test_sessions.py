@@ -1,4 +1,4 @@
-"""The arms at production settings and the sessions loads: their data, the requests a corpus of sessions gives each
+"""The arms at the recipe's settings and the sessions loads: their data, the requests a corpus of sessions gives each
 user, a pass sent by one client a user, and the cost on such a load, on synthetic records."""
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import serve_tax as S
 GLM = S.MODELS["glm53"]
 
 
-def test_the_production_arms_are_the_recipes_settings_and_are_costed_over_prod():
+def test_the_prod_arms_are_the_recipes_settings_and_are_costed_over_prod():
     prod, again, record = (S.ARMS[n] for n in ("prod", "prod-again", "prod-record"))
     assert prod.parent is None and again.parent == record.parent == "prod"
     assert prod.args == again.args == record.args == S.PROD and record.plugin == ("record",) and not prod.plugin

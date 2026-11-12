@@ -30,7 +30,7 @@
 # PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own
 # (serve_tax.parse_pass_prompts): for a ladder past the rungs the load's own prompts can hold, and the same for every
 # arm of a cost. After the table it prints the cost of
-# ARMS's last arm over the stock arm it is made from, compiled or, for the arms at production settings, prod
+# ARMS's last arm over the stock arm it is made from, compiled or, for the arms at vLLM's recipe's settings, prod
 # (serve_tax.py cost, serve_tax.root_of; --arms "prod prod-record prod-again" --loads agentic is that cost on an
 # agent's sessions, where a rung is the users and PASS_PROMPTS the turns each sends) and writes OUT/serving_cost.{json,txt} and the run's result.json (each
 # load's cost a measurement, and the number one under the model's metric id once every load has run); --json prints the
