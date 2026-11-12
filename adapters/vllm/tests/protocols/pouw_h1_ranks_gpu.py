@@ -36,6 +36,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.engine.hooks import Hooks
+
 SCHEMA = "verity/pouw-h1-ranks-gpu/v1"
 KEY = hashlib.sha512(b"verity/pouw-h1-ranks-gpu/key/v1").digest()[:32]
 SUMMARY = "ranks-summary.json"
@@ -101,7 +103,6 @@ def _w_edit(worker: Any, kind: str, tp: int) -> dict[str, Any] | None:
     ``observe`` handed `_edit_of(kind)` of the arm's codes (`EXPERT_NEGATIVE`: `pouw_h1_gpu.editor`'s), outside H1's own
     (`pouw_h1_ranks.wire_rank`), so the Commit acquires the arm's codes and the served y is the arm's."""
     from tests.protocols import pouw_h1_gpu as GPU
-    from verity_vllm.engine.hooks import Hooks
     if worker._h1rank_rank()[1] != tp:
         return None
     _model, layers = worker._h1rank_layers()
