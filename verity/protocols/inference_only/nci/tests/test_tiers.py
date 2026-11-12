@@ -33,7 +33,7 @@ def test_the_gpus_read_the_accel_models_card_table():
     """`CARD` is `Verity.Accel.Sm120.card`'s tensor rate and clock ceiling (its sheet-form `f_max`), and PoUW credits
     H1's SM120 record's f_max: so the clock term is 0, the server's peak is 8 cards at the table's FP8 rate (7.485e15
     FLOP/s, not NVIDIA's 8e15 headline at about 2,597 MHz) and the Xeons are 12.6% of it."""
-    lean = (ROOT / "Security/Definitions/Core/Accel/Sm120.lean").read_text()
+    lean = (ROOT / "security/Definitions/Core/Accel/Sm120.lean").read_text()
     sms, tensor = map(int, re.search(r"\| \.tensor => (\d+) \* (\d+)", lean).groups())
     mhz = re.search(r"def clock : ℚ≥0 := (\d+) \* 10 \^ 6", lean) or re.search(r"f_max = (\d+) MHz", lean)
     assert T.CARD == {"sms": sms, "tensor": tensor, "clock_hz": int(mhz.group(1)) * 1e6}
@@ -315,11 +315,11 @@ def test_reference_layered_at_kimi_k2():
     assert T.DEFAULTS["K"] < (E + 1) * b and (d0, e, b, E) == (17, 2328, 2621440, 7)
     assert T.REFERENCE_THREADED == (d0 - E, step * (e + E * e_lk)) and T.DEFAULTS["e"] == T.REFERENCE_THREADED[1]
     assert T.DEFAULTS["thread_bits"] == pytest.approx(d0 * b, rel=1e-3)
-    nci = ROOT / "Security" / "Definitions" / "Nci"
+    nci = ROOT / "security" / "Definitions" / "Nci"
     layered = (nci / "Assumptions/Layered.lean").read_text()
     assert f"Nonempty (Layered T {d0} {e} {e_lk} ({m['vocab']} * {EMBED_BITS}))" in layered
     stated = (nci / "Guarantees/Layered.lean").read_text()
     assert T.DEFAULTS["K"] == 2e7 and f"S ≤ 2 * 10 ^ 7 → T.Threaded Γ S {d0 - E} {e + E * e_lk}" in stated
-    entry = json.loads((ROOT / "Security" / "lean-audit.json").read_text())["shape"]["conjectures"]
+    entry = json.loads((ROOT / "security" / "lean-audit.json").read_text())["shape"]["conjectures"]
     test = f"verity/protocols/inference_only/nci/tests/{Path(__file__).name}::test_reference_layered_at_kimi_k2"
     assert entry["Nci.Assumptions.ReferenceLayered"] | {"why": ""} == {"status": "open", "test": test, "why": ""}

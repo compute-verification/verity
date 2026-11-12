@@ -49,7 +49,7 @@ wipe_s = { value = 86400, unit = "s", low = 3600, high = 604800, source = "ruled
 per = "server"
 k_wipe = { value = 4e10, unit = "bit/server", low = 2e10, high = 9.32e11, source = "ruled: the wipe leaves at most 5 GB of the server's assumed memory capacity M_s, every tier included (the operating point); low: half; high: the per-device measurement's 116.5 GB a server (8 x 10 GB of HBM and 36.5 GB of host, DPU, BMC and flash unwiped: regime.onsite-per-device)", status = "ruled" }
 game_delta_coin = { value = 2.938735877055719e-39, source = "the streamed wipe's retention game: accepted with probability at most 2^-128 + Adv_PRF; the coins' 2^-128", status = "derived" }
-prf_advantage = { value = 2.938735877055719e-39, source = "Adv_PRF of the streamed wipe's label function, taken at the PoUS statements' epsilon_crypto = 2^-128 (Security/Definitions/Pous/Guarantees.lean)", status = "assumed" }
+prf_advantage = { value = 2.938735877055719e-39, source = "Adv_PRF of the streamed wipe's label function, taken at the PoUS statements' epsilon_crypto = 2^-128 (security/Definitions/Pous/Guarantees.lean)", status = "assumed" }
 declared = false
 intake = { value = 1, unit = "x", low = 1, high = 1.3e6, source = "draft:declared-ingress: a server's ingress carries only its inference blocks' declared inputs, at most alpha Phi at full use (verity/protocols/inference_only/nci/tiers.py DEFAULTS intake_x); high: line rate, the upper end until Lean states the per-server bits", status = "derived" }
 timing = { value = 860, unit = "bit/s/host", low = 61.3, high = 1e4, source = "verity/protocols/inference_only/nci/tiers.py DEFAULTS tau: the network appendix's program format; low: the llama8b-node1 calibration's requests (51.3) and coin (10) links", status = "derived" }

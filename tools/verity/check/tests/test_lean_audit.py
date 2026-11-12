@@ -720,7 +720,7 @@ DEFERRED = ["python3", "tools/verity/check/slot.py", "--priority", "--by", "ci",
 def test_a_slot_wrapped_check_is_a_recorded_check_whose_bundle_and_verdicts_are_taken(tmp_path, monkeypatch):
     """Checks run under `slot.py`, so the store records drive's trains, Lean checks and after-landing runs with tool
     `python3`; `shared_bundles` and `gathered_packs` selecting only tool `check` would leave each node without another's
-    built modules or replay verdicts, building `Security/Proofs` cold (700 to 1,300 s) and replaying some 2,000 modules."""
+    built modules or replay verdicts, building `security/Proofs` cold (700 to 1,300 s) and replaying some 2,000 modules."""
     index = _attempts(tmp_path, [("r-lean", "python3", "failed", DEFERRED), ("r-other", "python3", "done", ["python3", "x.py"]),
                                  ("r-lean-tool", "python3", "done", ["python3", "tools/verity/lean/check.py", "--build"]),
                                  ("r-check", "check", "done", ["check"]), ("r-running", "python3", "running", DEFERRED)])
@@ -766,14 +766,14 @@ def test_only_a_recorded_check_bundles_its_built_modules_for_other_nodes(tmp_pat
 
 
 def test_a_package_whose_sources_sit_beside_it_keeps_its_build(tmp_path):
-    """`Security/Proofs` has `srcDir = ".."`. Pruning looked for each kept output's source inside the package, found none,
-    and deleted the whole kept build on every warm take, so each check's audit rebuilt `Security/Proofs` from scratch."""
-    pkg = tmp_path / "Security" / "Proofs"
+    """`security/Proofs` has `srcDir = ".."`. Pruning looked for each kept output's source inside the package, found none,
+    and deleted the whole kept build on every warm take, so each check's audit rebuilt `security/Proofs` from scratch."""
+    pkg = tmp_path / "security" / "Proofs"
     (pkg / "Flock").mkdir(parents=True)
     (pkg / "lakefile.toml").write_text('name = "proofs"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
     (pkg / "Flock" / "X.lean").write_text("theorem x : True := trivial\n")
-    (tmp_path / "Security" / "Flock").mkdir()
-    (tmp_path / "Security" / "Flock" / "Y.lean").write_text("theorem y : True := trivial\n")
+    (tmp_path / "security" / "Flock").mkdir()
+    (tmp_path / "security" / "Flock" / "Y.lean").write_text("theorem y : True := trivial\n")
     lib, ir = pkg / ".lake/build/lib/lean", pkg / ".lake/build/ir"
     kept = [lib / "Proofs/Flock/X.olean", lib / "Proofs/Flock/X.olean.hash", lib / "Proofs/Flock/X.ilean",
             lib / "Proofs/Flock/X.trace", ir / "Proofs/Flock/X.c", ir / "Proofs/Flock/X.c.hash", lib / "Flock/Y.olean"]
@@ -917,7 +917,7 @@ def test_every_file_the_step_loads_is_in_its_key():
     import ast
 
     files = LA.COMMON.tracked_files()
-    got = LA.inputs("Security/Proofs", files)
+    got = LA.inputs("security/Proofs", files)
     loaded = re.findall(r'_module\(ROOT / "tools" / "verity" / "check" / "([a-z_]+\.py)"', (ROOT / "tools/verity/lean/lean_audit.py").read_text())
     assert loaded == ["common.py"] and all(f"tools/verity/check/{m}" in got for m in loaded)
     assert ROOT / LA.CONTRACT == LA.MK.CONTRACT and LA.CONTRACT in got
@@ -1067,9 +1067,9 @@ def test_a_spec_reads_the_packages_proving_its_guarantees_and_misses_with_them(t
 def test_the_real_packages_and_their_inputs():
     files = LA.COMMON.tracked_files()
     pkgs = LA.packages(files)
-    assert "Security/Proofs" in pkgs and not [p for p in pkgs if p.startswith("tools/verity/lean")]
-    got = LA.inputs("Security/Proofs", files)
-    assert "Security/lean-audit.json" in got and "verity/protocols/flock/verifier/FlockVerify.lean" in got
+    assert "security/Proofs" in pkgs and not [p for p in pkgs if p.startswith("tools/verity/lean")]
+    got = LA.inputs("security/Proofs", files)
+    assert "security/lean-audit.json" in got and "verity/protocols/flock/verifier/FlockVerify.lean" in got
     assert "tools/verity/lean/check.py" in got and not [f for f in got if "/.lake/" in f]
     assert "tools/verity/lean/Replay.lean" in got and "tools/verity/lean/README.md" not in got
     assert not [f for f in got if f.startswith("tools/verity/lean/tests/")]
@@ -1087,7 +1087,7 @@ FACTS_AUDIT = FAKE_AUDIT.replace(
     '    reps.append({"package": str(pkg), "failures": [f"reads {m}" for m in missing]})\n',
     '''    rep = {"package": str(pkg), "failures": [f"reads {m}" for m in missing]}
     rel = pkg.relative_to(root).as_posix()
-    if rel in ("Security", "Security/Proofs"):
+    if rel in ("security", "security/Proofs"):
         import gzip, hashlib
         tag = "audit-" + "".join(c if c.isalnum() else "_" for c in rel)
         (out / tag).mkdir(parents=True, exist_ok=True)
@@ -1118,8 +1118,8 @@ def test_the_ratchet_joins_the_facts_of_this_run_s_audits_or_of_the_passes_it_re
     again; the caps and `unread.py` rerun no audit; a run with one of the two packages leaves the ratchet to another."""
     extra = {"tools/verity/lean/check.py": FACTS_AUDIT, "tools/verity/lean/unread.py": FAKE_UNREAD,
              "tools/verity/lean/unread-caps.json": "2", "pkg/b/lean-audit.json": "{}",
-             "Security/S.lean": "", "Security/Proofs/P.lean": "",
-             **{f"Security/{f}": t for f, t in SPEC.items()}, **{f"Security/Proofs/{f}": t for f, t in SPEC.items()}}
+             "security/S.lean": "", "security/Proofs/P.lean": "",
+             **{f"security/{f}": t for f, t in SPEC.items()}, **{f"security/Proofs/{f}": t for f, t in SPEC.items()}}
     assert FACTS_AUDIT != FAKE_AUDIT
     root = _tree(tmp_path, monkeypatch, extra)
     cache = tmp_path / "cache" / "lean-audit"
@@ -1131,31 +1131,31 @@ def test_the_ratchet_joins_the_facts_of_this_run_s_audits_or_of_the_passes_it_re
         seen = json.loads((out / "unread" / "seen.json").read_text()) if (out / "unread" / "seen.json").exists() else None
         return rc, ran, json.loads((out / "audit.json").read_text()), seen
 
-    keys = {p: LA.key(p, LA.COMMON.tracked_files(), LA.FLAGS) for p in ("Security", "Security/Proofs", "pkg/a")}
+    keys = {p: LA.key(p, LA.COMMON.tracked_files(), LA.FLAGS) for p in ("security", "security/Proofs", "pkg/a")}
     rc, ran, doc, seen = run(1)
-    assert rc == 0 and ran == sorted(["Security", "Security/Proofs", "pkg/a", "pkg/b"]) and seen == ["Security", "Security/Proofs"]
+    assert rc == 0 and ran == sorted(["security", "security/Proofs", "pkg/a", "pkg/b"]) and seen == ["security", "security/Proofs"]
     assert doc["unread"]["failures"] == [] and sorted(p.stem for p in (cache / "unread").glob("*.json")) == sorted(
-        [keys["Security"], keys["Security/Proofs"]])
+        [keys["security"], keys["security/Proofs"]])
     published = sorted(f"{keys[p]}.jsonl.gz" for p in LA.UNREAD_FACTS)
     assert sorted(f.name for f in (tmp_path / "out1" / "unread").glob("*.jsonl.gz")) == published, \
         "an audit's facts are left by their key, as the landing gate looks for them"
     rc, ran, doc, seen = run(2)
-    assert rc == 0 and ran == [] and seen == ["Security", "Security/Proofs"] and len(doc["cached"]) == 4
+    assert rc == 0 and ran == [] and seen == ["security", "security/Proofs"] and len(doc["cached"]) == 4
     assert sorted(f.name for f in (tmp_path / "out2" / "unread").glob("*.jsonl.gz")) == published, "a reused pass's too"
     (root / "tools/verity/lean/unread-caps.json").write_text("1")
     rc, ran, doc, seen = run(3)
     assert rc == 1 and ran == [] and doc["failed"] == ["unread"] and doc["unread"]["failures"] == ["unread: 2 above 1"]
     (root / "tools/verity/lean/unread-caps.json").write_text("2")
-    k = keys["Security/Proofs"]
+    k = keys["security/Proofs"]
     entry = cache / "unread" / f"{k}.json"
     entry.write_text(json.dumps(json.loads(entry.read_text()) | {"facts": "e30K"}))
     rc, ran, doc, seen = run(4)
-    assert rc == 0 and ran == ["Security/Proofs"] and seen == ["Security", "Security/Proofs"], "other bytes: audited again"
+    assert rc == 0 and ran == ["security/Proofs"] and seen == ["security", "security/Proofs"], "other bytes: audited again"
     entry.unlink()
-    assert not LA.reusable(cache, "Security/Proofs", k) and LA.reusable(cache, "pkg/a", keys["pkg/a"])
+    assert not LA.reusable(cache, "security/Proofs", k) and LA.reusable(cache, "pkg/a", keys["pkg/a"])
     rc, ran, doc, seen = run(5)
-    assert rc == 0 and ran == ["Security/Proofs"] and entry.is_file()
-    rc, ran, doc, seen = run(6, only=["Security/Proofs"])
+    assert rc == 0 and ran == ["security/Proofs"] and entry.is_file()
+    rc, ran, doc, seen = run(6, only=["security/Proofs"])
     assert rc == 0 and doc["unread"] is None and seen is None
     assert LA.prune_facts(cache, kept=1) == 1 and len(list((cache / "unread").glob("*.json"))) == 1
 

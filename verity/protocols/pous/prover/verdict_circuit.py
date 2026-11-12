@@ -12,9 +12,9 @@ Every array is of `Value<1>`, and a byte string is bits in byte order, bit t bei
 **What it computes.**  Round j *hits* when its record names round j, its receipt is not before its send, ``receipt − send
 ≤ LIMIT`` (Δ + RTT in ns) and its ``H(block)`` is ``expected[j]``; every other round misses (`round_verdict`).  The output
 is 1 iff at most M of the K rounds miss: `Pous.contAccepts M` over the rounds' verdicts
-(`Security/Definitions/Pous/Model/Continuous.lean`), the continuous audit's ``max_misses = M`` over ``n = K`` challenges.
+(`security/Definitions/Pous/Model/Continuous.lean`), the continuous audit's ``max_misses = M`` over ``n = K`` challenges.
 At M = 0 it is the per-round part of `memory_challenger.verdict`: no round wrong, none late, every record its own round.
-`PousVerdict.verdictProg_accepts` (`Security/Proofs/Pous/Continuous/Verdict.lean`) proves it of the gates.
+`PousVerdict.verdictProg_accepts` (`security/Proofs/Pous/Continuous/Verdict.lean`) proves it of the gates.
 
 **The gates** (`gates`, which `PousVerdict.verdictProg` restates, and the body is written from gate for gate):
 the K·1248 input bits, the constants 0 and 1, then per round
