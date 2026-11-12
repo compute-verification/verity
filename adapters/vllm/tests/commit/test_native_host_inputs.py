@@ -15,3 +15,12 @@ def test_weights_cover_one_input_per_registered_leaf_width():
     assert _inputs(fp8) == ["Input16_v1", "Input32_v1", "Input8_v1"]
     assert _inputs([["n", "bfloat16", [4], 8]], REGISTRATION) == ["RegisteredInput16_v1"]
     assert _inputs([]) == ["Input16_v1"]
+
+
+def test_weights_without_a_registered_tree_cover_the_default_width():
+    """`verity_vllm.commit.committer.input_classes.weights_inputs`: no registered tree, a tree without `names` and a tree that names
+    no tensor cover the 16-bit input alone, as a tree does whose dtypes state no width."""
+    trees: list[dict | None] = [None, {}, {"names": None}, {"names": []}, {"names": [["w", "bool", [4], 4]]}]
+    for tree in trees:
+        assert weights_inputs(tree) == ["Input16_v1"]
+        assert weights_inputs(tree, REGISTRATION) == ["RegisteredInput16_v1"]
