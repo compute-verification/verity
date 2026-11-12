@@ -1,6 +1,6 @@
 """vLLM at its serving settings, replayed: what one served job shows, as the settings it ran with and three lines (README.md).
 
-    prod_repro.py arms [--model ID] [--out OUT]
+    prod_repro.py arms [--model ID] [--out OUT] [--among ARM ...]
     prod_repro.py limit --model ID
     prod_repro.py report OUT [--stock ARM] [--ours ARM] [--again ARM] [--beside ARM ...] --load NAME
                          [--replayed PASS] [--rep 1] [--replay DIR] [--expect-replay] [--private DIR]
@@ -64,7 +64,7 @@ artifacts (`declare`: the report's two files and the replay's record).
 ``arms`` prints the three arms a job serves by default (`default_arms`): the arms at vLLM's published serving settings
 (`PROD`) for a model whose recipe the benchmark holds, else stock compiled vLLM, stock again and the step record
 (`TODAY`); with ``--out``, the three an earlier job's out/ is read as, which ``report`` reads it as too where none is
-named.
+named; with ``--among``, the arms a job lists (the runner's ``--arms``), the set whose arm of ours is among them.
 
 ``limit`` prints the context limit a job serves the model at where it names none (`LIMITS`), or nothing.
 """
@@ -158,10 +158,15 @@ DIGEST_SHOWN = 12
 NOT_COUNTED = "  past an end-of-text token: not counted, no arm's passes hold a count of the requests that went on past one"
 
 
-def default_arms(model_id: str | None = None, out: Path | None = None) -> tuple[str, str, str]:
+def default_arms(model_id: str | None = None, out: Path | None = None, among: Sequence[str] = ()) -> tuple[str, str, str]:
     """The arms of a job that names none: `PROD` where the benchmark has them and holds vLLM's recipe for the model (it
     refuses an arm at the published settings for a model with none), else `TODAY`. An earlier job's ``out`` is read as
-    `PROD` where it holds that set's arm of ours."""
+    `PROD` where it holds that set's arm of ours. A job that lists the arms it serves (the runner's --arms,
+    ``among``) is of the set whose arm of ours the list names, whatever its out/ holds: one that ended before ours
+    was served is still read as the arms it was to serve."""
+    for names in (PROD, TODAY):
+        if names[2] in among:
+            return names
     if out is not None:
         return PROD if arm_dirs(out, PROD[2])[0].is_dir() else TODAY
     model = S.MODELS.get(model_id)
@@ -1362,6 +1367,8 @@ def main(argv: list[str] | None = None) -> int:
     q = sub.add_parser("arms", help="the arms a job serves by default: stock, stock again, ours")
     q.add_argument("--model", help="the model the job serves, as the benchmark names it")
     q.add_argument("--out", type=Path, help="an earlier job's out/, read again: the arms it is read as")
+    q.add_argument("--among", nargs="*", default=(), metavar="ARM",
+                   help="the arms the job lists (the runner's --arms): the three are the set whose arm of ours is among them")
     q = sub.add_parser("served", help="exit 0 where an arm of a job's out/ served the load without an error")
     q.add_argument("out", type=Path)
     q.add_argument("arm")
@@ -1390,7 +1397,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--json", action="store_true", help="print the JSON object alone")
     a = ap.parse_args(argv)
     if a.cmd == "arms":
-        print(" ".join(default_arms(a.model, a.out)))
+        print(" ".join(default_arms(a.model, a.out, a.among)))
         return 0
     if a.cmd == "served":
         ss = [arm_state(d, a.load) for d in arm_dirs(a.out, a.arm)]

@@ -1199,9 +1199,13 @@ def test_the_arms_are_the_published_settings_arms_for_a_model_whose_recipe_the_b
     assert P.main(["arms", "--model", "glm53"]) == 0 and capsys.readouterr().out == "prod prod-again prod-record\n"
     monkeypatch.setattr(S, "ARMS", {k: v for k, v in S.ARMS.items() if k != "prod-record"})
     assert P.default_arms("glm53") == P.TODAY
-    # an earlier job's out/ is read as the arms it served
+    # an earlier job's out/ is read as the arms it served, and a job that lists its arms as the set the list is of
     assert P.default_arms("glm53", tmp_path) == P.TODAY
+    assert P.default_arms("glm53", tmp_path, ("prod", "prod-seeded", "prod-record")) == P.PROD
+    assert P.main(["arms", "--out", str(tmp_path), "--among", "prod", "prod-record"]) == 0
+    assert capsys.readouterr().out == "prod prod-again prod-record\n"
     (tmp_path / "prod-record").mkdir()
+    assert P.default_arms("glm53", tmp_path, ("compiled", "record")) == P.TODAY
     assert P.default_arms("moonlight", tmp_path) == P.PROD
     assert P.main(["arms", "--out", str(tmp_path)]) == 0 and capsys.readouterr().out == "prod prod-again prod-record\n"
 
@@ -1311,6 +1315,10 @@ def test_the_runner_serves_the_arms_it_is_named_in_their_order_and_the_others_be
     # read again from its out/ under the same arms, it is the same report
     q = bash(script, "--report", str(run_dir / "out"), "--load", "chat", "--model", "glm53", "--arms", four)
     assert q.returncode == 0 and q.stdout == (run_dir / "out/prod_repro.txt").read_text() and q.stdout in p.stdout
+    # an out/ that holds nothing of ours is still read as the arms the list names, each not served
+    (tmp_path / "empty").mkdir()
+    q = bash(script, "--report", str(tmp_path / "empty"), "--load", "chat", "--model", "glm53", "--arms", four)
+    assert q.returncode == 0 and all(f"  {a}: NOT SERVED" in q.stdout for a in four.split()), q.stdout + q.stderr
     # stock again is served where the list holds it
     bash(script, *line, "--arms", "prod prod-again prod-record", run_dir=run_dir)
     assert started(run_dir)["argv"] == "--model glm53 --arms prod prod-again prod-record --loads chat=16 --reps 1"

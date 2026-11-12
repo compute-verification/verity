@@ -76,7 +76,7 @@ case $CLIENT in corpus|vllm-bench) ;; *) echo "prod_repro: --client corpus or vl
 [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # as serve_tax/run.sh finds it
 VENV=${VENV:-$venv}
 [ -x "$VENV/bin/python" ] && PY=$VENV/bin/python || PY=python3
-arms=($("$PY" "$here/prod_repro.py" arms --model "${MODEL_ID:-moonlight}" ${REPORT:+--out "$REPORT"})) || exit 2
+arms=($("$PY" "$here/prod_repro.py" arms --model "${MODEL_ID:-moonlight}" ${REPORT:+--out "$REPORT"} ${SERVE:+--among $SERVE})) || exit 2
 # --stock none serves ours alone: a first start of it and its replay, with no stock arm, so no cost
 alone=0; [ "${STOCK-}" != none ] || { alone=1; AGAIN=none; }
 [ "${AGAIN-}" != none ] || AGAIN=
