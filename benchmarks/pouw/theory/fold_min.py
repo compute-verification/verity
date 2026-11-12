@@ -41,6 +41,7 @@ import random
 import sys
 from dataclasses import replace
 from math import comb
+from pathlib import Path
 
 from exact_kit.checks import Checks
 from verity_machine_model import eps as E
@@ -115,7 +116,7 @@ def xor2_program(x: int, w: int) -> tuple[int, int]:
 
 # ---- the certificates and the B200 re-solve --------------------------------------------------------------------------
 
-def certificate(dev: str, vector: str):
+def certificate(dev: str, vector: str) -> tuple[Path, E.Design, E.Machine, E.Setup, E.Mix]:
     data = device(dev)
     d = E.design(HEADLINE[dev][0], data)
     pi = E.machine(vector, data)
@@ -124,11 +125,11 @@ def certificate(dev: str, vector: str):
     return data, d, pi, s, s.cheat(q)
 
 
-def class_price(pi, lam: dict[str, float], k: str) -> float:
+def class_price(pi: E.Machine, lam: dict[str, float], k: str) -> float:
     return sum(w * pi.c[k].get(r, 0.0) for r, w in lam.items())
 
 
-def blend(d, moves: list[tuple[float, int]], split: bool = False):
+def blend(d: E.Design, moves: list[tuple[float, int]], split: bool = False) -> E.Design:
     """li heavy with the fraction x of its keyed rounds on the k-instruction IMAD-pipe route, for each (x, k): each such
     round's LOP3 + IMAD becomes k IMAD-pipe instructions ((k − 1)/2 of them IMAD.HI, class IMADHI when `split`)."""
     f = dict(d.fold)
@@ -142,7 +143,8 @@ def blend(d, moves: list[tuple[float, int]], split: bool = False):
     return replace(d, name=f"{d.name}+imadxor", fold=f)
 
 
-def resolve(s, menu, split: bool = False, luck: bool = False, hi: float = 0.02, steps: int = 48):
+def resolve(s: E.Setup, menu: list[tuple[int, float]], split: bool = False, luck: bool = False, hi: float = 0.02,
+            steps: int = 48) -> tuple[float, E.Mix]:
     """The cheater's least T over the share X of keyed rounds moved, filled cheapest key first from `menu` (k, share
     of rounds), the uniform route kept on the honest fold; `luck`, the lucky cheater's (Theorem S's shortfall open).
     Returns (X, the Mix)."""

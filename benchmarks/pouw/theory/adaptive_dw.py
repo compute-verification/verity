@@ -124,7 +124,8 @@ def step_lanes(design: str, co: dict) -> np.ndarray:
     return 1 + 2 * co["b"] if design == "hw" else 1 + co["b"]
 
 
-def data(case: str, design: str, m: int, n: int, s: int, pub: dict, rng: np.random.Generator):
+def data(case: str, design: str, m: int, n: int, s: int, pub: dict,
+         rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
     """A (m × data lanes) and B (data lanes × n), fixed before the coins."""
     d1, dl = first_data(design), later_data(design)
     k = d1 + dl * (s - 1)
@@ -150,7 +151,7 @@ def bias(c: np.ndarray, s: int) -> np.ndarray:
     return np.rint((c.sum(axis=0) + 3 * (s - 1)) / 2).astype(np.int64)
 
 
-def honest(design: str, a, b, pub: dict, co: dict, s: int) -> np.ndarray:
+def honest(design: str, a: np.ndarray, b: np.ndarray, pub: dict, co: dict, s: int) -> np.ndarray:
     """The committed words (m × S × n): the served layout X·Y by k32 steps, from −β."""
     m, n = a.shape[0], b.shape[1]
     d1, dl = first_data(design), later_data(design)
@@ -178,7 +179,8 @@ def honest(design: str, a, b, pub: dict, co: dict, s: int) -> np.ndarray:
     return np.cumsum(steps, axis=1) - bias(pub["C"], s)[None, None, :]
 
 
-def adversary(design: str, case: str, a, b, pub: dict, co: dict, s: int, key_bits: bool = True):
+def adversary(design: str, case: str, a: np.ndarray, b: np.ndarray, pub: dict, co: dict, s: int,
+              key_bits: bool = True) -> tuple[np.ndarray, int, int]:
     """Copy-based prover: one vector a coin-state key, computed from data and coins; copies at one pointer each.
 
     Returns (words, writes, pointers). `key_bits=False` drops the step bits from the key (a mutation)."""
@@ -357,7 +359,7 @@ def masked_rows(words: np.ndarray, sources: int, levels: np.ndarray | None = Non
     return {f"masked_saving_{sources}_level": 1 - paid / words.size, "mask_mismatch": mismatch}
 
 
-def row_levels(design: str, a, co: dict, s: int) -> np.ndarray:
+def row_levels(design: str, a: np.ndarray, co: dict, s: int) -> np.ndarray:
     """Each row's key: its coin level W_t (the cumulative row-lane term and chosen lane, which every column shares) and,
     for `blc`, its tile, whose coin lanes it shares."""
     m = a.shape[0]
