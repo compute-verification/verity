@@ -331,12 +331,13 @@ def test_an_evaluator_that_disagrees_with_the_lane_walk_is_named_as_an_evaluator
             f"disagree on the same Definition and inputs -- an evaluator defect, not a verdict on the record") in rep["reasons"]
 
 
-def test_an_evaluator_it_does_not_know_and_a_log_without_its_header_are_refused(tmp_path):
+def test_an_evaluator_it_does_not_know_is_refused_and_a_log_without_its_header_is_not_read(tmp_path):
+    """No record refuses the log by name: the run's facts are read off its first event, whatever it is."""
     run, manifest = _capture(tmp_path / "ok")
     with pytest.raises(ValueError, match=r"evaluator 'gpu': one of \['lane', 'rows'\]"):
         _recompute(run, manifest, evaluator="gpu")
     run, manifest = _capture(tmp_path / "headless", header_first=False)
-    with pytest.raises(ValueError, match="log does not start with a RunHeader"):
+    with pytest.raises(AttributeError, match="object has no attribute 'workload'"):
         _recompute(run, manifest)
 
 

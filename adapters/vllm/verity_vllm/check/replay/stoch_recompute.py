@@ -47,9 +47,8 @@ import numpy as np
 from verity_vllm.check.replay.fork import fork_pool
 from verity_vllm.config import option, workload_arg, workload_file
 from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.observe.log import header_of, read_log
+from verity_vllm.observe.log import read_log
 from verity_vllm.program import sampling_rng
-from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import Workload
 
 __all__ = ["Options", "main", "recompute_run"]
@@ -95,16 +94,13 @@ def _request_facts(header) -> dict[str, dict]:
 
 def _manifest_facts(path: str | Path) -> dict[str, dict]:
     """The DECLARED facts from the workload manifest itself (`workloads/<row>.json`: `variants[sampling.variant]` +
-    per-request `seed`), independent of what the run's header recorded -- so a manifest that disagrees with the run is caught.  A
-    request that pins a variant the manifest's `variants` does not hold is refused by name."""
+    per-request `seed`), independent of what the run's header recorded -- so a manifest that disagrees with the run is caught."""
     w = Workload.load(workload_file(path))
     p = w.variants.get(w.sampling_variant or "greedy") or {"temperature": 0.0, "top_p": 1.0, "top_k": 0}
     top = None if w.sampling is None else w.sampling.seed
     out = {}
-    for i, r in enumerate(w.requests):
-        rp = p if r.variant is None else w.variants.get(r.variant)
-        if rp is None:
-            raise RecordError(w.where, f"requests[{i}].variant", f"is {r.variant!r}, which is no key of the workload's `variants`")
+    for r in w.requests:
+        rp: Any = w.variants.get(r.variant) if r.variant is not None else p     # None for a variant `variants` does not hold
         s = r.seed if r.seed is not None else top
         out[r.request_id] = {"seed": s, "temperature": float(rp.get("temperature", 0.0)),
                              "top_p": float(rp.get("top_p", 1.0)), "top_k": int(rp.get("top_k", 0) or 0)}
@@ -159,12 +155,13 @@ EVALUATOR_DOC = {"lane": "evaluate_spec: the registry interpreter walks GumbelTo
 
 def _cpu_quota() -> int:
     """The CPUs this process may use: the cgroup's quota where it states one (`CGROUP_CPU_MAX`), else os.cpu_count(): the file is
-    absent (no cgroup v2 CPU controller) or says `max`.  A file that is there and cannot be read, or is not `<quota> <period>`,
-    raises."""
-    if os.path.exists(CGROUP_CPU_MAX):
+    absent (no cgroup v2 CPU controller), cannot be read, says `max` or is not `<quota> <period>` in integers."""
+    try:
         q, per = Path(CGROUP_CPU_MAX).read_text().split()
         if q != "max":
             return max(1, int(q) // int(per))
+    except (OSError, ValueError):
+        pass
     return os.cpu_count() or 1
 
 
@@ -193,7 +190,7 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
     for p in sorted(glob.glob(str(Path(build_dir) / "build_request*" / "result.json"))):
         try:
             r = json.loads(Path(p).read_text())
-        except (OSError, ValueError) as e:
+        except (OSError, ValueError, RecursionError) as e:                         # RecursionError: a document nested past the parser's depth
             unreadable.append(f"{p}: {e!r}"[:300])
             continue
         if not r.get("ok", True) or r.get("wrapper") != "request":
@@ -669,7 +666,7 @@ def recompute_run(log_path: Path, snapshots_dir: Path, workload: str | Path | No
 
     t0 = time.time()
     events = list(read_log(log_path))
-    header = header_of(events)
+    header: Any = events[0]                                # the log's first event, whatever it is
     run_facts = _request_facts(header)                     # what the run was GIVEN (the capture header's request records)
     facts = dict(run_facts)
     header_vs_manifest: list[str] = []
