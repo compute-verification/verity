@@ -21,12 +21,14 @@ per-call prover step, each on a given stream and capturable into a CUDA graph.
 
 from __future__ import annotations
 
+import argparse
 import ctypes as C
 import hashlib
 import json
 import os
 import statistics
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import numpy as np
@@ -148,7 +150,8 @@ class Dev:
     def copy(self, dst: int, src: int, n: int, stream: int = 0) -> None:
         self.ck("cuMemcpyDtoDAsync_v2", u64(dst), u64(src), n, vp(stream or None))
 
-    def launch(self, name: str, grid: int | tuple[int, int], block: int, smem: int = 0, p=(), i=(), stream: int = 0) -> None:
+    def launch(self, name: str, grid: int | tuple[int, int], block: int, smem: int = 0, p: Sequence[int] = (), i: Sequence[int] = (),
+               stream: int = 0) -> None:
         a = Args()
         for j, v in enumerate(p):
             a.p[j] = v
@@ -161,7 +164,7 @@ class Dev:
     def sync(self) -> None:
         self.ck("cuCtxSynchronize")
 
-    def timed(self, body, reps: int) -> list[float]:
+    def timed(self, body: Callable[[], object], reps: int) -> list[float]:
         out = []
         for _ in range(reps):
             a, b, ms = vp(), vp(), C.c_float()
@@ -381,7 +384,6 @@ def check_fmt(dev: Dev, d: Path) -> bool:
 
 
 def main(argv: list[str]) -> int:
-    import argparse
     ap = argparse.ArgumentParser()
     ap.add_argument("what", choices=("check", "time"))
     ap.add_argument("args", nargs="*")

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import itertools
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from fractions import Fraction
 
 import numpy as np
@@ -88,7 +88,7 @@ def _edges_between(lo_b: np.ndarray, hi_b: np.ndarray, width: int) -> np.ndarray
     return np.where(s > F.UE4M3_TOP, np.inf, below)
 
 
-def certified_modes(v: np.ndarray, realised: np.ndarray, cdf) -> np.ndarray:
+def certified_modes(v: np.ndarray, realised: np.ndarray, cdf: Callable[[np.ndarray], np.ndarray]) -> np.ndarray:
     """Per block of v (blocks × 16), its modal byte, certified by a local search around the realised byte, or −1."""
     nb = len(v)
     out = np.full(nb, -1, dtype=np.int64)
@@ -121,7 +121,7 @@ def certified_modes(v: np.ndarray, realised: np.ndarray, cdf) -> np.ndarray:
     return out
 
 
-def p_lower(v: np.ndarray, modes: np.ndarray, cdf) -> np.ndarray:
+def p_lower(v: np.ndarray, modes: np.ndarray, cdf: Callable[[np.ndarray], np.ndarray]) -> np.ndarray:
     """Per element (blocks × 16), a lower bound on P(code ≠ modal code) at the block's modal byte, from 4 lookups."""
     vs = _byte_value(np.maximum(modes, 1))[:, None]
     edges = _EDGES[None, None, :] * vs[..., None]                # (blocks, 1, 14)
