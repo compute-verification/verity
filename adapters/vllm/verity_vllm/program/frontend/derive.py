@@ -44,7 +44,7 @@ from verity.circuits.codec import descriptor_id, canonical_json, encode_program,
 from verity.circuits.defs import Builder, CompositeDefinition, SpecializedDefinition
 from verity.circuits.defs import bind as ir_bind
 from verity.circuits.program import Program
-from verity.circuits.refs import Affine, Coll
+from verity.circuits.refs import Affine, Coll, concat
 from verity.circuits.refs import runs as _refs_runs
 from verity.circuits.liveness import dead_gates as _dead_gates
 from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
@@ -837,7 +837,6 @@ def _translate(ctx: Ctx) -> Coll:
 
 
 def _concat_refs(parts):
-    from verity.circuits.refs import concat
     return concat(list(parts))
 
 

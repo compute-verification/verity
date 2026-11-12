@@ -109,3 +109,6 @@ def main(a: SeedOptions | CheckOptions) -> int:
     print(f"[served-pin] {a.inductor_dir}: winners {'equal to' if not diff else 'not'} artifact {art['digest'][:16]}'s"
           + "".join(f"\n  {d}" for d in diff[:20]))
     return 3 if diff else 0
+
+
+__all__ = ["COMMANDS", "PARTS", "artifact_of", "differences", "main", "pinned", "seed", "winners"]

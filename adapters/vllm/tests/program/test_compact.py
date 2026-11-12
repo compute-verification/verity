@@ -376,6 +376,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
 
     from tests.check import test_global_match as T
     from verity_vllm.check.match import global_match_fast as GMF
+    from verity_vllm.check.match import program_loaders as PL
     from verity_vllm.pipeline import cli
     from verity_vllm.pipeline import match as RC
     monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
@@ -384,6 +385,7 @@ def test_record_document_states_the_stored_form_it_loaded_like_the_fast_one(tmp_
     gp2, o2 = T.assemble([T.R0, T.R1_LATE], tmp_path / "v2")
     monkeypatch.delenv(RC.INSTANCES_FORM_ENV, raising=False)
     docs = {}
+    PL.LOAD_NOTES.clear()               # fold_load copies the process's loads so far: start from none, as a command's process does
     for impl in ("record", "fast"):
         monkeypatch.setenv(GMF.FLAG, impl)
         for tag, (gp, o) in (("v1", (gp1, o1)), ("v2", (gp2, o2))):
@@ -470,7 +472,7 @@ def test_persist_program_progressions_form_gives_the_same_prog_and_document_and_
     assert IF.instances_form_of(i1) == "runs" and IF.instances_form_of(i2) == "progressions"
     rows1, rows2 = _text(i1).split("\n")[1:], _text(i2).split("\n")[1:]
     assert rows1 != rows2 and len(rows1) == len(rows2)
-    assert any('"N",' in l for l in rows2) and any('["p",' in l for l in rows2)   # (the toy's gathers are short: the size win is the real fold's)
+    assert any('"N",' in row for row in rows2) and any('["p",' in row for row in rows2)   # (the toy's gathers are short: the size win is the real fold's)
     # (1) lossless both ways, byte for byte on the rows
     c12, c21 = str(tmp_path / "v1_as_v2.jsonl"), str(tmp_path / "v2_as_v1.jsonl")
     r = IF.convert_instances(i1, c12, "progressions")
@@ -526,7 +528,7 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
     assert res.report.unsupported == 0 and not res.errors and res.instances and res.accesses
 
     def generic_view(v):
-        return dataclasses.asdict(v) if dataclasses.is_dataclass(v) else RC._jsonable(v)
+        return dataclasses.asdict(v) if dataclasses.is_dataclass(v) and not isinstance(v, type) else RC._jsonable(v)
 
     def generic_rows(form):        # the generic writer, verbatim
         out = []
@@ -567,7 +569,7 @@ def test_persist_program_writer_is_byte_identical_to_the_generic_conversion(tmp_
         with gzip.open(os.path.join(d, "accesses.jsonl.gz"), "rt") as fh:
             lines = fh.read().split("\n")[:-1]
         assert lines == generic_journal(form) and len(lines) == len(res.accesses)
-        assert any('"operand_views":[{"alloc":' in r for r in rows) and any('"view":{"alloc":' in l for l in lines)   # the shape path ran
+        assert any('"operand_views":[{"alloc":' in r for r in rows) and any('"view":{"alloc":' in line for line in lines)   # the shape path ran
 
 
 def test_lean_root_reads_definitions_with_decode_programs_reader_and_refuses_what_it_refuses():

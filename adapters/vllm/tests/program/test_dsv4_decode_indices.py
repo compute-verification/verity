@@ -143,8 +143,8 @@ def test_the_slot_and_the_length_pieces():
     for x, want in [(0, (20, 1)), (11, (31, 1)), (-1, (M32, 0)), (I32_MIN, (M32, 0)), (12, ((-4) & M32, 1))]:
         assert tuple(int(v) for v in evaluate(slot, x & M32, blocks)) == want, x
     length = bind(X.Dsv4GlobalTopkLen, TOPK=5)
-    for live, byte, want in [([1, 0, 1, 1, 0], 1, 3), ([1] * 5, 0x40, 5), ([1] * 5, 0, 0), ([0] * 5, 0xFF, 0)]:
-        assert [int(v) for v in evaluate(length, live, byte)] == [want]
+    for live, byte, count in [([1, 0, 1, 1, 0], 1, 3), ([1] * 5, 0x40, 5), ([1] * 5, 0, 0), ([0] * 5, 0xFF, 0)]:
+        assert [int(v) for v in evaluate(length, live, byte)] == [count]
 
 
 # --- the twin --------------------------------------------------------------------------------------------------------------------

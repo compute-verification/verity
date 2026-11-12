@@ -66,7 +66,7 @@ class _Committer:
     name = "fake"
 
     def __init__(self) -> None:
-        self._cur = None
+        self._cur: types.SimpleNamespace | None = None
         self.got: dict[str, torch.Tensor] = {}
         self.errors: list[str] = []
         self.sources: list = []

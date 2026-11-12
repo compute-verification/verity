@@ -51,7 +51,7 @@ HASHES = {"sha256": (0, 32), "sha512": (1, 64), "shake256": (2, None), "turbosha
 
 _u8, _u16, _u32, _u64 = (np.ctypeslib.ndpointer(t, flags="C_CONTIGUOUS") for t in (np.uint8, np.uint16, np.uint32, np.uint64))
 _i8 = np.ctypeslib.ndpointer(np.int8, flags="C_CONTIGUOUS")
-_COMMIT = [ctypes.c_int] * 3 + [_i8, _u32, _i8, _u32, _u16, _u8] + [ctypes.c_uint64] * 3 + [_u32] * 4 + [_u8, _u8, _u16]
+_COMMIT: list[Any] = [ctypes.c_int] * 3 + [_i8, _u32, _i8, _u32, _u16, _u8] + [ctypes.c_uint64] * 3 + [_u32] * 4 + [_u8, _u8, _u16]
 
 
 @dataclass
