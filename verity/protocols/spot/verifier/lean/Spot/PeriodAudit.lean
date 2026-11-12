@@ -261,7 +261,8 @@ def caseAt (inner : Inner) (p : AuditParams) (ledger pins session : Json) (w : W
 log records on main's first-parent line, and withheld (`coin`); it sampled one registration (`missing`, `members`);
 the evidence holds one case (`evidence`); and the audit answers the case (`caseAt`): an accept adds the window, a
 reject refuses the period (`audit`), and an undecided is kept as the period's, the first one, while later windows are
-still checked. -/
+still checked. The sampled registrations and the cases are matched as lists: a property of the check splits a list's
+match, and Lean generates no equations for an array literal's. -/
 def windowAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins : Json) (bs : Core.Blobs) (st : Progress)
     (w : Window) (ev : WindowEvidence) : Except (Code × String) Progress := do
   let (a, opened) ← coinOf (Challenger.auditedIn r.wins r.periods (Json.mkObj [("root", Json.str w.root)]))
@@ -270,12 +271,12 @@ def windowAt (inner : Inner) (p : AuditParams) (r : Read) (ledger pins : Json) (
   let (_, roots) ← coinOf (Challenger.sessionNamed a p.ledger.key ev.session)
   unless Challenger.withheldOn ledger w.root do throw (Code.coin, Challenger.WITHHELD)
   let sampled := sampledOn p.ledger.label w.root roots
-  let want ← match sampled with
-    | #[] => throw (Code.missing, s!"session {w.session} released no {p.ledger.label} coin after a registration: " ++
+  let want ← match sampled.toList with
+    | [] => throw (Code.missing, s!"session {w.session} released no {p.ledger.label} coin after a registration: " ++
         "its root was committed and never sampled")
-    | #[d] => pure d
+    | [d] => pure d
     | _ => throw (Code.members, s!"session {w.session} sampled {sampled.size} registrations: {ONE_MEMBER}")
-  let #[k] := ev.audits
+  let [k] := ev.audits.toList
     | throw (Code.evidence, s!"session {w.session}: {ev.audits.size} cases for the one registration its log " ++
         "shows sampled")
   let (record, o) ← caseAt inner p ledger pins ev.session w want st.before k bs
