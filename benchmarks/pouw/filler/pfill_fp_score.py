@@ -23,22 +23,20 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import fused_score as FS
-import psched_score as PS
-import score as SC
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import fused_score as FS  # noqa: E402
+import psched_score as PS  # noqa: E402
+import score as SC  # noqa: E402
+
 A, S = SC.A, SC.S
 FUSED_GATES = ("fused_receipts", "fused_dram", "fused_exact")
 PHASE_GATES = ("phase_dram", "phase_receipts", "sgates")
 
 
-def drivers(arm: Any, pts: Iterable[tuple[str, int, int]]) -> dict:
+def drivers(arm, pts) -> dict:
     """Each point's driver: fscore at a fused step, pscore at a phase filler, dscore elsewhere; never both at one point.
     Both runners' checks hold: a fused or phase point is on a split and pumps the arm's `filler`."""
     out = {}
@@ -51,7 +49,7 @@ def drivers(arm: Any, pts: Iterable[tuple[str, int, int]]) -> dict:
     return out
 
 
-def measure(arm: Any, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
+def measure(arm, bdir: Path, out: Path, rounds: int, reps: int, robust: bool) -> int:
     env = dict(os.environ, DFILL_COINS=(out / "coins.txt").read_text().strip(), DFILL_CHUNK_LOG2=str(arm.filler.chunk_log2))
     fl, err, rc_log = arm.filler, out / "errors.txt", out / "rc.txt"
 
@@ -119,7 +117,7 @@ def measure(arm: Any, bdir: Path, out: Path, rounds: int, reps: int, robust: boo
     return 0
 
 
-def report(out: Path, arm: Any) -> dict:
+def report(out: Path, arm) -> dict:
     """The locked report with both runners' gates: fused_score.report's, then psched_score.report's (each reruns the
     locked report over the same out dir, so the second's res is the locked one with its own gates), merged."""
     fused = FS.report(out, arm)
@@ -147,7 +145,7 @@ def show(res: dict) -> None:
         print(f"  gate {k}: {'pass' if res['gates'][k]['ok'] else 'FAIL'}  {v}")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     if argv and argv[0] == "measure":
         ap = argparse.ArgumentParser(prog="pfill_fp_score.py measure")
