@@ -93,7 +93,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   statement's unit (`--tmpl-unit`) goes to both its sides there. Under ``--firewall`` (Lean's `flock-firewall`), the
   core protocols' path, each runs behind the ZK server's send check instead (`FC_FIREWALL=1`, live PROTOCOL.md §10.4), its `Hello`
   set up on the statement's partition and program. Lean `verify --zk` holds each session with `--partition` and `--program`
-  (units derived). Under ``--firewall`` the window's members are verified by one kept process, `flock-verify verify-members`
+  (units derived). Behind the ZK server the window's members are verified by one kept process, Lean's ``verify-members``
   (`a0.VerifyMembers`), which reads the window's program once and is handed each member as its session ends; a member it
   gives no verdict is refused, and so is every member after it, with no second try. `member_seconds.py` holds each
   member's verdict to the one `verify` prints for its session as a process of its own.

@@ -32,7 +32,7 @@ def verify(args):
     arc = pathlib.Path(args[args.index("--archive") + 1]) / "sha512"
     ok = all(hashlib.sha512((arc / args[args.index(f) + 1]).read_bytes()).hexdigest() == args[args.index(f) + 1]
              for f in ("--circuit", "--public"))
-    print("inputs: 5 ms\\nsetup (drawn): 1 ms\\n" + str(session) + ": 3 ms", file=sys.stderr)
+    print("inputs: 5 ms\\nsetup: 1 ms\\n" + str(session) + ": 3 ms", file=sys.stderr)
     print("VERDICT " + json.dumps({{"accepted": ok, "why": None if ok else "archive", "session": str(session)}}))
     return 0 if ok else 1, mode
 
@@ -159,7 +159,7 @@ def test_a_held_object_that_is_gone_is_put_again(tmp_path):
 
 
 def test_without_a_shared_record_each_member_puts_its_circuit(tmp_path):
-    lean, puts = tmp_path / "flock-verify", tmp_path / "puts.jsonl"
+    lean, puts = tmp_path / "lean", tmp_path / "puts.jsonl"
     lean.write_text(FAKE.format(python=sys.executable, puts=str(puts)))
     lean.chmod(0o755)
     circuit = tmp_path / "circuit.txt"

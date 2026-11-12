@@ -1,9 +1,10 @@
 """An audit's seconds a member outside its prover's clock and in Lean's verify before its first check, split by what is
 read: where a member's time goes that is neither proving nor checking, on an audit `a5.audit` ran (its ``out``), each
-session behind the ZK server (``--firewall``) or not.
+session behind the ZK server or not.
 
-    python benchmarks/one_stage/member_seconds.py wrap DIR flock-circuit flock-verify flock-firewall
-        # a stamping wrapper of each binary under DIR, their three paths printed: give the audit these
+    python benchmarks/one_stage/member_seconds.py wrap DIR PROVER VERIFIER LOOP
+        # a stamping wrapper of each binary under DIR (`PROGRAMS`: the prover, Lean's verifier and the ZK server's Lean
+        # loop), their three paths printed: give the audit these
     python benchmarks/one_stage/member_seconds.py measure ROOT --stamped DIR [--reps 3] [--no-alone]
         # every audit under ROOT (a directory holding session-m<k>/): <audit>/member-seconds.json and a MEMBER-SECONDS line;
         # run it before the audit's logs are copied, which loses their modification times
@@ -27,14 +28,15 @@ session behind the ZK server (``--firewall``) or not.
   the audit's first session process. It is split at the start of the member's Lean session loop, and what is outside the
   prover's clock is the turn less ``e2e_s``. The turns add up to the window's sessions, so two audits of one window
   compare by them.
-* **Lean** (`lean`), per member: the draw check, ``archive-put``, and ``verify`` split by its own lines (``inputs:``, the
-  files read by key and the circuit parsed; ``setup (drawn):``; the session's line, whose remainder is the check).
+* **Lean** (`lean`), per member: the sample's check, ``archive-put``, and ``verify`` split by its own lines (``inputs:``,
+  the files read by key and the circuit parsed; its setup's line, `SETUP`; the session's line, whose remainder is the
+  check).
   Before the first check is the member's own ``archive-put`` and ``verify`` less the check. The audit's one
   ``archive-put`` of the window's files before its sessions is the window's (`window`), counted once. A member the
   window's kept verifier checked (`a0.VerifyMembers`) has no ``verify`` process: its seconds are from its line to its
   answer, on its log's first lines, and the kept process's life is the window's.
 * **Each reader alone** (`alone`, unless ``--no-alone``), from the member's stamped commands on the member's files, the
-  median of ``--reps``: the verifier's and the prover's load (`flock-circuit statement` on the public file and on the
+  median of ``--reps``: the verifier's and the prover's load (the prover's ``statement`` on the public file and on the
   prover's file), the Lean loop's start to ``LISTENING`` with and without the window's partition and program, its setup at
   the member's sample (``session --schedule``, which a session runs inside the clock), and ``archive-put`` of each file
   alone and of none (a Lean process's start), and ``verify`` on the member's session, a process of its own. A reader
@@ -59,7 +61,10 @@ from collections.abc import Callable
 from decimal import Decimal
 from pathlib import Path
 
-PROGRAMS = ("flock-circuit", "flock-verify", "flock-firewall")
+#: the audit's three programs: the prover, Lean's verifier and the ZK server's Lean loop
+PROGRAMS = PROVER, VERIFIER, LOOP = ("flock-circuit", "flock-verify", "flock-firewall")
+#: the verifier's command that checks a session's sample, and the names its `verify` gives its setup's line
+SAMPLE_CHECK, SETUP = "draw-test", ("setup (drawn)", "setup")
 STAMPS, REAL = "stamps.txt", "real.json"
 WRAPPER = """#!/bin/bash
 echo "{name} $$ $PPID ${{EPOCHREALTIME/,/.}} $*" >> {stamps}
@@ -143,7 +148,7 @@ def less(a: float | None, *bs: float | None) -> float | None:
 def lean_lines(log: str, session: str | None) -> dict:
     """`verify`'s own lines of ``log``: ``inputs``, the session's setup and the session's whole, in seconds."""
     got = {name: int(ms) / 1000 for name, ms in LEAN_MS.findall(log.split("--- stderr", 1)[-1])}
-    setup = got.get("setup (drawn)", got.get("setup"))
+    setup = next((got[name] for name in SETUP if name in got), None)
     whole = got.get(session) if session else None
     return {"inputs_s": got.get("inputs"), "setup_s": setup, "session_s": whole, "check_s": less(whole, setup)}
 
@@ -174,8 +179,8 @@ def kept_prover(audit: Path, k: int, all_stamps: list[dict]) -> dict:
     none = {"prover": None, "tap": None, "loop": None}
     if (s / "prove.log").exists():
         return none
-    streams = [x for x in all_stamps if x["program"] == "flock-circuit" and x["argv"][0] == "prove" and "--stream" in x["argv"]]
-    mine = [x for x in all_stamps if x["program"] == "flock-firewall" and any(p["pid"] == x["ppid"] and p["ns"] <= x["ns"] for p in streams)]
+    streams = [x for x in all_stamps if x["program"] == PROVER and x["argv"][0] == "prove" and "--stream" in x["argv"]]
+    mine = [x for x in all_stamps if x["program"] == LOOP and any(p["pid"] == x["ppid"] and p["ns"] <= x["ns"] for p in streams)]
     loop = last([x for x in mine if x["argv"][0] == "session" and under(flag(x["argv"], "--circuit"), m)], recorded(s))
     if loop is None:
         return none
@@ -189,18 +194,18 @@ def found(audit: Path, k: int, all_stamps: list[dict]) -> dict:
     proved has no ``serve`` or ``prove`` of its own: its tap and loop are its kept prover's (`kept_prover`)."""
     m, s = audit / f"m{k}", audit / f"session-m{k}"
     exited = ended(s / "prove.log")
-    pair = [x for x in all_stamps if x["program"] == "flock-circuit" and under(flag(x["argv"], "--circuit"), m)]
+    pair = [x for x in all_stamps if x["program"] == PROVER and under(flag(x["argv"], "--circuit"), m)]
     prove = last([x for x in pair if x["argv"][0] == "prove"], exited)
     serve = last([x for x in pair if x["argv"][0] == "serve" and under(flag(x["argv"], "--out"), s)], prove and prove["ns"])
-    child = [x for x in all_stamps if x["program"] == "flock-firewall" and prove is not None and x["ppid"] == prove["pid"]
+    child = [x for x in all_stamps if x["program"] == LOOP and prove is not None and x["ppid"] == prove["pid"]
              and x["ns"] >= prove["ns"]]
-    verify = [x for x in all_stamps if x["program"] == "flock-verify" and len(x["argv"]) > 1]
+    verify = [x for x in all_stamps if x["program"] == VERIFIER and len(x["argv"]) > 1]
     kept = kept_prover(audit, k, all_stamps)
     return {"serve": serve, "prove": prove,
             "tap": kept["tap"] or last([x for x in child if x["argv"][0] == "tap"], exited),
             "loop": kept["loop"] or last([x for x in child if x["argv"][0] == "session"], exited),
-            "draw-test": last([x for x in verify if x["argv"][0] == "draw-test" and same(x["argv"][1], s / "u1-u3.cases.json")],
-                              ended(s / "u1-u3.lean.log")),
+            "sample-check": last([x for x in verify if x["argv"][0] == SAMPLE_CHECK and same(x["argv"][1], s / "u1-u3.cases.json")],
+                                 ended(s / "u1-u3.lean.log")),
             "archive-put": last([x for x in verify if x["argv"][0] == "archive-put" and under(x["argv"][1], s)],
                                 ended(s / "archive-put.log")),
             "verify": last([x for x in verify if x["argv"][0] == "verify" and under(flag(x["argv"], "--session"), s)],
@@ -246,8 +251,8 @@ def lean(audit: Path, k: int, at: dict) -> dict:
     if kept:    # no process of its own: its seconds are from its line to its answer
         whole = kept["s"]
     lines = lean_lines(log, verify and flag(verify["argv"], "--session"))
-    return {"waited_s": sub(ns["draw-test"], ended(s / "prove.log")),
-            "draw_test_s": sub(ended(s / "u1-u3.lean.log"), ns["draw-test"]), "archive_put_s": put, "verify_s": whole, **lines,
+    return {"waited_s": sub(ns["sample-check"], ended(s / "prove.log")),
+            "sample_check_s": sub(ended(s / "u1-u3.lean.log"), ns["sample-check"]), "archive_put_s": put, "verify_s": whole, **lines,
             "verify_rest_s": less(whole, lines["inputs_s"], lines["session_s"]),
             "before_first_check_s": less(None if own is None or whole is None else own + whole, lines["check_s"]),
             "kept_member": kept and kept["member"]}
@@ -258,7 +263,7 @@ def window(audit: Path, all_stamps: list[dict]) -> dict:
     first session, and its kept verifier's life, from its start to its exit after the last member; no figure for an audit
     whose members each put their own, or each have a ``verify`` of their own."""
     d = audit / "lean-verify"
-    mine = [x for x in all_stamps if x["program"] == "flock-verify" and len(x["argv"]) > 1]
+    mine = [x for x in all_stamps if x["program"] == VERIFIER and len(x["argv"]) > 1]
     end, closed = ended(d / "archive-put.log"), ended(d / "verify-members.log")
     at = last([x for x in mine if x["argv"][0] == "archive-put" and same(x["argv"][1], d / "archive")], end)
     kept = last([x for x in mine if x["argv"][0] == "verify-members" and same(flag(x["argv"], "--archive") or "", d / "archive")],
@@ -272,7 +277,7 @@ def turns(audit: Path, members: list[dict], all_stamps: list[dict]) -> None:
     if not members:
         return
     first = audit / f"session-m{members[0]['k']}"
-    server = [x["ns"] for x in all_stamps if x["program"] == "flock-circuit" and x["argv"][0] == "serve"
+    server = [x["ns"] for x in all_stamps if x["program"] == PROVER and x["argv"][0] == "serve"
               and under(flag(x["argv"], "--out"), audit / "proof-server")]
     kept = kept_prover(audit, members[0]["k"], all_stamps)["prover"]
     began = [members[0]["starts_ns"]["serve"]] if (first / "prove.log").exists() else [*server, kept and kept["ns"]]
@@ -345,7 +350,7 @@ def alone(audit: Path, k: int, at: dict, real: dict, reps: int) -> dict:
         if at[side] is None:
             continue
         argv, loads = at[side]["argv"], []
-        cmd = [real["flock-circuit"], "statement", *(["--zk"] if "--zk" in argv else []),
+        cmd = [real[PROVER], "statement", *(["--zk"] if "--zk" in argv else []),
                *kept(argv, ("--instances", "--circuit", "--tmpl-unit", "--tables", "--pin"))]
 
         def statement(cmd: list[str] = cmd, loads: list[float] = loads) -> float:
@@ -361,15 +366,15 @@ def alone(audit: Path, k: int, at: dict, real: dict, reps: int) -> dict:
     public = at["serve"] and flag(at["serve"]["argv"], "--instances")
     if at["loop"] is not None and public:
         argv = at["loop"]["argv"]
-        base = [real["flock-firewall"], "session", *kept(argv, ("--statement", "--circuit")), "--public", public,
+        base = [real[LOOP], "session", *kept(argv, ("--statement", "--circuit")), "--public", public,
                 *kept(argv, ("--tables", "--session-tables"))]
         window = kept(argv, ("--partition", "--program"))
         out["loop_start"] = median(lambda: listening([*base, "--verifier", "127.0.0.1:9", *window]), reps)
         out["loop_start_no_window"] = median(lambda: listening([*base, "--verifier", "127.0.0.1:9"]), reps)
-        draw = text(s / "draw.json")
+        sample = text(s / "draw.json")
 
         def schedule() -> float:
-            sec, p = timed([*base, *window, "--schedule"], draw)
+            sec, p = timed([*base, *window, "--schedule"], sample)
             if p.returncode or not p.stdout.startswith("ok "):
                 raise RuntimeError(f"session --schedule exited {p.returncode}: {p.stdout[:200]} {p.stderr[-300:]}")
             return sec
@@ -379,7 +384,7 @@ def alone(audit: Path, k: int, at: dict, real: dict, reps: int) -> dict:
             def run() -> float:
                 d = tempfile.mkdtemp(prefix="member-seconds-")
                 try:
-                    sec, p = timed([real["flock-verify"], "archive-put", d, *files])
+                    sec, p = timed([real[VERIFIER], "archive-put", d, *files])
                 finally:
                     shutil.rmtree(d, ignore_errors=True)
                 if p.returncode:
@@ -397,7 +402,7 @@ def alone(audit: Path, k: int, at: dict, real: dict, reps: int) -> dict:
         want, split = [x for x in log.splitlines() if x.startswith("VERDICT ")], []
 
         def alone_verify() -> float:
-            sec, p = timed([real["flock-verify"], *verify["argv"]])
+            sec, p = timed([real[VERIFIER], *verify["argv"]])
             if [x for x in p.stdout.splitlines() if x.startswith("VERDICT ")] != want:
                 raise RuntimeError(f"verify alone (exit {p.returncode}) printed another verdict than the audit has for this "
                                    f"member: {p.stdout[:300]} {p.stderr[-300:]}")
@@ -419,7 +424,7 @@ def audits(root: Path) -> list[Path]:
 
 
 #: the logs whose modification times are their processes' ends
-LOGS = {"prove": "prove.log", "draw-test": "u1-u3.lean.log", "archive-put": "archive-put.log", "verify": "lean-verify.log"}
+LOGS = {"prove": "prove.log", "sample-check": "u1-u3.lean.log", "archive-put": "archive-put.log", "verify": "lean-verify.log"}
 
 
 def measure(audit: Path, all_stamps: list[dict]) -> dict:
@@ -439,7 +444,7 @@ def measure(audit: Path, all_stamps: list[dict]) -> dict:
     for a, b in zip(members, members[1:]):
         a["to_next_member_s"] = sub(b["starts_ns"]["serve"], a["ends_ns"]["prove"])
     turns(audit, members, all_stamps)
-    return {"audit": audit.name, "firewall": bool(summary.get("firewall")), "stamped": bool(all_stamps),
+    return {"audit": audit.name, "zk_server": bool(summary.get("firewall")), "stamped": bool(all_stamps),
             "staging": summary.get("staging"), "window": window(audit, all_stamps), "members": members}
 
 
@@ -461,7 +466,7 @@ def main(argv=None) -> int:
     sp = ap.add_subparsers(dest="cmd", required=True)
     w = sp.add_parser("wrap", help="a stamping wrapper of each binary")
     w.add_argument("dir", type=Path)
-    w.add_argument("binaries", nargs=3, metavar="BIN", help="flock-circuit, flock-verify and flock-firewall, in that order")
+    w.add_argument("binaries", nargs=3, metavar="BIN", help="the prover, Lean's verifier and the ZK server's Lean loop, in that order")
     m = sp.add_parser("measure", help="every audit under ROOT")
     m.add_argument("root", type=Path)
     m.add_argument("--stamped", type=Path, required=True, help="wrap's DIR")
