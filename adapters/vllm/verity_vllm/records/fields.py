@@ -5,6 +5,8 @@ from __future__ import annotations
 from collections.abc import Collection, Mapping
 from typing import Any
 
+__all__ = ["RecordError"]
+
 
 class RecordError(ValueError):
     """A record refused: `where` is the file it was read from (or what handed it over), `field` the field at fault."""

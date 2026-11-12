@@ -14,6 +14,8 @@ from typing import IO, cast
 
 from .events import Event, RunHeader, StepEnd, StepStart, from_json, to_json
 
+__all__ = ["header_of", "read_log", "split_steps"]
+
 
 def _open(path: str | Path, mode: str) -> IO:
     p = Path(path)

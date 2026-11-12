@@ -11,6 +11,8 @@ import pytest
 
 from tests.query.test_module_body import W, _call
 from verity_vllm.correspondence.reader_for_query import Correspondence
+from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import manifest as M
 from verity_vllm.query.compose import merge_ranks
 from verity_vllm.query.program_view import InputView, Port, ProgramView
 from verity_vllm.query.required import QUERIES, request_manifest
@@ -63,8 +65,6 @@ def test_a_rank_programs_moe_block_names_its_all_reduce_and_its_partial_and_the_
 
 def test_an_incomplete_manifest_is_a_failed_manifest_step(tmp_path, monkeypatch, capsys):
     """The Commit refuses an incomplete manifest, so `manifest build` / `build-global` exit 4 on one (the file is still written)."""
-    from verity_vllm.pipeline import cli
-    from verity_vllm.pipeline import manifest as M
     bad = {"complete": False, "unmodelled": {"AllReduce2_v1 under m.experts (out: two producers MoeExpertGemm_v1 8 / AllReduce2_v1 4)": 1},
            "tp_peer_binding": {"n_unbound": 2}, "populations": {"identities": 0}, "manifest_digest": "m" * 64, "identities": []}
     assert M.incomplete_rc(dict(bad, complete=True)) == 0 and M.incomplete_rc(bad) == 4

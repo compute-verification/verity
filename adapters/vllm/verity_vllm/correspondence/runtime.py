@@ -20,8 +20,10 @@ imports without torch.
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
+import os
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -470,7 +472,6 @@ def read_descriptor_annotation(desc_path: str, namespace: str = NAMESPACE) -> di
     walked key by key, `definitions` (the Program body -- a request Program's is GBs of reference runs) is streamed through and
     dropped, only `annotations` is built.  None when the descriptor carries no `annotations` or no such namespace.  The value is
     exactly `json.load(f)["annotations"][namespace]` (`correspondence_digest` of it is the recorded digest)."""
-    import gzip
     gz = str(desc_path).endswith(".gz")
     with (gzip.open(desc_path, "rt", encoding="utf-8") if gz else open(desc_path, encoding="utf-8")) as fh:
         s = _Stream(fh)
@@ -507,7 +508,6 @@ def read_program_dir(program_dir: Any) -> tuple[RuntimeCorrespondence | None, st
 
 def read_program_document(program_dir: Any) -> tuple[dict | None, str | None, str | None]:
     """`read_program_dir`'s (document, digest, problem): the record's document, not its table."""
-    import os
     d = str(program_dir)
     res_p = os.path.join(d, "result.json")
     recorded = None

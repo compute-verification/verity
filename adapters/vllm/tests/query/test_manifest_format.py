@@ -4,8 +4,11 @@ committed short) and the binding loader's two engine-step shapes -- over manifes
 (`test_sampled_replay.v2_manifest`) on a synthetic wired Program (no torch, no pod)."""
 from __future__ import annotations
 
+import ast
 import copy
 import json
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -226,3 +229,16 @@ def test_a_workloads_sweep_and_requests_are_empty_where_it_holds_none():
     assert MF.sweep_and_requests(None) == ({}, ()) and MF.sweep_and_requests({"sweep": None}) == ({}, ())
     w = {"sweep": {"batch": 2, "arrive_steps": [0, 3]}, "requests": [{"request_id": "r0"}, {"request_id": "r1"}]}
     assert MF.sweep_and_requests(w) == (w["sweep"], w["requests"])
+
+
+def test_importing_the_format_loads_only_the_standard_library_and_records():
+    """What importing `format` loads is part of its contract: a suite that lists its inputs by file reads this module, and its
+    read guard fails on a file the list lacks.  So `load_program` and `program_dirs_for` import `program` inside themselves, and
+    the module's own imports are the standard library and `verity_vllm.records`."""
+    loaded: set[str] = set()
+    for node in ast.parse(Path(MF.__file__).read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Import):
+            loaded |= {a.name for a in node.names}
+        elif isinstance(node, ast.ImportFrom):
+            loaded.add("." * node.level + (node.module or ""))
+    assert {m for m in loaded if m.split(".")[0] not in sys.stdlib_module_names} == {"verity_vllm.records"}

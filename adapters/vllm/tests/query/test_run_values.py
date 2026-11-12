@@ -8,6 +8,18 @@ from __future__ import annotations
 import json
 from dataclasses import replace
 
+from verity.circuits.codec import encode_program
+from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Tuple, Value
+from verity.definitions.registry import prims
+
+from verity_vllm.acquire import plan as PL
+from verity_vllm.correspondence.reader_for_acquire import (
+    AnnotationCorrespondence,
+    runtime_tree_from_paths,
+)
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query import program_view as pv
 from verity_vllm.query.manifest import format as fmt
@@ -106,13 +118,6 @@ def test_the_checks_a_program_returns_are_never_required():
 
 def test_a_descriptors_last_returned_leaves_are_its_checks():
     """`from_descriptor(checks=n)`: the Values of the return's last n leaves are the view's checks, still among its outputs."""
-    from verity.circuits.codec import encode_program
-    from verity.circuits.defs import REGISTRY, CompositeDefinition, bind
-    from verity.circuits.program import Program
-    from verity.circuits.refs import tuple_of
-    from verity.circuits.types import Tuple, Value
-    from verity.definitions.registry import prims
-
     i32 = Value(32)
     checked = CompositeDefinition("QChecked", 1, (), lambda S: ((("a", i32), ("b", i32)), Tuple(i32, Value(1))),
                                   lambda B, S, a, b: tuple_of(B.call(prims.I32Add, a, b), B.call(prims.I32Eq, a, b)), register=False)
@@ -130,12 +135,6 @@ def test_a_run_field_no_step_or_two_steps_read_is_unmodelled_by_name():
 
 
 def test_the_plan_anchors_one_value_class_per_layer_on_its_readers_module():
-    from verity_vllm.acquire import plan as PL
-    from verity_vllm.correspondence.reader_for_acquire import (
-        AnnotationCorrespondence,
-        runtime_tree_from_paths,
-    )
-
     m = _served()
     assert PL.ROUTE_OF_FAMILY[fmt.RUN_FAMILY] == "run_tap"
     (v,) = [v for v in PL.value_classes(m) if v.family == fmt.RUN_FAMILY]

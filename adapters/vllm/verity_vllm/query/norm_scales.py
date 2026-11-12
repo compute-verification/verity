@@ -22,7 +22,9 @@ from collections.abc import Callable, Mapping
 from functools import cache
 from typing import Any
 
+from verity_vllm.query import units
 from verity_vllm.query.manifest.format import identity_rows
+from verity_vllm.query.required import DTYPE_OF_WIDTH, CallMember, Population
 
 FAMILY = "norm_scales"
 MEMBER = "norm_scale"
@@ -51,20 +53,17 @@ def scale_calls(P: Any, literals: frozenset[int] = frozenset()) -> list[Any]:
 
 @cache
 def _population_class() -> type:
-    from verity_vllm.query.required import DTYPE_OF_WIDTH, CallMember, Population
-    from verity_vllm.query.units import Policy, RequiredValues, ValueRef
-
     class NormScalePopulation(Population):
         """`Population` under the norm-scale policy: the outputs of `scale_calls` are protocol-required and spelt `norm_scale`."""
 
         def __init__(self, P: Any, corr: Any, **kw: Any) -> None:
             super().__init__(P, corr, **kw)
             base = self.required.values - self.interior
-            extra = frozenset(ValueRef(c.id, p.name) for c in scale_calls(P, self.literals) for p in c.port_table) - base
+            extra = frozenset(units.ValueRef(c.id, p.name) for c in scale_calls(P, self.literals) for p in c.port_table) - base
             self.norm_scale_values = extra
             self.interior = self.interior - extra
-            self.policy = Policy(prescribed_inputs=self.policy.prescribed_inputs, protocol_required=self.policy.protocol_required | extra)
-            self.required = RequiredValues(self.B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
+            self.policy = units.Policy(prescribed_inputs=self.policy.prescribed_inputs, protocol_required=self.policy.protocol_required | extra)
+            self.required = units.RequiredValues(self.B.values, self.policy.prescribed_inputs, self.policy.protocol_required)
             self._ports_of = None
 
         def member(self, v: Any) -> Any:
