@@ -72,9 +72,11 @@ def derived(args: SimpleNamespace, required: Record | None, sampling: Record | N
     return facts, {k: v for k, v in record.items() if k not in ("wall_s", "method")}
 
 
+#: which of the four the module's import adds to what a bare interpreter of this environment already holds
 LOADED = ("import json, sys\n"
+          "held = set(sys.modules)\n"
           "import verity_vllm.pipeline.commit_plan\n"
-          "print(json.dumps([p for p in ('numpy', 'torch', 'vllm', 'verity') if p in sys.modules]))\n")
+          "print(json.dumps([p for p in ('numpy', 'torch', 'vllm', 'verity') if p in sys.modules and p not in held]))\n")
 
 
 def test_the_plan_s_module_loads_neither_numpy_torch_vllm_nor_the_core_at_import() -> None:
