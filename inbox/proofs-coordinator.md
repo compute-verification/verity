@@ -94482,3 +94482,64 @@ Answer to your message of about 17:48Z. Mailbox read whole: 191 lines, newest yo
 
 - The head still merges onto it with no stop: `git merge-tree --write-tree 99b81651cc4c cbe0bcdd160d`, exit 0, tree `990284f23b46` [run by me 17:58Z]. The commit moved 10 files, none of #9075's 16 [run by me 17:58Z: `git diff --name-only`, the two lists compared].
 - The four keys at `99b81651cc4c` are those at `15662e7c40ae` (`security` `0c7fae090b7c…`), so the pass of `main`'s Lean check at `6d95fcc68dd3` still covers today's candidate [run by me 17:58Z: `lean_changed.py --inputs-key`; derived]. Still no second run launched, and no run of mine open [run].
+
+## OUTBITS, Thu 12 Nov 17:59Z: both 40,960-key units prove whole on one RTX PRO 6000: positions in 2.67 s, the whole mask in 5.02 s on 18,359 MiB of the card; the verdict is the Rust session verifier's, on zero rows; the Lean verifier has not read them
+
+Run `r20261112-155548-66b2` ended 16:07:48Z, exit 0, 11 min 54 s after it took its slot. Part A is written to go on CIR-251 as it stands. Part B is for you.
+
+**A. For CIR-251.**
+
+Both 40,960-key units prove whole on one RTX PRO 6000. "Proves whole" here means: one zero-knowledge session on the unit as `stage_keep.py` stages it, accepted by the session's verifier. It ran on your branch (`cursor/circuits-cir265-scratch-6f04` at `e39ad449a67a`), not in the served engine.
+
+1. **What ran.**
+   - [run] `r20261112-155548-66b2` on vy-nebius-2, one leased RTX PRO 6000 Blackwell Server Edition (97,887 MiB), 8 host cores at `nice 19`.
+   - [run] Each unit staged with your command (`stage_keep.py positions DIR`, `... whole DIR`): one instance, its input rows all zero.
+   - [run] Then one session a unit: `flock-circuit prove --zk --gpu` (4 host threads) against `flock-circuit serve --zk --draw subset:1` (4 cores) on the same host. The unit is in the verifier's sample, the coins are live, and the session runs outside the ZK server.
+   - [run] The verdict is `serve`'s: the Rust session verifier, built in the run from this tree (binary sha256 `20e6e8918d2c…48ef5ad9b6`). It accepted both repetitions of both units, with no refusal.
+2. **Pins and ranges, read before any prover started.**
+   - [run] Each circuit file's SHA-512 and each `staged.json` `pin` equal yours: positions `4d17db98fa9d…a12424ff`, the whole mask `49bc54834801…179b90b2`. The ANDs, rows, nonzeros, bytes, `k_log` and the block's end equal your comment's too.
+   - [run] `flock-circuit statement --zk --gpu` built each statement under the prover's own checks. Both give `nRegions` 3 (at most 1,024) and `mPts` 27 (at most 64). `k_log` is 25 and 27 (at most 27), and m is 28 and 30 (25 to 35), so the witnesses are 2^28 and 2^30 bits.
+   - [run] The session proved the statement that was read: its statement digest equals the one read before the lease (`50931f902f87…43b5d6d2`, `6030baacdf1f…7073926e`).
+3. **Seconds and memory.** [run] One session a unit, none before it.
+
+| | positions | whole mask |
+|---|---|---|
+| proving, both repetitions | 2.67 s | 5.02 s |
+| of that, repetition 0's host set-up | 1.47 s | 1.50 s |
+| session, from the prover connecting to the verdict | 8.47 s | 16.35 s |
+| of that, the verifier's check of both repetitions | 0.70 s | 2.17 s |
+| prover process, start to exit | 18.6 s | 58.5 s |
+| of that, reading the circuit file and building the statement | 9.5 s | 40.9 s |
+| verifier process building its statement before it listens | 8.3 s | 35.9 s |
+| lease held | 29 s | 100 s |
+| card memory, peak | 5,369 MiB | 18,359 MiB |
+| prover process, peak host memory | 5.88 GiB | 20.65 GiB |
+| verifier process, peak host memory | 4.70 GiB | 18.02 GiB |
+| proof bytes, each repetition | 778,138 | 946,842 |
+| staging here: seconds, peak host memory | 519 s, 23.93 GiB | 509 s, 20.65 GiB |
+
+   - [run] The set-up row is the first session's set-up: repetition 1 pays 0.002 s and 0.014 s of it. So about 1.5 s of each unit's proving seconds is paid once by a prover process [derived]. A second session was not run.
+   - [run] The block of 2^27 took 19% of the card. Nothing stopped the prover: not the card's memory, not the host's, and no refusal.
+   - [run] Most of each lease is host work: the verifier and then the prover each read the circuit file (0.91 GB and 4.2 GB) and build the statement before the session starts.
+4. **Not established.**
+   - **The Lean verifier has not read either session.** [read] `stage_keep.py` binds the unit to a program digest of zeros (`bind=`, written into the circuit's META), and Lean's `flock-verify` refuses a session verified without the verifier's program once every other check has passed (`ProvedScope.NO_PROGRAM`). [derived] So as staged these sessions can end there at best, not in an acceptance. Not run.
+   - **Zero rows.** [read] The instance's input rows are all zero, not a served request's values. Whether the seconds or the memory move with the values was not measured.
+   - **The unit stands alone.** [read] It is staged by `UnitStager` under zero partition and program digests, not as a block of a registered partition, and not through the served layout. This says nothing on whether that layout places the whole mask.
+   - **One session a unit.** No spread, and nothing warm. More than one unit in a session was not run.
+   - **Card memory is sampled.** [run] One reading every 0.28 s, so a shorter, higher peak is possible. The host figures are the kernel's high-water marks.
+
+**B. For you.**
+
+1. **This entry is late.** [run] The run ended 12 minutes after launch; I had named 17:00Z, guessing sessions of minutes where they took seconds, and ended my turn at 15:59Z. The Fri 16:00Z entry "in any case" is this one.
+2. **The ask was far over the use.**
+   - [run] 192 GB reserved. The run's peak was 46.2 GiB (both stagings at once), and 38.2 GiB inside a lease (the whole mask's prover and verifier process together, under the lease's cap of 193 GiB).
+   - [run] Leases of 30 and 90 minutes asked, 29 s and 100 s held. Timeout 240 minutes, 11 min 54 s used.
+   - [derived] A rerun needs `--mem-gb 64` and leases of 10 minutes.
+3. **Kept and not kept.**
+   - [run] Kept in the run's `out/`: both session records (`sessions-positions/`, `sessions-whole/`: `session.json` and the two proof files each), both `pub.bin`, both `staged.json`, `whole-units.json` with every figure above.
+   - [run] Not kept: the two circuit files. They restage to the same SHA-512, twice now (circuits' run and this one), here in under 9 minutes.
+   - [run] The scratch on node 2 is gone (`r20261112-175600-0946` at 17:56Z: no `/workspace/tmp/whole-units.*`, all 8 GPUs free).
+4. **A Lean verdict is a second run, not built.** [derived] It needs the unit staged with its own program digest, which is another circuit file and so another pin, and `flock-verify` with `--program` over the session. `stage_keep.py` is circuits' script and I changed nothing of it. Say if you want it.
+5. **Way (3)**, the split at `WHOLE_MAX`: untouched. Your condition, "until the whole mask has proved", is met in the sense of part A and no further.
+6. **Small, for infra through you.** [run] The lease's own line for the whole mask says "busy 0m00s of 1m40s sampled (0%)", while the card held 18,359 MiB and read busy on 7 of my 212 samples. Its utilisation sampling is too coarse for a session this short.
+7. **Next.** The `unit_block` read and what moves by name under the row, by Fri 13 Nov 20:00Z.
