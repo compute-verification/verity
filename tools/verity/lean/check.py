@@ -5255,7 +5255,9 @@ class Pipeline:
     accepted, under its key. Its verdict is
     dropped: the final `replay_step`, unchanged, reuses a module only where a key it computes from the files after the
     build is in the cache, and checks the rest, so it covers the same modules, reads the same files and fails the same
-    way as without the pipeline.
+    way as without the pipeline. A batch leaves to the final replay each module `replay_first` lists that has not
+    passed, which that replay checks in a step of its own at its stated threads (`replay_in_steps`), and each module that
+    imports one, whose closure would check it at the batch's.
 
     The build runs the package's code, which may rewrite any file under the `.lake` directories it writes (`writable`)
     while a batch reads it. So a batch reads none of them where the build can reach: each `.olean` file it needs from one
@@ -5346,6 +5348,11 @@ class Pipeline:
             keys = replay_keys(facts, self.toolchain, self.digest)
             def passed(m):
                 return (self.replay_cache / f"{keys[m]}.json").is_file()
+            first = {m for m in (e["module"] for e in replay_first(self.pkg)) if m in facts["graph"] and not passed(m)}
+            if left := [m for m in mods if first and not first.isdisjoint(imported_by(facts["graph"], [m]))]:
+                mods = [m for m in mods if m not in left]
+                facts = {**facts, "graph": imported_by(facts["graph"], mods), "modules": mods}
+                rec["left"] = len(left)
             if all(map(passed, mods)) and not (self.closure and closure_plan(facts, passed)[0]):
                 rec["checked"] = 0                              # `Replay.lean` would only load what it reuses
                 return
