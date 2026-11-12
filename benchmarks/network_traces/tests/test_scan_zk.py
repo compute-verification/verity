@@ -238,11 +238,11 @@ def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_
 
 
 def test_every_rounds_own_o0_rows_meet_one_set_of_frame_domains_its_templates_and_counts(tmp_path):
-    """A scan member's statement's input set is its template's (`scan_zk.set_of`), naming no round and no
-    link-window, so the frame domain of a port it registers as its own rows (`scan_zk.Frame`) is a function of its
-    template, its unit count and the port: the o0 domains computed once from a group's templates and counts are the
-    ones every round's registered o0 names, a link-window's member's those of the next's, and the unread round's one
-    unit's the last ingress unit's, whose o1's is its own in both its rounds. A block member's set is its run's
+    """A scan member's statement's input set is its template's (`scan_zk.set_of`), naming no round and no execution
+    phase, so the frame domain of a port it registers as its own rows (`scan_zk.Frame`) is a function of its template,
+    its unit count and the port: the o0 domains computed once from a group's templates and counts are the ones every
+    round's registered o0 names, an execution phase's member's those of the next's, and the unread round's one unit's
+    the last ingress unit's, whose o1's is its own in both its rounds. A block member's set is its run's
     (`block_set`), so its domains are no other run's."""
     G, T = 2, sz.TEST.params.window
     h = sz.host(tmp_path / "a", setup=sz.TEST, group=G)
