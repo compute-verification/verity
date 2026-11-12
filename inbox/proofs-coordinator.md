@@ -81319,3 +81319,34 @@ So network-accounting's point holds and is wider than one-instance statements: k
 - **Who holds PRF-371's text today** [read]: nothing on `main` states it; `security/Proofs/Properties/Verity/Sampled/MemberForm.lean` holds properties of the checks only. The text is on soundness's `cursor/soundness-multileg-8fb2` at `e67c8c956fed`: `Sampled/Window.lean` (`spotSound_of_window`, `WindowDeployed.claim`), `Window/Assembled.lean` 89 (`windowSpotSound_assembled`), and my `JointAuditV5.UnboundWrong` (`Window/Unbound.lean` 221) with `Window.unboundWrong` (`Window/UnboundLaid.lean`). In (i-a)'s terms `MemberV5.OpensUnder` reads `m.roots`, so a member's root for an own port must be the registration's own.
 
 **Still running:** `r20261112-084112-4309` (the suites on the held branch), until 12:41Z at the latest.
+
+## LAND3, Thu 12 Nov 09:32Z: the ready line for #9220, at a NEW head `a5858d735fc3` (not `514604d03c75`): its Lean check passed, exit 0, and regenerated no record, but it rewrote `security`'s lock with two keys in the other order, so the head now carries that file as the run kept it; no stop against lean's merge beyond `main`'s. Yours to mark
+
+Mailbox read 09:31Z: your 09:26Z section, answered here [run].
+
+**Ready line.** #9220, head `a5858d735fc3a90ace29fd49b0e691d59d11b2df`, on `main` `19fb19a21e40`; one-file try `r20261112-084224-c43b` exit 0; quick tier `r20261112-084229-cec8` exit 0, 4 suites passed, 0 failed; the Lean check of the security packages with their records `r20261112-085328-b163` exit 0 (`security` PASS, `security/Proofs` PASS, `security/Properties` PASS); no stop against lean's merge beyond `main`'s (lean's branch at `f3837f57d113`); it changes no lock record, so it is no notice to Daniel. Not marked [run: `gh pr view 9220`: OPEN, MERGEABLE, no label, 09:31Z].
+
+**Your question, "no record regenerated?"**
+
+- No record. The run's outcome line reads `"security": "regenerated"`, `"security/Proofs": "pass"`, `"security/Properties": "pass"` [run: `b163`'s `stdout.log`, its `OUTCOME` line]. What it regenerated in `security/lean-audit.json` is two lines in the other order and nothing else: the last two of the eleven keys of `shape.inline` for `NetTiming.SecurityProofs.PooledLeakAccepted` [run: `diff` of the run's record against the tree's; both read as JSON with their key order kept]. Read as JSON the run's file equals `main`'s at `19fb19a21e40`, key for key and value for value [run: Python `==`]. It is the same difference my 18:42Z entry of Wed 11 Nov reported for #8934 and #8940: `main`'s file has "Real.instLE.le …" first and `--update` writes "∀ (z : Z) …" first [read: this file, line 61131]. `main`'s own lock commit at `19fb19a21e40` still has `main`'s order [run], so the difference comes from the fast check's `--update`, not from this change [guess: I did not run it on `main` alone].
+- **I committed the run's file, as for #8934 and #8940.** One commit after the change's, `a5858d735fc3`, holding only `security/lean-audit.json` (2 lines added, 2 removed), pushed 09:28Z [run: `git diff --stat HEAD~1 HEAD`, `git ls-remote`]. Why: at `514604d03c75` the head's Lean inputs key for `security` is `958dece5e346`, which `b163` records as "regenerated" and not as a pass; at `a5858d735fc3` the keys for `security` and `security/Properties` are `5817b7ad5610` and `666290835b9e`, the two `b163` lists under `passes` [run: `lean_changed.py --inputs-key security security/Proofs security/Properties` at each head; `b163`'s `OUTCOME`]. The head's lock is the run's byte for byte, sha256 `2a550a440b14…`, the run's `record_sha256` [run]. No run for this commit, by your rule for a commit that only holds the records a passing `--update` run kept.
+- **One key I could not match:** `security/Proofs` at the new head has the key `ec3c64a3ae53`; `b163` gives it "pass" at `f32a38377cf9`, the key at `514604d03c75`, and lists no pass key for it [run]. For #8934 and #8940 the mark's records gate named keys for `security` and `security/Properties` only [read: line 61122], so I expect the mark to pass on those two [guess]. If the gate refuses on `security/Proofs`, its message says which run it wants; do not launch one before reading it.
+- **So the pull request now changes three files, not two** [run: `git diff --stat 19fb19a21e40 a5858d735fc3`]: `TwoAt.lean` (22 lines added, 20 removed), the allowlist (1 line), and the lock (the two lines above). The body says so under "The lock file", and its title still holds: no statement and no lock record changes [run: `research queue edit 9220`, 09:31Z].
+
+**The runs, read after they ended** [run: each run's `status.json`, `stdout.log`, and its row of `research status`: `done 0 SUCCESS`]:
+
+| run | what | tree | verdict |
+|---|---|---|---|
+| `r20261112-084224-c43b` | `lean_changed.py --try security/Proofs/Flock/SamplingGeneric/TwoAt.lean` | `514604d03c75` | exit 0; "lean exit 0 in 94 s"; axiom probe clean for its 21 theorems |
+| `r20261112-084229-cec8` | `suites.py --changed 19fb19a21e40 --quick` | `514604d03c75` | exit 0; "4 suites: 4 passed (0 cached), 0 failed; 13.1 min of test time" |
+| `r20261112-085328-b163` | `lean_changed.py --records security --update` | `514604d03c75` | exit 0; `security` PASS (27,098 declarations in 712 modules, 1,103 guarantees), `security/Proofs` PASS (195,395 in 3,877 modules), `security/Properties` PASS (3,093 in 94 modules, 465 guarantees); axioms `propext`, `Classical.choice`, `Quot.sound`; "check.py exit 0 in 752 s" and "in 611 s" |
+
+**Local at `a5858d735fc3`, no build** [run: 09:29Z]: `tests/lint/test_repo_retired_terms.py`, `tests/test_retired_terms.py` and `tests/test_lean_packages.py`, 64 passed; `ratchet_gate.py origin/main HEAD`: "19fb19a21e40..a5858d735fc3: 1 change(s), 0 failed".
+
+**Merges at `a5858d735fc3`** [run: `git merge-tree`, 09:28Z]: with `main` `19fb19a21e40`, with #9080 at `0e627f718ff4` and with #9208 at `34148509870b`, no file named.
+
+**Lean's branch moved again, to `f3837f57d113`** (it was `a88eee998fa2` at 09:09Z) [run: `git fetch`, 09:28Z]. At the new tip `main` stops in the same 12 files my 09:11Z entry lists, and by your `comm -23` command neither head stops in any file beyond them: none at `a5858d735fc3` (#9220), none at `787faa474cbf` (#8950) [run: 09:28Z]. The lock merge driver's lines for `security/lean-audit.json` are the same for #9220's head as for `main` [run: `diff` of the two outputs' `merge.py` lines].
+
+**#8950** is as my 09:11Z entry says: head `787faa474cbf`, `main` `19fb19a21e40` merged in once, quick tier `r20261112-084739-b4b8` exit 0, not marked, nothing more until #9112 is on `main` [run: `gh pr view 8950`, 09:31Z].
+
+**What a fresh worker does next:** nothing for #9220 unless the mark's gate refuses (then read its message). For #8950, the rework after #9112 lands, as the 09:11Z entry lists. Checkpoint note: `lanes/proofs/20261112T0851Z-report-land3-twoat-terms.md`.
