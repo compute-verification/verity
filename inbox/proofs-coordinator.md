@@ -101889,3 +101889,36 @@ command I ran and read now; [read]; [derived]; [guess].
 **At #9373's head, both runs read whole by me.** [run] `r20261112-190841-ba66`: rc 0, pass for `security/Properties`, `security/Proofs` and `security`, nothing regenerated. [run] `r20261112-190935-8611`: rc 0, "67 suites: 67 passed (0 cached), 0 failed". [run] #9373's body now has both verdicts and one paragraph on the close (`research queue edit`, exit 0; the head and the missing mark are unchanged).
 
 **#9237.** [read] CROSSCLOSE's "For REDRAW" (20:50Z) is read: one stop, the coins import of `test_difftest.py`, three lines, or the file whole from `82a48d3a8dda` while `main`'s copy is blob `fc4019234796`. [run] Nothing is pushed to `cursor/proofs-redraw-cc71`, which is at `9d4aec0111fb`; I merge the hour #9375 is on `main`. [read] My mailbox is 163 lines, its last section the 17:08Z one, reread at 21:13Z. I marked nothing and posted nothing on Linear or Slack.
+
+## ACCOUNTS, Thu 12 Nov 21:16Z: FOR DANIEL: Site v2
+
+**The notice.** Site v2 changes what the thirteen listed statements about the Site's code (`Properties.Site.*` in `security/Properties/lean-audit.json`) say, because it changes the spec's Site they are stated against. Each record's statement line stays as it is (`Properties.Site.checks : Properties.Site.Checks` and so on); what each one names says more. One of the five definitions they name, `RefusedAt`, changes in its own text. No premise is added, and none is taken away.
+
+The spec's Site in v2's form is written and compiles: `security/Definitions/Core/Site.lean` at `982668328b` on `cursor/proofs-site-v2-1dc6` [run `r20261112-211104-5668`, exit 0]. The proofs are not yet written.
+
+**What changes in the spec, the four causes.**
+
+| | Cause | In plain words |
+|---|---|---|
+| a | The Site's types | A new kind of location, the auditor's host. A location gains seven fields: a key's scheme, a memory leaf's read rate, a host's on-chip state and shared rates, the Site's unit of time, an auditor's host's time base and its clock's drift. A link's rate may be absent, with the reason no certifier splits it. The auditor brings its schemes and its figures for each host, each memory leaf under a host, and each of its own hosts' clocks. |
+| b | An entry's checks | `kind`: an auditor's host is at the site and holds only the auditor's devices; a link may state no rate only where it says why no certifier splits it. `figures`: besides the sheets, each new host, each new memory leaf under a host and the site's unit of time state the auditor's figures. `owner`: the auditor's own carry a key of a known scheme, and an auditor's host the auditor's time base and clock figure. `uncertified`: a boundary link is certified, or says why not. |
+| c | A log's check | One check more, at the log's end and not entry by entry: the Site is complete against the auditor's figures. Under each host, every memory leaf, card and way out the auditor lists is registered. Its refusal is `inventory`. |
+| d | The witnesses' instances | The example auditor has a figure for the one host; the example entry states a unit of time of one second and the host's figure, so the example log passes the new checks. |
+
+**The thirteen, before and now.**
+
+| Listed statement | Before | Now | Causes |
+|---|---|---|---|
+| `fold` | The code's Site of a log is the spec's Site of that log. | The same sentence, over v2's locations and links. | a |
+| `refuses` | The code refuses an entry with the refusal the spec gives it, over nine checks. | The same sentence, over the widened checks: twelve clauses under the same ten refusal names. | a, b |
+| `entryValid` | The code accepts an entry exactly when it is valid. | The same sentence; a valid entry now also passes b. | a, b |
+| `checks` | The code accepts a log exactly when each entry is valid against the log before it. | Exactly when each entry is valid against the log before it **and the log's Site is complete**. | a, b, c |
+| `refusedAt` | When the code refuses a log at index i, i is an entry, the entries before it are valid, and the spec refuses entry i with the same refusal. | The same, **or** i is the log's length, the refusal is `inventory`, every entry passes, and the Site is not complete. The definition's own text gains that case. | a, b, c |
+| `refuses_honest`, `entryValid_honest`, `checks_honest`, `refusedAt_honest` | Each holds on the example log: one site, one host, its uplink. | The same, on the example in v2's form. | a, b, d (and c for the two on logs) |
+| `refuses_nontrivial`, `entryValid_nontrivial`, `checks_nontrivial`, `refusedAt_nontrivial` | A check that accepts (or refuses) everything fails each. | The same, on the example in v2's form. | a, d |
+
+**Two things beyond the thirteen.**
+- Records of the main lock (`security/lean-audit.json`) move too, without saying anything new: every guarantee whose statement takes a registration reads the Site's types (cause a). How many is known only from the records run; I give the list then.
+- A device's model read off the Site (`Verity.Site.device`) now rounds a sheet's memory rate, stated a second, over one unit of the Site's time, as the code does. No listed statement reads it [read: neither lock's `reads` names it, at `e0167418c1`].
+
+**One choice inside it, for the lead** (my 21:06Z entry): whether the spec's "valid log" itself gains completeness (as written above for `checks`), or stays entry by entry with completeness stated beside it. The second makes `Checks`' own text change as well; the first changes the spec's lemma that a valid log's prefix is valid. What Daniel reads in the table is the same either way.
