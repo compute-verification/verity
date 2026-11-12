@@ -768,7 +768,6 @@ def test_biasadd_over_an_interior_gemm_without_evaluator_is_not_evaluable_by_nam
 # adders are told apart on an adversarial lane; an unregistered / absent DOT -> unresolved BY NAME, never another chain).
 
 HOPPER_DOT = 'DOT={"fn":"HopperBF16WgmmaDot16_v1"}'
-AMPERE_DOT = 'DOT={"fn":"AmpereBF16TcDot16_v2"}'
 
 
 def _hopper_program(inst: dict, dot: str = HOPPER_DOT) -> dict:

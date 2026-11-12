@@ -23,7 +23,7 @@ from verity.definitions.numerics import dsv4_indexer_twin as T
 from verity.definitions.registry import dsa
 from verity_vllm.properties.record import REGISTRY, digest_of
 
-I, X = D4.I, D4.X
+IDX, X = D4.I, D4.X
 SPECIAL = (0, 0x80000000, 1, 0x80000001, 0x007FFFFF, 0x807FFFFF, 0x00800000, 0x3F800000, 0xBF800000, 0x3F000000, 0x7F7FFFFF,
            0xFF7FFFFF, 0x7F800000, 0xFF800000, 0x7FC00000, 0x7FFFFFFF, 0xFFC00001, 0x7F800001, 0x43E00000, 0x43E00001, 0xC3E00000,
            0x2EDBE6FF, 0x38D1B717, 0xC2FC0000, 0xC2FC0001, 0x42FE0000, 0x4B000000, 0xCB000001)
@@ -58,7 +58,7 @@ def _total(results: list[dict]) -> dict:
 # ------------------------------------------------------------------------------------------------------------- the word steps
 def _operands(name: str, w: np.ndarray, rng: np.random.Generator) -> list[np.ndarray]:
     """Each step's operands: every word for one operand, every pair of SPECIAL and random pairs for two, random triples for three."""
-    arity = len(I.WORD[name].signature()[0])
+    arity = len(IDX.WORD[name].signature()[0])
     if name == "cvt":
         return [np.unique(np.concatenate([w >> 16, w & 0xFFFF])).astype(np.uint32)]
     if name == "fsel":
@@ -73,12 +73,12 @@ def _operands(name: str, w: np.ndarray, rng: np.random.Generator) -> list[np.nda
     return [rng.choice(w, 2000) for _ in range(3)]
 
 
-@pytest.mark.parametrize("name", sorted(I.WORD) + ["neg"])
+@pytest.mark.parametrize("name", sorted(IDX.WORD) + ["neg"])
 def test_the_numpy_steps_are_the_word_primitives(name: str) -> None:
     """`NumpyOps` runs the Definitions' bodies over arrays: each step is its primitive word for word (NaN, inf, subnormals, the
     MUFU tables and div.full's range scaling, e4m3 saturation, the i32 wraps and comparisons)."""
-    rng = np.random.default_rng(sorted(I.WORD).index(name) if name in I.WORD else 99)
-    prim = I.WORD.get(name, I.F32Neg)
+    rng = np.random.default_rng(sorted(IDX.WORD).index(name) if name in IDX.WORD else 99)
+    prim = IDX.WORD.get(name, IDX.F32Neg)
     args = _operands(name if name != "neg" else "fabs", _words(1), rng)
     with np.errstate(all="ignore"):
         got = np.broadcast_to(getattr(T.OPS, name)(*args), args[0].shape).astype(np.int64)
@@ -95,7 +95,7 @@ def test_the_score_twin_is_the_definition() -> None:
     ape = _f32(rng, 3, D4.STATE_W, scale=0.5)
     ape[2, :len(SPECIAL)] = SPECIAL
     want = T.score_twin(score, ape)
-    fn = bind(I.Dsv4CompressorScore, W=D4.STATE_W)
+    fn = bind(IDX.Dsv4CompressorScore, W=D4.STATE_W)
     assert [list(evaluate(fn, score[i].tolist(), ape[i].tolist())) for i in range(3)] == want.astype(np.int64).tolist()
 
 
@@ -124,7 +124,7 @@ def _entry_operands(rng: np.random.Generator) -> tuple[np.ndarray, ...]:
 def test_the_entries_twin_is_the_definition() -> None:
     kv, sc, w, cs = _entry_operands(np.random.default_rng(4))
     q, s = D4.entries_twin(kv, sc, w, cs)
-    fn = bind(I.Dsv4IndexerCompress, D=D4.D, ROPE=D4.ROPE, EPS=D4.EPS)
+    fn = bind(IDX.Dsv4IndexerCompress, D=D4.D, ROPE=D4.ROPE, EPS=D4.EPS)
     for i in range(kv.shape[0]):
         y = evaluate(fn, kv[i].reshape(-1).tolist(), sc[i].reshape(-1).tolist(), w.tolist(), cs[i].tolist())
         assert list(y[:D4.D]) == q[i].tolist() and y[D4.D] == s[i], i
@@ -153,7 +153,7 @@ def _head_operands(rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
 def test_the_heads_twin_is_the_definition() -> None:
     x, cs = _head_operands(np.random.default_rng(5))
     q, s = T.heads_twin(x, cs, D4.QG, D4.ROPE)
-    fn = bind(I.Dsv4InvRopeQuantHead, CHUNKS=D4.CHUNKS, QG=D4.QG, ROPE=D4.ROPE)
+    fn = bind(IDX.Dsv4InvRopeQuantHead, CHUNKS=D4.CHUNKS, QG=D4.QG, ROPE=D4.ROPE)
     for i in range(x.shape[0]):
         y = evaluate(fn, x[i].tolist(), cs[i].tolist())
         assert list(y[:D4.HD]) == q[i].tolist() and list(y[D4.HD:]) == s[i].tolist(), i
@@ -166,7 +166,7 @@ def test_the_fill_twin_is_the_definition() -> None:
     assert p.size == len(D4.FILL_POSITIONS) + 2 * D4.FILL_RANDOM and (p < 0).sum() > 8
     sel = np.concatenate([np.arange(len(D4.FILL_POSITIONS)), len(D4.FILL_POSITIONS) + np.arange(0, 2 * D4.FILL_RANDOM, 8)])
     want = D4.fill_twin(p[sel])
-    fn = bind(I.Dsv4ShortContextTopK, TOPK=D4.TOPK, RATIO=D4.RATIO)
+    fn = bind(IDX.Dsv4ShortContextTopK, TOPK=D4.TOPK, RATIO=D4.RATIO)
     for i, pos in zip(sel, p[sel]):
         assert list(evaluate(fn, int(pos) & D4.M64)) == (want[list(sel).index(i)].astype(np.int64) & 0xFFFFFFFF).tolist(), int(pos)
     n = (want >= 0).sum(axis=1)
@@ -178,7 +178,8 @@ def test_the_state_rows_are_the_kernel_reads() -> None:
     """Row r of the token at position p is position p - 7 + r of its request through the block table, rows 0-3 the overlap halves
     [0:128] / [256:384], rows 4-7 [128:256] / [384:512]; rows before position 0 kv 0 and score -inf."""
     nb = 6
-    b, r, c = np.meshgrid(np.arange(nb), np.arange(D4.STATE_BLOCK), np.arange(2 * D4.STATE_W), indexing="ij")
+    grid: tuple[np.ndarray, ...] = np.meshgrid(np.arange(nb), np.arange(D4.STATE_BLOCK), np.arange(2 * D4.STATE_W), indexing="ij")
+    b, r, c = grid
     state = (b * 100000 + r * 1000 + c).astype(np.uint32)
     bt = np.array([[4, 1, 5, 0], [2, 3, 0, 0]], dtype=np.int32)
     req, pos = np.array([0, 0, 1]), np.array([3, 11, 7])
@@ -251,7 +252,8 @@ def test_the_head_words_layout() -> None:
     """Head 8 g + i of `fused_inv_rope_fp8_quant`'s (T, G, 8 * 512) bytes and (T, G, 8 * 4) scales is [t, g, 512 i:512 (i + 1)]
     and [t, g, 4 i:4 i + 4]."""
     T = 3
-    t, g, j = np.meshgrid(np.arange(T), np.arange(D4.GROUPS), np.arange(D4.HPG * D4.HD), indexing="ij")
+    grid: tuple[np.ndarray, ...] = np.meshgrid(np.arange(T), np.arange(D4.GROUPS), np.arange(D4.HPG * D4.HD), indexing="ij")
+    t, g, j = grid
     fp8 = (t * 7 + g * 3 + j // D4.HD).astype(np.uint8)
     t, g, j = np.meshgrid(np.arange(T), np.arange(D4.GROUPS), np.arange(D4.HPG * D4.CHUNKS), indexing="ij")
     scale = (t * 1000 + g * 100 + j).astype(np.uint32)
@@ -418,7 +420,7 @@ def test_the_topk_checks() -> None:
     worse = sel.copy()
     worse[np.flatnonzero(vals[ones, sel] == 1)[0]] = np.setdiff1d(np.flatnonzero(vals[ones, :1100] == 0), sel)[0]
     assert D4.topk_valid(vals[ones], 1100, sel)["valid"] and D4.topk_valid(vals[ones], 1100, worse)["valid"] is False
-    wide = np.full((len(lens), D4.MAX_MODEL_LEN + 13), np.inf, dtype=np.float32)
+    wide: np.ndarray = np.full((len(lens), D4.MAX_MODEL_LEN + 13), np.inf, dtype=np.float32)
     wide[:, 5:5 + D4.MAX_MODEL_LEN] = vals
     assert D4.check_topk(wide, np.maximum(lens, 0), out, 5)["long_valid"] == 4
 
@@ -544,8 +546,8 @@ def _stub_vllm(monkeypatch, gate: dict) -> None:
     import types
 
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
     for k in ("VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR"):

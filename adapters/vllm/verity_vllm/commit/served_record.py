@@ -38,7 +38,6 @@ from dataclasses import dataclass, field
 from types import SimpleNamespace
 from typing import Any
 
-SCHEMA = "verity-vllm/served-record/v1"
 #: The step-input port's two tensors, the first two of every step's stream (`StepInputPort`).
 PORT_NAMES = ("step.input/ids", "step.input/positions")
 #: The step's input ids, in the order they are read: the step-input port's, then the compiled path's name, then the eager
