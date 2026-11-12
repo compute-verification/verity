@@ -19,6 +19,12 @@ The warden's code on a lane emits, cell by cell, what the client view gives for 
 (`certifierLane_eq`): its data cells and padding before it, the fail cell, padding after. So the code's output is the
 client view of the schedule, the data and the fail cells (`certifierCode_eq`), which `Tap` reads the network certifier's
 cells from.
+
+On the wire, a bucket's frames are the connection's frames in it (`filter_laneWire`), every cell's bucket in the
+connection's span (`bucket_mem_span`). A lane of `k` cells has cell `j` in bucket `t j` (`certifierLane_fst`); among the
+cells before `j`, those in `j`'s bucket number `j mod r` (`countP_range_div`), so `j` is the `(j mod r)`-th of its
+bucket's frames (`getElem?_filter_countP_take`, `wireFrames_cell`), the admission padding in earlier buckets and the
+padding after the lane's last cell after it.
 -/
 
 @[expose] public section
@@ -133,6 +139,58 @@ theorem filterMap_flatMap_ite [DecidableEq κ] {β : Type} (X : List β) {c : κ
       simp [this]
     · have hc' : c ∈ ds := (List.mem_cons.1 hc).resolve_left (Ne.symm hdc)
       simp [hdc, filterMap_flatMap_ite X hds hc']
+
+/-- A lane's cell is in its connection's span. -/
+theorem bucket_mem_span (s : CertifierSchedule κ) (c : κ) {j : ℕ} (hj : j < s.cells c) : s.bucket c j ∈ s.span c := by
+  rw [CertifierSchedule.span, List.mem_range, CertifierSchedule.bucket]
+  have := Nat.div_le_self j s.r
+  omega
+
+/-- **A bucket's frames on the wire** are the connection's frames in it. -/
+theorem filter_laneWire (s : CertifierSchedule κ) (v : κ → List (ℕ × CellView Cell)) (c : κ) {b : ℕ}
+    (hb : b ∈ s.span c) : (laneWire s v c).filter (fun x => x.1 == b) = (wireFrames s v c b).map (b, ·) := by
+  have h : ∀ d, ((wireFrames s v c d).map (d, ·)).filter (fun x => x.1 == b) =
+      if d = b then (wireFrames s v c b).map (b, ·) else [] := by
+    intro d
+    by_cases hd : d = b
+    · subst hd
+      rw [if_pos rfl, List.filter_eq_self]
+      simp
+    · rw [if_neg hd, List.filter_eq_nil_iff]
+      simp [hd]
+  rw [laneWire, List.filter_flatMap]
+  simp only [h]
+  exact filterMap_flatMap_ite _ List.nodup_range hb
+
+/-- **A lane's cell `j` is the `(j mod r)`-th of its connection's frames in its bucket**: the admission padding is in
+earlier buckets, and the padding after the lane's last cell follows it. -/
+theorem wireFrames_cell (s : CertifierSchedule κ) (a : κ → Arrivals Cell) (c : κ) {j : ℕ} (hj : j < s.cells c) :
+    (wireFrames s (certifierCode s a) c (s.bucket c j))[j % s.r]? = ((certifierCode s a c)[j]?).map Prod.snd := by
+  have hlen : (certifierCode s a c).length = s.cells c := certifierLane_length _ _ _ _
+  have h2 : j < (certifierCode s a c).length := hlen ▸ hj
+  have hfst : ((certifierCode s a c)[j]).1 = s.bucket c j := by
+    have h := congrArg (fun l => l[j]?) (certifierCode_fst s a c)
+    simp only [List.getElem?_map, List.getElem?_eq_getElem h2, List.getElem?_range hj, Option.map_some,
+      Option.some.injEq] at h
+    exact h
+  have hpre : ¬(s.adm c ≤ s.bucket c j ∧ s.bucket c j < s.adm c + s.D) := fun h =>
+    absurd h.2 (Nat.not_lt.2 (Nat.le_add_right _ _))
+  simp only [wireFrames, hpre, ite_false, List.nil_append]
+  have key := getElem?_filter_countP_take (fun x : ℕ × CellView Cell => x.1 == s.bucket c j) (certifierCode s a c) j h2
+    (by simp [hfst])
+  have hcount : ((certifierCode s a c).take j).countP (fun x => x.1 == s.bucket c j) = j % s.r := by
+    have := congrArg (fun l => (l.take j).countP (· == s.bucket c j)) (certifierCode_fst s a c)
+    simp only [← List.map_take, List.countP_map, List.take_range, Nat.min_eq_left hj.le] at this
+    rw [show (fun x : ℕ × CellView Cell => x.1 == s.bucket c j) = (· == s.bucket c j) ∘ Prod.fst from rfl, this,
+      ← countP_range_div s.r j]
+    congr 1
+    funext i
+    simp [CertifierSchedule.bucket]
+  rw [hcount] at key
+  have hlt : j % s.r < (((certifierCode s a c).filter fun x => x.1 == s.bucket c j).map Prod.snd).length := by
+    rw [List.length_map]
+    exact (List.getElem?_eq_some_iff.1 key).1
+  rw [List.getElem?_append_left hlt, List.getElem?_map, key, List.getElem?_eq_getElem h2]
 
 end Wire
 
