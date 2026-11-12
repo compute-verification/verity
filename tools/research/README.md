@@ -145,15 +145,16 @@ bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs th
 A tool's declaration may name result steps a merge needs by path (`Tool.merge_requires`, `{step: [path prefixes]}`, read from
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
-`lean-agreement` for `verity/{ml,core/service}/flock/`, less README.md and PROTOCOL.md; `--train --send FILE` ships what such a
-step needs. It may also name what runs after a landing (`Tool.after_land`, an argv): once `--push` has pushed, it starts detached
+`lean-agreement` for `verity/protocols/flock/`'s `prover/`, `pod/`, `agreement/`, `verifier/` and `tool.py`, less README.md and
+PROTOCOL.md; `--train --send FILE` ships what such a step needs. It may also name what runs after a landing
+(`Tool.after_land`, an argv): once `--push` has pushed, it starts detached
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
 `research queue` is the merge queue. Its loop, the verified queue (`research queue vqueue`, ci's: `vqueue_loop.py`, whose
 policy is `vqueue.py`), merges the PRs ready to land onto `main` as candidates (`queue/<sha12>`, one `Queue: #N` merge each),
-checks each (`check.py --record`, in shards), and fast-forwards `main` only to a candidate that passed every step on the
-merge gate; a failure its base doesn't share ejects its lone suspect or bisects several, and the candidate is built again
+checks each (graph2's tasks by default), and fast-forwards `main` only to a candidate with no new failure; a failure its
+base doesn't share ejects its lone suspect or bisects several, and the candidate is built again
 without them. A PR is ready to land when it's open against `main` (drafts too), names its owner (a `Lane {name}` line, else
 its Cursor agent id), has no hold label, is marked ready at its head by that owner (`research queue ready PR --mark --by
 LANE`, or `--on auto` to run the quick tier first, or a `ready` label on `pr:{n}@{head}`), and has a reviewer's land verdict
@@ -210,6 +211,11 @@ reaches it. The Nebius nodes are such machines (`src/research/pods/nebius/`): `l
 needs no credentials), `teardown.sh` stops or deletes it, `n1_replacement.sh` plans n1's replacement, `check.py` is the
 bootstrap check, `prefetch.py` fills the weight cache, and the lease is `sh/lease.sh` (`LEASE_MACHINE_ID`, a stop command).
 Runs share a node's GPUs through `gpu-lease N -- CMD` (`sh/gpu_lease.sh`: a flock per GPU, `CUDA_VISIBLE_DEVICES` set).
+With `--cores CPUS` it pins CMD to those CPUs, records them in the lease, and refuses the request before it takes a GPU when they
+and the live leases' CPUs together pass the machine's CPU quota (a container's `cpu.max`), naming each lease's CPUs, or when
+`taskset` can't pin to them on the machine. The count covers leases only, and those of one lease directory, and the pin is the
+lease's word, not a fence: a job can still widen its own affinity. Every lease also writes the machine's throttle counters
+(`cpu.stat`) into its owner line at its start and at its release.
 
 What runs on the Nebius nodes outside a run (infra's loops and the files they read) is listed in `src/research/pods/nebius/deploy.toml`,
 each with its repository file and owner (a Slack handle), and goes there only through `research deploy install NODE --by WHO
@@ -383,17 +389,16 @@ research data label ART verified accepted --by red-team-1 [--ref RUN]           
 research data reindex [--remote]             research data sql "SELECT ..."       # read-only connection
 ~~~
 
-Python: `research.store.local.LocalStore`, its methods listed in the contract. Nothing is
-called PRESERVED without a remote; nothing in the store is ever overwritten.
+Python: `research.store.local.LocalStore`, its methods listed in the contract.
 
 ### The evidence store: `--tool`, `--scratch`, and the publish step
 
-`src/research/store/README.md` is the contract. What `research run` does:
+What `research run` does:
 
 - Before launch it collects `research.env.conditions()` (source tree, runtime,
   hardware, execution; `None` when unknown), resolves the harness `--input`
   paths to content identity, and, with `--tool NAME` (registry in
-  `store/tools_registry.py`: `tc_probe`, `bench_vu`) or `--tool module:NAME`,
+  `store/tools_registry.py`: `tc_probe`) or `--tool module:NAME`,
   loads the `Tool` declaration, parses the workload argv into params, replaces
   path-valued key params by the content they point at, hashes the declared
   closure, and computes the derivation id and the `reuse_key` (`None` on a
@@ -440,9 +445,8 @@ called PRESERVED without a remote; nothing in the store is ever overwritten.
 ### Retention of node data: `research keep`, `research retention`
 
 `src/research/retention.py`: nothing under a node's `/workspace` is deleted without a record that allows it. A record
-(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data: `path`
-(relative to the root), `node`, `owner` (a lane handle), `by`, `created`, `expires` (UTC, or null for never), `priority`
-(`low|normal|high|keep`), `preserved` (an art id or null), `regenerate` (a command or null), `why`. It covers everything beneath its
+(`research/retention/v0`) is a sidecar, `<dir>/.retention.json` or `<file>.retention.json`, so it travels with its data.
+It covers everything beneath its
 path. A directory its owner made read-only gets its record beside it, `<dir>.retention.json`. A directory with both is invalid, and
 gc leaves a tree whole while any directory in it is read-only. A run dir whose `.custody` says `preserved: true` and which has no sidecar has an implicit record: owner its lane, else its
 campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verified_utc` (`RUN_EXPIRY`); priority `normal`. Nothing
@@ -467,14 +471,13 @@ nested record, and no file in `/workspace/pouw/fill/queue`, `/workspace/pouw/fil
 `--apply` deletes a path, its record and the job scripts are read again. A preserved path also needs its artifact to hold every file
 now under it at its size, so files custody trimmed never count as preserved, and its stored copy `verified`, `expired` or
 `withdrawn` on the remote; one that can't be asked about fails the pass (`retention.STORED`). An implicit record's marker must still
-vouch for the run dir (the store README's §10.1). A path without a record is never deleted. Without `--apply` gc deletes nothing and
+vouch for the run dir (the store README's §10.1). Without `--apply` gc deletes nothing and
 reads no remote; either way it prints every deletion and every skip with its reason. The failure it prevents: hundreds of GiB of
 unowned, unpreserved files on a node that nobody can decide to delete.
 
 `rm` is the one way to delete data you don't own on a node, for a cleanup the policy doesn't reach. It deletes a path only when a
 record covers it (its own or an ancestor's), and that record and every record beneath it (sidecars and implicit ones) name the
-`--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. A
-path no record covers has nobody to say yes and is never deleted. The records are read again just before `--apply` deletes. Each
+`--approved-by` handle as owner and are not `keep`. No job script may name the path, and nothing in it may be read-only or a mount. Each
 decision of an `--apply` (delete, refuse, failed) is a `research/retention-log/v1` line in `/workspace/research/retention/deletions.jsonl`
 with `--by` (default `$RESEARCH_AGENT_URL`), the approver and `--ref`. The failure it prevents: a disk cleanup's bare `rm -rf` of
 outputs whose record names another lane as owner, approved by a lane that doesn't own them, which loses them. Here that `rm` is

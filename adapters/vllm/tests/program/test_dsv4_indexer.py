@@ -20,12 +20,12 @@ import math
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import dsv4_indexer as I
 from verity.definitions.registry import prims as P
+
 from tests.program import test_dsa as G
 
 SIGN, INF, M32, NAN_PTX = G.SIGN, G.INF, G.M32, G.NAN_PTX
@@ -71,10 +71,6 @@ def fma(a: int, b: int, c: int) -> int:
         p = mul(a, b)
         return p if G._is_nan(p) else add(p, c)
     return c if _inf(c) else G._ffma(a, b, c)
-
-
-def fma_ftz(a: int, b: int, c: int) -> int:
-    return G._ftz(fma(G._ftz(a), G._ftz(b), G._ftz(c)))
 
 
 def ex2(x: int) -> int:
