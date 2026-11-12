@@ -1,6 +1,6 @@
 """What H1's readers make of a part their input leaves out: a rank's release whose committer states no errors, a pull
-from a rank that shipped no acquisitions, a window's record with no commitment object, and a slot of a round the round
-log does not hold."""
+from a rank that shipped no acquisitions, a window's record with no commitment object, a slot of a round the round
+log does not hold, and an engine that holds no executor in its own process."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -12,7 +12,7 @@ from verity.protocols.spot.device.challenger import OPENING_FORM, LiveCommitment
 from tests.protocols.test_credit_gate import _descriptor
 from verity_vllm.protocols.pouw.h1.challenger import drawn_of
 from verity_vllm.protocols.pouw.h1.commit import ROOT_BYTES, SCHEME
-from verity_vllm.protocols.pouw.h1.ranks import Holder, RankExtension
+from verity_vllm.protocols.pouw.h1.ranks import Holder, RankExtension, executor_of
 from verity_vllm.protocols.pouw.h1.requests import RoundOpening, slot_reason
 
 #: what a rank's release hands on of its committer's finalize beside the errors (`h1rank_release`)
@@ -130,3 +130,26 @@ def test_a_slot_of_a_round_the_log_does_not_hold_is_refused_before_anything_is_o
     coins = LiveCommitment("pouw-h1/rounds", 0, (("round", 2),), bytes(64))
     slot = RoundOpening(round=3, position=0, value=b"", path=())
     assert slot_reason([{"round": 0}, {"round": 1}], coins, b"salt", 4, [], slot) == "the round log has no round 3"
+
+
+def _engine(**holds: Any) -> SimpleNamespace:
+    """What `executor_of` reads of vLLM's ``LLM``: its engine, which holds `holds`."""
+    return SimpleNamespace(llm_engine=SimpleNamespace(**holds))
+
+
+def test_the_executor_is_the_engine_cores_held_by_the_engine_or_by_its_client():
+    executor = SimpleNamespace(collective_rpc=lambda method: [])
+    core = SimpleNamespace(model_executor=executor)
+    assert executor_of(_engine(engine_core=core)) is executor
+    assert executor_of(_engine(engine_core=SimpleNamespace(engine_core=core))) is executor
+
+
+@pytest.mark.parametrize("holds", [
+    {}, {"engine_core": None}, {"engine_core": SimpleNamespace()}, {"engine_core": SimpleNamespace(model_executor=None)},
+    {"engine_core": SimpleNamespace(model_executor=SimpleNamespace())},
+    {"engine_core": SimpleNamespace(model_executor=SimpleNamespace(collective_rpc=None))},
+], ids=["no core", "a null core", "a client of a core in another process", "a null executor", "no collective_rpc",
+        "a collective_rpc that is no call"])
+def test_an_engine_with_no_executor_that_reaches_its_ranks_is_refused(holds):
+    with pytest.raises(RuntimeError, match="no in-process executor with collective_rpc"):
+        executor_of(_engine(**holds))
