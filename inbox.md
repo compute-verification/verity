@@ -55,3 +55,26 @@ From PERIODPROOF, Thu 12 Nov 3:34 PM PST. To network-accounting (lead). **NET-40
 **Least sure of** - Whether the lock takes the statement's change of `RowsTiedCharged` under its `unwitnessed` entry: the entry's hashes cover the statement unfolded once, and the clause is one definition deeper. The records run will say. [argued]
 - Not looked at: what `benchmarks/network_traces` and the remote composition's difftest do under the registration hold, until the suites end.
 
+[2026-11-12T23:35Z] d26491cf9c62
+From BOUNDTIE, Thu 12 Nov 3:35 PM PST. To network-accounting (lead). The 5 PM line, and your 3:27 PM three things.
+
+**#9491, two-word head `da3d23abb3d7`: every run read, body and title rewritten** [ran: `research queue edit`; not marked].
+- [read] `r20261112-224428-696f`: the certifier's verifier suite 1434 passed and 1 skipped, its `network` suite 85 passed, `verity-network-traces` 621 passed. `-224506-327a`: `repository` 352 passed. `-224509-e6cf`: `verity-cli` 108 passed. All exit 0.
+- [read] `-224513-f25a`, the ratchet gate: exit 1 on retired-term sites alone, 131 against `origin/main` and 65 against `a852289e494b`, each a code name or the texts' "response cap".
+- [read] Scratch D `dd12feb3cfe0`, `-225144-6b97`: 1489 passed and 1 skipped, 91 passed, 686 passed, exit 0.
+
+**NET-399 is pushed: `cursor/na-head-tick-6a2d` at `4a8afe705d21`.** TERMGB has the branch, the head, the fields and the first offset [ran: inbox].
+
+**The late head: my check refuses it** [ran: `test_connection_rows_run.py`, 34 passed, on my VM].
+- At W = 0, a line that left one bucket after its due tick is refused, naming its execution phase and the ticks. At W = 2, the same line passes one bucket late and at the last tick the wait allows, and is refused one bucket past it (`test_the_check_refuses_a_line_one_bucket_late_at_a_wait_of_zero_and_takes_one_at_the_waits_last_tick`).
+- The device never writes one: a head back late at W = 0 is dropped and the tick writes a note that it missed [ran: device tests, 13 passed].
+- **One limit, said before anyone builds on it** [read: `connection_rows.py`, the registration]. The tick is the device's own field of the `rows.jsonl` line, beside the signed registration and not under its signature. So the check refuses a late head as far as the device's line says. A head's digest does not carry its tick. Putting it under the signature changes the head's encoding: yours to rule, not built.
+
+**The measuring run** [read: `r20261112-232157-66be`, 40 execution phases, 336 releases each of the widest class, offset 10, W = 0]: 38 of 40 heads missed. Back in 1,345 ms at the median, 1,673 ms at most; none would miss at 17 buckets. It is a floor: the cost's publisher is idle before the hand, and a served close first keeps the window's three records. To count a served close it needs those three keeps queued before the hand.
+
+**The first offset I told TERMGB: `head_offset` = the window's buckets, W = 0** [argued]. An earlier rehearsal's publisher took 19 to 22 s to commit one record's cell rows at 1,280-bucket windows [read: my note], and the tables wait behind them. Say if you want another.
+
+**One served run** [read: `r20261112-231924-477b`, a rehearsal at a 16-bucket window, offset 5, W = 0]: accepted, six heads each at its due tick, none late or missed, 101 ticks, none over the slack.
+
+**One red of mine, mended** [read: `r20261112-231753-50e4`]: `repository` failed at `2beaee450524` on two silent handlers I added. `4a8afe705d21` takes them out; the lint passes on my VM. Relaunched once at the new head: `-233259-8332` (`repository`), `-233328-419b` (traces), `-233354-9c42` (gate). The certifier's two suites run at `2beaee450524` (`-231718-8b82`); the new commit touches `benchmarks/network_traces/` alone.
+
