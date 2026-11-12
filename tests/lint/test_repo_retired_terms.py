@@ -370,6 +370,32 @@ def test_two_terms_on_one_span_name_the_same_one_in_every_process() -> None:
     assert said == {(1, "'DampenerRemotePeriod' is retired; say monitoring period (GLOSSARY.md)")}, sorted(said)
 
 
+def test_two_terms_on_one_site_say_the_same_whatever_order_the_set_holds_them_in() -> None:
+    class Placed(Term):
+        """A term whose place in a small set is chosen: such a set gives its members in the order of their hashes."""
+
+        def __init__(self, place: int, old: str, new: str):
+            super().__init__(old, new, code=True)
+            self.place = place
+
+        def __hash__(self) -> int:
+            return self.place
+
+    def said(text: str, *rows: tuple[int, str, str]) -> list[tuple[int, str]]:
+        by: dict[str, list[Term]] = {}
+        for t in (Placed(*row) for row in rows):
+            for a in t.anchors:
+                by.setdefault(a, []).append(t)
+        return sites_of(text, by)
+
+    longer = [(1, "'OldName' is retired; say the longer row's (GLOSSARY.md)")]  # second by spelling: the length decides
+    assert said("an OldName", (1, "*Name", "the shorter row's"), (2, "OldNa*", "the longer row's")) == longer
+    assert said("an OldName", (2, "*Name", "the shorter row's"), (1, "OldNa*", "the longer row's")) == longer
+    first = [(1, "'OldName' is retired; say the first by spelling (GLOSSARY.md)")]  # of one length: the spelling decides
+    assert said("an OldName", (1, "OldN*", "the second by spelling"), (2, "*Name", "the first by spelling")) == first
+    assert said("an OldName", (2, "OldN*", "the second by spelling"), (1, "*Name", "the first by spelling")) == first
+
+
 def test_it_reads_what_lane_text_reads_and_skips_what_it_says() -> None:
     assert holds("verity/a.py") and holds("security/A.lean") and holds("README.md") and holds("a/b.toml")
     assert not holds("x.json") and not holds("archive/a.md") and not holds(GLOSSARY) and not holds("tools/move/x_map.toml")

@@ -82,7 +82,8 @@ of whose sides are a string array's items (`roots`) merges as a list, wrapped as
 package or add a root to `security/Properties` merge. Any other conflict, and a result that is not TOML, stays git's. For a
 `pyproject.toml` (`--pyproject`, `pyproject-test-lists`), the same merge of string arrays stands only when every value outside
 `[tool.verity.tests]`'s lists (`inputs`, `untraced`, a `reads` entry's `paths` and `tests`) is the three-way merge of the
-sides: two branches that each add a file a suite reads merge, and anything else stays git's. In
+sides: two branches that each add a file a suite reads merge, each side's comment lines above the item they were above, and
+anything else stays git's. In
 both, an import, a require or a root that one side removed stays removed, judged on the whole files (`kept`), so a line the
 other side moved can't bring it back. For `tests/test_lean_packages.py` (`--caps`, `lean-caps`), each of its ratchet caps
 (`CAP_NAMES`: `UNWITNESSED = {...}`, `INLINE = {...}`...) merges over the whole files key by key as the larger of the two
@@ -120,9 +121,10 @@ CAPS = "lean-caps"
 #: as lists: what a suite reads, which two branches that each add a file a suite reads both change
 PYPROJECT = "pyproject-test-lists"
 TEST_LISTS = {"inputs", "untraced", "paths", "tests"}
-#: a lakefile's `[[require]]` block line, and a line of a string array's items (`roots = ["A", "B",`, `"C"]`)
+#: a lakefile's `[[require]]` block line, a line of a string array's items (`roots = ["A", "B",`, `"C"]`), and a comment line
 REQUIRE_LINE = re.compile(r'\s*(\[\[require\]\]|(name|path|git|rev|scope|version|subDir)\s*=\s*\S.*)\s*$')
 ITEM_LINE = re.compile(r'\s*(\w+\s*=\s*\[)?\s*("[^"]*"\s*,?\s*)+\]?\s*$')
+COMMENT_LINE = re.compile(r"\s*#")
 #: the ratchet caps of `tests/test_lean_packages.py`, each on one line there
 CAP_NAMES = ("UNWITNESSED", "INLINE", "ROOM", "TREES_EXCEPT", "FOUR_NAMES_EXCEPT", "UNDOCUMENTED", "SPEC_THEOREMS", "OVERLONG",
              "RETIRED_NAMES", "IMPORT_ALL_USES")
@@ -694,28 +696,68 @@ def _requires(o: list[str], a: list[str], b: list[str], keep: set | None = None)
     return lead + "\n".join(merged).splitlines(keepends=True) + trail
 
 
-def _array(o: list[str], a: list[str], b: list[str], keep: set | None = None) -> list[str] | None:
+def _above(side: list[str]) -> dict[str, list[str]] | None:
+    """A conflict side's comment lines by the item that follows them, the first of the next line, a line of items; None
+    when the side's last line is a comment, which no item of it follows, or its first is, above an array's opening."""
+    out, pending = {}, []
+    for s in side:
+        if COMMENT_LINE.match(s):
+            pending.append(s)
+        elif pending:
+            if ITEM_LINE.match(s).group(1):
+                return None
+            out[re.search(r'"([^"]*)"', s).group(1)] = pending
+            pending = []
+    return None if pending else out
+
+
+def _array(o: list[str], a: list[str], b: list[str], keep: set | None = None, comments: bool = False) -> list[str] | None:
     """A conflict all of whose sides are a string array's items (`roots`): ours' items with theirs' new ones, less what
     either removed in the hunk (and not in ``keep``), wrapped at `WIDTH` with ours' opening, indent and close.  `lakefile`
-    then holds every array to the whole files (`_hold`)."""
+    then holds every array to the whole files (`_hold`).
+
+    With ``comments`` a side may hold comment lines too, and each stays above the item that follows it in its side
+    (`_above`): an item only one side has under that side's comment, an item both have under the comment of the side that
+    changed it from the base's.  The conflict stays git's where a comment would be lost, written twice or placed by a
+    guess: one with no item after it in its side, one above the array's opening, one above an item the merge drops, one
+    line above two items, and one the two sides changed two ways."""
     sides = [[s for s in side if s.strip()] for side in (o, a, b)]
-    if not sides[1] or not all(ITEM_LINE.match(s) for side in sides for s in side):
+    rows = [[s for s in side if not (comments and COMMENT_LINE.match(s))] for side in sides]
+    if not rows[1] or not all(ITEM_LINE.match(s) for side in rows for s in side):
+        return None
+    above = [_above(side) if comments else {} for side in sides]
+    if None in above:
         return None
     def opening(side):
         return m.group(1) if side and (m := ITEM_LINE.match(side[0])) and m.group(1) else None
 
     def closes(side):
         return bool(side) and side[-1].rstrip().endswith("]")
-    if sides[2] and (opening(sides[2]) != opening(sides[1]) or closes(sides[2]) != closes(sides[1])):
+    if rows[2] and (opening(rows[2]) != opening(rows[1]) or closes(rows[2]) != closes(rows[1])):
         return None
-    head = opening(sides[1])
-    lead = re.match(r"\s*", sides[1][0]).group(0)
-    indent = re.match(r"\s*", sides[1][1]).group(0) if len(sides[1]) > 1 else (lead + "  " if head else lead)
-    names = [re.findall(r'"([^"]*)"', "".join(side)) for side in sides]
+    head = opening(rows[1])
+    lead = re.match(r"\s*", rows[1][0]).group(0)
+    indent = re.match(r"\s*", rows[1][1]).group(0) if len(rows[1]) > 1 else (lead + "  " if head else lead)
+    names = [re.findall(r'"([^"]*)"', "".join(side)) for side in rows]
     merged = [n for n in items(*names) if keep is None or n in keep]
     if not merged:
         return None
-    return _wrap(merged, head, lead, indent, closes(sides[1]))
+    notes: dict[str, list[str]] = {}
+    for n in set(above[1]) | set(above[2]):
+        x, y, z = (side.get(n, []) for side in above)
+        if n not in merged or (n in names[1] and n in names[2] and x != y != z != x):
+            return None
+        notes[n] = y if n not in names[2] or z in (x, y) else z
+    said = [s for n in merged for s in notes.get(n, [])]
+    if len(said) != len(set(said)):
+        return None
+    starts = [i for i, n in enumerate(merged) if i == 0 or notes.get(n)]
+    out: list[str] = []
+    for i, end in zip(starts, [*starts[1:], len(merged)]):
+        out += notes.get(merged[i], [])
+        out += _wrap(merged[i:end], head if i == 0 else None, lead if i == 0 else indent, indent,
+                     closes(rows[1]) and end == len(merged))
+    return out
 
 
 def _wrap(merged: list[str], head: str | None, lead: str, indent: str, close: bool) -> list[str]:
@@ -827,15 +869,16 @@ def _hold(text: str, requires: set[str], strings: dict[str, set[str]]) -> str:
     return "".join(out)
 
 
-def lakefile(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
+def lakefile(base: Path, ours: Path, theirs: Path, comments: bool = False) -> tuple[str, int]:
     """(the merged text, the number of conflicts left) of a `lakefile.toml`: git's own merge, then each conflict whose sides are
     only `[[require]]` blocks merged as a set of blocks, and each whose sides are only a string array's items (`roots`) merged
     as a list (`items`), so two branches that each require a package or add a root merge; a block or an item one side
     removed stays removed anywhere in the merged file, conflict or not (`kept`, `_hold`).  Any other conflict (a comment, a value) is left as git writes it, and so is a result
-    that is not TOML."""
+    that is not TOML.  With ``comments`` (`pyproject`) an array's conflict may hold comment lines above its items (`_array`)."""
     sides = [_lakefile_names(p.read_text()) for p in (base, ours, theirs)]
     requires = None if None in sides else kept(*(s[0] for s in sides))
-    text, left = lean(base, ours, theirs, (lambda o, a, b: _requires(o, a, b, requires), _array))
+    text, left = lean(base, ours, theirs, (lambda o, a, b: _requires(o, a, b, requires),
+                                           lambda o, a, b: _array(o, a, b, comments=comments)))
     if requires is not None:
         keys = set().union(*(s[1] for s in sides))
         text = _hold(text, requires, {k: kept(*(s[1].get(k, set()) for s in sides)) for k in keys})
@@ -850,8 +893,9 @@ def lakefile(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
 def pyproject(base: Path, ours: Path, theirs: Path) -> tuple[str, int]:
     """(the merged text, the number of conflicts left) of a `pyproject.toml`: `lakefile`'s merge of string arrays, kept only
     when it changed nothing but `[tool.verity.tests]`'s lists (`TEST_LISTS`, each now `kept` of the sides' items) and every
-    other value is the three-way merge of the sides; otherwise git's own merge, its conflicts left."""
-    text, left = lakefile(base, ours, theirs)
+    other value is the three-way merge of the sides; otherwise git's own merge, its conflicts left.  A side's comment lines
+    stay above the item that follows them, so a branch that adds inputs under a comment of their own merges too."""
+    text, left = lakefile(base, ours, theirs, comments=True)
     if left:
         return text, left
     docs = [tomllib.loads(p.read_text()) for p in (base, ours, theirs)] + [tomllib.loads(text)]

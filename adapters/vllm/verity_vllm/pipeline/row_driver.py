@@ -290,11 +290,13 @@ class Row:
             pass
 
     def research_result(self) -> None:
-        """The research runner's result envelope, from the stage verdicts (only under a research run)."""
-        if self.env.research_run_dir and os.path.isdir(self.d):
+        """The research runner's result envelope, from the stage verdicts (only under a research run), into the row's run dir: the
+        one `--research-run-dir` names, which a caller whose run dir is published points elsewhere."""
+        rd = self.env.research_run_dir
+        if rd and os.path.isdir(self.d):
             with open(f"{self.d}/row.log", "a") as f:
-                subprocess.run(self.cli("research-result", self.d, self.row, self.role, self.stages), stdout=f, stderr=subprocess.STDOUT,
-                               cwd=self.tree, env=self.child_env or dict(self.env.environ))
+                subprocess.run(self.cli("research-result", self.d, self.row, self.role, self.stages, "--run-dir", rd), stdout=f,
+                               stderr=subprocess.STDOUT, cwd=self.tree, env=self.child_env or dict(self.env.environ))
 
     # ------------------------------------------------------------------------------------------------ processes
     def cli(self, *args: str, py: str | None = None) -> list[str]:

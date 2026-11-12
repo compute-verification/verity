@@ -1,8 +1,8 @@
 module
 
 public import Lean.Data.Json
-public import Flock.Canon
-public import Flock.Hash
+public import Base.Canon
+public import Base.Hash
 public import CoreProtocol.Ratio
 
 /-!
