@@ -174,17 +174,18 @@ PLACE: dict[str, tuple[str, ...]] = {
 _UNIT_AT = {place: unit for unit, places in PLACE.items() for place in places}
 #: Source files in no unit, by exact path from ``verity/``, each with its owner: code that came under ``verity/`` from
 #: ``benchmarks/`` and was in no unit there.  The unit rules read none of them until its owner gives each a unit.  It only
-#: shrinks.
-NO_UNIT = (
+#: shrinks.  Written from the root, so a move of one rewrites its row.
+NO_UNIT = tuple(p.removeprefix("verity/") for p in (
     # compute-accounting
-    "protocols/pouw/clear/clear_audit.py", "protocols/pouw/clear/clear_work.py",
-    "protocols/pouw/receipts/receipt_conform.py", "protocols/pouw/receipts/receipt_folds.py",
+    "verity/protocols/pouw/clear/clear_audit.py", "verity/protocols/pouw/clear/clear_work.py",
+    "verity/protocols/pouw/receipts/receipt_conform.py", "verity/protocols/pouw/receipts/receipt_folds.py",
     # memory-accounting
-    "protocols/poub/device/live_verifier/host.py", "protocols/poub/verifier/remote_session/verifier_process.py",
+    "verity/protocols/poub/device/live_verifier/host.py",
+    "verity/protocols/poub/verifier/remote_session/verifier_process.py",
     # proofs
-    "composite/device/live_challenger/auditor.py", "composite/device/live_challenger/coin_link.py",
-    "composite/device/live_challenger/models.py", "composite/device/live_challenger/serve.py",
-)
+    "verity/composite/device/live_challenger/auditor.py", "verity/composite/device/live_challenger/coin_link.py",
+    "verity/composite/device/live_challenger/models.py", "verity/composite/device/live_challenger/serve.py",
+))
 _LISTED = {*_UNIT_AT, *NO_UNIT}
 #: ml and core are two named sets: the units named ``ml.*`` and ``core.*``, each with its tests, and with them the trees
 #: below, which are no unit's (a ``SEPARATE`` tree, a grouping's own tests, a file beside a unit): what else is ml's, and
