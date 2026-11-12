@@ -61,24 +61,87 @@ theorem printsLog_onWindow {dev : History} {w : String} {log : List Release} (h 
   obtain ⟨h1, -, h3⟩ := h pk r hr (@of_decide_eq_true _ (Classical.propDecidable _) ho)
   exact ⟨h1, h3⟩
 
+/-- **`Lines.read_run` on lines a round's coins are read against** (`Lines.TreeLines`), however the records were held
+to them: `read_run`'s own proof, which reads its records only through `Lines.tree_lines`. -/
+theorem read_run_lines {dev : History} {log : List Release} (hP : Verity.Sampled.Lines.PrintsLog dev log)
+    {pk : ByteArray} {w label : String} {after : ByteArray} {recs : List Json} {r : Properties.Challenger.Run}
+    (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
+    (hcr : ∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) {ts : Array LoggedTree}
+    (hts : coinTreesOf r.log = .ok ts) (hL : Verity.Sampled.Lines.TreeLines recs r.log) {out : List Release}
+    (h : Verity.Sampled.readLog label after recs (r.released label after) r.log = some out) :
+    List.Forall₂ Verity.Sampled.Lines.ReadOf out log := by
+  obtain ⟨hp, hξ⟩ := hP pk w r hr ho
+  obtain ⟨c, roots, -, hroots⟩ := id hcr
+  rw [Verity.Sampled.Lines.readLog_head hroots] at h
+  have hT := Verity.Sampled.Lines.trees_log hts
+  have hn : (r.log.filterMap Verity.Sampled.Lines.helloRoot).Nodup := hT.roots ▸ hT.nodup
+  refine Verity.Sampled.Lines.read_prints hp .nil (hL.sub fun _ hl => List.mem_of_mem_tail hl) ?_
+    (fun _ h => absurd h List.not_mem_nil) (hξ hcr label after) h
+  simpa using hn.sublist ((List.tail_sublist r.log).filterMap _)
+
 /-- **A session's read, where `drawCoins` accepts its coin evidence and the runs on its window print `log`, is `log`
 but for openings' coins of one SHA-512**, or the finder outputs a break: the lines it read are the drawn run's
-(`hl`), and its records pass the coin trees those lines hold (`hrecs`). -/
+(`hl`), and its records give each round opened the coins those lines show (`hL`). -/
 theorem read_on {dev : History} {key : ChallengerKey} {w label : String} {after ξ : ByteArray} {coins : Json}
     {log : List Release} {lines : List String} {recs : List Json} {out : List Release}
     (hP : PrintsOn dev w log) (hξ : drawCoins key w label after coins = .ok ξ)
     (hl : ∀ (ls : Array Json) (l : List String), Spot.getD (Spot.getD coins "session") "log" = .arr ls →
       ls.toList = l.map Json.str → lines = l)
-    (hrecs : ∀ ts, coinTreesOf lines = .ok ts → ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none)
+    (hL : ∀ ts, coinTreesOf lines = .ok ts → Verity.Sampled.Lines.TreeLines recs lines)
     (h : Verity.Sampled.readLog label after recs ξ lines = some out) :
     List.Forall₂ Verity.Sampled.Lines.ReadOf out log ∨ Break dev key label coins := by
   rcases Drawn.drawn_log (dev := dev) hξ with ⟨s, hs, ho, hξs, hcr, ls, hls, hlog⟩ | b
   · obtain rfl : lines = s.log := hl ls s.log hls hlog
     obtain ⟨-, ⟨ts, hts⟩, -⟩ := hP key.pub s hs ho
     rw [hξs] at h
-    exact .inl (Verity.Sampled.Lines.read_run (printsLog_onWindow hP) (mem_onWindow hs ho)
-      (opensOn_onWindow ho) hcr hts (hrecs ts hts) h)
+    exact .inl (read_run_lines (printsLog_onWindow hP) (mem_onWindow hs ho) (opensOn_onWindow ho) hcr hts
+      (hL ts hts) h)
   · exact .inr b
+
+/-! ## A member's tree less its closing round -/
+
+theorem find?_dropLast {α : Type} {p : α → Bool} {x : α} :
+    ∀ l : List α, l.dropLast.find? p = some x → l.find? p = some x
+  | [], h => by simp at h
+  | [_], h => by simp at h
+  | a :: b :: l, h => by
+    have e : (a :: b :: l).dropLast = a :: (b :: l).dropLast := rfl
+    rw [e] at h
+    cases hp : p a
+    · simp only [List.find?_cons, hp] at h ⊢
+      exact find?_dropLast (b :: l) h
+    · simp only [List.find?_cons, hp] at h ⊢
+      exact h
+
+/-- A round the tree less its closing round shows opened is one the tree shows opened. -/
+theorem opening_unclosed {t : LoggedTree} {S : String} {k : ℕ} {o : TreeOpening}
+    (h : t.unclosed.opening S k = some o) : t.opening S k = some o := by
+  unfold LoggedTree.opening LoggedTree.unclosed at h
+  unfold LoggedTree.opening
+  rw [← Array.find?_toList] at h ⊢
+  rw [Array.toList_pop] at h
+  exact find?_dropLast _ h
+
+/-- **Records held to the trees less their closing rounds give each round opened the coins its line shows**, as
+`Lines.tree_lines` gives it for records held to the trees: a round the tree less its closing round shows opened is one
+the tree shows (`opening_unclosed`). -/
+theorem tree_lines_unclosed {lines : List String} {ts : Array LoggedTree} {recs : List Json}
+    (h : coinTreesOf lines = .ok ts)
+    (hrecs : ∀ rec ∈ recs, ∃ t ∈ ts, ∃ tabs, sessionTreeReason #[t.unclosed] tabs rec = none) :
+    Verity.Sampled.Lines.TreeLines recs lines := by
+  have hT := Verity.Sampled.Lines.trees_log h
+  refine ⟨hT.spec, fun l hl j hev hnt hop R S k C hR hS hk hC rec hrec htree cs hcs => ?_⟩
+  obtain ⟨t, ht, htr, o, ho, hoc⟩ := hT.opened l hl j hev hnt hop R S k C hR hS hk hC
+  obtain ⟨t₀, ht₀, tabs, htabs⟩ := hrecs rec hrec
+  obtain ⟨t', ht', htr', o', ho', hoc'⟩ := Verity.Sampled.Trees.round_held htabs hcs
+  obtain rfl : t' = t₀.unclosed := by simpa using ht'
+  have e : t₀ = t := List.inj_on_of_nodup_map hT.nodup (Array.mem_toList_iff.2 ht₀) (Array.mem_toList_iff.2 ht)
+    (htr'.symm.trans (htree.trans htr.symm))
+  subst e
+  have ho'' := opening_unclosed ho'
+  rw [ho] at ho''
+  cases ho''
+  rw [← hoc, hoc']
 
 /-! ## The first session -/
 
@@ -113,19 +176,20 @@ theorem first_session {dev : History} {key : ChallengerKey} {p : VStar.Recursive
         Spot.getD (Spot.getD (firstCoins e) "session") "log" = .arr ls → ls.toList = l.map Json.str → lines = l :=
       fun _ _ hls hl' => Except.ok.inj (hl.symm.trans (firstLines_eq hls hl'))
     obtain ⟨out', h₀, hag⟩ := Verity.Sampled.Lines.readLog_agree .empty h'
-    rcases read_on hP hξ hlines (fun _ _ _ hm => by cases hm) h' with hr | b
+    rcases read_on hP hξ hlines (fun _ hts => Verity.Sampled.Lines.tree_lines hts fun _ hm => by cases hm) h' with
+      hr | b
     · exact .inl ⟨hr, out', he.trans h₀, hag⟩
     · exact .inr b
 
 /-! ## The interior session -/
 
 /-- **The interior's records are held to the coin trees its session's lines hold**, as the form's per-member check
-holds them (`OneStageZk.membersRun`'s `membersTreesHeld`): every record `secondRecords` reads passes the trees
-`coinTreesOf` reads from the lines `linesOf` reads. -/
+holds them (`OneStageZk.membersRun`'s `membersTreesHeld`, `memberTreeReason`): every record `secondRecords` reads
+names a tree `coinTreesOf` reads from the lines `linesOf` reads, and passes it less its closing round. -/
 def InteriorHeld (s : Verity.Sent) : Prop :=
   ∀ p c e, caseOf s = .ok (p, c, e) → ∀ recs, secondRecords (_root_.Core.Blobs.ofArray s.blobs) e = some recs →
     ∀ lines, Verity.Sampled.linesOf e.interior = .ok lines → ∀ ts, coinTreesOf lines = .ok ts →
-      ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none
+      ∀ rec ∈ recs, ∃ t ∈ ts, ∃ tabs, sessionTreeReason #[t.unclosed] tabs rec = none
 
 /-- **The interior session's read is the log its window's runs print**, but for openings' coins of one SHA-512, with
 the same read without the samples' coins agreeing with it; or its record carries a break. -/
@@ -135,7 +199,8 @@ theorem second_session {dev : History} {p : VStar.Recursive.SampledTwo.Params}
     (hξ : Spot.OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ) {log : List Release}
     (hP : PrintsOn dev d.window log)
     (hH : ∀ recs, secondRecords bs e = some recs → ∀ lines, Verity.Sampled.linesOf e.interior = .ok lines →
-      ∀ ts, coinTreesOf lines = .ok ts → ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none)
+      ∀ ts, coinTreesOf lines = .ok ts →
+        ∀ rec ∈ recs, ∃ t ∈ ts, ∃ tabs, sessionTreeReason #[t.unclosed] tabs rec = none)
     {out : List Release} (h : secondRead p e bs ξ = some out) :
     (List.Forall₂ Verity.Sampled.Lines.ReadOf out log ∧
       ∃ out', secondRead p e bs .empty = some out' ∧ List.Forall₂ Verity.Sampled.Lines.Agree out out') ∨
@@ -161,7 +226,8 @@ theorem second_session {dev : History} {p : VStar.Recursive.SampledTwo.Params}
             lines = l :=
         fun _ _ hls hl' => Except.ok.inj (hl.symm.trans (Verity.Sampled.Binding.linesOf_eq hls hl'))
       obtain ⟨out', h₀, hag⟩ := Verity.Sampled.Lines.readLog_agree .empty h'
-      rcases read_on hP hraw hlines (hH recs hr lines hl) h' with hr' | b
+      rcases read_on hP hraw hlines (fun ts hts => tree_lines_unclosed hts (hH recs hr lines hl ts hts)) h' with
+        hr' | b
       · exact .inl ⟨hr', out', he.trans h₀, hag⟩
       · exact .inr b
 
