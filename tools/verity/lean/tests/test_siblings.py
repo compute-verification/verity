@@ -220,13 +220,16 @@ def test_try_with_siblings_passes_beside_two_scripts_that_declare_main_under_exe
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_try_with_siblings_refuses_two_scripts_that_declare_main_under_no_exempt_prefix(tmp_path, capsys):
     """The control: the same package, its lock with no `exempt` entry. The stub imports both scripts beside the library,
-    Lean refuses the second for the `main` the first declares, and the line names both."""
+    Lean refuses the second for the `main` the first declares, and the line names both. Lake, which the try has build
+    the two, holds both current and rebuilds neither, and the stub's second refusal is the verdict."""
     file = scripts(tmp_path, {})
     assert S.plan(file.parents[1], "P/D.lean").siblings == ["P", "P.A", "P.Probe", "P.Run.Bulk"]
     assert _cli().main(["lean", "try", str(file), "--siblings"]) == 1
     out = capsys.readouterr().out
     assert "import P.Run.Bulk failed, environment already contains 'main' from P.Probe" in out, out
-    assert "siblings: P.Run.Bulk and P.Probe both declare 'main', neither of them P.D: a clash already in the sources" in out, out
+    assert "siblings: P.Run.Bulk and P.Probe both declare 'main' as they are built here: Lake rebuilt nothing in " in out, out
+    assert ("siblings: P.Run.Bulk and P.Probe both declare 'main', neither of them P.D, and Lake holds both current, which "
+            "this try had it build: a clash in the sources") in out, out
 
 
 def test_modules_sit_under_src_dir_and_a_plain_sibling_makes_the_stub_plain(tmp_path):
