@@ -70,8 +70,8 @@ from verity_machine_model import sheet as S
 from verity_machine_model.lean_headline import Q, exact
 from verity_machine_model.model import device
 
-#: What other files read of it: `benchmarks/pouw/lean_headline_dc.py`, which writes the readings as Lean and also takes
-#: the private `_Exact` and `_and`.
+#: What other files read of it: `verity_machine_model.lean_headline_dc`, which writes the readings as Lean and also
+#: takes the private `_Exact` and `_and`.
 __all__ = ["CATCH_ALL", "CATCH_ALLS", "EPS_DEN", "FAMILIES", "JOINT_ISSUE", "SCALAR_REF", "SM90", "Family", "Reading",
            "reading"]
 
