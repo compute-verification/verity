@@ -61,6 +61,8 @@ integration's public interfaces. A spec in `benchmarks/specs/` names a preset, i
 points, each with an identity. `verity-bench run SPEC` records one run per point without a passing run, `check` passes
 only when every point has one, `compare` and `table` accept results only when their identities agree, and
 `served-table` and `breakdown` render from the evidence store. It also holds the code behind `verity bench overhead`.
+The harness's kit (`harness/verity_bench/kit.py`) holds what runners share, each written once: the GPU lease, the host
+stamp, the paired ratio and the result's writer, which records measurements and refuses a verdict of record.
 `benchmarks/harness/README.md` is its contract: how a point is timed and what a result says.
 
 ## What a benchmark may import and write
@@ -83,6 +85,23 @@ Some files here still break these rules: a kernel or a store the integration loa
 holds, the exporter of Lean data a guarantee reads. Each moves out to the package that uses it, and none is a pattern
 for a new benchmark.
 
+## Metrics
+
+`metrics.toml` declares the numbers a lead is held to, one `[[metric]]` each, and the console's Metrics tab shows each
+one's history from the evidence store. A metric's value is a measurement in a run's `result.json` named by its `id`,
+`OWNER/NAME`, which the benchmark records it under (`serve_tax`'s `Model.metric`), so a value without a run doesn't
+exist. Its keys:
+
+- `id`, `title`, `owner` (a handle in `.agents/skills/using-slack/registry.json`, the id's prefix) and `unit`, the
+  unit its measurements carry.
+- `better`: `lower` or `higher`.
+- `command`: the one command that measures it, whose script's directory records it under `id`.
+- `every`: how often it is measured (`7d`, `12h`); a value older than that is stale.
+- Optional: `floor`, the number it must not cross; `goal`, the plan's goal it serves; `tags`, a list of words.
+
+`tests/test_metrics_registry.py` refuses a repeated id, an unknown owner, an id outside its owner's prefix, a `better`
+other than `lower` or `higher`, and a command whose script is missing or whose directory never names the id.
+
 ## Index
 
 Every directory has one row, in the group of what it measures; `tests/test_benchmarks_index.py` holds the rows to the
@@ -98,7 +117,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, and the served table of each protocol's overhead | maintained |
+| `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `specs/` | the harness's specs and sweeps, one TOML file each | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
@@ -173,7 +192,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `network_traces/` | the network certifier's runs in front of a served endpoint, and their zero-knowledge proofs | maintained |
 | `network_e2e/` | network certification end to end on a served model, as one command and one report, with its negatives | maintained |
-| `certifier_term/` | the network certifier's term for GLM-5.3 at the load of a node, a datacenter and the world, in bits and GB, each row by its check's own counting rule: the scan and N2 as the monitoring-period check charges them, the scan under each change to its check, and the design with no run behind it (`network_traces/leak_bounds.py`'s runner) | maintained |
+| `certifier_term/` | the network certifier's term for GLM-5.3 at the load of a node, a datacenter and the world, in bits and GB, each row by its check's own counting rule: the scan and N2 as the monitoring-period check charges them, the scan under each change to its check, and the design with no run behind it, without its stop block and with it (`network_traces/leak_bounds.py`'s runner) | maintained |
 | `network_sim/` | the device graph, and a mock datacenter of Linux network namespaces that runs the real network certifier | maintained |
 | `certifier_timing/` | the bits an interval a server moves through when the network certifier releases its bytes: one number from a server that times its writes by a bit, with a guard, a target and the candidate fixes as flags | maintained |
 | `mempool/` | the certifier's prefix-cache pool as memory-checked RAM (`pool_ram`, held to vLLM's pool on the encodings' traces; `stream.py` holds `CacheStep_v3`'s stream to it after every call): a window's cost at its busiest stretch, and `MemCheck_v1`'s and `CacheStep_v3`'s vectors | maintained |
