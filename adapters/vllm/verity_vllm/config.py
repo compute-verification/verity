@@ -690,6 +690,13 @@ class CommitConfig:
                                            "deferred Commit (REPLAY_DEFERRED=1; slim refused) commits them at its C2 site, before its "
                                            "bundle is sealed (c2_replay.serving_rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
+    serving_rows_tables: str | None = option("--serving-rows-tables", env="SERVING_ROWS_TABLES", default=None, metavar="REGISTRATION_JSON",
+                                             help="the per-expert cut's tables registration (verity-vllm tp-register-tables --out; {rank} "
+                                                  "in its path its rank's): the windows commit the tables their reads read under it, so "
+                                                  "their records declare them (verity_vllm.pipeline.expert_rows.of_request); needs "
+                                                  "SERVING_ROWS and SERVING_ROWS_TABLES_KEY")
+    serving_rows_tables_key: str | None = option("--serving-rows-tables-key", env="SERVING_ROWS_TABLES_KEY", default=None, metavar="KEY",
+                                                 help="the committer's key file SERVING_ROWS_TABLES is registered under (--new-key's)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the PoUB session's verifier: the Commit proves its store to it in lockstep "
                                               "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")

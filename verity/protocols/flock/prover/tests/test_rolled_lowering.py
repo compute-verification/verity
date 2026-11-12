@@ -1,8 +1,8 @@
-"""C-Flock lowers the FP8 group quantisers written as calls of their elements' circuits (`elementwise.rolled`: their `In`, `Core`
+"""Flock lowers the FP8 group quantisers written as calls of their elements' circuits (`elementwise.rolled`: their `In`, `Core`
 and `Out` parts, which have no builder) to the circuit it lowered them to before: an activation of a rolled group is lowered by
-its ``fold_build``, the flat circuit's gates in `trace.emit`'s order, never through the calls. Each pin is the flock-ir-unit/v2
-netlist's sha256 and useful rows that `ir_lower.whole` gave with the groups' flat bodies: a group alone, the row quantisers
-and the linears that call them."""
+its ``fold_build``, the flat circuit's gates in `trace.emit`'s order, never through the calls. Each pin is the lowered circuit's
+useful rows and its flock-ir-unit/v2 description's sha256 that `ir_lower.whole` gave with the groups' flat bodies: a group
+alone, the row quantisers and the linears that call them."""
 from __future__ import annotations
 
 import hashlib
@@ -20,7 +20,7 @@ from verity.definitions.registry import boolean_deepgemm as BDG
 from verity_flock import struct_lower as SL
 from verity_flock.ir_lower import _sha256, layout, netlist_pieces, whole
 
-#: target -> (useful rows, netlist sha256) with the groups' flat bodies
+#: target -> (useful rows, the description's sha256) with the groups' flat bodies
 PINS = {
     "FlashInferFp8Quant1x128Group_v2": (247809, "3b81211e2c18f472773fd3c531e025ced7c3243b9b7978b872fa0add6ebdbe40"),
     "Fp8GroupQuantUe8m0Group_v2{G=128}": (204801, "e5aec782357df065469c02434a827b0f7873418c6293761f84f57f6a1a315fb6"),
@@ -42,7 +42,7 @@ def _target(name: str):
     }[name]()
 
 
-def _netlist(target) -> tuple[int, str]:
+def _lowered(target) -> tuple[int, str]:
     U = whole(target)
     lay = layout(U.circuit(), [f"in{j}" for j in range(len(U.in_widths))], [f"out{j}" for j in range(len(U.out_widths))])
     h = hashlib.sha256()
@@ -60,7 +60,7 @@ def _flat(d, statics=()) -> CompositeDefinition:
 
 
 def test_a_rolled_group_lowers_to_its_flat_circuit() -> None:
-    """A group of 2-bit words with two classes and a word of its own lowers to its flat body's netlist, and its templated
+    """A group of 2-bit words with two classes and a word of its own lowers to its flat body's circuit, and its templated
     lowering (`struct_lower`, through the calls) is the flat lowering on random inputs."""
     def sig(S):
         return (("x", Array(6, Array(2, BL.BIT))),), Tuple(Array(6, Array(2, BL.BIT)), Array(1, BL.BIT))
@@ -75,7 +75,7 @@ def test_a_rolled_group_lowers_to_its_flat_circuit() -> None:
 
     d = RO.rolled("RolledLoweringCheck", 1, [], build, sig, register=False)
     assert len(d.cut(SimpleNamespace())["classes"]) == 2
-    assert _netlist(bind(d)) == _netlist(bind(_flat(d)))
+    assert _lowered(bind(d)) == _lowered(bind(_flat(d)))
     assert SL.check(bind(d))["mismatched_bits"] == 0
 
 
@@ -84,7 +84,7 @@ def test_a_rolled_group_lowers_to_its_flat_circuit() -> None:
 def test_a_rolled_quantiser_lowers_to_the_flat_circuit(name: str) -> None:
     """25 to 55 s and up to 4 GB a target (the lowering): what holds the lowered circuit, the one a proof is of, to the one
     before the groups were rolled; the circuits suite's tests hold only a small group's."""
-    assert _netlist(_target(name)) == PINS[name]
+    assert _lowered(_target(name)) == PINS[name]
 
 
 @pytest.mark.slow

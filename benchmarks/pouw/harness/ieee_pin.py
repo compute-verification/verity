@@ -110,7 +110,7 @@ def _covered(rec: dict) -> dict:
 
 
 def build_toolkit(tk: str, home: str, work: Path, pins_path: Path, pending: Path) -> dict:
-    """Stage 1 for one toolkit: versions, builds, the pins entry and the gate."""
+    """The CPU part for one toolkit: versions, builds, the pins entry and the gate."""
     bin_dir = Path(home) / "bin"
     rec = {"home": home, "nvcc_version": _run([str(bin_dir / "nvcc"), "--version"]).strip(),
            "ptxas_version": _run([str(bin_dir / "ptxas"), "--version"]).strip(), "builds": [], "problems": []}
@@ -149,7 +149,7 @@ def build_toolkit(tk: str, home: str, work: Path, pins_path: Path, pending: Path
 
 
 def run_binaries(work: Path) -> None:
-    """Stage 2, inside the lease: every binary of work/builds.json, one at a time, into work/runs.json."""
+    """The GPU part, inside the lease: every binary of work/builds.json, one at a time, into work/runs.json."""
     lease = os.environ.get("GPU_LEASE_UUID", "")
     if not lease:
         raise PinFailed("no GPU_LEASE_UUID: run under gpu-lease")
