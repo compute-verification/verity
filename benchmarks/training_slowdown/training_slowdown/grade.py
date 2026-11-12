@@ -446,9 +446,9 @@ def per_period(run_gates: float, rho: dict) -> dict:
                     "of the search record",
         "proved": (f"the count ρ's products term solves for the fewest blocks, {calculator.theorem()}'s first "
                    "conjunct (`HEShared`'s where its products share arrays): a lower bound at the N, O, β_w, β_x and "
-                   "b_y the traced step gives, given (H), (E) and the theorem's hypotheses on the circuit, which the "
-                   "trace doesn't check; the solving is the calculator's arithmetic, and p and the shares are not "
-                   "proved" if rho["binding_kind"] == "products" else
+                   "b_y the traced step gives, given (H), (E), the theorem's hypotheses on the circuit, which the "
+                   f"trace doesn't check, and that {work.P_BATCH}; the solving is the calculator's arithmetic, and p "
+                   "and the shares are not proved" if rho["binding_kind"] == "products" else
                    f"nothing: ρ's {rho['binding_kind']} term is computed"),
         "scaled": f"every share: a fleet's AND gates are its registry's peak FLOP a second, two a MAC at the "
                   f"{calculator.FLEET_PRECISION} GEMM's AND gates, times its locations and the period, and the run's "

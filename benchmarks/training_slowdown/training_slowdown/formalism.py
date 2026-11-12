@@ -76,7 +76,8 @@ bound on its own, ρ ≥ max_K (|B_K|/|C|)/(cap_K(k)/c): each kind's term, the m
 kind rests on (`RESTS_ON`). Where Fit fails ρ is the entry point's slowdown, max(1, that max); where Fit holds it is
 c/(c − d), and every term is at most that. Its one kind:
 - products: the theorem of record's count on M (`RESTS_ON` has its statement), a theorem for the run's circuit given
-  (H) and (E). The term is `calculator.slowdown`'s, the benchmark's one entry point to a slowdown, before its floor at
+  (H) and (E), on a count that takes a premise on the batch (`work.P_BATCH`), which every string that names what
+  the term rests on states. The term is `calculator.slowdown`'s, the benchmark's one entry point to a slowdown, before its floor at
   1: it reads the record's products (`Measured.products`, `work.products_of_trace` of the trace's rows) at the
   record's |C|, τ and update code, chooses the work and asks the slowdown calculator's bound of record. Nothing here
   restates the count or computes the term; `training_slowdown.work` states M and `calculator` the choice. Where the
@@ -138,7 +139,7 @@ import numpy as np
 
 from . import calculator, policy
 from .gates import gates, of_log, per_mac, split_key
-from .work import THE_CODE, products_of_trace
+from .work import P_BATCH, THE_CODE, products_of_trace
 
 ACT_BITS = 16
 
@@ -402,7 +403,8 @@ RESTS_ON = {
                 "output width; and the structure, which the product rows don't record: M's matmuls have "
                 "distinct words, W and X disjoint, no two share both a w- and an x-word, and no four arrays "
                 "are pairwise multiplied (a layer's forward, input-gradient and weight-gradient products share "
-                "three: F = 2/√3 where M holds a backward product, else 1, and 1 on weight gradients alone). M "
+                "three: F = 2/√3 where M holds a backward product, else 1, and 1 on weight gradients alone); "
+                f"and on the batch, whose tokens no trace keeps: {P_BATCH}. M "
                 "is the grader's, the best of three: the products whose two operands both depend on the update, "
                 "less one array times itself, a product reading a gather's rows (the lowest layer's q, k and "
                 "v), attention's products, the optimizer's (Newton-Schulz's B·X), from k = 8e7 the head's "
@@ -535,7 +537,8 @@ def he_rests_on(got: dict) -> str:
     """What a products term rests on with the subset, F, β_w, β_x and b_y it took (`calculator.slowdown`'s `figure`,
     as `bound` keeps it in its `inputs`), short, as a row publishes it: the subset of M that binds and the F it is
     charged (`SHARED_LABEL` where its products share arrays), (H) with β(k) and casts of one value as one word, the
-    code-size β_w where it caps a weight; the generic `RESTS_ON_CELL` where M is empty."""
+    code-size β_w where it caps a weight, (E), and the premise on the batch (`work.P_BATCH`); the generic
+    `RESTS_ON_CELL` where M is empty."""
     if got.get("beta_w") is None:
         return RESTS_ON_CELL["products"]
     which = ("M charges an operand the update reaches through a low-rank bottleneck at its β_eff"
@@ -545,7 +548,7 @@ def he_rests_on(got: dict) -> str:
     return (f"theorem of record on {got['subset']} at {shared}, given (H): operands are hard at β_w = "
             f"{got['beta_w']:.4g}{code} and β_x = {got['beta_x']:.4g} bits a word ({calculator.BETA_K_LABEL}; the "
             f"casts of one value count as one word), and (E): exports are wide at b_y = {got['b_y']:g} bits an "
-            f"output, premises a single counterexample refutes; {which}")
+            f"output, premises a single counterexample refutes, and given that {P_BATCH}; {which}")
 
 
 def bound(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
@@ -650,7 +653,8 @@ def at(m: Measured, c: float, k: float, kinds: tuple[str, ...] = KINDS) -> dict:
 RESTS_ON_CELL = {
     "fit": "Fit's construction",
     "products": "theorem of record, given (H): operands are hard at the β_w and β_x the row's products term takes, "
-                "and (E): exports are wide at its b_y, premises a single counterexample refutes",
+                "and (E): exports are wide at its b_y, premises a single counterexample refutes, and given that "
+                f"{P_BATCH}",
     "none": "no kind exceeds 1",
     "unmeasured": "unmeasured",
 }

@@ -619,12 +619,13 @@ def test_the_grades_slowdown_is_the_entry_points(monkeypatch):
 def test_the_bound_call_fits_the_calculator_as_it_is():
     """On the calculator as the tree has it, the grade's own call gives a slowdown of at least 1 under one of the two
     statements the calculator's `min_cut` names, the first of them the one the grade says ρ's products term solves
-    the count of."""
+    the count of, with the premise that count takes on the batch."""
     s = graded([job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])])
     got, mod = s["bound_of_record"], calculator._min_cut()
     assert got["available"] and got["slowdown"] >= 1
     assert got["theorem"] in (mod.HE, mod.HE_SHARED) and got["rests_on"].startswith(got["theorem"])
     assert calculator.theorem() == mod.HE and mod.HE in s["per_period"]["parts"]["proved"]
+    assert work.P_BATCH in s["per_period"]["parts"]["proved"]
 
 
 def test_the_periods_and_fleets_are_the_calculators():

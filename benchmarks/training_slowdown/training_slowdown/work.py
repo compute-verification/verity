@@ -20,6 +20,16 @@ from .gates import gates
 THE_CODE = "training's slowdown code"
 #: the premise the products term takes on the step's elementwise ops, as published strings state it
 P_MATCH = "elementwise steps don't fan out (P-match)"
+#: the premise the products term takes on the step's batch, as published strings state it: M charges a token-indexed
+#: product for every position past each row's first (`SHARED_PREFIX`) as words of its own. Three batches break it
+#: (tests/test_batch_premise.py holds each on the model's forward): two rows that share their first two tokens or
+#: more hold equal words at the shared positions, at every layer; a row that starts with a run of one token holds
+#: equal words along the run, at every layer, with the rotation or without it, since attention over equal keys
+#: returns their one value, so a run of r repeats (r − 1)/n of that row's words; and without the rotation, two
+#: positions with one token whose earlier tokens are in the same proportions hold equal words after the first
+#: attention and not after the second. Equal is to rounding, not bit for bit: a float sums one word at two positions
+#: in two orders. No trace keeps the batch's tokens, so no record checks the premise
+P_BATCH = "past each row's first position, no two positions of the batch hold equal words"
 #: the first training_slowdown whose capture writes a traced step's product rows (training_slowdown.capture.products' `CAPTURE`)
 PRODUCTS_FROM = "4.8"
 #: why the products kind is unmeasured on a record with no product rows
@@ -31,7 +41,7 @@ SYSTEM_FROM = "4.12.1"
 #: the positions at the start of each sequence that M leaves out of every token-indexed product (`he_of_rows`):
 #: position 0 reads only its own token, so sequences that share their first token (a BOS, or the stream's own where
 #: windows are cut from it) compute it identically through every layer. A longer shared prefix needs the batch's
-#: tokens, which no trace keeps
+#: tokens, which no trace keeps: past the first position the count takes `P_BATCH`
 SHARED_PREFIX = 1
 #: why the products kind is unmeasured where a trace isn't of the run's own program (`formalism.other_program`): a
 #: products term is priced only on its run's own program
@@ -147,7 +157,8 @@ def he_of_rows(rows: list[dict], k: float, steps: float | None = None, tokens: f
     scores), is at most `beta_eff`(w, r_step, k): the update reaches it only through the adapters, and its rate
     stops showing that once r_step passes K*. The adapters' own operands (A, B, Ax and the rank-wide gradients) keep
     their widths. Each output is at its Definition's output width b_y. Token-indexed products keep 1 −
-    `SHARED_PREFIX`/n of their MACs, and every output. An operand no token indexes is a
+    `SHARED_PREFIX`/n of their MACs, and every output: every later position is charged as words of its own, the
+    premise `P_BATCH` states. An operand no token indexes is a
     weight (`weight`), which `calculator.slowdown` holds to the record's code bits a trained weight at most, the
     others activations, which it holds to β(k) at most; a backward product contracting over tokens is a weight
     gradient (`dw`); the head's are the
