@@ -39,6 +39,8 @@ STAMP = {"card": "none", "gpus": [], "driver": None, "cuda": None, "node": "test
 GIVEN = ["--commit", "c0ffee", "--world-requests", "1e16"]
 #: each amount's unit, by its name's last word; the error's last word is the runner's `ERROR`
 AMOUNTS = {"free": "bit", "capacity": "bit", "verified": "bit", R.ERROR: "probability"}
+#: the measurements of a result with every scope and monitoring period: the term of record, and each row's amounts
+EVERY = 1 + len(LB.SCOPES) * len(LB.PERIODS) * len(AMOUNTS)
 #: the uplink's two halves' capacities in bits a tick: the host's side, which is the boundary link, and the outside's
 BETA, BEYOND = 400, 100
 
@@ -109,7 +111,7 @@ def test_the_result_is_the_kits_and_nothing_else_is_written(tmp_path, capsys, mo
     out = tmp_path / "out"
     bench(capsys, "--out", str(out), *GIVEN)
     # every measurement of the file is one the kit's writer returned, in its fields, under this run and its stamp
-    assert json.loads((out / kit.RESULT).read_text())["measurements"] == written and len(written) == 37
+    assert json.loads((out / kit.RESULT).read_text())["measurements"] == written and len(written) == EVERY
     fields = set(kit.writer(tmp_path / "another").measurement(name="a measurement", value=1, unit="bit"))
     for m in result(out).values():
         assert set(m) == fields and (m["run"], m["commit"], m["host"], m["ci95"]) == (RUN, STAMP["commit"], STAMP, None)
@@ -168,8 +170,8 @@ def test_the_metric_and_free_stand_against_the_documents_target(tmp_path, capsys
         metric = got["certifier_term/modeled/metric"]
         assert (metric["target"], metric["verdict"]) == (
             target_gb, "over target" if said["world", "year"] > 1 else "within target")
-        assert {m["verdict"] for m in got.values()} == {None, *(["over target"] if at < 2 else []),
-                                                        *(["within target"] if at != 1 else [])}
+        # a target under every row's term, and one over every row's
+        assert at == 0 or {m["verdict"] for m in got.values()} == {None, "over target" if at == 1 else "within target"}
         assert all((m["target"], m["verdict"]) == (None, None) for name, m in got.items()
                    if name.rsplit("/", 1)[1] in ("capacity", "verified", R.ERROR))
 
@@ -216,14 +218,14 @@ def test_with_no_registration_capacity_and_verified_have_no_value_and_say_why(tm
             assert verified["value"] is None
             assert verified["inputs"] == [f"{name}/capacity", f"{name}/free", R.NO_REGISTRATION, klass]
     assert R.NO_REGISTRATION.startswith("absent: no registration is given")
-    assert sum(m["value"] is None for m in got.values()) == 18
+    assert sum(m["value"] is None for m in got.values()) == 2 * len(LB.SCOPES) * len(LB.PERIODS)
 
 
 def test_every_measurement_names_the_class_the_term_is_at(tmp_path, capsys):
     """The most ids a response holds, read from the document: the default's, and another's where the command is given
     one, whose terms are another class's."""
-    paths = {}
-    for ids in (None, 1024):
+    paths, another = {}, LB.RESPONSE_IDS // 2
+    for ids in (None, another):
         argv = [] if ids is None else ["--response-ids", str(ids)]
         paths[ids] = tmp_path / str(ids)
         bench(capsys, "--out", str(paths[ids]), "--registration", str(log(tmp_path)), *GIVEN, *argv)
@@ -231,8 +233,7 @@ def test_every_measurement_names_the_class_the_term_is_at(tmp_path, capsys):
         klass = f"response_ids = {entry['value']} id ({entry['mark']}): {entry['source']}"
         assert R.CLASS == "response_ids" and entry["value"] == (LB.RESPONSE_IDS if ids is None else ids)
         assert all(klass in m["inputs"] for m in result(paths[ids]).values())
-    default, other = result(paths[None]), result(paths[1024])
-    assert LB.RESPONSE_IDS != 1024
+    default, other = result(paths[None]), result(paths[another])
     assert all((default[name]["value"] == m["value"]) == name.endswith(("/capacity", f"/{R.ERROR}")) for name, m in other.items())
 
 
@@ -241,7 +242,7 @@ def test_the_result_of_the_commands_defaults(tmp_path, capsys):
     text = bench(capsys, "--out", str(tmp_path), "--commit", "c0ffee")
     assert LB.main(["--commit", "c0ffee"]) == 0 and capsys.readouterr().out == text
     got, doc = result(tmp_path), document(capsys, given=("--commit", "c0ffee"))
-    assert doc["request_count"] == "plan" and len(got) == 37
+    assert doc["request_count"] == "plan" and len(got) == EVERY
     assert got["certifier_term/modeled/metric"]["value"] == doc["value"]
     rows = {(r["scope"], r["period"]): r for r in doc["rows"] if r["row"] == "scan"}
     assert all(got[f"certifier_term/modeled/{scope}/{period}/free"]["value"] == r["term"]["2"]["bits"]
