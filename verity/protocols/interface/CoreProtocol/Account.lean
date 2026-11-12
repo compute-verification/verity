@@ -442,7 +442,7 @@ the ticks they do not cover, a tick's cover counted once: the steps of one serie
 that names none, whichever is more. Where the registration holds no capacity for those ticks it prints no amount.
 
 An amount at a moment has a row for each session and one for the period: the least verified, or the most free, of its
-sessions, at their errors summed. -/
+sessions. The period's error is its answers' as the amount's `pool` says, for a flow and for a moment alike. -/
 def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (tick : Figure)
     (ticks : Nat) (place : Option String) (rs : List Reading) : List Row :=
   let xs := m.part.leavesAt S place
@@ -451,13 +451,13 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
     | [] => [("", none)]
     | cs => cs.map fun c => (c.1, some c.2)
   let at_ : String := place.getD ""
+  let error : Ratio := match m.pool, rs with
+    | .once, [r] => r.error
+    | .once, _ => whole
+    | .sum, _ => rs.foldl (fun e r => plus e r.error) ⟨0, 1⟩
   if xs.isEmpty then [] else totals.flatMap fun (reading, total) =>
     if m.part.flow then
       let good := rs.filter fun r => r.certified
-      let error : Ratio := match m.pool, rs with
-        | .once, [r] => r.error
-        | .once, _ => whole
-        | .sum, _ => rs.foldl (fun e r => plus e r.error) ⟨0, 1⟩
       let named : List (List (Nat × Nat × Nat)) := (good.map fun r => r.series).eraseDups.map fun s =>
         good.filterMap fun r => if r.series = s then r.steps.map fun x => (x.1, x.2, r.amount) else none
       let unnamed : List Reading := good.filter fun r => r.steps.isNone
@@ -489,7 +489,6 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
       let worst : Nat := match m.side with
         | .verified => each.foldl (fun n x => min n x.1) ((each.head?.map fun x => x.1).getD 0)
         | .free => each.foldl (fun n x => max n x.1) 0
-      let error : Ratio := each.foldl (fun e x => plus e x.2) ⟨0, 1⟩
       (each.zipIdx.map fun (x, i) => certifiedRow m at_ reading total x.1 x.2 1 (some i)) ++
         [certifiedRow m at_ reading total worst error rs.length none]
 
@@ -723,6 +722,10 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
    ("held", "gpu0", "registered", some 8589934592, some 5000000000, some 3589934592, "3/100")]
 #guard ((table [held] [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3).map
     (fun r => (r.session, r.sessions)) == [(some 0, 1), (some 1, 1), (none, 2)]
+-- sessions whose protocol says one answer pools the period's error state no error for the period, each still its own
+#guard ((table [{ held with amounts := held.amounts.map fun m => { m with pool := .once } }]
+    [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3).map (fun r => r.status) ==
+  [.certified, .certified, .noBound]
 -- a session that certifies nothing verifies nothing, whatever amount it states
 #guard cells ((table [held] [session 6000000000 "0" false]).take 1) ==
   [("held", "gpu0", "registered", some 8589934592, some 0, some 8589934592, "0")]
