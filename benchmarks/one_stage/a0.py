@@ -362,12 +362,24 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
             "digest": hashlib.sha512(line.encode()).hexdigest() if line else None}
 
 
+#: how Lean's reason opens where a file of the session, its record or a rep's proof, was not there to read (`verify` in
+#: FlockVerify.lean, after the statement is set up and before any check of a proof)
+NO_SESSION_FILES = "session files:"
+
+
 def lean_refused(v: dict, names: str | None = None) -> bool:
-    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not at setup, where a missing
-    or unreadable input is refused, unless the refusal names `names`, a check Lean makes there."""
+    """Lean's own verdict (a VERDICT line, not a0's stand-in for none) refused the proof, and not where it read none: at
+    setup, where a missing or unreadable input is refused, or for want of a file of the session (`NO_SESSION_FILES`);
+    unless the refusal names `names`, a check Lean makes there."""
     why = v.get("why") or ""
     return v.get("accepted") is False and v.get("digest") is not None and bool(why) and (
-        names in why if names else not why.startswith("setup:"))
+        names in why if names else not why.startswith(("setup:", NO_SESSION_FILES)))
+
+
+def lean_read_no_proof(v: dict) -> bool:
+    """Lean's own verdict refused the session for want of a file of it (`NO_SESSION_FILES`), so it read no proof: what a
+    prover that sent none, or a ZK server that held one back, leaves. It says no proof left, never that Lean refused one."""
+    return lean_refused(v, NO_SESSION_FILES) and v["why"].startswith(NO_SESSION_FILES)
 
 
 def drawcheck_refused(cases: list[dict], i: int, code: str) -> bool:
