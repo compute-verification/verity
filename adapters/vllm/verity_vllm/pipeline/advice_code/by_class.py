@@ -23,7 +23,8 @@ are the certified record's.
 
 **What is 0 by construction.** `closed` gives, for a registration, the fields no window of it can charge, each with
 the rules (`RULES`) that hold it there; `where` finds a rule's line in this package's source, so a report cites the
-code as it stands and a rule that moved is refused rather than cited stale.
+code as it stands and a rule that moved is refused rather than cited stale. One rule says what is charged rather than
+what is 0: `length width`, the bits a request's output length and its end are sent in.
 
 **The events** (`observing`, `Seen`). A class's 0 bits say something only where its event happened, so a report
 counts, beside each window's bits, what the replay's scheduler and block pool did at each executed step: the cached
@@ -97,6 +98,8 @@ RULES = {
                          "codec", "if reg.tick is not None and any(w.arrived or w.order for w in wins):"),
     "no lengths": Rule("a registration that sends no lengths has no length term in any window", "codec",
                        "if not reg.send_lengths:"),
+    "length width": Rule("a request's output length is sent in ⌈log2(max_tokens + 1)⌉ bits and how it ended in 1",
+                         "lengths", "C.width(requests[k].max_tokens + 1), 1)"),
     "aborts unmodelled": Rule("the replay refuses what it doesn't model, aborts among them", "replay",
                               "aborts and stop strings", prose=True),
     "aborts refused": Rule("a record with an output the stop rule doesn't end is refused", "codec",
