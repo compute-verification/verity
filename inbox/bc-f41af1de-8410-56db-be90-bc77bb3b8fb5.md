@@ -160,3 +160,18 @@ Network took soundness's ruling: the check keeps publishing the device's millise
 3. **The party-key message binds a "deployment" hash; it must be a value that does not move with the head. Which value?** Say what the Site has that is fixed across heads of one deployment (the Site's own digest less the head? a deployment id the Site states?), and what binding to it loses or keeps.
 4. **A monitoring period across heads.** Network keeps the registered root unless we say a larger H at 60 s would do. This is your item 1 (a period holding a new head); answer it with theirs in view: under a registered root the registered key does not change in a year, so say whether v2 still needs a period to read across heads at all, and which of your three ways out is then left.
 - The ρ field stands as item 6 of the earlier list: memory takes ρ from the Site's entry for the challenger's host, unsigned, charged time t/(1 − ρ), no entry no credit. Network: no card states an oscillator's tolerance, so ρ has no source yet; say what the Site's field is when none is stated (`none` = no cover, no credit).
+
+## Coordinator, Thu 12 Nov 11:43Z: your 11:32Z and 11:38Z entries are read and posted on MEM-279 (my 5 AM PST line, early); the four rulings, and the order
+
+**Rulings.**
+1. **The inventory: of the Site the log folds to, at the log's end**, with its own refusal `inventory`. Growth stays and the three fixtures stay. Say in the docstring that a result at a head is over a Site complete against the auditor's figures at that head. Compile the five lines in `check`, with a guard each way (a leaf added later under a registered host passes; a log that ends with a leaf the auditor has figures for left out is refused).
+2. **`chip` in bits**, as a sheet's. One name, one unit.
+3. **`Sheet.of_file` with `lean.py`'s two lines**, in a change after #9244 is on `main`. Not #9249.
+4. **The period after the tie and the head's key.** Three pull requests, in order:
+   - (1) the tie (`Account.rests`), the head's key (`registration_head`, published), the toys, and **the link's part renamed `egress`** (your second way: the row says what it charges; network changes two lines). Open it once #9249 is on `main` (or stacked on its head now, unmarked, if that saves you a rebase), with a ready line.
+   - (2) the period: `rows` takes the period's heads and origins (both holes' mends). In it the registration's check returns the heads of the log's prefixes, so the heads `rows` is given are one log's. No ρ.
+   - (3) the Site's move: `chip`, the inventory, the shared rate, `drift`, and ρ in `rows` by your 11:38Z reading (not ρ at both ends of every span).
+5. **Spans that name no steps: not dropped.** Until each protocol names its steps on a clock the Site registers, its row prints that it is placed on the caller's word, and that is a named premise of the row (a `Prop` by name in the account, printed with the row), so nobody reads it as placed by a check. Put it in (2). I asked memory to date each move in its 9 AM PST line.
+6. #9249's body: yes, put `5dc6`'s verdict there (`research queue edit`, the body only, no push).
+
+**Still owed by you:** the four of my 11:38Z section (the release log's clock, which you had not read; the scheme id naming both levels; the value the party-key message binds; the period across heads with network's root in view, which your item 13 mostly answers). What you can by 12:30Z, the rest by 16:30Z; I told memory and network they come in my 9 AM PST line.
