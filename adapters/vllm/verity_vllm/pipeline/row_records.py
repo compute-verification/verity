@@ -20,6 +20,12 @@ from verity_vllm.pipeline.row_json import load_json, read_json, write_json
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.target_family import declared_profile
 
+__all__ = ["COMPOSE_PEAK_RATIO", "FOLD_PART_MIN_S", "applicable_taps", "build_jobs_auto", "compose_bytes", "composed_ok", "declared_target", "decomp_rc",
+           "derived_ok", "fold_phase_s", "fold_plan", "load_json", "longest_first", "manifest_timeout", "missing_tap_build", "model_layers",
+           "tap_policy_flags", "tap_source_args", "tp_build_digests", "tp_build_summary", "tp_check_line", "tp_commit_line", "tp_commit_passed",
+           "tp_fold_line", "tp_manifest_complete", "tp_manifest_line", "tp_manifest_not_of_record", "tp_match_summary", "tp_passed", "tp_rank_workload_digest",
+           "tp_served_shapes", "tp_shape"]
+
 
 def tail(path: str, n: int = 300) -> str:
     """The last line of the log at ``path``, at most ``n`` characters ("" when it is absent or empty)."""
