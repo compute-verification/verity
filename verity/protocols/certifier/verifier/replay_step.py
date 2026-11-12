@@ -825,7 +825,9 @@ ENGINE_DRAFT = ("num_speculative_tokens", "speculative", "num_lookahead_tokens",
 ENGINE_HELD = {"policy": ("fcfs",), "scheduler": ("Scheduler", "AsyncScheduler")}
 #: The keys that leave the scheduler's steps as they are, each with why. They bind at any value.
 ENGINE_INERT = {"max_num_partial_prefills": "the scheduler the step models does not read it",
-                "kv_cache_dtype": "the binding reads the pool's size in blocks (num_gpu_blocks) directly"}
+                "kv_cache_dtype": "the binding reads the pool's size in blocks (num_gpu_blocks) directly",
+                "max_model_len_auto": "the scheduler's steps read the limit vLLM fitted (max_model_len), which the binding "
+                                      "reads; this says only that the launch left the limit to vLLM"}
 
 
 def _refuse_unmodeled(e: dict) -> None:
@@ -865,7 +867,8 @@ def statics(R: int, W: int, A: int, engine: dict, IW: int, EW: int = 0) -> dict:
       as they are: an engine that differed in an ignored key would bind the same step.
 
     It cannot refuse a setting its caller does not hand it: of `ENGINE_READ`, the four sizes are required, and each
-    other key that is absent takes the default written here."""
+    other key that is absent takes the default written here; and an engine with a Mamba or hybrid KV cache group, or
+    a KV connector, which the step does not model and no key here names, binds as one without."""
     e = engine
     _refuse_unmodeled(e)
     return {"R": R, "W": W, "A": A, "M": int(e["max_num_seqs"]), "T": int(e["max_num_batched_tokens"]),

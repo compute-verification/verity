@@ -171,6 +171,16 @@ def test_a_key_that_leaves_the_steps_as_they_are_binds_at_any_value():
             assert RS.statics(2, 1, 2, _engine(**{k: v}), 7) == base, k
 
 
+@pytest.mark.parametrize("served", [SERVED, SERVED_ASYNC], ids=["sync", "async"])
+def test_a_serve_whose_launch_left_the_context_limit_to_vllm_binds_as_one_launched_at_the_fitted_limit(served):
+    """A serving integration records ``max_model_len_auto`` beside the limit vLLM fitted. The scheduler's steps read
+    the fitted limit alone, so the two launches bind the same step, and another fitted limit binds another."""
+    fitted = {**served, "max_model_len": 1008}
+    auto = RS.statics(8, 1, 9, {**fitted, "max_model_len_auto": True}, 9)
+    assert auto == RS.statics(8, 1, 9, fitted, 9) == _formula(8, 1, 9, fitted, 9) and auto["L"] == 1008
+    assert RS.statics(8, 1, 9, {**served, "max_model_len_auto": True}, 9)["L"] == served["max_model_len"] != 1008
+
+
 def test_the_compile_slice_refuses_what_its_step_refuses():
     size = dict(Q=3, D=5, P=4, K=3)
     st = CS.statics(2, 1, 2, CS.DEMO_ENGINE, 3, **size)
