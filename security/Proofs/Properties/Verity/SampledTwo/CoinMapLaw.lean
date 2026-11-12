@@ -433,4 +433,276 @@ theorem splits_open {K : ℕ} (i : Fin K) (u n : ℕ) (hu : u + n ≤ 65536) :
   show (FlockDeploy.Coin.at (r i) (u + q.val)).bit b.val = Flock.F128.bit (r i ⟨u + q.val, h3⟩) b.val
   simp only [FlockDeploy.Coin.at, dif_pos h3]
 
+theorem law_send {M : Type} (kf : M → Game β) (m : M) (s' : Strategy (kf m)) {P : R → Tape (kf m) s' → Tape (kf m) s'}
+    {G : ℝ≥0∞} (h : LawHolds (kf m) s' P G) : LawHolds (Game.send M kf) ⟨m, s'⟩ P G := h
+
+/-! ## Along the releases -/
+
+section Along
+
+variable (L : Locate) {K : ℕ}
+
+theorem usedOf_append (i : ℕ) : ∀ (q l₁ l₂ : List Verity.Release),
+    usedOf L i q (l₁ ++ l₂) = usedOf L i q l₁ + usedOf L i (q ++ l₁) l₂
+  | q, [], l₂ => by simp [usedOf]
+  | q, rl :: l₁, l₂ => by
+    simp only [List.cons_append, usedOf]
+    rw [usedOf_append i (q ++ [rl]) l₁ l₂]
+    simp only [List.append_assoc, List.singleton_append]
+    omega
+
+theorem usedOf_snoc (i : ℕ) (pre : List Verity.Release) (rl : Verity.Release) :
+    usedOf L i [] (pre ++ [rl]) =
+      usedOf L i [] pre + (if locAt L pre rl.frame rl.answers = some i then widthOf rl.frame else 0) := by
+  rw [usedOf_append]
+  simp [usedOf]
+
+/-- **Coins that agree where the releases after `pre` read**: at each round's elements from what `pre` gave it. -/
+def AgreeFrom (pre : List Verity.Release) (r r' : Fin K → FlockDeploy.Coin) : Prop :=
+  ∀ (j : Fin K) (a : Fin 65536), usedOf L j.val [] pre ≤ a.val → r j a = r' j a
+
+theorem AgreeFrom.snoc {pre : List Verity.Release} {r r' : Fin K → FlockDeploy.Coin} (h : AgreeFrom L pre r r')
+    (rl : Verity.Release) : AgreeFrom L (pre ++ [rl]) r r' := fun j a ha =>
+  h j a (by rw [usedOf_snoc] at ha; omega)
+
+theorem slot_spec {pre : List Verity.Release} {fr : Verity.Frame} {b : ByteArray} {m : ℕ} {j : Fin K} {u : ℕ}
+    (h : slot L K pre fr b m = some (j, u)) :
+    locAt L pre fr b = some j.val ∧ u = usedOf L j.val [] pre ∧ u + m ≤ 65536 := by
+  unfold slot at h
+  split at h
+  next i hi =>
+    by_cases h₁ : i < K
+    · rw [dif_pos h₁] at h
+      by_cases h₂ : usedOf L i [] pre + m ≤ 65536
+      · rw [if_pos h₂] at h
+        cases h
+        exact ⟨hi, rfl, h₂⟩
+      · rw [if_neg h₂] at h
+        cases h
+    · rw [dif_neg h₁] at h
+      cases h
+  next => cases h
+
+/-- Coins that agree off a write's chunk agree where the releases after it read. -/
+theorem offChunk_agree {pre : List Verity.Release} {fr : Verity.Frame} {b : ByteArray} {m : ℕ} {j : Fin K} {u : ℕ}
+    (h : slot L K pre fr b m = some (j, u)) (hw : widthOf fr = m) {r r' : Fin K → FlockDeploy.Coin}
+    (hr : OffChunk j u m r r') (cs : List Bool) : AgreeFrom L (pre ++ [⟨fr, b, cs⟩]) r r' := by
+  obtain ⟨hl, hu, -⟩ := slot_spec L h
+  intro j' a ha
+  refine hr j' a fun ⟨hj, h₁, h₂⟩ => ?_
+  rw [hj] at ha
+  rw [usedOf_snoc] at ha
+  have hc : locAt L pre (⟨fr, b, cs⟩ : Verity.Release).frame (⟨fr, b, cs⟩ : Verity.Release).answers = some j.val := hl
+  rw [if_pos hc] at ha
+  have hw' : widthOf (⟨fr, b, cs⟩ : Verity.Release).frame = m := hw
+  omega
+
+/-! ### The coin map reads the run's coins only where the releases after it read -/
+
+theorem placeOpt_congr {β γ : Type} (n : Game β) (y : γ → Game β) {fn fn' : (s : Strategy n) → Tape n s → Tape n s}
+    {fy fy' : (a : γ) → (s : Strategy (y a)) → Tape (y a) s → Tape (y a) s} (hn : ∀ s t, fn s t = fn' s t)
+    (hy : ∀ a s t, fy a s t = fy' a s t) :
+    ∀ (o : Option γ) (s : Strategy (optGame o n y)) (t : Tape (optGame o n y) s),
+      placeOpt n y fn fy o s t = placeOpt n y fn' fy' o s t
+  | none, s, t => hn s t
+  | some a, s, t => hy a s t
+
+theorem placeIte_congr {β : Type} {c : Prop} (dc : Decidable c) (G₁ G₂ : Game β) (s : Strategy (@ite _ c dc G₁ G₂))
+    {f₁ f₁' : (s : Strategy G₁) → Tape G₁ s → Tape G₁ s} {f₂ f₂' : (s : Strategy G₂) → Tape G₂ s → Tape G₂ s}
+    (h₁ : ∀ s t, f₁ s t = f₁' s t) (h₂ : ∀ s t, f₂ s t = f₂' s t) (t : Tape (@ite _ c dc G₁ G₂) s) :
+    placeIte dc G₁ G₂ s f₁ f₂ t = placeIte dc G₁ G₂ s f₁' f₂' t := by
+  cases dc
+  · exact h₂ s t
+  · exact h₁ s t
+
+theorem placeCoin_congr {β C : Type} {iF : Fintype C} {iN : Nonempty C} (k : C → Game β) {w w' : C → C}
+    {f f' : (c : C) → (s : Strategy (k c)) → Tape (k c) s → Tape (k c) s} (hw : ∀ c, w c = w' c)
+    (hf : ∀ c s t, f c s t = f' c s t) (s : Strategy (@Game.coin β C iF iN k))
+    (t : Tape (@Game.coin β C iF iN k) s) : placeCoin k w f s t = placeCoin k w' f' s t := by
+  have e₁ : w = w' := funext hw
+  have e₂ : f = f' := funext fun c => funext fun s => funext fun t => hf c s t
+  subst e₁ e₂
+  rfl
+
+theorem coinBit_congr {c c' : FlockDeploy.Coin} {u : ℕ} (h : ∀ a : Fin 65536, u ≤ a.val → c a = c' a) {t : ℕ}
+    (ht : 128 * u ≤ t) : coinBit c t = coinBit c' t := by
+  unfold coinBit FlockDeploy.Coin.at
+  by_cases ha : t / 128 < 65536
+  · rw [dif_pos ha, dif_pos ha, h ⟨t / 128, ha⟩ (by show u ≤ t / 128; omega)]
+  · rw [dif_neg ha, dif_neg ha]
+
+theorem freshVal_congr {c c' : FlockDeploy.Coin} {u : ℕ} (h : ∀ a : Fin 65536, u ≤ a.val → c a = c' a) :
+    freshVal c u = freshVal c' u :=
+  funext fun _ => coinBit_congr h (Nat.le_add_right _ _)
+
+theorem openBits_congr {c c' : FlockDeploy.Coin} {u n : ℕ} (h : ∀ a : Fin 65536, u ≤ a.val → c a = c' a) :
+    openBits c u n = openBits c' u n := by
+  unfold openBits
+  congr 1
+  funext t
+  exact coinBit_congr h (Nat.le_add_right _ _)
+
+/-- A coin map along `relK k` reads the run's coins only where the releases after `pre` read. -/
+def RecCongr {β : Type} {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k) : Prop :=
+  ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
+    (s : Strategy (relK k fs ts f)) (t : Tape (relK k fs ts f) s) (r r' : Fin K → FlockDeploy.Coin),
+    AgreeFrom L pre r r' → rc r fs ts pre f s t = rc r' fs ts pre f s t
+
+theorem placeFresh_congr {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} (hrc : RecCongr L rc)
+    (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
+    (l : String) (b : ByteArray) (s : Strategy (freshG k fs ts f l b)) (t : Tape (freshG k fs ts f l b) s)
+    {r r' : Fin K → FlockDeploy.Coin} (h : AgreeFrom L pre r r') :
+    placeFresh L r k (rc r) fs ts pre f l b s t = placeFresh L r' k (rc r') fs ts pre f l b s t := by
+  unfold placeFresh
+  refine placeOpt_congr _ _ (fun _ _ => rfl) (fun fs' s' t' => placeCoin_congr _ (fun v => ?_)
+    (fun x s₃ t₃ => hrc _ _ _ _ _ _ r r' (h.snoc L _)) s' t') _ s t
+  split
+  next i u hs =>
+    obtain ⟨-, hu, -⟩ := slot_spec L hs
+    exact freshVal_congr fun a ha => h i a (by rw [← hu]; exact ha)
+  next => rfl
+
+theorem placeHello_congr {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} (hrc : RecCongr L rc)
+    (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
+    (spec : Flock.CoinTree.Spec) (ν : ByteArray) (s : Strategy (helloG k fs ts f spec ν))
+    (t : Tape (helloG k fs ts f spec ν) s) {r r' : Fin K → FlockDeploy.Coin} (h : AgreeFrom L pre r r') :
+    placeHello k (rc r) fs ts pre f spec ν s t = placeHello k (rc r') fs ts pre f spec ν s t := by
+  unfold placeHello
+  exact placeIte_congr _ _ _ s (fun s' t' => placeCoin_congr _ (fun _ => rfl)
+    (fun _ _ _ => hrc _ _ _ _ _ _ r r' (h.snoc L _)) s' t') (fun _ _ => rfl) t
+
+theorem placeRound_congr {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} (hrc : RecCongr L rc)
+    (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
+    (i sn n : ℕ) (b : ByteArray) (T : OpenTree) (p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog))
+    (s : Strategy (openP k fs ts f i sn n b T p)) (t : Tape (openP k fs ts f i sn n b T p) s)
+    {r r' : Fin K → FlockDeploy.Coin} (h : AgreeFrom L pre r r') :
+    placeRound L r k (rc r) fs ts pre f i sn n b T p s t = placeRound L r' k (rc r') fs ts pre f i sn n b T p s t := by
+  unfold placeRound
+  refine placeCoin_congr _ (fun dr => ?_) (fun _ _ _ => hrc _ _ _ _ _ _ r r' (h.snoc L _)) s t
+  split
+  next j u hs =>
+    obtain ⟨-, hu, -⟩ := slot_spec L hs
+    rw [openBits_congr fun a ha => h j a (by rw [← hu]; exact ha)]
+  next => rfl
+
+theorem placeOpen_congr {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} (hrc : RecCongr L rc)
+    (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
+    (i sn n : ℕ) (b : ByteArray) (s : Strategy (openG k fs ts f i sn n b)) (t : Tape (openG k fs ts f i sn n b) s)
+    {r r' : Fin K → FlockDeploy.Coin} (h : AgreeFrom L pre r r') :
+    placeOpen L r k (rc r) fs ts pre f i sn n b s t = placeOpen L r' k (rc r') fs ts pre f i sn n b s t := by
+  unfold placeOpen
+  exact placeIte_congr _ _ _ s (fun s' t' => placeOpt_congr _ _ (fun _ _ => rfl)
+    (fun T s₃ t₃ => placeOpt_congr _ _ (fun _ _ => rfl)
+      (fun p s₄ t₄ => placeRound_congr L hrc fs ts pre f i sn n b T p s₄ t₄ h) _ s₃ t₃) _ s' t')
+    (fun _ _ => rfl) t
+
+theorem placeK_congr {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
+    (pre : List Verity.Release) (f : List Verity.Release → Game β) (s : Strategy (relK k fs ts f))
+    (t : Tape (relK k fs ts f) s) (r r' : Fin K → FlockDeploy.Coin),
+    AgreeFrom L pre r r' → placeK L r k fs ts pre f s t = placeK L r' k fs ts pre f s t
+  | 0, _, _, _, _, _, _, _, _, _ => rfl
+  | _ + 1, _, _, _, _, ⟨none, _⟩, _, _, _, _ => rfl
+  | k + 1, fs, ts, pre, f, ⟨some (.fresh l, b), s'⟩, t, _, _, h =>
+    placeFresh_congr L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+      (fun fs ts pre f s t r r' h => placeK_congr k fs ts pre f s t r r' h) fs ts pre f l b s' t h
+  | k + 1, fs, ts, pre, f, ⟨some (.hello spec, ν), s'⟩, t, _, _, h =>
+    placeHello_congr L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+      (fun fs ts pre f s t r r' h => placeK_congr k fs ts pre f s t r r' h) fs ts pre f spec ν s' t h
+  | k + 1, fs, ts, pre, f, ⟨some (.opening i sn n, b), s'⟩, t, _, _, h =>
+    placeOpen_congr L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+      (fun fs ts pre f s t r r' h => placeK_congr k fs ts pre f s t r r' h) fs ts pre f i sn n b s' t h
+
+/-! ### The law frame by frame -/
+
+/-- The law along `relK k` from every layout, trees, releases before and continuation. -/
+def RecLaw {β : Type} {k : ℕ} (rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k) (gr : GapRec β k) : Prop :=
+  ∀ (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release) (f : List Verity.Release → Game β)
+    (s : Strategy (relK k fs ts f)), LawHolds (relK k fs ts f) s (fun r => rc r fs ts pre f s) (gr fs ts pre f s)
+
+theorem law_fresh {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
+    (hlaw : RecLaw rc gr) (hrc : RecCongr L rc) (fs : List (String × ℕ)) (ts : List OpenTree)
+    (pre : List Verity.Release) (f : List Verity.Release → Game β) (l : String) (b : ByteArray)
+    (s : Strategy (freshG k fs ts f l b)) :
+    LawHolds (freshG k fs ts f l b) s (fun r => placeFresh L r k (rc r) fs ts pre f l b s)
+      (gapFresh k gr fs ts pre f l b s) := by
+  unfold placeFresh gapFresh
+  refine law_opt _ _ (fun s => law_id _ s) (fun fs' s' => ?_) _ s
+  rcases hs : slot L K pre (.fresh l) b 4 with _ | ⟨i, u⟩
+  · refine law_keep s' fun x => ?_
+    exact hlaw _ _ _ _ _
+  · refine law_set s' (fun r => freshVal (r i) u) (OffChunk i u 4) (splits_fresh i u (slot_spec L hs).2.2) ?_
+      fun x => ?_
+    · intro x r r' τ hr
+      exact hrc _ _ _ _ _ _ r r' (offChunk_agree L hs rfl hr _)
+    · exact hlaw _ _ _ _ _
+
+theorem law_hello {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
+    (hlaw : RecLaw rc gr) (fs : List (String × ℕ)) (ts : List OpenTree) (pre : List Verity.Release)
+    (f : List Verity.Release → Game β) (spec : Flock.CoinTree.Spec) (ν : ByteArray)
+    (s : Strategy (helloG k fs ts f spec ν)) :
+    LawHolds (helloG k fs ts f spec ν) s (fun r => placeHello k (rc r) fs ts pre f spec ν s)
+      (gapHello k gr fs ts pre f spec ν s) := by
+  unfold placeHello gapHello
+  refine law_ite _ _ _ (fun s' => ?_) (fun s => law_id _ s) s
+  refine law_keep s' fun tr => ?_
+  exact hlaw _ _ _ _ _
+
+theorem law_round {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
+    (hlaw : RecLaw rc gr) (hrc : RecCongr L rc) (fs : List (String × ℕ)) (ts : List OpenTree)
+    (pre : List Verity.Release) (f : List Verity.Release → Game β) (i sn n : ℕ) (b : ByteArray) (T : OpenTree)
+    (p : Fin T.spec.streams.size × Fin (2 ^ T.spec.roundsLog)) (s : Strategy (openP k fs ts f i sn n b T p)) :
+    LawHolds (openP k fs ts f i sn n b T p) s (fun r => placeRound L r k (rc r) fs ts pre f i sn n b T p s)
+      (gapRound L K k gr fs ts pre f i sn n b T p s) := by
+  unfold placeRound gapRound
+  rcases hs : slot L K pre (.opening i sn n) b n with _ | ⟨j, u⟩
+  · refine law_keep s fun dr => ?_
+    exact hlaw _ _ _ _ _
+  · obtain ⟨-, -, hu⟩ := slot_spec L hs
+    refine law_mono (law_congr (P' := fun r => placeCoin _ (fun dr => openW n (bitsOf (openElems (r j) u n)) dr)
+        (fun dr s₅ t₅ => rc r fs (ts.set i (T.bump p.1)) (pre ++ [⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩])
+          (fun log => f (⟨.opening i sn n, b, TreeDraw.opened dr.1 n⟩ :: log)) s₅ t₅) s) ?_
+      (law_write s (fun e dr => openW n (bitsOf e) dr) (fun r => openElems (r j) u n) (OffChunk j u n)
+        (splits_open j u n hu) ?_ fun dr => ?_)) ?_
+    · intro r t
+      show placeCoin _ (fun dr => openW n (openBits (r j) u n) dr) _ s t = _
+      rw [openBits_eq]
+    · intro dr r r' τ hr
+      exact hrc _ _ _ _ _ _ r r' (offChunk_agree L hs rfl hr _)
+    · exact hlaw _ _ _ _ _
+    · exact add_le_add_right le_self_add _
+
+theorem law_open {β : Type} {k : ℕ} {rc : (Fin K → FlockDeploy.Coin) → PlaceRec β k} {gr : GapRec β k}
+    (hlaw : RecLaw rc gr) (hrc : RecCongr L rc) (fs : List (String × ℕ)) (ts : List OpenTree)
+    (pre : List Verity.Release) (f : List Verity.Release → Game β) (i sn n : ℕ) (b : ByteArray)
+    (s : Strategy (openG k fs ts f i sn n b)) :
+    LawHolds (openG k fs ts f i sn n b) s (fun r => placeOpen L r k (rc r) fs ts pre f i sn n b s)
+      (gapOpen L K k gr fs ts pre f i sn n b s) := by
+  unfold placeOpen gapOpen
+  refine law_ite _ _ _ (fun s' => ?_) (fun s => law_id _ s) s
+  refine law_opt _ _ (fun s => law_id _ s) (fun T s₃ => ?_) _ s'
+  refine law_opt _ _ (fun s => law_id _ s) (fun p s₄ => ?_) _ s₃
+  exact law_round L hlaw hrc fs ts pre f i sn n b T p s₄
+
+/-- **The law along the releases**: at every layout, trees, releases before, continuation and strategy, the coin map
+`placeK` is uniform up to the hiding term `gapK`. -/
+theorem law_placeK {β : Type} : ∀ (k : ℕ) (fs : List (String × ℕ)) (ts : List OpenTree)
+    (pre : List Verity.Release) (f : List Verity.Release → Game β) (s : Strategy (relK k fs ts f)),
+    LawHolds (R := Fin K → FlockDeploy.Coin) (relK k fs ts f) s (fun r => placeK L r k fs ts pre f s)
+      (gapK L K k fs ts pre f s)
+  | 0, _, _, _, _, s => law_id _ s
+  | _ + 1, _, _, _, _, ⟨none, _⟩ => law_id _ _
+  | k + 1, fs, ts, pre, f, ⟨some (.fresh l, b), s'⟩ =>
+    law_send _ _ s' (law_fresh L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+      (fun fs ts pre f s => law_placeK k fs ts pre f s)
+      (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f l b s')
+  | k + 1, fs, ts, pre, f, ⟨some (.hello spec, ν), s'⟩ =>
+    law_send _ _ s' (law_hello (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+      (fun fs ts pre f s => law_placeK k fs ts pre f s) fs ts pre f spec ν s')
+  | k + 1, fs, ts, pre, f, ⟨some (.opening i sn n, b), s'⟩ =>
+    law_send _ _ s' (law_open L (rc := fun r fs ts pre f s t => placeK L r k fs ts pre f s t)
+      (fun fs ts pre f s => law_placeK k fs ts pre f s)
+      (fun fs ts pre f s t r r' h => placeK_congr L k fs ts pre f s t r r' h) fs ts pre f i sn n b s')
+
+end Along
+
 end Verity.SampledTwo.CoinMap
