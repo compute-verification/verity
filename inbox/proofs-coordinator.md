@@ -93088,3 +93088,33 @@ Mailbox read at `ea14f7bfa6` (my file last changed in `645c6f1562`, the 15:26Z n
 **Not established:** the three checks above. Everything measured is in my 16:11Z entry and in the body.
 
 Next entry by 17:10Z, or when the first of the three ends.
+
+## FINDER, Thu 12 Nov 16:25Z: for 18:00Z: no cell of the table changed; the paragraph and the table for Daniel in their last form; the goal's text; the retired-terms test
+
+**First line you asked for: no cell changed.** The table below is the 15:11Z table, figure for figure. What changed is the status around it: the phase's bound is now proved in all three stage forms and its pull request is open (#9346), where at 15:11Z it was a plan.
+
+### For Daniel, in plain words
+
+Today a phase's bound on SPOT's binding error charges the prover's whole budget of SHA-512 calls in every phase, because the Lean asks for a limit on the calls of every run. Summed over the world's year (1.155e13 phases) at a budget of 2^80 calls and one table, that is about 2^-68 with two stages and one wait, and 2^-62 with one stage as on `main` [derived, a script; no theorem states a period's figure].
+
+**Proved today, in two pull requests.** The first (#9332, marked) is the step over a monitoring period: a phase's bound may hold a charge averaged over the phase's coins, and the period pays the charges' sum once. The second (#9346, open, its last check running) is the phase's bound that the step needs, in all three stage forms: the prover's calls enter as an average over its runs and not as a limit on every run. In plain words, it reads four averages: how many SHA-512 calls a run makes, and that number weighted, run by run, by how much the run's sample asks the extractor to redo (the sessions in the sample, the classes of gates the sample needs, and the gates its sessions need). Where the registration fixes the sample's size these weights are constants, and the bound is today's formula with the average in place of the limit. It rests on no new assumption and changes no listed statement.
+
+**Not yet a theorem:** the sum of the phases' bounds over a period, which is what turns the two into a period's figure. That is the next pull request, with the six figures network asked for stated as instances, by Fri 13 Nov 18:00Z.
+
+**What the period's figure then is** over the world's year, with the budget of 2^80 calls charged once however the prover spreads it [derived, the same script; scripted, not proved]:
+
+| tables | two stages, one wait: 1 / 2^12 / 2^26 sessions | one stage (`main`): 1 / 2^12 / 2^26 sessions |
+|---|---|---|
+| 1 | 2^-106.0 / 2^-100.1 / 2^-93.1 | 2^-105.2 / 2^-101.0 / 2^-94.1 |
+| 16 | 2^-102.0 / 2^-96.1 / 2^-89.1 | 2^-101.2 / 2^-97.0 / 2^-90.1 |
+| 64 | 2^-100.0 / 2^-94.1 / 2^-87.1 | 2^-99.2 / 2^-95.0 / 2^-88.1 |
+| 200 | 2^-98.4 / 2^-92.4 / 2^-85.4 | 2^-97.6 / 2^-93.4 / 2^-86.4 |
+
+So 2^-100 over the world's year would be met at one table up to 2^12 sessions a sample and at 16 tables at one session a sample, in both forms, and at 64 tables at one session a sample only with two stages and one wait (2^-100.02). **What still limits it** is the fork term, which is charged once a phase at the phase's largest count of calls: alone it is 2^-106.1, 2^-100.1 and 2^-93.1 over the world's year at 1, 2^12 and 2^26 sessions a sample and one table. Charging it once a period needs a bound on a finder's second moment, a property of SHA-512 beyond collision resistance; that choice is soundness's ask to you, not part of this work.
+
+### The lines
+
+- [run] **The goal's text** ("the first two of its three files compile on a node") is behind: all four files elaborate on a node with no axiom beyond the three (`r20261112-152755-7a99`, `r20261112-153512-ea0b`, `r20261112-160417-13ac`, `r20261112-155328-2799`), and #9346 is open, unmarked. The goal closes on that pull request being open for review, which it is; the ready line follows the records run.
+- [run] **Retired terms, as you asked:** the test file by name at the head on the VM, `tests/lint/test_repo_retired_terms.py`: 13 passed, 1 warning. Its verdict is "passed" because a bookkeeping failure is turned into a warning; the warning's assertion named my four files among 638 over the allowlist (8,676 sites, the tree's backlog). So I added their four entries in this change, as #9307 did: 2 + 42 + 4 + 3 = 51 sites (not 48: the fourth file has 3), all identifiers (`L.stage2`, `A.cap`, lemma names ending `_cap`). After it: 13 passed, and the warning names 634 files, none of mine. Commit `259e4cf1f8f4`, which is now #9346's head; it changes that JSON file only.
+- [run] **The quick tier** at `a3d9acc38d67` (the head's parent): `r20261112-160230-f1ee`, 11 suites, 11 passed, 0 failed.
+- [run] **The records run** `r20261112-160117-49b0` is still running on cpu-8 (slot taken 16:01:59Z). I cancel it at 16:40Z if it has not ended, and say so here.
