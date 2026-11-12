@@ -26,12 +26,19 @@ import json
 import shutil
 import statistics
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import torch
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import glm53  # noqa: E402
+
+__all__ = ["COUNTS", "EXPERTS", "SCHEDULES", "SHAPES", "WARM_GRAPHS", "check_shape", "stock_arms"]
 
 EXPERTS = 8
 SHAPES = ((4096, 6144), (6144, 2048))
@@ -55,7 +62,8 @@ def _same(a: Path, b: Path) -> list[str]:
     return out
 
 
-def stock_arms(Ws: list, dense: list, counts, x) -> tuple[dict, dict]:
+def stock_arms(Ws: list[torch.Tensor], dense: list, counts: Sequence[int], x: torch.Tensor,
+               ) -> tuple[dict[str, Callable[[], torch.Tensor]], dict[str, str]]:
     """The stock arms for the experts' weights `Ws` (BF16, n × k each) at `counts` (x's rows gathered by expert) that build:
     name -> f() -> y (x's rows by n, in x's order), and name -> the error of each that didn't.  Each arm quantizes x per
     128-wide token group in its call, as `glm53_timing.stock_arms`' do:
@@ -164,7 +172,7 @@ def stock_arms(Ws: list, dense: list, counts, x) -> tuple[dict, dict]:
     return arms, errors
 
 
-def check_shape(a, n: int, k: int) -> dict:
+def check_shape(a: argparse.Namespace, n: int, k: int) -> dict:
     import torch
     import glm53_timing as T
     from verity_vllm.protocols.pouw.pearl_c import grouped as PG

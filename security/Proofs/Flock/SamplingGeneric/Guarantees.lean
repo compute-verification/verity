@@ -25,7 +25,7 @@ moves stays in the program, an input gate that no gate reads and no proof block 
 opening of a gate is revealed at the gate the map sends it to, under the roots the connected program opens that gate
 under. The code facts, coins and sessions' runs are proved (`SpotFlock.ksTwo_connected`), with the sessions' openings
 at the connected program (`SpotFlock.stmtOpens_connected`) from five premises on the held code, three of them
-conditions that evaluation decides and the verifier does not run, one a fact nothing proves:
+conditions decided on the held code that the design's evaluation does not check, one a fact nothing proves:
 
 * `SpotFlock.BuiltWired`: the registration's frame is SPOT's own at the connected program. Every held code whose frame
   is set to it has it (`SpotFlock.builtWired_spot`).
@@ -38,17 +38,18 @@ conditions that evaluation decides and the verifier does not run, one a fact not
 * `SpotFlock.SourcesNamed`: every source bit is at a port a link or a wire names. Nothing the verifier runs decides
   it, so the guarantee says nothing of an input the developer supplies or a row round 2 opens off the interior record.
 * `SpotFlock.WiresFirst`: each wire's writer's part is before its reader's, so each wire's writer names a template.
-  The deployed round 2 decides it (`SecondStage.wiresOk`); the verifier the guarantee is stated about (`SpotFlock.V`)
-  does not run that check. With no wires held it holds, where `wiresOk` fails.
+  Round 2 decides it at a run's parts (`SecondStage.wiresOk`), and `SpotFlock.V` runs round 2's check of the design
+  on each run; the proof reads the condition wherever the design evaluates, which the design's evaluation does not
+  decide. With no wires held it holds, where `wiresOk` fails.
 * `SpotFlock.WiresMove`: every wired source bit has a gate to go to. Nothing the verifier runs decides it. It enters
   no step of the proof: it is in the statement so that the connected program has no wired read left as a free input.
 
-At a held code that fails one of them the guarantee says nothing, though `SpotFlock.V` still accepts its runs. The
+At a held code that fails one of them the guarantee says nothing, though `SpotFlock.V` may still accept its runs. The
 guarantee speaks of what a replay block returns: its served outputs are the written bits at an output port a link
 names, so at a design with no link it says nothing. What it covers rests on the links the held code holds: an output
 that leaves and that no held link names is outside it. The held links are the auditor's copy, which nothing in the
-statement holds to the replay block program's own links (`SecondStage.replayLinks`), and `SpotFlock.V` does not run
-the design's check of them (`SecondStage.linksOk`). That check asks that each link is for a template one of the parts
+statement holds to the replay block program's own links (`SecondStage.replayLinks`), though `SpotFlock.V` runs the
+design's check of them (`SecondStage.linksOk`). That check asks that each link is for a template one of the parts
 is of, whose units its rows place, and not that an output that leaves has a link. Over the members' programs side by
 side every written bit is returned, whatever the links; the connected program of a design with no wire still returns
 only the linked ones. So at every design, with a wire or without, the guarantee speaks only of the linked outputs,

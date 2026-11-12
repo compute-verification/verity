@@ -100,8 +100,13 @@ LEAN_AUDIT = "lean-audit/audit.json"            # the Lean check's report there:
 #: the steps whose parts are compared one by one, as suites and Lean packages; every other step of a result is one part, so
 #: a step check gains is compared from the night it first runs
 BY_PART = ("pytest", "lean-suites", "lean-audit")
-#: the fields of a Lean package's report that say how its check ran; the others say what it found
-RUN_FIELDS = frozenset({"seconds", "sampled", "staged", "replay", "pipeline", "sandbox"})
+#: the fields of a Lean package's report that say how its check ran; the others say what it found. A reused pass's report is
+#: the one its storing run wrote, so these are that run's: its times, sample, seal and replay, its node's (`sandbox`,
+#: `build_threads`, `peak_gib`, and whether it used its replay and facts caches, `replay_cache`, `facts_cache`), the content
+#: address of its build (`facts_key`: it folds the `.olean` files, whose bytes differ between machines, and only a records
+#: run's `--facts-cache` writes it) and the records run whose facts it was judged from (`judged_from`)
+RUN_FIELDS = frozenset({"seconds", "sampled", "staged", "replay", "pipeline", "sandbox", "build_threads", "peak_gib",
+                        "replay_cache", "facts_cache", "facts_key", "judged_from"})
 VERDICTS = ("passed", "failed")
 LOST = ("launcher-exited", "runner-gone")       # a run that ended leaving no status (research.cli.ENDED)
 OUTCOMES = ("passed", "contradicted", "failed", "error")
@@ -230,7 +235,9 @@ def verdicts(run: str, result: dict, suites: list[dict], audit: dict) -> dict[tu
     under, where an uncached and a recorded check hold the same kind of key (a Lean package's inputs key; a suite's inputs
     key, which the row of a part of a split suite and the row of a reused traced pass don't hold: theirs are the part's key
     and the suite's traced key); a Lean package's `report`, each field outside RUN_FIELDS by digest; `how` a pass it
-    reused came to it; and its `row`, which part of a split suite it is a verdict on (None: the whole part)."""
+    reused came to it (a Lean package's names lean-audit's cache key, its own hash of the package's inputs, which is never
+    the inputs key and which an uncached check doesn't print); and its `row`, which part of a split suite it is a verdict
+    on (None: the whole part)."""
     out: dict[tuple[str, str], list[dict]] = {}
 
     def add(kind: str, name, status: str, key=None, how: str = "", report: dict | None = None, row: str | None = None) -> None:
@@ -251,7 +258,7 @@ def verdicts(run: str, result: dict, suites: list[dict], audit: dict) -> dict[tu
     for r in audit.get("packages") or []:
         if isinstance(r, dict) and isinstance(pkg := r.get("package"), str):
             add("Lean package", pkg, "passed" if r.get("failures") == [] and pkg not in failed else "failed", keys.get(pkg),
-                f"a pass reused under cache key `{str(reused[pkg])[:12]}`" if pkg in reused else "",
+                f"a pass reused from lean-audit's cache, where its key is `{str(reused[pkg])[:12]}`" if pkg in reused else "",
                 {k: found(k, v) for k, v in r.items() if k not in RUN_FIELDS})
     for pkg in failed:
         if ("Lean package", str(pkg)) not in out:        # one whose check left no report

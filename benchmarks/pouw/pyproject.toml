@@ -28,6 +28,7 @@ untraced = [
     "tests/test_ffill.py",
     "tests/test_pearl_c_hash_decode.py",
     "tests/test_pearl_c_hash_host.py",
+    "tests/test_pearl_c_hash_wide.py",
     "tests/test_pearl_c_sm120.py",
     "tests/test_pearl_c_sm90.py",
     "tests/test_pearl_c_sm90_prefill.py",

@@ -1957,6 +1957,10 @@ def test_the_served_profile_names_hash_fasts_kernels_and_gives_a_fold_its_segmen
             (4, 5, "s512_folds", 11), (5, 6, "s512_tile_segs", 7), (6, 7, "s512_folds", 7)]
     assert [r[4] for r in SP._folds(rows)] == ["pearlc:row_digests", "pearlc:tile_hash", "pearlc:row_digests", "pearlc:tile_hash",
                                                "pearlc:folds", "pearlc:tile_hash", "pearlc:tile_hash"]
+    # hash_wide.cuh's launches (rows past 128 segments) are the same steps
+    assert [SP.category(k) for k in ("s512_row_segs_w", "s512_heads_w", "s512_folds_w")] == [
+        "pearlc:row_digests", "pearlc:setup", "pearlc:folds"]
+    assert [r[4] for r in SP._folds([(0, 1, "s512_row_segs_w", 7), (1, 2, "s512_folds_w", 7)])] == ["pearlc:row_digests"] * 2
 
 
 def test_the_served_profile_times_each_passs_end_and_splits_a_steps_hashing(monkeypatch, tmp_path):

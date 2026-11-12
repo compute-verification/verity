@@ -161,9 +161,13 @@ namespace Spot.SecondStage
 open Lean (Json)
 
 /-- **The switch**: whether the verifier accepts a two-stage run whose every check of round 2 passes. Off, it refuses
-each one last (`two-stage-form`): the two-stage guarantee (`Flock.SecurityProofs.SampledKSTwo`) takes its sessions'
-openings (`SessionOpensTwo`) as a fact of the code, and SPOT[Flock] derives that fact only from its layout's `Embeds` and
-`FrameIs`, both open. -/
+each one last (`two-stage-form`). Three things withhold the accept. SPOT[Flock]'s two-stage guarantee
+(`Flock.SecurityProofs.SpotKSTwo`) takes as a premise that each gate's value has one address, fixed before the run
+(`SpotFlock.AddressesConnected`), which nothing proves from this check. No theorem says that a run this verifier
+accepts is one the verifier that guarantee is stated about (`SpotFlock.V`) accepts. And the composite's sampled
+component has no two-stage form, nor a leg for one, under the one soundness theorem (`Verity.Soundness`). The switch
+turns on only once the two-stage form is under that theorem: SPOT[Flock]'s own two-stage theorem does not turn it
+on. -/
 def FORM : Bool := false
 
 def FORM_WHY : String :=

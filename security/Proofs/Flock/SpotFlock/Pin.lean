@@ -120,6 +120,8 @@ def readsOkHash (t : ℕ) (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : St
   | some st, some rec, some draw, some w =>
     let own := ownOf h st rec draw c₀
     Spot.SecondStage.interiorOrderOk own && Spot.SecondStage.namesOk own &&
+      (Spot.SecondStage.inputsFailure own).isNone &&
+      Spot.SecondStage.designOk (partsAt h own.sample.size) own &&
       ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinHash h t w
   | _, _, _, _ => false
 
@@ -127,7 +129,7 @@ def readsOkHash (t : ℕ) (x m₁ xS : Msg) (c₀ : FlockDeploy.Coin) (c₁ : St
 def stmtOkHash (x m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) : Bool :=
   match parse h x, stmtsOf m₂ with
   | some s, some xs =>
-    (partition h s).isSome && (two h s).isSome && xs.length == h.ms.length &&
+    (partition h s).isSome && (two h s).isSome && xs.length == h.ms.length && recordsOk h x m₁ &&
       (List.range h.ms.length).all fun t =>
         (FlockDeploy.V true).k (xs.getD t (h.xS₀ t)) == k₀ h t && sessionOk h t (xs.getD t (h.xS₀ t)) &&
           readsOkHash h t x m₁ (xs.getD t (h.xS₀ t)) c₀ c₁
