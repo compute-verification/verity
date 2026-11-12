@@ -51,6 +51,9 @@ what the layout's design has and the tree does not.
 - `demos/`: one directory per demo: its workload, placement, commands and doneness (`demos/README.md`).
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
+- `redteam/`: attempts to get out of the system what its protocols exist to deny (`redteam/README.md`). Training is the
+  first: a training circuit and its output in, its loss and its slowdown under the inference-only policy out. Target,
+  not yet: its code, which is `benchmarks/training_slowdown/`.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
 - `fixtures/artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
   its reader). `tests/`: invariants of the whole tree. `archive/`: code kept and not developed, in no suite. The archived
