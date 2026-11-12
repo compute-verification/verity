@@ -2,8 +2,8 @@
 every tensor of a decoder of any `Shape` (the H200 demo's frozen shape `H200`, Phase 1's CPU model `PHASE1`), and the
 registration of those tensors as core's registered values (``one_stage.registered``), computed in parallel.
 
-No torch: memory-accounting's encoder and the H200 demo run it with `archive/examples/h200` on their path
-(``PYTHONPATH=archive/examples/h200 python -m benchmarks.torch_gpu.p2_stage.served_weights ...``).
+No torch: memory-accounting's encoder and the trace endpoint load it by its module name, and it runs from the tree's
+root (``python -m benchmarks.torch_gpu.p2_stage.served_weights ...``).
 
 * **The model** (`Shape`): a pre-norm decoder with learned absolute positions, ``heads`` query heads of ``head_dim`` and
   ``kv_heads`` KV heads (1: MQA), a ReLU MLP of width ``mlp``, a byte vocabulary, W8A8 linears (s8 codes, an f32 scale per
@@ -61,15 +61,15 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 
-from verity.protocols.spot.verifier.one_stage import registered as REG
-from verity.commitments import hm96
-from verity.commitments.hm96 import batch as hm96_batch
-from verity.commitments.identity import identity_digest_sha512
-from verity.commitments.merkle import merkle_depth
 from verity.circuits.codec import program_digest
 from verity.circuits.program import Program
-from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
+from verity.commitments import hm96
 from verity.commitments.crypto import chacha20
+from verity.commitments.hm96 import batch as hm96_batch
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.merkle import CommitmentDomain, merkle_depth
+from verity.commitments.rowleaf import sha512_row_seg_digest, sha512_row_v2_prefix
+from verity.protocols.spot.verifier.one_stage import registered as REG
 
 FORMAT = "verity/seeded-weights/v1"
 MANIFEST = "verity/seeded-weights/manifest/v1"
@@ -359,7 +359,7 @@ def salts(salt_key: bytes, index: int, first: int, n: int) -> bytes:
     return chacha20.keystream(_salt_key(salt_key), index, _SALT_BLOCKS * first, _SALT_BLOCKS * n)
 
 
-def domain(t: Tensor, r: Reader):
+def domain(t: Tensor, r: Reader) -> CommitmentDomain:
     """`t`'s domain under reader `r`, held across windows (no window root)."""
     b = r.word_bits(t.name)
     return REG.domain(r.digest, t.name, registered_words(t, b), t.leaves, b)
@@ -603,7 +603,7 @@ def fixture() -> dict[str, Any]:
     stream's length and first 64 bytes, the first and last rows of layer 0's tensors and of those outside the layers, and
     SHA-256 of every tensor's
     (`first_rows`, as compact JSON). `H200`'s whole manifest, with each tensor's SHA-256 under `DEMO_SEED`, is an artifact
-    of the evidence store (``archive/examples/h200/README.md``)."""
+    of the evidence store (``manifest --digests`` writes it again)."""
     out: dict[str, Any] = {"format": "verity/seeded-weights/fixture/v1", "seed": TEST_SEED.hex(),
                            "salt_key": TEST_SALT_KEY.hex(), "program": TEST_PROGRAM, "shapes": {}}
     for s in (TINY, PHASE1):

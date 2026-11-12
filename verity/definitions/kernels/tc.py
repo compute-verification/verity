@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping
 import numpy as np
 
 from verity.circuits.evaluation import ScalarReference, register_kernel
+from verity.circuits.types import Array, Value
 from verity.definitions.silicon.models import (
     ADA_E4M3_M16N8K32,
     BLACKWELL_SM120_MXF4,
@@ -27,13 +28,12 @@ from verity.definitions.silicon.models import (
 )
 from verity.definitions.silicon.term import FORMATS
 from verity.definitions.silicon.total_fp8 import HOPPER_E4M3_WGMMA_K32, tc_dot_total_e4m3
-from verity.circuits.types import Array, Value
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from verity.definitions.silicon.term import Format
     from verity.circuits.types import Type
+    from verity.definitions.silicon.term import Format
 
 __all__ = [
     "HOPPER_E4M3_DOT",

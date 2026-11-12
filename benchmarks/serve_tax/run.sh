@@ -27,9 +27,9 @@
 # --dataset chat=FILE names another copy of it, and no run sends or keeps the file. --dataset prefix=FILE serves a table
 # of planned requests (arrival times and lengths; prefix_plan.jsonl is the full-size one) in place of load prefix's
 # four, each sent as it arrives: the row then says whether stock kept up, and which of its figures is the cost.
-# PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own
-# (serve_tax.parse_pass_prompts): for a ladder past the rungs the load's own prompts can hold, and the same for every
-# arm of a cost. After the table it prints the cost of
+# PASS_PROMPTS=NAME=N,... makes a pass of load NAME send N prompts at every rung in place of the load's own, and
+# NAME=Kx K prompts for each request its rung holds in flight (serve_tax.parse_pass_prompts): for a ladder past the
+# rungs the load's own prompts can hold, and the same for every arm of a cost. After the table it prints the cost of
 # ARMS's last arm over compiled (serve_tax.py cost) and writes OUT/serving_cost.{json,txt} and the run's result.json (each
 # load's cost a measurement, and the number one under the model's metric id once every load has run); --json prints the
 # JSON object last. In this form REPS is 6 and WINDOW_S 30 by default, and OUT/gpus.csv names the cards.
@@ -46,13 +46,19 @@
 # rank keeps its KV copy and rows in host memory, and KV_COPY=first copies rank 0's pool alone (for ranks that hold the
 # same KV bytes, as GLM-5.3's replicated MLA cache does). PLAN_FILE (else a sent inputs/plan.jsonl) is a ready plan, served
 # as it is (the replay ladder's production plan: each request's own sampling, stopping at its end of text), copied to
-# OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, else
+# OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit, a number of tokens or auto (vLLM's word for the longest the
+# cards' KV cache holds); PUBLISHED_FRONTEND=rust starts the published arm behind vLLM's Rust front end, on a build
+# that has it (python, the default, is the front end of every other arm), and PUBLISHED_ARGS=--FLAG=VALUE,... adds flags
+# of vLLM's own to that arm's line alone. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, else
 # the newest toolkit under /usr/local), so vLLM runs FlashInfer's sampler, autotune and fused all-reduce, and runs a sent
 # inputs/fi_smoke.py before the first engine so that its JIT lands outside the served traffic; OUT/engine_env.txt records
 # the toolkit, has_flashinfer and FlashInfer's caches' digests (fi_cache) before the arms and after each. LDCONFIG=1 refreshes the
 # linker cache first. BUDGET_MIN bounds the arms' minutes: each arm after the first serves the reps of REPS that fit its
 # share of the minutes left, equal among the arms still to serve (serve_tax.py fit, from the arm before it), and one if
-# none does, since reps are cut and never an arm (OUT/arms.txt says what was cut).
+# none does, since reps are cut and never an arm (OUT/arms.txt says what was cut). STOP_AT=TIME (with its zone, as
+# 2030-01-01T00:00:00Z) is the time the job's GPUs are another's: an arm starts no pass it can't expect to finish and stop
+# its server by then (serve_tax.stop_before), keeps the passes it served, and its meta.json says where it stopped
+# (stopped); an arm whose turn comes after TIME is not served. The job ends between two passes and exits as if whole.
 # Each restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR/<arm> (KV_DIR by default a fresh directory
 # under the node's scratch, removed at the end); RESTORE=FROM:TO then restores each RESTORE_ARM's edge FROM into a fresh
 # engine (warmed first on RESTORE_WARM of the replay block's prompts) and replays to edge TO (restore.py) into
@@ -64,7 +70,8 @@
 # into OUT/replay-<mode>; a mode listed again replays into OUT/replay-<mode>-<k>, its tokens compared with the first's too
 # (REPLAY_MODES="compiled compiled": does the replay agree with itself?). Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
 # checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b and
-# qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be d9105ea80, the integration's pin.
+# qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
+# pin, unless set.
 set -uo pipefail
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
   flag=$1; shift
@@ -85,17 +92,29 @@ CLIENT=${CLIENT:-corpus}
 if [ "$CLIENT" = vllm-bench ]; then
   ARMS=${ARMS:-compiled compiled-again two-stage}; LOADS=${LOADS:-chat,long}
   [ "$ARMS" = all ] && ARMS="compiled compiled-again record no-prefix-cache boundary-rows canonical-topk two-stage"
-  # six reps: the fewest whose ratios bound their median at 95% (the cost's interval). A Commit window shorter than a
-  # pass: a pass then holds the commits of the requests it finishes. At a window longer than a pass they would fall
-  # between passes, where no request waits on them, and the cost would leave the commitment's work out; a short window
-  # counts a window's fixed work more often than a long one, so the cost errs high.
+  # six reps: the fewest whose ratios bound their median at 95% (the cost's interval). A Commit period shorter than a
+  # pass: a pass then holds the commits of the requests it finishes. At a period longer than a pass they would fall
+  # between passes, where no request waits on them, and the cost would leave the commitment's work out; a short period
+  # counts a period's fixed work more often than a long one, so the cost errs high.
   REPS=${REPS:-6}; WINDOW_S=${WINDOW_S:-30}
   export ARMS LOADS
 fi
 export CLIENT ${MODEL_ID:+MODEL_ID} ${REPS:+REPS} ${DATASETS:+DATASETS}
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-[ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
+# SERVE_VLLM: the vLLM build to serve on, one of the adapter's engine.stock.BUILDS. The pin's environment is the node's
+# own; another build's is ops/vllm_env.sh's, which installs it beside the pin's the first time, before any GPU is held
+SERVE_VLLM=${SERVE_VLLM:-d9105ea80}
+if [ "$SERVE_VLLM" = d9105ea80 ]; then
+  [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
+else
+  venv=$(SERVE_VLLM=$SERVE_VLLM OUT= bash "$here/../../adapters/vllm/verity_vllm/ops/vllm_env.sh" | tail -n 1)
+  [ -n "$venv" ] || { echo "serve-tax: no environment for SERVE_VLLM=$SERVE_VLLM"; exit 2; }
+  # what this build compiles (vLLM's graphs, DeepGEMM and autotune files, FlashInfer's JIT, Triton) goes to caches of its
+  # own under its environment: the node's, which the pin's engines read, get no file from it
+  export VLLM_CACHE_ROOT=$venv/cache/vllm FLASHINFER_WORKSPACE_BASE=$venv/cache TRTLLM_DG_CACHE_DIR=$venv/cache/tensorrt_llm \
+    TRITON_CACHE_DIR=$venv/cache/triton
+fi
 VENV=${VENV:-$venv}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
@@ -133,15 +152,17 @@ export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0
 replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY_FROM:-}${RESTORE_FROM:-}" ] && replay_only=1
 [ -f "$C4" ] || [ $replay_only = 1 ] || [ -n "$PLAN_FILE" ] || [ "$CLIENT" = vllm-bench ] || { echo "serve-tax: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 [ -d "$CK" ] || { echo "serve-tax: no checkpoint at $CK"; exit 2; }
-v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
-case $v in *+gd9105ea8*) ;; *) echo "serve-tax: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
+v=$("$PY" -c 'from vllm._version import __commit_id__ as c; print(c.removeprefix("g"))') || exit 2
+[ "$v" = "$SERVE_VLLM" ] || { echo "serve-tax: $VENV holds vLLM $v, not SERVE_VLLM=$SERVE_VLLM"; exit 2; }
 mkdir -p "$OUT"
+[ ! -f "$VENV/freeze.txt" ] || cp "$VENV/freeze.txt" "$OUT/vllm_env.freeze.txt"   # ops/vllm_env.sh's: what it installed
 
-# FlashInfer's caches every engine reads, by their files' digests: its JIT GEMMs (~/.tensorrt_llm/cache) and vLLM's
-# autotune file per config hash (VLLM_CACHE_ROOT's flashinfer_autotune_cache), which the arms share, as they share the hash
+# FlashInfer's caches every engine reads, by their files' digests: its JIT GEMMs (TRTLLM_DG_CACHE_DIR, else
+# ~/.tensorrt_llm/cache) and vLLM's autotune file per config hash (VLLM_CACHE_ROOT's flashinfer_autotune_cache), which the
+# arms share, as they share the hash
 fi_cache() {
   local kv c
-  for kv in "tensorrt_llm_cache:$HOME/.tensorrt_llm/cache" \
+  for kv in "tensorrt_llm_cache:${TRTLLM_DG_CACHE_DIR:-$HOME/.tensorrt_llm/cache}" \
             "autotune_cache:${VLLM_CACHE_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/vllm}/flashinfer_autotune_cache"; do
     c=${kv#*:}
     if [ -d "$c" ]; then
@@ -165,7 +186,9 @@ if [ "${1:-}" = leased ]; then
     GPUS=$GPUS "$PY" "$smoke" "$OUT/fi_smoke.json" > "$OUT/fi_smoke.log" 2>&1 || { tail -n 20 "$OUT/fi_smoke.log"; exit 1; }
   fi
   echo "before the arms: $(fi_cache)" >> "$OUT/engine_env.txt"
-  common=(--model-id "$MODEL_ID" --checkpoint "$CK" ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"})
+  common=(--model-id "$MODEL_ID" --checkpoint "$CK" ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"}
+    ${PUBLISHED_FRONTEND:+--published-frontend "$PUBLISHED_FRONTEND"}
+    ${PUBLISHED_ARGS:+"--published-args=$PUBLISHED_ARGS"})
   if [ "$CLIENT" = vllm-bench ]; then
     load=(--client vllm-bench --loads "$LOADS" ${PASS_PROMPTS:+--pass-prompts "$PASS_PROMPTS"})
     for f in ${DATASETS:-}; do load+=(--dataset "$f"); done
@@ -185,6 +208,7 @@ if [ "${1:-}" = leased ]; then
   [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
   [ -n "${EDGES_EVERY_S:-}" ] && count+=(--edges-every-s "$EDGES_EVERY_S" ${SAVE_KV:+--save-kv "$SAVE_KV"} --kv-copy "${KV_COPY:-all}")
   last=; to_serve=$(wc -w <<< "${ARMS:-}")
+  [ -z "${STOP_AT:-}" ] || stop_at=$(date -d "$STOP_AT" +%s) || { echo "serve-tax: STOP_AT=$STOP_AT is not a time"; exit 2; }
   for arm in ${ARMS:-}; do
     reps=$REPS
     if [ -n "${BUDGET_MIN:-}" ] && [ -n "$last" ]; then
@@ -195,8 +219,12 @@ if [ "${1:-}" = leased ]; then
       [ "$reps" -lt "$REPS" ] && echo "== $arm: $reps of $REPS reps fit its $((left / 60)) min, an equal share for each of the $to_serve arms left of BUDGET_MIN=$BUDGET_MIN" | tee -a "$OUT/arms.txt"
       [ "$reps" -lt 1 ] && { reps=1; echo "== $arm: serving 1 rep anyway (reps are cut, never an arm)" | tee -a "$OUT/arms.txt"; }
     fi
+    if [ -n "${STOP_AT:-}" ] && [ "$(date +%s)" -ge "$stop_at" ]; then
+      echo "== $arm and the arms after it: not served, STOP_AT=$STOP_AT has passed" | tee -a "$OUT/arms.txt"
+      break
+    fi
     echo "== $arm $(date -u +%FT%TZ)"
-    "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" --reps "$reps" \
+    "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
       --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" \
       ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$arm"} --out "$OUT/$arm" || rc=1
     echo "after $arm: $(fi_cache)" >> "$OUT/engine_env.txt"
@@ -250,7 +278,8 @@ export PLAN DOCS WINDOW_S KV_WINDOW_S KV_DIR
 # LDCONFIG=1: the linker cache refreshed first, so libnvrtc and the rest resolve to the toolkit the node's dev packages
 # were installed for, the same for every engine of the job
 [ "${LDCONFIG:-0}" = 1 ] && ldconfig
-for k in FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK MAX_MODEL_LEN PLAN_FILE; do
+for k in SERVE_VLLM VLLM_CACHE_ROOT FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK MAX_MODEL_LEN \
+    PUBLISHED_FRONTEND PUBLISHED_ARGS PLAN_FILE; do
   echo "$k=${!k-unset}"; done > "$OUT/engine_env.txt"
 { command -v nvcc && nvcc --version | tail -1
   echo "has_flashinfer=$("$PY" -c 'from vllm.utils.flashinfer import has_flashinfer; print(has_flashinfer())')"
@@ -276,9 +305,10 @@ gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
-# the cost of the last arm over compiled; a job of compiled alone (a calibration of its rungs) has none. WITH: the out/
-# directories of earlier jobs on this node whose arms served another load, which joins the number
-if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ]; then
+# the cost of the last arm over compiled; a job that ends on stock has none: compiled alone (a calibration of its
+# rungs), or published, which is stock under other settings and no arm of ours. WITH: the out/ directories of earlier
+# jobs on this node whose arms served another load, which joins the number
+if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ]; then
   for o in ${WITH:-}; do for d in "$o"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done; done
   cost=("$PY" "$here/serve_tax.py" cost "${dirs[@]}" --arm "${ARMS##* }" ${TARGET:+--target "$TARGET"})
   "${cost[@]}" --out "$OUT" --result || rc=1

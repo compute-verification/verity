@@ -1019,6 +1019,8 @@ def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discar
 @pytest.mark.parametrize("engine,edit,fact", [
     ({"max_num_batched_tokens": 16384}, {}, "engine arg max_num_batched_tokens 16384, not a stated value of at most 8192"),
     ({"max_model_len": None}, {}, "engine arg max_model_len None, not a stated value of at most 131072"),
+    ({"max_model_len": -1}, {}, "engine arg max_model_len -1, not a stated value of at most 131072"),
+    ({"max_model_len": 262144}, {}, "engine arg max_model_len 262144, not a stated value of at most 131072"),
     ({"long_prefill_token_threshold": 512}, {}, "engine arg long_prefill_token_threshold 512, not a stated value of at most 256"),
     ({"max_num_seqs": 0}, {}, "engine arg max_num_seqs 0, not a stated value of at most 256"),
     ({"enable_prefix_caching": None}, {}, "engine arg enable_prefix_caching None, not stated True or False"),
