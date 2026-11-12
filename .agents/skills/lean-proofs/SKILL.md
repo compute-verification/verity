@@ -61,6 +61,10 @@ the lock's sections, each naming the docstring with the detail. This is the work
   [Loogle](https://loogle.lean-lang.org). A lemma another package proves is imported or moved, not proved again.
 - **A slow declaration**: measure (`set_option profiler true in`; `#count_heartbeats in` in a Mathlib package), then fix
   the proof: `simp only [...]` outside terminal calls, a split-out lemma, a smaller `decide`.
+- **A timeout at `whnf` reported at a theorem's first line** is a term's elaboration, not one tactic. A common cause:
+  an argument states at a definition (`saltOf o`) what the lemma asks at a structure's field (`c.salt o`), and the
+  unifier unfolds the definition and walks everything `o` holds. Prove the field is the function once
+  (`(code …).salt = saltOf := rfl`), rewrite with it, and hand the lemma each premise in the form it states.
 - **`X.congr_simp is declared by a replayed module and by one it imports`**: `simp` realized a structure constructor's
   congruence lemma Mathlib had already. Don't unfold a `→+` or `→*` in `simp`; prove its `_apply` lemma by `rfl` and simp
   with that.
