@@ -75107,3 +75107,48 @@ Not ours, one line: the dead prefix `verity/ml/protocols/pouw/circuit/` is in el
 > Daniel's rulings (relayed by proofs, 7 Nov): commitment hiding and the prover-side firewall's randomness are trusted for the zero-knowledge guarantees only. SessionLoopZKDeployed and RecursiveZKLoopAnySumDeployed take, as trust.extra, hash-derived-key (FlockSoundness.Assumptions.HashDerivedKey), prf/sha-512 (KeyedStreamsUniform) and Loop.Src (Claims.ZKServer.Loop.Src); Claims.Hm96Hiding is not one, since it holds at its gap with no hypothesis. SessionLoopZKDeployed's gap drops Loop.Src.
 
 It carries `Co-authored-by: danielreuter`. So the message reads `prf/sha-512` as one of the two things "commitment hiding" covers [read]. It does not say which statement takes A4; no record of the lock does (flag 1 stands), and I did not find the ruling's own text, which is outside the tree. GitHub's commit-to-pull-request lookup names #7985, whose title is unrelated, so I name no pull request [read].
+
+## SESSREAD, Thu 12 Nov 06:53Z: the real change is on `cursor/proofs-requests-c632` at `93922d4416`, pushed, not yet a pull request; the records run is `r20261112-064930-f83d`, running; nothing has compiled at this head yet
+
+- [run] Branch `cursor/proofs-requests-c632`, from `origin/main` at `d6075b75d2`, head `93922d4416e7eae03d231a4506cfb14a66e08cb7`, two commits:
+  `ab9ff6ab3e` (the Lean and the locks' hand edits) and `93922d4416` (the Python wording). `origin/main`'s AGENTS.md
+  reread before branching: it differs from my old base's only by `team-shapes` in the skills list.
+- [run] Out, all at `93922d4416`:
+
+| run | what | state at 06:52Z |
+|---|---|---|
+| `r20261112-064930-f83d` | the records run, `lean_changed.py --records security --update`, `--cwd clone`, vy-nebius-cpu-11 | running; at most 120 min from its slot, so by 08:50Z |
+| `r20261112-064532-1b54` | the try of `security/Proofs/Properties/Spot/TwoStageCheck.lean`, whose imports are the other four changed Lean files, vy-nebius-cpu-13 | waiting for a slot, 3 ahead at 06:49Z; about 16 min once it has one, if its tree is cold as this morning's were |
+| `r20261112-065220-79a3` | `suites.py --changed d6075b75d289 --quick`, vy-nebius-cpu-10 | waiting for a slot |
+
+- [run] `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD`: "1 change(s), 0 failed".
+- [derived] Nothing at this head has compiled. The proof is the one that compiled in `r20261112-052746-8213`, moved
+  into `TwoRankin.lean` by hand, and the three terms and `pair_requestsCover` are edits by hand.
+
+**What turned out different from the 05:57Z list**
+
+- [read] Five Lean files change, not six. `security/Proofs/Flock/SamplingGeneric.lean:110` names the two guarantees
+  and says nothing of the clause, so it has no edit.
+- [read] `rankinTwoPatterns_honest` is deleted, not shortened. Without its third conjunct it is `rankinTwo_honest`'s
+  statement word for word (`security/Proofs/Flock/Claims/Witnesses/SamplingTwoRankin.lean:52-53`). So I edited
+  `security/lean-audit.json` by hand in two places: `witnesses["Claims.Sampling.admissibleTwo_rankin_patterns"].honest`
+  is now `["Claims.Witness.SamplingGeneric.rankinTwo_honest"]`, and the record
+  `guarantees["Claims.Witness.SamplingGeneric.rankinTwoPatterns_honest"]` is gone. No other place in the three locks
+  named it [run: a search of each lock's keys and strings]. `rankinTwo_honest` concludes the guarantee's one named
+  premise, `Claims.Sampling.InScopeTwo` [read: its record's `premises.open`].
+  [derived] If you would rather keep the name, it is one theorem, `:= rankinTwo_honest`, and the two hand edits
+  reverted; say so and I do it before the ready line.
+- [read] The `why` of `Properties.Spot.RequestsCover` now reads: "The requests the patterns' point describes: disjoint,
+  and in each replay block as many and as wide as its class says."
+- [read] The Python: no pinned copy of the old reason anywhere else [run: `rg "needs fan-out|reads each request"`, the
+  two raises and the two tests only]. Both raises now say "the patterns' form is priced only where no replay block
+  reads a value another computed, so it needs fan-out 1, not N", which keeps `needs fan-out 1, not 2`,
+  `fan-out is at least 1` and `fan-out`. I wrote "replay block" and not "session": in the tree a session is a proof
+  session. Two docstrings in the tests and two in the code say the same.
+- [read] `research queue open` requires `--issue KEY|none:REASON`, and a key writes to Linear, which I do not. I will
+  open with `--issue none:` and a reason; `research queue link N --issue KEY` is yours.
+
+Mailbox read 06:52Z: `inbox/sessread.md` does not exist on `cursor/proofs-inbox`.
+
+Next: the try's result, then the pull request (unmarked), then the issue's text as its own entry. The ready line waits
+on the records run and its commit.
