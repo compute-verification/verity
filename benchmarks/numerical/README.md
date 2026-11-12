@@ -12,6 +12,9 @@ as a Boolean circuit. It has three parts:
   for `verity.definitions.circuits.targets.target.FIRST`.
 - `checker`: a reference checker of that step with auxiliary witnesses, and the search for an output it accepts and should not.
 
+`bench-instances/` holds the committed input set `bench-instances/v1` that `bench.instances` reads (`DEFAULT_ROOT`), with
+its byte layout in `bench-instances/v1/README.md`.
+
 **What a caller may import** is each module's `__all__`. Its readers outside this directory are Flock's prover and pod
 scripts (`bench.contract`, `bench.interaction`, `bench.generate`, `bench.cell`) and other benchmarks: `tc_probe/`
 (`bench.contract`, `bench.instances`, `reference.hawkeye_close`), and `proof_throughput/`, `judge.py` and `latency_compare.py`
