@@ -11,6 +11,8 @@ launch_coordinator.py ids                                                  # eac
 launch_coordinator.py launch HANDLE --predecessor BC_ID --pairing-thread TS   # a successor, from its predecessor's handoff
 launch_coordinator.py launch HANDLE --charter-from BC_ID --pairing-thread TS  # a new slice, from its charter
 launch_coordinator.py archive BC_ID
+launch_coordinator.py tell --file MSG.md --dry-run                            # who gets what; sends nothing, needs no key
+launch_coordinator.py tell --file MSG.md [--only|--skip HANDLE ...]          # Daniel's message, in each coordinator's chat
 ~~~
 
 - **The handoff or charter travels as an artifact.** The outgoing lead copies its handoff to
@@ -26,6 +28,14 @@ launch_coordinator.py archive BC_ID
   `--succeeds`), "up" posted in the pairing thread, and each acting loop started only after the predecessor posts
   "stopped LOOP".
 - `--dry-run` prints the create request and sends nothing; with `--text-file` it needs no key.
+- **`tell` puts one message of Daniel's in every coordinator's own chat**, for a ruling a lead acts on only when Daniel
+  says it there. It reads each handle's holder from the registry in the checkout (pull `main` first), leaves out `top` and
+  any handle a desktop agent holds, and sends each target one steer (`POST /v1/agents/{id}/runs` with `delivery: steer`,
+  [Send A Follow-Up Or Steer](https://cursor.com/docs/cloud-agent/api/endpoints)): a running turn takes it, an idle
+  agent gets it as its next follow-up, and an archived one refuses it. Run it with `--dry-run` first, which prints each
+  target and the text. It prints one line a target and exits nonzero listing those not sent (a steer that failed with a
+  5xx or never got an answer may still have arrived: look in that chat before resending with `--only`); `--no-steer`
+  sends plain follow-ups, which a running agent refuses.
 
 ## Handing over
 

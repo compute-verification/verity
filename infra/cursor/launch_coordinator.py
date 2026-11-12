@@ -16,6 +16,14 @@ instead of a second one.
     launch_coordinator.py launch HANDLE --predecessor BC_ID --pairing-thread TS [--model ID] [--dry-run]
     launch_coordinator.py launch HANDLE --charter-from BC_ID --pairing-thread TS [--model ID] [--dry-run]
     launch_coordinator.py archive BC_ID                           # idempotent
+    launch_coordinator.py tell (--text TEXT | --file PATH) [--only HANDLE ...] [--skip HANDLE ...] [--agent BC_ID ...]
+                          [--no-steer] [--dry-run]                # one message to every coordinator's chat but top's
+
+``tell`` sends the text to the agent holding each coordinator handle (the registry's ``holder``; a handle held by a
+desktop agent gets nothing) with one ``POST /v1/agents/{id}/runs`` each, as Cursor's "Send A Follow-Up Or Steer"
+documents it (https://cursor.com/docs/cloud-agent/api/endpoints): ``delivery: steer`` by default, which a running turn
+takes and an idle agent gets as its next follow-up; ``--no-steer`` sends a plain follow-up, which starts a new run and is
+refused (409 ``agent_busy``) while one runs. An archived agent refuses either (409 ``agent_archived``).
 """
 
 from __future__ import annotations
@@ -24,6 +32,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.parse
@@ -93,6 +102,8 @@ NEW_SLICE = dict(
 
 MODEL = "claude-fable-5-2"
 EFFORT = "xhigh"
+FOLLOW_UPS = "https://cursor.com/docs/cloud-agent/api/endpoints"
+CLOUD_AGENT = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 
 
 def agent_id(handle: str, generation: int) -> str:
@@ -200,7 +211,59 @@ def ids(_: argparse.Namespace) -> None:
         print(f"{handle}\t{generation}\t{new_id}\t{new_id[-4:]}")
 
 
-def main() -> None:
+def coordinators() -> dict[str, str]:
+    """Each coordinator handle and the cloud agent that holds it, from the registry's ``holder``."""
+    return {h["handle"]: h["holder"] for h in json.loads(REGISTRY.read_text())["handles"]
+            if CLOUD_AGENT.fullmatch(h.get("holder", ""))}
+
+
+def targets(args: argparse.Namespace) -> list[tuple[str, str]]:
+    held = coordinators()
+    unknown = [h for h in args.only + args.skip if h not in held]
+    if unknown:
+        sys.exit(f"not a coordinator handle: {', '.join(unknown)}; nothing sent. The handles {REGISTRY} gives a cloud "
+                 f"agent: {', '.join(held)}")
+    bad = [a for a in args.agent if not CLOUD_AGENT.fullmatch(a)]
+    if bad:
+        sys.exit(f"not a cloud agent id (bc-<uuid>): {', '.join(bad)}; nothing sent")
+    chosen = [(h, held[h]) for h in dict.fromkeys(args.only)] if args.only else [(h, a) for h, a in held.items() if h != "top"]
+    out = [(h, a) for h, a in chosen if h not in args.skip]
+    out += [("--agent", a) for a in dict.fromkeys(args.agent) if a not in {b for _, b in out}]
+    if not out:
+        sys.exit("no targets left; nothing sent")
+    return out
+
+
+def tell(args: argparse.Namespace) -> None:
+    text = args.text if args.text is not None else Path(args.file).read_text()
+    if not text.strip():
+        sys.exit("the message is empty; nothing sent")
+    to = targets(args)
+    if args.dry_run:
+        for handle, agent in to:
+            print(f"{handle}\t{agent}\thttps://cursor.com/agents/{agent}")
+        print(f"\n{'a plain follow-up' if args.no_steer else 'a steer'} to each of these {len(to)}, saying:\n{text}")
+        return
+    key = os.environ.get("CURSOR_API_KEY") or sys.exit("set CURSOR_API_KEY (Daniel's user key); nothing sent")
+    body = {"prompt": {"text": text}} if args.no_steer else {"prompt": {"text": text}, "delivery": "steer"}
+    failed = []
+    for handle, agent in to:
+        try:
+            status, payload = call("POST", f"/v1/agents/{agent}/runs", key, body)
+        except OSError as err:
+            status, payload = None, {"error": str(err)}
+        if status is not None and 200 <= status < 300:
+            how = payload.get("delivery") or f"run {payload.get('run', {}).get('id', '?')}"
+            print(f"{handle}\t{agent}\tsent ({how})")
+        else:
+            why = f"HTTP {status} {json.dumps(payload)}" if status is not None else f"not reached: {payload['error']}"
+            print(f"{handle}\t{agent}\tFAILED {why}")
+            failed.append(f"{handle} {agent}: {why}")
+    if failed:
+        sys.exit(f"{len(failed)} of {len(to)} not sent:\n" + "\n".join(failed))
+
+
+def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("ids", help="every coordinator's generation, id and branch suffix").set_defaults(fn=ids)
@@ -219,7 +282,20 @@ def main() -> None:
     q = sub.add_parser("archive", help="archive an agent once it has stopped")
     q.add_argument("agent")
     q.set_defaults(fn=archive)
-    args = p.parse_args()
+    q = sub.add_parser("tell", help=f"send one message to every coordinator but top, a steer each ({FOLLOW_UPS}, "
+                                    "Send A Follow-Up Or Steer)")
+    src = q.add_mutually_exclusive_group(required=True)
+    src.add_argument("--text", help="the message")
+    src.add_argument("--file", help="read the message from this file")
+    q.add_argument("--only", nargs="+", action="extend", default=[], metavar="HANDLE",
+                   help="only these handles (top included if named)")
+    q.add_argument("--skip", nargs="+", action="extend", default=[], metavar="HANDLE", help="leave these handles out")
+    q.add_argument("--agent", nargs="+", action="extend", default=[], metavar="BC_ID", help="also these agent ids")
+    q.add_argument("--no-steer", action="store_true",
+                   help="a plain follow-up: starts a new run, refused with 409 agent_busy while the agent runs")
+    q.add_argument("--dry-run", action="store_true", help="print each target and the message; send nothing, need no key")
+    q.set_defaults(fn=tell)
+    args = p.parse_args(argv)
     args.fn(args)
 
 
