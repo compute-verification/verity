@@ -201,6 +201,11 @@ structure Inputs where
   decls : List Decl
 
 def REGISTERED : List String := ["params", "tables", "reads", "roots", "openings"]
+/-- Keys of `registered` a record may carry beside `REGISTERED`, which the form takes and reads nothing of: the
+parameters its Program takes as its own (`values`) and, by parameter, the rows a read of it opens where they are not
+16-bit leaves (`formats`). Neither changes a count: a read's bits are its reader row's, and a parameter is θ only by
+its entry in the log's first record. -/
+def REGISTERED_UNREAD : List (List String) := [[], ["values"], ["formats"], ["values", "formats"]]
 def READ : List String := ["reader", "port", "param", "at", "radix", "base", "step"]
 def TABLE : List String := ["name", "param", "offset", "words", "rows"]
 def TABLE_READ : List String := ["reader", "port", "table", "of", "at", "units"]
@@ -277,7 +282,7 @@ It reads `W`'s cuts and wires and nothing else of it: no template of its own and
 * `ingress`, `{reader, port, at, units, step}`: units `[at, at + units)` of the reader read that row from outside. -/
 def inputsOf (ts : List Tmpl) (W : Spot.Wires.Wiring) (doc : Json) : Except String Inputs := do
   let reg := (doc.getObjVal? "registered").toOption.getD NO_REGISTERED
-  if !(keyed reg REGISTERED || keyed reg ("values" :: REGISTERED)) then throw "inputs"
+  if !(REGISTERED_UNREAD.any fun ks => keyed reg (ks ++ REGISTERED)) then throw "inputs"
   let .obj pkv := valueAt reg "params" | throw "inputs"
   let params ← pkv.toArray.toList.mapM fun (p, v) => match nat? v with
     | some n => if n ≥ 1 then pure (p, n) else throw "inputs"

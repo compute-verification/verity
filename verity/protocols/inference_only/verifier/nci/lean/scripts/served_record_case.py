@@ -242,7 +242,7 @@ def main() -> int:
     said("the reference's count:", json.dumps(res["count"]))
     if res["detail"].get("error") == "inputs":
         said("the record's registered has keys", sorted(doc.get("registered", {})), "and the form reads",
-             sorted(ref.REGISTERED | {"values"}))
+             sorted(ref.REGISTERED | getattr(ref, "REGISTERED_UNREAD", {"values"})))
     counted(inst, tr)
     said("done")
     return 0

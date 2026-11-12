@@ -69,6 +69,8 @@ LIMITS = ("table", "c", "k", "n")
 WIRE = {"reader", "port", "writer", "out", "at", "radix", "base", "step"}
 READ = {"reader", "port", "param", "at", "radix", "base", "step"}
 REGISTERED = {"params", "tables", "reads", "roots", "openings"}
+#: keys of `registered` a record may carry beside those, which the form takes and reads nothing of
+REGISTERED_UNREAD = {"values", "formats"}
 TABLE = {"name", "param", "offset", "words", "rows"}
 TABLE_READ = {"reader", "port", "table", "of", "at", "units"}
 OPENING = {"reader", "table", "key", "ports", "verdict", "at", "units"}
@@ -427,7 +429,7 @@ class Inputs:
         for i, w in enumerate(wires):
             put(w["reader"], w["port"], ((u, r) for u, r, _ in entries(w)), ("wire", i))
         reg = rec.get("registered", {"params": {}, "tables": [], "reads": [], "roots": [], "openings": []})
-        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | {"values"}
+        if not (isinstance(reg, dict) and REGISTERED <= set(reg) <= REGISTERED | REGISTERED_UNREAD
                 and isinstance(reg["params"], dict) and all(_nat(v) and v >= 1 for v in reg["params"].values())
                 and isinstance(reg["reads"], list)):
             raise Malformed("inputs")
