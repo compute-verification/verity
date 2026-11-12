@@ -1206,7 +1206,9 @@ def test_r7_takes_the_verifiers_certified_entries():
     prog = _program()
     reg = _registered(prog)
     rec, ports = _record(prog, reg)
-    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}}
+    seeded, check, _, _ = _seeded_case()
+    design = {k: x for k, x in check.items() if k not in ("program", "query", "ports", "registered", "supplied")}
+    kw = {**design, "ports": ports, "registered": {"W": 2}}
     (value, mine), = CERTIFIED.items()
     e = {"value": value, **mine}
     both = {**rec, "registered": [reg.entry(), e]}
@@ -1239,10 +1241,10 @@ def test_r7_takes_the_verifiers_certified_entries():
     # a program none of whose parameters is registered: the record's registered values are the certified ones alone
     lone = _program(w=16)
     served, ports1 = _record(lone, reg)
-    kw1 = {"law": LAW, "scheme": SCHEME, "ports": ports1}
-    v1 = R.record(lone, Q, LAW, SCHEME, served["roots"], SERVED)
-    only = R.record(lone, Q, LAW, SCHEME, served["roots"], SERVED, registered=[e])
-    assert only["format"] == "verity/registration/v2" and only["registered"] == [e]
+    kw1 = {**design, "ports": ports1}
+    v1 = {**{k: x for k, x in served.items() if k != "registered"}, "format": R.FORMAT}
+    only = {**served, "registered": [e]}
+    assert only["format"] == R.FORMAT_V2
     assert R.check(only, lone, Q, **kw1, certified=CERTIFIED).ok
     assert R.check(only, lone, Q, **kw1, registered={}, certified=CERTIFIED).ok
     assert R.check(only, lone, Q, **kw1).codes == ("keys",)
@@ -1259,7 +1261,6 @@ def test_r7_takes_the_verifiers_certified_entries():
         with pytest.raises(ValueError):
             R.check(both, prog, Q, **kw, certified=bad)
     # a certified value is the verifier's by its entry alone: it names it nowhere else
-    seeded, check, _, _ = _seeded_case()
     with pytest.raises(ValueError):
         R.check(seeded, **check, certified={"pouw.roots": mine})
     for named in ({"supplied": {value: [[{"port": "x"}]]}}, {"pinned": {value: "cd" * 64}}, {"held": [value]},

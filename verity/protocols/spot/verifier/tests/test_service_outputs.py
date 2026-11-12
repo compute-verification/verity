@@ -219,21 +219,27 @@ def test_the_run_of_record_reads_the_certified_entries(monkeypatch):
     assert not outcome.accepted and stream.records[-1]["audit"]["checks"]["run"]["codes"] == [V.DISAGREE]
 
 
-def test_an_interior_registration_takes_no_certified_entries():
-    """`register_interiors` takes no certified entries: an interior record that registers a link's certified rows beside
-    the state its boundary left is refused (`R7-values`), where the same record without the rows is accepted."""
-    stream = _stream(_two_stage_spec((STATE, ROWS)), replay=BLOCK)
+def _two_stage(spec: S.Spec):
+    """A two-stage stream of `spec` past its first-stage sample: the stream, its boundary record, which leaves its replay
+    blocks' state at port `carry`, that registration, the sample, the interior's `outputs` naming that port, and the
+    interior's record and ports registering the entries it is given."""
+    stream = _stream(spec, replay=BLOCK)
     m = Q * N_RHO
     boundary, bports = _record(P.population_program(BLOCK, NB), GRAIN, {"bx": NB, "bout": NB, "carry": m},
                                {"law": "subset", "k": Q}, 0, None)
     reg = stream.register(boundary, bports)
     first = stream.select(reg)
-    out = {"state": {"record": reg.digest, "port": "carry"}}
 
     def interior(registered):
         return _record(P.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
                        0, reg.digest, registered, interior=True, replay_sample=D.proved(first.draw))
+    return stream, boundary, reg, first, {"state": {"record": reg.digest, "port": "carry"}}, interior
 
+
+def test_an_interior_registration_takes_no_certified_entries():
+    """`register_interiors` takes no certified entries: an interior record that registers a link's certified rows beside
+    the state its boundary left is refused (`R7-values`), where the same record without the rows is accepted."""
+    stream, boundary, _, first, out, interior = _two_stage(_two_stage_spec((STATE, ROWS)))
     with_rows, iports = interior([_left(boundary, "carry"), ROWS_ENTRY])
     assert _refused(lambda: stream.register_interiors(first, with_rows, iports, registered={"state": 2},
                                                       outputs=out)) == ("R7-values",)
@@ -251,17 +257,9 @@ def test_an_interior_registration_reads_a_port_of_its_boundary():
     them, which this boundary doesn't register, and its session, which the verdict of record names as it checked it,
     reads `state` from the registered value instead. Registered with no output named, it is refused under its own
     domain."""
-    stream = _stream(_two_stage_spec(), replay=BLOCK)
+    stream, boundary, reg, first, out, record = _two_stage(_two_stage_spec())
     assert stream.n_rho == N_RHO
-    m = Q * N_RHO
-    boundary, bports = _record(P.population_program(BLOCK, NB), GRAIN, {"bx": NB, "bout": NB, "carry": m},
-                               {"law": "subset", "k": Q}, 0, None)
-    reg = stream.register(boundary, bports)
-    first = stream.select(reg)
-    out = {"state": {"record": reg.digest, "port": "carry"}}
-    interior, iports = _record(P.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
-                               0, reg.digest, [_left(boundary, "carry")], interior=True,
-                               replay_sample=D.proved(first.draw))
+    interior, iports = record([_left(boundary, "carry")])
     assert "R7-domain" in _refused(lambda: stream.register_interiors(first, interior, iports, registered={"state": 2}))
     ireg = stream.register_interiors(first, interior, iports, registered={"state": 2}, outputs=out)
     assert stream._entries[reg.order].interior_copies[-1] == out
