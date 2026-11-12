@@ -278,8 +278,8 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
     if not gaps and not sel:
         return None, None
     n = sum(gaps.values())
-    cls = sorted({codes[k]["class"] for k in gaps})                            # a gap is a reason whose code names its class
-    tags = sorted({t for k in gaps for t in codes[k].get("tags") or ()})
+    cls = sorted({_table(codes, k).get("class") for k in gaps})
+    tags = sorted({t for k in gaps for t in _table(codes, k).get("tags") or ()})
     reasons = " | ".join(f"{v} x {k.split(' [', 1)[0][:110]}" for k, v in sorted(gaps.items(), key=lambda kv: -kv[1]))
     missing = _form_b_complete_over_values(oc)
     # plane-fed VUs are covered by neither form: FAIL by name, whatever form (B) says
@@ -290,7 +290,7 @@ def _complete_replay_population_gap(sr: dict | None, oc: dict | None) -> tuple[s
         reasons_p = " | ".join(f"{v} x {k.split(' [', 1)[0][:110]}" for k, v in sorted(plane.items(), key=lambda kv: -kv[1]))
         tail = ""
         if rest:
-            rest_cls = sorted({codes[k]["class"] for k in rest})
+            rest_cls = sorted({_table(codes, k).get("class") for k in rest})
             tail = (f"; the other {sum(rest.values())} VUs not evaluable by name ({', '.join(rest_cls)}) "
                     + ("are covered by the complete form (B)" if missing is None else f"are not covered either: {missing}"))
         return None, (f"C2 of record not established: {n_p} plane-fed VUs {_PLANE_FED_NEITHER_FORM} -- {reasons_p}{tail}; "
