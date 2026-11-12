@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import json
 
 import pytest
 
@@ -121,12 +122,14 @@ def case(heads, load: tuple[str, int] = FIRST, stop: bool = True):
 @pytest.mark.parametrize("load", (FIRST, SECOND), ids=("first", "second"))
 def test_an_honest_ties_record_is_held_to_the_head_and_its_verdict_says_accepted_and_complete_apart(heads, load, stop):
     """The tie's record at the head's count, registering the class's end and response tables as the head signs them
-    beside the compute side's ports, passes the verifier in either form. Its verdict names the head and the record,
+    beside the compute side's ports, passes the verifier in either form, and the registration reads the same after
+    a run has kept it as JSON. Its verdict names the head and the record,
     and carries two bits: accepted on one-stage's accept of the record, and complete only where the accept's public
     `complete` is true, so an accept without the field, or with anything but true there, is accepted and not
     complete."""
     t, doc, log, outputs, rec = case(heads, load, stop)
     head = t.read(doc)
+    assert t.read(json.loads(json.dumps(doc))) == head
     assert rec["population"] == t.rows(head) == TB.COUNTS[load[0]][load[1]]
     assert sorted(t.registered) == (["egress", "stop"] if stop else ["egress"])
     assert set(t.certified(head)) == {f"{TB.LINK}/end.{load[1]}/0", f"{TB.LINK}/response.{load[1]}/0"}
