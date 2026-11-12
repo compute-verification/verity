@@ -12,7 +12,8 @@ after-landing run on `checked`'s tip).  It reports each step's real verdict; wha
                                                             after-landing run drive launches on `checked`'s tip (`train.sh
                                                             --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
                                                             with --shard K/N, only those of shard K's parts, the last
-                                                            shard's with those no shard holds (ratchet-gate) (drive's
+                                                            shard's with those no shard holds (ratchet-gate, where its plan
+                                                            doesn't name it) (drive's
                                                             `after_landing_shards`: one run per shard, at once, once the
                                                             records step passed: `--cc-records`)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
@@ -201,8 +202,8 @@ doesn't name:
                     the culprit.  A BASE at or above HEAD fails it, since it would judge nothing (drive's after-landing
                     run sends one below the tip: the tip of the last run whose ratchet-gate gave a verdict, else the last
                     verified `main`); one that names no commit here skips it.  Off the
-                    gate and in no plan: a recorded check skips it, and the after-landing run, `--deferred` with every
-                    job, runs it
+                    gate: a recorded check skips it, and the after-landing run, `--deferred` with every job, runs it
+                    (sharded, in the shard its plan names, else in the last)
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run, whose every step also runs with Lake's
 local artifact cache off, `suites.UNCACHED_ENV`), each a hit only on identical inputs:
@@ -2093,10 +2094,10 @@ def deferred_parts(steps: str) -> list[str]:
 def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file: Path | None = None) -> dict:
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
     gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
-    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
-    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
-    provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
-    can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
+    of the plan holds, ratchet-gate's where the plan doesn't name it, so the N shards together run every part drive's
+    after-landing run passes), "all": every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake
+    packages, each spec's audit on its provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is
+    no such plan or shard, or the tree can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
     if spec.startswith("auto:"):
         return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
