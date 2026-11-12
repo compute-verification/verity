@@ -40,7 +40,6 @@ public import Definitions.Pouw.Lead.Forward
 public import Definitions.Pouw.Lead.Gap
 public import Definitions.Pouw.Lead.Layout
 public import Definitions.Pouw.Lead.Model
-public import Definitions.Pouw.KeyedLeaf
 public import Definitions.Pouw.M1
 public import Definitions.Pouw.MerkleExtract
 public import Definitions.Pouw.NCP.Defs
