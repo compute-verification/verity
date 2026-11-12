@@ -68591,3 +68591,216 @@ Mailbox checked at 02:59Z: twelve sections, nothing after the one headed 02:55Z.
 - **Before and after:** before, the cost model priced a sample at a rate of every replay block with strata by width, a design `main`'s verifier does not run, at a size where the first stage `main` runs cannot pay for one sampled replay block; after, it prices a whole count of each verification phase's replay blocks with strata by template, prints the phase's size with every figure, and says beside each design which limit of today's code it meets.
 - **Who marks:** it changes no guarantee's statement and nothing a verifier accepts ([read] no verifier module imports `two_stage_design`; `plancheck.py`, `candidates.py` and `costfit.py` import other names of the planner, which I did not change), so by the brief it is mine to mark. I mark it when `9e83` ends with no failure my change causes. If you would rather mark it, this is the line.
 - **What the body still says "running" for:** the suites' line and the several-phases section's run. I edit both in when the runs end.
+
+## FRAME, Thu 12 Nov 02:59Z: at the served driver every input of a replay block is registered after the first stage's sample and nothing holds its content to round 1; no such run is accepted (`two-stage-form`); the two rulings stated, with what each costs
+
+Tags: [read] = the file on `main` `be9a3d566905` unless a path says otherwise; [run] = a run id; [derived] = my own
+inference from what is tagged read; [guess] = unverified. Times from `date -u`. Mailbox read 02:58Z (six
+sections, newest 02:25Z Thu 12 Nov) [read].
+
+### 1. Each link today: which record commits it, when, and what holds its content to round 1
+
+By kind:
+
+- **`Supply`** (the verifier's). The interior registration registers it, after the first stage's sample, but each row
+  is bytes the verifier holds before the sample: a root round 1's record names, or bytes of its own; it is committed
+  at public salts and R7 recomputes its root (`R7-supplied`) [read `one_stage/registered.py:45-62`,
+  `interior_links.py` `Supply`, `supplied`, `sources`, `history`]. Content held to round 1: yes, wholly.
+- **`Operand`** (the prover's). The interior registration registers it, after the first stage's sample and before the
+  second stage's coins, under fresh salts, its domain binding the interior window's open root. R7 holds its name, leaf
+  count, words, word bits and domain (`R7-values`, `-leaves`, `-words`, `-word_bits`, `-domain`) and its root only for
+  a value that is pinned, held, supplied or an output of an earlier record, which no `Operand` is [read
+  `registration.py:775-838`, `interior_links.py` `Operand`, `operand`]. Content held to round 1: no.
+- **Which kind a parameter gets.** `interior_links.links` makes a parameter a `Supply` only where its caller names it
+  in `supplied`; every other is an `Operand` [read `interior_links.py` `links`]. The served driver's `design()` calls it
+  with no `supplied` [read `benchmarks/one_stage/two_stage.py:351`]. So at the driver every parameter link is an
+  `Operand` [derived].
+- **The return.** The interior never registers it; round 2 reads it only at a port round 1's record commits [read
+  `two_stage.py:47-58`, `Design` docstring].
+
+By design, each link `main` has:
+
+| design | link | kind | committed by | when | what holds its content to round 1 |
+|---|---|---|---|---|---|
+| toy (`benchmarks/two_stage/toy.py`) | `ingress`, read by the first template | a port of round 1's record | round 1's record | at serving, before the first stage's coins | it is round 1's row, leaf S[i] of the port (`linkedRow`) [read toy.py:1-32, 196-200] |
+| toy | the return `o0`, written by the last template | a port of round 1's record | round 1's record | at serving | the same [read] |
+| token select, the check's instances whole (`two_stage.py`, `two_stage_small.py`) | `logits`: O rows a span of V 16-bit words | `Operand` | the interior registration | after the first stage's sample | nothing at the verifier. The prover's own `interior_rows.captured` refuses a capture whose ids are not the served ones, before it commits [read `two_stage.py:380-400`, `tests/test_two_stage_second.py:102-108`] |
+| token select | the return `o0` | none | no record, under a name round 2 reads: the class's round-1 record commits `b.ingress` and `b.egress` only; the session's port is at the interior's own root | | nothing; round 2 refuses the read (`second-read`) and the command exits 1. Where round 1 does commit the return, `replayed` raises: not built [read `two_stage.py:47-58`, `:427-450`; `test_two_stage_second.py:166-216`] |
+| token select, the check's body inlined, as a served vocabulary's is | none: round 2 derives no wires and no links | | each port at its own rows of the interior registration | after | nothing; refused `second-wires`, exits 1 [read `two_stage_small.py:1-10`, `two_stage.py:864-867`] |
+| table read (`adapters/vllm/tests/pipeline/test_interior_table.py`, `benchmarks/one_stage/tests/test_two_stage_driver.py`; no command of the driver runs one) | `root`, `domain` | `Supply`, a `history` source | the interior registration, at public salts | registered after the sample; its content is the table's root and domain id in round 1's record, committed at serving before any coin | wholly: `R7-supplied` recomputes it from round 1's record [read `interior_links.py` `history`, test_interior_table.py:66-73, :270] |
+| table read | `tok`, the key | `Operand` | the interior registration | after | nothing [read; derived] |
+| table read | `row`, `salt`, `path` | `Operand` | the interior registration | after | the read's own circuit, in part: `ok` = 1 exactly when the leaf of (`row`, `salt`) opens at position `tok` under `root` and `domain` (`EmbeddingRead_v1`) [read `gates/embedding.py:1-27`]. But `ok` is the session's output at the interior's own rows; only the prover's `interior_links.opened` refuses `ok` ≠ 1, before it commits. I found no check of the verifier that holds `ok` to 1 [read `interior_links.py:388-405`, test_interior_table.py:440-452; searched `second_stage.py`, `interior_rows.py`] |
+| indices (`adapters/vllm/tests/pipeline/test_interior_indices.py`) | `c`, `i` | `Supply`, a `bytes` source | the interior registration, at public salts | after; its content is the verifier's own bytes | wholly (`R7-supplied`) [read test_interior_indices.py:1-10, :57-58] |
+| indices | `x0`, `best`, `y0`, `ybest` (a picking unit's scores and count) | `Operand` | the interior registration | after | nothing [read :60-61; `interior_links.py:10`] |
+
+So the only design on `main` whose every link is round 1's is the toy. At the token select neither end of the replay
+block is held: its input is an `Operand` and its return is at no record round 2 reads [derived].
+
+### 2. The attack
+
+A prover serves whatever tokens it likes and commits them in `b.egress`; nothing of what computed them is committed.
+After the first stage's sample it knows which replay blocks are opened, and for each one it picks the `Operand` (the
+token select's `logits`) so that the block's circuit outputs what it served, registers it in the interior
+registration, and proves the second stage honestly. R7 and round 2 hold that value's name, rows, words and domain and
+never its content, so every check passes and the audit establishes only that the served ids are the select of some
+logits chosen after the coins: an unsampled block costs the prover nothing, a sampled one never fails, and ε bounds
+nothing about what the model computed [derived from section 1].
+
+Two qualifications. It is no accepted run today (section 4). And it is not advice the guarantee could charge: advice
+is committed before the coins (AGENTS.md, output accounting), and this is chosen after them [read; derived].
+
+### 3. The two candidate rulings
+
+**(a)** *Every input of a replay block that the prover gives is a port of round 1's record, committed at serving before
+the first stage's coins. A template's port reads a port of round 1's record (a link), another template's output in the
+same block (a wire), or a value the verifier computes itself from what it holds before the sample (a supplied value).
+The interior registration registers nothing else that a block's input reads.*
+
+- As the coordinator's sentence stands ("every input ... is a port the boundary record commits") it would refuse the
+  supplied values too, which the interior registration registers; the statement above keeps them [derived from
+  `readOk`'s link arm, which cannot tell a supplied value from an `Operand`: the difference is R7's alone, read
+  `Spot/SecondStage.lean:844-871`].
+- In code it is one refusal: R7 at an interior registration refuses a registered value whose root it does not hold
+  (not supplied, pinned, held or an output of an earlier record) [derived]. It is not my branch
+  `cursor/proofs-readshapes-d930` as it is: that refuses every interior-registered value a link names, the supplied
+  ones among them [read my own diff].
+- What the adapter lacks for it: a link that reads a parameter at round 1's port. `interior_links.links` gives a
+  parameter one of two kinds, `Supply` or `Operand`, even where round 1's record names a port for it (round 2 would then
+  refuse the interior's value of that name, `second-interior-names`). The toy reads both its links at round 1's rows
+  through `verity.commitments.windows.links.Port`; the driver's `replayed` raises where round 1 commits the return
+  ("doesn't open yet") [read `interior_links.py:189-221`, `toy.py:14-24`, `two_stage.py:439-447`; the refusal by
+  `second-interior-names` derived from `namesOk`].
+- What serving must then commit, a replay block:
+  - today: `b.ingress`, 4·(HEAD + P) bytes, and `b.egress`, 4·(2 + O) bytes, a row a span each [read
+    `boundary_rows.py:281-284`];
+  - the token select as it stands (the check alone as the block): a port for `logits`, 2·V·O bytes a block, O rows each
+    under its own salt, and a port for the return. At the test's V = 128, O = 4 that is 1,024 bytes; at a vocabulary of
+    128,256 it is 256,512 bytes a served token [derived; V = 128,256 read in `gates/embedding.py`'s cost paragraph; the
+    served class's V and O not read];
+  - a request's own Definition as the block: nothing new. Its inputs are `b.ingress` and the tables it reads, which
+    round 1 commits already when its history tables are on: C rows a (span, layer) of 576 16-bit words, 1,152 bytes a
+    position a layer [read `boundary_tables.py:1-30`, `commit/history_tables.py:41`];
+  - a block that reads what another block computed (a cached prefix): those rows must be a table or port of round 1,
+    committed by the request that computed them, 1,152 bytes a cached position a layer if they are the latent rows; the
+    reading block takes `root` and `domain` supplied [derived]. Which table and which rows of it a block reads is
+    an input too: it must be fixed by round 1 (a `Supply`'s `history` source names the sampled span's own table today;
+    `boundary_tables.py` says the committed step schedule a range is to come from "isn't there yet"), else the prover
+    names the writer after the sample [read `boundary_tables.py:24-30`, `interior_links.py` `sources`; derived].
+- **`rootsWired` under (a): as it is stated in #9080.** A gate strictly inside a sampled replay block opens under the
+  interior registration's roots; every other gate, the block's inputs and its return among them, under round 1's. The
+  property is then true at every design the verifier accepts, the toy among them today [derived]. One addition: a
+  supplied input is no witness; the model must read it as a public value of the statement, which it does not have yet
+  [derived; guess on the size of that change].
+
+**(b)** *An input of a replay block may be registered by the interior registration, after the first stage's sample,
+where a check named in the verifier's params holds its content to round 1's commitments: any two contents the check
+accepts under one round-1 record give the block the same value on every wire that reads the input.*
+
+- Which check, for each `Operand` of today:
+  - `row`, `salt`, `path` of a table read: the read's opening under the supplied `root` and `domain` at its key. Any two
+    accepted openings give the same `h`, by SHA-512's collision resistance (already in the trust base), **if** the key
+    is held and `ok` is held to 1. Neither is today: `tok` is an `Operand` and `ok` sits at the interior's own rows
+    (section 1) [derived];
+  - `tok`: none today. It would be a supplied index, a wire, or a port of round 1 [derived];
+  - `logits`: none, and none can exist while the block is the check alone: nothing round 1 commits determines the
+    logits short of the whole forward pass [derived];
+  - `x0`, `best`, `y0`, `ybest`: none [derived].
+- **`rootsWired` under (b): a third case and a premise for each such value.** An input gate of the block whose link's
+  value is on the design's public list of held values opens under the interior registration's roots, at its sampled
+  block's rows (`wiredRow`). The guarantee takes, for each held value, a named `Prop`: the uniqueness lemma the
+  nondeterminism rule asks for, once per Definition. `revealWired`'s extracted input at those gates is then the
+  interior's, and equals what round 1 determines only through that premise. Without the lemma the input is a free input
+  at its width [derived; AGENTS.md "Nondeterminism is quantified" read].
+
+**The two are not exclusive** [derived]. A table read under (a) is already (b)'s shape for `row`, `salt` and `path`: what
+is read against is round 1's (the supplied root), and the opened row is the interior's, held by the opening. So (a)
+with one exception written into it, "or the opening of a root round 1 committed, its key held and its verdict held to
+1", covers every link `main` has except `logits` and the picking unit's operands, which no check holds. For a replay
+block that reads a cached prefix, that exception is the whole mechanism: the writer's rows committed at serving, the
+reader's `root` and `domain` supplied, the opened rows the interior's.
+
+### 4. What the last refusal covers
+
+Every two-stage run of record ends refused, whatever its links [read; the theorem's own run not repeated by me].
+
+- `SecondStage.FORM` is `false`; `check` appends `two-stage-form` where nothing else failed and the form is not
+  allowed; the theorem `check_refused` states `(check false own stmts).codes ≠ #[]` for every `own` and every
+  `stmts`, no statements and no parts included [read `Spot/SecondStage.lean:142`, `:1068`, `:1082-1091`, `:1167-1177`].
+- The run reads it: `Run.interiorAudit` calls `SecondStage.check SecondStage.FORM`, `attach` fails the interior's audit
+  record where the check fails, and the run's symbol is `reject` with no public outputs. A two-stage rule with no
+  interior registration is refused at the step `interiors`; only a one-stage rule skips the check [read
+  `Spot/Run.lean:205-235`, `:275-279`].
+- Python's the same: `service.py:2430` calls `SS.check(SS.FORM, ...)`, `second_stage.FORM = False`, and the outcome is
+  accepted only if both audit records are [read `service.py:2396-2432`, `second_stage.py:86`, `:1158-1210`].
+
+What it does not cover [read; derived]:
+
+- **The proofs' model.** `SpotFlock.readsOk` has no such switch: the guarantee is stated over what round 2 accepts with
+  the form allowed. So the gap of sections 1 and 2 is in a premise of a theorem about a run the verifier never accepts,
+  not in any accepted run.
+- **The driver's own report.** `two_stage.py` `round_two` calls `SS.check(True, ...)`, and `held` counts a second stage
+  as held when the outcome is refused by `two-stage-form` alone [read `two_stage.py:592-608`, `:676-691`]. That is a
+  development report; a reader can take "held" for accepted.
+- **The day `FORM` is turned on.** Nothing but `FORM` stands between section 2 and an accepted run at a design whose
+  return round 1 commits: R7 and round 2 would pass it [derived].
+
+### 5. `namesOk` in the model's `readsOk`
+
+Prepared, not opened [read; run where tagged].
+
+- Branch `cursor/proofs-frame-names-3b1e`, head `dd5961ba6a80`: one commit on #8940's head `58a598e615b1` (#8940 open,
+  not a draft, at that head, 02:58Z [read gh]).
+- The change: `Spot.SecondStage.namesOk own` as a conjunct of `SpotFlock.readsOk` (`Code.lean`) and of `readsOkHash`
+  (`Pin.lean`), after `interiorOrderOk own`, with one sentence in each docstring.
+- What breaks, by reading: nothing. The four places that open `readsOk` take its conjuncts by position from the
+  right, and the new one sits left of them: `readsOk_true` (`EntriesAt.lean`), `readsOkHash_eq` (`Pin.lean`),
+  `stmtOk_draw` (`Cap.lean`), `pin_of_stmtOkAt` (`Opens.lean`) [derived].
+- What breaks, by run: not known yet. The five files' tries are one run, `r20261112-023658-e79f`, which has waited
+  for a check slot on its node since 02:37Z and has not started [run status 02:58Z].
+- It opens once #8940 is on `main`; I open nothing before.
+- What the model still does not read of round 2 after it: the boundary's schedule (`second-schedule`), the design's
+  links and wires (`designOk`), and the order, cover and reported checks [read `Code.lean:484`, `SecondStage.lean`
+  `failures`].
+
+### 6. The tests the read change refuses
+
+Not yet [run status 02:58Z]: `r20261112-014345-d86c` is still running (launched 01:43Z, at most 180 minutes).
+
+By reading, that branch's change refuses more than (a) asks: it refuses every value a link names that the interior
+registration registers, so the supplied `root`, `domain`, `c` and `i` as well as the `Operand`s. The tests it should
+refuse are then every one that passes round 2 over the token select's `logits`, the table read's links or the
+indices' links [derived]. The list by suite and test follows the run.
+
+### 7. Corrections to my earlier entries
+
+- 02:13Z, "the two read shapes of a port no link or wire names are one condition": true of an input port only. An
+  output port may read a value only the interior registers, and that agrees with `rootsWired` (a gate inside the block
+  opens under the interior's roots) [derived].
+- My summary to myself had a table read's `ok` held to 1 by a registered value `opened`. That name is a synthetic case
+  of the verifier's difftest (`_read_interior`, a port named `ok` of a toy template), not the adapter's: at the adapter
+  only the prover holds `ok` to 1 (section 1) [read `lean/tests/test_difftest.py:4576-4606`].
+
+### 8. What I did not read
+
+- The served class's V and O, and which model's layers the history tables cover: the bytes in 3(a) are formulas with
+  the test's values and one vocabulary read from a docstring.
+- Where a `bytes` source's bytes come from at a served run (which message, before which coins); I read only that the
+  verifier "fills it from what it holds before the sample".
+- `interior_rows.interior` past line 482, `interior_rows.captured`, `engine.sampler_capture`, and `service.py`'s
+  `register_interiors` body (docstring only).
+- Whether any Definition that consumes a read's `ok` exists on `main` (a request's own Definition): I searched the
+  adapter's pipeline and round 2 only.
+- The lock entry of `check_refused`, if it has one, and whether any guarantee reads it.
+- The `cached-serving-audit-design` goal's own drafts and the other workers' entries on it.
+- The toy's run: that `rootsWired` holds at it is derived from its docstring, not run.
+
+### Runs
+
+- `r20261112-014345-d86c`: running at 02:58Z; ends by 04:43Z. The read change's check on `main`.
+- `r20261112-023658-e79f`: waiting for a check slot at 02:58Z since 02:37Z; at most 170 minutes once it runs. The five
+  tries of section 5.
+- `r20261112-020201-e57e`: exit 0. `AddressesWired.lean` at #9080's head `601df7cb4bb5`: 12 theorems, the three
+  axioms only.
+- `r20261112-012913-9301`: exit 0. `RevealsWired.lean` at that head: 33 theorems.
+- Pull requests [read gh 02:58Z]: #9080 a draft at `601df7cb4bb5`, its body says it stays one; #9084 open and
+  unmarked at `6e87dff94fc7`; nothing opened for section 5.
