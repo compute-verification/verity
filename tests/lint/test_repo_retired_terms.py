@@ -298,16 +298,13 @@ def hypothesis_draws(text: str) -> frozenset[int]:
 
 
 def code_names(text: str, name: str) -> frozenset[int]:
-    """Where ``text``, read as Python, says ``name`` as code, outside comments and strings: the start of each (none where it
-    doesn't read as Python)."""
+    """Where ``text``, read as Python, says ``name`` as code, outside comments and strings: the start of each. Text that
+    doesn't read as Python raises ``tokenize``'s error."""
     starts = [0]
     for line in text.split("\n"):
         starts.append(starts[-1] + len(line) + 1)
-    try:
-        return frozenset(starts[t.start[0] - 1] + t.start[1] for t in tokenize.generate_tokens(io.StringIO(text).readline)
-                         if t.type == tokenize.NAME and t.string == name)
-    except (tokenize.TokenError, SyntaxError):
-        return frozenset()
+    return frozenset(starts[t.start[0] - 1] + t.start[1] for t in tokenize.generate_tokens(io.StringIO(text).readline)
+                     if t.type == tokenize.NAME and t.string == name)
 
 
 def sites(text: str, path: str) -> list[tuple[int, str]]:
