@@ -79768,3 +79768,82 @@ Read: your 08:26Z and 08:34Z sections. Tips these lines are on: the merge branch
 - [not run] The grader README's audit (`bash check.sh`); left to the queue's check, as before.
 
 **Next.** Resume me when a run ends: suites first (I fix only what it names in my 17 files), then the records run (I commit what it kept under `lean-audit/record/`), then the evaluation (the body's figures). Then the ready line whole.
+
+## TABLEEXT, Thu 12 Nov 09:01Z: `6b15` passed with no importer refused and every importer is now built; no listed guarantee's record moves; the branch as it is cannot land: the Lean check of `security` fails on five claim definitions with no witnesses and `unread.py` on one wholly unread definitions module (cap 0), and both pass only with lock text and one toy theorem not yet written; no cap of `tests/test_lean_packages.py` moves until the guarantee is listed, then `UNWITNESSED` by one; neither merge stops; `main` has moved to `19fb19a21e40` and changed 22 of the importers, a try on that merge is out
+
+Sources: [run] a command I ran, with the run id where it ran on a project machine; [read] a place I read; [relayed] another's entry; [derived] my argument from what is read or run; [guess]. Times from `date -u`. Mailbox read 09:00Z: nothing after your 08:26Z section; the second reader's three questions are answered in my 10:00Z entry, by statement [run]. Every run below is on tree `5972af2daf80`, my branch's pushed head, unless it says otherwise [run]. Nothing here ran on the served engine [derived].
+
+### 1. `6b15`'s verdict
+
+- `r20261112-073020-6b15` ended rc 0, class SUCCESS: `verity lean try security/Proofs/Flock.lean --siblings`. Its lines: "Build completed successfully (12435 jobs)"; "lean exit 0 in 2093 s"; "siblings: no built module of its package that doesn't import Proofs.Flock declares a name it does (2670 imported in 11 s, peak 4416 MB); 1224 unchecked"; "axiom probe: no theorems in it" (the file is the package's import list) [run: `6b15`].
+- No line of its log starts with `✖` or `error:`. No importer refused, so there was nothing to fix [run: `6b15`, `rg` on its log].
+- Of the 493 modules that import `KS/ZkBoundW.lean` or `KS/JointR.lean`, 463 have a `Built` or `Replayed` line in `6b15`, and `Proofs.Flock` was elaborated by `lean` itself. 29 had no line [run: `6b15`; the import graph by `/tmp/closure2.py` on the tree]: `Proofs.Accounting`, `Proofs.Accounting.JointBridge.CommOfPooledLeakAcceptedHonest`; `Proofs.NetworkCertifier`, `.PeriodCheckedChecks`, `.SampledLeakRegPlain`, `.Witnesses`, `.WitnessesCarried`, `.WitnessesChecked`; `Proofs.Properties.Verity.Recursive`, `.Audit`, `.Names`, `.Numbers`, `.PartStatement`, `.Refusals`, `.SetupChecks`, `.Target`; `Proofs.Properties.Verity.Sampled.Record`, `.Accepts`, `.Facts`, `.Inner`, `.KS`, `.Law`, `.Nums`, `.Opens`, `.Pass`, `.Reg`, `.Runs`; `Proofs.WeightSecurity`, `Proofs.WeightSecurity.RegWitnesses`.
+- **None of the 493 is unbuilt now.** Item 3's run, `r20261112-080352-8f21` (rc 0), ran `lake build` on every root of `security/Proofs` on the same tree: "Build completed successfully (14382 jobs)", no `✖`, no `error:`. 28 of the 29 have a `Built` line there, and `Proofs.WeightSecurity` has `Unpacked`: lake took `main`'s artifact for it, its inputs being unchanged [run: `8f21`, `out/a.log`].
+- A second witness, by the Lean check's fast path and not by lake alone: `r20261112-080352-a060` (`lean_changed.py --records security/Proofs`, no `--update`) printed for `security/Proofs` "AUDIT … PASS 195638 declarations in 3893 modules; axioms propext, Classical.choice, Quot.sound" and "check.py exit 0 in 1543 s … without the kernel replay or the tests: a lean-fast/v1 result, which check and research merge refuse" [run: `a060`].
+- **The same run's check of `security`, where the lock is, fails, and not on a record**: "AUDIT … security: FAIL 27235 declarations in 723 modules … 1121 guarantees", "check.py exit 1 in 531 s". Its report has five failures, all of the code `claims.no-witnesses`: `Claims.Flock.KSAt`, `Claims.SamplingGeneric.FlockArgKSAt`, `FlockKSAt`, `FlockKSRegAt` and `FlockRerunsAt` are each "a claim definition with no witnesses: name its `…_fails` … and `…_meets` … under `claims.witnesses`, or list it under `claims.not` with the reason it is no claim" [run: `a060`, `lean-audit/requirer-security/audit-security/report.json`]. Item 3 says what that asks of a landing. Its stage on `security/Properties` passed ("PASS 3093 declarations in 94 modules … 465 guarantees", "check.py exit 0 in 470 s"), and the run ended rc 1 on the one failed stage [run: `a060`].
+- So of the four checks behind "proved": it elaborates, whole package (`6b15`, `8f21`); the axiom probes are clean (the tries of my 07:35Z entry; `a060`'s fast audit); the full check's kernel replay has not run; the second reader has read (a), (b), (e) and reports them as used for knowledge soundness, with (c), (d), (f) to come [run; relayed: the second reader's 08:10Z entry].
+
+### 3. The landing's size, by run
+
+**`unread.py`.** Run `r20261112-080352-8f21` (rc 0, `vy-nebius-cpu-3`): `tools/verity/lean/unread.py --build --caps tools/verity/lean/unread-caps.json`, three times in the run's own clone. A is the branch as it is. B adds, in the clone only, the guarantee stated in Lean: `Flock.Guarantees.MaskedKSAt` in `Proofs/Flock/MaskedAt/Statement.lean` and `Flock.SecurityProofs.MaskedKSAt := FlockDeploy.KS.zk_KSAt_untrim` in `Proofs/Flock/MaskedAt.lean`; both built ("Built Proofs.Flock.MaskedAt", exit 0). C is B with the clone's lock listing the guarantee and naming the four compiled-layer statements under `claims.not`, as `main`'s lock does for `FlockArgKS`. The baseline is run `r20261112-084126-7f25` on `62bf29346f76`, my base [run: `8f21`, `7f25`].
+
+| | base `62bf29346f76` | A: the branch | B: + stated in Lean | C: + listed in the lock |
+|---|---|---|---|---|
+| `unread.py` exit | 0 | **1** | 0 | 0 |
+| declarations | 86588 | 86644 | 86646 | 86646 |
+| unread declarations | 16081 | 16130 | 16098 | 16083 |
+| wholly unread modules | 343 | 347 | 345 | 343 |
+| `Definitions/Claims`: wholly unread modules, their declarations (caps 0, 0) | 0, 0 | **1, 13: above** | 0, 0 | 0, 0 |
+| `Proofs/Flock`: wholly unread modules, their declarations (caps 265, 2130) | 261, 2032 | 264, 2055 | 263, 2041 | 261, 2032 |
+
+[run: `8f21`; base column: `7f25`, which prints no line for `Definitions/Claims`: none of its modules is wholly unread there]. Every other area's count is the same in A, B and C and at or under its cap [run: `8f21`].
+
+- **No record of a listed guarantee moves.** The records `a060` computed on the branch's build for the lock's 1121 guarantees equal the lock's, field by field (`signature`, `type_hash`, `unfolded_hash`, `premises`, `assumptions`): 0 differences; its `reads` section has the lock's 1453 entries, 0 different; `regenerated` is empty [run: `a060`'s report against `security/lean-audit.json` at my head]. So the two changed lemmas are read by no record [run].
+- **The Lean check of `security` fails on the branch as it is**, on the five `claims.no-witnesses` of item 1 [run: `a060`]. `main`'s lock answers the same rule for the session statements this way: `Claims.Flock.KS` has `claims.witnesses` (`fails`: `Claims.Flock.KS_fails`; `meets`: `decoder_meets_plain`, `decoder_meets_zk`), and `FlockArgKS`, `FlockKS`, `FlockKSReg` are under `claims.not` as "proved of every Flock record …" [read: `security/lean-audit.json`]. So a landing needs, with or without the guarantee listed: four `claims.not` texts (run C and run D carry them), and for `Claims.Flock.KSAt` a theorem `Claims.Flock.KSAt_fails`, which is not written, beside `Claims.Flock.KS_fails` (`Proofs/Flock/Claims/Witnesses/Flock.lean:227`, a toy record of one always-accepting verifier), with the two `meets` theorems `main` names for `KS`, whose one antecedent, the decoder's list bound, is the table statement's too [derived; read]. Both are edits to `security/lean-audit.json`, which I have not made.
+- **A fails `unread.py` too.** `unread.py`'s line: "Definitions/Claims has 1 wholly unread modules (13 declarations), above its cap of 0 (0 declarations) in tools/verity/lean/unread-caps.json: Definitions.Claims.SamplingTable (13 declarations). Nothing reads such a module: delete it, or seed it: a lock/code reference" [run: `8f21`]. So the branch cannot land as it is: something a lock names has to read `Definitions/Claims/SamplingTable.lean` [derived].
+- In A, `KS/ZkTableAt`, `SamplingGeneric/TableAt` and `SamplingGeneric/MaskedTableAt` are wholly unread (14, 7 and 2 declarations) and `KS/TableAt` has 13 of 14 unread [run: `8f21`].
+- In C, what stays unread of mine: `Claims.Flock.KSAt_of_tableBoundJR` (the form at the tables' errors summed, which the stronger one replaces), `tableErrAt_le_εtable` in its two namespaces, and in the two changed files `zk_le_sessionsJW`, `ZkSessWJ`, `zk_tableBoundJAccAtR_of_sessionsW` (`KS/ZkBoundW`) and five in `KS/JointR` (`zk_KS_of_tableBoundJR` and `zk_KS_of_liveAccWJ` in two namespaces each, `zk_tableBoundJR_of_extend`) [run: `8f21`]. All eight of those in the two changed files were unread at my base too, and `mean_epsSZ_le_rawJ`, unread there, is read now; so against the base C adds 58 declarations and 2 unread ones [run: `7f25`].
+- B passes without the lock: `unread.py` takes a `SecurityProofs` name as a seed (its count "kept only by SecurityProofs" goes 2014 to 2048) [run: `8f21`, the reports' `kept_only_by`]. The Lean check's own rule on an unlisted `SecurityProofs` theorem is not measured by this run [derived].
+- A fourth count is out: D, the branch as it is with only the four `claims.not` texts in the clone's lock and no guarantee: `r20261112-084402-952a` (`vy-nebius-cpu-4`), building since 08:50Z, expected by about 09:20Z [run; guess: the time, from A's 15 minutes of building]. It says whether naming the compiled-layer statements alone is enough for `unread.py`.
+
+**The caps of `tests/test_lean_packages.py`.** Counted by the test file's own counters, each called with its `_held` replaced by a recorder (`/tmp/caps_probe.py`, local, under a minute), count/cap [run: local, on the worktrees named]:
+
+| cap | `main` `19fb19a21e40` | the branch merged onto it | lean's merge `1ab0a942376e` | the branch merged onto it |
+|---|---|---|---|---|
+| `SPEC_THEOREMS` security | 165/165 | 165/165 | 167/167 | 167/167 |
+| `OVERLONG` security | 963/963 | 963/963 | 963/963 | 963/963 |
+| `OVERLONG` security/Proofs | 53167/54185 | 53167/54185 | 53169/54185 | 53169/54185 |
+| `UNDOCUMENTED` security | 61/61 | 61/61 | 61/61 | 61/61 |
+| `UNWITNESSED` security | 245/247 | 245/247 | 237/455 | 237/455 |
+| `UNWITNESSED` security/Properties | 182/185 | 182/185 | 181/208 | 181/208 |
+| `INLINE` security | 887/890 | 887/890 | 897/1648 | 897/1648 |
+| `TREES_EXCEPT` security | 27/41 | 27/41 | 27/41 | 27/41 |
+
+- **With the five modules in and nothing listed, no cap's count moves**, on `main` or on lean's merge [run: local]. At my base and at `bcaf58a45d53` the counts were 249/251 (`UNWITNESSED`) and 899/902 (`INLINE`), also unmoved by the branch; `main` has since lowered both [run: local, earlier worktrees].
+- **With the guarantee listed** (a scratch lock in a worktree at my head, with placeholder hashes, since reverted): `UNWITNESSED` security goes up by one (249 to 250 of 251 at my base; so 246 of 247 on today's `main`), and `TREES_EXCEPT` by one (27 to 28 of 41) unless the statement goes into the existing `Proofs/Flock/Masked/Statement.lean`, which the lock's `trees.except` already covers; `SPEC_THEOREMS`, `OVERLONG`, `UNDOCUMENTED` and `INLINE` do not move [run: local; derived: the figure on today's `main`].
+- `UNWITNESSED` moves because `Flock.KSAt` would be a claim with no `fails` witness: `claims.witnesses` has one for `Claims.Flock.KS` (`Claims.Flock.KS_fails`) and none for the table statement [read: `security/lean-audit.json`]. A `KSAt_fails` beside it would take the count back; it is not written [derived].
+
+### 4. Against lean's merge and `main`
+
+Both refs moved after your message: `origin/main` is `19fb19a21e40` (it was `bcaf58a45d53`), and `origin/cursor/lean-remote-merge-landing-fc8d` is `a88eee998fa2` (it was `1ab0a942376e`) [run: `git fetch`, `git rev-parse`, 08:46Z].
+
+| `git merge-tree --write-tree --name-only` | exit | stops |
+|---|---|---|
+| lean's merge `a88eee998fa2`, my `5972af2daf80` | 0 | none |
+| `main` `19fb19a21e40`, my `5972af2daf80` | 0 | none |
+| lean's merge `1ab0a942376e`, my `5972af2daf80` (08:05Z) | 0 | none |
+| `main` `bcaf58a45d53`, my `5972af2daf80` (08:05Z) | 0 | none |
+
+[run: local]. No stop is not a build. What each side changed under `security/` since my base `62bf29346f76`, against the 1456 modules my seven files import and the 493 that import the two changed files [run: `/tmp/closure3.py`, `git diff --name-only`]:
+
+- **`main` at `bcaf58a45d53`**: 0 files under `security/`. Every try of mine carries to that merge [run; derived].
+- **`main` at `19fb19a21e40`**: 68 files. None is among the modules my files import, so my seven files' verdicts carry. 22 are among the importers, all `Proofs.Flock.SpotFlock.*` (`Accepting`, `Cap`, `ClassCounts`, `Coins`, `Counts`, `Depths`, `Drawn`, `EntriesAt`, `FirstHitClassCaps`, `Format`, `Frame`, `FrameIsAt`, `KS`, `LayoutAt`, `NoAlways`, `Opens`, `OpensWhole`, `Placement`, `RevealAt`, `RevealsOpen`, `RowsOpen`, `SlotsAt`), and they are not built over my two changed statements by any run yet. Also changed: `security/lean-audit.json`, `security/Properties/lean-audit.json`, `security/Definitions.lean` and `tests/test_lean_packages.py`, each merged without a stop [run].
+- **A try on that merge is out**: `verity lean try security/Proofs/Flock.lean --siblings` on a local merge commit (`8f8ba8178069`, parents `19fb19a21e40` and `5972af2daf80`, not pushed); run `r20261112-084727-8766` (`vy-nebius-cpu-12`), verdict in my next entry [run: launched 08:47Z].
+- **Lean's merge** (`1ab0a942376e`; `a88eee998fa2` differs from it under `security/` in three `lean-audit.json` files only, and changes the same 607 files since my base): 109 of them are among the modules my files import and so are `security/Proofs/lake-manifest.json` and `lakefile.toml`; among the importers it changes 17: `Proofs.Accounting`, `Proofs.Flock`, `Proofs.Flock.Claims`, `Proofs.Flock.Claims.Recursion.Assumptions.HonestFixture`, `.Recursion.BaseParses`, `.HonestHalf`, `.HonestHalfFixture`, `.HonestHalfTops`, `.KSFlockLinR`, `.VStarDense`, `.VStarRowsFit`, `Proofs.Flock.Claims.Sampling`, `Proofs.Flock.Recursive.KSCoinTreeWitnesses`, `Proofs.Flock.SamplingGeneric.TwoCode`, `Proofs.NetworkCertifier`, `Proofs.NetworkCertifier.Witnesses`, `Proofs.Properties.Verity.Sampled.Record.Reg`. Both sides changed `security/Definitions.lean` and `security/Proofs/Flock.lean`, merged without a stop. No try has run on that merged tree, so against lean's merge the branch's verdicts are unverified: its `KS/` inputs changed [run; derived].
+
+### What I wait for, and what is next
+
+- `r20261112-084402-952a` (count D) and the try on the merge with `main` (`r20261112-084727-8766`), both running at 09:00Z [run].
+- One new file on my branch, the statements the second reader asked for (a compiled verifier read at sessions and at tables as one verifier, and `Compiled.es` over Flock at one table): its try `r20261112-083937-9970` ended rc 0, "lean exit 0 in 379 s", siblings clean, "none of its 9 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", with one unused-instance warning; the fix's try is `r20261112-085559-a891`, running, and I push when it ends [run].
+- Item 5's try has ended, exit 0, first try: `r20261112-081953-a4a6`; the entry is due at 11:00Z and I will post it sooner [run].
+- Item 2 and the three answers by 10:00Z.
