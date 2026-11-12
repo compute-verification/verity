@@ -36,7 +36,8 @@ harness (`verity/core/difftest`):
 * `chunks` (a natural number K, not an object): `PouwCheck.Chunks.chunks` (`weights.chunks`) as `{"chunks": n}`, or
   `{"refused": why}`; any other input is a reject.
 * `ratio` (`s` and `ctx`, strings): `Core.Ratio.ofString s ctx` (`core_check.ratio`) as `{"ratio": [num, den]}`, each in
-  lowercase hex, which no limit on decimal digits touches, or `{"refused": why}`.
+  lowercase hex, which no limit on decimal digits touches, with `text`, the ratio written back by `Core.Ratio.toString`
+  (`window.ratio_str`), and `back`, that text read again; or `{"refused": why}`.
 
 The lead's window (`PouwCheck.Lead`, `circuit/lead.py`'s), a refusal as `{"refused": why}` where Python raises
 `ValueError`, and a malformed input a reject:
@@ -142,8 +143,11 @@ def ratioOf (j : Json) : Except String Json := do
   let .str s ← get j "s" | throw "the input's s is not a string"
   let .str ctx ← get j "ctx" | throw "the input's ctx is not a string"
   let hex (n : Nat) : Json := .str (String.ofList (Nat.toDigits 16 n))
+  let read (s : String) : Json := match Core.Ratio.ofString s ctx with
+    | .ok r => Json.arr #[hex r.num, hex r.den]
+    | .error why => Json.mkObj [("refused", Json.str why)]
   pure <| match Core.Ratio.ofString s ctx with
-    | .ok r => Json.mkObj [("ratio", Json.arr #[hex r.num, hex r.den])]
+    | .ok r => Json.mkObj [("ratio", read s), ("text", Json.str r.toString), ("back", read r.toString)]
     | .error why => Json.mkObj [("refused", Json.str why)]
 
 def intOf (j : Json) (k : String) : Except String Int := do need k (PouwWindow.strictInt? (← get j k))
