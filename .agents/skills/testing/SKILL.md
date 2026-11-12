@@ -89,7 +89,8 @@ Programs the guard can't trace (bash, git, a Python run with `-I`, `-E` or `-S` 
 unchecked, so list what they read, and list a path a test only checks the existence of (the guard sees opens, not
 `stat()`). The graph's test-file runner, and `suites.py` alike (an `AFTER_LEAN` suite aside), fails a file that starts
 one unless its suite lists it under `[tool.verity.tests] untraced`, which keys it on the suite's whole tree; the
-failure names the line to add. A test that builds or runs a Lake package lists its lakefile, and its suite goes in `AFTER_LEAN`
+failure names the line to add. A shared fixture's program counts for each file using it; one a conftest's hook starts
+outside any test, `suites.py` only warns of, since a whole run can't tell which files' own runs start it. A test that builds or runs a Lake package lists its lakefile, and its suite goes in `AFTER_LEAN`
 (`tools/verity/check/suites.py`), after `check`'s lean-build step. Locate files from `__file__` (`Path(__file__).parent /
 "fixtures"`), never the working directory, and never lean on another suite's side effects: every suite runs alone.
 
