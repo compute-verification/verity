@@ -26,6 +26,7 @@ partition's counts only on the calls spent in refused runs.
 * `sum_lin4`: a sum of four scaled terms and a constant.
 * `sum_hash_avg_le`: the phases' parts that count calls, summed, at the averages' totals.
 * `pr_phases_avg_le`: **the period's step at averages**, for phases whose bounds have that shape.
+* `CompiledTwo.phases_oneWait_le_avg_of_phase`: the period's step from any bound of a phase at its averages.
 * `CompiledTwo.phases_oneWait_le_avg`: the period's bound at two stages with one wait, each phase under
   `eventTwoX_oneWait_le_cls_avg`'s premises at its own averages.
 -/
@@ -119,6 +120,113 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 
 namespace CompiledTwo
 
+/-- **The period's step for the one-wait bound at averages, from a phase's bound.** A period of `n` phases, phase
+`i` at its statement `x i` and its prover `P i`, whose tape and the phase's coins split the period's sample space
+(`φ`). Where each phase's event has probability at most `εclsOneWaitAvg` at any averages its calls and its sample's
+counts are within (`Compiled.CallsAvg`), and the period's totals are at most `T`, `A_s`, `A_k` and `A_m`, with each
+phase's expected classes at most `K_s`, its expected reruns a session at most `e` and its opening checks' calls at
+most `c`, some phase has its event with probability at most
+
+`Σ_i (3·κ_s + 2·√(k·γ_s·Pr[B_i]))`
+`+ 2·(2·(T + e·A_s + n·c) + 4·(T + e·A_s + A_k + e·A_m + (1 + K_s)·n·c))/2^256`. -/
+theorem phases_oneWait_le_avg_of_phase {H : Msg → Msg} {L : CompiledTwo Coin A} {n : ℕ} {x : Fin n → Msg}
+    {S : Type} [Fintype S] {Ω : Fin n → Type} [∀ i, Fintype (Ω i)] [∀ i, Nonempty (Ω i)]
+    (φ : ∀ i, S ≃ Ω i × (Fin (L.V.k (x i)) → Coin)) (P : ∀ i, Prover (Ω i)) (needs : Fin n → ℕ → Finset ℕ)
+    (cls : ∀ i, Fin (L.nG (x i)) → Fin (L.nG (x i)))
+    (hphase : ∀ i (T As Ak Am Ks : ℝ), L.toCompiled.CallsAvg H (P i) (x i) (needs i) (cls i) T As Ak Am Ks →
+      Pr (fun p : Ω i × (Fin (L.V.k (x i)) → Coin) => (run H (P i) L.V (x i) p.1 p.2).out = .acc ∧
+          ∃ u ∈ L.checked (x i) p.2, u ∈ L.oneWait.FregTwoX H (P i) (x i) p.1 p.2) ≤
+        L.εclsOneWaitAvg H (x i) (P i) T As Ak Am Ks)
+    {T As Ak Am Ks e c : ℝ} (he0 : 0 ≤ e) (hKs0 : 0 ≤ Ks)
+    (hT : Ex (fun σ : S => ∑ i, (L.toCompiled.partiesCalls H (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ T)
+    (hAs : Ex (fun σ : S => ∑ i, ((L.toCompiled.firstSlots (x i) (L.checked (x i) (φ i σ).2)).card : ℝ) *
+      (L.toCompiled.partiesCalls H (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ As)
+    (hAk : Ex (fun σ : S => ∑ i,
+      (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) (φ i σ).2)).image (cls i)).card : ℝ) *
+        (L.toCompiled.partiesCalls H (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ Ak)
+    (hAm : Ex (fun σ : S => ∑ i,
+      (L.toCompiled.sessCountIn (x i) (needs i)
+        (fun l => (L.toCompiled.sampleNeeds (x i) (needs i) l).image (cls i)) (L.checked (x i) (φ i σ).2) : ℝ) *
+          (L.toCompiled.partiesCalls H (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ Am)
+    (hKs : ∀ i, Ex (fun r : Fin (L.V.k (x i)) → Coin =>
+      (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) r)).image (cls i)).card : ℝ)) ≤ Ks)
+    (he : ∀ i, L.oneWait.toCompiled.es (x i) ≤ e)
+    (hc : ∀ i, (L.oneWait.toCompiled.nPU (x i) : ℝ) * L.oneWait.toCompiled.openCalls (x i) ≤ c) :
+    Pr (fun σ : S => ∃ i, (run H (P i) L.V (x i) (φ i σ).1 (φ i σ).2).out = .acc ∧
+        ∃ u ∈ L.checked (x i) (φ i σ).2, u ∈ L.oneWait.FregTwoX H (P i) (x i) (φ i σ).1 (φ i σ).2) ≤
+      ∑ i, (3 * L.κs (x i) + 2 * Real.sqrt (L.V.k (x i) * L.γs (x i) * PrB H L.V (P i) (x i))) +
+        2 * (2 * (T + e * As + n * c) + 4 * (T + e * As + Ak + e * Am + (1 + Ks) * (n * c))) /
+          2 ^ (256 : ℝ) := by
+  have key : ∀ b u v p : ℝ, b + 2 * (2 * u + 4 * v) / p = b + (4 * u + 8 * v) / p := by
+    intro b u v p
+    ring
+  have hph : ∀ i, Pr (fun p : Ω i × (Fin (L.V.k (x i)) → Coin) => (run H (P i) L.V (x i) p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked (x i) p.2, u ∈ L.oneWait.FregTwoX H (P i) (x i) p.1 p.2) ≤
+      3 * L.κs (x i) + 2 * Real.sqrt (L.V.k (x i) * L.γs (x i) * PrB H L.V (P i) (x i)) +
+        (4 * (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
+              (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
+            L.oneWait.toCompiled.es (x i) * Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
+              ((L.toCompiled.firstSlots (x i) (L.checked (x i) q.2)).card : ℝ) *
+                (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
+            (L.oneWait.toCompiled.nPU (x i) : ℝ) * L.oneWait.toCompiled.openCalls (x i)) +
+          8 * (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
+              (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
+            L.oneWait.toCompiled.es (x i) * Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
+              ((L.toCompiled.firstSlots (x i) (L.checked (x i) q.2)).card : ℝ) *
+                (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
+            Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
+              (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) q.2)).image (cls i)).card : ℝ) *
+                (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
+            L.oneWait.toCompiled.es (x i) * Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
+              (L.toCompiled.sessCountIn (x i) (needs i)
+                (fun l => (L.toCompiled.sampleNeeds (x i) (needs i) l).image (cls i)) (L.checked (x i) q.2) : ℝ) *
+                  (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
+            (1 + Ex (fun r : Fin (L.V.k (x i)) → Coin =>
+              (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) r)).image (cls i)).card : ℝ))) *
+              ((L.oneWait.toCompiled.nPU (x i) : ℝ) * L.oneWait.toCompiled.openCalls (x i)))) /
+          2 ^ (256 : ℝ) := by
+    intro i
+    have hC : L.toCompiled.CallsAvg H (P i) (x i) (needs i) (cls i)
+        (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) => (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)))
+        (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
+          ((L.toCompiled.firstSlots (x i) (L.checked (x i) q.2)).card : ℝ) *
+            (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)))
+        (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
+          (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) q.2)).image (cls i)).card : ℝ) *
+            (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)))
+        (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
+          (L.toCompiled.sessCountIn (x i) (needs i)
+            (fun l => (L.toCompiled.sampleNeeds (x i) (needs i) l).image (cls i)) (L.checked (x i) q.2) : ℝ) *
+              (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)))
+        (Ex (fun r : Fin (L.V.k (x i)) → Coin =>
+          (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) r)).image (cls i)).card : ℝ))) :=
+      ⟨le_refl _, le_refl _, le_refl _, le_refl _, le_refl _⟩
+    have hi := hphase i _ _ _ _ _ hC
+    unfold εclsOneWaitAvg Compiled.runCostAvg Compiled.firstHitCostAvg at hi
+    exact hi.trans (le_of_eq (key _ _ _ _))
+  have h := pr_phases_avg_le φ
+    (fun i p => (run H (P i) L.V (x i) p.1 p.2).out = .acc ∧
+      ∃ u ∈ L.checked (x i) p.2, u ∈ L.oneWait.FregTwoX H (P i) (x i) p.1 p.2)
+    (fun i q => (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ))
+    (fun i q => ((L.toCompiled.firstSlots (x i) (L.checked (x i) q.2)).card : ℝ) *
+      (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ))
+    (fun i q => (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) q.2)).image (cls i)).card : ℝ) *
+      (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ))
+    (fun i q => (L.toCompiled.sessCountIn (x i) (needs i)
+      (fun l => (L.toCompiled.sampleNeeds (x i) (needs i) l).image (cls i)) (L.checked (x i) q.2) : ℝ) *
+        (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ))
+    (fun i => 3 * L.κs (x i) + 2 * Real.sqrt (L.V.k (x i) * L.γs (x i) * PrB H L.V (P i) (x i)))
+    (fun i => L.oneWait.toCompiled.es (x i))
+    (fun i => Ex (fun r : Fin (L.V.k (x i)) → Coin =>
+      (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) r)).image (cls i)).card : ℝ)))
+    (fun i => (L.oneWait.toCompiled.nPU (x i) : ℝ) * L.oneWait.toCompiled.openCalls (x i))
+    (a := 4) (f := 8) (by norm_num) (by norm_num)
+    (fun _ _ => mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+    (fun _ _ => mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
+    (fun _ => mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) he0 hKs0 he hKs hc hT hAs hAk hAm hph
+  exact h.trans (le_of_eq (key _ _ _ _).symm)
+
+
 /-- **The event at the one-wait extraction's traces over a monitoring period, at the period's averages.** A period
 of `n` phases, phase `i` at its statement `x i` in the two-stage scope and its prover `P i`, whose tape and the
 phase's coins split the period's sample space (`φ`). Each phase is under `eventTwoX_oneWait_le_cls_avg`'s premises.
@@ -173,76 +281,11 @@ theorem phases_oneWait_le_avg {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A
         ∃ u ∈ L.checked (x i) (φ i σ).2, u ∈ L.oneWait.FregTwoX H (P i) (x i) (φ i σ).1 (φ i σ).2) ≤
       ∑ i, (3 * L.κs (x i) + 2 * Real.sqrt (L.V.k (x i) * L.γs (x i) * PrB H L.V (P i) (x i))) +
         2 * (2 * (T + e * As + n * c) + 4 * (T + e * As + Ak + e * Am + (1 + Ks) * (n * c))) /
-          2 ^ (256 : ℝ) := by
-  have key : ∀ b u v p : ℝ, b + 2 * (2 * u + 4 * v) / p = b + (4 * u + 8 * v) / p := by
-    intro b u v p
-    ring
-  have hph : ∀ i, Pr (fun p : Ω i × (Fin (L.V.k (x i)) → Coin) => (run H (P i) L.V (x i) p.1 p.2).out = .acc ∧
-        ∃ u ∈ L.checked (x i) p.2, u ∈ L.oneWait.FregTwoX H (P i) (x i) p.1 p.2) ≤
-      3 * L.κs (x i) + 2 * Real.sqrt (L.V.k (x i) * L.γs (x i) * PrB H L.V (P i) (x i)) +
-        (4 * (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
-              (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
-            L.oneWait.toCompiled.es (x i) * Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
-              ((L.toCompiled.firstSlots (x i) (L.checked (x i) q.2)).card : ℝ) *
-                (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
-            (L.oneWait.toCompiled.nPU (x i) : ℝ) * L.oneWait.toCompiled.openCalls (x i)) +
-          8 * (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
-              (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
-            L.oneWait.toCompiled.es (x i) * Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
-              ((L.toCompiled.firstSlots (x i) (L.checked (x i) q.2)).card : ℝ) *
-                (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
-            Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
-              (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) q.2)).image (cls i)).card : ℝ) *
-                (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
-            L.oneWait.toCompiled.es (x i) * Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
-              (L.toCompiled.sessCountIn (x i) (needs i)
-                (fun l => (L.toCompiled.sampleNeeds (x i) (needs i) l).image (cls i)) (L.checked (x i) q.2) : ℝ) *
-                  (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)) +
-            (1 + Ex (fun r : Fin (L.V.k (x i)) → Coin =>
-              (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) r)).image (cls i)).card : ℝ))) *
-              ((L.oneWait.toCompiled.nPU (x i) : ℝ) * L.oneWait.toCompiled.openCalls (x i)))) /
-          2 ^ (256 : ℝ) := by
-    intro i
-    have hC : L.toCompiled.CallsAvg H (P i) (x i) (needs i) (cls i)
-        (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) => (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)))
-        (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
-          ((L.toCompiled.firstSlots (x i) (L.checked (x i) q.2)).card : ℝ) *
-            (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)))
-        (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
-          (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) q.2)).image (cls i)).card : ℝ) *
-            (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)))
-        (Ex (fun q : Ω i × (Fin (L.V.k (x i)) → Coin) =>
-          (L.toCompiled.sessCountIn (x i) (needs i)
-            (fun l => (L.toCompiled.sampleNeeds (x i) (needs i) l).image (cls i)) (L.checked (x i) q.2) : ℝ) *
-              (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ)))
-        (Ex (fun r : Fin (L.V.k (x i)) → Coin =>
-          (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) r)).image (cls i)).card : ℝ))) :=
-      ⟨le_refl _, le_refl _, le_refl _, le_refl _, le_refl _⟩
-    have hi := eventTwoX_oneWait_le_cls_avg hF hA hbind hS hopen (hs i) (hPt i) (hd i) (hin i) (P i) (needs i)
-      (hpos i) (cls i) (hallX i) (hallI i) hC (hB i) (hX i) (hI i)
-    unfold εclsOneWaitAvg Compiled.runCostAvg Compiled.firstHitCostAvg at hi
-    exact hi.trans (le_of_eq (key _ _ _ _))
-  have h := pr_phases_avg_le φ
-    (fun i p => (run H (P i) L.V (x i) p.1 p.2).out = .acc ∧
-      ∃ u ∈ L.checked (x i) p.2, u ∈ L.oneWait.FregTwoX H (P i) (x i) p.1 p.2)
-    (fun i q => (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ))
-    (fun i q => ((L.toCompiled.firstSlots (x i) (L.checked (x i) q.2)).card : ℝ) *
-      (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ))
-    (fun i q => (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) q.2)).image (cls i)).card : ℝ) *
-      (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ))
-    (fun i q => (L.toCompiled.sessCountIn (x i) (needs i)
-      (fun l => (L.toCompiled.sampleNeeds (x i) (needs i) l).image (cls i)) (L.checked (x i) q.2) : ℝ) *
-        (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ))
-    (fun i => 3 * L.κs (x i) + 2 * Real.sqrt (L.V.k (x i) * L.γs (x i) * PrB H L.V (P i) (x i)))
-    (fun i => L.oneWait.toCompiled.es (x i))
-    (fun i => Ex (fun r : Fin (L.V.k (x i)) → Coin =>
-      (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) r)).image (cls i)).card : ℝ)))
-    (fun i => (L.oneWait.toCompiled.nPU (x i) : ℝ) * L.oneWait.toCompiled.openCalls (x i))
-    (a := 4) (f := 8) (by norm_num) (by norm_num)
-    (fun _ _ => mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
-    (fun _ _ => mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _))
-    (fun _ => mul_nonneg (Nat.cast_nonneg _) (Nat.cast_nonneg _)) he0 hKs0 he hKs hc hT hAs hAk hAm hph
-  exact h.trans (le_of_eq (key _ _ _ _).symm)
+          2 ^ (256 : ℝ) :=
+  phases_oneWait_le_avg_of_phase φ P needs cls
+    (fun i _ _ _ _ _ hC => eventTwoX_oneWait_le_cls_avg hF hA hbind hS hopen (hs i) (hPt i) (hd i) (hin i) (P i)
+      (needs i) (hpos i) (cls i) (hallX i) (hallI i) hC (hB i) (hX i) (hI i))
+    he0 hKs0 hT hAs hAk hAm hKs he hc
 
 end CompiledTwo
 

@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.OneWaitClassAt
 public import Proofs.Flock.SpotFlock.ClassCounts
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitAvg
+public import Proofs.Flock.SamplingGeneric.PhasesAvg
 import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.Masked
 import Proofs.Flock.Claims.KS.FindsFlock
@@ -36,6 +37,8 @@ whole partition's count is paid only on the calls spent in refused runs.
 * `code_eventTwoX_oneWait_le_cls_avg`: `CompiledTwo.eventTwoX_oneWait_le_cls_avg` at SPOT[Flock]'s compiled
   two-stage verifier, with `code_eventTwoX_oneWait_le_cls_at_budget`'s gates and classes.
 * `code_eventTwoX_oneWait_le_cls_avg_strata`: that bound at `code_callsAvg`'s three products.
+* `code_phases_oneWait_le_avg`: the bound over a monitoring period at the period's averages
+  (`CompiledTwo.phases_oneWait_le_avg`), at SPOT[Flock]'s compiled two-stage verifier.
 -/
 
 @[expose] public section
@@ -427,5 +430,65 @@ theorem code_eventTwoX_oneWait_le_cls_avg_strata (hB : Built h) (hS : Addresses 
   code_eventTwoX_oneWait_le_cls_avg h hB hS rfl hx hP hd hin P hneeds hcls
     (code_callsAvg h Fzk x needs cls (by subst hcls; exact Claims.SamplingGeneric.Compiled.clsOf_idem _) M hM hK P
       hT hR hKs) hBc hX hI
+
+/-- **The one-wait bound over a monitoring period, at the code and the period's averages**:
+`CompiledTwo.phases_oneWait_le_avg` at SPOT[Flock]'s compiled two-stage verifier `L`, under `Built` and `Addresses`.
+A period of `n` phases, phase `i` at its statement `x i` in the two-stage scope and its prover `P i`, whose tape and
+the phase's coins split the period's sample space (`φ`); `needs i` is the gates each proof block's reveal opens and
+`cls i` the classes of `gateKey`. Where the period's phases call SHA-512 at most `T` times on average in total, both
+parties' calls counted, a phase's calls times its sample's three counts average at most `A_s`, `A_k` and `A_m` in
+total, each phase's sample needs gates of at most `K_s` classes on average, the expected reruns a session are at most
+`e` and the opening checks' calls at most `c` at every phase, and each phase's `B_conf,X` and two by-class finders
+meet the linear expected-time bound, some phase's accepted run samples a proof block of the one-wait compiled
+verifier's `FregTwoX` with probability at most
+
+`Σ_i (3·κ_s + 2·√(k·γ_s·Pr[B_i]))`
+`+ 2·(2·(T + e·A_s + n·c) + 4·(T + e·A_s + A_k + e·A_m + (1 + K_s)·n·c))/2^256`.
+
+No count is held at every sample, and no run or phase of a prover to a budget. -/
+theorem code_phases_oneWait_le_avg (hB : Built h) (hS : Addresses h)
+    {L : Claims.SamplingGeneric.CompiledTwo FlockDeploy.Coin (Claims.SamplingGeneric.Arg.ofFlock Fzk)}
+    (hL : L = 𝓛[Fzk]) {n : ℕ} {x : Fin n → Msg} {s : Fin n → AuditStatement} {Pt : Fin n → Partition}
+    {d : Fin n → Design.Two} (hx : ∀ i, parse h (x i) = some (s i))
+    (hP : ∀ i, partition h (s i) = some (Pt i)) (hd : ∀ i, two h (s i) = some (d i))
+    (hin : ∀ i, InScopeTwo (Pt i) (d i) (s i)) {S : Type} [Fintype S] {Ω : Fin n → Type} [∀ i, Fintype (Ω i)]
+    [∀ i, Nonempty (Ω i)] (φ : ∀ i, S ≃ Ω i × (Fin (L.V.k (x i)) → FlockDeploy.Coin)) (P : ∀ i, Prover (Ω i))
+    {needs : Fin n → ℕ → Finset ℕ}
+    (hneeds : ∀ i, needs i = fun u => (Reveal.needs (partition h) (s i) u).toFinset)
+    {cls : ∀ i, Fin (L.nG (x i)) → Fin (L.nG (x i))}
+    (hcls : ∀ i, cls i = Verity.FirstHit.clsOf fun g : Fin (L.nG (x i)) => gateKey h (s i) (Pt i) (d i) g.val)
+    {T As Ak Am Ks e c : ℝ} (he0 : 0 ≤ e) (hKs0 : 0 ≤ Ks)
+    (hT : Ex (fun σ : S =>
+      ∑ i, (L.toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ T)
+    (hAs : Ex (fun σ : S => ∑ i, ((L.toCompiled.firstSlots (x i) (L.checked (x i) (φ i σ).2)).card : ℝ) *
+      (L.toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ As)
+    (hAk : Ex (fun σ : S => ∑ i,
+      (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) (φ i σ).2)).image (cls i)).card : ℝ) *
+        (L.toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ Ak)
+    (hAm : Ex (fun σ : S => ∑ i,
+      (L.toCompiled.sessCountIn (x i) (needs i)
+        (fun l => (L.toCompiled.sampleNeeds (x i) (needs i) l).image (cls i)) (L.checked (x i) (φ i σ).2) : ℝ) *
+          (L.toCompiled.partiesCalls FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2 : ℝ)) ≤ Am)
+    (hKs : ∀ i, Ex (fun r : Fin (L.V.k (x i)) → FlockDeploy.Coin =>
+      (((L.toCompiled.sampleNeeds (x i) (needs i) (L.checked (x i) r)).image (cls i)).card : ℝ)) ≤ Ks)
+    (he : ∀ i, L.oneWait.toCompiled.es (x i) ≤ e)
+    (hc : ∀ i, (L.oneWait.toCompiled.nPU (x i) : ℝ) * L.oneWait.toCompiled.openCalls (x i) ≤ c)
+    (hBc : ∀ i, ExpectedCR FlockDeploy.sha512
+      (Claims.SamplingGeneric.Compiled.BconfX FlockDeploy.sha512 L.oneWait.toCompiled (Ω i) (P i) (x i)))
+    (hX : ∀ i (K : ℕ), ExpectedCR FlockDeploy.sha512
+      (L.oneWait.toCompiled.finderXCls FlockDeploy.sha512 (P i) (x i) (s i) (needs i) (cls i) K))
+    (hI : ∀ i (K : ℕ), ExpectedCR FlockDeploy.sha512
+      (L.oneWait.finderICls FlockDeploy.sha512 (P i) (x i) (s i) (d i).part (needs i) (cls i) K)) :
+    Pr (fun σ : S => ∃ i, (run FlockDeploy.sha512 (P i) L.V (x i) (φ i σ).1 (φ i σ).2).out = .acc ∧
+        ∃ u ∈ L.checked (x i) (φ i σ).2,
+          u ∈ L.oneWait.FregTwoX FlockDeploy.sha512 (P i) (x i) (φ i σ).1 (φ i σ).2) ≤
+      ∑ i, (3 * L.κs (x i) +
+          2 * Real.sqrt (L.V.k (x i) * L.γs (x i) * PrB FlockDeploy.sha512 L.V (P i) (x i))) +
+        2 * (2 * (T + e * As + n * c) + 4 * (T + e * As + Ak + e * Am + (1 + Ks) * (n * c))) /
+          2 ^ (256 : ℝ) :=
+  Claims.SamplingGeneric.CompiledTwo.phases_oneWait_le_avg_of_phase φ P needs cls
+    (fun i _ _ _ _ _ hC => code_eventTwoX_oneWait_le_cls_avg h hB hS hL (hx i) (hP i) (hd i) (hin i) (P i)
+      (hneeds i) (hcls i) hC (hBc i) (hX i) (hI i))
+    he0 hKs0 hT hAs hAk hAm hKs he hc
 
 end SpotFlock
