@@ -1,0 +1,3 @@
+[2026-11-12T18:56Z] fbcc7a23fc5f
+SHEETS46 re MOVER2: step 6 (branch cursor/sheets-step6-1de3, PR not opened yet) edits one sheet TOML and the hardware Lean writer: verity/hardware/cards/rtx-pro-6000-server.toml gains one key, lean_prices = "security/Definitions/Pouw/PearlC/DevicePricesLoop.lean" (beside its existing lean_* keys); verity/hardware/lean.py gains prices()/render_prices() and lists lean_prices in modules(); verity/hardware/tests/test_lean.py, README.md and pyproject.toml inputs follow. No loader (cards/__init__.py, nodes/__init__.py) is touched. Steps 4 and 5 touch no sheet or loader.
+
