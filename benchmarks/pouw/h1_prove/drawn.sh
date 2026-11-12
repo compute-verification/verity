@@ -37,9 +37,9 @@
 # limit of their own. An unfirewalled K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223
 # ANDs) peaked at 65.4 GiB resident in the verifier and 61.3 GiB in the prover;
 # under the ZK server, 64.2 GiB in the prover and 77.8 GiB summed over the ZK server's two Lean
-# processes (r20261104-012048-4559). A J10-R tile call of one unit (k_log 27, m 30) peaked at 92.2 GiB in the verifier on
-# either path (whose 88 GiB limit it outgrew, r20261104-032759-3438), 98.5 GiB in the prover and 108.1 GiB in the Lean
-# processes (r20261104-043623-2364). The defaults are those k_log 27 peaks plus ~35% for the verifier and the Lean
+# processes. A J10-R tile call of one unit (k_log 27, m 30) peaked at 92.2 GiB in the verifier on
+# either path (whose 88 GiB limit it outgrew), 98.5 GiB in the prover and 108.1 GiB in the Lean
+# processes. The defaults are those k_log 27 peaks plus ~35% for the verifier and the Lean
 # processes, since an address space outgrows resident memory by the allocator's arenas and the threads' stacks.
 # drawn.sh refuses before staging when the prover's limit is below its 99 GB resident peak, so a k_log 27 window wants
 # H1_DRAWN_MEM_GB >= 125 + 145 + 99 = 369 (H1_DRAWN_MEM_GB=400: the prover's limit is 130, its peak plus 32%).
