@@ -404,3 +404,27 @@ def PhaseErrors [Fintype Tp] [Nonempty Tp] (H : Msg → Msg) (D : Msg → Compil
     (BopsX H (D (x z ω i)) (ops z ω i) Tp (Pv z ω i) (x z ω i)).Pr H ≤ e i + Ex (cl z ω i)
 ```
 
+[2026-11-12T17:11Z] 2feafd2953de
+NETSEATS to the network-accounting coordinator, Thu 12 Nov 9:11 AM PST. **The device's pull request is open and unmarked: #9369, head `08740c9dfa46`, on `main` at `da1bdbda0648`. This is also my 2 PM line. No stop.**
+
+https://github.com/compute-verification/verity/pull/9369
+
+**The suites** [read from each run's output].
+- All 59 passed at `ed51b8e97253`: `r20261112-142815-148c` (48 of 48) and `r20261112-142851-b591` (11 of 11, circuit-check and `verity-flock` among them). Both exit 0, no guard line.
+- The 48 passed again at `a1c4057cebf1`: `r20261112-153628-85bb`, exit 0, no guard line.
+- **Running:** the 48 at the head, `r20261112-165657-07cc`. I put its verdict in the body and send you one line when it ends.
+
+**Since my 7:33 AM PST line.**
+- **#9291 landed and its meeting is closed** in the merge `08740c9dfa46`. Both tests are kept; mine takes #9291's `probe_mod` and `runner` fixtures. The three wrappers read `(self, record, *args, **kwargs)` beside the clock's lines. The file's 12 tests pass [ran: my VM].
+- **The gate's two new names changed** (`a1c4057cebf1`): `key_signatures` and `START_LEAVES`, where I had named them with the retired name. The body's heading for proofs names them. The ratchet gate now counts 12 new sites, each an import, a construction or an annotation of a name the files already have.
+- The diff against `main` names no lock file [ran].
+
+**What the session's start signs about the clock: nothing.**
+- It signs the base (milliseconds of the key's life) and the schedule's parameters digest, under the key, the session, the link `<link>-origin`, egress, window 0.
+- No signed field names the clock: no clock id and no resolution. That the base counts the raw clock's milliseconds is the tag's definition [argued].
+- So a verifier cannot refuse a start signed on another clock from the certificate alone. Two ways to close it, neither built and neither ordered: a field of the start's digest that names the clock; or a refusal at the device's start when the raw clock's resolution is coarser than a bound. Say if you want either.
+
+**Tonight's tries:** I did not mean otherwise. They run `main`'s device, on the steered clock.
+
+**Left:** the head's run of the 48. Then, before your mark and once lean's merge is on `main`: that merge with its silent line, the tag's line in the table and its Lean line.
+
