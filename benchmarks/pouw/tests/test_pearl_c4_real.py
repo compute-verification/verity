@@ -63,8 +63,8 @@ def capture(root: Path) -> Path:
 
 
 def test_real_activation_replay(tmp_path):
-    src, out = capture(tmp_path), tmp_path / "out"
-    args = [str(src), str(out), "--tiles", "1", "--workers", "2"]
+    cap, out = capture(tmp_path), tmp_path / "out"
+    args = [str(cap), str(out), "--tiles", "1", "--workers", "2"]
     assert R.main(args + ["--budget-min", "0"]) == 99                      # one task started, then out of budget
     assert len(list(out.glob("admit-*.json")) + list(out.glob("tile-*.json"))) == 1
     split = json.loads((out / "split-L000-attn.json").read_text())
@@ -84,7 +84,7 @@ def test_real_activation_replay(tmp_path):
     assert row["macs"] == M * N * (K - K // 100) and RT.mac_shares([row])["synthetic"]["over_bound"] == 0
     elsewhere = s | {"capture": str(tmp_path / "not-here")}
     assert RT.rows([elsewhere], RT.Fraction(1, 1000))[0]["x_rows"] is None
-    assert RT.rows([elsewhere], RT.Fraction(1, 1000), src / "manifest.json")[0]["x_rows"] == M
+    assert RT.rows([elsewhere], RT.Fraction(1, 1000), cap / "manifest.json")[0]["x_rows"] == M
     assert NAME in RT.markdown([row], RT.Fraction(1, 1000))
 
 
@@ -113,14 +113,14 @@ def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_bounds():
 def test_an_npz_capture_is_read_as_its_linears(tmp_path):
     """`fp4_v3_real.capture`'s npz (``layers.<i>.<linear>.x`` and ``.w``, float32 holding BF16): the same admission,
     split and tile as the capture directory gives, keyed by the capture's own sha256."""
-    src = capture(tmp_path)
-    x = np.load(src / "L000-attn.npy")
-    snap = json.loads((src / "manifest.json").read_text())["snapshot"]
+    cap = capture(tmp_path)
+    x = np.load(cap / "L000-attn.npy")
+    snap = json.loads((cap / "manifest.json").read_text())["snapshot"]
     w = (R.w_codes(Path(snap), NAME).astype(np.uint32) << 16).view(np.float32)
     npz = tmp_path / "Qwen--synthetic.npz"
     np.savez(npz, **{NAME[len("model."):] + ".x": x, NAME[len("model."):] + ".w": w})
     out_dir, out_npz = tmp_path / "out-dir", tmp_path / "out-npz"
-    for c, o in ((src, out_dir), (npz, out_npz)):
+    for c, o in ((cap, out_dir), (npz, out_npz)):
         assert R.main([str(c), str(o), "--tiles", "1", "--workers", "2"]) == 0
     a, b = (json.loads((o / "summary.json").read_text()) for o in (out_dir, out_npz))
     assert b["manifest_sha256"] == hashlib.sha256(npz.read_bytes()).hexdigest() and b["model"] == npz.name
