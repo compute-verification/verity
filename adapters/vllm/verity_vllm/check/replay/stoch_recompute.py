@@ -32,6 +32,8 @@ Implementation variant this checks against (recorded in the report): vLLM d9105e
 """
 from __future__ import annotations
 
+import glob
+import gzip
 import json
 import os
 import struct
@@ -41,12 +43,15 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from verity.definitions.registry import sampling_topp_difftest
+from verity.definitions.registry import sampling_rows, sampling_topp_difftest
 
+from verity_vllm.check.replay.fork import fork_pool
+from verity_vllm.commit import challenge
 from verity_vllm.config import option, workload_arg, workload_file
 from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
 from verity_vllm.observe.log import header_of, read_log
 from verity_vllm.program import sampling_rng
+from verity_vllm.program.lifting import continuation
 from verity_vllm.properties.admission import evaluate_spec
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import Workload
@@ -125,12 +130,11 @@ def _eval_job_rows(job: tuple) -> tuple[int, np.ndarray, float]:
     """The same Definition over the whole row at once: `sampling_rows.gumbel_topp_token_select_row`
     (numpy twins of the registered gates, held word-equal to `evaluate_spec` in tests/program/test_sampling_rows.py) -> the same
     (token, masked fp32 row, seconds) triple.  The words layout is `_eval_job`'s: [bf16 row, top_p, seed, pos, temp] (uint64 arrays)."""
-    from verity.definitions.registry import sampling_rows as SR
     V, S, words = job
     t1 = time.time()
     bf, p_w, seed_w, pos_w, t_w = words
-    out = SR.gumbel_topp_token_select_row(np.asarray(bf, dtype=np.uint64).astype(np.uint16), int(p_w[0]), int(seed_w[0]), int(pos_w[0]),
-                                          int(t_w[0]), int(S))
+    out = sampling_rows.gumbel_topp_token_select_row(np.asarray(bf, dtype=np.uint64).astype(np.uint16), int(p_w[0]), int(seed_w[0]), int(pos_w[0]),
+                                                     int(t_w[0]), int(S))
     tok = int(out["token"])
     if tok & 0x80000000:
         tok -= 1 << 32
@@ -163,7 +167,6 @@ def _evaluate_all(jobs: list[tuple], n_jobs: int | None, evaluator: str = "lane"
     n = int(n_jobs) if n_jobs else min(32, _cpu_quota())
     if len(jobs) <= 1 or n <= 1:
         return [fn(j) for j in jobs]
-    from verity_vllm.check.replay.fork import fork_pool
     with fork_pool(min(n, len(jobs))) as pool:
         return list(pool.imap(fn, jobs, chunksize=1))
 
@@ -174,7 +177,6 @@ def _program_splits(build_dir: str | Path | None, workload: str | Path | None) -
     could not be read is named with its error."""
     if build_dir is None or workload is None:
         return {}, []
-    import glob
     by_shape: dict[tuple[int, int], Any] = {}
     unreadable: list[str] = []
     for p in sorted(glob.glob(str(Path(build_dir) / "build_request*" / "result.json"))):
@@ -204,7 +206,6 @@ def _stop_rule(build_dir: str | Path | None) -> dict:
             continue
         try:
             if p.suffix == ".gz":
-                import gzip
                 with gzip.open(p, "rt") as f:
                     gp = json.loads(f.read())
             else:
@@ -253,9 +254,6 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     `executed_slots` (spec s7 three-state machine; n_executed = min(n + 1, C) under A = 1) and the executed-prefix rule (`commit.executed_prefix`).  Returns
     None (with the reason) when the rule cannot be evaluated: an undeclared EOS set with fewer samples than the cap, or an EOS before the cap
     with the profile unattested.  When the continuation module is importable the two computations are compared and a disagreement is named."""
-    # the Continuation_v1 recurrence: THE mechanism, not a twin of it
-    from verity_vllm.program.lifting import continuation as CT
-
     info: dict = {"rule": "verity_vllm.program.lifting.continuation.recurrence / executed_slots (pad, spec s7): EOS at slot t < C -> min(A, C - t) lag slot(s), then inactive"}
     served = list(served)
     if eos_ids is None:
@@ -272,8 +270,8 @@ def expected_executed_slots(served: list, cap: int, A: int | None, eos_ids: set 
     # served[:cap]: the recurrence runs over the C slots (`expected_draw_positions` does the same); samples past C are EXTRA positions for
     # the comparison to name, never a reason to stop judging.  A = 0 when no EOS is served before the cap: the lag term is
     # then never reached, so the profile does not matter.
-    slots = CT.recurrence([None if y is None else int(y) for y in served[:cap]], cap=cap, A=int(A) if A is not None else 0, eos=eos_ids)
-    exp = [int(t) for t in CT.executed_slots(slots)]
+    slots = continuation.recurrence([None if y is None else int(y) for y in served[:cap]], cap=cap, A=int(A) if A is not None else 0, eos=eos_ids)
+    exp = [int(t) for t in continuation.executed_slots(slots)]
     info["t_eos"] = t_eos
     info["n_executed"] = len(exp)
     return exp, info
@@ -358,21 +356,20 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
         # the RULE's positions are those of `expected_draw_positions`: slot t at pos L - 1 + (t - 1), the query position whose
         # logits slot t samples = the record's own `pos` fact (device_facts_match on every checked row; qwen B8 L=1024: first sample 1023);
         # served[:T] and A = 0 without an EOS as in expected_executed_slots (the same recurrence; a disagreement between the two calls is named)
-        from verity_vllm.program.lifting import continuation as CT
         if any(y is None for y in served[:T]):
             ent["finish"] = "unjudged"
             out["requests_unjudged"] += 1
             probs.append(f"draw ledger {rid}: a sampled row without its served token: the rule cannot be read for this request")
             out["requests"][rid] = ent
             continue
-        pad_pos = CT.expected_draw_positions([int(y) for y in served[:T]], cap=T, A=int(lag) if lag is not None else 0,
+        pad_pos = continuation.expected_draw_positions([int(y) for y in served[:T]], cap=T, A=int(lag) if lag is not None else 0,
                                              eos=eos_ids if eos_ids is not None else set(), prompt_len=L)
         expected = [int(p) for p in pad_pos["positions"]]
         if pad_pos["slots"] != exp_slots:
             probs.append(f"draw ledger {rid}: expected_draw_positions slots {pad_pos['slots'][:4]}.. != executed_slots {exp_slots[:4]}..: one recurrence, two answers")
         ent["lag_positions"] = pad_pos["lag_positions"]
         ent["first_forbidden_position"] = pad_pos["first_forbidden_position"]
-        cmp = CT.compare_draw_positions(expected, drawn)          # the continuation's comparison: extra / missing / repeated / out-of-order BY NAME
+        cmp = continuation.compare_draw_positions(expected, drawn)          # the continuation's comparison: extra / missing / repeated / out-of-order BY NAME
         extra, missing = cmp["extra"], cmp["missing"]
         ent["expected_executed_slots"] = {"n": len(exp_slots), "first": exp_slots[0], "last": exp_slots[-1]}
         ent["expected_positions"] = {"n": len(expected), "first": expected[0], "last": expected[-1]}
@@ -606,8 +603,8 @@ def _evaluate_pending(pending: list, rows: list[dict], reasons: list[str], tally
     ref_check: dict = {"evaluator": evaluator, "reference_evaluator": None, "rows_requested": 0, "rows_checked": 0, "disagreements": [],
                        "seconds": 0.0}
     if evaluator != "lane" and reference_rows and pending:
-        from verity_vllm.commit import challenge as CH
-        pick = sorted(CH.stream(CH.reference_rows_seed(sampled_rows_total, len(pending))).sample(range(len(pending)), min(int(reference_rows), len(pending))))
+        stream = challenge.stream(challenge.reference_rows_seed(sampled_rows_total, len(pending)))
+        pick = sorted(stream.sample(range(len(pending)), min(int(reference_rows), len(pending))))
         t_ref = time.time()
         ref_results = _evaluate_all([pending[k][1] for k in pick], jobs, "lane")
         ref_check.update(reference_evaluator="lane", rows_requested=int(reference_rows), rows_checked=len(pick), seconds=round(time.time() - t_ref, 1),
