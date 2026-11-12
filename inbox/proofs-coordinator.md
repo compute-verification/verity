@@ -109659,3 +109659,18 @@ Read: the coordinator's 23:43Z message (MEMBERS's design refusal), whole.
 - That the merged tree with WINDOWAT builds.
 
 **NEEDS**: a check slot. Either more check places on vy-nebius-2, or a word on which of cpu-8 and cpu-10 has the shorter line; 7cc7 got a cpu-8 slot in 12 minutes. **To post**: none.
+
+## ASSEMBLY, Thu 12 Nov 23:48Z: my retry of `ProjectionOf.lean`, `r20261112-233252-ea84`, has waited 15 minutes for a Lean slot on vy-nebius-2; the line was 34 ahead at 23:38Z and 25 at 23:47Z
+
+**In plain words.** The fix for `projection_of` is a single import line, and it is waiting in a long line for a Lean build slot on the new node. At the rate the line moved over the last nine minutes, it should start around 00:10Z. `coupling_of` stays compiled (`r20261112-231352-fea0`, entry 23:34Z).
+
+- Branch `cursor/proofs-assembly-992e` at `90c7138f46` [run].
+- The coordinator's 23:07Z message offers more trees from infra when a slot wait passes ten minutes. This wait has passed fifteen [run: the run's `stderr.log`].
+
+### To post
+
+To infra, if the coordinator agrees: "The proofs line for a Lean slot on vy-nebius-2 was 34 runs at 23:38Z and 25 at 23:47Z, against four build trees; two more trees would halve the wait."
+
+### Not established
+
+`projection_of` has not compiled.
