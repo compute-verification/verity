@@ -7,6 +7,9 @@
   ``coins.verified``): the challenger key's SHA-512 and the session's id, in ``public.coins``. An accepted audit record
   that names none in that form is undecided by name and makes nothing public; the driver's own account of the session
   (the summary's ``coins_session``) gives it no accept;
+* the accept says which kind it is (``public.case_v2``): the Python audit's, with or without the case the compiled
+  check reads, as the audit record says its audit wrote it (``case_v2``) and with the audit's reason where it wrote none;
+  an accepted audit record that doesn't say is undecided;
 * where the window holds a case for the compiled check that names its challenger (``window/case-v2.json``'s
   ``params.challenger``), the accept stands only on that key: another key, or a case that isn't read, is undecided. No
   audit writes such a case here, so these cases are built by hand; an audit with no case, or a case that names no
@@ -55,10 +58,11 @@ def write(out: Path, summary: dict, record: dict | None = None) -> Path:
 
 
 def record(accepted: bool, **checks) -> dict:
-    """An audit record on coins its check verified."""
+    """An audit record on coins its check verified, whose audit wrote the case for the compiled check."""
     return {"accepted": accepted, "registration": REG, "draw": DRAW, "proved_units": [700, 5],
             "checks": {"draw": {"ok": True}, **{k: {"ok": v} for k, v in checks.items()}},
             "coins": {"source": "challenger", "outcome": {"accepted": accepted}, "verified": dict(WHOSE)},
+            "case_v2": {"written": True},
             "wrong_units": {"delta": 0.5, "of": 1024, "bound": 3} if accepted else None}
 
 
@@ -69,7 +73,8 @@ def test_an_accepted_audit_is_an_accept(tmp_path):
     assert check_answer(a) == a
     assert a["verdict"] == "accept" and a["protocol"] == "verity/sampled-proofs/one-stage/v1"
     assert a["commitment"] == R.digest(REG)
-    assert a["public"] == {"bound": 3, "coins": WHOSE, "drawn": [5, 700], "per_template": None, "proved": [5, 700]}
+    assert a["public"] == {"bound": 3, "case_v2": {"written": True}, "coins": WHOSE, "drawn": [5, 700],
+                           "per_template": None, "proved": [5, 700]}
     p = CC.integrity(a["profile"])
     assert str(p["delta"]) == "1/2" and p["drawn"] == [("unit", 2)]
     assert p["levels"] == [{"name": "unit", "query": "bb" * 64, "size": 1024, "draw": {"subset": 2}}]
@@ -118,6 +123,34 @@ def test_an_accepted_audit_whose_coins_no_check_verified_is_undecided(tmp_path, 
     assert check_answer(a) == a
     assert (a["verdict"], a["public"], a["profile"]) == ("undecided", None, None)
     assert a["reason"].startswith("the audit record names no challenger key and session a check verified its coins under")
+    assert a["commitment"] == R.digest(REG)
+
+
+#: why a5 writes no case for the compiled check on a sample of two members, and on plain sessions (`a5.v2_proof`)
+TWO_MEMBERS = "ValueError: v2 verifies one table's session on its circuit and public file; this audit drew 2 members"
+PLAIN = "ValueError: v2 verifies --zk sessions; this audit's are plain"
+
+
+@pytest.mark.parametrize("why", [TWO_MEMBERS, PLAIN])
+def test_an_accept_with_no_case_for_the_compiled_check_says_so(tmp_path, why):
+    """The audit accepted and wrote no case for the compiled check: the accept stands, as the Python audit's, and its
+    public outputs say no such case was written and why, in the audit's words."""
+    said = {"written": False, "why": why}
+    a = I.answer(write(tmp_path / "a", SUMMARY, {**record(True), "case_v2": said}), REG)
+    assert check_answer(a) == a
+    assert a["verdict"] == "accept" and a["public"]["case_v2"] == said and a["public"]["coins"] == WHOSE
+
+
+@pytest.mark.parametrize("said", [None, True, {}, {"written": False}, {"written": False, "why": ""}, {"written": "yes"},
+                                  {"written": True, "why": TWO_MEMBERS}, {"written": False, "why": PLAIN, "compiled": True}])
+def test_an_accepted_audit_that_does_not_say_whether_it_wrote_the_case_is_undecided(tmp_path, said):
+    rec = {**record(True), "case_v2": said}
+    if said is None:
+        del rec["case_v2"]
+    a = I.answer(write(tmp_path / "a", SUMMARY, rec), REG)
+    assert check_answer(a) == a
+    assert (a["verdict"], a["public"], a["profile"]) == ("undecided", None, None)
+    assert a["reason"].startswith("the audit record doesn't say whether its audit wrote the case for the compiled check")
     assert a["commitment"] == R.digest(REG)
 
 

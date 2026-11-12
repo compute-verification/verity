@@ -5,8 +5,8 @@
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the profile is
 `audit.profile` as `Core.Integrity` (δ an exact ratio) and the public outputs are the four `Spot.OneStage.check` makes
 public (``drawn`` and ``proved``, the sampled and proved units; ``bound``, the bound on incorrect proof blocks at δ;
-``per_template``, each template's under a stratified or work sampling design) and a fifth the Lean's answer doesn't
-have, ``coins``. A refusal before the
+``per_template``, each template's under a stratified or work sampling design) and two the Lean's answer doesn't have,
+``coins`` and ``case_v2``. A refusal before the
 sample (the records, a check on the registration, the sample) rejects with its codes; an audit record that doesn't accept,
 with its failed checks and the first of Lean's refusals by member (a registered read that doesn't open its root names
 its port). An audit that ended with no summary is an error (RuntimeError), not a verdict.
@@ -21,10 +21,18 @@ check's case: `Spot.OneStageZk` reads the challenger from its parameters, and a 
 values are to come from once an audit writes one. Until then a case that does name its challenger
 (``window/case-v2.json``'s ``params.challenger``) is held to the audit record: the key's digest must be the recorded one.
 
-An accepted audit record is undecided, not an accept, where it names no such key and session (an audit record written
-without them), or where the window's case names a challenger whose key is another, or isn't read. A reader that holds
-the deployment's key record compares the digest with it; nothing here holds a key record, so nothing here tells a
-development session's key from the auditor's.
+``public.case_v2`` says which kind of accept this is. Every accept here is the Python audit's (`a5`'s): none is the
+compiled check's, `Spot.OneStageZk`'s, which nothing here runs. The field says whether the audit wrote the case that
+check reads, as the audit record says it (``case_v2``, `a5.case_written`, set by the audit when it wrote its cases and
+not read from a case): ``{"written": true}``, or ``{"written": false, "why"}`` with the audit's own reason (sessions
+that aren't `--zk`, a sample of several members), where no verifier of record can be run on the window at all. A
+record or a statement about the compiled check's accepts counts no answer here as one, and none with ``written``
+false as one that could become one.
+
+An accepted audit record is undecided, not an accept, where it names no such key and session or doesn't say whether
+it wrote the case (an audit record written without them), or where the window's case names a challenger whose key is
+another, or isn't read. A reader that holds the deployment's key record compares the digest with it; nothing here
+holds a key record, so nothing here tells a development session's key from the auditor's.
 """
 from __future__ import annotations
 
@@ -57,6 +65,21 @@ def whose_coins(rec: Mapping[str, Any]) -> dict[str, str] | None:
     if type(key) is not str or len(key) != 128 or set(key) - set("0123456789abcdef") or type(session) is not str or not session:
         return None
     return {"key_sha512": key, "session": session}
+
+
+def case_said(rec: Mapping[str, Any]) -> dict[str, Any] | None:
+    """Whether the audit record ``rec``'s audit wrote the case for the compiled check, as the record says it
+    (``case_v2``, `a5.case_written`): ``{"written": True}``, or ``{"written": False, "why"}`` with the audit's reason;
+    None for a record that doesn't say it in that form."""
+    said = rec.get("case_v2")
+    if not isinstance(said, Mapping):
+        return None
+    if said.get("written") is True and sorted(said) == ["written"]:
+        return {"written": True}
+    why = said.get("why")
+    if said.get("written") is False and sorted(said) == ["why", "written"] and type(why) is str and why:
+        return {"written": False, "why": why}
+    return None
 
 
 def case_key(out: Path) -> str | None:
@@ -115,8 +138,9 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
     units that are wrong, except with probability δ, and its public ``coins`` whose coins the sample is on
-    (`whose_coins`). An accepted audit record that names no such coins, or beside a case for the compiled check that
-    names another challenger key (`case_key`), is undecided (module docstring)."""
+    (`whose_coins`) and its public ``case_v2`` whether the audit wrote the case for the compiled check (`case_said`). An
+    accepted audit record that says neither, or beside a case for the compiled check that names another challenger key
+    (`case_key`), is undecided (module docstring)."""
     commitment = R.digest(registration) if registration is not None else None
     try:
         summary = json.loads((out / "summary.json").read_text())
@@ -151,6 +175,10 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
         return _refusal("the audit record names no challenger key and session a check verified its coins under "
                         "(coins.verified): its acceptance says nothing of whose coins the sample is on", R.digest(reg),
                         "undecided")
+    kind = case_said(rec)
+    if kind is None:
+        return _refusal("the audit record doesn't say whether its audit wrote the case for the compiled check (case_v2): "
+                        "its acceptance doesn't say which kind of accept it is", R.digest(reg), "undecided")
     try:
         named = case_key(out)
     except ValueError as e:
@@ -164,10 +192,10 @@ def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
     profile = A.profile(reg, draw, wrong["delta"]).to_json()
     profile["delta"] = str(delta)
     per_template = wrong.get("per_template")
-    public = {"bound": wrong["bound"], "coins": coins, "drawn": sorted(draw["units"]), "per_template": per_template,
-              "proved": sorted(rec["proved_units"])}
+    public = {"bound": wrong["bound"], "case_v2": kind, "coins": coins, "drawn": sorted(draw["units"]),
+              "per_template": per_template, "proved": sorted(rec["proved_units"])}
     return {"commitment": R.digest(reg), "profile": profile, "protocol": PROTOCOL, "public": public, "reason": None,
             "verdict": "accept"}
 
 
-__all__ = ["PROTOCOL", "answer", "case_key", "whose_coins"]
+__all__ = ["PROTOCOL", "answer", "case_key", "case_said", "whose_coins"]
