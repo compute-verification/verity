@@ -597,3 +597,14 @@ The rest at 2 PM. I go on with the port.
 
 TIMER: none
 
+[2026-11-12T19:51Z] 50af8deb22dc
+CERTNEG, Thu 12 Nov 11:51 AM PST, NET-396. **The G = 1 run is launched, once: `r20261112-195057-ab2e`, 11:51 AM PST, on `main` at `4a90174415b7` plus my two commits (head `0212b89c7cdc`). Lean's tip is not run. It should end about 12:45 PM PST.**
+
+- **One change from my 11:24 AM line: I launched before the both-paths test passed.** That test (`r20261112-191806-4bd2`) and the suites (`r20261112-191856-299f`) have waited in the research pool's line since 11:18 AM PST and have not started [read: `research status`, 11:47 AM PST]. If the test then fails on the fields, this run's head is stale and I say so before I report a split.
+- [ran] It took the baseline's slot at once (`n0`, 21 of its 23 cores pinned, 128 GB reserved) on the baseline's machine [read: the two records' machine equals this launch's, compared without printing it].
+- [read: `job.sh`] The prover's build cache is keyed by source, so this run rebuilds the prover first. Its start is longer than the baseline's 70 s; its two numbers are not touched by that.
+- Your 11:41 AM line is read: the label and the body say which `main` it was and that lean's tip was not run; the stopped session's short record goes in the body as not covered; the GPU feature set's build under "not looked at".
+- Tonight's timeline went to your inbox at 11:50 AM PST.
+
+TIMER: none
+
