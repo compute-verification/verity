@@ -84,6 +84,13 @@ NUMPY_USERS = ("verity/circuits/evaluation", "verity/circuits/boolean/forms.py")
 NO_DATE_OR_REASON = ("verity/configuration/config", "verity/protocols/inference_only/nci",
                      "verity/composite/device/live_challenger", "verity/protocols/poub/device/live_verifier",
                      "verity/protocols/pouw/clear", "verity/protocols/pouw/receipts")
+#: Inside the listing's distributions, the directories whose Python is still held as ``verity``'s own is by the rules on
+#: a file's text: it reads no other distribution at run time and names no path of the census, and each of its
+#: directories is a package.  The code that came from ``benchmarks/``, and the Lean check of σ beside Flock's prover.
+#: It only shrinks, as a directory becomes part of ``verity``, which is held whole.
+HELD_AS_VERITY = ("verity/composite/device/live_challenger", "verity/protocols/flock/sigma",
+                  "verity/protocols/poub/device/live_verifier", "verity/protocols/pouw/clear",
+                  "verity/protocols/pouw/receipts")
 #: SPOT[Flock] stands on its own, and the network certifier is a layer beside it: SPOT reads the certifier's stamp as a
 #: certified input and imports none of the certifier, and the two compose only above both.  SPOT's row of the
 #: listing and the certifier's, the trees each of whose Python files (tests included) is checked, SPOT's Lean packages
@@ -205,6 +212,13 @@ def _sources(root: Path = SRC) -> list[Path]:
                   and _distribution(p.relative_to(ROOT).as_posix(), listing) is None and not p.name.endswith(SIDECAR))
 
 
+def _held_sources() -> list[Path]:
+    """``verity``'s own Python files (``_sources``) and, held with them, those of ``HELD_AS_VERITY``'s directories."""
+    kept = [p for d in HELD_AS_VERITY for p in (ROOT / d).rglob("*.py")
+            if not {"tests", "lean", ".lake", "__pycache__"} & set(p.relative_to(SRC).parts) and not p.name.endswith(SIDECAR)]
+    return sorted({*_sources(), *kept})
+
+
 def _imports(path: Path, src: Path = SRC, package: tuple[str, ...] = ("verity",),
              nodes: Iterable[ast.AST] | None = None) -> list[tuple[str, int, bool]]:
     """``(module, line, imported)`` for every module ``path`` (or its parsed ``nodes``) names.  Statements and import-call
@@ -251,18 +265,25 @@ def _run_time_reads(text: str) -> list[tuple[int, str]]:
 
 def test_verity_reads_no_other_distribution_at_run_time() -> None:
     """No Python file under ``verity/`` (tests, Lean scripts and sidecars included; a directory of the listing's
-    ``distribution`` is a distribution of its own) reads another distribution's package data or names one of its modules
-    for an import call, so ``verity`` alone evaluates its Definitions and no suite of it takes another distribution as an
-    input."""
-    offenders, listing = [], _listing()
+    ``distribution`` is a distribution of its own, but for ``HELD_AS_VERITY``) reads another distribution's package
+    data or names one of its modules for an import call, so ``verity`` alone evaluates its Definitions and no suite of
+    it takes another distribution as an input."""
+    offenders, listing, held = [], _listing(), set()
     for path in sorted(SRC.rglob("*.py")):
         rel = path.relative_to(ROOT).as_posix()
-        if {".lake", "__pycache__"} & set(path.parts) or _distribution(rel, listing) is not None:
+        if {".lake", "__pycache__"} & set(path.parts):
             continue
+        if _distribution(rel, listing) is not None:
+            kept = {p for p in HELD_AS_VERITY if _under(rel, [p])}
+            held |= kept
+            if not kept:
+                continue
         offenders += [f"{rel}:{line}: {name}" for line, name in _run_time_reads(path.read_text(encoding="utf-8"))]
     assert not offenders, ("verity reads another distribution at run time, and an integration may import verity but never the "
                            "reverse: move the data or code into verity beside what reads it (as `bf16_gemm_check`'s device pins "
                            "sit in its `device_pins/`), or take it as a parameter the caller supplies\n" + "\n".join(offenders))
+    gone = sorted(set(HELD_AS_VERITY) - held)
+    assert not gone, f"directories of HELD_AS_VERITY that hold no Python of a `distribution` of the listing; remove them: {gone}"
 
 
 def test_a_run_time_read_is_found() -> None:
@@ -275,9 +296,10 @@ def test_a_run_time_read_is_found() -> None:
 
 
 def test_every_source_directory_is_a_package() -> None:
-    """``verity`` is one regular package: every directory of its own Python has an ``__init__.py``, so no part of it resolves
-    as a namespace package from whatever else is on the path.  Tests and Lean scripts are run by path and stay out."""
-    missing = sorted({str(p.parent.relative_to(SRC.parent)) for p in _sources() for d in [p.parent, *p.parent.parents]
+    """``verity`` is one regular package: every directory of its own Python (``HELD_AS_VERITY``'s with it) has an
+    ``__init__.py``, so no part of it resolves as a namespace package from whatever else is on the path.  Tests and Lean
+    scripts are run by path and stay out."""
+    missing = sorted({str(p.parent.relative_to(SRC.parent)) for p in _held_sources() for d in [p.parent, *p.parent.parents]
                       if d.is_relative_to(SRC) and not (d / "__init__.py").exists()})
     assert not missing, missing
 
@@ -312,6 +334,19 @@ def _covered(rel: str, globs: Iterable[str]) -> bool:
     return any(fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(rel, g + "/*") for g in globs)
 
 
+def _certifier_imports(path: Path, nodes: Iterable[ast.AST] | None = None) -> list[tuple[int, str]]:
+    """``(line, module)`` for each module of the certifier's (``CERTIFIER_MODULES``) that ``path`` (or its parsed
+    ``nodes``) imports.  ``from M import a`` names ``M.a`` as well as ``M``, since ``a`` may be the certifier's package."""
+    def certifier(name: str) -> bool:
+        return any(name == m or name.startswith(m + ".") for m in CERTIFIER_MODULES)
+
+    nodes = list(nodes if nodes is not None else ast.walk(ast.parse(path.read_text(encoding="utf-8"), filename=str(path))))
+    names = [(line, name) for name, line, _ in _imports(path, nodes=nodes)]
+    names += [(n.lineno, f"{n.module}.{a.name}") for n in nodes
+              if isinstance(n, ast.ImportFrom) and n.level == 0 and n.module and not certifier(n.module) for a in n.names]
+    return sorted((line, name) for line, name in names if certifier(name))
+
+
 def _spot_python_offenders() -> list[str]:
     """Each import of a certifier module (``CERTIFIER_MODULES``) in a Python file of ``SPOT_TREES`` (a tree, or one file), its
     tests included."""
@@ -320,8 +355,7 @@ def _spot_python_offenders() -> list[str]:
     for path in sorted(files):
         if {".lake", "__pycache__"} & set(path.relative_to(ROOT).parts):
             continue
-        out += [f"{path.relative_to(ROOT)}:{line}: {name}" for name, line, _ in _imports(path)
-                if any(name == m or name.startswith(m + ".") for m in CERTIFIER_MODULES)]
+        out += [f"{path.relative_to(ROOT)}:{line}: {name}" for line, name in _certifier_imports(path)]
     return out
 
 
@@ -419,7 +453,13 @@ def test_spot_never_imports_the_network_certifier_in_lean() -> None:
 
 def test_a_spot_import_of_the_certifier_is_found() -> None:
     """The check above isn't vacuous: a certifier module that a SPOT root reaches through another module is found with the
-    chain that reaches it, a module no file declares (Mathlib's) is skipped, and a package's ``srcDir`` names its modules."""
+    chain that reaches it, a module no file declares (Mathlib's) is skipped, and a package's ``srcDir`` names its modules.
+    In Python, the certifier's package imported from the package above it is found as its module is."""
+    src = ("from verity.protocols.certifier import verifier\nimport verity.protocols.certifier.prover.egress as e\n"
+           "from verity.protocols.certifier.device import x\nfrom verity.protocols import certifier, spot\n")
+    found = _certifier_imports(SRC / "protocols/spot/tests/test_x.py", ast.walk(ast.parse(src)))
+    assert found == [(1, "verity.protocols.certifier.verifier"), (2, "verity.protocols.certifier.prover.egress"),
+                     (3, "verity.protocols.certifier.device")], found
     files_of = {"B": ["s/B.lean"], "C": ["verity/protocols/certifier/device/program/lean/C.lean"]}
     imports = {"s/A.lean": ["Mathlib.X", "B"], "s/B.lean": ["C"]}
     parent = _lean_reach(["s/A.lean"], lambda f: imports.get(f, ()), files_of)
@@ -860,7 +900,7 @@ def test_core_never_reads_the_census() -> None:
     ``verity``: it takes such numbers as parameters.  No string in its code (docstrings aside) names the directory or one of
     its files; a Program's census schema (``verity/census/v1``, ``ml.circuits.census``) is not the directory."""
     offenders = []
-    for path in _sources():
+    for path in _held_sources():
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         docs = _docstrings(tree)
         offenders += [f"{path.relative_to(SRC)}:{n.lineno}" for n in ast.walk(tree)
