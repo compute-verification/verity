@@ -12,6 +12,7 @@ public import Definitions.Core.Period
 public import Definitions.Core.Structure
 public import Definitions.Core.Rec
 public import Definitions.Core.CoinBytes
+public import Definitions.Core.FirstHit
 public import Definitions.Core.Game.Tape
 public import Definitions.Core.Game.TwoRun
 public import Definitions.Core.Game.InterleaveBridge
