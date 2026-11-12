@@ -178,8 +178,10 @@ against that salted digest is a later change to its circuit (the certifier PROTO
 * in the rows form, link-window `w`'s scan's state is the `SCAN_STATE` of an audit its `prog` is wired to
   (`stateTied`): the scan's registration has an entry of its `roots` whose port is `scan/state` or of its `registered`
   whose value is `verity/certifier/scan-state/v1`, every such entry at one root and domain, and so has a `wired`
-  audit's registration, every such entry at that root and domain; and the scan's registration states its units' reads
-  of that state and opens its row 0, its `window`'s
+  audit's registration, every such entry at that root and domain, with the entry of that value in its `window`'s
+  `activations.values`, where a window circuit's registration commits its per-window values (`auditStateEntries`,
+  which its driver, not one-stage's registration checks, holds its reads to); and the scan's registration states its
+  units' reads of that state and opens its row 0, its `window`'s
 
       "reads": {"scan/state": {"o1": {"leaf": 1, "units": [0, T − 1]}, "sin": {"leaf": 1, "units": [1, T]}}, …},
       "empty": {"scan/state": {"words": W, "salt": hex, "path": hex}, …}
@@ -1161,6 +1163,25 @@ def stateEntries (reg : Json) : Array Json :=
   let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
   (entries "roots").filter (named "port" stateName) ++ (entries "registered").filter (named "value" stateValue)
 
+/-- A compute audit's state entries: its `stateEntries` and, where its `window` commits its per-window values
+(`window.activations.values`, fixed with the record before the sample), its entry of `stateValue` when that entry's
+`value` is `stateValue`. That entry is the root the audit's reads of `stateValue` open at only where its verifier is given
+those reads at its window's entries: one-stage's registration checks hold `roots` and `registered` but read nothing of
+`window`, so it is the audit's driver, which pins each per-window value from `activations.values`, that holds it. A
+scan's state entries are its `stateEntries` alone. -/
+def auditStateEntries (reg : Json) : Array Json :=
+  let named := fun (k n : String) (e : Json) => match e.getObjValD k with | .str x => x == n | _ => false
+  stateEntries reg ++ #[(((reg.getObjValD "window").getObjValD "activations").getObjValD "values").getObjValD
+    stateValue].filter (named "value" stateValue)
+
+-- a registration whose window's activations hold the state: an audit's state entry, no scan's; one whose activations
+-- entry names another value: none
+#guard
+  let act := fun (v : String) => Json.mkObj [("window", Json.mkObj [("activations", Json.mkObj [("program", "c"),
+    ("values", Json.mkObj [(stateValue, Json.mkObj [("value", v), ("root", "s"), ("domain", "d")])])])])]
+  (auditStateEntries (act stateValue)).size == 1 && (stateEntries (act stateValue)).isEmpty &&
+    (auditStateEntries (act "w")).isEmpty
+
 /-- Whether `j` is the run `{"leaf": l, "units": [lo, hi]}`: units `lo` to `hi − 1`, unit `lo + i` at leaf `l + i`. Read
 field by field, which the kernel evaluates (`Json`'s `==` it doesn't). -/
 def isRun (j : Json) (lo hi l : Nat) : Bool :=
@@ -1193,7 +1214,7 @@ def stateRead (s : Schedule) (reg : Json) : Bool :=
 /-- The scan's state is the state its slots' Programs read, read where the scan's transitions chain it: the scan's
 registration states its state reads as the chain (`stateRead`: unit `t`'s `sin` at leaf `t`, its `o1` at leaf `t + 1`, but
 the last unit's `o1`, which no leaf holds), has a state entry (`stateEntries`), every one at one root and domain, and an
-audit `wired` to the scan's `prog` has one, every one at that root and domain. So the `SCAN_STATE`
+audit `wired` to the scan's `prog` has one (`auditStateEntries`), every one at that root and domain. So the `SCAN_STATE`
 that audit's Programs read is the chain of the scan's transitions, each row past row 0 the one the unit before
 registered. -/
 def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : Json) : Bool :=
@@ -1203,7 +1224,7 @@ def stateTied (audits : Array Audit) (s : Schedule) (regs : Array Json) (reg : J
     | .str root, .str dom =>
       let atRoot := fun (o : Json) => named "root" root o && named "domain" dom o
       (stateEntries reg).all atRoot && (audits.zip regs).any fun (a, r) =>
-        wired #[a] s #[r] reg && !(stateEntries r).isEmpty && (stateEntries r).all atRoot
+        wired #[a] s #[r] reg && !(auditStateEntries r).isEmpty && (auditStateEntries r).all atRoot
     | _, _ => false
   | none => false
 

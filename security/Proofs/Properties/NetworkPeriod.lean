@@ -290,6 +290,23 @@ def stateWindow : Lean.Json := stateWindowOf (stateRun 1 1 2) (stateRun 1 0 1)
 theorem rowsStateTied_honest : stateTied #[slotAudit] slotSchedule #[stateReg "s"] stateWindow = true := by
   decide +kernel
 
+/-- The slot audit's registration holding its `SCAN_STATE` in its window's `activations.values` alone, as a window
+circuit's registration commits its per-window values, at the root `root` and the domain `e`. -/
+def activationsReg (root : String) : Lean.Json :=
+  Lean.Json.mkObj [
+    ("roots", Lean.Json.arr #[Lean.Json.mkObj
+      [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]]),
+    ("window", Lean.Json.mkObj [("activations", Lean.Json.mkObj [("values", Lean.Json.mkObj [
+      ("verity/certifier/scan-state/v1", Lean.Json.mkObj
+        [("value", "verity/certifier/scan-state/v1"), ("root", root), ("domain", "e")])])])])]
+
+/-- An audit's state entry in its window's activations alone ties it (`auditStateEntries`), at the scan's root and at
+no other. -/
+theorem rowsStateTied_activations :
+    stateTied #[slotAudit] slotSchedule #[activationsReg "s"] stateWindow = true ∧
+      stateTied #[slotAudit] slotSchedule #[activationsReg "t"] stateWindow = false := by
+  decide +kernel
+
 /-- A slot audit whose `SCAN_STATE` skips or alters one of the scan's transitions: a tree of other rows, at another
 root (`t`) than the scan's state's, so its Programs compute on states the scan never reached. -/
 theorem stateWindow_skipped : stateTied #[slotAudit] slotSchedule #[stateReg "t"] stateWindow = false := by
