@@ -52,8 +52,10 @@ record (`state-anchored`, `anchor_audit`), and a phase whose tied audit reads it
 (`state-misanchored`, `MISANCHORS`). Each is charged its free inputs with those reads held where its `SCAN_STATE` is
 the scan's state in every phase tied to it (`_charge`); a second audit tied to a phase, whose `SCAN_STATE` is another
 link-window's or none's, is charged them free (`state-unheld`). Those charges are a phase's whose scan is sampled in
-part: a scan with every unit proved (`Facts.whole`) is charged its slot entries once in their place, and no audit is
-read at the period's δ for it (`proved_whole` and `sampled_in_part` redraw a case's scans either way). In the
+part: a scan with every unit proved (`Facts.whole`) is charged none of them, and no audit is read at the period's δ
+for it (`proved_whole` and `sampled_in_part` redraw a case's scans either way). Every phase is charged its scan's view
+rows, its egress instances' `state` (`Scan.view`), as no view tie is held (`VIEW_TIE_HELD`); with it held (`public`'s
+`view_tie`) none is, and a scan with every unit proved is charged its slot entries once instead. In the
 clock form an audit may be in the record form (`audit-record`): its window's circuit record, wire order and the
 verifier's pins beside its Program (`record_audit`), its registration's window binding the record and recording each
 pin's root, a record whose wire reads a Boolean-profile writer's bits as 16-bit leaves accepted too
@@ -224,12 +226,14 @@ class Params:
 class Scan:
     """`Scan`: the scan's monitoring period (T), its own free inputs (none: its `prog` is a compute audit's slot
     entries, `_wired`, whose free inputs a link-window's term counts, `_tied_audits`), the bits one ingress and one
-    egress instance commit (its parameters and its return), and its slot entries' bits (`E_w`), all a tied audit's incorrect proof blocks can set."""
+    egress instance commit (its parameters and its return), its slot entries' bits (`E_w`), all a tied audit's
+    incorrect proof blocks can set, and its view rows' bits (its T egress instances' `state` parameters)."""
     steps: int
     free: int
     ingress: int
     egress: int
     entries: int = 0
+    view: int = 0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -695,7 +699,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
         raise D.Reject("scan: a body names a later node (Flock.Program.Prog.orderViolation): the Program is not "
                        "topological, so a gate's operands could be gates after it")
     return Scan(T, 0, max([bits(bf["params"]), *(bits(b["params"]) for _, b in later)]) + bits_of(bf["ret_type"]),
-                bits(be["params"]) + bits_of(be["ret_type"]), L * nb * bits_of(ety))
+                bits(be["params"]) + bits_of(be["ret_type"]), L * nb * bits_of(ety), T * bits(be["params"]))
 
 
 def params(j) -> Params:
@@ -1287,27 +1291,38 @@ def _facts_json(f: Facts) -> dict:
     return {"delta": str(f.delta), "drawn": f.drawn, "units": f.units, "wrong_units": f.wrong}
 
 
+#: `viewTieHeld`: whether the check holds a scan's view tie, egress unit t's `state` the view ingress unit t returns.
+#: No registration states it and the check reads none, so every link-window's term charges its scan's view rows.
+VIEW_TIE_HELD = False
+
+
 def _terms(free: int, steps: int, per_unit: int, f: Facts, jitter: int, faulty: int | None = None,
-           tied: list[int] | None = None, entries: int | None = None) -> dict:
+           tied: list[int] | None = None, entries: int | None = None, view: int | None = None) -> dict:
     """`AuditTerms.of` (a compute audit's, `per_unit` its Program's widest unit's committed bits) and `Scan.terms` (a
     scan's, `per_unit` the wider instance's committed bits, `faulty` the slot entry bits its tied audits' incorrect
-    proof blocks can set, `faulty_entries`, `tied` those audits by index and `entries` the slot entry bits it charges
-    once where every unit of it is proved, `termsJson`'s)."""
+    proof blocks can set, `faulty_entries`, `tied` those audits by index, `entries` the slot entry bits it charges
+    once where every unit of it is proved and its view tie is held, and `view` the view rows' bits it charges where
+    the tie is not, with `whole`, whether every unit of it is proved, `termsJson`'s)."""
     return _facts_json(f) | {"faulty_bits": f.wrong * per_unit, "faulty_sets": clog2(at_most(f.units, f.wrong)),
                              "free": free, "jitter": clog2(jitter ** steps)} | (
         {} if entries is None else {"entries": entries}) | (
-        {} if faulty is None else {"faulty_entries": faulty}) | ({} if tied is None else {"tied": tied})
+        {} if faulty is None else {"faulty_entries": faulty}) | ({} if tied is None else {"tied": tied}) | (
+        {} if view is None else {"view": view, "whole": f.whole})
 
 
 def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int, list[int]]] | None = None,
-           charged: list[Facts] = ()) -> dict:
+           charged: list[Facts] = (), view_tie: bool | None = None) -> dict:
     """K and its terms over `PeriodLeakAccepted`'s windows: the clock form's compute audits, or the rows form's
     link-windows' scans (`scans`, each its facts, its tied audits' free inputs, its `β_w` and its tied audits by index;
     None in the clock form), where a compute audit's own terms are in none. A scan sampled in part has its tied audits'
     free inputs in its phase's `free` and their incorrect proof blocks in its `faulty_entries`; a scan whose every unit
-    is proved (`Facts.whole`) is charged its slot entries once (`entries`, `Scan.terms`) in place of both, with no
-    minimum of the two charges. An audit drawn in part and tied to a scan sampled in part, read at `TIED_DELTA`
-    (`charged`), is in the rows public's `charged` and its δ_i in `eps`."""
+    is proved (`Facts.whole`) is charged neither. Where the scan's view tie is not held (`view_tie`, the check's
+    `VIEW_TIE_HELD`) every scan is charged its view rows (`view`, `Scan.terms`); where it is, none is, and a scan whose
+    every unit is proved is charged its slot entries once (`entries`), with no minimum of that and the tied audits'
+    charges. An audit drawn in part and tied to a scan sampled in part, read at `TIED_DELTA` (`charged`), is in the
+    rows public's `charged` and its δ_i in `eps`. `scan_bits` are the scan's entries' and view rows' bits, whichever
+    a term charges."""
+    view_tie = VIEW_TIE_HELD if view_tie is None else view_tie
     cells = sum(clog2(cap + 1) for cap in p.cells)
     if scans is None:
         units = [_terms(a.free, a.steps, a.bits, f, p.jitter) for a, f in zip(p.audits, facts)]
@@ -1316,13 +1331,14 @@ def public(p: Params, facts: list[Facts], scans: list[tuple[Facts, int, int, lis
     else:
         s = p.scan
         units = [_terms(s.free + (0 if f.whole else t), s.steps, max(s.ingress, s.egress), f, p.jitter,
-                        0 if f.whole else b, tied, s.entries if f.whole else 0)
+                        0 if f.whole else b, tied, s.entries if f.whole and view_tie else 0,
+                        0 if view_tie else s.view)
                  for f, t, b, tied in scans]
         schedules = cells
         out = {"audits": [_facts_json(f) for f in facts], "charged": [_facts_json(f) for f in charged],
-               "held": list(HELD), "scans": units}
+               "held": list(HELD), "scan_bits": {"entries": s.entries, "view": s.view}, "scans": units}
     K = schedules + cells + sum(t["free"] + t["faulty_sets"] + t["faulty_bits"] + t["jitter"]
-                                + t.get("faulty_entries", 0) + t.get("entries", 0) for t in units)
+                                + t.get("faulty_entries", 0) + t.get("entries", 0) + t.get("view", 0) for t in units)
     eps = sum((Fraction(t["delta"]) for t in units), Fraction(0)) + sum((f.delta for f in charged), Fraction(0))
     return out | {"K": K, "cells": cells, "eps": str(eps), "schedules": schedules, "windows": p.windows}
 
@@ -1372,7 +1388,7 @@ def check(p: Params, c: Commitment, e) -> tuple:
     if p.schedule is None:
         return ACCEPT, public(p, facts), {"link": p.link, "windows": p.windows}
     # `partOf`: an audit is charged for the link-windows whose scans are sampled in part; a scan proved whole is
-    # charged its entries whatever its tied audits' draws
+    # charged its view rows, or with its view tie held its entries, whatever its tied audits' draws
     part = [reg for (f, _), reg in zip(scans, c.windows) if not f.whole]
     charged = {i: f.at(TIED_DELTA) for i, f in enumerate(facts)
                if _tied_in(c.audits, part, i) and f.drawn < f.units}

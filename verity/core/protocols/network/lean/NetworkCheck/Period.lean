@@ -240,24 +240,37 @@ slot's entry, a `ScanSlots_v2` one setting the `occ` and prompts its slots' Prog
 read, changes at most those `E_w` bits; the scan reads an entry only where its own state has the slot due and occupied,
 and refuses one there whose `read` is 0, so no `occ` the audit computes drops a request.
 
-A link-window's term charges what the prover chose of its scan's inputs by one of two rules, by the scan's own draw:
+A link-window's term charges what the prover chose of its scan's inputs by the scan's view tie and its own draw.
+
+The view tie: egress unit `t`'s `state`, the one parameter an egress instance reads (`scanOf`), is the view ingress
+unit `t` returns. The egress rows are computed from those `state` rows alone, and each is an input gate of the scan's
+Program, so until a scan's registration states the tie before the coins and the check reads it, as it reads the
+state's chain (`stateRead`), nothing holds a `state` row to what the ingress computed. No registration states it and
+the check reads none (`viewTieHeld`), so every term charges its scan's view rows (`view`: `Scan.view`, its `T` egress
+instances' `state`, 32 · 800 = 25,600 bits at w63k4), and beside them:
 
 * every unit of the scan is proved (`Facts.whole`: its draw takes each stratum whole and the strata hold all its
-  units). The scan's only input gates beside the certified ingress rows and its own state are its slot entries
-  (`scanOf` refuses any other), so the term charges those `E_w` bits once (`entries`), in place of its tied audits'
-  free inputs and `faulty_entries` together, whatever the tied audits' draws: no `δ_i` enters `eps` for it. It takes no
-  minimum with the tied audits' own count: where that count is the smaller, the smaller figure would rest on the audits'
-  tie to the entries, which this term does not read.
+  units): nothing more of the scan's inputs. Neither its tied audits' free inputs nor its slot entries are charged:
+  they reach the egress rows only through the view, every bit of which the term charges, whatever the tied audits'
+  draws, so no `δ_i` enters `eps` for it.
 * the scan is sampled in part. The term charges its tied audits' free inputs (`free`), and the check accepts a tied
   audit at any sample: sampled in part, the period reads the audit's draw at its own `δ_i` = 2^-64 (`tiedDelta`, fixed
   before any coin), where its at most `b` incorrect proof blocks can set any of its phase's entries, so that phase's
   term charges every entry bit (`faulty_entries`: `β_w ≤ 1[b ≥ 1] · E_w`) when `b ≥ 1`, and `δ_i` is in `eps`.
 
+With the view tie held (`Scan.terms` at `viewTie`, which no accepted period's term is at), no term charges the view
+rows, and a scan with every unit proved is charged its slot entries instead: its only input gates beside the certified
+ingress rows, its own state and its view are its slot entries (`scanOf` refuses any other), so the term charges those
+`E_w` bits once (`entries`), in place of its tied audits' free inputs and `faulty_entries` together. It takes no
+minimum with the tied audits' own count: where that count is the smaller, the smaller figure would rest on the audits'
+tie to the entries, which this term does not read.
+
 The public:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c,
      "charged": [{"delta": δ_i, "drawn", "units", "wrong_units"}, …], "eps": m · δ + Σ δ_i,
-     "held": ["circuit", "free"], "scans": [terms, …], "schedules": c, "windows": m}
+     "held": ["circuit", "free"], "scan_bits": {"entries": E_w, "view": V_w}, "scans": [terms, …],
+     "schedules": c, "windows": m}
 
 * `audits` are the compute audits' facts as their answers give them: each at the δ sampled proofs reads its draw at, and
   its answer's `bound` there.
@@ -274,14 +287,19 @@ The public:
   admits a queued connection at the first lane that frees, in the clients' arrival order, so the admissions are a
   function of the lengths, and `#Ss ≤ ∏_c (cap_c + 1)`. The second factor is the fail cell's position (`failCell`). A
   failed lane ends at its fail cell, so in a run the two coincide; `K` charges the product as the statement states it.
-* each scan's terms, from the scan's Program and its tied audits: `entries`, `E_w`, its slot entries' bits
-  (`Scan.entries`: `lanes · T / every` entries of its `prog` ports' type, 8 · 112 = 896 at w63k4) where every unit of
-  the scan is proved, else 0; `free`, where the scan is sampled in part, the free inputs the check counts off the
+* `scan_bits` are the scan's Program's sizes a link-window, whichever a term charges: `entries`, `E_w`, its slot
+  entries' bits (`Scan.entries`: `lanes · T / every` entries of its `prog` ports' type, 8 · 112 = 896 at w63k4), and
+  `view`, `V_w`, its view rows' bits (`Scan.view`: its `T` egress instances' `state`).
+* each scan's terms, from the scan's Program and its tied audits: `view`, `V_w`, since no view tie is held; `whole`,
+  whether every unit of the scan is proved (`Facts.whole`); `entries`, `E_w` where every unit of the scan is proved
+  and its view tie is held, so 0 in every accepted period's; `free`, where the scan is sampled in part, the free
+  inputs the check counts off the
   descriptor (`inputGates`, or with its circuit record `NetworkCheck.Circuit.check`'s count, its reads of the scan's
   state held where its `SCAN_STATE` is the scan's state in every phase tied to it, `chargeOf`) of each audit its `prog`
   is an output of, summed (`tiedAudits`, each once), and with every unit proved the scan's own alone (the scan's own is
   0, as it registers the rows, its `prog` is
-  those audits' output, and bucket 0 starts from the empty state, constants of `IngressScanFirst`: the egress tie
+  those audits' output, bucket 0 starts from the empty state, constants of `IngressScanFirst`, and its view rows are
+  their own term, `view`: the egress tie
   moves the free term from the scan's `prog` to the tied audit's inputs), `steps` T, `faulty_bits`
   `b · max(b_ing, b_eg)` with `b_ing` an ingress instance's parameter and return bits (its row, state and slot
   entries, the more of bucket 0's and a later bucket's, and its verdict u16, state and view) and `b_eg` an egress
@@ -415,16 +433,19 @@ def rowsWfRefusal (s : Schedule) (windows : Nat) : String :=
     frames could encode alike (rowsWf)"
 
 /-- The scan's terms, read off its Program: its monitoring period (`T`, the window's buckets), its own free inputs
-(none: it registers the rows, and its `prog` is a compute audit's output, `progTied`, whose free inputs a link-window's
-term counts, `tiedAudits`), the bits one ingress and one egress instance commit (its parameters, its input gates, and
-its return: the outputs other units read or the client receives, and its verdict), and its slot entries' bits (`E_w`: `lanes · T / every` entries of
-its `prog` ports' type), all a tied audit's wrong units can set. -/
+(none: it registers the rows, its `prog` is a compute audit's output, `progTied`, whose free inputs a link-window's
+term counts, `tiedAudits`, and its view rows are their own term, `view`), the bits one ingress and one egress instance
+commit (its parameters, its input gates, and its return: the outputs other units read or the client receives, and its
+verdict), its slot entries' bits (`E_w`: `lanes · T / every` entries of its `prog` ports' type), all a tied audit's
+wrong units can set, and its view rows' bits (its `T` egress instances' `state` parameters, each an input node's
+leaves, `scanOf`: every input gate an egress instance reads). -/
 structure Scan where
   steps : Nat
   free : Nat
   ingress : Nat
   egress : Nat
   entries : Nat
+  view : Nat
 
 /-- Which run the link-windows are: the clock form's, under Σ_sync, or the rows form's, under one schedule (and its
 digest), read by the scan whose terms are the last. -/
@@ -903,7 +924,8 @@ def scanOf (j : Json) (program : String) (s : Schedule) : V Scan := do
     is not topological, so a gate's operands could be gates after it"
   pure { steps := T, free := 0,
          ingress := max (paramBits df.params) ((later.map fun (_, d) => paramBits d.params).getD 0) + bitsOf df.ret,
-         egress := paramBits de.params + bitsOf de.ret, entries := s.lanes * nb * bitsOf ety }
+         egress := paramBits de.params + bitsOf de.ret, entries := s.lanes * nb * bitsOf ety,
+         view := T * paramBits de.params }
 
 def paramsOf (j : Json) : V Params := do
   match j with
@@ -1399,7 +1421,7 @@ def chargeOf (p : Params) (audits windows : Array Json) (i : Nat) : Nat :=
   let a : Audit :=
     { free := 9, steps := 0, program := "", units := 1, bits := 0, entries := #[], record := none, stateFree := 4 }
   let p : Params := ⟨#[a], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none,
-    .rows ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩ .empty ⟨0, 0, 0, 0, 0⟩, 1⟩
+    .rows ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1⟩ .empty ⟨0, 0, 0, 0, 0, 0⟩, 1⟩
   stateHeldIn #[audit [st "s"]] #[window "p" "s"] 0 &&
     stateHeldIn #[audit [st "s"]] #[window "p" "s", window "p" "s"] 0 &&
     stateHeldIn #[audit [st "s"]] #[window "p" "s", window "x" "t"] 0 &&
@@ -1618,12 +1640,15 @@ structure AuditTerms where
   part; 0 in the clock form and where `entries` charges them). -/
   faultyEntries : Nat := 0
   /-- The scan's slot entries' bits (`Scan.entries`, `E_w`), charged once where every unit of the scan is proved
-  (`Facts.whole`), in place of its tied audits' free inputs and `faultyEntries` together; 0 otherwise and in the clock
-  form. -/
+  (`Facts.whole`) and its view tie is held, in place of its tied audits' free inputs and `faultyEntries` together; 0
+  otherwise and in the clock form. -/
   entries : Nat := 0
+  /-- The scan's view rows' bits (`Scan.view`), charged where its view tie is not held (`viewTieHeld`); 0 where it is
+  and in the clock form. -/
+  view : Nat := 0
 
 def AuditTerms.bits (t : AuditTerms) : Nat :=
-  t.free + t.faultySets + t.faultyBits + t.jitter + t.faultyEntries + t.entries
+  t.free + t.faultySets + t.faultyBits + t.jitter + t.faultyEntries + t.entries + t.view
 
 /-- A compute audit's terms in the clock form, from its layout terms, its facts and the jitter bound: each of its at
 most `b` faulty proof blocks commits at most its Program's widest proof block's bits. -/
@@ -1631,18 +1656,34 @@ def AuditTerms.of (a : Audit) (f : Facts) (jitter : Nat) : AuditTerms :=
   { facts := f, free := a.free, faultySets := clog2 (atMost f.units f.wrong), faultyBits := f.wrong * a.bits,
     jitter := clog2 (jitter ^ a.steps) }
 
+/-- Whether the check holds a scan's view tie: egress unit `t`'s `state` is the view ingress unit `t` returns, stated
+in the scan's registration, so fixed before any coin, and read by the check as `stateRead` reads the state's chain. No
+registration states it and no step of the check reads it, so it is held for no scan, and every link-window's term
+charges its scan's view rows (`Scan.terms`). -/
+def viewTieHeld : Bool := false
+
 /-- A link-window's scan's terms in the rows form, from the scan's terms, its facts, its tied audits' free inputs
 (`tied`: the egress renders their outputs, so the bits the prover chose of them are the link-window's free inputs), the
-slot entries' bits its tied audits' wrong units can set (`faulty`, `faultyEntries`) and the jitter bound: each of its
-at most `b` wrong units commits at most the wider instance's bits. Where every unit of the scan is proved
-(`Facts.whole`), the term charges the scan's slot entries once (`entries` = `Scan.entries`) in place of `tied` and
-`faulty` together, and reads neither: the entries are every input gate of the scan the prover chooses. It takes no
-minimum of the two charges, so it can exceed `tied + faulty` where the tied audits count fewer free inputs than the
-entries' bits. -/
-def Scan.terms (s : Scan) (f : Facts) (tied faulty jitter : Nat) : AuditTerms :=
+slot entries' bits its tied audits' wrong units can set (`faulty`, `faultyEntries`), the jitter bound and whether the
+scan's view tie is held (`viewTie`, the check's `viewTieHeld`): each of its at most `b` wrong units commits at most the
+wider instance's bits.
+
+Where the view tie is not held, an egress instance's `state` is an input gate nothing ties to what the ingress
+computed, so the term charges the scan's view rows (`view` = `Scan.view`), every input gate its egress instances read.
+Where every unit of the scan is proved (`Facts.whole`) it charges nothing more of the scan's inputs: neither `tied`
+and `faulty` nor the slot entries, which reach the egress rows only through the view.
+
+Where the view tie is held and every unit of the scan is proved, the term charges the scan's slot entries once
+(`entries` = `Scan.entries`) in place of `tied` and `faulty` together, and reads neither: the entries are every input
+gate of the scan the prover chooses. It takes no minimum of the two charges, so it can exceed `tied + faulty` where
+the tied audits count fewer free inputs than the entries' bits.
+
+A scan sampled in part is charged `tied` and `faulty`, beside its view rows where the view tie is not held. -/
+def Scan.terms (s : Scan) (f : Facts) (tied faulty jitter : Nat) (viewTie : Bool := viewTieHeld) : AuditTerms :=
   { facts := f, free := s.free + (if f.whole then 0 else tied), faultySets := clog2 (atMost f.units f.wrong),
     faultyBits := f.wrong * max s.ingress s.egress, jitter := clog2 (jitter ^ s.steps),
-    faultyEntries := if f.whole then 0 else faulty, entries := if f.whole then s.entries else 0 }
+    faultyEntries := if f.whole then 0 else faulty, entries := if f.whole && viewTie then s.entries else 0,
+    view := if viewTie then 0 else s.view }
 
 structure Public where
   /-- The compute audits' facts. -/
@@ -1661,6 +1702,9 @@ structure Public where
   /-- Each of the rows form's link-windows' tied audits, by index (`tiedAudits`), the audits its scan's `free` sums
   where the scan is sampled in part; none in the clock form. -/
   tied : Array (Array Nat) := #[]
+  /-- The rows form's scan's slot entries' bits and view rows' bits a link-window (`Scan.entries`, `Scan.view`), as
+  its Program gives them, whichever a term charges. -/
+  scanBits : Nat × Nat := (0, 0)
 
 def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0
 
@@ -1685,13 +1729,14 @@ def terms (audits : Array Audit) (facts : Array Facts) (cells : Array Nat) (jitt
 /-- The rows form's terms: the cells' as the clock form's, the schedules' the same count (each connection's lane
 length, one of `cap_c + 1`, fixes its admission and the lanes it frees), and each link-window's scan's from the scan's
 terms, its facts, its tied audits' free inputs and the entry bits their wrong units can set (`scans`, a triple a
-link-window; `Scan.terms` charges a scan whose every unit is proved its entries in place of the last two). The compute
-audits' own terms are in none: a tied audit's free inputs and wrong units are in its link-window's, and the δ of one
-drawn in part and tied to a scan sampled in part (`charged`) in `eps`. -/
+link-window; `Scan.terms` charges a scan whose every unit is proved its view rows, or with its view tie held
+(`viewTie`) its entries, in place of the last two). The compute audits' own terms are in none: a tied audit's free
+inputs and wrong units are in its link-window's, and the δ of one drawn in part and tied to a scan sampled in part
+(`charged`) in `eps`. -/
 def rowsTerms (facts : Array Facts) (scan : Scan) (scans : Array (Facts × Nat × Nat)) (cells : Array Nat)
-    (jitter windows : Nat) (charged : Array Facts := #[]) : Public :=
-  { audits := facts, cells := capsTerm cells, units := scans.map fun (f, t, b) => scan.terms f t b jitter,
-    rows := true, schedules := capsTerm cells, windows, charged }
+    (jitter windows : Nat) (charged : Array Facts := #[]) (viewTie : Bool := viewTieHeld) : Public :=
+  { audits := facts, cells := capsTerm cells, units := scans.map fun (f, t, b) => scan.terms f t b jitter viewTie,
+    rows := true, schedules := capsTerm cells, windows, charged, scanBits := (scan.entries, scan.view) }
 
 /-- `δ_i` = 2^-64, the δ at which the rows form reads a tied audit's draw (`chargedOf`): a constant of the check, so
 fixed before any coin, and its own reading of the draw, beside the δ sampled proofs reads the same draw at (the audit's
@@ -1716,20 +1761,21 @@ def faultyEntries (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan
 
 /-- The commitment with only the link-windows whose scans are sampled in part (`Facts.whole` false), `scans` the
 link-windows' scans' facts in order: the windows whose terms read a tied audit's bound (`faultyEntries`). A scan whose
-every unit is proved is charged its entries whatever its tied audits' draws (`Scan.terms`), so reads none. -/
+every unit is proved is charged its view rows or its entries whatever its tied audits' draws (`Scan.terms`), so reads
+none. -/
 def partOf (c : Commitment) (scans : Array (Facts × Nat)) : Commitment :=
   { c with windows := (scans.zip c.windows).filterMap fun ((f, _), reg) => if f.whole then none else some reg }
 
 /-- The rows form's public on acceptance: `rowsTerms` over the accepted audits' facts and each link-window's scan's
 facts, tied audits' free inputs and `β_w` (`faultyEntries`), of which `Scan.terms` charges a scan whose every unit is
-proved its entries instead; the audits charged are those tied to a scan sampled in part (`chargedOf` over `partOf`), so
-no `δ_i` enters `eps` for an audit tied only to scans proved whole; with each link-window's tied audits
-(`tiedAudits`). -/
-def rowsPublic (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan : Scan) (scans : Array (Facts × Nat)) :
-    Public :=
+proved its view rows instead, or with its view tie held (`viewTie`) its entries; the audits charged are those tied to
+a scan sampled in part (`chargedOf` over `partOf`), so no `δ_i` enters `eps` for an audit tied only to scans proved
+whole; with each link-window's tied audits (`tiedAudits`). -/
+def rowsPublic (p : Params) (c : Commitment) (as : Array (Found Facts)) (scan : Scan) (scans : Array (Facts × Nat))
+    (viewTie : Bool := viewTieHeld) : Public :=
   { rowsTerms (as.filterMap (·.toOption)) scan
       ((scans.zip c.windows).map fun ((f, t), reg) => (f, t, faultyEntries p (partOf c scans) as scan reg)) p.cells
-      p.jitter p.windows ((Array.range as.size).filterMap (chargedOf p (partOf c scans) as)) with
+      p.jitter p.windows ((Array.range as.size).filterMap (chargedOf p (partOf c scans) as)) viewTie with
     tied := (scans.zip c.windows).map fun (_, reg) => tiedAudits c.audits reg }
 
 structure Profile where
@@ -1769,16 +1815,17 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
           | .rows _ _ scan => rowsPublic p c as scan scans)
         { link := p.link, windows := p.windows }
 
-/-- The terms' JSON, each with its `entries`, its `faulty_entries` and its tied audits (`tied`, the `i`th's at `i`)
-when `entries` (the rows form's scans). -/
+/-- The terms' JSON, each with its `entries`, its `faulty_entries`, its tied audits (`tied`, the `i`th's at `i`), its
+`view` and whether every unit of it is proved (`whole`, `Facts.whole`) when `entries` (the rows form's scans). -/
 def termsJson (ts : Array AuditTerms) (entries : Bool := false) (tied : Array (Array Nat) := #[]) : Json :=
   .arr <| ts.zipIdx.map fun (t, i) => Json.mkObj ([
     ("delta", .str t.facts.delta.toString), ("drawn", toJson t.facts.drawn)] ++
     (if entries then [("entries", toJson t.entries)] else []) ++ [("faulty_bits", toJson t.faultyBits)] ++
     (if entries then [("faulty_entries", toJson t.faultyEntries)] else []) ++ [
     ("faulty_sets", toJson t.faultySets), ("free", toJson t.free), ("jitter", toJson t.jitter)] ++
-    (if entries then [("tied", toJson (tied[i]?.getD #[]))] else []) ++ [
-    ("units", toJson t.facts.units), ("wrong_units", toJson t.facts.wrong)])
+    (if entries then [("tied", toJson (tied[i]?.getD #[]))] else []) ++ [("units", toJson t.facts.units)] ++
+    (if entries then [("view", toJson t.view), ("whole", toJson t.facts.whole)] else []) ++ [
+    ("wrong_units", toJson t.facts.wrong)])
 
 def factsJson (fs : Array Facts) : Json :=
   .arr <| fs.map fun f => Json.mkObj [("delta", .str f.delta.toString), ("drawn", toJson f.drawn),
@@ -1795,7 +1842,9 @@ def publicJson (x : Public) : Json :=
     ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
     ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
     (if x.rows then
-      [("charged", factsJson x.charged), ("held", toJson heldNames), ("scans", termsJson x.units true x.tied)]
+      [("charged", factsJson x.charged), ("held", toJson heldNames),
+       ("scan_bits", Json.mkObj [("entries", toJson x.scanBits.1), ("view", toJson x.scanBits.2)]),
+       ("scans", termsJson x.units true x.tied)]
     else []))
 
 def profileJson (pr : Profile) : Json :=
@@ -1956,7 +2005,7 @@ def clocksFn (j : Json) : Except String Json := do
 -- δ = 1/15 with at most 3 wrong, 1,120 free inputs, ingress and egress instances committing 300 and 512 bits, and
 -- jitter below 2 over its 10 steps: 1351 sets of at most 3 of 20 units
 #guard atMost 20 3 == 1351 && clog2 1351 == 11
-#guard (rowsTerms #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] ⟨10, 1120, 300, 512, 0⟩
+#guard (rowsTerms #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] ⟨10, 1120, 300, 512, 0, 0⟩
   #[({ units := 20, drawn := 5, delta := ⟨1, 15⟩, wrong := 3 }, 0, 0)] #[7, 2] 2 1).K ==
   (3 + 2) + (3 + 2) + (1120 + 11 + 3 * 512 + 10)
 -- every unit proved: a `subset` draw of all its units, or strata each drawn whole that hold them all; not a draw in
@@ -1969,32 +2018,60 @@ def clocksFn (j : Json) : Except String Json := do
   !(⟨64, 32, tiedDelta, 0, .stratified #[⟨"a", 32, 32⟩]⟩ : Facts).whole &&
   !(⟨64, 64, tiedDelta, 0, .bernoulli ⟨1, 1⟩⟩ : Facts).whole &&
   !({ units := 64, drawn := 64, delta := tiedDelta, wrong := 0 } : Facts).whole
--- every unit proved: no wrong unit, so no faulty set and no faulty bits, and the term charges the scan's 96 entry bits
--- once, in place of its tied audits' 500 free inputs and the 96 entry bits their wrong units can set
-#guard (rowsTerms #[] ⟨4, 0, 300, 512, 96⟩ #[(⟨8, 8, ⟨1, 100⟩, 0, .subset 8⟩, 500, 96)] #[] 1 1).K == 96
--- w63's class with the egress tie: T = 32, the scan's own free inputs none, and its tied audit (the slot entries'
--- `SlotEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their entries, 1,136
--- bits each. The scan sampled at all but one of its 64 units, with at most 1 wrong (one of 65 sets, its 512 bits): K is
--- the tied audit's 9,088 beside them. Every unit proved: K is the scan's 8 slot entries of 112 bits, 896
-#guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 8 * 112⟩
-  #[(⟨64, 63, ⟨1, 100⟩, 1, .subset 63⟩, 8 * 1136, 0)] #[] 1 1).K == 9088 + 7 + 512
-#guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 8 * 112⟩
-  #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 8 * 1136, 0)] #[] 1 1).K == 896
+-- no view tie is held, so a term charges its scan's view rows
+#guard !viewTieHeld
+-- every unit proved: no wrong unit, so no faulty set and no faulty bits, and the term charges the scan's 40 view bits
+-- alone: neither its tied audits' 500 free inputs, nor the 96 entry bits their wrong units can set, nor its 96 entry
+-- bits. With the view tie held it charges those 96 entry bits once, in their place, and no view row
+#guard (rowsTerms #[] ⟨4, 0, 300, 512, 96, 40⟩ #[(⟨8, 8, ⟨1, 100⟩, 0, .subset 8⟩, 500, 96)] #[] 1 1).K == 40 &&
+  (rowsTerms #[] ⟨4, 0, 300, 512, 96, 40⟩ #[(⟨8, 8, ⟨1, 100⟩, 0, .subset 8⟩, 500, 96)] #[] 1 1 #[] true).K == 96
+-- w63's class with the egress tie: T = 32, the scan's own free inputs none, its view rows 32 of 4,832 bits, and its
+-- tied audit (the slot entries' `SlotEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free
+-- inputs are their entries, 1,136 bits each. The scan sampled at all but one of its 64 units, with at most 1 wrong
+-- (one of 65 sets, its 512 bits): K is the tied audit's 9,088 beside them and the view rows' 154,624. Every unit
+-- proved: K is the view rows' 154,624. With the view tie held: the tied audit's 9,088 beside the wrong unit's, and
+-- every unit proved the scan's 8 slot entries of 112 bits, 896
+#guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 8 * 112, 32 * 4832⟩
+  #[(⟨64, 63, ⟨1, 100⟩, 1, .subset 63⟩, 8 * 1136, 0)] #[] 1 1).K == 9088 + 7 + 512 + 154624
+#guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 8 * 112, 32 * 4832⟩
+  #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 8 * 1136, 0)] #[] 1 1).K == 154624
+#guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 8 * 112, 32 * 4832⟩
+  #[(⟨64, 63, ⟨1, 100⟩, 1, .subset 63⟩, 8 * 1136, 0)] #[] 1 1 #[] true).K == 9088 + 7 + 512
+#guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512, 8 * 112, 32 * 4832⟩
+  #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 8 * 1136, 0)] #[] 1 1 #[] true).K == 896
 -- eps over the scans' δ = 1/15 and 1/15 is 2/15; the audit's 1/10 is in it no more
-#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0, .subset 1⟩] ⟨0, 0, 0, 0, 0⟩
+#guard (rowsTerms #[⟨1, 1, ⟨1, 10⟩, 0, .subset 1⟩] ⟨0, 0, 0, 0, 0, 0⟩
   #[(⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, 0, 0), (⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, 0, 0)] #[] 1 2).eps.toString == "2/15"
--- w63k4: T = 32, 4 lanes, every 16, so 8 slot entries of 112 bits a link-window; its tied audit drawn in part, with at
--- most 2 wrong units, which can set any entry. Its scan sampled in part (at most 1 wrong of 64): its link-window's term
--- charges E_w = 896 bits beside its free inputs. Every unit of its scan proved: the term charges E_w once, and neither
--- the tied audit's free inputs nor E_w again for its wrong units
-#guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112⟩
-  #[(⟨64, 63, ⟨1, 100⟩, 1, .subset 63⟩, 9088, 8 * 112)] #[] 1 1).K == 9088 + 7 + 512 + 896
-#guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112⟩
-  #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 9088, 8 * 112)] #[] 1 1).K == 896
--- the rule takes no minimum: a scan proved whole whose tied audits count 100 free inputs, below its 896 entry bits, and
--- have no wrong unit is charged the 896, where its tied audits' count is 100
-#guard (rowsTerms #[] ⟨32, 0, 300, 512, 8 * 112⟩ #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 100, 0)] #[] 1 1).K == 896 &&
-  (rowsTerms #[] ⟨32, 0, 300, 512, 8 * 112⟩ #[(⟨64, 63, ⟨1, 100⟩, 0, .subset 63⟩, 100, 0)] #[] 1 1).K == 100
+-- w63k4: T = 32, 4 lanes, every 16, so 8 slot entries of 112 bits a link-window, and 32 view rows of 800 bits; its
+-- tied audit drawn in part, with at most 2 wrong units, which can set any entry. Its scan sampled in part (at most 1
+-- wrong of 64): its link-window's term charges E_w = 896 bits beside its free inputs, and its view rows' 25,600. Every
+-- unit of its scan proved: the term charges the view rows alone, and neither the tied audit's free inputs, nor E_w for
+-- its wrong units, nor E_w once. With the view tie held, the scan sampled in part is charged no view row, and with
+-- every unit proved E_w once, in place of the tied audit's free inputs and E_w for its wrong units
+#guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112, 32 * 800⟩
+  #[(⟨64, 63, ⟨1, 100⟩, 1, .subset 63⟩, 9088, 8 * 112)] #[] 1 1).K == 9088 + 7 + 512 + 896 + 25600
+#guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112, 32 * 800⟩
+  #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 9088, 8 * 112)] #[] 1 1).K == 25600
+#guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112, 32 * 800⟩
+  #[(⟨64, 63, ⟨1, 100⟩, 1, .subset 63⟩, 9088, 8 * 112)] #[] 1 1 #[] true).K == 9088 + 7 + 512 + 896
+#guard (rowsTerms #[{ units := 16, drawn := 9, delta := ⟨1, 100⟩, wrong := 2 }] ⟨32, 0, 300, 512, 8 * 112, 32 * 800⟩
+  #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 9088, 8 * 112)] #[] 1 1 #[] true).K == 896
+-- w63k4's period of one link-window, every unit of its scan proved, over its schedule's 128 connections of 5 egress
+-- cells and jitter below 2 over its 32 steps: the schedules' and the fail cells' 384 bits each, the view rows' 25,600
+-- and the jitter's 32; with the view tie held, the slot entries' 896 in the view rows' place
+#guard (rowsTerms #[] ⟨32, 0, 300, 512, 8 * 112, 32 * 800⟩ #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 9088, 0)]
+    (Array.replicate 128 5) 2 1).K == 384 + 384 + 25600 + 32 &&
+  (rowsTerms #[] ⟨32, 0, 300, 512, 8 * 112, 32 * 800⟩ #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 9088, 0)]
+    (Array.replicate 128 5) 2 1 #[] true).K == 384 + 384 + 896 + 32
+-- neither rule takes a minimum: a scan proved whole whose tied audits count 100 free inputs, below its 25,600 view
+-- bits and its 896 entry bits, and have no wrong unit is charged the 25,600, and with the view tie held the 896, where
+-- its tied audits' count is 100
+#guard (rowsTerms #[] ⟨32, 0, 300, 512, 8 * 112, 32 * 800⟩ #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 100, 0)] #[] 1
+    1).K == 25600 &&
+  (rowsTerms #[] ⟨32, 0, 300, 512, 8 * 112, 32 * 800⟩ #[(⟨64, 64, ⟨1, 100⟩, 0, .subset 64⟩, 100, 0)] #[] 1 1 #[]
+    true).K == 896 &&
+  (rowsTerms #[] ⟨32, 0, 300, 512, 8 * 112, 32 * 800⟩ #[(⟨64, 63, ⟨1, 100⟩, 0, .subset 63⟩, 100, 0)] #[] 1 1 #[]
+    true).K == 100
 -- w63k4's schedule: 4 lanes over a 32-bucket link-window carry at most 128 connections, each capped at its 5 egress
 -- cells, so the schedules and the fail cells each charge 128 · ⌈log2 6⌉ = 384 bits a link-window
 #guard
@@ -2005,11 +2082,11 @@ def clocksFn (j : Json) : Except String Json := do
 #guard
   let s : Schedule := ⟨100, 512, 27, 65, 16, 12, 47, 4, 4, 4, 32⟩
   let p := fun (w : Nat) =>
-    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows s .empty ⟨0, 0, 0, 0, 0⟩, w⟩ : Params)
+    (⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none, .rows s .empty ⟨0, 0, 0, 0, 0, 0⟩, w⟩ : Params)
   rowsWf s (2 ^ 25 - 1) && !rowsWf s (2 ^ 25) && (rowsWfCheck (p (2 ^ 25 - 1))).isNone &&
     (rowsWfCheck (p (2 ^ 25))).isSome
 -- a charged audit's δ = 1/10 is in eps beside its scan's 1/15: 1/6
-#guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0, .subset 1⟩] ⟨0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, 0, 0)] #[] 1 1
+#guard (rowsTerms #[⟨2, 1, ⟨1, 10⟩, 0, .subset 1⟩] ⟨0, 0, 0, 0, 0, 0⟩ #[(⟨1, 1, ⟨1, 15⟩, 0, .subset 1⟩, 0, 0)] #[] 1 1
   #[⟨2, 1, ⟨1, 10⟩, 0, .subset 1⟩]).eps.toString == "1/6"
 -- the same draw read at δ_i = 2^-64: one of 16 drawn (`subset:1`, 8 at δ = 1/2) leaves 15 possibly faulty, all 16 drawn
 -- none, and facts with no draw every unit; a stratified draw's bound at δ = 1/2 is `countBound`'s
@@ -2023,13 +2100,15 @@ def clocksFn (j : Json) : Except String Json := do
 -- w63k4's tied audit of 16 proof blocks sampled at one (`subset:1`), its answer's bound 8 at δ = 1/2: among a
 -- commitment's link-windows it is charged, read at δ_i = 2^-64 with a bound of 15, its phase's β_w every one of the
 -- scan's E_w = 896 entry bits; sampled whole, uncharged and β_w = 0. The public keeps the answer's δ and bound in
--- `audits`. Its scan sampled in part (63 of 64 units, at most 1 wrong): the period's reading is in `charged`, the term
--- charges the audit's 9,088 free inputs and β_w, and eps is the scan's δ = 2^-64 and δ_i, 2^-63. Every unit of its scan
--- proved: no audit is charged, the term is the scan's E_w once, and eps is the scan's 2^-64 alone; the same with the
--- audit sampled whole and no free input, where its own count is 0. Over two link-windows, the first's scan proved
--- whole and the second's sampled in part, the audit is charged for the second alone: the first's term is E_w
+-- `audits`, and the scan's E_w and its view rows' 25,600 bits in `scanBits`. Its scan sampled in part (63 of 64 units,
+-- at most 1 wrong): the period's reading is in `charged`, the term charges the audit's 9,088 free inputs, β_w and the
+-- view rows, and eps is the scan's δ = 2^-64 and δ_i, 2^-63. Every unit of its scan proved: no audit is charged, the
+-- term is the scan's view rows alone, and eps is the scan's 2^-64 alone; the same with the audit sampled whole and no
+-- free input. Over two link-windows, the first's scan proved whole and the second's sampled in part, the audit is
+-- charged for the second alone: the first's term is the view rows. With the view tie held no term charges a view row:
+-- the scan proved whole is charged E_w once, and sampled in part the audit's free inputs and β_w
 #guard
-  let scan : Scan := ⟨32, 0, 300, 512, 8 * 112⟩
+  let scan : Scan := ⟨32, 0, 300, 512, 8 * 112, 32 * 800⟩
   let p : Params := ⟨#[⟨0, 0, "", 16, 0, #[], none, none, 0⟩], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", none,
     .rows ⟨0, 0, 0, 0, 16, 0, 0, 4, 0, 0, 32⟩ .empty scan, 1⟩
   let at_ := fun (q : String) => Json.mkObj [("roots", Json.arr #[
@@ -2040,20 +2119,26 @@ def clocksFn (j : Json) : Except String Json := do
   let whole : Array (Found Facts) := #[.ok ⟨16, 16, ⟨1, 2⟩, 0, .subset 16⟩]
   let all : Facts := ⟨64, 64, tiedDelta, 0, .subset 64⟩
   let part : Facts := ⟨64, 63, tiedDelta, 1, .subset 63⟩
-  let read := fun (x : Public) => x.units.map fun t => (t.free, t.faultyEntries, t.entries)
+  let read := fun (x : Public) => x.units.map fun t => (t.free, t.faultyEntries, t.entries, t.view)
   let pub := rowsPublic p c one scan #[(all, 9088)]
   let pub' := rowsPublic p c one scan #[(part, 9088)]
   let pub2 := rowsPublic p c2 one scan #[(all, 9088), (part, 9088)]
+  let tied := rowsPublic p c one scan #[(all, 9088)] true
+  let tied' := rowsPublic p c one scan #[(part, 9088)] true
   tiedIn c.audits c.windows 0 && (chargedOf p c one 0).map (fun f => (f.delta, f.wrong)) == some (tiedDelta, 15) &&
     faultyEntries p c one scan (at_ (progName 0)) == 896 &&
     (chargedOf p c whole 0).isNone && faultyEntries p c whole scan (at_ (progName 0)) == 0 &&
     pub.audits.map (fun f => (f.delta, f.wrong)) == #[((⟨1, 2⟩ : Core.Ratio), 8)] &&
     pub'.charged.map (fun f => (f.delta, f.wrong)) == #[(tiedDelta, 15)] && pub'.eps == (⟨1, 2 ^ 63⟩ : Core.Ratio) &&
-    read pub' == #[(9088, 896, 0)] && pub'.K == 9088 + 7 + 512 + 896 &&
-    pub.charged.isEmpty && pub.eps == tiedDelta && read pub == #[(0, 0, 896)] && pub.K == 896 &&
-    (rowsPublic p c whole scan #[(all, 0)]).K == 896 && (rowsPublic p c whole scan #[(part, 0)]).K == 7 + 512 &&
+    read pub' == #[(9088, 896, 0, 25600)] && pub'.K == 9088 + 7 + 512 + 896 + 25600 &&
+    pub.charged.isEmpty && pub.eps == tiedDelta && read pub == #[(0, 0, 0, 25600)] && pub.K == 25600 &&
+    pub.scanBits == (896, 25600) &&
+    (rowsPublic p c whole scan #[(all, 0)]).K == 25600 &&
+    (rowsPublic p c whole scan #[(part, 0)]).K == 7 + 512 + 25600 &&
     pub2.charged.map (fun f => (f.delta, f.wrong)) == #[(tiedDelta, 15)] &&
-    read pub2 == #[(0, 0, 896), (9088, 896, 0)] && pub2.eps == (⟨3, 2 ^ 64⟩ : Core.Ratio)
+    read pub2 == #[(0, 0, 0, 25600), (9088, 896, 0, 25600)] && pub2.eps == (⟨3, 2 ^ 64⟩ : Core.Ratio) &&
+    tied.charged.isEmpty && tied.eps == tiedDelta && read tied == #[(0, 0, 896, 0)] && tied.K == 896 &&
+    read tied' == #[(9088, 896, 0, 0)] && tied'.K == 9088 + 7 + 512 + 896 && tied'.eps == (⟨1, 2 ^ 63⟩ : Core.Ratio)
 -- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||

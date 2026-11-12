@@ -460,9 +460,9 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
     """The egress renders the outputs of the audit the scan's `prog` is tied to, so the bits the prover chose of that
     audit's inputs are the link-window's: over honest rows periods, which Lean and the mirror accept with one public,
     each scan sampled in part has as its `free` the input gates of the Programs of the audits whose registration holds
-    its `prog`'s root (`input_gates`; the scan's own is 0), some of them nonzero, and no `entries`; a scan whose every
-    unit is proved has the scan's own `free`, 0, and its slot entries' bits as `entries`; and each one's `tied` names
-    those audits by index."""
+    its `prog`'s root (`input_gates`; the scan's own is 0), some of them nonzero; a scan whose every unit is proved
+    (`whole`) has the scan's own `free`, 0; either has its view rows' bits as `view` and no `entries`, as no view tie
+    is held; and each one's `tied` names those audits by index."""
     charged, whole = 0, 0
     for n in range(8):
         case = build("rows-honest", n, small=n % 2 == 0)
@@ -476,7 +476,8 @@ def test_a_tied_audits_free_inputs_are_in_its_link_windows_term(server):
                      if PC.prog_port(e.get("port")) or PC.prog_port(e.get("value"))}
             tied = [i for i, r in enumerate(c["audits"]) if any(o.get("root") in roots for o in r["roots"])]
             want = sum(PC.input_gates(case["params"]["audits"][i]["program"]) for i in tied)
-            assert (t["free"], t["entries"]) == ((0, p.scan.entries) if proved else (want, 0)), (n, t, want, proved)
+            assert (t["free"], t["entries"], t["view"], t["whole"]) == (
+                0 if proved else want, 0, p.scan.view, proved), (n, t, want, proved)
             assert t["tied"] == tied and tied, (n, t, tied)
             whole += proved
         charged += any(t["free"] for t in out["public"]["scans"])
@@ -525,8 +526,8 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server
     every entry they can set, `faulty_entries` = E_w = lanes · T / every · the entry's bits, every other phase's none,
     and `eps` holds δ_i beside the scans' δ. Each way of sampling in part is charged, the demo's sample at one proof
     block and at two, and the cases' audits select (`SelectEntry_v1` beside `ScanSlots_v2`) or don't (`SlotEntry_v1`).
-    Where its link-window's scan has every unit proved, that term charges E_w once as `entries`, the audit is not
-    charged and `eps` is the scans' δ alone, in each way of sampling too."""
+    Where its link-window's scan has every unit proved, that term charges no entry, the audit is not charged and `eps`
+    is the scans' δ alone, in each way of sampling too. Every term charges its scan's view rows (`view`)."""
     seen = Counter()
     for m in SAMPLED_IN_PART:
         for n in range(16):
@@ -541,7 +542,8 @@ def test_a_tied_audit_sampled_in_part_is_charged_its_link_windows_entries(server
             c = json.loads(bytes.fromhex(case["commitment"]))
             (i,) = [j for j, f in enumerate(pub["audits"])
                     if f["drawn"] < f["units"] and PC._tied_in(c["audits"], c["windows"], j)]
-            assert [t["entries"] for t in pub["scans"]] == [p.scan.entries if w else 0 for w in proved], (m, n, pub)
+            assert [(t["entries"], t["view"], t["whole"]) for t in pub["scans"]] == [
+                (0, p.scan.view, w) for w in proved], (m, n, pub)
             if not charged(case, pub):
                 assert pub["charged"] == [] and not any(t["faulty_entries"] for t in pub["scans"]), (m, n, pub)
                 assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]), Fraction(0))), (m, n, pub)
@@ -608,22 +610,26 @@ def test_a_tied_audits_draw_is_read_at_the_periods_own_delta(server):
     assert read >= 2, read
 
 
-def test_a_scan_proved_whole_is_charged_its_slot_entries_once(server):
-    """Where every unit of a link-window's scan is proved, the scan's input gates the prover chooses are its slot
-    entries, E_w bits, so its term charges those once (`entries`) in place of its tied audits' free inputs and
-    `faulty_entries` together, whatever its tied audits' draws, and an audit tied only to such scans is not charged, so
-    no δ_i is in `eps`. Over honest rows periods and each way of sampling a tied audit in part, with every scan proved
-    whole (`PC.proved_whole`: a subset draw of all its units, or both directions' strata whole), Lean accepts with the
-    mirror's public: each term's `free` is the scan's own, 0, its `entries` E_w and its `faulty_entries` 0, `charged`
-    is empty, `eps` is the scans' δ alone, and K is the schedules, the cells and each link-window's E_w and jitter.
-    With the first link-window's scan alone proved whole, an audit sampled in part stays charged exactly where a scan
-    it is tied to is sampled in part. The term reads none of the tied audits' own count, so takes no minimum with it
-    (`test_the_rows_forms_bound_counts_what_it_says` has that count the smaller)."""
+def test_a_scan_proved_whole_is_charged_its_view_rows_alone(server):
+    """Where every unit of a link-window's scan is proved, the input gates its egress instances read are its view rows,
+    V_w bits (its T egress instances' `state`), which no view tie holds to what its ingress computed, so its term
+    charges those (`view`) and neither its tied audits' free inputs, nor `faulty_entries`, nor its slot entries,
+    whatever its tied audits' draws, and an audit tied only to such scans is not charged, so no δ_i is in `eps`. Over
+    honest rows periods and each way of sampling a tied audit in part, with every scan proved whole (`PC.proved_whole`:
+    a subset draw of all its units, or both directions' strata whole), Lean accepts with the mirror's public: each
+    term's `free` is the scan's own, 0, its `view` V_w, its `entries` and its `faulty_entries` 0, `charged` is empty,
+    `eps` is the scans' δ alone, K is the schedules, the cells and each link-window's V_w and jitter, and `scan_bits`
+    gives E_w beside V_w, charged or not. With the first link-window's scan alone proved whole, an audit sampled in
+    part stays charged exactly where a scan it is tied to is sampled in part. The term reads none of the tied audits'
+    own count, so takes no minimum with it (`test_the_rows_forms_bound_counts_what_it_says` has that count the
+    smaller)."""
     seen = Counter()
     for m in ("rows-honest", *SAMPLED_IN_PART):
         for n in range(6):
             base = build(m, n, small=n % 2 == 0)
-            p, E = PC.params(base["params"]), PC.params(base["params"]).scan.entries
+            p = PC.params(base["params"])
+            E, V = p.scan.entries, p.scan.view
+            assert V == p.schedule.window * 16 * PC._scan_widths(base["params"]["scan"])[3] > 0, (m, n, p.scan)
             for stratified in (False, True):
                 case = PC.proved_whole(base, stratified=stratified)
                 assert all(PC.wholes(case)), (m, n)
@@ -632,17 +638,19 @@ def test_a_scan_proved_whole_is_charged_its_slot_entries_once(server):
                 verdict, got = D.replay(PORT, case, server)
                 assert verdict == ACCEPT and json.loads(got)["public"] == out["public"], (m, n, got)
                 pub = out["public"]
-                assert [(t["free"], t["entries"], t["faulty_entries"], t["faulty_sets"], t["faulty_bits"])
-                        for t in pub["scans"]] == [(0, E, 0, 0, 0)] * p.windows, (m, n, pub)
+                assert [(t["free"], t["view"], t["whole"], t["entries"], t["faulty_entries"], t["faulty_sets"],
+                         t["faulty_bits"]) for t in pub["scans"]] == [(0, V, True, 0, 0, 0, 0)] * p.windows, (m, n, pub)
                 assert pub["charged"] == [] and not charged(case, pub), (m, n, pub)
                 assert pub["eps"] == str(sum((Fraction(t["delta"]) for t in pub["scans"]), Fraction(0))), (m, n, pub)
-                assert pub["K"] == pub["schedules"] + pub["cells"] + sum(E + t["jitter"] for t in pub["scans"])
+                assert pub["K"] == pub["schedules"] + pub["cells"] + sum(V + t["jitter"] for t in pub["scans"])
+                assert pub["scan_bits"] == {"entries": E, "view": V}, (m, n, pub)
             mixed = PC.proved_whole(base, windows=(0,))
             out = reference(mixed)
             verdict, got = D.replay(PORT, mixed, server)
             assert verdict == out["verdict"] == ACCEPT and json.loads(got)["public"] == out["public"], (m, n, got)
             pub, proved = out["public"], PC.wholes(mixed)
-            assert proved[0] and [t["entries"] for t in pub["scans"]] == [E if w else 0 for w in proved], (m, n, pub)
+            assert proved[0] and [(t["entries"], t["view"], t["whole"]) for t in pub["scans"]] == [
+                (0, V, w) for w in proved], (m, n, pub)
             tied = charged(mixed, pub)
             assert [f["delta"] for f in pub["charged"]] == [str(PC.TIED_DELTA)] * len(tied), (m, n, pub)
             seen["mixed", bool(tied), all(proved)] += 1
@@ -710,8 +718,9 @@ def test_each_lanes_prog_is_its_own_chunk():
 def test_the_scan_is_read_off_its_program(server):
     """The rows form's scan terms are its registered Program's, in the generator form: T, no free input (its `prog` a
     compute audit's output), an ingress and an egress instance's committed bits (their parameters, the more of bucket
-    0's and a later bucket's for ingress, and their returns: a u16 with the state and view, or with the row), and its
-    slot entries' bits (lanes · T / every entries of its `prog` ports' width); and
+    0's and a later bucket's for ingress, and their returns: a u16 with the state and view, or with the row), its
+    slot entries' bits (lanes · T / every entries of its `prog` ports' width) and its view rows' bits (its T egress
+    instances' `state`); and
     Lean and the mirror refuse, as parameters, a scan that isn't a descriptor, another Program's, one in the checker
     form (its egress row an input), one whose templates have other parameters or other than 1, T − 1 and T instances,
     or rows other than the schedule's, one whose lane reads another row of its input than its bucket's or another
@@ -724,7 +733,7 @@ def test_the_scan_is_read_off_its_program(server):
         s, T, row = p.schedule, p.schedule.window, WR.row_bytes(p.schedule)
         ins = 8 * row + (state if T > 1 else 0) + s.lanes * prog
         assert p.scan == PC.Scan(T, 0, ins + 16 + state + view, 16 * words + 16 + 8 * row,
-                                 s.lanes * (T // s.every) * prog), (n, p.scan)
+                                 s.lanes * (T // s.every) * prog, T * 16 * words), (n, p.scan)
         for bad in PC.bad_scans(case["params"]):
             broken = case | {"params": bad}
             assert reference(broken)["reason"].startswith("params: scan:"), (n, reference(broken))
@@ -1023,46 +1032,68 @@ def test_the_rows_forms_bound_counts_what_it_says():
     bits for the schedules and 5 again for the fail cells, an audit whose own terms are in none, and over 1 link-window
     one scan of 20 units (T = 10) drawn at δ = 1/15 with at most 3 incorrect (1351 sets), 1,120 free inputs, instances
     committing 300 and 512 bits, and jitter below 2 over its 10 steps; with every unit proved, no term for incorrect
-    proof blocks, and the scan's 96 entry bits once in place of its tied audits' 500 free inputs and the 96 their
-    incorrect proof blocks can set; at w63's class with the egress tie (T = 32), sampled at all but one unit with at
-    most 1 incorrect, K the tied slot entries' free inputs, 8 · 1,136 = 9,088 bits, beside its one of 65 sets and 512
-    bits, and with every unit proved its 8 slot entries of 112 bits, 896; at w63k4's with its tied audit drawn in part
-    with at most 2 incorrect, K those 9,088 and its E_w = 896 bits beside the scan's own where the scan is sampled in
-    part, and E_w once where every unit of it is proved; no minimum, a scan proved whole whose tied audits count 100
-    free inputs charged 896; and eps over the scans' δ alone, or with a charged audit's beside them. `Facts.whole` on
-    Lean's `#guard`: a subset draw of every unit or strata each whole that hold them all, not a draw in part, a
-    stratum drawn past its size beside one in part, strata short of the units, or no draw."""
+    proof blocks, and the scan's 40 view bits alone, neither its tied audits' 500 free inputs, nor the 96 entry bits
+    their incorrect proof blocks can set, nor its 96 entry bits, which it is charged once in their place with the view
+    tie held (`view_tie`); at w63's class with the egress tie (T = 32, view rows of 4,832 bits), sampled at all but one
+    unit with at most 1 incorrect, K the tied slot entries' free inputs, 8 · 1,136 = 9,088 bits, beside its one of 65
+    sets and 512 bits and its view rows' 154,624, and with every unit proved the view rows alone, or with the view tie
+    held its 8 slot entries of 112 bits, 896; at w63k4's (view rows of 800 bits) with its tied audit drawn in part
+    with at most 2 incorrect, K those 9,088 and its E_w = 896 bits beside the scan's own and its view rows' 25,600
+    where the scan is sampled in part, and the view rows alone where every unit of it is proved, or with the view tie
+    held E_w once; its period of one link-window with every unit proved, 384 + 384 + 25,600 + 32 = 26,400, and with
+    the view tie held 1,696; no minimum, a scan proved whole whose tied audits count 100 free inputs charged 25,600,
+    or 896; and eps over the scans' δ alone, or with a charged audit's beside them. `Facts.whole` on Lean's `#guard`:
+    a subset draw of every unit or strata each whole that hold them all, not a draw in part, a stratum drawn past its
+    size beside one in part, strata short of the units, or no draw."""
     p = Params((PC.Audit(0, 3, "", 10, 16),), (7, 2), 0, 2, "a", None, b"", "", None, 1, WardenParams(),
                PC.Scan(10, 1120, 300, 512))
     out = public(p, [Facts(10, 3, Fraction(1, 10), 4)], [(Facts(20, 5, Fraction(1, 15), 3), 0, 0, [])])
     (scan,) = out["scans"]
     assert at_most(20, 3) == 1351 and clog2(1351) == 11
     assert (out["schedules"], out["cells"], scan["free"], scan["faulty_sets"], scan["faulty_bits"], scan["jitter"],
-            scan["faulty_entries"], scan["entries"], scan["tied"], out["K"]) == (
-                5, 5, 1120, 11, 3 * 512, 10, 0, 0, [], 5 + 5 + (1120 + 11 + 3 * 512 + 10))
+            scan["faulty_entries"], scan["entries"], scan["view"], scan["whole"], scan["tied"], out["K"]) == (
+                5, 5, 1120, 11, 3 * 512, 10, 0, 0, 0, False, [], 5 + 5 + (1120 + 11 + 3 * 512 + 10))
+    assert not PC.VIEW_TIE_HELD and out["scan_bits"] == {"entries": 0, "view": 0}
     assert out["audits"] == [{"delta": "1/10", "drawn": 3, "units": 10, "wrong_units": 4}]
     d = Fraction(1, 100)
     all64, most64 = Facts(64, 64, d, 0, ((64, 64),)), Facts(64, 63, d, 1, ((64, 63),))
     assert all64.whole and Facts(64, 64, d, 0, ((32, 32), (32, 32))).whole
     assert not any(f.whole for f in (most64, Facts(64, 64, d, 0, ((32, 33), (32, 31))),
                                      Facts(64, 32, d, 0, ((32, 32),)), Facts(64, 64, d, 0)))
-    drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512, 96))
-    assert public(drawn, [], [(Facts(8, 8, d, 0, ((8, 8),)), 500, 96, [])])["K"] == 96
+    drawn = dataclasses.replace(p, audits=(), cells=(), jitter=1, scan=PC.Scan(4, 0, 300, 512, 96, 40))
+    assert public(drawn, [], [(Facts(8, 8, d, 0, ((8, 8),)), 500, 96, [])])["K"] == 40
+    assert public(drawn, [], [(Facts(8, 8, d, 0, ((8, 8),)), 500, 96, [])], view_tie=True)["K"] == 96
+
+    def read(x):
+        (t,) = x["scans"]
+        return t["free"], t["faulty_entries"], t["entries"], t["view"], t["whole"], t["tied"], x["K"]
+
     w63 = dataclasses.replace(p, audits=(PC.Audit(8 * 1136, 0, "", 8, 1136),), cells=(), jitter=1,
-                              scan=PC.Scan(32, 0, 300, 512, 8 * 112))
-    tied = public(w63, [Facts(8, 8, d, 0)], [(most64, 8 * 1136, 0, [0])])
-    assert (tied["scans"][0]["free"], tied["scans"][0]["entries"], tied["scans"][0]["tied"], tied["K"]) == (
-        9088, 0, [0], 9088 + 7 + 512)
-    tied = public(w63, [Facts(8, 8, d, 0)], [(all64, 8 * 1136, 0, [0])])
-    assert (tied["scans"][0]["free"], tied["scans"][0]["entries"], tied["scans"][0]["tied"], tied["K"]) == (
-        0, 896, [0], 896)
-    part = public(w63, [Facts(16, 9, d, 2)], [(most64, 9088, 8 * 112, [0])])
-    assert (part["scans"][0]["faulty_entries"], part["scans"][0]["tied"], part["K"]) == (
-        896, [0], 9088 + 7 + 512 + 896)
-    part = public(w63, [Facts(16, 9, d, 2)], [(all64, 9088, 8 * 112, [0])])
-    assert (part["scans"][0]["faulty_entries"], part["scans"][0]["entries"], part["K"]) == (0, 896, 896)
-    assert public(w63, [], [(all64, 100, 0, [])])["K"] == 896
-    assert public(w63, [], [(Facts(64, 63, d, 0, ((64, 63),)), 100, 0, [])])["K"] == 100
+                              scan=PC.Scan(32, 0, 300, 512, 8 * 112, 32 * 4832))
+    full = [Facts(8, 8, d, 0)]
+    assert read(public(w63, full, [(most64, 8 * 1136, 0, [0])])) == (
+        9088, 0, 0, 154624, False, [0], 9088 + 7 + 512 + 154624)
+    assert read(public(w63, full, [(all64, 8 * 1136, 0, [0])])) == (0, 0, 0, 154624, True, [0], 154624)
+    assert read(public(w63, full, [(most64, 8 * 1136, 0, [0])], view_tie=True)) == (
+        9088, 0, 0, 0, False, [0], 9088 + 7 + 512)
+    assert read(public(w63, full, [(all64, 8 * 1136, 0, [0])], view_tie=True)) == (0, 0, 896, 0, True, [0], 896)
+    k4 = dataclasses.replace(w63, scan=PC.Scan(32, 0, 300, 512, 8 * 112, 32 * 800))
+    some = [Facts(16, 9, d, 2)]
+    assert read(public(k4, some, [(most64, 9088, 8 * 112, [0])])) == (
+        9088, 896, 0, 25600, False, [0], 9088 + 7 + 512 + 896 + 25600)
+    assert read(public(k4, some, [(all64, 9088, 8 * 112, [0])])) == (0, 0, 0, 25600, True, [0], 25600)
+    assert read(public(k4, some, [(most64, 9088, 8 * 112, [0])], view_tie=True)) == (
+        9088, 896, 0, 0, False, [0], 9088 + 7 + 512 + 896)
+    assert read(public(k4, some, [(all64, 9088, 8 * 112, [0])], view_tie=True)) == (0, 0, 896, 0, True, [0], 896)
+    period = dataclasses.replace(k4, audits=(), cells=(5,) * 128, jitter=2)
+    kept = public(period, [], [(all64, 9088, 0, [0])])
+    assert (kept["schedules"], kept["cells"], kept["scans"][0]["view"], kept["scans"][0]["jitter"], kept["K"]) == (
+        384, 384, 25600, 32, 26400)
+    assert kept["scan_bits"] == {"entries": 896, "view": 25600}
+    assert public(period, [], [(all64, 9088, 0, [0])], view_tie=True)["K"] == 384 + 384 + 896 + 32 == 1696
+    assert public(k4, [], [(all64, 100, 0, [])])["K"] == 25600
+    assert public(k4, [], [(all64, 100, 0, [])], view_tie=True)["K"] == 896
+    assert public(k4, [], [(Facts(64, 63, d, 0, ((64, 63),)), 100, 0, [])], view_tie=True)["K"] == 100
     two = dataclasses.replace(p, cells=(), windows=2, scan=PC.Scan(0, 0, 0, 0))
     assert public(two, [Facts(1, 1, Fraction(1, 10), 0)],
                   [(Facts(1, 1, Fraction(1, 15), 0), 0, 0, [])] * 2)["eps"] == "2/15"

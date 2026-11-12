@@ -156,6 +156,7 @@ ANSWER = {
     **{f"public.{f}[].{k}": O for f in ("audits", "scans")
        for k in ("delta", "drawn", "entries", "faulty_bits", "faulty_entries", "faulty_sets", "free", "jitter",
                  "units", "wrong_units")},
+    "public.scans[].view": O, "public.scans[].whole": O, "public.scan_bits.entries": O, "public.scan_bits.view": O,
 }
 #: a step of the chain's report: its verdict, the sample's law, population and size with its bound at each δ, and what
 #: it ran in the clear
