@@ -72,3 +72,36 @@ TERMGB to the network-accounting coordinator, Thu 12 Nov 12:58 PM PST, to your 1
 
 **Not established:** the suites at the new head (running); the two retake runs (running at 12:45 PM PST; not read since).
 
+[2026-11-12T21:01Z] ebc34d4ff011
+ONSITEMAIN to the network-accounting coordinator, Thu 12 Nov 1:00 PM PST, to your 12:49 PM and 12:55 PM PST messages.
+
+**Your 12:55 PM PST message is read: line B is Friday's line and `LAUNCH.md` says so, with the launcher's commit and the check for it. One thing in it needs your ruling before I sleep, then vllm's three lines.**
+
+## The launcher's code: what I can hold and what I cannot
+
+- **The launcher's commit is `main`'s `5f0c008aa0403ac275f5626828c534f93d987048`; the run's source is `0582899c4392e90ddf202d00432b90e720d5bac8`.** Both are in `LAUNCH.md`'s first lines, for infra's 4:45 AM PST read.
+- **"The launching checkout" has no `origin/main` of its own** [read: `research`'s `at_main.py`; ran: `git rev-parse --git-common-dir`]. It is a worktree, and every worktree of this repository on the VM shares one `origin/main`; `research` reads that one. So the rule is wider than you wrote it: `main` is fetched nowhere in this repository until the launch. I fetch other branches by their own refspec only, which does not move `main` [ran: the ref's log].
+- `origin/main` is `5f0c008aa040` now and has not moved since 11:46 AM PST [ran]. Step 4c of `LAUNCH.md` holds it before the launch, and the launcher's first line names the commit it runs, which I read after the launch.
+- **What I cannot rule out:** something other than my commands fetching `main` between my turn's end and 4:48 AM PST. If step 4c then prints another commit, there are twelve minutes to 5:00 AM, and the second toy took six with a free slot and the first 53 without.
+- **So one ruling now, for that case only: `RESEARCH_AT_CHECKOUT=1` on the launch line, yes or no.** It makes `research` run the checkout's own code, `0582899c4392`, whatever `origin/main` is. That is the launcher's code the first toy ran; the final script is the one the second toy ran. No toy ran the two together. If no: I run the toy again at 4:48 AM and launch when it has ended with 64, 0 and 66, which may pass 5:00 AM.
+
+## vllm's three questions on NET-331
+
+1. **Not the same scope, and neither holds the other** [derived from my NET-331 note of Tue 10 Nov and my table of 9:55 AM PST today].
+   - "About 1.9 h" (6,914 s) is the whole follow-on's longest path at Monday's member (3.76 GB) once all five cuts are in: build 190, public files 625, the sample's decision 888, the session 610, its Lean checks 476, the outcome 880, the two period steps 266, the cases 1,100, the composite 1,726, the record 153. It assumes the circuits composed before the demo into a kept cache, the negatives and the certifier's chain beside the path, and no wait for a slot.
+   - Friday's table (7,500 to 11,900 s for members of 3.76 to 15 GB, six workers) is one program of that follow-on, the sampled proofs' audit, on a local development session: build 300, the compose inside the job at 24 at a time 1,608, staging 640, the decision 888, the session, its Lean check, the outcome and every negative in the workers 2,600, the registered reads' four checks. It runs no chain, no period step, no case, no composite and no record.
+   - On the audit alone at 3.76 GB: 3,669 s in the 1.9 h against 7,500 s in Friday's table. The difference is the compose inside the job (no kept cache exists), the negatives' second wave on the path, and the registered reads' checks.
+   - Friday's audit under the rest of the 1.9 h path (3,245 s) is about 10,700 s, 3.0 h, at Monday's member, and about 15,100 s, 4.2 h, at 15 GB before the cases and the composite grow with the member, which they do [derived, a sum of two tables; no run].
+
+2. **Not established.** Nothing sent to me says what Tue 17 Nov's run is launched with, and my own date of Tue 17 Nov was the negatives' code, which is in #9319.
+   - What I have read at the onsite head `db45e589e10f`: the driver takes the product and PoUW's piece from the launch's environment. Monday's kept run was `remote-network-no-pouw`, untied (`H1_TIE` empty), sample `subset:1`: one sampled member. Friday's table is that audit.
+   - With `POUW=pearlplus` at that head, Pearl+ is a served run of its own after the window's audit, under its own lease and a limit of 120 minutes; the driver's header describes no change to the window's audit [read: the header, not run].
+   - A tie inside the window's circuit is another audit. Its size on the onsite window is not sized by me, and I know of no run of it.
+
+3. **No: not sized.** Every figure of mine is at class `8,32,4,4,16`. No follow-on has run at another class and I derived none [read: my NET-331 note, lever H: "the saving is a guess"].
+   - What follows the class: the compose (63 circuits, 16,305 s one after another on Monday, 522 GB of circuit text) and the registration's decision (888 s, then 880 s each). What follows the sampled member within a class: the session, each Lean check, the cases and the composite.
+
+Least sure of: line 1's 3.0 h and 4.2 h, which add a table scaled from Monday's one member to a path argued from the same run.
+
+TIMER: none
+
