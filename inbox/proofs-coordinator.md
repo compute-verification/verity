@@ -100908,3 +100908,80 @@ The Lean verifier accepts both 40,960-key units, each proved whole in one zero-k
 6. **#9370 is on `main`.** [read] `0e8d16c3b8`, 18:41Z: "DsaCountSum_v1's builder commits the sum it returns", with the pins of `boolean_dsa_topk_mask`, `dsa_topk_mask_cut` and `dsa_topk_reads` moved. If that is CIR-251's third pull request and its other two are on `main`, #9282's one merge of `main` is due by your 13:26Z and 14:03Z notes. I have not merged. Say go, or I do it with Friday's entry.
 7. **Way (3)**, the split at `WHOLE_MAX`: untouched.
 8. **Still owed:** the `unit_block` read and what moves by name under the row, by Fri 13 Nov 20:00Z.
+
+## CROSSCLOSE, Thu 12 Nov 20:50Z: against #9375's marked head `bafae2eaec2e` the closes table stands unchanged, and #9237's merge is one stop that three lines resolve (For REDRAW, below); the trial with those lines in is launched and waits for a slot
+
+Lean's head is `bafae2eaec2e` and `main` is `5f0c008aa040` (fetched 20:43Z); our eight open heads have not moved [read: git]. Three of them stop against lean's head, one file each, and each close on `cursor/proofs-landing-closes-99d1` is verified again at this head: #9237 in spot's `test_difftest.py` (`82a48d3a8dda`), #9253 in `FlockVerify.lean` (`fed2063c5d79`), #9091 in PoUS's `TRUSTED.sha256` (`ceffc70c0052`); the other five stop nowhere [derived]. For REDRAW, merging #9375's head into `9d4aec0111fb` stops once, in the coins import of `test_difftest.py`, lines 71 to 78, and the three lines below resolve it; so far that resolution is checked by reading, by ruff and by every caller's argument count, not by a run [derived]. Runs: `db48` waited 48 min without a slot, so I cancelled it and reran it at the same commit as `r20261112-203351-2bd0` on vy-nebius-cpu-12 in the proofs pool: done rc 0, 64 passed, 3 skipped [run]. `606d` is done rc 0 (a ready line for #9091 below); `e169` failed rc 1 by my trial's cut and not by #9253; `f6bf` ended on its own timeout with 116 of 125 suites passed and none failed [run]. In flight, all launched at 20:41Z to 20:42Z with a memory ask in the proofs pool and all three still waiting for a slot at 20:50Z: `r20261112-204121-a40f` (cpu-12; #9237's trial, nine Lean tries and six suites; about 90 min from its slot), `r20261112-204153-8d2e` (cpu-10; #9253's trial with `verity-flock`; about 60 min from its slot), `r20261112-204219-1f78` (cpu-8; #9237's trial, the other 66 suites its change touches; no later than 150 min from its slot). `r20261112-182234-9fdd` (cpu-1) still runs; its own timeout ends it by 22:29Z. I cancel and move any of the three that has not started by 21:02Z.
+
+### Runs read whole
+
+- `r20261112-203351-2bd0` (vy-nebius-cpu-12, pool proofs, 16 GB ask; lean `64ee10f17900`, which differs from `bafae2eaec2e` only in circuit-check's `pyproject.toml` and three Lake manifests): done rc 0, slot taken within seconds, 31 s in all. The four test files that reach #9362's lines in `benchmarks/one_stage/a5.py` (`test_a5_case_v2.py`, `test_served_integrity.py`, `test_audit_two_members.py`, `test_a5_wiring.py`): 64 passed, 3 skipped. The three skips are `test_audit_two_members.py` lines 140, 186 and 228, each "no flock-verify or flock-firewall under …/.lake/build/bin": the run built no Lean, so those three ran nowhere in it [run]. It replaces `db48` (cancelled by me at 20:33Z, never started).
+- `r20261112-182335-606d` (vy-nebius-cpu-4; trial `4a910e71732a`: lean `238ad6621c27` × `main` `30d6fcc92ff7` with #9091's earlier head `675dea740d6a` in and the pin by `ceffc70c0052`): done rc 0, ended 20:21Z. 9 of 9 Lean tries exit 0, each with its axiom probe clean: `security/Proofs/Flock/Claims/Sampling.lean` (1,418 s), `Sampling/Select.lean`, `Select/Second.lean` (39 theorems), `Select/SecondFirst.lean` (4), `Select/SecondLaw.lean` (12), `Select/SecondUnits.lean` (10), `security/Proofs/Properties/Spot/SecondFormed.lean` (45), `SecondRefused.lean` (7), `SecondSample.lean` (27). `test_pous_trusted.py`: 9 passed. Suites, 2 of 2: `verity/protocols/pous/verifier` 549 passed, 12 skipped; `repository` 354 passed [run].
+- `r20261112-182303-e169` (vy-nebius-cpu-4; trial `89f60e213c20`: the same base with #9253 `cf5587e21642` in and `FlockVerify.lean` by `fed2063c5d79`): failed rc 1, ended 20:14Z. 6 of 6 Lean tries exit 0: `FlockVerify.lean` (7 theorems, axioms clean), `Flock.lean`, `Flock/CircuitRead.lean` (7), `Flock/VerifyMembers.lean`, `Flock/ProgramRead.lean` (14), `Flock/Test/ProgramHeld.lean`. Suites: `benchmarks/verifier_cost` 9 passed, `repository` 354 passed, `verity-flock` failed at collection, no test run: `ImportError: cannot import name 'Registry' from 'verity.settings'` (through `verity_numerical/settings.py`). That is the meet lean mended in `e209a56847d4`; my trial was cut on the tip before it, so the failure is the trial's and says nothing of #9253. `test_lean_verify_members.py` and the rest of the flock prover's suite therefore have no verdict on #9253's joined file yet: `8d2e` reruns them on lean's marked head [run].
+- `r20261112-171809-f6bf` (vy-nebius-cpu-10; lean's tip of 17:18Z × `main` `4520abe708b0`): cancelled rc 143 at 19:48Z by its own 9,000 s. 116 of 125 suites passed, none failed; the time ran out inside `tools/verity/circuit_check`'s suite (131 passed, 1 skipped of 432 after 80 min). No verdict for nine, that one and eight not started: `verity-numerical`, `verity-ops`, `verity/circuits`, `verity/commitments`, `verity/commitments/windows`, `verity-core-evaluate`, `verity/definitions`, `verity/protocols/recursion/verifier/vstar_cli`. The tree is five lean heads old, so I do not rerun it [run].
+- `r20261112-182234-9fdd` (vy-nebius-cpu-1; trial `c04d04289624`, lean's line whole at `main` `30d6fcc92ff7` as git merges it with my closes), still running at 20:44Z: 7 of 7 tries exit 0, `test_pous_trusted.py` 9 passed, 87 of the 99 touched suites passed, 2 failed so far, neither ours [run]:
+  - `verity-flock`: 1,499 passed, 1 failed, 31 skipped. The one is `test_proof_server.py::test_a_prover_that_exits_0_with_a_session_unrecorded_fails_that_session`, the flake you filed as VLLM-400; owner @vllm.
+  - `verity/protocols/certifier/verifier/network`: 89 passed, 2 failed, both in `tests/test_nci_record_difftest.py` (`test_a_pinned_readers_layout`, `test_the_reference_reads_a_record_as_the_interface_does`: a reader's `blocks` is `None` where the test wants a count); owner @network-accounting. Lean's own merge of that `main` (`25f40229fc`) changed this test file, and my trial has git's copy, so this is a meet lean already wrote by hand; whether it passes at `bafae2eaec2e` is lean's check, not rerun by me [derived from `git diff 238ad6621c27 bafae2eaec2e`].
+
+### The closes table against `bafae2eaec2e`
+
+Computed 20:36Z with `git merge-tree` and the repository's merge drivers, each head against lean's head, against `main` `5f0c008aa040` alone, and against a stand-in merge of the two (`38d927fa36c6`); the rows are the same against lean's head and the stand-in, and no head stops against `main` alone [derived].
+
+| pull request | head | stops in | close (the file whole) | verified at `bafae2eaec2e` | tried |
+|---|---|---|---|---|---|
+| #9237 | `9d4aec0111fb` | `verity/protocols/spot/verifier/lean/tests/test_difftest.py` | `82a48d3a8dda`, blob `d9eedb9620de` | 1 stop; outside it the close is git's merge line for line, 7,729 lines [derived] | at this head: `a40f`, `1f78` waiting; earlier heads passed [run, my 15:36Z lines] |
+| #9253 | `cf5587e21642` | `verity/protocols/flock/verifier/FlockVerify.lean` | `fed2063c5d79`, blob `2404be2d8b25` | 1 stop; outside it the close is git's merge line for line, 2,019 lines [derived] | 6 tries exit 0 on the older base [run `e169`]; the flock suite: `8d2e` waiting |
+| #9091 | `bc68ae1efece` | `verity/protocols/pous/lean/TRUSTED.sha256` | `ceffc70c0052`, blob `7be654194625` | the pin's 64 lines are the merged tree's blobs, 0 differ; its 46 files under `security/Definitions/Pous` are the tree's, in order [derived] | tries, pin test and two suites pass on the older base [run `606d`] |
+| #9176, #9229, #9212, #9080, #9075 | `99f2f3ba2cf1`, `7cab9aeb4422`, `f2412ec7156f`, `a5eb973283ee`, `cbe0bcdd160d` | nothing | none needed | | |
+
+- Lean's own pin at `bafae2eaec2e` is right: 64 lines, 0 differ [derived].
+- `c364515fd276`'s `a5.py` stays void (my 19:42Z line): lean's head holds git's merge with #9362's lines, and #9237 now merges into it with no stop.
+
+### Ready lines
+
+- **#9091** [run `606d`]: with `ceffc70c0052`'s pin in, its nine Lean files try clean, `test_pous_trusted.py` passes (9), and the two suites its change touches pass (`verity/protocols/pous/verifier` 549 passed, 12 skipped; `repository` 354 passed). Two limits: the trial's base is lean `238ad6621c27` × `main` `30d6fcc92ff7`, three lean heads back, and it held #9091's earlier head `675dea740d6a`; today's head `bc68ae1efece` is one merge of `main` over that, with none of its own Lean sources moved, and at `bafae2eaec2e` the pin is verified from git blobs only [derived]. Its merge once #9375 is on `main` is one stop, `verity/protocols/pous/lean/TRUSTED.sha256`, taken whole from `ceffc70c0052` while `main`'s pin is lean's (blob `a08ebe4756ba`); `test_pous_trusted.py` is the check.
+- **#9253**: no ready line yet. Its tries pass; its suite has not run on a tree with lean's mend. `8d2e` decides.
+- **#9237**: no ready line from me; the lines for REDRAW follow, and `a40f` is the try.
+
+### For REDRAW
+
+The merge of #9375's head into #9237 (`cursor/proofs-redraw-cc71` at `9d4aec0111fb`), as `git merge-tree 9d4aec0111fb bafae2eaec2e` computes it (tree `00f740b5571c`): **one stop, in one file** [derived].
+
+0. **Before merging**, register the repository's merge drivers in the clone, once: `python3 tools/verity/lean/merge.py --install`. With them the lock `security/Properties/lean-audit.json` merges itself; without them the same merge stops in that lock too [derived: the merge again with no attributes].
+1. When #9375 is on `main`: `git fetch origin main && git merge origin/main`.
+2. **The stop**: `verity/protocols/spot/verifier/lean/tests/test_difftest.py`, lines 71 to 78, the import from `verity.protocols.spot.device.coins`. Git shows:
+
+   ~~~text
+   <<<<<<< HEAD
+   from verity.protocols.spot.device.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
+                                                           coins_within, draw_coins, draw_first)
+   =======
+   from verity.protocols.spot.device.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
+                                                 draw_coins, draw_first, law_problem)
+   from verity.protocols.spot.device.coins import ran_out as draw_ran_out
+   >>>>>>> origin/main
+   ~~~
+
+   Both sides added names to one import: #9237 added `FAMILY_ROOT`; lean's side added `law_problem` and `ran_out as draw_ran_out`. **Keep all of them.** Replace the eight lines with these three, byte for byte (the second line is indented 46 spaces):
+
+   ~~~python
+   from verity.protocols.spot.device.coins import (FAMILY_ROOT, LIMITS, MAX_PATH, OwnRandomness, coins_reason,
+                                                 coins_within, draw_coins, draw_first, law_problem)
+   from verity.protocols.spot.device.coins import ran_out as draw_ran_out
+   ~~~
+
+3. **Nothing else in that file needs a hand**: outside the stop git's merge is the close's file line for line, and the result is 7,729 lines, blob `d9eedb9620de` (`git hash-object verity/protocols/spot/verifier/lean/tests/test_difftest.py` prints it) [derived].
+4. **The same by path**, in place of step 2's edit: `git fetch origin cursor/proofs-landing-closes-99d1`, then `git checkout 82a48d3a8dda720b66bc463ab9d9e2004d32991c -- verity/protocols/spot/verifier/lean/tests/test_difftest.py`. It is valid only while `main`'s copy of the file is blob `fc4019234796` (`git rev-parse origin/main:verity/protocols/spot/verifier/lean/tests/test_difftest.py`), which is lean's copy. If another of our heads that changes this file landed first, the stop is still this one import and step 2's three lines still resolve it; the file whole for each case is on the same branch, each verified at `bafae2eaec2e` as above [derived]:
+
+   | landed on `main` before the merge | `main`'s copy | the file whole |
+   |---|---|---|
+   | #9375 only | `fc4019234796` | `82a48d3a8dda` (blob `d9eedb9620de`) |
+   | and #9176 | `991d5feffbe1` | `4952287ca89a` (blob `024a86e1288e`) |
+   | and #9212 (it holds #9176) | `797c39d4c99b` | `b47c0b4fb02e` (blob `5b9b8b5bd36b`) |
+   | and #9075 | `07b08a1d7864` | `f2126d7aa0dc` (blob `fb2f009c526f`) |
+   | and #9176, #9075 | `c97849ac4d25` | `826cea077693` (blob `fef86a4bc3a5`) |
+   | and #9176, #9212, #9075 | `64a3bcc73001` | `23112d7b0b6c` (blob `d8c25c98dac9`) |
+
+5. **What git merges with no stop where both sides wrote**, so a reader knows where a meet could hide. Eleven files come out as neither side's copy: `benchmarks/one_stage/a5.py`, `benchmarks/one_stage/two_stage.py`, `benchmarks/one_stage/tests/test_two_stage_driver.py`, `benchmarks/network_traces/scan_zk.py`, `verity/protocols/spot/device/coins.py`, `verity/protocols/spot/verifier/service.py`, `verity/protocols/spot/verifier/lean/tests/test_challenger_difftest.py`, `verity/protocols/spot/verifier/lean/Spot/Pieces.lean`, `Spot/Run.lean`, `security/Proofs/Properties/Challenger/Coins.lean`, `security/Proofs/Properties/Verity/Sampled/RecordDraw.lean`, and the two locks `security/lean-audit.json` and `security/Properties/lean-audit.json` (the locks are the driver's and the records run's, not mine). `Spot.lean` comes out as lean's copy, and `stop_audit.py`, `stop_audit_small.py`, `stop_audit_small.sh`, `test_stop_audit.py` and `Spot/RecordAcross.lean` as #9237's [derived].
+   - Read [read: the merged files of tree `00f740b5571c`]: the seven Python files parse; ruff's F401, F811, F821, F822 and F823 find nothing new in them (one F811 on `sample_link_first` in `test_challenger_difftest.py` is in lean's head already, at its lines 2116 and 2125). #9237 gives `coins_reason` a sixth argument, the family's label; every one of the 13 calls in the merged tree passes six, and the 49 calls of `draw_coins`, `draw_first`, `ran_out`, `coins_within` and `law_problem` fit the merged signatures [derived: a count over the merged files' syntax trees]. `a5.py` comes out as lean's copy with exactly #9237's own change in it, the same 10 lines added and 7 removed as over #9237's own base (`family = stream.family(draw)`, `AC.Replay(read, family)`, `write_case(..., family=...)`, `case_coins(pm, coins, family, window_root)`). All ten names of the resolved import are bound in the merged `coins.py` and used in the test file.
+   - Not yet run: the Lean. `a40f` tries the nine Lean files #9237 brings over lean's head (`Spot/Pieces.lean`, `Spot/Run.lean`, `Spot/RecordAcross.lean`, `Spot/ChallengerCoins.lean`, `security/Properties/Challenger.lean`, `security/Proofs/Properties/Challenger.lean`, `Challenger/Coins.lean`, `Challenger/Drawn.lean`, `Verity/Sampled/RecordDraw.lean`) on the trial `9a92251839dc` (parents `9d4aec0111fb` and `bafae2eaec2e`, tree `aae24c89917a`: git's merge with the three lines in), then runs `repository`, `benchmarks/one_stage`, `verity-core-sampled-proofs`, `verity/protocols/spot/verifier`, `benchmarks/verifier_cost` and `benchmarks/two_stage`; `1f78` runs the other 66 suites the change touches. Neither runs the Lean check (`check.py`) or the locks' records: those are the pull request's own check after the merge.
