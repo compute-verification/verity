@@ -106,7 +106,7 @@ at every R, and a `static_assert` bounds R to 1..64.
 | `eps_profile.py`, `vprod_profile.py` | a run's `ncu` sections as executed instructions by class, against the ACCEL model |
 | `summary.py`, `prof_summary.py`, `egemm80.py` | `run.sh`'s, `profile.sh`'s and `run80.sh`'s summaries; `egemm80.py gate` is the sm_80 SASS gate |
 | `flash_ref.py` | plain attention's time under torch, `fattn.cu`'s baseline |
-| `tests/` | the suite `uv run tools/verity/check/suites.py benchmarks/pouw/edited_gemm` runs: `egemm_ref.py`, `egemm80_ref.py` and `d2sgemm_ref.py` on made-up gate directories, `egemm_ref.py` against the receipts reference, the summaries, `eps_profile.py` (priced with the ACCEL model's census) and `vprod_profile.py` on made-up run directories, `egemm80.py`'s SASS gate and the depth-R check |
+| `tests/` | the suite `uv run tools/verity/check/suites.py benchmarks/pouw/edited_gemm` runs: `egemm_ref.py`, `cgemm_ref.py`, `egemm80_ref.py` and `d2sgemm_ref.py` on made-up gate directories, `egemm_ref.py` against the receipts reference, the summaries, `eps_profile.py` (priced with the ACCEL model's census) and `vprod_profile.py` on made-up run directories, `egemm80.py`'s SASS gate and the depth-R check |
 
 ## What other code reads
 
