@@ -10,11 +10,11 @@ import json
 import pytest
 
 from tests.query.test_module_body import W, _call
-from verity_vllm.query.units import ValueRef
 from verity_vllm.correspondence.reader_for_query import Correspondence
 from verity_vllm.query.compose import merge_ranks
 from verity_vllm.query.program_view import InputView, Port, ProgramView
 from verity_vllm.query.required import QUERIES, request_manifest
+from verity_vllm.query.units import ValueRef
 
 EMBED_W, W13, W2, LM_W = f"{W}.embed.weight", f"{W}.layers.0.mlp.experts.w13_weight", f"{W}.layers.0.mlp.experts.w2_weight", f"{W}.lm_head.weight"
 EXPERTS = f"{W}.layers.0.mlp.experts"

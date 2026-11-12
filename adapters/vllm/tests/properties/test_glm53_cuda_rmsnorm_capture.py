@@ -4,12 +4,16 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import json
+import os
+import sys
+import types
 
 import numpy as np
+from verity.definitions.numerics import cuda_rmsnorm_rows as R
 
 from tests.properties import glm53_cuda_rmsnorm_capture_gpu as X
 from verity_vllm.engine.env import SERVED_DEFAULTS
-from verity.definitions.numerics import cuda_rmsnorm_rows as R
+from verity_vllm.pipeline.cli import MACHINE
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 
@@ -26,9 +30,6 @@ def _doc() -> dict:
 
 
 def _stub_envs(monkeypatch, **switches) -> None:
-    import sys
-    import types
-
     envs = types.ModuleType("vllm.envs")
     for k, v in {"VLLM_BATCH_INVARIANT": False, "VLLM_USE_OINK_OPS": False, **switches}.items():
         setattr(envs, k, v)
@@ -92,10 +93,6 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     """`main` with the launches and the SASS build stood in for, every served-default switch inherited set: cleared before vLLM
     reads them, its switches read back, the SASS built with a served engine's toolchain, GO; with batch invariance read back on, or
     the SASS build failing, NO-GO."""
-    import os
-
-    from verity_vllm.pipeline.cli import MACHINE
-
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     sass_ok = [True]
 

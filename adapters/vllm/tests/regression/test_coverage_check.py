@@ -74,10 +74,6 @@ class _Row(resolver.Row):
             raise resolver.NotResolvable(rel)
         return self.reference / rel
 
-    def jsonl(self, rel):
-        with open(self.path(rel)) as f:
-            return [json.loads(line) for line in f if line.strip()]
-
 
 def test_the_candidates_norm_scales_are_covered_by_the_candidates_own_layouts(tmp_path):
     """#73's case: the reference run committed no norm scales; the candidate's source did, into its own layouts."""

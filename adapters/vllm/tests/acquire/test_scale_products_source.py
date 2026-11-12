@@ -10,12 +10,12 @@ import types
 
 import numpy as np
 import pytest
+from verity.definitions.registry import fp8
 
 from tests.acquire.test_vocab_range_source import Recorder
 from tests.check.test_sampled_replay_v2_addresses import _v2_manifest
 from tests.query.test_scale_products import fp8_program
 from verity_vllm.acquire.sources import call_boundary_plan as CBP
-from verity.definitions.registry import fp8
 from verity_vllm.query import scale_products as SP
 
 torch = pytest.importorskip("torch")
@@ -30,14 +30,14 @@ XS = [[0x7FC00001, 0x00000001], [0xFFC00000, 0x7F800000], [0x3C000000, 0x3B12492
 WS = [[0x7FA00000, 0x00400000], [0x80000000, 0x5F800000], [0x3B124925, 0xFFFFFFFF]]
 
 
-def _f32(words) -> "torch.Tensor":
+def _f32(words) -> torch.Tensor:
     return torch.from_numpy(np.asarray(words, dtype=np.uint32).view(np.int32)).view(torch.float32)
 
 
 def _ir(xs: list[int], ws: list[list[int]]) -> list[int]:
-    from verity.circuits.evaluation.reference import standalone_call
     from verity.circuits.defs import bind
     from verity.circuits.evaluation import evaluate_call
+    from verity.circuits.evaluation.reference import standalone_call
 
     prog, call = standalone_call(bind(fp8.ScaledMmFp8BlockSharedScale, K=K, N=N, G=G))
     t: dict[int, int] = {}

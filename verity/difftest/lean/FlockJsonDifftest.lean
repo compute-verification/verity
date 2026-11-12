@@ -1,7 +1,7 @@
 module
 
 public import Difftest
-public import Flock.JsonParse
+public import Base.JsonParse
 
 /-! The Flock verifier's JSON parser, `Flock.JsonParse.parse`, held to its Python mirror
 (`tests/test_flock_json_port.py`), and Lean core's `Lean.Json.parse`, which it reads as, held to the same mirror. Each

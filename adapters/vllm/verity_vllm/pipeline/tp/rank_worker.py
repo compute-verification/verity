@@ -47,6 +47,7 @@ def repo_modules_loaded() -> dict[str, Any]:
     the collector's JIT C++/CUDA sources when native_collect was loaded -- what RAN, written from the running process (not a static closure).
     Paths relative to the repo root; a module outside the repo (site-packages, vllm) is not listed."""
     import sys as _sys
+
     from verity_vllm.config import ROOT as root
     roots = [root, root / "vllm-poc"]
     files: set[str] = set()
@@ -173,9 +174,8 @@ def swap_label(label: str, sw: dict | None, step: int | None) -> str:
     does not -- a ranged swap never touches a step-less consumer)."""
     if not sw:
         return label
-    if sw.get("mode") == "steps":
-        if step is None or not (int(sw["lo"]) <= int(step) <= int(sw["hi"])):
-            return label
+    if sw.get("mode") == "steps" and (step is None or not (int(sw["lo"]) <= int(step) <= int(sw["hi"]))):
+        return label
     if label == sw["a"]:
         return sw["b"]
     if label == sw["b"]:
@@ -195,7 +195,7 @@ def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
         v = getattr(parent, attr, None)
         if isinstance(v, torch.nn.Parameter):
             continue
-        if not isinstance(v, torch.Tensor):
+        if parent is None or not isinstance(v, torch.Tensor):
             raise TypeError(f"the Build registers the post-load tensor {n!r} as a Parameter; the served model holds no tensor there")
         delattr(parent, attr)
         parent.register_parameter(attr, torch.nn.Parameter(v, requires_grad=False))
@@ -204,6 +204,10 @@ def register_post_load_tensors(model: Any, names: list[str]) -> list[str]:
 
 class TP2CaptureWorkerExtension:
     """Mixed into vLLM's Worker (`worker_extension_cls`); `self` is the Worker of one rank."""
+
+    #: the Worker's own attributes that these methods read
+    model_runner: Any
+    vllm_config: Any
 
     # ------------------------------------------------------------------ topology
 
@@ -881,8 +885,8 @@ class TP2CaptureWorkerExtension:
             return None
         import numpy as np
 
-        from verity_vllm.check import oracle_compare as OC
         from verity_vllm.acquire.sources.partial_source import _committed
+        from verity_vllm.check import oracle_compare as OC
 
         com, rank = st["com"], int(st["rank"])
         rd = OC.OpenedReader(com, rc)
@@ -890,7 +894,7 @@ class TP2CaptureWorkerExtension:
         layouts = getattr(com, "_layouts", None) or {}
         seen: dict[str, int] = {}
         checked, steps_checked = 0, 0
-        mismatches: list[dict] = []
+        mismatches: list[dict | None] = []
         missing: list[dict] = []
         for s in sorted(int(k) for k in layouts):
             metas = layouts[s] if s in layouts else layouts[str(s)]
@@ -932,14 +936,14 @@ class TP2CaptureWorkerExtension:
                 checked += 1
             steps_checked += 1
         n_mis = len(mismatches)
-        mismatches = [x for x in mismatches if x is not None]
+        named = [x for x in mismatches if x is not None]
         lens = {lg: {"sampled_rows_committed": seen.get(lg, 0), "match_record_generated": len(mt[lg])} for lg in sorted(mt)}
         len_ok = all(v["sampled_rows_committed"] == v["match_record_generated"] for v in lens.values())
         ok = n_mis == 0 and not missing and len_ok and checked > 0 and steps_checked > 0
         why = None
         if not ok:
             if n_mis:
-                f = mismatches[0]
+                f = named[0]
                 why = (f"rank {rank}: step {f.get('step')}: {f['why']}" if "why" in f else
                        f"rank {rank}: {n_mis} of {checked} committed sampled rows disagree with the Match record (first: step {f.get('step')} row {f.get('row')} "
                        f"labelled {f.get('request')} k={f.get('k')}: committed {f.get('committed')} != match {f.get('match_record')})")
@@ -951,7 +955,7 @@ class TP2CaptureWorkerExtension:
                 why = f"rank {rank}: nothing checked"
         return {"ok": ok, "rank": rank, "reference": "tp2_match capture arm tokens.json (per request generated ids; independent instrumented run)",
                 "identity": "runner.sampler/sampled_token_ids row j of step s -> request of row j in this rank's request->rows map (step_rows) -> k-th sampled token of that request",
-                "steps_checked": steps_checked, "rows_checked": checked, "requests": lens, "mismatches_n": n_mis, "mismatches": mismatches[:12],
+                "steps_checked": steps_checked, "rows_checked": checked, "requests": lens, "mismatches_n": n_mis, "mismatches": named[:12],
                 "missing_steps": missing[:8], "swap_requests_negative": st.get("swap_requests"), "value_source": rd.record(), "why": why}
 
     def _tp2_binding(self, rc: Any) -> dict[str, Any] | None:

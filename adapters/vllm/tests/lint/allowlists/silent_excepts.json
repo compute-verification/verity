@@ -3,9 +3,6 @@
   "entries": [
     {"file": "verity_vllm/check/fold_compare.py", "kind": "silent-except", "symbol": "_extra_norm_layer_fields", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return {}"},
     {"file": "verity_vllm/check/fold_compare.py", "kind": "silent-except", "symbol": "_moe_layer_fields", "detail": "except (AttributeError, KeyError, ValueError, IndexError): return {}"},
-    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "_spec_id_memo", "detail": "except (AttributeError, KeyError): pass"},
-    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "_spec_id_memo", "detail": "except AttributeError: pass"},
-    {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "silent-except", "symbol": "request_legs", "detail": "except OSError: pass"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "silent-except", "symbol": "_cpu_quota", "detail": "except (OSError, ValueError): pass"},
     {"file": "verity_vllm/check/verdict.py", "kind": "silent-except", "symbol": "execution_of_record", "detail": "except ValueError: es[k] = v"},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "silent-except", "symbol": "NativeCollectCommitter._end_step", "detail": "except OSError: pass"},
@@ -16,8 +13,6 @@
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._load_cudart", "detail": "except Exception: pass"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "NativeHostCommitter._pin_thread", "detail": "except OSError: pass"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "silent-except", "symbol": "step_bound_bytes", "detail": "except StopIteration: isz = 2"},
-    {"file": "verity_vllm/commit/committer/native_jit.py", "kind": "silent-except", "symbol": "staged_sources", "detail": "except FileNotFoundError: same = False"},
-    {"file": "verity_vllm/commit/committer/pinned_pool.py", "kind": "silent-except", "symbol": "PinnedPool.__del__", "detail": "except Exception: pass"},
     {"file": "verity_vllm/commit/opened.py", "kind": "silent-except", "symbol": "OpenedReader.or_none", "detail": "except OpeningNotVerified: return None"}
   ]
 }

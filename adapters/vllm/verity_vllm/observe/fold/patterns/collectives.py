@@ -15,6 +15,7 @@ rank Program binds through `vllm_bindings.AllReduce2Rule` / `AllGather2Rule`, so
 
 from __future__ import annotations
 
+from verity.circuits.defs import bind
 from verity.definitions.registry import b1_tp2
 from verity.definitions.registry import tp_allreduce as T
 
@@ -22,8 +23,20 @@ from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.patterns.embedding import Embedding
 from verity_vllm.observe.fold.patterns.geometry import is_int, is_row_major
 from verity_vllm.observe.fold.patterns.ops import base_op, bound_args
-from verity_vllm.observe.fold.patterns.resolutions import attribution_for, hint_of, unsupported
-from verity_vllm.observe.fold.resolver import Collective, Compute, Group, PerRow, Resolution, Shared, StepContext
+from verity_vllm.observe.fold.patterns.resolutions import (
+    attribution_for,
+    hint_of,
+    unsupported,
+)
+from verity_vllm.observe.fold.resolver import (
+    Collective,
+    Compute,
+    Group,
+    PerRow,
+    Resolution,
+    Shared,
+    StepContext,
+)
 from verity_vllm.observe.fold.tree import TreeNode
 
 ALL_REDUCE_OP = "vllm.all_reduce"
@@ -92,8 +105,6 @@ class TpCollective:
     def _per_request(self, node: TreeNode, routed: T.Captured, x: ViewDesc, out: ViewDesc, site: str, attribution) -> Resolution:
         """The routed all-reduce as the Build binds it: one call per request over its run of rows, each `rows * N` words on the route
         the launch's M picks (`route_binding`; refused where the route reduces an element by its offset in the launch)."""
-        from verity.circuits.defs import bind
-
         (M, N), parts = x.shape, []
         try:
             spans = request_spans(attribution) or [(0, M)]
@@ -132,17 +143,25 @@ def allreduce_settings(header) -> dict | None:
     notes = getattr(header, "notes", None) or {}
     if notes.get("allreduce_settings"):
         return dict(notes["allreduce_settings"])
-    facts = (notes.get("tp2") or {}).get("facts") or {}
-    pc = facts.get("parallel_config") or {}
-    if not isinstance(pc.get("disable_custom_all_reduce"), bool):
+    tp2 = notes.get("tp2")
+    facts = tp2.get("facts") if tp2 else None
+    if not facts:
         return None
-    env = {**(facts.get("nccl_env") or {}), **((getattr(header, "profile", None) or {}).get("engine_flags") or {})}
+    pc = facts.get("parallel_config")
+    if not pc or not isinstance(pc.get("disable_custom_all_reduce"), bool):
+        return None
+    env: dict = {}
+    for part in (facts.get("nccl_env"), (getattr(header, "profile", None) or {}).get("engine_flags")):
+        if part:
+            env.update(part)
     return T.settings_of(pc["disable_custom_all_reduce"], env)
 
 
 def capture_device(header) -> tuple[str, int] | None:
     """The capture's GPU as `tp_allreduce.device_of` names it (``RunHeader.profile["gpu"]``), or None when it recorded none."""
-    gpu = (getattr(header, "profile", None) or {}).get("gpu") or {}
+    gpu = (getattr(header, "profile", None) or {}).get("gpu")
+    if not gpu:
+        return None
     cc, sms = gpu.get("compute_capability", gpu.get("cc")), gpu.get("multi_processor_count", gpu.get("sms"))
     return None if cc is None or sms is None else T.device_of(cc, sms)
 
@@ -180,12 +199,10 @@ class TpFusedAllReduceRmsNorm:
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
         if node.is_triton or base_op(node.op) != FUSED_AR_NORM_OP:
             return None
-        from verity.circuits.defs import bind
-
         a = bound_args(node)
         x, res, w, out = (a.get(k) for k in ("allreduce_in", "residual", "rms_gamma", "norm_out"))
         eps, world, fp32, code = (a.get(k) for k in ("rms_eps", "world_size", "fp32_acc", "pattern_code"))
-        if not all(isinstance(v, ViewDesc) for v in (x, res, w, out)):
+        if not (isinstance(x, ViewDesc) and isinstance(res, ViewDesc) and isinstance(w, ViewDesc) and isinstance(out, ViewDesc)):
             return unsupported(node, "fused all-reduce norm without allreduce_in / residual / rms_gamma / norm_out views", args={k: repr(v) for k, v in a.items()})
         if world != self.world or fp32 is not True or code != AR_RESIDUAL_RMS_NORM or a.get("quant_out") is not None \
                 or a.get("scale_out") is not None or float(a.get("weight_bias", 0.0) or 0.0) != 0.0 or not isinstance(eps, float):
@@ -194,7 +211,7 @@ class TpFusedAllReduceRmsNorm:
         site = node.enter.module
         if not site:
             return unsupported(node, f"{FUSED_KIND}: no issuing module recorded (site unknown; fail closed)")
-        M, N = x.shape if x.rank == 2 else (None, None)
+        M, N = x.shape if x.rank == 2 else (0, 0)
         views_ok = all(v.rank == 2 and v.shape == (M, N) and v.dtype == "bfloat16" and is_row_major(v) for v in (x, res, out))
         if not views_ok or w.shape != (N,) or w.dtype != "bfloat16" or len({x.alloc, res.alloc, out.alloc}) != 3:
             return unsupported(node, "expected distinct row-major bf16 [M,N] allreduce_in / residual / norm_out and a [N] gamma",
@@ -223,14 +240,13 @@ class EmbeddingShardCuda:
     name: str = "tp.embedding_shard_cuda"
 
     def match(self, node: TreeNode, ctx: StepContext) -> Resolution | None:
-        from verity.circuits.defs import bind
         if node.is_triton or base_op(node.op) != "_C.vocab_parallel_embedding":
             return None
         a = bound_args(node)
         out, idx, w = a.get("out", a.get("arg0")), a.get("input_ids", a.get("arg1")), a.get("weight", a.get("arg2"))
         start, end = a.get("org_vocab_start_index", a.get("arg3")), a.get("org_vocab_end_index", a.get("arg4"))
         pad, add0, add1 = a.get("num_org_vocab_padding", a.get("arg5")), a.get("added_vocab_start_index", a.get("arg6")), a.get("added_vocab_end_index", a.get("arg7"))
-        if not all(isinstance(v, ViewDesc) for v in (out, idx, w)) or not all(isinstance(v, int) for v in (start, end, pad, add0, add1)):
+        if not (isinstance(out, ViewDesc) and isinstance(idx, ViewDesc) and isinstance(w, ViewDesc)) or not (isinstance(start, int) and isinstance(end, int) and isinstance(pad, int) and isinstance(add0, int) and isinstance(add1, int)):
             return unsupported(node, "vocab_parallel_embedding arguments not bound as expected", args={k: repr(v) for k, v in a.items()})
         if pad != 0 or add1 != add0:
             return unsupported(node, "EmbeddingShard_v1 binds plain contiguous shards only (padded or added-vocab shard)", padding=pad, added=(add0, add1))

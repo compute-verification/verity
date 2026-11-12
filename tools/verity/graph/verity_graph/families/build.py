@@ -1,7 +1,8 @@
 """The build family: the check's steps that build the Flock verifier and run what it built, and Flock's Rust, as
 `tools/verity/check/check.py` runs them (its `lean_steps` and `groups`), each step one task.
 
-- `lean-build:verity/protocols/flock/verifier`: `lake build` of the Lean verifier; its outputs are the executables its lakefile's
+- `lean-build:verity/protocols/flock/verifier`: `lake build` of the Lean verifier, which reads its package and the packages of
+  the tree it requires by path; its outputs are the executables its lakefile's
   `defaultTargets` name, each at its path in a built tree (`.lake/build/bin/<exe>`, where the suites that run them look).
 - `lean-unit-cut:verity/protocols/flock/agreement/unit_cut_agree.py`: the script on the flock-verify it reads, the Lean partition
   check's conformance with `verity.circuits.partition`; its inputs are the script's import closure (`test_file.Imports`: it
@@ -25,6 +26,7 @@ A tree without the verifier's Lean package or its pin lists none of the Lean tas
 from __future__ import annotations
 
 import ast
+import json
 import tomllib
 from pathlib import Path
 
@@ -53,16 +55,32 @@ CHECK_READS = (*(f"tools/verity/check/{m}" for m in ("check.py", "ci.toml", "com
                ".agents/skills/using-slack/registry.json")
 
 
+def required(root: Path, files: list[str]) -> list[str]:
+    """The packages of the tree the Lean verifier requires by path from outside its directory, by its manifest (which lists
+    those its requirements require too) or its lakefile, each from the root and ending in "/" (`check.required_in_tree`)."""
+    entries: list[dict] = []
+    if f"{LEAN}/lake-manifest.json" in files:
+        entries += json.loads((root / LEAN / "lake-manifest.json").read_text()).get("packages", [])
+    if f"{LEAN}/lakefile.toml" in files:
+        entries += tomllib.loads((root / LEAN / "lakefile.toml").read_text()).get("require", [])
+    top, own = root.resolve(), (root / LEAN).resolve()
+    dirs = {(own / p).resolve() for e in entries if (p := e.get("dir") or e.get("path")) is not None}
+    return sorted(d.relative_to(top).as_posix() + "/" for d in dirs if d.is_relative_to(top) and not d.is_relative_to(own))
+
+
 def package(root: Path, files: list[str]) -> list[str]:
-    """The Lean verifier's files `lake build` can read: its package's, less its lock (`lean-audit.json`, which only the Lean
-    check reads) and any Lake package nested in it while its lakefile requires nothing (`check.agreement_closure`'s cut)."""
+    """The files `lake build` of the Lean verifier can read: its package's and those of the packages of the tree it requires
+    by path (`required`), less each one's lock (`lean-audit.json`, which only the Lean check reads) and any Lake package
+    nested in the verifier's while its lakefile requires nothing (`check.agreement_closure`'s cut)."""
     pre = LEAN + "/"
     lakefiles = [f for f in files if f.startswith(pre) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     top = [f for f in lakefiles if f.count("/") == pre.count("/")]
     nested = tuple(f.rsplit("/", 1)[0] + "/" for f in lakefiles if f not in top)
     if any("require" in (root / f).read_text() for f in top):
         nested = ()
-    return [f for f in files if f.startswith(pre) and f != pre + "lean-audit.json" and not f.startswith(nested)]
+    packages = (pre, *required(root, files))
+    locks = {p + "lean-audit.json" for p in packages}
+    return [f for f in files if f.startswith(packages) and f not in locks and not f.startswith(nested)]
 
 
 def executables(root: Path, files: list[str]) -> list[str]:

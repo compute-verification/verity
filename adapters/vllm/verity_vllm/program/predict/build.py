@@ -28,8 +28,9 @@ from __future__ import annotations
 
 import hashlib
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
-from typing import Any, Callable
+from typing import Any
 
 from verity.circuits.codec import canonical_json, encode_program, program_digest
 from verity.circuits.defs import Builder, CompositeDefinition, bind
@@ -146,12 +147,12 @@ def model_shape(hf: dict) -> ModelShape:
     if int(fv.get("SHARED_EXPERTS") or 0):
         facts.append(f"shared experts (shared_expert_intermediate_size {fv['SHARED_EXPERTS']})")
     E = TOPK = 0
-    I = int(C["I"])
+    inter = int(C["I"])
     if arch == "moe":
         from verity_vllm.program.frontend.rules.vllm_moe import TOPK_SOFTMAX_E_TESTED
         E, TOPK = int(C.get("NUM_EXPERTS") or 0), int(C.get("TOPK") or 0)
         if ff.get("moe_width_key"):
-            I = int(hf[ff["moe_width_key"]])
+            inter = int(hf[ff["moe_width_key"]])
         if E not in TOPK_SOFTMAX_E_TESTED or not 1 <= TOPK <= E:
             facts.append(f"{E} experts, top-{TOPK} (the router is difftested for E in {sorted(TOPK_SOFTMAX_E_TESTED)})")
         if hf.get("mlp_only_layers") or int(hf.get("decoder_sparse_step") or 1) != 1:
@@ -193,7 +194,7 @@ def model_shape(hf: dict) -> ModelShape:
     if facts:
         raise Unexpressible("vocabulary cannot express: " + "; ".join(facts))
     return ModelShape(arch=family, model_class=served_class(ff["vllm_class"]), H=int(C["H"]), V=int(C["V"]), NL=int(C["NL"]), NH=int(C["NH"]), KVH=int(C["KVH"]),
-                      D=int(C["D"]), I=I, EPS=float(C["EPS"]), tie=bool(fv.get("tie_word_embeddings", C["tie_word_embeddings"])),
+                      D=int(C["D"]), I=inter, EPS=float(C["EPS"]), tie=bool(fv.get("tie_word_embeddings", C["tie_word_embeddings"])),
                       max_pos=int(C["MAX_POS"]), rot=int(C["D"]), qkv_bias=qkv_bias, window=int(window) - 1 if window else None,
                       qk_norm=qk_norm, E=E, TOPK=TOPK, renorm=bool(fv.get("RENORMALIZE")), act=act, norm_chain=norm_chain,
                       extra_norms=bool(extra), embed_scale="embed_normalizer" in fv, attn_cap=caps[0], final_cap=caps[1], int8=int8)
@@ -211,7 +212,7 @@ def rank_shape(C: ModelShape, world: int) -> ModelShape:
     if world == 1:
         return C
     facts = []
-    replicated_kv = C.KVH < world and world % C.KVH == 0          # QKVParallelLinear: a key/value head on world // KVH ranks
+    replicated_kv = world > C.KVH and world % C.KVH == 0          # QKVParallelLinear: a key/value head on world // KVH ranks
     if C.NH % world or (C.KVH % world and not replicated_kv):
         facts.append(f"{C.NH} query and {C.KVH} key/value heads over {world} ranks (an even split, or each key/value head on "
                      f"world // KVH ranks)")
@@ -528,7 +529,7 @@ class _Model:
             k = [self.call(S.rope_k, Coll(prk[0], k_in[i]), Coll(prk[1], cs[i].refs)) for i in range(M)]
             kh, vh = self.hist[L]
             P0 = len(kh)
-            prefill = P0 == self.cached
+            prefill = self.cached == P0
             if prefill:
                 self.lp_of[L] = P0 + M
             own_rows = M if prefill else 1
@@ -674,7 +675,7 @@ class _Decoder:
         """The Input a request's history of its first C positions opens with (`vllm_meta.prefix_input`): every layer's key and value rows."""
         return [("prefix", _arr((self.C.NL, 2, C, self.C.KVH * self.C.D), 16))]
 
-    def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
+    def model(self, B: Builder, W: Coll, peers: _Peers) -> _Model:
         return _Model(B, self.specs, W, self.specs.C, peers)
 
 
