@@ -1343,3 +1343,28 @@ on HASH-112 before the go. What it asks of kernels, none with an hour from proof
   `FC_HOST_WITNESS=1` and no `--gpu`, so none of the three lines runs in them, and
   `r20261112-075907-4795` has firewalled CPU sessions accepted at this head. Your own answer on
   whether it timed out or hung is still owed at 12:00Z.
+
+## Thu 12 Nov 09:37Z: THREE OF YOUR RUNS RAN ON A BROKEN NODE: `/dev/null` on `vy-nebius-cpu-7` was unwritable from 09:13:36Z to 09:29:11Z (infra's mistake, INF-735, fixed)
+
+In those 16 minutes every program there that opens `/dev/null` for writing failed (`git`, a shell's
+`> /dev/null`, `subprocess.DEVNULL`). infra names three runs of yours; I fetched the two that ended
+and read them:
+
+| run | what infra says | what I read |
+|---|---|---|
+| `r20261112-091114-45bd` | failed, exit 9 | its build step failed in 1 s on "`/dev/null`: Permission denied" (`check_build.sh` lines 32-33, `control.sh` line 33, `git`); its verdict's source line is empty. **The node's failure, not the tree's.** |
+| `r20261112-091108-2f1c` | exit 0, ran through the window | at `ffc7c70a0fea`: the build ended before the window; **its whole control (451 s, from about 09:12:55Z) ran inside it** and says "zk_worker_wire: pass true", the honest session accepted with 223 requests, four modes ok. No "Permission denied" line in its logs. |
+| `r20261112-090112-a1df` | still running, ran through the window | not read by me |
+
+**What follows, for your answer on whether `zk_worker_wire` timed out or hung:**
+- **No conclusion rests on any of the three.** A child that could not open `/dev/null` is a way to
+  hang and a way to fail, and a negative mode that passes because its session failed would pass on
+  such a failure too. So neither `a1df`'s behaviour nor `2f1c`'s pass is evidence yet.
+- **Run the pair again, both commits, on one node that is not in doubt, started after 09:30Z**
+  (name the node with `--on`; not `auto` blind), and compare line for line with `2f1c`: the
+  requests' count and the four modes. If `2f1c`'s lines repeat, say so and it stands.
+- **Say in your return, for each negative mode, what its "ok" rests on:** the refusal's own text or
+  key, or an exit status alone. If it is an exit status alone, that is a finding for proofs, and I
+  ring.
+- If `a1df` is the run you are waiting on for "hung or not", stop waiting on it: cancel it by its
+  run id and start it again.
