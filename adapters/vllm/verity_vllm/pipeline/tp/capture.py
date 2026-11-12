@@ -68,7 +68,7 @@ def parse_steps(s: str | None, max_tokens: int | None) -> list[int]:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", type=workload_arg, default="workloads/workload_qwen15_32x16_1req.json")
+    workload: str = option("--workload", type=workload_arg)
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     case: str | None = option("--case", default=None)
@@ -132,7 +132,7 @@ def main(args: Options) -> None:
     if revision is None:
         try:
             revision = json.loads(Path("EXPORT.json").read_text()).get("commit", "unknown")
-        except Exception:  # noqa: BLE001
+        except (OSError, ValueError, AttributeError):
             revision = "unknown"
     env_flags = {**prof.apply_env(), **target_env}
     engine_env.step_timeout(args.rpc_timeout)
@@ -249,7 +249,7 @@ def main(args: Options) -> None:
         all_equal = all_equal and bool(eq)
         doc["requests"].append({"request_id": rid, "prompt_token_ids": r["prompt_token_ids"], "max_tokens": r["max_tokens"],
                                 "generated_token_ids": gen, "accepted_record_token_ids": acc, "equals_accepted": eq})
-        print(f"[tp2] {rid}: generated {gen}\n[tp2]   accepted (TP=1 RTX 4090 record) {acc}  equal={eq}", flush=True)
+        print(f"[tp2] {rid}: generated {gen}\n[tp2]   accepted (the workload's record) {acc}  equal={eq}", flush=True)
     doc["all_equal_accepted"] = all_equal
     (out / "tokens.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(f"[tp2] done -> {out}", flush=True)
