@@ -48,7 +48,8 @@
 # as it is (the replay ladder's production plan: each request's own sampling, stopping at its end of text), copied to
 # OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit, a number of tokens or auto (vLLM's word for the longest the
 # cards' KV cache holds); PUBLISHED_FRONTEND=rust starts the published arm behind vLLM's Rust front end, on a build
-# that has it (python, the default, is the front end of every other arm). FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, else
+# that has it (python, the default, is the front end of every other arm), and PUBLISHED_ARGS=--FLAG=VALUE,... adds flags
+# of vLLM's own to that arm's line alone. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, else
 # the newest toolkit under /usr/local), so vLLM runs FlashInfer's sampler, autotune and fused all-reduce, and runs a sent
 # inputs/fi_smoke.py before the first engine so that its JIT lands outside the served traffic; OUT/engine_env.txt records
 # the toolkit, has_flashinfer and FlashInfer's caches' digests (fi_cache) before the arms and after each. LDCONFIG=1 refreshes the
@@ -186,7 +187,8 @@ if [ "${1:-}" = leased ]; then
   fi
   echo "before the arms: $(fi_cache)" >> "$OUT/engine_env.txt"
   common=(--model-id "$MODEL_ID" --checkpoint "$CK" ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"}
-    ${PUBLISHED_FRONTEND:+--published-frontend "$PUBLISHED_FRONTEND"})
+    ${PUBLISHED_FRONTEND:+--published-frontend "$PUBLISHED_FRONTEND"}
+    ${PUBLISHED_ARGS:+"--published-args=$PUBLISHED_ARGS"})
   if [ "$CLIENT" = vllm-bench ]; then
     load=(--client vllm-bench --loads "$LOADS" ${PASS_PROMPTS:+--pass-prompts "$PASS_PROMPTS"})
     for f in ${DATASETS:-}; do load+=(--dataset "$f"); done
@@ -277,7 +279,7 @@ export PLAN DOCS WINDOW_S KV_WINDOW_S KV_DIR
 # were installed for, the same for every engine of the job
 [ "${LDCONFIG:-0}" = 1 ] && ldconfig
 for k in SERVE_VLLM VLLM_CACHE_ROOT FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK MAX_MODEL_LEN \
-    PUBLISHED_FRONTEND PLAN_FILE; do
+    PUBLISHED_FRONTEND PUBLISHED_ARGS PLAN_FILE; do
   echo "$k=${!k-unset}"; done > "$OUT/engine_env.txt"
 { command -v nvcc && nvcc --version | tail -1
   echo "has_flashinfer=$("$PY" -c 'from vllm.utils.flashinfer import has_flashinfer; print(has_flashinfer())')"

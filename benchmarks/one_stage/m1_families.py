@@ -5,8 +5,10 @@ batched members), whether it is a template the rows commit (`serving_rows.templa
 `describe` cannot address, its port words (`serving_rows.members`' rule) and its Definition's word gates. No value is read.
 ``--estimate`` adds each family's Flock size to a census: every distinct primitive (or Boolean Definition) of the row's
 Definition lowered once on its own (`ir_lower.lower` on fresh inputs), its ANDs, table reads and assertions times how many
-times the Definition holds it, with its served MACs and each port's bits. Constants folded and ANDs shared across leaves are
-not taken off, so it is an upper bound.
+times the Definition holds it, with its served MACs and each port's bits. Its ANDs are the sum of each leaf's ANDs,
+lowered alone, times how often the Definition holds it. Nothing is taken off for constants or unread outputs. Table reads
+are counted apart (``reads``), so a statement with its reads inline, whose ``ands`` counts their rows
+(`ir_lower.layout`), can exceed it: the estimate is not that statement's ``ands`` and is not compared with it.
 With it, M0's block for the unit (`block`): the in-circuit hashing of its rows alone bounds it from below, so a family whose
 ``rows_log`` passes `K_MAX` is refused whatever its ANDs.  The same is computed for each family's split units (its unit
 templates past the row itself: ``units``), and for each ``--also`` Definition (``candidates``: a split's unit main lacks).

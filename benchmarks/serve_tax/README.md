@@ -22,9 +22,10 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
 | `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
 | `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
-| `boundary-rows` | prefix caching off, and the two-stage audit's boundary commitment at serve: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
+| `boundary-rows` | the two-stage audit's boundary commitment at serve, vLLM's prefix cache left on: each window's finished requests committed by size class off the engine loop (`verity_vllm.pipeline.boundary_rows`), under the arm's object (`serve_tax.ROWS`) and the model's check template (`Model.check`) | `record` |
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
-| `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`) | `boundary-rows` |
+| `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`), and prefix caching off, which the tables need | `boundary-rows` |
+| `two-stage-tick` | the two-stage serve's launch line admitting on the certified tick: `two-stage`'s data with the tick on, served by the corpus's client | `two-stage` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -56,11 +57,17 @@ that command in two things, each with the recipe's own alternative:
   the front end it served behind (`front_end`). Every other arm serves behind the Python one, whatever the job says.
 - **The context limit.** The command names none, so vLLM takes the model's own, 1,048,576 tokens, and by the recipe's
   own note refuses to start on eight H200s, whose KV cache does not hold one request of that length. The arm serves
-  at `--max-model-len auto`, vLLM's setting for the longest limit the cards' KV cache holds, which the engine resolves
-  when it starts and prints in its log. The recipe's command builder sets 262,144 for these cards instead; a job that
-  wants that, or any other limit, names it (`MAX_MODEL_LEN`), for every arm it serves, so that its arms differ by
-  their flags alone. The runner checks no load against `auto`: a request past the limit the engine resolved is
-  refused by the server and counted as failed.
+  at 262,144 tokens, the limit the recipe's command builder sets for these cards. A job that wants another limit
+  names it (`MAX_MODEL_LEN`), for every arm it serves, so that its arms differ by their flags alone.
+  `MAX_MODEL_LEN=auto` is vLLM's setting for the longest limit the cards' KV cache holds, which the engine resolves
+  when it starts and prints in its log. At the integration's pin the engine then builds the model at its own limit
+  and fits the cache after, so the sparse attention's table of a step is sized by the model's limit and not by the
+  one resolved. The runner checks no load against `auto`: a request past the limit the engine resolved is refused by
+  the server and counted as failed.
+
+The values a recipe leaves to the operator (the requests at once, the cards' share of memory, the tokens a step) are
+vLLM's own defaults on the arm's line. A job that sets any of them adds the flags to that line alone with
+`PUBLISHED_ARGS=--FLAG=VALUE,...`, each flag once; the arm's `meta.json` holds the line it served (`server_argv`).
 
 The recipe's page asks for prefix caching off under a benchmark; the arm keeps it on, as a server has it, and each
 pass starts from an empty cache as every arm's does. A job that ends on `published` prints no cost: the arm is stock,
@@ -219,9 +226,13 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   it, and no target is made of the parts that are on. The `two-stage` arm leaves off admission on the certified
   tick and the edge snapshot, which need the corpus's client, and turns on four changes GLM-5.3's target has no
   part for (the step record, prefix caching off, the two-stage boundary commitment, the history tables), so its
-  cost against the model's target is not comparable. A target given with `--target` has no parts.
-- **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and the arms from
-  `boundary-rows` down turn it off, since the boundary commitment needs it off. Neither load repeats a prefix
+  cost against the model's target is not comparable. `two-stage-tick` is that line with the tick on, and no cost
+  here is of it: vLLM's own client can't drive a tick arm. A target given with `--target` has no parts.
+- **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and so does
+  `boundary-rows`: a request's boundary is its own prompt ids and the ids it was served, whichever KV pages its
+  prefill read. `two-stage` turns it off: a history table holds its request's latent rows from position 0, and a
+  request served from the cache computes none before its hit's end, so the boundary commitment refuses tables on a
+  scheduler that caches prefixes. Neither load repeats a prefix
   (chat's requests are different conversations' first turns, long context's are random tokens, and the cache is
   emptied before every pass), so the number does not hold what the cache is worth on a load that does: the row on
   a repeated prefix does. `no-prefix-cache` is stock with the cache off alone, and each rep's `meta.json` records
