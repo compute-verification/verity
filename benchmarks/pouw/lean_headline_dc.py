@@ -101,6 +101,10 @@ exact, branches, Q = LH.exact, LH.branches, LH.Q
 from verity_machine_model import sheet as S  # noqa: E402
 from verity_machine_model.model import device  # noqa: E402
 
+#: What other files read of it: its own test and `tests/test_census_cover.py`.
+__all__ = ["CATCH_ALL", "CATCH_ALLS", "E", "EPS_DEN", "FAMILIES", "JOINT_ISSUE", "LH", "MODEL", "Q", "SCALAR_REF", "SM90",
+           "main", "reading", "render_measured", "verity_machine_model"]
+
 DEPTH = {"S8": 32, "U8S8": 32, "E4M3": 32, "E5M2": 32, "BF16": 16, "F16": 16, "TF32": 8, "B1": 256}
 GMMA = re.compile(r"[HIBQ]GMMA_(S8|U8S8|E4M3|E5M2|BF16|F16|TF32|B1)_N(\d+)(?:_RS)?")
 UTC = re.compile(r"UTC[HIQ]MMA_(?:(F16|E4M3)_)?M(\d+)_N(\d+)")
