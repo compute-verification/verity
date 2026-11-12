@@ -148,13 +148,15 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   sampling no more than the level holds and no more of a stratum than the stratum holds, its strata's sizes summing
   to the level's (`factsOf` refuses a profile that fails any of the three); the level is the registration's own
   sample, its `population` under its `law` (`sampleOf`), so its strata, the units of each and how many each holds are
-  the ones registered before any coin, and a profile of another is refused by name; and its `bound` is at least
-  one-stage's bound of that sample at the profile's δ, which the check computes itself (`Spot.Bound.boundOf`, over the
-  strata of a stratified sample), refusing a smaller one;
+  the ones registered before any coin, and a profile of another is refused by name; and its count of incorrect
+  proof blocks is the larger of its public's `bound` and that sample's bound at the profile's δ, which the check
+  computes itself with one-stage's `Spot.Bound.boundOf` (`sampleBound`: a stratified sample's a stratum at a time,
+  each one `subset:k_s` of its own units, at δ split equally over the strata), so no answer is refused for its
+  `bound`;
 * in the rows form, every accepted link-window's scan is at one δ, `PeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
   registration's digest, accepted with one level of its Program's units sampled `subset:k` or stratified (a work sampling design's
-  sample is stratified), held to the same three, to its registration's sample and to that sample's bound (`factsOf`),
+  sample is stratified), held to the same three and to its registration's sample, its count read the same way (`factsOf`),
   at any sample: this is the consistency
   check (each audit's answer is its registration's, and in the rows form its outputs are the scan's `prog` and its
   `SCAN_STATE` the scan's state, below), and what a sample in part leaves unproved is in `K` (in the rows form, a tied
@@ -1154,15 +1156,31 @@ def sampleOf (reg : Json) : Option (Nat × Core.SamplingDesign) := do
   | .stratified ss => pure (n, .stratified ss)
   | _ => none
 
+/-- A stratified sample's bound on incorrect proof blocks at `δ`, a stratum at a time: each stratum is one
+`subset:k_s` of its own `n_s` units, bounded by one-stage's `Spot.Bound.boundOf` at `δ` split equally over the
+strata, `δ / S` each of `S`, and the sum of the strata's bounds holds except with probability `δ`. The stratified
+rule is never read as one law of the whole population. -/
+def strataBound (ss : Array Core.Stratum) (δ : Core.Ratio) : Nat :=
+  ss.foldl (fun b st => b + Spot.Bound.boundOf st.size (.subset st.k) ⟨δ.num, δ.den * ss.size⟩) 0
+
+/-- The bound on incorrect proof blocks the period reads of a sample of `n` units at `δ`, computed with one-stage's
+`Spot.Bound.boundOf` and nothing else: a `subset:k`'s is its bound at `δ`, and a stratified sample's the sum of its
+strata's own (`strataBound`), never the bound of its totals `Σ k_s` of `n` read as one sample. -/
+def sampleBound (n : Nat) (d : Core.SamplingDesign) (δ : Core.Ratio) : Nat :=
+  match d with
+  | .stratified ss => strataBound ss δ
+  | d => Spot.Bound.boundOf n d δ
+
 /-- An accepted scan's or audit's facts: one level sampled `subset:k` or stratified (a work sample's profile is
 stratified, its `Σ k_s` sampled), and its bound. A profile that names more sampled than its level holds is no sample
 of the level and is refused. So is a stratified one that names more sampled of a stratum than the stratum holds, or
 whose strata's sizes do not sum to the level's size: with both held, a level sampled whole is every stratum sampled
 whole. The level is then held to the sample its registration `reg` states (`sampleOf`): a profile of another size or
 draw, a stratum renamed, resized or sampled otherwise among them, is refused, so the strata are the registered ones.
-And the public's `bound` is held to that sample: the check computes one-stage's bound on incorrect proof blocks at the
-profile's δ itself (`Spot.Bound.boundOf`, over the strata of a stratified sample, never from its totals) and refuses a
-smaller `bound`. That the answer is its audit's own verifier's is not checked here. -/
+And the count of incorrect proof blocks is at least that sample's: the check computes the sample's bound at the
+profile's δ itself (`sampleBound`) and reads the larger of it and the public's `bound`, so no answer is refused for
+its `bound`, and one that states a smaller `bound` than its sample gives gains nothing by it. That the answer is its
+audit's own verifier's is not checked here. -/
 def factsOf (what : String) (reg : Json) (prof : Core.Integrity) (pub : Json) : Found Facts := do
   let #[l] := prof.levels | refuse s!"{what}: profile: not one level"
   let drawn ← match l.draw with
@@ -1182,11 +1200,7 @@ def factsOf (what : String) (reg : Json) (prof : Core.Integrity) (pub : Json) : 
     refuse s!"{what}: profile: not the registration's sample: its level of {l.size} units and its draw are not the \
       registration's {n} units under its law"
   match Flock.J.nat pub "bound" "public" with
-  | .ok b =>
-    let need := Spot.Bound.boundOf l.size d prof.delta
-    if need ≤ b then pure { units := l.size, drawn, delta := prof.delta, wrong := b }
-    else refuse s!"{what}: public: bound {b}: below the sample's bound {need} at its delta (Spot.Bound.boundOf of \
-      the registration's sample)"
+  | .ok b => pure { units := l.size, drawn, delta := prof.delta, wrong := max b (sampleBound l.size d prof.delta) }
   | .error e => refuse s!"{what}: {e}"
 
 /-- Link-window `w`'s findings in the rows form, in the order the module docstring gives, and on acceptance its scan's
@@ -1585,9 +1599,11 @@ def protocol : Core.Protocol where
     reason (Json.mkObj [("population", toJson (4 : Nat)),
       ("law", Json.mkObj [("law", "bernoulli"), ("p", "1/2")])]) 4 two == unsampled &&
     reason (Json.mkObj [("law", law two)]) 4 two == unsampled
--- the bound is the sample's, computed here: 3 of 10 at δ = 1/10 leave at most 4 incorrect, so a `bound` of 3 is
--- refused and 4 and 5 pass; strata of 9 of 10 and 1 of 10 at δ = 1/100 leave at most 10, so 9 is refused, where
--- their totals, 10 of 20, would leave 5; a level sampled whole leaves none, and any `bound` passes
+-- the count is the larger of the public's `bound` and the sample's, computed here: 3 of 10 at δ = 1/10 leave at most
+-- 4 incorrect, so a `bound` of 3 is read as 4, and 4 and 5 as themselves; strata of 9 of 10 and 1 of 10 at δ = 1/100
+-- leave at most 1 and 9 at 1/200 each, so 9 is read as 10, where their totals, 10 of 20, would leave 5; two strata
+-- of 4 of 8 at δ = 1/10 leave at most 3 each at 1/20, so 0 is read as 6, where one-stage's bound of the stratified
+-- rule over all 16 is 3; a level sampled whole leaves none, and its `bound` is read as it is
 #guard
   let law := fun (d : Core.SamplingDesign) => match d with
     | .subset k => Json.mkObj [("law", "subset"), ("k", toJson k)]
@@ -1596,21 +1612,20 @@ def protocol : Core.Protocol where
           ("units", Json.arr #[Json.arr #[toJson lo, toJson (lo + st.size)]])]))) (0, #[])).2)]
     | _ => Json.null
   let reg := fun (size : Nat) (d : Core.SamplingDesign) => Json.mkObj [("population", toJson size), ("law", law d)]
-  let reason := fun (size : Nat) (d : Core.SamplingDesign) (δ : Core.Ratio) (b : Nat) =>
-    match factsOf "x" (reg size d) ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], δ, #[]⟩
-      (Json.mkObj [("bound", toJson b)]) with
-    | .error (_, e) => e
-    | .ok f => if f.wrong == b then "" else "another bound"
+  let count := fun (size : Nat) (d : Core.SamplingDesign) (δ : Core.Ratio) (b : Nat) =>
+    (factsOf "x" (reg size d) ⟨#[], #[], false, #[], #[⟨"unit", none, size, some d⟩], δ, #[]⟩
+      (Json.mkObj [("bound", toJson b)])).toOption.map (·.wrong)
   let strata : Core.SamplingDesign := .stratified #[⟨"a", 10, 9⟩, ⟨"b", 10, 1⟩]
-  reason 10 (.subset 3) ⟨1, 10⟩ 3 ==
-      "x: public: bound 3: below the sample's bound 4 at its delta (Spot.Bound.boundOf of the registration's \
-        sample)" &&
-    reason 10 (.subset 3) ⟨1, 10⟩ 4 == "" && reason 10 (.subset 3) ⟨1, 10⟩ 5 == "" &&
-    reason 20 strata ⟨1, 100⟩ 9 ==
-      "x: public: bound 9: below the sample's bound 10 at its delta (Spot.Bound.boundOf of the registration's \
-        sample)" &&
-    reason 20 strata ⟨1, 100⟩ 10 == "" && Spot.Bound.boundOf 20 (.subset 10) ⟨1, 100⟩ == 5 &&
-    reason 10 (.subset 10) ⟨1, 10⟩ 0 == ""
+  let halves : Core.SamplingDesign := .stratified #[⟨"a", 8, 4⟩, ⟨"b", 8, 4⟩]
+  count 10 (.subset 3) ⟨1, 10⟩ 3 == some 4 && count 10 (.subset 3) ⟨1, 10⟩ 4 == some 4 &&
+    count 10 (.subset 3) ⟨1, 10⟩ 5 == some 5 &&
+    sampleBound 10 (.subset 3) ⟨1, 10⟩ == Spot.Bound.boundOf 10 (.subset 3) ⟨1, 10⟩ &&
+    count 20 strata ⟨1, 100⟩ 9 == some 10 && count 20 strata ⟨1, 100⟩ 12 == some 12 &&
+    Spot.Bound.boundOf 20 (.subset 10) ⟨1, 100⟩ == 5 &&
+    Spot.Bound.boundOf 10 (.subset 9) ⟨1, 200⟩ == 1 && Spot.Bound.boundOf 10 (.subset 1) ⟨1, 200⟩ == 9 &&
+    count 16 halves ⟨1, 10⟩ 0 == some 6 && count 16 halves ⟨1, 10⟩ 7 == some 7 &&
+    Spot.Bound.boundOf 8 (.subset 4) ⟨1, 20⟩ == 3 && Spot.Bound.boundOf 16 halves ⟨1, 10⟩ == 3 &&
+    count 10 (.subset 10) ⟨1, 10⟩ 0 == some 0 && count 10 (.subset 10) ⟨1, 10⟩ 2 == some 2
 -- a unit's output port past o0, its index in ASCII digits without a leading zero; never o0, an input, or no unit's
 #guard outputPort "block-3/o1" && outputPort "a/b/o10" && outputPort "/o2"
 #guard !(outputPort "o1" || outputPort "u/o0" || outputPort "u/o01" || outputPort "u/o" || outputPort "u/O1" ||
