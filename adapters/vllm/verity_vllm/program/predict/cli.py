@@ -17,14 +17,16 @@ from __future__ import annotations
 import gzip
 import json
 import os
-import sys
 from dataclasses import dataclass, field
 
 from verity_vllm.config import UsageError, option
+from verity_vllm.log import init_logger
 
 from . import aot as A
 from . import compiled as PC
 from . import node_registration as NR
+
+logger = init_logger(__name__)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -66,7 +68,7 @@ def node_main(a: NodeOptions) -> int:
            "theta": list(r.theta), "spans": [list(s) for s in r.spans]}
     with open(os.path.join(a.out, "node.json"), "w") as f:
         json.dump(doc, f, indent=1, sort_keys=True)
-    print(json.dumps(r.summary()), file=sys.stderr)
+    logger.info("[predict node] %s", json.dumps(r.summary()))
     return 0
 
 

@@ -84,6 +84,16 @@ def test_emit_refuses_a_trace_of_another_program(tmp_path, field, match):
     assert not (tmp_path / "out" / "descriptor.json.gz").exists()
 
 
+def test_the_emit_command_prints_the_dir_its_digest_and_its_timings(tmp_path, monkeypatch, capsys):
+    """`predict emit`'s stdout is one JSON line: the derive dir it wrote, the predicted Program's digest and `emit`'s timings."""
+    trace, out = _trace(tmp_path / "trace"), tmp_path / "out"
+    monkeypatch.setattr(A, "phi_at", lambda row, rank, config: _phi(TINY))
+    assert A.main(A.EmitOptions(row="row", config="config.json", trace=str(trace), out=str(out), wrapper="step", aot=json.dumps(AOT))) == 0
+    block = json.loads((out / "result.json").read_text())["aot"]
+    assert json.loads(capsys.readouterr().out) == {"out": str(out), "digest": block["predicted_digest"], "timings": block["timings"]}
+    assert block["predicted_digest"] == json.loads((trace / "result.json").read_text())["program"]["digest"]
+
+
 @pytest.mark.slow
 def test_compare_names_each_program_and_is_equal_only_when_every_one_is(tmp_path, monkeypatch):
     d = tmp_path / "row"
@@ -107,6 +117,25 @@ def test_compare_names_each_program_and_is_equal_only_when_every_one_is(tmp_path
     assert doc["ranks"]["1"]["errors"] == {"build_request_LP9_T2": "Unexpressible: x"}
     got[1] = {**got[0], "step": "s1", "requests": {"build_request_LP9_T2": "q1"}, "workload": "w1"}
     assert A.compare(str(d), "row", "config.json")["equal"] is True
+
+
+@pytest.mark.parametrize("equal", [True, False])
+def test_the_compare_command_prints_a_line_a_rank_and_its_verdict_last(tmp_path, monkeypatch, capsys, equal):
+    """`predict compare` writes `compare`'s comparison to `--out` and prints a line a rank, the predicted Build's line and then the
+    verdict it exits by (0 equal, 1 not): on stdout, where a caller reads them by their heads (`rank`, `predicted`, `[predict]`)
+    and takes the last line as the verdict."""
+    part = {"traced": "s0", "predicted": "s0", "equal": True}
+    doc = {"schema": A.SCHEMA, "row": "row", "equal": equal,
+           "ranks": {"0": {"step": part, "workload": part, "secs": {"step": 1.0}},
+                     "1": {"step": part, "workload": {**part, "equal": equal}, "errors": {} if equal else {"workload": "Unexpressible: x"}}},
+           "predicted": {"dir": "pred", "parts": {"workload": part, "manifest": part}, "equal": True}}
+    monkeypatch.setattr(A, "compare", lambda *_a: doc)
+    out = tmp_path / "comparison.json"
+    a = A.CompareOptions(row_dir="traced", row="row", config="config.json", out=str(out), predicted="pred")
+    assert A.main(a) == (0 if equal else 1) and json.loads(out.read_text()) == doc
+    assert capsys.readouterr().out.splitlines() == [
+        "rank 0: step =  workload =", f"rank 1: step =  workload {'=' if equal else '≠'}", "predicted pred: workload =  manifest =",
+        f"[predict] row: {'EQUAL on every rank' if equal else 'NOT EQUAL'} -> {out}"]
 
 
 def test_a_rank_composes_its_workload_from_each_requests_component_as_predicted(tmp_path, monkeypatch):
