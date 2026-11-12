@@ -106,3 +106,6 @@ def decode_tensor(layout: Layout, prims: Primitives, salt: bytes, name: str, blo
     data = b"".join(codec.decode_segment(params, prims, salt, s, [block(s * n + v) for v in range(n)]) for s in segs)
     start = p.offset - segs.start * params.segment_bytes if p.size else 0
     return data[start:start + p.size]
+
+
+__all__ = ["Layout", "decode_tensor"]

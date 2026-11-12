@@ -708,3 +708,7 @@ def ideal(params: Params, seed: bytes) -> Primitives:
     """The two-permutation model: the overwrite chain over an ideal `Π₂`, and an ideal tweakable `P`."""
     return Primitives(OverwriteChain(params, IdealPermutation(2 * params.m + CAPACITY_BITS, seed, "pi2")),
                       IdealTweakablePermutation(params.m, seed))
+
+
+__all__ = ["CAPACITY_BITS", "HEADER", "KECCAK_F_NS", "PI_DOMAIN", "P_DOMAIN", "SHAKE256_RATE", "FeistelP", "FeistelPi",
+           "pad_block", "pi2_keccak_f", "reference"]

@@ -39,7 +39,7 @@ def dropping(honest: audit.Store) -> audit.Store:
     return out
 
 
-def _split(cheat=None) -> tuple[P.Period, int]:
+def _split(cheat=None) -> tuple[P.Run, int]:
     request = verifier_party.request_of("n0")
     a, b = socket.socketpair()
     got: dict = {}
@@ -57,7 +57,7 @@ def _split(cheat=None) -> tuple[P.Period, int]:
     return got["period"], passes
 
 
-def _in_process(cheat=None) -> P.Period:
+def _in_process(cheat=None) -> P.Run:
     c = Clock(10 ** 9, 1_000)
     return P.run("n0", STORE, COINS, clock=c, sleep_until=c.sleep_until, entropy=Entropy(b"salts"), cheat=cheat)
 

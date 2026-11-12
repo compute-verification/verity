@@ -17,7 +17,6 @@ says. These are the directories that have one:
 | `verity bench bool_build_cost` | a workload's Boolean Build against its word Build: the descriptor's size and each Definition's proof-block rule, timed |
 | `verity bench certifier_term` | the network certifier's term for GLM-5.3 at a scope's load, in bits and GB |
 | `verity bench circuit_properties` | its circuits' fan-out, fan-in and s_×, counted exactly, beside `rho`'s shape-derived ones |
-| `verity bench codec_tensor` | the tensor-core wide-word codec's gates and timings on one GPU |
 | `verity bench compile_cost` | wall time and peak memory, by phase, of compiling a class-G window's Programs |
 | `verity bench compute` | the compute audit's number: the share of a served model's MACs that Pearl+ credits over the tokens a served run served, from the verifier's side of a recorded run's record |
 | `verity bench dsa_topk` | the canonical top-k on one GPU node: its outputs run to run and in two processes at once, the plugin as vLLM loads it, and its cost |
@@ -25,7 +24,6 @@ says. These are the directories that have one:
 | `verity bench f32_exhaustive` | a reference primitive against MPFR, or a Boolean version against its word, on all 2^32 binary32 words |
 | `verity bench flock_s8_block` | Flock `--zk`'s price for proof blocks of adjacent cells of one int8 GEMM output row, on one GPU node |
 | `verity bench int8_class_rate` | one card's sustained int8 rate per operand class at the declared clock, alone and beside SHA-512 |
-| `verity bench kv_filler` | the filler top-up beside vLLM serving on one GPU, and what it costs inference |
 | `verity bench moe_align` | the canonical `moe_align_block_size` on one GPU: its outputs run to run, the plugin as vLLM loads it, and its cost |
 | `verity bench network_e2e` | network certification end to end on a served model, as one report with its negatives |
 | `verity bench network_sim` | the device graph's demo, and the mock datacenter of network namespaces running the real network certifier |
@@ -47,7 +45,6 @@ says. These are the directories that have one:
 | `verity bench unit_lowering` | writing a PoUW H1 circuit file: peak memory and wall time by K, its SHA-512 held to a reference |
 | `verity bench unit_walk` | the device witness's host walk of a served proof-block type's unit: CPU and wall seconds at each width |
 | `verity bench verifier_cost` | a verifier's time against the size of the description it reads and of the circuit that description unrolls to |
-| `verity bench vllm_encoded` | Llama-3.1-8B or 70B decode in vLLM with its weights stored only encoded, against plain FP8 weights |
 | `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
@@ -132,7 +129,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives | maintained |
+| `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives; and a served window's two-stage audit (`two_stage.py`: each class's first stage, and a class's second stage through that audit, round 2 and the stream's outcome; `two_stage_small.sh` runs both at small statics) | maintained |
 | `two_stage/` | the two-stage audit end to end on a toy replay block: the boundary registered, a first-stage sample of replay blocks, their interiors replayed and registered, a second-stage sample per (replay block, template) cell, one Flock `--zk` session per template with link ports read at the boundary record, the Lean verifier, and the stream's outcome, with its negatives | maintained |
 | `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
