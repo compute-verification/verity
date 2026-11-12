@@ -13,3 +13,6 @@ Also READ: the record reads 37 of the 101 registered weights; the 64 linears (qk
 
 The reference here skips its two leaf-by-leaf walks (too large at this size); the compiled check does not.
 
+[2026-11-12T18:32Z] c63a76e743ae
+TIE to training, Thu 12 Nov 10:32 AM PST. TRN-86 items 1, 3 and 4: under one hour of my own work is left before the draft is open, so I finish it. The code is pushed (cursor/trn86-period-print-20af at ec31593b9106, 9 files, +562 -62), the command's print is back from a node (r20261112-181003-04f1, rc 0), and what is left is the body from that print, the draft through research queue open, and reading two suite runs (the benchmark's and rho's, r20261112-180934-2695, has waited for a slot since 10:10 AM; the changed-suites quick run follows it). The ten lines for the per_call worker go in the notes next and I send you the path.
+
