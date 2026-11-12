@@ -301,7 +301,7 @@ section ofJson
 
 open FlockSoundness.Refine Lean
 
-open private stratumOfJson from Flock.Draw
+open private stratumOfJson from Commitments.Draw
 
 theorem ok_of_mem_mapM_list {α β : Type} (f : α → Flock.V β) :
     ∀ (l : List α) (r : List β), l.mapM f = .ok r → ∀ b ∈ r, ∃ a ∈ l, f a = .ok b

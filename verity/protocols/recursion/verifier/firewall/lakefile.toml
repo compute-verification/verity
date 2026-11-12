@@ -2,9 +2,10 @@
 # over Flock.Firewall.Contract, the decision as a core protocol (`core-firewall`), and the release side around C-Flock's
 # session loop on the record's files (`core-firewall session`, which flock-circuit's `--firewall-state` runs). Code, not
 # analysis: Lean core, C-Flock's verifier library, the core protocol interface, and the difftest server for
-# `core-firewall-difftest`.
+# `core-firewall-difftest` and for the port of the honest worker's requests.
 name = "core_firewall"
-defaultTargets = ["Firewall", "core-firewall", "core-firewall-difftest"]
+defaultTargets = ["Firewall", "FirewallHonestDifftest", "core-firewall", "core-firewall-difftest",
+  "firewall-honest-difftest"]
 
 [leanOptions]
 autoImplicit = false
@@ -26,6 +27,9 @@ path = "../../../../difftest/lean"
 [[lean_lib]]
 name = "Firewall"
 
+[[lean_lib]]
+name = "FirewallHonestDifftest"
+
 [[lean_exe]]
 name = "core-firewall"
 root = "FirewallMain"
@@ -33,3 +37,7 @@ root = "FirewallMain"
 [[lean_exe]]
 name = "core-firewall-difftest"
 root = "FirewallDifftest"
+
+[[lean_exe]]
+name = "firewall-honest-difftest"
+root = "FirewallHonestDifftestMain"

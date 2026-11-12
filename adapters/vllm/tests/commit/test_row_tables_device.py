@@ -2,10 +2,13 @@
 (`row_tables.step_roots`, over `verity.commitments.row_table`) on random steps.  The steps cover a row's segment cases (K + 4
 a multiple of 1024 and two past one, codes whose count is not a multiple of 8), one-row and non-power-of-two tables, a one-table
 step, rows out of rank order, tables out of step order, and an engine step past 2^32 (the nonce's second word).  The twin needs a
-C++ compiler; the device tests need CUDA and nvcc, and skip elsewhere."""
+C++ compiler; the device tests need CUDA and nvcc, and skip elsewhere.  What a build hands its compiler (`built`) is held with a
+compiler that only records it, on every machine."""
 from __future__ import annotations
 
+import tempfile
 from collections import deque
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -59,6 +62,56 @@ def test_the_plan_refuses_what_step_roots_refuses():
             D.plan(CTX, 1, bad, KEY)
     with pytest.raises(ValueError):
         D.plan(bytes(32), 1, {"x": ([("r", 0)], 1, 4)}, KEY)
+
+
+#: a compiler that records what it is given (its arguments, its directory and the files there) and writes its -o
+RECORDER = """#!/bin/sh
+if [ "$1" = --version ]; then echo "a compiler that records"; exit 0; fi
+printf '%s\\n' "$@" > "@REC@/argv"; pwd > "@REC@/cwd"; ls > "@REC@/files"
+while [ $# -gt 0 ]; do if [ "$1" = -o ]; then out=$2; fi; shift; done
+cat ./* > "$out"
+"""
+
+
+def _recorder(tmp_path: Path, monkeypatch) -> tuple[str, Path]:
+    """The recording compiler, named as one, and where it records; builds go under tmp_path."""
+    tool, rec = tmp_path / "bin" / "nvcc", tmp_path / "rec"
+    tool.parent.mkdir()
+    rec.mkdir()
+    tool.write_text(RECORDER.replace("@REC@", str(rec)))
+    tool.chmod(0o755)
+    monkeypatch.setattr(D, "BUILD_DIR", tmp_path / "built")
+    return str(tool), rec
+
+
+def test_a_build_hands_its_compiler_no_path_in_the_tree(tmp_path, monkeypatch):
+    """The compiler runs in a directory of the build's own that holds a copy of each source and header under its base name,
+    and is given the last source by that name: of its arguments only -o's is a path, and it is the build's output."""
+    tool, rec = _recorder(tmp_path, monkeypatch)
+    flags = (*D.NVCC_FLAGS, "-gencode=arch=compute_90,code=sm_90")
+    sources = (str(D.SHA512), *D.DEVICE_SOURCES)                # a header named among the sources and the headers: one file
+    lib = D.built(tool, sources, flags, "librow_table_cuda.so", D.SHARED)
+    argv = (rec / "argv").read_text().splitlines()
+    out = argv[argv.index("-o") + 1]
+    assert argv == [*flags, "-o", out, "row_table.cu"] and not any("/" in a for a in argv if a != out)
+    assert Path(out).parent == lib.parent and lib.parent.parent == tmp_path / "built" and lib.stat().st_size > 0
+    stage = Path((rec / "cwd").read_text().strip())
+    assert stage.name.startswith("verity-build.") and stage.parent.resolve() == Path(tempfile.gettempdir()).resolve()
+    assert not stage.exists()
+    assert set((rec / "files").read_text().split()) == {Path(s).name for s in sources} | {p.name for p in D.SHARED}
+    (rec / "argv").unlink()
+    assert D.built(tool, sources, flags, "librow_table_cuda.so", D.SHARED) == lib and not (rec / "argv").exists()
+
+
+def test_two_files_with_one_name_are_refused_before_the_compiler_runs(tmp_path, monkeypatch):
+    tool, rec = _recorder(tmp_path, monkeypatch)
+    other = tmp_path / "elsewhere" / "ncp2.cuh"
+    other.parent.mkdir()
+    other.write_text("// another file of that name\n")
+    with pytest.raises(ValueError) as refused:
+        D.built(tool, D.DEVICE_SOURCES, D.NVCC_FLAGS, "librow_table_cuda.so", (*D.SHARED, other))
+    assert f"two files named ncp2.cuh among a build's sources and headers, {D.CUDA_DIR / 'ncp2.cuh'} and {other}" in str(refused.value)
+    assert not list(rec.iterdir()) and not (tmp_path / "built").exists()
 
 
 def _cuda():
