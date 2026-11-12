@@ -364,7 +364,7 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
                 if c.get("role") == a.case or (a.case == "B1" and str(c.get("role", "")).startswith("B1")):
                     ck = {k: c.get(k) for k in ("repo", "revision", "role", "files", "sha256", "digest", "local_path") if c.get(k) is not None}
                     break
-        except (OSError, ValueError, AttributeError, TypeError):   # no manifest on this host, or not one: the checkpoint_dir still identifies the weights
+        except (OSError, ValueError, RecursionError, AttributeError, TypeError):   # no manifest on this host, or not one: the checkpoint_dir still identifies the weights
             pass
         wl_doc = _workload_doc(a.workload)
         spec = EXP.build_spec(config_id=required(a, "config_id"), case=required(a, "case"), profile=a.profile, workload_path=a.workload, workload_doc=wl_doc,
@@ -397,11 +397,11 @@ def write_realized(plan: Plan) -> dict | None:
     ctl_p = plan.control_tokens_path()
     try:
         cap = json.loads(cap_p.read_text()) if cap_p.exists() else None
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):   # unreadable, not JSON, or nested past what the parser reads: no record
         cap = None
     try:
         ctl = json.loads(ctl_p.read_text()) if ctl_p.exists() else None
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         ctl = None
     src = cap or ctl
     if src is None:
@@ -420,7 +420,7 @@ def write_realized(plan: Plan) -> dict | None:
             sj = json.loads(sp.read_text())
             kept = sj.get("steps") or sj.get("snapshot_steps")   # the capture's list of the steps it kept, under either name
             snaps = (sorted({int(s) for s in kept}) or None) if kept else None
-        except (OSError, ValueError, AttributeError, TypeError):
+        except (OSError, ValueError, RecursionError, OverflowError, AttributeError, TypeError):   # unreadable, or no list of whole steps (an infinite one is none)
             snaps = None
     real = {"requests": reqs, "prompt_lens": [r["prompt_len"] for r in reqs], "n_generated": [r["n_generated"] for r in reqs],
             "engine_steps_capture": _engine_steps(cap), "engine_steps_control": _engine_steps(ctl),

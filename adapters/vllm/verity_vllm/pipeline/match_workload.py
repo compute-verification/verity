@@ -21,7 +21,7 @@ def _workload_doc(path: str | None) -> dict | None:
         return None
     try:
         return json.loads(Path(path).read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):   # unreadable, not JSON, or nested past what the parser reads
         return None
 
 
