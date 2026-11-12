@@ -31,7 +31,13 @@
   on: their ``count``, their ``list`` and the ``numa_nodes`` that hold them (`cores`).
 * **The verdict of record** (``--lean``): at K = 1, the last ``--lean-sessions`` sessions get Lean `flock-verify verify
   --zk` on their record on the server's verdict pool, one at a time and after the steady window, each with its own CPU
-  seconds and peak RSS (`os.wait4`), the circuit and the public file archived once a type.
+  seconds and peak RSS (`os.wait4`), the circuit and the public file archived once a type. With ``--wide-leaf`` the
+  verdict is asked under the version's own name, ``verity/flock-circuit+wide-leaf`` or
+  ``verity/flock-circuit/tmpl+wide-leaf``, and the name alone selects the version: `flock-verify` has no
+  ``--wide-leaf`` argument, takes a wide-leaf name only with ``--zk`` and with no ``--rec-…`` argument, and refuses
+  every other name that ends ``+wide-leaf`` as an unknown statement (exit 2). A `flock-verify` whose `Flock/Tags.lean`
+  does not list the two names refuses them the same way, and a row then records that refusal for each session
+  (`no_verdict`), not a verdict on the proof.
 
 Writes DIR/rate.json (a row a type and K, as each ends) and DIR/<type>-k<K>/ (the server's logs and session records; no
 circuit, prover file or proof). A type whose server fails at some K is recorded with its error, and the next goes on.
@@ -276,6 +282,19 @@ def cores(cpus=None, nodes: Path | None = None) -> dict:
     return {"count": len(mine), "list": cpu_list(mine), "numa_nodes": sorted(held)}
 
 
+def no_verdict(statement: str, rc: int, said: str) -> str:
+    """Why a `flock-verify verify` that printed no VERDICT line gave none, from its exit code and what it wrote
+    (``said``). A statement name it does not know is said as that: the refusal is of the name, before any proof is read,
+    and a wide-leaf name is known only to a `flock-verify` whose `Flock/Tags.lean` lists it."""
+    if "unknown statement" not in said:
+        return f"no verdict (rc {rc})"
+    why = f"no verdict (rc {rc}): this flock-verify does not know the statement {statement!r} and refused it unread"
+    if statement.endswith(WIDE_LEAF):
+        why += ("; the wide level-0 leaf's names are known only to a flock-verify built from a tree whose "
+                "Flock/Tags.lean lists them, so this says nothing of the proof")
+    return why
+
+
 class Lean:
     """Lean `flock-verify verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
     file and tables archived once, in scratch outside ``out`` (`close` removes it); ``statement``, the one `verify` sets
@@ -308,7 +327,8 @@ class Lean:
             wall = time.monotonic() - t
             f.write(stdout)
         line = next((x for x in stdout.splitlines() if x.startswith("VERDICT ")), None)
-        v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode})"}
+        v = (json.loads(line.split(" ", 1)[1]) if line
+             else {"accepted": False, "why": no_verdict(self.statement, p.returncode, log.read_text(errors="replace"))})
         return {"accepted": v.get("accepted") is True, "why": v.get("why"), "wall_s": round(wall, 2),
                 "cpu_s": round(ru.ru_utime + ru.ru_stime, 2), "user_s": round(ru.ru_utime, 2),
                 "maxrss_gib": round(ru.ru_maxrss / 2**20, 2)}
