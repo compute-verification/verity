@@ -734,7 +734,6 @@ def test_try_with_siblings_passes_over_products_built_before_names_moved_and_fai
     assert "(3 imported" in capsys.readouterr().out
 
 
-@pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 @pytest.mark.parametrize("how", ["cache", "ltar"])
 def test_a_build_lake_took_is_a_sibling_while_lake_holds_it_whatever_the_times_say(tmp_path, monkeypatch, capsys, how):
@@ -769,7 +768,8 @@ def test_a_build_lake_took_is_a_sibling_while_lake_holds_it_whatever_the_times_s
         lake(pkg, "build", LAKE_ARTIFACT_CACHE="true")
         shutil.rmtree(pkg / ".lake" / "build")
     else:
-        publisher, out = write(tmp_path / "publisher" / "p", files), tmp_path / "published"
+        publisher, out = tmp_path / "publisher" / "p", tmp_path / "published"
+        write(publisher, files)
         writable = {"LAKE_ARTIFACT_CACHE": "true", "LAKE_CACHE_DIR": str(out / "lake-cache")}
         lake(publisher, "build", "-o", str(out / "outputs.jsonl"), **writable)
         lake(publisher, "cache", "stage", str(out / "outputs.jsonl"), str(out / "stage"), **writable)
