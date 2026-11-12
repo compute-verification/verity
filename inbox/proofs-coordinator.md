@@ -67926,3 +67926,42 @@ Your 02:00Z and 02:20Z sections are read (at 02:14Z and 02:22Z). This is the 03:
 6. **A follow-up that is on none of these heads.** `benchmarks/spot_figures/breakeven/headline.py:404`, new on `main` with #8853, has its own copy of the rule that puts a block in a stratum and compares with the row's `merged`. A row from `widths=True` has `merged` None, so that line would raise a `TypeError` on such a row. [read] It is called with default rows only today, and its tests pass on the merged trees. After #8878 lands it should call `optimize.two_stage_strata`. Say if you want it as a pull request of mine.
 
 **#8915.** Restated on the three lemmas of `cursor/proofs-finder-b3a4` and committed at `bfe0225d021d` on a branch of my own, `cursor/proofs-firsthit-ks-restate-c416`: #8915's head `3468c5485255` merged with that branch at `0188ed442e8d` (which holds `main` at `be9a3d566905`), then one commit. Nothing is pushed onto #8915's branch and I have marked nothing. The statement's only premise on SHA-512 is `Claims.ExpectedCR` at `B_conf,X` and at the two by-class finders at every number of tries; the two costs are `Compiled.runCost` and `Compiled.firstHitCost` at `Compiled.runCalls` and three expectations, each fixed by an equation. [guess] Not elaborated yet: the try of `SpotFirstHit.lean` is `r20261112-020536-6af2` on cpu-7, in its Lean slot since 02:11Z; the last one-file try on a tree with this `main` took 23 minutes of Lean, so I expect its verdict by about 02:50Z. The entry with the statement as text, the lock's record and the try's verdict comes when it ends, by 04:00Z as you set.
+
+## LAND3, Thu 12 Nov 02:23Z: #9051 is marked ready at `88372b58943e`; #8950 now sits on the planner's three pull requests and #9066 at `ae26265a8e09`, to be marked once #9066 is on `main`; #8940 waits on its records run (about 02:50Z); the table, with its tests still running
+
+**My 01:54Z hazard is mended in the planner's pull requests themselves.** [read] Between 01:57Z and 02:09Z #8878 (`10d1060dd899`), #8893 (`7644eae26591`) and #8904 (`bce41b2dafb3`) moved, and all three are marked again. Each now holds #9066's head `23b637d143c7`; `figure1.py` imports `ceil` again and the stratum test passes `returned`. So the three land with or after #9066. [run] The heads marked before did fail with it: #8893's old head `4d8451dfd83e` and #9066, both merged onto `main`: "3 failed, 95 passed, 3 deselected" over `test_figure1.py`, `test_headline.py` and `test_binding.py`.
+
+**Job C is done: #9051 is marked ready at `88372b58943eba6129e51548bc0db11647a78cee`** (02:08Z).
+
+- [run] The mark: "preflight: #9051 at 88372b58943e merged onto `main` at be9a3d566905: nothing refused"; "#9051 is ready at 88372b58943e".
+- [run] Quick tier at that head, `r20261112-015203-3a29` (cpu-7): exit 0, "4 suites: 4 passed (0 cached), 0 failed". Ratchet gate (local): "1 change(s), 0 failed".
+- Its body now names PRF-466, the three reports (#8527, #8867, #8853) and the stray `uv.lock` it removes; its title says the driver's two names too.
+
+**Job B, #8950: head `ae26265a8e09d8219e34a13af18633cec3e9d3af`, pushed 02:18Z, not marked. It can be marked when `r20261112-021851-4636` passes and #9066 is on `main`.**
+
+- Why it moved again. [run] At `f53cf612414e` it still failed two tests when merged with #9066 (`ceil`), and nothing in #8950 alone mends that: the import is unused without #9066. Once the planner's three moved, it also conflicted with each of them in the stratum test.
+- What I did. I merged #8904's new head `bce41b2dafb3` and took the stratum test as the planner's pull requests have it. **My two-line mend of 01:33Z (a test with no served limit) is gone with that**: with #9066 underneath, the test passes its served limit with `returned`, and #8950 no longer differs from #8904 in that file. [run] #8950's own difference from `main` with #8904 merged is two files, `breakeven/headline.py` and `tests/test_headline.py`, as its body says.
+- [run] Local, at this tree: `test_figure1.py` and `test_headline.py` 39 passed (4 slow not run); `test_plancheck.py` and `test_optimize.py` 72 passed; ruff clean. The suite at the head before, `r20261112-013418-2070`: exit 0. Quick tier at this head: `r20261112-021851-4636` (cpu-7), waiting for a slot. I cancelled `r20261112-013934-4033`: 39 minutes in cpu-6's line, never started, and its head is replaced.
+- **What a mark meets.** [run: `lean_changed.py --inputs-key` at this head and at `main`] Because it holds #9066, its Lean inputs differ from `main`'s in nine packages: `security`, `security/Proofs`, `security/Properties`, `verity/protocols/spot/verifier/lean`, and five that require it (onsite's and remote's verifiers, PoUW's `check` and `window`, recursion's `recursive`). All of it is #9066's three Lean files. I launch no records run for that: once #9066 is on `main` I merge `main` and nothing differs. Say so if you want it marked before then.
+- **Open:** its body is still the one written for `f8b6e599b19b`. Tell me the Linear issue for its `Refs` line and I rewrite the two sections that name heads and runs.
+
+**Job A, #8940:** as at 01:54Z. Head `58a598e615b1`; records run `r20261112-014158-2129` (cpu-8), running since its slot at 01:50Z; [guess] it ends about 02:50Z. The new body is drafted. [read] #9080 (`601df7cb4bb5`) already holds this head. #9043 (`972a687a0583`) still names `CheckedRun` without its rounds, 11 times in `AddressesAt.lean` and twice in `WireMap.lean`.
+
+**Job D, the table, against `main` at `be9a3d566905`, heads as of 02:20Z.** [run] "Merges" is `git merge-tree`, and each pair is tried with the first already merged onto `main`. Tests on the merges run locally now (`test_figure1.py`, `test_headline.py`, `test_binding.py`, `test_plancheck.py`, `test_optimize.py`, without the slow ones); their counts come in my next entry.
+
+| pull request | head | merges onto `main` | breaks, or is broken by | edits the `Proofs/Flock` entry of `unread-caps.json` |
+|---|---|---|---|---|
+| #9066 | `23b637d143c7`, marked | yes | It broke the old heads of #8878, #8893, #8904 and #8950; all four now hold it. Merges as text with the other four | no |
+| #8878 | `10d1060dd899`, marked | yes | Holds #9066. Conflicts with `cursor/proofs-count-71ac` in `figure1.py`, `optimize.py` and `tests/test_optimize.py` | no |
+| #8893 | `7644eae26591`, marked | yes | Holds #8878. The same three conflicts | no |
+| #8904 | `bce41b2dafb3`, marked | yes | Holds #8893. The same three conflicts | no |
+| #8950 | `ae26265a8e09`, not marked | yes | Holds #8904. Conflicts with `cursor/proofs-count-71ac` in five files: those three, `breakeven/headline.py` and `tests/test_headline.py` | no |
+| #9027 | `ff8f3ea94705` | yes | None found. At this head it touches three files of `benchmarks/verifier_cost/`, none of `benchmarks/spot_figures/` and not `plancheck.py` | no |
+| #9047 | `40157cc66775` | yes | Holds #9027. Touches `benchmarks/verifier_cost/` and `tools/verity/check/suites.py`. None found | no |
+| `cursor/proofs-count-71ac` | `c401de8495ac` (last commit 02:07Z; it holds `main`) | yes | Conflicts with the planner's three and #8950, as above. Whichever side lands second merges `optimize.py` by hand; this branch changes 292 lines of it. Merges as text with #9066, #9027, #9047 and #9051 | no |
+| #9051 (mine) | `88372b58943e`, marked | yes | Merges as text with all eight. It renames `HOST_CAPS` in `headline.py`, which `cursor/proofs-count-71ac` also edits: [run] that branch adds no use of the old name, none is left on their merge, and the lint there counts `headline.py` 2 and `binding.py` 18, their allowances, and `README.md` 6 against 10, which only warns | no |
+
+- [run] The only two of ours that edit the `Proofs/Flock` entry are #9043 (265 to 270 modules, 2130 to 2272 declarations) and #9080 (265 to 272, 2130 to 2336): the same two lines, so they conflict with each other there.
+- [guess] #9066 against #9027 and #9047 in Lean: #9066 only adds (`Spot/Returned.lean`, one piece `replay_returned` in `Pieces.lean`), and `whole_run/Main.lean` reads `Pieces.run`, which it leaves alone. Not built.
+
+**Waiting on:** `r20261112-014158-2129` (#8940's records, about 02:50Z), then its body and mark; `r20261112-021851-4636` (#8950's quick tier, about 02:50Z if cpu-7 gives it a slot soon). The table's test counts by 05:00Z.
