@@ -11,7 +11,7 @@ from fractions import Fraction
 import pytest
 
 from verity.errors import InvalidArtifact
-from verity.hardware import cards
+from verity.hardware import cards, nodes
 from verity.hardware.cards import KINDS, MARKS, load, skus
 
 
@@ -34,11 +34,12 @@ def test_the_cards_we_run() -> None:
     assert skus("gpu") == ["b200-sxm-180gb", "h200-sxm-141gb", "rtx-pro-6000-server"]
     assert skus("host") == ["xeon-6776p-2s", "xeon-platinum-8468-2s"]
     assert skus("server") == ["dgx-h200"]
-    assert skus() == sorted(skus("gpu") + skus("host") + skus("server"))
+    assert skus("timebase") == ["nebius-vm-monotonic-raw"]
+    assert skus() == sorted(sku for kind in KINDS for sku in skus(kind))
 
 
 #: The fewest entries a card of each kind holds, so a card whose sections didn't parse as entries fails.
-FEWEST = {"gpu": 20, "host": 20, "server": 4}
+FEWEST = {"gpu": 20, "host": 20, "server": 4, "timebase": 2}
 
 
 @pytest.mark.parametrize("sku", skus())
@@ -182,6 +183,47 @@ def test_derived_server_numbers(sku: str) -> None:
     assert value(link, "rate") == sum(value(link, k) for k in link if k != "rate")
 
 
+@pytest.mark.parametrize("sku", skus("timebase"))
+def test_a_time_base_states_its_drift_and_the_largest_reading_of_it(sku: str) -> None:
+    """A time base's one section is `drift`, both entries in seconds a second: `max`, the most its clock's rate may
+    differ from the SI second's, a ceiling where a page bounds it and a premise where none does, and `read`, the largest
+    reading on record, a measurement, which a `max` below it would contradict."""
+    card = load(sku)
+    assert [key for key, item in card.items() if isinstance(item, dict)] == ["drift"]
+    assert sorted(entries(card)) == ["drift.max", "drift.read"]
+    most, read = card["drift"]["max"], card["drift"]["read"]
+    assert most["unit"] == read["unit"] == "s/s"
+    assert most["mark"] in ("ceiling", "premise") and read["mark"] == "measurement"
+    assert 0 < cards.number(read) <= cards.number(most) < 1
+
+
+def test_the_drift_an_auditor_reads_for_a_provider_virtual_machine() -> None:
+    """The one time base on record, pinned so that a change to it is deliberate: the figure a reader takes for its
+    device's drift is exactly 1/2000, on a premise its source states by name, for the device's host, beside the trust
+    in that host; and the reading beside it is 31.2 ppm."""
+    drift = load("nebius-vm-monotonic-raw")["drift"]
+    assert cards.number(drift["max"]) == Fraction(1, 2000) and drift["max"]["mark"] == "premise"
+    assert "ClockRateWithin(host, 5e-4)" in drift["max"]["source"] and "trusted-host" in drift["max"]["source"]
+    assert cards.number(drift["read"]) == Fraction(312, 10 ** 7)
+
+
+#: Every entry marked `premise`, by its file and dotted key.
+PREMISES = ["cards/nebius-vm-monotonic-raw.toml: drift.max"]
+
+
+def test_every_premise_is_listed() -> None:
+    """A premise is a number no page and no run bounds, assumed of whom its source names, so each one in a card or a
+    node file is listed here: a new one is a change to this list, which someone reads."""
+    marked = {f"cards/{sku}.toml": entries(load(sku)) for sku in skus()}
+    marked |= {f"nodes/{kind}.toml": entries(nodes.load(kind)) for kind in nodes.kinds()}
+    found = sorted(f"{file}: {key}" for file, numbers in marked.items() for key, entry in numbers.items()
+                   if entry["mark"] == "premise")
+    assert found == PREMISES, (
+        f"the entries marked `premise` are {found} and PREMISES lists {PREMISES}: a premise's source says that no page "
+        "bounds the number, what is assumed and of whom, and what breaks it; list it in PREMISES, or mark the entry "
+        "`ceiling` with the page that bounds it")
+
+
 def test_the_quoted_numbers() -> None:
     """The clocks, host peaks, bandwidths and measured reads already quoted outside this package, pinned so that a
     change to one is deliberate: among them remote_bandwidth/timing.py's HOST_ figures, which the RTX node's host card
@@ -238,6 +280,7 @@ def test_the_rates_readers_quote() -> None:
     assert cards.rate(server, fmt="nvf4", mhz=2092.5) == 188 * 1024 * Fraction("2092.5") * 10 ** 6 * 2
     assert cards.rate(h200, "dram") == 4916736 * 10 ** 6 / 4
     for call, refusal in ((lambda: cards.rate(load("xeon-6776p-2s")), "is a host card"),
+                          (lambda: cards.rate(load("nebius-vm-monotonic-raw")), "is a timebase card"),
                           (lambda: cards.rate(h200, "dram", mhz=1500), "no SM clock"),
                           (lambda: cards.rate(h200, "tensr"), "no rate.tensr"),
                           (lambda: cards.rate(h200, "issue", fmt="s8"), "weighs tensor MACs only"),
@@ -247,8 +290,8 @@ def test_the_rates_readers_quote() -> None:
 
 
 def test_an_unknown_sku_names_the_cards() -> None:
-    every = ["b200-sxm-180gb", "dgx-h200", "h200-sxm-141gb", "rtx-pro-6000-server", "xeon-6776p-2s",
-             "xeon-platinum-8468-2s"]
+    every = ["b200-sxm-180gb", "dgx-h200", "h200-sxm-141gb", "nebius-vm-monotonic-raw", "rtx-pro-6000-server",
+             "xeon-6776p-2s", "xeon-platinum-8468-2s"]
     with pytest.raises(KeyError, match=re.escape(f"the cards are {every}")):
         load("rtx-pro-6000-workstation")
 
