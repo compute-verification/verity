@@ -14,8 +14,8 @@ def write_import_path_runtime(llm, out: Path, rpc_timeout: float) -> None:
         drv = repo_modules_loaded()
         ranks_mods = llm.collective_rpc("tp2_repo_modules", timeout=rpc_timeout)
         union = set(drv["files"])
-        for rm in ranks_mods:
-            union.update((rm or {}).get("files") or [])
+        for rm in ranks_mods:               # each rank's `repo_modules_loaded()`; a rank that answered without its files is the error below
+            union.update(rm["files"])
         (out / "import_path_runtime.json").write_text(json.dumps({"schema": "verity/tp2/import-path-runtime/v1", "method": drv["method"],
                                                                    "driver": drv, "ranks": ranks_mods, "union_n": len(union), "union": sorted(union)},
                                                                   indent=1, default=str) + "\n")
