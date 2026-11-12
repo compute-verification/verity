@@ -327,3 +327,19 @@ def test_demo_sh_takes_a_challenger_on_its_own_host_only_with_its_key_pinned(tmp
                         *pin], env=os.environ | {"OUT": str(tmp_path / "out")}, capture_output=True, text=True)
     assert r.returncode == 2 and r.stdout.strip().startswith(said), r.stdout + r.stderr
     assert not any((tmp_path / "out").iterdir())
+
+
+def test_demo_sh_on_a_host_with_no_ip_says_what_is_missing(tmp_path) -> None:
+    """A host without `ip` (no iproute2): demo.sh says so on stderr and exits 3 once its options are read, before it
+    writes or builds anything, rather than ending 127 with the error hidden."""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    for tool in ("dirname", "basename", "mkdir", "hostname"):
+        (bin_ / tool).symlink_to(next(Path(d) / tool for d in os.environ["PATH"].split(os.pathsep)
+                                      if (Path(d) / tool).is_file()))
+    r = subprocess.run(["/bin/bash", str(DEMO), "--no-lean"], env={"PATH": str(bin_), "OUT": str(tmp_path / "out")},
+                       capture_output=True, text=True)
+    assert r.returncode == 3 and r.stdout == "", r.stdout + r.stderr
+    assert r.stderr.strip() == ("demo.sh: this host has no `ip` (iproute2), which names the node's links: apt-get "
+                                "install iproute2")
+    assert not any((tmp_path / "out").iterdir())

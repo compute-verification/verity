@@ -69,7 +69,7 @@ two gate verbs on the auditor's machine:
 
 ## The wipe's egress
 
-Memory accounting's streamed wipe signs its egress `UNCOUNTED` when its challenger is on another host. The count over
+Memory accounting's streamed wipe signs no egress count; its check takes the count as evidence. The count over
 its period [t0, t1) comes after, from a relay run that spans it: `wipe_gate.sh` runs that relay through the gate
 (`warden-rehearse --scan --prompts` against the toy, `demo_stub.py serve`, on the peer's loopback), at a given UTC time
 when asked, and fetches the run's bundle: with `witness/` into a 0700 directory outside the run dir, and to the run's

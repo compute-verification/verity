@@ -125,6 +125,8 @@ else
   [ -z "$TRUSTED" ] || [[ $TRUSTED =~ ^[0-9a-f]{128}$ ]] || {
     echo "demo.sh: --trusted-sha512 is a key's SHA-512 in 128 lowercase hex digits, not $TRUSTED"; exit 2; }
   [ "$SIMULATED" = 1 ] && [ -n "$CH" ] && { echo "demo.sh: --simulated runs the challenger here, not on --challenger"; exit 2; }
+  command -v ip > /dev/null || {
+    echo "demo.sh: this host has no \`ip\` (iproute2), which names the node's links: apt-get install iproute2" >&2; exit 3; }
   read -r CTRL_DEV CTRL_SRC < <(ip -o route get 1.1.1.1 2>/dev/null | sed -nE 's/.* dev ([^ ]+).* src ([^ ]+).*/\1 \2/p') || true
   CTRL_MBPS=$(cat "/sys/class/net/${CTRL_DEV:-none}/speed" 2>/dev/null || echo)
   [ -n "$EXPECT" ] || { [ "$FOREIGN" = 0 ] && EXPECT=accept || EXPECT=reject; }
