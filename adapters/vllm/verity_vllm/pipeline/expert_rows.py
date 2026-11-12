@@ -317,7 +317,9 @@ def wire(ms: Sequence[CS.Member], plan: Plan) -> list[CS.Member]:
 def declarations(plan: Plan) -> IF.Registered | None:
     """The window's tables, table reads and openings (a listed record's ``registered``, `interface.listed_reads`): each read or
     fused template's tables, each with its root and domain id read into ``in1`` and ``in2`` and its row, salt and path (``in3``,
-    ``in4``, ``in5``) opened at the key ``in0`` by the verdict ``o1``, over its units.  None where the window reads none."""
+    ``in4``, ``in5``) opened at the key ``in0`` by the verdict ``o1``, over its units.  A table two templates read (one
+    projection's fused blocks on two kernels) is declared once, each template's reads and openings of it its own.  None where
+    the window reads none."""
     params: dict[str, int] = {}
     tables, roots, openings = [], [], []
     for t, (what, _n) in plan.what.items():
@@ -325,8 +327,11 @@ def declarations(plan: Plan) -> IF.Registered | None:
             continue
         E = int(plan.of[t][0][3]["statics"]["E"])
         for at, n, _b, param, leaves in plan.tables(t):
-            params[param] = leaves
-            tables.append(IF.Table(param, param, 0, leaves // E, E))
+            if param not in params:
+                params[param] = leaves
+                tables.append(IF.Table(param, param, 0, leaves // E, E))
+            elif params[param] != leaves:
+                raise ValueError(f"{t}: table {param} of {leaves} leaves, another template's of {params[param]}")
             roots += [IF.TableRead(t, "in1", param, "root", at, n), IF.TableRead(t, "in2", param, "domain", at, n)]
             openings.append(IF.TableOpening(t, param, "in0", ("in3", "in4", "in5"), "o1", at, n))
     return IF.Registered(params, tuple(tables), (), tuple(roots), tuple(openings)) if tables else None
@@ -356,6 +361,8 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
         E, N, K, G_ = (int(S[x]) for x in ("E", "N", "K", "G"))
         arg, held = ARGS[plan.family[t]][2 if of == "w" else 3], None
         for at, _n, b, param, _leaves in plan.tables(t):
+            if param in out:
+                continue
             if param not in nonces:
                 raise ValueError(f"{param}: the committer's registration names no nonce for the table (records.expert_tables)")
             x = rs[plan.units[t][at][0]]

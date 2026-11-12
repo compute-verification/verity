@@ -12,6 +12,7 @@ A record is named in the store, never in code (`served_table`'s rule). Each inpu
 | `flock-single` | one `proof_overhead` card | each block type's single-session seconds (`prove.Session`) |
 | `flock-steady` | any number of runs, or arts naming their `runs` | the rows of each run's `RATES`, the file `benchmarks/one_stage/server_rate.py` writes: a row a staged type and prover count (`prove.Steady`, `steady_row`); an art that holds `ART_RATES` gives those rows in place of its one run's own (`steady_rows`); a run from before `RATES` gives its proof server reports (`REPORTS`), a staged type of a `server-kK` report as its row at K provers |
 | `spot-sampling` | one art holding `mix.json` | the sampling plan (`prove.SamplingPlan.of`), for `--system spot` |
+| `lean-verify` | any number of runs of `verity bench prove lean-verify` | each run's `LEAN_RECORD`: one statement of a block type the Lean verifier accepted, its runs' seconds, its proof's bytes and its `label`, what the accept holds, which the Lean line prints word for word (`prove.LeanVerify`, `lean_verify`) |
 
 The command refuses an input that isn't labelled, one that is superseded and a slot two unsuperseded targets claim, and
 says which and how to label it. A steady-state run or art that is superseded, a run that holds neither `RATES` nor a
@@ -40,6 +41,13 @@ every proof server report. A row
 whose staged Definition is no block type of the census under its cut is on no row and in no figure: it is listed
 under "Unread", with its own figure where it is a steady-state measurement.
 
+The Lean verifier's seconds and the proof's bytes a served token are `not measured` with no `lean-verify` run of
+record. With one, a block type the Lean verifier was run on takes its record's figures and every other type is scaled
+from it (`prove`'s rules), and both totals print as `modeled`, each line naming what was measured (the block type, its
+share of the proving time, its statement, the run and its host) and what was scaled, with the scaling's basis. A run
+whose record the Lean verifier refused, that holds no record or whose block type the census doesn't hold measures
+nothing and is listed under "Refused".
+
 The serving rate isn't a record: it is modeled from the census's MACs a served token, the fleet's assumed serving MFU
 (`FLEETS`) and the card's data-sheet peak, and the output says so.
 """
@@ -49,11 +57,12 @@ from __future__ import annotations
 import json
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs, overhead_records, steady
+from verity_bench import lean_verify as L
 from verity_bench import overhead as O
 from verity_bench import prove as P
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
@@ -82,12 +91,18 @@ CHECKS = (steady.accepted, steady.exits, steady.not_void, steady.flat, steady.no
 PRICE_FIELDS = ("gpus", "stage.k_log", "stage.blocks", "stage.full")
 #: what `prove.HOST_CORES` is, as the table says it of the default
 HOST_CORES_ARE = ", node A's share: the cores its provider gives a card"
+#: the Lean verifier's record in a run's files, as `verity bench prove lean-verify` writes it under the run's `$OUT`
+LEAN_RECORD = "out/" + L.RECORD
+#: what a `lean-verify` record holds for the command to read it
+LEAN_FIELDS = ("block.k_log", "block.blocks", "block.full", "proof.bytes", "verifier.runs", "accepted", "label", "host.node",
+               "host.cores", "host.cpu_model")
 #: each fleet's assumed serving MFU
 FLEETS = Path("verity/protocols/inference_only/rho/data/reference.toml")
 SYSTEMS = ("flock", "spot")
 #: the block types with no figure the rendered table names, the most blocks first; `--json` names every one
 MISSING_NAMED = 8
 CENSUS, CUT, STEADY, SINGLE, SAMPLING = "census", "cut", "flock-steady", "flock-single", "spot-sampling"
+LEAN = "lean-verify"
 
 
 @dataclass(frozen=True)
@@ -101,7 +116,13 @@ class Workload:
     fleet: str
 
     def record(self, slot: str) -> str:
-        return f"prove-{self.name}-{slot}"
+        return record_name(self.name, slot)
+
+
+def record_name(workload: str, slot: str) -> str:
+    """The `run_of_record` value that names a workload's record of a slot."""
+
+    return f"prove-{workload}-{slot}"
 
 
 WORKLOADS = {w.name: w for w in (Workload("glm53", "GLM-5.3", "h200", "world-h200"),)}
@@ -391,6 +412,82 @@ def flock(store: Any, workload: Workload, census: P.Census, provers: int = 1,
         _input(SINGLE, workload, [art], f"{len(sessions)} block types on the {value.get('device')}")], refused
 
 
+def lean_verify(doc: Any, run: str) -> P.LeanVerify | str:
+    """A `lean-verify` record as the statement it measured, or why it measures nothing: another schema, a field it
+    lacks (its `label` among them: an accept the record doesn't qualify is printed by no line), a run the Lean verifier refused (the refusal is the record's result, and prices nothing), or figures that
+    aren't a statement's."""
+
+    if not isinstance(doc, Mapping) or doc.get("schema") != L.SCHEMA:
+        return f"its `{LEAN_RECORD}` isn't a `{L.SCHEMA}` record"
+    if lacks := [name for name in LEAN_FIELDS if _field(doc, name) is _ABSENT]:
+        return "its record lacks " + ", ".join(f"`{name}`" for name in lacks)
+    block, runs = doc["block"], doc["verifier"]["runs"]
+    if not isinstance(runs, list) or not runs or not all(isinstance(r, Mapping) for r in runs):
+        return "its record holds no run of the verifier"
+    if refused := [r for r in runs if r.get("accepted") is not True]:
+        return f"the Lean verifier refused its statement: {refused[0].get('why')}"
+    if doc["accepted"] is not True:
+        return f"the Lean verifier ran {len(runs)} of the {doc['verifier'].get('repeat')} runs it set out to"
+    if not (isinstance(doc["label"], str) and doc["label"].startswith("accepted")):
+        return f"its `label` ({doc['label']!r}) doesn't say what its accept holds"
+    word, definition = block.get("word"), block.get("definition")
+    if not isinstance(word, str) and not isinstance(definition, str):
+        return "its record names no block type (`block.word`, `block.definition`)"
+    seconds = [r.get("wall_s") for r in runs]
+    if not (all(_count(block[k]) for k in ("k_log", "blocks", "full")) and block["blocks"] <= block["full"]
+            and _count(doc["proof"]["bytes"])
+            and all(isinstance(x, (int, float)) and not isinstance(x, bool) and x > 0 for x in seconds)):
+        return (f"its `block` ({ {k: block[k] for k in ('k_log', 'blocks', 'full')} }), `proof.bytes` "
+                f"({doc['proof']['bytes']}) and runs' `wall_s` ({seconds}) aren't a statement's blocks, bytes and seconds")
+    host = doc["host"]
+    return P.LeanVerify(P.definition_id(word) if isinstance(word, str) else definition, block["k_log"], block["blocks"],
+                        block["full"], tuple(seconds), doc["proof"]["bytes"], run,
+                        f"{host['node']} ({host['cores']} cores, {host['cpu_model']})", doc["label"])
+
+
+def lean_run(store: Any, run: str) -> P.LeanVerify | str:
+    """A run of record's `LEAN_RECORD` as the statement it measured, or why the run measures nothing."""
+
+    if superseded := _superseded(store, run):
+        return f"superseded by {', '.join(superseded)}"
+    if run.startswith("art:"):
+        return f"an art: the Lean verifier's record is a run's (`{LEAN_RECORD}`)"
+    attempt = store.get_attempt(run)
+    if attempt is None:
+        return "not in the store or on its remote"
+    out = attempt.get("outputs") or {}
+    files = out.get("run_files") or out.get("run_record")
+    if not files:
+        return "kept no run files"
+    if not store.listing(files, [LEAN_RECORD]):
+        return f"holds no `{LEAN_RECORD}`, which `verity bench prove lean-verify` writes"
+    return lean_verify(json.loads((Path(store.fetch(files, paths=[LEAN_RECORD])) / LEAN_RECORD).read_text()), run)
+
+
+def lean(store: Any, workload: Workload, census: P.Census) -> tuple[list[P.LeanVerify], list[dict], list[dict]]:
+    """The statements of `census`'s block types the Lean verifier accepted, from the workload's `lean-verify` runs of
+    record; their input, where a run carries the label; and the runs that measure nothing, with why."""
+
+    held = {P.definition_id(b.name) for b in census.blocks}
+    found, refused = [], []
+    for run in sorted(records(store).get(workload.record(LEAN), []), reverse=True):
+        got = lean_run(store, run)
+        if isinstance(got, P.LeanVerify) and got.definition not in held:
+            got = f"its block type, `{got.definition}`, is no block type of the census under its cut"
+        if isinstance(got, str):
+            refused.append({"target": run, "record": workload.record(LEAN), "why": got})
+        else:
+            found.append(got)
+    if not found and not refused:
+        return [], [], []
+    types = len({v.definition for v in found})
+    return found, [_input(LEAN, workload, [v.run for v in found],
+                          f"the Lean verifier (its `verify`) on one statement of each of {types} block type(s); "
+                          "every other type's Lean verifier seconds and proof bytes are scaled from them" if found else
+                          "none that measures a block type: the Lean verifier's seconds and the proof's bytes are not "
+                          "measured")], refused
+
+
 def plan(store: Any, workload: Workload, given: str | None) -> tuple[P.SamplingPlan, dict]:
     """The workload's sampling plan of record (`given` must be it), and its input."""
 
@@ -438,9 +535,12 @@ def build(system: str, workload: str, *, sampling: str | None = None, provers: i
     store, w = completion.store, WORKLOADS[workload]
     blocks, inputs = census(store, w)
     prover, more, refused = flock(store, w, blocks, provers, cores)
+    timed, its, unread = lean(store, w, blocks)
+    prover = replace(prover, lean=tuple(timed))
     rate = serving(root, w)
     seconds = rate.gpu_seconds_per_token(blocks)
-    inputs += more
+    inputs += more + its
+    refused += unread
     sampled = None
     if system == "spot":
         sampled, its = plan(store, w, sampling)
@@ -538,6 +638,46 @@ def _planned_lines(planned: Mapping[str, Any]) -> list[str]:
     return lines
 
 
+def _lean_lines(doc: Mapping[str, Any]) -> list[str]:
+    """The Lean verifier's seconds and the proof's bytes a served token, a line each: `not measured` with no statement
+    measured, else the figure with its status, what was measured (the block type with its share of the proving time,
+    its statement, the verifier's seconds on it or its proof's bytes, the run and the host) and what was scaled (the
+    block types, their share of the figure, and the basis). The seconds' line says what the accept holds in the
+    record's own words (its `label`)."""
+
+    t = doc["totals"]
+    seconds, size, measured = t["lean_verifier_seconds_per_token"], t["proof_bytes_per_token"], t["lean_verify"]
+    if not measured:
+        return ["- Lean verifier seconds per token: not measured (no Lean verifier run of record measures a block type: "
+                f"label one {_label(record_name(doc['workload'], LEAN))})", "- proof bytes per token: not measured"]
+    m = measured[0]
+    of = "the proving time at the sampling plan" if doc["system"].startswith("spot") else "the proving time"
+    share = "none" if m["time_share"] is None else f"{m['time_share']:.1%}"
+    fill = "a full statement" if m["blocks"] == m["full"] else f"{m['blocks']}/{m['full']} of a full statement"
+    block = (f"`{m['block']}` ({share} of {of}), in its statement of {m['blocks']} blocks of 2^{m['k_log']} "
+             f"witness bits each ({fill})")
+    runs = "one run" if len(m["seconds"]) == 1 else (f"the median of {len(m['seconds'])} runs: "
+                                                     + ", ".join(_n(x) for x in m["seconds"]) + " s")
+    more = "" if len(measured) == 1 else "; also measured: " + ", ".join(
+        f"`{x['block']}` ({_n(x['statement_seconds'])} s and {_n(x['proof_bytes'])} bytes a statement, run "
+        f"{x['run']})" for x in measured[1:])
+    one = "one block type" if len(measured) == 1 else f"{len(measured)} block types, the most proving time first"
+
+    def line(name: str, v: Mapping[str, Any], what: str, unit: str) -> str:
+        status = "modeled, not measured" if v["status"] == "modeled" else v["status"]
+        rate = "the measured statement's" if len(measured) == 1 else "the measured statements' median"
+        scaled = (f" Scaled: the other {v['scaled_block_types']} block types, {1 - v['measured_share']:.1%} of this figure, "
+                  f"each at {rate} {unit} a witness bit times its 2^k_log bits: {v['basis']}." if v["scaled_block_types"] else "")
+        bare = (f" In neither: {v['unpriced_block_types']} block type(s) with no k_log." if v["unpriced_block_types"] else "")
+        return f"- {name} per token: {_n(v['value'])}, {status}. Measured: {one}, {what}{more}.{scaled}{bare}"
+
+    return [line("Lean verifier seconds", seconds,
+                 f"{block}: {m['label']}, by the Lean verifier's `verify` in {_n(m['statement_seconds'])} s ({runs}; a run is "
+                 f"one process, the statement read and set up in it), in run {m['run']} on {m['host']}", "seconds"),
+            line("proof bytes", size,
+                 f"{block}, whose proof files are {_n(m['proof_bytes'])} bytes in all (run {m['run']})", "bytes")]
+
+
 def _record(target: str | None) -> str:
     return "—" if target is None else target[:16] if target.startswith("art:") else target
 
@@ -593,13 +733,13 @@ def render(doc: Mapping[str, Any], rows: int | None = None) -> str:
         lines.append(f"- each range's other end: {t['range_basis']}")
     lines.append(f"- served MACs inside a proof block: {doc['macs_in_blocks']:.1%}; the rest are served rows no cut fits, "
                  "which no figure here prices")
-    for name, key in (("verifier seconds", "verifier_seconds_per_token"), ("proof bytes", "proof_bytes_per_token")):
-        if (v := t[key]) is None:
-            lines.append(f"- {name} per token: not measured")
-        else:
-            basis = f" ({t['verifier_basis']})" if key.startswith("verifier") and t["verifier_basis"] else ""
-            lines.append(f"- {name} per token: {_n(v['value'])} on the {v['block_types']} block types a record holds them "
-                         f"for, {v['block_share']:.1%} of the blocks{basis}; the rest: not measured")
+    if (v := t["verifier_seconds_per_token"]) is None:
+        lines.append("- verifier seconds per token: not measured")
+    else:
+        basis = f" ({t['verifier_basis']})" if t["verifier_basis"] else ""
+        lines.append(f"- verifier seconds per token: {_n(v['value'])} on the {v['block_types']} block types a record holds "
+                     f"them for, {v['block_share']:.1%} of the blocks{basis}; the rest: not measured")
+    lines += _lean_lines(doc)
     lines += ["", "Share of the proving time each source covers:", "",
               "| source | block types | blocks per token | share of blocks | prover GPU-seconds per token | "
               "share of proving time |", "| --- | --- | --- | --- | --- | --- |"]

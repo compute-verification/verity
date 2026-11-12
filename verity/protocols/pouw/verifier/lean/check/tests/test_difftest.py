@@ -44,7 +44,8 @@ Its `chunks` against `weights.chunks` (an H1 lane's chunks along K, the chunk ro
 multiple of 32 below 2^17, then sampled integers and non-integers, compared output for output: the count, or the same refusal.
 
 Its `ratio` against `core_check.ratio`: sampled strings, then numbers of more decimal digits than `int` reads by default,
-compared output for output: the ratio's numerator and denominator in hex, or the same refusal.
+compared output for output: the ratio's numerator and denominator in hex, the text it is written back as
+(`window.ratio_str`) and that text read again, or the same refusal.
 
 Its `lead-record`, `lead-instance`, `lead-unit`, `lead-egress` and `lead-window` against `circuit.lead`'s `lead_record`,
 `instance_domain` (with its leaves and root), `unit_opening`, `egress_refused` with `forward_count`, and `window_refusal`:
@@ -75,6 +76,7 @@ from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.pouw.verifier import credit as Cr
 from verity.protocols.pouw.verifier import verifier as V
 from verity.protocols.pouw.verifier import weights as W
+from verity.protocols.pouw.verifier import window as Wd
 from verity.commitments.merkle import tree_levels
 from verity.protocols.pouw.prover.circuit import lead as L
 
@@ -568,11 +570,17 @@ def test_chunks(pass_server):
 def ratio(x) -> dict:
     if not (isinstance(x, dict) and isinstance(x.get("s"), str) and isinstance(x.get("ctx"), str)):
         raise D.Reject("the input's s or ctx is not a string")
-    try:
-        r = CC.ratio(x["s"], x["ctx"])
-    except CC.Refused as e:
-        return {"refused": str(e)}
-    return {"ratio": [format(r.numerator, "x"), format(r.denominator, "x")]}
+    def read(s: str) -> tuple:
+        try:
+            r = CC.ratio(s, x["ctx"])
+        except CC.Refused as e:
+            return None, {"refused": str(e)}
+        return r, [format(r.numerator, "x"), format(r.denominator, "x")]
+    r, got = read(x["s"])
+    if r is None:
+        return got
+    text = Wd.ratio_str(r)
+    return {"ratio": got, "text": text, "back": read(text)[1]}
 
 
 RATIO = D.Port("pouw-check-difftest", "ratio", ratio, package=LEAN, of_record=V.RECORD_VERDICT,
@@ -583,13 +591,16 @@ RATIO = D.Port("pouw-check-difftest", "ratio", ratio, package=LEAN, of_record=V.
 
 def test_ratio(pass_server):
     """`Core.Ratio.ofString` is `core_check.ratio` on sampled strings, and on numbers past `int`'s 4,300 decimal digits:
-    one of 4,301 digits and a ratio of two long numbers read to the same value, and each refusal of a long one says the
+    one of 4,301 digits and a ratio of two long numbers read to the same value and written back (`Core.Ratio.toString`,
+    `window.ratio_str`) as the text read, which reads again to that value, and each refusal of a long one says the
     same."""
     stats = D.run(RATIO, examples=500, server=pass_server)
     big, odd = "1" + "0" * 4300, "1" + "0" * 4999 + "1"
     read = {big: (10**4300, 1), f"{big}/{odd}": (10**4300, 10**5000 + 1), f"7/{odd}": (7, 10**5000 + 1)}
     for s, (n, d) in read.items():
-        assert json.loads(D.replay(RATIO, {"s": s, "ctx": "delta"}, pass_server)[1]) == {"ratio": [f"{n:x}", f"{d:x}"]}
+        hexes = [f"{n:x}", f"{d:x}"]
+        assert json.loads(D.replay(RATIO, {"s": s, "ctx": "delta"}, pass_server)[1]) == {"ratio": hexes, "text": s,
+                                                                                       "back": hexes}
     for s in (f"{big}/{big}0", "0" + big, f"{big}/0{odd}", f"{big}/1", f"{big}/{odd}/3"):
         assert "refused" in json.loads(D.replay(RATIO, {"s": s, "ctx": "delta"}, pass_server)[1])
     print(f"pouw-check-difftest ratio: {stats}, and {len(read) + 5} long numbers")

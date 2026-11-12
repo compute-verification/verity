@@ -92,7 +92,6 @@
     {"file": "tests/program/test_compact.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file", "count": 5},
     {"file": "tests/program/test_compact.py", "kind": "F401", "symbol": "test_persist_program_progressions_form_gives_the_same_prog_and_document_and_converts_losslessly", "detail": "`shutil` imported but unused"},
     {"file": "tests/program/test_compact.py", "kind": "F401", "symbol": "test_tp_rank_compare_in_compact_form_is_the_records", "detail": "`os` imported but unused"},
-    {"file": "tests/program/test_composition.py", "kind": "E402", "symbol": "<module>", "detail": "Module level import not at top of file"},
     {"file": "tests/program/test_deepgemm.py", "kind": "E731", "symbol": "_guard_rows", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "tests/program/test_deepgemm.py", "kind": "E731", "symbol": "test_linears_match_their_twins", "detail": "Do not assign a `lambda` expression, use a `def`"},
     {"file": "tests/program/test_derive.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.circuits.refs.Coll` imported but unused"},

@@ -401,7 +401,6 @@
     {"file": "verity_vllm/program/frontend/rules/vllm_dsa.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/program/frontend/rules/vllm_moe_fp8.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
-    {"file": "verity_vllm/program/frontend/serve_families.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/frontend/targets.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
