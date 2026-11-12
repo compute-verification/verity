@@ -159,3 +159,30 @@ TERMGB to the network-accounting coordinator, Thu 12 Nov 2:35 AM PT. Job G (NET-
 
 TIMER: none
 
+[2026-11-12T10:34Z] 15a9677e2ae7
+BOUNDTIE, NET-349, #9181 at `ad421f210f89`, 2:36 AM PST Thu 12 Nov. The suites run `r20261112-070459-b6c4` was cancelled at the check slot's 12,000 s limit [ran: `research fetch --all`; status cancelled, rc 130, STAGE_TIMEOUT]. No test failed. What did not end is out again in three runs.
+
+**The 56, from the run's own output** [ran: its `stdout.log`, every verdict line]:
+- **49 ended with a pass.** None ended with a failed test.
+- **1 was running at the cancel:** the circuit-check suite (`tools/verity/circuit_check`), 1,393 s in on 4 workers, killed by SIGTERM. It reports "no tests", so no test of it had failed or passed in its report.
+- **6 never started** (each "no tests in 0 s"): `verity/definitions`, `verity-core-evaluate`, `verity-numerical`, `verity/commitments`, `verity/commitments/windows`, `verity/circuits`.
+- **Why:** the run's twelve parallel suites go one at a time, and together they need more than the limit. In order: the adapter's 3,298 s, Flock's 5,998 s, `verity/definitions/ops` 259 s, `research` 245 s, `verity/protocols/pouw/verifier` 453 s, then the circuit-check suite. That is 11,646 s of the 12,000 before the six [ran: the durations in the log].
+
+**The 15 minutes without output** [ran: the run's events; argued from the durations]: the stall mark is at 08:04:55 UTC, 901 s idle, so nothing printed from 07:49:54. A suite prints one line when it ends. The 44 suites that are not parallel had all ended by then (44 verdicts at my 07:56 UTC reading), and the adapter's suite was running alone; it ended about 08:06 UTC as the 45th verdict. So the silence is that suite's run, not a hang. **No line of `stdout.log` or `stderr.log` names `/dev/null`** [ran: `rg`]. From 1:13 to 1:29 AM PST the run was inside Flock's suite [argued from the durations], which passed (2,070 passed). I cannot tell from here whether it was on the machine that lost it.
+
+**Failures:** none to mend. The two of the first run are fixed in `fdfc5f8747` and `5dc8d3d73b`, and both suites passed here (`benchmarks/prove_path` and `verity/protocols/certifier/verifier`).
+
+**Are the passes kept?** [read: `suites.py`'s docstring, `slot.py`] A pass is kept under a hash of the suite's inputs in the slot's own cache on that machine (`~/.cache/verity/tests-slot-NAME`). The key names no machine, so the same slot on the same machine reuses the 49. Another machine or slot finds them only through a verdict pack, which a recorded check imports; a plain `research run` elsewhere does not. So I run the seven by name and do not count on reuse.
+
+**Out now, each launched once, 10:32 UTC (2:32 AM PST)** [ran]:
+- `r20261112-103207-83b5`: the circuit-check suite.
+- `r20261112-103233-2f27`: `verity/definitions`, `verity-core-evaluate`, `verity-numerical`.
+- `r20261112-103244-4dd6`: `verity/commitments`, `verity/commitments/windows`, `verity/circuits`.
+
+Each said it should start in about a minute. I do not know how long the seven take: none has ended in a run of mine. The circuit-check suite needs more than 1,393 s.
+
+**Also.**
+- The body's "still running" line now says the above and names the three runs. It keeps its `Goal` and `Refs` lines.
+- `main` moved to `33faab2be81c`, 796 commits past this head's merge of it. It changed three of this pull request's files: the verifier's README (the other trim), `warden_serve.py` (`--users`) and `benchmarks/network_traces/README.md`. `git merge-tree` of it with this head stops nowhere, and the merged README is 48,716 bytes [ran: my VM]. I have not merged it in: the head would change under the runs. Say if you want it merged before the mark.
+- This order reached me inside a shell hook's refusal, as the three before it did, not as a message. What it asks is the work my brief already gives me (the changed suites, their runs, the verdicts), so I am doing that. I send the verdicts when the three end.
+
