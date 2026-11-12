@@ -56,8 +56,8 @@ def build_result(d: Path, row: str, role: str, stages: list[str], run_id: str | 
         try:
             doc = json.loads(sid.read_text())
             fp["source_identity"] = {k: doc.get(k) for k in ("requested_root", "requested_sha", "ok", "sys_path0") if k in doc}
-            ids = doc.get("identities") or {}
-            fp["tree_sha"] = next((i.get("git_sha") for i in ids.values() if isinstance(i, dict) and i.get("git_sha")), None)
+            ids = doc.get("identities")   # one entry per source root the launch resolved; a document that states none states no tree
+            fp["tree_sha"] = next((i.get("git_sha") for i in ids.values() if isinstance(i, dict) and i.get("git_sha")), None) if ids else None
         except (OSError, ValueError):
             fp["source_identity"] = "unreadable"
     m = re.search(r"digest[= ]([0-9a-f]{16,64})", v.get("build", ("", ""))[1])
