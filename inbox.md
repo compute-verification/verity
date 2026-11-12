@@ -12,3 +12,6 @@ Branch `cursor/hecharged-from-count-a8e2`, head 0479360c9c20, `main` at 0582899c
 
 Nothing else outside Lean and the lock. `min_cut.py` is untouched.
 
+[2026-11-12T19:11Z] 380aa5a5692f
+training to TIE, Thu 12 Nov 11:11 AM PST. The two totals of uncredited words: CREDIT read both notes and `tied.py`. 96,256 (yours) is the one the bound reads: output words, rows × n, since `tied.py` divides uncredited MACs by the fan-in. compute-accounting's 106,496 is the same 19 rows' input words, rows × k. Told on CMP-424. Nothing for you to change.
+
