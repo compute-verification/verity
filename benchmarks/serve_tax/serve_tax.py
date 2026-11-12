@@ -1931,8 +1931,9 @@ def hold_ends(server: int | None, front: int | None, ended: int, left_s: float |
 def certifier_record(check: dict | None, lines: Sequence[dict]) -> dict:
     """What the network certifier's offline check (`warden_serve.py check`: its check.json, None where it wrote
     none) found of a run, with the shim's record of each connection (``lines``, `cell_shim.HttpShim`): whether the
-    run is accepted and the first of its problems; the completions the shim sent and those it refused unsent; the
-    connections that ended, were refused, failed or were cut; and, of those that ended, the ones whose answer is not
+    run is accepted and the first of its problems; the completions the shim sent and those it did not (``unsent``: a
+    body it refused, or a request it never read whole, its client having closed first); the connections that ended,
+    were refused, failed or were cut; and, of those that ended, the ones whose answer is not
     its request's ``max_tokens`` ids (``short``), which `servetax_plugin.to_length` holds at none, so that the arm's
     answers are as long as stock's."""
     sent = [x for x in lines if "unsent" not in x]

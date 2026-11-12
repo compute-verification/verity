@@ -22,7 +22,8 @@ side of the certifier, the client's thin shim (`warden.cells`, `warden.Shim`) wi
 Each connection's record is one line of ``--log``, in the keys of `warden_serve.connection_log` (every cell's kind and
 arrival after the certifier's origin, the request's and the response's digests), which is what the certifier's offline
 check reads as its ``client.json`` (`client_doc`), with the request's id, its token counts and the HTTP status beside
-them. No prompt and no token id is kept.
+them. A request the shim did not send has a line too, with why (``unsent``): one it refused, and one it never read
+whole, its client having closed first. No prompt and no token id is kept.
 
     python cell_shim.py --deployment WARDEN_OUT/deployment.json --tokenizer CHECKPOINT --log shim.jsonl
         [--listen 127.0.0.1:0]
@@ -145,12 +146,22 @@ class HttpShim:
     def _ms(self, t: float) -> float:
         return round((t - self.origin) * 1000, 3)
 
+    def unread(self, why: str, status: int | None = None) -> None:
+        """The record of a connection no request was read from, so none was sent: why, and the status answered, None
+        where its client had closed."""
+        self.log({"index": None, "id": None, "status": status, "unsent": why})
+
     async def handle(self, reader: asyncio.StreamReader, writer: Any) -> None:
         """One HTTP connection: one request, answered, then closed."""
         try:
             try:
                 head = await reader.readuntil(b"\r\n\r\n")
-            except (asyncio.IncompleteReadError, asyncio.LimitOverrunError):
+            except asyncio.IncompleteReadError as e:
+                self.unread(f"the client closed {len(e.partial)} bytes into its request's head")
+                return
+            except asyncio.LimitOverrunError as e:
+                writer.write(_error(400, "a request's head is longer than this listener reads"))
+                self.unread(f"a request's head had no end in its first {e.consumed} bytes", 400)
                 return
             line, *rest = head[:-4].split(b"\r\n")
             headers = {k.strip().lower(): v.strip() for k, _, v in (x.partition(b":") for x in rest)}
@@ -165,15 +176,12 @@ class HttpShim:
                 return
             try:
                 raw = await reader.readexactly(int(size))
-            except asyncio.IncompleteReadError:
+            except asyncio.IncompleteReadError as e:
+                self.unread(f"the client closed {len(e.partial)} bytes into its request's body of {int(size)}")
                 return
             await self.completion(raw, headers.get(b"x-request-id", b"").decode("latin-1") or None, writer)
         finally:
-            try:
-                await writer.drain()
-            except OSError:
-                pass
-            writer.close()
+            writer.close()  # what is written and not yet sent goes out before the connection closes
 
     async def completion(self, raw: bytes, request_id: str | None, writer: Any) -> None:
         index, self.connections = self.connections, self.connections + 1
@@ -306,10 +314,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--tokenizer", required=True, help="the served model's checkpoint, for text prompts")
     ap.add_argument("--log", required=True, help="each connection's record, a line of JSON")
     ap.add_argument("--listen", type=address, default=("127.0.0.1", 0), help="HOST:PORT (port 0: any)")
-    try:
-        asyncio.run(serve(ap.parse_args(argv)))
-    except KeyboardInterrupt:
-        pass
+    asyncio.run(serve(ap.parse_args(argv)))
     return 0
 
 

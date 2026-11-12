@@ -288,6 +288,24 @@ def test_a_body_the_id_request_cannot_carry_is_refused_and_nothing_is_sent(chang
     assert [(x["status"], "unsent" in x) for x in log] == [(400, True)] * 2 and C.client_doc(log) == {"connections": []}
 
 
+def test_a_request_never_read_whole_is_recorded_and_nothing_is_sent():
+    """A client that closes inside its request's head or its body, and a head with no end, each leave a line that says
+    what happened: the certifier sees no connection of them, and they are none of the offline check's."""
+    whole = post(BODY)
+    head = whole[:whole.index(b"\r\n\r\n") + 4]
+    warden, server, (in_head, in_body, endless), log = asyncio.run(drive({1: [
+        whole[:20], head + whole[len(head):len(head) + 7], b"POST /v1/completions HTTP/1.1\r\nX-Junk: " + b"j" * 70000]}))
+    assert in_head.writes == [] and in_body.writes == []
+    status, body, _ = endless.answer()
+    assert status == 400 and "longer than this listener reads" in body["error"]["message"]
+    assert (warden.ordinals, warden.refused, server.conns) == (0, 0, [])
+    assert [(x["index"], x["status"]) for x in log] == [(None, None), (None, None), (None, 400)]
+    assert log[0]["unsent"] == "the client closed 20 bytes into its request's head"
+    assert log[1]["unsent"] == f"the client closed 7 bytes into its request's body of {len(whole) - len(head)}"
+    assert log[2]["unsent"].startswith("a request's head had no end in its first ")
+    assert C.client_doc(log) == {"connections": []}
+
+
 def test_a_connection_the_certifier_refuses_or_fails_is_an_error_or_a_broken_stream_never_a_short_answer():
     """With one lane and one place in the queue: a request that arrives with the queue taken is refused by the
     certifier (503), and one that waits for the lane is served once it is free, its wait in its first chunk's time. A

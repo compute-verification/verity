@@ -217,8 +217,8 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     def sleep(s: float) -> None:
         # the engine empties its prefix cache, the certifier's watermark goes on, and at the third look the hold ends
         t[0] += s
-        events.append(("sleep", s))
-        if len([e for e in events if e[0] == "sleep"]) == 1:
+        events.append(("waited", s))
+        if len([e for e in events if e[0] == "waited"]) == 1:
             (out / "server" / "prefix_resets.7.jsonl").write_text('{"t":5001.0,"idle_s":null,"reset":true}\n')
             feed.write_text('{"run":"aa","t":0,"n":0}\n')
         elif ends == "certifier":
@@ -235,7 +235,7 @@ def test_the_servers_side_starts_the_engine_then_the_id_front_and_holds_them(
     rc = S.certified_server(a, popen=popen, sleep=sleep, now=lambda: t[0], clock=lambda: t[0])
     said = capsys.readouterr().out
     # --stop-at is 100 s off, and the side stops `STOP_S` before it
-    held = [("sleep", 2.0)] * (round((100 - S.STOP_S) / 2) if ends == "stop-at" else 2)
+    held = [("waited", 2.0)] * (round((100 - S.STOP_S) / 2) if ends == "stop-at" else 2)
     assert rc == exits
     assert events == [("plugins", S.ARMS[ARM].plugin), ("started", "server"), ("ready", 8100), ("started", "front"),
                       *held, *([] if ends == "front" else [("scrape", 8100)]),
@@ -319,7 +319,7 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
         return NS(returncode=0)
 
     def sleep(s: float) -> None:
-        events.append(("sleep", s))
+        events.append(("waited", s))
         t[0] += s
 
     a = argparse.Namespace(
@@ -332,10 +332,10 @@ def test_the_clients_side_sends_each_pass_through_the_shim_and_records_what_the_
     # reps fit and the third is not sent, of 200 all three are
     reps, end = (2, 2305.0) if windows == 130 else (3, 3005.0)
     key = events[1][2]
-    assert events[:4] == [("keys",), ("certifier", windows, key), ("shim", str(out / "shim.jsonl")), ("sleep", 5.0)]
+    assert events[:4] == [("keys",), ("certifier", windows, key), ("shim", str(out / "shim.jsonl")), ("waited", 5.0)]
     assert not key.exists() and not key.is_relative_to(out)
     sent = [x for k in range(reps + 1) for x in (
-        ("sleep", S.IDLE_S), ("scrape", 18746), ("pass", "http://127.0.0.1:5000", "2", 3, 1011.0 + 306.0 * k),
+        ("waited", S.IDLE_S), ("scrape", 18746), ("pass", "http://127.0.0.1:5000", "2", 3, 1011.0 + 306.0 * k),
         ("scrape", 18746))]
     last = 1011.0 + 306.0 * reps + 300.0
     assert events[4:] == [*sent, ("ended", "certifier", end - last + S.CERTIFIER_END_S), ("check",),
