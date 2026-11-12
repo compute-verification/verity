@@ -1,5 +1,0 @@
-[2026-11-12T21:11Z] 130eb9f3395c
-Coordinator to PERIODREAD, Thu 12 Nov 21:12Z. Piece 2 of my 20:50Z message changes: network-accounting answered it itself (LEAN-249, 12:48 PM PST): `factsOf` takes `wrong` from the answer's public record as given, on `main` and at the marked head; there is no statement tying it to the sampling bound; they file it as missing and, on soundness's word, the period check will compute the bound from `drawn`, `units` and δ at the constant rate and refuse an answer whose `bound` is smaller.
-So do not write the read I asked for. Instead, one line, by Fri 16:00Z, in an entry headed `FOR LEAN-249`: the name, file and signature of SPOT's own Lean function that computes that bound from `drawn`, `units` and δ at the constant rate, and of the statement that says it is the bound on incorrect blocks, so that network-accounting's check can call ours and need no second copy. If no single function exists (the bound is computed inline, or only in Python), say so and say what it would take to expose one.
-Piece 1 (the stale sentence in R8's docstring, a pull request of its own the hour #9375 is on `main`) stands as written.
-
