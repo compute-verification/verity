@@ -15,8 +15,8 @@ too (`raw_on_dial`, `DIAL_K`), since a row's rates and kind move with k.
 What the capture measures and what a price adds are apart: `raw_on_dial` gives the rows with their operands' dtypes
 and no price, as a job's record keeps them, and `priced` makes a raw row the row `rows` states, so a record's rows are
 priced where they are read. A product is priced in the dtype the trace's |C| counts it in (`counted_dtype`): the
-one it was traced in (`traced_dtype`), and for a product of a scaled-dot-product attention call the dtype of the
-call's query (the row's `attention`), which the card's kernel computes it in and the trace's float32 product stands
+one it was traced in (`traced_dtype`), and for a product of a scaled-dot-product attention call the dtype the call
+computes in (the row's `attention`), which the card's kernel computes it in and the trace's float32 product stands
 in for (`ATTENTION_PREMISE`). The one exception is the rule of the captures before `PRICED_AS_TRACED_FROM`
 (`priced_dtype`).
 
@@ -46,9 +46,10 @@ from training_slowdown.policy import CONSOLE
 CAPTURE = "4.25.0"
 #: the first capture whose every product is priced in the dtype its trace's |C| counts it in (`priced_dtype`)
 PRICED_AS_TRACED_FROM = "4.23.0"
-#: the premise a trace's price of an attention call's products takes (`priced_dtype`), as published strings state it
-ATTENTION_PREMISE = ("each of attention's six matrix products is a 16-bit tensor-core dot product on the card; "
-                     "measured for the forward's two, read for the backward's four")
+#: the premise a trace's price of an attention call's products takes (`priced_dtype`), as published strings state it;
+#: the card is the one whose BF16 pipeline `training_slowdown.gates` prices a bf16 GEMM at
+ATTENTION_PREMISE = ("each of a 16-bit attention call's six matrix products is a 16-bit tensor-core dot product on "
+                     "sm_120, the card whose BF16 pipeline prices a bf16 GEMM")
 #: the captures whose raw rows are read: this one, and the one the stored records were traced by
 READS = ("4.12.9", CAPTURE)
 #: the dtype the routes' autocast casts a step's forward to, which the rule of the captures before
@@ -149,10 +150,16 @@ def traced_dtype(row: dict) -> str | None:
 
 
 def counted_dtype(row: dict) -> str | None:
-    """The dtype the trace's |C| counts a raw row's product in (`capture.structure._counted_dtype`): the query's of
-    the scaled-dot-product attention call that computes it, where the capture states one (the row's `attention`),
-    else the one it was traced in."""
+    """The dtype the trace's |C| counts a raw row's product in (`capture.structure._counted_dtype`): the one the
+    scaled-dot-product attention call that computes it computes in, where the capture states one (the row's
+    `attention`), else the one it was traced in."""
     return row.get("attention") or traced_dtype(row)
+
+
+def on_premise(rows: list[dict]) -> bool:
+    """Whether a trace's raw rows take `ATTENTION_PREMISE`: one of them is a product of an attention call counted in
+    another dtype than it was traced in (`counted_dtype`)."""
+    return any(counted_dtype(r) != traced_dtype(r) for r in rows)
 
 
 def priced_dtype(row: dict, capture: str | None) -> str | None:
@@ -163,23 +170,37 @@ def priced_dtype(row: dict, capture: str | None) -> str | None:
     price is the card's kernel's and not the traced product's. The capture runs a call on torch's math path, which
     computes a 16-bit call from operands it casts up, so the trace holds float32 products there; a step's circuit
     built product by product to the trace computes them on that path too, until it wires the card's kernel. On the
-    path a job runs the card's fused kernel computes the call, in the dtype of its query, and the job's count writes
-    the call's ops in that dtype (`flops.Counter._attention`). The trace's float32 products stand in for the
-    kernel's, and their price is the kernel's: the query's dtype as the call took it, which the capture states at
-    the call (`capture.trace`'s marker, the row's `attention`). A float32 job's call stays float32, and so does a
+    path a job runs the card's fused kernel computes the call in its operands' dtype: the query's, as autocast hands
+    it to the kernel. The job's count writes the call's ops in that dtype, its stand-ins' (`flops.dtype_of`, on
+    `flops.Counter._attention`'s). The trace's float32 products stand in for the kernel's, and their price is the
+    kernel's: the dtype the call computes in, which the capture states at the call (`capture.trace`'s marker, the
+    row's `attention`), refusing a call that returns in another. A float32 job's call stays float32, and so does a
     float32 product a step computes outside a call, under autocast or not.
 
-    The premise (`ATTENTION_PREMISE`): each of attention's six matrix products is a 16-bit tensor-core dot product on
-    the card; measured for the forward's two, read for the backward's four. Its edge: the trace is taken under the
-    math kernel and cannot see the card's choice, so a call the card serves on its math path (fused kernels turned
-    off, or a call none of them takes) is computed in float32 and priced low by the trace; the job's count sees it.
-    |C| counts a call's other ops (its scalings, dropout's, a mask's add) at the query's dtype too, not on the
-    premise but because the job's count prices them so (`capture.structure._counted_dtype`).
+    The premise (`ATTENTION_PREMISE`): each of a 16-bit call's six matrix products is a 16-bit tensor-core dot
+    product on sm_120. Its edges:
+    - the trace is taken under the math kernel and cannot see the card's choice, so a call the card serves on its
+      math path (fused kernels turned off, or a call none of them takes) is computed in float32 and priced low by
+      the trace; the job's count sees it, since on that path its rows name the float32 the math kernel's ops return
+      (`flops.dtype_of`);
+    - a call is marked where torch's dispatch hands it to the capture's mode (`capture.trace._MarkedAttention`); a
+      call another function of torch makes through a name it bound before the capture is not, and its ops are
+      priced as traced;
+    - attention written by hand (a `bmm` and a softmax; `nn.MultiheadAttention` asked for its weights) is no call,
+      and is priced as traced;
+    - the six products are whole rectangles, as the job's count takes them: a causal kernel skips its masked tiles,
+      so both price a causal call high against the card.
+    |C| counts a call's other ops (its scalings, dropout's, a mask's add) in the call's dtype too, not on the premise
+    but because the job's count names them so (`flops.dtype_of`, on `flops.Counter._attention`'s stand-ins), which
+    keeps the count and the trace op for op (`capture.structure._counted_dtype`).
 
     The one exception is the rule of the captures before `PRICED_AS_TRACED_FROM`, whose traces hold the same float32
     products and state no call: a forward or backward GEMM they traced wider than `AUTOCAST` is priced at `AUTOCAST`,
     and the trace's circuit is not (`work.repriced`). The rule lasts as long as the stored records traced by those
-    captures: the rebuild that retraces them deletes it."""
+    captures: the rebuild that retraces them deletes it. A trace of a capture from `PRICED_AS_TRACED_FROM` before
+    `CAPTURE` states no call either, and is priced as traced: a 16-bit call's products at 32 bits, against its own
+    32-bit |C|, one price but not this one's. The grade and the grader refuse it (`READS`); the calculator, the
+    library and `work.repriced` read it as it is."""
     from training_slowdown.capture.structure import _dtype_bits
 
     if _priced_as_traced(capture):
@@ -203,7 +224,7 @@ def _priced_as_traced(capture: str | None) -> bool:
 def step_gates(graph) -> float:
     """The step's |C| in gates for a step captured by capture_step, each counted op at
     training_slowdown.gates' price for the dtype training_slowdown.capture.structure counts it in (`_counted_dtype`:
-    the traced one, an attention call's ops at its query's): GEMMs (`_gemm_price`),
+    the traced one, an attention call's ops at the call's): GEMMs (`_gemm_price`),
     elementwise multiplications and dense linear algebra (`_other_macs`), and the forward's other ops that combine an
     activation with an updated parameter (a gather of an updated table by token data at the circuit's gather, any other
     at its work)."""

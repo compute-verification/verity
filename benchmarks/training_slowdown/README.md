@@ -294,13 +294,17 @@ reachable.
 After its last step a job traces its route's step once, outside the count, and its record's `trace` holds what the
 capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced
 at each k of the console's dial (`capture.products.raw_on_dial`), which `capture.products.priced` prices where they
-are read: each in the dtype it was traced in, and those of a scaled-dot-product attention call in the dtype of the
-call's query. The capture runs attention on torch's math path, so a step under bf16 autocast has its attention
-products in float32, as that path computes them from operands it casts up; its other products are bf16. On the card
-a fused kernel computes the call at the query's width, so the trace's float32 products stand in for the kernel's and
-are priced as the kernel's: the capture states each call's query's dtype (a row's `attention`), and |C| and the
-rows read it (`capture.products.priced_dtype`, which names the premise and its edge: a call the card serves on its
-math path is priced low by the trace, and the job's count sees it). A trace of a capture before
+are read: each in the dtype it was traced in, and those of a scaled-dot-product attention call in the dtype the call
+computes in, its query's as autocast hands it to the kernel. The capture runs attention on torch's math path, so a
+step under bf16 autocast has its attention products in float32, as that path computes them from operands it casts up;
+its other products are bf16. On the card a fused kernel computes the call at that width, so the trace's float32
+products stand in for the kernel's and are priced as the kernel's, on the premise `capture.products.ATTENTION_PREMISE`,
+which the library's premises and what a grade's S rests on name: the capture states the dtype of each call (a row's
+`attention`), refuses a call that returns in another, and |C| and the rows read it (`capture.products.priced_dtype`,
+which names the premise's edges: a call the card serves on its math path is priced low by the trace, and the job's
+count sees it; attention written by hand, and a call made through a builtin bound before the capture inside a function
+torch hands it, are no call the capture marks and are priced as traced; and a causal or masked call's products are
+whole rectangles, so it is priced high by the tiles a kernel skips). A trace of a capture before
 `capture.products.PRICED_AS_TRACED_FROM` holds the same float32 products and states no call, and that capture's
 rule prices every forward or backward product wider than bf16 in bf16; the rule goes when the stored records it
 reads are traced again. The

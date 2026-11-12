@@ -674,13 +674,25 @@ PRODUCT, SCALING, WEIGHTS = AN * AS * AS * AE, AN * AS * AE, AN * AS * AS
 #: is two products and two scalings, its backward four and two; dropout scales the weights twice forward and once
 #: backward; a trained mask is added to the scores once; a call under no_grad has no backward
 CALLS = {"plain": (6, 4, 0), "dropout": (6, 4, 3), "mask": (6, 4, 1), "module": (6, 4, 0), "no grad": (8, 6, 0),
-         "wide": (6, 4, 0)}
+         "wide": (6, 4, 0), "upcast": (6, 4, 0)}
+#: torch's own builtin for the call, bound before any capture
+BOUND = torch._C._nn.scaled_dot_product_attention
+
+
+def by_bound(q, k, v):
+    """A function torch hands to a function mode, as it does its own (`handle_torch_function`), which makes the call
+    through `BOUND`."""
+    if torch.overrides.has_torch_function((q, k, v)):
+        return torch.overrides.handle_torch_function(by_bound, (q, k, v), q, k, v)
+    return BOUND(q, k, v, is_causal=True)
 
 
 class Attending(nn.Module):
     """An embedding, q, k and v projections, one attention call and a head. `how`: the call as it is, with dropout,
-    with a trained bias as its mask, made by `nn.MultiheadAttention`, made a second time under no_grad, or followed
-    by a product that the step computes in float32 with autocast turned off around it."""
+    with a trained bias as its mask, made by `nn.MultiheadAttention`, made a second time under no_grad, followed by
+    a product that the step computes in float32 with autocast turned off around it, or made with q and k cast up to
+    float32, which autocast casts back for the kernel. And two that make no call the capture marks: attention by
+    hand (`nn.MultiheadAttention` asked for its weights), and the call made through `BOUND` inside `by_bound`."""
 
     def __init__(self, how: str) -> None:
         super().__init__()
@@ -689,18 +701,22 @@ class Attending(nn.Module):
         self.q, self.k, self.v, self.head = (nn.Linear(AH, AH, bias=False) for _ in range(4))
         if how == "mask":
             self.bias = nn.Parameter(torch.zeros(1, 1))
-        if how == "module":
+        if how in ("module", "weights"):
             self.att = nn.MultiheadAttention(AH, HEADS, bias=False, batch_first=True)
         if how == "wide":
             self.side = nn.Parameter(torch.randn(AH, AH))
 
     def forward(self, ids):
         x = self.emb(ids)
-        if self.how == "module":
-            return self.head(self.att(x, x, x, need_weights=False)[0])
+        if self.how in ("module", "weights"):
+            return self.head(self.att(x, x, x, need_weights=self.how == "weights")[0])
         b, s, d = x.shape
         q, k, v = (f(x).view(b, s, HEADS, d // HEADS).transpose(1, 2) for f in (self.q, self.k, self.v))
-        if self.how == "mask":
+        if self.how == "upcast":
+            q, k = q.float(), k.float()
+        if self.how == "bound":
+            a = by_bound(q, k, v)
+        elif self.how == "mask":
             a = tF.scaled_dot_product_attention(q, k, v, attn_mask=self.bias.expand(s, s))
         else:
             a = tF.scaled_dot_product_attention(q, k, v, is_causal=True, dropout_p=0.5 * (self.how == "dropout"))
@@ -744,7 +760,8 @@ def test_a_bf16_calls_ops_are_priced_at_16_bits_and_every_other_op_as_traced(how
     it, a float32 product inside autocast at float32. The step's |C| is under that capture's by exactly the call's
     ops (its products, its scalings, dropout's and a trained mask's add, forward and backward: the ops the counter
     counts in a call, `flops.Counter._attention`) at the difference of the two dtypes' prices, and by nothing else;
-    its MACs are the same. Whatever makes the call: `nn.MultiheadAttention`, and a call that has no backward."""
+    its MACs are the same. Whatever makes the call: `nn.MultiheadAttention`, and a call that has no backward. A
+    call whose q and k reach it in float32 is marked bf16 too, the dtype autocast hands the kernel."""
     from training_slowdown import gates
 
     g, unmarked = attending(how, True), attending(how, True, marked=False)
@@ -779,3 +796,28 @@ def test_a_float32_calls_ops_stay_at_32_bits(how):
         ("mm", ("float32", "float32"), None), ("bmm", ("float32", "float32"), "float32")}
     assert _priced(g) == _priced(unmarked) and {r["gates_per_mac"] for r in _priced(g)} == {gates.per_mac("gemm/f32")}
     assert products.step_gates(g) == products.step_gates(unmarked) > 0
+
+
+@pytest.mark.parametrize("how, dtype", [("weights", "bfloat16"), ("bound", "float32")])
+def test_attention_the_capture_marks_no_call_of_is_priced_as_traced(how, dtype):
+    """Under bf16 autocast, attention that is no call the capture marks: written by hand (`nn.MultiheadAttention`
+    asked for its weights, a `bmm` and a softmax), whose products autocast runs in bf16; and a call made through a
+    builtin bound before the capture inside a function torch hands to the capture's mode, which the mode does not
+    see there, so its products are the math kernel's float32. No row states a call, and the step is priced as a
+    capture that marks none prices it."""
+    g, unmarked = attending(how, True), attending(how, True, marked=False)
+    raw = products.raw_on_dial(g)["rows"]
+    assert {r["attention"] for r in raw} == {None}
+    assert {tuple(r["dtypes"]) for r in raw if r["op"] == "bmm"} == {(dtype, dtype)}
+    assert _priced(g) == _priced(unmarked) and products.step_gates(g) == products.step_gates(unmarked)
+
+
+def test_a_call_that_returns_in_another_dtype_than_it_is_marked_is_refused(monkeypatch):
+    """The marker's dtype is the one the call computes in, and either kernel returns in it: a call whose output is
+    in another dtype than its marker would have its ops priced in a dtype it did not compute in, and the capture is
+    refused, naming the call and both dtypes."""
+    monkeypatch.setattr(trace, "_computes_in", lambda query: torch.float16)
+    with pytest.raises(CaptureRefused) as e:
+        attending("plain", True)
+    assert (e.value.reason, e.value.op) == ("trace", "scaled_dot_product_attention")
+    assert "an attention call marked torch.float16 returned torch.bfloat16" in str(e.value)

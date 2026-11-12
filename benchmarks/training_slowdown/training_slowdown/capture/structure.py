@@ -332,9 +332,10 @@ def _phases(gm) -> dict:
 
 
 def _attention(gm) -> dict:
-    """The nodes a scaled-dot-product attention call computes, forward and backward, each with the dtype of the
-    call's query as the call took it: the innermost ``te_capture::attention::DTYPE`` marker around it. That dtype is
-    the one |C| counts the node in (`_counted_dtype`)."""
+    """The nodes a scaled-dot-product attention call computes, forward and backward, each with the dtype the call
+    computes in, its query's as autocast hands it to the kernel: the innermost ``te_capture::attention::DTYPE``
+    marker around it (`capture.trace._MarkedAttention`). That dtype is the one |C| counts the node in
+    (`_counted_dtype`)."""
     out = {}
     for n, markers in _marked(gm):
         m = next((m for m in markers if m.startswith(ATTENTION)), None)
@@ -344,14 +345,15 @@ def _attention(gm) -> dict:
 
 
 def _counted_dtype(attention: dict, n, traced: str | None) -> str | None:
-    """The dtype |C| counts node `n` in, which was traced in `traced`: the query's of the scaled-dot-product
-    attention call that computes it (`_attention`), else the traced one.
+    """The dtype |C| counts node `n` in, which was traced in `traced`: the one the scaled-dot-product attention call
+    that computes it computes in (`_attention`), else the traced one.
 
-    The graph holds a call as the math backend computes it, from operands cast up to float32 where the query is 16
-    bits wide; on the path a job runs the card's fused kernel computes the call, in the query's dtype. So the call's
-    six matrix products are counted at the kernel's width, on the premise `capture.products.ATTENTION_PREMISE`. The
+    The graph holds a call as the math backend computes it, from operands cast up to float32 where they are 16 bits
+    wide; on the path a job runs the card's fused kernel computes the call in its operands' dtype. So the call's six
+    matrix products are counted at the kernel's width, on the premise `capture.products.ATTENTION_PREMISE`. The
     call's other counted ops (the scalings of q and of k, dropout's, a mask's add) are counted with them because the
-    job's count prices them so (`flops.Counter._attention`), which keeps a job's count and its trace op for op."""
+    job's count names them in that dtype too (`flops.dtype_of`, on the stand-ins `flops.Counter._attention` makes in
+    the kernel's operands' dtype), which keeps a job's count and its trace op for op."""
     return attention.get(n) or traced
 
 

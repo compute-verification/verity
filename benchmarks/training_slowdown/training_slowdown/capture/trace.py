@@ -36,7 +36,8 @@ agree node for node, so a step whose graph changes with the batch size is refuse
 Scaled-dot-product attention runs on its math backend during capture, so attention is its matmuls and softmax. That
 backend computes a 16-bit call from operands it casts up to float32, so the graph alone does not show the dtype the
 call was made in. The capture states it at the call: everything a call computes, forward and backward, is inside a
-``te_capture::attention::DTYPE`` marker, DTYPE its query's dtype (`_marked_attention`).
+``te_capture::attention::DTYPE`` marker, DTYPE the dtype the call computes in: its query's as autocast hands it to the
+kernel (`_marked_attention`).
 
 `CaptureRefused` names what stops a capture, with the user's source line where there is one: a tensor value read into
 Python (``aten._local_scalar_dense``: an ``if`` on a tensor, ``.item()``), an output shape set by values
@@ -315,11 +316,13 @@ def _marked_backward():
 
 class _MarkedAttention(torch.overrides.TorchFunctionMode):
     """Every scaled-dot-product attention call the step makes runs inside a ``te_capture::attention::DTYPE`` marker,
-    DTYPE the query's dtype as the call takes it, and so does the call's backward: each autograd node the call made
-    (one reached from its output and numbered between the call's start and its end) enters the marker before it runs
-    and leaves it after. The mode sees the call at torch's own dispatch, however the step names the function.
-    `handling` counts the other calls it is handling: torch turns a mode off while it handles one, so a call made
-    inside one is seen only where it is made with the mode entered again (`_marked_attention`)."""
+    DTYPE the dtype the call computes in (`_computes_in`), and so does the call's backward: each autograd node the
+    call made (one reached from its output and numbered between the call's start and its end) enters the marker
+    before it runs and leaves it after. Either kernel returns in the dtype its operands reached it in, so a call that
+    returns in another than DTYPE is refused. The mode sees the call at torch's own dispatch, however the step names
+    the function. `handling` counts the other calls it is handling: torch turns a mode off while it handles one, so a
+    call made inside one is seen only where it is made with the mode entered again (`_marked_attention`), and one
+    made there through a name bound before the capture is not marked."""
 
     def __init__(self, call) -> None:
         super().__init__()
@@ -333,11 +336,15 @@ class _MarkedAttention(torch.overrides.TorchFunctionMode):
                 return func(*args, **kwargs)
             finally:
                 self.handling -= 1
-        query = args[0] if args else kwargs["query"]
-        marker = f"{ATTENTION}{str(query.dtype).removeprefix('torch.')}"
+        dtype = _computes_in(args[0] if args else kwargs["query"])
+        marker = f"{ATTENTION}{str(dtype).removeprefix('torch.')}"
         first = torch.autograd._get_sequence_nr()
         with torch.autograd.profiler.record_function(marker):
             out = func(*args, **kwargs)
+        if out.dtype != dtype:
+            raise CaptureRefused("trace", "scaled_dot_product_attention",
+                                 f"an attention call marked {dtype} returned {out.dtype}, so the dtype its ops are "
+                                 f"priced in is not the one it computed in")
         last = torch.autograd._get_sequence_nr()
         made, stack = set(), [out.grad_fn]
         while stack:
@@ -348,6 +355,16 @@ class _MarkedAttention(torch.overrides.TorchFunctionMode):
             _mark_node(node, marker)
             stack.extend(f for f, _ in node.next_functions)
         return out
+
+
+def _computes_in(query: torch.Tensor) -> torch.dtype:
+    """The dtype a scaled-dot-product attention call computes in, from its query as the step passes it: autocast's
+    where autocast is on for the query's device and casts it (a floating query that isn't float64), as it does the
+    call's operands before either kernel takes them; else the query's own."""
+    device = query.device.type
+    if torch.is_autocast_enabled(device) and query.is_floating_point() and query.dtype != torch.float64:
+        return torch.get_autocast_dtype(device)
+    return query.dtype
 
 
 @contextlib.contextmanager
