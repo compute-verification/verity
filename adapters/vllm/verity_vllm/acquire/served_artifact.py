@@ -52,7 +52,7 @@ def differences(pinned: dict[str, Any], loaded: dict[str, Any], parts: tuple[str
     """Each kernel or winner whose config `loaded` does not share with `pinned`, by name."""
     out = []
     for part in parts:
-        a, b = pinned.get(part) or {}, loaded.get(part) or {}
+        a, b = ({} if held is None else held for held in (pinned.get(part), loaded.get(part)))
         for k in sorted(set(a) | set(b)):
             if a.get(k) != b.get(k):
                 out.append(f"{part} {k}: pinned {a.get(k, 'absent')}, loaded {b.get(k, 'absent')}")

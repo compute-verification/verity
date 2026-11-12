@@ -168,7 +168,7 @@ class Top1SwitchMoE(Experts):
 
 def test_M1_sparse_gather_moe_is_refused_at_the_routing_for_every_example_input():
     torch.manual_seed(0)
-    m = ex.NegMoE(H=H, I=INTER, E=E, k=K)
+    m = ex.NegMoE(H=H, INTER=INTER, E=E, k=K)
     reps = [derive_report(m, (torch.empty(T, H),), **REF, name="NegMoE") for _ in range(2)]
     for rep in reps:
         assert not rep.ok, "a sparse-gather MoE derived to a Program: its structure would encode the example input's routing"

@@ -13,7 +13,8 @@ docstring says what it holds.
   tensor-parallel stages (`tp`). Otherwise it is run, as those commands.
 - **Loads:** `verity.circuits` and `verity.definitions`; the integration's `program`, `records`, `observe`, `query`,
   `engine`, `config`, `settings` and `log`, and `check.program_ops` and `check.replay`; numpy, and torch inside the
-  sampled replay. Four names of `pipeline` are still read inside functions; the layering list holds them.
+  sampled replay. Two commands' `main` still read `pipeline.gc_tuning.tune` inside the function; the layering list holds
+  them.
 
 What the integration's other packages import, module by module; each module lists these names in its `__all__`.
 `Options` and `main` of `global_match`, `batch_decomp` and `program_dag`, which the command line takes from a

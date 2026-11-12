@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import sys
 import time
 from dataclasses import dataclass
@@ -35,30 +34,44 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm import settings
-from verity_vllm.config import option, workload_arg
+from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine.collectives import fused_norm as FN
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline.build import read_tp_links, same_module_path
 from verity_vllm.pipeline.launch_context import rows_at
+
+__all__ = ["Options", "main"]
+
+
+def _first_step(tok: dict, request_id: str) -> int:
+    """The forward that ran a request's prefill, as the capture's `tokens.json` has it (`timing.requests[rid].first_step`); 0 for a
+    capture written without the block, a request the block does not list, and a step the engine did not report (null)."""
+    timing = tok.get("timing")
+    listed = timing.get("requests") if timing else None
+    entry = listed.get(request_id) if listed else None
+    first = entry.get("first_step") if entry else None
+    return int(first) if first else 0
 
 
 def step_rows(tok: dict) -> dict[int, tuple[int, int]]:
     """{engine step: (tokens, sampled rows)} of the schedule a capture's `tokens.json` realized: each request from the forward that ran
-    its prefill (`timing.requests[rid].first_step`, 0 without one) for one forward per generated token, as `launch_context.rows_at`
-    schedules a declared request (a chunked prefill is not modelled: its steps' rows differ and fail)."""
-    timing = (tok.get("timing") or {}).get("requests") or {}
-    reqs = [{"arrive_step": int((timing.get(str(q["request_id"])) or {}).get("first_step") or 0), "prompt_len": len(q["prompt_token_ids"]),
+    its prefill (`_first_step`) for one forward per generated token, as `launch_context.rows_at` schedules a declared request (a
+    chunked prefill is not modelled: its steps' rows differ and fail)."""
+    reqs = [{"arrive_step": _first_step(tok, str(q["request_id"])), "prompt_len": len(q["prompt_token_ids"]),
              "max_tokens": len(q["generated_token_ids"])} for q in tok["requests"]]
     last = max((q["arrive_step"] + max(1, q["max_tokens"]) for q in reqs), default=0)
     return {e: (sum(rows_at(q, e) for q in reqs), sum(1 for q in reqs if rows_at(q, e))) for e in range(last)}
 
 
 def _engine_main(args) -> None:
-    from verity_vllm.engine import engine_profile as prof, env as engine_env
+    from verity_vllm.engine import engine_profile as prof
+    from verity_vllm.engine import env as engine_env
 
     prof.apply_env()
     from vllm import LLM
 
-    from verity_vllm.engine import served, vllm_adapter as va
+    from verity_vllm.engine import served
+    from verity_vllm.engine import vllm_adapter as va
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 
@@ -85,7 +98,7 @@ def _engine_main(args) -> None:
     topo = llm.collective_rpc("tp2_probe", timeout=args.rpc_timeout) if instrumented else None
     (out / "topology.json").write_text(json.dumps({"arm": args.arm, "tp": args.tp, "build_s": round(build_s, 1),
                                                     "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
-                                                    "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))}),
+                                                    "env": settings.redact({k: v for k, v in settings.environ().items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS"))}),
                                                     "ranks": topo}, indent=1, default=str) + "\n")
     if not args.no_warmup:
         warm = va.throwaway_requests(eng, wl["requests"], seed=va.WARMUP_SEED)
@@ -154,9 +167,9 @@ def _structure(builds: list[str], recs: dict, steps: list, sched: dict[int, tupl
         sig_sites = [ln.get("module") for ln in links["links"]]     # recorder vocabulary, from the recorded model_root (read_tp_links)
         sites_exact = bool(links.get("model_root"))              # a v1 file has no recorded root: dotted-suffix identity (same_module_path)
         if int(links["rank"]) != r or int(links["world"]) != world:
-            raise SystemExit(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
+            raise Refused(f"tp_links of build {bdir}: rank {links['rank']} world {links['world']} != rank {r} of world {world}")
         if any(len(ln["peers"]) != world - 1 for ln in links["links"]):
-            raise SystemExit(f"tp_links of rank {r}: a link does not name exactly world-1 = {world - 1} peers")
+            raise Refused(f"tp_links of rank {r}: a link does not name exactly world-1 = {world - 1} peers")
         per_step: dict[Any, dict[str, Any]] = {}
         bad = []
         bad_sites = []
@@ -408,12 +421,12 @@ def _build_dirs(args) -> list[str]:
     """The rank Build dirs in rank order: `--build-rank DIR` repeated (world = count), or the two-rank `--build-rank0/--build-rank1`."""
     if getattr(args, "build_rank", None):
         if args.build_rank0 or args.build_rank1:
-            raise SystemExit("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
+            raise UsageError("give either --build-rank DIR (repeated, rank order) or --build-rank0/--build-rank1, not both")
         if len(args.build_rank) < 2:
-            raise SystemExit(f"--build-rank: {len(args.build_rank)} rank Build(s); a tensor-parallel world needs at least 2")
+            raise UsageError(f"--build-rank: {len(args.build_rank)} rank Build(s); a tensor-parallel world needs at least 2")
         return list(args.build_rank)
     if not (args.build_rank0 and args.build_rank1):
-        raise SystemExit("check arm: --build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
+        raise UsageError("check arm: --build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
     return [args.build_rank0, args.build_rank1]
 
 
@@ -438,10 +451,10 @@ def match_record(match_dir: str, request_ids: dict[str, str], world: int) -> tup
     for q in json.loads(mp.read_text())["requests"]:
         lg = request_ids.get(str(q["request_id"]))
         if lg is None:
-            raise SystemExit(f"fail-closed: Match record request {q['request_id']} is not a request of this workload")
+            raise Refused(f"fail-closed: Match record request {q['request_id']} is not a request of this workload")
         tokens[lg] = [int(t) for t in q["generated_token_ids"]]
     if set(tokens) != set(request_ids.values()):
-        raise SystemExit(f"fail-closed: Match record covers {sorted(tokens)} but the workload declares {sorted(set(request_ids.values()))}")
+        raise Refused(f"fail-closed: Match record covers {sorted(tokens)} but the workload declares {sorted(set(request_ids.values()))}")
     verdict = Path(match_dir) / "tp2_match.json"
     return tokens, {"path": str(mp), "requests": len(tokens), "generated_total": sum(len(v) for v in tokens.values()),
                     "tp2_match_verdict": json.loads(verdict.read_text()).get("pass") if verdict.exists() else None,

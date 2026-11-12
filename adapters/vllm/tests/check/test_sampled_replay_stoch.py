@@ -198,9 +198,7 @@ def test_a_selector_reading_its_split_count_from_a_program_input_is_unresolved_b
 
 def test_the_selector_is_a_replayed_stratum_of_the_population_not_a_no_evaluator_gap():
     inst, pi, blocks, _ = _honest()
-    pop = POP.population(pi, "r0", arrive=5) if hasattr(POP, "population") else None
-    if pop is None:
-        pytest.skip("population API not exposed by name")
+    pop = POP.population(pi, "r0", arrive=5)
     vus, not_ev = pop[0], pop[1]
     fams = {RM.spec_family(pi.by_i[v["i"]]["spec"]) for v in vus}
     assert "GumbelTopPTokenSelect_v1" in fams

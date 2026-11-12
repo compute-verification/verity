@@ -28,7 +28,10 @@ from verity_vllm.config import (
 )
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import P2P_SYS_TARGETS
+from verity_vllm.pipeline import global_program as GP
 from verity_vllm.pipeline import workload as W
+from verity_vllm.program import prefix_plan as PP
+from verity_vllm.records.workload import Workload
 
 GLM = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 
@@ -212,6 +215,31 @@ def test_a_shared_prefix_no_later_request_could_reuse_fails_the_check():
     assert any("arrives after the first one" in v for v in W.check_plan(_prefix_row(255)))
 
 
+def test_the_check_names_a_length_out_of_range_on_either_side_and_a_stochastic_row_short_of_distinct_seeds():
+    p = _prefix_row(0)
+    assert W.check_plan(p) == []
+    lengths = [*p["input_lengths"][:-1], 257]
+    assert f"input length outside [{p['min_input']}, 256]: {lengths}" in W.check_plan({**p, "input_lengths": lengths})
+    (outputs,) = [k for k in p if k.startswith("output_")]                # the plan's list of the most tokens each request may write
+    most = [*p[outputs][:-1], 33]
+    assert any(v.startswith("output ") and v.endswith(f" outside [1, 32]: {most}") for v in W.check_plan({**p, outputs: most}))
+    short = "stochastic row without B distinct per-request sampling seeds"
+    for seeds, refused in (([7] * 8, True), (list(range(7)), True), (list(range(8)), False)):
+        assert (short in W.check_plan({**p, "sampling": "topp", "sampling_seeds": seeds})) is refused
+
+
+def test_a_shared_prefix_rows_manifest_requests_state_each_warm_requests_cached_rows_and_their_producers():
+    """`verity_vllm.pipeline.global_program.manifest_requests` on a row that serves with the prefix cache: each request's cached
+    rows and the Program ids of the requests that produced them, as the prefix plan gives them; a row without it states neither."""
+    doc = W.workload_doc(_prefix_row(128), hf_repo="org/x", revision="0" * 40, case="X", tok=_CharTok())
+    rows = GP.manifest_requests(Workload.of(doc, "w.json"))
+    plan = PP.plan(doc)
+    assert [(r["cached"], r["producers"]) for r in rows] == [(p["cached"], [f"r{q}" for q in p["producers"]]) for p in plan]
+    assert any(r["cached"] for r in rows) and not all(r["cached"] for r in rows)
+    plain = W.workload_doc(_prefix_row(0), hf_repo="org/x", revision="0" * 40, case="X", tok=_CharTok())
+    assert not any("cached" in r or "producers" in r for r in GP.manifest_requests(Workload.of(plain, "w.json")))
+
+
 def test_a_tp_workload_runs_batch_invariant_only_on_a_batch_invariant_row(tmp_path):
     assert _generate(tmp_path, "x__bf16__h200__tp8__b1__i256__o32__mixed__greedy__eager")["engine"]["env"] == {"VLLM_BATCH_INVARIANT": "0"}
 
@@ -259,3 +287,45 @@ def test_every_tp_row_disables_p2p_and_the_custom_all_reduce_exactly_on_a_sys_ta
         sys_box = row_target(p.stem) in P2P_SYS_TARGETS
         assert eng.env.get("NCCL_P2P_DISABLE") == ("1" if sys_box else None), p.name
         assert eng.args["disable_custom_all_reduce"] is sys_box, p.name
+
+
+def test_the_generator_logs_what_it_did_each_message_at_its_level_and_keeps_its_exit_codes(tmp_path, monkeypatch, caplog):
+    """What `verity_vllm.pipeline.workload` says goes to the log: the `--check` line and the written file's note at INFO, a failed
+    self-check without `--check` at WARNING (the file is still written), and a refusal at ERROR beside its exit code."""
+    row = "x__bf16__h100__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+    opts = dict(row_id=row, hf_repo="org/x", revision="0" * 40, batch=1, max_input=256, max_output=32, case="X", out=str(tmp_path / "w.json"))
+    a = W.Options(**opts)
+    plan = W.plan(row, 1, 256, 32, sampling=a.sampling, arrivals=a.arrivals, shared_prefix=0)
+    bad = ["a request never arrives", "a request has no output"]
+
+    def said() -> list[tuple[str, str]]:
+        got = [(r.levelname, r.getMessage()) for r in caplog.records if r.name == "verity_vllm.pipeline.workload"]
+        caplog.clear()
+        return got
+
+    def checked(record: tuple[str, str], verdict: str) -> bool:
+        """The `--check` line: the row and its plan's lengths first, the verdict last."""
+        level, line = record
+        return (level == "INFO" and line.startswith(f"[check] {row}: B=1 lens={plan['input_lengths']} ")
+                and line.endswith(f" steps={plan['arrive_steps']} -> {verdict}"))
+
+    doc = _generate(tmp_path, row)
+    note = ("INFO", f"{tmp_path / 'w.json'}: {doc['note'][:220]}")
+    check, wrote = said()
+    assert checked(check, "PASS") and wrote == note
+    _generate(tmp_path, row, rc=2, reason=["moe_backend"])
+    check, refused = said()
+    assert checked(check, "PASS")
+    assert refused == ("ERROR", f"--reason ['moe_backend']: a reason is SWITCH=TEXT for a switch of {sorted(W.served.DEFAULTS)}")
+    _generate(tmp_path, "x-eager", rc=3, target=json.dumps({"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False}))
+    assert said()[-1] == ("ERROR", "row id execution suffix 'x-eager' != the target's execution label 'eager'")
+    monkeypatch.setattr(W, "find_tokenizer", lambda repo, revision: None)
+    assert W.main(W.Options(**opts)) == 2
+    assert said() == [("ERROR", f"tokenizer.json for org/x@{'0' * 40} not found under {W.hf_home()} — pass --tokenizer or use --lengths-only")]
+    monkeypatch.setattr(W, "check_plan", lambda plan: bad)
+    (tmp_path / "w.json").unlink()
+    _generate(tmp_path, row, rc=1)
+    (check,) = said()
+    assert checked(check, "FAIL: " + "; ".join(bad)) and not (tmp_path / "w.json").exists()
+    assert W.main(W.Options(**opts, lengths_only=True)) == 0 and (tmp_path / "w.json").exists()
+    assert said() == [("WARNING", "§12 self-check: " + "; ".join(bad)), note]

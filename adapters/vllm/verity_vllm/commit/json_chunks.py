@@ -12,6 +12,8 @@ import json
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from typing import Any
 
+__all__ = ["dict_pieces"]
+
 CHUNK = 1024
 
 

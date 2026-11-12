@@ -23,7 +23,7 @@ from verity_vllm.commit import executed_prefix as EPX
 Record = dict[str, Any]
 Lines = Callable[[], list[str]]
 
-#: two requests of four steps each: `a` runs to its cap, `b` stops at the EOS (token 2) it serves second
+#: two requests of four steps each: `a` runs to its `max_tokens`, `b` stops at the EOS (token 2) it serves second
 REQS: list[Record] = [{"request_id": "a", "prompt_token_ids": [1, 9], "max_tokens": 4, "seed": 11},
                       {"request_id": "b", "prompt_token_ids": [1], "arrive_step": 1}]
 TOKENS: Record = {"a": [5, 6, 7, 8], "b": [5, 2]}
@@ -102,14 +102,14 @@ def test_a_prefix_no_account_links_is_passed_on_with_its_faults_named(tmp_path: 
                     f"FAULTS {faults}")
 
 
-def test_with_no_early_stop_the_facts_pass_quietly_and_a_k_draw_takes_none(tmp_path: Path, said: Lines) -> None:
+def test_with_no_early_stop_the_facts_pass_quietly_and_a_sample_of_k_takes_none(tmp_path: Path, said: Lines) -> None:
     full = {"a": [5, 6, 7, 8], "b": [5, 6, 7, 8]}
     linked = {"coverage": LINKED["coverage"] | {"commit_account_link": LINKED["coverage"]["commit_account_link"] | {"served_by_request": {"r0": 4, "r1": 4}}}}
     linkage = {"result": True, "horizon": {"r0": {"linked_steps": 4}, "r1": {"linked_steps": 4}}}
     kw, _facts = C2.executed_prefix_kw(sources(tmp_path, linked, full), executed(full), linkage, {"r0": 0, "r1": 1}, LABELS)
     assert [(v["n_exec"], v["faults"]) for v in kw["executed_prefix"].values()] == [(4, []), (4, [])]
-    drawn, _facts = C2.executed_prefix_kw(sources(tmp_path, linked, full, replay_k=3), executed(full), linkage, {"r0": 0, "r1": 1}, LABELS)
-    assert drawn == {"executed_prefix": {}}
+    kw, _facts = C2.executed_prefix_kw(sources(tmp_path, linked, full, replay_k=3), executed(full), linkage, {"r0": 0, "r1": 1}, LABELS)
+    assert kw == {"executed_prefix": {}}
     assert said() == []
 
 
@@ -170,7 +170,7 @@ def test_nothing_is_reconciled_without_the_class_or_without_an_early_stop(tmp_pa
     assert said() == []
 
 
-def test_the_seed_is_the_prover_s_else_drawn_from_the_challenge_and_the_run_root_else_from_the_run_root_alone() -> None:
+def test_the_seed_is_the_prover_s_else_derived_from_the_challenge_and_the_run_root_else_from_the_run_root_alone() -> None:
     rc = SimpleNamespace(run_root=bytes(range(64)))
     assert C2.seed_of(SimpleNamespace(replay_seed=0, replay_challenge="c0ffee"), rc) == (0, RC.PROVER_SEED_SOURCE, "prover-chosen", None)
     seed, source = C2.SR.challenge_seed("c0ffee", rc.run_root)
@@ -186,8 +186,10 @@ class Steps:
         self.calls: list[tuple[Any, ...]] = []
         self.replays: list[Record] = []
         self.reader = SimpleNamespace(record=lambda: dict(OPENED))
-        self.loaded: Record = {"r0": {"instances": {"rows": ["p0"]}, "dir": "/programs/r0", "result": {"T": 3}},
-                               "r1": {"instances": {"rows": ["p1"]}, "dir": "/programs/r1", "result": {"T": 3}}}
+        # each Program's one row is of a family with no row kernel and no delegate: a row as `evaluate` may read it, which the
+        # replay evaluates nothing of
+        self.loaded: Record = {"r0": {"instances": {"rows": [{"spec": "NotReplayed_v1{request=0}"}]}, "dir": "/programs/r0", "result": {"T": 3}},
+                               "r1": {"instances": {"rows": [{"spec": "NotReplayed_v1{request=1}"}]}, "dir": "/programs/r1", "result": {"T": 3}}}
         self.progs: Record = {k: v["instances"] for k, v in self.loaded.items()}
         monkeypatch.setattr(C2, "programs_of_record", self.programs_of_record)
         monkeypatch.setattr(C2.SR, "ProgramIndex", self.index)
@@ -231,7 +233,7 @@ def test_the_replay_and_the_linkage_are_given_the_run_s_facts_of_record_and_the_
     arr = {"r0": 0, "r1": 1}
     assert [c[0] for c in steps.calls] == ["programs", "index", "readers", "linkage", "replay", "replay"]
     assert steps.calls[0] == ("programs", LABELS, True)
-    assert steps.calls[1] == ("index", {"rows": ["p0"]}, "/programs/r0")
+    assert steps.calls[1] == ("index", {"rows": [{"spec": "NotReplayed_v1{request=0}"}]}, "/programs/r0")
     assert steps.calls[2] == ("readers", None, "stub", Weights("model."), steps.progs, {"entries": 5}, arr, steps.loaded,
                               {"manifest_digest": "m" * 8}, "row", {"r0": "d" * 8, "r1": "e" * 8})
     linked = steps.calls[3]
@@ -300,7 +302,7 @@ def test_a_plan_makes_the_sample_s_reads_and_evaluates_nothing(tmp_path: Path, m
     assert "opened_values" not in s.row["commit"] and "not_executed_reconciliation" not in s.row["commit"]
 
 
-def test_a_planner_s_plan_is_drawn_from_its_programs_and_only_the_reads_are_made_here(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_planner_s_plan_is_made_from_its_programs_and_only_the_reads_are_made_here(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     steps, s, asked = Steps(monkeypatch), sources(tmp_path), list[Record]()
 
     def plan(request: Record) -> Record:
@@ -308,7 +310,7 @@ def test_a_planner_s_plan_is_drawn_from_its_programs_and_only_the_reads_are_made
         return {"plan": {"picks": 4}, "reads": ["read0", "read1", "read2"]}
     planner = SimpleNamespace(ready=lambda: {"program_steps": {"r0": 4, "r1": 4}, "embed_op_path": "model/embed", "prepare_s": 1.5}, plan=plan)
     sr, lk = C2.evaluate(s, {}, plan=True, planner=planner)
-    assert [c[0] for c in steps.calls] == ["readers", "linkage", "touch"], "no Program is loaded here and no sample drawn"
+    assert [c[0] for c in steps.calls] == ["readers", "linkage", "touch"], "no Program is loaded here and no sample taken"
     assert steps.calls[0][3:6] == (C2.no_weights, {}, {"entries": 5}) and steps.calls[0][7] == {}
     with pytest.raises(RuntimeError, match="the Programs are a planner's, whose plan evaluates no row"):
         steps.calls[0][3]("model.layers.0.weight")
@@ -318,8 +320,8 @@ def test_a_planner_s_plan_is_drawn_from_its_programs_and_only_the_reads_are_made
     assert set(request.pop("sr_kw")["executed_prefix"]) == {"r0", "r1"}
     assert request == {"binding_map": str(tmp_path / "binding_map_p0.json"), "arrivals": {"r0": 0, "r1": 1}, "seed": 7,
                        "seed_source": RC.PROVER_SEED_SOURCE, "seed_challenge": None}
-    draw_s, reads_s = sr.pop("draw_s"), sr.pop("reads_s")
-    assert sr == {"picks": 4, "prepare_s": 1.5, "reads": 3} and draw_s >= 0 and reads_s >= 0 and lk == LINKAGE
+    sample_s, reads_s = sr.pop("draw_s"), sr.pop("reads_s")
+    assert sr == {"picks": 4, "prepare_s": 1.5, "reads": 3} and sample_s >= 0 and reads_s >= 0 and lk == LINKAGE
 
 
 def test_for_a_planner_that_is_not_ready_the_programs_are_loaded_here_and_the_plan_is_still_its(

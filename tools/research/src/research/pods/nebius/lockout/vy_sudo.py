@@ -69,6 +69,10 @@ PROPERTIES = frozenset({
     "KillMode", "SendSIGKILL", "TimeoutStopSec", "EnvironmentFile",
 })
 EMPTY_ONLY = frozenset({"CapabilityBoundingSet", "AmbientCapabilities"})
+#: the namespace types RestrictNamespaces= may name here: only `yes` (make none) or a space-separated list out of these narrows the
+#: unit; `no`, a `~` list or any other value widens it. jobuser.check_namespaces (NAMESPACES) holds the same set for the launcher's
+#: side; the two agree by test_nebius_lockout, since this file is installed on a node as a lone `python3 -I` script and cannot import it
+NAMESPACES = frozenset({"user", "mnt", "net"})
 HF_BIND = ("/workspace/jobs/hf", "/workspace/hf")
 BUNDLE_ROOTS = ("/workspace/jobs/cov", "/workspace/jobs/probe-jit")
 #: every form, as the usage line lists them; jobuser.py asks for root through this helper once it reads "job-reclaim" here
@@ -174,6 +178,21 @@ def job_user(name: str) -> pwd.struct_passwd:
     return pw
 
 
+def _restrict_namespaces(value: str) -> None:
+    """Refuse a RestrictNamespaces= that would widen the unit. systemd reads this property as a boolean or a whitespace-separated
+    list of namespace types: `yes` makes none (the launcher's default), a list of NAMESPACES makes only those, but `no`/`false`/`0`
+    make every type, and a `~`-prefixed list all but those. The launcher (jobuser.check_namespaces) only ever sends `yes` or a
+    sorted subset of NAMESPACES, so hold a direct caller to the same: `yes`, or a non-empty list naming NAMESPACES only. A property
+    repeated with different values is checked here on each occurrence, so a widening one is caught even when systemd would take the
+    last."""
+    types = value.split()
+    if value == "yes" or (types and all(t in NAMESPACES for t in types)):
+        return
+    raise Refused(f"RestrictNamespaces={value!r} would widen the unit: only `yes` (make no namespace) or a space-separated list of "
+                  f"{', '.join(sorted(NAMESPACES))} is allowed (systemd reads anything else, e.g. no or a ~list, as every namespace "
+                  "type or all but some)")
+
+
 def _strip_setpriv(cmd: list[str], uid: int, gid: int) -> list[str]:
     drop = ["setpriv", f"--reuid={uid}", f"--regid={gid}", "--init-groups", "--"]
     return cmd[len(drop):] if cmd[:len(drop)] == drop else cmd
@@ -203,6 +222,8 @@ def systemd_run(args: list[str], uid: int, gid: int, user=job_user) -> list[str]
                     raise Refused(f"EnvironmentFile {p}: no such file") from None
                 if not p.is_file() or p.is_symlink() or st.st_uid != uid:
                     raise Refused(f"EnvironmentFile {p} is not a file of the caller's")
+            elif k == "RestrictNamespaces":
+                _restrict_namespaces(v)
             out += ["-p", f"{k}={v}"]
         elif o == "--unit":
             out.append(f"--unit={_unit(next(it, ''))}")

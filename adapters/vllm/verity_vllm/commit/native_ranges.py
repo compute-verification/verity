@@ -3,7 +3,7 @@
 `NativeRangeOpenings` is a mixin of `commit.committer.native_host.NativeHostCommitter`: a run of leaves of a step is opened from the retained copy
 with the boundary siblings of its tree (`open_range`) and verified against the run commitment (`verify_range`); `leaf_span` maps a tensor's
 bytes to the leaves that hold them.  `fault_retained_flip` is the negative test of that path.  `open_levels` is one leaf's path from level
-tensors; `level_sizes` is the number of nodes on each level.
+tensors.
 
 The step trees are rows-sha512's (`step_rows`): their leaves are hiding leaves salted from each step's 64-byte key (``row_keys``), their
 trees complete frame-v3-sha512 trees and their roots 64 bytes; a range opening carries its leaves' salts.
@@ -21,6 +21,8 @@ from verity.commitments import Opening as FrameOpening
 from verity.commitments.multiproof import multiproof_root
 
 from verity_vllm.commit import step_rows
+
+__all__ = ["DROPPED"]
 
 # A leaf a `--retain device` window's draw-gated release did not keep (`committer.device_pool`): refused, never replayed.
 DROPPED = "dropped at its window's draw-gated release (--retain device): a draw that names it is refused, never answered from a recomputation"
@@ -68,16 +70,6 @@ def open_range_levels(levels: list, lo: int, hi: int) -> tuple:
         parts = [p.cpu() for p in parts]
     got = {di: row.tobytes() for di, row in zip(idx, torch.stack(parts).cpu().numpy())} if parts else {}
     return tuple((None if left is None else got[(d, left)], None if right is None else got[(d, right)]) for d, (left, right) in enumerate(need))
-
-
-def level_sizes(leaf_count: int, levels: int) -> list[int]:
-    """Nodes per level of a step tree over `leaf_count` leaves, leaves first: ceil(n / 2^L) for L = 0..min(levels, height) (an odd
-    trailing node is lifted).  A windowed step keeps these levels on host below its window level (`levels` = the window's)."""
-    height, m = 0, leaf_count
-    while m > 1:
-        m = (m + 1) // 2
-        height += 1
-    return [-(-leaf_count // (1 << L)) for L in range(min(levels, height) + 1)]
 
 
 class NativeRangeOpenings:

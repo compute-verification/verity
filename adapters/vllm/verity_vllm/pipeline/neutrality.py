@@ -35,6 +35,8 @@ from verity_vllm.engine import env as engine_env
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import epoch
 
+__all__ = ["Options", "main"]
+
 PINS = CR.INDEX
 #: `row run` flags a tier's rebuild adds: GLM-5.3's Build manifest (the word check over 8 ranks) takes hours at 200-450 GB a worker
 #: and decides no Program digest, so the heavy tier's Build ends at GP-01.

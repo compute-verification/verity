@@ -50,6 +50,7 @@ from typing import Any
 import numpy as np
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics.kernel_registry import Declined
+from verity.protocols.pouw.prover.circuit import SCHEMES
 from verity.protocols.pouw.prover.circuit import anchors as CA
 from verity.protocols.pouw.prover.circuit import plan as CPL
 from verity.protocols.pouw.prover.circuit.ncp2 import D
@@ -59,6 +60,7 @@ from verity_vllm.check.replay.delegate import Place, delegated
 from verity_vllm.protocols import pouw
 from verity_vllm.protocols.pouw import circuit as PC
 from verity_vllm.protocols.pouw import native as PN
+from verity_vllm.records.schema_ids import POUW_CIRCUIT_REPLAY_SCHEMA
 
 M32 = 0xFFFFFFFF
 #: the row's bias when the linear has none: −0, the identity of the bf16 add (`program.registry.pouw_rows`)
@@ -259,7 +261,7 @@ def replay(records: Sequence[PC.CallRecord], commitment: Mapping[str, Any], k: i
         w = link(t, plan, rec, opened_side)
         if w:
             why.append(f"call {rec.index}: {w}")
-    return {"schema": "verity-vllm/pouw-ncp-v2-replay/v3", "result": not why, "why": why[:12], "why_n": len(why),
+    return {"schema": POUW_CIRCUIT_REPLAY_SCHEMA, "result": not why, "why": why[:12], "why_n": len(why),
             "law": f"work K={k}" if plans else None, "record_k": CPL.RECORD_K, "sizes": dict(sizes), "calls": len(records),
             "weights": len(sides), "units": sum(r.units for r in records) + sum(s.units for s in sides),
             "drawn": sum(len(p.drawn) for p in plans), "proved_units": sum(roles.values()), "proved_by_role": dict(roles),
@@ -356,7 +358,7 @@ def around(comp: Any) -> Iterator[dict[str, Any] | None]:
     when it has one. The run's ``tamper`` setting makes it a negative control: ``tile`` replays the calls as `tamper_tiles`
     commits them, ``bias`` the executor's wrong-bias call (`pouw.Settings.tamper`). Yields None without such an entry."""
     entry = next((e for e in (getattr(comp, "entries", None) or ()) if e.split(":", 1)[0] == pouw.NAME
-                  and e.split(":", 1)[1] in PC.C.SCHEMES), None)
+                  and e.split(":", 1)[1] in SCHEMES), None)
     live = pouw.circuit_run(entry) if entry else None
     if live is None:
         yield None

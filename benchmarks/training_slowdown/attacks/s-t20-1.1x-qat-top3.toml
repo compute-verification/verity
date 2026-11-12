@@ -1,0 +1,15 @@
+# Quantization-aware training of the top three blocks: each of their matrices is the start's plus sparse ternary codes
+# of a latent Muon trains, one entry of five nonzero under one scale a matrix. E is the codes it trained.
+start = "s-t20"
+route = "qat"
+target = { gain = 1.1 }
+budget = { steps = 2640, batch = 64 }
+seeds = { search = [0], final = [0, 101, 102] }
+policy = "console"
+
+[dials]
+targets = "blocks.[345].w*.weight"
+keep = 0.2
+lr = 1.5e-3
+warmup = 50.0
+decay = 0.4

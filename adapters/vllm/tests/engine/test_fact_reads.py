@@ -12,6 +12,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 
+from tests import fake_vllm
 from verity_vllm.engine import build, engine_profile, run_facts
 from verity_vllm.pipeline.tp import rank_worker
 
@@ -45,7 +46,7 @@ _RANKS = [{"attention": "a", "tp_rank": 0}, {"attention": "a", "tp_rank": 1}]
 
 @pytest.mark.parametrize("llm", [
     NS(llm_engine=NS(vllm_config=_CONFIG), collective_rpc=lambda fn: _RANKS),
-    NS(vllm=NS(llm_engine=NS(vllm_config=_CONFIG)), collective_rpc=lambda fn: _RANKS),
+    NS(vllm=NS(llm_engine=NS(vllm_config=_CONFIG), collective_rpc=lambda fn: _RANKS)),
     NS(vllm_config=_CONFIG, collective_rpc=lambda fn: _RANKS),
 ], ids=["a vllm.LLM", "the wrapper around one", "its LLMEngine"])
 def test_the_profile_reads_the_config_of_whatever_the_handle_takes(monkeypatch, llm):
@@ -147,7 +148,7 @@ def _no_device(exc):
 @pytest.mark.parametrize("export, want_export", [(None, None), ("{bad", None), ('{"a": 1}', {"a": 1}), ("<dir>", None)])
 def test_versions_doc_keeps_the_facts_it_reads(monkeypatch, tmp_path, props, gpu, export, want_export):
     monkeypatch.setitem(sys.modules, "triton", _module("triton", __version__="t"))
-    monkeypatch.setitem(sys.modules, "vllm", _module("vllm", __version__="v"))
+    fake_vllm.install(monkeypatch)["vllm"].__version__ = "v"
     real = importlib.metadata.version
 
     def version(name):
@@ -165,6 +166,7 @@ def test_versions_doc_keeps_the_facts_it_reads(monkeypatch, tmp_path, props, gpu
         (tmp_path / "EXPORT.json").write_text(export)
     doc = run_facts.versions_doc()
     assert (doc["triton"], doc["vllm"], doc["flashinfer"], doc["transformers"]) == ("t", "v", None, "4.0")
+    assert doc["python"] == sys.version.split()[0]
     assert doc.get("gpu") == gpu
     assert doc.get("export") == want_export
     assert doc["host"] == {}

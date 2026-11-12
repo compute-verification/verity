@@ -28,6 +28,7 @@ def test_an_artifact_that_states_no_inputs_address_map_or_chronology_gives_a_dec
     art = {"schema": "verity/workload-program/v1", "ok": True, "workload_digest": "00" * 32, "requests": []}
     (tmp_path / "workload_program.json").write_text(json.dumps(art))
     gp = GD.from_gprog(str(tmp_path / "workload_program.json"))
+    assert gp["schema"] == GD.GP_SCHEMA == "cb-a/global-program/v1"
     assert gp["workload"] == {"path": None, "sha256": None, "n_requests": 0} and gp["requests"] == []
     assert (gp["chronology"], gp["address_space"], gp["applicability"]) == (None, None, None)
     assert gp["gprog_artifact"]["digest_verification"] == {"verified": False, "why": "descriptor.json.gz not beside the artifact"}

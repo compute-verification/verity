@@ -41,6 +41,9 @@ from verity_vllm.config import CHECKPOINTS as MANIFEST
 from verity_vllm.config import checkpoint_entries
 from verity_vllm.engine.profiles.cases import CASES
 
+__all__ = ["HF_CONFIG_DIR", "MANIFEST", "MODULE_PREFIX", "checkpoint_entries", "find_hf_config", "hf_snapshot",
+           "pinned_hf_config", "role_of_module"]
+
 MODULE_PREFIX = "dense_"                    # verity_vllm.observe.fold.profiles.dense_<ROLE>
 HF_CONFIG_DIR = Path(__file__).with_name("hf_configs")
 

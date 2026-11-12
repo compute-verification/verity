@@ -40,10 +40,15 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
+from verity.circuits.codec import encode_program, program_digest
 from verity.circuits.types import RecordType
 
+from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, correspondence_digest
+from verity_vllm.pipeline.build_instances import write_instances
+from verity_vllm.program.prune import kept_records
+
 from .build import BuildResult, _Decoder, build_program, decoder
-from .common import Unexpressible
+from .common import Unexpressible, kind
 from .phi import Phi
 
 #: the request wrapper's attribute holding the model (`vllm_meta.GreedyRequest.model`): the root of every module path and weight name
@@ -220,7 +225,6 @@ def _forward(w: _Walk, S: Any, C: Any, M: int, p0: int) -> None:
 
 def _sample(w: _Walk, S: Any, C: Any, sampling: dict) -> None:
     """The sampled row's logits and its select (module docstring)."""
-    from .common import kind
     w.rows(S.logits, "LM head GEMM", "triton_launch", f"{WRAPPER}logits_processor", 1, [_view((1, C.V), BF16)], ((2, "other"),))
     if sampling.get("kind", "greedy") == "greedy":
         occ, node = w.site("argmax", "", [_view((1,), "int64")])
@@ -242,10 +246,8 @@ def name_request(raw: Any, net: Any, params: tuple, *, LP: int, T: int, C: int, 
     passes) over `params` (its user inputs, then the weights record), prefill LP rows after a cached prefix of C, then T decodes,
     sampled under `sampling`, then its length rule where `stop` gives one -> (its body in the registered compiler's form, its
     names), or `Unexpressible` (module docstring)."""
-    from verity_vllm.correspondence.runtime import SCHEMA
     from verity_vllm.program.frontend.seed_rule import NAME as SEED
     from verity_vllm.program.frontend.stop_rule import NAME as STOP
-    from verity_vllm.program.prune import kept_records
     S, Cm = net.specs, net.C
     w = _Walk(list(raw.nodes))
     for M, p0 in [(LP - C, C)] + [(1, LP + s) for s in range(T)]:
@@ -289,10 +291,6 @@ def write_build(out: str, program: Any, named: Named) -> str:
     `named`'s Call and parameter names, its `result.json` (the Program's function, digest and correspondence digest, the
     request's shape, the declared target and `attention_impls_declared`) and its `prefix_cache.json` with a cached prefix ->
     the Program's digest."""
-    from verity.circuits.codec import encode_program, program_digest
-
-    from verity_vllm.correspondence.runtime import NAMESPACE, correspondence_digest
-    from verity_vllm.pipeline.build_instances import write_instances
     desc = encode_program(program)
     digest = program_digest(desc)
     desc["annotations"] = {"node_hints": {str(k): v for k, v in sorted(named.names.items())}, NAMESPACE: named.correspondence}

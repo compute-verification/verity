@@ -32,6 +32,7 @@ from typing import Any
 
 from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES
 from verity_vllm.engine.profiles import layer_classes as LC
+from verity_vllm.records.schema_ids import RANK_COMMIT_BINDING_SCHEMA, RANK_MATCH_SCHEMA
 
 __all__ = ["commit_binding", "cross_rank_check", "load_recorder", "own_producers_from_record"]
 
@@ -40,7 +41,7 @@ LINEAR_PRODUCERS = ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Lin
 #: the producer class the ISSUING MODULE's class admits (the link table names the class: `... (RowParallelLinear)`): an all-reduce issued
 #: by a RowParallelLinear reduces a K-sharded Gemm output, never an embedding row (equal-result-but-wrong-producer fails here by name)
 PRODUCER_BY_SITE_CLASS = {LC.EMBEDDING: ("EmbeddingShard_v1",), LC.ROW_LINEAR: LINEAR_PRODUCERS,
-                          LC.LOGITS: ("Gemm_v1", "Gemm_v2", "batch:Gemm"), "ParallelLMHead": ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
+                          LC.LOGITS: ("Gemm_v1", "Gemm_v2", "batch:Gemm"), LC.LM_HEAD: ("Gemm_v1", "Gemm_v2", "batch:Gemm"),
                           **{c: ("MoeSum", "MoeExpertSum") for c in MOE_COLLECTIVE_CLASSES}}
 #: what a summed partial may add to a partial of its site's class: at a MoE site, the shared expert's down-proj, which the MoE runner
 #: reduces with the routed sum (GLM-5.3's and DeepSeek-V4's MoE blocks)
@@ -85,12 +86,15 @@ def _norm_site(s: str | None) -> str:
     return (s or "").split(" (")[0].strip()
 
 
-def _same_site(a: str | None, b: str | None) -> bool:
-    """The derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive wrote
-    by object identity) vs the fold's / recorder's site: equal, or a dotted suffix of one another (a v1 tp_links without a recorded root
-    spells the traced wrapper's path).  No vocabulary prefix is spelled here (`derive_step.same_module_path`)."""
-    from verity_vllm.pipeline.build import same_module_path
-    return same_module_path(a, b)
+def same_module_path(a: str | None, b: str | None) -> bool:
+    """Two dotted module paths name the same module when equal, or when one is the other's dotted suffix (the same
+    `named_modules()` path read from a wrapper's root vs the model's root).  Structural: no vocabulary prefix is spelled.
+    Here it holds the derive's link module (`link.module`: module_path minus the derive's RECORDED model root -- data the derive
+    wrote by object identity) to the fold's / recorder's site; a v1 tp_links without a recorded root spells the traced wrapper's path."""
+    if a is None or b is None:
+        return False
+    a, b = a.split(" (", 1)[0].strip(), b.split(" (", 1)[0].strip()
+    return a == b or a.endswith("." + b) or b.endswith("." + a)
 
 
 def _own_rows(rs: list, c: dict, spec_of: Any) -> list[str]:
@@ -223,7 +227,7 @@ def cross_rank_check(colls: dict[int, list[dict]], *, producers: dict[int, dict[
     specs (`own_producers*`); `fold_errors[r]` = the rank fold's error count (a fold with errors never passes: an Unresolved own part is a
     collective input nobody computed); `recorder[r]` = coll.rank<r>.jsonl rows; `links[r]` = tp_links.json `links` of rank r's Program
     (B1) or {request_id: links of that request's Program} (B>1); `provenance` = tp2_match.json's `provenance` (the stored-step value leg)."""
-    res: dict[str, Any] = {"schema": "tp2/rank_match/v1", "ranks": sorted(colls), "checks": [], "verdict": None}
+    res: dict[str, Any] = {"schema": RANK_MATCH_SCHEMA, "ranks": sorted(colls), "checks": [], "verdict": None}
     ranks = sorted(colls)
     world = len(ranks)
     # any world >= 2: the ranks must be exactly 0..world-1; every pairwise check below runs rank r against rank 0 and the
@@ -406,7 +410,7 @@ def _check_recorder(folds: _Folds, recorder: dict[int, list[dict]]) -> None:
             (x, col), (kind, shape) = (rows[key], by_key[r][key]), _recorded_as_folded(rows[key])
             if kind != col["kind"]:
                 c.fail(f"rank {r} {key}: recorder kind {x['kind']}{'/' + str(x.get('path')) if x.get('path') else ''} (folds as {kind}) vs fold {col['kind']}")
-            if not _same_site(x.get("module"), col["site"]):
+            if not same_module_path(x.get("module"), col["site"]):
                 c.fail(f"rank {r} {key}: recorder module {x.get('module')!r} vs fold site {col['site']!r}")
             if shape != [int(col["rows"]), int(col["N"])]:
                 c.fail(f"rank {r} {key}: recorder partial shape {x.get('shape')} vs fold [{col['rows']}, {col['N']}]")
@@ -519,7 +523,7 @@ def _check_links(folds: _Folds, links: dict[int, list[dict] | dict[str, list[dic
                 link_shape = ln.get("shape")   # a link without a shape reads as no shape, never the fold's two
                 if (list(link_shape) if link_shape else []) != [rows_q, int(col["N"])]:
                     c.fail(f"{tag} link {k}: shape {ln.get('shape')} vs fold [{rows_q}, {col['N']}]")
-                if not _same_site(ln.get("module", ln.get("module_path")), col["site"]):
+                if not same_module_path(ln.get("module", ln.get("module_path")), col["site"]):
                     c.fail(f"{tag} link {k}: module {ln.get('module', ln.get('module_path'))!r} vs fold site {col['site']!r}")
                 cls = _site_class(ln.get("module_path"))
                 admits = PRODUCER_BY_SITE_CLASS.get(cls or "")
@@ -554,7 +558,7 @@ def commit_binding(match_dir: str | Path, *, world: int = 2, match_oracle: Mappi
     collective-level only, ◐) unless `require`, then a named FAIL.  CPU only, digests only (no tensors re-read)."""
     md = Path(match_dir)
     fm, rm = md / "fold_match" / "tp2_fold_match.json", md / "fold_match" / "tp2_rank_match.json"
-    res: dict[str, Any] = {"schema": "verity/tp2/commit-binding/v1", "fold_match": str(fm), "rank_match": str(rm), "failures": [], "n_bindings": 0, "n_recorder": {}}
+    res: dict[str, Any] = {"schema": RANK_COMMIT_BINDING_SCHEMA, "fold_match": str(fm), "rank_match": str(rm), "failures": [], "n_bindings": 0, "n_recorder": {}}
     if not fm.exists() or not rm.exists():
         res["result"] = False if require else None
         res["why"] = ("fold Match record missing (tp2_fold_match.json / tp2_rank_match.json): the peer leaves have no Match-stage binding" + (" -- REQUIRED" if require else "; Match is collective-level only (◐)"))

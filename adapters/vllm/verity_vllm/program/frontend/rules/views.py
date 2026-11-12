@@ -525,4 +525,4 @@ class DropoutEvalRule(ViewRule):
 VIEW_RULES = [StaticIndexRule(), IdentityViewRule(), ReshapeRule(), ViewDtypeRule(), SliceSelectRule(), SplitRule(), CatStackRule(), PermuteRule(),
               ExpandRule(), RepeatInterleaveRule(), StaticGatherRule(), AllocRule(), DropoutEvalRule()]
 
-__all__ = ["VIEW_RULES"]
+__all__ = ["VIEW_RULES", "StaticIndexRule"]

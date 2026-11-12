@@ -72,11 +72,13 @@ class Context:
 
     def settings_of(self, name: str) -> Mapping[str, Any]:
         """Protocol ``name``'s settings: none when the config has no entry for it."""
-        return self.settings.get(name, {})
+        own = self.settings.get(name)
+        return {} if own is None else own
 
     def filled_of(self, name: str) -> tuple[str, ...]:
         """The settings of ``name`` the built engine will supply: none when it names none."""
-        return tuple(self.filled.get(name, ()))
+        own = self.filled.get(name)
+        return () if own is None else tuple(own)
 
 
 @dataclass(frozen=True)

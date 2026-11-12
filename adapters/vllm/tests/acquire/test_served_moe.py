@@ -167,6 +167,14 @@ def test_the_expert_gemms_are_hoppers_k16_chain_at_every_launched_config() -> No
         plan(16)
 
 
+@pytest.mark.parametrize("at_8,flag", [({"False": SMALL}, "True"), ({"False": SMALL, "True": None}, "True"), ({}, "(True|False)"), (None, "(True|False)")],
+                         ids=["no routed launch", "a null routed launch", "an empty row count", "a null row count"])
+def test_a_row_count_recorded_without_a_launch_is_refused_by_its_flag(at_8: dict[str, Any] | None, flag: str) -> None:
+    plan = SM.expand(_wired(), {**RECORD, "configs": {"8": at_8}})[1]
+    with pytest.raises(Unmodelled, match=rf"no fused_moe_kernel launch at 8 rows \(MUL_ROUTED_WEIGHT {flag}\) was recorded"):
+        plan(8)
+
+
 @pytest.mark.parametrize("cc", [[10, 0], [12, 0]])
 def test_cc_10_and_12_bind_the_same_expert_gemms(cc: list[int]) -> None:
     assert SM.expand(_wired(), {**RECORD, "cc": cc})[1](256) == SM.expand(_wired(), RECORD)[1](256)

@@ -11,6 +11,8 @@ import torch
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, value_family
 from verity_vllm.commit.committer.plan_cache import PlanMetas
 
+__all__ = ["GPU_CHUNK_BYTES", "HIDDEN_M1_FAMILIES", "retain_exclude_families"]
+
 
 class _HostWindows:
     """The raw bytes of one step retained on host as pinned windows (P0 windowed staging); quacks like the contiguous `keep` tensor for

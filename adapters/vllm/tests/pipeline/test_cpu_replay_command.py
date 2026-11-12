@@ -80,7 +80,7 @@ class Replay:
         monkeypatch.setattr(WR, "CheckpointIndex", step("CheckpointIndex", "ck"))
         monkeypatch.setattr(CPU, "open_weights", step("open_weights", (self.words, wc)))
         monkeypatch.setattr(CPU, "worker_peak", step("worker_peak", 123))
-        monkeypatch.setattr(CPU, "kept_draw", step("kept_draw"))
+        monkeypatch.setattr(CPU, "kept_sample", step("kept_sample"))
         monkeypatch.setattr(CPU.SD, "touched", touched)
         monkeypatch.setattr(CPU.C2, "run", run)
         monkeypatch.setattr(CPU, "engine_of_record", step("engine_of_record"))
@@ -127,12 +127,30 @@ def test_a_failed_replay_ends_on_the_reason_and_returns_false(tmp_path: Path, mo
     assert capsys.readouterr().out.splitlines() == ["[replay] COMMIT FAIL (pair 3): the sampled replay failed; verdict commit_pass False"]
 
 
-def test_a_slim_keep_is_held_to_its_draw_and_written_no_second_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_slim_keep_is_held_to_its_sample_and_written_no_second_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     r = Replay(tmp_path, monkeypatch, kept=True)
     assert CPU.replay(OPTIONS) is True
-    assert r.calls == [*ORDER[:7], "kept_draw", *ORDER[7:11], "record"], "the draw is checked before the replay; no keep is cut from a keep"
-    site, keep = r.seen["kept_draw"][0]
+    assert r.calls == [*ORDER[:7], "kept_sample", *ORDER[7:11], "record"], "the sample is checked before the replay; no keep is cut from a keep"
+    site, keep = r.seen["kept_sample"][0]
     assert site is r.seen["run"][0][0] and keep == {"picks": []}
+
+
+@pytest.mark.parametrize("commit", [{}, {"weight_registration": None}, {"weight_registration": {}}, {"weight_registration": {"root": None}}])
+def test_a_run_that_registered_no_weights_opens_its_tensors_against_no_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                            commit: dict[str, Any]) -> None:
+    r = Replay(tmp_path, monkeypatch)
+    r.row["commit"] = {"value_correspondence": {}} | commit
+    assert CPU.replay(OPTIONS) is True
+    assert r.seen["open_weights"] == ((r.bdir, {"names": [], "extra": {"model.rope": 0}}, None, "ck"), {"threads": 3})
+
+
+@pytest.mark.parametrize("tree", [{"names": []}, {"names": [], "extra": None}, {"names": [], "extra": {}}])
+def test_a_tree_that_lists_no_tensor_as_the_bundle_s_decides_the_run_with_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+                                                                               tree: dict[str, Any]) -> None:
+    r = Replay(tmp_path, monkeypatch)
+    (r.bdir / "weights" / "tree.json").write_text(json.dumps(tree))
+    assert CPU.replay(OPTIONS) is True
+    assert r.seen["open_weights"][0][1] == tree and r.seen["decide"][0][-1] == {}
 
 
 @pytest.mark.parametrize(("verdict", "code"), [(True, 0), (False, 3), (None, 3)])

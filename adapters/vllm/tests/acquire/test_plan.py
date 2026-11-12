@@ -133,6 +133,13 @@ def test_many_sites_policy_producer_output_first_and_analytic_beside():
     assert sorted(s.kind for s in w.sites) == ["analytic_table", "registered_input"] and w.chosen.kind == "registered_input"
 
 
+@pytest.mark.parametrize("held", [{}, {"consumers": None}, {"consumers": []}], ids=["absent", "null", "empty"])
+def test_a_row_that_names_no_consumer_has_none(held):
+    """`consumers` is a promoted row's field: a row that leaves it out, or holds null or an empty list, names no consumer."""
+    (v,) = P.value_classes(manifest([row("instance_outputs", "body.blocks.0.act", "out", spec="Act_v1", **held)]))
+    assert (v.value_id, v.consumers, v.identities) == ("body.blocks.0.act/out", [], 1)
+
+
 def test_promoted_value_consumer_input_only():
     rows = base_rows() + [row("instance_outputs", "body", RM.PROMOTED_MEMBER, **RM.promoted_annotations({"rows": 3, "width": 8, "dtype": "bf16", "spec": "Scale_v1", "consumers": ["body.blocks.0.norm_in"]}))]
     plan, _, _ = make_plan(rows)

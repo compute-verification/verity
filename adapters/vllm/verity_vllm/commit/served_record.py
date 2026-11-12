@@ -40,6 +40,9 @@ from typing import Any
 
 from verity_vllm.commit.committer.plan_cache import PlanMetas
 
+__all__ = ["BlockValues", "PORT_NAMES", "SamplerInputsSource", "StepInputPort", "base_id", "committed_ints",
+           "committed_raw", "ints_of", "served_rows", "window_commit"]
+
 #: The step-input port's two tensors, the first two of every step's stream (`StepInputPort`).
 PORT_NAMES = ("step.input/ids", "step.input/positions")
 #: The step's input ids, in the order they are read: the step-input port's, then the compiled path's name, then the eager
@@ -488,8 +491,10 @@ def window_commit(rc: Any) -> dict[str, Any]:
     """The Commit's own verdict on a finalized window (`RunCommitment`): a run root, no committer errors, and the identity
     check not failed."""
     extra = getattr(rc, "extra", None) or {}
-    ident = extra.get("identity_check") or {}
-    errors = list(extra.get("errors") or [])
+    ident, recorded = extra.get("identity_check"), extra.get("errors")
+    if not ident:
+        ident = {}   # the committer ran no identity check on the window: none failed, and there is nothing of it to report
+    errors = list(recorded) if recorded else []   # a committer that recorded no error leaves the list out
     root = bytes(getattr(rc, "run_root", b"") or b"")
     return {"passed": bool(root) and not errors and int(extra.get("errors_n") or 0) == 0 and ident.get("ok") is not False,
             "run_root": root.hex(), "steps": len(getattr(rc, "steps", ()) or ()), "errors": errors[:10],

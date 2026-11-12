@@ -33,16 +33,16 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.commit import step_rows
-from verity_vllm.commit.committer.host_retention import (
-    _excluded_chunk_ranges,
-    outside,
-)
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
 from verity_vllm.commit.opened import meta_by_name
 from verity_vllm.commit.run_roots import RunRoots, StepRoot
+from verity_vllm.records.schema_ids import COMMITTED_STORE_SCHEMA
 
-SCHEMA = "verity-vllm/committed-store/v1"
+__all__ = ["Touched", "as_bytes", "dump", "dump_files", "held_of", "load", "nbytes", "not_retained", "not_retained_of", "touch",
+           "touched", "write_doc"]
+
+SCHEMA = COMMITTED_STORE_SCHEMA
 NODE = step_rows.ROOT_BYTES                                     # a tree node
 #: bytes written between flushes: the dirty pages of a dump are charged to the writer's memory cgroup, beside a pinned store
 FLUSH = 1 << 30
@@ -140,7 +140,8 @@ def touch(com: Any, reads: Iterable[tuple[int, str, int, int]]) -> None:
     """Opens, without verifying, the leaves of every read (step, member name, byte lo, byte hi) as `OpenedReader` would: under `touched`
     the ranges and tree nodes a verified read of the same bytes opens are recorded, and no leaf is hashed."""
     for step, name, lo, hi in reads:
-        m = meta_by_name(com._layouts.get(step) or [], name)
+        layout = com._layouts.get(step)   # the step's committed members; a step the committer holds no layout for has none to open
+        m = meta_by_name(layout, name) if layout else None
         lo, hi = max(0, int(lo)), min(int(hi), int(m.nbytes)) if m is not None else 0
         if m is not None and hi > lo:
             com.open_range(step, *com.leaf_span(step, m, lo, hi)[:2])
@@ -153,20 +154,24 @@ def _slim_ranges(blk: Any, want: list[tuple[int, int]]) -> list[tuple[int, int, 
         for lo, hi in want:
             a, b = max(lo, rlo), min(hi, rhi)
             if a < b:
-                out.append((a, b, _as_bytes(hv)[a - rlo:b - rlo]))
+                out.append((a, b, as_bytes(hv)[a - rlo:b - rlo]))
     return sorted(out, key=lambda x: x[0])
 
 
 def _nodes(lvs: list[Any], nodes: list[tuple[int, int]]) -> Iterator[memoryview]:
     for d, i in nodes:
-        yield _as_bytes(lvs[d][i].contiguous() if hasattr(lvs[d][i], "contiguous") else lvs[d][i])
+        yield as_bytes(lvs[d][i].contiguous() if hasattr(lvs[d][i], "contiguous") else lvs[d][i])
 
 
-def _as_bytes(t: Any) -> memoryview:
+def as_bytes(t: Any) -> memoryview:
+    """A tensor's or an array's bytes, from the host: a device tensor is copied there first."""
     if getattr(t, "is_cuda", False):
         t = t.cpu()
     a = t.numpy() if hasattr(t, "numpy") else t
     return memoryview(a.reshape(-1) if hasattr(a, "reshape") else a).cast("B")
+
+
+_as_bytes = as_bytes  # the name `pipeline.replay_bundle` still reads
 
 
 def _refusal(com: Any) -> str | None:
@@ -211,8 +216,8 @@ def _dump_step(com: Any, sc: Any, d: Path, t: Touched | None) -> tuple[dict[str,
     rs = _ranges(blk) if t is None else _slim_ranges(blk, t.merged(s))
     lvs = list(com._gpu_levels[s])
     nodes = None if t is None else sorted(t.nodes.get(s, ()))
-    lv_bytes = (_as_bytes(lv.contiguous()) for lv in lvs) if nodes is None else _nodes(lvs, nodes)
-    digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (_as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
+    lv_bytes = (as_bytes(lv.contiguous()) for lv in lvs) if nodes is None else _nodes(lvs, nodes)
+    digests = {f"raw/s{s}.bin": write_file(d / "raw" / f"s{s}.bin", (as_bytes(hv)[:hi - lo] for lo, hi, hv in rs)),
                f"levels/s{s}.bin": write_file(d / "levels" / f"s{s}.bin", lv_bytes)}
     salted = None
     if t is not None:
@@ -259,6 +264,11 @@ def held_of(com: Any) -> dict[int, tuple[list[tuple[int, int]], int]]:
 def not_retained_of(fams: set[str], C: int, held: dict[int, tuple[list[tuple[int, int]], int]],
                     layouts: dict[int, Any]) -> dict[str, Any]:
     """`not_retained` over the blocks' retained ranges (`held_of`) and the steps' metas."""
+    from verity_vllm.commit.committer.host_retention import (  # it imports torch, which this module imports without
+        _excluded_chunk_ranges,
+        outside,
+    )
+
     by, committed, retained, stray = dict.fromkeys(sorted(fams), 0), 0, 0, []
     for s, (ranges, used) in sorted(held.items()):
         held_s = sorted((lo, hi, "") for lo, hi in ranges)

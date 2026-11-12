@@ -61,7 +61,7 @@ def test_exact_pool_rss_equals_its_accounting_and_is_released():
 
 def _cgroup_anon_shmem() -> tuple[int, int] | None:
     try:
-        st = {l.split()[0]: int(l.split()[1]) for l in open("/sys/fs/cgroup/memory.stat")}
+        st = {stat_line.split()[0]: int(stat_line.split()[1]) for stat_line in open("/sys/fs/cgroup/memory.stat")}
         return st["anon"], st["shmem"]
     except Exception:  # noqa: BLE001
         return None
@@ -90,7 +90,7 @@ def test_exact_pool_blocks_are_shared_across_fork_not_copied():
             os.close(sampled_w)
             mv = memoryview(v.numpy())
             s = sum(mv[::4096])
-            st = {l.split(":")[0]: int(l.split()[1]) for l in open("/proc/self/status") if l.startswith(("RssAnon", "RssShmem"))}
+            st = {status_line.split(":")[0]: int(status_line.split()[1]) for status_line in open("/proc/self/status") if status_line.startswith(("RssAnon", "RssShmem"))}
             os.write(w, f"{s} {st['RssAnon']} {st['RssShmem']}".encode())
             os.read(sampled_r, 1)                 # stay alive until the parent has sampled the cgroup and closed its end
         finally:
@@ -309,18 +309,6 @@ def test_reserve_is_a_no_op_off_the_exact_path(fake_cuda):
     assert PinnedPool(exact=False).reserve([MiB]) == 0
     pools.append(pool := PinnedPool(block_bytes=MiB, exact=True, populate_threads=0))
     assert pool.reserve([MiB]) == 0 and pool.all == []
-
-
-@pytest.mark.parametrize("j", [0, 1, 3, 7, 12])
-def test_the_primed_level_sizes_are_begin_trees(j):
-    from verity_vllm.commit.native_ranges import level_sizes
-
-    for n_total in [1, 2, 3, 5, 8, 127, 128, 129, 4097, 1 << 15]:
-        height, m = 0, n_total
-        while m > 1:
-            m = (m + 1) // 2
-            height += 1
-        assert level_sizes(n_total, j) == [-(-n_total // (1 << L)) for L in range(min(j, height) + 1)]
 
 
 def test_the_helper_threads_are_the_commit_commands_option_and_a_fresh_pool_keeps_them():

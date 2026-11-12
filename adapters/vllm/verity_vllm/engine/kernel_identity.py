@@ -5,9 +5,9 @@ that embeds the Triton source of each kernel it launches (``async_compile.triton
 and a ``call()`` body that is the launch program of the fused region. The *cache key* of such a
 module depends on the whole Inductor config (so it differs between production and a replay whose
 ``CompilationConfig`` differs); the *sources* are what actually ran. This module collects, per
-process, the set of generated kernel sources and wrapper programs by content hash, and compares
-two such collections. Equality of the kernel-source set is the evidence that a replay executed
-production's generated kernels; a difference is reported kernel by kernel.
+process, the set of generated kernel sources and wrapper programs by content hash. Equality of two
+processes' kernel-source sets (``summary.kernel_set_sha256``, which a run's record pins) is the
+evidence that a replay executed production's generated kernels.
 
 Also collected: Triton's compiled artifacts in ``TRITON_CACHE_DIR`` when it is set: per kernel the
 ``*.cubin`` hash and the hash of the *code* part of its PTX. Triton embeds the path of the Python
@@ -19,11 +19,6 @@ strings. ``ptx_code_sha256`` hashes the PTX with ``.file``/``.loc`` directives, 
 sections and ``assertFile_*`` globals removed; equality of the ``ptx_code`` sets is the binary-level
 identity, the raw cubin hashes are reported as well. Wrappers get a ``norm_sha256`` likewise (their
 ``# kernel path:`` comments name the cache root; ``# AOT ID`` differs per compilation).
-
-CLI::
-
-    verity-vllm kernel-identity --inductor-dir D [--triton-dir T] --out kernels.json
-    verity-vllm kernel-identity --compare a.json b.json --out cmp.json
 """
 
 from __future__ import annotations
@@ -32,11 +27,10 @@ import hashlib
 import json
 import os
 import re
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.config import option
+__all__ = ["collect", "inductor_cache_dir", "triton_cache_dir"]
 
 _TRITON_SRC = re.compile(r"async_compile\.triton\('([^']+)', '''(.*?)''', device_str=", re.S)
 _AOT_ID = re.compile(r"^# AOT ID: \[(.*?)\]", re.M)
@@ -122,7 +116,7 @@ def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cac
     """Scan the Inductor cache directory: wrapper modules (graph pieces) and kernel modules.
 
     A file that can't be read is named in ``unreadable`` and in ``summary.error``, both present only then: the sets and digests
-    leave it out, so they are partial, and ``compare`` claims no identity over them."""
+    leave it out, so they are partial, and a reader claims no identity over them."""
     wrappers: list[dict[str, Any]] = []
     kernel_files: list[dict[str, Any]] = []
     kernels: dict[str, str] = {}  # kernel name -> source sha256 (collisions listed separately)
@@ -169,7 +163,7 @@ def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cac
                     entry["ptx_code_sha256"] = sha256_bytes(ptx_code(ptx_src).encode())
             cubins.append(entry)
     kernel_pairs = sorted({(k["name"], k["source_sha256"]) for w in wrappers for k in w["kernels"]})
-    doc = {
+    doc: dict[str, Any] = {
         "schema": "verity-vllm/kernel-identity/v1",
         "inductor_cache_dir": inductor_dir,
         "triton_cache_dir": triton_dir,
@@ -200,11 +194,6 @@ def collect(inductor_dir: str | None, triton_dir: str | None = None, *, vllm_cac
     return doc
 
 
-def _whole(a: dict[str, Any], b: dict[str, Any]) -> bool:
-    """Neither collection left a file out (``collect``'s ``unreadable``)."""
-    return not (a.get("unreadable") or b.get("unreadable"))
-
-
 _CONFIG_KEYS = ("XBLOCK", "YBLOCK", "R0_BLOCK", "RBLOCK", "num_warps", "num_stages")
 
 
@@ -213,8 +202,8 @@ def autotune_configs(root: Path, unreadable: dict[str, str]) -> list[dict[str, A
     benchmarked more than one launch configuration (``autotune_pointwise``, pointwise kernels) — the chosen
     ``XBLOCK`` / ``num_warps`` / ``num_stages``. Those are *launch parameters* selected by timing in each
     process, not part of the generated source; a pointwise kernel's per-element arithmetic does not depend on
-    them, but they are the one thing production and replay may legitimately differ in, so they are recorded
-    and compared. Each entry: kernel name (from the sibling ``.py``), the kernel module's sha256, the config.
+    them, but they are the one thing production and replay may legitimately differ in, so they are recorded.
+    Each entry: kernel name (from the sibling ``.py``), the kernel module's sha256, the config.
     A file that can't be read or parsed is recorded in ``unreadable`` (path relative to ``root``)."""
     out: list[dict[str, Any]] = []
     for bc in sorted(root.rglob("*.best_config")):
@@ -241,87 +230,3 @@ def autotune_configs(root: Path, unreadable: dict[str, str]) -> list[dict[str, A
             "configs_hash": cfg.get("configs_hash"), "found_by_coordesc": cfg.get("found_by_coordesc"),
         })
     return out
-
-
-def compare_autotune(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    """Per kernel module (keyed by the module's content sha256 — Inductor names standalone kernel modules
-    ``triton_`` generically, so the name alone is ambiguous): the autotuner's chosen launch config in a vs b
-    (``differing`` lists the kernels whose chosen config is not the same; ``candidates_identical`` says whether
-    both saw the same candidate set). Neither is True when either collection left a file out."""
-    whole = _whole(a, b)
-    ca = {e["kernel_module_sha256"]: e for e in a.get("autotune_configs", []) if e.get("kernel_module_sha256")}
-    cb = {e["kernel_module_sha256"]: e for e in b.get("autotune_configs", []) if e.get("kernel_module_sha256")}
-    differing = []
-    for k in sorted(set(ca) | set(cb), key=lambda h: ((ca.get(h) or cb.get(h))["kernel"] or "", h)):
-        ea, eb = ca.get(k), cb.get(k)
-        if ea is None or eb is None or ea["config"] != eb["config"]:
-            differing.append({"kernel": (ea or eb)["kernel"], "kernel_module_sha256": k,
-                              "a": ea["config"] if ea else None, "b": eb["config"] if eb else None})
-    return {
-        "a": len(ca), "b": len(cb),
-        "chosen_configs_identical": (not differing and whole) if (ca or cb) else None,
-        "candidates_identical": (whole and all(ca[k]["configs_hash"] == cb[k]["configs_hash"] for k in set(ca) & set(cb)))
-                                if (set(ca) & set(cb)) else None,
-        "differing": differing,
-    }
-
-
-def compare(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
-    """Set comparison of generated kernel sources (by content), wrappers and call programs.
-
-    When either collection left a file out (``collect``'s ``unreadable``), every identity below is False and ``unreadable`` names
-    the files by side: sets that are equal without them show nothing."""
-    whole = _whole(a, b)
-    ka = {(k["name"], k["source_sha256"]) for w in a["wrappers"] for k in w["kernels"]}
-    kb = {(k["name"], k["source_sha256"]) for w in b["wrappers"] for k in w["kernels"]}
-    ha = {h for _, h in ka}
-    hb = {h for _, h in kb}
-    wa = {w["sha256"]: w for w in a["wrappers"]}
-    wb = {w["sha256"]: w for w in b["wrappers"]}
-    ca = {w["call_sha256"] for w in a["wrappers"] if w["call_sha256"]}
-    cb = {w["call_sha256"] for w in b["wrappers"] if w["call_sha256"]}
-    cub_a = {c["sha256"] for c in a.get("cubins", [])}
-    cub_b = {c["sha256"] for c in b.get("cubins", [])}
-    na = {w.get("norm_sha256") for w in a["wrappers"] if w.get("norm_sha256")}
-    nb = {w.get("norm_sha256") for w in b["wrappers"] if w.get("norm_sha256")}
-    pa = {c["ptx_code_sha256"]: c["name"] for c in a.get("cubins", []) if c.get("ptx_code_sha256")}
-    pb = {c["ptx_code_sha256"]: c["name"] for c in b.get("cubins", []) if c.get("ptx_code_sha256")}
-    out = {
-        "kernel_sources_identical": ha == hb and bool(ha) and whole,
-        "kernel_sources": {"a": len(ha), "b": len(hb), "common": len(ha & hb), "only_a": sorted(n for n, h in ka if h not in hb), "only_b": sorted(n for n, h in kb if h not in ha)},
-        "wrappers_identical": set(wa) == set(wb) and bool(wa) and whole,
-        "wrappers_identical_modulo_cache_path": na == nb and bool(na) and whole,
-        "wrappers_norm": {"a": len(na), "b": len(nb), "common": len(na & nb)},
-        "wrappers": {"a": len(wa), "b": len(wb), "common": len(set(wa) & set(wb)), "only_a": sorted(w["path"] for h, w in wa.items() if h not in wb), "only_b": sorted(w["path"] for h, w in wb.items() if h not in wa)},
-        "call_programs_identical": ca == cb and bool(ca) and whole,
-        "call_programs": {"a": len(ca), "b": len(cb), "common": len(ca & cb)},
-        "cubins_identical": (cub_a == cub_b and bool(cub_a) and whole) if (cub_a or cub_b) else None,
-        "cubins": {"a": len(cub_a), "b": len(cub_b), "common": len(cub_a & cub_b)},
-        "ptx_code_identical": (set(pa) == set(pb) and bool(pa) and whole) if (pa or pb) else None,
-        "ptx_code": {"a": len(pa), "b": len(pb), "common": len(set(pa) & set(pb)),
-                     "only_a": sorted(n for h, n in pa.items() if h not in pb), "only_b": sorted(n for h, n in pb.items() if h not in pa)},
-        "b_kernel_sources_subset_of_a": hb <= ha and bool(hb) and whole,
-        "autotune": compare_autotune(a, b),
-    }
-    if not whole:
-        out["unreadable"] = {side: d["unreadable"] for side, d in (("a", a), ("b", b)) if d.get("unreadable")}
-    return out
-
-
-@dataclass(frozen=True, kw_only=True)
-class Options:
-    inductor_dir: str | None = option("--inductor-dir", default=None)
-    triton_dir: str | None = option("--triton-dir", default=None)
-    compare: list[str] | None = option("--compare", default=None, nargs=2, metavar=("A_JSON", "B_JSON"))
-    out: str = option("--out")
-
-
-def main(args: Options) -> None:
-    if args.compare:
-        a = json.loads(Path(args.compare[0]).read_text())
-        b = json.loads(Path(args.compare[1]).read_text())
-        doc = compare(a, b)
-    else:
-        doc = collect(args.inductor_dir or inductor_cache_dir(), args.triton_dir or triton_cache_dir())
-    Path(args.out).write_text(json.dumps(doc, indent=1) + "\n")
-    print(json.dumps(doc.get("summary", doc), indent=1))

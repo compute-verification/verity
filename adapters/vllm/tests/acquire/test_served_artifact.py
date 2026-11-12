@@ -44,6 +44,10 @@ def test_the_digest_is_over_configs_and_winners_not_timing(tmp_path: Path) -> No
     assert named(SA.differences(a, d)) == ["kernels bb22"]
     absent = SA.differences(a, {})
     assert named(absent) == [f"kernels {k}" for k in KERNELS] + [f"winners {k}" for k in WIN] and all(x.endswith("loaded absent") for x in absent)
+    assert SA.differences(a, {"kernels": None, "winners": {}}) == absent
+    unpinned = SA.differences({}, a)
+    assert named(unpinned) == named(absent) and all(": pinned absent, loaded " in x for x in unpinned)
+    assert SA.differences({"kernels": {}, "winners": None}, a) == unpinned
 
 
 def test_a_seeded_dir_holds_the_pinned_winners_torch_loads(tmp_path: Path) -> None:

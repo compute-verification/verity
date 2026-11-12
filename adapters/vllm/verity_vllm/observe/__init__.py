@@ -17,6 +17,7 @@ Anywhere (no torch):
     events          the event vocabulary, schema `verity-capture/log/v1`: the contract between the two sides
     log             the log's writer and reader, one JSON object a line
     capture_log     the log as the Match reads it: its header, each step's rows and each prompt parameter's request
+    capture_types   what a capture is given (its configuration) and what it holds of one step until it writes the step
     kernel_trace    the device kernels of a profiler's Chrome trace
 
 The runtime artifact is the *raw observation log*, never a "trace": that word is kept for a circuit's gate values.

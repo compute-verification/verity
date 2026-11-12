@@ -245,6 +245,7 @@ def test_the_profile_is_a_sidecar_and_the_document_is_the_one_written_without_it
     derived = [e2e.fold_alone(e2e.R0, tmp_path / "LP3_T2"), e2e.fold_alone(e2e.R1, tmp_path / "LP2_T1")]
     res = bd.decompose(d, derived)
     prof = json.loads(profile_out.read_text())
+    assert res["schema"] == "cb-a/batch-decomp/v1"
     assert prof["schema"] == "cb-a/x09-profile/v1" and prof["oracle_dir"] == d and prof["force_dag"] is False
     assert (prof["verdict"], prof["seconds"], _how_the_requests_ran(prof)) == ("PASS", res["seconds"], "inline")
     assert (prof["fold_preloaded"], prof["fold_instances"], prof["fold_compact"]) == (False, res["oracle"]["instances"], False)

@@ -19,11 +19,7 @@ from __future__ import annotations
 import hashlib
 import os
 
-from verity.circuits.codec import descriptor_id
-
-from verity_vllm.pipeline import global_program as GP
 from verity_vllm.program import sampling_event as SE
-from verity_vllm.program import workload as W
 
 from .. import resolver
 
@@ -95,6 +91,11 @@ def expected(row: resolver.Row) -> dict:
 
 def recompute(desc: dict) -> dict:
     """`request_component` (current code) over one component descriptor: its segmentation and the sampling events in its body."""
+    # numpy and the core `verity` load with these three, which only a recomputation needs: the module itself loads neither
+    from verity.circuits.codec import descriptor_id
+
+    from verity_vllm.pipeline import global_program as GP
+    from verity_vllm.program import workload as W
 
     # the registry set build_workload decodes components with
     comp = W.request_component(desc, GP.REGISTRY, None, canon={})
@@ -105,7 +106,7 @@ def recompute(desc: dict) -> dict:
 
 
 def _consistent(reqs: dict, ends: dict[str, bool]) -> dict:
-    return {rid: {"steps_eq_cap": r["steps"] == r["cap"], "steps_eq_sampling_events": r["steps"] == r.get("sampling_events"),
+    return {rid: {"steps_eq_declared": r["steps"] == r["cap"], "steps_eq_sampling_events": r["steps"] == r.get("sampling_events"),
                   **({"segments_end_at_sampling_event": ends[r["component"]]} if r["component"] in ends else {})} for rid, r in reqs.items()}
 
 

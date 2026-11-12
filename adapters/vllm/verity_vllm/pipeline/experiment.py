@@ -34,11 +34,12 @@ from pathlib import Path
 
 from verity_vllm.config import RowEngine
 from verity_vllm.pipeline import research_tools
+from verity_vllm.pipeline.row_json import field_of, load_json
+from verity_vllm.records.schema_ids import EXPERIMENT_SCHEMA, EXPERIMENT_SPEC_SCHEMA
 
-__all__ = ["build_spec", "code_version", "write_experiment", "write_spec"]
+__all__ = ["build_spec", "code_version", "digest_doc", "write_experiment", "write_spec"]
 
-SPEC_SCHEMA = "verity-gen/spec/v1"
-EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
+SPEC_SCHEMA = EXPERIMENT_SPEC_SCHEMA
 SMALL_FILE_SHA_LIMIT = 64 << 20  # sha256 only for files up to 64 MiB (program.json, reports); bigger ones carry size only
 
 
@@ -50,8 +51,13 @@ def _sha256(p: Path) -> str:
     return h.hexdigest()
 
 
-def _digest_doc(doc) -> str:
+def digest_doc(doc) -> str:
+    """The sha256 of ``doc`` as JSON with sorted keys: a spec's ``digest``."""
     return hashlib.sha256(json.dumps(doc, sort_keys=True, default=str).encode()).hexdigest()
+
+
+#: the older name of `digest_doc`, which `pipeline/match.py` reads
+_digest_doc = digest_doc
 
 
 def _ref(run: Path, rel: str, *, sha: bool = True) -> dict:
@@ -75,13 +81,9 @@ def _ref(run: Path, rel: str, *, sha: bool = True) -> dict:
 
 
 def _load(run: Path, rel: str):
+    """The run's document at ``rel``, None when it is absent or unreadable."""
     p = run / rel
-    if not p.exists():
-        return None
-    try:
-        return json.loads(p.read_text())
-    except (OSError, ValueError):  # an unreadable report is reported as absent
-        return None
+    return load_json(p) if p.exists() else None
 
 
 def code_version(repo: Path) -> dict:
@@ -117,8 +119,11 @@ def build_spec(*, config_id: str, case: str, profile: str | None, workload_path:
     copied out of the workload file (text prompts, per-request max_tokens, arrival steps, request ids); their token ids come from the
     capture process's `spec_tokens.json` (same information, produced by the tokenizer before the first engine step)."""
     wl = workload_doc or {}
+    requests = wl.get("requests")    # a workload that declares no requests has none to copy
+    declared = wl.get("sampling")    # the workload's own sampling; one that declares none takes the caller's alone
+    given = {k: v for k, v in (sampling or {}).items() if v is not None}
     reqs = []
-    for r in wl.get("requests") or []:
+    for r in requests if requests else ():
         rec = {k: r.get(k) for k in ("request_id", "prompt", "prompt_token_ids", "max_tokens", "arrive_step", "seed", "n", "variant",
                                       "prompt_len_target", "n_generated_target") if k in r}
         if "prompt_token_ids" in rec:
@@ -147,14 +152,14 @@ def build_spec(*, config_id: str, case: str, profile: str | None, workload_path:
             "serving_profile": wl.get("serving_profile"), "context_class": wl.get("context_class"),
             "length_seed": wl.get("length_seed"), "prompt_seed": wl.get("prompt_seed"), "replicate": wl.get("replicate"),
             "expected_engine_steps": wl.get("expected_engine_steps"), "engine_args_required": dict(RowEngine.of(wl).args),
-            "sampling": {**(wl.get("sampling") or {}), **{k: v for k, v in (sampling or {}).items() if v is not None}},
+            "sampling": {**declared, **given} if declared else given,
             "variants": wl.get("variants"),           # named sampling parameter sets the `sampling.variant` / per-request `variant` select
             "n_requests": len(reqs), "requests": reqs,
             "tokens": "capture/spec_tokens.json",     # the same prompt token ids as the capture process saw them before its first engine step
         },
         "initial_state": initial_state or {"kind": "fresh", "note": "fresh engine, empty KV cache; any prefix reuse happens inside this run's own requests"},
     }
-    spec["digest"] = _digest_doc({k: v for k, v in spec.items() if k != "digest"})
+    spec["digest"] = digest_doc({k: v for k, v in spec.items() if k != "digest"})
     return spec
 
 
@@ -183,7 +188,7 @@ def _transcript_values(run: Path) -> dict:
     snaps = _load(run, "capture/snapshots.json")
     out: dict = {"snapshot_index": _ref(run, "capture/snapshots.json", sha=False), "values_dir": _ref(run, "capture/values")}
     if isinstance(snaps, dict):
-        entries = snaps.get("snapshots") or snaps.get("entries") or []
+        entries = snaps.get("snapshots") or snaps.get("entries")   # an index that lists none under either name has no entries
     elif isinstance(snaps, list):
         entries = snaps
     else:
@@ -208,10 +213,11 @@ def _phase_realized(run: Path) -> dict[str, dict | None]:
         d = _load(run, rel)
         if not d:
             return None
-        t = d.get("timing") or {}
-        reqs = t.get("requests") or {}
-        return {"engine_steps": t.get("engine_steps", d.get("engine_steps")),
-                "requests": {rid: {k: r.get(k) for k in ("first_step", "finish_step", "n_generated", "arrive_step_realized")} for rid, r in reqs.items()}}
+        timing = d.get("timing")     # a record without its timing states its engine steps at the top, and no request's steps
+        reqs = timing.get("requests") if timing else None
+        return {"engine_steps": timing.get("engine_steps", d.get("engine_steps")) if timing else d.get("engine_steps"),
+                "requests": {rid: {k: r.get(k) for k in ("first_step", "finish_step", "n_generated", "arrive_step_realized")}
+                             for rid, r in reqs.items()} if reqs else {}}
     out["capture"] = from_tokens("capture/tokens.json")
     out["control"] = from_tokens("control/tokens.json")
     for v in ("a_observer", "b_hooks", "c_bare"):
@@ -219,9 +225,13 @@ def _phase_realized(run: Path) -> dict[str, dict | None]:
     c = _load(run, "census/census.json")
     if c:
         r = c.get("realized")
+        named = r.get("requests") if r else None   # the requests the census realized; a block that names none has none
+        steps = c.get("steps")                     # a census without a realized block counts its steps, and none where it lists none
         out["census"] = ({"engine_steps": r.get("engine_steps"),
-                          "requests": {rid: {k: q.get(k) for k in ("first_step", "finish_step", "n_generated", "arrive_step_realized")} for rid, q in (r.get("requests") or {}).items()}}
-                         if r else {"engine_steps": len(c.get("steps") or []), "requests": None, "note": "census without a realized block (pre-a9a13179f)"})
+                          "requests": {rid: {k: q.get(k) for k in ("first_step", "finish_step", "n_generated", "arrive_step_realized")}
+                                       for rid, q in named.items()} if named else {}}
+                         if r else {"engine_steps": len(steps) if steps else 0, "requests": None,
+                                    "note": "census without a realized block (pre-a9a13179f)"})
     else:
         out["census"] = None
     return out
@@ -261,18 +271,20 @@ def vu_partition_index(qu: dict | None, gates: dict | None) -> dict:
     """Checks-section entry for the query-use document: its identities and verdict fields lifted verbatim (frozen shape
     `{"schema", "binding_id", "use": {"kind", "w_max"}, "verdict": {partition{status,codes}, width{status,w_max,max_seen,violators,
     unsupported}, count, status}}`), plus G8's status from gates.json.  `present: false` when the run has no document."""
-    g8 = ((gates or {}).get("gates") or {}).get("G8") if isinstance(gates, dict) else None
+    by_id = gates.get("gates") if isinstance(gates, dict) else None   # a gates document that lists no gate has no G8
+    g8 = by_id.get("G8") if by_id else None
     gate = {"status": g8.get("status"), "reason": g8.get("reason")} if isinstance(g8, dict) else None
     if not isinstance(qu, dict):
         return {"present": False, "gate": gate}
     v = qu["verdict"] if isinstance(qu.get("verdict"), dict) else {}
     part = v["partition"] if isinstance(v.get("partition"), dict) else {}
     width = v["width"] if isinstance(v.get("width"), dict) else {}
-    binding = (g8.get("detail") or {}).get("binding") if isinstance(g8, dict) else None
+    binding = field_of(g8.get("detail"), "binding") if isinstance(g8, dict) else None   # a G8 without its detail checked no binding
+    codes, violators, unsupported = part.get("codes"), width.get("violators"), width.get("unsupported")   # a verdict may leave each out: none
     return {"present": True, "schema": qu.get("schema"), "binding_id": qu.get("binding_id"), "use": qu.get("use"),
-            "partition": {"status": part.get("status"), "codes": list(part.get("codes") or [])[:32]},
+            "partition": {"status": part.get("status"), "codes": list(codes)[:32] if codes else []},
             "width": {"status": width.get("status"), "w_max": width.get("w_max"), "max_seen": width.get("max_seen"),
-                      "n_violators": len(width.get("violators") or []), "n_unsupported": len(width.get("unsupported") or [])},
+                      "n_violators": len(violators) if violators else 0, "n_unsupported": len(unsupported) if unsupported else 0},
             "count": v.get("count"), "status": v.get("status"), "verdict_status": v.get("status"),
             "binding": binding if isinstance(binding, dict) else {"checked": False}, "gate": gate}
 
@@ -293,16 +305,19 @@ def build_experiment(run: Path, *, repo: Path | None = None, spec_note: dict | N
     if not inst_ref.get("present"):
         inst_ref = _ref(run, "instances.jsonl.gz", sha=False)
     realized = man.get("realized")
+    # a spec that was not written, or was written without a block, states that block's fields as None; the run record's workload
+    # stands in for the spec's where it has the field
+    spec_wl, man_wl = spec.get("workload"), man.get("workload")
     doc = {
         "schema": EXPERIMENT_SCHEMA, "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "config_id": man.get("config_id"),
         "run_dir": str(run),
         "specification": {
             "spec": _ref(run, "spec.json"), "spec_digest": spec.get("digest"), "spec_note": spec_note,
             "spec_tokens": _ref(run, "capture/spec_tokens.json"),
-            "workload_file": {"path": man.get("workload_path"), "sha256": (spec.get("workload") or {}).get("file_sha256")},
-            "checkpoint": (spec.get("configuration") or {}).get("checkpoint") or {"checkpoint_dir": man.get("checkpoint_dir")},
-            "serving_profile": (spec.get("workload") or {}).get("serving_profile") or (man.get("workload") or {}).get("serving_profile"),
-            "context_class": (spec.get("workload") or {}).get("context_class") or (man.get("workload") or {}).get("context_class"),
+            "workload_file": {"path": man.get("workload_path"), "sha256": field_of(spec_wl, "file_sha256")},
+            "checkpoint": field_of(spec.get("configuration"), "checkpoint") or {"checkpoint_dir": man.get("checkpoint_dir")},
+            "serving_profile": field_of(spec_wl, "serving_profile") or field_of(man_wl, "serving_profile"),
+            "context_class": field_of(spec_wl, "context_class") or field_of(man_wl, "context_class"),
             "initial_state": spec.get("initial_state"),
         },
         "execution": {
@@ -328,7 +343,7 @@ def build_experiment(run: Path, *, repo: Path | None = None, spec_note: dict | N
                 "weights": {"checkpoint_dir": man.get("checkpoint_dir"), "verified_against_manifest": man.get("verify_weights"),
                             "manifest": man.get("checkpoints")},
                 "prompt_tokens": "capture/spec_tokens.json",
-                "initial_state": (spec.get("initial_state") or {}).get("kind"),
+                "initial_state": field_of(spec.get("initial_state"), "kind"),
                 "note": "known-before-execution does not put a value into the Program statics; weights and prompts are Input gates. "
                         "Generated tokens and MoE routes are computed circuit values, not free inputs.",
             },

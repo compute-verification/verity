@@ -24,7 +24,6 @@ from typing import Any
 
 from verity_vllm.query import units
 from verity_vllm.query.manifest.format import identity_rows
-from verity_vllm.query.required import DTYPE_OF_WIDTH, CallMember, Population
 
 FAMILY = "norm_scales"
 MEMBER = "norm_scale"
@@ -53,6 +52,9 @@ def scale_calls(P: Any, literals: frozenset[int] = frozenset()) -> list[Any]:
 
 @cache
 def _population_class() -> type:
+    # inside the function: importing this module loads neither numpy nor the core `verity`
+    from verity_vllm.query.required import DTYPE_OF_WIDTH, CallMember, Population
+
     class NormScalePopulation(Population):
         """`Population` under the norm-scale policy: the outputs of `scale_calls` are protocol-required and spelt `norm_scale`."""
 

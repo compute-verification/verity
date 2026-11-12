@@ -44,6 +44,8 @@ from typing import Any
 
 from verity_vllm.config import UsageError, option
 from verity_vllm.errors import Refused
+from verity_vllm.pipeline.tp.rank_replay import request_program_dirs
+from verity_vllm.records.schema_ids import NODE_REGISTRATION_SCHEMA
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -144,7 +146,6 @@ def rank_job(o: Options, out: Path, pair: int, c: dict[str, Any], dd: dict[str, 
     """What rank `rank`'s process registers, once its bundle, Build and trace are shown to be the record's (module docstring)."""
     from verity_vllm.pipeline import cpu_replay as CPU
     from verity_vllm.pipeline import replay_bundle as RB
-    from verity_vllm.pipeline.tp.rank_replay import request_program_dirs
 
     world = len(P.phis)
     try:
@@ -282,7 +283,7 @@ def register(o: Options) -> dict[str, Any]:
     reg = RL.record(digest, P.params, theta, entries, window)
     for name in ("record", "trusted", "provenance"):
         (out / f"{name}.json").write_text(json.dumps(reg[name], separators=(",", ":")) + "\n")
-    doc = {"schema": "verity-vllm/node-registration/v1", "program_digest": digest, "record_digest": reg["digest"], "row": o.row,
+    doc = {"schema": NODE_REGISTRATION_SCHEMA, "program_digest": digest, "record_digest": reg["digest"], "row": o.row,
            "wrapper": o.wrapper, "shape": shape, "commit_out": str(commit_out), "pair": pair, "window": window,
            "theta_parameters": len(P.theta), "theta_nodes": len(theta), "rows": sum(e["leaves"] for e in entries.values()),
            "checkpoint": checkpoint, "ranks": ranks, "salts": str(salts),

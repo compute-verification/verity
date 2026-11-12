@@ -540,3 +540,142 @@ def test_each_records_subcommand_runs_its_own_function_with_its_options(tmp_path
         assert circuit_db.main(cli.parse("records", argv, {})) == 0
         assert calls == want, argv
         assert capsys.readouterr().out.rstrip("\n") == printed, argv
+
+
+# What each reader makes of a document that leaves an optional field out, or holds it null or empty.
+
+@pytest.mark.parametrize("build", [{}, {"programs": None}, {"programs": {}}, {"per_rank": None}, {"per_rank": {}, "programs": {}}])
+def test_a_record_whose_build_names_no_program_has_rank_0_alone_with_no_part(build):
+    rec = {"build": {**build, "workload_digest": "w"}, "evidence": {"build": "art:b"}, "tree": "x@1234567"}
+    assert circuit_db.parts({"build": build}) == {0: {}} and circuit_db.parts(rec) == {0: {"workload": "w"}}
+    assert circuit_db.entry(rec, "art:r", "fast")["programs"] == {"0": {"step": None, "workload": "w", "requests": {}}}
+
+
+@pytest.mark.parametrize("rank", [{}, {"programs": None}, {"programs": {}}])
+def test_a_rank_that_names_no_program_has_its_workload_program_alone(rank):
+    assert circuit_db.parts({"build": {"per_rank": {"1": {**rank, "workload_digest": "w"}, "0": rank}}}) == {1: {"workload": "w"}, 0: {}}
+
+
+@pytest.mark.parametrize("attempt", [{}, {"outputs": None}, {"outputs": {}}, {"outputs": {"run_record": None}}])
+def test_a_run_whose_attempt_states_no_run_record_is_refused(attempt, monkeypatch):
+    monkeypatch.setattr(circuit_db, "data", lambda *args: json.dumps(attempt))
+    with pytest.raises(UsageError, match=r"r1: no run record \(outputs\.run_record"):
+        circuit_db.capture("r1")
+
+
+@pytest.mark.parametrize("source", ["absent", None, {}])
+def test_a_run_whose_attempt_states_no_source_is_preserved_with_no_commit(source, tmp_path, store, monkeypatch):
+    run, real = _capture_run(store, tmp_path), circuit_db.data
+
+    def data(*args: str) -> str:
+        out = real(*args)
+        if args[:2] != ("show", run):
+            return out
+        attempt = {k: v for k, v in json.loads(out).items() if k != "source"}
+        return json.dumps(attempt if source == "absent" else {**attempt, "source": source})
+
+    monkeypatch.setattr(circuit_db, "data", data)
+    assert store.get_manifest(circuit_db.capture(run)[PROP]).meta["commit"] is None
+
+
+@pytest.mark.parametrize("unstated", [{}, {"meta": None}, {"meta": {}}])
+def test_an_artifact_whose_manifest_states_no_meta_is_no_capture_and_no_record_to_pull(unstated, monkeypatch):
+    held = {"id": "art:a", "manifest": {"kind": circuit_db.PROPERTY_KIND, **unstated}}
+    monkeypatch.setattr(circuit_db, "data", lambda *args: json.dumps([held] if args[0] == "select" else held))
+    with pytest.raises(UsageError, match=rf"--conformance {PROP}=art:a: a property-record/v1 of None at None \(ok None\), not a holding"):
+        circuit_db.check_capture(PROP, "art:a")
+    assert circuit_db.newest_capture(PROP) is None
+    held = {"id": "art:a", "manifest": {"kind": CR.KIND, **unstated}}
+    with pytest.raises(UsageError, match=r"art:a: a vllm-config-record/v1 \(None\), not a PASS vllm-config-record/v1"):
+        circuit_db.pull("art:a")
+
+
+def test_the_newest_capture_is_one_that_holds_though_it_names_no_run(monkeypatch):
+    held = [{"id": "art:a", "manifest": {"meta": {"ok": True, "schema": "another/v0", "run_id": "r9"}}},
+            {"id": "art:b", "manifest": {"meta": {"ok": True, "schema": REGISTRY[PROP].schema}}},
+            {"id": "art:c", "manifest": {"meta": {"ok": False, "schema": REGISTRY[PROP].schema, "run_id": "r9"}}}]
+    monkeypatch.setattr(circuit_db, "data", lambda *args: json.dumps(held))
+    assert circuit_db.newest_capture(PROP) == "art:b"
+
+
+def _construction(tmp_path: Path, monkeypatch, doc: dict) -> list[str]:
+    """The listing of a Build whose one construction manifest is `doc`, which `due` fetches from under `tmp_path`."""
+    p = f"build_step/{circuit_db.CONSTRUCTION}"
+    _w(tmp_path / "fetched" / p, doc)
+    monkeypatch.setattr(circuit_db, "fetch", lambda art, to, paths: tmp_path / "fetched")
+    return [p]
+
+
+@pytest.mark.parametrize("doc", [{}, {"model": None, "tp": None}, {"model": {}, "tp": {}}, {"model": {"pin": None}, "tp": {"world": None}},
+                                 {"model": {"pin": {}}, "tp": {"world": 0}}, {"model": {"pin": {"model": None}}, "tp": {"world": 1}}])
+def test_a_construction_manifest_that_states_no_checkpoint_has_no_map_and_nothing_due(doc, tmp_path, monkeypatch):
+    assert circuit_db.due("art:b", _construction(tmp_path, monkeypatch, doc)) == {"map": None, "due": {}}
+
+
+@pytest.mark.parametrize("histogram", [{}, {"spec_histogram": None}, {"spec_histogram": {}}])
+def test_a_construction_manifest_that_states_no_definition_has_its_map_and_nothing_due(histogram, tmp_path, store, monkeypatch):
+    _map(tmp_path)
+    doc = {"model": {"pin": {"model": REPO}}, "tp": {"world": 2}, **histogram}
+    assert circuit_db.due("art:b", _construction(tmp_path, monkeypatch, doc)) == {"map": "llama-test-tp2", "due": {}}
+    used = {**doc, "spec_histogram": {"Mul16_v1": 3}}
+    assert circuit_db.due("art:b", _construction(tmp_path, monkeypatch, used)) == {"map": "llama-test-tp2", "due": {PROP: ["mul"]}}
+
+
+def test_a_row_the_index_holds_nothing_of_needs_its_tier(monkeypatch):
+    monkeypatch.setattr(circuit_db, "index", lambda: {"null": None, "empty": {}, "tiered": {"tier": "heavy"}})
+    for row in ("new", "null", "empty"):
+        with pytest.raises(UsageError, match=rf"{row}: a row new to records\.json needs --tier"):
+            circuit_db._tier(row, None)
+        assert circuit_db._tier(row, "fast") == "fast"
+    assert circuit_db._tier("tiered", None) == "heavy" and circuit_db._tier("tiered", "fast") == "fast"
+
+
+@pytest.mark.parametrize("manifest", ["absent", None, {}])
+def test_publish_holds_a_commit_that_states_no_manifest_to_no_build(manifest, tmp_path, store, monkeypatch):
+    """The summary's manifest is another Build's, which `publish` refuses when the record's Commit states it."""
+    d, real = _row_dir(tmp_path), CR.record
+
+    def record(*args, **kw) -> dict:
+        rec = real(*args, **kw)
+        commit = {k: v for k, v in rec["commit"].items() if k != "manifest"}
+        return {**rec, "commit": commit if manifest == "absent" else {**commit, "manifest": manifest}}
+
+    build = _build_art(store, d, tmp_path / "run")
+    served = {**_served(d), "required_manifest": {"manifest_digest": "other", "program_digest_per_rank": {"0": "0" * 128}}}
+    with pytest.raises(UsageError, match="not the one served"):
+        circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=served)
+    monkeypatch.setattr(CR, "record", record)
+    art = circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=served)
+    assert circuit_db.index()[ROW]["record"] == art
+
+
+@pytest.mark.parametrize("unstated", [{}, {"conformance": None, "gaps": None}, {"conformance": {}, "gaps": {}}])
+def test_publish_reads_evidence_that_states_no_conformance_and_no_gap_as_citing_nothing(unstated, tmp_path, store):
+    _map(tmp_path)
+    d = _row_dir(tmp_path)
+    ev = {"build": _build_art(store, d, tmp_path / "run"), **unstated}
+    with pytest.raises(UsageError, match=f"need {PROP} .*which the record neither cites nor names a gap"):
+        circuit_db.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d))
+    new = circuit_db.capture(_capture_run(store, tmp_path))[PROP]
+    art = circuit_db.publish(d, ROW, evidence=ev, tree="cursor/x@1b53f685a", by="circuits", tier="fast", summary=_served(d), newest=True)
+    assert circuit_db.record(ROW)["evidence"] == {**ev, "conformance": {PROP: new}} and store.get_manifest(art).refs == {"build": ev["build"], PROP: new}
+
+
+@pytest.mark.parametrize("entry", [None, {}])
+def test_pull_reads_an_index_entry_that_holds_nothing_as_a_row_on_the_trace(entry, tmp_path, store, monkeypatch):
+    d = _row_dir(tmp_path)
+    build = _build_art(store, d, tmp_path / "run")
+    art = circuit_db.publish(d, ROW, evidence=circuit_db.evidence_of(build), tree="cursor/x@1b53f685a", by="circuits", tier="heavy",
+                          summary=_served(d))
+    pod = circuit_db.index()
+    monkeypatch.setattr(circuit_db, "INDEX", tmp_path / "checkout.json")
+    _w(circuit_db.INDEX, {"schema": CR.INDEX_SCHEMA, "rows": {ROW: entry}})
+    assert circuit_db.pull(art) == ROW and circuit_db.index() == pod
+
+
+def test_a_row_dir_whose_build_summary_states_no_rank_has_no_construction(tmp_path):
+    assert circuit_db.constructions(tmp_path) == {}
+    unstated: list[dict] = [{}, {"ranks": None}, {"ranks": {}}]
+    for summary in unstated:
+        _w(tmp_path / "build_summary.json", summary)
+        assert circuit_db.constructions(tmp_path) == {}

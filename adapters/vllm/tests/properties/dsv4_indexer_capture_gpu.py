@@ -383,8 +383,12 @@ def _ref_every(quick: bool) -> int:
 def phase_compress(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dict], list[dict], dict[str, Any]]:
     """`save_partial_states` then `compress_norm_rope_store_triton`, twice on fresh caches: the score and compress records and jobs."""
     import torch
-    from vllm.models.deepseek_v4.common.ops.fused_compress_quant_cache import compress_norm_rope_store_triton
-    from vllm.models.deepseek_v4.common.ops.save_partial_states import save_partial_states
+    from vllm.models.deepseek_v4.common.ops.fused_compress_quant_cache import (
+        compress_norm_rope_store_triton,
+    )
+    from vllm.models.deepseek_v4.common.ops.save_partial_states import (
+        save_partial_states,
+    )
 
     dev = "cuda"
     T = o["pos"].size
@@ -414,7 +418,7 @@ def phase_compress(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dic
     saved = runs[0]["saved"]
     flat_rows = saved.reshape(NBS * STATE_BLOCK, 2 * STATE_W)
     ks = _u32(o["kv_score"])
-    touched = np.zeros(NBS * STATE_BLOCK, dtype=bool)
+    touched: np.ndarray = np.zeros(NBS * STATE_BLOCK, dtype=bool)
     touched[sslot[written]] = True
     rec_score = {"phase": "score", "case": "served", "tokens": int(T), "rows_written": int(written.size),
                  "checks": {"deterministic": bool(np.array_equal(saved, runs[1]["saved"])),
@@ -430,11 +434,11 @@ def phase_compress(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dic
     entries = np.flatnonzero((sslot >= 0) & (kslot >= 0) & ((pos + 1) % RATIO == 0))
     k = runs[0]["k"]
     untouched = k.reshape(-1)[~X.slot_mask(NBK, kslot[entries])]
-    rec_comp = {"phase": "compress", "case": "served", "entries": int((req[entries] == 0).sum()),
-                "checks": {"deterministic": bool(np.array_equal(k, runs[1]["k"])),
-                           "state_unchanged": all(np.array_equal(r["saved"], r["after"]) for r in runs),
-                           "unwritten_untouched": bool((untouched == SENTINEL_K).all()),
-                           "entries": int(entries.size) == (SEQ + EDGE_SEQ) // RATIO}}
+    rec_comp: dict[str, Any] = {"phase": "compress", "case": "served", "entries": int((req[entries] == 0).sum()),
+                                "checks": {"deterministic": bool(np.array_equal(k, runs[1]["k"])),
+                                           "state_unchanged": all(np.array_equal(r["saved"], r["after"]) for r in runs),
+                                           "unwritten_untouched": bool((untouched == SENTINEL_K).all()),
+                                           "entries": int(entries.size) == (SEQ + EDGE_SEQ) // RATIO}}
     rec_edge = {"phase": "compress", "case": "edge", "entries": int((req[entries] == 1).sum()),
                 "checks": {"entries": int((req[entries] == 1).sum()) == EDGE_SEQ // RATIO,
                            "deterministic": rec_comp["checks"]["deterministic"]}}
@@ -503,7 +507,9 @@ def head_operands(seed: int, dev: str = "cuda") -> tuple[Any, np.ndarray]:
 def phase_inv_rope(work: Path, o: dict[str, Any], quick: bool) -> tuple[list[dict], list[dict], dict[str, Any]]:
     """`fused_inv_rope_fp8_quant` (twice) on the first NH heads of a PADDED_HEADS-head buffer."""
     import torch
-    from vllm.models.deepseek_v4.common.ops.fused_inv_rope_fp8_quant import fused_inv_rope_fp8_quant
+    from vllm.models.deepseek_v4.common.ops.fused_inv_rope_fp8_quant import (
+        fused_inv_rope_fp8_quant,
+    )
 
     T = INV_TOKENS
     xb, pos = head_operands(77)
@@ -552,7 +558,11 @@ def phase_logits(work: Path, o: dict[str, Any], cst: dict[str, Any], quick: bool
     """The prefill gather, `fp8_fp4_mqa_logits` and `fp8_fp4_paged_mqa_logits` on request 0's compressed cache."""
     import torch
     from vllm import _custom_ops as ops
-    from vllm.utils.deep_gemm import fp8_fp4_mqa_logits, fp8_fp4_paged_mqa_logits, get_paged_mqa_logits_metadata
+    from vllm.utils.deep_gemm import (
+        fp8_fp4_mqa_logits,
+        fp8_fp4_paged_mqa_logits,
+        get_paged_mqa_logits_metadata,
+    )
     from vllm.utils.platform_utils import num_compute_units
 
     cache = cst["kcache"]
@@ -677,7 +687,7 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any] | None) -> dict[str, Any]:
     vals, lens, names = topk_rows(11)
     rows = len(lens)
     start = 5
-    wide = np.full((rows, MAX_MODEL_LEN + start + 8), np.inf, dtype=np.float32)
+    wide: np.ndarray = np.full((rows, MAX_MODEL_LEN + start + 8), np.inf, dtype=np.float32)
     wide[:, start:start + MAX_MODEL_LEN] = vals
     wide[:, :start] = 1e30
     pl = torch.from_numpy(wide).to("cuda")
@@ -880,7 +890,7 @@ def bind_check() -> dict[str, Any]:
                f"DsaMqaLogit_v3{{H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogitV3, H=H, D=D),
                f"DsaMqaLogits_v3{{N=64,H={H},D={D}}}": lambda: bind(dsa.DsaMqaLogitsV3, N=64, H=H, D=D),
                f"DsaTopKShortRow_v1{{TOPK={TOPK}}}": lambda: bind(dsa.DsaTopKShortRow, TOPK=TOPK)}
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in targets.items():
         try:
             out[name] = bool(make().signature())

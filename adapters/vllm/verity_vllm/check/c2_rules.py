@@ -477,7 +477,8 @@ def c2_rules(commit: dict, ctx: dict) -> list[CheckResult]:
     oc = _oracle_of(commit)
     out: dict[str, CheckResult] = {}
     sr_scope, sr_inputs = _replay_scope(sr), _replay_inputs(sr, ctx)
-    sr_notes = [_leak("sampled_replay.EVALUATORS / NOT_YET", "which families the replay can evaluate is a table by family name (the stated applicability domain)")]
+    sr_notes = [_leak("sampled_replay.EVALUATORS / NOT_YET", "which families the replay can evaluate is a table by family name (the stated applicability domain)"),
+                *_d(sr).get("premises", [])]          # what the replay says its equal rows leave unshown (a Boolean Build's)
     rc = ctx.get("replay_cache")
     if rc:
         sr_scope["replay_cache"] = {k: rc.get(k) for k in ("distinct_replays", "reused_pairs")}

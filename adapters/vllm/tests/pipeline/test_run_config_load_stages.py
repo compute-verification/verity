@@ -12,14 +12,17 @@ from verity_vllm.check import gates as G
 from verity_vllm.pipeline import match as RC
 
 
-def test_empty_stages_json_is_set_aside_and_the_resume_starts_empty(tmp_path, capsys):
+def test_empty_stages_json_is_set_aside_and_the_resume_starts_empty(tmp_path, caplog):
     p = tmp_path / G.ARTIFACTS["stages"]
     p.write_text("")
     assert RC.load_stages(tmp_path) == []
     assert not p.exists()
     aside = [q for q in tmp_path.iterdir() if q.name.startswith(p.name + ".unreadable-")]
     assert len(aside) == 1 and aside[0].read_text() == ""
-    assert "unreadable" in capsys.readouterr().err
+    (said,) = caplog.records
+    assert (said.name, said.levelname) == ("verity_vllm.pipeline.match", "WARNING")
+    assert said.getMessage().startswith(f"[stages] {p.name} unreadable (JSONDecodeError: ")
+    assert said.getMessage().endswith(f"; 0 bytes) -> set aside as {aside[0].name}; resuming with no stage records")
 
 
 def test_a_readable_record_and_a_missing_one_are_unchanged(tmp_path):

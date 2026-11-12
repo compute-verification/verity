@@ -32,6 +32,8 @@ import numpy as np
 
 from verity_vllm.commit import scheme
 
+__all__ = ["ROW_GUARD_FIELD", "SRC_BITS", "StreamLayout"]
+
 TAG = scheme.FA2H_TAG
 VERSION = scheme.FA2H_VERSION
 KBLOCK_N = 128
@@ -235,7 +237,7 @@ class StreamCommitment:
 
     @property
     def retained_bytes(self) -> int:
-        return 32 * sum(len(l) for l in self.levels) if self.levels else 32
+        return 32 * sum(len(level) for level in self.levels) if self.levels else 32
 
     def open(self, stream: np.ndarray, word_index: int) -> ChunkOpening:
         ci, off = divmod(word_index, self.chunk_words)

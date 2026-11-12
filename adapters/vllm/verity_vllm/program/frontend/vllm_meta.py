@@ -21,9 +21,7 @@ import sys
 from contextlib import contextmanager, nullcontext
 from typing import Any
 
-from verity_vllm import settings
 from verity_vllm.engine import env as engine_env
-from verity_vllm.program.frontend import seed_rule
 
 engine_env.pin(engine_env.EXPORT)
 
@@ -517,6 +515,7 @@ def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: 
             ids = torch.empty((M,), dtype=torch.int32, device="meta")
             return StochasticEngineStep(model, pos0, M, temp, p, S=S), (ids, seed_in)
         if kind == "request":
+            from verity_vllm.program.frontend import seed_rule
             prompt, rule = torch.empty((LP,), dtype=torch.int32, device="meta"), seed_rule.inputs(s)
             return StochasticRequest(model, LP, T, temp, p, S=S), (prompt, seed_in, *rule)
         raise ValueError(f"wrapper {kind!r} has no stochastic form (padded is greedy-only)")
@@ -542,6 +541,7 @@ def consulted_facts(vllm_config) -> dict:
     `env_consulted` = variables the builder sets AND the pinned vLLM's `envs` module defines (so vLLM reads them);
     `env_ignored`   = variables set in the process that this vLLM pin does NOT define (e.g. `VLLM_ATTENTION_BACKEND`, dead in d9105ea80)
     — never reported as declared facts. The target facts themselves (capability, SM count, BI switch) live in `target.declared/applied`."""
+    from verity_vllm import settings
     facts: dict = {}
     try:
         import vllm.envs as envs
@@ -580,6 +580,7 @@ def consulted_facts(vllm_config) -> dict:
 def no_fx_stack_traces():
     """Export without FX stack traces: nothing reads `node.meta["stack_trace"]`, and recording one per node was a tenth of a derive."""
     import torch.fx.config as fx_config
+
     from verity_vllm.engine import hooks
     with hooks.Hooks() as h:
         h.patch(fx_config, "do_not_emit_stack_traces", True)
@@ -594,6 +595,7 @@ def export_module(mod: nn.Module, inputs: tuple, vllm_config, num_tokens: int, s
     export context right after the export — what vLLM saw while the graph was produced (the driver refuses if it differs from the profile).
     Under a declared launch batch the graph keeps each node's `launch_region` tag."""
     import torch.fx.traceback as fxt
+
     from .export_compat import export_compat, read_back_applied
     from .rules.vllm_bindings.observations import launch_batch_declared
     from .triton_capture import intercept_triton_launches
@@ -626,7 +628,8 @@ def op_histogram(ep) -> dict[str, int]:
 
 __all__ = ["PIN", "make_vllm_config", "ensure_distributed", "instantiate_meta", "fake_forward_context", "EngineStep", "GreedyRequest",
            "CachedGreedyRequest", "CachedStochasticRequest", "cached_wrapper", "prefix_input", "PaddedGreedyRequest", "make_wrapper", "export_module", "export_step", "op_histogram", "consulted_facts",
-           "attention_impls", "export_facts", "BI_TRITON_KERNELS"]
+           "attention_impls", "export_facts", "BI_TRITON_KERNELS",
+           "with_peers", "probe_collectives"]
 
 
 def attention_impls(model: nn.Module) -> dict:
@@ -739,6 +742,7 @@ def mean_dim_override_facts() -> dict | None:
     try:
         import hashlib
         import inspect
+
         from vllm.model_executor.determinism import batch_invariant as bi
         k = bi.mean_kernel
         fn = getattr(k, "fn", k)

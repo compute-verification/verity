@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
+import struct
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
@@ -223,3 +224,16 @@ def test_the_value_correspondence_passes_only_when_the_replay_the_linkage_and_wh
         f"[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair 0): {linked} 2/2 (step, request) boundaries linked",
         ("[delta] C2 MOE PLANE ALIAS CHECK (pair 0): ALIAS up != down bytes on 3/4 (request, step, layer) triples, 1 layers, plane words None"
          " -- one triple aliases")]
+
+
+def test_the_live_replay_reads_a_registered_weight_from_the_engine_s_model() -> None:
+    """`live_weights` is the in-process replay's reader of registered inputs: a field's words from the model's own tensor,
+    under the Program's prefix or without it, and None for a field the model does not hold."""
+    torch = pytest.importorskip("torch")
+    values = [1.0, -2.0, 0.5, 3.0, -0.25, 8.0]
+    model = torch.nn.Linear(2, 3, bias=False)
+    model.weight = torch.nn.Parameter(torch.tensor(values).reshape(3, 2))
+    words = list(struct.unpack("<6I", struct.pack("<6f", *values)))
+    read = C2.live_weights(model, "model.")
+    assert read("model.weight", 0, 6).tolist() == words and read("weight", 2, 5).tolist() == words[2:5]
+    assert read("model.bias", 0, 1) is None and read("model.weight", 0, 7) is None

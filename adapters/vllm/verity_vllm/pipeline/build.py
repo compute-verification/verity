@@ -18,13 +18,14 @@ import gzip
 import hashlib
 import json
 import os
-import sys
 import time
 import traceback
 from dataclasses import dataclass
+from typing import Any
 
 from verity_vllm.config import RowConfig, option, workload_arg, workload_file
 from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import launch_context as LC
 from verity.definitions.boolean import write_word
 from verity_vllm.program.frontend.boolean import derived
@@ -34,6 +35,9 @@ from verity_vllm.program.prune import BATCHED, registered_form
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
+
+__all__ = ["Options", "main", "read_tp_links", "same_module_path", "sampler_geometry", "sampling_policy", "write_instances"]
+logger = init_logger(__name__)
 
 
 def _spec_histogram(program) -> dict[str, int]:
@@ -57,7 +61,8 @@ _CONSTRUCTION_SOURCES = ("verity_vllm/program/frontend/export_compat.py", "verit
                          "verity_vllm/program/frontend/rules/vllm_bindings/triton_launches.py",
                          "verity_vllm/program/frontend/rules/vllm_bindings/views.py",
                          "verity_vllm/program/frontend/rules/vocab.py", "verity_vllm/program/frontend/rules/triton_iface.py",
-                         "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py", "verity_vllm/program/frontend/target_profile.py",
+                         "verity_vllm/program/frontend/rules/vllm_iface.py", "verity_vllm/program/frontend/derive.py",
+                         "verity_vllm/program/frontend/derive_context.py", "verity_vllm/program/frontend/target_profile.py",
                          "verity_vllm/program/frontend/rules/common.py", "verity_vllm/program/frontend/value_types.py",
                          "verity_vllm/program/frontend/targets.py",
                          # the TP construction scaffolding (group stub, collective bus, verity_tp ops) and the TP2 Definitions
@@ -154,7 +159,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     if wl:
         try:
             w = json.loads(workload_file(wl).read_text())
-            reqs = list(w.get("requests") or [])
+            reqs = list(stated) if (stated := w.get("requests")) else []   # a workload that states none: a batch of one
         except Exception as e:  # noqa: BLE001
             return refuse(f"cannot read the workload manifest {wl!r} for the sampler batch: {e!r}", reason="sampler_geometry")
     B = max(1, len(reqs))
@@ -213,24 +218,25 @@ def sampling_policy(arg: str | None, workload: str | None) -> dict:
         return _norm({"temperature": float(m.group(1)), "top_p": float(m.group(2)), "top_k": int(m.group(3) or 0)}, s)
 
     def _from_manifest(path: str) -> dict:
-        w = json.load(open(path))
-        sw = w.get("sweep") or {}
-        if sw.get("sampling") is not None:
-            pol = _norm(dict(sw.get("sampling_params") or {}), sw["sampling"]) if sw["sampling"] != "greedy" else {"kind": "greedy"}
+        with open(path) as f:
+            w = json.load(f)
+        sw = w.get("sweep")   # a generated workload's block; a row file has none
+        if sw and sw.get("sampling") is not None:
+            pol = _norm(dict(params) if (params := sw.get("sampling_params")) else {}, sw["sampling"]) if sw["sampling"] != "greedy" else {"kind": "greedy"}
             if sw.get("sampling_seeds"):
                 pol["seeded"] = True
             return pol
-        variants = w.get("variants") or {}
-        top = (w.get("sampling") or {}).get("variant")
+        variants = w.get("variants")   # the legacy form's named policies; None: every request's is its own fields'
+        top = block.get("variant") if (block := w.get("sampling")) else None
         pols = []
         for r in w.get("requests", []):
             v = r.get("variant", top)
-            p = variants.get(v) if v is not None else None
+            p = variants.get(v) if variants and v is not None else None
             if p is None:
                 p = {"temperature": 0.0} if r.get("seed") is None and v in (None, "greedy") else {"temperature": 1.0}
             pols.append(_norm(dict(p), v))
         if not pols:
-            return _norm(dict(variants.get(top) or {"temperature": 0.0}), top) if top else {"kind": "greedy"}
+            return _norm(dict((variants.get(top) if variants else None) or {"temperature": 0.0}), top) if top else {"kind": "greedy"}
         kinds = {json.dumps(p, sort_keys=True) for p in pols}
         if len(kinds) > 1:
             return {"kind": "mixed", "policies": [json.loads(k) for k in sorted(kinds)]}
@@ -245,7 +251,8 @@ def sampling_policy(arg: str | None, workload: str | None) -> dict:
     pol = dict(pol_w if pol_w is not None else (pol_a if pol_a is not None else {"kind": "greedy"}))
     pol["source"] = "workload" if pol_w is not None else ("arg" if pol_a is not None else "default")
     if workload:
-        pol.update(workload=workload, **rid_entry(pol, json.load(open(workload)).get("requests", [])))
+        with open(workload) as f:
+            pol.update(workload=workload, **rid_entry(pol, json.load(f).get("requests", [])))
     return pol
 
 
@@ -270,7 +277,7 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
     samp = {k: v for k, v in (sampling or {"kind": "greedy"}).items() if k not in ("source", "workload", "label")}
     cond = {"numerics_profile": profile.numerics_profile, "attention_impl": impls, "attention_backend": backs, "vllm_flash_attn_version": favs,
             # the sampler the Program binds is an applicability condition: a greedy artifact is not reusable for a stochastic row
-            "sampler": samp, "token_select": SAMPLERS_BOUND.get(samp.get("kind")),
+            "sampler": samp, "token_select": SAMPLERS_BOUND.get(samp.get("kind", "")),
             "fused_add_rms_norm_dispatch": (export_facts or {}).get("fused_add_rms_norm_dispatch"),
             "vllm_version": applied.get("vllm_version"), "torch_version": applied.get("torch_version"), "triton_version": applied.get("triton_version"),
             "tuned_gemm_arch_family": applied.get("tuned_gemm_arch_family"), "tuned_gemm_table_sha256": tuned_gemm_table_sha256(),
@@ -290,18 +297,16 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
     if launch:
         # a request Program built under a declared launch context is reusable only for a batch that co-schedules it the same
         # way (FA3's tile reads the launch's max_seqlen_q).  Key present ONLY when a context was declared: B1 / undeclared identities are unchanged.
-        cond["launch_context"] = {"max_seqlen_q_by_step": {str(k): v for k, v in sorted((launch.get("max_seqlen_q_by_step") or {}).items())},
+        by_step = launch.get("max_seqlen_q_by_step")
+        cond["launch_context"] = {"max_seqlen_q_by_step": {str(k): v for k, v in sorted(by_step.items())} if by_step else {},
                                   "conflict": bool(launch.get("conflict")), **({"batch_by_step": {str(k): [list(q) for q in v] for k, v in sorted(launch["batch_by_step"].items())}} if launch.get("batch_by_step") else {}),
                                   **({"chunks": list(launch["chunks"])} if launch.get("chunks") else {})}
     return cond
 
 
 def _cuda_available() -> bool:
-    try:
-        import torch
-        return bool(torch.cuda.is_available())
-    except Exception:  # noqa: BLE001
-        return False
+    import torch
+    return bool(torch.cuda.is_available())
 
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
@@ -346,10 +351,9 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                  # co-scheduled sequence (frontend.targets.parse_launch_context).  FA3's tile rule reads it; None = own rows (B1 semantics, digests unchanged)
                  "launch_context": launch, **({"stop": stop} if stop is not None else {}), **({"form": BATCHED} if batched else {}),
                  **({"dsa_table_reads": True} if table_reads else {})}
-    try:
-        res["code_rev"] = json.load(open("EXPORT.json"))
-    except Exception:  # noqa: BLE001
-        res["code_rev"] = None
+    res["code_rev"] = None
+    with contextlib.suppress(OSError, ValueError), open("EXPORT.json") as f:   # none here, or not JSON: the tree is no export
+        res["code_rev"] = json.load(f)
     # the profile's environment is applied BEFORE vLLM is imported (vllm_meta's setdefaults are the fallback for callers without a profile)
     engine_env.apply_target(target.env())
     res["ok"] = False
@@ -379,7 +383,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
         res["sampling"] = sampling
         if res_target_source == "declared":   # the declared target decides the platform, not the host's NVML (a GPU-free Build host has none)
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
-            print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp, device_name)}", file=sys.stderr)
+            logger.info("[derive_step] declared target %s x%s: vLLM platform %s", target.sm_arch, tp, select_cuda_platform(tp, device_name))
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                    tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop, batched=batched, table_reads=table_reads)
     except _Refused:
@@ -401,7 +405,7 @@ class _Refused(Exception):
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0,
                dead_free: bool = False, stop: dict | None = None, batched: bool = False, table_reads: bool = False) -> None:
-    from verity_vllm.program.frontend.target_profile import ArtifactIdentity, applied_kernels, profile_mismatches
+    from verity_vllm.program.frontend.target_profile import applied_kernels, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
         from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
@@ -491,7 +495,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             applied_export: dict = {}
             ep = vm.export_module(mod, inputs, cfg, ntok, intercept_triton=intercept, launch_log=log, profile=target, applied_out=applied_export)
             res["export"] = {"secs": round(time.time() - t0, 2), "n_nodes": len(list(ep.graph.nodes)), "op_histogram": vm.op_histogram(ep),
-                             "triton_kernels": sorted({l["kernel"] for l in log.launches}), "n_triton_launches": len(log.launches)}
+                             "triton_kernels": sorted({x["kernel"] for x in log.launches}), "n_triton_launches": len(log.launches)}
             res["export_facts"] = vm.export_facts(res["export"]["op_histogram"], res["export"]["triton_kernels"])
             observe_export_facts(res["export_facts"])
             # READ BACK inside the export context: an export-phase value that diverged from the declared one (a second capability
@@ -560,7 +564,8 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     raw = json.dumps(desc, sort_keys=True).encode()
     with gzip.open(os.path.join(out, "descriptor.json.gz"), "wb") as f:
         f.write(raw)
-    corr_doc = (desc.get("annotations") or {}).get(CORR_NS) or {}
+    annotations = desc.get("annotations")
+    corr_doc = annotations.get(CORR_NS) if annotations else None   # None: a Program derived with no runtime correspondence
     res["program"] = {"function": program.fn.id, "digest": digest, "gates": program.gates, "input_gates": program.input_gates,
                       "n_root_nodes": len(program.fn.body.nodes), "descriptor_bytes": len(canon),
                       "descriptor_sha256": hashlib.sha256(raw).hexdigest(), "dead_gates": rep.dead.total if rep.dead else None,
@@ -579,10 +584,11 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     if tp > 1:
         res["tp"]["links"] = write_tp_links(out, res, program, rep, tp, rank, model_root=model_root)
     res["mutation_effects"] = rep.provenance["mutation_effects"]
-    res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
+    res["kv_rewrites"] = (len(kv) if (kv := rep.provenance.get("kv_rewrites")) else 0) if isinstance(rep.provenance, dict) else None
     if (pfx := KP.layout_of(rep.provenance)) is not None:   # the cached prefix's input and layer order, for Match
-        res["prefix"] = json.dump(pfx, open(os.path.join(out, "prefix_cache.json"), "w"), indent=1) or pfx
-    json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
+        _write_json(out, "prefix_cache.json", pfx)
+        res["prefix"] = pfx
+    _write_json(out, "derive-report.json", rep.to_json(), default=str)
     write_instances(out, program, digest, corr_digest, supplied, checks=rep.provenance.get("checks"))
     if res.get("wrapper") == "request":
         from verity_vllm.pipeline.memory_map import census_entry
@@ -593,7 +599,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["artifact"] = art.to_json()
     # beside program_digest, NOT inside the identity: the correspondence is data about the Program, not part of it
     res["artifact"]["correspondence_digest"] = corr_digest
-    json.dump(res["artifact"], open(os.path.join(out, "artifact.json"), "w"), indent=1, sort_keys=True)
+    _write_json(out, "artifact.json", res["artifact"], sort_keys=True)
 
 
 @contextlib.contextmanager
@@ -619,7 +625,6 @@ def _count(xs) -> dict:
 def _sharded_param_summary(model) -> dict:
     """The rank's parameter shapes AS INSTANTIATED at this rank (the sharded weight inputs the Program commits to), keyed by the
     vLLM layer class: `{class: {shape: count}}` — the independent check that the shard shapes match the engine worker's loaded shards."""
-    import torch
     by_cls: dict = {}
     n_params = n_elems = 0
     for name, m in model.named_modules():
@@ -635,11 +640,17 @@ def _sharded_param_summary(model) -> dict:
     return {"n_params": n_params, "n_elements": n_elems, "by_class": by_cls}
 
 
+def _write_json(out: str, name: str, doc: Any, **how: Any) -> None:
+    """`doc` as the Build's file `name` under `out`: JSON indented by one, `how` being `json.dump`'s other options."""
+    with open(os.path.join(out, name), "w") as f:
+        json.dump(doc, f, indent=1, **how)
+
+
 def _finish(out: str, res: dict, t_start: float) -> dict:
     import resource
     res["wall_secs_total"] = round(time.time() - t_start, 2)
     res["max_rss_mb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 1)  # Linux: KB
-    json.dump(res, open(os.path.join(out, "result.json"), "w"), indent=1, default=str)
+    _write_json(out, "result.json", res, default=str)
     _write_manifest(out, res)
     return res
 
@@ -648,20 +659,20 @@ def _write_manifest(out: str, res: dict) -> None:
     """`construction_manifest.json`: what the construction read (inputs trace summary), which rules fired, the declared
     facts it relied on, wall/RSS, and the program identity — for the independent validator."""
     tr = {}
-    try:
-        tr = json.load(open(os.path.join(out, "inputs.json")))
-    except Exception:  # noqa: BLE001
-        pass
+    with contextlib.suppress(OSError, ValueError), open(os.path.join(out, "inputs.json")) as f:   # none written, or not JSON
+        tr = json.load(f)
+    tp, declared = res.get("tp"), res.get("declared_derived")   # None: a single-GPU Build, and one refused before it declared
+    world, rank = (tp.get("world", 1), tp.get("rank", 0)) if tp else (1, 0)
     m = {"schema": "cb-a/construction_manifest/v3", "utc": res.get("utc"), "wrapper": res.get("wrapper"),
          # `sampling` is the row's declared policy (manifest / --sampling / default-by-omission), never a literal
          "structural_inputs": {"LP": res.get("LP"), "T": res.get("T"), "M": res.get("M"), "pos0": res.get("pos0"), "eos": res.get("eos"),
-                               "sampling": res.get("sampling"), "tp": (res.get("tp") or {}).get("world", 1), "rank": (res.get("tp") or {}).get("rank", 0),
+                               "sampling": res.get("sampling"), "tp": world, "rank": rank,
                                "launch_context": res.get("launch_context"), **({"C": res["C"]} if res.get("C") else {}),
                                **({"stop": res["stop"]} if res.get("stop") else {})},
          # world > 1: the rank's collectives (peer-input signature), embedding shard, engine args + env the admitted TP path requires,
          # the sharded parameter shapes and the cross-rank binding summary (full record: result.json `tp`, tp_links.json)
          "tp": ({k: v for k, v in res["tp"].items() if k != "collectives"} | {"collectives": {k: v for k, v in res["tp"].get("collectives", {}).items() if k != "record"}}
-                if (res.get("tp") or {}).get("world", 1) > 1 else None),
+                if world > 1 else None),
          "model": {"class": res.get("model_class"), "hf_config": res.get("hf_config"), "pin": res.get("model_pin"),
                    # `hf_config.tie_word_embeddings` above is what vLLM SET for loading (False when the checkpoint ships an
                    # lm_head); the loader's re-tie decision, reproduced from the checkpoint's bytes, is the served model's fact
@@ -670,7 +681,7 @@ def _write_manifest(out: str, res: dict) -> None:
          # read back from vLLM inside the applied shim; `target.host` = the construction host (informational, in no identity);
          # `target.consulted` = config facts + env split into consulted / ignored (dead in this pin) / non-vLLM
          "target": res.get("target"), "artifact": res.get("artifact"),
-         "declared": (res.get("declared_derived") or {}).get("declared"), "derived": (res.get("declared_derived") or {}).get("derived"),
+         "declared": declared.get("declared") if declared else None, "derived": declared.get("derived") if declared else None,
          "observed": {"attention_impls": res.get("attention_impls_observed"), "export_facts": res.get("export_facts")},
          "construction": {"mechanism": "torch.export(strict=False) of the vLLM model class on meta + verity_vllm.program.frontend.derive (profile mode)",
                           "export": res.get("export"), "derive_secs": res.get("derive_secs"), "wall_secs_total": res.get("wall_secs_total"),
@@ -686,7 +697,7 @@ def _write_manifest(out: str, res: dict) -> None:
                    "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
     if res.get("relabeled_from"):
         m["relabeled_from"] = res["relabeled_from"]
-    json.dump(m, open(os.path.join(out, "construction_manifest.json"), "w"), indent=1, default=str)
+    _write_json(out, "construction_manifest.json", m, default=str)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -753,13 +764,14 @@ def _stop_arg(text: str | None) -> dict | None:
 
 
 def main(a: Options) -> int:
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
     try:
+        from verity_vllm.engine.profiles.devices import device_name
+        from verity_vllm.pipeline.tp.emit_ranks import parse_ranks
         from verity_vllm.program.frontend.target_profile import parse_target_arg
         from verity_vllm.program.frontend.targets import parse_launch_context
-        from verity_vllm.pipeline.tp.emit_ranks import parse_ranks
-        from verity_vllm.engine.profiles.devices import device_name
         emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         named = device_name(a.workload)
         if a.device_name and named and a.device_name != named:
@@ -772,13 +784,13 @@ def main(a: Options) -> int:
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)
-        json.dump({"ok": False, "exception": type(e).__name__, "message": str(e)[:4000], "traceback_tail": tb[-6000:]}, open(os.path.join(a.out, "result.json"), "w"), indent=1)
-        print(f"[derive_step] CRASH {type(e).__name__}: {str(e)[:800]}", file=sys.stderr)
-        print(tb[-3000:], file=sys.stderr)
+        _write_json(a.out, "result.json", {"ok": False, "exception": type(e).__name__, "message": str(e)[:4000], "traceback_tail": tb[-6000:]})
+        logger.error("[derive_step] CRASH %s: %s\n%s", type(e).__name__, str(e)[:800], tb[-3000:])
         return 2
     summary = {k: res.get(k) for k in ("ok", "unsupported", "program", "rules_applied", "n_applications", "derive_secs")}
-    summary["target"] = {k: (res.get("target") or {}).get(k) for k in ("declared", "applied")}
-    summary["artifact_identity"] = (res.get("artifact") or {}).get("identity")
+    target, artifact = res.get("target"), res.get("artifact")   # a Build that crashed before its construction states neither
+    summary["target"] = {k: target.get(k) if target else None for k in ("declared", "applied")}
+    summary["artifact_identity"] = artifact.get("identity") if artifact else None
     print(json.dumps(summary, indent=1, default=str))
     if res.get("ok"):
         print(json.dumps(res["spec_histogram"], indent=1))

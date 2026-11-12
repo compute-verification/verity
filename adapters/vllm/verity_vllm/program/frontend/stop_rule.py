@@ -116,3 +116,6 @@ def in_derive(ctx: Any, outs: Sequence[Coll], at: Any) -> None:
     except (TypeError, ValueError) as e:
         refuse("shape", at, None, f"the length rule (config `stop`): {e}")
     ctx.node_hints[len(ctx.B.nodes) - 1] = NAME
+
+
+__all__ = ["NAME", "KEYS", "stop_ids", "spec", "of", "body_refusal", "check", "definition", "in_derive"]

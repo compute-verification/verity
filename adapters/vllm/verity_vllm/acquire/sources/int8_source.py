@@ -24,6 +24,7 @@ from typing import Any
 from verity_vllm.acquire.sources.call_boundary_plan import FAMILY
 from verity_vllm.log import init_logger
 from verity_vllm.query.manifest.bind import Port
+from verity_vllm.query.manifest.format import identity_rows
 
 logger = init_logger(__name__)
 
@@ -52,7 +53,7 @@ def claim(r: Mapping[str, Any]) -> str | None:
 def quant_sites(manifest: Mapping[str, Any] | None) -> dict[tuple[int, str], str]:
     """(engine step, linear module) -> the op path `<module>/<fx node>` of its Int8RowQuant_v1 call boundaries."""
     out: dict[tuple[int, str], str] = {}
-    for r in (manifest or {}).get("identities") or []:
+    for r in identity_rows(manifest):
         if claim(r):
             op = str(r["op_path"])
             out[(int(r.get("engine_step", r.get("step", 0))), op.split("/", 1)[0])] = op
@@ -61,7 +62,7 @@ def quant_sites(manifest: Mapping[str, Any] | None) -> dict[tuple[int, str], str
 
 def kv_modules(manifest: Mapping[str, Any] | None) -> list[str]:
     """The attention modules whose Int8KvQuant_v1 results the manifest requires (`instance_outputs` rows of its ports 0..3)."""
-    return sorted({str(r["op_path"]) for r in (manifest or {}).get("identities") or []
+    return sorted({str(r["op_path"]) for r in identity_rows(manifest)
                    if r.get("family") == "instance_outputs" and _spec(r) == KV_SPEC
                    and str(r.get("port", r.get("output_member"))) in KV_PORTS})
 

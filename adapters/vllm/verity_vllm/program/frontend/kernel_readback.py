@@ -122,3 +122,7 @@ def _quant_attrs(model, attr: str) -> list:
 
 def _one_name(names: set[str]) -> str | None:
     return None if not names else names.pop() if len(names) == 1 else "<mixed>"
+
+
+__all__ = ["INT8_ARM", "fp8_block_gemm_kernel_of", "moe_experts_class_of", "int8_exact_of", "int8_k_scales_of",
+           "is_attention_impl", "applied_kernels", "routers", "kept"]

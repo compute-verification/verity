@@ -36,3 +36,6 @@ COMPILATIONS: dict[str, dict[str, Any]] = {
                   "attention": "captured at the padded batch in a uniform decode step's FULL graph, else eager breaks "
                                "(eager_break_during_capture) on the real batch between captured segments"},
 }
+
+
+__all__ = ["COMPILATIONS"]

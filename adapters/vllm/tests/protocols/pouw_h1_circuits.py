@@ -52,10 +52,6 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.circuits import partition_object as PO
-from verity.circuits.codec import descriptor_id
-from verity.protocols.spot.verifier.one_stage import partition as P
-
 HERE = Path(__file__).resolve().parent
 H1_PROVE = HERE.parents[3] / "benchmarks" / "pouw" / "h1_prove"
 #: the statement's name, `h1_prove/stage.py`'s
@@ -84,6 +80,8 @@ def bind_of(descriptor: bytes, layout: dict) -> tuple[dict[str, str], dict[int, 
     (`h1window.tile_unit`) or J10-R's (`h1tile.PouwH1Tile5`, serve-openai's pouw setting ``unit`` j10r). ValueError when
     neither is one of the descriptor's definitions, or (with core's credit) the partition is not the one core's credit
     verifies statements under."""
+    from verity.circuits import partition_object as PO
+    from verity.circuits.codec import descriptor_id
     from verity.protocols.pouw.prover.circuit import h1tile as HT
     from verity.protocols.pouw.prover.circuit import h1window as HW
     from verity.protocols.pouw.verifier import credit as CR
@@ -146,6 +144,7 @@ def _h1_live():
 def live_part(T: int, S: int, prefix: str) -> dict:
     """The partition object of the live Program a window of S rounds at T rows under `prefix` proves on: v2's, or past
     `live.PIECE_ROWS` rows the pieced one (``h1_prove/live.py``'s `program_of`)."""
+    from verity.protocols.spot.verifier.one_stage import partition as P
     return P.partition(*_h1_live().program_of({"T": T, "S": S, "prefix": prefix}))
 
 
@@ -160,6 +159,7 @@ def lower_live(T: int, part: dict, path: Path) -> None:
 def rebuilt(descriptor: bytes) -> Any:
     """The declared window Program rebuilt from its descriptor's layout (`credit.layout_of`, its prefix `credit.shape_of`'s),
     each K's template held to the descriptor's by its descriptor id, which names every binding. ValueError otherwise."""
+    from verity.circuits.codec import descriptor_id
     from verity.protocols.pouw.prover.circuit import h1window as HW
     from verity.protocols.pouw.verifier import credit as CR
     layout, why = CR.layout_of(descriptor)
@@ -182,6 +182,7 @@ def leaf_bound(win: Any, k: int, kind: str) -> tuple[Any, bytes, dict, dict]:
     descriptor (`served.descriptor`), its partition object and what its file is bound to, ``{"partition",
     "program"}``."""
     from verity.protocols.pouw.prover.circuit import h1window as HW
+    from verity.protocols.spot.verifier.one_stage import partition as P
 
     from verity_vllm.protocols.pouw.h1 import served as SV
     program, query = HW.leaf_program(win, k, kind)
@@ -206,6 +207,7 @@ def _lower_leaf(k: int, kind: str, program: Path, path: Path) -> None:
     """K's leaf statement ``kind`` (`leaf_bound`) as the flat statement on `drawn_rows.leaf_rows`, its output
     `drawn_rows.LEAF_OUT_ROWS`, lowered under ``HZ_STAGE`` (``fast`` by default) and written to `path`."""
     from verity_flock import class_statement as CS
+
     from verity_vllm.protocols.pouw.h1 import drawn_rows as D
     if os.environ.get("HZ_STAGE", "fast") == "fast":
         sys.path.insert(0, str(H1_PROVE.parent / "hidden_zk"))

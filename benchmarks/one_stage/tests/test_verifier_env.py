@@ -1,4 +1,4 @@
-"""The benchmarks' runs of the Lean verifier (`a0.lean_verify`, `server_rate.Lean`) start `flock-verify verify` in
+"""The benchmarks' runs of the Lean verifier (`a0.lean_verify`, `server_rate.Lean`) start its `verify` in
 `verifier_env`: under the verifier's allocator setting where this process's environment sets none, and under the
 caller's own value where it does, with the rest of the environment as it is. The children are stand-ins that record the
 environment they were given."""
@@ -12,6 +12,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
+from verity.protocols.spot.verifier.one_stage.proofs import EXE
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -46,7 +48,7 @@ def test_a0s_lean_verify_runs_under_the_allocator_setting_unless_the_caller_sets
     (st["dir"] / "circuit.txt").write_text("circuit")
     (out / "sessions" / "s").mkdir(parents=True)
     (out / "sessions" / "s" / "session.json").write_text("{}")
-    assert a0.lean_verify("flock-verify", st, 8, out, zk=True)["accepted"]
+    assert a0.lean_verify(EXE, st, 8, out, zk=True)["accepted"]
     assert children["verify"] == {**os.environ, NAME: want}
 
 
@@ -66,7 +68,7 @@ def test_server_rates_lean_runs_under_the_allocator_setting_unless_the_caller_se
     monkeypatch.setattr(SR.subprocess, "run", lambda cmd, **kw: subprocess.CompletedProcess(cmd, 0, "", ""))
     monkeypatch.setattr(SR.subprocess, "Popen", Child)
     monkeypatch.setattr(SR.os, "wait4", lambda pid, options: (pid, 0, SimpleNamespace(ru_utime=0.0, ru_stime=0.0, ru_maxrss=0)))
-    lean = SR.Lean("flock-verify", tmp_path, tmp_path)
+    lean = SR.Lean(EXE, tmp_path, tmp_path)
     try:
         assert lean(SimpleNamespace(dir=tmp_path / "s", label="t/0"))["accepted"]
     finally:

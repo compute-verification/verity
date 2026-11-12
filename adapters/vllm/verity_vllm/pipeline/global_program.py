@@ -60,6 +60,8 @@ from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program import workload as W
 from verity_vllm.records.workload import Workload, WorkloadSampling
 
+__all__ = ["MODELLED_ENGINE", "Options", "compilation_facts", "main", "request_id_of", "stop_rule", "workload_target"]
+
 # the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
 for _e in _load_registry()[1]:
     print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)
@@ -347,7 +349,8 @@ def component_applicability(d: str) -> dict:
         if os.path.exists(p):
             with open(p) as f:
                 j = json.load(f)
-            a = j.get("applicability") or (j.get("artifact") or {}).get("applicability") or {}
+            artifact = j.get("artifact")   # a derive's record states the block at its top, an artifact's file under `artifact`
+            a = j.get("applicability") or (artifact.get("applicability") if artifact else None)
             if a:
                 return a
     return {}
@@ -392,15 +395,16 @@ def sampler_geometry(app: dict, reqs: list[dict]) -> dict | None:
     TokenSelect's launch S to it (`check.match.sampler_geometry.sampler_geometry_check`).  Declared for a stochastic sampler only (None
     for greedy); a stochastic sampler without an agreed num_SMs, or whose components declare another S, is a named refusal.  Not part
     of the Program digest (a declaration beside `applicability`, like `stop_rule`).  ``reqs`` is unused: S reads no request."""
-    comps = app.get("components") or {}
-    samp = comps.get("sampler")
+    comps = app.get("components")   # the components' agreed facts; a declaration without them declares no sampler
+    samp = comps.get("sampler") if comps else None
     if not isinstance(samp, dict):
         samp = {}
     if (samp.get("kind") or "greedy") != "stochastic":
         return None
-    nsm = comps.get("num_sms")
+    nsm = comps.get("num_sms") if comps else None
     if nsm is None:
-        nsm = (samp.get("geometry") or {}).get("num_sms") if isinstance(samp.get("geometry"), dict) else None
+        geometry = samp.get("geometry")
+        nsm = geometry.get("num_sms") if isinstance(geometry, dict) else None
     out = {"schema": "verity/workload-program/v1/sampler-geometry", "relation": "registered", "num_sms": nsm,
            "rule": "S = registered_splits(num_SMs) at every launch, whatever the live batch (engine.topp_pin); "
                    "every top-p TokenSelect of the fold carries it (its launch S); GM-01 fails by name otherwise",
@@ -496,9 +500,10 @@ def weights_of_record_binding(components: dict[str, dict]) -> dict:
             return {"refusal": f"component {key}: weights_of_record.json unreadable ({e})", "components": per, "per_rank": None}
         tp = rec.get("tp") if isinstance(rec.get("tp"), dict) else {}
         rank = int(tp.get("rank") or 0)
+        unresolved, checkpoint = rec.get("unresolved"), rec.get("checkpoint")   # a complete walk lists none; an older record names no checkpoint
         ent = {"root_of_record": rec.get("root_of_record"), "program_digest": rec.get("program_digest"), "tp": {"world": int(tp.get("world") or 1), "rank": rank},
                "complete": bool(rec.get("complete")), "n_pinned": rec.get("n_pinned"), "n_fields": rec.get("n_fields"),
-               "unresolved": rec.get("unresolved") or [], "schema": rec.get("schema"), "checkpoint_dir": (rec.get("checkpoint") or {}).get("dir")}
+               "unresolved": unresolved if unresolved else [], "schema": rec.get("schema"), "checkpoint_dir": checkpoint.get("dir") if checkpoint else None}
         per[key] = ent
         rd = c.get("recorded_digest")
         # a record without program_digest cannot be tied to the component (the stale check could never fire): refused
@@ -705,7 +710,7 @@ class Options:
 
 def main(a: Options) -> int:
     # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
     eos = [int(x) for x in a.eos_token_ids.split(",") if x.strip()] if a.eos_token_ids else None
     early = None
@@ -722,8 +727,14 @@ def main(a: Options) -> int:
         return 4
     print(json.dumps({"workload_digest": res["workload_digest"], "gates": res["gates"], "input_gates": res["input_gates"],
                       "requests": len(res["requests"]), "descriptor_bytes": res["descriptor"]["bytes"], "cost": res["cost"],
-                      "eos_token_ids": (res.get("stop_rule") or {}).get("eos_token_ids"),
-                      "lag": (res.get("lag") or {}).get("value"), "async_scheduling": (res.get("lag") or {}).get("async_scheduling"),
-                      "moe_construction": (res.get("moe_construction") or {}).get("value"),
-                      "moe_block_present": (res.get("moe_construction") or {}).get("moe_block_present")}))
+                      "eos_token_ids": _stated(res, "stop_rule", "eos_token_ids"),
+                      "lag": _stated(res, "lag", "value"), "async_scheduling": _stated(res, "lag", "async_scheduling"),
+                      "moe_construction": _stated(res, "moe_construction", "value"),
+                      "moe_block_present": _stated(res, "moe_construction", "moe_block_present")}))
     return 0
+
+
+def _stated(res: dict, block: str, key: str) -> Any:
+    """A field of one of the build result's optional blocks (`stop_rule`, `lag`, `moe_construction`); None where it has no such block."""
+    doc = res.get(block)
+    return doc.get(key) if doc else None

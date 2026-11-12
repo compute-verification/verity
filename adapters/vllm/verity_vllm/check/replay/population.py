@@ -20,11 +20,13 @@ from verity_vllm.check.replay.index import (
     ProgramIndex,
     const_word,
     node_runs,
+    plane_copies,
 )
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records.schema_ids import MOE_PLANE_ALIAS_CHECK_SCHEMA
 
 __all__ = ["phase_anchor", "population", "split_not_executed"]
 
@@ -139,7 +141,7 @@ def moe_plane_alias_check(store: CommittedStore) -> dict[str, Any]:
                                   "sha256": hashlib.sha256(got["up"][:n]).hexdigest()[:16]})
     n_ident = sum(v["identical"] for v in per_layer.values())
     result = None if compared == 0 else (n_ident == 0)
-    return {"schema": "verity-sweep/moe-plane-alias-check/v1", "result": result, "compared": compared, "identical_n": n_ident,
+    return {"schema": MOE_PLANE_ALIAS_CHECK_SCHEMA, "result": result, "compared": compared, "identical_n": n_ident,
             "identical": identical, "read_errors_n": len(errors), "read_errors": errors, "per_layer": per_layer,
             "plane_words": {k: sorted(v) for k, v in widths.items()},
             "rule": "for every (request, step, MoE layer) with both planes committed: committed up bytes != committed down bytes over their common "
@@ -213,7 +215,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
         # produced it -- the sampler op, a plane description (`plane_kind`) / a plane copy (MOE-TP-02), else the member's own family
         # (`manifest_format.alias_family`: a rank-local partial vs an instance output) -- never parsed back out of the op_path string
         keys = [(str(d["op_path"]), str(m[0]), "moe_block_stream" if d.get("plane_kind") else None) for m in d["members"]] \
-            + [(str(c["op_path"]), str(c["member"]), "moe_block_stream") for c in d.get("copies") or []]
+            + [(str(c["op_path"]), str(c["member"]), "moe_block_stream") for c in plane_copies(d)]
         for op, mem, mfam in keys:
             k = (rid, int(d["step"]), op, mem)
             a = addresses.get(k)
@@ -300,7 +302,7 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
         # sampled deterministically (the cell holds one row group); only a mid-phase single-identity fault is sampled with probability
         # n / (steps in the phase) -- targets (`--replay-target`) pin those for the negatives of record
         life = _lifetime(arrive + st, ring_slots)
-        sspec = _stratum_spec(fam, r["spec"], d.get("statics") or {})
+        sspec = _stratum_spec(fam, r["spec"], d["statics"])
         vus.append({"i": int(r["i"]), "spec": r["spec"], "family": fam, "request_id": rid, "step": st, "phase": _phase(st, last), "rank": int(rank),
                     "op_path": d["op_path"], "lifetime": life, "stratum": f"{sspec}|{rid}|rank{int(rank)}|{_phase(st, last)}|{d['op_path']}|{life}"})
     return vus, not_ev, not_ev_fam
@@ -373,9 +375,9 @@ def executed_prefix_of_record(rid: str, *, a_r: int, lag: int, cap: int, arrive:
         if lag in (0, 1):
             blk = rule(served_l, cap=cap, A=lag, eos=[int(e) for e in (eos_ids or ())])
             by_rule = {k: blk.get(k) for k in ("executed_prefix_len", "eos_step", "lag_steps", "first_eos_index", "served_past_first_eos", "cap_exhausted", "eos_stop", "problems")}
-            for pr in blk.get("problems") or []:
+            for pr in blk["problems"]:
                 faults.append(f"Continuation_v1 rule: {pr}")
-            if not blk.get("problems") and len(served_l) == a_r:
+            if not blk["problems"] and len(served_l) == a_r:
                 n_rule = int(blk["executed_prefix_len"])
                 if n_rule != n_exec:
                     faults.append(f"the arithmetic min(a_r + LAG, cap) = {n_exec} disagrees with the recurrence |{{t : r_t = 1}}| = {n_rule} (R3: the rule is the mechanism, "

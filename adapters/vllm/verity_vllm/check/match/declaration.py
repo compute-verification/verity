@@ -17,14 +17,49 @@ from verity_vllm.config import workload_file
 from verity_vllm.observe import capture_log as CL
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.records.fields import RecordError
+from verity_vllm.records.schema_ids import GLOBAL_PROGRAM_SCHEMA
 from verity_vllm.records.workload import Workload
 
-GP_SCHEMA = "cb-a/global-program/v1"
+GP_SCHEMA = GLOBAL_PROGRAM_SCHEMA
 
 
 def request_id_of(index: int) -> str:
     """`r<k>` -- the same function as global_program.request_id_of (kept local: this module must not import torch paths)."""
     return f"r{int(index)}"
+
+
+# engine conditions the workload Program models: the components are eager per-request Programs (X-09) over one shared
+# weights input; a request's prefill may be chunked over engine steps (X-09's chunked-prefill criterion).  Prefix caching is the
+# manifest's (`workload_applicability`): with it on, a request whose first C rows the prefix cache serves (`program.prefix_plan`) is a
+# component that reads them as its `prefix` input, which Match binds to the producing requests' rows; no other cross-request read.
+MODELLED_ENGINE = {"enforce_eager": True, "enable_prefix_caching": False, "enable_chunked_prefill": "modelled (a request's prefill rows may span engine steps)"}
+
+# a COMPILED execution is modelled only when every component declares it (applicability.execution
+# 'bi-compiled…' AND an agreed `compilation` block {mode, cudagraph_mode, capture_sizes, …} written by derive_step from the TargetProfile);
+# the engine conditions then say enforce_eager False + those facts, and GM-01 G1 compares the record's header against them.
+COMPILATION_FACT_KEYS = ("mode", "cudagraph_mode", "capture_sizes", "backend", "use_inductor_graph_partition", "compile_cache",
+                         # the record-level pin of the Inductor output identity (control process): carried into
+                         # global_match.json execution.effective_compilation when the header attests it, NOT compared with the Build
+                         # (derive_step traces eagerly; the pin is an attempt-to-attempt condition the report/commit compare)
+                         "kernel_set_sha256", "call_set_sha256", "wrapper_norm_set_sha256")
+_FACT_ALIASES = {"compilation_mode": "mode"}   # compiled's TargetProfile.modelled_engine() names it compilation_mode
+
+# vLLM CompilationMode: the recorder's profile.compilation writes the enum VALUE as a string ("0" on an eager record), compiled's
+# TargetProfile.modelled_engine() the NAME ("VLLM_COMPILE"); one spelling so the record's own sources are comparable
+_MODE_NAMES = {"0": "NONE", "1": "STOCK_TORCH_COMPILE", "2": "DYNAMO_TRACE_ONCE", "3": "VLLM_COMPILE"}
+
+
+def compilation_facts(block: dict | None) -> dict:
+    """The compilation facts of an applicability `engine`/`compilation` block, key-normalised (compilation_mode -> mode); {} if none.
+    (Of a declared block; `engine.build.compilation_facts` is another function, which reads them back from a built engine.)"""
+    if not isinstance(block, dict):
+        return {}
+    out = {}
+    for k, v in block.items():
+        kk = _FACT_ALIASES.get(k, k)
+        if kk in COMPILATION_FACT_KEYS and v is not None:
+            out[kk] = _MODE_NAMES.get(str(v), v) if kk == "mode" else v
+    return out
 
 
 # ------------------------------------------------------------------------------------------------------ the global Program
@@ -117,7 +152,6 @@ def mock_global_program(workload_path: str, component_dirs: list[str], eos_token
                      "prompt_sha256": hashlib.sha256(json.dumps(list(r.prompt_token_ids)).encode()).hexdigest()[:16],
                      "component": {"dir": comps.get((lp, T)), "LP": lp, "T": T},
                      "output_interface": {"unit": "engine_step", "max_events": cap, "event": "TokenSelect over the request's logits row"}})
-    from verity_vllm.pipeline.global_program import MODELLED_ENGINE
     engine = dict(MODELLED_ENGINE)
     stop_rule: dict = {"eos_token_ids": sorted(set(int(x) for x in eos_token_ids)) if eos_token_ids else None}
     lag_block = None
@@ -340,7 +374,6 @@ def record_engine_facts(header: dict, oracle_dir: str | None = None) -> dict:
     `capture/versions.json` repeats the effective engine kwargs.  Returns {engine: {k: v}, compilation: {fact: v}, values: {k: [distinct v]},
     sources: {k: [locations]}, disagreements: {k: (a, b, src_a, src_b)}, and unreadable: {location: error} only when a location is present
     but unreadable} -- the caller FAILS on any disagreement, on an unreadable location and when nothing is attested."""
-    from verity_vllm.pipeline.global_program import compilation_facts
     header = header if isinstance(header, dict) else {}
     prof = header.get("profile")
     prof = prof if isinstance(prof, dict) else {}
@@ -497,7 +530,6 @@ def _execution_conditions(c: NamedCheck, res: dict, gp: dict, header: dict, orac
     # a Program modelling a COMPILED execution declares its compilation facts; the record must attest the same
     # (RunHeader.profile.compilation / .compilation / engine_kwargs.compilation_config); a compiled Program against a header without them
     # FAILS (fail closed).  An EAGER Program against a record whose compilation facts attest cudagraphs / torch.compile FAILS too.
-    from verity_vllm.pipeline.global_program import compilation_facts
     decl_comp = app["engine"].get("compilation") if app.get("engine") else None
     if decl_comp is not None:
         decl = compilation_facts(decl_comp)

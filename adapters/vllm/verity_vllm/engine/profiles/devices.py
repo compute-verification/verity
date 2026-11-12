@@ -14,6 +14,8 @@ import json
 from verity_vllm.config import workload_file
 from verity_vllm.target_family import device_token_of_row
 
+__all__ = ["CARD", "NO_CARD", "device_name", "device_name_of_row", "fused_moe_config"]
+
 DEVICE_NAME: dict[str, str] = {"h200": "NVIDIA H200"}
 
 #: the card file (`verity.hardware.cards.load`) each served target is registered on, by the name its device reports, which

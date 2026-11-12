@@ -95,7 +95,7 @@ class Window:
         """Call c's A over the Program's M slots (its served codes as the prover kept them, then zero rows) and its B."""
         row = self.calls[c]
         k, m = int(row["k"]), int(row["served"])
-        a = np.zeros((int(self.layout["m"]), k), np.int8)
+        a: np.ndarray = np.zeros((int(self.layout["m"]), k), np.int8)
         if m:
             with np.load(self.prover / PV.CALLS / f"{c}.npz") as kept:
                 a[:m] = kept["a"].reshape(m, k)

@@ -2,9 +2,14 @@
 was dumped from; its full dump keeps the steps' salt keys, its slim dump only the salts of the leaves its reads opened."""
 from __future__ import annotations
 
+import subprocess
+import sys
+
 import pytest
 
 pytest.importorskip("torch")
+
+import torch
 
 from tests.check.opened import commit_steps, retained_block
 from verity_vllm.check import oracle_compare as OC
@@ -21,6 +26,22 @@ STEPS = {0: [("model.embed_tokens", bytes(range(256)) * 5 * K), ("model.layers.0
 
 def _reads(reader):
     return {(s, m.name): reader(s, m.name, 0, m.nbytes) for s, ms in reader.com._layouts.items() for m in ms}
+
+
+def test_the_store_imports_where_torch_is_not_installed():
+    """`verity_vllm.commit.store_dump` imports with no torch to import, and so do the CPU replay's modules that load it: only
+    `not_retained_of`, when called, reads `host_retention`, which imports torch."""
+    hidden = "import sys; sys.modules['torch'] = None; import verity_vllm.commit.store_dump"
+    child = subprocess.run([sys.executable, "-c", hidden], capture_output=True, text=True, check=False)
+    assert child.returncode == 0, child.stderr
+
+
+def test_as_bytes_is_a_tensors_and_an_arrays_bytes_in_memory_order():
+    """`verity_vllm.commit.store_dump.as_bytes`: one byte an item, whatever the value's dtype and shape."""
+    t = torch.arange(6, dtype=torch.int32).reshape(2, 3)
+    for value in (t, t.numpy()):
+        view = SD.as_bytes(value)
+        assert view.format == "B" and view.ndim == 1 and bytes(view) == t.numpy().tobytes()
 
 
 def test_a_dumped_store_reads_every_member_the_committer_reads(tmp_path):
@@ -141,6 +162,16 @@ def test_touching_a_read_records_what_the_verified_read_opens():
     with SD.touched(com) as touched:
         SD.touch(com, reads + [(0, "no.such.member", 0, 4)])
     assert touched.ranges == verified.ranges and touched.nodes == verified.nodes and touched.ranges[2]
+
+
+def test_touching_a_step_the_committer_holds_no_layout_for_opens_nothing():
+    """`verity_vllm.commit.store_dump.touch`: a read of a step the committer committed no layout for, like a read of a member its
+    step does not hold, opens no range and no tree node."""
+    com, _rc = commit_steps(STEPS)
+    assert 99 not in com._layouts
+    with SD.touched(com) as touched:
+        SD.touch(com, [(99, "runner.sampler", 0, 4), (0, "no.such.member", 0, 4)])
+    assert not any(touched.ranges.values()) and not any(touched.nodes.values())
 
 
 def test_a_rows_store_dumps_its_nodes_and_keys_in_full(tmp_path):

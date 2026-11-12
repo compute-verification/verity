@@ -50,7 +50,7 @@ from verity_vllm.program.frontend.target_profile import TargetProfile
 
 Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 C = Q3.C
-H, I, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
+H, INTER, E, TOPK = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"]
 G = 64
 CUDA = "cuda:0"
 E4M3 = "float8_e4m3fn"
@@ -84,7 +84,7 @@ def view(alloc, shape, dtype="bfloat16", strides=None, offset=0):
 
 
 def scale_shapes(g: int = G) -> dict[str, tuple[int, int, int]]:
-    return {"w13": (E, cdiv(2 * I, g), cdiv(H, g)), "w2": (E, cdiv(H, g), cdiv(I, g))}
+    return {"w13": (E, cdiv(2 * INTER, g), cdiv(H, g)), "w2": (E, cdiv(H, g), cdiv(INTER, g))}
 
 
 def fp8_scope_events(M: int, *, naive: bool = False, consts_up: dict | None = None, consts_down: dict | None = None, quant_group: int = G,
@@ -133,8 +133,8 @@ def fp8_scope_events(M: int, *, naive: bool = False, consts_up: dict | None = No
         op("_moe_C.moe_align_block_size.default",
            "_moe_C::moe_align_block_size(Tensor topk_ids, int num_experts, int block_size, Tensor($0! -> ) sorted_token_ids, Tensor($1! -> ) experts_ids, Tensor($2! -> ) num_tokens_post_pad, Tensor? maybe_expert_map) -> ()",
            [ids, E, 64, sorted_ids, expert_ids, npad, None])
-    cache1, cache2, cache3 = view(301, (M, TOPK, 2 * I), offset=P * I), view(301, (P, I)), view(301, (M, TOPK, H), offset=P * I)
-    w13, w2 = view(A_W13, (E, 2 * I, H), E4M3), view(A_W2, (E, H, I), E4M3)
+    cache1, cache2, cache3 = view(301, (M, TOPK, 2 * INTER), offset=P * INTER), view(301, (P, INTER)), view(301, (M, TOPK, H), offset=P * INTER)
+    w13, w2 = view(A_W13, (E, 2 * INTER, H), E4M3), view(A_W2, (E, H, INTER), E4M3)
     w13s, w2s = view(A_W13S, w13_scale_shape or scale_shapes()["w13"], "float32"), view(A_W2S, scale_shapes()["w2"], "float32")
 
     def launch(a, a_s, b, b_s, c, weights, N, K, consts):
@@ -146,17 +146,17 @@ def fp8_scope_events(M: int, *, naive: bool = False, consts_up: dict | None = No
         evs.append(TritonLaunch(new(), scope, 0, "forward", FN, "sha", args, consts, [(EM // 64) * (N // 64)], 4, 3, 7))
 
     c_up = dict(CONSTS, naive_block_assignment=naive, **(consts_up or {}))
-    launch(xq, xs, w13, w13s, cache1, None, 2 * I, H, c_up)
-    hq, hs = view(312, (P, I), E4M3), view(313, (P, I // G), "float32")
+    launch(xq, xs, w13, w13s, cache1, None, 2 * INTER, H, c_up)
+    hq, hs = view(312, (P, INTER), E4M3), view(313, (P, INTER // G), "float32")
     if fused_silu_quant:
         op("aten.empty.memory_format", EMPTY, [list(hq.shape), None, None, None, None, None], hq)
         op("_C.silu_and_mul_per_block_quant.default",
            "_C::silu_and_mul_per_block_quant(Tensor! out, Tensor input, Tensor! scales, int group_size, Tensor? scale_ub, bool is_scale_transposed) -> ()",
-           [hq, view(301, (P, 2 * I), offset=P * I), hs, G, None, False])
+           [hq, view(301, (P, 2 * INTER), offset=P * INTER), hs, G, None, False])
     else:
-        op("_C.silu_and_mul.default", "_C::silu_and_mul(Tensor($0! -> ) result, Tensor input) -> ()", [cache2, view(301, (P, 2 * I), offset=P * I)])
+        op("_C.silu_and_mul.default", "_C::silu_and_mul(Tensor($0! -> ) result, Tensor input) -> ()", [cache2, view(301, (P, 2 * INTER), offset=P * INTER)])
         quant(cache2, hq, hs, quant_group)
-    launch(hq, hs, w2, w2s, cache3, w_, H, I, dict(CONSTS, naive_block_assignment=naive, MUL_ROUTED_WEIGHT=True, top_k=1, **(consts_down or {})))
+    launch(hq, hs, w2, w2s, cache3, w_, H, INTER, dict(CONSTS, naive_block_assignment=naive, MUL_ROUTED_WEIGHT=True, top_k=1, **(consts_down or {})))
     op("_moe_C.moe_sum.default", "_moe_C::moe_sum(Tensor input, Tensor($0! -> ) output, Tensor? topk_ids=None, Tensor? expert_map=None) -> ()",
        [cache3, out, None, None])
     i = new()
@@ -181,8 +181,8 @@ def _ctx(start: StepStart, *, target: TargetProfile | None = SM120, experts: str
     header = RunHeader("verity-capture/log/v1", "2026-10-03T00:00:00Z", "x", prof, {"repo": Q3.MODEL, "config": {}}, {"requests": []})
     sh = scale_shapes()
     pre = f"model.layers.{LAYER}.mlp.experts.routed_experts"
-    roots = {A_W13: [Root(view(A_W13, (E, 2 * I, H), E4M3), "weight", f"{pre}.w13_weight")],
-             A_W2: [Root(view(A_W2, (E, H, I), E4M3), "weight", f"{pre}.w2_weight")],
+    roots = {A_W13: [Root(view(A_W13, (E, 2 * INTER, H), E4M3), "weight", f"{pre}.w13_weight")],
+             A_W2: [Root(view(A_W2, (E, H, INTER), E4M3), "weight", f"{pre}.w2_weight")],
              A_W13S: [Root(view(A_W13S, sh["w13"], "float32"), "weight", f"{pre}.w13_weight_scale_inv")],
              A_W2S: [Root(view(A_W2S, sh["w2"], "float32"), "weight", f"{pre}.w2_weight_scale_inv")]}
     return StepContext(header, start, None, [], roots, C, profile or fp8_profile())
@@ -212,9 +212,9 @@ def test_block_fp8_scope_folds_both_quants_and_both_pair_forms_on_the_target_s_e
     dot = T.moe_expert_fp8_dot(SM120).id
     assert [c.spec.id for c in computes] == [
         f"MoeRouterTopKOrderedNorm_v1{{E={E},TOPK={TOPK},VPT=8}}",
-        f"Fp8GroupQuant_v1{{K={H},G={G}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * I},G={G},KB=32,SWAP=False,DOT={dot}}}",
-        f"SiluMul_v2{{I={I}}}",
-        f"Fp8GroupQuant_v1{{K={I},G={G}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={I},N={H},G={G},KB=32,SWAP=False,DOT={dot}}}",
+        f"Fp8GroupQuant_v1{{K={H},G={G}}}", f"MoeExpertFp8Gemm_v1{{E={E},K={H},N={2 * INTER},G={G},KB=32,SWAP=False,DOT={dot}}}",
+        f"SiluMul_v2{{I={INTER}}}",
+        f"Fp8GroupQuant_v1{{K={INTER},G={G}}}", f"MoeExpertFp8GemmW_v1{{E={E},K={INTER},N={H},G={G},KB=32,SWAP=False,DOT={dot}}}",
         f"MoeSum_v1{{TOPK={TOPK},H={H}}}", f"AllReduce2_v1{{N={H}}}"]
     P = M * TOPK
     assert [c.rows for c in computes] == [M, M, P, P, P, P, M, M]

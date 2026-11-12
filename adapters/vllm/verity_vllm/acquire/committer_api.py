@@ -21,6 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from verity_vllm.commit.run_roots import RunRoots, StepRoot
+from verity_vllm.records.schema_ids import COVERAGE_DECLARATION_SCHEMA
 
 
 @dataclass
@@ -67,7 +68,7 @@ class Opening:
     salt: bytes = b""           # the row's salt (`step_rows.salt`, `step_rows.SALT_BYTES`)
 
 
-DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"
+DECLARATION_SCHEMA = COVERAGE_DECLARATION_SCHEMA
 
 
 def declaration(committer: str, path_label: str, classes: list[dict], notes: list[str] | None = None) -> dict:

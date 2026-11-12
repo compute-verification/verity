@@ -10,7 +10,7 @@ recomputes those names and `rows_differ` the names whose committed rows are not 
 for `bind_names`, which holds one step's committed names to the map.  `counts` totals the taps by Program status and by binder.
 A Program's `captures` names the conformance properties (`properties.record.REGISTRY`) whose captures establish it on the map's
 target; `captures` inverts them and `of_checkpoint` finds a checkpoint's map, which the circuit database reads (`verity_vllm.records`).
-Holding a map against a module inventory is `verity_vllm.check.capture_map`.
+Holding a map against a module inventory is `tests/check/capture_map_check.py`.
 """
 from __future__ import annotations
 
@@ -50,11 +50,17 @@ def load(path: Path | str) -> dict[str, Any]:
     return cmap
 
 
+def _pinned_repo(cmap: dict[str, Any]) -> Any:
+    """The repo of the checkpoint a map pins (`pins.checkpoint.repo`); None for a map that pins no checkpoint or names no repo."""
+    pins = cmap.get("pins")
+    checkpoint = pins.get("checkpoint") if pins else None
+    return checkpoint.get("repo") if checkpoint else None
+
+
 def of_checkpoint(repo: str, world: int, maps: Path | None = None) -> dict[str, Any] | None:
     """The map under `maps` (default `MAPS`) whose pinned checkpoint is `repo` and whose target runs `world` ranks; None when none is."""
     return next((m for m in (load(p) for p in sorted((maps or MAPS).glob("*.json")))
-                 if ((m.get("pins") or {}).get("checkpoint") or {}).get("repo") == repo
-                 and m["target"]["tensor_parallel_size"] == world), None)
+                 if _pinned_repo(m) == repo and m["target"]["tensor_parallel_size"] == world), None)
 
 
 def captures(cmap: dict[str, Any]) -> dict[str, list[str]]:
@@ -178,8 +184,10 @@ def _step_taps(cmap: dict[str, Any], env: dict[str, int], phase: str, routes: tu
             continue
         if tap.get("phases") and phase not in tap["phases"]:
             continue
-        if binders is not None and (tap.get("commit") or {}).get("binder") not in binders:
-            continue
+        if binders is not None:
+            commit = tap.get("commit")   # a tap the Commit does not bind has no binder, and is none of `binders`'
+            if (commit.get("binder") if commit else None) not in binders:
+                continue
         layers = tap_layers(cmap, tap, env)
         for layer in (layers if layers is not None else [None]):
             yield tap, layer
@@ -217,19 +225,25 @@ def committer_names(cmap: dict[str, Any], env: dict[str, int], *, phase: str = "
     return out
 
 
+def _ratios(cmap: dict[str, Any]) -> dict[str, Any]:
+    """The map's row counts (`row_counts.ratios`: the count's symbol -> its ratio's expression); none for a map without row counts."""
+    counted = cmap.get("row_counts")
+    ratios = counted.get("ratios") if counted else None
+    return ratios if ratios else {}
+
+
 def row_count_of(cmap: dict[str, Any], tap: dict[str, Any]) -> str | None:
     """The row count (`row_counts.ratios`) a tap's leading dimension is, or None."""
     lead = tap["shape"][0] if tap.get("shape") else None
-    return lead if isinstance(lead, str) and lead in ((cmap.get("row_counts") or {}).get("ratios") or {}) else None
+    return lead if isinstance(lead, str) and lead in _ratios(cmap) else None
 
 
 def row_counts(cmap: dict[str, Any], env: dict[str, int], positions) -> dict[str, int]:
     """Each row count of the map (`row_counts.ratios`: the count's symbol -> its ratio's) on a step whose tokens are at `positions`
     (the values the step commits under the `row_counts.positions` tap): the tokens whose position + 1 is a multiple of the ratio,
     the rows the compress kernels' mask selects, recomputed from the step's own positions.  Empty for a map without row counts."""
-    ratios = (cmap.get("row_counts") or {}).get("ratios") or {}
     out: dict[str, int] = {}
-    for sym, ratio in ratios.items():
+    for sym, ratio in _ratios(cmap).items():
         r = int(evaluate(ratio, env))
         out[sym] = sum(1 for p in positions if (int(p) + 1) % r == 0)
     return out
@@ -280,7 +294,7 @@ def bind_names(cmap: dict[str, Any], env: dict[str, int], names, *, profile: str
         raise MapError(f"capture map {cmap.get('id')}: a step that commits row-counted names needs their leading dimensions")
     return {"ids": sorted(tap_value_id(*want[n], profile=profile, request=request, t=t, phase=phase, rank=rank) for n in got & want.keys()),
             "unknown": sorted(got - want.keys()), "missing": sorted(want.keys() - got - empty), "empty": sorted(got & empty),
-            "rows_differ": rows_differ(cmap, env, positions, counted, rows) if counted else {}}
+            "rows_differ": rows_differ(cmap, env, positions, counted, rows) if counted and rows is not None else {}}
 
 
 def counts(cmap: dict[str, Any], env: dict[str, int], routes: tuple[str, ...] | None = None) -> dict[str, Any]:

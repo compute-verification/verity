@@ -10,7 +10,6 @@ import contextlib
 import copy
 import hashlib
 import json
-import sys
 import types
 from pathlib import Path
 from typing import Any
@@ -23,6 +22,7 @@ from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import mhc_twin as W
 from verity.definitions.registry import mhc as R
 
+from tests import fake_vllm
 from tests.properties import dsv4_mhc_capture_gpu as X
 from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
@@ -271,11 +271,8 @@ def test_the_source_scan_wants_each_kernel_and_no_fast_math(tmp_path, monkeypatc
     tk = types.ModuleType("tilelang_kernels")
     for name in X.KERNELS:
         setattr(tk, name, types.SimpleNamespace(_kernel_cache={(1,): Kernel(body + name)}))
-    parts = ["vllm", "vllm.model_executor", "vllm.model_executor.kernels", "vllm.model_executor.kernels.mhc"]
-    for p in parts:
-        monkeypatch.setitem(sys.modules, p, types.ModuleType(p))
-    monkeypatch.setattr(sys.modules[parts[-1]], "tilelang_kernels", tk, raising=False)
-    monkeypatch.setitem(sys.modules, parts[-1] + ".tilelang_kernels", tk)
+    kernels = "vllm.model_executor.kernels.mhc:tilelang_kernels"
+    fake_vllm.install(monkeypatch, extra=[kernels]).set(kernels, tk)
     got = X.sources(tmp_path)
     assert got["ok"] and len(list((tmp_path / "cuda").glob("*.cu"))) == len(X.KERNELS)
     assert got["kernels"]["hc_head_fuse_tilelang"][0]["counts"] == {"expf": 1, "rsqrtf": 1, "fmaxf": 1, "__shfl_xor_sync": 1,
@@ -374,11 +371,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys) -> N
     """`main --quick` with the GPU's phases stood in for (small-statics cases, one word flipped in the broadcast's layer input)
     and vLLM's config module stubbed: the jobs through the spawned worker pool, the per-case verdicts, the sealed record, the
     TF32 and capture lines and the exit status, so a slip in the orchestration shows here and not in the H200's first hour."""
-    vc = types.ModuleType("vllm.config")
-    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
-                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
-    monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
-    monkeypatch.setitem(sys.modules, "vllm.config", vc)
+    fake = fake_vllm.install(monkeypatch, extra=["vllm.config:CompilationConfig", "vllm.config:VllmConfig"])
+    fake.set("vllm.config:CompilationConfig", lambda **kw: kw)
+    fake.set("vllm.config:VllmConfig", lambda **kw: kw)
+    fake.set("vllm.config:set_current_vllm_config", lambda cfg: contextlib.nullcontext())
     for k in ("VLLM_USE_DEEP_GEMM", "VLLM_ENABLE_V1_MULTIPROCESSING", "TRITON_CACHE_DIR", "DG_JIT_CACHE_DIR", "TILELANG_CACHE_DIR"):
         monkeypatch.setenv(k, "")
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})

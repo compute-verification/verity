@@ -23,6 +23,11 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from verity_vllm.config import MANIFESTS, RowEngine, row_file
+from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
+from verity_vllm.engine.profiles.devices import fused_moe_config
+
+from . import dsa
 from .common import Unexpressible, _arr_shape, kind
 from .phi import Phi
 
@@ -48,9 +53,6 @@ def _id(name: str, **statics: object) -> str:
 def workload_phi(row: str, case: str) -> Phi:
     """The φ of a workload row of record (`config.row_file`, fetched when absent), its checkpoint's config.json the package's
     pinned copy (`hf_configs/<case>.config.json`), as `score.phi_of` makes it."""
-    from verity_vllm.config import RowEngine, row_file
-    from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
-
     from . import score as S
     w = json.loads(row_file(row).read_text())
     revision = RowEngine.of(w).revision
@@ -65,7 +67,6 @@ def workload_phi(row: str, case: str) -> Phi:
 
 def _routes_of_definitions() -> dict[str, str]:
     """Each Definition name (version dropped) -> its route in the capture map's `programs`."""
-    from verity_vllm.config import MANIFESTS
     progs = json.loads((MANIFESTS / "capture-maps" / _CAPTURE_MAP).read_text())["programs"]
     out = {"GumbelTopPTokenSelectSharedGreedy": "token-select", "GumbelTopPTokenSelect": "token-select"}
     for route, p in progs.items():
@@ -82,8 +83,6 @@ class StepNeeds:
             DECODE_THRESHOLD,
             DECODE_THRESHOLD_DEFAULT,
         )
-
-        from . import dsa
         self.phi, self.net = phi, dsa.Net(phi, 1, 8)
         self.C, self.tp, self.W = self.net.C, self.net.tp, self.net.world
         self._shape = {key: _arr_shape(t) for _, t, key in self.net._leaves if key is not None}
@@ -215,7 +214,6 @@ class StepNeeds:
     def _moe(self, M: int, n: int, L: int) -> list[tuple[Need, int]]:
         from verity.definitions.registry.moe import router_kernel
 
-        from verity_vllm.engine.profiles.devices import fused_moe_config
         from verity_vllm.program.frontend import targets as TG
         C, H, G = self.C, self.H, self.G
         E, TOPK, INTER = int(C["NUM_EXPERTS"]), int(C["TOPK"]), int(C["I"])

@@ -11,30 +11,31 @@ from __future__ import annotations
 
 __models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 
+from collections.abc import Callable
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits import codec
 from verity.circuits.boolean.trace import word_of
-from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation.batch import type_shape
 from verity.circuits.evaluation.reference import evaluate, standalone_call
+from verity.definitions import word as WQ
+from verity.definitions.boolean import boolean_version
 from verity.definitions.ops import fp32 as W
 from verity.definitions.ops import prims as P
 from verity.definitions.ops.boolean import gemm as BG
-from verity.definitions.boolean import boolean_version
-from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 from verity.definitions.registry import bf16_gemm_check as C
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import cublas_gemv as GV
 from verity.definitions.registry import ll_bf16 as LL
 from verity.definitions.registry import mla
 from verity.definitions.registry import mla_check as MK
-from verity.definitions import word as WQ
+
+from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3
 
 U16, U32 = np.uint16, np.uint32
 HOP = BG.HopperBF16WgmmaDot16
@@ -135,7 +136,7 @@ def _bf16_words(rng, shape, kind: str) -> np.ndarray:
 
 def _f32_words(rng, shape, kind: str) -> np.ndarray:
     """f32 words of a kind: a bf16 word of it with random low bits, except on infinities and NaNs, which keep theirs."""
-    hi = _bf16_words(rng, shape, kind).astype(U32)
+    hi: np.ndarray = _bf16_words(rng, shape, kind).astype(U32)
     lo = rng.integers(0, 1 << 16, hi.shape).astype(U32)
     return (hi << 16) | np.where((hi >> 7) & 0xFF == 0xFF, 0, lo).astype(U32)
 
@@ -289,9 +290,9 @@ def test_cublas_gemv_agrees_with_its_twin_and_contracts() -> None:
             x, w = _bf16_words(rng, (8, 64), kind), _bf16_words(rng, (2, 64), kind)
             got = np.asarray(BS.evaluate_words(gemv, x, np.broadcast_to(w, (8, *w.shape)))).astype(U16)
             assert np.array_equal(got, C.cublas_gemv_rows(x, w, LANES)), (LANES, kind)
-        ovf = np.zeros((2, 64), U16)
+        ovf: np.ndarray = np.zeros((2, 64), U16)
         ovf[:, 3], ovf[:, 3 + LANES] = 0xDF7F, 0x5FC0
-        neg = np.full((2, 64), 0x8000, U16)
+        neg: np.ndarray = np.full((2, 64), 0x8000, U16)
         neg[:, :LANES] = 0x9980
         x = np.full((1, 64), 0x5F80, U16)
         got = np.asarray(BS.evaluate_words(gemv, x, ovf[None])).astype(U16)
@@ -305,7 +306,7 @@ def test_cublas_gemv_agrees_with_its_twin_and_contracts() -> None:
 
 @pytest.mark.parametrize("M,K,SPLIT_K", [(1, 2048, 5), (4, 1024, 3), (303, 512, 2)])
 def test_route_probe_rows_tell_every_candidate_route_apart(M, K, SPLIT_K) -> None:
-    """`served routes` keeps the one candidate route (`cublas_routes_at`) whose twin computes every word of `route_probe_rows`; on
+    """`probe_routes` keeps the one candidate route (`cublas_routes_at`) whose twin computes every word of `route_probe_rows`; on
     the rows it reads, each pair of candidates at a split count differs somewhere, so the device's route is never ambiguous."""
     rows = sorted({0, M // 2, M - 1})
     tests = [(x[rows], w) for x, w in C.route_probe_rows(M, K, 64, np.random.default_rng([M, K]))]
@@ -382,8 +383,9 @@ def test_words_at_the_gates_statics_agree_with_the_models(gate: str, kind: str) 
     x, w = _bf16_words(rng, (2, K), kind), _bf16_words(rng, (1, K), kind)
     assert {C.dispatch_sm90(m, K, N)[1].get("BS") for m in range(1, 5)} == set(dotprod_bs)
     assert {C.dispatch_sm90(m, K, N)[1].get("SPLIT_K") for m in range(5, 17)} == set(split_ks)
-    cases = [(bind(LL.LlBf16DotprodDotWord, K=K, BS=bs, VEC=8, FMA=f), lambda bs=bs, f=f: C.dotprod_rows(x, w, bs, 8, f))
-             for bs in dotprod_bs for f in (1, 0)]
+    cases: list[tuple[SpecializedDefinition, Callable[..., np.ndarray]]] = [
+        (bind(LL.LlBf16DotprodDotWord, K=K, BS=bs, VEC=8, FMA=f), lambda bs=bs, f=f: C.dotprod_rows(x, w, bs, 8, f))
+        for bs in dotprod_bs for f in (1, 0)]
     cases += [(bind(LL.LlBf16SplitKDotWord, K=K, SPLIT_K=s, TILE_K=256, WARPS=4, DOT=HOPW), lambda s=s: C.splitk_rows(x, w, s))
               for s in split_ks]
     cases += [(bind(CB.GemmF32OutWord, K=K, N=1, DOT=HOPW), lambda: C.f32out_rows(x, w))]

@@ -57,3 +57,6 @@ def evaluated_cross_rank(family_or_id: str, families: frozenset[str] | set[str] 
     by its routed Definition.  The one rule both the rank's unreplayable sites and the record's `evaluated_by` read."""
     fam = str(family_or_id or "").split("{", 1)[0]
     return fam in families or collective_kind(fam) == "all_reduce"
+
+
+__all__ = ["collective_kind", "trailing_operands", "cross_rank_families", "evaluated_cross_rank"]

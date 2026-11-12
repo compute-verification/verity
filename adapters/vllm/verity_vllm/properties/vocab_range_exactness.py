@@ -21,9 +21,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.circuits.evaluation import evaluate_call
-from verity.circuits.evaluation.reference import standalone_call
-
 from verity_vllm.properties.record import REGISTRY, digest_of
 from verity_vllm.properties.record import seal as seal_record
 from verity_vllm.query import vocab_range as VR
@@ -44,6 +41,10 @@ def ir_values(vs: int, start: int, tok: int) -> tuple[int, int, int]:
     """(local, ge, le) of one token id in the circuit: evaluate `EmbeddingShard_v1{VS,H=2,START}` as a standalone Call over a zero table and read
     its committed interior gates (`query.vocab_range.slots`).  The three values depend on the id alone, not on H or the table; H = 2 is the
     smallest width whose output words are separate units reading them, as at every served width."""
+    # inside the function: these load numpy, and importing this module must not
+    from verity.circuits.evaluation import evaluate_call
+    from verity.circuits.evaluation.reference import standalone_call
+
     key = (vs, start)
     if key not in _CALLS:
         _CALLS[key] = standalone_call(VR.shard_fn(vs, 2, start))

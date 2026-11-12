@@ -673,9 +673,9 @@ class PaddedFusedMoeKernelRule(InPlaceRule):
         if (sc.get("stride_am"), sc.get("stride_ak")) != (K, 1):
             return f"a strides {sc.get('stride_am')},{sc.get('stride_ak')} are not row-major [rows, K]"
         if (sc.get("stride_be"), sc.get("stride_bk"), sc.get("stride_bn")) != (N * K, 1, K):
-            return f"b strides are not a contiguous [E, N, K] stack"
+            return "b strides are not a contiguous [E, N, K] stack"
         if (sc.get("stride_cm"), sc.get("stride_cn")) != (N, 1):
-            return f"c strides are not row-major rows of N"
+            return "c strides are not row-major rows of N"
         if K % sc.get("BLOCK_SIZE_K"):
             return f"BLOCK_SIZE_K={sc.get('BLOCK_SIZE_K')!r} does not divide K={K}"
         route = self._route(node, ctx, meta, sc, nv)
@@ -862,13 +862,13 @@ class PaddedMoeSumRule(InPlaceRule):
         y, out = node.args[:2]
         dn = ctx.val(y)
         up, route = dn.act.up, dn.act.up.route
-        M, E, TOPK, VPT, H, I = route.M, route.E, route.TOPK, route.VPT, up.H, up.I
-        fn = ctx.kind("moe_ffn_fixed", node, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
+        M, E, TOPK, VPT, H, INTER = route.M, route.E, route.TOPK, route.VPT, up.H, up.I
+        fn = ctx.kind("moe_ffn_fixed", node, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
         hint = ctx.hint_name(node)
         outs = [ctx.call(fn, up.x_rows[t], route.rows[t], up.w13, dn.w2, node=node, rule=self, name=f"{hint}[{t}]") for t in range(M)]
         ctx.rebind(out, from_rows(outs, (M,)), self, what="output")
         w13, w2 = ctx.weight_of(up.w13_node), ctx.weight_of(dn.w2_node)
-        ctx.record(self, node, {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": I, "rows": M, "schedule": up.schedule, "moe_construction": PADDED,
+        ctx.record(self, node, {"E": E, "TOPK": TOPK, "VPT": VPT, "H": H, "I": INTER, "rows": M, "schedule": up.schedule, "moe_construction": PADDED,
                                 "W13_is_parameter": w13.name if w13 else None, "W2_is_parameter": w2.name if w2 else None,
                                 "lift_of_record": "LMoeFfnL_v1 (hand-authored; registry.lifted.register_hand_lift)"},
                    emitted=f"{fn.id} x{M}")
@@ -884,4 +884,4 @@ VLLM_MOE_RULES = [PaddedTopkSoftmaxRule(), PaddedMoeAlignBlockSizeRule(), Padded
 __all__ = ["VLLM_MOE_RULES", "TopkSoftmaxRule", "MoeAlignBlockSizeRule", "FusedMoeKernelRule", "MoeSumRule", "MoeSchedule", "DeadOutput",
            "PaddedTopkSoftmaxRule", "PaddedMoeAlignBlockSizeRule", "PaddedFusedMoeKernelRule", "PaddedViewRule", "PaddedSiluAndMulRule", "PaddedMoeSumRule",
            "PaddedRoute", "PaddedStage", "PaddedSchedule", "PaddedUp", "PaddedAct", "PaddedDown", "active_moe_construction", "INDEXED_READ", "PADDED",
-           "MOE_GEMM_PINS", "TOPK_SOFTMAX_VPT", "TOPK_SOFTMAX_E_TESTED"]
+           "MOE_GEMM_PINS", "TOPK_SOFTMAX_VPT", "TOPK_SOFTMAX_E_TESTED", "INDEXED_READ_ORDERED"]

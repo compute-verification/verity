@@ -689,7 +689,6 @@ def stack() -> dict[str, Any]:
     """What the kernels of record came from: torch, vLLM, the `_flashmla_C` library and its SASS architectures."""
     import torch
     import vllm
-
     import vllm._flashmla_C as FC
 
     rec: dict[str, Any] = {"torch": torch.__version__, "cuda": torch.version.cuda, "vllm": getattr(vllm, "__version__", None),
@@ -753,7 +752,7 @@ def launch_case(work: Path, case: str, quick: bool) -> tuple[dict[str, Any], lis
                                       and torch.equal(meta.num_splits, meta2.num_splits)),
                       "returned": bool(torch.equal(ret1.reshape(b, H_Q, D).view(torch.int16), out1.view(torch.int16)))}}
     if not rec["checks"]["sched"]:
-        bad = np.flatnonzero(np.any(tsm[:, :7] != want_m, axis=1)) if tsm.shape[0] == want_m.shape[0] else []
+        bad: np.ndarray | list[int] = np.flatnonzero(np.any(tsm[:, :7] != want_m, axis=1)) if tsm.shape[0] == want_m.shape[0] else []
         rec["sched_first_bad"] = {"part": int(bad[0]), "gpu": tsm[bad[0], :7].tolist(), "port": want_m[bad[0]].tolist()} \
             if len(bad) else {"gpu_num_splits": ns.tolist()[:40], "port_num_splits": want_ns.tolist()[:40]}
     paths = _save(work / case, **case_arrays(o, _u16(out1), tsm[:, :7].astype(np.int32), ns.astype(np.int32)))
@@ -950,7 +949,7 @@ def bind_check() -> dict[str, Any]:
         "FlashMlaDecode_v1{NH=16,SPLITS=(0,9,18),NW=128,...}": lambda: bind(F.FlashMlaDecode, NH=NH, SPLITS=(0, 9, 18), NW=128,
                                                                             **st),
     }
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in targets.items():
         try:
             out[name] = bool(make().signature())

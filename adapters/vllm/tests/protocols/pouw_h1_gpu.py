@@ -1447,6 +1447,7 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     `draw_directory` is the window's sample session as `directory` is its session (its ``out/`` with `window_file`, else
     its tree), from which its sampling coin is read (none refuses it)."""
     from verity.protocols.spot.device import remote
+
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC
 

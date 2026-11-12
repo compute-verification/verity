@@ -35,9 +35,10 @@ from verity_vllm.correspondence.reader_for_acquire import (
     AcquireCorrespondence,
     RuntimeTree,
 )
+from verity_vllm.records.schema_ids import CALL_BOUNDARIES_GATE_SCHEMA
 
 PLAN_COMPARE_SCHEMA = "verity-vllm/acquisition-plan-compare/v1"
-CALL_BOUNDARIES_SCHEMA = "verity-vllm/call-boundaries-gate/v1"
+CALL_BOUNDARIES_SCHEMA = CALL_BOUNDARIES_GATE_SCHEMA
 #: identities without a source the record names, per kind (its counts are complete)
 NAMED = 100
 

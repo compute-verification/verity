@@ -109,7 +109,7 @@ class Plan:
             # exceed max(max_tokens)), else max(max_tokens); a listed step that never happens costs nothing
             n = a.max_tokens if a.max_tokens is not None else _workload_expected_steps(a.workload)
             if not n:
-                print("[plan] --snapshot-steps all: workload max_tokens unknown, falling back to 0,1,2,3", file=sys.stderr)
+                logger.warning("[plan] --snapshot-steps all: workload max_tokens unknown, falling back to 0,1,2,3")
                 n = 4
             self.steps = list(range(int(n)))
         else:
@@ -420,11 +420,12 @@ def write_spec_for(plan: Plan, a: Options, man: dict) -> dict | None:
             spec["reconstructed_after_execution"] = True
             spec["digest"] = EXP._digest_doc({k: v for k, v in spec.items() if k != "digest"})
         note = EXP.write_spec(plan.run, spec)
-        print(f"[spec] {'written' if note.get('written') else 'kept'} digest={(note.get('digest') or note.get('existing_digest') or '')[:12]}"
-              f"{'' if note.get('same', True) else '  (this phase would have produced a DIFFERENT spec; not rewritten)'}", file=sys.stderr)
+        logger.info("[spec] %s digest=%s%s", "written" if note.get("written") else "kept",
+                    (note.get("digest") or note.get("existing_digest") or "")[:12],
+                    "" if note.get("same", True) else "  (this phase would have produced a DIFFERENT spec; not rewritten)")
         return note
     except Exception as e:  # noqa: BLE001 - informational
-        print(f"[spec] not written: {type(e).__name__}: {e}", file=sys.stderr)
+        logger.warning("[spec] not written: %s: %s", type(e).__name__, e)
         return {"written": False, "error": f"{type(e).__name__}: {e}"}
 
 
@@ -448,8 +449,9 @@ def write_realized(plan: Plan) -> dict | None:
         return None
     reqs = []
     for r in src.get("requests", []):
-        reqs.append({"request_id": r.get("request_id"), "prompt_len": r.get("prompt_len", len(r.get("prompt_token_ids") or [])),
-                     "max_tokens": r.get("max_tokens"), "n_generated": r.get("n_generated", len(r.get("generated_token_ids") or [])),
+        prompt, generated = r.get("prompt_token_ids"), r.get("generated_token_ids")   # counted where the record states no count
+        reqs.append({"request_id": r.get("request_id"), "prompt_len": r.get("prompt_len", len(prompt) if prompt else 0),
+                     "max_tokens": r.get("max_tokens"), "n_generated": r.get("n_generated", len(generated) if generated else 0),
                      "arrive_step": r.get("arrive_step", 0), "arrive_step_realized": r.get("arrive_step_realized"),
                      "first_step": r.get("first_step"), "finish_step": r.get("finish_step"), "finish_reason": r.get("finish_reason")})
     snaps = None
@@ -457,12 +459,12 @@ def write_realized(plan: Plan) -> dict | None:
     if sp.exists():
         try:
             sj = json.loads(sp.read_text())
-            snaps = sorted({int(s) for s in (sj.get("steps") or sj.get("snapshot_steps") or [])}) or None
+            kept = sj.get("steps") or sj.get("snapshot_steps")   # the capture's list of the steps it kept, under either name
+            snaps = (sorted({int(s) for s in kept}) or None) if kept else None
         except (OSError, ValueError, AttributeError, TypeError):
             snaps = None
     real = {"requests": reqs, "prompt_lens": [r["prompt_len"] for r in reqs], "n_generated": [r["n_generated"] for r in reqs],
-            "engine_steps_capture": (cap or {}).get("engine_steps") or ((cap or {}).get("timing") or {}).get("engine_steps"),
-            "engine_steps_control": (ctl or {}).get("engine_steps") or ((ctl or {}).get("timing") or {}).get("engine_steps"),
+            "engine_steps_capture": _engine_steps(cap), "engine_steps_control": _engine_steps(ctl),
             "expected_engine_steps_declared": src.get("expected_engine_steps"), "serving_profile": src.get("serving_profile"),
             "context_class": src.get("context_class"), "snapshot_steps_realized": snaps,
             "max_concurrent_requests": _max_concurrent(reqs)}
@@ -471,6 +473,12 @@ def write_realized(plan: Plan) -> dict | None:
     man["realized"] = real
     p.write_text(json.dumps(man, indent=1, default=str) + "\n")
     return real
+
+
+def _engine_steps(tokens: dict | None) -> Any:
+    """The engine steps a tokens record states, at its top or under its `timing`; None with no record, or one that states neither."""
+    timing = tokens.get("timing") if tokens else None
+    return (tokens.get("engine_steps") if tokens else None) or (timing.get("engine_steps") if timing else None)
 
 
 def _max_concurrent(reqs: list[dict]) -> int | None:
@@ -499,8 +507,8 @@ def load_stages(run: Path) -> list[dict]:
         # over the preserved capture: set the unreadable record aside under a stamped name and start the stage list empty.
         aside = p.with_name(p.name + f".unreadable-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}")
         p.replace(aside)
-        print(f"[stages] {p.name} unreadable ({e.__class__.__name__}: {e}; {len(text)} bytes) -> set aside as {aside.name}; resuming with no stage records",
-              file=sys.stderr)
+        logger.warning("[stages] %s unreadable (%s: %s; %d bytes) -> set aside as %s; resuming with no stage records",
+                       p.name, e.__class__.__name__, e, len(text), aside.name)
         return []
     return list(d.get("stages", d) if isinstance(d, dict) else d)
 
@@ -604,8 +612,8 @@ def main(a: Options) -> int:
         cap, why = snapshot_cap_bytes(_workload_doc(a.workload), _hf_config_of(a, C0), _engine_arg_dict(a.engine_arg))
         a.snapshot_max_bytes, a.snapshot_cap_derivation = cap, why
         if why["raised"]:
-            print(f"[plan] --snapshot-max-bytes derived: {cap} B ({why['rows']} rows [{why['rows_source']}] x {why['row_bytes']} B "
-                  f"[{why['row_bytes_source']}]; the 32 MiB cap of record skips the prefill MLP rows of 1024-class workloads)", file=sys.stderr)
+            logger.info("[plan] --snapshot-max-bytes derived: %s B (%s rows [%s] x %s B [%s]; the 32 MiB cap of record skips the prefill MLP "
+                        "rows of 1024-class workloads)", cap, why["rows"], why["rows_source"], why["row_bytes"], why["row_bytes_source"])
 
     plan = Plan(a)
     stages = plan.stage_list(a.phase)
@@ -641,7 +649,7 @@ def main(a: Options) -> int:
         try:
             write_realized(plan)             # an existing capture's realized shape is in run.json before the gates / card read it
         except Exception as e:  # noqa: BLE001
-            print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
+            logger.warning("[realized] not written: %s: %s", type(e).__name__, e)
     for st in stages:
         if plan.skipped(st):
             recs.append({"stage": st, "status": "skipped", "returncode": None, "seconds": 0.0, "log": None, "cmd": None, "reason": "--skip"})
@@ -651,7 +659,7 @@ def main(a: Options) -> int:
             try:
                 write_realized(plan)         # realized shape into run.json before the card is built
             except Exception as e:  # noqa: BLE001
-                print(f"[realized] not written: {type(e).__name__}: {e}", file=sys.stderr)
+                logger.warning("[realized] not written: %s: %s", type(e).__name__, e)
             try:
                 recs.append(gates_stage(plan, a))
             except Exception as e:  # noqa: BLE001 - the driver reports, never crashes on the last stage
@@ -662,15 +670,17 @@ def main(a: Options) -> int:
         cmd = plan.cmd(st)
         if cmd is None:
             continue
-        print(f"[{st}] {shlex.join(cmd)}", file=sys.stderr)
+        logger.info("[%s] %s", st, shlex.join(cmd))
         rec = run_stage(st, cmd, logs / f"{st}.log", max_rss_gb=max_rss, timeout_s=timeout)
-        print(f"[{st}] {rec['status']} in {rec['seconds']} s", file=sys.stderr)
+        logger.info("[%s] %s in %s s", st, rec["status"], rec["seconds"])
         recs.append(rec)
         save_stages(plan.run, recs)
     if a.phase in ("gpu", "all"):
         gd = {"utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "seconds": round(time.time() - t_phase, 3), "config_id": a.config_id,
               "stages": {r["stage"]: {"status": r["status"], "seconds": r.get("seconds")} for r in recs if r["stage"] in GPU_STAGES}}
         plan.p("gpu_done").write_text(json.dumps(gd, indent=1) + "\n")
+    # the phase's last word on the realized shape is a print, with no logger's head: `ops/cov_pod.sh` shows a GPU phase's
+    # first "[realized]" line as it is written, and these two are the ones a GPU phase writes
     try:
         real = write_realized(plan)          # realized lengths / steps into run.json (also on a --phase cpu re-run over an old capture)
         if real:
@@ -681,7 +691,7 @@ def main(a: Options) -> int:
     try:
         EXP.write_experiment(plan.run, repo=Path(a.tree), spec_note=spec_note)   # the Experiment index over the run directory
     except Exception as e:  # noqa: BLE001 - informational
-        print(f"[experiment] not written: {type(e).__name__}: {e}", file=sys.stderr)
+        logger.warning("[experiment] not written: %s: %s", type(e).__name__, e)
     bad = [r for r in recs if r["stage"] in stages and r["status"] not in ("ok", "skipped")]
     return 1 if bad else 0
 
@@ -761,7 +771,8 @@ def snapshot_cap_bytes(doc: dict | None, hf: dict | None, engine_args: dict | No
     --snapshot-max-bytes-op contract is unchanged; OLMoE stays at the 32 MiB floor).  Returns (cap, derivation) -- the derivation
     goes into run.json so a reader sees why the record's cap is what it is."""
     doc = doc or {}
-    reqs = doc.get("requests") or []
+    stated = doc.get("requests")   # a workload read for its engine arguments alone states no requests
+    reqs = stated if stated else []
     ea = {**dict(RowEngine.of(doc).args), **dict(engine_args or {})}
     rows_src = None
     mnbt = ea.get("max_num_batched_tokens")
@@ -1009,11 +1020,12 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
     # (`fold._attribution`; X-09's `meta` channel reads exactly these keys -- without them here the record never carried them and the
     # decomposition always fell through to the data-flow / row-count channels).
     reqs_tab = []
+    sampled = getattr(result, "sampled", None)   # request id -> its served samples; a fold of no sampler has none
     for i, r in enumerate(getattr(result, "requests", None) or []):
         rid = r.get("request_id")
-        reqs_tab.append({"index": i, "request_id": rid, "prompt_len": len(r.get("prompt_token_ids") or []),
-                         "served_samples": len((getattr(result, "sampled", None) or {}).get(rid) or []),
-                         "max_tokens": r.get("max_tokens")})
+        prompt, served = r.get("prompt_token_ids"), sampled.get(rid) if sampled else None
+        reqs_tab.append({"index": i, "request_id": rid, "prompt_len": len(prompt) if prompt else 0,
+                         "served_samples": len(served) if served else 0, "max_tokens": r.get("max_tokens")})
     _form = instances_form()
     if _form == "progressions":
         from verity_vllm.program.compact import file_items_from_refs as _file_items
@@ -1034,8 +1046,9 @@ def persist_program(result: Any, run_dir: Path, *, profile_name: str, log_path: 
             if m.get("collective"):
                 rec["collective"] = m["collective"]           # kind/step/k/site/rank/world + the peers field the row reads
             rec = _jsonable(rec)                              # the meta fields only (small; may carry tuples / numpy scalars / objects)
-            rec["operand_views"] = [view(v) for v in m.get("operand_views") or []]
-            rec["output_views"] = [view(v) for v in m.get("output_views") or []]
+            operand_views, output_views = m.get("operand_views"), m.get("output_views")   # an instance may list no view of a side
+            rec["operand_views"] = [view(v) for v in operand_views] if operand_views else []
+            rec["output_views"] = [view(v) for v in output_views] if output_views else []
             if node is not None:
                 if _form == "progressions":   # from the fold's own Refs objects: no runs() expansion, no to_json() tree
                     rec["operand_refs"] = [_file_items(arg.refs) for arg in node.args]   # (== file_items_from_refs_json(refs.to_json()))
@@ -1073,7 +1086,7 @@ def fold_worker(a: Options) -> int:
     if log is None or profile is None or summary is None:
         raise SystemExit(f"--worker fold needs --{next(req for req in ('log', 'profile', 'out') if getattr(a, req) is None)}")
     # process-level; content-neutral (VERITY_GC_THRESHOLDS)
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+    from verity_vllm.gc_tuning import tune as _gc_tune
     _gc_tune()
     doc, result = fold_summary_result(log, profile, with_program=not a.no_program, moe_construction=getattr(a, "moe_construction", None), sampler_construction=getattr(a, "sampler_construction", None), registered_values=bool(getattr(a, "registered_values", False)))
     out = Path(summary)
@@ -1082,9 +1095,9 @@ def fold_worker(a: Options) -> int:
         doc["persisted"] = persist_program(result, Path(a.persist_dir), profile_name=profile, log_path=log,
                                            journal_level=1 if a.match_pipeline == "shared" else 9)
     out.write_text(json.dumps(_jsonable(doc), indent=1) + "\n")
-    print(f"{out}  digest={doc['digest'][:16]}  instances={doc['n_instances']}  steps={doc['n_steps']}  unresolved={doc['unresolved']}  "
-          f"unknown_roots={len(doc['unknown_roots'])}  rss={doc['max_rss_gb']} GB"
-          + (f"  persisted={sorted(doc['persisted'])}" if doc.get("persisted") else ""), file=sys.stderr)
+    logger.info("%s  digest=%s  instances=%s  steps=%s  unresolved=%s  unknown_roots=%d  rss=%s GB%s", out, doc["digest"][:16],
+                doc["n_instances"], doc["n_steps"], doc["unresolved"], len(doc["unknown_roots"]), doc["max_rss_gb"],
+                f"  persisted={sorted(doc['persisted'])}" if doc.get("persisted") else "")
     return 0
 
 

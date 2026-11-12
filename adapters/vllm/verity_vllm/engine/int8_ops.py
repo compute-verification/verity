@@ -47,6 +47,8 @@ import torch
 from verity_vllm.engine import int8_attention as A
 from verity_vllm.engine import int8_exact as E
 
+__all__ = ["linear", "linear_zy", "row_quant", "scaled_mm", "scaled_mm_zy"]
+
 LIBRARY = "verity_int8"
 
 

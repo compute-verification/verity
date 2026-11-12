@@ -31,6 +31,7 @@ def post(url: str, body: dict) -> Any:
 def complete(url: str, model: str, prompt: list[int], sampling: dict, user: str) -> dict[str, Any]:
     body = {"model": model, "prompt": prompt, "stream": True, "return_token_ids": True, "user": user,
             **{k: v for k, v in sampling.items() if k != "top_p"}}
+    ids: list[int]
     ids, http_id, finish = [], None, None
     with post(url + "/v1/completions", body) as r:
         for line in r:
@@ -59,7 +60,8 @@ def conversations(reqs: list[dict]) -> list[list[dict]]:
 
 
 def serve(url: str, model: str, chain: list[dict], max_model_len: int, sink: list[dict]) -> None:
-    prompt, streamed = None, None
+    prompt: list[int] = []
+    streamed: list[int] = []
     for t, q in enumerate(chain):
         prompt = q["prompt"] if t == 0 else prompt + streamed + q["suffix"]
         if len(prompt) + q["sampling"]["max_tokens"] > max_model_len:

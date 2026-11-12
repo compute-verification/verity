@@ -87,3 +87,6 @@ def check_identity(program: Program, *, check_registry: bool = True) -> dict[str
                 raise FrontendError("E_IDENTITY", f"the authored body of {fid} differs from the registered definition's body "
                                                   f"({v.verdict}: {v.detail}); the id denotes one body — give the authored function a new version")
     return seen
+
+
+__all__ = ["check_identity"]

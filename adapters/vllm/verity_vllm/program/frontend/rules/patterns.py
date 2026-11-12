@@ -23,7 +23,7 @@ from verity.circuits.types import Array, Value
 
 from verity_vllm.program.frontend.derive import StaticIndex, _LiftedConstant
 from verity_vllm.program.frontend.rules.base import OpRule, RuleInfo
-from verity_vllm.program.frontend.rules.common import shape
+from verity_vllm.program.frontend.rules.common import known, shape
 from verity_vllm.program.frontend.strided_views import _permute, _tensor_type
 
 aten = torch.ops.aten
@@ -309,7 +309,7 @@ class HFRMSNormPatternRule(OpRule):
             return "pow is not read by mean.dim only"
         dims = mean.args[1] if len(mean.args) > 1 else None
         keep = mean.args[2] if len(mean.args) > 2 else False
-        rank = len(shape(ctx, x))
+        rank = len(known(shape(ctx, x)))
         if not (isinstance(dims, (list, tuple)) and len(dims) == 1 and dims[0] in (-1, rank - 1) and keep is True):
             return f"mean over {dims} keepdim={keep} (pattern: last axis, keepdim)"
         add = _single_user(mean)
@@ -330,8 +330,8 @@ class HFRMSNormPatternRule(OpRule):
         w = next((a for a in out.args if isinstance(a, torch.fx.Node) and a is not cast), None)
         if w is None or not isinstance(ctx.val(w), Coll):
             return "no weight value in the final multiply"
-        N = shape(ctx, x)[-1]
-        if tuple(shape(ctx, w)) != (N,) or ctx.dtype_of(w) != dt_in:
+        N = known(shape(ctx, x))[-1]
+        if tuple(known(shape(ctx, w))) != (N,) or ctx.dtype_of(w) != dt_in:
             return f"weight shape {shape(ctx, w)} / dtype {ctx.dtype_of(w)} (pattern: [N] of the input dtype)"
         chain = [pw, mean, add, rs, ml, cast, out] if identity else [node, pw, mean, add, rs, ml, cast, out]
         return {"x": x, "w": w, "eps": eps, "N": N, "DT": _DT[dt_in], "chain": chain, "anchor": out}
@@ -379,7 +379,7 @@ def _through_views(node):
         if node.target in _CASTS:
             src = node.args[0]
             v, sv = node.meta.get("val"), getattr(src, "meta", {}).get("val")
-            if hasattr(v, "dtype") and hasattr(sv, "dtype") and v.dtype == sv.dtype:
+            if v is not None and sv is not None and hasattr(v, "dtype") and hasattr(sv, "dtype") and v.dtype == sv.dtype:
                 node = src
                 continue
         break
@@ -405,7 +405,7 @@ def _static_positions_source(node):
         if node.target in _CASTS:
             src = node.args[0]
             v, sv = node.meta.get("val"), getattr(src, "meta", {}).get("val")
-            if hasattr(v, "dtype") and hasattr(sv, "dtype") and v.dtype == sv.dtype:
+            if v is not None and sv is not None and hasattr(v, "dtype") and hasattr(sv, "dtype") and v.dtype == sv.dtype:
                 node = src
                 continue
             return None
@@ -447,7 +447,7 @@ def _buffer_source(node):
         if node.target in _CASTS:
             src = node.args[0]
             v, sv = node.meta.get("val"), getattr(src, "meta", {}).get("val")
-            if not (hasattr(v, "dtype") and hasattr(sv, "dtype")):
+            if v is None or sv is None or not (hasattr(v, "dtype") and hasattr(sv, "dtype")):
                 return None, None
             if v.dtype == sv.dtype:
                 node = src
@@ -518,7 +518,7 @@ class HFRotaryTableRule(OpRule):
             if not (isinstance(src, torch.fx.Node) and src.op == "placeholder" and src.name in buffers):
                 continue
             sv = src.meta.get("val")
-            if not (hasattr(sv, "dtype") and sv.dtype in _TABLE_BUFFER_DTYPES and sv.ndim == 1):
+            if sv is None or not (hasattr(sv, "dtype") and sv.dtype in _TABLE_BUFFER_DTYPES and sv.ndim == 1):
                 continue
             # a bf16 buffer reaches the f32 matmul through its one widening cast; an f32 buffer has none (by construction of the walk)
             if (sv.dtype == torch.bfloat16) != (src_cast is not None):
@@ -529,7 +529,7 @@ class HFRotaryTableRule(OpRule):
                 continue
             pos = cast.args[0]
             pv = getattr(pos, "meta", {}).get("val") if isinstance(pos, torch.fx.Node) else None
-            if not (hasattr(pv, "dtype") and not pv.dtype.is_floating_point and _static_positions_source(pos) is not None):
+            if pv is None or not (hasattr(pv, "dtype") and not pv.dtype.is_floating_point and _static_positions_source(pos) is not None):
                 continue
             tr = _single_user(mm)
             if tr is None or tr.target is not aten.transpose.int:
@@ -699,7 +699,7 @@ class HFRoPEPatternRule(OpRule):
         xs = x2.args[0]
         if x1.args[0] is not xs:
             return "the two halves are sliced from different tensors"
-        xshape = shape(ctx, xs)
+        xshape = known(shape(ctx, xs))
         rank = len(xshape)
         D = xshape[-1]
         R = D // 2
@@ -727,7 +727,7 @@ class HFRoPEPatternRule(OpRule):
             return f"x has rank {rank} (pattern: [B, NH, T, D])"
         B_, NH, T, _ = xshape
         cshape, sshape = shape(ctx, cos), shape(ctx, sin)
-        if cshape != sshape or len(cshape) != 4 or cshape[1] != 1 or cshape[2:] != (T, D) or cshape[0] not in (1, B_):
+        if cshape != sshape or len(c4 := known(cshape)) != 4 or c4[1] != 1 or c4[2:] != (T, D) or c4[0] not in (1, B_):
             return f"cos {cshape} / sin {sshape} do not broadcast over heads of x {xshape}"
         return {"x": x, "xs": xs, "cos": cos, "sin": sin, "B": B_, "NH": NH, "T": T, "D": D, "DT": _DT[next(iter(dts))], "anchor": add,
                 "chain": [node, x1, x2, neg, cat, other, add]}
@@ -742,8 +742,8 @@ class HFRoPEPatternRule(OpRule):
         x, cos, sin = ctx.coll(m["x"], "x"), ctx.coll(m["cos"], "cos"), ctx.coll(m["sin"], "sin")
         w = 32 if m["DT"] == "f32" else 16
         B_, NH, T, D = m["B"], m["NH"], m["T"], m["D"]
-        cb = cos.reshape(Array(shape(ctx, m["cos"])[0], Array(T, Array(D, Value(w)))))
-        sb = sin.reshape(Array(shape(ctx, m["sin"])[0], Array(T, Array(D, Value(w)))))
+        cb = cos.reshape(Array(known(shape(ctx, m["cos"]))[0], Array(T, Array(D, Value(w)))))
+        sb = sin.reshape(Array(known(shape(ctx, m["sin"]))[0], Array(T, Array(D, Value(w)))))
         outs = []
         for b in range(B_):
             xb = _permute(x[b], (1, 0, 2), "rope rows")  # [T][NH][D]

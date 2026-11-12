@@ -3,10 +3,12 @@
 `install`, run in every worker (``engine.collective_rpc``), wraps the model runner's sampler: before each call it copies
 the logits rows of the target requests whose scheduled tokens reach the end of their prompt (the rows the runner keeps a
 token of), as bf16 bits, and after it their sampled ids. `take`, run in every worker, writes each target's rows under
-``<directory>/rank<r>/`` and returns their ids and sha256s. `spans` lays them out: rank 0's rows, which every other rank
-that sampled the request must have taken bit for bit with the same ids, at the engine steps its tokens were emitted at,
-with the launch that fixes its Program. `write` writes them as `records.logits_capture`, which
-`pipeline.interior_rows.captured` reads as a token select's span. CPU replay writes the same record in tests.
+``<directory>/rank<r>/`` and returns their ids and sha256s. `uninstall`, run in every worker after `take`, puts the
+runner's own sampler back: the wrap is a patch of `engine.hooks`, listed by ``hooks.live(TAG)`` while it is on. `spans`
+lays the rows out: rank 0's, which every other rank that sampled the request must have taken bit for bit with the same
+ids, at the engine steps its tokens were emitted at, with the launch that fixes its Program. `write` writes them as
+`records.logits_capture`, which `pipeline.interior_rows.captured` reads as a token select's span. CPU replay writes the
+same record in tests.
 
 The runner is vLLM's V2 model runner (`v1.worker.gpu.model_runner`), whose sampler takes ``(logits, input_batch)``. A
 runner that shards sampling across ranks (``batch_sharder``), samples draft tokens, or hands the sampler logits that
@@ -21,12 +23,15 @@ from typing import Any
 
 import numpy as np
 
+from verity_vllm.engine import hooks
 from verity_vllm.records.logits_capture import LogitsCapture
 
-__all__ = ["CAPTURE", "Capture", "install", "launch", "piece_rows", "spans", "take", "write"]
+__all__ = ["CAPTURE", "TAG", "Capture", "install", "launch", "piece_rows", "spans", "take", "uninstall", "write"]
 
 #: a capture's record, beside its rows' files
 CAPTURE = "capture.json"
+#: the tag of a capture's patch of a runner's sampler (``hooks.live(TAG)``)
+TAG = "sampler-capture"
 
 
 class Capture:
@@ -102,11 +107,24 @@ def piece_rows(logits: Any, ids: Any, c: int | None = None, *, pad: int | None =
 
 
 def install(worker: Any, targets: Sequence[str]) -> int:
-    """Wrap ``worker``'s sampler for ``targets`` (the requests' engine ids); its rank."""
+    """Wrap ``worker``'s sampler for ``targets`` (the requests' engine ids), as a patch of `hooks` under `TAG`; its rank."""
     runner = worker.model_runner
     if getattr(runner, "batch_sharder", None) is not None:
         raise TypeError("the runner shards sampling across ranks: each rank's logits are an all-to-all's, not the gathered row")
-    runner.sampler = Capture(runner.sampler, targets)
+    hooks.Hooks(tag=TAG).patch(runner, "sampler", Capture(runner.sampler, targets))
+    return int(worker.rank)
+
+
+def uninstall(worker: Any) -> int:
+    """Put back the sampler ``worker``'s runner held before `install` wrapped it (the newest wrap, when there are two); its
+    rank. The rows go with the capture, so `take` comes first. Refused when the runner's sampler is not a capture that
+    `install` put there."""
+    capture = worker.model_runner.sampler
+    patch = next((p for p in reversed(hooks.live(TAG)) if isinstance(p, hooks.Patch) and p.value is capture), None)
+    if patch is None:
+        raise TypeError(f"the runner's sampler is a {type(capture).__qualname__}, not a capture `install` put there: nothing "
+                        "to put back")
+    patch.uninstall()
     return int(worker.rank)
 
 

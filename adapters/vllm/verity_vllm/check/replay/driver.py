@@ -105,13 +105,14 @@ from verity_vllm.commit.opened import opened_in_children
 from verity_vllm.program.compact import p_item_weight_span
 from verity_vllm.query import norm_scales
 from verity_vllm.query.required import QUERIES
+from verity_vllm.records.schema_ids import SAMPLED_REPLAY_SCHEMA
 
 __all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "default_workers", "engine_facts_of_record",
            "executed_prefix_of_record", "keep_population", "linkage_horizon", "manifest_query", "model_weights_provider", "populate",
            "PoolDoesNotFit", "ProgramIndex", "sampled_replay", "SCHEMA", "take_population", "V2_QUERY"]
 
 
-SCHEMA = "verity-sweep/sampled-replay/v1"
+SCHEMA = SAMPLED_REPLAY_SCHEMA
 
 _FORK_FN: Callable | None = None      # the per-VU closure the forked children run (set in the parent right before the fork)
 _FORK_VUS: list[dict] = []

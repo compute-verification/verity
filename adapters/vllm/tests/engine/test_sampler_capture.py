@@ -2,7 +2,8 @@
 
 A target's rows are kept only at the steps that sample a token of it (its scheduled tokens reach its prompt's end), as the
 bf16 bits the sampler took, and `pipeline.interior_rows.captured` reads them back as its token-select span. Ranks that took
-other bits are refused, as are a sharded sampler and logits that are not one bf16 row a request."""
+other bits are refused, as are a sharded sampler and logits that are not one bf16 row a request. The wrap is a patch of
+`verity_vllm.engine.hooks`, and `verity_vllm.engine.sampler_capture.uninstall` puts the runner's own sampler back."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -12,6 +13,7 @@ import numpy as np
 import pytest
 import torch
 
+from verity_vllm.engine import hooks
 from verity_vllm.engine import sampler_capture as SC
 from verity_vllm.pipeline import interior_rows as IR
 
@@ -44,6 +46,16 @@ def _batch(step: dict) -> SimpleNamespace:
 
 def _worker(rank: int) -> SimpleNamespace:
     return SimpleNamespace(rank=rank, model_runner=SimpleNamespace(sampler=Sampler(), batch_sharder=None))
+
+
+@pytest.fixture(autouse=True)
+def no_capture_stays_on():
+    """A test's captures come off with it, so the process's live patches are what they were."""
+    before = hooks.live()
+    yield
+    for p in reversed(hooks.live(SC.TAG)):
+        p.uninstall()
+    assert hooks.live() == before
 
 
 def _serve(workers, flip_at: int | None = None):
@@ -92,3 +104,36 @@ def test_ranks_that_took_other_bits_and_runners_a_token_select_cannot_read_are_r
     SC.install(w, ["a"])
     with pytest.raises(TypeError, match="one bf16 row a token"):
         w.model_runner.sampler(torch.zeros(2, V), _batch(STEPS[1]))
+
+
+def test_uninstall_puts_the_runner_s_own_sampler_back_and_the_rows_stay_with_the_capture(tmp_path):
+    w, before = _worker(0), hooks.live()
+    own = w.model_runner.sampler
+    assert SC.install(w, ["a"]) == 0
+    capture = w.model_runner.sampler
+    (patch,) = hooks.live(SC.TAG)
+    assert isinstance(capture, SC.Capture) and capture.inner is own and hooks.live() == (*before, patch)
+    assert (patch.owner, patch.name, patch.value, patch.prior) == (w.model_runner, "sampler", capture, own)
+    _serve([w])
+    took = SC.take(w, str(tmp_path / "ranks"))["spans"]["a"]
+    assert SC.uninstall(w) == 0
+    assert w.model_runner.sampler is own and vars(w.model_runner)["sampler"] is own and hooks.live() == before
+    assert (len(capture.rows["a"]), capture.ids["a"]) == (2, took["ids"])
+    w.model_runner.sampler(torch.zeros(1, V).to(torch.bfloat16), _batch(STEPS[2]))
+    assert len(capture.rows["a"]) == 2
+    with pytest.raises(TypeError, match="the runner's sampler is a Sampler, not a capture `install` put there"):
+        SC.uninstall(w)
+
+
+def test_two_captures_on_one_runner_come_off_newest_first_and_another_s_patch_on_top_is_not_taken_for_one():
+    w = _worker(0)
+    own = w.model_runner.sampler
+    SC.install(w, ["a"])
+    SC.install(w, ["b"])
+    assert w.model_runner.sampler.targets == {"b"} and w.model_runner.sampler.inner.targets == {"a"}
+    SC.uninstall(w)
+    assert w.model_runner.sampler.targets == {"a"} and w.model_runner.sampler.inner is own
+    with hooks.patched(w.model_runner, "sampler", Sampler()), pytest.raises(TypeError, match="not a capture `install` put there"):
+        SC.uninstall(w)
+    SC.uninstall(w)
+    assert w.model_runner.sampler is own and hooks.live(SC.TAG) == ()

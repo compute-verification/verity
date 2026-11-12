@@ -1,6 +1,8 @@
 """The gather collector's flush points by module leaf (`native_collect`).  Torch-free: the acquisition plan (`acquire.plan`) reads the
 same tables in a process where torch does not import."""
 
+__all__ = ["GATHER_FLUSH_LEAVES", "PRE_FLUSH_LEAVES"]
+
 # With a reference held from the hook to the flush, only in-place overwrites bound the windows.  On Llama the three zero-window
 # overwriters are RoPE after qkv_proj, the post-attention fused norm after o_proj and the next layer's input fused norm after down_proj ->
 # flush (one gather launch) at exactly those hooks + step end.  Two more exist on the other architectures, where the C2 oracle sees them as

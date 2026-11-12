@@ -17,6 +17,7 @@ CPU, synthetic checkpoint (real safetensors), no torch.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -24,7 +25,7 @@ import pytest
 from tests.check.test_weights_of_record import _bf16, live_digests, write_safetensors
 from verity_vllm.check import weights_of_record as WR
 
-H, I, E = 8, 6, 4          # hidden, intermediate, experts
+H, INTER, E = 8, 6, 4          # hidden, intermediate, experts
 
 
 def _ty(shape, bits):
@@ -49,18 +50,19 @@ def moe(request, tmp_path):
     gate, up, down = ("gate_proj", "up_proj", "down_proj") if fam == "olmoe" else ("w1", "w3", "w2")
     t = {"model.embed_tokens.weight": ("BF16", _bf16(rng, 10, H)), "model.norm.weight": ("BF16", _bf16(rng, H))}
     for e in range(E):
-        t[f"{container}.{e}.{gate}.weight"] = ("BF16", _bf16(rng, I, H))
-        t[f"{container}.{e}.{up}.weight"] = ("BF16", _bf16(rng, I, H))
-        t[f"{container}.{e}.{down}.weight"] = ("BF16", _bf16(rng, H, I))
-    d = tmp_path / "snap"; d.mkdir()
+        t[f"{container}.{e}.{gate}.weight"] = ("BF16", _bf16(rng, INTER, H))
+        t[f"{container}.{e}.{up}.weight"] = ("BF16", _bf16(rng, INTER, H))
+        t[f"{container}.{e}.{down}.weight"] = ("BF16", _bf16(rng, H, INTER))
+    d = tmp_path / "snap"
+    d.mkdir()
     write_safetensors(str(d / "model.safetensors"), t)
-    json.dump({"tie_word_embeddings": False, "hidden_size": H}, open(d / "config.json", "w"))
+    (d / "config.json").write_text(json.dumps({"tie_word_embeddings": False, "hidden_size": H}))
     man = tmp_path / "checkpoints.json"
-    json.dump({"checkpoints": [{"repo": f"test/{fam}", "revision": "abc", "local_path": str(d),
-                                "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d / 'model.safetensors'))}}}]}, open(man, "w"))
+    Path(man).write_text(json.dumps({"checkpoints": [{"repo": f"test/{fam}", "revision": "abc", "local_path": str(d),
+                                                      "files": {"model.safetensors": {"sha256": WR.sha256_file(str(d / 'model.safetensors'))}}}]}))
     served_w13 = f"{container}.routed_experts.w13_weight"
     served_w2 = f"{container}.routed_experts.w2_weight"
-    fields = [("model.model.embed_tokens.weight", [10, H], 16), ("model." + served_w13, [E, 2 * I, H], 16), ("model." + served_w2, [E, H, I], 16),
+    fields = [("model.model.embed_tokens.weight", [10, H], 16), ("model." + served_w13, [E, 2 * INTER, H], 16), ("model." + served_w2, [E, H, INTER], 16),
               ("model.model.norm.weight", [H], 16)]
 
     def A(n):
@@ -103,17 +105,17 @@ def test_unknown_segments_and_absent_parts_are_refused_by_name_never_guessed(moe
     ck = WR.CheckpointIndex(str(d), checkpoints_manifest=str(man))
     # any other segment between the container and the stack: no composition rule
     with pytest.raises(KeyError, match="no checkpoint tensor and no composition rule"):
-        WR.compose(f"{moe['container']}.shared.w13_weight", [E, 2 * I, H], 16, ck)
+        WR.compose(f"{moe['container']}.shared.w13_weight", [E, 2 * INTER, H], 16, ck)
     with pytest.raises(KeyError, match="no checkpoint tensor and no composition rule"):
-        WR.compose(f"{moe['container']}.routed_experts.extra.w2_weight", [E, H, I], 16, ck)
+        WR.compose(f"{moe['container']}.routed_experts.extra.w2_weight", [E, H, INTER], 16, ck)
     # a container whose expert 0 carries neither HF nor Mixtral part names: refused naming both candidate sets
     with pytest.raises(KeyError, match=r"no per-expert checkpoint tensors model.layers.7.mlp.experts.0.\{gate_proj\|up_proj\|w1\|w3\}.weight"):
-        WR.compose("model.layers.7.mlp.experts.routed_experts.w13_weight", [E, 2 * I, H], 16, ck)
+        WR.compose("model.layers.7.mlp.experts.routed_experts.w13_weight", [E, 2 * INTER, H], 16, ck)
     # a stack that declares MORE experts than the checkpoint has: the missing expert is named (not zero-filled)
     with pytest.raises(KeyError, match=f"expert {E} sources missing"):
-        WR.compose(moe["w13"], [E + 1, 2 * I, H], 16, ck)
+        WR.compose(moe["w13"], [E + 1, 2 * INTER, H], 16, ck)
     # in a record: the unresolved field is named with its reason and the record is incomplete (the checker FAILs 'weights of record incomplete')
-    bad_fields = moe["fields"] + [("model.model.layers.0.mlp.experts.other.w13_weight", [E, 2 * I, H], 16)]
+    bad_fields = moe["fields"] + [("model.model.layers.0.mlp.experts.other.w13_weight", [E, 2 * INTER, H], 16)]
     rec = WR.weights_of_record(_program(bad_fields), WR.CheckpointIndex(str(d), checkpoints_manifest=str(man)), prefix="model.")
     assert rec["complete"] is False and [u["field"] for u in rec["unresolved"]] == ["model.model.layers.0.mlp.experts.other.w13_weight"]
     assert "no composition rule" in rec["unresolved"][0]["why"]
@@ -133,19 +135,32 @@ def test_expert_level_substitutions_fail_the_pin_by_name(moe):
         assert "1 served weight(s) differ from the checkpoint of record: " + field in res["why"]
         return res
     # (1) one element of ONE expert's slice flipped (flipweight on ...routed_experts.w2_weight)
-    s = dict(honest); w = s[moe["w2"]].copy(); w[2, 3, 1] ^= 0x0040; s[moe["w2"]] = w
+    s = dict(honest)
+    w = s[moe["w2"]].copy()
+    w[2, 3, 1] ^= 0x0040
+    s[moe["w2"]] = w
     _fails(s, moe["w2"])
     # (2) two experts permuted (same bytes, wrong order): the stack is not the checkpoint's experts by index
-    s = dict(honest); w = s[moe["w13"]].copy(); w[[0, 1]] = w[[1, 0]]; s[moe["w13"]] = w
+    s = dict(honest)
+    w = s[moe["w13"]].copy()
+    w[[0, 1]] = w[[1, 0]]
+    s[moe["w13"]] = w
     assert np.array_equal(np.sort(w.ravel()), np.sort(honest[moe["w13"]].ravel()))          # a permutation: every word kept
     _fails(s, moe["w13"])
     # (3) an expert replaced by another expert's tensors (a duplicated expert)
-    s = dict(honest); w = s[moe["w2"]].copy(); w[3] = w[0]; s[moe["w2"]] = w
+    s = dict(honest)
+    w = s[moe["w2"]].copy()
+    w[3] = w[0]
+    s[moe["w2"]] = w
     _fails(s, moe["w2"])
     # (4) gate|up halves swapped inside one expert (up first): the layout vLLM fills is gate first (w1), up second (w3)
-    s = dict(honest); w = s[moe["w13"]].copy(); w[1] = np.concatenate([w[1, I:], w[1, :I]]); s[moe["w13"]] = w
+    s = dict(honest)
+    w = s[moe["w13"]].copy()
+    w[1] = np.concatenate([w[1, INTER:], w[1, :INTER]])
+    s[moe["w13"]] = w
     _fails(s, moe["w13"])
     # (5) a stack with one expert fewer: shape differs -> named as a mismatch of that field, never compared partially
-    s = dict(honest); s[moe["w13"]] = honest[moe["w13"]][:E - 1]
+    s = dict(honest)
+    s[moe["w13"]] = honest[moe["w13"]][:E - 1]
     res = WR.check(rec, live_digests(s), **ctx)
     assert res["result"] is False and [m["served_name"] for m in res["mismatched"]] == [moe["w13"]]

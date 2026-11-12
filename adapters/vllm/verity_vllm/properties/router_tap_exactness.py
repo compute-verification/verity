@@ -28,9 +28,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from verity.circuits.evaluation import evaluate_call
-from verity.circuits.evaluation.reference import standalone_call
-
 from verity_vllm.properties.record import REGISTRY, digest_of
 from verity_vllm.properties.record import seal as seal_record
 from verity_vllm.query import router_softmax as RS
@@ -53,6 +50,10 @@ _CALLS: dict[tuple, Any] = {}
 def ir_row(E: int, TOPK: int, VPT: int, renormalize: bool, logits: list[int]) -> tuple[list[int], list[int], list[int]]:
     """(tap words, weights, ids) of one row in the circuit: evaluate the ordered router as a standalone Call and read its committed interior
     gates (`query.router_softmax.slots`) from the trace."""
+    # inside the function: these load numpy, and importing this module must not
+    from verity.circuits.evaluation import evaluate_call
+    from verity.circuits.evaluation.reference import standalone_call
+
     key = (E, TOPK, VPT, renormalize)
     if key not in _CALLS:
         _CALLS[key] = standalone_call(RS.router_fn(E, TOPK, VPT, renormalize))

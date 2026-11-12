@@ -14,6 +14,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+import pytest
+
+pytest.importorskip("torch")  # `vllm_adapter` imports it
+
 from verity_vllm.engine.vllm_adapter import throwaway_requests
 
 C = 256                                              # the chunk-leaf size the worker pads a step to

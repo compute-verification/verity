@@ -35,6 +35,8 @@ import numpy as np
 from verity_vllm.commit import challenge as CH
 from verity_vllm.config import option
 
+__all__ = ["COMMANDS", "main"]
+
 f32 = np.float32
 NEG_INF_BITS = 0xFF800000
 SPLITS = (1, 2, 4, 8, 16, 32)
