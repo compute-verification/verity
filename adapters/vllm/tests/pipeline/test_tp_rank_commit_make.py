@@ -7,6 +7,7 @@ committer (`plugin:<module>:<factory>`); the partial and MoE sources are the lib
 class names; the hidden source, which loads a tap build, is a stand-in; and the test sets the rank's facts."""
 from __future__ import annotations
 
+import inspect
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -27,6 +28,9 @@ from verity_vllm.pipeline.tp import rank_worker as RW
 from verity_vllm.pipeline.tp.rank_worker import TP2CaptureWorkerExtension
 
 FACTS = {"tp": {"rank": 1, "world_size": 2}}
+#: a make's options that are tables by request (`{"<request>": number}`: each request's arrival step and its token limit)
+TABLES = [name for name, option in inspect.signature(TP2CaptureWorkerExtension.tp2_commit_make).parameters.items()
+          if option.annotation == "dict[str, int] | None"]
 ENVELOPE = {"max_num_seqs": 2, "max_tokens": 4}
 ROOT = "ab" * 64
 UNPINNED = {"rank": 1, "result": None, "why": "weights unpinned (MAN-09): no checkpoint of record given to this rank"}
@@ -222,24 +226,25 @@ def test_the_commits_door_is_handed_the_drivers_kind_arena_and_scheme(monkeypatc
 
 def test_the_rank_keeps_the_commits_state_for_the_calls_that_follow():
     answer, st, com = _made()
-    assert sorted(st) == ["arrivals", "base", "caps", "com", "eng", "match_capture_dir", "match_tokens", "n_requests", "program_digest",
-                          "rank", "rc", "replay", "request_ids", "request_order", "required_manifest", "swap_requests", "swap_rule",
-                          "tps", "weights", "weights_pin", "world"]
+    assert sorted(set(st) - set(TABLES)) == ["base", "com", "eng", "match_capture_dir", "match_tokens", "n_requests", "program_digest",
+                                             "rank", "rc", "replay", "request_ids", "request_order", "required_manifest", "swap_requests",
+                                             "swap_rule", "tps", "weights", "weights_pin", "world"]
     assert (st["rank"], st["world"], st["rc"], st["n_requests"]) == (1, 2, None, 1)
     assert st["weights"] is com.model and st["tps"] is com.sources[0] and st["weights_pin"] == answer["weights_pin"]
     assert st["base"] == PC.baseline_state(st["eng"]) == {"runner_had": {"execute_model": False, "sample": False}, "hooks": 0,
                                                            "wrapped_forwards": 0, "sampler_hooks": 0, "cuda_alloc_mib": 0}
     assert [st[k] for k in ("program_digest", "required_manifest", "match_tokens", "swap_requests", "swap_rule", "match_capture_dir",
                             "replay")] == [None] * 7
-    assert (st["request_order"], st["arrivals"], st["caps"], st["request_ids"]) == ([], {}, {}, {})
+    assert (st["request_order"], st["request_ids"]) == ([], {}) and [st[table] for table in TABLES] == [{}, {}]
 
 
 def test_the_state_holds_its_own_copy_of_what_the_driver_declared(tmp_path):
-    order, arrivals, caps, tokens, replay = ["x", "y"], {"x": 0, "y": 3}, {"x": 4, "y": 2}, {"x": [5, 6]}, {"programs": {"1": "p"}, "seed": 9}
-    _, st, _ = _made(n_requests=2, request_order=order, arrivals=arrivals, caps=caps, match_tokens=tokens, replay=replay,
-                     match_capture_dir=tmp_path / "capture", program_digest="d" * 128)
+    order, tokens, replay = ["x", "y"], {"x": [5, 6]}, {"programs": {"1": "p"}, "seed": 9}
+    tables = {table: {"x": at, "y": 3} for at, table in enumerate(TABLES)}
+    _, st, _ = _made(n_requests=2, request_order=order, match_tokens=tokens, replay=replay, match_capture_dir=tmp_path / "capture",
+                     program_digest="d" * 128, **tables)
     assert (st["n_requests"], st["program_digest"], st["match_capture_dir"]) == (2, "d" * 128, str(tmp_path / "capture"))
-    for key, given in (("request_order", order), ("arrivals", arrivals), ("caps", caps), ("match_tokens", tokens), ("replay", replay)):
+    for key, given in (("request_order", order), ("match_tokens", tokens), ("replay", replay), *tables.items()):
         assert st[key] == given and st[key] is not given, key
 
 
