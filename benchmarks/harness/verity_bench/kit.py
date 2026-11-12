@@ -4,16 +4,18 @@
 - `host_stamp()`: where a number was measured, as one dict: the card, each GPU's UUID and clocks, the driver, CUDA, the node
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
-- `writer(out).measurement(name, value, unit, ...)`: appends one measurement to `out/result.json`.
+- `writer(out).measurement(name, value, unit, ...)`: appends one measurement to the run's result: under a research run
+  (`RESEARCH_RUN_DIR` set) `$RESEARCH_RUN_DIR/result.json`, where `research` reads it, and outside one `out/result.json`.
   `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once.
 
 **A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
-`validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to `out`). Each
+`validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to the result's
+directory: under a research run, the run's). Each
 measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its 95% interval
 (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was computed from
-(other measurements' names, run or `art:` ids) and the `host` stamp it was written under. The writer appends: `out` may be
-a run's own directory, where it keeps what the run's result already holds, or its `$OUT`. A result holds one run's
-measurements, one a name, and one validation, so a rerun writes a fresh directory.
+(other measurements' names, run or `art:` ids) and the `host` stamp it was written under. The writer appends: every
+writer of a research run, whatever its `out`, appends to the run's one result and keeps what the run already wrote there.
+A result holds one run's measurements, one a name, and one validation, so a rerun writes a fresh directory.
 
 **A measurement is a number, and its verdict is its target check.** Nothing under `benchmarks/` writes a verdict of record or
 a seal: a verdict of record is its protocol's verifier's, and a seal its Commit's. So the writer refuses a value that isn't
@@ -229,7 +231,8 @@ def _locked(directory: Path) -> Iterator[None]:
 
 @dataclass(frozen=True)
 class Writer:
-    """`writer(out)`: the one writer of `out/result.json`, for the run `run` under the host stamp `stamp`."""
+    """`writer(out)`: the one writer of `out/result.json`, for the run `run` under the host stamp `stamp`. `out` is the
+    directory the result is in: under a research run the run's own, whatever `writer` was given."""
 
     out: Path
     run: str
@@ -333,6 +336,10 @@ class Writer:
 
 
 def writer(out: str | os.PathLike) -> Writer:
-    """The writer of `out/result.json`: this run's (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now."""
+    """The writer of this run's result (`RESEARCH_RUN_ID`, ``local`` outside one), stamped with the host now. Under a
+    research run (`RESEARCH_RUN_DIR` set) the result is `$RESEARCH_RUN_DIR/result.json`, the one file `research` reads a
+    run's result from, whatever `out` is, so its evidence paths are relative to the run's directory; outside one it is
+    `out/result.json`."""
 
-    return Writer(Path(out), settings.RESEARCH_RUN_ID, host_stamp())
+    where = settings.RESEARCH_RUN_DIR if settings.is_set("RESEARCH_RUN_DIR") else out
+    return Writer(Path(where), settings.RESEARCH_RUN_ID, host_stamp())

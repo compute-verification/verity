@@ -42,6 +42,8 @@ def _host(monkeypatch: pytest.MonkeyPatch, answers: dict[str, tuple[int, str]] |
     monkeypatch.setattr(kit.shutil, "which", lambda name: None if answers is None else f"/usr/bin/{name}")
     monkeypatch.setattr(kit, "_run", run)
     monkeypatch.delenv("GPU_LEASE_UUID", raising=False)
+    # under a `research run` of the suites the writer's result would be that run's own, which no test may write
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
     monkeypatch.setenv("RESEARCH_RUN_ID", RUN)
     if sha is None:
         monkeypatch.delenv("RESEARCH_SOURCE_SHA", raising=False)
@@ -271,6 +273,44 @@ def test_a_validation_and_the_measurements_share_a_result_in_either_order(tmp_pa
     kit.writer(third).validation("failed", "a benchmark", "1 of 4 gates hold")
     assert _result(third) == envelope | {"validation": {"status": "failed", "checker": "a benchmark",
                                                        "detail": "1 of 4 gates hold", "evidence": []}}
+
+
+def test_under_a_research_run_the_result_is_the_run_directorys_where_research_reads_it(tmp_path, no_gpu, monkeypatch):
+    """`research` reads a run's result from `$RESEARCH_RUN_DIR/result.json` alone, so a result under the run's `out/` is
+    absent to it: every writer of a run, whatever its `out`, appends to the one file in the run's directory."""
+
+    from research import result as research_result
+
+    run_dir, elsewhere = tmp_path / "run", tmp_path / "elsewhere"
+    out = run_dir / "out"
+    out.mkdir(parents=True)
+    # outside a run (the variable unset, or empty) the result is `out`'s, and research finds none in the run's directory
+    kit.writer(out).measurement("wall", 1.5, "s")
+    assert [m["name"] for m in _result(out)["measurements"]] == ["wall"] and list(run_dir.iterdir()) == [out]
+    assert not research_result.check(run_dir, RUN).present
+    monkeypatch.setenv("RESEARCH_RUN_DIR", "")
+    assert kit.writer(elsewhere).out == elsewhere
+    (out / kit.RESULT).unlink()
+    # under one it is the run directory's, whatever `out` is, and the evidence is relative to that directory
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    first, second = kit.writer(out), kit.writer(elsewhere)
+    assert first.out == second.out == run_dir
+    wall = first.measurement("wall", 1.5, "s")
+    block = second.validation("passed", "a benchmark", "4 of 4 gates passed", ["out/gates.json"])
+    gamma = second.measurement("gamma", 0.5, "ratio")
+    reps = kit.writer(run_dir).measurement("reps", 20, "")
+    assert _result(run_dir) == {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [wall, gamma, reps],
+                                "validation": block}
+    assert sorted(run_dir.iterdir()) == [out, run_dir / kit.RESULT] and list(out.iterdir()) == [] and not elsewhere.exists()
+    check = research_result.check(run_dir, RUN)
+    assert check.present and check.valid and check.errors == [] and check.validation_status == "passed"
+    assert check.doc == _result(run_dir)
+    # one result a run: its writers hold each other to one measurement a name and one validation
+    with pytest.raises(ValueError, match="already holds a measurement named wall"):
+        second.measurement("wall", 2.0, "s")
+    with pytest.raises(ValueError, match="already holds a validation"):
+        first.validation("failed", "another checker", "")
+    assert _result(run_dir) == check.doc
 
 
 def test_the_writer_refuses_a_second_validation_and_one_that_isnt_a_runs_own_gates(tmp_path, no_gpu, monkeypatch):
