@@ -447,19 +447,19 @@ def priced_apart(tr: dict, log: dict) -> list[dict]:
 def priced_apart_reason(record: dict, found: list[dict]) -> str:
     """Why ρ is refused where `priced_apart` finds products in `record`'s trace, with the way out: the work would be
     priced in one dtype and the count it is divided by in another. It names how many, and the largest with its two
-    dtypes. For a product its capture's rule prices in another dtype than it was traced in (a capture before
+    dtypes. For a product its capture's rule prices in another dtype than its circuit counts it in (a capture before
     `capture.products.PRICED_AS_TRACED_FROM`), the way out is the trace taken again by this tree's capture, which
-    prices each product as traced (`retrace`). For one priced as traced, the traced step ran it in another dtype than
-    the job did, as a CPU's trace of a card's job does where torch's autocast casts a product on a card and not on a
-    CPU (`mv`, `addmv` and `addr`): the way out is the trace taken again on a device of the kind the record states
-    its job ran on."""
+    prices each product as its circuit counts it (`retrace`). For one priced as its circuit counts it, the traced
+    step ran it in another dtype than the job did, as a CPU's trace of a card's job does where torch's autocast casts
+    a product on a card and not on a CPU (`mv`, `addmv` and `addr`): the way out is the trace taken again on a device
+    of the kind the record states its job ran on."""
     from .capture import products
 
     x, tr = found[0], record["trace"]
     r, d, named = x["row"], x["row"]["dims"], " or ".join(x["named"])
-    if x["priced"] != products.traced_dtype(r):
-        fix = (f"trace the job again at capture {products.PRICED_AS_TRACED_FROM} or later, which prices each product "
-               f"in the dtype it was traced in ({products.traced_dtype(r)} here; this trace is capture "
+    if x["priced"] != products.counted_dtype(r):
+        fix = (f"trace the job again at capture {products.CAPTURE} or later, which prices each product in the dtype "
+               f"its circuit counts it in ({products.counted_dtype(r)} here; this trace is capture "
                f"{tr.get('capture')}'s); {retrace(record)}")
     else:
         kind = str(record.get("device") or "").split(":")[0]

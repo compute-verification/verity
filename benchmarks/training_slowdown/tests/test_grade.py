@@ -708,16 +708,18 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     takes: it divides the trace's products by the record's count, so their one price is that each product the trace
     prices is priced in the dtype the record names for it.
 
-    With the trace its job took, of this capture: neither rule speaks. Every traced product with fewer than two
-    token dims, which M's all are, is priced in the dtype it was traced in, the one the record's log names for it.
-    The products the two sides differ on are attention's, float32 in the trace and bf16 in the rows the counter
-    writes for a fused kernel, and M leaves them out for their two token dims.
+    With the trace its job took, of this capture: neither rule speaks, and every traced product is priced in the
+    dtype the record's log names for it. A product outside an attention call is priced in the dtype it was traced
+    in. Attention's are float32 in the trace, as the math kernel computes them, and bf16 in the rows the counter
+    writes for a fused kernel; the trace states the bf16 their call computes in (a row's `attention`), which is
+    their price.
 
-    With the same rows under an earlier capture, whose rule prices those float32 products at bf16: `work.repriced`
-    lists them and nothing else, so over the trace's own circuit there is no slowdown, with that reason, and the
-    grade's ρ and bound of record are what they are with the job's own trace, since nothing M holds moved."""
+    With the same rows as an earlier capture's, which states no call, that capture's rule prices those float32
+    products at bf16 too, so the work is priced as it is with the job's own trace; but that capture's circuit
+    counted them in float32, so `work.repriced` lists them and nothing else, and over the trace's own circuit there
+    is no slowdown, with that reason. The grade's ρ and bound of record are what they are with the job's own trace."""
     tr = ran["trace"]
-    assert G.names_dtypes(ran) is True and work.repriced(tr) == [] and tr["capture"] == products.PRICED_AS_TRACED_FROM
+    assert G.names_dtypes(ran) is True and work.repriced(tr) == [] and tr["capture"] == products.CAPTURE
     names: dict = {}
     for _, _, op, shapes, _, _, dtype in ran["structures"][ran["steps"][tr["step"]]["struct"]]["log"]:
         if op in (*F.PLAIN_PRODUCTS, "bmm"):
@@ -731,13 +733,18 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     attentions = [r for r in tr["rows"] if sum(x in r["token_dims"] for x in "mkn") >= 2]
     others = [r for r in tr["rows"] if r not in attentions]
     assert others and all(named_for(r) == {products.traced_dtype(r)} == {"bfloat16"} for r in others)
-    assert attentions and all((r["op"], products.traced_dtype(r), named_for(r)) == ("bmm", "float32", {"bfloat16"})
-                              for r in attentions)
+    assert attentions and all((r["op"], products.traced_dtype(r), r["attention"], named_for(r)) == (
+        "bmm", "float32", "bfloat16", {"bfloat16"}) for r in attentions)
+    assert all({products.priced_dtype(r, tr["capture"])} == named_for(r) for r in tr["rows"])
+
+    def no_call(rows: list) -> list:
+        return [{k: v for k, v in r.items() if k != "attention"} for r in rows]
 
     earlier = products.READS[0]
-    old = tr | {"capture": earlier}
+    old = tr | {"capture": earlier, "rows": no_call(tr["rows"]),
+                "at": {k: b | {"rows": no_call(b["rows"])} for k, b in tr["at"].items()}}
     moved = work.repriced(old)
-    assert earlier != products.CAPTURE and len(moved) == len(attentions) and all(r in attentions for r in moved)
+    assert earlier != products.CAPTURE and len(moved) == len(attentions) and all(r in no_call(attentions) for r in moved)
     pol = policy.named(CONFIG["policy"], synthetic.SHAPE)
     alone = calculator.slowdown(pol, old)
     assert calculator.slowdown(pol, tr)["slowdown"] is not None and alone["slowdown"] is None
@@ -746,9 +753,8 @@ def test_a_record_that_names_dtypes_has_one_price_with_its_own_trace_and_with_an
     row = G.rows_of(ran)[-1]
     now, then = (G.traced(ran | {"trace": t}, row)["formalism"] for t in (tr, old))
     assert then["products"]["he"] == now["products"]["he"] and now["products"]["he"]["groups"]
-    prices = [(x["op"], x["gates_per_mac"], y["gates_per_mac"])
-              for x, y in zip(now["trace"]["products"]["rows"], then["trace"]["products"]["rows"]) if x != y]
-    assert prices == [("bmm", gates.per_mac("gemm/f32"), PER_MAC)] * len(attentions)
+    assert then["trace"]["products"]["rows"] == now["trace"]["products"]["rows"]
+    assert {x["gates_per_mac"] for x in now["trace"]["products"]["rows"] if x["op"] == "bmm"} == {PER_MAC}
 
     config = CONFIG | {"start": "tiny", "seeds": {"search": [0], "final": []}}
     runs = [{"seed": 0, "split": "search", "record": ran}]
@@ -778,8 +784,8 @@ def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_nam
     this capture, each is priced as traced, nothing is apart and the record grades. The same rows as an earlier
     capture's are priced by that capture's rule, a product traced wider than bf16 at bf16: the builds are then bf16
     in the work and float32 in the count, and ρ is refused, saying how many, the largest with its two dtypes and the
-    way out, the job traced again at capture `PRICED_AS_TRACED_FROM` or later. A job with no product of M wider than
-    bf16 has none apart under either capture: attention's float32 products are outside M.
+    way out, the job traced again by this capture. A job with no product of M wider than bf16 has none apart under
+    either capture.
 
     A trace whose step ran M's products in another dtype than the job did is refused at this capture too, and there
     the way out is a trace whose step runs them as the job did: the job traced again on a device of the kind the
@@ -789,7 +795,7 @@ def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_nam
     old = tr | {"capture": earlier}
     builds = [r for r in tr["rows"] if work.in_m(r) and products.traced_dtype(r) == "float32"]
     assert len(builds) == 2 and all(r["phase"] == "forward" and not r["token_dims"] for r in builds)
-    assert G.names_dtypes(adapted) is True and tr["capture"] == products.PRICED_AS_TRACED_FROM
+    assert G.names_dtypes(adapted) is True and tr["capture"] == products.CAPTURE
     assert G.priced_apart(tr, row["macs_log"]) == [] and G.traced(adapted, row)["formalism"]["products"]["he"]["groups"]
     apart = G.priced_apart(old, row["macs_log"])
     assert sorted(apart, key=str) == sorted(({"row": r, "priced": "bfloat16", "named": ["float32"]} for r in builds),
@@ -800,8 +806,8 @@ def test_a_trace_that_prices_a_product_of_m_in_another_dtype_than_the_record_nam
     said = (f"2 of the traced step's matrix products in M are priced in another dtype than the search record's op log "
             f"names for them (the largest: 1 forward mm of {d['m']}×{d['k']} by {d['k']}×{d['n']}, priced in "
             f"bfloat16 where the record names float32), and one slowdown has one price: trace the job again at "
-            f"capture {products.PRICED_AS_TRACED_FROM} or later, which prices each product in the dtype it was "
-            f"traced in (float32 here; this trace is capture {earlier}'s); {G.retrace(adapted)}")
+            f"capture {products.CAPTURE} or later, which prices each product in the dtype its circuit counts it in "
+            f"(float32 here; this trace is capture {earlier}'s); {G.retrace(adapted)}")
     with pytest.raises(F.Refused) as refused:
         G.traced(adapted | {"trace": old}, row)
     assert str(refused.value) == said and G.RETRACE in said

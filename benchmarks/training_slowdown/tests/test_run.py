@@ -594,13 +594,12 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     step on the counter holds it at the gather Definition's multiplexers, which |C| counts and no product is, so the
     counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work.
 
-    In gates, attention's ops excepted by name (`ATTENTION`): the counted step's, each op at the price of the dtype
-    its row names with no assumption made (`gates.of_log`), against the traced circuit's, whose nodes are priced by
-    the same rule. A job runs attention under a fused kernel, in its operands' bf16, and the trace under the math
-    kernel, which casts them to float32, so the rows the counter writes for the kernel name bf16 where the circuit
-    holds float32: the counted step is under the circuit by those rows' MACs at the two dtypes' prices and by nothing
-    else, and with those rows named float32 it is the circuit, to the last digit: both are compared as they are,
-    with no tolerance, since at this shape every sum of gates is a whole number of eighths a float holds exactly. An
+    In gates: the counted step's, each op at the price of the dtype its row names with no assumption made
+    (`gates.of_log`), is the traced circuit's, whose nodes are priced by the same rule, to the last digit: both are
+    compared as they are, with no tolerance, since at this shape every sum of gates is a whole number of eighths a
+    float holds exactly. Attention's ops too: a job runs them under a fused kernel, in its operands' bf16, and its
+    rows name that (`ATTENTION`); the trace runs them under the math kernel, which casts those operands to float32,
+    and counts each op of a call at the dtype the call computes in (`capture.structure._counted_dtype`). An
     optimizer's products are in the dtype it ran them in, whatever the forward's: Muon's in bf16, Shampoo's in f32,
     with its roots.
 
@@ -619,12 +618,7 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     counted = gates.of_log({"by": step["by"], "ops": ops})
     assert {(key[2], key[4]) for key in attention} == {(op, FUSED) for op in ATTENTION}
     assert all(ops[gates.op_key([*key[:4], *n, key[4]])] == n for key, n in attention.items())
-    as_traced = gates.of_log({"by": step["by"], "ops": {gates.op_key(r): r[4:6] for r in in_dtype(log, attention, MATH)}})
-    assert counted["assumed"] == as_traced["assumed"] == {}
-    assert as_traced["gates"] == tr["circuit"]["gates"] and counted["macs"] == as_traced["macs"]
-    under = sum(n[1] * (gates.per_mac(gates.kind_of(*key[:3], MATH)[0]) - gates.per_mac(gates.kind_of(*key[:3], FUSED)[0]))
-                for key, n in attention.items())
-    assert under > 0 and tr["circuit"]["gates"] - counted["gates"] == under
+    assert counted["assumed"] == {} and counted["gates"] == tr["circuit"]["gates"]
     if job in OPTIMIZER_PRODUCTS:
         dtype, kind = OPTIMIZER_PRODUCTS[job]
         products = {k: v for k, v in ops.items() if k.startswith("other param mm ")}
@@ -682,50 +676,31 @@ def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job
 @pytest.mark.parametrize("job", ["whole", "lora"])
 def test_a_jobs_count_and_its_trace_agree_in_gates_at_attention(tmp_path, job):
     """On the path a job runs, a fused attention kernel under the route's bf16 autocast, the counter counts each
-    call as the math kernel's ops in the query's dtype (`flops.Counter._attention`, on stand-ins `_shaped` makes in
-    it), and the trace, which is taken under the math kernel and holds those ops in float32, counts them in the
-    query's dtype too (`capture.structure._counted_dtype`). So at attention the traced step's gates are the counted
-    step's: the ops the counter writes for the kernel in that step, each at its dtype's price, against the gates the
-    traced circuit holds at the nodes of its calls. At float32's price the same ops are more, which is what the
+    call as the math kernel's ops in the kernel's operands' dtype (`flops.Counter._attention`), and the trace, which
+    is taken under the math kernel and holds those ops in float32, counts them in the dtype the call computes in
+    (`capture.structure._counted_dtype`). So at attention the traced step's gates are the counted step's: the ops
+    the counter writes for the kernel in that step, each at the price of the dtype its row names, against the gates
+    the traced circuit holds at the nodes of its calls. At float32's price the same ops are more, which is what the
     circuit held before it read the call's dtype."""
     import numpy as np
 
-    from training_slowdown import gates
     from training_slowdown.capture.structure import _attention
 
-    added, dtypes = {}, {}
-    inner, shaped = flops.Counter._attention, flops.Counter._shaped
-
-    def attention(self, func, *rest):
-        before = {key: list(n) for key, n in self.cur.log.items()}
-        out = inner(self, func, *rest)
-        into = added.setdefault(self.cur.index, {})
-        for key, n in self.cur.log.items():
-            was = before.get(key, [0, 0])
-            if n != was:
-                into[key] = [a + b - c for a, b, c in zip(into.get(key, [0, 0]), n, was)]
-        return out
-
-    def stand_in(self, like, shape):
-        dtypes.setdefault(self.cur.index, set()).add(str(like.dtype).removeprefix("torch."))
-        return shaped(self, like, shape)
-
-    with pytest.MonkeyPatch.context() as patch:
-        patch.setattr(flops.Counter, "_attention", attention)
-        patch.setattr(flops.Counter, "_shaped", stand_in)
+    with attention_rows() as added:
         rec, tr, g, _ = counted_and_traced(tmp_path, 3, **JOBS[job])
     assert rec["invalid"] == []
-    step = rec["steps"][tr["step"]]["step"]
-    kernel, calls = added[step], _attention(g.graph)
-    assert dtypes[step] == set(calls.values()) == {"bfloat16"} and {key[2] for key in kernel} == {"bmm", "mul"}
+    kernel, calls = added[rec["steps"][tr["step"]]["step"]], _attention(g.graph)
+    assert {key[4] for key in kernel} == set(calls.values()) == {FUSED}
+    assert {key[2] for key in kernel} == set(ATTENTION)
 
-    def counted(dtype: str) -> float:
-        return sum(macs * gates.per_mac(gates.kind_of(*key[:3], dtype)[0]) for key, (_, macs) in kernel.items())
+    def counted(dtype: str | None = None) -> float:
+        return sum(macs * gates.per_mac(gates.kind_of(*key[:3], dtype or key[4])[0])
+                   for key, (_, macs) in kernel.items())
 
     at = [i for i, n in enumerate(g.graph.graph.nodes) if n in calls]
     traced = float(g.circuit.gates[np.isin(g.circuit.node, at)].sum())
-    assert traced == counted("bfloat16") > 0 and counted("float32") > traced
-    assert {r["attention"] for r in tr["rows"] if r["op"] == "bmm"} == {"bfloat16"}
+    assert traced == counted() > 0 and counted(MATH) > traced
+    assert {r["attention"] for r in tr["rows"] if r["op"] == "bmm"} == {FUSED}
     assert sum(r["count"] * math.prod(r["dims"].values()) for r in tr["rows"] if r["attention"]) == sum(
         macs for key, (_, macs) in kernel.items() if key[2] == "bmm")
 
