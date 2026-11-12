@@ -1190,6 +1190,8 @@ def test_a_build_restores_no_file_by_a_link_and_outside_the_sandbox_restores_non
         rc, out = records()
         assert rc == 0 and says() == "version Z 1", out
     assert staged or not store.exists(), "the node's artifact cache is for what a build compiled in the sandbox"
+    assert staged or not [f for f in (tree / ".lake").rglob("*") if f.is_file() and f.stat().st_nlink > 1], \
+        "with no cache read and none staged, no file of the build is another's by a link"
 
 
 @pytest.mark.skipif(LAKE is None, reason="no lake")
