@@ -48,7 +48,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from verity.protocols.poub.verifier import audit, timing  # noqa: E402
+from verity.protocols.poub.verifier import audit, ledger, timing  # noqa: E402
 from verity.protocols.spot import costfit  # noqa: E402
 
 from verity.protocols.poub.verifier.session import wire  # noqa: E402
@@ -447,7 +447,8 @@ def main() -> None:
         pool = line_at(p32, o=o, d=d, k=k, r=r32, theta=10 * T)
         rows.append([f"{s_T:,}", k, f"{d:.3g}", pct(LN / s_T), pct(per["eps_held"]), pct(LN / (10 * s_T)),
                      pct(pool["eps_held"]), pct(per["rebuild_held"])])
-    md.append(f"\n## ε against openings proved a {T:g}-s window (δ = 2^-40), at 32B x8's {r32:.2f} passes/s\n")
+    md.append(f"\n## ε against openings proved a {T:g}-s window (δ = 2^-40, which reads {ledger.DELTA_FORM}), "
+              f"at 32B x8's {r32:.2f} passes/s\n")
     md.append(table(["openings a window", "k", "draws a group", "ε a window, snapshot", "ε a window, held",
                      "pooled over 10 windows, snapshot", "pooled over 10, held", "rebuilds held (a window)"], rows))
 
@@ -613,7 +614,7 @@ def main() -> None:
     out = {"recorded": recorded, "uniform_checks": uniform, "prices": prices, "points": pts, "region": region,
            "sweep": sweep, "serve": serve, "per_coin": {"plans": coin_plans, "at_g1_rate": coin_fixed},
            "one_in_flight": rooms,
-           "window_s": T, "horizon_s": H, "delta": audit.DELTA, "ln_inv_delta": LN}
+           "window_s": T, "horizon_s": H, "delta": audit.DELTA, "named": ledger.NAMED_TERMS, "ln_inv_delta": LN}
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "sampling-inputs.json").write_text(json.dumps(out, indent=1, default=str))
     (a.out / "sampling-inputs.md").write_text("\n".join(md) + "\n")

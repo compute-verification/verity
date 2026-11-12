@@ -131,6 +131,8 @@ def test_an_accepted_answer_is_a_core_accept_with_its_eps_and_gamma() -> None:
     assert core_check.answer_of(a)["verdict"] == "accept"
     assert a["commitment"] == "ab" * 64 and a["reason"] is None
     assert Fraction(a["public"]["eps"]) == Fraction(1, 2**40) + Fraction(16, 2**64)
+    assert "not Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)" in a["profile"]["eps_terms"], (
+        "the answer says the term its eps leaves out")
     assert a["public"]["q_bytes"] == 60 * p2.UNIT_BYTES and a["public"]["span_ns"] == 2 * 10**9
     assert Fraction(a["public"]["gamma"]) == 1 - Fraction(60 * p2.UNIT_BYTES, 2 * 10**6)
     assert a["profile"]["wrong"] == 4 and a["profile"]["plan_units"] == 32 and a["profile"]["delta"] == "1/1099511627776"
