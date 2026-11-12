@@ -427,8 +427,8 @@ def at_row(knob: Any, workload: Mapping[str, Any], *, world: int = 1) -> tuple[s
     if not enabled or enabled == config.DEFAULT_ROW_PROTOCOLS:
         return None
     if not any(e.startswith("sampled-proofs:") for e in enabled):
-        raise Refused([f"{list(enabled)}: a row is a sampled-proofs run, so its set names sampled-proofs:<scheme> "
-                       "(serve without it through verity_vllm.LLM)"])
+        raise Refused([(f"{list(enabled)}: a row is a sampled-proofs run, so its set names sampled-proofs:<scheme> "
+                        "(serve without it through verity_vllm.LLM)")])
     bad = refusals(Context(stage="commit", enabled=enabled, world=int(world), settings=load_settings(workload.get("protocols_config"))))
     if bad:
         raise Refused(bad)
@@ -455,8 +455,8 @@ def commit_guard(profile: Any, *, world: int = 1, installs: bool = True, setting
             raise Refused(["this Commit (TP) installs no protocol options yet"])
         declared = ctx.scheme("sampled-proofs") if ctx is not None else None
         if commit_scheme is not None and declared is not None and declared != commit_scheme:
-            raise Refused([f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "
-                           f"commits under {commit_scheme}: run it with --commit-scheme {declared}"])
+            raise Refused([(f"sampled-proofs:{declared} is what the target declares the Commit commits under, but its committer "
+                            f"commits under {commit_scheme}: run it with --commit-scheme {declared}")])
     except Refused as e:
         print(f"[delta] REFUSE (fail-closed): {e}", flush=True)
         raise SystemExit(3) from None

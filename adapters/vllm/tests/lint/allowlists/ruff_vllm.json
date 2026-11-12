@@ -927,8 +927,6 @@
     {"file": "verity_vllm/properties/noninterference.py", "kind": "T201", "symbol": "run_observer_variant", "detail": "`print` found", "count": 3},
     {"file": "verity_vllm/properties/quarantine_lint.py", "kind": "SIM110", "symbol": "_parents.walk", "detail": "Use `return any(walk(ch, chain + [node]) for ch in ast.iter_child_nodes(node))` instead of `for` loop"},
     {"file": "verity_vllm/properties/quarantine_lint.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 2},
-    {"file": "verity_vllm/protocols/__init__.py", "kind": "ISC004", "symbol": "at_row", "detail": "Unparenthesized implicit string concatenation in collection"},
-    {"file": "verity_vllm/protocols/__init__.py", "kind": "ISC004", "symbol": "commit_guard", "detail": "Unparenthesized implicit string concatenation in collection"},
     {"file": "verity_vllm/protocols/__init__.py", "kind": "T201", "symbol": "at_capture", "detail": "`print` found"},
     {"file": "verity_vllm/protocols/__init__.py", "kind": "T201", "symbol": "at_commit", "detail": "`print` found"},
     {"file": "verity_vllm/protocols/__init__.py", "kind": "T201", "symbol": "commit_guard", "detail": "`print` found"},
