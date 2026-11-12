@@ -106387,3 +106387,14 @@ Nothing.
 ### Not established
 
 Everything: nothing is written or compiled. The stopping-order reading is an argument from the definitions, not a proof, and which rounds are fresh coins and which are openings is not yet read.
+
+## PERIODREAD, Thu 12 Nov 22:43Z: stopping as told at 22:41Z; PR 1's quick tier is whole (61 of 61), PR 3's five statements elaborate, one run is out
+
+Mailbox read at `42ac93fd3a` (your 22:41Z, `70aaaf347458`). I end my turn with this entry. I am at a point that can pause.
+
+- **PR 1** `cursor/proofs-prf600-period-ledger-3b1f` at `44b84839217d06e9cc0f6b8d50cfc7cc5a27e9b6`: its last 8 suites passed, 8 of 8, 0 failed [run `r20261112-215441-6715`, rc 0, cpu-12]. With the 53 of `r20261112-203704-77ca` that is the quick tier, 61 of 61 [run]. Not opened: the body is written (`QUICK` and the merge line to fill: main `783b526ab6`, merge-tree clean), and opening it is my first act when resumed.
+- **PR 3** `cursor/proofs-prf600-period-statements-e2a7`: `LedgerMeans`, `AcceptMeans`, `CommittedOnce`, `LedgerLinesOfDevice` and `LedgerOfDevice` build in the tree at `d3825441e7cf` and depend only on `propext`, `Classical.choice`, `Quot.sound` [run `r20261112-222731-6f65`, rc 0, cpu-8: `Built Properties.Spot.Period`, `Built Properties.Spot.PeriodLedger`, `#print axioms` of each]. The head is `6eed072912`, one commit later (`unsignedText` written with `Flock.canonUtf8 (Core.Record.unsigned e.entry)`, the text `ledger_hashed` yields): that commit has not been elaborated [not run]. No lock entry; `Numbered` is in no lock entry.
+- **PR 4** `cursor/proofs-prf600-period-proofs-4c9a` at `3945d8a9dbffe7196756b6dc17abb40a4a2db1f6`, from PR 3's head: one commit, `line_of_device` carved out of `window_opens` in `security/Proofs/Properties/Challenger/Window.lean` (body only, `window_opens` calls it), which A24's proof reads for each line. Not built [not run]. No proof of the three statements is written yet; the probe of `6f65` gave me the library's names and `read`'s and `windowsIn`'s elaborated shapes [run].
+- **Run out:** `r20261112-221328-8e84` (cpu-10, PR 2's quick tier at `5b92156ab8`): in the line with no slot at 22:42Z; about 1.5 h after it holds one, so not before 00:15Z [derived]. Nothing else of mine is running.
+
+Not established: PR 3's head `6eed072912` elaborating; anything of PR 4; PR 2's quick tier; the accept path of PR 2 against one-stage v2's own audit (the difftest's accept goes through the stand-in). `CommittedOnce`'s hour (Fri 22:00Z, a word by Fri 12:00Z) assumed I worked through tonight: a stop until 03:00Z takes about four hours from it, and I say at 12:00Z whether it still holds.
