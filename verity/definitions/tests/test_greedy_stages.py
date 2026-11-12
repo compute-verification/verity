@@ -7,6 +7,7 @@ from which the serving reader commits a row's units:
 * at the served statics the combine computes the token's two words on rows whose winner sits past 2^16 lanes and ties across
   chunks, its own among them, and each chunk its token index's two words at its first and last index and on each side of the
   two lanes where a chunk's indices pass a multiple of 2^16 (`carries`);
+* a chunk whose carry is at a lane up to 128, where its compare reads +0 or a subnormal word, computes them on each side of it;
 * `GreedySelect_v1`, whose body is the plan, computes the same two words;
 * `plan` wires each combine parameter to its chunk's one output, every chunk is whole and its own Definition, every output is
   16-bit words, and `cut` counts its units, at small and served statics; a K that does not divide V, and a chunk off its
@@ -240,6 +241,22 @@ def test_the_widest_chunk_with_a_carry_compares_its_last_index():
     for V2, N2 in ((1 << 17, 1 << 16), (1 << 18, 1 << 15)):
         bind(G.GreedyCombine, V=V2, N=N2).signature()
         bind(G.GreedyChunk, N=N2, OFF=V2 - 2 * N2).signature()
+
+
+@pytest.mark.parametrize("N,OFF,t", [(3, 65535, 1), (24, 65520, 16), (146, 65408, 128)])
+def test_a_carry_at_a_lane_among_the_subnormal_words_is_taken_from_that_lane_on(N, OFF, t):
+    """A chunk whose carry is at a lane t <= 128 compares its index with t - 1, +0 or a subnormal word (1 .. 0x7F), where
+    the served chunks' carries compare normal numbers: at t = 1 with +0, at t = 16 a subnormal with a subnormal, at t = 128
+    the smallest normal number with the largest subnormal.  One lane alone above -inf at index t - 1 is the token 65,535,
+    words (65,535, 0), and at index t the token 65,536, words (0, 1); a lowering compared with the reference does not say
+    which the high word is."""
+    chunk = bind(G.GreedyChunk, N=N, OFF=OFF)
+    assert G.carry(N, OFF) == t and OFF + t == G.SPAN
+    assert [int(v) for v in evaluate(chunk, _alone(N, t - 1))] == [ONE, 65535, 0]
+    assert [int(v) for v in evaluate(chunk, _alone(N, t))] == [ONE, 0, 1]
+    for i in sorted({0, t - 2, t + 1, N - 1} & set(range(N))):
+        assert [int(v) for v in evaluate(chunk, _alone(N, i))] == [ONE, (OFF + i) % 65536, (OFF + i) // 65536], i
+    assert [int(v) for v in evaluate(chunk, [NINF] * N)] == [NINF, OFF, 0]
 
 
 @pytest.mark.slow
