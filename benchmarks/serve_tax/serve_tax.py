@@ -1330,10 +1330,12 @@ UNKEPT = frozenset({"generated_texts", "itls"})
 
 def merged(results: Sequence[dict]) -> dict:
     """The results vLLM's clients saved for one pass of a sessions load, a client a user, as one in the client's keys
-    (`bench_metrics`): requests and tokens summed, and each rate over the pass's seconds (``duration``), which are the
-    longest user's own, from its first send to its last answer: the users start together, so that is the time the
-    engine took to serve the pass's requests, and the seconds a client takes to start are in no rate. The users end
-    at different times, so the sum of each user's own rate is another figure, which counts a user that ended early
+    (`bench_metrics`): requests and tokens summed, and each rate over the pass's seconds (``duration``), from its
+    users' first send to the last one's last answer: the time the engine took to serve the pass's requests, with the
+    seconds a client takes to start in no rate. Where each result is the client's detailed one they are read from
+    the requests' own start times and latencies, which the clients take from one clock, the host's monotonic one;
+    else they are the longest user's own seconds, which leave out how long after the first user it began. The users
+    end at different times, so the sum of each user's own rate is another figure, which counts a user that ended early
     as if it served the whole pass: it is kept beside (``users_output_throughput``), as are the users' seconds summed
     (``users_duration``). ``met`` is the requests within the SLO. Where each result is the client's detailed one, the
     time to the first token and the time a token after it (a request's latency past its first token over its other
@@ -1344,6 +1346,9 @@ def merged(results: Sequence[dict]) -> dict:
 
     good = [r.get("request_goodput") for r in results]
     seconds = max(r["duration"] for r in results)
+    if all(r.get("start_times") and len(r.get("latencies") or ()) == len(r["start_times"]) for r in results):
+        sent = [(at, at + took) for r in results for at, took in zip(r["start_times"], r["latencies"])]
+        seconds = max(end for _, end in sent) - min(at for at, _ in sent)
     met = None if None in good else sum(round(g * r["duration"]) for g, r in zip(good, results))
     out = {"users": len(results), "completed": total("completed"), "failed": sum(int(r.get("failed") or 0) for r in results),
            "total_output_tokens": total("total_output_tokens"), "total_input_tokens": total("total_input_tokens"),

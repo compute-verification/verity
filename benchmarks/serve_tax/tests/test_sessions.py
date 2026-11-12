@@ -229,6 +229,12 @@ def test_a_pass_of_a_sessions_load_is_one_client_a_user_and_its_rates_are_over_t
     # a result that is not the detailed one gives no time, and one with no goodput no count within the SLO
     bare = S.merged([result(3, 60.0, 100.0, None), users["u1"]])
     assert bare["met"] is None and "p90_tpot_ms" not in bare and "tpot_p90_s" not in S.bench_metrics(bare)
+    # where the clients kept each request's start, the pass's seconds are from the first send of any user to the last
+    # answer of any: the user that took 80 s sent first and was answered last 79.5 s later, the other began 0.5 s
+    # after it; the users' own seconds are summed as they are
+    timed = S.merged([users["u0"] | {"start_times": [1000.5, 1020.0, 1040.0]}, users["u1"] | {"start_times": [1000.0, 1078.7]}])
+    assert timed["duration"] == pytest.approx(79.5) and timed["output_throughput"] == pytest.approx(10000 / 79.5)
+    assert (timed["users_output_throughput"], timed["users_duration"]) == (150.0, 140.0)
     # one user's client that fails fails the pass
     with pytest.raises(RuntimeError, match="exited 1"):
         S.drive_bench(8000, GLM, Path("/ck"), S.LOADS[S.AGENTIC], 2, "x", tmp_path / "bad", dataset=whole, prompts=3,
