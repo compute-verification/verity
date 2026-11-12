@@ -1062,3 +1062,43 @@ Your return is as before, plus: the test's name and its run, item 2's answer, it
   your own:** read that run's command; it records which Program it was handed and checks the partition
   and the circuit's SHA-512 against `stage.json`, and its line carries the label word for word. Size
   the job for 41 GiB. If its runner cannot take a proof of yours as it is, say what it lacks.
+
+## Thu 12 Nov 04:41Z: proofs said YES to Friday's condition (HASH-112, 04:37Z), with three lines; the baseline; a second card
+
+Read its comment whole, and mine under it. **Friday's rows are timed results, with no SASS gate, on the
+condition as I put it:** the twin on the card before any step; every timed proof accepted by the proof
+server's verifier; after the run one kept proof of an own step and one of a kernel step through `main`'s
+Lean verifier with the statement's Program. What proofs adds, and what follows:
+
+1. **A row's words:** "accepted by the proof server's verifier", with that verifier's binary and commit
+   named. Never "accepted by the Lean verifier", never "verified" alone. Beside it, once a kind of
+   step: "Lean verified 1 kept proof of N: accepted on the provisional unit cover, units as stated, the
+   Program not held to the circuit". `fri-after.sh` prints exactly these.
+2. **Which proof is kept is fixed before the run and written in the job**, and it comes from the timed
+   run's own provers, not from a second process. This replaces my "outside the timed window". Proofs'
+   example: rep 0 of the first timed step of each kind. Say what keeping it costs inside the window;
+   if it would change a timed session, pick that step's last warm session of prover 0 instead and say
+   so, and I put the pick to proofs before Friday.
+3. **A Lean refusal of a kept proof:** that kind's rows are not published as accepted. No second pick.
+4. **The baseline (read by me on `main`: `gpu_circuit.rs`, `deep_unit`):** a unit of 2,048 levels or
+   more is evaluated on the host unless `FC_HOST_UNITS` says otherwise, and the head block has 11,516.
+   **So an own step, no variable, is already the host's walk**, and Friday compares the host's walk
+   with the kernel, one thing changed. Proofs' 2.1425 is a branch build with `FC_SALTS_KEYED=all`
+   (not on `main`: no file under the prover names it); the same run's arm on the code as it was gave
+   3.1174. **On Thursday's run, confirm from the prover's own report which path an own step takes and
+   that `FC_UNIT_WALK=1` is what changes it;** if my reading of `deep_unit` is wrong, tell me first.
+   A step still refuses `FC_HOST_UNITS`: no kind needs it. Item 4 of my 03:59Z section is answered by
+   this; you need not read `5832`'s record.
+5. **A second card on Friday: card 2, cores 24-33, 15:45Z to 19:45Z, booked provisional** (the other
+   socket from card 6). Make the launcher take the card, the cores, `PAIRS` and the lease's name, so
+   two runs go at once, each recording the other on every step:
+   - **card 6:** four provers only, as many pairs as fit whole (six, by your hours), kernel and own
+     alternating;
+   - **card 2:** two provers (four pairs) then one (two pairs), on `main` with the walk. **Unless
+     proofs names its keyed-salts branch by Thu 18:00Z and it merges with the walk's branch:** then
+     card 2 times own and kernel at two provers on that tree, `FC_SALTS_KEYED=all` in both kinds,
+     which is the configuration proofs' cost model reads. I tell you which by Thu 19:00Z.
+   Dry-run both forms. Say what two runs at once need that one did not (the build's key, the copy of
+   the statement, the lock).
+
+Your return is as before, plus the pick of item 2 and the two launch lines of item 5.
