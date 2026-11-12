@@ -37,7 +37,7 @@ ALL_FAMILIES = [256, 1, 2, 1, 160, 9, 9, 1, 8, 1, 49152, 6144, 4096, 2048, 19360
 SILU_RULE, FAMILIES_RULE = "stratified-rate:4/675", "stratified-rate:1/90112"
 ROOT = "ab" * 64
 AFTER = bytes.fromhex("cd" * 64)
-STUB = AC.TREE / "verity" / "composite" / "device" / "live_challenger" / "tests" / "stub_serve.py"
+STUB = AC.TREE / "verity" / "protocols" / "spot" / "device" / "live_challenger" / "tests" / "stub_serve.py"
 
 
 def template(i: int):
@@ -156,7 +156,7 @@ def test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve(
 def local(tmp_path: Path, monkeypatch, ranks: list[int], **kw):
     """`a5_coins.start` on a local challenger session under `tmp_path`, pinned on this tree's commit. Its serve.py runs under
     live_challenger's stub of the Lean verifier's coins (`stub_serve.py`), so the test builds no `sampled-proofs-verifier`."""
-    A = AC._module("a5_auditor", AC.TREE / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    A = AC._module("a5_auditor", AC.TREE / "verity" / "protocols" / "spot" / "device" / "live_challenger" / "auditor.py")
     real = A.serve_argv
     monkeypatch.setattr(A, "serve_argv", lambda *a, **k: [sys.executable, str(STUB), *real(*a, **k)[2:]])
     monkeypatch.setenv("COINS_LOG", str(tmp_path / "coins.log"))

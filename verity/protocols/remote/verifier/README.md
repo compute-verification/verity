@@ -39,7 +39,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   recorded, over one TCP stream that the developer's client opens at its own `127.0.0.1` port (`RemoteChallenger`).
   Deployed, on an auditor host, that port is the far end of a coin link the auditor host opens to the
   developer's machine: `ssh -N -R` straight to that machine's sshd, relayed and counted by network certification's
-  code running on the auditor host (`verity/composite/device/live_challenger/coin_link.py`). No coin path of remote's own, with no
+  code running on the auditor host (`verity/protocols/spot/device/live_challenger/coin_link.py`). No coin path of remote's own, with no
   network certifier anywhere, is specified yet.
 - **No auditor devices at the site.** There are no network certifiers or memory challengers. So network certification,
   PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,

@@ -53,16 +53,16 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           # auditor_line.py --boundary: the network certifiers' records of the gate node's boundary and their audit
           "verity/protocols/certifier", "verity/protocols/certifier/prover",
           # test_challengers.py: challengers.Gate against the auditor host's gate, its sessions served by serve.py
-          "verity/composite/device/live_challenger/auditor.py", "verity/composite/device/live_challenger/host.json", "verity/composite/device/live_challenger/serve.py",
-          "verity/composite/device/live_challenger/tests/stub_serve.py",
+          "verity/protocols/spot/device/live_challenger/auditor.py", "verity/protocols/spot/device/live_challenger/host.json", "verity/protocols/spot/device/live_challenger/serve.py",
+          "verity/protocols/spot/device/live_challenger/tests/stub_serve.py",
           "adapters/vllm/verity_vllm/settings.py", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/config.py",
           "adapters/vllm/verity_vllm/engine", "adapters/vllm/verity_vllm/protocols/remote_bandwidth",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
-          "verity/composite/__init__.py", "verity/composite/device/__init__.py", "adapters/vllm/verity_vllm/protocols/__init__.py", "verity/composite/device/live_challenger/__init__.py"]
+          "adapters/vllm/verity_vllm/protocols/__init__.py", "verity/protocols/spot/device/live_challenger/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_gate_whatif.py"]
-paths = ["verity/composite/device/live_challenger/tests"]
+paths = ["verity/protocols/spot/device/live_challenger/tests"]

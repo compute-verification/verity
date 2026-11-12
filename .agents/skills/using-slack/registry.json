@@ -124,7 +124,7 @@
         "benchmarks/one_stage/",
         "benchmarks/serve_tax/",
         "benchmarks/replay_ladder/",
-        "verity/composite/device/live_challenger/",
+        "verity/protocols/spot/device/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
         "benchmarks/private_circuit/",

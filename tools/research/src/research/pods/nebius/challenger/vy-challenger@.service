@@ -1,5 +1,5 @@
 [Unit]
-Description=the challenger's session %i, as auditor from the pinned tree (verity/composite/device/live_challenger/auditor.py run)
+Description=the challenger's session %i, as auditor from the pinned tree (verity/protocols/spot/device/live_challenger/auditor.py run)
 
 [Service]
 Type=exec
@@ -8,7 +8,7 @@ Group=auditor
 UMask=0022
 WorkingDirectory=/opt/vy-challenger/current
 Environment=PYTHONDONTWRITEBYTECODE=1 HOME=/var/lib/vy-challenger PATH=/opt/vy-challenger/current/.lean-bin:/usr/bin:/bin
-ExecStart=/usr/bin/python3 -I /opt/vy-challenger/current/verity/composite/device/live_challenger/auditor.py run %i
+ExecStart=/usr/bin/python3 -I /opt/vy-challenger/current/verity/protocols/spot/device/live_challenger/auditor.py run %i
 # past the gate's longest --minutes (720), so only a session the runner lost track of meets it
 RuntimeMaxSec=13h
 NoNewPrivileges=yes

@@ -3,13 +3,13 @@
 
 - `Local`: a `LiveChallenger` in the verifier's process, sampling from `secrets.token_bytes`.
 - `Serve`: the challenger's own process, the command its caller hands in
-  (`verity/protocols/poub/verifier/remote_session/verifier_process.py`'s is `verity/composite/device/live_challenger/serve.py`), started for the session
+  (`verity/protocols/poub/verifier/remote_session/verifier_process.py`'s is `verity/protocols/spot/device/live_challenger/serve.py`), started for the session
   on the verifier's machine with its LMS key (`--challenger-key`), reached over its 127.0.0.1 by
   `spot.remote`'s client. It flips its coins in the Lean (`one_stage.verifier.coins`), signs its record before
   it listens and its release log when the client closes the session. Not the auditor host: the verifier's machine is
   the audit's (never the prover's), but no ledger opens the session for its window, so the read is
   `challenger.session_of`'s, under the key the run wrote.
-- `ChallengerGate`: the auditor's challenger host, through its gate (`verity/composite/device/live_challenger/auditor.py`)
+- `ChallengerGate`: the auditor's challenger host, through its gate (`verity/protocols/spot/device/live_challenger/auditor.py`)
   under the lane's own gate key, over ssh (`ssh_gate`). Each session is reserved for this machine (`--peer`), inside
   the audit's period, and opened at its window root R (`coins.window`; the ledger opens one session a root, ever); the
   host serves it from its pinned tree and reaches this machine's 127.0.0.1 at the open's port through this machine's

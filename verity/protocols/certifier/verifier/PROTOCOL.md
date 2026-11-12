@@ -9,7 +9,7 @@ order of every frame are fixed by the declared Program.
 - **Trust.** The certifier is auditor-trusted: it runs on a host the developer doesn't control, and the auditor trusts it
   to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
   named assumption `trusted-host`. The challenger's live coins reach it on two more premises, named in
-  `verity/protocols/spot/verifier/README.md`, with the coins' path in `verity/composite/device/live_challenger/auditor.py`:
+  `verity/protocols/spot/verifier/README.md`, with the coins' path in `verity/protocols/spot/device/live_challenger/auditor.py`:
   `CoinsConfidential`, stated as `Pouw.Assumptions.CoinsConfidential`
   (`security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the certifier's
   boundary before it has them), and `OneClock` (the challenger's release times and the certifier's ingress ticks are
@@ -2222,7 +2222,7 @@ wire's bits. The third record, `fails`, holds one reason a failed connection.
 - `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's (and, in the id form,
   the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
 - `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that each client got exactly its egress
-  record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`verity/composite/device/live_challenger/auditor.py`)
+  record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`verity/protocols/spot/device/live_challenger/auditor.py`)
   runs the same rehearsal on the auditor's host.
 - The server's copy of each request carries its release order (`release`), so that `serve-openai --admit
   release-order` adds requests to the engine in the order they were released: `x-verity-release: N`, N its `END`'s

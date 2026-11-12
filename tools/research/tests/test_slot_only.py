@@ -176,13 +176,13 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
     """On vy-challenger-1 a run launched from a tree older than the launcher's auditor refusal is stopped, unless its command
     is exactly a line of /etc/vy/auditor; slot.py's runs get no pass there."""
     runs, proc, marker, log = tmp_path / "runs", tmp_path / "proc", tmp_path / "auditor", tmp_path / "auditor-only.jsonl"
-    ok = _run(runs, "r-ok", "running", ["bash", "verity/composite/device/live_challenger/run.sh"], pgid=10, runner=9)
+    ok = _run(runs, "r-ok", "running", ["bash", "verity/protocols/spot/device/live_challenger/run.sh"], pgid=10, runner=9)
     slot = _run(runs, "r-slot", "running", ["python3", "tools/verity/check/slot.py", "--", "true"], pgid=20, runner=19)
-    extra = _run(runs, "r-extra", "running", ["bash", "verity/composite/device/live_challenger/run.sh", "x"], pgid=30, runner=29)
+    extra = _run(runs, "r-extra", "running", ["bash", "verity/protocols/spot/device/live_challenger/run.sh", "x"], pgid=30, runner=29)
     for pid, run in ((10, ok), (20, slot), (30, extra)):
         _proc(proc, pid, pid, run)
-    marker.write_text("# comment\n\nbash verity/composite/device/live_challenger/run.sh\n")
-    assert S.auditor_commands(marker) == [["bash", "verity/composite/device/live_challenger/run.sh"]]
+    marker.write_text("# comment\n\nbash verity/protocols/spot/device/live_challenger/run.sh\n")
+    assert S.auditor_commands(marker) == [["bash", "verity/protocols/spot/device/live_challenger/run.sh"]]
     assert [o["run"] for o in S.offenders(runs, lambda c: S.auditor_allows(c, marker))] == ["r-extra", "r-slot"]
     sent = []
     monkeypatch.setattr(S.os, "kill", lambda pid, sig: sent.append(pid))
@@ -192,7 +192,7 @@ def test_an_auditor_host_stops_every_live_run_but_the_commands_its_marker_lists(
     assert sent == [30, 20]
     assert {json.loads(ln)["why"] for ln in log.read_text().splitlines()} == {f"not a command of the auditor host's {marker}"}
     marker.write_text("")
-    assert S.auditor_commands(marker) == [] and not S.auditor_allows(["bash", "verity/composite/device/live_challenger/run.sh"], marker)
+    assert S.auditor_commands(marker) == [] and not S.auditor_allows(["bash", "verity/protocols/spot/device/live_challenger/run.sh"], marker)
     assert S.auditor_commands(tmp_path / "absent") == []
 
 

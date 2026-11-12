@@ -2,7 +2,7 @@
 (`verity.protocols.certifier.verifier.coin_link`): the one path the session's coins take to its peer, counted and re-clocked
 on the link's grids.
 
-    python3 -I verity/composite/device/live_challenger/coin_link.py --out DIR --port PORT [--peer NAME [--peers FILE]] [--minutes M]
+    python3 -I verity/protocols/spot/device/live_challenger/coin_link.py --out DIR --port PORT [--peer NAME [--peers FILE]] [--minutes M]
         [--cell-bytes B] [--coin-cells R] [--request-cells R] [--bucket-ms MS] [--window T] [--slack-ms MS]
 
 `auditor.py run` starts it once `serve.py` listens on this host's 127.0.0.1:PORT, after the window's `open` entry and the
@@ -33,7 +33,7 @@ import time
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(Path(__file__).resolve().parents[4]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[5]))
 sys.path.insert(0, str(HERE))
 
 from serve import peer_ssh  # noqa: E402

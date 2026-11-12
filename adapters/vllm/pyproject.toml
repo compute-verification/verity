@@ -104,8 +104,8 @@ untraced = [
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
 # tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
 # imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
-# period-open's --circuit-files with infra's gate (verity/composite/device/live_challenger/auditor.py), and the in-process gate
-# (tests/protocol_options/challenger_host.py) runs infra's model registry (verity/composite/device/live_challenger/models.py);
+# period-open's --circuit-files with infra's gate (verity/protocols/spot/device/live_challenger/auditor.py), and the in-process gate
+# (tests/protocol_options/challenger_host.py) runs infra's model registry (verity/protocols/spot/device/live_challenger/models.py);
 # tests/pipeline/test_served_unit_rows.py pins the statements of the served GLM-5.3 partitions' chunked templates
 # (benchmarks/one_stage/glm53_*.json), and tests/tools/test_description_sizes.py holds the description of every template
 # they name to its size (each glm53_*_tp8_step*.json, so a partition file added there is listed here);
@@ -126,8 +126,8 @@ inputs = ["verity", "verity/README.md", "verity/configuration/config/verity_conf
           "benchmarks/ppl/windows.py", "benchmarks/ppl/datasets.json", "benchmarks/pouw/edited_gemm/fattn_ref.py",
           "benchmarks/remote_session/prover.py", "verity/protocols/poub/verifier/session/verifier.py", "verity/protocols/poub/verifier/session/wire.py",
           "verity/protocols/poub/verifier/session/checks.py", "verity/protocols/poub/verifier/session/lean_verifier.py", "verity/protocols/poub/verifier/session/challengers.py",
-          "benchmarks/remote_session/store_layout.py", "verity/composite/device/live_challenger/auditor.py", "verity/composite/device/live_challenger/host.json",
-          "verity/composite/device/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
+          "benchmarks/remote_session/store_layout.py", "verity/protocols/spot/device/live_challenger/auditor.py", "verity/protocols/spot/device/live_challenger/host.json",
+          "verity/protocols/spot/device/live_challenger/models.py", "benchmarks/pouw/harness/sass_gate.py",
           "benchmarks/pous/p2_v1/__init__.py", "benchmarks/pous/p2_v1/store.py", "benchmarks/pous/p2_v1/reference.py",
           "benchmarks/pous/p2_v1/load.py", "benchmarks/pous/p2_v1/gpu.py",
           "benchmarks/one_stage/glm53_all_families_tp8_step16.json", "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",

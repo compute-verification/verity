@@ -2060,9 +2060,9 @@ DIGEST = "5e" * 64
 
 
 def _auditor():
-    """Infra's gate, ``verity/composite/device/live_challenger/auditor.py``, as a module of its own."""
+    """Infra's gate, ``verity/protocols/spot/device/live_challenger/auditor.py``, as a module of its own."""
     import importlib.util
-    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py")
+    spec = importlib.util.spec_from_file_location("sv_auditor", HERE.parents[2] / "verity" / "protocols" / "spot" / "device" / "live_challenger" / "auditor.py")
     module = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(module)
     return module

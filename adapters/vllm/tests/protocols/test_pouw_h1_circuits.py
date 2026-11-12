@@ -26,7 +26,7 @@ from tests.protocols import pouw_h1_circuits as PC
 from tests.protocols import pouw_h1_rehearsal as RH
 from tests.protocols.test_pouw_h1_served import _unit
 
-AUDITOR = Path(__file__).resolve().parents[4] / "verity" / "composite" / "device" / "live_challenger" / "auditor.py"
+AUDITOR = Path(__file__).resolve().parents[4] / "verity" / "protocols" / "spot" / "device" / "live_challenger" / "auditor.py"
 #: two linears at K = 64 and one at K = 128: two strata
 SHAPES, MODULES, ROWS, STEPS = [(64, 64), (64, 128), (32, 64)], {0: "q", 1: "down", 2: "o"}, 32, 1
 

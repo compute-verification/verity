@@ -22,7 +22,7 @@ from verity.commitments.crypto import lms
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/composite/device/live_challenger"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/spot/device/live_challenger"))
 import auditor as G  # noqa: E402
 import certifier_serve as cs  # noqa: E402
 import warden_serve as ws  # noqa: E402

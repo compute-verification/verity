@@ -1,4 +1,4 @@
-"""Infra's challenger gate (`verity/composite/device/live_challenger/auditor.py`) run on one node
+"""Infra's challenger gate (`verity/protocols/spot/device/live_challenger/auditor.py`) run on one node
 under a test key, for a rehearsal of a served window (`pouw_h1_rehearsal.py`); run by hand or by that job, never collected.
 
     python -I local_gate.py DIR init --tree TGZ --commit SHA [--params W,H] [--peer NAME] [--ports LO-HI] [--coins lean|stub]
@@ -40,7 +40,7 @@ from pathlib import Path
 CONFIG = "gate.json"
 #: what the tree's archive holds: infra's code and core, and every checkpoint manifest `models.MANIFESTS` reads, so a role
 #: of any registers
-ARCHIVE = ("verity", "verity/composite/device/live_challenger", "adapters/vllm/manifests/checkpoints-int8.json")
+ARCHIVE = ("verity", "verity/protocols/spot/device/live_challenger", "adapters/vllm/manifests/checkpoints-int8.json")
 
 
 def _config(d: Path) -> dict:
@@ -50,7 +50,7 @@ def _config(d: Path) -> dict:
 def _auditor(d: Path, cfg: dict):
     """Infra's auditor.py from the pinned tree, which puts that tree first on sys.path (no `verity` imported before it)."""
     assert "verity" not in sys.modules, "verity was imported before infra's tree went on sys.path"
-    sys.path.insert(0, str(Path(cfg["tree"]) / "verity" / "composite" / "device" / "live_challenger"))
+    sys.path.insert(0, str(Path(cfg["tree"]) / "verity" / "protocols" / "spot" / "device" / "live_challenger"))
     import auditor
     lo, hi = cfg["ports"]
     auditor.PORTS = range(lo, hi + 1)
@@ -169,7 +169,7 @@ def unit(d: Path, session: str) -> int:
     argv += ["--params", ",".join(map(str, cfg["params"])), "--keygen-workers", "4"]
     if cfg["coins"] == "stub":
         os.environ["COINS_LOG"] = str(d / "units" / f"{session}.coins")
-        argv[2:2] = [str(Path(cfg["tree"]) / "verity" / "composite" / "device" / "live_challenger" / "tests" / "stub_serve.py")]
+        argv[2:2] = [str(Path(cfg["tree"]) / "verity" / "protocols" / "spot" / "device" / "live_challenger" / "tests" / "stub_serve.py")]
     signer = A.key_signer(host, _params(cfg), 4)
     try:
         e = A.run(host, session, signer=signer, pinned=A.pinned_commit(), now=_now, argv=argv)

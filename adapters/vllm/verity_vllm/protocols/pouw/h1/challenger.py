@@ -24,7 +24,7 @@ verifier's check that a served window's coins are that challenger's.
   Its coin must have been opened once, after that root: a sample opened early, from another session or family,
   from a session the ledger didn't open withheld, or never, is refused.
 * **Sessions** (the pouw setting ``session``): a lane reserves a session on infra's challenger gate
-  (``reserve --peer NAME --scheme S --families JSON``, `verity/composite/device/live_challenger/auditor.py` on vy-challenger-1, under
+  (``reserve --peer NAME --scheme S --families JSON``, `verity/protocols/spot/device/live_challenger/auditor.py` on vy-challenger-1, under
   the lane's own gate key), and the window opens it on its root (``open --session S --root R``, H1's R its window-open
   root, opened from the serving process: `pouw_h1_window.Window`), and carries the gate's open answer (``commits["session"]``: its
   ``session``, ``seq``, ``root`` and coin ``commitment``,

@@ -72,7 +72,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/engine/step_trace.py",
           "adapters/vllm/verity_vllm/records/__init__.py", "adapters/vllm/verity_vllm/records/fields.py",
           "adapters/vllm/verity_vllm/records/workload.py", "benchmarks/network_e2e/chain.py",
-          "verity/composite/device/live_challenger", "benchmarks/one_stage/a5_coins.py", "benchmarks/one_stage/a0.py",
+          "verity/protocols/spot/device/live_challenger", "benchmarks/one_stage/a5_coins.py", "benchmarks/one_stage/a0.py",
           "benchmarks/one_stage/a7.py", "benchmarks/one_stage/a8.py", "benchmarks/one_stage/prove_leg.py",
           "benchmarks/one_stage/r2_population.py", "verity/protocols/flock/prover/python/verity_flock",
           "verity/protocols/spot/verifier/lean/lakefile.toml",
@@ -87,7 +87,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "benchmarks/one_stage/interfaces/verity_e2e_demo/__init__.py", "benchmarks/one_stage/served_verdicts.py",
           "benchmarks/one_stage/interfaces/tests/fixtures/block-record-r2-period0.json",
           "verity/protocols/certifier/verifier/network/tests/period_case.py", "tools/difftest/python/verity_difftest",
-          "verity/__init__.py", "verity/composite/__init__.py", "verity/composite/device/__init__.py"]
+          "verity/__init__.py", "verity/protocols/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py",]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

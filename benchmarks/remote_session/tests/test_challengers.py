@@ -1,4 +1,4 @@
-"""`challengers.ChallengerGate` against the auditor host's own gate (`verity/composite/device/live_challenger/auditor.py`), in this process: its
+"""`challengers.ChallengerGate` against the auditor host's own gate (`verity/protocols/spot/device/live_challenger/auditor.py`), in this process: its
 requests go to `auditor.gate` as the lane key's forced command would pass them, and each opened session is served by
 `auditor.run` through `serve.py` (the Lean's coins stubbed, `stub_serve.py`) on a thread, with the gate's root steps
 (chown, systemctl) and the clock injected. An honest session whose coins the gate's session released is accepted and
@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[3]
-LIVE = ROOT / "verity" / "composite" / "device" / "live_challenger"
+LIVE = ROOT / "verity" / "protocols" / "spot" / "device" / "live_challenger"
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(LIVE))

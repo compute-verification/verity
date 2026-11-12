@@ -9,7 +9,7 @@
 #
 #   RESEARCH_RUN_DIR=DIR PEER=NODE PORT=7811 SCHEME=vllm/commit SESSION=s-20261020-1 \
 #     FAMILIES='[["opening-positions",8],["opening-identities",8],["replay",8],["kernel-check",8]]' \
-#     bash verity/composite/device/live_challenger/run.sh
+#     bash verity/protocols/spot/device/live_challenger/run.sh
 #
 # Run it, as remote_session's verifier, on a node that lets a run hold no check slot: a session waits on its client for the
 # whole Commit, and a node under slot_only.py stops a run that holds none. SESSION is the session's id, the one the auditor's signed ledger opens
@@ -29,7 +29,7 @@ command -v lake >/dev/null || PATH="$HOME/.elan/bin:$PATH"
 for ip in $(hostname -I); do
   HOST_NAME=${HOST_NAME:-$(awk -v ip="$ip" '{n = split($NF, a, "@")} a[n] == ip {print $1; exit}' /etc/vy/peers || true)}
 done
-exec "${PY:-python3}" verity/composite/device/live_challenger/serve.py --out "$O" --port "${PORT:?}" --scheme "${SCHEME:?}" \
+exec "${PY:-python3}" verity/protocols/spot/device/live_challenger/serve.py --out "$O" --port "${PORT:?}" --scheme "${SCHEME:?}" \
   --families "${FAMILIES:?}" --session "${SESSION:?}" --epoch "${EPOCH:-0}" --peer "${PEER:?}" --host "${HOST_NAME:-$(hostname)}" \
   ${KEY:+--key "$KEY"} ${KEYGEN_WORKERS:+--keygen-workers "$KEYGEN_WORKERS"} ${PARAMS:+--params "$PARAMS"} \
   2> >(tee "$O/serve.log" >&2)

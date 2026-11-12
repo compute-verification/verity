@@ -280,9 +280,9 @@ def test_a_window_that_faults_drops_its_requests_and_the_audit_follows_the_relea
 
 
 def test_the_gates_certifier_rehearsal_parses_here_with_its_sampling(tmp_path):
-    """`certifier-rehearse`'s command (`verity/composite/device/live_challenger/auditor.py`) is a `rehearse` this parser takes, its
+    """`certifier-rehearse`'s command (`verity/protocols/spot/device/live_challenger/auditor.py`) is a `rehearse` this parser takes, its
     temperature and top_p (0 and 1 by default) always among it, and they are the body every request sends."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     req = {"requests": 8, "tamper": None, "profile": "served", "in_flight": 2, "tokens": 32, "temperature": 0.6,
            "top_p": 0.9}
@@ -303,7 +303,7 @@ def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_ma
     as `rehearse`'s `--height`, which makes both keys at it; `load_key` makes a key above `HEIGHT` in
     `KEYGEN_WORKERS` processes (at 20, minutes, not the quarter hour one process takes) and one at or below it in one,
     and either loads back from its files."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     plain = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None}, tmp_path, "u")[2:])
     given = cs.parser().parse_args(A.certifier_command({"requests": 8, "tamper": None, "height": 10}, tmp_path,
@@ -321,7 +321,7 @@ def test_the_gates_keys_height_reaches_rehearse_and_a_key_above_this_files_is_ma
 def test_the_gate_takes_every_tamper_the_rehearsal_has_and_each_is_a_serve_this_parser_takes(tmp_path):
     """The gate's tampers are `serve`'s `--tamper` choices, so the auditor host runs every shim this file has, and
     each reaches `serve` (which alone checks it, after the tunnel is up) as one strategy of `rehearse`."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     assert A.TAMPERS == cs.TAMPERS == ("late", "extra", "drop", "token", "byte")
     for t in A.TAMPERS:
@@ -348,7 +348,7 @@ def test_the_gates_varied_rehearsal_is_a_varied_rehearse_named_for_its_run_with_
     """The gate's traffic is `rehearse`'s `--traffic`, and a varied request's command is a varied `rehearse` this
     parser takes, named for its run, with each varied flag the request has and no fixed one: without them, the plan's
     own 64, 2 a second, 16:1024, seed 0 and the probe's EOS."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     assert A.CERTIFIER_TRAFFIC == cs.TRAFFIC
     req = {"run": "c20261024T120000Z-ab12", "requests": 40, "tamper": "token", "traffic": "varied", "temperature": 0.0,
@@ -1625,7 +1625,7 @@ def gate_varied(tmp_path_factory):
     as serve-openai records them."""
     import tarfile
 
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     tmp, endpoint, got = tmp_path_factory.mktemp("gate-varied"), _Varied(), {}
     for strategy, (run, tamper) in GATE_RUNS.items():
@@ -1682,7 +1682,7 @@ def test_the_gates_varied_rehearsal_names_its_requests_for_its_run_and_the_endpo
 def gate_compact(tmp_path_factory):
     """`GATE_RUNS` as `gate_varied`, each request with `compact` 8: the rehearsal the gate's command asks for, its plan
     made, run and checked, against one `_Varied` endpoint whose every other response ends in a merged chunk."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     tmp, endpoint, got = tmp_path_factory.mktemp("gate-compact"), _Varied(merges=lambda r: r % 2 == 1), {}
     for strategy, (run, tamper) in GATE_RUNS.items():
@@ -1704,7 +1704,7 @@ def test_the_gates_compact_rehearsal_runs_compact_cells_and_its_check_reads_them
     token run accepted by `check` too, its ids differing in window 0's alone, which only the I/O tie refuses. The
     tie's compact rule (`active.compact_finish_violations`), with the endpoint's ids as the Commit's, finds nothing
     in the honest run's cells and refuses exactly window 0's responses in the token run's."""
-    sys.path.insert(0, str(ROOT / "verity/composite/device/live_challenger"))
+    sys.path.insert(0, str(ROOT / "verity/protocols/spot/device/live_challenger"))
     import auditor as A
     assert A.CERTIFIER_COMPACT == (active.COMPACT_RECORD.size, cs.FRAME_BYTES)
     got, endpoint = gate_compact

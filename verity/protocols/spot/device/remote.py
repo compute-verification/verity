@@ -2,10 +2,10 @@
 
 The challenger is auditor-trusted (`trusted-host`): it runs on a machine the prover doesn't control, and the
 prover's process reaches it over the stream at its own 127.0.0.1:PORT.  For a session on the auditor host, that port is
-one of the prover machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`,
+one of the prover machine's certifier coin link (`verity/protocols/spot/device/live_challenger/auditor.py`,
 the coins' path; the premises `CoinsConfidential` (`Pouw.Assumptions.CoinsConfidential`) and `OneClock` are named in
 this package's README); in development
-(`verity/composite/device/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/remote_session` places
+(`verity/protocols/spot/device/live_challenger/run.sh`) it is `ssh -R PORT` to the prover's machine, as `benchmarks/remote_session` places
 its verifier.  On its host, before the stream opens, `open_session` signs the challenger's record and writes it, the key
 and the head of the release log to the challenger's directory (`record.json`, `key.json`, `releases.jsonl`), for the
 session id the auditor launched it under; `serve` refuses a session whose record isn't written there, so no coin opens
@@ -61,10 +61,10 @@ writes nothing, or ends the session with a named reason.  Each lives in one func
 - the openings, `MAX_COINS`: `layout_problem`, in `LiveChallenger`'s constructor, each coin opened once; an opening's
   path, `MAX_PATH`, is its layout's depth (`merkle.merkle_depth`), at most that of `MAX_COINS` coins;
 - a coin tree's coins, `MAX_TREE_COINS`: `LiveChallenger.sample_tree`, before it samples;
-- the refused hellos, `MAX_HELLOS`: `log_hello`, which `verity/composite/device/live_challenger/serve.py` calls for each, the
+- the refused hellos, `MAX_HELLOS`: `log_hello`, which `verity/protocols/spot/device/live_challenger/serve.py` calls for each, the
   session ending at the first past them;
 - the auditor's ledger lines, `MAX_LEDGER_LINES`, and each line's characters, `MAX_LEDGER_LINE`:
-  `verity/composite/device/live_challenger/auditor.py`'s `append`, the one place the ledger grows, the count before it signs;
+  `verity/protocols/spot/device/live_challenger/auditor.py`'s `append`, the one place the ledger grows, the count before it signs;
 - the host's pins log lines, `MAX_PINS`: that file's `record_pin`, before it writes.
 
 `RemoteChallenger` is the client's `LiveChallenger`, its `commitment`, `open(label, index, after)` and `open_many`, so

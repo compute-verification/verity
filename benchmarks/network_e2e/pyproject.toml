@@ -36,7 +36,7 @@ inputs = ["benchmarks/network_traces", "benchmarks/network_e2e/encodings/derived
           "adapters/vllm/verity_vllm/pipeline/advice_code",
           "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/verity_vllm/pipeline/__init__.py",
           "adapters/vllm/verity_vllm/pipeline/window_advice.py",
-          "verity/protocols/certifier/verifier/README.md", "verity/composite/device/live_challenger/auditor.py",
-          "verity/composite/device/live_challenger/host.json",
+          "verity/protocols/certifier/verifier/README.md", "verity/protocols/spot/device/live_challenger/auditor.py",
+          "verity/protocols/spot/device/live_challenger/host.json",
           "verity/protocols/certifier/verifier/lean/lakefile.toml", "verity/protocols/spot/verifier/lean/lakefile.toml",
-          "verity/__init__.py", "verity/composite/__init__.py", "verity/protocols/__init__.py", "verity/composite/device/__init__.py", "verity/protocols/certifier/__init__.py", "verity/composite/device/live_challenger/__init__.py", "verity/protocols/certifier/verifier/__init__.py"]
+          "verity/__init__.py", "verity/protocols/spot/__init__.py", "verity/protocols/spot/device/__init__.py", "verity/protocols/__init__.py", "verity/protocols/certifier/__init__.py", "verity/protocols/spot/device/live_challenger/__init__.py", "verity/protocols/certifier/verifier/__init__.py"]

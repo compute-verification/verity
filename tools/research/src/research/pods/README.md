@@ -84,7 +84,7 @@ added here reaches a node only through a line there.
 | `nebius/node_ops.py` | A shared node's OOM guard, status page and alerts. |
 | `nebius/oom_order.py` | Orders the kernel OOM killer's picks by each run's memory against its reservation. |
 | `nebius/sky/` | Node 1's Kueue queue: `nebius/sky/kueue.yaml` (the queues and their quotas, which `cluster_up.sh` applies), `nebius/sky/jobs/` (one template per kind of job, `nebius/sky/jobs/config-run.yaml` among them), `nebius/sky/job_tree.sh` (the tree a job runs from, one copy per content), `nebius/sky/vllm_bootstrap.sh` (a job's vLLM bootstrap, skipped once it has passed), and `nebius/sky/store_evict.sh` with `nebius/sky/store_evict_src.conf` (the timer that frees a node's disk of local copies the remote store holds). |
-| `nebius/challenger/` | The auditor host's setup and units for the challenger and the network certifier's rehearsal, which `verity/composite/device/live_challenger` reads. `nebius/verifier/` is the same for the verifier's host. |
+| `nebius/challenger/` | The auditor host's setup and units for the challenger and the network certifier's rehearsal, which `verity/protocols/spot/device/live_challenger` reads. `nebius/verifier/` is the same for the verifier's host. |
 | `nebius/lockout/` | Taking root away from the nodes' operator account; it has its own README. |
 
 `tools/research`'s tests read these files by path, so a rename here is a rename there.

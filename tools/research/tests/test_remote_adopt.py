@@ -135,7 +135,7 @@ def test_a_search_without_on_never_logs_in_to_an_auditor_host_and_says_so(machin
     ms = remote.load_machines()
     ms["vy-auditor-1"] = {"provider": "ssh", "host": "aud1", "user": "vy-admin", "root": str(tmp / "aud1"), "project": "verity"}
     ms["gate-c"] = {"provider": "ssh", "host": "gate", "user": "vy-admin", "root": str(tmp / "gate"), "project": "verity",
-                    "auditor": "ssh research@gate open ... (verity/composite/device/live_challenger/auditor.py)"}
+                    "auditor": "ssh research@gate open ... (verity/protocols/spot/device/live_challenger/auditor.py)"}
     _run_on(tmp / "aud1", held, "done")
     hosts: list[str] = []
     monkeypatch.setattr(remote, "ssh_argv", lambda host, port, **kw: hosts.append(host) or ["sh", "-c"])

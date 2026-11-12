@@ -197,9 +197,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   files, with the words `parsed, not checked` and no verdict.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
-  machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).
+  machine only through that machine's certifier coin link (`verity/protocols/spot/device/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
-  as the far end of that coin link (`verity/composite/device/live_challenger/coin_link.py`).
+  as the far end of that coin link (`verity/protocols/spot/device/live_challenger/coin_link.py`).
   - **Remote's coin path in Lean** (`security/Definitions/Core/Challenger.lean`, assumptions in its `Assumptions/`, in the
     lock): `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`. Under them
     a logged coin's sample misses a set fixed before it at most as the sampling design allows (`SampleAfterRecorded`, proved).

@@ -6,7 +6,7 @@ D7 (`security/Definitions/NetworkCertifier/Guarantees.lean`, "The coins (D7)") p
 ingress link of the server's network certifier: its timing is charged on the ingress grid, its content is exempt for
 coin openings that open against the challenger's committed coin root, and everything else on it is counted. The
 prover's requests for coins are egress, charged on their own grid. `coin_link.CoinLink` is that link for one window's
-session, and `verity/composite/device/live_challenger/coin_link.py` runs it on the challenger's host.
+session, and `verity/protocols/spot/device/live_challenger/coin_link.py` runs it on the challenger's host.
 
 ### The path
 

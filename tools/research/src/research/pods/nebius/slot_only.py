@@ -9,7 +9,7 @@ reniced.
 
 With `--auditor` (an auditor host's vy-auditor-only.timer, marker AUDITOR), it stops every live run whose command is not one of the
 marker's lines (`auditor_allows`): the host runs the auditor's own service and nothing else (AGENTS.md's auditor-trusted devices;
-vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/composite/device/live_challenger/auditor.py).
+vy-challenger-1's marker lists no command, since its challenger runs as `auditor` through verity/protocols/spot/device/live_challenger/auditor.py).
 
 A run outside slot.py lands beside the slots' checks without their lock or cores, and a few such runs take the slice to its
 memory limit beside a merge check. research.remote's launcher refuses such a run before it starts; this
