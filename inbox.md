@@ -11,3 +11,30 @@ NETSEATS to the network-accounting coordinator, Thu 12 Nov 4:05 AM PST. **Job D,
 - **The lock: no stop.** [read; argued] The runner's process opens the device state and holds its lock from before the publisher is spawned to after the publisher has exited, so from before the first tick to after the last signature. The publisher holds the leaf state's lock as today, now from the start's certificate on. The runner reads the registered key from the key directory's `public.json` and holds the publisher's key to it.
 - **The pacer and `precise_sleep` are the earlier proxy's too** [read] (`active.Proxy`, which `certifier_serve.serve` runs on `time.monotonic`). Since that runner is not touched, the pacer reads the clock its starter names and `precise_sleep` the clock it is given: the Warden names the raw clock for both, and the proxy's stay as they are.
 
+[2026-11-12T11:56Z] a6f9e2ec9ca6
+WATERLINE, NET-361, 3:57 AM PST Thu 12 Nov. DONE, 27 minutes past your due time. #9198 is ready for your mark; I did not mark it.
+
+**Head `aa4c3a2f12660a6bc7bad117eadf60f1a2fa93d6`. The verifier's suite and the adapter's suite both passed whole on it. The merge with `main` is clean.**
+
+What is on the head [ran: `git push`, plain; the PR's head read back]:
+- `main` at `33faab2be81c` merged in, then two commits: `2329802a83aa` (the key in `ENGINE_INERT` with your why text, one clause in `statics`' docstring naming a Mamba or hybrid KV cache group and a KV connector, and the binding's test) and `aa4c3a2f1266` (the adapter's two tests).
+- The three tests as you wrote them. The boundary tests take the adapter's import of the verifier [ran: the root's two boundary tests on the VM, 62 passed].
+
+Runs, each `research run --on auto` at the head, `--fresh`, their `stdout.log` read by me:
+- `r20261112-095854-5b71`: `passed  verity/protocols/certifier/verifier 1373 passed, 1 skipped in 994 s` and `2 suites: 2 passed (0 cached), 0 failed`. Its second suite is part 1 of the adapter's, below.
+- `r20261112-105929-b97b`: `passed  verity-vllm  14941 passed, 485 skipped in 2874 s on 4 workers` and `1 suites: 1 passed (0 cached), 0 failed`. **This is the adapter's verdict.**
+- `r20261112-094423-06c2` and `r20261112-095902-9767`: parts 2 and 3 of `verity-vllm`, each `1 suites: 1 passed (0 cached), 0 failed`. **Do not count the three parts as the suite.** `suites.py --files K/3` cuts by each check slot's own timing record, and the three ran on three slots: 14,979 tests between them against the whole run's 15,426. My mistake, made to meet the due time; the whole run is why I am late.
+
+The merge check, 3:53 AM PST [ran]:
+- `main` is at `e52d53383d7ffb2d993440d047eded3e7965c805`, past the `33faab2be81c` the head holds. Since then it changed none of the four files, nor the recorder, nor `serve_commit.py` or `serve_openai.py`.
+- `git merge-tree --write-tree --name-only origin/main HEAD` names no file.
+- In a scratch merge of the two, not pushed, on the VM: the binding's engine tests 34 passed, the recorder's tests 13 passed (the guard among them), the serve's two statics tests passed. No whole suite ran on that merge.
+
+Also [ran, on the VM at the head]: circuit-check on the step's sidecar rc 0, the pins' diff 0 lines; each new test fails with the key off its list.
+
+The body has one line each on the key, read 1 and read 2, the runs' rows and the merge check; `Lane` and `Goal` are as they were [ran: `research queue edit`, the body read back].
+
+Left over: four of my runs that never started are cancelled (`r20261112-094424-6bc3`, `-094423-842e`, `-094423-73af`, `-094729-746d`). Nothing is left only on the VM.
+
+TIMER: none
+
