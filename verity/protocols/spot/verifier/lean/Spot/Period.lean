@@ -152,13 +152,13 @@ def read (p : Params) (ledger : Json) : Except (Code × String) Read := do
   let some stop := reaches es p.stop | throw (Code.early, early p.stop)
   let start := (reaches es p.start).getD stop
   let reserves := reservesOf es p.lane
-  let sessions := wins.filterMap fun w =>
+  let sessions : Array Session := wins.filterMap fun w =>
     let e := w.opened
     if e.schema == Challenger.LEDGER_SCHEMA && Challenger.laneOf e.body == p.lane && start ≤ e.seq && e.seq < stop then
-      some { session := e.session, root := w.root, families := getD e.body "families"
-             withheld := (match getD e.body "withheld" with | .bool true => true | _ => false)
-             place := (reserves.findIdx? (· == e.session)).getD reserves.size
-             period := (periods.find? (·.windows.contains e.session)).map (·.name) }
+      some ({ session := e.session, root := w.root, families := getD e.body "families",
+              withheld := (match getD e.body "withheld" with | .bool true => true | _ => false),
+              place := (reserves.findIdx? (· == e.session)).getD reserves.size,
+              period := (periods.find? (·.windows.contains e.session)).map (·.name) } : Session)
     else none
   return { wins, periods, sessions }
 
