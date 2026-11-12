@@ -14,8 +14,8 @@ the decoder's list bound and the commitment's binding as hypotheses. At Flock's 
 list bound `listWithin_deployZk`, and hm96 leaves of rows that place the value, under the registered path check, bind
 at every hash (`pathCommit_binds`). So a compiled verifier over Flock at one table of a session there, with such a
 commitment, is knowledge sound, in both forms, wherever it meets the contract (`ksAt_masked`, `ksRegAt_masked`), at
-every way its statements name a table and a Flock statement. Its sessions' expected reruns are one table's
-(`flockRerunsAt`), and their knowledge error reads one table's error.
+every way its statements name a table and a Flock statement. Each wait of its extractor stops at one table's `k_j`
+(`flockRerunsAt`), and its knowledge error reads one table's error.
 -/
 
 @[expose] public section

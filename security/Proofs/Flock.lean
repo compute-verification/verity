@@ -52,6 +52,7 @@ public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.TableAt
 public import Proofs.Flock.SamplingGeneric.Masked
 public import Proofs.Flock.SamplingGeneric.MaskedTableAt
+public import Proofs.Flock.SamplingGeneric.OneVerifierAt
 public import Proofs.Flock.SamplingGeneric.MaskedTrunc
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt

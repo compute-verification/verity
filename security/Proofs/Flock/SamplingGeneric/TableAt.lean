@@ -16,8 +16,8 @@ Flock's at the named statement and its extractor `Flock.EAt` at the named table 
   (`flockArgKSAt`): `Flock.KSAt` at that prover, with the runs rewritten.
 * **The compiler at it** (`flockKSAt`, `flockKSRegAt`): `CompilerKS` and `CompilerKSReg` at `Arg.ofFlockAt`, as
   `flockKS` and `flockKSReg` are at `Arg.ofFlock`.
-* **Its reruns** (`flockRerunsAt`): at every statement its waits are the session's and each stops at the named
-  table's `k_j`, by unfolding. So `Compiled.es` over it is the largest of `1 + m′·k_j` over the proof blocks' tables.
+* **Its waits** (`flockRerunsAt`): at every statement's shape its waits are the session's and each stops at the named
+  table's `k_j`, by unfolding. What `Compiled.es` over it is then: `OneVerifierAt.lean`.
 -/
 
 @[expose] public section
@@ -88,7 +88,7 @@ theorem flockKSRegAt : FlockKSRegAt (Coin := Coin) (Col := Col) (T := T) := by
   exact compilerKSReg Coin (Arg.ofFlockAt D N ε names) L H (flockArgKSAt H D N ε names hKS hdec) hB hS
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] in
-/-- **Its reruns**: the session's waits, each stopping at the named table's `k_j`. -/
+/-- **Its waits**: the session's waits, each stopping at the named table's `k_j`. -/
 theorem flockRerunsAt : FlockRerunsAt (Coin := Coin) (Col := Col) (T := T) := fun _ _ _ _ _ => ⟨rfl, rfl⟩
 
 end Claims.SamplingGeneric

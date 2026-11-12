@@ -28,9 +28,9 @@ This file states the extractor at one table of a session, beside `Flock.E`, `Flo
 5. **The proof system for proof blocks** (`Arg.ofFlockAt`): Flock at one table of a session, a second `Arg` beside
    `Arg.ofFlock`. Its statement names a table and a Flock statement (`names`); its verifier is Flock's at the named
    statement, its extractor `Flock.EAt` at the named table and the deployed decoder (`Arg.ext` at it), and its shape
-   holds the named table's length, so `Arg.k` there is `k_j`. `Compiled.es` reads `Arg.waits` and `Arg.k` at each proof
-   block's shape, so at this `Arg` it is the largest of `1 + m′·k_j` over the proof blocks' tables, with no change to
-   `Compiled` (`FlockRerunsAt` states what its numbers are).
+   holds the named table's length, so `Arg.k` there is `k_j` (`FlockRerunsAt`). `Compiled.es` reads `Arg.waits` and
+   `Arg.k` at each proof block's shape, with no change to `Compiled`: where those shapes are statements', it is the
+   largest of `1 + m′·k_j` over the tables the statements name.
 6. **Flock's statements at it** (`FlockArgKSAt`, `FlockKSAt`, `FlockKSRegAt`): `FlockArgKS`, `FlockKS` and
    `FlockKSReg` at `Arg.ofFlockAt`, from `Flock.KSAt`.
 
@@ -131,9 +131,9 @@ noncomputable def Arg.ofFlockAt (D : Claims.Flock.Deploy Coin Col T) (N : Msg �
   κ y := Claims.Flock.κAt D N ε (names y).1 (names y).2
   γ y := Claims.Flock.γ D (names y).2
 
-/-- **The reruns at one table are that table's**: at each statement, `Arg.ofFlockAt`'s waits are Flock's and each stops
-at the named table's `k_j` (`Flock.kAt`), so `Compiled.es` over it, which reads `Arg.waits` and `Arg.k` at each proof
-block's shape, is the largest of `1 + m′·k_j` over the tables the proof blocks' sessions name. -/
+/-- **The waits at one table are that table's**: at each statement's shape, `Arg.ofFlockAt`'s waits are Flock's and
+each stops at the named table's `k_j` (`Flock.kAt`). It is a statement about the proof system at a statement, not
+about a compiled verifier: `Compiled.es` reads `Arg.waits` and `Arg.k` at its proof blocks' shapes. -/
 def FlockRerunsAt : Prop :=
   ∀ (D : Claims.Flock.Deploy Coin Col T) (N : Msg → ℕ → ℕ) (ε : Msg → ℕ → ℝ) (names : Msg → ℕ × Msg) (y : Msg),
     (Arg.ofFlockAt D N ε names).waits ((Arg.ofFlockAt D N ε names).shape y) = D.waits (names y).2 ∧
