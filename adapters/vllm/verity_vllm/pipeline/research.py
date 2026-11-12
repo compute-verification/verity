@@ -42,6 +42,7 @@ from verity_vllm.config import ROOT, UsageError
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import source_identity
 from verity_vllm.pipeline.row_driver import CLI, utc
+from verity_vllm.pipeline.row_json import field_of
 from verity_vllm.records.schema_ids import ROW_ATTEMPTS_SCHEMA
 
 REPO_ROOT = os.path.realpath(os.path.join(ROOT, "../.."))
@@ -83,7 +84,7 @@ def job_input(run_dir: str | None, name: str) -> str:
     try:
         with open(os.path.join(run_dir, "job.json")) as f:
             d = json.load(f)
-        return ((d.get("store") or {}).get("inputs") or {}).get(name) or ""
+        return field_of(field_of(d.get("store"), "inputs"), name) or ""
     except (OSError, ValueError, AttributeError):
         return ""
 
@@ -102,7 +103,7 @@ def artifact_meta(research: tuple[list[str], dict[str, str]], art: str, key: str
     d = _show(research, art)
     if not isinstance(d, dict):
         return ""
-    v = ((d.get("manifest") or d).get("meta") or {}).get(key)
+    v = field_of((d.get("manifest") or d).get("meta"), key)
     return "" if v is None else str(v)
 
 
@@ -115,7 +116,7 @@ def _attempt(research: tuple[list[str], dict[str, str]], run_id: str) -> dict[st
 
 def attempt_output(research: tuple[list[str], dict[str, str]], run_id: str, name: str) -> str:
     """outputs[name] of a published attempt, "" when none."""
-    return str((_attempt(research, run_id).get("outputs") or {}).get(name) or "")
+    return str(field_of(_attempt(research, run_id).get("outputs"), name) or "")
 
 
 def _tee(path: str, line: str) -> None:
@@ -227,8 +228,8 @@ def publish(o: Any, d: str, runs: dict[str, dict[str, Any]], research: tuple[lis
     Commit's summary.json, each needed property's newest capture of record and the tree the Commit ran, ``how``'s ref at its
     Attempt's source commit.  A dirty or unknown source publishes nothing."""
     (b, _), (m, m_run), (c, c_run) = ((runs[s]["artifact"], runs[s]["run_id"]) for s in OF_RECORD)
-    src = _attempt(research, c_run).get("source") or {}
-    if not src.get("commit") or src.get("dirty") is not False:
+    src = _attempt(research, c_run).get("source")
+    if not field_of(src, "commit") or field_of(src, "dirty") is not False:
         _tee(f"{d}/row.log", f"{utc()} [row {o.row}] v2 row: publishes nothing: the Commit {c_run} ran source {src or 'unknown'}, "
                              f"not a clean commit")
         return PUBLISH_REFUSED
@@ -252,9 +253,9 @@ def cited_runs(o: Any) -> dict[str, str]:
 def cited(research: tuple[list[str], dict[str, str]], st: str, run_id: str) -> dict[str, Any]:
     """The chain's stage ``st`` when it cites one (``--<st>-run``): a ``vllm.<st>`` Attempt that exited 0 with its account artifact."""
     att = _attempt(research, run_id)
-    tool, status, art = (att.get("tool") or {}).get("name"), att.get("status") or {}, (att.get("outputs") or {}).get(ACCOUNT[st])
-    if tool != f"vllm.{st}" or status.get("rc") != 0 or not art:
-        raise UsageError(f"--{st}-run {run_id}: not a passing {st.title()} Attempt (tool {tool}, rc {status.get('rc')}, {ACCOUNT[st]} artifact {art})")
+    tool, art, rc = field_of(att.get("tool"), "name"), field_of(att.get("outputs"), ACCOUNT[st]), field_of(att.get("status"), "rc")
+    if tool != f"vllm.{st}" or rc != 0 or not art:
+        raise UsageError(f"--{st}-run {run_id}: not a passing {st.title()} Attempt (tool {tool}, rc {rc}, {ACCOUNT[st]} artifact {art})")
     return {"run_id": run_id, "artifact": art, "rc": 0}
 
 
@@ -276,7 +277,7 @@ def chain(o: Any, sweep_dir: str) -> int:
     for st, run_id in cited_runs(o).items():
         runs[st] = cited(research, st, run_id)
         _row_json(d, ("stages", st), runs[st])
-    build_art, match_art = ((runs.get(st) or {}).get("artifact") or "" for st in ("build", "match"))
+    build_art, match_art = (field_of(runs.get(st), "artifact") or "" for st in ("build", "match"))
     for st in o.stages.split(","):
         run_id = f"r{time.strftime('%Y%m%d-%H%M%S', time.gmtime())}-{secrets.token_hex(2)}"
         args = ["run", "--id", run_id, "--tool", f"vllm.{st}", "--project", project, "--cwd", REPO_ROOT]
