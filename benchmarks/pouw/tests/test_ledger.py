@@ -665,6 +665,21 @@ def test_a_clock_list_that_isn_t_numbers_and_a_price_twin_table_that_doesn_t_loa
     monkeypatch.setattr(L.P, "load", lambda: load(table))
     with pytest.raises(P.TwinError, match=f"{table} is 'price-twins/v0'"):
         L.records(res, run_id=RUN, commit=COMMIT)
+    table.write_text(json.dumps({"schema": P.SCHEMA}))
+    with pytest.raises(P.TwinError, match=f"{table} has no twins list"):
+        L.records(res, run_id=RUN, commit=COMMIT)
+
+
+def test_a_price_twin_table_with_no_twins_list_leaves_the_verification_standing(tmp_path, monkeypatch):
+    """The ledger step never raises: a table of the right schema with no twins list is its error, and the verification's
+    own result and exit code are written as before."""
+    table = tmp_path / "price_twins.json"
+    table.write_text(json.dumps({"schema": P.SCHEMA}))
+    load = P.load
+    monkeypatch.setattr(L.P, "load", lambda: load(table))
+    code, res = verify(result(tmp_path / RUN, variant(tmp_path)), "--tier", "2b")
+    assert code == V.EXIT_OK and res["verification"]["ok"]
+    assert res["ledger"]["records"] == [] and res["ledger"]["error"] == f"TwinError: {table} has no twins list"
 
 
 def test_the_ledger_s_words_are_the_store_s():
