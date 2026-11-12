@@ -5,13 +5,19 @@ Inductor output code the process compiled.
 
 from __future__ import annotations
 
+import base64
 import contextlib
+import glob
+import hashlib
 import json
 import os
+import re
+import struct
 from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import kernel_identity as KI
 
 _VERITY_INDUCTOR_DIR_MARK = engine_env.INDUCTOR_DIR_MARK
 
@@ -24,7 +30,7 @@ CUBIN_DENY_LIST: tuple[str, ...] = (".debug*", ".rel.debug*", ".rela.debug*", ".
 _CUBIN_DENY_PREFIX = (".debug", ".rel.debug", ".rela.debug", ".nv.debug", ".nv_debug", ".rel.nv_debug", ".rela.nv_debug", ".rel.nv.debug", ".rela.nv.debug")
 CUBIN_CODE_IDENTITY_RULE = ("sha256 over every ELF section of the executed cubin EXCEPT the named deny-list " + repr(CUBIN_DENY_LIST)
                             + " (debug/line info, embedded PTX text, symbol/string tables); NOT a .text allow-list")
-_PATH_STRING_RE = None
+_PATH_STRING_RE = re.compile(rb"/[\x21-\x7e]{3,}")
 
 
 def cubin_section_denied(name: str) -> bool:
@@ -33,8 +39,6 @@ def cubin_section_denied(name: str) -> bool:
 
 def _elf_section_bytes(b: bytes) -> dict[str, bytes]:
     """Pure-Python ELF32/64 section walk -> {section name: bytes} ({} if not an ELF)."""
-    import struct
-
     if len(b) < 64 or b[:4] != b"\x7fELF":
         return {}
     is64, le = b[4] == 2, b[5] == 1
@@ -68,8 +72,6 @@ def _elf_section_bytes(b: bytes) -> dict[str, bytes]:
 def cubin_sections(b: bytes) -> dict[str, str]:
     """Per-section sha256 of a cubin (ELF), every section (deny-listed ones included, so that WHICH sections differ between
     two cubins is on record).  {} if not an ELF."""
-    import hashlib
-
     return {n: hashlib.sha256(d).hexdigest() for n, d in _elf_section_bytes(b).items()}
 
 
@@ -77,11 +79,6 @@ def _split_path_strings(data: bytes) -> tuple[bytes, list[str]]:
     """Replace every printable run (>= 4 bytes) that is an ABSOLUTE PATH (starts with '/', no whitespace) by b'<PATH>' and return the
     normalised bytes + the removed strings.  Device data of Inductor/Triton kernels embeds the generated module's absolute source path
     (tl.device_assert / assert message strings in .nv.global.init) -- a per-process string, not computation."""
-    import re
-
-    global _PATH_STRING_RE
-    if _PATH_STRING_RE is None:
-        _PATH_STRING_RE = re.compile(rb"/[\x21-\x7e]{3,}")
     found: list[str] = []
 
     def _sub(m: re.Match[bytes]) -> bytes:
@@ -95,8 +92,6 @@ def cubin_section_detail(b: bytes) -> dict[str, dict[str, Any]]:
     """For every NON-deny-listed section: sha256, size, sha256 of the bytes with absolute-path strings normalised
     (`residue_sha256`), and the path strings themselves -- so a cross-arm difference in device data can be DECODED from the record:
     residue equal + only path strings differ = per-process source path embedded in device data; anything else = not one specialization."""
-    import hashlib
-
     out: dict[str, dict[str, Any]] = {}
     for n, d in _elf_section_bytes(b).items():
         if cubin_section_denied(n):
@@ -113,8 +108,6 @@ def cubin_section_detail(b: bytes) -> dict[str, dict[str, Any]]:
 def cubin_code_sha256(sections: dict[str, str]) -> str | None:
     """sha256 over the sorted {(section name, sha256)} of every section NOT on CUBIN_DENY_LIST = everything the device loads (SASS, constant
     banks, initialised globals, rodata, kernel info), without debug/line-info/symbol sections.  None if the cubin has no .text section."""
-    import hashlib
-
     code = sorted((k, v) for k, v in sections.items() if not cubin_section_denied(k))
     return hashlib.sha256(json.dumps(code).encode()).hexdigest() if any(k.startswith(".text") for k, _ in code) else None
 
@@ -122,8 +115,6 @@ def cubin_code_sha256(sections: dict[str, str]) -> str | None:
 def cubin_code_sha256_normalized(detail: dict[str, dict[str, Any]]) -> str | None:
     """As cubin_code_sha256 but over each non-deny-listed section's residue_sha256 (absolute-path strings normalised): equal across two
     processes iff every difference is a path string.  The strict digest is the identity; this one names what the difference is."""
-    import hashlib
-
     code = sorted((k, v.get("residue_sha256")) for k, v in detail.items())
     return hashlib.sha256(json.dumps(code).encode()).hexdigest() if any(k.startswith(".text") for k, _ in code) else None
 
@@ -136,9 +127,6 @@ def _triton_cache_files(h: str | None) -> dict[str, Any]:
     the compile metadata json (num_warps / num_stages / target / options) -- what the executed binary was compiled WITH."""
     if not h:
         return {}
-    import base64
-    import glob
-
     root = settings.TRITON_CACHE_DIR or os.path.join(os.path.expanduser("~"), ".triton", "cache")
     cands = [os.path.join(root, str(h))]                          # Triton <= 3.3: <hex hash>/
     with contextlib.suppress(ValueError):                          # Triton >= 3.4: base32(sha256 digest)/ (52 chars, no padding)
@@ -187,8 +175,6 @@ def _binary_identity(k: Any, cfg: Any = None) -> dict[str, Any]:
     """One compiled Triton binary: triton hash (source x signature/specialization x options x env), cubin sha256 (bytes), per-section
     sha256 + code_sha256 (every section except CUBIN_DENY_LIST) + code_sha256_normalized / section_detail (path strings in
     device data decoded), the compile metadata, and the autotune config it was compiled for."""
-    import hashlib
-
     ent: dict[str, Any] = {"triton_hash": str(getattr(k, "hash", None)) if getattr(k, "hash", None) else None}
     asm = getattr(k, "asm", None)
     cub = asm.get("cubin") if isinstance(asm, dict) else None
@@ -228,12 +214,11 @@ def loaded_code_objects() -> dict[str, Any]:
     EXECUTES after autotuning); `executed_set_sha256` over the sorted {(kernel, src sha, executed code id, executed config)} is the identity
     of the specialization the graphs replay.  Two processes running the same code objects differ in cubin BYTES when the debug/line-info
     sections carry the per-process module path (code_sha256 equal) or in EXECUTED config when autotuning picked another candidate."""
-    import hashlib
-
     def _sha(b: Any) -> str:
         return hashlib.sha256(b if isinstance(b, (bytes, bytearray)) else str(b).encode()).hexdigest()
 
     try:
+        # torch's two stay inside the function: this module is imported where torch is not installed
         from torch._inductor.codecache import PyCodeCache
         from torch._inductor.runtime.triton_heuristics import CachingAutotuner
         reg: list[tuple[str, Any]] = []
@@ -394,8 +379,6 @@ def generated_kernels_of_this_process(inductor_dir: str | None = None) -> dict[s
     {(kernel name, source sha256)}; call_set_sha256 over the pieces' launch programs), plus where it was read from.  Shared by the record
     path (RunHeader.compilation.generated_kernels) and commit_delta's versions.json so the two pins are comparable byte for byte."""
     try:
-        from verity_vllm.engine import kernel_identity as KI
-
         ind = inductor_dir or settings.TORCHINDUCTOR_CACHE_DIR or KI.inductor_cache_dir()
         doc = KI.collect(ind, KI.triton_cache_dir())
         gk = dict(doc["summary"])
