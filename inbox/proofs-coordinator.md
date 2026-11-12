@@ -85500,3 +85500,449 @@ theorem rewires_wireMap (hbuilt : ∀ ci ∈ h.ms, FlockSoundness.Built ci.1.uni
 - Next: read `f89a` and `ffaa`; open the pull request (`research queue open --base cursor/proofs-wired-7ac3 --issue PRF-528`); its ready line. I mark nothing.
 
 [read] Mailbox at 11:31Z: 164 lines, newest section 10:17Z; nothing since your 10:55Z message. [run] Checkpoint note `proofs/20261112T1116Z-report-wired` synced at 11:16Z.
+
+## ACCOUNTS, Thu 12 Nov 11:32Z: every ask of 10:37Z to 11:24Z answered; `5dc6` passed (63 suites, 0 failed, on the head merged with `main`); two holes of ours said plainly (a period reads one head; nothing holds a span to the period), each with a mend that compiles; one consequence of the inventory rule needs your ruling
+
+**Headline.** #9249 is marked at `e28f52c10a7d` and I push nothing to it. Its quick tier on the head merged with `main` at `5a6330f1a429` passed: `r20261112-110344-5dc6`, 63 suites, 63 passed (1 cached), 0 failed. Everything below is scratch on my VM, compiled on cpu-9, none of it on any branch. Two texts: the follow-up to #9249 (`Account.lean` only: the tie, the head's key, the period, egress) and the Site's v2 (the move). Three things for your 13:00Z line that are not a plain yes:
+
+1. **`rows` today reads one head, and the head moves with every entry of the registration, a day's declaration included.** So a week with a declaration a day reads only the answers since the last one. Network's key change is one case of it. Mend, compiled: `rows` takes the period's heads.
+2. **Nothing in `rows` holds a span to the monitoring period.** No check, no argument, no stated premise. It is a hole in absolute units. Mend, compiled: the period says where each series of steps lies in it, and `rows` counts only the period's ticks, each once across every series. Spans that name no steps (PoUB's two, the example's, every moment) stay the caller's word, and I say which.
+3. **The inventory rule, held per entry, forbids adding a memory leaf under a host that is already registered.** Three fixtures of ours do exactly that. You rule: per entry (they change), or of the Site a log folds to (growth stays).
+
+Tags: [read] with file, line and commit; [run] with the run id; [relayed]; [derived] with steps; [guess]. `main` is `5a6330f1a429`, #9249's head `e28f52c10a7d`, both read at 11:03Z. "v3" is `/tmp/acc/v3` (the head plus the follow-up), "v2" is `/tmp/acc/v2` (the Site's move, on `c962872c9231`).
+
+### Part 1. One line an ask, for your post
+
+| # | Ask (mailbox) | Answer | Who changes what |
+|---|---|---|---|
+| 1 | PoUB's side (10:37Z, 1) | The branch never said it. The one wrong place is my 09:35Z entry, line 81469 of your file: "PoUB (a read rate, free)". It reads: verified from below. | nothing on the branch; v3 adds a verified read toy in PoUB's shape |
+| 2 | The wipe's part (10:37Z, 2) | Mine differed: `toy/wiped` is HBM only. v3 makes it the three tiers. The form has no rule on tiers either way. | ours, one toy |
+| 3 | The head's key (10:37Z, 3; 10:42Z, 2) | **`registration_head`, in the public output.** `head := some (.published "registration_head")`. | ours: 6 toys and the toys' answer builder. Network: one line (`Account.lean:62` of its draft). Memory: nothing. P2's `profile.registration` stays. |
+| 4 | The tie (10:42Z, 1) | **A tie in the form**, `Account.rests`. No caller holds the premise today: `rows` has no caller but guards. | no account value changes; network adds one field and one public key |
+| 5 | `Part.link`'s direction (10:42Z, 3) | The docstring says egress, now. A direction on the part I would not add yet: it puts an ingress row on every site, which is a ruling on what is charged. | ours, two lines |
+| 6 | A key-life series (10:42Z) | Yes, with no change: spans of one series add where they share no step. With the period's origins, two keys' series add too. | nothing |
+| 7 | A host's on-chip bytes (10:45Z, 1) | `Loc.chip : Option Nat` compiles, guards each way. Held equal to the auditor's figure at the host's id. One flag: a sheet's `chip` is bits, this one bytes. | the move |
+| 8 | The inventory (10:45Z, 2) | Compiles, as `Covered` and `Reached` are written, with a refusal of its own, `inventory`. In the move's pull request. **See headline 3.** | the move; 3 fixtures if per entry |
+| 9 | Soundness's ruling (10:45Z, 3) | In `Auditor`'s docstring: a public input, no check, no premise. | the move |
+| 10 | "read from or written to", the header's paths (10:45Z, 4) | Done in v2. | the move |
+| 11 | Disk leaves in our fixtures (10:45Z, 5) | Three files register one; two more draw one. None reads a card for it, so none waits on the cards. | list in Part 3 |
+| 12 | Rule 5's text (10:45Z, 6) | Below, with #9244's keys by name. | text only |
+| 13 | A period with a new head (11:05Z, 1) | Headline 1. Of network's three ways out: a larger H changes nothing of ours, one leaf a phase nothing, a root key a statement (the signature premise covers a chain). **I would have them take the root key.** | ours: `rows` takes heads (v3) |
+| 14 | A span in the period (11:05Z, 2) | Headline 2. No lock record moves: no lock names `Core.Account`. | ours: `Period.origin` (v3); network: its call of `rows` |
+| 15 | v2's link charge (11:05Z, 3) | Yes: one `Site.over β (ticks − cover)`, rounded up once; cover rounded down. Worked case: 1,310 bits charged for the one step; 792,288,000,000 bits the week's capacity. | nothing new |
+| 16 | The disks' one rate (11:05Z, 4; 11:10Z) | A host's shared rate for a tier, `Loc.shared`, beside each leaf's own. `readRate` takes the smaller. Compiles. | the move |
+| 17 | `Sheet.of_file`'s line (11:05Z, 5) | Not #9249. The follow-up, once #9244 is on `main`, and with `verity/hardware/lean.py:73` and `:77` or the sheet and the Lean card table read two entries. | ours |
+| 18 | ρ (11:07Z to 11:24Z) | `Loc.drift : Option Figure` on every device of the auditor, a rational, held equal to the auditor's figure. No drift: no credit and no bound; the type has no default. Credit rounds down, charge rounds up, once each. Until a source: `none`. | the move (the field); v2's `rows` (the use) |
+
+### Part 2. The two holes, said plainly
+
+**Hole 1: a period reads one head.**
+
+- [read] `rows` takes one `head : String` (`Account.lean:539`, `e28f52c10a7d`), and `readings` counts an answer only when the text under its account's key equals it (`:507`).
+- [read] The registration's head is the digest of its last entry (`Site.lean:307`), and an entry is a site entry, registered information or a day's declaration (`Registration.lean:102-105`). So every declared day is a new head.
+- [derived] An answer accepted before the period's last entry names an earlier head and is not read. Its part prints "not audited: charged at capacity", or the amount's row counts only the later answers.
+- **Mend (v3, compiled).** `rows` takes the heads the registration had in the period, and an answer counts when it names one. The rows are over the Site at the last head. [derived] That is sound because the registration only adds: no id is registered twice (`Fresh`, `Site.lean:335`), so what an answer read at an earlier head is in the last Site unchanged.
+- Not held by the mend: that the heads given are those of one log's prefixes. [derived] The registration's check folds the log and can return them; that function is not written.
+
+**Hole 2: nothing holds a span to the period.**
+
+- [read] `rows` takes the period only as a count, `ticks : Nat` (`Account.lean:539-540`). It has no start. A span is read as step indices in a series (`Steps.read`, `:325`), and no line compares an index with the period.
+- [read] Its docstring says "over a period of `ticks` ticks" and nothing about whose answers it is given.
+- [derived] So an accepted answer from last month, naming this head, covers this month. There is no check and no stated premise. As `rule_of` on NET-365: right in the count, silent on which.
+- **A tick is not counted twice, and that part holds.** [read] Spans of one series are joined before they are counted (`stepsCovered`, `:416`); across series, and for spans that name no steps, the largest counts, never the sum (`:471-473`). The verified side adds only spans of one series that share no step (`disjointMost`, `:407`). [derived] It rests on a series being one clock's numbering: two sessions that publish one series name with overlapping real time would be counted as disjoint. That is network's "one session at a time under a key", which soundness granted at 11:05Z under `trusted-host`.
+- **Mend (v3, compiled).** A `Period` holds, for each series by the name an answer writes, an `Origin`: the series' step that begins at a tick of the period. Each series' spans are joined, placed in the period's ticks (start rounded up, end rounded down, nothing before the origin's step or past the last tick), and the placed ticks are joined across every series. The verified side counts a span only when it lies whole in the period.
+- **What the mend does not hold, plainly.**
+  - That an origin is true. It is the auditor's statement of where a device's count was when the period began. No answer states it.
+  - Spans that name no steps cannot be placed. They are: the example protocol's (`.unstated`), my toys `toy/worked` and `toy/spare` (`.span`), and [relayed, memory 10:08Z] `poub` (`.unstated`) and `poubP2` (`.span span_ns`). Every amount at a moment is in the same place (`pous`, `wipe`, my `toy/held` and `toy/wiped`). For all of these "the answer is of this period" stays the caller's word. The mend for them is theirs: name the steps on a clock the Site registers. Or `rows` drops them, and they print "not audited".
+- **The lock.** [run] `git grep -c "Core.Account" -- '*.json'` on the head: no file. No guarantee reads `rows`. Nothing moves.
+
+### Part 3. Each answer with its sources
+
+**1. PoUB's side.** [run] `rg -i "poub|q_bytes" verity/protocols/interface/` on the head: no line. [read] Your file, line 81469: "memory-accounting: PoUB (a read rate, free)". Read it as: verified from below, `q_bytes` a lower bound. My 10:13Z entry does not name PoUB. [read] The branch's one read-rate toy, `toy/spare` (`Account.lean:631-636`), is on the free side on purpose: it is what tests the free side's charge. v3 adds `toy/reads`: `.read [.hbm]`, `q_bytes` in bytes, `side := .verified`, `time := .unstated`, with two guards [run `r20261112-105227-1449`].
+
+**2. The wipe's part.** [read] `toy/wiped` is `part := .memory [.hbm]` (`Account.lean:605-609`). v3: `.memory [.hbm, .dram, .disk]` [run `1449`].
+
+**3. The head's key.**
+
+- **What reads it.** [read] `Account.head : Option Account.Key` (`Account.lean:259-261`); a `Key` is a key of the public output or of the profile (`:65-68`); `readings` reads the text under it (`:507`). In the form it is `none` for the example protocol's account (`:570`). The six toys each read `.profile "registration"` (`:599`, `:605`, `:612`, `:619`, `:625`, `:632`), and the toys' answers carry it through `at_` (`:637-638`).
+- **The name: `registration_head`.** [read] The Glossary's words are "the registration" and "the log's head" (`ARCHITECTURE.md:170`). [run] `git grep -E "registration_head|site_head"` on the head: no line, so the name is free. [read] `registration` alone already means four other things under a published key: P2's own store's digest (`RemoteAudit/P2Protocol.lean:164`), the certifier's case and verdict (`NetworkCheck/LinkWindow.lean:207`, `:417`), a registered θ entry (`NciCheck/Baseline.lean:234`), a receipt's record (`security/Properties/Spot.lean:354`). Taking it would make memory rename P2's.
+- **The place: the public output.** [read, my 10:13Z entry, item 4] A sampled protocol's profile is `Core.Integrity`, which 47 lock records' statements read; a key there moves them all. A key of a protocol's own public output moves that protocol's records only. [relayed, memory 10:08Z, decision 3] "The head goes in the public output, and only a check that reads its registered figures at that head publishes it." One name and one place for every protocol.
+- **Who renames.** Ours: the six toys' `head` and the toys' answer builder, compiled [run `1449`]. Network: `head := some (.profile "registration")` at `NetworkCheck/Account.lean:62` of `cursor/na-account-draft-56db` at `3a0b01d32c93` becomes `head := some (.published "registration_head")`, with its docstring's sentence and its guards' answers [read]. Memory: nothing, its four are `head := none` [relayed].
+- Set aside: `site_head` (the Site is not what is chained); `head` (the registration protocol's own key, `Registration.lean:310`, bare elsewhere).
+
+**4. The tie.**
+
+- **No caller holds the premise.** [run] `git grep -E "Account\.rows|Core\.Account"` on the head: only `Account.lean` and the package's import file. Network's draft calls it once, in a guard (`:124`).
+- [read] The period check's evidence holds `audits : Array Core.Answer` (`NetworkCheck/Period.lean:401`, `e28f52c10a7d`), and its docstring leaves "which the composition's theorem is to bind" (`:229`). [read] `Core.Composition.Tie` reads cases (`CoreComposition/Tie.lean:19-21`), which an answer does not hold.
+- **The text (v3, compiled, `1449`).** An account may say what its answers rest on: a key under which an accepted answer lists the names of the answers its check read as given, and the protocols they must be of. An answer's name is SHA-512 of a tag and its canonical JSON. `rows` counts a resting answer only when each name is an accepted answer of a named protocol among the answers given. Seven guards: it counts beside its audit; not without it, beside another audit, beside the audit refused, or with no list; an empty list counts; a name is 128 hex characters.
+- **Cost.** No account value changes: the field defaults to `none`, and memory's four and network's one are written with field names [derived; not compiled against their branches]. Network: one field (`rests := some ⟨.published "audits", ["verity/spot/..."]⟩`, its names to choose) and one public key listing the names its check read. One new hash tag, `verity/account/answer/v1`; the domains table may need the entry [not checked].
+- **What it does not hold.** A tie over commitments (onsite's one store). That the answers it rests on name the same head: that is the resting check's to say.
+- **Priced beside it.** A docstring premise: free, held by nobody. `rows` fed from an accepted configuration's own answer: every tie held by the configuration's check, but it needs the configurations' lists, which are not mine and wait on lean's merge.
+
+**5. `Part.link`'s direction.** [read] `Link.β` is "bits a tick each way" (`Site.lean:172`); `Part.link`'s capacity is the boundary links' β summed (`Account.lean:166`). Network's `K` is egress only [relayed]. Three ways:
+
+| Way | Cost | What it risks |
+|---|---|---|
+| The docstring says egress (v3, compiled) | two lines | the row still prints `link` |
+| Rename the constructor to `egress` | 8 lines of `Account.lean`, the README's sentence, network's two lines (`:63`, its filter) [run: `rg`] | none I see; ingress later is a new constructor |
+| `link (direction)` | the same, and `Part.all` lists both | every site prints an ingress row "not audited: charged at capacity" until a protocol accounts for it |
+
+My pick is the first now, the second if you want the row's name to say it. The third decides that ingress is a charged resource, which is yours.
+
+**6. A key-life series.** [read] `series` is read as the compact JSON under its key (`Account.lean:351-353`), any value. Spans of one series join by step (`:416`). So a series named by the registered key, with steps counted on the key's life, adds across sessions today.
+
+**7. A host's on-chip bytes.** [run `r20261112-111810-b9a1`, exit 0] The text is in Part 5. `Chips`: a new host states the auditor's figure for it; every other location states none. Guards: accepted; refused with none, with another figure, for a host the auditor has no figure for, and on a device. At the check: a host with no figure is refused as `figures` [run `r20261112-110635-5cea`].
+
+- **Another form?** No better one. The auditor's side is `Auditor.hosts`, by the host's id, one structure that also carries the cards (ask 8) and the shared rates (ask 16). A host that names a host sheet by digest, as a device does, would be more uniform, but `Sheet` holds a clock and peak rates a host does not have, so it is a second sheet type and a second tag.
+- **Flag.** [read] A sheet's `chip` is bits (`verity/hardware/site/__init__.py:284`), and the asked field is bytes (1,000,341,504 B [relayed]). One name, two units. I kept bytes and said so in the docstring. You may want `chip` in bits on both.
+
+**8. The inventory.** [run `b9a1`, `5cea`, `r20261112-110725-ad97`] `Inventory`, over the whole Site after the entry: under each host, every memory leaf the auditor has figures for is registered under it, and at least its count of each card it lists. The auditor's memory figure names its host, and `Rates` holds a leaf to it. Guards each way, and at the check: a card short and a leaf left out are each refused.
+
+- **Which refusal.** Its own, `inventory`, placed after `owner` and before `uncertified`, as the other two whole-Site checks have theirs. Under `figures` it also compiles [run `r20261112-105833-430c`] and adds no name. A new name costs one constructor here, one in the spec (`security/Definitions/Core/Site.lean:381`), one map line (`security/Properties/Core/Site.lean:167`), one in Python's `REFUSALS` (`__init__.py:72`) [read].
+- **Where.** In the move's pull request. [derived] It moves no tag, but it changes the auditor's parameters (`memory` items gain `host`, a `hosts` list), and unknown keys are refused, so a second change is a second round for every writer of them.
+- **Cards are one-sided, memory is two-sided.** A card beyond the auditor's count passes: more registered capacity is more charged. A leaf with no figure is refused by `Rates`.
+- **The consequence (headline 3).** [derived] The auditor is one argument of the check of a whole log. If it has a figure for a leaf, `Inventory` refuses the first entry that registers the host without that leaf. If it has none, `Rates` refuses the later entry that adds the leaf. So no memory leaf can be added under a registered host. [read] Our fixtures do it: `LATER` adds `nvme1` and a third card under `node0` at `verity/hardware/site/tests/test_site.py:53-54`, `verity/protocols/spot/verifier/lean/tests/test_site_difftest.py:111-112` and `demos/lifecycle/lifecycle.py:521-523` (the demo's own `Registration` type, which I did not trace to `verity.hardware.site`).
+  - **Per entry, as you wrote it:** a host's memory is registered whole with the host. The three fixtures move the disk into the first entry or onto a new host.
+  - **Of the Site the log folds to:** the check of a log refuses at its end. Growth stays, and a result at a head is still over a complete Site. Not compiled; about five lines in `check`.
+- **Not held either way:** a host the auditor lists and no entry registers. An entry's refusal cannot see an absence. The second form would.
+
+**9, 10. Docstrings and paths.** [run `b9a1`] `Auditor`'s docstring ends: "That these figures are the hardware is a public input: no check holds it and no premise says it, and a result is over the registered hardware." `Loc.bw` and `Sheet.bw` say "read from or written to". The header's three lines read `security/Definitions/Core/Site.lean`, `verity.hardware.site` twice, and the v2 tags.
+
+**11. Disk leaves in our fixtures.** [run: `git grep` on the head]
+
+| File | Lines | What |
+|---|---|---|
+| `verity/hardware/site/tests/test_site.py` | 40, 54 | `nvme0` in the first entry, `nvme1` in a later one, 1 TiB each |
+| `verity/protocols/spot/verifier/lean/tests/test_site_difftest.py` | 102, 112; 162 | the same two; and its generator draws any tier |
+| `demos/lifecycle/lifecycle.py` | 518, 523 | the same two, in the demo's own `Registration` type (`card=`), not traced to `verity.hardware.site` |
+| `verity/protocols/remote/verifier/composition/tests/test_registration_difftest.py` | 124, 159; 169 | generators draw any tier; a fixed DRAM leaf under a host |
+| Lean | | none: the example registers `hbm0` only (`Registration.lean:405-410`) |
+
+[read] Each builds its auditor by hand (`test_site.py:23-24`, `test_site_difftest.py:95-96`, `:245`, `test_registration_difftest.py:35`), so after the move each states a figure for its disks in the test itself. [derived] None reads a host card for a disk, so none of ours waits on the cards. What waits is whatever builds an auditor from the node files, which is compute-research's function. How `demos/lifecycle` checks its registration I did not read.
+
+**12. Rule 5's text.** [relayed: the keys, compute-research 10:43Z; #9244 is open at `d0de6c8ee353`, read 11:20Z]
+
+> Where a card states two readings of one figure, registration takes the larger, and the card keeps both, each with its mark and source. A GPU's device memory: `store.dram_installed` over `store.dram`; a sheet's `mem` reads `store.dram_installed` (if ASK-291 is answered A; it goes back otherwise). A host's memory: `memory.bandwidth_max` over `memory.bandwidth` and `memory.write_max` over `memory.write`; a host DRAM leaf's `bw` is eight times the larger of `memory.bandwidth_max` and `memory.write_max`, in whole bits a second, rounded up. `memory.speed_max` is the speed those two are computed from and is not registered.
+
+**13. A period with a new head, and network's three ways out.** Hole 1 above is what the Lean does. With the mend a key change reads: both keys' answers count, each key is a series, and the period's origins let their cover add (guard: two keys, 500 ticks each of a 1,000-tick period, cover whole; overlapping by 100, the shared ticks once) [run `r20261112-111828-3915`].
+
+| Way out | What it changes of ours | Note |
+|---|---|---|
+| A larger H (26 for a year at 3.2 s [relayed]) | nothing: the registered key's scheme id | one key a year a link |
+| One leaf an execution phase | nothing | [derived, from network's "five leaves an execution phase"] 47 keys a year become 10 (47/5 = 9.4, rounded up), 4 a month become 1; a year still changes keys |
+| A registered root key that certifies the signing keys | **a statement**: the signature premise the certifier's guarantee reads covers a chain (the root signs a key, the key signs the windows). No field: the series and the head stay. | I did not locate where that premise is stated [not read] |
+
+I would have them take the root key. [derived] It is the only one whose count does not grow with the period: 47 keys a year a link is 587,500 site entries a year for a datacenter's 12,500 links (47 × 12,500), each a new head. With the mend none of the three is needed for `rows` to read right; the choice is the device's cost and the registration's size. The statement it costs is yours to carry: I say only that it is one.
+
+**14.** Hole 2 above.
+
+**15. v2's link charge.** [read, v2] Yes.
+
+- A rate is in bits a second: `Link.β`, a sheet's `bw`, a leaf's `bw`.
+- `Site.over rate ticks = ⌈u · rate · ticks⌉`, `u` the Site's unit of time in seconds, a rational. **Up, once.**
+- `ticksOf count seconds tick = ⌊count · seconds / tick⌋`. **Down, once a series**, after its steps are joined. In v3's text a joined span's start rounds up and its end down; at a step that is a whole number of ticks nothing is lost.
+- The free amount is the answers' `K` summed plus `over β (ticks − cover)`, and never more than the capacity, `over β ticks`.
+- **Worked** [run `r20261112-111929-8b26`, three guards; arithmetic rerun in Python]: β = 1,310,000 bits a second, `u` = 10⁻⁹ s, a step of 1/1000 s (10⁶ ticks), one week = 604,800,000 steps = 6.048 × 10¹⁴ ticks. Capacity ⌈10⁻⁹ × 1,310,000 × 6.048 × 10¹⁴⌉ = 792,288,000,000 bits. Cover of all but one step: 604,799,999 × 10⁶ = 604,799,999,000,000 ticks. Not covered: 1,000,000 ticks. Charge ⌈10⁻⁹ × 1,310,000 × 10⁶⌉ = **1,310 bits**. Over one tick alone the charge rounds up to 1 bit.
+- [derived] At the head, where β is bits a tick, the same link at a nanosecond is 0.00131 and has to be written 1: 763 times the link (10⁹ / 1.31 × 10⁶).
+
+**16. The disks' one rate.** [run `b9a1`] On the host's location, `shared : List (Tier × Nat)`: for a tier, the bits a second its leaves of that tier read or write together. Each leaf keeps its own `bw`.
+
+- `readRate`: a host's leaves of one tier count the sum of their own rates, or the host's shared rate for the tier where that is less. Guards: three disks at 28 read 84; with a shared rate of 50 they read 50, two of them 50, one of them 28; with 100 they read 84; a DRAM leaf beside them adds its own.
+- `Rates` is unchanged: each leaf states the auditor's figure. The host's shared rates are held with its other figures (`Chips`): equal to the auditor's, none 0, absent on every other location.
+- **Why by tier and not a list of leaves.** [derived] A leaf added by a later entry falls under its host's rate with no entry rewritten. A list of ids on the host could not take it.
+- **In the proof.** The smaller of two upper bounds is an upper bound: one step. Both bounds are public inputs.
+- **On these nodes** [relayed: compute-research 11:12Z, your 11:24Z]: every disk is the provider's network disk, so each leaf registers the host's bound and the shared rate is the only tightening the type gives. Nothing in the text changes for it; a server with its own drives states each drive's link on its leaf and the same `readRate` takes the smaller.
+- **What the bound loses without it** [relayed]: memory, 17.62% with the bound once against 14.71% with three leaves at it; compute-research, the disks at about 2.1 × 10¹² B/s on the eight-card node.
+- **The lock.** [derived] In the move: no record beyond the move's own, those that read `Core.Site.Loc`. After the move it would move `site/v2` again. So it is decided before the move's pull request, with every other field of `Loc`: `bw`, `chip`, `shared`, `drift`, `timeUnit`.
+
+**17. `Sheet.of_file`'s line.** [read] `mem = v(store["dram"])` at `verity/hardware/site/__init__.py:285` (`e28f52c10a7d`). #9249 lands as it is, and [run: `gh pr view 9244`] #9244 is open, so the entry is not on `main`. The follow-up carries it once it is. With it: the fixture card at `test_site.py:236`, and compute-research's caller at `benchmarks/compute/tests/test_compute.py:481` [relayed]. **One thing to rule on:** [read] `Sheet.of_file`'s docstring says it reads the card "as `Accel.Card.toDevice` reads the card", and `verity/hardware/lean.py:73` and `:77` read `store["dram"]` for that Lean table. Moving one line makes the sheet 144 GiB and the Lean table 141 GiB on the H200. Either both move or the docstring's sentence goes.
+
+**18. ρ, on every device of the auditor, read in both directions.**
+
+- **Place.** On the location of each of the auditor's devices, certifier and challenger alike: `drift : Option Figure`, held equal to the auditor's figure at the device's id in the `owner` check, beside its key; below 1; `none` on every location that is not the auditor's device [run `b9a1`, six guards and the JSON round trip]. In the Site and not only in `Auditor`, because the rows are a function of the registration's head.
+- **Type.** A rational, written as the Site writes every rational (`"3/5000"`), like `tolerance` and `timeUnit`. Parts per million would be a second way to write one kind of number.
+- **No drift, no credit and no bound.** [run `r20261112-112055-0c5d` for the first, `r20261112-112912-9df9` for both] Two functions, each matching on the option, neither with a default, so "states no ρ" cannot read as 0:
+  - `ticksCredited count seconds tick drift`: `none` gives 0; `some ρ` gives ⌊count · seconds · (1 − ρ) / tick⌋. **Down, once.** Guards: none gives 0; 1,000 ms at ρ = 3/5000 is 999,400,000 ns; ρ = 0 is `ticksOf`.
+  - `ticksCharged count seconds tick drift`: `none` gives none (no bound); `some ρ` gives ⌈count · seconds / ((1 − ρ) · tick)⌉. **Up, once.** Guards: 1,000 ms at ρ = 3/5000 is 1,000,600,361 ns; ρ = 1 gives none.
+- **Where each direction is applied in the rows** [derived; the two functions compile, their use in `rows` is not written]:
+
+  | Quantity in `rows` | Direction | Why |
+  |---|---|---|
+  | A span's cover in the period's ticks, whether it names steps or a bare length (`poubP2`'s `span_ns`) | credit, ×(1 − ρ), down | time the prover is credited as watched or held |
+  | The offset from a series' origin to a span's end, when the span is placed (`Origin.place`) | credit, ×(1 − ρ), down | the span is credited only up to where it surely reached |
+  | The offset from the origin to a span's start | charge, ÷(1 − ρ), up | the time before the span is charged; the span starts no earlier than this surely |
+  | Whether a verified span lies whole in the period (`Origin.inside`) | its end a charge, up; its start a credit, down | the other way round from the free side: here the span must surely be inside, there surely reached |
+  | The ticks not covered, `ticks − cover`, and the capacity over them | no ρ | they are counted on the period's own ticks, which are the auditor's, by subtraction |
+  | An amount (`K`, `q_bytes`, work) | not in `rows` | where a check multiplies a registered rate by a time a device counted (a wipe's batch against its deadline, the memory line's charge, γ's span [relayed: memory 11:26Z]) that time is a charge, ÷(1 − ρ), inside the check; its lane writes it and reads `drift` from the Site |
+
+  [derived] Reading the offsets in both directions is what holds a span's place and not only its length: without it a slow clock reaches the period's nominal last step after the period has ended.
+- **How `rows` finds the device.** By the series: network's ruling 2 makes the series the registered key, and the device is the auditor's location with that key. A series that is no registered device's key has no drift, so on the free side it covers nothing.
+- **The account's step stays 1/1000 s.** [relayed] Network's 11:08Z ruling 2 writes the step as (1 − ρ)/1000 s in its account. With the field on the location and `rows` reading it, the account keeps 1/1000 s, or the factor is applied twice.
+- **Which location.** [relayed] Memory's 11:26Z says the verifier takes ρ "from the Site's entry for the challenger's host". In the Site an auditor's device is one location of kind `certifier` or `challenger` with its key (`Site.lean`, `Kind.auditor`); it has no host under it. The field is on that location. Whether the proof service that times PoUB is a registered location of kind `challenger` I have not read; if it is not, it has nowhere to state ρ and earns no credit.
+- **Until a source is named:** `none`. The certifier's link is charged at capacity and the challenger's timed reads earn no credit [relayed: soundness 11:12Z, the slewed clock]. That is the true state; an interim figure in a registered object would be a figure with no source.
+- **One thing soundness's sentences do not cover** [derived], for you to ask: adding cover across two keys needs "one key at a time on a link" from the device. Two clocks place a span only to within ρ of the time since each began, so their spans can be shown disjoint only with a gap of that size between them.
+- [derived] The worked case at ρ = 3/5000, cover as a credit: 604,437,119,000,600 ticks covered, 362,880,999,400 not, charge 475,374,110 bits, 0.06% of the week's capacity.
+
+### Part 4. Runs, what is not established, next
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-100327-af54` | quick tier, #9249 at `0ac9c966a129` | 63 suites, 63 passed |
+| `r20261112-110344-5dc6` | the same on the head with `main` at `5a6330f1a429` merged in (local) | 63 suites, 63 passed (1 cached), 0 failed |
+| `r20261112-105227-1449` | v3: the tie, the head's key, egress, the wipe, the verified read toy | exit 0 |
+| `r20261112-111828-3915` | v3: the period's heads and origins, 11 guards | exit 0 (after `9a77` and `7a8d`, exit 1 on my own guards' expected values) |
+| `r20261112-112055-0c5d`, `r20261112-112912-9df9` | v3: time credited on a drifting clock; then time charged too | exit 0; exit 0 |
+| `r20261112-105528-0eb0`, `-105613-c82f`, `-105833-430c`, `-105833-2654` | v2: `chip`, the inventory under `figures`, at the check, `Account.lean` on it | each exit 0 |
+| `r20261112-110635-5cea`, `-110725-ad97` | v2: the inventory with its own refusal | each exit 0 |
+| `r20261112-111810-b9a1`, `-111929-db1b`, `-111929-8b26` | v2: `drift`, `shared`, `readRate`; the registration's example; the week's worked case | each exit 0 |
+
+**Not established.**
+
+- That v2 and v3 compile together: v2's `Account.lean` is the older text, without the period.
+- That either compiles on lean's merge branch or with the spec, and which lock records each field moves.
+- That memory's and network's values compile with `rests` and with `rows` taking a `Period`. [read] Network's draft calls `rows` once (`:124`) and that call changes.
+- The check of a log at its end (the inventory's second form), and `drift` inside `rows` (only its two functions compile).
+- Python: nothing of v2 is mirrored, so no difftest has run on it.
+- Scratch lines over 120 characters are not all wrapped.
+
+**Next.** #9249 is marked (your 11:24Z); I push nothing to its branch and have not touched its body since 11:04Z, so its `5dc6` row still reads "running"; say the word and I put the verdict there with `research queue edit` (the body only, no push). Memory's 11:26Z ask 1 to proofs (the release log's clock at `verity/protocols/spot/device/remote.py:377`) is not in my brief and I have not read it. I wait for your rulings on: the inventory per entry or at the log's end; `chip` in bits or bytes; `Sheet.of_file` with or without `lean.py`; whether the follow-up carries the period (heads and origins) with the tie and the head's key, or after them.
+
+### Part 5. The Lean text, as compiled
+
+**The follow-up (v3, `Account.lean`).**
+
+```lean
+/-- **An answer's name**: SHA-512 of the tag and its canonical JSON (`Answer.canonical`), in hex. -/
+def nameOf (a : Answer) : Option String :=
+  a.canonical.toOption.map fun s => Flock.hexOf (Flock.Sha512.hash (ANSWER.toUTF8.push 0 ++ s.toUTF8))
+
+/-- **What an answer rests on**: answers its check read as given and did not verify. An accepted answer lists the name
+(`nameOf`) of each under `key`, and each is to be an accepted answer of one of `protocols`. -/
+structure Rests where
+  key : Key
+  protocols : List String
+  deriving DecidableEq, Repr
+
+/-- Every answer `a` rests on is among `answers`, accepted, and of a protocol `r` names. False when `a` holds no list
+of names under `r`'s key. -/
+def Rests.held (r : Rests) (a : Answer) (answers : List Answer) : Bool :=
+  match (r.key.read a).bind fun j => j.getArr?.toOption.bind fun xs => xs.toList.mapM fun x => x.getStr?.toOption with
+  | none => false
+  | some names => names.all fun n => answers.any fun b =>
+      b.verdict == .accept && r.protocols.contains b.protocol && nameOf b == some n
+
+/-- **What a protocol accounts for**: its id, the key under which an accepted answer names the registration's head (none
+while the protocol names no registration: `Account.rows` then holds its answers to none), the form of each amount it
+publishes, and the answers its own rest on (`rests`, none for a protocol whose check verifies all it reads): an answer
+that rests on one `Account.rows` was not given, or on one that does not accept, counts for nothing. -/
+structure Account where
+  protocol : String
+  head : Option Account.Key
+  amounts : List Account.Amount
+  rests : Option Account.Rests := none
+  deriving DecidableEq, Repr
+
+/-- The ticks of `count` steps of `seconds` seconds at ticks of `tick` seconds, rounded up. -/
+def ticksUp (count : Nat) (seconds : Ratio) (tick : Figure) : Nat :=
+  let d : Nat := seconds.den * tick.1.num.toNat
+  (count * seconds.num * tick.1.den + (d - 1)) / d
+
+/-- The ticks `count` steps of `seconds` seconds cover when a clock that may run `drift` from real time, as a share of
+it, counted them: the steps' length less that share, rounded down once. A clock that states no drift covers no tick. -/
+def ticksCredited (count : Nat) (seconds : Ratio) (tick : Figure) (drift : Option Figure) : Nat :=
+  match drift with
+  | none => 0
+  | some q =>
+    count * seconds.num * (q.1.den - q.1.num.toNat) * tick.1.den / (seconds.den * q.1.den * tick.1.num.toNat)
+
+/-- The ticks to charge for `count` steps of `seconds` seconds that a clock which may run `drift` from real time
+counted: the steps' length over what the drift leaves of it, rounded up once. None where the clock states no drift, or
+one of 1: such a time has no bound. -/
+def ticksCharged (count : Nat) (seconds : Ratio) (tick : Figure) (drift : Option Figure) : Option Nat :=
+  drift.bind fun q =>
+    let d : Nat := seconds.den * (q.1.den - q.1.num.toNat) * tick.1.num.toNat
+    if d = 0 then none else some ((count * seconds.num * q.1.den * tick.1.den + (d - 1)) / d)
+
+/-- **Where a series of steps lies in the monitoring period**: step `first` of the series begins at the period's tick
+`tick`. A series older than the period gives the step it was at when the period began, at tick 0; one that began in
+the period gives its step 0, at the tick it began. -/
+structure Origin where
+  first : Nat
+  tick : Nat
+  deriving DecidableEq, Repr
+
+/-- The ticks of a period of `ticks` ticks that the steps `x` (the first, and the one after the last) of a series placed
+at `o` cover: the first tick, and the one after the last. Steps before `o.first` are before the period and are left
+out, the start is rounded up and the end down, and no tick past the period counts. None when no tick is left. -/
+def Origin.place (o : Origin) (seconds : Ratio) (tick : Figure) (ticks : Nat) (x : Nat × Nat) : Option (Nat × Nat) :=
+  let a : Nat := o.tick + ticksUp (max x.1 o.first - o.first) seconds tick
+  let b : Nat := min ticks (o.tick + ticksOf (x.2 - o.first) seconds tick)
+  if a < b then some (a, b) else none
+
+/-- The steps `x` lie in the period: none is before `o.first`, and the last ends by the period's last tick. -/
+def Origin.inside (o : Origin) (seconds : Ratio) (tick : Figure) (ticks : Nat) (x : Nat × Nat) : Bool :=
+  decide (o.first ≤ x.1) && decide (o.tick + ticksUp (x.2 - o.first) seconds tick ≤ ticks)
+
+/-- **A monitoring period, as `rows` reads it**: its length in ticks; every head the registration had in it, an answer
+counting when it names one of them; and where each series of steps lies in it (`Origin`), by the series' name as an
+answer writes it: the compact JSON under its amount's `series`, or the empty text where the amount names none. A series
+with no origin covers no tick and adds no amount. The three are the auditor's: no answer states them. -/
+structure Period where
+  ticks : Nat
+  heads : List String
+  origin : String → Option Origin
+
+/-- **What the accepted answers certify**, amount by amount. An answer counts for an account when it names the
+account's protocol, accepts, names one of `heads` under the account's key, and rests only on accepted answers among
+`answers` (`Rests.held`); of such an answer, each amount of a form `rows` reads that the answer holds. -/
+def readings (heads : List String) (tick : Figure) (accounts : List Account) (answers : List Answer) :
+    List (Amount × Reading) :=
+  accounts.flatMap fun c =>
+    let named : List Answer := answers.filter fun a =>
+      a.protocol == c.protocol && a.verdict == .accept &&
+        ((c.head.bind fun k => (k.read a).bind fun j => j.getStr?.toOption).any fun h => heads.contains h) &&
+        c.rests.all fun r => r.held a answers
+    (c.amounts.filter fun m => m.Formed).flatMap fun m => named.filterMap fun a => (m.read tick a).map fun r => (m, r)
+
+/-- **The accounting rows** of the site `S`, over the monitoring period `period` at ticks of `tick` seconds, from the
+protocols' `answers` read by their `accounts`: the rows of each amount at each place its answers name, then the rows of
+what none covers and of the device memory no leaf holds. `S` is the Site at the period's last head: the registration
+only adds, so what an answer read at an earlier head of the period is in `S` unchanged. `digest` and `A` are the
+registration's: the sheets' digest and the auditor, whose estimate compute's `bound` reading reads. -/
+def rows (S : Site) (digest : Sheet → String) (A : Site.Registration.Auditor) (period : Period) (tick : Figure)
+    (accounts : List Account) (answers : List Answer) : List Row :=
+  let cs := readings period.heads tick accounts answers
+  let groups : List (Amount × Option String) := (cs.map fun x => (x.1, x.2.place)).eraseDups
+  (groups.flatMap fun g =>
+      g.1.rows S digest A tick period.ticks period.origin g.2
+        ((cs.filter fun x => x.1 = g.1 ∧ x.2.place = g.2).map fun x => x.2)) ++
+    unaudited S digest A tick period.ticks cs ++ unregistered S digest
+```
+
+**The Site's v2 (`Site.lean`), the parts these asks touch.**
+
+```lean
+/-- A location, and who owns it. `bw` is the bits a second read from or written to a memory leaf directly under a host,
+and none on every other location: a memory leaf under a device reads at its device's sheet's `bw` (`Site.readRate`).
+`chip` is a host's on-chip state in bytes, and none on every other location. `shared` is, for a tier, the bits a second
+read from or written to a host's leaves of that tier together, where one ceiling holds them all; empty on every other
+location. `drift` is how far the clock of one of the auditor's devices may run from real time, as a share of it; none
+on every other location, and a device that states none times nothing. `timeUnit` is the Site's unit of time in seconds,
+on a location of kind `site` and none on every other (`Site.timeUnit`). -/
+structure Loc where
+  id : String
+  kind : Kind
+  parent : Option String := none
+  owner : Owner := .prover
+  sheet : String := ""
+  tier : Option Tier := none
+  bytes : Nat := 0
+  key : String := ""
+  bw : Option Nat := none
+  chip : Option Nat := none
+  shared : List (Tier × Nat) := []
+  drift : Option Figure := none
+  timeUnit : Option Figure := none
+  deriving DecidableEq
+
+/-- The auditor's figures for one memory leaf directly under a host: the host it is under, the bits a second read from
+or written to it, and the bytes it holds. -/
+structure MemoryFigures where
+  host : String
+  bw : Nat
+  bytes : Nat
+  deriving DecidableEq, Repr
+
+/-- The auditor's figures for one host: its on-chip state in bytes, the cards it carries, each SKU with its count, and
+for a tier the bits a second its leaves of that tier read or write together. -/
+structure HostFigures where
+  chip : Nat
+  cards : List (String × Nat) := []
+  shared : List (Tier × Nat) := []
+  deriving DecidableEq, Repr
+
+/-- What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the
+SKU's; the tolerance registration allows around an estimate; the key of each of its own devices, by the device's id; its
+figures for each memory leaf directly under a host, by the leaf's id; its figures for each host, by the host's id; and
+how far each of its own devices' clocks may run from real time, by the device's id. That these figures are the hardware
+is a public input: no check holds it and no premise says it, and a result is over the registered hardware. -/
+structure Auditor where
+  sheet : String → Option Sheet
+  tolerance : Figure
+  key : String → Option String
+  memory : List (String × MemoryFigures) := []
+  hosts : List (String × HostFigures) := []
+  drift : List (String × Figure) := []
+
+/-- `figures`, a host's memory: each new memory leaf directly under a host states the auditor's figures for it: the
+host it is under, a rate that is not 0, and its bytes; every other new location states no rate. -/
+def Rates : Prop :=
+  ∀ x ∈ e.locs,
+    if x.kind = .memory ∧ x.parent.bind (S.add e).kind? = some .host then
+      ∃ f ∈ A.memory.lookup x.id, x.parent = some f.host ∧ x.bw = some f.bw ∧ 0 < f.bw ∧ x.bytes = f.bytes
+    else x.bw = none
+
+/-- `figures`, a host's own: each new host states the auditor's figures for it, its on-chip state in bytes and each
+tier's shared rate, none of them 0; every other new location states neither. -/
+def Chips : Prop :=
+  ∀ x ∈ e.locs,
+    if x.kind = .host then
+      ∃ h ∈ A.hosts.lookup x.id, x.chip = some h.chip ∧ x.shared = h.shared ∧
+        (h.shared.all fun (p : Tier × Nat) => decide (0 < p.2)) = true
+    else x.chip = none ∧ x.shared = []
+
+/-- `inventory`: under each host of the Site, every memory leaf the auditor has figures for is
+registered, and so is every card it lists for the host: at least its count of devices whose sheet is of its SKU. -/
+def Inventory : Prop :=
+  ∀ h ∈ (S.add e).locs, h.kind = .host →
+    (∀ f ∈ A.memory, f.2.host = h.id →
+      ∃ x ∈ (S.add e).locs, x.id = f.1 ∧ x.kind = .memory ∧ x.parent = some h.id) ∧
+    ∀ g ∈ A.hosts.lookup h.id, ∀ k ∈ g.cards,
+      k.2 ≤ ((S.add e).locs.filter fun d =>
+        d.kind = .device ∧ d.parent = some h.id ∧ ((S.add e).sheet? D.sheet d).map (·.sku) = some k.1).length
+
+/-- `owner`: each new certifier or challenger is one of the auditor's own devices, owned by it, with its key and the
+auditor's figure for its clock, below 1 where there is one; and every other new location is the prover's and states no
+clock. -/
+def Owners : Prop :=
+  ∀ x ∈ e.locs,
+    (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key ∧ x.drift = A.drift.lookup x.id ∧
+      (x.drift.all fun (q : Figure) => decide (q.1 < 1)) = true) ∧
+    (x.kind.auditor = false → x.owner = .prover ∧ x.drift = none)
+
+/-- A site entry's refusal: the first of its checks it fails, or `none` when it passes them all. -/
+def refusal : Option Refusal :=
+  if ¬Fresh D S e then some .duplicateId
+  else if ¬Refs S e then some .unknownRef
+  else if ¬Kinds S e then some .kind
+  else if ¬Sheets D A S e then some .sheetDigest
+  else if ¬(Figures A e ∧ Rates A S e ∧ Timed S e ∧ Chips A e) then some .figures
+  else if ¬Capacity D S e then some .capacity
+  else if ¬Owners A e then some .owner
+  else if ¬Inventory D A S e then some .inventory
+  else if ¬Covered c S e then some .uncertified
+  else if ¬Reached c S e then some .challengerReach
+  else none
+
+/-- The bits a second readable from the memory leaves `xs`: a host's leaves of one tier at the sum of their own
+registered rates, or at the host's shared rate for the tier where that is less; and each device with a leaf among them
+at its sheet's `bw`, once. `none` when a leaf states no rate and is under no device with a registered sheet. -/
+def readRate (digest : Sheet → String) (xs : List String) : Option Nat := do
+  let ys ← xs.mapM S.loc?
+  let devices ← (ys.filter fun y => y.bw.isNone).mapM fun y => y.parent
+  let sheets ← devices.eraseDups.mapM fun d => (S.sheetOf digest d).map fun k => k.bw
+  let rated : List Loc := ys.filter fun y => y.bw.isSome
+  let groups : List (Option String × Option Tier) := (rated.map fun y => (y.parent, y.tier)).eraseDups
+  let hosts : List Nat := groups.map fun g =>
+    let sum : Nat := ((rated.filter fun y => (y.parent, y.tier) = g).filterMap fun y => y.bw).sum
+    match (g.1.bind S.loc?).bind fun h => g.2.bind fun t => h.shared.lookup t with
+    | some c => min sum c
+    | none => sum
+  pure (hosts.sum + sheets.sum)
+
+/-- What a rate of `rate` a second carries over `ticks` of the Site's units of time, rounded up once. `none` when the
+Site states no unit of time. -/
+def over (rate ticks : Nat) : Option Nat := S.timeUnit.map fun (u : Figure) => (u.1 * (rate * ticks : Nat)).ceil.toNat
+```
+
+JSON in v2: a location's keys are `bw`, `bytes`, `chip`, `drift`, `id`, `key`, `kind`, `owner`, `parent`, `shared`, `sheet`, `tier`, `time_unit`; the auditor's are `drift`, `hosts`, `keys`, `memory`, `sheets`, `tolerance`; a memory figure is `{"bw", "bytes", "host", "id"}`; a host's figures are `{"cards": [{"count", "sku"}], "chip", "id", "shared": [{"bw", "tier"}]}`; a device's drift is `{"drift", "id"}` [run `b9a1`, the round-trip guards].
