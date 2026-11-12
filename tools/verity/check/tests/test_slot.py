@@ -1358,6 +1358,37 @@ def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp
     assert SLOT.blocked(SLOT.parse("b 0 mem=560")[0], NOW) is None
 
 
+def test_a_reservation_with_no_pid_counts_by_its_run_directory_and_not_once_that_is_gone(tmp_path, monkeypatch):
+    """research.mem writes a run's reservation before its runner has a pid, and until it names one the reservation counts
+    whole by the run's directory, made before it. A launch that dies there leaves it with no pid for good: once the run's
+    directory is removed nothing holds it, and counted it would keep its whole size from every slot's gate for as long as its
+    file lay there. One whose run ended holds nothing either, one written by hand with no pid and no directory counts as it
+    did, and research.mem counts the same of each. A directory that can't be read is there, as is a path that isn't absolute."""
+    from research import mem
+
+    proc, runs = tmp_path / "proc", tmp_path / "runs"
+    proc.mkdir()
+    for run, status in (("r-starting", None), ("r-ended", '{"state": "failed"}')):
+        (runs / run).mkdir(parents=True)
+        if status:
+            (runs / run / "status.json").write_text(status)
+    SLOT.RAMLOCK.mkdir(parents=True)
+    for run, gb in (("r-starting", 40.0), ("r-gone", 340.0), ("r-ended", 100.0)):
+        (SLOT.RAMLOCK / f"research-{run}.json").write_text(json.dumps(
+            {"owner": "research", "gb": gb, "started": "2026-10-01T09:00:00Z", "pid": None, "run_id": run, "run_dir": str(runs / run)}))
+    (SLOT.RAMLOCK / "by-hand.json").write_text(json.dumps({"owner": "someone", "gb": 30.0, "note": "no pid"}))
+    assert SLOT.reserved_gb(proc) == int(70e9) >> 30, "the starting run's 40 GB and the hand-written 30"
+    assert mem.reserved_bytes(mem.reservations(SLOT.RAMLOCK)) == 70e9
+    (runs / "r-starting").rmdir()
+    assert SLOT.reserved_gb(proc) == int(30e9) >> 30, "a run directory that is gone holds nothing"
+    assert mem.reserved_bytes(mem.reservations(SLOT.RAMLOCK)) == 30e9
+    assert SLOT._run_gone(str(runs / "r-ended" / "status.json" / "x")) and not SLOT._run_gone(str(runs)) and not SLOT._run_gone(None)
+    assert not SLOT._run_gone("runs/r-gone") and not mem._gone("runs/r-gone")
+    with monkeypatch.context() as m:
+        m.setattr(SLOT.os, "stat", lambda p: (_ for _ in ()).throw(PermissionError(13, "Permission denied", p)))
+        assert not SLOT._run_gone(str(runs / "r-gone")) and not mem._gone(str(runs / "r-gone"))
+
+
 def test_a_train_check_counts_only_other_train_checks_reservations_and_a_lane_check_counts_every_one(tmp_path, monkeypatch, capsys):
     """A free train slot (mem=300) would read a negative net behind pool checks that reserve 279 GB each and use 25 and 5,
     and wait until someone shrank their reservations by hand. A
