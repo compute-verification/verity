@@ -239,7 +239,7 @@ class First:
     stream: S.Stream
     record: dict[str, Any]
     registration: S.WindowCommitmentRecord
-    draw: S.Draw
+    sample: S.Draw
     coins: CC.ChallengerCoins
     read: bytes = b""
     extra: dict[str, Any] = field(default_factory=dict)
@@ -248,14 +248,14 @@ class First:
         """``stage1.json``: what `resume` and the replay side read."""
         return {"format": FORMAT, "commit": self.pub, "rule": self.rule.to_json(), "spec": self.stream.spec.digest(),
                 "record": self.record, "registration": self.registration.digest, "receipt": dict(self.registration.receipt),
-                "draw": self.draw.draw, "units": list(self.draw.units), "read": self.read.hex(), **self.extra}
+                "draw": self.sample.draw, "units": list(self.sample.units), "read": self.read.hex(), **self.extra}
 
     def second(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
                **kwargs: Any) -> tuple[S.WindowCommitmentRecord, S.Draw]:
         """The replay side's interior registration over the sampled spans' proof blocks (`Stream.register_interiors`,
         taking its copies as it does), the coins committed to its digest, and the second stage's sample: ``k`` proof
         blocks in each sampled span."""
-        ireg = self.stream.register_interiors(self.draw, record, ports, **kwargs)
+        ireg = self.stream.register_interiors(self.sample, record, ports, **kwargs)
         self.coins.commit(bytes.fromhex(ireg.digest))
         return ireg, self.stream.select(ireg)
 
@@ -266,7 +266,7 @@ class First:
         root for it, of its class's C strings, the prover's ``published`` ones; ``bodies`` the interior's released public
         bodies by member key."""
         L = self.layout
-        names = [BT.name(L.run, L.prompt, L.outputs, int(u), layer) for u in self.draw.units]
+        names = [BT.name(L.run, L.prompt, L.outputs, int(u), layer) for u in self.sample.units]
         return IR.history(self.record, names, BT.WORDS, BT.class_rows(L.prompt, L.outputs, L.capacity), published, bodies)
 
 
@@ -282,8 +282,8 @@ def first(pub: Mapping[str, Any], check: SpecializedDefinition, rule: Rule, coin
     rec = BR.record(pub, check, S.selection_law(stream.spec.selection, layout.spans), previous, window)
     reg = stream.register(rec, layout.ports(), **({} if window_root is None else {"window_root": window_root}))
     coins.commit(bytes.fromhex(reg.digest))
-    draw = stream.select(reg)
-    return First(dict(pub), rule, layout, stream, rec, reg, draw, coins, bytes(coins.read))
+    sample = stream.select(reg)
+    return First(dict(pub), rule, layout, stream, rec, reg, sample, coins, bytes(coins.read))
 
 
 def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.ChallengerCoins | None = None, *,
@@ -302,10 +302,11 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
     reg = stream.register(stage1["record"], layout.ports(), **({} if window_root is None else {"window_root": window_root}))
     if reg.digest != stage1["registration"]:
         raise ValueError("the record registers to another digest than its first stage's")
-    draw = stream.select(reg)
-    if list(draw.units) != list(stage1["units"]) or draw.draw != stage1["draw"]:
+    sample = stream.select(reg)
+    if list(sample.units) != list(stage1["units"]) or sample.draw != stage1["draw"]:
         raise ValueError("the first stage samples other spans read again than it did")
-    return First(dict(pub), rule, layout, stream, dict(stage1["record"]), reg, draw, coins, bytes.fromhex(stage1["read"]))
+    return First(dict(pub), rule, layout, stream, dict(stage1["record"]), reg, sample, coins,
+                 bytes.fromhex(stage1["read"]))
 
 
 def template_fn(t: str) -> SpecializedDefinition:
@@ -424,7 +425,7 @@ class Replayed:
 
     @property
     def sample(self) -> list[int]:
-        return [int(u) for u in self.first.draw.units]
+        return [int(u) for u in self.first.sample.units]
 
 
 def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, window_root: str | None = None,
@@ -445,7 +446,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     if {k: v for k, v in c.public().items() if k != "seconds"} != {k: v for k, v in again.pub.items() if k != "seconds"}:
         raise ValueError("the class's files are not the commitment its first stage registered")
     d = design(again.layout, again.record, unlinked=unlinked)
-    sample = [int(u) for u in again.draw.units]
+    sample = [int(u) for u in again.sample.units]
     per, launches = spans_of(c, capture, sample, rids)
     it = IR.interior(per, d.cells, again.registration.digest, sample, row=again.pub["window"], links=d.links,
                      wires=d.wires, served=again.record, window_root=window_root, salt_key=salt_key,
@@ -807,7 +808,7 @@ def _second(a: argparse.Namespace) -> int:
         again = resume(stage1, check, delta=a.delta, window_root=first_root(stage1))
     except (S.Refused, ValueError, KeyError, OSError) as e:
         return done(1, refused=f"{type(e).__name__}: {e}")
-    sample = [int(u) for u in again.draw.units]
+    sample = [int(u) for u in again.sample.units]
     summary.update(sample=sample, first_stage={"registration": again.registration.digest, "units": sample},
                    stream={"digest": again.stream.digest, "cells": list(again.stream.cells),
                            "counts": list(again.stream.counts)})

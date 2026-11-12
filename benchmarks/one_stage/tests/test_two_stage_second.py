@@ -118,7 +118,7 @@ def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_
     sample's order, registering the block's ``logits`` and nothing round 1's record names; the second stage samples
     K proof blocks in each sampled span."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
-    sample = [int(u) for u in again.draw.units]
+    sample = [int(u) for u in again.sample.units]
     assert r.record == json.loads((tmp / "interior" / "registration.json").read_text()) == r.registration.record
     assert r.record["previous"] == again.registration.digest and r.record["window"]["replay_sample"] == sample
     assert r.record["window"]["run"] == IR.interior_run(again.registration.digest, sample)
@@ -127,7 +127,7 @@ def test_the_interior_is_registered_after_round_1_under_no_name_round_1_has_and_
     assert [e["value"] for e in r.record["registered"]] == ["logits"]
     assert not earlier & ({x["port"] for x in r.record["roots"]} | {"logits"})
     assert r.launches == {f"r{u}": f"launch:r{u}" for u in sample}
-    assert r.draw.replay_sample == again.draw and [u // O for u in r.draw.units] == list(range(Q))
+    assert r.draw.replay_sample == again.sample and [u // O for u in r.draw.units] == list(range(Q))
 
 
 def test_the_replay_side_refuses_a_capture_that_is_not_the_sampled_spans_or_a_return_round_1_did_not_commit(run):
@@ -135,7 +135,7 @@ def test_the_replay_side_refuses_a_capture_that_is_not_the_sampled_spans_or_a_re
     differ, never by id), under another commitment than the first stage registered, or from a replay whose units
     return other rows than round 1 committed for them, refused by slot and row."""
     again, c, tmp, capture = run["again"], run["class"], run["tmp"], run["capture"]
-    sample = [int(u) for u in again.draw.units]
+    sample = [int(u) for u in again.sample.units]
     with pytest.raises(ValueError, match="holds no span of request 'other'"):
         TS.spans_of(c, capture, sample, {f"r{sample[0]}": "other"})
     with pytest.raises(ValueError, match="didn't reproduce the span"):
@@ -160,7 +160,7 @@ def test_the_interior_commits_the_return_under_the_serves_salts_and_its_header_o
     of its Q·O strings is round 1's leaf's at ``sample[i]·O + j``, and the member's header names round 1's port, those
     rows and each one's path in round 1's tree, whose root is the boundary record's."""
     again, r, c, tmp = run["again"], run["r"], run["class"], run["tmp"]
-    sample = [int(u) for u in again.draw.units]
+    sample = [int(u) for u in again.sample.units]
     at = [s * O + j for s in sample for j in range(O)]
     port, mine = c.port("o0"), r.interior.committed
     assert port.root == c.roots["o0"] and port.leaves == N * O and port.words == 2
@@ -181,7 +181,7 @@ def test_the_return_salts_are_the_serves_at_each_sampled_blocks_row_and_none_on_
     round 1's port: the row of the block's own span and unit, from the serve's salts. A class whose files hold no
     salts of the port has none."""
     again, r, c = run["again"], run["r"], run["class"]
-    sample, drawn = [int(u) for u in again.draw.units], list(r.draw.units)
+    sample, drawn = [int(u) for u in again.sample.units], list(r.draw.units)
     assert TS.return_salts(replace(c, salts={p: c.salts[p] for p in BR.PORTS}), r.design, sample, drawn) == {}
     got = TS.return_salts(c, r.design, sample, drawn)
     assert list(got) == ["o0"] and sorted(got["o0"]) == drawn
@@ -213,7 +213,7 @@ def test_round_2_takes_the_hand_over_with_the_return_read_at_round_1s_rows(run):
     port leaves it, round 2 refuses that read (``second-read``), which is not the params' either (``second-values``).
     Slow (about 15 s): it lowers the template for the references and the sessions' files."""
     again, r, tmp = run["again"], run["r"], run["tmp"]
-    d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.draw.units], list(r.draw.units)
+    d, brec, sample, drawn = r.design, again.record, [int(u) for u in again.sample.units], list(r.draw.units)
     mine, w = d.window(again.registration.digest, sample), r.interior.committed.window
     assert (mine.partition_digest, mine.run, mine.population) == (w.partition_digest, w.run, w.population)
     assert CS.expected_ports(mine) == r.interior.ports
@@ -275,7 +275,7 @@ def test_an_unlinked_class_is_committed_and_proved_blockwise_and_round_2_refuses
     with pytest.raises(ValueError, match="makes no wires round 2 derives"):
         TS.replayed(again, c, got["capture"], tmp_path / "never")
     r = TS.replayed(again, c, got["capture"], tmp_path / "interior", unlinked=True)
-    d, sample, drawn = r.design, [int(u) for u in again.draw.units], list(r.draw.units)
+    d, sample, drawn = r.design, [int(u) for u in again.sample.units], list(r.draw.units)
     chunks = O * v // 64
     assert d.cells == (chunks, O) and "registered" not in r.record and r.tie == {}
     assert sorted(u // chunks for u in drawn if u < Q * chunks) == list(range(Q))

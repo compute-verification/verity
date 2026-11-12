@@ -78,14 +78,14 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     c = _class()
     got = TS.first(c.public(), PAIR, RULE, FC.Challenger("first"))
     assert got.layout.n_rho == N_RHO and got.registration.record["population"] == N
-    assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q and got.read
+    assert got.sample.draw["law"] == "subset" and len(got.sample.units) == Q and got.read
     stage1 = json.loads(json.dumps(got.stage1()))
-    assert stage1["units"] == list(got.draw.units) and stage1["spec"] == got.stream.spec.digest()
+    assert stage1["units"] == list(got.sample.units) and stage1["spec"] == got.stream.spec.digest()
     again = TS.resume(stage1, PAIR, FC.Challenger("second"))
-    assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
+    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
     ireg, second = again.second(*_interior(again.layout, again.registration.digest))
     assert ireg.order == again.registration.order and again.coins.live
-    assert second.replay_sample == again.draw and len(second.units) == Q * K
+    assert second.replay_sample == again.sample and len(second.units) == Q * K
     assert [u // N_RHO for u in second.units] == list(range(Q))
 
 
@@ -96,7 +96,7 @@ def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
     got = TS.first(_class(WRAP, inline=True).public(), WRAP, RULE, FC.Challenger("first"))
     assert got.layout.inline and got.stream.spec.check.query == P.template_instance_query(PAIR)
     again = TS.resume(json.loads(json.dumps(got.stage1())), WRAP, FC.Challenger("second"))
-    assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
+    assert (again.registration.digest, again.sample.units) == (got.registration.digest, got.sample.units)
     _, second = again.second(*_interior(again.layout, again.registration.digest))
     assert len(second.units) == Q * K and [u // (2 * N_RHO) for u in second.units] == list(range(Q))
 
@@ -110,7 +110,7 @@ def test_resume_refuses_another_rule_registration_or_sample():
         TS.resume({**stage1, "rule": TS.Rule(RULE.replay, K + 1, INTERIOR, 60.0).to_json()}, PAIR)
     with pytest.raises(ValueError, match="registers to another digest"):
         TS.resume({**stage1, "registration": "00" * 64}, PAIR)
-    others = [u for u in range(N) if u not in got.draw.units][:Q]
+    others = [u for u in range(N) if u not in got.sample.units][:Q]
     with pytest.raises(ValueError, match="other spans"):
         TS.resume({**stage1, "units": others}, PAIR)
 
@@ -125,7 +125,7 @@ def test_a_hand_off_that_names_no_window_root_resumes_under_its_commitments_run(
     assert "window_root" not in stage1 and TS.first_root(stage1) == pub["run"]
     assert TS.first_root({**stage1, "window_root": "ab" * 64}) == "ab" * 64
     again = TS.resume(stage1, PAIR, window_root=TS.first_root(stage1))
-    assert again.registration.digest == got.registration.digest and again.draw.units == got.draw.units
+    assert again.registration.digest == got.registration.digest and again.sample.units == got.sample.units
 
 
 def test_the_second_stages_coins_follow_the_whole_first_stage():
@@ -159,7 +159,7 @@ def test_a_class_with_history_tables_declares_and_registers_them_beside_its_valu
     assert served == [("b.ingress", BR.SCHEMA), ("b.egress", BR.SCHEMA), *((t, HT.SCHEMA) for t in layout.tables)]
     assert [r["port"] for r in got.record["roots"]] == [*BR.PORTS, *layout.tables]
     assert {r["port"]: r["root"] for r in got.record["roots"]} == {k: v["root"] for k, v in pub["values"].items()}
-    assert got.draw.draw["law"] == "subset" and len(got.draw.units) == Q
+    assert got.sample.draw["law"] == "subset" and len(got.sample.units) == Q
 
 
 def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_sample():
@@ -188,7 +188,7 @@ def test_a_class_with_history_tables_gives_the_challengers_history_from_its_own_
         assert sig["root"] == sig["domain"] == Array(q, RG.DIGEST)
         assert [sig[x.value] for x in opening] == [Array(2 * q, Array(x.words, Bits(16))) for x in opening]
     assert not [v for v in TS.first(pub, PAIR, RULE, FC.Challenger("first")).stream.spec.values if v.registered]
-    names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.draw.units]
+    names = [BT.name(layout.run, layout.prompt, layout.outputs, u, 1) for u in got.sample.units]
     bodies = {"m0": b"the interior's public body"}
     hist = got.history(1, {n: [bc.hex() for bc in hs[n].bcs] for n in names}, bodies)
     assert [t["name"] for t in hist["tables"]] == names and c == 8
@@ -253,11 +253,11 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
     assert {(x.template, x.port, SS._port_of(named, key, x.value), per, tuple(SS.row_at(rs, j) for j in range(cells)))
             for x, per, rs in runs} == {(x.template, x.port, x.value, x.per, x.at) for x in links}
 
-    names = [BT.name(layout.run, prompt, outputs, int(u), 0) for u in got.draw.units]
+    names = [BT.name(layout.run, prompt, outputs, int(u), 0) for u in got.sample.units]
     sampled = [hs[n] for n in names]
     toks = ((1, 5, 0, 2), (0, 4, 3, 2))
     it = IR.interior([IR.Span(f"s{k}", member, IR.table_reads(t, toks[k]), [[0, cells]], "p" * 64)
-                      for k, t in enumerate(sampled)], cells, got.registration.digest, got.draw.units,
+                      for k, t in enumerate(sampled)], cells, got.registration.digest, got.sample.units,
                      row="two-stage-driver-test", tables=sampled, served=got.record, positions=c, links=links)
     entries = {e["value"]: e for e in it.record["registered"]}
     assert list(entries) == [x.value for x in links]
@@ -274,7 +274,7 @@ def test_round_2_reads_a_served_classs_tables_root_and_domain_under_its_replay_b
         assert {k: entries[v.value][k] for k in v.entry()} == v.entry()
 
     part = SS.Part(tid, 0, cells)
-    own = SS.Own(tuple(got.draw.units), (part,), it.record, got.record, (),
+    own = SS.Own(tuple(got.sample.units), (part,), it.record, got.record, (),
                  links=tuple(SS.Link(x.template, x.port, SS._port_of(named, key, x.value)) for x, _per, _rs in runs),
                  rows=tuple(SS.Rows(x.template, x.port, per, rs) for x, per, rs in runs))
     for x in table:
