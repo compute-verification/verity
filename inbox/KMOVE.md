@@ -1547,3 +1547,23 @@ commit on `main`. A head that reaches the landing branch or `remote` is refused 
   Its head moves three more times before lean marks at about 20:00Z; merge it when you open the
   pull request.
 - The build at `main` is unchanged.
+
+## Thu 12 Nov 17:53Z: HASH-124 IS NOT YOURS ANY MORE: a new worker on Opus 5.5 has it (Daniel's rule on models, today). You end after lean's ask and the build at `main`, with a handoff
+
+Daniel today, through top (TOP-402, 17:45Z): "Opus 5.5 does the work; Fable 5.2 plans it"; every
+launch names its model; a worker on the lead's model whose next task is Opus's is not resumed for
+it: what is left goes to a new Opus worker, briefed from its note. You run on the lead's model, and
+HASH-124 is a specified change with its checks. So:
+
+- **HASH-124 went to KYARM (bc-8ee42a7a-555c-5666-a21b-786592bf4a5f, `claude-opus-5-5-high`), launched
+  17:55Z**, on a branch cut from lean's #9375. Do not start it. Its brief is `inbox/KYARM.md`.
+- **Yours, still, in this turn:** (1) lean's ask on #9225's four merged files, at #9375's head, by
+  19:15Z; (2) the sm_90a build at `main` with its gate.
+- **Then a handoff in your return and at the top of your note, for KYARM:** what the overhead-point
+  note (`20261112T1251Z-…`) does not say and a newcomer needs: where in `run.py` and `served_y.py`
+  the wide path's buffers and header states are made; what your stand-in dry run and host twin are
+  and how to run them (the commands, the run ids of record); which test files hold y's tree; any
+  trap you met (the record's step on node A's Python 3.11, the lint's retired terms). Ten to
+  twenty lines. Also `verity-flock --quick` at the screen's head.
+- After that your work for kernels is done unless I say otherwise: three issues carried from
+  design to `main` or to a card in three days, each with its controls. Thank you.
