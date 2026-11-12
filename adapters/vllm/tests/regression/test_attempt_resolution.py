@@ -9,7 +9,6 @@ Self-contained: three fake stage Attempts are published into a temporary LocalSt
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import sys
 from pathlib import Path
@@ -186,8 +185,9 @@ def test_row_candidate_is_the_union_of_its_attempts(store, monkeypatch):
     root = row.candidate_root()
     assert root is not None and root == store["tmp"] / "cache" / ROW
     assert row.candidate("global_match.json") == root / "global_match.json"
-    assert json.loads(row.candidate("build_summary.json").read_text())["program_digest"] == PD
-    assert row.candidate("commit/commit_verdict.json").is_file() and row.candidate("nope.json") is None
+    summary, verdict = row.candidate("build_summary.json"), row.candidate("commit/commit_verdict.json")
+    assert summary is not None and json.loads(summary.read_text())["program_digest"] == PD
+    assert verdict is not None and verdict.is_file() and row.candidate("nope.json") is None
     # cached: a second call does not refetch; a different attempt set does
     (root / "sentinel").write_text("x")
     assert row.candidate_root() == root and (root / "sentinel").exists()
@@ -241,9 +241,9 @@ def test_attempt_provenance_names_a_different_configuration_and_a_broken_chain(s
 
 def test_attempt_provenance_does_not_apply_without_attempt_ids(monkeypatch, tmp_path):
     monkeypatch.delenv(resolver.CANDIDATE_ENV, raising=False)
-    assert "no candidate Attempt ids" in AP.applies(_row())
+    assert "no candidate Attempt ids" in (AP.applies(_row()) or "")
     monkeypatch.setenv(resolver.CANDIDATE_ENV, str(tmp_path))
-    assert "no candidate Attempt ids" in AP.applies(_row())
+    assert "no candidate Attempt ids" in (AP.applies(_row()) or "")
 
 
 def test_row_config_grammar_matches_the_tool_declaration():
@@ -253,6 +253,6 @@ def test_row_config_grammar_matches_the_tool_declaration():
     from adapters.vllm.verity_vllm.pipeline import research_tools as RT
     for rid in (ROW, "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager", "gemma2-2b__bf16__h100__tp1__b1__i512__o64__burst__stochastic__bi-graph", "bad"):
         assert AP.row_config(rid) == RT.row_config(rid), rid
-    assert AP.CONFIG_KEYS == ("row", "model", "revision", "query", *AP.ROW_FIELDS)
+    assert ("row", "model", "revision", "query", *AP.ROW_FIELDS) == AP.CONFIG_KEYS
     assert set(AP.CONFIG_KEYS) <= set(RT.ROW_KEY_PARAMS)
     assert AP.DEFAULT_QUERY == RT.DEFAULT_QUERY

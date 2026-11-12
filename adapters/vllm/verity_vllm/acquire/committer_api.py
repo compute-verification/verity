@@ -19,7 +19,6 @@ the run — so a fast subset cannot be reported as the full interface.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Protocol
 
 from verity_vllm.commit.run_roots import RunRoots, StepRoot
 
@@ -66,20 +65,6 @@ class Opening:
     path: tuple                 # siblings (None for lifts) — production `commit.path_shape` shape
     identity: dict              # verifier-derivable (tensor ordinal, name, dtype, shape, byte offset)
     salt: bytes = b""           # the row's salt (`step_rows.salt`, `step_rows.SALT_BYTES`)
-
-
-class Committer(Protocol):
-    name: str
-
-    def register_weights(self) -> dict: ...
-    def install(self) -> None: ...
-    def uninstall(self) -> None: ...
-    def finalize(self) -> RunCommitment: ...
-    def open(self, sample: list[tuple[int, int]]) -> list[Opening]: ...
-    def verify(self, run: RunCommitment, opening: Opening) -> bool: ...
-    def coverage_declaration(self, run: RunCommitment) -> dict: ...
-    def reset(self) -> None: ...
-
 
 
 DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"

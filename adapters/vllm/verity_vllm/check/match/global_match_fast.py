@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import collections
 import functools
-import json
 import os
 from collections.abc import Callable
 
@@ -604,12 +603,6 @@ def _x09_legs(items: list, leg: Callable, weight: Callable) -> list:
     n = workers(len(items))
     stats["x09_workers"] = n
     return request_legs(items, leg, n, weight=weight)
-
-
-def seed_dag_hashes(P: SEQ.RootView, hashes: dict) -> None:
-    """RETIRED: a worker's dag_hashes dict must never seed the parent's memo -- the Merkle ids are per process.
-    The legs return G8's per-step matching as facts instead (global_match._perm_match in the leg)."""
-    raise RuntimeError("seed_dag_hashes is retired: legs return matching facts, never hash dicts across processes")
 
 
 def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | None = None) -> list:

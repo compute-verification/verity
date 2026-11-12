@@ -11,7 +11,11 @@ import pytest
 import torch
 
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
-from verity_vllm.commit.served_record import SAMPLER_INPUTS, SamplerInputsSource, served_rows
+from verity_vllm.commit.served_record import (
+    SAMPLER_INPUTS,
+    SamplerInputsSource,
+    served_rows,
+)
 
 
 def committer(seeds):

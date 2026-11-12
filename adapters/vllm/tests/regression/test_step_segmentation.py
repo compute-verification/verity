@@ -7,9 +7,18 @@ and, for the greedy select, cuts one segment per event.
 """
 from __future__ import annotations
 
+import json
 import tomllib
 
 import pytest
+from verity.circuits.codec import encode_program
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.refs import tuple_of
+from verity.circuits.types import Array, Tuple, Value
+from verity.definitions.registry import b1, sampling
+from verity.definitions.registry import prims as P
+from verity.definitions.registry.prims import BF16, F32, I32
 
 from tests.regression import lift_expected as LE
 from tests.regression import resolver
@@ -58,14 +67,6 @@ def test_a_component_without_a_histogram_states_no_sampling_count():
 def _flat_request(family: str):
     """A flat two-step request body (what derive_step emits: the selects at the root body's top level, not inside a call):
     step 0 = [select(l0)], step 1 = [F32Add(temp, temp), select(l1)]."""
-    from verity.circuits.codec import encode_program
-    from verity.circuits.defs import CompositeDefinition, bind
-    from verity.circuits.program import Program
-    from verity.circuits.refs import tuple_of
-    from verity.circuits.types import Array, Tuple, Value
-    from verity.definitions.registry import b1, sampling
-    from verity.definitions.registry import prims as P
-    from verity.definitions.registry.prims import BF16, F32, I32
     V, I64 = 8, Value(64)
     greedy = family == "TokenSelect_v1"
 
@@ -109,7 +110,6 @@ def test_rows_the_index_does_not_name_are_carried_over(tmp_path):
 
 @pytest.mark.slow
 def test_append_keeps_the_existing_text_and_refuses_a_known_key(tmp_path, monkeypatch):
-    import json
     fx, files = tmp_path / "fixtures.toml", tmp_path / "files.toml"
     head = ('schema = "verity-vllm/r19-reference-fixtures/v1"\nsnapshot_artifact = "art:' + "e" * 64 + '"\n\n[artifacts]\n'
             'commit_logs = "art:' + "f" * 64 + '"   # a hand comment\n\n[rows."old"]\nrow = 11\nclass = "GREEN"\n')
