@@ -585,6 +585,100 @@ def test_a_node_2_that_takes_runs_only_through_a_check_slot_is_never_chosen(tmp_
         auto.choose({N2: n2, CPU1: "no answer in 30 s"}, 4, 16)
 
 
+@pytest.fixture
+def idle(tmp_path, monkeypatch):
+    """`read`: every machine's documents as the probe gives them where each machine is this one, idle: node 2's share whole
+    and unheld, and a free slot in each pool, so nothing but what the probe finds of the machine keeps a job off it."""
+    monkeypatch.setattr(cores, "CLAIMS", tmp_path / "claims")
+    monkeypatch.setattr(cores, "CPU_ROOT", tmp_path / "no-topology")
+    monkeypatch.setattr(auto, "DISK_PATH", str(tmp_path / "no-disk"))
+    monkeypatch.setattr(auto, "HOLD_FILE", str(tmp_path / "no-hold"))
+    monkeypatch.setattr(remote, "RUNS_VIA_SLOT_FILE", str(tmp_path / "no-via-slot"))
+    src = tmp_path / "src"
+    (src / auto.DESCRIPTION).parent.mkdir(parents=True)
+    (src / auto.DESCRIPTION).write_text(f'[[shares]]\nproject = "verity"\nnode = "{N2}"\ncpus = "48-95"\n')
+    (src / auto.SLOT_PY).parent.mkdir(parents=True)
+    (src / auto.SLOT_PY).write_text(f"def status_doc(now):\n    return {pool(slot('r0'))['research']!r}\n")
+    return lambda **kw: auto.read(src, 4, reach=lambda name: [sys.executable, "-"], **kw)
+
+
+def test_a_machine_whose_read_says_its_null_device_cant_be_written_is_shut_out_with_the_reason(tmp_path, monkeypatch, capsys, idle):
+    """A machine whose null device its user can't open to read and write starts no runner and no git, so its slots stay idle
+    and every launch read them as places. Its read says so in place of its pool, and it takes no job."""
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    whole = idle()
+    assert whole[CPU1] == pool(slot("r0")) and whole[N2]["share"]["free"] == 48, "the machine's own null device and git: it is read"
+    assert auto.choose({N2: share(waiters=5), CPU1: whole[CPU1], CPU5: full}, 4, 16)[0] == (CPU1, "research")
+    null = tmp_path / "null"
+    monkeypatch.setattr(auto, "NULL_DEVICE", str(null))
+    cant = f"{null} can't be opened to read and write"
+    stands = [(lambda: None, f"{cant} (FileNotFoundError: No such file or directory)"),
+              (null.mkdir, f"{cant} (IsADirectoryError: Is a directory)"),
+              (lambda: (null.rmdir(), null.write_text("")), f"{null} is not a character device")]    # a file put in its place
+    if os.geteuid():                                                # root opens a file whatever its mode
+        stands.append((lambda: null.chmod(0), f"{cant} (PermissionError: Permission denied)"))
+    for put, why in stands:
+        put()
+        docs = idle()
+        assert docs[CPU1] == {"research": {"error": f"{auto.NO_START}: {why}"}}, "in place of the slots that looked free"
+        target, said = auto.choose({N2: share(waiters=5), CPU1: docs[CPU1], CPU5: full}, 4, 16)
+        assert target == (CPU5, "research") and f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in said
+        assert auto.expect(docs, (CPU1, "research"), 4, 16) == auto.Wait(None, f"{auto.NO_START}: {why}", False)
+        assert auto.smaller({CPU1: docs[CPU1]}, 8, 64) is None, "no smaller request starts there either"
+    launched = []
+    monkeypatch.setattr(auto, "read", lambda source, cpus: {N2: share(waiters=5), CPU1: docs[CPU1], CPU5: full})
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", _refusing([]))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--", "pytest", "-q"]) == 3
+    assert [kw["machine_name"] for kw in launched] == [CPU5], "the launch goes where a runner starts, though it waits there"
+    assert f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}; " in capsys.readouterr().err
+
+
+def test_a_machine_whose_git_gives_no_answer_is_shut_out_with_the_reason(tmp_path, monkeypatch, idle):
+    """A launch ships its tree as a checkout with the machine's git, and a suite is keyed from git's view of it: a machine
+    whose git doesn't run, or runs and fails, refuses those launches one by one."""
+    git = tmp_path / "git"
+    monkeypatch.setattr(auto, "GIT", str(git))
+    gone = idle()[CPU1]["research"]["error"]
+    assert gone.startswith(f"{auto.NO_START}: `{git} --version` gave no answer (FileNotFoundError: ")
+    git.write_text("#!/bin/sh\necho 'git: a warning' >&2\necho \"fatal: could not open '$0' for reading\" >&2\nexit 128\n")
+    git.chmod(0o755)
+    docs = idle()
+    why = f"`{git} --version` exited 128 (fatal: could not open '{git}' for reading)"
+    assert docs[CPU1] == {"research": {"error": f"{auto.NO_START}: {why}"}}
+    target, said = auto.choose({N2: share(free=8), CPU1: docs[CPU1]}, 4, 16)
+    assert target is None and f"{CPU1}'s research pool skipped: {auto.NO_START}: {why}" in said
+    git.write_text("#!/bin/sh\necho git version 0\n")
+    assert idle()[CPU1] == pool(slot("r0")), "a git that answers: the machine is read as it is"
+
+
+def test_a_node_2_that_can_start_no_run_is_closed_to_every_job_a_gpu_one_included(tmp_path, monkeypatch, capsys, idle):
+    """Node 2's queue starts a run as a pool does, so a node 2 whose read says no run starts there takes no job: a job a pool
+    fits goes to the pool, and a GPU or quiet job, which no other node runs, is refused with the reason."""
+    null = tmp_path / "null"
+    null.write_text("")
+    monkeypatch.setattr(auto, "NULL_DEVICE", str(null))
+    why = f"{null} is not a character device"
+    n2 = idle(node_only=True)[N2]
+    assert n2 == {"share": {"no_start": why}}
+    said = f"{N2} takes no job: {auto.NO_START}: {why}"
+    assert auto.closed(n2) == auto.off(n2) == said
+    full = pool(*(slot(f"r{i}", held=True) for i in range(8)), waiters=9)
+    target, told = auto.choose({N2: n2, CPU1: full}, 4, 16)
+    assert target == (CPU1, "research") and told.startswith(said + "; "), "an idle share is no place while nothing starts on its node"
+    assert auto.expect({N2: n2}, None, 4, 16) == auto.Wait(None, said, False)
+    with pytest.raises(auto.Unplaceable, match=f"no pool fits and {N2} takes no job") as refused:
+        auto.choose({N2: n2, CPU1: pool(slot("r0"))}, 64, 300)
+    assert str(refused.value).startswith(said + "; ")
+    placed = []
+    monkeypatch.setattr(auto, "read", lambda source, cpus, **kw: {N2: n2})
+    monkeypatch.setattr(remote, "queue_placement", _refusing(placed))
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--gpus", "1", "--", "nvidia-smi"]) == 2
+    assert placed == [] and f"research run --on auto: refused: {said}, and a GPU or quiet job runs on no other node" in capsys.readouterr().err
+
+
 def _auto_repo(tmp_path: Path) -> Path:
     repo = tmp_path / "repo"
     repo.mkdir()
