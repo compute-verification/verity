@@ -12,7 +12,7 @@ the record.  In the statements' terms, with b a block's bytes and every rate in 
 - X = s/E + β, what can bring a block back into node memory a ns: the node's squaring ceiling over the codec's
   squarings a block (`audit.Rebuild`), plus its disks' read ceiling, plus, link-charged, its boundary links' β_l;
 - B = B_r + B_d, what can come back at once beyond that rate, in blocks: one maximal rebuild batch and one maximal
-  disk read (plus, link-charged, one link window B_l), `Node`'s bursts (X and B: `line.charges_of`);
+  disk read (plus, link-charged, one link burst B_l), `Node`'s bursts (X and B: `line.charges_of`);
 - snapshot: `planned − W − (X·span + B) − P·S` blocks over the passes, `span` the record's;
 - paced, with each window a group g ≤ C and the credited span Σ = [e_0, s_C): time-held is
   `Σ·(N − S) − 2L·(X·(Σ + 2L) + B) − fill` block-ns over Σ, the line's stretch held over time with the whole session
@@ -66,7 +66,7 @@ class Node:
     prover's compressions over a session at most F times the node's), and the read ceilings of its own disks and of
     its boundary links (bytes a second, 0 charging none).  Each way back into node memory also has a burst, the bytes it can bring at once
     beyond its rate (`SquaringCeiling`, `Disks` and `Links` hold over every interval as rate·length + burst): one
-    maximal rebuild batch, one maximal disk read and one link window.  A burst of 0 states the rate down to one
+    maximal rebuild batch, one maximal disk read and one link burst.  A burst of 0 states the rate down to one
     nanosecond, which no device with a nonzero rate meets.  Beside the read ceilings are the write ceilings, one GPU's
     and the host DRAM's (bytes a second), how fast a fill can write labels into each tier, which a wipe's timing reads;
     the node states no DPU's (`timing.HOST_WRITE_BYTES_PER_S`).  `stated` takes `timing`'s, which a reported read rate

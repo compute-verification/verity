@@ -306,7 +306,7 @@ def test_delta_charges_the_draws_a_window_requested_where_it_opens_all_its_recei
 def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
     """On `k1`'s schedule: s = (0, 1, 350, 650, 950), the arrivals 300 later each, so e_0 = 350, L = 650 − 1 and
     Σ = 950 − 350; no receipt is wrong, so the line charges the chip and 2L·(X·(Σ + 2L) + B) over Σ, B the rebuild
-    and disk bursts and, link-charged, the link window too."""
+    and disk bursts and, link-charged, the link burst too."""
     r, _ = k1
     X = 1e-3
     n = node(chip_blocks=1, squarings=X * codec.FALLBACK.encode_squarings * 1e9, bursts=(2, 3, 0))
@@ -322,7 +322,7 @@ def test_the_time_held_line_is_held_over_times_conclusion(k1) -> None:
 
 
 def test_the_stated_node_has_a_burst_for_each_way_back() -> None:
-    """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link window
+    """`Node.stated`: a rebuild batch is at most S_chip, a disk read a second of the disks' ceiling, and a link burst
     `timing.LINK_WINDOW_BYTES` when the links are charged; each may be stated instead."""
     n = ledger.Node.stated(disk_bytes_per_s=4.32e9, link_bytes_per_s=50e9)
     assert (n.rebuild_burst_bytes, n.disk_burst_bytes, n.link_burst_bytes) == (

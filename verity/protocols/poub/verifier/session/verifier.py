@@ -476,7 +476,7 @@ def paced_groups(mem: dict, seen: list[dict], *, block_bytes: int) -> list[line.
 def ingress_bursts(ingress_bytes_per_s: float, disk_bytes_per_s: float = DISK_BYTES_PER_S) -> float:
     """B, the bytes the routes back into node memory bring at once beyond their rates at an ingress charge of
     `ingress_bytes_per_s`, `ledger.Node.stated`'s bursts: one rebuild batch in flight (S_chip), one second at the disks'
-    ceiling (the charge up to `disk_bytes_per_s`), and one link window (`timing.LINK_WINDOW_BYTES`) when the charge is
+    ceiling (the charge up to `disk_bytes_per_s`), and one link burst (`timing.LINK_WINDOW_BYTES`) when the charge is
     above that, the boundary links charged too."""
     disk = min(ingress_bytes_per_s, disk_bytes_per_s)
     n = ledger.Node.stated(disk_bytes_per_s=disk, link_bytes_per_s=ingress_bytes_per_s - disk)
@@ -1562,7 +1562,7 @@ def main(argv: Sequence[str] | None = None, *, verify: Verify | None = None, ser
     ap.add_argument("--disk-burst-bytes", type=float,
                     help="the most the disks bring back at once beyond their ceiling (default: a second of it)")
     ap.add_argument("--link-burst-bytes", type=float,
-                    help="one link window, charged with the links (default: `timing.LINK_WINDOW_BYTES`)")
+                    help="one link burst, charged with the links (default: `timing.LINK_WINDOW_BYTES`)")
     ap.add_argument("--close", metavar="NODE_HEX",
                     help="close the node's live registration in --registry, its sessions counted as they stood, "
                          "and exit")
