@@ -279,7 +279,8 @@ def cut(doc: dict, hours: float) -> dict:
             files[f"{pr}@{short(h)}" if h else pr] = few(v)
             assert was.touched(frozenset(files[f"{pr}@{short(h)}" if h else pr])) == was.touched(frozenset(v)), k
     kept = [f for v in files.values() for f in v]
-    suites = {path: {"name": s["name"], "prose": s["prose"], "inputs": [q for q in s["inputs"] if q == "." or any(_under(f, [q]) for f in kept)],
+    # a suite goes by its directory: its seconds are all its name is read for
+    suites = {path: {"name": path, "prose": s["prose"], "inputs": [q for q in s["inputs"] if q == "." or any(_under(f, [q]) for f in kept)],
                      "cut": [c for c in s["cut"] if any(_under(f, [c]) for f in kept)]} for path, s in (rep.get("suites") or {}).items()}
     runs = {n: {"runs": [{k: (steps(r) if k == "steps" else v)
                           for k, v in r.items() if k in ("id", "kind", "sha", "shard", "took", "end", "state", "failed", "steps")}
@@ -296,7 +297,7 @@ def cut(doc: dict, hours: float) -> dict:
                        "flags": [f for f in flags if f[0] < day][-1:] + [f for f in flags if f[0] >= day],
                        "wide": rep.get("wide") or [], "pins": rep.get("pins") or [], "files": files, "locks": locks,
                        "suites": suites, "runner": rep.get("runner") or [], "soundness": sound,
-                       "seconds": {s["name"]: (rep.get("seconds") or {}).get(s["name"]) for s in suites.values()}}}
+                       "seconds": {path: (rep.get("seconds") or {}).get(s["name"]) for path, s in (rep.get("suites") or {}).items()}}}
 
 
 # ---- the trace --------------------------------------------------------------------------------------------------------------
