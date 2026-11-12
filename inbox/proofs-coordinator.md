@@ -103438,3 +103438,58 @@ Clock: `date -u` read 21:44Z before the push. Mailbox read at `93f55fdd76`: 3 me
 ### To post
 
 - If the table is already posted: "Row A13 corrected: the fact has its lemma (`checkOwn_none`); it is glue inside A11. 19 rows have no holder."
+
+## ACCOUNTS, Thu 12 Nov 21:44Z: the agreement compiles in A2's form: v2 is at `b9ba5acad9` with the spec's Site, its example, and all 136 of the agreement's theorems; A2 changes four listed texts, not two (`Checks`' two witnesses change with it)
+
+Tags: [run] a command or a run id; [read] a file at a commit; [derived]; [guess]. Mailbox read at 21:40Z: its last section is your A2 ruling (the hook's message of 21:31Z); nothing after it.
+
+**1. The head.** `cursor/proofs-site-v2-1dc6` is at `b9ba5acad9` [run: `git ls-remote`], five commits over job 2's `e0167418c1`:
+
+| Commit | What |
+|---|---|
+| `982668328b` | The spec's Site in v2's form (`security/Definitions/Core/Site.lean`): the clauses, `Complete` beside `Valid`, `Valid` as it was. |
+| `d9b3740f8c` | The agreement's maps and the witnesses' instances (`security/Properties/Core/Site.lean`). |
+| `c1feb04e37` | The spec's own lemmas, unchanged, and its example site rebuilt in v2's form (`security/Proofs/Core/Site.lean`), 35 theorems. |
+| `238b0e4d84` | `Checks` and `RefusedAt` in A2's text. |
+| `b9ba5acad9` | The agreement's proofs (`security/Proofs/Properties/Core/Site.lean`), 136 theorems, and the witnesses. |
+
+Verdict: `r20261112-213504-bbba` (`verity lean try security/Proofs/Properties/Core/Site.lean`, `vy-nebius-cpu-12`) exit 0 in 78 s, 136 theorems, none uses an axiom beyond `propext`, `Classical.choice` and `Quot.sound` [run]. It ran on the working tree one line break short of the head: the commit splits `cases e; simp only […]` over two lines to fit 120 columns, nothing else [derived: I made that one edit between the try and the commit]. A try of the head itself, `r20261112-213948-c288`, has waited for a slot since 21:39Z; I read it when it ends and say so only if it fails.
+
+No name `Chained` is in the tree [run: `rg` over `security/`, only Flock's `levelsChained`]. The spec's lemmas (`valid_append_singleton`, `Valid.of_prefix` and the rest) are `main`'s text [read: `git diff origin/main -- security/Proofs/Core/Site.lean` changes one line of the file's header and the example, lines 267 on; the lemmas end at line 249].
+
+**2. A2 changes four listed texts, not two.** [read: `security/Properties/lean-audit.json` at `b9ba5acad9`, the thirteen records' `signature` lines.] The two witnesses of `Checks` state its condition in their own words, so they change with it. The lock's signature line of each witness spells its statement out, so there the change shows in the record's own line; for `checks` and `refusedAt` the line stays `Properties.Site.checks : Properties.Site.Checks` and the definition it names changes.
+
+| Listed statement | Before (`main`) | Now |
+|---|---|---|
+| `checks` (`Checks`) | `(check D A c l).toOption.map site = if Valid … (log l) then some (ofLog (log l)) else none` | `… = if Valid … (log l) ∧ Complete (digests D) (auditor A) (ofLog (log l)) then some (ofLog (log l)) else none` |
+| `refusedAt` (`RefusedAt`) | `check D A c l = .error (i, r) → ∃ hi : i < l.length, Valid … (log (l.take i)) ∧ Entry.refusal … (regEntry l[i]) = some (refusal r)` | `check D A c l = .error (i, r) → Valid … (log (l.take i)) ∧ ((∃ hi : i < l.length, Entry.refusal … (regEntry l[i]) = some (refusal r)) ∨ (i = l.length ∧ r = .inventory ∧ ¬Complete (digests D) (auditor A) (ofLog (log l))))` |
+| `checks_honest` | `check … honestLog = .ok (ofLog honestLog) ∧ Valid … (log honestLog)` | `check … honestLog = .ok (ofLog honestLog) ∧ Valid … (log honestLog) ∧ Complete … (ofLog (log honestLog))` |
+| `checks_nontrivial` | `¬((acceptAllCheck staleLog).toOption.map site = if Valid … (log staleLog) then some … else none)` | `¬(… = if Valid … (log staleLog) ∧ Complete … (ofLog (log staleLog)) then some … else none)` |
+
+The other nine keep their own text [read: the same diff]: `fold`, `refuses`, `entryValid`, their four witnesses, and `refusedAt_honest` and `refusedAt_nontrivial`. `refusedAt_nontrivial` still says what it said: no entry of the honest log is refused with `previous`; the new case does not touch it [derived: it names an entry's index and the refusal `previous`, and the new case has the log's length and `inventory`].
+
+For the notice to Daniel: the row for `checks` in my 21:16Z table reads right under A2 as it stands ("exactly when each entry is valid against the log before it **and the log's Site is complete**"). What changes is the sentence above the table, "One of the five definitions they name, `RefusedAt`, changes in its own text": under A2 it is two of the five, `Checks` and `RefusedAt`, and `Checks`' two witnesses with it. The last paragraph of that notice ("One choice inside it, for the lead") is answered by your ruling and comes out.
+
+**3. A correction of times.** My sections headed 21:15Z and 21:16Z were pushed at 21:14:24Z and 21:15:43Z [run: the pushes' own clock readings]: I wrote each heading a minute ahead. From this entry on I read `date -u` just before the heading.
+
+**4. Runs.**
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-211104-5668` | try, the spec's Site | exit 0 |
+| `r20261112-211353-38c5` | try, the maps and instances | exit 0 |
+| `r20261112-212447-9d0a` | try, the spec's proofs and example | exit 0, 35 theorems |
+| `r20261112-213504-bbba` | try, the agreement's proofs (A2) | exit 0, 136 theorems |
+| `r20261112-213948-c288` | try, the same file at the pushed head | waiting for a slot since 21:39Z; 78 s once it has one |
+| `r20261112-213155-e409` | the two lists: the suites, `vy-nebius-cpu-10` | waiting since 21:32Z: "4 check(s) ahead in line" [run: its `slot.json`, 21:39Z] |
+| `r20261112-213155-38e4` | the two lists: the records, `vy-nebius-cpu-8` | waiting since 21:32Z: every check slot's memory is reserved by live runs [run: its `slot.json`, 21:39Z] |
+
+Earlier tries of mine that failed and were mended are not listed; each is in my checkpoint note.
+
+**5. Not established.**
+- Which lock records v2 moves, in either lock. It takes a records run on the v2 branch, about 50 minutes of a check slot for `security` alone by the last one's measure (3005 s). I have **not** launched it: both machines' check slots are full, and the branch will still take compute-research's merge and network-accounting's commit. I would launch it once, after those two are in. Say if you want it sooner.
+- That the rest of `security/` compiles over the spec's new Site. [read, at `b9ba5acad9`] No file outside the Site's four builds a location or a link, opens the Site's or the registration's namespace, or says `Complete`, `SCHEMES`, `MemoryFigures`, `HostFigures` or `timeUnit` unqualified; so I expect no break [derived], and the records run is what shows it.
+- The certifier verifier's Lean on v2 (network-accounting's commit is not named yet), and the Site difftest's Python test (compute-research's Python for the three additions).
+- The two lists' suites and records (the two runs above).
+
+**6. Where I would only wait.** From here the v2 pull request needs, in order: compute-research's branch merged whole, network-accounting's one commit merged, `main` merged, the records run, the body with the notice. The first two are not mine to hasten. Until they come I write the pull request's body (the notice in A2's words) and nothing that needs a slot; the two runs for the lists are in line and I only read them. If you want this worker's slot back, this is a clean place to end the turn: everything written is pushed.
