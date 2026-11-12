@@ -3,8 +3,6 @@
   "entries": [
     {"file": "verity_vllm/check/fold_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 897},
     {"file": "verity_vllm/check/gates.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1397},
-    {"file": "verity_vllm/check/match/batch_decomp.py", "kind": "function", "symbol": "decompose", "detail": "lines", "count": 348},
-    {"file": "verity_vllm/check/match/rank_match.py", "kind": "function", "symbol": "cross_rank_check", "detail": "lines", "count": 267},
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "function", "symbol": "oracle_compare", "detail": "lines", "count": 196},
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 932},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "function", "symbol": "recompute_run", "detail": "lines", "count": 310},
@@ -23,10 +21,8 @@
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 397},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 168},
     {"file": "verity_vllm/pipeline/match.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1184},
-    {"file": "verity_vllm/pipeline/telemetry/admission.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1106},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "function", "symbol": "main", "detail": "lines", "count": 687},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 896},
-    {"file": "verity_vllm/pipeline/tp/match.py", "kind": "function", "symbol": "_check_main", "detail": "lines", "count": 195},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 972},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "function", "symbol": "emit_correspondence", "detail": "lines", "count": 215},
     {"file": "verity_vllm/program/frontend/rules/reference.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 879},
@@ -37,7 +33,6 @@
     {"file": "verity/definitions/numerics/derived_rows.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 944},
     {"file": "verity/definitions/registry/lifted.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 2228},
     {"file": "verity/definitions/registry/gelu_erf_table.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 1203},
-    {"file": "verity/definitions/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 805},
-    {"file": "verity_vllm/query/required.py", "kind": "function", "symbol": "request_manifest", "detail": "lines", "count": 177}
+    {"file": "verity/definitions/registry/ref_prims.py", "kind": "module", "symbol": "<module>", "detail": "lines", "count": 805}
   ]
 }

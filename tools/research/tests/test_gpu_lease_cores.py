@@ -1,5 +1,6 @@
 """gpu-lease's CPU quota check (`--cores`), run as the script on a made-up machine: a lease directory whose locks the test holds, a
-cpu.max with its cpu.stat, a /proc and a `taskset` that records what it was given. No GPU, and nothing waits on a clock."""
+cpu.max with its cpu.stat, a /proc (the leases' processes, and the CPUs a request may run on) and a `taskset` that records what
+it was given. No GPU, and nothing waits on a clock."""
 from __future__ import annotations
 
 import fcntl
@@ -22,14 +23,17 @@ pytestmark = pytest.mark.skipif(shutil.which("flock") is None or shutil.which("b
 class Node:
     """A machine as gpu-lease reads it. Its quota is 81.6 of 96 CPUs unless `quota` says otherwise (None: no cpu.max at all), and
     it has no cpu.stat until `throttled` writes one. Its `taskset` writes its first two arguments to `pinned` and runs the rest
-    unpinned: the made-up CPUs aren't this machine's. A request with `--cores` calls it once to try its list, and once more
-    to start CMD when it is leased."""
+    unpinned: the made-up CPUs aren't this machine's. A request with `--cores` calls it once to try its list, reading in the
+    made-up /proc the CPUs a request may run on (`self/status`: all 96 until `allows` says otherwise), and once more to start
+    CMD when it is leased."""
 
     def __init__(self, tmp_path: Path, quota: str | None = "8160000 100000"):
         self.gl, self.proc, self.bin = tmp_path / "gl", tmp_path / "proc", tmp_path / "bin"
         for d in (self.gl, self.proc, self.bin):
             d.mkdir()
         (self.proc / "stat").write_text("cpu  1 2 3\n" + "".join(f"cpu{c} 1 2 3\n" for c in range(96)) + "intr 0\n")
+        (self.proc / "self").mkdir()
+        self.allows("0-95")
         self.cpu_max, self.pinned = tmp_path / "cpu.max", tmp_path / "taskset.args"
         if quota is not None:
             self.cpu_max.write_text(quota + "\n")
@@ -44,6 +48,9 @@ class Node:
     def program(self, name: str, script: str) -> None:
         (self.bin / name).write_text(f"#!/bin/sh\n{script}\n")
         (self.bin / name).chmod(0o755)
+
+    def allows(self, cpus: str) -> None:
+        (self.proc / "self" / "status").write_text(f"Name:\tcat\nCpus_allowed:\tff\nCpus_allowed_list:\t{cpus}\n")
 
     def throttled(self, nr: int, usec: int) -> None:
         (self.cpu_max.parent / "cpu.stat").write_text(
@@ -242,11 +249,26 @@ def test_cores_the_machine_cannot_pin_to_are_refused_before_any_gpu_is_taken(tmp
     assert not list(node.gl.glob("*.owner"))                                 # no GPU was taken for a CMD that could not start
 
 
+def test_a_list_with_a_cpu_the_request_may_not_run_on_is_refused_naming_those_cpus_before_any_gpu_is_taken(tmp_path):
+    node = Node(tmp_path, quota=None)                                        # quota or none
+    node.allows("0-47,64-79")
+    r = node.ask("--cores", "40-49,60,62-66", cmd=("echo", "ran"))           # taskset would pin CMD to 40-47 and 64-66 alone
+    assert r.returncode == 2 and r.stdout == ""
+    assert r.stderr.splitlines() == ["gpu-lease: --cores 40-49,60,62-66 names CPUs this request can't run on here (48-49,60,62-63), "
+                                     "so nothing is leased: every CPU of the list must be one of this machine's that it may use"]
+    assert not list(node.gl.glob("*.owner")) and node.pinned.read_text() == "-c 40-49,60,62-66\n"
+    r = node.ask("--cores", "40-47,64-66", cmd=("echo", "ran"))              # every CPU of it inside
+    assert r.returncode == 0 and r.stdout == "ran\n"
+    (node.proc / "self" / "status").write_text("Name:\tcat\n")               # a /proc that doesn't say what the trial was pinned to
+    r = node.ask("--cores", "0-3", cmd=("echo", "ran"))
+    assert r.returncode == 2 and r.stdout == "" and "doesn't say which CPUs taskset pinned to" in r.stderr
+
+
 @pytest.mark.skipif(shutil.which("taskset") is None, reason="needs taskset(1)")
 def test_cmd_runs_on_the_cores_it_declared_and_a_cpu_no_machine_has_is_refused(tmp_path):
     node = Node(tmp_path, quota=None)
     cpu = min(os.sched_getaffinity(0))
-    env = {**node.env, "PATH": node.path}                                    # this machine's taskset
+    env = {**node.env, "PATH": node.path, "GPU_LEASE_PROC": "/proc"}         # this machine's taskset, and what it pinned to
     r = subprocess.run(["bash", str(GPU_LEASE), "1", "--cores", str(cpu), "--mem-gb", "0", "--", sys.executable, "-c",
                         "import os; print(sorted(os.sched_getaffinity(0)))"], env=env, capture_output=True, text=True)
     assert r.returncode == 0 and r.stdout == f"[{cpu}]\n"

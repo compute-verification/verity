@@ -6,10 +6,11 @@ import random
 from types import SimpleNamespace
 
 import pytest
-from verity_vllm.query.units import ValueRef
 from verity.definitions import word as W
+
 from verity_vllm.query.module_body import literal_calls
 from verity_vllm.query.program_view import CallView, ProgramView, from_instances
+from verity_vllm.query.units import ValueRef
 
 PARAMS = [["prompt", "Array<4,Value<32>>"], ["weights", "{m.a.weight: Array<4,Value<16>>, m.b.weight: Array<4,Value<16>>}"]]
 EPS = '{"f64":"0x1p-17"}'

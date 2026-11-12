@@ -16,10 +16,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.protocols.pouw.verifier.audit import HM96, rows_domain  # noqa: E402
-from verity.protocols.pouw.verifier.protocol import tagged  # noqa: E402
 from verity.commitments.limits import VerificationLimits  # noqa: E402
 from verity.commitments.merkle import Commitment, verify_opening  # noqa: E402
+from verity.protocols.pouw.verifier.audit import HM96, rows_domain  # noqa: E402
+from verity.protocols.pouw.verifier.protocol import tagged  # noqa: E402
+
 from verity_vllm.engine import int8_ops  # noqa: E402
 from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
 from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
@@ -140,8 +141,14 @@ def test_a_window_kept_off_the_serving_thread_keeps_the_files_kept_in_the_call(t
 def test_a_window_on_the_twin_commits_what_hiding_rows_commits_and_its_calls_reopen(tmp_path, monkeypatch):
     """`H1Run` hashing its call tables by the kernels' functions commits `hiding_rows`' A and z roots, so the same manifest,
     calls_root and sample root; `open_call` rebuilds each call (served and empty) from the prover's directory under them."""
-    hashed, twin = [], TD.host_roots
-    monkeypatch.setattr(TD, "host_roots", lambda tables, key: hashed.append(len(tables)) or twin(tables, key))
+    hashed: list[int] = []
+    twin = TD.host_roots
+
+    def host_roots(tables, key):
+        hashed.append(len(tables))
+        return twin(tables, key)
+
+    monkeypatch.setattr(TD, "host_roots", host_roots)
     got, prover = _window(tmp_path, "host", monkeypatch)
     want, _ = _window(tmp_path, "python", monkeypatch)
     assert hashed == [2, 2]
@@ -158,12 +165,17 @@ def test_a_window_whose_tables_hash_beside_the_forward_records_each_root_before_
     """With the tables launched and read later (`device_hash`'s `Pending`, here the twin's roots held until asked and never
     ready before), `H1Run` waits for a call's roots when its round closes, so it commits what hashing them in the call
     commits; every launch is read."""
-    launched = []
+    launched: list[object] = []
 
     class Later:
         def __init__(self, tables, key, names=("a", "z")):
             roots = TD.host_roots(tables, key)
-            self.roots, self.ready, self.names = lambda: launched.remove(self) or roots, lambda: False, names
+
+            def read():
+                launched.remove(self)
+                return roots
+
+            self.roots, self.ready, self.names = read, lambda: False, names
             launched.append(self)
 
     monkeypatch.setattr(TD, "device_hash", Later)
