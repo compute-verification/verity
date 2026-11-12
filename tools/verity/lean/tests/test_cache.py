@@ -1174,6 +1174,7 @@ def unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH) -> SimpleNamespac
                            records=records, says=says, apart=apart)
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_built(tmp_path, monkeypatch):
     """A slot tree sees three kinds of build: a records run's (`repair`, stage, the default targets, put), a `--build`
@@ -1189,6 +1190,7 @@ def test_a_repair_leaves_no_object_of_an_earlier_source_for_lake_to_take_as_buil
     unpacked_then_repaired(tmp_path, monkeypatch, LC, LA, LCH)
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(LAKE is None, reason="no lake")
 def test_an_object_an_earlier_repair_kept_goes_for_being_older_than_the_c_restored_beside_it(tmp_path, monkeypatch):
     """A repair that dropped a module's trace and `.hash` files and kept its objects left a tree where a records run
