@@ -2294,35 +2294,6 @@ def test_train_sh_fetches_only_a_commit_no_ref_of_origin_holds(tmp_path):
     assert p.returncode == 1 and "is on no branch of origin" in p.stderr, p.stderr
 
 
-def test_train_sh_runs_every_shard_of_a_commit_in_one_tree(tmp_path):
-    """Each shard of a candidate's check checked its commit out again, and made a venv again, under the clone's lock (minutes
-    each on the control pod): the shards of one commit run in one tree, each with its own log, and only one `worktree add`
-    is made.  A tree of the commit older than every sweep's margin is never taken (a sweep may be removing it): beside it the
-    launch makes its own, as before."""
-    import os
-
-    git, train, _ = _train_repo(tmp_path)
-    calls, cwds = _counting_git(tmp_path), tmp_path / "cwds"
-    uv = tmp_path / "bin" / "uv"
-    uv.write_text(uv.read_text().replace("#!/bin/sh\n", f"#!/bin/sh\npwd >> {cwds}\n", 1))
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "candidate")
-    git("push", "-q", "origin", "HEAD:refs/heads/queue/c1")
-    sha = git("rev-parse", "HEAD")
-    shared = tmp_path / f"train-{sha[:12]}"
-    for k in (1, 2, 3):
-        p = train(sha, "vy-x", "--deferred", "pytest", "--shard", f"{k}/3")
-        assert p.returncode == 0 and f"train-{sha[:12]}-{k}of3.log" in p.stdout, (p.stdout, p.stderr)
-        assert (tmp_path / f"train-{sha[:12]}-{k}of3.log").is_file()
-    assert cwds.read_text().split() == [str(shared)] * 3, cwds.read_text()
-    assert calls.read_text().split().count("worktree") == 3          # one remove, one prune, one add: the first shard's
-    assert "in the tree another launch of it made" in p.stdout and not (tmp_path / f"train-{sha[:12]}-3of3").exists()
-    os.utime(shared, (0, 0))
-    p = train(sha, "vy-x", "--deferred", "pytest", "--shard", "2/3")
-    assert p.returncode == 0 and cwds.read_text().split()[-1] == str(tmp_path / f"train-{sha[:12]}-2of3"), (p.stdout, p.stderr)
-    assert (shared / "a").read_text() == "b\n"
-
-
 def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(tmp_path):
     """A head that merges main into a commit already holding main's change has its first parent's tree, yet differs from main,
     and is not empty: empty means the tree is main's, where it leaves main."""

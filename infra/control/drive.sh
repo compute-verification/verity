@@ -133,8 +133,6 @@ prune_trees() {
     [ -n "$(find "$t" -mmin -60 -print -quit 2>/dev/null)" ] && continue
     rm -rf -- "$t" "$t.log"
   done
-  # a shard's log, beside the one tree its commit's launches share
-  find "$TRAIN_TREES" -mindepth 1 -maxdepth 1 -type f -name 'train-*.log' -mmin +60 -delete 2>/dev/null || true
   git -C "$FAST/queue-verity" worktree prune 2>/dev/null || true
   [ "$(find "$REPO/.git/objects/pack" -name '*.pack' 2>/dev/null | wc -l)" -le 50 ] || git -C "$REPO" repack -a -d -q || true
 }
