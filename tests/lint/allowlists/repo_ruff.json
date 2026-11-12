@@ -134,7 +134,6 @@
     {"file": "benchmarks/pouw/served_zk/served_commit.py", "rule": "F401", "count": 1},
     {"file": "benchmarks/pouw/served_zk/served_commit.py", "rule": "RUF100", "count": 2},
     {"file": "benchmarks/pouw/tests/test_census_cover.py", "rule": "F401", "count": 2},
-    {"file": "benchmarks/pouw/tests/test_eps_budget.py", "rule": "F402", "count": 2},
     {"file": "benchmarks/pouw/tests/test_h1_pin.py", "rule": "RUF100", "count": 1},
     {"file": "benchmarks/pouw/tests/test_harness.py", "rule": "RUF100", "count": 10},
     {"file": "benchmarks/pouw/tests/test_ieee_pin.py", "rule": "RUF100", "count": 2},
