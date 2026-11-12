@@ -46,7 +46,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - **A memory wipe's egress:** `wipe_gate.sh` and `wipe_egress.py` (below).
 - **A cheating server.** `served_cheats.py` runs four cheats of a server (tokens, length, timing, failures) in a dry
   run on stand-in responses of GLM-5.3's tokens, and prints for each what the audit was expected to do and what it
-  did (below).
+  did. `deviations.py` puts a deviating process between the relay and the server's id front, plants a random string,
+  and tries six ways to send it out, each with a network certifier process of its own (both below).
 - `tool.py`: the harness's store declarations.
 
 ## The demo's load
@@ -152,6 +153,37 @@ GLM-5.3's tokens, so it needs no GPU or served model, and no switch reads a kept
 `--switch all` runs the four, the proxy's honest run first. The command exits 0 when every control ran as an honest
 run does and no switch errored: what a cheat's row says is its finding. Its report is read from the run's published
 Attempt, never from this README.
+
+### Behind the relay
+
+`deviations.py` is the cheating server on the relay's path. A deviating process sits between the network certifier
+(`warden_serve.py`'s relay, in its id egress form) and the server's id front. It plants a random string and tries one
+way to send it out, a class a try; a receiver that reads only what the client got scores the bits it has back; and
+the table sets them beside the check that refuses the class, in the refusal's own words, and what the leak bound
+charges. The dry run, against the stand-in id endpoint:
+
+    uv run benchmarks/network_traces/deviations.py try --stand-in --out DIR
+
+and against a served front, whose `HOST:PORT` is the value of an environment variable the command names:
+
+    FRONT=HOST:PORT uv run benchmarks/network_traces/deviations.py try --front-env FRONT --out DIR \
+        [--ids REQUESTS.jsonl] [--cell-bytes B] [-- --window T --delay D ...]
+
+- The six classes (`--class`, by default all, each one try): `honest`, the control; `tokens`, a planted bit in each
+  output id; `length`, a response's last id event dropped to set its count's parity; `bucket`, a response held
+  `--hold-ms`; `fail`, a response withheld; `extra`, bytes out of the id form after the trailer.
+- A try is the deviating process, then `warden_serve.py rehearse --ids` through it: a key, the traffic, the relay,
+  its client and its offline check, on the host's clock. The flags after `--` are the rehearsal's own, the schedule's
+  among them; `--cell-bytes` is the relay's B, which fixes an id event's size.
+- The front's address has no default. Only the deviating process reads it, from its environment, and nothing a try
+  writes holds it: the relay's upstream is the deviating process on the loopback.
+- The relay's check refuses `fail`, `extra` and a `bucket` hold past a cell's deadline, in its audit's words. `tokens`
+  and `length` leave id-form cells, which the relay's check accepts; the I/O tie's content refuses them
+  (`io_tie.cells_match` on each bucket of the egress record). The tie needs the Commit's sampled ids of each request:
+  `--ids`, the server's record by request `user`, or under `--stand-in` the stand-in's own. Without them the tie isn't
+  run and the row says so. Its map is the certified placement, a stand-in for the advice's.
+- The command exits 0 when honest was accepted and each other class was refused by its check, or wasn't shown to the
+  client. `table --out DIR` prints the table of the tries in a directory again.
 
 ## The chain's run of record
 
