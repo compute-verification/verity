@@ -205,3 +205,46 @@ return what the count will be at each shape, if `verify_run.py`'s default says.
 
 Return when the run on cpu-8 has ended and `expect` has its count, by Fri 13 Nov 04:00Z, with
 the new sha256 of each changed file and the one launch line.
+
+## Thu 12 Nov 22:29Z: COMPUTE-ACCOUNTING SAID YES to #9489 (CMP-380, 22:27Z), with one blocker for Tuesday that is now yours: the wide cubin as an art, gated, and the pin moved. After tonight's two things; nothing here changes Friday
+
+Read compute-accounting's comment on CMP-380 whole (the newest of its lead's): it read #9489 at
+`c5840ecef3` file by file, reran your test file (62 passed) and says "yes, no change is needed
+to merge it". **Your note on the one-pass key is closed: "class (c), not a gap", no pull
+request**; its reasons are there. I answered at 22:29Z that the blocker is ours.
+
+**Order: tonight's two things first (the section above; back by Fri 04:00Z). Then Friday's
+run. The piece below is due Mon 16 Nov 18:00Z and may start whenever you have a waiting hour.**
+
+**1. The blocker for Tue 17 Nov: `overhead_arm.json` pins a cubin without the wide kernels**
+(`art:378f025e…`, sha256 `cdf0e443…`, 4 Nov), so the arm refuses gate_up at prepare and the
+slot would be lost. compute-accounting's steps, which are the piece:
+- a cubin built at a head that has `hash_wide.cuh`: **it exists, sha256 `5a6d7461f5f01bb2…`,
+  8,037,440 bytes** (KMOVE's `r20261112-175053-2b44` on cpu-1: `build.sh` for sm_90a, both gates
+  passing, a second build the same bytes; and `r20261112-084338-5963`'s, which Friday's job
+  takes). Say which head `main` builds it from today, and build it once more from `main` if
+  `main` has moved under its sources;
+- **the run's SASS gate on it** (`verity_bench/overhead_records.py:201`, `cubin_why`: read what
+  it asks of a cubin of record and meet each line);
+- **put as an art** (the kind and the label the pinned one carries: `research data show
+  art:378f025e…` is the model), its sha256 and bytes checked after the put;
+- **a pull request that moves the pin** (`cubin.art`, `sha256`, `bytes`; nothing of `window`),
+  with whatever test holds the pin, on #9489's branch or stacked on it, unmarked, `Lane
+  kernels`, `Refs HASH-124`. **Friday's card run is its evidence that the wide kernels hold on
+  a card**: say so in its body with the run's id, and what is still unshown (nothing timed; C's
+  and L's points).
+- Tell me when it is open; I ring compute-accounting, who reads it by Mon 18:00Z.
+
+**2. The docstring** (`overhead_arm.py:14-16`, "as the served call does"): take
+compute-accounting's sentence: the arm makes y's tree serially on the timed stream, where the
+served call overlaps it on its retain stream, and widens by `widen_a` where the served call
+uses torch's copy; the bytes are the same, the launches are not; so the figure with y is an
+upper bound on y's cost against an overlapped served schedule. **One commit on #9489, AFTER
+Friday's run** (the job is pinned to `c5840ecef3`; do not move the head before it), with the
+suite it touches run again.
+
+**3. For Tuesday's plan, from the same comment:** the first minutes of the slot on
+`vy-dc-h200-3` are one untimed shape per linear (the gate, the dump, ACCEPT, the control's
+REJECT) before anything is timed, whatever Friday showed on node A; and the γ of that retime
+is the first figure without `WITHOUT_Y`, not comparable with earlier ones. Put both in your
+plan for the slot.
