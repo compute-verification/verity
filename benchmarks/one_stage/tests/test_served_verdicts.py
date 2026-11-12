@@ -5086,7 +5086,8 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
                                                                                                     killed):
     """served_composite.sh with onsite_pieces.sh's `onsite_cases` and composite.py as they are, a stand-in lake, and a
     stand-in for each product's Lean, which reads nothing and rejects under its own name (`NO_LEAN`); the serve dir,
-    named through a link, holds a case of each of onsite's subprotocols. A piece killed once it wrote its case and its
+    named through a link, holds a case of each of onsite's subprotocols, and SERVED_NODE names another host than this
+    one, where the composite is composed and not refused. A piece killed once it wrote its case and its
     answer and before it published its summary (PoUS's pous.json, the wipe's summary.json): the protocol is
     NOT_WRITTEN and its directory LEFT_OUT; the case composite.py makes for onsite's Lean names every other
     subprotocol and not that one, in its params and in its evidence; OUT/verdicts.txt and onsite's composite.json name
@@ -5127,7 +5128,7 @@ def test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and
     else:
         case(ONSITE_OWN[protocol][3], protocol)
     env = {"PATH": f"{bin_}:{os.defpath}", "HOME": str(tmp_path), "PY": sys.executable, "TPY": sys.executable,
-           "ONSITE_PIECES": str(ONSITE_PIECES)}
+           "ONSITE_PIECES": str(ONSITE_PIECES), "SERVED_NODE": "the-served-node"}
     r = subprocess.run(["bash", str(HERE.parent / "served_composite.sh"), str(d), str(out)], cwd=tree, env=env,
                        check=False, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
