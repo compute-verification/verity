@@ -4,6 +4,7 @@ public import Proofs.Pouw.PearlPlus.Assembly
 public import Proofs.Pouw.PearlPlus.Rules
 public import Proofs.Properties.Pouw.PearlPlus.Verdict
 public import Definitions.Pouw.PearlC.TileDraw
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Pearl+'s bridge, the draw: the run's tickets and acceptance as the game's draw reads them

@@ -41,18 +41,18 @@ def _root_.Pouw.Guarantees.PearlC.TileCheck8WordsCore : Prop :=
         (pearlCTiles (pc8Sem coreOps p noise) c ρ) U H s g cm
 
 /-- **`pc4`'s tile check computes the words at core's instance**: when `tileCheck4` at `coreOps` accepts a witness for
-tile `g` and commitment `cm`, on a workload of D₄ and the audit's tiles, the tile's ticket and useful words have the
-reference values on every credited row. -/
+tile `g` and commitment `cm`, on a workload of D₄ and the audit's tiles, at the FP4 record at any prices
+(`devFp4At pr`), the tile's ticket and useful words have the reference values on every credited row. -/
 def _root_.Pouw.Guarantees.PearlC.TileCheck4WordsCore : Prop :=
-  ∀ {Q R S : Type} (ρ : ℚ)
+  ∀ {Q R S : Type} (pr : Fp4Prices) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
     (U : Workload) (H : Q → R) (s : S) (g : ℕ) (cm : Commit) X,
-    (tileCheck4 coreOps lines).Accepts (pearlCProtocolFp4 devFp4Sm120 (pc4Sem coreOps lines) ρ)
-        (pearlCTilesFp4 devFp4Sm120 (pc4Sem coreOps lines) ρ) H s U g cm X →
-      U.InDomain (pearlCProtocolFp4 devFp4Sm120 (pc4Sem coreOps lines) ρ) (pearlCDomainFp4 (pc4Sem coreOps lines)) →
-      g < ((pearlCTilesFp4 devFp4Sm120 (pc4Sem coreOps lines) ρ).tiling U.layout).NT →
-      TileWordsGood (pearlCProtocolFp4 devFp4Sm120 (pc4Sem coreOps lines) ρ)
-        (pearlCTilesFp4 devFp4Sm120 (pc4Sem coreOps lines) ρ) U H s g cm
+    (tileCheck4 coreOps lines).Accepts (pearlCProtocolFp4 (devFp4At pr) (pc4Sem coreOps lines) ρ)
+        (pearlCTilesFp4 (devFp4At pr) (pc4Sem coreOps lines) ρ) H s U g cm X →
+      U.InDomain (pearlCProtocolFp4 (devFp4At pr) (pc4Sem coreOps lines) ρ) (pearlCDomainFp4 (pc4Sem coreOps lines)) →
+      g < ((pearlCTilesFp4 (devFp4At pr) (pc4Sem coreOps lines) ρ).tiling U.layout).NT →
+      TileWordsGood (pearlCProtocolFp4 (devFp4At pr) (pc4Sem coreOps lines) ρ)
+        (pearlCTilesFp4 (devFp4At pr) (pc4Sem coreOps lines) ρ) U H s g cm
 
 end Pouw.PearlC

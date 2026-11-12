@@ -37,6 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.JointBridge.WorkOfCreditedWords
 import Proofs.Pouw.Period
 import Std.Tactic.BVDecide.Normalize.Prop
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Proof of the joint period's PoUW guarantee from H1's checked credit

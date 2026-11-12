@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.NoiseSha512
-public import Definitions.Pouw.PearlC.DevicePrices
+public import Proofs.Pouw.PearlC.Records
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 
 /-!

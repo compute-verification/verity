@@ -21,6 +21,10 @@ does not; a fraction is written ``p / q`` in ℚ≥0, where the division is exac
     uv run python -m verity.hardware.lean            name each generated module its card file no longer gives; exit 1 if any
     uv run python -m verity.hardware.lean --write    write them
 
+A card file that also names a PoUW record (``lean_prices``) gives that module too: ``Prices.<the table's name>Loop``,
+PoUW's coarse record at the card (``prices``, ``W1Prices.toPrices``' rule with the add at ``price.fp32_loop``), written
+``⟨add, bf16, ⟨fs, qa⟩⟩`` (``render_prices``).
+
 ``modules`` is every generated module by its path, which ``--write`` writes (``write``; ``stale`` names the ones to
 write) and ``tests/test_lean.py`` holds the committed files to, byte for byte. Another kind of record generated from
 the card files is one more ``render`` function and its line in ``modules``; ``header``, ``numeral``, ``binary`` and
@@ -31,6 +35,7 @@ from __future__ import annotations
 
 import argparse
 from fractions import Fraction
+from math import ceil
 from pathlib import Path
 
 from verity.errors import InvalidArtifact
@@ -38,6 +43,8 @@ from verity.hardware.cards import CARDS, WORD, load, number, rate, skus
 
 #: The Lean module that declares ``Verity.Accel.Card``, which a card table imports.
 CARD = "Definitions.Core.Accel.Card"
+#: The Lean module that declares PoUW's ``Prices``, which a card's PoUW record imports.
+DEVICE = "Definitions.Pouw.PearlC.Device"
 #: ``weight``'s arms, in order: the formats that have one where their weight is not 1. A format this doesn't name goes
 #: after these, in the card file's order. An arm's place is part of the term (a match's alternatives are positional).
 FORMATS = ("nvf4", "mxf4", "f16", "bf16", "tf32", "f64", "b1")
@@ -173,9 +180,46 @@ def render(card: dict | str) -> str:
         f"end Verity.Accel.{name}", ""])
 
 
+def prices(card: dict | str) -> tuple[Fraction, Fraction, Fraction, Fraction]:
+    """PoUW's coarse record at a card (or the card of a SKU), in E4M3 MACs: the FP32 add in the timed loop
+    (``price.fp32_loop``), the BF16 MAC, the credited forming per element (the k32 noise atom's 32 MACs and half a
+    two-code cast, a cast an ALU lane's share of the tensor rate, rounded up) and the forming that reads the activations
+    alone (one FFMA on every 8th element at the loop's add, rounded up): ``W1Prices.toPrices``' rule. Rounding up raises
+    ``W_ref`` and not the credit, so the gap is never below its value at the unrounded prices."""
+    card = load(card) if isinstance(card, str) else card
+    weight, r = card["weight"], card["rate"]
+    unit = number(weight["e4m3"])
+    add = number(card["price"]["fp32_loop"]) / unit
+    cast = number(r["tensor"]) / number(r["alu"]) / unit
+    return add, number(weight["bf16"]) / unit, Fraction(ceil(32 + cast / 2)), Fraction(ceil(add / 8))
+
+
+def render_prices(card: dict | str) -> str:
+    """The Lean module of a card's PoUW record (``lean_prices``): ``Prices.<the table's name>Loop``, ``prices``' four
+    numbers as ``⟨add, bf16, ⟨fs, qa⟩⟩``, the term the hand-written record had."""
+    card = load(card) if isinstance(card, str) else card
+    sku = card["sku"]
+    if "lean_prices" not in card:
+        raise KeyError(f"{sku} names no PoUW record: its card file has no `lean_prices`")
+    stem = Path(card["lean"]).stem
+    name = stem[0].lower() + stem[1:]
+    add, bf16, fs, qa = prices(card)
+    term = f"⟨{numeral(add)}, {numeral(bf16)}, ⟨{numeral(fs, nat=f'{sku}: fs')}, {numeral(qa, nat=f'{sku}: qa')}⟩⟩"
+    return "\n".join([
+        "module", "", f"public import {DEVICE}", "", header(sku), "", "@[expose] public section", "",
+        "namespace Pouw.PearlC", "",
+        f"/-- PoUW's coarse record of the card file `{sku}.toml`, in `E4M3` MACs",
+        f"(`verity.hardware.lean.prices`): an `FP32` add in the timed loop `{numeral(add)}`, a `BF16` MAC `{numeral(bf16)}`,",
+        f"the credited forming `{numeral(fs)}` and the forming that reads the activations alone `{numeral(qa)}` per element.",
+        "-/",
+        f"def Prices.{name}Loop : Prices := {term}", "",
+        "end Pouw.PearlC", ""])
+
+
 def modules() -> dict[str, str]:
     """Every generated Lean module: its path from the repository's root, and its text."""
-    return {load(sku)["lean"]: render(sku) for sku in tabled()}
+    return {load(sku)["lean"]: render(sku) for sku in tabled()} | {
+        load(sku)["lean_prices"]: render_prices(sku) for sku in tabled() if "lean_prices" in load(sku)}
 
 
 def stale(top: Path | None = None) -> list[str]:

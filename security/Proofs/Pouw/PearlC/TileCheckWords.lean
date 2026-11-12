@@ -5,6 +5,7 @@ public import Proofs.Pouw.PearlC.PeelExists4
 public import Proofs.Pouw.PearlC.TileCheck4Words
 public import Proofs.Pouw.PearlC.CoreOps
 public import Definitions.Pouw.Guarantees.PearlCTileCheck
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # The plain `pc8` and `pc4` tile checks compute the words (proofs)
@@ -176,12 +177,12 @@ theorem tileCheck8_computesWords_k32 {ops : RowOps} (hops : Pc8OpsAgree ops) {w 
 
 /-! ## `pc4`'s tile check computes the words -/
 
-/-- **L3's words for the plain `pc4` Program** (`tileCheck4`) at the record `devFp4Sm120` and `pc4Sem`: on tile rules
+/-- **L3's words for the plain `pc4` Program** (`tileCheck4`) at the record `devFp4At pr` (any prices) and `pc4Sem`: on tile rules
 whose tiles lie in their unit, whose credited rows pass `pc4Sem`'s rules (`hrow`) and whose domain has whole-tile
 shapes (`Shape4`) with `k ≤ 2^16` (`hk16`), an accepted tile's ticket and useful words have the reference values on
 every credited row, under `Pc4OpsAgree`. The peel's rows exist at each entry of a credited row, since both rows are
 `Row4OK` (`PeelExists.pc4EntryOK_of_rows`). `Collides` is `False` and never needed. -/
-theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
+theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (pr : Fp4Prices) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
     (TR : TileRules Q R S) (D : Layout → Prop)
@@ -190,7 +191,7 @@ theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : �
     (hrows : ∀ L g, ∀ i ∈ (TR.tiling L).rows g, i < (L.shape ((TR.tiling L).unit g)).m)
     (hcols : ∀ L g, ∀ j ∈ (TR.tiling L).cols g, j < (L.shape ((TR.tiling L).unit g)).n)
     (hrow : ∀ (sh : Shape) (act : Codes) (i : ℕ), TR.rowOK sh act i → (pc4Sem ops lines).RowOK sh.m sh.k act i) :
-    (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ) TR D := by
+    (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 (devFp4At pr) (pc4Sem ops lines) ρ) TR D := by
   intro U hU H s g hg c X ⟨hcone, hpub, _, hreg, hwt⟩
   left
   intro i hi hok j hj
@@ -221,14 +222,14 @@ theorem tileCheck4_computesWords {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : �
 /-- **L3's words for the plain `pc4` Program on the audit's tiles** (`pearlCTilesFp4`, the `64 × 64` grid): on a
 domain whose every unit has a whole-tile shape with `k ≤ 2^16`, `tileCheck4_computesWords` with the grid's tiles in
 their units. -/
-theorem tileCheck4_computesWords_pearlC {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
+theorem tileCheck4_computesWords_pearlC {ops : RowOps} (hops : Pc4OpsAgree ops) (pr : Fp4Prices) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k)
     (D : Layout → Prop) (hsh : ∀ L, D L → ∀ u < L.N, Shape4 (L.shape u))
     (hk16 : ∀ L, D L → ∀ u < L.N, (L.shape u).k ≤ 2 ^ 16) :
-    (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ)
-      (pearlCTilesFp4 devFp4Sm120 (pc4Sem ops lines) ρ) D :=
-  tileCheck4_computesWords hops ρ lines _ D
+    (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 (devFp4At pr) (pc4Sem ops lines) ρ)
+      (pearlCTilesFp4 (devFp4At pr) (pc4Sem ops lines) ρ) D :=
+  tileCheck4_computesWords hops pr ρ lines _ D
     (fun L hL _ hg => hsh L hL _ (auditTiling_unit_lt 64 64 L hg))
     (fun L hL _ hg => hk16 L hL _ (auditTiling_unit_lt 64 64 L hg))
     (auditTiling_rows_lt 64 64) (auditTiling_cols_lt 64 64) (fun _ _ _ h => h)
@@ -236,12 +237,12 @@ theorem tileCheck4_computesWords_pearlC {ops : RowOps} (hops : Pc4OpsAgree ops) 
 /-- **L3's words for the plain `pc4` Program on D₄** (`pearlCDomainFp4`) and the audit's tiles:
 `tileCheck4_computesWords_pearlC` with `Shape4` and `k ≤ 2^16` from D₄'s shapes, so it names no hypothesis beyond
 `Pc4OpsAgree`. -/
-theorem tileCheck4_computesWords_domain {ops : RowOps} (hops : Pc4OpsAgree ops) (ρ : ℚ)
+theorem tileCheck4_computesWords_domain {ops : RowOps} (hops : Pc4OpsAgree ops) (pr : Fp4Prices) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k) :
-    (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem ops lines) ρ)
-      (pearlCTilesFp4 devFp4Sm120 (pc4Sem ops lines) ρ) (pearlCDomainFp4 (pc4Sem ops lines)) :=
-  tileCheck4_computesWords_pearlC hops ρ lines _ (fun _ hL u hu => shape4_of_pearlCShapeFp4 (hL.2 u hu))
+    (tileCheck4 ops lines).ComputesWords (pearlCProtocolFp4 (devFp4At pr) (pc4Sem ops lines) ρ)
+      (pearlCTilesFp4 (devFp4At pr) (pc4Sem ops lines) ρ) (pearlCDomainFp4 (pc4Sem ops lines)) :=
+  tileCheck4_computesWords_pearlC hops pr ρ lines _ (fun _ hL u hu => shape4_of_pearlCShapeFp4 (hL.2 u hu))
     fun _ hL u hu => (hL.2 u hu).2.2.2.2.2.2.2.1
 
 /-! ## At core's instance -/
@@ -273,12 +274,12 @@ theorem tileCheck8_computesWords_h100 (c : Costs) (ρ : ℚ)
 /-- **L3's words for the plain `pc4` Program at core's instance** (`coreOps`) on D₄ and the audit's tiles:
 `tileCheck4_computesWords_domain` with `Pc4OpsAgree` from core's definitions (`CoreOps.pc4OpsAgree_coreOps`), so it
 names no hypothesis. -/
-theorem tileCheck4_computesWords_core (ρ : ℚ)
+theorem tileCheck4_computesWords_core (pr : Fp4Prices) (ρ : ℚ)
     (lines : (Q → R) → S → (U : Workload) → (u : ℕ) → Codes →
       Lines4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k) :
-    (tileCheck4 coreOps lines).ComputesWords (pearlCProtocolFp4 devFp4Sm120 (pc4Sem coreOps lines) ρ)
-      (pearlCTilesFp4 devFp4Sm120 (pc4Sem coreOps lines) ρ) (pearlCDomainFp4 (pc4Sem coreOps lines)) :=
-  tileCheck4_computesWords_domain CoreOps.pc4OpsAgree_coreOps ρ lines
+    (tileCheck4 coreOps lines).ComputesWords (pearlCProtocolFp4 (devFp4At pr) (pc4Sem coreOps lines) ρ)
+      (pearlCTilesFp4 (devFp4At pr) (pc4Sem coreOps lines) ρ) (pearlCDomainFp4 (pc4Sem coreOps lines)) :=
+  tileCheck4_computesWords_domain CoreOps.pc4OpsAgree_coreOps pr ρ lines
 
 end Pouw.PearlC.WholeCircuit
 
@@ -289,5 +290,5 @@ theorem Pouw.SecurityProofs.PearlC.TileCheck8WordsCore : Pouw.Guarantees.PearlC.
   exact (Pouw.PearlC.WholeCircuit.tileCheck8_computesWords_core zf pr c ρ noise U hU H s g hg cm X hacc).resolve_right id
 
 theorem Pouw.SecurityProofs.PearlC.TileCheck4WordsCore : Pouw.Guarantees.PearlC.TileCheck4WordsCore := by
-  intro Q R S ρ lines U H s g cm X hacc hU hg
-  exact (Pouw.PearlC.WholeCircuit.tileCheck4_computesWords_core ρ lines U hU H s g hg cm X hacc).resolve_right id
+  intro Q R S pr ρ lines U H s g cm X hacc hU hg
+  exact (Pouw.PearlC.WholeCircuit.tileCheck4_computesWords_core pr ρ lines U hU H s g hg cm X hacc).resolve_right id

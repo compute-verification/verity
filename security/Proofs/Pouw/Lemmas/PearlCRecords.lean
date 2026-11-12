@@ -20,7 +20,7 @@ public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.PearlC.DeviceChainOnly
 public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
-public import Definitions.Pouw.PearlC.DevicePrices
+public import Proofs.Pouw.PearlC.Records
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1

@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.DeviceFp4Issue
-public import Definitions.Pouw.PearlC.DevicePrices
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.PearlC.Sha512
 
@@ -73,6 +72,9 @@ records, one NVFP4 MAC for the FP4 record):
   (the H100 whitepaper's Table 1 and the H200 data sheet: INT8 TOPS equal to FP8 TFLOPS); only `W1Device.s8H100` has
   its fragments, and it is the H200's setting too.
 - `W1Prices.fp4Sm120`: `sm120Loop` in FP4 units (an FP8 unit is 2), the record `devFp4Sm120` uses.
+
+The served setting `W1Device.sm120Loop` and its prices are here; the other settings, their prices and fragment lists
+(`W1Device.sm120`, `.h100`, `.fp4Sm120`, `.s8Sm120`, `.s8H100`) are `Proofs.Pouw.PearlC.Records`'.
 
 `sha512` (a compression) and `fetch` (a first-fetched word) are unmeasured on both devices, so the records take them as
 parameters. The game's preprocessing is a `QTree` over `H`, which computes anything, SHA-512 included, for free before
@@ -179,30 +181,9 @@ def W1Prices.sm120 (sha fetch : ℚ) : W1Prices where
 /-- sm_120's W1 prices with FP32 at the measured loop's `1047/125 = 8.376`. -/
 def W1Prices.sm120Loop (sha fetch : ℚ) : W1Prices := { W1Prices.sm120 sha fetch with fp32 := 1047 / 125 }
 
-/-- **The H100's W1 prices** (`Dimension.H100.h100Nominal`, the datasheet): E4M3 1, BF16 2 and S8 1 per MAC (the H100
-has no E2M1 fragment, so that price is never read); FP32 32; a cast 64 per instruction (32 per code); INT32 64.
-
-S8's 1 (`nominalMac .s8`) is the data sheets' ratio, the same on the H100 and the H200 (one GH100; they differ in memory
-and its bandwidth, which W1 does not price). NVIDIA's H100 Tensor Core GPU Architecture whitepaper V1.04, Table 1, H100
-SXM5: "Peak INT8 Tensor Core" 1978.9 TOPS dense, equal to "Peak FP8 Tensor Core" 1978.9 TFLOPS (BF16 989.4). NVIDIA's
-H200 Tensor Core GPU data sheet (2024), H200 SXM: "INT8 Tensor Core" and "FP8 Tensor Core" 3,958 each, with sparsity
-(BF16 1,979). -/
-def W1Prices.h100 (sha fetch : ℚ) : W1Prices where
-  mac := fun | .e4m3 => 1 | .bf16 => 2 | .e2m1 => 1 / 2 | .s8 => 1
-  fp32 := 32
-  cvt := 64
-  int32 := 64
-  sha512 := sha
-  fetch := fetch
-
 /-- Every price times `c` (a change of unit). -/
 def W1Prices.scale (c : ℚ) (pr : W1Prices) : W1Prices :=
   ⟨fun f => c * pr.mac f, c * pr.fp32, c * pr.cvt, c * pr.int32, c * pr.sha512, c * pr.fetch⟩
-
-/-- **sm_120's W1 prices in FP4 units** (an FP8 unit is 2, `Fp4Prices.sm120`): `sm120Loop` doubled, with `sha` and
-`fetch` given in FP4 units. -/
-def W1Prices.fp4Sm120 (sha fetch : ℚ) : W1Prices :=
-  { (W1Prices.sm120Loop 0 0).scale 2 with sha512 := sha, fetch := fetch }
 
 /-- **The coarse record** `creditDev` and `wrefDev` read: the FP32 add, the BF16 MAC, and the forming per element,
 `fs = ⌈32·mac(E4M3) + cvt/2⌉` (the noise atom's 32 MACs and half a cast) and `qa = ⌈fp32/8⌉` (ρ's FFMA on every 8th). -/
@@ -238,54 +219,12 @@ def W1Device.depth (dv : W1Device) : Fmt → ℕ
 (OMMA.SF.16864, UE4M3 per 16). -/
 def sm120Frags : List Frag := [⟨.e4m3, 16, 8⟩, ⟨.bf16, 16, 8⟩, ⟨.e2m1, 16, 8⟩]
 
-/-- sm_120's fragments with INT8: `sm120Frags` and S8 m16n8k32 with `.satfinite` (IMMA.16832.S8.S8.SAT). -/
-def sm120S8Frags : List Frag := sm120Frags ++ [⟨.s8, 16, 8⟩]
-
-/-- The H100's `wgmma` fragments at its nominal per-MAC prices: E4M3 m64nNk32 and BF16 m64nNk16 for `N = 64, 72, …, 256`. -/
-def h100Frags : List Frag := (List.range 25).flatMap fun i => [⟨.e4m3, 64, 64 + 8 * i⟩, ⟨.bf16, 64, 64 + 8 * i⟩]
-
 /-- The RTX PRO 6000 (sm_120) at prices `pr`: `sm120E4m3`, the BF16 stand-in `hopperBf16K16`, and `sm120Nvf4`. -/
 def W1Device.sm120At (pr : W1Prices) : W1Device := ⟨pr, sm120E4m3, hopperBf16K16, sm120Nvf4, sm120Frags⟩
-
-/-- The H100 at prices `pr`: `hopperE4m3K32` and `hopperBf16K16`; no E2M1 fragment. -/
-def W1Device.h100At (pr : W1Prices) : W1Device := ⟨pr, hopperE4m3K32, hopperBf16K16, sm120Nvf4, h100Frags⟩
-
-/-- `devH100`'s setting (`Prices.h100`). It omits the card's integer tensor core (`W1Device.s8H100` has it), pending
-the restatement of its readers on an S8 setting. -/
-def W1Device.h100 (sha fetch : ℚ) : W1Device := W1Device.h100At (W1Prices.h100 sha fetch)
-
-/-- `devSm120v1 Prices.sm120` and `devSm120v2 Prices.sm120`'s setting: both run the same E4M3 step (`G` is the
-program's choice, not the machine's). It omits the card's integer tensor core (`W1Device.s8Sm120` has it), pending
-the restatement of its readers on an S8 setting. -/
-def W1Device.sm120 (sha fetch : ℚ) : W1Device := W1Device.sm120At (W1Prices.sm120 sha fetch)
 
 /-- `devSm120v1 Prices.sm120Loop` and `devSm120v2 Prices.sm120Loop`'s setting. It omits the card's integer tensor
 core (`W1Device.s8Sm120` has it), pending the restatement of its readers on an S8 setting. -/
 def W1Device.sm120Loop (sha fetch : ℚ) : W1Device := W1Device.sm120At (W1Prices.sm120Loop sha fetch)
-
-/-- `devFp4Sm120`'s setting, in FP4 units. It omits the card's integer tensor core (`W1Device.s8Sm120` has it),
-pending the restatement of its readers on an S8 setting. -/
-def W1Device.fp4Sm120 (sha fetch : ℚ) : W1Device := W1Device.sm120At (W1Prices.fp4Sm120 sha fetch)
-
-/-- **The RTX PRO 6000 (sm_120) with INT8** at prices `pr`: `sm120At pr`'s steps, and `sm120S8Frags`, its three
-fragments and S8's. -/
-def W1Device.s8Sm120At (pr : W1Prices) : W1Device := ⟨pr, sm120E4m3, hopperBf16K16, sm120Nvf4, sm120S8Frags⟩
-
-/-- The INT8 setting, at `W1Prices.sm120`: S8 and E4M3 1, BF16 2 and NVFP4 0.5 per MAC, in E4M3 units. -/
-def W1Device.s8Sm120 (sha fetch : ℚ) : W1Device := W1Device.s8Sm120At (W1Prices.sm120 sha fetch)
-
-/-- The H100's fragments with INT8: `h100Frags` and S8 m64nNk32 with `.satfinite` (`IGMMA.64xNx32.S8.S8.SAT`) for
-`N = 64, 80, …, 256`, PTX's dense integer `wgmma` shapes at `N ≥ 64`, as `h100Frags`. Each output is
-`GEMM_SM90_S8`'s dot (`verity.ml.circuits.ops.gemm`, `BlackwellS8ImmaDot32`): k32, clamped once. Only N = 8 is pinned:
-`verity.ml.circuits.silicon.instructions` pins `sm90.wgmma.m64n8k32.s8` on an H200. The
-wider N here follow PTX's `wgmma` semantics, the same dot at each output, and no run has measured them. -/
-def h100S8Frags : List Frag := h100Frags ++ (List.range 13).map fun i => ⟨.s8, 64, 64 + 16 * i⟩
-
-/-- **The H100 or the H200 (sm_90) with INT8** at prices `pr`: `h100At pr`'s steps, and `h100S8Frags`. -/
-def W1Device.s8H100At (pr : W1Prices) : W1Device := ⟨pr, hopperE4m3K32, hopperBf16K16, sm120Nvf4, h100S8Frags⟩
-
-/-- The Hopper INT8 setting, at `W1Prices.h100`: S8 and E4M3 1, BF16 2 per MAC. -/
-def W1Device.s8H100 (sha fetch : ℚ) : W1Device := W1Device.s8H100At (W1Prices.h100 sha fetch)
 
 /-! ## Memory -/
 

@@ -12,7 +12,7 @@ one's body at that cost model (same protocol, domain, `g₀ = 1/400` and `δPear
 (W1.w1Priced dv salt) …` (`Proofs.Pouw.PearlC.TTOutFp4W1`). What W1 charges, why `w1Priced`, and the honest program's
 `AdmitsRef` are `TTOutW1`'s.
 
-**The device.** `devFp4Sm120` is set on `W1Device.fp4Sm120 sha fetch`: sm_120 at the loop's prices (`sm120Loop`) in FP4
+**The device.** At sm_120 (`Proofs.Pouw.PearlC.Records`), `devFp4Sm120` is set on `W1Device.fp4Sm120 sha fetch`: sm_120 at the loop's prices (`sm120Loop`) in FP4
 units, an FP8 unit worth 2, with `sha` and `fetch` given in FP4 units. Its table gives the record's prices:
 `W1Prices.toFp4Prices` at the `lut256` scale path is `Fp4Prices.sm120` (`W1Checks.toFp4Prices_fp4Sm120`), as
 `W1Checks.toPrices_*` pairs the FP8 records. `sha` and `fetch` are unmeasured parameters, and the assumption only gets
@@ -47,15 +47,5 @@ def TTOutFp4W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1De
 def TTOutTileFp4W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : Fp4Device) (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
   TTOutTileW1 dv salt (pearlCProtocolFp4 d sem ρ) (pearlCTilesFp4 d sem ρ) (pearlCDomainFp4 sem) (1 / 400) δPearlC
-
-/-- **`tt-out/fp4-sm120` at W1**: TT_OUT(1/400) for Pearl-C4 at `devFp4Sm120` on `W1Device.fp4Sm120 sha fetch`. -/
-def TTOutFp4Sm120W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
-    (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOutFp4W1 (W1.W1Device.fp4Sm120 sha fetch) salt devFp4Sm120 sem ρ
-
-/-- **`tt-out/fp4-sm120` per audit tile at W1**: `TTOutTileFp4W1` at `devFp4Sm120` on `W1Device.fp4Sm120 sha fetch`. -/
-def TTOutTileFp4Sm120W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
-    (sem : Fp4Sem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTileFp4W1 (W1.W1Device.fp4Sm120 sha fetch) salt devFp4Sm120 sem ρ
 
 end Pouw.PearlC.Assumptions

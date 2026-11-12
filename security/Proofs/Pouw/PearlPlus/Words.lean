@@ -9,6 +9,7 @@ public import Proofs.Pouw.PearlPlus.Numerics
 public import Proofs.Pouw.PearlPlus.Atom
 public import Proofs.Pouw.PearlC.TileValues
 public import Proofs.Pouw.PearlC.TileCheckWords
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # Pearl+'s bridge, part (b): a tile's words under -h3's noise are the semantics'

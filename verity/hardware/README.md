@@ -90,6 +90,11 @@ gives it): the Lean check's record of a definition digests the term, so a number
 is a changed record though no number changed. A division in a field of ℕ is exact, and `render` refuses a card file
 whose entry would make Lean's ℕ division truncate.
 
+A card file that also names PoUW's record (`lean_prices`, the RTX PRO 6000's
+`security/Definitions/Pouw/PearlC/DevicePricesLoop.lean`) gives that module as well: `render_prices(card)`, the served
+record `Prices.sm120Loop` at the card's numbers (`prices(card)`: the add at `price.fp32_loop`, the BF16 MAC and the two
+formings by `W1Prices.toPrices`' rule), in the term the hand-written record had.
+
 **Changing a number:** change the card file, then write its table:
 
 ~~~sh

@@ -63,7 +63,6 @@ public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
 public import Definitions.Pouw.PearlC.DeviceFp4Hot
 public import Definitions.Pouw.PearlC.DeviceFp4Issue
 public import Definitions.Pouw.PearlC.DeviceKernelWref
-public import Definitions.Pouw.PearlC.DevicePrices
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.PearlC.DeviceRev1
 public import Definitions.Pouw.PearlC.EncVectors
@@ -171,8 +170,8 @@ modules keep their basenames in `Definitions.Pouw`, `Definitions.Pouw.Assumption
   `Tile`) on their primitives' word views.
 * `KeyedLeaf`: the lead's keyed commitments, each instance's keyed digest (`Definitions.Hash.Keyed`), and the two games
   its hiding reads. Their statements are `Definitions.Pouw.Guarantees.KeyedLeaf`.
-* `PearlC`: Pearl-C's Π (`Defs`), its game (`Game`) and its named protocol and error (`Instance`). The device records
-  and their prices are `Device` and `DevicePrices`, the hidden audit `Hidden` and `HiddenTileGame`, and the sampled
+* `PearlC`: Pearl-C's Π (`Defs`), its game (`Game`) and its named protocol and error (`Instance`). The device record
+  is `Device`, the served record's prices `DevicePricesLoop` (generated from the card file), the hidden audit `Hidden` and `HiddenTileGame`, and the sampled
   audit `Tile`, `TileDraw` and `Completeness`. The units as core circuits are `RowCircuit`, `TileCircuit` and
   `WholeCircuit`, and Pearl-C4's FP4 step and chain `Fp4` and `Fp4Chain`.
 * `Receipt`: the receipt folds `Duo`, `Fx1` (sm_120's) and `Li`, after

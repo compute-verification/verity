@@ -8,6 +8,7 @@ import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.KernelWrefGap
 import Proofs.Pouw.PearlC.TileGap
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # v2 at the chain cap 1/1,000 against the honest kernel's `W_ref`: the exact in-loop values (staged)

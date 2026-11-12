@@ -14,6 +14,7 @@ public import Proofs.Pouw.PearlC.DeviceSm120Gap
 public import Proofs.Pouw.PearlC.CapLoopGap
 public import Proofs.Pouw.PearlC.ChainCapLoopGap
 public import Proofs.Pouw.PearlC.UOnlyLoopGap
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # g at the RTX PRO 6000 (sm_120) records at the in-loop prices (staged)

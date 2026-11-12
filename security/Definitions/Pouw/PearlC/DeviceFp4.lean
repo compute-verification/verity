@@ -86,7 +86,8 @@ same fields and no promotion (`G = 0`):
   `sem`'s lines, so it is empty at a `sem` whose `B̃` is not keyed by A's salt.
 
 `Fp4Sem` holds what is not pinned yet, as `PearlCSem` does for FP8: the noise lines from the oracle and the rows'
-scales `α` and `β`. `devFp4Sm120` is the record at `Fp4.sm120Nvf4` with the §3/§4 prices (`Fp4Prices.sm120`).
+scales `α` and `β`. `devFp4At pr` is the record at `Fp4.sm120Nvf4` and prices `pr`; at the §3/§4 prices it is `devFp4Sm120`
+(`Proofs.Pouw.PearlC.Records`).
 -/
 
 @[expose] public section
@@ -318,7 +319,7 @@ def rowWin24 (r : Option Row4) (w : ℕ) : Bool :=
 
 /-! ## The base-split fix: F1′ and F2 (theory §6.2–6.5, with its FP4 conditions)
 
-F1′ reads NVFP4's forming (`formRow`, `nvf4NoiseElem`), the forming `devFp4Sm120` runs, since its sampling design needs each code
+F1′ reads NVFP4's forming (`formRow`, `nvf4NoiseElem`), the forming `devFp4At` runs, since its sampling design needs each code
 at a fixed scale byte. -/
 
 /-- F1′'s patch price per changed element and MAC, `c = 16.92/128`: one FFMA per word (16.92 FP4 units) over a window's
@@ -638,21 +639,6 @@ structure Fp4Prices where
   fs : ℚ
   qa : ℚ
 
-/-- **sm_120's prices in FP4 units** (theory §2–§4, node 2 at locked 2,100 MHz), with an FP8 unit worth 2 FP4 units,
-the block scale on `lut256` (§6.6) and FADD at the measured `1047/125`
-= 8.376, as `Prices.sm120Loop`. It is `Fp4Prices.sm120At (1047/125) Fp4ScalePath.lut256`:
-- a BF16 MAC is 4 (2.000 FP8 units);
-- `fs = 105299/1000 = 105.299`: the noise atom 64 (a dense k64 NVFP4 `mma.sync`, 64 lanes, at full shape); the block
-  scale on `lut256` at its W1 issue prices, `7.5 + FADD/8 = 8.547` (half an `F2FP`, 1.25 `PRMT` and one `LDS` per block
-  of 16, and the FMUL `amax·1/6`); and the cast, FMUL plus the E2M1 cvt's F2FP alone, at `2·8.376 + 2·8.0 = 32.752`;
-- `qa = 9423/500 = 18.846`: the noisy amax (one FMNMX, `2·8.376`) and ρ's squared accumulate on every 8th element
-  (`2·8.376/8`), both reading the row alone.
-
-The price rule publishes the larger g, and g rises with the FADD price, so the record is at the in-loop 8.376, not the
-issue-bound 8.00 (`fs = 104.5`, `qa = 18`). `creditFp4` and `wrefFp4` read this one `fs`. It was `2444/25 = 97.76`, with
-the block scale at 1 and FADD at 8.38. -/
-def Fp4Prices.sm120 : Fp4Prices := ⟨4, 105299 / 1000, 9423 / 500⟩
-
 /-- **An FP4 device record**: `PearlCDevice`'s fields on block-scaled FP4 operands, without promotion (`G = 0`, no FP32
 add between firings). It holds the prices, the forming of one row from its values, its scales and its noise lines, the
 ticket and U maps on formed operands, the flags (debit (2)), the sub-grid flags (debit (5)), and P3's salt-dead
@@ -667,11 +653,12 @@ structure Fp4Device where
   subgrid : ∀ {m n : ℕ}, Op4 m → Op4 n → Fin m → Fin n → ℕ → Bool
   saltDead : ((k : ℕ) → (Fin k → ℚ) → ℚ) → ((k : ℕ) → (Fin k → ℚ) → ℚ) → (k : ℕ) → (Fin k → ℚ) → Fin k → Prop
 
-/-- **`devFp4Sm120`**, Pearl-C4 on sm_120 (`BLACKWELL_SM120_NVF4`, `Fp4.sm120Nvf4`: 4 groups of 16, UE4M3 per 16, 27
+/-- **Pearl-C4 on sm_120 at prices `pr`** (`BLACKWELL_SM120_NVF4`, `Fp4.sm120Nvf4`: 4 groups of 16, UE4M3 per 16, 27
 fraction bits, a 36-bit window, round toward zero, floor −174): NVFP4's forming, `C̃ = cTilde`, U by `peelFp4`,
-`Fp4Skip`'s lone-skip flags, the sub-grid flags and `saltDead4`, at `Fp4Prices.sm120`. -/
-def devFp4Sm120 : Fp4Device where
-  prices := Fp4Prices.sm120
+`Fp4Skip`'s lone-skip flags, the sub-grid flags and `saltDead4`. The record at a card's numbers is this at that card's
+prices. -/
+def devFp4At (pr : Fp4Prices) : Fp4Device where
+  prices := pr
   form := fun α β x e F => formRow α β x e F
   ticket := fun A B => ticket4 sm120Nvf4 A B
   useful := fun A B FA FB beA beB i j => (peelFp4 sm120Nvf4 A B FA FB beA beB i j).bind wordQ

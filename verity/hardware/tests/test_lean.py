@@ -29,6 +29,7 @@ ROOT = Path(__file__).resolve().parents[3]
 ISA = ROOT / "security/Definitions/Core/Accel/Isa.lean"
 SHEET = ROOT / "security/Definitions/Accounting/Sheets/B200.lean"
 LEAN = lean.tabled()
+PRICED = [sku for sku in LEAN if "lean_prices" in load(sku)]
 OPS = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.Div: operator.truediv}
 
 
@@ -196,7 +197,7 @@ def test_a_generated_table_is_the_generators_output(path: str) -> None:
 def test_a_generated_table_declares_the_names_its_importers_read() -> None:
     """Each card's table is the module its card file names, a module of the definitions tree, and declares its
     namespace, its clocks and ``card``: a renamed or dropped one fails here before a Lean build does."""
-    assert sorted(GENERATED) == sorted(load(sku)["lean"] for sku in LEAN)
+    assert sorted(GENERATED) == sorted([load(sku)["lean"] for sku in LEAN] + [load(sku)["lean_prices"] for sku in PRICED])
     assert all(path.startswith("security/Definitions/") for path in GENERATED)
     found = {sku: re.findall(r"^(?:namespace|def|abbrev|theorem|lemma|instance|structure) (\S+)", lean.render(sku), re.M)
              for sku in LEAN}
@@ -206,12 +207,11 @@ def test_a_generated_table_declares_the_names_its_importers_read() -> None:
 def test_a_generated_table_states_its_source_and_no_number_in_prose() -> None:
     """A generated module opens by naming the command that wrote it and its card file, and says not to edit it. Its
     comments name the card file's keys and restate none of its numbers."""
-    for sku in LEAN:
-        text = lean.render(sku)
+    for sku, text in [(sku, lean.render(sku)) for sku in LEAN] + [(sku, lean.render_prices(sku)) for sku in PRICED]:
         opening = text.split("@[expose] public section")[0]
         assert lean.COMMAND in opening and f"verity/hardware/cards/{sku}.toml" in opening and "do not edit" in opening
         comments = re.findall(r"/-[-!].*?-/", text, re.S)
-        assert len(comments) >= 3
+        assert len(comments) >= 2
         assert not re.search(r"\d", re.sub(r"`[^`]*`", "", "\n".join(comments))), f"{sku}: a comment states a number"
 
 
@@ -284,3 +284,18 @@ def test_the_command_writes_the_generated_tables(tmp_path: Path, capsys: pytest.
     edited = next(iter(GENERATED))
     (tmp_path / edited).write_text(GENERATED[edited].replace("* clock", "* clock * 2", 1), encoding="utf-8")
     assert lean.stale(tmp_path) == [edited]
+
+
+def test_a_pouw_record_is_the_coarse_rule_at_its_card_file() -> None:
+    """The RTX PRO 6000's PoUW record is ``W1Prices.toPrices``' rule at its card file, written as the hand-written record
+    was, and the rule follows the card: at the issue-bound add, 8, it gives the issue-bound record ``Prices.sm120``
+    (``⟨8, 2, ⟨40, 1⟩⟩``), whose A-only forming rounds down to 1 where the loop's rounds up to 2."""
+    assert PRICED == ["rtx-pro-6000-server"]
+    assert lean.prices("rtx-pro-6000-server") == (Fraction(1047, 125), 2, 40, 2)
+    assert "\ndef Prices.sm120Loop : Prices := ⟨1047 / 125, 2, ⟨40, 2⟩⟩\n" in lean.render_prices("rtx-pro-6000-server")
+    card = copy.deepcopy(load("rtx-pro-6000-server"))
+    card["price"]["fp32_loop"]["value"] = 8
+    assert "\ndef Prices.sm120Loop : Prices := ⟨8, 2, ⟨40, 1⟩⟩\n" in lean.render_prices(card)
+    del card["lean_prices"]
+    with pytest.raises(KeyError, match="lean_prices"):
+        lean.render_prices(card)

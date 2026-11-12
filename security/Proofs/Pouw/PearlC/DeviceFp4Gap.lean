@@ -4,6 +4,7 @@ public import Proofs.Pouw.PearlC.TileGap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
+public import Proofs.Pouw.PearlC.Records
 
 /-!
 # g at an FP4 record, and Pearl-C4's headline on sm_120 (staged, nothing pinned)

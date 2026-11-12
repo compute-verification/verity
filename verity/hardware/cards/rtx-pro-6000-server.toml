@@ -12,6 +12,7 @@ arch = "sm_120a"
 board = "900-2G153-0000-000"
 vbios = "98.02.8D.00.01"
 lean = "security/Definitions/Core/Accel/Sm120.lean"
+lean_prices = "security/Definitions/Pouw/PearlC/DevicePricesLoop.lean"
 nodes = "an RTX PRO 6000 node: eight cards, all this SKU and vBIOS (art:0620926423e6; the SKU first read in art:f8da67c39f76)"
 
 # count: the SMs. warps: the most warps resident on an SM at once.
