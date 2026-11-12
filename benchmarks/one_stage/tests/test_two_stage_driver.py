@@ -115,7 +115,8 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
     three of a sampled span's eight PAIR instances and one of its four SWAP instances, the rule carried through
     ``stage1.json`` to the replay side's stream. A file is read alone or as a counts record's ``k``; one that names a
     template twice, gives a count that is no whole number of at least one, misses one of the check's templates or names
-    another is refused by name, and the command refuses it before it opens a challenger session."""
+    another is refused by name, and the command refuses it, and a class that is not the check's, before it opens a
+    challenger session."""
     c, (pair, swap) = _class(BOTH, inline=True), (P.template_id(t) for t in (PAIR, SWAP))
     ks = {pair: 3, swap: 1}
 
@@ -156,10 +157,12 @@ def test_a_class_of_two_check_templates_samples_each_at_its_own_count(tmp_path, 
 
     (tmp_path / "p4-o4").mkdir()
     (tmp_path / "p4-o4" / BR.COMMIT).write_text(json.dumps(c.public()))
-    monkeypatch.setattr(TS, "template_fn", lambda t: BOTH)
     monkeypatch.setattr(TS, "_first_all", lambda *a, **k: pytest.fail("a refused counts file reached the first stage"))
-    for text, why in ((json.dumps({pair: 3}), f"class p4-o4: the counts name each of the check's templates once: missing {swap}"),
-                      ('{"%s": 3, "%s": 1, "%s": 2}' % (pair, swap, swap), f"names {swap} twice")):
+    for check, text, why in (
+            (BOTH, json.dumps({pair: 3}), f"class p4-o4: the counts name each of the check's templates once: missing {swap}"),
+            (BOTH, '{"%s": 3, "%s": 1, "%s": 2}' % (pair, swap, swap), f"names {swap} twice"),
+            (PAIR, json.dumps(ks), f"class p4-o4: a {BR.FORMAT} commitment of check {P.template_id(BOTH)}, not {pair}")):
+        monkeypatch.setattr(TS, "template_fn", lambda t, check=check: check)
         with pytest.raises(SystemExit):
             TS.main(["first", "--boundary", str(tmp_path / "p4-o4"), "--check", P.template_id(BOTH), "--replay", RULE.replay,
                      "--k", file(text), "--challenger", "local", "--main", str(tmp_path / "main"), "--out", str(tmp_path)])

@@ -891,7 +891,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--check", required=True, help="the check template's descriptor id (serving_templates.template)")
     f.add_argument("--replay", required=True, help="the first stage's law over a class's spans, a rate law: rate:NUM/DEN or rate:NUM/DEN:T")
     f.add_argument("--k", required=True, help="proof blocks the second stage samples of each check template in each sampled span: "
-                                              "a whole number, or a JSON file of each template's, {descriptor id: k_t}")
+                                              "a whole number, or a JSON file of each template's, {descriptor id: k_t}, "
+                                              "which names each template of every class's check once")
     f.add_argument("--interior", help="the interior values, a JSON list of [name, schema]; without it each class's "
                                       "rule is its replay block's (rule_of), and --span-values is not taken")
     f.add_argument("--advice", help="the window's advice registration, whose binding the records' windows name")
@@ -945,11 +946,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         a.k = counts(a.k)
     except (ValueError, OSError) as e:
         ap.error(f"--k: {e}")
-    for d, pub in zip(a.boundary, pubs, strict=True):
+    for d, pub in zip(a.boundary, pubs, strict=True) if isinstance(a.k, Mapping) else ():
         try:
             why = counts_refused(a.k, BR.layout_of(pub, check).templates)
-        except ValueError:  # no class of this check: its stage1.json says why
-            continue
+        except ValueError as e:  # no class of this check: the counts name no template of it
+            why = str(e)
         if why:
             ap.error(f"--k: class {Path(d).name}: {why}")
     rule = None if a.interior is None else Rule(
