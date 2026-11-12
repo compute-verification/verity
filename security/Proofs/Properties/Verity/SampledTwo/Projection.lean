@@ -15,12 +15,14 @@ that hold separately, each a `Prop` here and a theorem in a file of its own, and
   `Frame.out`.
 * **What the form's check reads** (`Reading`), round by round of the run: the coin it reads for round `i` from the
   device's log as the evidence shows it (`coin`), the message it reads for round `i` from the evidence (`msg`), the coin
-  the device released for round `i` in the play's own log (`dev`), and the rounds whose coin the run's verifier reads
-  (`reads`). The rounds fall in four groups (`groupOf`): the first stage's (round 0), the second stage's (rounds 1 to
-  `stage`), the statements' (round `stage + 1`) and the sessions' (past it).
+  the device released for round `i` in the play's own log (`dev`), the rounds whose coin the run's verifier reads
+  (`reads`), and when a coin read agrees with a run's coin (`agree`): a release carries a prefix of a coin, so the two
+  agree on what the run's verifier reads of it, never as whole coins. The rounds fall in four groups (`groupOf`): the
+  first stage's (round 0), the second stage's (rounds 1 to `stage`), the statements' (round `stage + 1`) and the
+  sessions' (past it).
 * **The pieces**:
-  * `CoinMapLaw`: the coin map is uniform up to the device's coin trees' hiding, and writes each read round's coin at
-    the device's release for it.
+  * `CoinMapLaw`: the coin map is uniform up to the device's coin trees' hiding, and every release the play's log
+    holds for a read round agrees with the run's coin there.
   * `CoinsRead` at each group of coins: on a play the form's check accepts (`Acc`) whose log the check read is the
     device's (`Good`), the coin the check reads for a round of the group is the device's release for it. Every piece but
     the coin map's, the cut's and the assemblies' is a lemma about the form's check alone, at `Acc`; that the sampled
@@ -29,7 +31,8 @@ that hold separately, each a `Prop` here and a theorem in a file of its own, and
     on plays at most `miss` likely; and the prover's calls are within the strategy's (`CallsLe`).
   * `CutBound`: an accepted play whose log the check read is not the device's is at most `terms` likely (the read
     finder and the forger).
-  * `AcceptsRun`: wherever the check accepts, a run whose coins and messages are what it read accepts.
+  * `AcceptsRun`: wherever the check accepts, a run whose coins agree with what it read and whose messages are what it
+    read accepts.
 * **The bound** (`StmtAt`, `ProjectionBound`, `ProjectionOf`): on the plays it accepts the check reads the frame's
   statement, and the sampled verdict is at most as likely as the run's accept plus the pieces' terms.
 * **The bridge to `CouplingTargetTwo`** (`MajorityBound`, `CouplingOf`): where the claim fails on the vocabulary's
@@ -76,14 +79,17 @@ noncomputable def Frame.out {V : Vocab d α} {A : Live₂} {x : Msg} {θ : ByteA
 the device's log as the evidence shows it (`coin`), the message it reads for round `i` from the evidence (`msg`:
 round 1's the interior registration's record, round `stage + 1`'s the session statements, a session's round its
 record's), the coin the device released for round `i` in a log (`dev`), the rounds whose coin the run's verifier
-reads (`reads`), and the run's statement it reads, the boundary registration's record (`stmt`). The form's parse owes
-`coin`, `msg`, `reads` and `stmt`; the coin map owes `dev`. -/
+reads (`reads`), the run's statement it reads, the boundary registration's record (`stmt`), and whether a coin `c` read
+at round `i` of a play agrees with a run's coin `c'` on everything the run's verifier reads of it (`agree o i c c'`; for
+a release of `n` bytes read as a coin padded with zeros, their first `n` bytes). The form's parse owes `coin`, `msg`,
+`reads`, `stmt` and `agree`; the coin map owes `dev`. -/
 structure Reading (A : Live₂) where
   coin : Verity.Exchange → ℕ → Option FlockDeploy.Coin
   msg : Verity.Exchange → ℕ → Option Msg
   dev : List Verity.Release → ℕ → Option FlockDeploy.Coin
   reads : ℕ → Prop
   stmt : Verity.Exchange → Option Msg
+  agree : Verity.Exchange → ℕ → FlockDeploy.Coin → FlockDeploy.Coin → Prop
 
 /-- The groups of a run's rounds by the coins they read. -/
 inductive Group where
@@ -102,14 +108,15 @@ def groupOf (A : Live₂) (i : ℕ) : Group :=
   else .sessions
 
 /-- **The coin map's law** (piece: the coin map and the coin trees' hiding): the period's play is distributed as the
-frame's play at a uniform tape and uniform run coins, up to `hide`; and at every tape and coins, the device's release
-for each round the verifier reads is the run's coin there. -/
+frame's play at a uniform tape and uniform run coins, up to `hide`; and at every tape and coins, every release the
+play's log holds for a round the verifier reads agrees with the run's coin there. A log may hold none: a strategy that
+closes the device at once leaves it empty. -/
 def CoinMapLaw (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ) (Rd : Reading A) (hide : ℝ≥0∞) : Prop :=
   (∀ E : Verity.Exchange → Prop, Verity.Game.prob E (V.game θ F c) σ ≤
       ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x => E (Fr.out s.1 s.2)) + hide) ∧
     ∀ (ω : TapeOf V θ F c σ) (r : Coins A x) (i : Fin (A.L.V.k x)), Rd.reads i.val →
-      Rd.dev (Fr.out ω r).log i.val = some (r i)
+      ∀ c, Rd.dev (Fr.out ω r).log i.val = some c → Rd.agree (Fr.out ω r) i.val c (r i)
 
 /-- **The coins the check reads at group `g`** (piece: one per group of coins): on a play the form's check accepts
 (`Acc`) whose log the check read is the device's (`Good`), the coin the check reads for each read round of group `g`
@@ -149,12 +156,12 @@ def CutBound (V : Vocab d α) (k : Verity.Registration.Composite) (θ : ByteArra
   Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Good o) (V.game θ F c) σ ≤ terms
 
 /-- **The check's accept is the run's** (piece: the accept, with the form's accept lemma): wherever the form's check
-accepts and reads the statement `x`, every run at `x` whose coins at the read rounds and whose messages are what the
-check read accepts. -/
+accepts and reads the statement `x`, every run at `x` whose coins at the read rounds agree with what the check read and
+whose messages are what the check read accepts. -/
 def AcceptsRun (A : Live₂) (x : Msg) (Rd : Reading A) (Acc : Verity.Exchange → Prop) : Prop :=
   ∀ o : Verity.Exchange, Acc o → Rd.stmt o = some x →
     ∀ (Ω : Type) (P : Claims.Prover Ω) (ω : Ω) (r : Coins A x),
-      (∀ i : Fin (A.L.V.k x), Rd.reads i.val → Rd.coin o i.val = some (r i)) →
+      (∀ i : Fin (A.L.V.k x), Rd.reads i.val → ∀ c, Rd.coin o i.val = some c → Rd.agree o i.val c (r i)) →
       (∀ i < A.L.V.k x, Rd.msg o i = msgAt (Claims.run FlockDeploy.sha512 P A.L.V x ω r) i) →
       (Claims.run FlockDeploy.sha512 P A.L.V x ω r).out = .acc
 

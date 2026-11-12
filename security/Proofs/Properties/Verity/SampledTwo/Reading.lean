@@ -26,7 +26,10 @@ instance's composite decodes (`CaseOf`):
   * round `stage + 1`: the session statements' message, and no coin read;
   * a session's round: the session's message and coin there; and the verdict's round no message;
   * the sessions' messages and coins and the statements' message are the sessions' pieces' to define
-    (`SessionReading`), on the files the check verified each session on.
+    (`SessionReading`), on the files the check verified each session on;
+  * a coin read agrees with a run's coin (`agree`) on the bytes the run's bytes carry of it (`prefixAgree`): at round
+    0 the first stage's bytes, at round `j + 1` the second stage's bytes from `j · L` on, at most `L`; at a session's
+    round as the sessions' pieces say.
 
 Definitions only. Nothing imports this module.
 -/
@@ -101,6 +104,14 @@ structure SessionReading where
   stmts : Verity.Exchange → Option Msg
   msg : Verity.Exchange → ℕ → ℕ → Option Msg
   coin : Verity.Exchange → ℕ → ℕ → Option FlockDeploy.Coin
+  agree : Verity.Exchange → ℕ → ℕ → FlockDeploy.Coin → FlockDeploy.Coin → Prop
+
+/-- **Two coins agree on their first `w` bytes.** -/
+def prefixAgree (w : ℕ) (c c' : FlockDeploy.Coin) : Prop :=
+  (SpotFlock.src c).extract 0 w = (SpotFlock.src c').extract 0 w
+
+/-- How many bytes of the second stage's coin `j` the run's bytes `b` carry. -/
+def stageWidth (b : ByteArray) (j : ℕ) : ℕ := min SpotFlock.L (b.size - j * SpotFlock.L)
 
 /-- The run of record's input on the play `o`'s case. -/
 def inputOn (C : CaseOf) (o : Verity.Exchange) : Option Spot.Run.Input :=
@@ -133,5 +144,12 @@ noncomputable def formReading (A : Live₂) (C : CaseOf) (S : SessionReading) : 
   dev _ _ := none
   reads n := readsAt A.h n
   stmt o := (inputOn C o).bind fun i => recordMsg i.record
+  agree o n c c' :=
+    if n = 0 then ∃ i, inputOn C o = some i ∧ prefixAgree i.source.size c c'
+    else if n ≤ A.h.stage then
+      ∃ i it, inputOn C o = some i ∧ i.interior = some it ∧ prefixAgree (stageWidth it.source (n - 1)) c c'
+    else match SpotFlock.slotOf A.h (n + 1) with
+      | some t => S.agree o t (n - SpotFlock.off A.h t) c c'
+      | none => False
 
 end Verity.SampledTwo
