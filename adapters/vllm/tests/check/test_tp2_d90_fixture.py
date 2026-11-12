@@ -29,19 +29,37 @@ import threading
 from dataclasses import dataclass
 
 import pytest
-
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepLink, StepStart,
-                                   StorageAlloc, TritonLaunch, ViewDesc)
-from verity_vllm.observe.fold.fold import FoldError, fold
-from verity_vllm.observe.fold.resolver import Compute, PerRow, Profile, Shared, Transparent, Gather
-from verity_vllm.check.match import rank_match as RM
-from verity_vllm.observe.fold.patterns.collectives import TpCollective
 from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.program import Program
 from verity.circuits.refs import Coll, array_of, concat, runs
-from verity.definitions.registry import b1, b1_tp2
-from verity_vllm.pipeline import cli
 from verity.circuits.types import Array, RecordType, Value
+from verity.definitions.registry import b1, b1_tp2
+
+from verity_vllm.check.match import rank_match as RM
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepLink,
+    StepStart,
+    StorageAlloc,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.fold import fold
+from verity_vllm.observe.fold.patterns.collectives import TpCollective
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    PerRow,
+    Profile,
+    Shared,
+    Transparent,
+)
+from verity_vllm.pipeline import cli
 
 BF16, I32 = Value(16), Value(32)
 BF, I32D, I64D = "bfloat16", "int32", "int64"
@@ -361,6 +379,7 @@ def write_derived(d, spec: SpecializedDefinition, rank: int, *, links_mut: dict 
     """descriptor.json.gz + derive-report.json + tp_links.json + result.json as derive_step writes them (the fields cb_a.compare and the
     fold's construction read)."""
     from verity.circuits import codec
+
     from verity_vllm.pipeline.build import _spec_histogram
     prog = Program(spec)
     desc = codec.encode_program(prog)
@@ -678,8 +697,9 @@ def _e2e(tmp_path, monkeypatch, *, drop_rank1_log=False, rank1_mut=None, provena
          provenance_of_other_run=False, provenance_digest_mismatch=False, rank_workers=0, fold_workers=0, wrap=None, spec_histogram=None,
          folded_under=None):
     import hashlib
-    from verity_vllm.pipeline.tp import fold_match as FM
+
     from verity_vllm.observe.fold.fold import summarize
+    from verity_vllm.pipeline.tp import fold_match as FM
     tmp_path = tmp_path / f"case{len(list(tmp_path.iterdir()))}"
     tmp_path.mkdir()
     cap = tmp_path / "capture"

@@ -10,12 +10,16 @@ collection counts what the cache keeps tracked per plan and what the layouts kee
 from __future__ import annotations
 
 import gc
+from typing import TYPE_CHECKING
 
 import pytest
 
-torch = pytest.importorskip("torch")
+if TYPE_CHECKING:
+    import torch
+else:
+    torch = pytest.importorskip("torch")
 
-from tests.commit import test_native_collect_plan_cache as P  # noqa: E402
+from tests.commit import test_native_collect_plan_cache as P
 
 RUNS = 3                                                       # the third run retires the first run's plans
 BASE = P.step_tensors

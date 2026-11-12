@@ -33,8 +33,13 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.commit import step_rows
+from verity_vllm.commit.committer.host_retention import (
+    _excluded_chunk_ranges,
+    outside,
+)
 from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta
 from verity_vllm.commit.native_ranges import NativeRangeOpenings
+from verity_vllm.commit.opened import meta_by_name
 from verity_vllm.commit.run_roots import RunRoots, StepRoot
 
 SCHEMA = "verity-vllm/committed-store/v1"
@@ -134,8 +139,6 @@ def touched(com: Any) -> Iterator[Touched]:
 def touch(com: Any, reads: Iterable[tuple[int, str, int, int]]) -> None:
     """Opens, without verifying, the leaves of every read (step, member name, byte lo, byte hi) as `OpenedReader` would: under `touched`
     the ranges and tree nodes a verified read of the same bytes opens are recorded, and no leaf is hashed."""
-    from verity_vllm.commit.opened import meta_by_name
-
     for step, name, lo, hi in reads:
         m = meta_by_name(com._layouts.get(step) or [], name)
         lo, hi = max(0, int(lo)), min(int(hi), int(m.nbytes)) if m is not None else 0
@@ -256,11 +259,6 @@ def held_of(com: Any) -> dict[int, tuple[list[tuple[int, int]], int]]:
 def not_retained_of(fams: set[str], C: int, held: dict[int, tuple[list[tuple[int, int]], int]],
                     layouts: dict[int, Any]) -> dict[str, Any]:
     """`not_retained` over the blocks' retained ranges (`held_of`) and the steps' metas."""
-    from verity_vllm.commit.committer.host_retention import (
-        _excluded_chunk_ranges,
-        outside,
-    )
-
     by, committed, retained, stray = dict.fromkeys(sorted(fams), 0), 0, 0, []
     for s, (ranges, used) in sorted(held.items()):
         held_s = sorted((lo, hi, "") for lo, hi in ranges)
@@ -432,7 +430,7 @@ class DumpedStore(NativeRangeOpenings):
         self._salted: dict[int, tuple[list[tuple[int, int, int]], memoryview]] = {}
         self._layouts: dict[int, list[TensorMeta]] = {}
         self._gpu_blocks: dict[int, tuple[_Block, int]] = {}
-        self._gpu_levels: dict[int, list[_Level]] = {}
+        self._gpu_levels: dict[int, list[_Level] | list[_SparseLevel]] = {}
         self._maps: list[mmap.mmap] = []
         for st in doc["steps"]:
             s = int(st["step"])

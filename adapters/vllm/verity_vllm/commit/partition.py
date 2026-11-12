@@ -12,6 +12,13 @@ import json
 import os
 from typing import Any
 
+from verity.circuits import partition_object as PO
+
+from verity_vllm.log import init_logger
+from verity_vllm.query.required import Q_WORD_ID
+
+logger = init_logger(__name__)
+
 __all__ = ["program_digests", "partition_of_record", "word_check_refusal", "require_partition", "partition_entry"]
 
 
@@ -51,9 +58,6 @@ def partition_of_record(man: dict[str, Any], programs: set[str] | None = None) -
     `by_component` / `by_rank` of them).  Each object must be a valid `verity/partition/v1` object of Q_word v1 {X: 16, W: 32} with that
     digest and, when the Commit holds the Builds' records (`programs`: their SHA-512s), name one of those Programs.  Refused by name
     (SystemExit) before any engine; returns what it checked, which the binding map records."""
-    from verity.circuits import partition_object as PO
-
-    from verity_vllm.query.required import Q_WORD_ID
     q = man.get("query") or {}
     if q.get("query_id") != Q_WORD_ID:
         return {"query": q.get("query_id"), "checked": False, "why": "not the query of record: no partition to bind"}
@@ -95,12 +99,12 @@ def word_check_refusal(q: dict[str, Any]) -> str | None:
 
 def require_partition(man: dict[str, Any], programs_root: str | None, program_dir: str | None) -> dict[str, Any]:
     """`partition_of_record` over the Programs the Builds under `programs_root` / `program_dir` recorded and, under the query of record,
-    a passing word check for every part (`word_check_refusal`; SystemExit naming what is missing); prints what it checked and returns `man`."""
+    a passing word check for every part (`word_check_refusal`; SystemExit naming what is missing); logs what it checked and returns `man`."""
     rec = partition_of_record(man, program_digests(programs_root, program_dir))
     why = word_check_refusal(man.get("query") or {}) if rec["checked"] else None
     if why:
         raise SystemExit(f"[delta] REFUSED: {why}; rebuild the manifest (verity-vllm manifest build / build-global, --word-check 16/32)")
-    print(f"[delta] partition of record: {rec}" + (" (word check recorded and passed)" if rec["checked"] else ""), flush=True)
+    logger.info("[delta] partition of record: %s%s", rec, " (word check recorded and passed)" if rec["checked"] else "")
     return man
 
 

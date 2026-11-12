@@ -68,7 +68,8 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
            "weight_shards": "the `weights` record of this Program holds THIS rank's shards (shapes in result.tp.sharded_params); the rank's "
                             "weight root commits to the shard, the run root binds every rank's weight root (rank-tagged)",
            "links": links}
-    json.dump(doc, open(os.path.join(out, "tp_links.json"), "w"), indent=1)
+    with open(os.path.join(out, "tp_links.json"), "w") as f:
+        json.dump(doc, f, indent=1)
     return {"n_peer_inputs": len(peer_names), "n_prompt_inputs": n_own, "file": "tp_links.json"}
 
 
@@ -76,7 +77,8 @@ def read_tp_links(path: str) -> dict:
     """Load a `tp_links.json` of schema v1 (world 2, one `peer_input`/`peer_rank` per link) or v2 (`peers` per link), returning
     the v2 shape: every link carries `peers = [{rank, input, operand, collective_k}]` and the doc `peer_ranks`.  A v1 file is upgraded in
     memory (world 2: the single peer is rank 1-r); nothing is rewritten on disk."""
-    doc = json.load(open(path))
+    with open(path) as f:
+        doc = json.load(f)
     world, rank = int(doc.get("world") or 2), int(doc.get("rank") or 0)
     doc.setdefault("peer_ranks", [r for r in range(world) if r != rank])
     root = doc.get("model_root")

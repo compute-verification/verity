@@ -8,7 +8,6 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.circuits.evaluation.batch import type_dtype, type_shape
@@ -16,9 +15,19 @@ from verity.circuits.evaluation.reference import signature_of, statics_of
 from verity.definitions.numerics import dsv4_rows, rows
 from verity.definitions.numerics.dsa_norm_rows import block_rmsnorm_rows
 from verity.definitions.numerics.kernel_registry import Declined
-from verity.definitions.registry import (dsa_norm, dsv4_compressor, dsv4_decode_indices, dsv4_indexer, dsv4_moe, dsv4_qnorm_insert,
-                                          flashmla, flashmla_prefill, mhc)
+from verity.definitions.registry import (
+    dsa_norm,
+    dsv4_compressor,
+    dsv4_decode_indices,
+    dsv4_indexer,
+    dsv4_moe,
+    dsv4_qnorm_insert,
+    flashmla,
+    flashmla_prefill,
+    mhc,
+)
 from verity.definitions.registry.hopper import HopperBF16WgmmaDot16
+
 from verity_vllm.query.manifest import format as RM
 
 #: the 19 families the per-rank no-evaluator rule failed DeepSeek-V4-Pro B1's deferred replay on

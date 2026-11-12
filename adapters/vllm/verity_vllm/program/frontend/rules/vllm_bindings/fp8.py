@@ -3,17 +3,35 @@
 from __future__ import annotations
 
 import torch
-
 from verity.circuits.refs import Coll, array_of
-from verity_vllm.program.frontend.derive import Alloc, refuse
-from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, ViewRule
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, row_value, rows_of, shape
-from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _untransposed, aten
-from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
 
+from verity_vllm.program.frontend.derive import Alloc, refuse
+from verity_vllm.program.frontend.rules.base import (
+    InPlaceRule,
+    OpRule,
+    RuleInfo,
+    ViewRule,
+)
+from verity_vllm.program.frontend.rules.common import (
+    dtype_is,
+    from_rows,
+    known,
+    row_value,
+    rows_of,
+    shape,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    active_target_profile,
+    launch_tokens_of,
+)
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import (
+    BF16,
+    _untransposed,
+    aten,
+)
+from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 
 # -- block-scaled FP8 linears: vLLM's sm_90 default dynamic route, and the explicit CUTLASS route ------------------------------
 
@@ -92,7 +110,7 @@ class DynamicDeepGemmFp8LinearRule(OpRule):
 
     def emit(self, node, ctx):
         x, w, ws, _group, _ue8m0 = node.args
-        N, K = shape(ctx, w)
+        N, K = known(shape(ctx, w))
         rows, lead = rows_of(ctx.coll(x))
         M = launch_tokens_of(node, len(rows))
         branch = "flashinfer" if M < 32 else "deepgemm"
@@ -147,7 +165,7 @@ class DeepGemmFp8EinsumRule(InPlaceRule):
                 return f"{name} is not a {dt} value ({type(ctx.val(x)).__name__}, {ctx.dtype_of(x)})"
         if not isinstance(ctx.val(d), Alloc) or not dtype_is(ctx, d, BF16):
             return f"d is not an unwritten bf16 allocation ({type(ctx.val(d)).__name__}, {ctx.dtype_of(d)})"
-        ash, bsh = shape(ctx, a), shape(ctx, b)
+        ash, bsh = known(shape(ctx, a)), known(shape(ctx, b))
         if len(ash) != 3 or len(bsh) != 3 or ash[1] != bsh[0] or ash[2] != bsh[2] or ash[2] % G:
             return f"a {ash} and b {bsh} are not [T, H, K] and [H, N, K] with K % {G} == 0"
         (T, H, K), N = ash, bsh[1]
@@ -163,7 +181,7 @@ class DeepGemmFp8EinsumRule(InPlaceRule):
 
     def emit(self, node, ctx):
         _expr, a, a_s, b, b_s, d, _recipe = node.args
-        (T, H, K), N, G = shape(ctx, a), shape(ctx, b)[1], FP8_QUANT_PINS["group_size"]
+        (T, H, K), N, G = known(shape(ctx, a)), known(shape(ctx, b))[1], FP8_QUANT_PINS["group_size"]
         fn = ctx.kind("deepgemm_fp8_einsum_grouped", node, H=H, K=K, N=N, G=G)
         x, s, w, ws = (ctx.coll(v) for v in (a, a_s, b, b_s))
         outs = [ctx.call(fn, x[t], s[t], w, ws, node=node, rule=self, name=f"{ctx.hint_name(node)}[{t}]") for t in range(T)]
@@ -208,7 +226,7 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
         r = row_value(ctx, a["x"], "x")
         if r:
             return r
-        xs_shape = shape(ctx, a["x"])
+        xs_shape = known(shape(ctx, a["x"]))
         G = a["group_size"]
         if not isinstance(G, int) or isinstance(G, bool) or G not in QUANT_GROUPS:
             return f"numerics_unregistered: group_size={G!r}; Fp8GroupQuant_v1 is registered for the groups {list(QUANT_GROUPS)}"
@@ -286,7 +304,7 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
             return f"out is not an unwritten allocation ({type(ctx.val(out)).__name__})"
         if not dtype_is(ctx, out, BF16):
             return f"numerics_unregistered: out has dtype {ctx.dtype_of(out)}; the Definition's epilogue is cvt.rn.bf16.f32"
-        ash, bsh, ash_s, bsh_s, osh = shape(ctx, a), shape(ctx, b), shape(ctx, a_s), shape(ctx, b_s), shape(ctx, out)
+        ash, bsh, ash_s, bsh_s, osh = known(shape(ctx, a)), shape(ctx, b), shape(ctx, a_s), shape(ctx, b_s), shape(ctx, out)
         if bsh is None or len(bsh) != 2 or ash[-1] != bsh[0]:
             return f"b {bsh} is not [K, N] for a [.., K={ash[-1]}]"
         K, N = bsh
@@ -311,8 +329,8 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
 
     def emit(self, node, ctx):
         out, a, b, a_s, b_s = node.args[:5]
-        K, N = shape(ctx, b)
-        G = FP8_QUANT_PINS["group_size"]
+        K, N = known(shape(ctx, b))
+        G = int(FP8_QUANT_PINS["group_size"])
         w = _untransposed(ctx, b, K, N, ctx.hint_name(node) + "/w")
         ws = _untransposed(ctx, b_s, K // G, weight_blocks(N, G), ctx.hint_name(node) + "/ws")
         ctx.bind_weight_role(b, self, "fp8_w", K=K, N=N)

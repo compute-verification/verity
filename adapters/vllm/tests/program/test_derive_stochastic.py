@@ -17,13 +17,13 @@ import struct
 
 import pytest
 import torch
+from verity.definitions.registry import b1
 
 from verity_vllm.program.frontend import derive_examples as ex
 from verity_vllm.program.frontend.derive import Unsupported, derive, derive_report
 from verity_vllm.program.frontend.rules import DEFAULT_RULES
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.vllm_sampling import VLLM_SAMPLING_RULES
-from verity.definitions.registry import b1
 
 PROF = dict(mode="profile", profile="b1-eager-v3")
 
