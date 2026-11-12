@@ -1970,7 +1970,7 @@ class Loop:
                  shadow: bool = False, dry_run: bool = False, batch: int = BATCH, depth: int = DEPTH, lean: int = LEAN,
                  pending_s: float = 4 * 3600, slim=None, now: Callable[[], float] = time.time,
                  out: Callable[[str], None] = print, state: Path | None = None, tree_ejects: bool = False,
-                 gate: str = GRAPH2_GATE, shards: int | str = SHARDS, records=None):
+                 gate: str = GRAPH2_GATE, shards: int | str = SHARDS, records=None, graph2_shadow: bool = True):
         if gate not in GATES or gate == CHECK_GATE and (slim is None or not _sharded(slim, shards)):
             raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
                              f"a gate is one of {', '.join(GATES)}, and `{CHECK_GATE}` is the run beside each check "
@@ -1978,6 +1978,9 @@ class Loop:
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
         self.batch, self.depth, self.lean, self.pending_s, self.slim = batch, depth, lean, pending_s, slim
         self.gate, self.shards = gate, shards
+        #: whether graph2's verdict is read in shadow where the check gates (`--no-graph2-shadow` turns it off): each read
+        #: lists every task of a candidate's check and pulls each pending task's results, which the check's gate never needs
+        self.graph2_shadow = graph2_shadow or gate != CHECK_GATE
         self.now, self.out, self.state, self.tree_ejects, self.records = now, out, state, tree_ejects, records
         #: the last tick this loop ran: a tick that logs nothing still counts
         self.last = 0
@@ -2025,7 +2028,8 @@ class Loop:
                 if waits:
                     j = Judged(Verdict(PENDING), note="its check waits for its records run", listed=False)
                 else:
-                    j = w.verdict(sha, base, p.since(sha), p.since(base))
+                    j = w.verdict(sha, base, p.since(sha), p.since(base)) if self.graph2_shadow else \
+                        Judged(Verdict(PENDING), note="graph2's shadow isn't read (--no-graph2-shadow)")
                     if not j.listed and not p.tries(sha):           # pushed, and its enqueue failed or never ran
                         j = Judged(Verdict(LIST_FAILED), mark="not enqueued", note="the log holds no enqueue of it",
                                    graph2=j.graph2, listed=False, theirs=j.theirs)
@@ -2632,10 +2636,10 @@ class Loop:
         """What a later tick compares graph2's verdict of ``c`` with (`_followed`), where the check gates and ``c`` is dropped
         with its check ended in a pass or a fail (`_ended`: not an early red; on `main`, or failed) and graph2's, in shadow,
         not: the check's reading and what it failed as this drop reads them, how long it took (`_check_s`), and when graph2's
-        check was enqueued.  None for any other drop: its graph2 check is cancelled, and it gets no compare line it hasn't
-        had."""
+        check was enqueued.  None for any other drop, and for every drop while the shadow is off (`--no-graph2-shadow`, under
+        which `_followed` follows nothing): its graph2 check is cancelled, and it gets no compare line it hasn't had."""
         j, mine = t.judged.get(c.sha), _ended(c.verdict)
-        if (self.gate != CHECK_GATE or j is None or j.shadow is None or _ended(j.shadow) is not None
+        if (self.gate != CHECK_GATE or not self.graph2_shadow or j is None or j.shadow is None or _ended(j.shadow) is not None
                 or mine not in (PASS, FAIL) or c.enqueued is None):
             return None
         return {"check": mine, "said": _brief(c.verdict), "check_s": self._check_s(t, c.sha, j.record),
@@ -3027,7 +3031,9 @@ class Loop:
         ones graph2 says still run (read newest first, so the oldest give way; its line names them, ``followed``), it is
         read once more, and one that still hasn't ended is cancelled and gets its compare line all the same: `unfinished`,
         with how long it ran and how many of its tasks on the merge gate ended.  Either line closes it: a candidate has one.  A read that fails is
-        logged and reads as pending: graph2 only shadows here, so it stops no tick."""
+        logged and reads as pending: graph2 only shadows here, so it stops no tick.  None with the shadow off."""
+        if not self.graph2_shadow:
+            return []
         w, recs, kept = self.world, [], []
         w._theirs, w._listed = {}, {}
         try:
@@ -3239,6 +3245,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--shadow", action="store_true", help="log advance, eject, ring, red, flakes and messages, and do none of "
                                                           "them; its own main is refs/vqueue/shadow in the clone")
     ap.add_argument("--dry-run", action="store_true", help="print the snapshot and the actions; write nothing")
+    ap.add_argument("--no-graph2-shadow", action="store_true",
+                    help=f"with --gate {CHECK_GATE}, read no graph2 verdict in shadow (no compare lines, no followed drops); "
+                         "graph2's checks are still enqueued")
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
     ap.add_argument("--move-carry-jobs", type=int, default=MAPPED_JOBS, metavar="N",
@@ -3292,7 +3301,7 @@ def main(argv: list[str]) -> int:
                       keep_file=a.keep_runs)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
                     pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects, gate=a.gate,
-                    shards=a.shards, records=None if a.no_records else vqueue_records)
+                    shards=a.shards, records=None if a.no_records else vqueue_records, graph2_shadow=not a.no_graph2_shadow)
         if a.once or a.dry_run:
             loop.tick()
             return 0
