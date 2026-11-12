@@ -296,9 +296,10 @@ G2_READ_S = 600
 G2_READS = "graph2-reads.json"
 #: the directory beside the log of the after-landing jobs (`Loop._moved`), each a directory of its job, and their output
 AFTER, AFTER_LOG = "after-landing", "after-landing.log"
-#: the after-landing job: the tick's own command with `--after-landing DIR` (``$1``), its output appended to ``$2``, then
-#: its exit to `rc` in its directory
-AFTER_JOB = 'd=$1 log=$2; shift 2; "$@" >> "$log" 2>&1; echo "$?" > "$d/rc.tmp" && mv "$d/rc.tmp" "$d/rc"'
+#: the after-landing job: the tick's own command with `--after-landing DIR` (``$1``), its output to `log` in its directory
+#: and then appended to ``$2``, and its exit to `rc` there, as `landing._job_end` reads them
+AFTER_JOB = ('d=$1 all=$2; shift 2; "$@" > "$d/log" 2>&1; rc=$?; cat "$d/log" >> "$all"; '
+             'echo "$rc" > "$d/rc.tmp" && mv "$d/rc.tmp" "$d/rc"')
 #: how long after its start an after-landing job no exit was written of is taken as lost (a restart of the pod can leave its
 #: pid to another process) and started again
 AFTER_LOST_S = 3600
@@ -1696,8 +1697,9 @@ class World:
 
     def start_after(self, job: dict, argv: list[str], root: Path) -> dict:
         """``argv`` with `--after-landing DIR` (`_after_landing`) in a session of its own, as `landing.detach` starts a launch,
-        so no tick waits on it: ``job`` in `job.json` of a directory of its own under ``root``, its output appended to
-        `AFTER_LOG` beside ``root`` and its exit written to `rc` there (`AFTER_JOB`).  The record `after_ended` reads."""
+        so no tick waits on it: ``job`` in `job.json` of a directory of its own under ``root``, its output in `log` there and
+        then appended to `AFTER_LOG` beside ``root``, and its exit written to `rc` there (`AFTER_JOB`).  The record
+        `after_ended` reads."""
         import tempfile
 
         root.mkdir(parents=True, exist_ok=True)
@@ -2273,13 +2275,13 @@ class Loop:
     def _read(self, p: Past, sha: str, base: str, fresh: bool = False, ended: bool | None = None
               ) -> tuple[Judged, dict | None]:
         """Candidate ``sha``'s verdict on graph2's results (`World.verdict`), list-failed when the log holds no enqueue of it,
-        and the reading `Shadow` kept it from, else None: where the check gates, one read under the same key (its base, the
-        results set aside, and whether its base's check ended) less than `G2_READ_S` ago, unless ``fresh`` or its check
+        and the reading `Shadow` kept it from, else None: where the check gates, one read under the same key (its base and the
+        results set aside there and on it) less than `G2_READ_S` ago, unless ``fresh`` or its check
         ended since (the record of its run, as the log holds it, has a verdict; ``ended`` says so of a read after this
         tick's judging found it).  A reading read is kept."""
-        rec, under = p.slim(sha)[1], p.slim(base)[1]
+        rec = p.slim(sha)[1]
         ended = isinstance(rec, dict) and "verdict" in rec if ended is None else ended
-        key = _digest([base, p.since(sha), p.since(base), isinstance(under, dict) and "verdict" in under])
+        key = _digest([base, p.since(sha), p.since(base)])
         if self.reads is not None and not fresh and (kept := self.reads.get("judged", sha, key)) is not None \
                 and (kept.get("check_ended") or not ended):
             self.stale.add(sha)
