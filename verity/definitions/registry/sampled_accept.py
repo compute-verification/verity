@@ -109,7 +109,7 @@ PART = 4096
 #: the lanes of an `AcceptResample_v1` chunk, at most (`chunk`): the registered top-p select's chunk
 RESAMPLE_N = 32
 NEG_INF = SA.NEG_INF_BITS
-_CONF = ("model-untested: read from the PTX and SASS Triton 3.7.1 compiles for sm_90a from vLLM d9105ea80's "
+_CONF = ("model-untested: read from the PTX and SASS Triton 3.7.1 compiles for cc 9.0 from vLLM d9105ea80's "
          f"`rejection_sample` kernels at 154,880 logits and five draft tokens ({EVIDENCE['sampled_accept_ptx']['run_record']}); "
          "a capture of those kernels on a cc 9.0 GPU would hold it")
 
