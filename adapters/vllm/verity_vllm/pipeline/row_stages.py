@@ -39,8 +39,9 @@ import re
 import shutil
 import subprocess
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
 from verity_vllm.pipeline import gpu_lease as GL
@@ -71,7 +72,8 @@ class SingleRow(Row):
         self.trap = False
         self.config_run = commit.config_run == "1"
         self.replay_pending = False
-        self.tgt, self.tgt_args = "", []      # the declared target (`shape`)
+        self.tgt = ""                         # the declared target (`shape`)
+        self.tgt_args: list[str] = []
 
     def run(self) -> int:
         try:
@@ -168,10 +170,14 @@ class SingleRow(Row):
         job = f"{self.d}/job.json"
         if os.path.isfile(job):
             try:
-                d = json.load(open(job))
-                d.setdefault("computation", {})["source_identity"] = json.load(open(f"{self.d}/source_identity.json"))
+                with open(job) as f:
+                    d = json.load(f)
+                with open(f"{self.d}/source_identity.json") as f:
+                    d.setdefault("computation", {})["source_identity"] = json.load(f)
                 d["computation"]["source_identity_reason"] = None
-                open(job + ".tmp", "w").write(json.dumps(d, indent=1) + "\n"); os.replace(job + ".tmp", job)
+                with open(job + ".tmp", "w") as f:
+                    f.write(json.dumps(d, indent=1) + "\n")
+                os.replace(job + ".tmp", job)
             except (OSError, ValueError, AttributeError) as e:
                 self.log(f"job.json not updated with the source identity: {e}")
         self.tl("precheck", "end", ("rc", 0))
@@ -253,7 +259,8 @@ class SingleRow(Row):
 
         def job(st: str, lf: str, cmd: list[str], out: str) -> None:
             rc = RC.derive_cached(self, st, to, lf, cmd, out, ("par", "true"))
-            open(f"{lf}.rc", "w").write(f"{rc}\n")
+            with open(f"{lf}.rc", "w") as f:
+                f.write(f"{rc}\n")
 
         def rc_of(lf: str) -> int:
             try:
@@ -334,7 +341,7 @@ class SingleRow(Row):
                 self.verdict("build-target", "FAIL", line)
             elif line.startswith("TARGET-FAMILY-WAIVED"):
                 self.verdict("build-target", "WAIVED", line, quiet=True)
-        mrc = 0
+        mrc: int | None = 0
         if ok == "PASS" and os.path.isfile(f"{self.d}/build_request/instances.json.gz"):
             mrc = self.required_manifest("build") if early is None else early
             if mrc == 3:
@@ -382,7 +389,8 @@ class SingleRow(Row):
                     if not (gm_rc == 4 and p == 1):
                         break
                     self.derive_missing(derived, "X-09 (inside GM-01)")
-                open(f"{d}/match_compare.log", "w").write("$ (shared) X-09 document written by cb_a.global_match --decomp-out; see global_match.log\n")
+                with open(f"{d}/match_compare.log", "w") as f:
+                    f.write("$ (shared) X-09 document written by cb_a.global_match --decomp-out; see global_match.log\n")
                 return R.decomp_rc(d), gm_rc, True
             rcc = 3
             for p in (1, 2):
@@ -402,7 +410,8 @@ class SingleRow(Row):
             if not os.path.isfile(f"{req_dir}/result.json"):
                 self.log(f"early EOS: served T_r={t_r} != cap-1={self.T} -> deriving request Program LP={self.LP} T={t_r}")
                 self.run_to(self.derive_timeout(self.LP, t_r), f"{req_dir}.log", self.request_cmd(self.LP, t_r, req_dir))
-        open(f"{d}/match_shape.json", "w").write(f'{{"LP": {self.LP}, "T": {t_r}, "cap_T": {self.T}, "derived": "{req_dir}"}}\n')
+        with open(f"{d}/match_shape.json", "w") as f:
+            f.write(f'{{"LP": {self.LP}, "T": {t_r}, "cap_T": {self.T}, "derived": "{req_dir}"}}\n')
         return self.run_to(to_c, f"{d}/match_compare.log",
                            self.cli("program-compare", "--a", req_dir, "--b", f"{d}/match", "--out", f"{d}/match_compare.json", py=self.py312)), None, False
 
@@ -447,11 +456,13 @@ class SingleRow(Row):
                                                  "--oracle", f"{d}/match", "--out", f"{d}/global_match.json", "--within-step", cm.within_step,
                                                  py=self.py312))
                 else:
-                    open(f"{d}/global_match.log", "w").write("no build_workload/workload_program.json: the global Match needs this row's Build workload Program (GP-01)\n")
+                    with open(f"{d}/global_match.log", "w") as f:
+                        f.write("no build_workload/workload_program.json: the global Match needs this row's Build workload Program (GP-01)\n")
                     gm_rc = 98
         else:
             rcc, gm_rc = 99, 99
-            open(f"{d}/match_compare.log", "w").write(f"no program.json/instances.jsonl in {d}/match (fold did not run or failed)\n")
+            with open(f"{d}/match_compare.log", "w") as f:
+                f.write(f"no program.json/instances.jsonl in {d}/match (fold did not run or failed)\n")
             self.tl("match.compare", "end", ("rc", 99))
         rcs = -1
         if os.path.isfile(f"{d}/match/capture/log.jsonl.gz") and self.stochastic():
@@ -493,10 +504,12 @@ class SingleRow(Row):
         step: the workload's default snapshot steps become ``all`` for them (an explicit ``--snapshot-steps`` stands, named)."""
         from verity_vllm.check.replay.coverage import form_b_families
         try:
-            f = form_b_families(json.load(open(f"{self.d}/manifest.json")))
-            fb, rc = " ".join(f"{k}x{v}" for k, v in sorted(f.items())), 0
+            with open(f"{self.d}/manifest.json") as f:
+                families = form_b_families(json.load(f))
+            fb, rc = " ".join(f"{k}x{v}" for k, v in sorted(families.items())), 0
         except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
-            open(f"{self.d}/row.log", "a").write(f"form (B) families: {type(e).__name__}: {e}\n")
+            with open(f"{self.d}/row.log", "a") as f:
+                f.write(f"form (B) families: {type(e).__name__}: {e}\n")
             fb, rc = "", 1
         if rc != 0:
             self.log(f"WARN match: form (B) families not derived (rc={rc}, see row.log): snapshot steps stay {self.snap_steps or self.snap_def}")

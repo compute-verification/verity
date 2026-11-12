@@ -8,6 +8,7 @@ import dataclasses
 import json
 import os
 import shutil
+import signal
 import sys
 import tempfile
 from pathlib import Path
@@ -30,6 +31,33 @@ def test_a_rows_stages_run_batch_invariant_exactly_when_its_execution_is(tmp_pat
     r = _row(tmp_path, row=row)
     r.setup({})
     assert (r.execution(), r.child_env["VLLM_BATCH_INVARIANT"], r.bi_eager()) == (execution, bi, execution == "bi-eager")
+
+
+@pytest.mark.parametrize("doc, label", [
+    ({"execution": "eager", "sweep": {"execution": "compiled"}}, "eager"),      # the file's own label first
+    ({"execution": "", "sweep": {"execution": "compiled"}}, "compiled"),        # then its sweep block's
+    ({"sweep": {"execution": "compiled"}}, "compiled"),
+    ({"sweep": {}}, "bi-eager"),                                                # then the id's last token
+    ({"sweep": ["execution"]}, "bi-eager"),                                     # a sweep that is no block names none
+    ({"sweep": None}, "bi-eager"),
+    ({}, "bi-eager"),
+    (["execution"], None),                                                      # a file that is no document has no label
+])
+def test_a_rows_execution_is_its_files_label_then_its_sweep_blocks_then_its_ids_last_token(tmp_path, doc, label):
+    r = _row(tmp_path)
+    r.wl = str(tmp_path / "workload.json")
+    Path(r.wl).write_text(json.dumps(doc))
+    assert r.execution() == label
+    os.remove(r.wl)
+    assert r.execution() is None
+
+
+def test_a_row_whose_shape_is_not_read_yet_names_no_target_to_its_derives(tmp_path):
+    """Before `shape` reads the row's declared target, a derive is built for the device: no ``--target`` and the plain limit."""
+    r = _row(tmp_path)
+    r.MML = 288
+    cmd = r.request_cmd(8, 1, "out")
+    assert cmd[-2:] == ["--out", "out"] and "--target" not in cmd and r.derive_timeout(256, 31) == 900
 
 
 def test_remote_verifier_reaches_the_single_gpu_commit_which_checks_its_session_before_anything_runs(tmp_path):
@@ -145,6 +173,95 @@ def test_a_rows_stages_get_the_names(tmp_path, monkeypatch, capsys):
     with pytest.raises(Stop) as e:
         _row(tmp_path, "--py", py).setup({})
     assert e.value.rc == 3 and "PRECHECK_FAIL_CUBLAS_NAMES" in capsys.readouterr().err
+    assert isinstance(e.value.__cause__, ValueError) and "not one cuBLAS of each name" in str(e.value.__cause__)
+
+
+# ---------------------------------------------------------------------------------------------------------------- a forwarded signal
+
+def test_a_signal_goes_to_every_running_stage_and_one_that_has_ended_is_passed_over(tmp_path, monkeypatch):
+    r = _row(tmp_path)
+    sent: list[tuple[int, int]] = []
+
+    def kill(pid: int, signum: int) -> None:
+        sent.append((pid, signum))
+        if pid == 7:
+            raise ProcessLookupError(pid)
+
+    monkeypatch.setattr(os, "kill", kill)
+    r._running = {7, 9}
+    r._on_signal(signal.SIGTERM, None)
+    assert r.signalled == "TERM" and sorted(sent) == [(7, 15), (9, 15)]
+    assert (Path(r.d) / "row.log").read_text().count("SIGTERM received: forwarding to the running stage (timeout pid ") == 2
+
+
+# ---------------------------------------------------------------------------------------------------------------- the launch context
+
+def _launcher(tmp_path: Path, script: str) -> str:
+    """An interpreter that is this shell script: what a row's stage command runs in place of ``verity-vllm``."""
+    py = tmp_path / "launcher"
+    py.write_text("#!/bin/sh\n" + script)
+    py.chmod(0o755)
+    return str(py)
+
+
+def test_a_batchs_request_program_is_built_under_its_launch_context_and_a_context_that_does_not_read_fails_the_shape(tmp_path):
+    """B=1 asks for none.  B>=2 runs ``launch-context WORKLOAD LP T [C]``: its lines are the Build's ``--launch-context`` arguments
+    (none for a context of no lines), and a failure is None with the end of its stderr in row.log, the whole of it kept beside the row."""
+    args = 'shift 2; echo "$@" >&2; '                                        # -m verity_vllm.pipeline.cli, then the command line
+    r = _row(tmp_path, "--py", _launcher(tmp_path, args + "printf 'k=1\\nk=2\\n'"))
+    r.B = 1
+    assert r.launch_args(8, 3) == []
+    r.B = 2
+    assert r.launch_args(8, 3) == ["--launch-context", "k=1", "k=2"] and r.launch_args(8, 3, 4) == ["--launch-context", "k=1", "k=2"]
+    assert not [f for f in os.listdir(r.d) if f.endswith(".err")]
+
+    r.py = _launcher(tmp_path, args + "exit 0")
+    assert r.launch_args(8, 3) == []
+
+    r.py = _launcher(tmp_path, args + "echo 'ValueError: the workload names no arrivals' >&2; exit 2")
+    assert r.launch_args(8, 3, 4) is None
+    (err,) = [f for f in os.listdir(r.d) if f.endswith(".err")]
+    assert err == "launch_context_LP8_T3_C4.err"
+    assert (Path(r.d) / err).read_text() == f"launch-context {r.wl} 8 3 4\nValueError: the workload names no arrivals\n"
+    line = (Path(r.d) / "row.log").read_text().splitlines()[-1]
+    assert line.endswith(f"Build FAIL shape LP8_T3_C4: launch_context rc=2 -- launch-context {r.wl} 8 3 4 ValueError: the workload names no arrivals ")
+
+
+# ---------------------------------------------------------------------------------------------------------------- the source identity
+
+def test_a_passed_source_identity_goes_into_the_runs_job_record_which_is_left_alone_when_it_does_not_read(tmp_path, monkeypatch):
+    """The precheck copies the stage interpreter's identity to ``source_identity.json`` and, inside a run, into ``job.json``
+    (``computation.source_identity``, its reason cleared); a job record that is no JSON object is left as it is and named in row.log,
+    and the precheck still passes."""
+    r = _row(tmp_path)
+    d = Path(r.d)
+    monkeypatch.setattr(r, "export_commit", lambda: "abc123")
+
+    def source_identity(pys: list[str], out_of) -> int:
+        for py in pys:
+            Path(out_of(py)).write_text(json.dumps({"ok": True, "py": py}))
+        return 0
+
+    monkeypatch.setattr(r, "source_identity", source_identity)
+    identity = {"ok": True, "py": r.py}
+    r.precheck_identity()                                                            # outside a run: no job record, none written
+    assert json.loads((d / "source_identity.json").read_text()) == identity and not (d / "job.json").exists()
+
+    (d / "job.json").write_text(json.dumps({"run": "r1", "computation": {"kind": "row", "source_identity_reason": "not read yet"}}))
+    r.precheck_identity()
+    assert (d / "job.json").read_text() == json.dumps(
+        {"run": "r1", "computation": {"kind": "row", "source_identity_reason": None, "source_identity": identity}}, indent=1) + "\n"
+    (d / "job.json").write_text(json.dumps({"run": "r2"}))
+    r.precheck_identity()
+    assert json.loads((d / "job.json").read_text()) == {"run": "r2", "computation": {"source_identity": identity, "source_identity_reason": None}}
+    assert not (d / "job.json.tmp").exists() and not (d / "row.log").exists()
+
+    for text, error in (("{", "Expecting property name"), ('["a list"]', "'list' object has no attribute 'setdefault'")):
+        (d / "job.json").write_text(text)
+        r.precheck_identity()
+        assert (d / "job.json").read_text() == text and not (d / "job.json.tmp").exists()
+        assert f"job.json not updated with the source identity: {error}" in (d / "row.log").read_text().splitlines()[-1]
+    assert [ln.split()[:2] for ln in (d / "stages.txt").read_text().splitlines()] == [["precheck", "PASS"]] * 5
 
 
 # ---------------------------------------------------------------------------------------------------------------- the release line
