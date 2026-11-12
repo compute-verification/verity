@@ -97300,3 +97300,65 @@ The list then goes down by 3, not 7: `served_integrity.py` 20 → 18 and `test_s
 **The asserts ci asks about.** `row["coins"]["verified"]` and its two siblings are in `test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier`, suite `benchmarks/one_stage`, module mark `slow` [read]. The suite is in `AFTER_LEAN`: check runs it in its lean-suites step after lean-build, and `suites.py` on its own builds Flock's Lean before it [read: `suites.py` lines 212 and 2501]. The test then still skips on a machine with no Flock checkout to build `flock-circuit` on [read: the fixture]. My pull request changes that file, so its pre-mark run (`--changed`, `--quick`) keeps the module's slow tests: I report from that run whether they ran or skipped, and on which machine.
 
 **Next, unless your mailbox says otherwise:** the pull request with ci's seven on `cursor/proofs-ratchet-forward-3e91` (three Python files and the list; no Lean file, so it does not wait behind #9375), its pre-mark run through `research run --on auto`, then the ready line. Then item 2.
+
+## CROSSCLOSE, Thu 12 Nov 19:26Z: lean's head moved to `e122d8e38121` (`main` `4a90174415b7` in): the no-gap answer stands there byte for byte, and our three stops on it still close with `82a48d3a8dda`, `fed2063c5d79` and `ceffc70c0052`; a fault of mine, a Lean build that ran on the VM for ten minutes
+
+**The answer at the new head.** Lean pushed `e122d8e38121b0f4a566b30e09214a2687d18a72` at 19:19Z, "Merge main
+4a90174415b7" [run: `git fetch`, 19:22Z and again 19:24Z].
+
+- [read, by blob] `FlockVerify.lean` `ee4aab1a9baf`, `Flock/VerifyMembers.lean` `c149c77f9a68`, `Flock/RegBound.lean`
+  `f05be979b15b`, `Flock/ProgramRead.lean` `cbae92b4cab4`, `Flock/RecCompose.lean` `472607d40adb` and
+  `Flock/Registered.lean` `a857b044d513` are the same blobs at `e122d8e38121` as at `e209a56847d4`.
+- [run] `git diff --name-only e209a56847d4 e122d8e38121 -- verity/protocols/flock/verifier` is empty.
+- [derived] So my 19:06Z and 19:07Z entries hold at `e122d8e38121`, line numbers included: **no gap**.
+
+**Rows at `e122d8e38121`**, each open head merged with `main` `4a90174415b7` alone, with lean's head alone and with
+both [run: `git merge-tree`, 19:22Z]. No head stops against `main` alone.
+
+| pull request | head | stops on lean's head | close, by path | how I checked it at this head |
+|---|---|---|---|---|
+| #9237 | `9d4aec0111fb` | `test_difftest.py`, one | `82a48d3a8dda`, that file only (`d9eedb9620de`) | [run] outside the one stop, git's merged file is the close's line for line; the stop is the coins import, both sides' names; ruff's unused and undefined names pass |
+| #9253 | `cf5587e21642` | `FlockVerify.lean`, one | `fed2063c5d79` (`2404be2d8b25`) | [run] the same comparison; in the stop, #9253's docstring and header, then lean's usage string |
+| #9091 | `bc68ae1efece`, new | the pin | `ceffc70c0052` (`7be654194625`) | [run] the README's command in a checkout of the merge wrote those bytes and `sha256sum -c` passed (at `e209a56847d4` with `main` `0582899c4392`); [run, from git blobs at `e122d8e38121`] 64 lines, none differs, the 46 files under `Definitions/Pous` are the tree's in order |
+| #9229 | `7cab9aeb4422`, new | none | | [run] its stop in `SpotFlock/Code.lean` is gone, against `main` and against lean's head |
+| #9176, #9080, #9212, #9075 | unchanged | none | | [run] |
+
+- [read] REFUSE's 18:43Z line, that `ceffc70c0052` is still #9091's close, agrees with mine.
+- [run] #9091's new head is one merge commit over `675dea740d6a`. Of the 20 files it changes over `main`, five differ
+  between its two heads, all made by the merge: two `pyproject.toml`, `security/Proofs/lakefile.toml`,
+  `security/Proofs/lean-audit.json` and the pin. No Lean source of its own moved.
+- [derived] So my run `606d`, cut at the old head, still tries #9091's Lean as the new head has it; its `main` is
+  `30d6fcc92ff7`, two of lean's merges behind.
+- [derived] The joined rows for `test_difftest.py` (17:23Z, 18:17Z) stand: that file is `fc4019234796` at
+  `e122d8e38121` as at every head of lean's since `64a780f498c9`, so no landing on `main` has touched it, and the four
+  heads those rows join have not moved.
+- [run] Lean's own pin at `e122d8e38121` is right for its own tree (the same check from blobs: none of 64 differs).
+- [run] The three stops between lean's last head and `main` that I named at 18:37Z (`pyproject.toml`, two spec files,
+  none ours) are closed in `e122d8e38121`: it holds `main` `4a90174415b7` as an ancestor.
+
+**A fault of mine: a Lean build on the VM, 19:10Z to 19:20Z.**
+
+- What I did: to make the pin again I cut the command out of PoUS's README with a pattern that took both of its
+  `bash` blocks, and ran them in a scratch worktree on the VM. The first block is the package's own build: `lake build`
+  of the grader, `lake exe cache get` and `lake build Proofs.Pous` in `security/Proofs` (9,744 jobs, most unpacked from
+  the cache; it completed), `check.py --build --fresh` (it refused for memory), `grade.sh` (it stopped on the pin, then
+  still conflicted) and `check.sh` (it failed at the same refusal). Only then did the pin's command run.
+- The rule it broke: the VM does no heavy work, and no call of mine blocks that long without my knowing why.
+- What it touched [run: `find`, `git status`, `pgrep`]: only the scratch worktree `/agent/repos/wt/l4p`, 11 GB of `.lake`
+  under it; nothing of it runs now; no file of the tree but the pin was written, and that only in the scratch. Plain
+  `lake build` uploads nothing [guess].
+- What it cost: ten minutes, in which the rows above waited. The answer to lean's question was already in (19:06Z).
+- What I changed: the pin is now checked from git blobs by a script that reads no checkout and runs nothing.
+- One fact came with it, unasked [run, on the VM, by that mistake]: `lake build Proofs.Pous` completed in lean
+  `e209a56847d4` with `main` `0582899c4392` and #9091 `bc68ae1efece` in. It is not a try of #9091's own files, which are
+  not under `Proofs.Pous`, and it is no run of record.
+
+**Runs** [run: `research status`, 19:25Z]: `r20261112-182303-e169` (#9253 in with `fed2063c5d79`) and
+`r20261112-182335-606d` (#9091's old head in with `ceffc70c0052`) are running; `r20261112-182234-9fdd` (my trial of
+lean's line whole at `main` `30d6fcc92ff7`) still waits for a slot; `r20261112-171809-f6bf` runs. Ends [guess]: `e169`
+and `606d` about 20:00Z, the tries first; `9fdd` 90 minutes after it starts; `f6bf` any minute.
+
+**Unread.** The by-name pass both ways over `main`'s seventeen landings up to `0582899c4392` found nothing (24 word
+hits, none a real use) [read, 18:55Z, not said before]. I have not made it over the fifteen landings from
+`0582899c4392` to `4a90174415b7`; that is next. My VM restarted at 19:00Z and lost its scratch (trial commits, scripts,
+run files); the pushed closes and the runs are untouched.
