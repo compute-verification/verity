@@ -27,11 +27,14 @@ untraced = [
     "tests/test_guard.py",
     "tests/test_lean_audit.py",
     "tests/test_lean_changed.py",
+    "tests/test_lean_prebuild.py",
     "tests/test_lean_records.py",
     "tests/test_markdown_caps_gate.py",
     "tests/test_merge_map.py",
+    "tests/test_merge_rows.py",
     "tests/test_move_check.py",
     "tests/test_mutants.py",
+    "tests/test_node_keys.py",
     "tests/test_pins.py",
     "tests/test_placement.py",
     "tests/test_plan.py",
@@ -47,6 +50,7 @@ untraced = [
     "tests/test_suite_parts.py",
     "tests/test_suites.py",
     "tests/test_tasks.py",
+    "tests/test_verdicts.py",
 ]
 # The tests read the verifier's pin, replayable sets and agreement scripts (the agreement step's inputs), check.py's
 # shipped-tree commit record, the flock-circuit build step's script and the patches its Rust tests cover, the repository
