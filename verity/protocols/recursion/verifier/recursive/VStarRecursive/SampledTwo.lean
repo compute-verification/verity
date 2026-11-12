@@ -313,6 +313,24 @@ theorem checkBlobs_refuses (hF : FORM = false) (p : Params) (c : OneStage.Commit
     (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) : checkBlobs p c e bs ≠ .accept pub prof :=
   checkBlobsAt_refuses hF p c e.source e bs pub prof
 
+def PROTOCOL : String := "verity/sampled-proofs/two-stage/v1"
+
+def protocol : Core.BlobProtocol where
+  id := PROTOCOL
+  Params := Params
+  Commitment := OneStage.Commitment
+  Evidence := Evidence
+  Public := OneStage.Public
+  Profile := Core.Integrity
+  params := paramsOfJson
+  commitment := OneStage.commitmentOf
+  evidence := evidenceOf
+  digest c := c.digest
+  check p c e := checkBlobs p c e Core.Blobs.empty
+  publicJson := OneStage.publicJson
+  profileJson := Core.Integrity.toJson
+  checkBlobs := checkBlobs
+
 #guard (paramsOfJson (Json.mkObj [("form", "one-stage")])).toOption.isNone
 #guard match paramsOfJson (Json.mkObj [("form", TWO_STAGE), ("outputs", Json.arr #["y"])]) with
   | .error e => e.startsWith "the keys of the parameters"
