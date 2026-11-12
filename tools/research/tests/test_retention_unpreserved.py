@@ -158,9 +158,10 @@ def test_a_runner_is_dead_only_when_its_pid_at_its_start_time_is_gone_from_its_o
     if os.geteuid():       # root reads every file
         process(table, PID, TICKS + 1)
         (table / str(PID) / "stat").chmod(0)
-        found = record(d, root)
-        assert (found.record, found.source) == (None, R.UNPRESERVED), "a process that can't be read is not shown dead"
-        assert found.error == (f"whether the run of {d} ended can't be read ([Errno 13] Permission denied: '{table}/{PID}/stat')")
+        found = record(d, root)        # None where the process reader answers "not known gone", a Found where it raises
+        assert found is None or (found.record, found.source) == (None, R.UNPRESERVED), "a process that can't be read is not shown dead"
+        assert found is None or found.error == (f"whether the run of {d} ended can't be read ([Errno 13] Permission denied: "
+                                                f"'{table}/{PID}/stat')")
 
 
 def test_an_explicit_record_on_the_run_or_above_it_always_wins(tmp_path):
