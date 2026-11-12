@@ -553,7 +553,7 @@ def string_of(wins: Sequence[Any], reg: Registered, tails: Sequence[Sequence[tup
     K = reg.engine.num_speculative_tokens
     if (kept is None) == bool(K) or (kept is not None and len(kept) != len(wins)):
         raise AdviceCodeError("under a draft, and only then, the string carries each window's kept terms (`kept.tails`)")
-    coded = None if kept is None else lambda e, w: [KP.put(e, K, n, counts) for n, counts in kept[w]]
+    coded = None if kept is None else lambda e, w: KP.put_window(e, K, kept[w])
     enc = CV.encode(wins, book_of(reg), tails, coded)
     return enc.bitlist(), list(enc.lens)
 

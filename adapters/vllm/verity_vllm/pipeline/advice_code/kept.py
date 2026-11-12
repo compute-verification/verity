@@ -31,7 +31,7 @@ from typing import Any
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline.advice_code import replay as R
 
-__all__ = ["context", "emitting", "get", "put", "tails"]
+__all__ = ["context", "emitting", "get", "put", "put_window", "tails"]
 
 
 def context(before: int | None, j: int) -> str:
@@ -61,6 +61,12 @@ def put(e: Any, K: int, outputs: int, counts: Sequence[int]) -> None:
         done, before = done + 1 + c, c
     if done != outputs:
         raise ValueError(f"a request's rows and the drafts they kept add up to {done} outputs, not its {outputs}")
+
+
+def put_window(e: Any, K: int, terms: Sequence[tuple[int, Sequence[int]]]) -> None:
+    """Codes one window's kept terms (`tails`), each request's by `put`, in their order."""
+    for outputs, counts in terms:
+        put(e, K, outputs, counts)
 
 
 def get(d: Any, K: int, outputs: int) -> tuple[int, ...]:

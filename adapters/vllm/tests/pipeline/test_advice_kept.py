@@ -13,6 +13,7 @@ import hashlib
 import random
 from dataclasses import replace
 from itertools import product
+from typing import Any
 
 import pytest
 
@@ -52,7 +53,8 @@ def _served(record: V.Record, reg: V.Registered, order: list[int]) -> SC.Schedul
     """The schedule of a serve under `reg` that took the requests in `order`, each as soon as the scheduler could: the
     replay's, on counts decided one emitting row at a time in the steps' order. A row keeps `_pick` of the drafts it
     carries and its request still lacks, and the rows not yet decided keep none, which every row can."""
-    K, decided = reg.engine.num_speculative_tokens, [[] for _ in record.requests]
+    K = reg.engine.num_speculative_tokens
+    decided: list[list[int]] = [[] for _ in record.requests]
     while True:
         kept = [tuple(d) + (0,) * (len(q.output) - len(d) - sum(d)) for d, q in zip(decided, record.requests)]
         if K:
@@ -177,7 +179,7 @@ def test_counts_no_row_can_have_are_refused_by_name():
     record, reg, served = _case(3)
     data = SC.encode(served, record, reg)
 
-    def with_kept(k: int, counts: tuple[int, ...]) -> SC.Schedule:
+    def with_kept(k: int, counts: tuple[Any, ...]) -> SC.Schedule:
         return served._replace(kept=tuple(counts if j == k else c for j, c in enumerate(served.kept)))
 
     assert served.kept[0] == (0, 0, 2, 1, 1)
@@ -237,18 +239,18 @@ def test_put_and_get_mirror_each_other():
     its window, and a segment cut short is refused."""
     rng = random.Random(0)
     for K in (1, 2, 3, 5):
-        requests = []
+        requests: list[tuple[int, tuple[int, ...]]] = []
         for _ in range(8):
-            outputs, counts, done = rng.randrange(1, 40), [], 0
+            outputs, done = rng.randrange(1, 40), 0
+            row: list[int] = []
             while done < outputs:
-                counts.append(rng.randrange(min(K, outputs - done - 1) + 1))
-                done += 1 + counts[-1]
-            requests.append((outputs, tuple(counts)))
+                row.append(rng.randrange(min(K, outputs - done - 1) + 1))
+                done += 1 + row[-1]
+            requests.append((outputs, tuple(row)))
         e = CV.Encoder(CV.Book.uniform())
         e.window()
         e.segment()
-        for outputs, counts in requests:
-            KP.put(e, K, outputs, counts)
+        KP.put_window(e, K, requests)
         enc = e.finish()
         assert enc.nbits > 2 and enc.lens == (enc.nbits,)
         d = CV.Decoder(enc.bits, enc.nbits, CV.Book.uniform())
