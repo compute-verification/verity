@@ -58,7 +58,7 @@ slot_line() {  # PRESET: the train slot's line, as on the live node of that shap
 plan() {
   local names first n
   names=$(printf '%s\n' "$NODES" | cut -d' ' -f1 | tr '\n' ' ')
-  first=$(printf '%s\n' "$NODES" | head -1 | cut -d' ' -f1)
+  read -r first _ <<< "$NODES"
   quota_note=""
   [ "$path" != quota ] || quota_note=$'\n    On 1024 GB nodes, give cpu-4/5 their own user-slice and session caps too (cpu-1\'s 700G and 600G are for 755 GB).'
   cat <<EOF

@@ -64,13 +64,14 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
 
   A `serving_rate` card is the engine's measured computed tokens, prompt and output, a GPU-second on the mix its
   `plan` names. It is `saturated` only where a rate above it was served and computed no more; a lower bound is
-  `saturated` false on a provisional card, and `bound` says what held the rate (compute, the KV pool, or unknown). No
-  figure reads it by its presence. `--serving measured` plans every scope at it: a scope's requests are its
-  GPU-seconds times the rate over a request's tokens, a replay takes its request's tokens over the rate, the scope's
-  GPUs stay rho's, and each exfiltration row names the rate and the rate at which its bound would reach 300 GB by
-  proportion (`tokens_per_gpu_second_at_goal_by_proportion`: the bound is taken to go as the requests, which a line
-  planned again at that rate need not do). Under a rate that is a lower bound each caption says its bounds are lower
-  bounds too. Every two-stage row, at a rate assumed or measured, holds at its verification phase's size: the first
+  `saturated` false on a provisional card, and `bound` says what held the rate (compute; the engine's step, where
+  requests waited with room in the KV pool and the record does not tell the GPUs' arithmetic from a step's token
+  budget; the KV pool; or unknown). No figure reads it by its presence. `--serving measured` plans every scope at it:
+  a scope's requests are its GPU-seconds times the rate over a request's tokens, a replay takes its request's tokens
+  over the rate, the scope's GPUs stay rho's, and each exfiltration row names the rate and the rate at which its bound
+  would reach 300 GB by proportion (`tokens_per_gpu_second_at_goal_by_proportion`: the bound is taken to go as the
+  requests, which a line planned again at that rate need not do). Under a rate that is a lower bound each caption says
+  its bounds are lower bounds too. Every two-stage row, at a rate assumed or measured, holds at its verification phase's size: the first
   stage samples a whole number of the phase's replay blocks, never fewer than one (`Spot.Rate`'s `count`), and the
   plan is priced and bounded at that count (`optimize.registration_sample`). None is what serving costs at a
   smaller verification phase, and a caption at the measured reading says so. Every JSON that read the rate names it
@@ -288,6 +289,9 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
     longest call (`--longest-call`, 64 KiB unless stated). With `--classes`, the classes of gates one reveal opens
     whole, a design by position is printed in four columns: by gates and by classes, each in calls and in
     compressions.
+  - K_s and K_m as given are means over the verifier's coins. With `--largest`, the most gates one block needs, it
+    prints beside them the gates as a count of the sample gives them: the blocks it checks (`--checked`, the
+    sessions unless stated) times that. `--largest-classes` does the same by classes.
   - It prints the sums per sampled replay block, per run and over each monitoring period, marks each above 2^-100
     (`--target`), gives the most gates that keep the collision term there, and beside them the term of the cap on
     the extractor's waits at each cap, per run (`--waits-k`).
