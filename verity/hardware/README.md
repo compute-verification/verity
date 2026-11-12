@@ -19,7 +19,7 @@ documents state of it apart from those, its network ports). Each number is an en
 | Two Xeon Platinum 8468, the H200 nodes' host | host | `cards/xeon-platinum-8468-2s.toml` | none |
 | NVIDIA DGX H200, a server none of our nodes is | server | `cards/dgx-h200.toml` | none |
 
-Every card of a kind has the same sections, a host card's `disk` apart. A GPU card's are `sm` (`count`, the SMs, and
+Every card of a kind has the same sections and entries, a host card's `disk.read` apart. A GPU card's are `sm` (`count`, the SMs, and
 `warps`, the most warps resident on one at once), `clock` (`tensor` the tensor's, `sm` every other resource's, `memory`
 device memory's),
 `store` (each store's size; `smem` is the pool of L1 and shared memory, and `smem_carveout` the most of that pool a
@@ -35,10 +35,14 @@ server's sockets and cores, and `vm_cores`, the cores a GPU that a node's VM giv
 number of the server), `clock`, `rate` (AMX MACs and SHA-512 compressions a cycle a core, and the host's op peak),
 `memory` (DRAM's channels, speed, bandwidth, measured read and write ceiling, and `speed_max`, `bandwidth_max` and
 `write_max`, a second reading of the speed, the bandwidth and the write ceiling: the channels at the fastest memory
-the processor takes, whatever DIMMs the server has) and `store` (its caches and allowances,
-and `chip`, the host's on-chip bytes in S_chip); and, only where a run read its node's disks, `disk` (`read`, the bytes
-a second the disks of the node's VM read back: like `vm_cores` a measurement of our node, so the RTX node's host card
-has it and the H200 nodes' has no entry rather than an invented one). A server card's is `link`: the line rates of the
+the processor takes, whatever DIMMs the server has), `pcie` (the PCI Express lanes into the sockets: `lanes` a
+socket and their `speed`, from the part's page; `dmi`, the chipset link a socket has apart from them, 0 where the part
+has no chipset; and `bandwidth`, the bytes a second all of them carry each way, less the coding), `disk` (`read_max`,
+the most the host's disks are read back at, all of them together: the lanes' `bandwidth`, since a disk's bytes are
+outside the sockets and enter them over a lane, whatever the disk is; and, only where a run read its node's disks,
+`read`, the bytes a second the disks of the node's VM read back: like `vm_cores` a measurement of our node, so the RTX
+node's host card has it and the H200 nodes' has no entry rather than an invented one) and `store` (its caches and
+allowances, and `chip`, the host's on-chip bytes in S_chip). A server card's is `link`: the line rates of the
 server's network ports by its guide's classes (`cluster`, `storage`, `management`), each port in one class, and `rate`,
 all of them together, which a boundary link of a host of that model carries at most each way. The DGX H200 is the
 machine the inference-only policy's `h200-hgx` location is, and `tests/test_policy.py` holds the policy's `links` to
