@@ -789,9 +789,10 @@ def test_a_branch_that_writes_code_in_an_init_the_move_deletes_is_script_failed_
     on(r, "pr", ("code in the package", {"app/data/__init__.py": "def load():\n    return 1\n"}))
     res = RS.restack("pr", move, cwd=str(r))
     assert (res["status"], res["step"]) == ("script-failed", "script") and "result" not in res
-    assert res["error"].startswith("exit 1: the move would delete 1 `__init__.py` file left in packages it empties")
-    assert "\n  app/data/__init__.py\n" in res["error"]
-    assert res["error"].endswith("or delete it in a hand commit before the move")
+    first, fix = res["error"].splitlines()
+    assert first == ("exit 1: the move would delete 1 `__init__.py` file left in packages it empties that hold more than "
+                     "comments and whitespace: app/data/__init__.py")
+    assert fix.startswith("give each a row in the map") and fix.endswith("or delete it in a hand commit before the move")
     assert RS.line(res).startswith("pr: script-failed  [")
 
 

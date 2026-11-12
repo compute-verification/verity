@@ -216,7 +216,7 @@ def test_a_path_map_that_would_delete_an_init_with_content_is_refused_naming_it_
                                   "tools/move/data_map.toml": data})
     assert _stage(monkeypatch, repo, "tools/move/data_map.toml", "--base", base, "--no-lock", "--branch", "staged") == 1
     err = capsys.readouterr().err
-    assert "failed on" in err and "(exit 1)" in err and "\n  gamma/__init__.py\n" in err
+    assert "failed on" in err and "(exit 1)" in err and "comments and whitespace: gamma/__init__.py\n" in err
     assert err.rstrip().endswith("or delete it in a hand commit before the move")
     assert git(repo, "branch", "--list", "staged") == ""
 

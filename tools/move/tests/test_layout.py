@@ -779,8 +779,10 @@ def test_an_emptied_packages_init_that_holds_more_stops_the_move_naming_it_and_t
     r, p = _run(tmp_path, {**HELD_TREE, "verity/hardware/cards/__init__.py": held,
                            "verity/hardware/nodes/__init__.py": "# the nodes\n"}, HELD_MAP, *(["--dry-run"] if dry else []))
     assert p.returncode == 1, p.stdout
-    assert "  verity/hardware/cards/__init__.py\n" in p.stderr and "nodes/__init__.py" not in p.stderr
-    assert "give each a row in the map saying where it goes" in p.stderr
+    first, fix = p.stderr.rstrip().splitlines()[-2:]
+    assert first == ("the move would delete 1 `__init__.py` file left in packages it empties that hold more than comments "
+                     "and whitespace: verity/hardware/cards/__init__.py")
+    assert fix.startswith("give each a row in the map saying where it goes")
     assert p.stderr.rstrip().endswith("or delete it in a hand commit before the move")
     assert git(r, "status", "--porcelain") == "" and (r / "verity/hardware/cards/__init__.py").read_text() == held
 

@@ -520,11 +520,11 @@ def only_comments(text: str | None) -> bool:
 
 def refuse_held(held: list[str]):
     """Stop a move that would delete `held`, the `__init__.py` files left in packages it empties that hold more than
-    comments and whitespace (`only_comments`)."""
+    comments and whitespace (`only_comments`). The first line names them, since a caller may show only that one."""
     if held:
         raise SystemExit(f"the move would delete {len(held)} `__init__.py` file{'s' * (len(held) != 1)} left in packages it "
-                         "empties, which hold more than comments and whitespace:\n" + "".join(f"  {p}\n" for p in held)
-                         + "give each a row in the map saying where it goes (on a branch, a row in its rows file "
+                         f"empties that hold more than comments and whitespace: {', '.join(held)}\n"
+                         "give each a row in the map saying where it goes (on a branch, a row in its rows file "
                          f"NAME{ROWS_SUFFIX} beside the map), or delete it in a hand commit before the move")
 
 
