@@ -600,9 +600,10 @@ def stop(conversation: str, inbox: Path, status: str = "completed", roots: tuple
     return json.loads(out)
 
 
-def test_a_message_still_queued_when_a_turn_completes_is_its_follow_up_once(tmp_path):
-    """A worker that ends its turn with no further shell command never met the shell hook's refusal, so a message sent after
-    its last command waited until it was resumed by hand. The stop hook hands it to Cursor as the turn's follow-up."""
+def test_the_stop_hook_offers_a_message_still_queued_when_a_turn_completes_as_its_follow_up_once(tmp_path):
+    """A worker that ends its turn with no further shell command never meets the shell hook's refusal, so a message sent after
+    its last command waits until it is resumed. The stop hook offers it to Cursor as the turn's follow-up, once, for a runtime
+    that honours one; no delivery relies on it, and the shell hook does not deliver again a message the stop hook took."""
     W = "bc-77777777-7777-4777-8777-777777777777"
     queue(W, "park the PR", tmp_path)
     assert stop(W, tmp_path, status="aborted") == {}

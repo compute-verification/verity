@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
-"""Cursor's `stop` hook (`.cursor/hooks.json`): an agent whose turn ends with a message still waiting gets it as the turn's
-follow-up, so a message sent after its last shell command still reaches it before its run ends.
+"""Cursor's `stop` hook (`.cursor/hooks.json`): it offers a message still waiting when an agent's turn ends to the runtime
+as the turn's follow-up. No delivery relies on it.
 
-The shell hook (`shell_hook.py`) delivers inbox messages by refusing the agent's next shell command, so a worker that ends
-its turn without another one never sees them. When a turn completes, this hook pulls the agent's pushed messages
-(`inbox.py pull`, its git calls bounded by GIT_TIMEOUT_S) and hands everything queued for it to Cursor as `followup_message`,
-which Cursor submits as the agent's next prompt. An aborted or failed turn gets nothing. A message is delivered once, by
-whichever hook takes it first, and appended to `<conversation_id>.delivered` like the shell hook's.
+A message reaches an agent at its next shell command, which the shell hook (`shell_hook.py`) refuses once with it. A cloud
+agent whose turn ends with a message waiting starts no new turn for it, so it is reached only by resuming it, and
+`inbox.py send` tells every sender so. This hook stays installed so that a runtime that honours a `stop` hook's follow-up
+delivers with no further change.
+
+When a turn completes, it pulls the agent's pushed messages (`inbox.py pull`, its git calls bounded by GIT_TIMEOUT_S) and
+hands everything queued for the agent to Cursor as `followup_message`, for the runtime to submit as the agent's next
+prompt. An aborted or failed turn gets nothing. A message is taken once, by whichever hook takes it first, and appended to
+`<conversation_id>.delivered` like the shell hook's: one this hook hands to a runtime that drops the follow-up is left only
+there.
 """
 import json
 import subprocess

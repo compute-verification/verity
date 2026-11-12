@@ -87,7 +87,8 @@ allowed command is refused once, with the message as the refusal's text, which i
 keeps the message queued, and the delivered text is appended to `<conversation_id>.delivered`. Messages pushed from other
 VMs reach the inbox through `inbox.py pull`, which the hook starts in the background, detached, at most every
 $AGENT_INBOX_POLL_S seconds per agent (default 30; `off` stops it), so the hook itself never waits on the network. A message
-still queued when the agent's turn ends is delivered by the stop hook (`stop_hook.py`) instead.
+still queued when the agent's turn ends waits until the agent is resumed, and its first command then delivers it: the stop
+hook (`stop_hook.py`) offers it to the runtime as a follow-up, and no delivery relies on that.
 
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
 them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
