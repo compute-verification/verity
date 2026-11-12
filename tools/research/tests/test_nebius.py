@@ -2888,6 +2888,9 @@ def test_n1_lease_fences_every_gpu_outside_the_pool_so_gpu_lease_takes_only_a_ho
     m, calls, _ = _n1_lease(monkeypatch, tmp_path, holders=[("gpu-pool-1", "gpu-pool-1-x", "GPU-c")])
     (tmp_path / "gl" / "2.foreign").write_text(f"pid={os.getpid()} mem=94000MiB user=research seen=2026-10-19T01:20:00Z cmd=vllm worker\n"
                                                "pid=5000000 mem=2048MiB user=research seen=2026-10-19T01:20:00Z cmd=gone\n")
+    # the lease dir is new and its lock files not yet made: nobody holds them, whatever lock the machine's list has under the
+    # inode numbers they then get (a file just released and deleted leaves its number to the next one made)
+    monkeypatch.setattr(m, "lock_holders", dict)
     s = m.Controller().tick(1_800_000_000.0)
     assert s["pool"] == 1 and [bool(g["fence_pids"]) for g in s["gpus"]] == [True, True, False, True]
     assert [g.get("foreign") for g in s["gpus"]] == [None, None, [{"pid": str(os.getpid()), "mem": "94000MiB", "user": "research",
