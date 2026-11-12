@@ -107572,3 +107572,123 @@ Turn ended on your word of 22:56Z. Nothing is running on my VM; every run below 
 - **The first one I need is `6685`**, then `ae12`. ETA: each try about 2 minutes once it has a slot; the records run about 50 minutes of slot; lines are yours to read.
 - Heads, unchanged since the 22:51Z entry: `cursor/proofs-site-v2-1dc6` at `a88978bf950f`; `cursor/proofs-composites-f4cc` at `57fb7f037f6b`; #9312 at `b034e9d200b5` and #9313 at `19474e53e4f7`, both unmarked.
 - The checkpoint note of 22:52Z is on the notes remote, with the commands to launch each run again and the body's draft.
+
+## TWOLEG, Thu 12 Nov 23:01Z: the four fixes from the pieces are on my branch (head `4b34ea95bb`), `Spot.Run.run` takes the switch, and the form's own accept lemma and its refusal at the protocol are written
+
+**In plain words.** Everything the coordinator's 22:56Z message asked of me is pushed; D and E can launch from `4b34ea95bb`:
+- the form's reading now takes the coin map's reading of the device's releases, instead of a fixed "none";
+- the projection's wiring hypothesis speaks only of plays at its own parameters;
+- the form refuses two challenger keys;
+- the stream's run takes the two-stage switch as an argument, defaulting to today's value, so the form's proofs can state acceptance with the switch on without being vacuous.
+
+I also wrote two things RUNCOINS and lean asked for:
+- the form's own lemma, which says what an accepted check ran;
+- the refusal read at the form's protocol, the shape lean's wiring dispatches to.
+
+Nothing new is compiled yet: run `7d73` builds all of it and is waiting for a slot.
+
+Clock: `date -u` read 23:00Z. Branch `cursor/proofs-twoleg-c5e5` at `4b34ea95bb`. Mailbox and the hook's 22:50Z and 22:56Z messages read; ASSEMBLY's, CUT's and RUNSAS's points answered below from the coordinator's relay [relayed]; their entries not reread.
+
+### 1. ASSEMBLY's `dev` (22:56Z point 1)
+
+Made, as ASSEMBLY proposed [read, `Reading.lean` at `4b34ea95bb`]:
+- `formReading A C S dev`, with `dev : List Verity.Release → ℕ → Option FlockDeploy.Coin` a parameter, which the coin map owes.
+- `CoinsRead A (formReading A C S dev) Acc Good g` now says that the coin the form read is `dev o.log i`. That is what D and E prove, at the coin map's `dev`.
+
+### 2. CUT's three (22:56Z point 2)
+
+- **(2) The wiring hypothesis.** Made [read, `Projection.lean`]. `ProjectionOf` now takes `∀ o, o.params = θ → V.Verdict k .sampled o → Acc o`.
+- **(3) No evidence passes both coin readers.** My form needs nothing more than REDRAW's change [read, `SampledTwo.lean` at `4b34ea95bb`]:
+  - The form hands the interior's evidence to `OneStageZk.coinsOf`, and so `drawCoins`.
+  - It hands the same evidence's `coins` to `Spot.Run.run` as the interior's coins, and so `coinsReason` (`inputOf`: `coins := b.coins`, `b = e.interior.base`).
+  - The boundary's coins (`e.coins`) go only to `Run.run`'s top `coinsReason`.
+  - So one set of fields both readers take is all the form needs [derived].
+- **(4) One key.** Made (`c9de5b54a6`, `ONE_KEY`).
+  - `paramsOfJson` refuses unless the boundary's parameters name a challenger and its `key` is the interior parameters' `challenger.key`.
+  - The interior audit's own key is read from those same interior parameters (`membersParamsOfJson` of `ip`), so all three are one key [derived].
+  - The families may differ: the first stage's and the second's.
+
+### 3. NEEDS 1 made: `Spot.Run.run (i) (form : Bool := SecondStage.FORM)` (`42808f6998`, which touches `Spot/Run.lean` and the form only)
+
+[read]
+- `interiorAudit` (private) takes `form` and passes it to `SecondStage.check`. `run` passes its `form` on. At the default, the behaviour is unchanged.
+- The form's `prepare` now takes `form` and calls `Spot.Run.run i form`, so `checkBlobsAtWith true` runs round 2 at `true`.
+- Lemmas that unfold `run` or `interiorAudit`, found by grep over every Lean package:
+  - Only `Spot.Run.run_decided` (`security/Proofs/Flock/Claims/Sampling/Select/Code.lean:123`). Its statement `run i = .ok j` now reads `run i SecondStage.FORM`, so it is unchanged. Its proof unfolds `run` and splits, with `interiorAudit` folded, so it should need no line [guess, in `7d73`].
+  - `Pieces.lean:722` calls `Run.run {…}` at the default.
+  - Nothing else unfolds `interiorAudit`.
+- RUNCOINS: state the accepted run at `Spot.Run.run i true`. A `form`-general `run_decided` is a one-word change to its statement (`run i form`), which I did not make, since it changes the statement. Its proof is the same; it is RUNCOINS's to ask for.
+
+### 4. The form's own accept lemma, for RUNCOINS (22:50Z point 2)
+
+`security/Proofs/Properties/Verity/SampledTwo/Steps.lean`, on `cursor/proofs-twoleg-c5e5`, namespace `VStar.Recursive.SampledTwo`. Not yet compiled.
+- `accepted_steps (h : checkBlobsAtWith form p c ξ e bs = .accept pub prof)` gives:
+  - `form = true`;
+  - `inputAt p c ξ e bs = .ok (c₂, ξ₂, r, i)`;
+  - `Spot.Run.run i true = .ok run` with `jeq (getD run "symbol") "accept"`;
+  - `OneStage.checkAt p.audit.base c₂ (some ξ₂) {e.interior.base with verdicts := r.out} = .accept pub prof`.
+- `inputAt_ok` gives:
+  - `c₂` is the interior record's commitment;
+  - `OneStageZk.coinsOf p.audit c₂ e.interior = .ok ξ₂`;
+  - `OneStageZk.membersRun … = .ok r` and `r.all = true`;
+  - `i = inputOf p c ξ ξ₂ e received₂ vs` with `stamped p e bs r.out = .ok vs`.
+- `finishWith_accept`: the last step.
+- I say yes to RUNCOINS's contract as in my 22:49Z section 3, with coins through `agree`.
+- What `r.all` means is open: each session's verifier, as `membersRun` runs it, accepted. That this is Flock's masked verifier accepting at `stmtAt h m₂ t` on the messages and coins the form read is E's and F's, at `SessionReading`.
+
+### 5. The refusal at the form's protocol, for lean (22:44Z point 1)
+
+[read]
+- The form now has its own `protocol : Core.BlobProtocol`, id `verity/sampled-proofs/two-stage/v1`, at its own `paramsOfJson`, `evidenceOf` and `checkBlobs`, as `OneStageZk.protocol` is (`9d61e66bd4`).
+- `security/Proofs/Properties/Verity/SampledTwo/Refused.lean`:
+  - `accepts_never (hF : FORM = false) bs p c e : ¬ (protocol.onBlobs bs).Accepts p c e`;
+  - `decodedAccepted_never (hF) bs a b e : ¬ Properties.Composition.DecodedAccepted (protocol.onBlobs bs) a b e`.
+- The second is the shape `paramsAt_of_verdict`'s proof destructures (`RecursiveRefused.lean:66-69`), so its two-stage case is one `exact`. Not yet compiled.
+
+### 6. For `heldOf` (22:50Z point 3, 22:56Z point 3)
+
+[relayed; not started]
+- Its registration carries the rule after the rate is resolved (`Rule.over`), as `HeldMatches.first` already says (`h.reg.first = ⟨{v with law, workTable}, resolved, i.closure⟩`).
+- `OwnAgrees` resets `reads := #[]`.
+- `RegHolds` carries `recordsOk h x m₁`.
+- `NamesDistinct h` is a hypothesis.
+- The premise that the interior registers no value waits on GATHER.
+- `heldOf` is built from the form's parameters and the run's input (`Run.Input`, `Run.Interior`), as `HeldMatches` reads them. The auditor's own copies, the reference statements `xS₀` with their scope proof `xS₀_ok`, `frame` and `desc`, come from the templates' files in the form's parameters. That is the largest part, and I have not sized it [guess: 300 to 600 lines].
+
+### 7. The Python twin and the difftest: two lines in files that are not mine
+
+[read]
+- The forms' twins live in the composition suite (`verity/protocols/remote/verifier/composition/tests/reference.py`), which already builds `core_vstar_recursive`. I write the twin and its difftest as new files there: `sampled_two.py` and `test_sampled_two_difftest.py`.
+- The difftest drives the form's `serve` (`BlobProtocol.main`), which needs two lines in files that are not mine (NEEDS 4 and 5).
+
+### 8. Runs
+
+- `r20261112-225954-7d73` (vy-nebius-cpu-12, proofs slot, 24 GB): `lean_changed.py --build` of `Spot/Run.lean`, `Spot/Pieces.lean`, `Select/Code.lean` and my seven files at `4b34ea95bb`. Waiting for a slot since 23:00Z; ETA 00:45Z [guess].
+- Cancelled before they held a slot, each superseded by the next head: `b424`, `e7f9`.
+
+### STOP RULE
+
+Nothing.
+- `Run.run`'s change is behaviour-preserving at the default, and no listed statement changes [derived: `run_decided`'s statement elaborates to the same term].
+- The form refuses last, and nothing imports it.
+
+### NEEDS
+
+1. Made (section 3).
+2. MEMBERS, when resumed: `membersParamsOfJson` reads `paramsParsed`. Taken by the coordinator.
+3. RUNCOINS: `accepts_of_reads` at `Rd.agree`, and its accepted run at `Spot.Run.run i true`.
+4. The owner of `verity/protocols/recursion/verifier/recursive/lakefile.toml`, a `[[lean_exe]]` with `name = "sampled-two"` and `root = "SampledTwoMain"`.
+   - The root is a new file of mine, `def main (args : List String) : IO UInt32 := VStar.Recursive.SampledTwo.protocol.main args`.
+   - Or I may add the two lines myself. Say which.
+5. The composition suite's owner, `verity/protocols/remote/verifier/composition/pyproject.toml`: `"tests/test_sampled_two_difftest.py"` added to `untraced`, since it starts `lake`. The same question.
+
+### To post
+
+Nothing.
+
+### Not established
+
+- Nothing since 22:27Z is compiled: the form, `Reading`, `Refused`, `Steps`, `Run.lean`'s change and `run_decided` still building.
+- The `simp` steps in `inputAt_ok` and `accepted_steps` are the most likely to need a fix.
+- The Python twin and difftest are not written.
+- `heldOf` is not started.
