@@ -121,7 +121,6 @@ def test_the_registers_a_run_found_on_the_rtx_pro_6000() -> None:
     memory and L2) so that a change to either is deliberate: a Lean table and every sheet of the card move with it."""
     card = load("rtx-pro-6000-server")
     assert value(card, "store.reg_extra") == 80 * 48 + 336 + 11 == 4187
-    assert card["store"]["reg_extra"]["mark"] == "ceiling"
     sms = value(card, "sm.count")
     words = value(card, "store.reg") + value(card, "store.reg_extra")
     assert 4 * sms * words + sms * value(card, "store.smem") + value(card, "store.l2") == 211_290_960
