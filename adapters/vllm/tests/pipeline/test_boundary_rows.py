@@ -244,8 +244,19 @@ def test_a_class_that_says_so_commits_the_ids_its_replay_block_returns_as_a_thir
     bw = BW.BoundaryWindows.of({"check": P.template_id(PICK), "ids": True}, tmp_path / "of")
     bw.stop()
     assert bw.ids and not BW.BoundaryWindows.of({"check": "c"}, tmp_path / "of2").ids
-    with pytest.raises(ValueError, match="as verdicts or as ids, not as both"):
+
+
+def test_no_class_commits_its_return_as_verdicts_and_as_ids(tmp_path):
+    """A replay block has one return and its class commits it once, so a serve that says both ``verdicts`` and ``ids`` is
+    refused as it starts, by name: the layout, the hook and its configuration each refuse the pair. Refused by the layout
+    alone, the serve would start and every window's commit would fail."""
+    why = "as verdicts or as ids, not as both"
+    with pytest.raises(ValueError, match=why):
         BR.Layout(PICK, 0, 1, 4, 4, 5, "a" * 128, verdicts=True, ids=True)
+    with pytest.raises(ValueError, match=why):
+        BW.BoundaryWindows(tmp_path / "x", PICK, 0, 1, 10.0, clock=lambda: 0.0, verdicts=True, ids=True)
+    with pytest.raises(ValueError, match=why):
+        BW.BoundaryWindows.of({"check": "c", "verdicts": True, "ids": True}, tmp_path / "y")
 
 
 def _fixed(L: BR.Layout) -> BR.Committed:

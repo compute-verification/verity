@@ -119,6 +119,8 @@ RETURN = "o0"
 TABLES_UNDER_A_RULE = ("a serve under a stop rule commits no history tables: a table's name holds its class's (P, O) and "
                        "slot, which a stop class and its sibling without a stop block share at the rule's T. The fix: the "
                        "table's key names which of the two its class is (`boundary_tables.KEY`)")
+#: why no class says both `verdicts` and `ids`: its replay block has one return, and the class commits it once
+ONE_RETURN = "a class commits its replay block's return as verdicts or as ids, not as both"
 MIN_CAP = 2
 #: `b.ingress`'s fields before its ids, each a u32 (``u64``: two, low first) of the request's own sampling inputs
 FIELDS = (("lp", "u32"), ("max_tokens", "u32"), ("min_tokens", "u32"), ("ignore_eos", "u32"), ("temperature", "f32"),
@@ -322,7 +324,7 @@ class Layout:
         if not HT.cap_ok(self.capacity):
             raise ValueError(f"a table's capacity is a power of two of at least 2, not {self.capacity!r}")
         if self.verdicts and self.ids:
-            raise ValueError("a class commits its replay block's return as verdicts or as ids, not as both")
+            raise ValueError(ONE_RETURN)
         if self.n_rho < 2:
             raise ValueError(f"a replay block holds two proof blocks or more (TwoStage), not {self.n_rho}: "
                              f"{self.per_prompt} a prompt row and {self.per_output} an output at ({self.prompt}, {self.outputs})")
