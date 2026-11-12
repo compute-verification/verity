@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -36,9 +37,21 @@ import tempfile
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-import sass_gate as SG  # noqa: E402
 
+
+def _gate():
+    """The SASS gate under the name every file that loads it gives it, so a process holds one: the tree's, or the copy
+    beside this file where the two were copied out of the tree."""
+    name = "pouw_harness_sass_gate"
+    if name not in sys.modules:
+        tree = HERE.parent.parent.parent / "benchmarks/pouw/harness/sass_gate.py"
+        spec = importlib.util.spec_from_file_location(name, tree if tree.is_file() else HERE / "sass_gate.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+SG = _gate()
 SOURCE = HERE / "ieee_pin.cu"
 ARCHS = {"sm_120a": 120, "sm_90a": 90}
 
