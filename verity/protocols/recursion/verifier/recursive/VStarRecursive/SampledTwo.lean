@@ -238,7 +238,7 @@ def inputOf (p : Params) (c : OneStage.Commitment) (ξ ξ₂ : ByteArray) (e : E
     interior := some
       { params := p.interior, replay := p.replay, values := p.interiorValues, record := e.record,
         received := received₂, source := ξ₂, coins := b.coins,
-        provedUnits := some (b.provedUnits.map fun n => (n : Int)), instances := some (b.instances : Int),
+        provedUnits := some (b.provedUnits.map Int.ofNat), instances := some (Int.ofNat b.instances),
         served := Lean.toJson b.served, sessionRoots := iRoots, statements := some e.stmts,
         circuits := p.circuits } }
 
