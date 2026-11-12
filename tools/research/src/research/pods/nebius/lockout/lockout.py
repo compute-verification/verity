@@ -83,7 +83,7 @@ ALLOW = (
          "its own threads); vy-sudo: own pids only"),
     Rule("/usr/local/sbin/vy-sudo", "taskset *", "journal n2 491 + n1 217 `taskset -pc|-apc CPUS PID`; vy-sudo: own pid only"),
     Rule("/usr/local/sbin/vy-sudo", "systemd-run *", "journal n1 43 + n2 31 `systemd-run --scope ... --slice=`, n1 6 `--uid= --pipe` "
-         "(jobuser.py:196, benchmarks/pouw/hidden_zk/scope.sh:14); vy-sudo: runs as the caller or a job user"),
+         "(jobuser.py unit_argv, benchmarks/pouw/hidden_zk/scope.sh:14); vy-sudo: runs as the caller or a job user"),
     Rule("/usr/local/sbin/vy-sudo", "env *", "journal n2 48 `env PATH=* systemd-run --quiet --scope` (provers.sh:8, pous_quiet.sh:8, "
          "device.sh:17, fill_runner.py:472)"),
     Rule("/usr/local/sbin/vy-sudo", "systemctl *", "journal n2 2 `systemctl stop hidden-zk-*.scope` (scope.sh:18), fill_runner.py:399 "
