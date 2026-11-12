@@ -6,9 +6,9 @@ import threading
 from types import SimpleNamespace
 
 import pytest
+from verity.protocols.certifier.verifier import replay_step as RS
 
 from tests.engine.fake_scheduler import FakeRequest, FakeScheduler, drive
-from verity.protocols.certifier.verifier import replay_step as RS
 from verity_vllm.engine import step_trace as ST
 
 
