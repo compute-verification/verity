@@ -227,6 +227,57 @@ def test_a_steady_row_that_prices_no_block_of_the_line_is_refused_by_name():
         "Map each to the line's block it measures, or to null to list it unread (--steady-map)")
 
 
+#: the two fused reads' types as a census names them, and their steady-state rows
+W13 = ('MoeExpertFp8ReadGemm_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=3072}"},K=6144,N=1,G=128,KB=128,SWAP=false,'
+       'DOT={"fn":"HopperE4m3MmaV2Dot32_v2"}}')
+W2 = ('MoeExpertFp8ReadGemmW_v1{READ={"fn":"EmbeddingRead_v1{V=256,H=4096}"},K=256,N=32,G=128,KB=128,SWAP=true,'
+      'DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}')
+FUSED_ROWS = {n: {"block": n, "statement_seconds": 2.0, "blocks": 1024, "provers": 1, "record": f"art:{t}"}
+              for t, n in (("w13", W13), ("w2", W2))}
+
+
+def fused_line(P):
+    """The proof server's line as the planner builds it before pricing: the card's per-expert strata, reads fused."""
+    case = P.sweep.served_line()["P5+poolwin600"]
+    assert case.fuse
+    return P.levers.fuse_reads(P.levers.priced_strata(case.line))
+
+
+def test_a_fused_read_s_row_prices_the_line_s_fused_block_with_no_map():
+    """A census holds a fused read as one type; the line names the block by its read and its GEMM. With no map each
+    of the two rows prices its fused block of the planner's own line, none is unread, and the pricing takes them; a
+    map entry still decides, and a type that isn't a fused read's keeps its own name."""
+    line = fused_line(H.planner())
+    fused = [x["block"] for x in line if x["kind"] == "fused"]
+    by, unread = H.placed(FUSED_ROWS, {})
+    assert sorted(by) == sorted(fused) and len(fused) == 2 and unread == []
+    assert {r["type"]: b for b, r in by.items()} == {W13: H.fused_block(W13), W2: H.fused_block(W2)}
+    assert by[H.fused_block(W13)] == FUSED_ROWS[W13] | {"block": H.fused_block(W13), "type": W13, "per_block": 1}
+    got = H.pricing(planner_price, {}, 2.0, [], by)(line)
+    assert sorted(x["block"] for x in got if x["priced"] == "steady") == sorted(fused)
+    assert [x["basis"] for x in got if x["block"] == H.fused_block(W2)] == ["steady: art:w2"]
+    assert H.placed(FUSED_ROWS, {W13: None}) == ({H.fused_block(W2): by[H.fused_block(W2)]}, [W13])
+    assert H.fused_block(QUANT) is None and H.fused_block(W13.replace("H=3072", "H=8")) is None
+    assert list(H.placed(MEASURED, {})[0]) == list(MEASURED)
+
+
+def test_beside_the_fused_reads_a_row_that_names_nothing_is_still_refused_by_name():
+    """The fused reads' rows placed with no map, a row for no block of the line still stops the pricing by its name;
+    and on a line with no fused block a fused read's row is refused with the block it was read as."""
+    line = fused_line(H.planner())
+    rows, _ = H.placed(FUSED_ROWS | {"Gone_v1{N=1}": MEASURED["Gone_v1{N=1}"]}, {})
+    with pytest.raises(ValueError) as refused:
+        H.pricing(planner_price, {}, 2.0, [], rows)(line)
+    assert str(refused.value) == (
+        "1 steady-state rows price no block of this line: `Gone_v1{N=1}`. "
+        "Map each to the line's block it measures, or to null to list it unread (--steady-map)")
+    with pytest.raises(ValueError) as refused:
+        H.pricing(planner_price, {}, 2.0, [], H.placed({W2: FUSED_ROWS[W2]}, {})[0])(LINE)
+    assert str(refused.value) == (
+        f"1 steady-state rows price no block of this line: `{W2}` (as `{H.fused_block(W2)}`). "
+        "Map each to the line's block it measures, or to null to list it unread (--steady-map)")
+
+
 def test_a_row_s_split_gives_each_basis_s_share():
     """The plan's proving by what priced it: every steady-state row's blocks under `steady`, the rest under the
     planner's table, a column cut's note left off, and the carried pages under the copy stratum's own model."""
