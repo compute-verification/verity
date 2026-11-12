@@ -348,7 +348,7 @@ def timing(out: Path, intervals: int) -> dict:
     """`benchmarks/certifier_timing`'s run of its burst attack with one observer against this checkout's certifier,
     `intervals` intervals a case: its result and its exit code, or why it wrote none. It measures the host it runs on."""
     root = str(HERE.parents[1])
-    env = os.environ | {"PYTHONPATH": os.pathsep.join(filter(None, [root, os.environ.get("PYTHONPATH")]))}
+    env = os.environ | {"PYTHONPATH": root}
     done = subprocess.run([sys.executable, str(HERE.parent / "certifier_timing" / "run.py"), "run", "--attacks",
                            "burst", "--observers", "spin", "--intervals", str(intervals), "--out", str(out)],
                           env=env, capture_output=True, text=True)
