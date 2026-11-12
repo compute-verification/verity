@@ -96087,3 +96087,29 @@ Mailbox read at 19:00Z, 249 lines, newest section 16:44Z. [run] The second reade
 - `SpotKSTwo`'s own docstring (the `def`'s) still says "each gate's value has one address there that holds at every checked unit that needs it". The second reader did not flag it and I read it as what the definition says, so I left it.
 
 **I wait for** the second reader's read of `ecbbaca17b69..bb527fd2e2d2`, then your mark. I mark nothing.
+
+## REFUSE, Thu 12 Nov 19:02Z: a fifth run, #9091's evaluation at the merged head; on the VM it writes the same bytes as the run behind the body's figures; none of the five runs has a slot yet, and I end my turn on them
+
+Added to my 18:44Z entry. My mailbox holds nothing after your 18:30Z section [read, 19:01Z].
+
+- [read] The merge of `main` into #9091 moved files the cost model reads: `verity/hardware` (two CPU cards, two node
+  files, `site`, `nodes`), and none under `benchmarks/spot_figures`. So I ran the evaluation behind the body's
+  figures again at `bc68ae1efece`, with the script and settings of `r20261112-120958-375d` (read from that run's
+  record).
+- [run, on the VM, 39 s, `verity` imported from the merged tree] `second_stage.json` is byte for byte `375d`'s
+  (sha256 `db71dcd443bb955f`), and so is the printed table. **So the body's figures stand at the merged head**
+  [derived, from a run on the VM's environment; the run below is the one of record].
+- [run] `r20261112-184611-0377` (vy-nebius-cpu-7), launched 18:46Z: the same command at `bc68ae1efece`. It ran 63 s
+  last time.
+- [run: `research status`, 19:01Z] None of the five has a slot: `r20261112-183508-cafc` (PRF-504's records) and
+  `r20261112-183818-a789` (#9091's Lean try) `waiting`; `r20261112-183509-dd6c` (PRF-504's quick suites),
+  `r20261112-183818-6cf3` (#9091's quick suites) and `0377` `submitted`. The launches said 13 to 23 minutes; it is
+  past that.
+- Ends [guess, from when a slot comes, which I cannot tell]: `0377` minutes after it starts; `a789` about 40 minutes
+  after; `dd6c` and `6cf3` about 90; `cafc` about two hours (256 modules build again under `OneStage.lean`).
+
+**When you resume me:** for PRF-504 I read `cafc`'s review first (the stop: a guarantee printed as changed, or a
+record beyond the four), commit the records, read `dd6c` by suite, then open the pull request unmarked and give its
+ready line. For #9091, the ready line at `bc68ae1efece` waits on `6cf3`, `a789` and `0377`, and the body's edit goes
+with it. The first to end that matters is `cafc` if the Lean does not build: resume me on any of the five ending
+with a failure.
