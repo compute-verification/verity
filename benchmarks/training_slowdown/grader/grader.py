@@ -227,7 +227,7 @@ def load_handover(path: Path) -> Handover:
 def load_slowdown_code(directory: Path, commit: str) -> SimpleNamespace:
     """Training's slowdown code from `directory`, the one its package (`PACKAGE`) sits in (`benchmarks/training_slowdown`), at
     `commit`: checked against the checkout's HEAD where `directory` is in a git checkout (`checked`), else taken as named.
-    Returns the modules the grader calls (`opnames`, `formalism`, `capture.products` as `products`), its version and the
+    Returns the modules the grader calls (`opnames`, `work`, `capture.products` as `products`), its version and the
     commit. Refuses a directory without it, another commit, the package already loaded from another directory in this
     process, and another capture."""
     d = Path(directory).resolve()
@@ -248,7 +248,7 @@ def load_slowdown_code(directory: Path, commit: str) -> SimpleNamespace:
         sys.path.insert(0, str(d))
     pkg = importlib.import_module(PACKAGE)
     mods = {m: importlib.import_module(f"{PACKAGE}.{p}") for m, p in (
-        ("opnames", "opnames"), ("formalism", "formalism"), ("products", "capture.products"))}
+        ("opnames", "opnames"), ("work", "work"), ("products", "capture.products"))}
     if mods["products"].CAPTURE != CAPTURE:
         raise Refused(f"the grader reads beside capture {CAPTURE}, and {THE_CODE} at {commit} captures with "
                       f"{mods['products'].CAPTURE}: update the grader to its capture first")
@@ -640,7 +640,7 @@ def against(result: dict, trace: dict, code) -> dict:
     """The circuit's matrix products (`read`'s) beside the slowdown code's product rows of the same step (`trace`,
     `load_trace`), by (phase, op, batch, m, k, n): on each side the products' count, N, O, operand widths, token dims and
     gates. The trace's widths are those its capture passes; its O has each output at its Definition's output width b_y, as
-    the slowdown code's `he_of_rows` reads it from `formalism.HE_BITS` (the narrower operand's width for a Definition it
+    the slowdown code's `he_of_rows` reads it from `work.HE_BITS` (the narrower operand's width for a Definition it
     doesn't list); its gates are each product's MACs at its gates a MAC (`gates_per_mac`), as its |C| prices them. The
     circuit's are as it wires and prices them. `agree` says which of count, N, O, widths and token dims match at every key;
     `C` holds both sides' |C| and their ratio: the step's, each op's products', all products' and the rest's (the step's
@@ -668,7 +668,7 @@ def against(result: dict, trace: dict, code) -> dict:
         e = side(_key(r["phase"], r["op"], r["dims"]), "trace")
         e["count"] += r["count"]
         if all(r["affected"]):
-            b_y = code.formalism.HE_BITS.get(r["cell_gates"], (min(r["widths"]),) * 2)[1]
+            b_y = code.work.HE_BITS.get(r["cell_gates"], (min(r["widths"]),) * 2)[1]
             e["N"] += r["count"] * r["macs"]
             e["O"] += r["count"] * r["outputs"] * b_y
         e["gates"] += r["count"] * r["macs"] * r["gates_per_mac"]
