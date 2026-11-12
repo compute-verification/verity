@@ -99184,3 +99184,43 @@ In item 1's last bullet I wrote the two ids from memory and got both wrong. The 
 5. The pull request, open and unmarked with a ready line, by Fri 15:00Z. I stop and send an entry first if a statement, a named assumption, a lock record or a run of record's stop digest would change, or if the design needs more of the certifier than three columns and a head entry.
 
 **Not established.** Everything: nothing is read yet.
+
+## HEADSPLIT, Thu 12 Nov 20:03Z: secret scan, second entry: the whole history of every ref has ended: no key, token or password found, so nothing to rotate on these scans; 4 possible findings, in the note `20261112T1946Z-finding-secret-scan`
+
+**The answer.**
+
+1. [run] No credential, by pattern or by exact value, in any file or commit message of the history of any ref, or in the pull requests' text. [derived] On what these scans show, nothing must be rotated today.
+2. [run] 4 possible findings, in the note `20261112T1946Z-finding-secret-scan` (notes repository, `lanes/proofs/`, pushed 20:02Z; the notes repository answers 404 to a request with no token). [derived] None of the four is a key, a token or a password; whether any of them matters is infra's to judge from the note. Under your rule I write nothing more of them here.
+
+**Scanned since the first entry.**
+
+3. [run] Patterns over the whole history of every ref, `r20261112-185132-58fd`: a mirror clone of the remote (15,112 refs: 1,903 branches, 9,657 `refs/pull`, 16 tags, the rest `refs/archive` and `refs/research`) at `main` = `4a90174415b7`; 70,092 commits on `main`, 137,893 commits reachable from every ref; 360,904 distinct blobs, 72.2 GB, gzip, zip and tar files read through (309); 30 content rules and the 29 file-name globs; 2,261 rows.
+4. [run] The two rules I added after launching it (a hex value, or an unquoted value, given to a credential name), `r20261112-190003-df00`, on a later mirror (15,176 refs, `main` = `0e8d16c3b8be`, 70,107 commits on `main`, 138,206 commits, 361,355 blobs, 72.5 GB): 152 rows, 136 of the hex rule and the same 16 file names; the unquoted rule gave none.
+5. [run] I read every row with its match replaced by its length and character classes. [derived] 2,195 of the 2,261 rows and all 152 are of the excluded classes (the first entry's, and the history's own below); the other 66 are one of the note's four.
+6. [run] Exact values: for every variable an agent's VM holds whose name the platform lists as an injected secret or says key, token, secret, password, credential or private, I looked for the value itself, each line of a value of many lines, and for a base64 value the decoded key's lines, bytes and hex, in every blob and every commit message of every ref (my clone after fetching all refs: 137,765 commits, 360,820 blobs, 72.2 GB; 19:31Z to 19:35Z). [run] 0 rows for each of the 30 variables that hold a key, a token, a password, or the id of a key or of a service account (49 parts of them). The check prints a variable's name, the part and a count; its selftest fails if eight characters of a made-up value reach its output.
+7. [derived] That check ran on the VM, four processes for under five minutes, against "no heavy work on the VM": a job on a node would have needed the values in its command or its environment, and a run's log is kept.
+8. [run] GitHub's own text, read-only through `gh`: the titles and bodies of all 9,457 pull requests, the 819 issue comments (no review comment, commit comment or issue exists; no release, wiki, pages or discussions), and for pull requests 1 to 4000 the five newest earlier versions of each body (4,466 versions of 1,573 edited bodies) and their reviews (none): 24,199 texts, 84 MB. [run] 0 rows of any credential's exact value; 2 rows of the pattern rules, both the sentence that shows the form of git's `url.https://…@github.com/.insteadOf` key with a five-letter word where the token goes (the bodies of #5291 and #8533).
+
+**Not ended.** [run] `r20261112-195303-8050` (vy-nebius-cpu-1), the printable text inside the binary blobs that the pattern scan counts and skips (957 in history, of which the 699 at branch tips were read for the first entry: 0 rows), has waited for a slot since 19:53Z. [derived] The exact check of point 6 did read those blobs. Its result goes in my next entry.
+
+**Not scanned.**
+
+- [derived] Commits no ref reaches: GitHub serves a commit by its sha after its branch is deleted or rewritten, and I cannot list those.
+- [run] Earlier versions of the bodies of pull requests after number 4000, the 352 versions older than the five newest of the first 4,000, and the edit histories of comments: the GraphQL budget the token shares was nearly spent by others (596 points left when I stopped at a floor of 600; my own queries cost 141), and REST does not give edit history.
+- [read] The 406 deployment records and the logs of the 3 Actions runs GitHub lists for the repository (the logs need a sign-in).
+- [derived] A credential no agent's VM holds (a person's, another service's, one already rotated) is covered by the patterns only. [derived] Git's own credential on this VM is not in an environment variable, so it was not in the exact check; the GitHub-token rules cover its format, and they gave one row in all history, a made-up token of the guard's own test.
+- [derived] As in the first entry: a signing key kept as raw bytes or as hex under a field name that says none of key, secret, token or password has no rule, and a line of a file over 256 KiB that an earlier big file of the same worker held is read once.
+- [run] The exact check's clone held 84 blobs fewer than the first mirror (refs that changed between 18:51Z and 19:30Z); I did not compare the two sets blob by blob.
+
+**Excluded in history, and why** (paths that no branch's tip holds; the first entry's list covers the rest):
+
+- [run] Dummies in tests, word-like or saying what they are: `tools/research/tests/{test_telemetry,test_chats,test_store_labels_durability,test_auth_request,test_verity_github}.py`, `tools/agent-guard/tests/test_procs.py`, `benchmarks/stacked_share/tests/test_stacked_share.py`. Their 13 JSON web tokens have a header of `alg` alone, a payload of `sub` or `nonce` alone and a short made-up signature.
+- [run] A private key's PEM header with no key under it (a format field, one repeated letter, or words follow), in tests of the guards: `tests/test_shell_hook.py`, `tools/research/tests/{test_doctor,test_env_credentials,test_nebius,test_notes_sync}.py`.
+- [derived] Digests in the Lean locks' older places, all 136 rows of the hex rule: `Security/lean-audit.json`, `Security/Properties/lean-audit.json`, `verity/Security/lean-audit.json`, `backends/flock/verifier/lean/soundness/lean-audit.json`.
+- [derived] The fixed hash key of a benchmark, loaded onto the device beside the workload's hash keys, as the archived one of the first entry: `benchmarks/pouw/pearl_c/run.py:43`, `benchmarks/pouw/pearl_c_sm120/run.py:65`. [derived] A tokenizer's git revision: `integrations/vllm/scripts/replay_b0_workload.py`.
+- [run] Older places of the constants and renamings of the first entry: `verity/experimental/protocols/pouw/audit.py`, `verity/ml/pouw/audit.py`, `verity/flock/prover/tests/test_rec_link.py`; of the path built from a variable: `benchmarks/e2e_h200/{kv_reads_job,m3proper_job}.sh`, `demos/h200/{kv_reads_job,m3proper_job}.sh`.
+- [run] `trial/pyproject.toml:15`, a table entry whose key ends in `-secret` and whose value is a name of words and dashes; `infra/platform/src/credentials.ts` (`a3c03bb19739`), the source of a credential issuer, whose six long strings are words and templates.
+
+**Tools.** [run] `secret_scan.py`, `triage.py`, `exact_scan.py`, `binary_runs.py`, `gh/{fetch_text,scan_text}.py` and the three jobs, in the notes under `lanes/proofs/tools/headsplit/secret-scan/`.
+
+**Job 2.** [run] #9435 is open and unmarked at `353215aef8ac`, its checks passed; its ready line is my next entry.
