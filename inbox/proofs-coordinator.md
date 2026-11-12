@@ -84541,3 +84541,29 @@ In plain words. Three things since 10:50Z. `main` moved once more, and both #911
 - Not run: the kernel replay of the Lean (the candidate's records run does it); slow tests outside the modules the change reaches (the tier is `--quick`); `circuit-check` (no circuit changes); `lean-agreement` (neither Flock nor its Lean verifier changes); the check of the merged candidate, which is the queue's; nothing with the form's switch on at this head.
 
 This is not a ready line: `438b` has not ended. Resume me when it has and I read it, change the body's one line and write the line. Nothing marked, nothing written to Linear or Slack, no push but the scratch branch's (10:37Z).
+
+## ACCOUNTS, Thu 12 Nov 11:05Z: #9249's ready line: the quick tier passed (63 of 63), it merges onto `main`'s tip with no stop, and no lock record moves
+
+**The line.** [#9249](https://github.com/compute-verification/verity/pull/9249) at `e28f52c10a7d`, unmarked, is ready for your mark. The four things you asked for:
+
+| Asked | Fact | Source |
+|---|---|---|
+| `af54`'s verdict | 63 suites, 63 passed (0 cached), 0 failed; 135.4 minutes of test time. No failure to name. | [run] `r20261112-100327-af54`, `stdout.log`'s last line, fetched 11:02Z; state `done`, rc 0 |
+| `git merge-tree --write-tree --name-only origin/main HEAD` | names no file, exit 0, with `main` at `5a6330f1a429` | [run] 11:03Z |
+| Stops against lean's branch beyond `main`'s own | none. Against `cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`, `main`'s tip stops in 23 files and the head stops in the same 23; none of the change's 8 files is among them. | [run] 11:04Z, three `merge-tree` calls, the file lists compared with `comm` |
+| The notice line | No lock record moves. The interface's lock (`verity/protocols/interface/lean-audit.json`) gains one line, `"format": 1`, and lists no guarantee before or after. | [run] `r20261112-100213-96fe` (the records run, pass; its lock is byte for byte the head's) |
+
+**What changed since `af54` was launched, so you can weigh it.**
+
+- `main` moved from `33faab2be81c` to `5a6330f1a429`: 39 commits over 32 files, none of them one of the change's 8 [run: `git rev-list --count`, `git diff --name-only HEAD...origin/main`, 11:03Z]. Two of the 32 are checks: `tests/test_boundaries.py` and `adapters/vllm/tools/ratchet_gate.py`.
+- `af54` ran at `0ac9c966a129` with `main` at `33faab2be81c` merged in. So I launched the same quick tier on the head with `main`'s new tip merged in (a local merge, `840ed32bb2a3`, not pushed): `r20261112-110344-5dc6`, on cpu-9, launched 11:03Z. [guess] It ends 11:45Z to 12:15Z; `af54` took 59 minutes. Its verdict goes in the body and in my 12:30Z entry.
+- The ratchet gate, `main`'s copy, over `5a6330f1a429..840ed32bb2a3`: 1 change, 0 failed [run 11:03Z].
+- The head is two commits past `0ac9c966a129`, prose only (a README paragraph, `Account.lean`'s module docstring). They were checked by `r20261112-101515-e86d` (9 suites, 9 passed) and `r20261112-101635-787d` (`Account.lean` and its 44 guards, exit 0). [derived] No declaration changed, so the records run was not repeated.
+
+**The `Goal` line.** The body now carries `Goal top/architecture-signed`. [read] #9196's and #9202's bodies carry `Lane proofs`, `Refs MEM-279`, `Goal top/architecture-signed` (`gh pr view`, 10:58Z). [run] `research goals show` lists `top/architecture-signed`, "Open architecture choices decided", on track, due Fri 13 Nov 6:00 PM. So MEM-279 needs no label for this pull request.
+
+**The body** was replaced twice with `research queue edit` (10:58Z for the `Goal` line, 11:04Z for `af54`'s verdict, `main`'s new tip and the `5dc6` row). The head did not move.
+
+**Not established.** The quick tier at `main`'s new tip (`5dc6` is out). That the candidate the queue builds passes: it holds other pull requests.
+
+**Next.** The 12:30Z entry, as ordered in your three sections. The scratch for it compiles: the tie, the head's key in the public output, the egress docstring, the wipe's three tiers and a verified read toy (`r20261112-105227-1449`, exit 0), and on the Site's v2 scratch a host's on-chip bytes and the inventory check with guards each way (`r20261112-105528-0eb0`, `r20261112-105833-430c`, `r20261112-105833-2654`, each exit 0). None of it is on the pull request's branch.
