@@ -84424,3 +84424,89 @@ The later of the two to land joins them on `main`; I redo row 9 on that head the
 - `fc27` (#9112, #9185 and `f58b4a3ef6e9`): the three selections exit 0; suites 3 passed, none failed.
 - `7b52` (twelve heads in): the two selections exit 0; suites 24 passed, 1 failed (item 5).
 - `02ef` (#8950, #9091 at its old head, #9075): both selections exit 0; suites 7 passed, none failed.
+
+## KEPT, Thu 12 Nov 10:55Z: both runs read. Lever D: the served sparse-attention program (2,765,984,170 bytes) reads in 609 s and 692 s of one core at 108.3 GB on vy-nebius-cpu-11 (`r20261112-075056-d29f`); `523f` passed, no record moved; #9253 is open at `cf5587e216`, not marked, ready line below (lean's branch: one file beyond `main`'s 23, `FlockVerify.lean`); one new thing for you: a kept process stays near 108 GB between members under the setting `main` uses
+
+Tags: [run] a command I ran and read now (a run's id, or the git command or script on the agent VM); [read] a place I read now; [relayed] another lane's statement I did not check; [derived] my arithmetic; [guess] mine. Times from `date -u`. Mailbox read 10:36Z: its last section is yours of 08:27Z. `origin/main` is `33faab2be8`; its AGENTS.md differs from `bcaf58a45d`'s in the map and one landing sentence, nothing that binds this work [run: `git diff`]. The VM was replaced again; worktrees remade, nothing unpushed was lost. GB below is 10^6 kB, the pull requests' unit.
+
+**1. Lever D, for COUNT (PRF-577). I did not touch the model's number, and nothing here is a figure of the bound.**
+
+- **The line to book** [run: `r20261112-075056-d29f`, exit 0, slot 08:12Z, ended 09:27Z]: the served sparse-attention window's program file, **2,765,984,170 bytes**, read by the Lean verifier of `main` at `bcaf58a45d` on **vy-nebius-cpu-11** (AMD EPYC-Genoa, 192 CPUs, 792,536,256 kB; load 26 and 43 at the two reads' starts), one core, under `MIMALLOC_PURGE_DELAY=-1`: **609.3 s and 692.0 s** for the three readings `verify` makes of its program, two reads in the one run. Peak memory **108.3 GB** both times (108,303,732 and 108,305,056 kB).
+- **By step** [run]:
+
+| step | read 1 | read 2 |
+|---|---|---|
+| the file's bytes | 0.60 s | 0.65 s |
+| their SHA-512 (what `--archive` adds) | 5.65 s | 6.23 s |
+| the digest, from the bytes read as JSON | 308.38 s | 237.19 s |
+| the description (`TemplateQuery.Desc.parse`), from that JSON | 88.33 s | 86.36 s |
+| the program (`Program.decode`), from that JSON | 295.25 s | 285.76 s |
+| the three readings | **691.96 s** | **609.31 s** |
+| the process, wall | 698.73 s | 616.61 s |
+| the process, CPU (user + system) | 588.46 + 110.19 s | 584.20 + 32.34 s |
+
+- **The two reads differ by system time only** [run]: user time 588.5 and 584.2 s; system 110.2 and 32.3 s. Read 1 began as the program's build released its 150.89 GB [guess: that is the cause]. Per MB of file: 0.220 s (read 2) and 0.250 s (read 1) [derived].
+- **Which file** [run: the run's record]: the population program of the 11 templates `benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json` names, one instance each, written as canonical JSON the way a window's `program.json` is. Built in the run (2,835 s, 150.89 GB of Python), not taken from a served run's record: I found none that holds one. The SHA-512 Lean computed of the file is the one Python wrote [run].
+- **What it is not** [run]: a `verify` call. It reads no statement and no session. What a setup does with the program after the readings is not in it.
+- **The check that the readings are `verify`'s program part** [run, derived]: the same reader on `ba14`'s 141,222,282-byte program, same node, same run: 31.01 s and 31.48 s (the three readings 30.59 s and 31.06 s, 0.217 and 0.220 s a MB), against the 31.0 s `ba14` took from `verify`'s own stage lines. So read 2 is the small program's rate, to 1%.
+- **Against the model's 1,006 s** [read: entry 19, section 4; derived]: that figure was measured on a file of 2,228,325,393 bytes on `main` before #8949 and #9042. This file is 24% larger and reads in 61% to 69% of it. By proportion to that file's size: 491 s to 558 s [derived, not measured].
+- **Memory** [run]: 98.4 GB resident once the JSON is read, 97.5 GB after all three; peak 108.3 GB.
+- **The other served windows, by proportion at 0.220 to 0.250 s a MB** [derived from sizes read in entry 19; not measured]: prefill step 0 (558.9 MB) 123 to 140 s; all families step 16 (277.8 MB) 61 to 70 s; prefill core (234.5 MB) 52 to 59 s.
+- **Who pays it** [derived]: on `main`, each member's `verify` process, so a window of n members pays it n times. With `verify-members` (#9190: on a branch, not on `main`) the process pays it once.
+
+**2. What it changes in the figures I gave.**
+
+- **Entry 19's guess** (590 to 610 s at 2,766.6 MB, about 480 s at 2,228 MB): read 2 is inside it, read 1 is 13% above it; at 2,228 MB the proportion from the measured reads is 491 to 558 s [derived].
+- **"Later ÷ first" in both bodies (0.17 to 0.54)** was at programs of 141 and 152 MB. At the served program the first member's program part alone is 609 to 692 s, so the ratio there is far smaller. I give no number: no session at that size was timed [derived].
+- **Memory is the one that matters, and it is new.** Both bodies' memory figures (5 to 14 GB) are at those small programs. Read at the served program, the verifier peaks at 108.3 GB [run: `d29f`].
+  - I ran one short measurement of what the kept process holds once its three readings are made [run: `r20261112-104515-e07e`, exit 0, 6.5 minutes, vy-nebius-cpu-2, load 45 to 70, #9190's head `f6d1341b85`, the 141.2 MB program, two reads each way, no statement and no session]:
+
+| | peak | held with the three readings kept | wall |
+|---|---|---|---|
+| under `MIMALLOC_PURGE_DELAY=-1` | 5.34 GB | **5.33 GB** | 32.2 s, 32.2 s |
+| under the allocator's default | 5.34 GB | **1.43 GB** | 34.8 s, 46.1 s |
+
+  - So #9190 does drop the JSON once the three are made, as its code says [read: `Flock/ProgramRead.lean:106-111` at `f6d1341b85`]; but under the setting `main`'s callers start the verifier under, the allocator gives nothing back, and the process stays at its peak [run].
+  - **At the served program, by proportion** [derived, not measured]: a kept process stays at about **108 GB** between members under the setting, and holds about **28 GB** under the default. On `main` each `verify` process reaches the same 108.3 GB, then ends.
+  - The default cost 8% and 43% more wall here, on a node whose load was rising; one run, so I do not call it a rate [run].
+- **What I did and did not do about it.** #9253's body carries both facts under "Risks". #9190's body says 13.4 GB under the setting and 5.1 GB under the default, at a 151.8 MB program beside a 1.79 GB circuit file; it does not have the served size. I did not edit it: it is marked and your word was to leave the body. Say so and I add the two sentences with `research queue edit 9190` (no push, the head does not move).
+- **Two things I can do next, neither started** [guess on the costs]:
+  - measure the held memory at the served program itself: one run, about 75 minutes, 224 GB reserved on a CPU node;
+  - the driver's side is the vLLM lane's: `verifier_env` keeps a value its caller sets, so a kept driver can start the process under the default. That is one line for VLLM-335 if you want it relayed.
+
+**3. `r20261112-074602-523f`: passed.** [run: vy-nebius-cpu-14, 07:47Z to 09:04Z, exit 0, `lean_changed.py --records verity/protocols/flock/verifier` without `--update`, at `cf5587e216`]
+
+- AUDIT PASS for each package: the verifier's (18,271 declarations in 257 modules, 11 guarantees), the certifier's Lean (1,524 in 10; 4), `security` (27,217 in 722; 1,121) with `security/Proofs` (195,578 in 3,889) and `security/Properties` (3,093 in 94; 465); each one's axioms are the three.
+- `lean-audit/audit.json`: `passed True, failed [], regenerated {}`, kind `lean-fast/v1`: no kernel replay, no tests.
+- It changes no figure. It was the last check the second pull request waited on.
+
+**4. The ready line for the second pull request.**
+
+- **Pull request:** [#9253](https://github.com/compute-verification/verity/pull/9253), `cursor/proofs-keptcircuit-7c1e`, head `cf5587e2164237a51b7d9e52b7b8b700c33adcac`, opened 10:53Z, linked to PRF-548, **not marked** [run: `research queue open`; `research queue status`: "not marked ready at cf5587e2"]. To mark: `research queue ready 9253 --mark --by proofs`.
+- **It sits on #9190.** Until #9190 lands it shows that change too: 13 files, +1,266 −126 over `main`. Its own change is 10 files, +413 −143 over `f6d1341b85` [run: `git diff --shortstat`]. #9190 is still open and marked at `f6d1341b85` [run: `research queue status`, 10:41Z].
+- **Against `origin/main`'s tip, `33faab2be8`: names no file** [run: `git merge-tree --write-tree --name-only origin/main HEAD`, 10:39Z, exit 0]. GitHub says MERGEABLE [run: `gh pr view`, 10:53Z].
+- **Against lean's branch, `f3837f57d1`, less `main`'s own 23: one file, `verity/protocols/flock/verifier/FlockVerify.lean`**, "2 conflict(s) beyond import lists" [run, 10:39Z]:
+  - that branch against `main` itself names 23 files, none of them mine;
+  - against this head it names the one file;
+  - against `main` with this head merged in (a local trial commit, pushed nowhere) it names 24: those 23 and `FlockVerify.lean`.
+  - I changed nothing to avoid it.
+- **The two places, against the first's** [run: the merged file read]:
+  - place two is the first's, line for line: their `RegBound.check …` in place of `Registered.checkComplete st.c own`, my `read.prog` for `read.progAt` on the line below;
+  - place one is the same place with a longer header on my side. Where #9190 has `def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (args : List String) (upstream …) : IO UInt32`, this one has `def verifyCmdBy (readers : ByteArray → ProgramRead.Readers) (circuits : CircuitRead.Readers) (args : List String) (upstream : Option Lean.Json := none) : StateT (Option CircuitRead) IO UInt32`, and three more comment lines above it. Their side is the same: `[--interface F]` in the usage string on the next line.
+  - So a close written for #9190's place one needs this header in place of that one; the rest carries over.
+- **#9190's head again, same commands** [run, 10:39Z]: `main`'s tip names no file; lean's branch names the same one file.
+- **Runs at the head** (the body's table has them):
+  - elaboration and axioms: `r20261112-043700-4d7c` and `r20261112-043728-486d`, exit 0 each, 7 theorems a file, no axiom beyond the three [run, read in an earlier turn];
+  - the package's Lean check: `523f`, above;
+  - quick tier: `r20261112-053423-42ee`, 60 suites, 60 passed (7 cached), 0 failed [run, read in an earlier turn];
+  - the measurement at the head: `r20261112-053448-9a71` [run, read in an earlier turn];
+  - no-growth lints against `main` at `33faab2be8`: "1 change(s), 0 failed" [run: `ratchet_gate.py origin/main HEAD` on the agent VM, 10:45Z].
+- **Records that move: none** [run: `523f`'s `regenerated {}`; no `--update`]. The body carries no notice to Daniel; it says the run regenerated no record.
+- **Before and after, one sentence:** before, a later member of a kept process hashes and parses its circuit file again; after, it reads the SHA-512 and the parse the member before it kept, where its own file's bytes (and its statement, flags and tables) are the kept ones, and its check is still `verify` on its arguments (`verifyMember_eq`).
+- **What a verifier accepts:** `verify` accepts what it accepted. A member of `verify-members` is accepted exactly when `verify` accepts its arguments. No guarantee's statement, no lock and no file under `security/` changes.
+- **The body's words:** your 21:44Z sentence leads it; it says a window's record is (b) today and that the vLLM lane's choice is not on `main`; every figure is labelled on a branch, stand-in values, one run on a loaded node. It writes no figure of the bound.
+- **The Goal warning** is the one #9190 had; I left the line, by your 08:27Z ruling.
+
+**5. Runs out: none.** `d29f`, `523f` and `e07e` have ended; I launched nothing else.
+
+**6. Your three facts, as I hold them.** I write no figure under 300 GB as reachable and no figure of the bound from these seconds: they are the verifier's seconds and memory, and booking them is COUNT's. LEAN-290: no run of mine this turn was a try, and I spend none on a `--siblings` rebuild.
