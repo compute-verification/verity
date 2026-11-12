@@ -266,3 +266,19 @@ def test_window_commit_reads_the_committers_verdict():
     bad = SimpleNamespace(run_root=b"\x01" * 64, steps=[1], extra={"identity_check": {"ok": False, "violations_n": 1}})
     assert not SR.window_commit(bad)["passed"]
     assert not SR.window_commit(SimpleNamespace(run_root=b"\x01", steps=[], extra={"errors": ["x"]}))["passed"]
+
+
+def test_window_commit_passes_a_window_whose_committer_recorded_no_check_and_no_error():
+    """`verity_vllm.commit.served_record.window_commit`: a window with a run root whose `extra` is absent or empty, or holds a null or
+    empty `identity_check` and `errors`, passed, with no errors and an empty identity check; an identity check that states no `ok`
+    is not a failed one, and only the check's four fields are reported."""
+    blank = {"passed": True, "run_root": "01" * 64, "steps": 0, "errors": [], "errors_n": 0, "identity_check": {}}
+    for extra in (None, {}, {"identity_check": None, "errors": None}, {"identity_check": {}, "errors": [], "errors_n": 0}):
+        assert SR.window_commit(SimpleNamespace(run_root=b"\x01" * 64, steps=None, extra=extra)) == blank
+    assert SR.window_commit(SimpleNamespace(run_root=b"\x01" * 64)) == blank
+    seen = SR.window_commit(SimpleNamespace(run_root=b"\x01" * 64, steps=[1], extra={"identity_check": {"steps_checked": 3, "other": 1}}))
+    assert seen == dict(blank, steps=1, identity_check={"steps_checked": 3})
+    many = SR.window_commit(SimpleNamespace(run_root=b"\x01" * 64, steps=[], extra={"errors": [str(k) for k in range(12)], "errors_n": 12}))
+    assert not many["passed"] and many["errors"] == [str(k) for k in range(10)] and many["errors_n"] == 12
+    assert not SR.window_commit(SimpleNamespace(run_root=b"", extra={}))["passed"]
+    assert not SR.window_commit(SimpleNamespace(run_root=b"\x01" * 64, extra={"errors_n": 1}))["passed"]
