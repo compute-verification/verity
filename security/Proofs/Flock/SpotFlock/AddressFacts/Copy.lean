@@ -116,8 +116,6 @@ theorem rowsFitS_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh 
   unfold HiddenExec.setupOne at hd
   rw [tagsAt_hiddenOutputs, hh] at hd
   simp only [↓reduceIte] at hd
-  have e! : p.sts[j]! = p.sts[j] := getElem!_pos p.sts j hj
-  rw [e!] at hd
   generalize hst : p.sts[j] = st at hd ⊢
   have s := Hidden.setupHidden_spec' hd
   have hcst : HmOut.parseCommit p.tags p.I.circuitFile p.I.tables = .ok st.c :=
@@ -206,6 +204,7 @@ theorem copy_of_copies (hr : r.Ok h) (hblk : r.InBlock h) {g q i : ℕ} {m : _ro
     have hblk' : r.n h / a.st.c.g < 2 ^ T.nbl := hblkA.trans_eq a.nbl_eq
     have hgi : r.n h % a.st.c.g < a.st.c.g := Nat.mod_lt _ hg0
     have hwire : r.wire h g = colAt a.st a.L.unit_built (r.n h % a.st.c.g) (r.pick h g) := by
+      classical
       show ((firstStmt (unitStmt h r.m₂ r.u)).map fun st =>
         if hb : FlockSoundness.Built (FlockSoundness.lunit st.c) then
           colAt st hb (rankAt h [] r.m₁ (unitStmt h r.m₂ r.u) r.u % st.c.g)
@@ -220,18 +219,18 @@ theorem copy_of_copies (hr : r.Ok h) (hblk : r.InBlock h) {g q i : ℕ} {m : _ro
       rfl
     let o : Fin (2 ^ T.nbl) := ⟨r.n h / a.st.c.g, hblk'⟩
     rw [hβ, Nat.mod_eq_of_lt hblkA, hwire, e1]
-    have key : ∀ (X : Fin a.rows.w) (q' b t : ℕ), X.val = r.pick h g →
+    have key : ∀ (cx : Fin a.rows.w) (q' b t : ℕ), cx.val = r.pick h g →
         FlockSoundness.Typed.msgCol a.st.c (r.n h % a.st.c.g) q' b t < 2 ^ a.st.c.kLog →
-        T.block (_root_.Flock.Readable.zOf r.p.sts.size r.wF 0 T.m) o (a.col hgi X) =
+        T.block (_root_.Flock.Readable.zOf r.p.sts.size r.wF 0 T.m) o (a.col hgi cx) =
           _root_.Flock.Readable.zOf r.p.sts.size r.wF 0 T.m (FlockSoundness.Discharge.HiddenExec.siteAddrH a o
             (FlockSoundness.Typed.msgCol a.st.c (r.n h % a.st.c.g) q' b t)) →
         _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.n h / a.st.c.g)
             (FlockSoundness.Typed.msgCol a.st.c (r.n h % a.st.c.g) q' b t) =
           _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.n h / a.st.c.g)
             (colAt a.st a.L.unit_built (r.n h % a.st.c.g) (r.pick h g)) := by
-      intro X q' b t hX hin hcp
-      have hcol : (a.col hgi X).val = colAt a.st a.L.unit_built (r.n h % a.st.c.g) (r.pick h g) := by
-        rw [col_val a hgi X, hX]
+      intro cx q' b t hX hin hcp
+      have hcol : (a.col hgi cx).val = colAt a.st a.L.unit_built (r.n h % a.st.c.g) (r.pick h g) := by
+        rw [col_val a hgi cx, hX]
       have hy : FlockSoundness.Typed.msgCol a.st.c (r.n h % a.st.c.g) q' b t < 2 ^ T.kLog := by
         rw [hkA]; exact hin
       rw [← hcol]
@@ -247,9 +246,9 @@ theorem copy_of_copies (hr : r.Ok h) (hblk : r.InBlock h) {g q i : ℕ} {m : _ro
             (FlockSoundness.Discharge.HiddenExec.siteAddrH a o
               (FlockSoundness.Typed.msgCol a.st.c (r.n h % a.st.c.g) q' b t))) :=
             (FlockSoundness.Discharge.HiddenExec.bit_siteAddrH a _ o hin).symm
-        _ = FlockSoundness.bit (T.block (_root_.Flock.Readable.zOf r.p.sts.size r.wF 0 T.m) o (a.col hgi X)) := by
+        _ = FlockSoundness.bit (T.block (_root_.Flock.Readable.zOf r.p.sts.size r.wF 0 T.m) o (a.col hgi cx)) := by
             rw [hcp]
-        _ = _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.n h / a.st.c.g) (a.col hgi X) :=
+        _ = _root_.Flock.InnerRows.bitAt r.p r.wF 0 (r.n h / a.st.c.g) (a.col hgi cx) :=
             bit_block_zOf r.p r.wF 0 hk' o _
     rw [e1] at hx
     unfold Copies at hx
@@ -257,11 +256,11 @@ theorem copy_of_copies (hr : r.Ok h) (hblk : r.InBlock h) {g q i : ℕ} {m : _ro
     · have hnIn : a.rows.nIn = a.st.c.upv * (a.st.c.unit.inWords * _root_.Flock.WORD) := by
         show a.st.c.upv * (FlockSoundness.unitRows a.st a.L.unit_built).nIn = _
         rw [a.L.unitRows_nIn]
-      let X : Fin a.rows.w := ⟨r.pick h g, by show _ < a.rows.nIn + a.rows.nComp + 1; omega⟩
+      let cx : Fin a.rows.w := ⟨r.pick h g, by show _ < a.rows.nIn + a.rows.nComp + 1; omega⟩
       have hin := FlockSoundness.Discharge.Hidden.Committed.msgCol_lt a.ht a.committed hgi hq (i / 8) (i % 8)
         (Nat.mod_lt _ (by norm_num))
-      exact key X q (i / 8) (i % 8) rfl hin
-        (FlockSoundness.Discharge.HiddenExec.copy_siteH a hz o hgi X (by rw [hnIn]; exact hxl) hkey hin)
+      exact key cx q (i / 8) (i % 8) rfl hin
+        (FlockSoundness.Discharge.HiddenExec.copy_siteH a hz o hgi cx (by rw [hnIn]; exact hxl) hkey hin)
     · obtain ⟨m', hm', hs⟩ := hsm
       rw [Option.some.inj (hm'.symm.trans hm)] at hs
       have hce : _root_.Flock.HmOut.unrolled a.st.c = m.1 := by
@@ -281,7 +280,7 @@ theorem copy_of_copies (hr : r.Ok h) (hblk : r.InBlock h) {g q i : ℕ} {m : _ro
           a.st.c.upv * ((FlockSoundness.unitRows a.st hb').nComp + 1) :=
         Nat.mul_le_mul_right _ (by rw [← hup]; exact hu')
       rw [add_one_mul] at hmul
-      let X : Fin a.rows.w := ⟨r.pick h g, by
+      let cx : Fin a.rows.w := ⟨r.pick h g, by
         show _ < a.st.c.upv * (FlockSoundness.unitRows a.st hb').nIn +
           a.st.c.upv * ((FlockSoundness.unitRows a.st hb').nComp + 1) + 1
         rw [hxe, hup]
@@ -290,8 +289,8 @@ theorem copy_of_copies (hr : r.Ok h) (hblk : r.InBlock h) {g q i : ℕ} {m : _ro
       have hin := FlockSoundness.Discharge.Hidden.Committed.msgCol_lt a.ht a.committed hgi
         (show _root_.Flock.HmOut.nIn m.1 + jo < a.st.c.ports.size by rw [hm1]; exact (hrfA.1.2 jo hjo').1)
         ((16 * k + t) / 8) ((16 * k + t) % 8) (Nat.mod_lt _ (by norm_num))
-      exact key X _ _ _ rfl hin
-        (FlockSoundness.Discharge.HiddenExec.out_copyH a hce ho hrf hz o hgi X hu' hj' ht h1 h2 hxe hjo hk2
+      exact key cx _ _ _ rfl hin
+        (FlockSoundness.Discharge.HiddenExec.out_copyH a hce ho hrf hz o hgi cx hu' hj' ht h1 h2 hxe hjo hk2
           (by rw [hw]; exact getElem!_pos _ j hj'))
 
 end CheckedRun
