@@ -13,6 +13,7 @@ boundary linkage (declared prompt -> input ids; sampled id[s-1] -> input id[s]) 
 from __future__ import annotations
 
 import copy
+import ctypes
 import gc
 import hashlib
 import inspect
@@ -23,13 +24,20 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from verity_vllm.check.replay import definitions as DF
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.check.replay.linkage import LINKAGE_SCHEMA
 from verity_vllm.commit import challenge as CH
+from verity_vllm.commit import executed_prefix as EPX
 from verity_vllm.commit import opened as OV
 from verity_vllm.commit import store_dump as SD
+from verity_vllm.log import init_logger
+from verity_vllm.pipeline import serving_rows as SRW
+from verity_vllm.pipeline import vu_store as VUX
+from verity_vllm.query.manifest import format as MF
 
-
-class ReplayReused(Exception):
-    """Control flow: this pair's C2 record is the cached one (see --replay-cache)."""
+logger = init_logger(__name__)
 
 
 def rss_kb() -> tuple[int | None, int | None]:
@@ -41,8 +49,18 @@ def rss_kb() -> tuple[int | None, int | None]:
             elif line.startswith("VmHWM:"):
                 hwm = int(line.split()[1])
         return cur, hwm
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, IndexError):
         return None, None
+
+
+def mib(kb: int | None) -> int | None:
+    """An `rss_kb` reading in whole MiB; None where there is none."""
+    return None if kb is None else kb >> 10
+
+
+def freed_mib(before: int | None, after: int | None) -> int | None:
+    """The whole MiB that left the resident set between two `rss_kb` readings; None where either is absent."""
+    return None if before is None or after is None else (before - after) >> 10
 
 
 @dataclass
@@ -76,15 +94,11 @@ class ReplaySources:
 
 
 def live_weights(model: Any, prefix: str) -> Callable:
-    from verity_vllm.check.replay import driver as SR
-
     return SR.model_weights_provider(model, prefix)
 
 
 def vu_export(args: Any, pair: int, rc: Any, manifest: Any, versions: dict[str, Any], eng: Any) -> Callable:
     """The in-process replay's VU export hook (`pipeline.vu_store.after_replay`)."""
-    from verity_vllm.pipeline import vu_store as VUX
-
     return lambda sr, progs, bm, rd, wp, arr, sr_kw, loaded, digs: VUX.after_replay(
         args.vu_export_dir, sr, pair, rc.run_root, progs, bm, rd, wp, arr, manifest, sr_kw, loaded, digs, versions, eng)
 
@@ -128,39 +142,37 @@ def cache_key(s: ReplaySources) -> str | None:
                            "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "targets": list(getattr(args, "replay_target", None) or []), "k": args.replay_k,
                            "code": s.versions.get("git_head"), "weights_root": _w_ref_k, "committer": s.com.name, "retain": getattr(args, "retain", None)}, sort_keys=True)
     except Exception as _ke:  # noqa: BLE001  -- no key, no reuse
-        print(f"[delta] replay cache: no key for pair {s.pair} ({_ke!r}); replay runs", flush=True)
+        logger.warning("[delta] replay cache: no key for pair %s (%r); replay runs", s.pair, _ke)
         return None
 
 
 def run(s: ReplaySources, replay_cache: dict[str, dict[str, Any]]) -> None:
     """The replay + linkage of the run on `s`, their artifact (`sampled_replay_p<pair>.json`) and their components on `s.row`.  A
     replay this host cannot hold (`driver.PoolDoesNotFit`) is raised, not recorded: it says nothing about the run."""
-    from verity_vllm.check.replay.driver import PoolDoesNotFit
-
     pair, rc = s.pair, s.rc
     _rc_key = cache_key(s)
     _cached = replay_cache.get(_rc_key) if _rc_key is not None else None
     if _rc_key is not None and _cached is None and replay_cache:
         _k0, _v0 = next(iter(replay_cache.items()))
         _d0 = sorted(k for k in json.loads(_k0) if json.loads(_k0)[k] != json.loads(_rc_key).get(k))
-        print(f"[delta] replay cache: pair {pair} key differs from pair {_v0['pair']}'s in {_d0}: own replay (root {rc.run_root.hex()[:16]} vs {_v0['run_root'][:16]})", flush=True)
+        logger.info("[delta] replay cache: pair %s key differs from pair %s's in %s: own replay (root %s vs %s)", pair, _v0["pair"], _d0,
+                    rc.run_root.hex()[:16], _v0["run_root"][:16])
     s.tl.start("validate.sampled_replay", pair=pair, cached=_cached is not None)
     held: dict[str, Any] = {}
-    try:
-        if _cached is not None:
-            raise ReplayReused()
-        sr, lk = evaluate(s, held)
-        if _rc_key is not None and sr.get("result") is not None:
-            replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(s.out / f"sampled_replay_p{pair}.json"),
-                                     "seed": (sr.get("sample") or {}).get("seed"), "code": s.versions.get("git_head")}
-    except ReplayReused:
+    if _cached is not None and _rc_key is not None:
         sr, lk = reused(s, _cached, _rc_key)
-    except PoolDoesNotFit:
-        raise
-    except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
-        sr = {"schema": "verity-sweep/sampled-replay/v1", "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated",
-              "why": f"sampled replay not run: {e!r}"[:300], "error": repr(e)[:300]}
-        lk = {"schema": "verity-sweep/boundary-linkage/v1", "result": None, "why": f"boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0}
+    else:
+        try:
+            sr, lk = evaluate(s, held)
+            if _rc_key is not None and sr.get("result") is not None:
+                replay_cache[_rc_key] = {"pair": pair, "run_root": rc.run_root.hex(), "sr": sr, "lk": lk, "artifact": str(s.out / f"sampled_replay_p{pair}.json"),
+                                         "seed": (sr.get("sample") or {}).get("seed"), "code": s.versions.get("git_head")}
+        except SR.PoolDoesNotFit:
+            raise
+        except Exception as e:  # noqa: BLE001  -- fail closed: an unrunnable replay is 'not evaluated', never PASS
+            sr = {"schema": SR.SCHEMA, "method": "sampled-exact-replay", "result": None, "grade": "not-evaluated",
+                  "why": f"sampled replay not run: {e!r}"[:300], "error": repr(e)[:300]}
+            lk = {"schema": LINKAGE_SCHEMA, "result": None, "why": f"boundary linkage not run: {e!r}"[:300], "pairs": 0, "linked": 0}
     _art = s.out / f"sampled_replay_p{pair}.json"
     _art.write_text(json.dumps({"sampled_replay": sr, "boundary_linkage": lk}, indent=1, default=str) + "\n")
     free_programs(sr, held, pair)
@@ -185,8 +197,8 @@ def reused(s: ReplaySources, _cached: dict[str, Any], _rc_key: str) -> tuple[dic
         sr["sample"]["evaluated_here"] = 0
     _cached.setdefault("shared_by", []).append({"pair": pair, "run_root": rc.run_root.hex(), "root_equal": True,
                                                 "artifact": str(s.out / f"sampled_replay_p{pair}.json")})
-    print(f"[delta] C2 SAMPLED REPLAY (pair {pair}): REUSED pair {_cached['pair']}'s record (identical key: run root {rc.run_root.hex()[:16]}, "
-          f"seed {_cached['seed']}, code {str(_cached['code'])[:9]}); no VU evaluated here", flush=True)
+    logger.info("[delta] C2 SAMPLED REPLAY (pair %s): REUSED pair %s's record (identical key: run root %s, seed %s, code %s); no VU evaluated here",
+                pair, _cached["pair"], rc.run_root.hex()[:16], _cached["seed"], str(_cached["code"])[:9])
     return sr, lk
 
 
@@ -195,9 +207,6 @@ def programs_of_record(s: ReplaySources, _rl: dict[str, str], *, definitions: bo
     record (--program-digest, B=1) or one of the manifest's component digests (B>=2), and the Definitions this tree evaluates their
     rows by must be the ones their Builds bound (`check.replay.definitions`); else REFUSED by name.  ``definitions=False`` for a
     caller that evaluates no row (the replay's plan, the serving rows): the replay that grades the picks checks them."""
-    from verity_vllm.check.replay import definitions as DF
-    from verity_vllm.query.manifest import format as MF
-
     args, required_manifest, reqs, sampling = s.args, s.manifest, s.reqs, s.sampling
     _of_record = set()
     if getattr(args, "program_digest", None):
@@ -236,8 +245,6 @@ def arrivals(s: Any, rl: dict[str, str]) -> tuple[dict[str, int], bool]:
     """Each request's arrival step, and whether it moved off the declared one.  One schedule of record for every consumer: when the
     population was placed on the engine's committed-step axis (binding.coverage.schedule.use == observed), the replay's, the
     linkage's and the serving rows' arrivals are the same observed ones."""
-    from verity_vllm.check.replay import driver as SR
-
     declared = {rl[str(r.get("request_id"))]: int(r.get("arrive_step") or 0) for r in s.reqs}
     sched = (((s.row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
     return SR.arrivals_of_record(declared, sched)
@@ -248,8 +255,6 @@ def seed_of(args: Any, rc: Any) -> tuple[int, str, str, str | None]:
     run root)[:8], else the run root's first 8 bytes.  That last form has no coin: a prover steers the sample by committing again, in about
     the lesser of 1/p and 2^64 tries (p: the chance one sample misses its faults), so such a replay is a measurement.  The Commit's own
     replay reads its two flags here and no coin of a challenger gate; the served C2 passes its replay challenge (`pipeline.served_match`)."""
-    from verity_vllm.check.replay import driver as SR, replay_codes as RC
-
     _seed_chal = None
     if getattr(args, "replay_seed", None) is not None:
         _seed, _seed_src, _seed_form = int(args.replay_seed), RC.PROVER_SEED_SOURCE, "prover-chosen"
@@ -273,8 +278,6 @@ def linkage_facts(loaded: dict, progs: dict, index: Any) -> dict[str, Any]:
 
 def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
     """Each request Program's steps of record: its Build result's T + 1, else its rows' segment steps."""
-    from verity_vllm.query.manifest import format as MF
-
     return {k: (int(v["result"]["T"]) + 1) if (v.get("result") or {}).get("T") is not None else (len(MF.segment_steps(progs[k]["rows"], progs[k].get("checks"))) if k in progs else None)
             for k, v in loaded.items()}
 
@@ -285,8 +288,6 @@ def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int]
     Program's Build result -- the prescribed-input linkage reads BOTH from the record, never from the served run.  The linkage horizon is the request's PROGRAM OF RECORD's, not the workload cap: horizon = min(cap,
     Program steps) -- the Program's T from its Build result (result.json T) else its ProgramIndex.n_steps; a request whose committed steps
     are FEWER than its Program of record still fails by name (the chain rule is unchanged inside the horizon).  Recorded per request."""
-    from verity_vllm.check.replay import driver as SR
-
     sampling = s.sampling
     return [{"request_id": _rl[str(r.get("request_id"))], "arrive_step": _arr[_rl[str(r.get("request_id"))]],
              "prompt_token_ids": list(r["prompt_token_ids"]), "cached": int(r.get("cached") or 0),
@@ -314,9 +315,6 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
     `population.not_executed_by_rule`, fed with named record facts (`EPX.executed_prefix_facts`) -- never literals.  On a tree without
     the `executed_prefix=` kwarg nothing bounds the replay population: an EOS-stopped request's rows past the stop are sampled and grade 'not
     evaluated' -> partial, never PASS.  An older signature receives only the arithmetic's facts."""
-    from verity_vllm.commit import executed_prefix as EPX
-    from verity_vllm.check.replay import driver as SR
-
     _sr_kw: dict[str, Any] = {}
     _ep_facts = EPX.executed_prefix_facts(_epr_r, s.row["commit"].get("binding") or {}, lk, _arr, s.stop_of_record,
                                           served_tokens={_rl[str(k)]: [int(t) for t in v] for k, v in s.tokens.items() if str(k) in _rl})
@@ -325,18 +323,24 @@ def executed_prefix_kw(s: ReplaySources, _epr_r: dict, lk: dict, _arr: dict, _rl
         _sr_kw["executed_prefix"] = {} if s.args.replay_k and not _epr_r["any_eos_stop"] else {k: SR.executed_prefix_of_record(k, **f) for k, f in _ep_facts.items()}
         _flt = {k: v["faults"] for k, v in _sr_kw["executed_prefix"].items() if v.get("faults")}
         if _epr_r["any_eos_stop"] or _flt:
-            print("[delta] not-executed class -> sampled_replay(executed_prefix=): " + ", ".join(
-                f"{k} a_r {v['a_r']} n_exec {v['n_exec']} cap {v['cap']}" for k, v in _sr_kw["executed_prefix"].items())
-                  + (f"; FAULTS {_flt}" if _flt else "; no faults"), flush=True)
+            (logger.warning if _flt else logger.info)(
+                "[delta] not-executed class -> sampled_replay(executed_prefix=): %s%s",
+                ", ".join(f"{k} a_r {v['a_r']} n_exec {v['n_exec']} cap {v['cap']}" for k, v in _sr_kw["executed_prefix"].items()),
+                f"; FAULTS {_flt}" if _flt else "; no faults")
     elif _epr_r["any_eos_stop"]:
-        print("[delta] WARNING: this tree's sampled_replay has no executed_prefix=: the EOS-stopped "
-              "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS", flush=True)
+        logger.warning("[delta] WARNING: this tree's sampled_replay has no executed_prefix=: the EOS-stopped "
+                       "request's rows past the stop are sampled as ordinary strata and grade 'not evaluated' -> C2 partial, never PASS")
     return _sr_kw, _ep_facts
 
 
 def live_only(s: ReplaySources) -> str | None:
+    """`live_only_entry` of the run's protocols."""
+    return live_only_entry(s.protocols)
+
+
+def live_only_entry(protocols: Any) -> str | None:
     """The protocol entry whose replay reads the live run (`pouw_circuit.around`): such a run's C2 cannot be deferred to a bundle."""
-    entries = getattr(s.protocols, "entries", None) or ()
+    entries = getattr(protocols, "entries", None) or ()
     if not entries:
         return None
     from verity_vllm.check.replay import pouw_circuit as PWC
@@ -359,9 +363,6 @@ def serving_rows(s: ReplaySources) -> None:
     """The in-Commit hook (`serving_rows.readers`) at the C2 site of a run whose replay is deferred to its bundle: the window
     committed from `s.com` over the Programs of record, as `evaluate` commits it in process, once the run's roots are final and
     before sampling (the deferred replay samples on CPU, after the bundle is sealed).  ``served``, as the in-process replay's is."""
-    from verity_vllm.check.replay import driver as SR
-    from verity_vllm.pipeline import serving_rows as SRW
-
     bm = json.loads((s.out / f"binding_map_p{s.pair}.json").read_text())
     rl = request_labels(s.reqs)
     loaded, digs = programs_of_record(s, rl, definitions=False)
@@ -375,9 +376,6 @@ def serving_rows(s: ReplaySources) -> None:
 def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, planner: Any = None) -> tuple[dict[str, Any], dict[str, Any]]:
     """The replay + linkage records; the Programs and readers they read stay in `held` for `free_programs` to release and measure.
     ``plan``: the sample's reads only (`plan`), with the Programs and the sample the ``planner``'s when there is one."""
-    from verity_vllm.commit import executed_prefix as EPX
-    from verity_vllm.check.replay import driver as SR
-
     args, rc, reqs, sampling, row, pair = s.args, s.rc, s.reqs, s.sampling, s.row, s.pair
     held["bm"] = _bm = json.loads((s.out / f"binding_map_p{pair}.json").read_text())
     _rl = request_labels(reqs)
@@ -387,14 +385,13 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
     _arr, _moved = arrivals(s, _rl)
     if _moved:
         _sched_r = (((row.get("commit") or {}).get("binding") or {}).get("coverage") or {}).get("schedule") or {}
-        print(f"[delta] replay/linkage arrivals follow the engine schedule of record: {_arr} (declared {_sched_r.get('declared_arrive_steps')})", flush=True)
+        logger.info("[delta] replay/linkage arrivals follow the engine schedule of record: %s (declared %s)", _arr, _sched_r.get("declared_arrive_steps"))
     if facts is None:
         _k0 = next(iter(_progs))
         held["pi0"] = _pi0 = SR.ProgramIndex(_progs[_k0], program_dir=_loaded[_k0].get("dir"))
         facts = linkage_facts(_loaded, _progs, _pi0)
-    from verity_vllm.pipeline import serving_rows as SRW
-    _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else None, _progs, _bm, _arr,
-                                  _loaded, s.manifest, args.label, _digs)
+    _wp, held["rd"] = SRW.readers(args.serving_rows, s.com, rc, s.weights_of(held["pi0"].prefix) if "pi0" in held else no_weights, _progs, _bm,
+                                  _arr, _loaded, s.manifest, args.label, _digs)
     _rd = held["rd"]
     _wc = None if plan else s.weights_check()
     _seed, _seed_src, _seed_form, _seed_chal = seed_of(args, rc)
@@ -408,8 +405,9 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
                                            eos_of_record=s.stop_of_record.get("eos"), lag=s.stop_of_record.get("lag"))
     _horizons = ({k: int(v["executed_prefix_len"]) for k, v in _epr_r["requests"].items()} if _epr_r["ok"] else None)
     if _epr_r["any_eos_stop"]:
-        print(f"[delta] replay/linkage horizons = the executed prefix of record: {_horizons} (LAG {_epr_r['lag']}; "
-              f"{'ok' if _epr_r['ok'] else 'PROBLEMS ' + str(_epr_r['problems'][:2])})", flush=True)
+        (logger.info if _epr_r["ok"] else logger.warning)(
+            "[delta] replay/linkage horizons = the executed prefix of record: %s (LAG %s; %s)", _horizons, _epr_r["lag"],
+            "ok" if _epr_r["ok"] else "PROBLEMS " + str(_epr_r["problems"][:2]))
     _wreq = linkage_requests(s, _rl, _arr, facts["program_steps"], _horizons)
     # the Program's declared stop rule + LAG = stop_rule_of_record; None = undeclared / unattested ->
     # a request linked over fewer steps than its cap fails closed by name -- never the engine value as the rule
@@ -446,10 +444,15 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
                                                                                   "facts_of_record": _ep_facts, "mechanism": ("population.not_executed_by_rule" if "executed_prefix" in _sr_kw else "none in this tree (rows past the stop sampled as ordinary strata)")}
     reconcile(s, sr, _bm, _rd, _epr_r, _sr_kw)
     sr["value_source"] = dict(_rd.record(), forked_children=sr.pop("value_reads_in_children", None))
-    print(f"[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair {pair}): {OV.filed(row['commit'], 'replay_linkage', sr['value_source'])}", flush=True)
+    logger.info("[delta] C2 SAMPLED REPLAY + LINKAGE opened values (pair %s): %s", pair, OV.filed(row["commit"], "replay_linkage", sr["value_source"]))
     if s.after_replay is not None:
         s.after_replay(sr, _progs, _bm, _rd, _wp, _arr, _sr_kw, _loaded, _digs)
     return sr, lk
+
+
+def no_weights(*a: Any, **kw: Any) -> Any:
+    """The weights provider where the Programs are a planner's and none is loaded here: its plan evaluates no row, so no weight is read."""
+    raise RuntimeError("no weights provider: the Programs are a planner's, whose plan evaluates no row")
 
 
 def replayed(protocols: Any, run: Callable[[], dict[str, Any]]) -> dict[str, Any]:
@@ -468,20 +471,19 @@ def reconcile(s: ReplaySources, sr: dict, _bm: dict, _rd: Any, _epr_r: dict, _sr
     """ONE mechanism, reconciled on the record: the Commit's classification of the manifest identities
     (binding coverage) and the population's third bucket must name the same identities -- n_exec per request, count per row family; a
     batch-level / named-input family is outside the population split's reach and is named, not equal."""
-    from verity_vllm.commit import executed_prefix as EPX
-
     row, pair = s.row, s.pair
     if "executed_prefix" in _sr_kw and _epr_r["any_eos_stop"]:
         _cc = (((row["commit"].get("binding") or {}).get("population") or {}).get("manifest") or {}).get("not_executed_by_rule")
         _recon = EPX.reconcile_not_executed(_cc, (sr.get("population") or {}).get("not_executed_by_rule"), _epr_r, manifest_identities=s.ids_full)
         sr["not_executed_reconciliation"] = _recon
         row["commit"]["not_executed_reconciliation"] = _recon
-        print(f"[delta] not-executed reconciliation (pair {pair}): {'AGREE' if _recon['ok'] else 'DISAGREE'} n_exec "
-              + ", ".join(f"{k} {v['commit']}/{v['population']}" for k, v in _recon["n_exec"].items())
-              + f"; row families {[(f, d['commit'], d['population']) for f, d in _recon['by_family'].items()]}"
-              + (f"; outside the population split's reach {[(f, d['commit'], d['population_N_excluded']) for f, d in _recon['outside_population_reach'].items()]}"
-                 if _recon["outside_population_reach"] else "")
-              + (f"; PROBLEMS {_recon['problems'][:3]}" if _recon["problems"] else ""), flush=True)
+        (logger.info if _recon["ok"] else logger.warning)(
+            "[delta] not-executed reconciliation (pair %s): %s n_exec %s; row families %s%s%s", pair, "AGREE" if _recon["ok"] else "DISAGREE",
+            ", ".join(f"{k} {v['commit']}/{v['population']}" for k, v in _recon["n_exec"].items()),
+            [(f, d["commit"], d["population"]) for f, d in _recon["by_family"].items()],
+            (f"; outside the population split's reach {[(f, d['commit'], d['population_N_excluded']) for f, d in _recon['outside_population_reach'].items()]}"
+             if _recon["outside_population_reach"] else ""),
+            f"; PROBLEMS {_recon['problems'][:3]}" if _recon["problems"] else "")
         if not _recon["ok"]:
             _cv = row["commit"].get("coverage")
             if isinstance(_cv, dict) and _cv.get("ok"):            # in place: row["commit"]["coverage"] and rc.extra["coverage"] alias one dict
@@ -498,19 +500,17 @@ def free_programs(sr: dict, held: dict[str, Any], pair: int) -> None:
     held.clear()
     gc.collect()
     _rss_c2g = rss_kb()[0]
-    _trim = None
+    _trim: int | str | None = None
     try:
-        import ctypes
-
         _trim = int(ctypes.CDLL("libc.so.6").malloc_trim(0))
     except Exception as e:  # noqa: BLE001  -- not glibc: the gc-only delta stands, named
         _trim = repr(e)[:80]
     _rss_c2b = rss_kb()[0]
-    sr["programs_freed"] = {"rss_before_kb": _rss_c2a, "rss_after_gc_kb": _rss_c2g, "rss_after_kb": _rss_c2b, "freed_mib": (_rss_c2a - _rss_c2b) >> 10,
-                            "freed_by_gc_mib": (_rss_c2a - _rss_c2g) >> 10, "freed_by_malloc_trim_mib": (_rss_c2g - _rss_c2b) >> 10, "malloc_trim": _trim,
+    sr["programs_freed"] = {"rss_before_kb": _rss_c2a, "rss_after_gc_kb": _rss_c2g, "rss_after_kb": _rss_c2b, "freed_mib": freed_mib(_rss_c2a, _rss_c2b),
+                            "freed_by_gc_mib": freed_mib(_rss_c2a, _rss_c2g), "freed_by_malloc_trim_mib": freed_mib(_rss_c2g, _rss_c2b), "malloc_trim": _trim,
                             "when": "after the sampled-replay + boundary-linkage records, before openings-after-release"}
-    print(f"[delta] C2 PROGRAMS FREED (pair {pair}): RSS {_rss_c2a >> 10} -> {_rss_c2g >> 10} (gc) -> {_rss_c2b >> 10} MiB (malloc_trim {_trim}): "
-          f"{(_rss_c2a - _rss_c2b) >> 10} MiB back before the openings-after-release replay", flush=True)
+    logger.info("[delta] C2 PROGRAMS FREED (pair %s): RSS %s -> %s (gc) -> %s MiB (malloc_trim %s): %s MiB back before the openings-after-release "
+                "replay", pair, mib(_rss_c2a), mib(_rss_c2g), mib(_rss_c2b), _trim, freed_mib(_rss_c2a, _rss_c2b))
 
 
 def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
@@ -543,19 +543,22 @@ def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
             vc["result"] = False
     if vc["result"] is None and sr.get("result") is True and lk.get("result") is True and s.vc_result in (None, True):
         vc["result"] = True
-    print(f"[delta] C2 SAMPLED REPLAY (pair {pair}): {str(sr.get('grade')).upper()} evaluated {_smp.get('evaluated')} equal {_smp.get('equal')} "
-          f"mismatch {_smp.get('mismatch_n')} not-evaluated {_smp.get('not_evaluated_n')} of population {(sr.get('population') or {}).get('vus')} VUs in "
-          f"{(sr.get('population') or {}).get('strata_n')} strata (per-stratum {_smp.get('per_stratum')}, seed {_smp.get('seed')}); "
-          f"not-evaluable {(sr.get('population') or {}).get('not_evaluable')}{(' -- ' + str(sr.get('why'))) if sr.get('why') else ''}", flush=True)
+    logger.info("[delta] C2 SAMPLED REPLAY (pair %s): %s evaluated %s equal %s mismatch %s not-evaluated %s of population %s VUs in %s strata "
+                "(per-stratum %s, seed %s); not-evaluable %s%s", pair, str(sr.get("grade")).upper(), _smp.get("evaluated"), _smp.get("equal"),
+                _smp.get("mismatch_n"), _smp.get("not_evaluated_n"), (sr.get("population") or {}).get("vus"),
+                (sr.get("population") or {}).get("strata_n"), _smp.get("per_stratum"), _smp.get("seed"),
+                (sr.get("population") or {}).get("not_evaluable"), (" -- " + str(sr.get("why"))) if sr.get("why") else "")
     if _smp.get("mismatch_n") and isinstance(sr.get("mismatch_by"), dict):        # every mismatch by name
-        print(f"[delta] C2 SAMPLED REPLAY (pair {pair}): mismatches by family|request|phase {sr['mismatch_by'].get('by_family_request_phase')}", flush=True)
-    print(f"[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair {pair}): {'OK' if lk.get('result') else ('FAIL' if lk.get('result') is False else 'NOT RUN')} "
-          f"{lk.get('linked')}/{lk.get('pairs')} (step, request) boundaries linked{(' -- ' + str(lk.get('why'))) if lk.get('why') else ''}", flush=True)
+        logger.warning("[delta] C2 SAMPLED REPLAY (pair %s): mismatches by family|request|phase %s", pair,
+                       sr["mismatch_by"].get("by_family_request_phase"))
+    logger.info("[delta] boundary_linkage (C2 BOUNDARY LINKAGE, pair %s): %s %s/%s (step, request) boundaries linked%s", pair,
+                "OK" if lk.get("result") else ("FAIL" if lk.get("result") is False else "NOT RUN"), lk.get("linked"), lk.get("pairs"),
+                (" -- " + str(lk.get("why"))) if lk.get("why") else "")
     # one line: the committed up plane != the committed down plane, per (request, step, layer)
     _ac = (sr.get("moe_planes") or {}).get("alias_check") or {}
     if _ac.get("compared"):
-        print(f"[delta] C2 MOE PLANE ALIAS CHECK (pair {pair}): {'OK' if _ac.get('result') else 'ALIAS'} up != down bytes on "
-              f"{int(_ac.get('compared', 0)) - int(_ac.get('identical_n', 0))}/{_ac.get('compared')} (request, step, layer) triples, "
-              f"{len(_ac.get('per_layer') or {})} layers, plane words {_ac.get('plane_words')}"
-              f"{(' -- ' + str(_ac.get('why'))) if _ac.get('why') else ''}"
-              f"{(' (read errors ' + str(_ac.get('read_errors_n')) + ')') if _ac.get('read_errors_n') else ''}", flush=True)
+        logger.info("[delta] C2 MOE PLANE ALIAS CHECK (pair %s): %s up != down bytes on %s/%s (request, step, layer) triples, %s layers, plane words "
+                    "%s%s%s", pair, "OK" if _ac.get("result") else "ALIAS", int(_ac.get("compared", 0)) - int(_ac.get("identical_n", 0)),
+                    _ac.get("compared"), len(_ac.get("per_layer") or {}), _ac.get("plane_words"),
+                    (" -- " + str(_ac.get("why"))) if _ac.get("why") else "",
+                    (" (read errors " + str(_ac.get("read_errors_n")) + ")") if _ac.get("read_errors_n") else "")

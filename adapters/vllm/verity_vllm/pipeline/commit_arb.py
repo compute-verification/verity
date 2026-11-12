@@ -39,9 +39,11 @@ I3 record, `RequestRecord.to_json`) and ``summary.json`` (with each request's ca
 """
 from __future__ import annotations
 
+import copy
 import json
 import operator
 import shutil
+from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +51,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from verity_vllm.commit.challenge import stream
+from verity_vllm.commit.served_record import BlockValues, window_commit
 from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline import serve_row as RW
 from verity_vllm.pipeline import serve_seal as SS
@@ -270,7 +273,8 @@ class Windows:
 
     def __init__(self, com: Any, record: Any, out: Path, window_steps: int, coins: Any) -> None:
         self.com, self.record, self.out, self.window_steps, self.coins = com, record, out, int(window_steps), coins
-        self.window, self.is_open, self.records, self.seed_coin = -1, False, [], None
+        self.window, self.is_open, self.seed_coin = -1, False, None
+        self.records: list[dict[str, Any]] = []
 
     def before_step(self) -> None:
         if self.is_open and int(self.com._step_index) >= self.window_steps:
@@ -283,17 +287,15 @@ class Windows:
             self.is_open = True
 
     def close(self) -> None:
-        from verity_vllm.commit.served_record import window_commit
-
         if not self.is_open:
             return
         rc = self.com.finalize() if int(self.com._step_index) else None
         readback = self.record.absorb(self.com, self.window) if rc is not None else None
         self.com.uninstall()
         self.is_open = False
-        rec = {"window": self.window, "commit": window_commit(rc) if rc is not None else {"passed": True, "steps": 0, "empty": True},
-               "seed_coin": self.seed_coin, "readback": readback}
-        rec["passed"] = rec["commit"]["passed"] and (readback is None or readback["passed"])
+        commit: dict[str, Any] = window_commit(rc) if rc is not None else {"passed": True, "steps": 0, "empty": True}
+        rec = {"window": self.window, "commit": commit, "seed_coin": self.seed_coin, "readback": readback}
+        rec["passed"] = commit["passed"] and (readback is None or readback["passed"])
         self.records.append(rec)
         with open(self.out / "windows.jsonl", "a") as fh:
             fh.write(json.dumps(rec) + "\n")
@@ -315,8 +317,6 @@ def prefix_negative(record: Any, checks: list[tuple[dict, dict | None, dict]], s
     """The negative control on the run's own records: in the first request that read a prefix from the cache, the middle
     position of its first span flipped in the record of the request that committed it; both requests' checks must then fail.
     None when no request read from the cache."""
-    import copy
-
     hit = next(((q, c) for q, _f, c in checks if c.get("prefix_spans")), None)
     if hit is None:
         return None
@@ -340,7 +340,6 @@ def run(llm: Any, com: Any, requests: list[dict[str, Any]], out: Path, window_st
     from vllm import SamplingParams
     from vllm.sampling_params import RequestOutputKind
 
-    from verity_vllm.commit.served_record import BlockValues
     from verity_vllm.engine import served_seed
 
     engine = llm.vllm.llm_engine
@@ -423,8 +422,6 @@ def summarize(checks: list[tuple[dict, dict | None, dict]], windows: list[dict],
               prefix_caching: bool = False, negative: dict[str, Any] | None = None, skipped: Sequence[str] = ()) -> dict[str, Any]:
     """The run's counts and verdict. With ``prefix_caching``, it passes only when some request read a prefix from the cache
     and the negative control on the records (`prefix_negative`) was caught."""
-    from collections import Counter
-
     failed = [q["request_id"] for q, _f, c in checks if not c["passed"]]
     finishes = Counter(("stop-string" if isinstance(f.get("stop_reason"), str) else str(f.get("reason"))) if f else "unfinished"
                        for _q, f, _c in checks)
