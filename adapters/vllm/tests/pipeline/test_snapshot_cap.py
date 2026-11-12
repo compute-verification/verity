@@ -9,11 +9,12 @@ from __future__ import annotations
 
 import json
 import sys
+from typing import Any
 
 import pytest
 
-from verity_vllm.pipeline import match as RC
 from verity_vllm.pipeline import cli
+from verity_vllm.pipeline import match as RC
 
 LLAMA_1B = {"H": 2048, "I": 8192, "GU": 16384, "QKV": 3072, "V": 128256}         # analytic.config_of keys
 QWEN_15B = {"H": 1536, "I": 8960, "GU": 17920, "QKV": 2048, "V": 151936}
@@ -21,7 +22,7 @@ OLMOE = {"H": 2048, "I": 1024, "GU": 2048, "QKV": 4096, "V": 50304, "TOPK": 8, "
 
 
 def _wl(prompt_lens, max_tokens=128, mnbt=None):
-    doc = {"requests": [{"request_id": f"r{i}", "prompt_len": n, "prompt_token_ids": [7] * n, "max_tokens": max_tokens} for i, n in enumerate(prompt_lens)]}
+    doc: dict[str, Any] = {"requests": [{"request_id": f"r{i}", "prompt_len": n, "prompt_token_ids": [7] * n, "max_tokens": max_tokens} for i, n in enumerate(prompt_lens)]}
     if mnbt is not None:
         doc["engine"] = {"args": {"max_num_batched_tokens": mnbt, "max_model_len": 1152}}
     return doc
@@ -32,7 +33,7 @@ def test_the_32_mib_cap_of_record_skipped_the_1024_class_prefill_gate_up_and_the
     assert 1028 * LLAMA_1B["GU"] * 2 == 33_685_504 > RC.SNAPSHOT_CAP_FLOOR == 33_554_432
     # qwen H100 B1 1024/128: [1024, 17920] bf16 = 36,700,160 B
     assert 1024 * QWEN_15B["GU"] * 2 == 36_700_160 > RC.SNAPSHOT_CAP_FLOOR
-    assert 35_840 == QWEN_15B["GU"] * 2       # one row of that tensor = the committed identity's byte range
+    assert QWEN_15B["GU"] * 2 == 35_840       # one row of that tensor = the committed identity's byte range
     # the derived caps: rows = the engine's max_num_batched_tokens of the workload (the bound the scheduler enforces)
     cap, why = RC.snapshot_cap_bytes(_wl([1024] * 16, mnbt=5348), LLAMA_1B)
     assert cap == 5348 * 16384 * 2 and why["raised"] and why["rows_source"] == "engine max_num_batched_tokens" and why["rows"] == 5348
@@ -98,7 +99,8 @@ def test_main_derives_the_cap_only_when_none_is_given_and_records_the_derivation
     a2 = seen["a"]
     assert a2.snapshot_max_bytes == 4096 and a2.snapshot_cap_derivation is None
     # a run.json re-run (--run-dir) keeps the cap the capture ran with, never a re-derived one
-    run = tmp_path / "run"; run.mkdir()
+    run = tmp_path / "run"
+    run.mkdir()
     (run / RC.G.ARTIFACTS.get("run", "run.json")).write_text(json.dumps({"case": "LLAMA32_1B", "workload_path": str(wl), "profile": "derived_LLAMA32_1B",
                                                                        "config_id": "x", "snapshot_max_bytes": 777, "snapshot_cap_derivation": {"rows": 1}}))
     with pytest.raises(SystemExit):
