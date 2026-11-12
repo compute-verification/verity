@@ -89,7 +89,7 @@ def test_the_fixed_loads_rows_and_refusal_are_verify_runs():
 def test_the_grid_is_h1s_window_grid():
     """`Grid.lean`'s `GRID_BITS` and `gridPad` are `window.GRID_BITS` and `window.pad` (0 at 0, where `verify_run.grid_work`
     pads nothing), at each value its guards name, the run of record's give-up among them."""
-    from verity.core.protocols.pouw import window as Wd
+    from verity.protocols.pouw.verifier import window as Wd
 
     grid = (LEAN / "Grid.lean").read_text()
     assert int(re.search(r"def GRID_BITS : Nat := (\d+)", grid).group(1)) == Wd.GRID_BITS and VR.grid_pad is Wd.pad

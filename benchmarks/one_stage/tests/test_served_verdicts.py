@@ -1839,7 +1839,7 @@ def test_pearlpluss_verdict_of_record_keeps_a_class_held_runs_give_up_and_not_it
     Lean's with that form's ``give_up``; the exact credit the form replaces (``exact_work``) is not in the row."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
-    monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
+    monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces, audit, pin, lane = _pearlplus_piece(tmp_path, monkeypatch, live, "class held")
     row = S.piece_row("work", pieces, sampled_proofs=audit, key_sha512=pin, lane=lane)
     assert row["verdict"] == "accept" and "development" not in row
