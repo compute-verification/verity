@@ -1,15 +1,24 @@
 """The sampled accept of speculative decoding and its resample (vLLM d9105ea80, `rejection_sampler_utils.rejection_sample`
 with a greedy draft and the standard method) as registered Definitions, read from the kernels' PTX and SASS.
 
-    AcceptExpLane_v1                (x, m: F32) -> F32                                      tl.exp(x - m)
-    AcceptTileStats_v1{N,TILE}      (x: Array<N, F32>) -> (F32, F32)                        one tile's maximum and summed exponentials
-    AcceptRowLse_v1{V,TILE}         (logits: Array<V, F32>) -> F32                          the row's log-sum-exp, as lane 0 holds it
-    AcceptUniform_v1                (key: U32) -> F32                                       tl_rand32(.., includes_zero=False) of its word
-    LogitAt_v1{V}                   (logits: Array<V, F32>, d: I32) -> F32                  logits[d], -inf outside [0, V)
-    AcceptResidual_v1{V}            (logits: Array<V, F32>, d: I32) -> Array<V, F32>        the row with lane d set to -inf
-    SampledAcceptRow_v1{V,TILE}     (logits: Array<V, F32>, d: I32, seed, pos: I64) -> BIT  the ratio test of one draft token
     SampledAccept_v1{K,V,TILE}      (logits: Array<K+1, Array<V, F32>>, draft: Array<K, I32>, seed: I64, pos: Array<K+1, I64>,
                                      temp: F32) -> (Array<K, I32>, I32, Array<K+1, I32>)    verdicts, accepted, appended
+
+The Call is past a Flock block at every layout it takes, so its body is units of at most a block each and their wiring
+(`plan`, which `cut` counts by Definition for `CUTS`), every unit reading its own lanes of the rows:
+
+    AcceptTileHead_v1{N,FIRST,LAST}   (x: Array<N, F32>, d: I32[, i: I32, at: F32]) -> (F32[, I32], F32)
+                                      a tile's maximum; the row's logit at draft token d, a scan carried tile to tile
+    AcceptTileSum_v1{N,AT,LAST}       (x: Array<N, F32>, m: F32[, acc: Array<128, F32>]) -> Array<128, F32> | F32
+                                      lanes AT .. AT+N of a tile: tl.exp(x - m) into the 128 thread sums; LAST, the tile's sum
+    AcceptRowEnd_v1{T,N,AT}           (x: Array<N, F32>, m: F32[, acc], at: F32, seed, pos: I64, m0, s0, .. : F32) -> I32
+                                      the last tile's last part and the other T-1 tiles' maxima and sums: the ratio test
+    AcceptResample_v1{K,N,FIRST,LAST} (x0 .. xK: Array<N, F32>, t0 .. t{K-1}: I32, draft: Array<K, I32>, seed: I64,
+                                       pos: Array<K+1, I64>, temp: F32[, c: Array<3, I32>]) -> Array<3, I32> | the Call's
+                                      a chunk of the K+1 rows: the resampled row's lanes, the Gumbel select's scan carried
+    AcceptExpLane_v1                  (x, m: F32) -> F32        tl.exp(x - m)
+    AcceptUniform_v1                  (key: U32) -> F32         tl_rand32(.., includes_zero=False) of its word
+    LogitAtStep_v1, AcceptResidualStep_v1                       one lane of the head's and of the residual's scan
 
 A request that verifies K draft tokens hands the sampler K + 1 rows of target logits (row i follows the first i draft tokens;
 row K is the bonus row), already through temperature and top-p (-inf outside the nucleus).  With a one-hot draft
@@ -41,7 +50,7 @@ Each instruction and the gate that states it:
     tl.rand: Philox4x32-10's word 0 of (pos, seed) GumbelStreamKey_v1: the same word the row's Gumbel noise is keyed by
        shr.s32 31, xor; cvt.rn.f32.s32             SelectI32_v1 of U32Xor_v1 by I32Le_v1; I32ToF32_v1
        mul.f32 by 0x2FFFFFFF; max.f32 0x2FFFFFFF   F32Mul_v1; SelectF32_v1 of F32GtStrict_v1 (`includes_zero=False`: the floor)
-    the resample's noise, add and argmax           GumbelSelectF32_v3{V} (its add is `add.f32` on the GPU, F32AddFtz_v1 there)
+    the resample's noise, add and argmax           GumbelSelectF32_v3{V}'s steps (its add is `add.f32` on the GPU, F32AddFtz_v1 there)
 
 Domain.  Every logit is finite or -inf and none is subnormal, a row has a finite logit, a draft token is below V, the
 temperature is not zero (at zero the kernels verify greedily, which `Accept_v1` states) and the vocabulary has 17 to 32
@@ -54,20 +63,32 @@ no longer run it.  The Definition is lane 0's arithmetic there too; `sampled_acc
 `TILE` is the stats kernel's `BLOCK_SIZE`, 8192 at the pin; another multiple of 512 keeps the thread layout (128 threads,
 four lanes a vector) with fewer vectors a thread, for tests at small vocabularies.
 
+The units.  A draft row's tile is a head and its parts of `part` lanes (4,096 at the pin: the exponentials of 8,192 lanes
+are past a block); the row's last part is in `AcceptRowEnd_v1`, so the unit that reads the tiles' 4-byte maxima and sums
+also reads a row past 111 bytes, which a proof block needs.  The K ratio tests are K units of one Definition, each row's
+tiles read once; the bonus row has no test.  The resample is `GumbelSelectF32_v3{V}`'s function on the residual row,
+written over its own steps (`GumbelStreamKey_v1`, `GumbelNoiseLane_v1`, `GumbelSelectStep_v1`) in chunks of `chunk` lanes
+of all K + 1 rows: every chunk selects the row, its position and its refused draft token by the tests, so the select runs
+once, on rows that are operands, and no residual row is committed.
+
 The numpy reference (`tile_stats`, `row_lse`, `accept_uniform`, `sampled_accept`) computes the same words from the kernels'
 layouts written independently of the Definitions' bodies (`topp_split.tree_sum_1d`, `sampling_rows.gumbel_select_row`).
 """
 from __future__ import annotations
 
+from collections import Counter
+from dataclasses import dataclass, field
+from functools import cache
+
 import numpy as np
 
-from verity.circuits.defs import bind, composite
+from verity.circuits.defs import SpecializedDefinition, bind, composite
 from verity.circuits.refs import Coll as _Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.ops.fp32 import F32Add, F32Fma, F32Mul
+from verity.definitions.ops.fp32 import F32Add, F32AddFtz, F32Fma, F32Mul
 from verity.definitions.ops.mufu import mufu_ex2_words, table
 from verity.definitions.ops.prims import const
-from verity.definitions.ops.scalar import BIT, BitAnd, BitNot, F32, F32Eq, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
+from verity.definitions.ops.scalar import BitAnd, BitNot, F32, F32Eq, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
 from verity.definitions.registry import dead_free as DF, sampling as SA
 from verity.definitions.registry.dsv4_moe import Ex2Approx
 from verity.definitions.registry.ref_prims import F32GtStrict, F32Sub
@@ -81,6 +102,10 @@ STATS_TILE = 8192
 THREADS, VECTOR = 128, 4
 #: lanes of the one-warp reduction over a row's tiles (`PADDED_VOCAB_NUM_BLOCKS` for 17 to 32 tiles)
 PADDED_TILES = 32
+#: the lanes of a tile one `AcceptTileSum_v1` unit adds, at most (`part`): half a tile at the pin, a unit of a Flock block
+PART = 4096
+#: the lanes of an `AcceptResample_v1` chunk, at most (`chunk`): the registered top-p select's chunk
+RESAMPLE_N = 32
 NEG_INF = SA.NEG_INF_BITS
 _CONF = ("model-untested: read from the PTX and SASS Triton 3.7.1 compiles for sm_90a from vLLM d9105ea80's "
          "`rejection_sample` kernels at 154,880 logits and five draft tokens; a capture of those kernels on a cc 9.0 GPU "
@@ -224,58 +249,6 @@ def AcceptExpLane(B, S, x, m):
     return B.call(Ex2Approx, B.call(F32Mul, B.call(F32Sub, x, m), B.call(const(32, LOG2E))))
 
 
-@composite("AcceptTileStats", 1, ["N", "TILE"], lambda S: ((("x", Array(S.N, F32)),), Tuple(F32, F32)), conformance=_CONF,
-           refuse=_refuse)
-def AcceptTileStats(B, S, x):
-    """One tile of `_compute_local_logits_stats_kernel` on its N logits below the vocabulary's end: the maximum, and the sum of
-    ``tl.exp(x - max)`` in the kernel's order (a thread's lanes in (r, j) order, the warp's butterfly 16 .. 1, the warps'
-    butterfly 2, 1), 0 when the maximum is -inf.  A lane past the vocabulary adds +0 on the GPU, which changes no sum, so it
-    has no gate here."""
-    top = x[0]
-    for v in range(1, S.N):
-        top = _max(B, top, x[v])
-    e = B.batch(AcceptExpLane, x, top, axes=(0, None))
-    threads = []
-    for lanes in thread_lanes(S.TILE, S.N):
-        if not lanes:
-            break
-        acc = e[lanes[0]]
-        for lane in lanes[1:]:
-            acc = B.call(F32Add, acc, e[lane])
-        threads.append(acc)
-    warps = [DF.lane0_butterfly(B, threads[w:w + 32], (16, 8, 4, 2, 1), F32Add) for w in range(0, len(threads), 32)]
-    total = DF.lane0_butterfly(B, warps, (2, 1), F32Add)
-    finite = B.call(BitNot, B.call(F32Eq, top, B.call(const(32, NEG_INF))))
-    return tuple_of(top, B.call(SelectF32, finite, total, B.call(const(32, 0))))
-
-
-@composite("AcceptRowLse", 1, ["V", "TILE"], lambda S: ((("logits", Array(S.V, F32)),), F32), conformance=_CONF, refuse=_refuse)
-def AcceptRowLse(B, S, logits):
-    """``max + log(sum_t sumexp_t * exp(max_t - max))`` over the row's tiles as lane 0 of `_rejection_kernel` computes it: tile
-    t in lane t of 32, the product fused into the first butterfly stage (``fma(e_t, sum_t, rn(e_{t+16} * sum_{t+16}))`` for
-    t < 16, a lane past the last tile holding +0), then `add.f32` by the stages 8, 4, 2, 1; `__nv_logf`; `add.f32`."""
-    V, T = S.V, S.TILE
-    full, rest = divmod(V, T)
-    ms, ss = [], []
-    if full:
-        st = B.batch(bind(AcceptTileStats, N=T, TILE=T), _Coll(Array(full, Array(T, F32)), logits[0:full * T].refs), axes=(0,))
-        ms += [st[t][0] for t in range(full)]
-        ss += [st[t][1] for t in range(full)]
-    if rest:
-        st = B.call(bind(AcceptTileStats, N=rest, TILE=T), logits[full * T:V])
-        ms.append(st[0])
-        ss.append(st[1])
-    top = ms[0]
-    for m in ms[1:]:
-        top = _max(B, top, m)
-    e = [B.call(AcceptExpLane, m, top) for m in ms]
-    half = PADDED_TILES // 2
-    upper = [B.call(F32Mul, e[t], ss[t]) for t in range(half, len(ms))]
-    lower = [B.call(F32Fma, e[t], ss[t], upper[t]) if t < len(upper) else B.call(F32Mul, e[t], ss[t]) for t in range(half)]
-    total = DF.lane0_butterfly(B, lower, (8, 4, 2, 1), F32Add)
-    return B.call(F32Add, top, B.call(SA.NvLogfV4, total))
-
-
 @composite("AcceptUniform", 1, [], lambda S: ((("key", U32),), F32), conformance=_CONF)
 def AcceptUniform(B, S, key):
     """``tl_rand32(seed, pos, includes_zero=False)`` from its Philox word: the word or its complement when negative as an i32
@@ -289,83 +262,211 @@ def AcceptUniform(B, S, key):
 
 
 @composite("LogitAtStep", 1, [], lambda S: ((("carry", Tuple(I32, F32)), ("x", F32), ("d", I32)), Tuple(Tuple(I32, F32), F32)),
-           conformance="reference-defined: one lane of LogitAt_v1's index into its operand")
+           conformance="reference-defined: one lane of an index into a row, `AcceptTileHead_v1`'s scan")
 def LogitAtStep(B, S, carry, x, d):
     """One lane: the lane's logit when its index is d, else the carried one; the index plus one."""
     at = B.call(SelectF32, B.call(I32Eq, carry[0], d), x, carry[1])
     return tuple_of(tuple_of(B.call(I32Add, carry[0], B.call(const(32, 1))), at), at)
 
 
-@composite("LogitAt", 1, ["V"], lambda S: ((("logits", Array(S.V, F32)), ("d", I32)), F32),
-           conformance="reference-defined: an index into its operand, -inf when d is outside [0, V) (the kernel's load "
-                       "`target_logits[row, token]`)")
-def LogitAt(B, S, logits, d):
-    """``logits[d]``, and -inf when d is no index of the row."""
-    carry = tuple_of(B.call(const(32, 0)), B.call(const(32, NEG_INF)))
-    if S.V > 1:
-        carry = B.scan(LogitAtStep, carry, xs=(logits[0:S.V - 1],), shared=(d,))[0]
-    return B.call(SelectF32, B.call(I32Eq, carry[0], d), logits[S.V - 1], carry[1])
-
-
 @composite("AcceptResidualStep", 1, [], lambda S: ((("i", I32), ("x", F32), ("d", I32)), Tuple(I32, F32)),
-           conformance="reference-defined: one lane of AcceptResidual_v1")
+           conformance="reference-defined: one lane of `AcceptResample_v1`'s residual")
 def AcceptResidualStep(B, S, i, x, d):
     """One lane: -inf when its index is d, else its logit; the index plus one."""
     y = B.call(SelectF32, B.call(I32Eq, i, d), B.call(const(32, NEG_INF)), x)
     return tuple_of(B.call(I32Add, i, B.call(const(32, 1))), y)
 
 
-@composite("AcceptResidual", 1, ["V"], lambda S: ((("logits", Array(S.V, F32)), ("d", I32)), Array(S.V, F32)), conformance=_CONF)
-def AcceptResidual(B, S, logits, d):
-    """`_resample_kernel`'s residual of a one-hot draft: ``tl.where(block != rejected_draft_token, target_logits, -inf)``;
-    a d outside [0, V) (the bonus row's, a negative draft token) leaves the row as it is."""
-    i, head = B.call(const(32, 0)), []
-    if S.V > 1:
-        res = B.scan(AcceptResidualStep, i, xs=(logits[0:S.V - 1],), shared=(d,))
-        i, head = res[0], [res[1].refs]
-    last = B.call(SelectF32, B.call(I32Eq, i, d), B.call(const(32, NEG_INF)), logits[S.V - 1])
-    return _Coll(Array(S.V, F32), concat(head + [last.refs]))
+def _flag(b: dict, *names: str) -> str | None:
+    for name in names:
+        if not isinstance(b.get(name), bool):
+            return f"{name} is a bool (an id's `{name}=True`), not {b.get(name)!r}"
+    return None
 
 
-@composite("SampledAcceptRow", 1, ["V", "TILE"],
-           lambda S: ((("logits", Array(S.V, F32)), ("d", I32), ("seed", I64), ("pos", I64)), BIT), conformance=_CONF,
-           refuse=_refuse)
-def SampledAcceptRow(B, S, logits, d, seed, pos):
-    """The ratio test of one draft token d against its row: ``logits[d] - lse > log(u)`` (`sub.f32`, `__nv_logf`,
-    `setp.gt.f32`), u the uniform of `tl.randint(seed, pos)`'s word.  A d outside [0, V) reads -inf and fails, as the kernel's
-    placeholder -1 does."""
-    lp = B.call(F32Sub, B.call(bind(LogitAt, V=S.V), logits, d), B.call(bind(AcceptRowLse, V=S.V, TILE=S.TILE), logits))
+def _lanes(b: dict) -> str | None:
+    n, at = b.get("N"), b.get("AT", 0)
+    if not (type(n) is int and n >= 1):
+        return f"N is a unit's lanes, a positive int, not {n!r}"
+    if not (type(at) is int and at >= 0 and at % (THREADS * VECTOR) == 0):
+        return f"AT is the unit's first lane in its tile, a multiple of {THREADS * VECTOR} (one vector a thread), not {at!r}"
+    return None
+
+
+def _head_sig(S):
+    carry = () if S.FIRST else (("i", I32), ("at", F32))
+    return (("x", Array(S.N, F32)), ("d", I32), *carry), Tuple(F32, F32) if S.LAST else Tuple(F32, I32, F32)
+
+
+@composite("AcceptTileHead", 1, ["N", "FIRST", "LAST"], _head_sig, conformance=_CONF,
+           refuse=lambda b: _lanes(b) or _flag(b, "FIRST", "LAST"))
+def AcceptTileHead(B, S, x, d, *carry):
+    """A tile's N logits -> its maximum (`max.f32` over the tile, order-free), and the row's logit at draft token d as a scan
+    carried tile to tile: (the lanes before this tile, the logit at d among them, -inf when none is d), from (0, -inf) on the
+    row's FIRST tile.  The row's LAST tile returns (maximum, ``logits[d]``): -inf when d is no index of the row, as the
+    kernel's load of ``target_logits[row, token]`` is never reached for a placeholder."""
+    top = x[0]
+    for v in range(1, S.N):
+        top = _max(B, top, x[v])
+    c = tuple_of(B.call(const(32, 0)), B.call(const(32, NEG_INF))) if S.FIRST else tuple_of(*carry)
+    scanned = S.N - 1 if S.LAST else S.N
+    if scanned:
+        c = B.scan(LogitAtStep, c, xs=(x[0:scanned],), shared=(d,))[0]
+    if not S.LAST:
+        return tuple_of(top, c[0], c[1])
+    return tuple_of(top, B.call(SelectF32, B.call(I32Eq, c[0], d), x[S.N - 1], c[1]))
+
+
+def _thread_sums(B, e, at: int, acc) -> list:
+    """The stats kernel's thread sums after a part's exponentials ``e`` (the tile's lanes from ``at``) are added to ``acc``
+    (the 128 carried sums, None on the tile's first part): thread t adds its lanes ``512 r + 4 t + j`` in (r, j) order.  A
+    thread with no lane yet has no sum; the threads that have one are a prefix."""
+    stride = THREADS * VECTOR
+    out = []
+    for t, lanes in enumerate(thread_lanes(-(-(at + len(e.refs)) // stride) * stride, at + len(e.refs))):
+        cur = acc[t] if acc is not None else None
+        for lane in lanes:
+            if lane >= at:
+                cur = e[lane - at] if cur is None else B.call(F32Add, cur, e[lane - at])
+        if cur is None:
+            break
+        out.append(cur)
+    return out
+
+
+def _tile_sum(B, threads: list, m):
+    """The tile's sum from its thread sums: each warp's butterfly 16, 8, 4, 2, 1, the warps' butterfly 2, 1; 0 when the
+    tile's maximum ``m`` is -inf."""
+    warps = [DF.lane0_butterfly(B, threads[w:w + 32], (16, 8, 4, 2, 1), F32Add) for w in range(0, len(threads), 32)]
+    total = DF.lane0_butterfly(B, warps, (2, 1), F32Add)
+    finite = B.call(BitNot, B.call(F32Eq, m, B.call(const(32, NEG_INF))))
+    return B.call(SelectF32, finite, total, B.call(const(32, 0)))
+
+
+def _sum_refuse(b: dict) -> str | None:
+    if (why := _lanes(b) or _flag(b, "LAST")) is not None:
+        return why
+    if not b["LAST"] and b["N"] % (THREADS * VECTOR):
+        return f"a part before a tile's last is whole vectors of every thread, a multiple of {THREADS * VECTOR} lanes, not N={b['N']}"
+    return None
+
+
+def _sum_sig(S):
+    acc = (("acc", Array(THREADS, F32)),) if S.AT else ()
+    return (("x", Array(S.N, F32)), ("m", F32), *acc), F32 if S.LAST else Array(THREADS, F32)
+
+
+@composite("AcceptTileSum", 1, ["N", "AT", "LAST"], _sum_sig, conformance=_CONF, refuse=_sum_refuse)
+def AcceptTileSum(B, S, x, m, *acc):
+    """Lanes AT .. AT + N of a tile of `_compute_local_logits_stats_kernel` and the tile's maximum m: ``tl.exp(x - m)`` of each
+    lane added into the tile's 128 thread sums in the kernel's order (a thread's lanes in (r, j) order), ``acc`` the sums
+    after the lanes before AT.  The tile's LAST part returns its sum: the warp's butterfly 16 .. 1, the warps' butterfly 2, 1,
+    and 0 when m is -inf.  A lane past the vocabulary adds +0 on the GPU, which changes no sum, so it has no gate here."""
+    threads = _thread_sums(B, B.batch(AcceptExpLane, x, m, axes=(0, None)), S.AT, acc[0] if acc else None)
+    return _tile_sum(B, threads, m) if S.LAST else array_of(threads)
+
+
+def _end_refuse(b: dict) -> str | None:
+    t = b.get("T")
+    if not (type(t) is int and PADDED_TILES // 2 < t <= PADDED_TILES):
+        return f"T is a row's tiles, 17 to 32 (the one-warp reduction's layouts the kernel was read at), not {t!r}"
+    return _lanes(b)
+
+
+def _end_sig(S):
+    acc = (("acc", Array(THREADS, F32)),) if S.AT else ()
+    others = tuple(port for t in range(S.T - 1) for port in ((f"m{t}", F32), (f"s{t}", F32)))
+    return (("x", Array(S.N, F32)), ("m", F32), *acc, ("at", F32), ("seed", I64), ("pos", I64), *others), I32
+
+
+@composite("AcceptRowEnd", 1, ["T", "N", "AT"], _end_sig, conformance=_CONF, refuse=_end_refuse)
+def AcceptRowEnd(B, S, x, m, *rest):
+    """The ratio test of one draft token against its row of T tiles, 1 or 0: ``logits[d] - lse > log(u)`` (`sub.f32`,
+    `__nv_logf`, `setp.gt.f32`).  It reads the last tile's last part (lanes AT .. AT + N, with its maximum m and the thread
+    sums ``acc`` before AT, as `AcceptTileSum_v1`'s LAST part) so that one of its rows is long enough for a proof block,
+    ``at`` the row's logit at the draft token, and the other tiles' maxima and sums m0, s0, ..  The log-sum-exp is lane 0's
+    of `_rejection_kernel`: tile t in lane t of 32, M the tiles' maximum, ``e_t = tl.exp(m_t - M)``, the product fused into
+    the first butterfly stage (``fma(e_t, s_t, rn(e_{t+16} * s_{t+16}))`` for t < 16, a lane past the last tile holding +0),
+    `add.f32` by the stages 8, 4, 2, 1, `__nv_logf`, `add.f32` to M.  u is the uniform of `tl.randint(seed, pos)`'s word."""
+    acc, rest = (rest[0], rest[1:]) if S.AT else (None, rest)
+    at, seed, pos, others = rest[0], rest[1], rest[2], rest[3:]
+    last = _tile_sum(B, _thread_sums(B, B.batch(AcceptExpLane, x, m, axes=(0, None)), S.AT, acc), m)
+    ms, ss = [*others[0::2], m], [*others[1::2], last]
+    top = ms[0]
+    for v in ms[1:]:
+        top = _max(B, top, v)
+    e = [B.call(AcceptExpLane, v, top) for v in ms]
+    half = PADDED_TILES // 2
+    upper = [B.call(F32Mul, e[t], ss[t]) for t in range(half, S.T)]
+    lower = [B.call(F32Fma, e[t], ss[t], upper[t]) if t < len(upper) else B.call(F32Mul, e[t], ss[t]) for t in range(half)]
+    lse = B.call(F32Add, top, B.call(SA.NvLogfV4, DF.lane0_butterfly(B, lower, (8, 4, 2, 1), F32Add)))
     u = B.call(AcceptUniform, B.call(SA.GumbelStreamKey, seed, pos))
-    return B.call(F32GtStrict, lp, B.call(SA.NvLogfV4, u))
+    test = B.call(F32GtStrict, B.call(F32Sub, at, lse), B.call(SA.NvLogfV4, u))
+    return B.call(SelectI32, test, B.call(const(32, 1)), B.call(const(32, 0)))
 
 
-@composite("SampledAccept", 1, ["K", "V", "TILE"],
-           lambda S: ((("logits", Array(S.K + 1, Array(S.V, F32))), ("draft", Array(S.K, I32)), ("seed", I64),
-                       ("pos", Array(S.K + 1, I64)), ("temp", F32)),
-                      Tuple(Array(S.K, I32), I32, Array(S.K + 1, I32))), conformance=_CONF, refuse=_refuse)
-def SampledAccept(B, S, logits, draft, seed, pos, temp):
-    """Sampled verification of K draft tokens and the resample (the module docstring): draft token p is accepted iff every
-    earlier one was and its row's ratio test holds.  Returns (verdict[K] in {0, 1}, accepted = sum(verdict), appended[K+1]):
-    ``appended[j]`` is draft token j for j < accepted, the resampled token at j = accepted, and -1 after it.  The resampled
-    token is `GumbelSelectF32_v3{V}` on row ``accepted`` with that row's position, its refused draft token's lane at -inf
-    (nothing masked on the bonus row); the row, its position and its draft token are selected by the verdicts, so the select
-    runs once.  Each draft row's ratio test is one member of a batch; the bonus row has none."""
-    K, V = S.K, S.V
-    test = B.batch(bind(SampledAcceptRow, V=V, TILE=S.TILE), logits[0:K], draft, seed, pos[0:K], axes=(0, 0, None, 0))
+def _resample_refuse(b: dict) -> str | None:
+    if (why := _refuse(b) or _lanes(b) or _flag(b, "FIRST", "LAST")) is not None:
+        return why
+    if b["FIRST"] and b["LAST"] and b["N"] < 2:
+        return "a row of one lane has no select"
+    return None
+
+
+def _resample_sig(S):
+    K = S.K
+    rows = tuple((f"x{p}", Array(S.N, F32)) for p in range(K + 1))
+    tests = tuple((f"t{p}", I32) for p in range(K))
+    carry = () if S.FIRST else (("c", Array(3, I32)),)
+    ret = Tuple(Array(K, I32), I32, Array(K + 1, I32)) if S.LAST else Array(3, I32)
+    return (*rows, *tests, ("draft", Array(K, I32)), ("seed", I64), ("pos", Array(K + 1, I64)), ("temp", F32), *carry), ret
+
+
+@composite("AcceptResample", 1, ["K", "N", "FIRST", "LAST"], _resample_sig, conformance=_CONF, refuse=_resample_refuse)
+def AcceptResample(B, S, *args):
+    """A chunk of N lanes of the K + 1 rows (x0 .. xK), the K draft rows' ratio tests (t0 .. each 1 or 0) and the request's
+    draft tokens, seed, positions and temperature.  Draft token p is accepted iff every earlier one was and its test is 1.
+    The resampled row is the first refused one, or the bonus row when none is, with its position's stream key and its refused
+    draft token's lane at -inf (`_resample_kernel`'s ``tl.where(block != rejected_draft_token, target_logits, -inf)``;
+    nothing masked on the bonus row or for a negative draft token).  Over the chunk's lanes of it, `GumbelSelectF32_v3`'s
+    scan (`GumbelSelectStep_v1`: y = x + g(key)[i] when temp != 0 else x, taken iff y > best), carried chunk to chunk as
+    c = (best, its index, the lanes so far), from lane 0 on the row's FIRST chunk.  The row's LAST chunk returns the
+    Call's outputs (`SampledAccept_v1`)."""
+    K, N = S.K, S.N
+    rows, tests = args[:K + 1], args[K + 1:2 * K + 1]
+    draft, seed, pos, temp = args[2 * K + 1:2 * K + 5]
     one, zero, minus_one = B.call(const(32, 1)), B.call(const(32, 0)), B.call(const(32, 0xFFFFFFFF))
-    live = [test[0]]
+    live = [B.call(I32Eq, tests[0], one)]
     for p in range(1, K):
-        live.append(B.call(BitAnd, live[p - 1], test[p]))
+        live.append(B.call(BitAnd, live[p - 1], B.call(I32Eq, tests[p], one)))
+    row, at, d = rows[K], pos[K], minus_one
+    for p in reversed(range(K)):
+        row = B.batch(SelectF32, live[p], row, rows[p], axes=(None, 0, 0))
+        at = B.call(SelectI64, live[p], at, pos[p])
+        d = B.call(SelectI32, live[p], d, draft[p])
+    key = B.call(SA.GumbelStreamKey, seed, at)
+    noisy = B.call(BitNot, B.call(F32Eq, temp, zero))
+    i, head = zero if S.FIRST else args[-1][2], []
+    if N > 1:
+        res = B.scan(AcceptResidualStep, i, xs=(row[0:N - 1],), shared=(d,))
+        i, head = res[0], [res[1].refs]
+    tail = B.call(SelectF32, B.call(I32Eq, i, d), B.call(const(32, NEG_INF)), row[N - 1])
+    r = _Coll(Array(N, F32), concat(head + [tail.refs]))
+    if S.FIRST:
+        c = tuple_of(B.call(SelectF32, noisy, B.call(F32AddFtz, r[0], B.call(SA.GumbelNoiseLane, key, zero)), r[0]), zero, one)
+    else:
+        c = tuple_of(args[-1][0], args[-1][1], args[-1][2])
+    lo, hi = int(S.FIRST), N - 1 if S.LAST else N
+    if hi > lo:
+        c = B.scan(SA.GumbelSelectStep, c, xs=(r[lo:hi],), shared=(key, noisy))[0]
+    if not S.LAST:
+        return array_of([c[0], c[1], c[2]])
+    y = B.call(SelectF32, noisy, B.call(F32AddFtz, r[N - 1], B.call(SA.GumbelNoiseLane, key, c[2])), r[N - 1])
+    token = B.call(SelectI32, B.call(F32GtStrict, y, c[0]), c[2], c[1])
     verdict = [B.call(SelectI32, live[p], one, zero) for p in range(K)]
     accepted = verdict[0]
     for p in range(1, K):
         accepted = B.call(I32Add, accepted, verdict[p])
-    row, at, d = logits[K], pos[K], minus_one
-    for p in reversed(range(K)):
-        row = B.batch(SelectF32, live[p], row, logits[p], axes=(None, 0, 0))
-        at = B.call(SelectI64, live[p], at, pos[p])
-        d = B.call(SelectI32, live[p], d, draft[p])
-    token = B.call(bind(DF.GumbelSelectF32V3, V=V), B.call(bind(AcceptResidual, V=V), row, d), seed, at, temp)
     appended = [B.call(SelectI32, live[0], draft[0], token)]
     for j in range(1, K):
         appended.append(B.call(SelectI32, live[j], draft[j], B.call(SelectI32, live[j - 1], token, minus_one)))
@@ -373,9 +474,114 @@ def SampledAccept(B, S, logits, draft, seed, pos, temp):
     return tuple_of(array_of(verdict), accepted, array_of(appended))
 
 
-ALL_COMPOSITES = [AcceptExpLane, AcceptTileStats, AcceptRowLse, AcceptUniform, LogitAtStep, LogitAt, AcceptResidualStep,
-                  AcceptResidual, SampledAcceptRow, SampledAccept]
+# ---------------------------------------------------------------------------------------------------------
+# the plan: the Call as its units
+# ---------------------------------------------------------------------------------------------------------
 
-__all__ = ["STATS_TILE", "PADDED_TILES", "AcceptExpLane", "AcceptTileStats", "AcceptRowLse", "AcceptUniform",
-           "LogitAtStep", "LogitAt", "AcceptResidualStep", "AcceptResidual", "SampledAcceptRow", "SampledAccept", "ALL_COMPOSITES",
-           "thread_lanes", "tl_exp", "tile_stats", "row_lse", "accept_uniform", "sampled_accept"]
+
+@dataclass(frozen=True)
+class Unit:
+    """One unit of the Call: ``key`` names it, ``defn`` is its Definition, ``reads`` gives each parameter that is an operand of
+    the Call (parameter, operand): ``("logits", row, lo, hi)`` a row's lanes, ``("draft", p)`` and ``("pos", p)`` one element,
+    ``("draft",)``, ``("pos",)``, ``("seed",)`` and ``("temp",)`` the operand whole; ``wires`` each wired parameter's
+    (parameter, writer key, writer's output index)."""
+    key: tuple
+    defn: SpecializedDefinition
+    reads: tuple[tuple[str, tuple], ...]
+    wires: tuple[tuple[str, tuple, int], ...] = field(default=())
+
+
+def part(tile: int) -> int:
+    """The lanes of a tile one `AcceptTileSum_v1` unit adds: `PART`, and at most half of a smaller tile in whole vectors of
+    every thread, so a tile of 1,024 logits or more is two parts or more."""
+    stride = THREADS * VECTOR
+    return min(PART, max(stride, tile // (2 * stride) * stride))
+
+
+def chunk(V: int) -> int:
+    """A resample chunk's lanes."""
+    return min(RESAMPLE_N, V)
+
+
+@cache
+def plan(K: int, V: int, tile: int = STATS_TILE) -> tuple[Unit, ...]:
+    """The units of `SampledAccept_v1{K,V,TILE}` in an order that writes each before its readers: each draft row's tiles (a
+    head, then the tile's parts; the row's last part is its `AcceptRowEnd_v1`), then the resample's chunks, whose last
+    returns the Call's outputs."""
+    T, P, out = -(-V // tile), part(tile), []
+    for p in range(K):
+        sums = {}
+        for t in range(T):
+            lo, n = t * tile, min(tile, V - t * tile)
+            first, last = t == 0, t == T - 1
+            carry = () if first else (("i", ("head", p, t - 1), 1), ("at", ("head", p, t - 1), 2))
+            out.append(Unit(("head", p, t), bind(AcceptTileHead, N=n, FIRST=first, LAST=last),
+                            (("x", ("logits", p, lo, lo + n)), ("d", ("draft", p))), carry))
+            starts = list(range(0, n, P))
+            for a, at in enumerate(starts):
+                pn, end = min(P, n - at), a == len(starts) - 1
+                x = (("x", ("logits", p, lo + at, lo + at + pn)),)
+                w = [("m", ("head", p, t), 0)] + ([("acc", ("sum", p, t, a - 1), 0)] if a else [])
+                if not (last and end):
+                    out.append(Unit(("sum", p, t, a), bind(AcceptTileSum, N=pn, AT=at, LAST=end), x, tuple(w)))
+                    sums[t] = ("sum", p, t, a)
+                    continue
+                w.append(("at", ("head", p, t), 1))
+                for t2 in range(T - 1):
+                    w += [(f"m{t2}", ("head", p, t2), 0), (f"s{t2}", sums[t2], 0)]
+                out.append(Unit(("row", p), bind(AcceptRowEnd, T=T, N=pn, AT=at),
+                                (*x, ("seed", ("seed",)), ("pos", ("pos", p))), tuple(w)))
+    N = chunk(V)
+    for k, lo in enumerate(range(0, V, N)):
+        hi = min(lo + N, V)
+        reads = (*((f"x{p}", ("logits", p, lo, hi)) for p in range(K + 1)),
+                 ("draft", ("draft",)), ("seed", ("seed",)), ("pos", ("pos",)), ("temp", ("temp",)))
+        wires = (*((f"t{p}", ("row", p), 0) for p in range(K)), *((("c", ("resample", k - 1), 0),) if k else ()))
+        out.append(Unit(("resample", k), bind(AcceptResample, K=K, N=hi - lo, FIRST=k == 0, LAST=hi == V), reads, wires))
+    return tuple(out)
+
+
+def cut(t) -> list[tuple[SpecializedDefinition, int]]:
+    """The units a binding of `SampledAccept_v1{K,V,TILE}` is cut into, each Definition bound and how many of it: its
+    `plan`, which is its body."""
+    b = t.bindings
+    return list(Counter(u.defn for u in plan(int(b["K"]), int(b["V"]), int(b["TILE"]))).items())
+
+
+#: the Call's units, by family: circuit-check holds each to the Flock block in the Call's place
+CUTS = {"SampledAccept_v1": cut}
+
+
+def _operand(ops: dict, ref: tuple):
+    name, *at = ref
+    if name == "logits":
+        return ops[name][at[0]][at[1]:at[2]]
+    return ops[name][at[0]] if at else ops[name]
+
+
+@composite("SampledAccept", 1, ["K", "V", "TILE"],
+           lambda S: ((("logits", Array(S.K + 1, Array(S.V, F32))), ("draft", Array(S.K, I32)), ("seed", I64),
+                       ("pos", Array(S.K + 1, I64)), ("temp", F32)),
+                      Tuple(Array(S.K, I32), I32, Array(S.K + 1, I32))), conformance=_CONF, refuse=_refuse)
+def SampledAccept(B, S, logits, draft, seed, pos, temp):
+    """Sampled verification of K draft tokens and the resample (the module docstring).  Returns (verdict[K] in {0, 1},
+    accepted = sum(verdict), appended[K+1]): ``appended[j]`` is draft token j for j < accepted, the resampled token at
+    j = accepted, and -1 after it.  The body is the units of `plan` and their wiring, nothing else: each draft row's ratio
+    test from its tiles' heads and parts, then the resample over the K + 1 rows in chunks."""
+    ops = {"logits": logits, "draft": draft, "seed": seed, "pos": pos, "temp": temp}
+    done: dict = {}
+    for u in plan(S.K, S.V, S.TILE):
+        args = {name: _operand(ops, ref) for name, ref in u.reads}
+        for name, key, i in u.wires:
+            args[name] = done[key][i] if isinstance(done[key].type, Tuple) else done[key]
+        done[u.key] = B.call(u.defn, *(args[name] for name, _ in u.defn.signature()[0]))
+    return done[u.key]
+
+
+ALL_COMPOSITES = [AcceptExpLane, AcceptUniform, LogitAtStep, AcceptResidualStep, AcceptTileHead, AcceptTileSum, AcceptRowEnd,
+                  AcceptResample, SampledAccept]
+
+__all__ = ["STATS_TILE", "PADDED_TILES", "PART", "RESAMPLE_N", "AcceptExpLane", "AcceptUniform", "LogitAtStep",
+           "AcceptResidualStep", "AcceptTileHead", "AcceptTileSum", "AcceptRowEnd", "AcceptResample", "SampledAccept",
+           "ALL_COMPOSITES", "CUTS", "Unit", "part", "chunk", "plan", "cut", "thread_lanes", "tl_exp", "tile_stats", "row_lse",
+           "accept_uniform", "sampled_accept"]
