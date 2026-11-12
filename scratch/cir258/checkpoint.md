@@ -1,1 +1,1 @@
-13:04Z GEMMCALL: head c00bf07b2258 pushed (items 1-5); confirming pass r20261112-125806-3bee 0 failures no pins diff; comment A posted on CIR-258; walks+negative r20261112-130257-171f running on vy-nebius-cpu-9.
+2026-11-12T13:59Z GEMMCALL: items 1-5 pushed (c00bf07); walk run r20261112-130257-171f running since 13:04:17Z on vy-nebius-cpu-9 r7, peak 71 GiB so far; item 7/8 runs queued behind it
