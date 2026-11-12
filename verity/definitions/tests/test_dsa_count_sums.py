@@ -27,7 +27,7 @@ def _lowering(fn):
     """``fn`` lowered on its rows, a row a parameter, as `UnitStager` lowers a served unit."""
     from verity_flock import class_statement as CS
 
-    return CS.unit_lowering(fn, "unit/serving-rows-cap", [(p, ps) for p, _schema, _bits, ps in IF.unit_rows(fn)[0]])[0]
+    return CS.unit_lowering(fn, "unit/count-sums", [(p, ps) for p, _schema, _bits, ps in IF.unit_rows(fn)[0]])[0]
 
 
 def _commit_rows(lay) -> list[int]:
