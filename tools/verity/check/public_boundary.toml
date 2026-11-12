@@ -48,7 +48,10 @@ ml = [
     "verity/commitments/{identity.py,indexed.py,keyed.py,layout.py,limits.py,merkle.py,multiproof.py,pyproject.toml}",
     "verity/commitments/{pool_row.py,row_table.py,rowleaf.py,scheme.py,tests,window.py,windows}",
     "verity/protocols/poub/verifier/commitments/gates",
-    "verity/{circuits,definitions}",
+    "verity/circuits",
+    "verity/definitions/{__init__.py,boolean.py,call_scope.py,circuits,commitments,cross_call.py,encoding.py,evidence.json}",
+    "verity/definitions/{evidence.py,kernels,numerics,ops,private_circuits,pyproject.toml,README.md,registry,replay.py}",
+    "verity/definitions/{silicon,tests,tiny.py,word.py}",
 ]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
 pouw = [
@@ -124,7 +127,7 @@ benchmarks = [
     "benchmarks/pouw/pearl_c_sm120/{run.py,fixture.py,build.sh,sass_gate.py}",
     "benchmarks/pouw/pearl_c_sm120/{pearl_c_sm120.cu,hash_fast.cuh,hash_decode.cuh,mainloop_sm120.cuh}",
     "benchmarks/pouw/pearl_c_sm90/{run.py,fixture.py,grouped.py,build.sh,sass_gate.py}",
-    "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h}",
+    "benchmarks/pouw/pearl_c_sm90/{pearl_c_sm90.cu,hash_prefill.cuh,acc.h,debit_sm90.cu}",
     # the -h3 hashing both cubins include
     "benchmarks/pouw/pearl_c/{hash_h3.cuh,sha512.cuh}",
     # the PoUW harness's SASS gate, whose `mma_gate` each build's gate runs, and the pins it reads
@@ -281,7 +284,7 @@ flock_bench = [
 # what a public directory holds that is not its own: another area's package or tool that sits under it, and is no part
 # of the public tree
 nested = [
-    "verity/definitions/{evaluate,requirement}",
+    "verity/definitions/requirement",
     "verity/hardware/tests/test_lean.py",
     "verity/protocols/flock/sigma",
     "verity/protocols/inference_only",
