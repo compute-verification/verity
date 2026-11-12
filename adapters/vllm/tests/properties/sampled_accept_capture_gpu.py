@@ -50,6 +50,7 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import argparse
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -67,8 +68,8 @@ for _p in (ROOT / "adapters" / "vllm", ROOT):
     if str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
 
-from tests.program import sampled_accept_vectors as SV  # noqa: E402
-from verity.definitions.registry import sampled_accept as A  # noqa: E402
+SV = importlib.import_module("tests.program.sampled_accept_vectors")
+A = importlib.import_module("verity.definitions.registry.sampled_accept")
 
 SCHEMA = "verity-vllm/sampled-accept-capture/v1"
 RECORD = "sampled_accept_capture.json"
