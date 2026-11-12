@@ -156,7 +156,7 @@ class SnapshotStore:
                     flat.append(e)
             entries = flat
         default_layout = self.meta.get("layout", "spanned-storage-bytes")
-        # `skipped` entries (a tensor over the capture's snapshot cap, D87 / `snapshot_max_bytes_op`) describe a view that was
+        # `skipped` entries (a tensor of more bytes than the capture's `snapshot_max_bytes_op`, D87) describe a view that was
         # NOT dumped: no `file`.  They must not become Snapshots (the empty file path resolved to the capture root and
         # `_raw` raised IsADirectoryError the first time a boundary value lived in a skipped alloc — OLMoE B8-static's
         # 1300-token step 0); they are kept aside for the report.
