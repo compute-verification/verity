@@ -273,7 +273,7 @@ def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
 
 def sized(params: WardenParams) -> tuple[tuple[int, int, int], ...]:
     """Each class of a schedule as (P, O, the most rows each of its tables has): the class's own rows under form 1
-    and, where a table's rows are a count (`counted`), R = `WardenParams.phase_releases`. None for a schedule
+    and, where a table's rows are a count (`counted`), R = `WardenParams.phase_releases`. `()` for a schedule
     without content rows."""
     if params.content is None or not counted(params):
         return params.content or ()
@@ -288,7 +288,7 @@ def names(i: int) -> tuple[str, str, str]:
 def tables_of(params: WardenParams) -> tuple[tuple[str, int, int], ...]:
     """The content tables a schedule's head lists after the lengths and fails tables, class by class in the
     schedule's order: each one's (name, rows, a row's bytes), the rows the table's own under form 1 and the most it
-    has where they are a count (`counted`). None for a schedule without content rows."""
+    has where they are a count (`counted`). `()` for a schedule without content rows."""
     B = params.cell_bytes
     return tuple(t for i, (P, O, rows) in enumerate(sized(params))
                  for t in zip(names(i), (rows,) * 3, (request_bytes(B, P), response_bytes(O), END_BYTES)))
