@@ -10,7 +10,7 @@ credited cells' credit is rejected, and an accepted unit is credited (1 − ρ)�
 hardware.
 
 * `H100` is the record every ``pearl-c-h100-*`` output was pinned on: `HOPPER_E4M3_K32`, `HOPPER_BF16_WGMMA_K16`, G = 4,
-  Rounds 10-11's W1 prices, k <= 2^16 (the pure-chain freezing bound), k = 256 under forming v1 and -h3 beside Pearl-C's
+  the H100's W1 prices (Lean `Prices.h100`), k <= 2^16 (the pure-chain freezing bound), k = 256 under forming v1 and -h3 beside Pearl-C's
   k >= 1,024 (`census_ks`, where a row's inert-work bound is 4ρ: `pearl_c.CENSUS_ROW_CAP`) and ρ = 1/400 (TT_OUT(1/400)).
 * `SM120` is the RTX PRO 6000 Blackwell's (``mma.sync``: ``kind::f8f6f4`` m16n8k32 E4M3 and m16n8k16 BF16).  The atom is the
   card's captured step, `BLACKWELL_SM120_E4M3_M16N8K32` (one group of 32 in a 26-bit adder), and the prices are
@@ -20,8 +20,7 @@ hardware.
   bound and the inert-work bound are statement parameters: they change with the Lean statements, not here.
 * `SM120_UNPROMOTED` is `SM120` without promotion (G is None: one accumulator from +0 over the whole of k, and the word is
   the last atom's output).  It is the panel's ``pearl-c-sm120`` v2, built for the kernels and the twin; no scheme
-  is registered on it and counting its inert work raises until the theory and Lean lanes restate Pearl-C without
-  promotion.
+  is registered on it and counting its inert work raises until Pearl-C is restated without promotion.
 """
 
 from __future__ import annotations
@@ -88,7 +87,7 @@ class Device:
         return {s: (m.groups, m.width, m.zero_exponent) for s, m in (("atom", self.atom), ("peel", self.peel))}
 
 
-#: sm_90, the H100 (Rounds 10–11, `Prices.h100`): FADD 32, a BF16 MAC 2, and `Costs.adopted`'s forming, 64 + 4
+#: sm_90, the H100 (`Prices.h100`): FADD 32, a BF16 MAC 2, and `Costs.adopted`'s forming, 64 + 4
 H100_PRICES = Prices("sm_90", fadd=32, bf16_mac=2, forming_credited=64, forming_a_only=4)
 #: sm_120, the RTX PRO 6000 (`Prices.sm120`; node 2, locked 2,100 MHz): FADD 8, issue-bound (8.38 in the measured 64-add loop); a BF16 MAC 2; the k32 noise atom
 #: (32) and the E4M3 cast alone (8; 12.31 in the packing loop), 40; ρ's one FFMA per 8 elements, 1
