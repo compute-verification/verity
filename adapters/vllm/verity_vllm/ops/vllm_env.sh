@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # A vLLM build of `engine.stock.BUILDS` other than the pin, in an environment of its own beside the pin's: Python 3.12, the
-# build's sha256-pinned wheel and the torch it names.  The pin's environment (pod_bootstrap.sh's $WORK/venv312) is never
-# read or written.
+# build's sha256-pinned wheel, the torch it names and FlashInfer's compiled kernels, which this build's wheel leaves to a
+# step of its own and without which vLLM turns FlashInfer off.  The pin's environment (pod_bootstrap.sh's $WORK/venv312)
+# is never read or written.
 #
 #   VENV=$(bash adapters/vllm/verity_vllm/ops/vllm_env.sh) || exit    # the last stdout line is the path
 #
-# Idempotent: a directory that holds the build is checked and left as it is, and one that holds anything else is refused.
-# An install that fails removes what it made.  Fails with a named class (VLLM_ENV_FAIL_<step>) and exits 3.
+# Idempotent: a directory that holds the build, with the freeze.txt an install writes last, is left as it is, and one that
+# holds anything else is refused.  An install that fails removes what it made.  Fails with a named class
+# (VLLM_ENV_FAIL_<step>) and exits 3.
 # Env: SERVE_VLLM (the build, by short commit: 52aeb5806; no VLLM_ name, which vLLM's own check of its environment would
 # report as unknown), WORK (/workspace), VENV ($WORK/venv-vllm-$SERVE_VLLM), NEED_GB (the free space the install asks of
 # VENV's filesystem: 30), OUT (where pip.log and freeze.txt are copied; none).
@@ -29,6 +31,7 @@ held() { "$PY" -c 'from vllm._version import __commit_id__ as c; print(c.removep
 
 if [ -e "$VENV" ]; then
   [ "$(held)" = "$BUILD" ] || fail OTHER "$VENV exists and does not hold vLLM $BUILD (it holds: $(held || echo no vLLM)); name another VENV"
+  [ -f "$VENV/freeze.txt" ] || fail OTHER "$VENV holds vLLM $BUILD without freeze.txt, so its install did not finish; name another VENV"
   say "$VENV holds vLLM $BUILD"
 else
   command -v uv >/dev/null || fail UV "no uv on PATH"
@@ -48,6 +51,13 @@ else
     "$tmp/$W" "numpy>=1.26" safetensors huggingface_hub zstandard pytest ninja >"$tmp/pip.log" 2>&1 \
     || { tail -n 5 "$tmp/pip.log" >&2; [ -z "${OUT:-}" ] || cp "$tmp/pip.log" "$OUT/"; fail PIP "see the lines above"; }
   [ "$(held)" = "$BUILD" ] || fail IMPORT "the installed vLLM is not $BUILD: $("$PY" -c 'import vllm._version' 2>&1 | tail -n 1)"
+  # FlashInfer's own step, the one vLLM's image runs: the kernels of every GPU architecture, by uv into this environment
+  UV_CACHE_DIR=$tmp/uv UV_HTTP_TIMEOUT=${UV_HTTP_TIMEOUT:-600} FLASHINFER_DISABLE_VERSION_CHECK=1 \
+    "$PY" -m flashinfer download-kernels >>"$tmp/pip.log" 2>&1 \
+    || { tail -n 8 "$tmp/pip.log" >&2; [ -z "${OUT:-}" ] || cp "$tmp/pip.log" "$OUT/"; fail KERNELS "flashinfer download-kernels: see the lines above"; }
+  "$PY" -c 'import importlib.util as u, sys; sys.exit(u.find_spec("flashinfer_cubin") is None)' \
+    || fail KERNELS "flashinfer download-kernels left no flashinfer_cubin"
+  [ "$(held)" = "$BUILD" ] || fail KERNELS "FlashInfer's step changed the installed vLLM"
   UV_CACHE_DIR=$tmp/uv uv pip freeze --python "$PY" >"$VENV/freeze.txt" || fail FREEZE "uv pip freeze"
   [ -z "${OUT:-}" ] || cp "$tmp/pip.log" "$VENV/freeze.txt" "$OUT/"
   ok=1

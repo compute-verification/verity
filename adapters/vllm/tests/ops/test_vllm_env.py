@@ -3,7 +3,7 @@
 The install itself (a wheel, torch) cannot run here.  What can: the script parses; with the pin it installs exactly
 `engine.stock.BUILDS`; it refuses the pin, whose environment is pod_bootstrap.sh's, and a build it doesn't know; it
 leaves a directory that holds the build as it is and prints its path last; and it refuses a directory that holds
-anything else without touching it."""
+anything else, or an install that did not finish, without touching it."""
 from __future__ import annotations
 
 import re
@@ -25,12 +25,15 @@ def run(tmp_path: Path, **env: str) -> subprocess.CompletedProcess:
                           env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "WORK": str(tmp_path / "work"), **env})
 
 
-def venv(tmp_path: Path, commit: str | None) -> Path:
-    """A directory whose ``bin/python`` answers the script's one question as a vLLM of ``commit`` would (None: no vLLM)."""
+def venv(tmp_path: Path, commit: str | None, finished: bool = True) -> Path:
+    """A directory whose ``bin/python`` answers the script's one question as a vLLM of ``commit`` would (None: no vLLM),
+    with the ``freeze.txt`` an install writes last when it ``finished``."""
     d = tmp_path / "venv"
     (d / "bin").mkdir(parents=True)
     (d / "bin" / "python").write_text(f"#!/bin/sh\necho {commit}\n" if commit else "#!/bin/sh\nexit 1\n")
     (d / "bin" / "python").chmod(0o755)
+    if finished:
+        (d / "freeze.txt").write_text("vllm==0\n")
     return d
 
 
@@ -60,9 +63,10 @@ def test_a_directory_that_holds_the_build_is_left_as_it_is(tmp_path: Path) -> No
     assert r.stdout.splitlines()[-1] == str(d) and sorted(p.relative_to(d) for p in d.rglob("*")) == before
 
 
-@pytest.mark.parametrize("commit", [stock.BUILDS[0], None])
-def test_a_directory_that_holds_anything_else_is_refused_and_kept(tmp_path: Path, commit: str | None) -> None:
-    d = venv(tmp_path, commit)
+@pytest.mark.parametrize("commit, finished", [(stock.BUILDS[0], True), (None, True), (NEW, False)])
+def test_a_directory_that_holds_anything_else_is_refused_and_kept(tmp_path: Path, commit: str | None, finished: bool) -> None:
+    d = venv(tmp_path, commit, finished)
+    before = sorted(p.relative_to(d) for p in d.rglob("*"))
     r = run(tmp_path, VENV=str(d))
     assert r.returncode == 3 and r.stderr.startswith("VLLM_ENV_FAIL_OTHER: ") and not r.stdout, (r.stdout, r.stderr)
-    assert (d / "bin" / "python").exists()
+    assert sorted(p.relative_to(d) for p in d.rglob("*")) == before
