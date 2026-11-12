@@ -10,9 +10,7 @@ public import Definitions.Pouw.Guarantees.Lead
 public import Definitions.Pouw.Guarantees.KeyedLeaf
 public import Definitions.Pouw.Guarantees.NCP
 public import Definitions.Pouw.Guarantees.OnsiteFreed
-public import Definitions.Pouw.Guarantees.PearlC
 public import Definitions.Pouw.Guarantees.PearlCDev
-public import Definitions.Pouw.Guarantees.PearlCFlockTile
 public import Definitions.Pouw.Guarantees.PearlCTileCheck
 public import Definitions.Pouw.Guarantees.Receipt
 public import Definitions.Pouw.Guarantees.RelativeSecurity

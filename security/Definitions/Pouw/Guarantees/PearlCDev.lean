@@ -18,7 +18,7 @@ hardware figure in it; the gap at a named record is the statement at that record
 * `SampledDevRev1K`: per audit tile, from TT_OUT rev1 per audit tile at W1 (`TTOutTilePearlCDevRev1W1`).
 * `HiddenFlockDevRev1K`: per audit tile under Flock's hidden audit over a TileRead session `F` (`F.audit`), at
   `t·δzk(q)` more error than the sampled audit, given T3 at the session (`TileReadSound`) and the binding
-  (`TileReadBinds`), the two open obligations `Definitions.Pouw.Guarantees.PearlCFlockTile` names.
+  (`TileReadBinds`), the two open obligations `Definitions.Pouw.PearlC.FlockTile.Audit` states.
 
 Each proof is `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G` (`Proofs.Pouw.PearlC.DevGap`).
 -/

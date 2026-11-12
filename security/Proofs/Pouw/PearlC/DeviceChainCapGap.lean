@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Pouw.PearlC.DeviceCapGap
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceRev1Gap

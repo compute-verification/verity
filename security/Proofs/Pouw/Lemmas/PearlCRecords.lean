@@ -23,24 +23,27 @@ public import Definitions.Pouw.PearlC.DevicePrices
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
+public import Definitions.Pouw.PearlC.FlockTile.Audit
 
 /-!
-# Pearl-C's guarantees (trusted)
+# Pearl-C's statements at device records: lemmas
 
-Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
-hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`.
-The gap at the RTX PRO 6000's v1 record under rev1 at the cap 1/1,000 (`Pouw.PearlC.pearlCGapSm120v1LoopCast8p72Rev1Cap1000_8192`
-in `Pouw.SecurityProofs.PearlC.DeviceCapRev1Gap`), its binders written as a `∀`. `Pouw.CostModel` and `Pouw.GGap` are
-the game's, so Pearl-C's are named in full.
+Pearl-C's gap statements at a named device record (`devSm120v1`, `devSm120v2`, `devH100`, `devFp4Sm120`) and its prices,
+each a `def G : Prop` under the guarantees' namespace, proved by the theorem `Pouw.SecurityProofs.PearlC.G` and audited
+with the proofs: no record pins it. The listed statements are the same forms over every device record
+(`Definitions.Pouw.Guarantees.PearlCDev`); a statement here is one of them at a record's numbers, or an earlier revision
+or comparison (v2 without promotion, other casts, chain-only, chain-cap, U-only, Pearl-C4, the H100).
 
-**At W1.** A guarantee that rests on a device TT_OUT form (`TTOutPearlCDev`, `TTOutPearlCDevRev1`, their tile forms and
+**At W1.** A statement that rests on a device TT_OUT form (`TTOutPearlCDev`, `TTOutPearlCDevRev1`, their tile forms and
 the H100's; the chain-only, chain-cap and U-only forms) is stated at the cost model `W1.w1Priced dv salt`, the W1
 machine on the record's device `dv` (`W1Device.sm120`, `.sm120Loop` or `.h100` at prices `sha` and `fetch`) with the
 salt's bytes `salt`, and rests on that form at W1 (`Definitions.Pouw.Assumptions.PearlC.TTOutW1`,
 `Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1`, and the chain-cap and U-only forms' `…W1` beside them).
-Pearl-C4's headline readers rest on `TTOutFp4Sm120W1` or `TTOutTileFp4Sm120W1` and conclude at
+Pearl-C4's rest on `TTOutFp4Sm120W1` or `TTOutTileFp4Sm120W1` and conclude at
 `W1.w1Priced (W1Device.fp4Sm120 sha fetch) salt` (`Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1`). The rest (the
-row-seed readers) are still stated over any `CostModel`.
+row-seed readers) are still stated over any `CostModel`. `HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` is the
+hidden-audit form at Flock's TileRead session (`Definitions.Pouw.PearlC.FlockTile`), and `EpsFp4Sm120_8192` Pearl-C4's
+gap at 8192³ in ε form.
 -/
 
 @[expose] public section
@@ -999,3 +1002,57 @@ def SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b : Prop :=
       ((106307 / 27386000 : ℚ) : ℝ) δPearlC
 
 end Pouw.Guarantees.PearlC
+
+namespace Pouw.Guarantees.PearlC
+
+open Pouw.PearlC Pouw.PearlC.Assumptions Pouw.PearlC.FlockTile
+
+/-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³, under Flock's hidden audit**, FP32 at 8.376, the honest
+cast at 8.72: `g = 1648180439/446072750000` (0.36949%), at `t·δzk(q)` more error than the sampled audit, for Flock's
+hidden audit over a TileRead session `F` (`F.audit`: the window root, each sampled tile's TileRead `--zk` session
+relabelled to flock-verify's verdict, and the class of batch provers whose every induced strategy meets the session's `Cls`).
+
+Its hypotheses, at the cost model `W1.w1Priced` on `W1Device.sm120Loop sha fetch`:
+* `TTOutTilePearlCDevRev1W1` (the device's timing at the cap at W1, a named assumption, as in the sampled audit);
+* `TileReadSound` (T3 at the session, an open obligation to be discharged by Flock's soundness of the TileRead
+  statement, whose CR hypotheses, `TableCRZ` at `cr/sha-512` and `LinkCRZC` at `ecr/sha-512`, are `F.Cls`);
+* `TileReadBinds` (the binding, an open obligation to be proved from TileRead's gates, L4's registered reads,
+  hm96-sha512's binding, L3 and L8);
+* `0 ≤ δzk`.
+
+The session is a parameter until TileRead's Definition lands. The statement says something about Flock only at the
+session whose `game` is TileRead's live session and whose `Cls` is T3's CR hypotheses: at a session with an empty `Cls`,
+`F.audit`'s class is empty and both obligations hold with `Bad` everything. It is cited beside the honest prover's
+`HiddenAudit.ProverBounded` at `F.audit` (`HiddenAudit`'s docstring). -/
+def HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)
+    (sem : PearlCSem Q R S) (F : TileReadSession Q R S) (δzk : ℕ → ℝ),
+    (∀ q, 0 ≤ δzk q) →
+    TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop) sem (1 / 1000) →
+    TileReadSound (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) F δzk →
+    TileReadBinds (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) F →
+    Pouw.PearlC.GGapHidden (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt)
+      (pearlCProtocolDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCTilesDevRev1K (devSm120v1 Prices.sm120Loop) sem (1 / 1000) (218 / 25 - 8953 / 1000))
+      (pearlCDomainDevAt (devSm120v1 Prices.sm120Loop) sh8192) F.audit
+      ((1648180439 / 446072750000 : ℚ) : ℝ) δPearlC δzk
+
+end Pouw.Guarantees.PearlC
+
+namespace Pouw.PearlC
+open Finset Pouw.PearlC.Assumptions Pouw.Fp8Atom Pouw.PearlC.Fp4Dev
+
+/-- **Pearl-C4's headline on sm_120, 8192³, in ε form**: `GapFp4Sm120_8192` at the advantage
+`ε = g/(1 − g) = 9875013901/1366788186099` (0.72250%). Like `GapFp4Sm120_8192`, it holds only for noise the domain's
+rule allows (D-SK, `Fp4Sem.SaltKeyedB`) and says nothing yet about the deployed NVFP4 noise, at which the domain is
+empty. -/
+def _root_.Pouw.Guarantees.PearlC.EpsFp4Sm120_8192 : Prop :=
+  ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ) (sem : Fp4Sem Q R S),
+    TTOutFp4Sm120W1 sha fetch salt sem (1 / 400) →
+    Pouw.PearlC.Gε (Pouw.PearlC.W1.w1Priced (Pouw.PearlC.W1.W1Device.fp4Sm120 sha fetch) salt) (pearlCProtocolFp4 devFp4Sm120 sem (1 / 400)) (pearlCDomainFp4At sem sh8192)
+    ((9875013901 / 1366788186099 : ℚ) : ℝ) δPearlC
+
+end Pouw.PearlC

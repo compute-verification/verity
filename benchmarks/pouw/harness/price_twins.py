@@ -22,13 +22,17 @@ both. Its key is
 
 Rounded twins (a record's own cast under the loop price, an upper bound) and U-only messages have no priced path and are
 left out. Each twin keeps its pin's name, type hash and source, and is ``pinned`` when the Lean store's lean-audit.json
-or the repository's own (`REPO_AUDIT`, read after the store's files) holds that pin with that type hash, ``staged``
-otherwise.
+or the repository's own (`REPO_AUDIT`, read after the store's files) holds that pin with that type hash, or when it is a
+statement of the repository's Pearl-C lemmas at device records (`REPO_LEMMAS`, read last), ``staged`` otherwise.
 
 A twin lifted to a guarantee is pinned as `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G`, whose signature
 states no gap. Its statement is the body of the definition `G`, read from the Lean source of `Pouw/Guarantees/` in the
 audit's definitions tree (`trees`), and checked as a signature is. A lifted twin whose `G` that source doesn't define,
 or whose body states no literal gap, fails the table (`TwinError`).
+
+A statement at a device record that left the guarantees for the lemmas beside its proof keeps its name: each
+`def G : Prop` of `REPO_LEMMAS` under `Pouw.Guarantees.PearlC` is the twin `Pouw.SecurityProofs.PearlC.G`, read from
+`G`'s body as a lifted twin is, with no type hash (no record pins a lemma; the Lean check builds and replays it).
 
   python price_twins.py STORE_ROOT [--out price_twins.json]   regenerate the table from the POUS Project store's pins
   python price_twins.py --repository-only                     re-read only the repository's pins, keeping the store's rows
@@ -59,6 +63,8 @@ LEAN_STORE = "lean/submissions/pouw/lean-audit.json"
 #: the repository's security analysis audit, where PoUW's pins land now; read after the store's files, so a pin they hold keeps its row
 REPO_AUDIT = HERE.parents[2] / "security" / "lean-audit.json"
 REPO_SOURCE = "security/lean-audit.json"
+#: the repository's Pearl-C statements at device records, beside their proofs (no record pins them)
+REPO_LEMMAS = "security/Proofs/Pouw/Lemmas/PearlCRecords.lean"
 STAGED = ("internal/pouw/price-twins-lean/proposed-pins.json", "internal/pouw/price-twins-lean/v2-hot/v2-hot-pins.json",
           "internal/pouw/price-twins-lean/v1-hot/v1-hot-pins.json", "internal/pouw/price-twins-lean/fp4-delta/fp4-delta-pins.json")
 CASTS = {"8": "cast-8", "8p72": "cast-8.72", "16": "cast-16", "32": "cast-32", "32p06": "cast-32.06"}
@@ -77,6 +83,7 @@ _FP8 = re.compile(r"pearlC(?P<kind>Gap|Gamma|Sampled)Sm120(?P<ver>v1|v2)(?P<loop
                   r"(?P<read>ChainOnly|Chain)?(?P<cap>Rev1Cap1000|Rev1|Cap1000)"
                   r"_(?:(?P<shape>8192|16384)|n(?P<n>\d+)k(?P<k>\d+)|(?P<layout>[a-z][a-z0-9_]*))")
 _LIFTED = re.compile(r"(\S+) : (Pouw\.Guarantees\.\S+)")
+_LEMMA_NS = "Pouw.Guarantees.PearlC"
 _DEV = re.compile(_NS + r"devSm120(v1|v2) " + _NS + r"Prices\.(sm120Loop|sm120)\b")
 _CAP_ARG = re.compile(_NS + r"pearlCProtocolDev\w* \(" + _NS + r"devSm120v[12] " + _NS + r"Prices\.\w+\) "
                       r"\w+ \(" + _RAT + r"\)")
@@ -125,6 +132,34 @@ def lifted_definitions(audit: dict, lean: Path) -> dict[str, str]:
                 out[d] = " ".join(m[1].split())
                 break
     return out
+
+
+def lemmas(lean: Path) -> tuple[dict[str, dict], dict[str, str]]:
+    """The repository's Pearl-C lemmas at device records (`REPO_LEMMAS`, under the repository root that holds `lean`) as
+    lifted pins, `Pouw.SecurityProofs.PearlC.G : Pouw.Guarantees.PearlC.G` with no type hash, and each `G`'s body with
+    whitespace collapsed: `def G : Prop :=` and the indented lines after it, in `namespace Pouw.Guarantees.PearlC` or as
+    `def _root_.Pouw.Guarantees.PearlC.G : Prop :=` in any namespace."""
+    pins, defs, ns = {}, {}, []
+    lines = (lean.parent / REPO_LEMMAS).read_text().split("\n")
+    for i, line in enumerate(lines):
+        if m := re.fullmatch(r"namespace (\S+)", line):
+            ns.append(m[1])
+        elif (m := re.fullmatch(r"end (\S+)", line)) and ns and ns[-1] == m[1]:
+            ns.pop()
+        elif m := re.fullmatch(r"def (\S+) : Prop :=", line):
+            d = m[1].removeprefix("_root_.") if m[1].startswith("_root_.") else ".".join([*ns, m[1]])
+            if d.rsplit(".", 1)[0] != _LEMMA_NS:
+                continue
+            body = []
+            for nxt in lines[i + 1:]:
+                if not re.match(r"[ \t]+\S", nxt):
+                    break
+                body.append(nxt)
+            short = d.rsplit(".", 1)[1]
+            pin = f"Pouw.SecurityProofs.PearlC.{short}"
+            pins[pin] = {"type_hash": None, "signature": [f"{pin} :", f"  {d}"]}
+            defs[d] = " ".join(" ".join(body).split())
+    return pins, defs
 
 
 def _statement(name: str, pin: dict, defs: dict[str, str]) -> tuple[str, bool]:
@@ -222,15 +257,16 @@ def _row(name: str, short: str, sig: str) -> dict | None:
     return row
 
 
-def extract(pins: dict[str, dict], source: str, pinned: dict[str, str], defs: dict[str, str] | None = None) -> list[dict]:
-    """Every twin among `pins`, from `source`; ``status`` pinned when `pinned` (the Lean store's name -> type hash) holds it.
-    ``defs`` states the lifted guarantees (`lifted_definitions`)."""
+def extract(pins: dict[str, dict], source: str, pinned: dict[str, str], defs: dict[str, str] | None = None,
+            proved: bool = False) -> list[dict]:
+    """Every twin among `pins`, from `source`; ``status`` pinned when `pinned` (the Lean store's name -> type hash) holds it,
+    or when ``proved`` (the repository's lemmas). ``defs`` states the lifted guarantees (`lifted_definitions`, `lemmas`)."""
     out = []
     for name in sorted(pins):
         row = parse(name, pins[name], defs)
         if row is not None:
             row["source"] = source
-            row["status"] = "pinned" if pinned.get(name) == row["type_hash"] else "staged"
+            row["status"] = "pinned" if proved or pinned.get(name) == row["type_hash"] else "staged"
             out.append(row)
     return out
 
@@ -244,42 +280,57 @@ def guarantees(doc: dict) -> dict[str, dict]:
     return doc["guarantees"] if "guarantees" in doc else doc["pins"]
 
 
+def repository(repo_audit: Path, pinned: dict[str, str]) -> list[tuple[str, list[dict]]]:
+    """The repository's twins by source: its audit's pins (`REPO_SOURCE`), then its lemmas' (`REPO_LEMMAS`)."""
+    audit = json.loads(repo_audit.read_text())
+    pins, defs = lemmas(repo_audit.parent)
+    return [(REPO_SOURCE, extract(guarantees(audit), REPO_SOURCE, pinned, lifted_definitions(audit, repo_audit.parent))),
+            (REPO_LEMMAS, extract(pins, REPO_LEMMAS, pinned, defs, proved=True))]
+
+
 def build(root: Path, repo_audit: Path = REPO_AUDIT) -> dict:
-    """The table from the POUS Project store at `root` and the repository's audit: every twin, one per pin (the Lean
-    store's copy of a pin first, the repository's last, a pin the store holds by its name before its lift included)."""
-    files = {rel: root / rel for rel in (LEAN_STORE, *STAGED)} | {REPO_SOURCE: repo_audit}
+    """The table from the POUS Project store at `root`, the repository's audit and its lemmas: every twin, one per pin (the
+    Lean store's copy of a pin first, the repository's last, a pin the store holds by its name before its lift included)."""
+    files = {rel: root / rel for rel in (LEAN_STORE, *STAGED)}
     pinned: dict[str, str] = {}
-    for rel in (REPO_SOURCE, LEAN_STORE):
-        pinned |= {k: v.get("type_hash") for k, v in guarantees(json.loads(files[rel].read_text())).items()}
+    for path in (repo_audit, files[LEAN_STORE]):
+        pinned |= {k: v.get("type_hash") for k, v in guarantees(json.loads(path.read_text())).items()}
     defs = lifted_definitions(json.loads(repo_audit.read_text()), repo_audit.parent)
-    sources, twins, seen = [], [], set()
+    sources, found, twins, seen = [], [], [], set()
     for rel, path in files.items():
         raw = path.read_bytes()
         rows = extract(guarantees(json.loads(raw)), rel, pinned, defs)
-        sources.append({"path": rel, "twins": len(rows)} | ({} if rel == REPO_SOURCE else
-                                                             {"sha256": hashlib.sha256(raw).hexdigest()}))
+        sources.append({"path": rel, "twins": len(rows), "sha256": hashlib.sha256(raw).hexdigest()})
+        found += rows
+    for rel, rows in repository(repo_audit, pinned):
+        sources.append({"path": rel, "twins": len(rows)})
+        found += rows
+    for r in found:
+        if _short(r["pin"]) not in seen:
+            seen.add(_short(r["pin"]))
+            twins.append(_jsonable(r))
+    return _table(sources, twins)
+
+
+def refresh(doc: dict, repo_audit: Path = REPO_AUDIT) -> dict:
+    """The table `doc` with the repository's twins re-read from `repo_audit` and its lemmas and every store file's rows
+    kept: what `build` gives when only the repository has changed since `doc` was built, without the store. A kept row
+    turns pinned when the repository now holds its pin at its type hash."""
+    repo = (REPO_SOURCE, REPO_LEMMAS)
+    pins = guarantees(json.loads(repo_audit.read_text()))
+    kept = [t | ({"status": "pinned"} if pins.get(t["pin"], {}).get("type_hash") == t["type_hash"] else {})
+            for t in doc["twins"] if t["source"] not in repo]
+    pinned = {k: v.get("type_hash") for k, v in pins.items()} | {t["pin"]: t["type_hash"] for t in kept
+                                                                  if t["status"] == "pinned"}
+    seen = {_short(t["pin"]) for t in kept}
+    sources, twins = [s for s in doc["sources"] if s["path"] not in repo], list(kept)
+    for rel, rows in repository(repo_audit, pinned):
+        sources.append({"path": rel, "twins": len(rows)})
         for r in rows:
             if _short(r["pin"]) not in seen:
                 seen.add(_short(r["pin"]))
                 twins.append(_jsonable(r))
     return _table(sources, twins)
-
-
-def refresh(doc: dict, repo_audit: Path = REPO_AUDIT) -> dict:
-    """The table `doc` with the repository's twins re-read from `repo_audit` and every store file's rows kept: what
-    `build` gives when only the repository's audit has changed since `doc` was built, without the store. A kept row
-    turns pinned when the repository now holds its pin at its type hash."""
-    raw = repo_audit.read_bytes()
-    pins = guarantees(json.loads(raw))
-    kept = [t | ({"status": "pinned"} if pins.get(t["pin"], {}).get("type_hash") == t["type_hash"] else {})
-            for t in doc["twins"] if t["source"] != REPO_SOURCE]
-    pinned = {k: v.get("type_hash") for k, v in pins.items()} | {t["pin"]: t["type_hash"] for t in kept
-                                                                  if t["status"] == "pinned"}
-    seen = {_short(t["pin"]) for t in kept}
-    rows = extract(pins, REPO_SOURCE, pinned, lifted_definitions(json.loads(raw), repo_audit.parent))
-    sources = [s for s in doc["sources"] if s["path"] != REPO_SOURCE]
-    sources.append({"path": REPO_SOURCE, "twins": len(rows)})
-    return _table(sources, kept + [_jsonable(r) for r in rows if _short(r["pin"]) not in seen])
 
 
 def _table(sources: list[dict], twins: list[dict]) -> dict:

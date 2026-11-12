@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Proofs.Pouw.PearlC.ChainOnlyGap
-public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlCRecords
 import Mathlib.Analysis.SpecialFunctions.Pow.Real
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.KernelWrefGap

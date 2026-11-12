@@ -159,9 +159,8 @@ reads. Proved:
   protocol's advantage is ε = Ω_max/(1 − g₀) − 1, and an audit of t work-weighted samples accepts while
   (1 + ε)/(1 − ε_s)·T < W with probability at most (1 − ε_s)^t + δ, for every share ε_s < 1 of the reference work W);
   NCP's `Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1`; Pearl-C's at 8192³ on the RTX PRO 6000 (sm_120) at an inert-work
-  share of 1/1,000, `Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192` (ε = 1648180439/444424569561, 0.371%);
-  and Pearl-C4's at 8192³, `Pouw.SecurityProofs.PearlC.EpsFp4Sm120_8192` (ε = 9875013901/1366788186099, 0.723%). Each
-  follows from its gap form below. Neither Pearl-C figure is the served point's. What is served is Llama 3.2 1B on an
+  share of 1/1,000, `Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192` (ε = 1648180439/444424569561, 0.371%).
+  Each follows from its gap form. Pearl-C's figure is not the served point's. What is served is Llama 3.2 1B on an
   H200, credited under the H100 record at an inert-work share of 1/400, and its gap is a lemma, not yet a listed
   guarantee: `pearlCGapH100Rev1_llama32_1b` (`security/Proofs/Pouw/PearlC/ServedH100Rev1Gap.lean`), under
   `TTOutPearlCH100Rev1`, g = 69533/10736000 (0.648%) on the model's four linears in one layout, which is `down`'s
@@ -173,11 +172,11 @@ reads. Proved:
   while the work done is below (1 − g)(1 − ε_s)·W with probability at most δ_s + δ) and work-weighted sampling.
 - **The deadline:** `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline`, `Pouw.SecurityProofs.SpareCapacityAtDeadline` and
   `Pouw.SecurityProofs.PearlCSampledByDeadline`.
-- **The schemes' gaps:** NCP's `Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1`; Pearl-C's at 8192³ on the RTX PRO 6000
-  (the served point's is the lemma above),
-  `Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin
-  `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`. The row seed's reduction and the barrier
-  are lemmas, in `security/Proofs/Pouw/Lemmas/PearlC.lean` and `security/Proofs/Pouw/Lemmas/Barrier.lean`.
+- **The schemes' gaps:** NCP's `Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1`; Pearl-C's over every device record, per
+  unit, per audit tile and under Flock's hidden audit (`Pouw.SecurityProofs.PearlC.GapDevRev1K`, `SampledDevRev1K`,
+  `HiddenFlockDevRev1K`), whose gap is `1 − (1 − 1/400)/ω` for a kernel within `ω` of the capped credit on the shapes
+  served. Each statement at a record's numbers (`devSm120v1`, `devSm120v2`, `devH100`, `devFp4Sm120`) is a lemma, in
+  `security/Proofs/Pouw/Lemmas/PearlCRecords.lean`. The row seed's reduction and the barrier are lemmas, in `security/Proofs/Pouw/Lemmas/PearlC.lean` and `security/Proofs/Pouw/Lemmas/Barrier.lean`.
 - **The served credit's relative security:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged` and
   `Pouw.SecurityProofs.RelativeSecurity.TheoremSOverlap`.
 - **Compute accounting reads PoUW** through `Accounting.SecurityProofs.ComputeOfPouw`,
@@ -186,8 +185,7 @@ reads. Proved:
 
 Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.WindowDelta`, and
 `Pouw.Guarantees.Window.ServiceEscapes` for the deployed sample, `security/Definitions/Pouw/Guarantees/Window.lean`);
-Dither's guarantees (`security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and
-per-model instances (`security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole
+and Dither's guarantees (`security/Definitions/Pouw/Guarantees/DitherInstance.lean`). No guarantee over the remote protocol as a whole
 is stated yet; `Properties.Composition` (`security/Properties/Composition.lean`) proves the composition's accept rule
 against its code.
 
