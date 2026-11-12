@@ -76,13 +76,15 @@ field's name:
 - `verifier`: `{"module": ..., "commit": ...}`, the verifier that checked it and the commit it ran at.
 - `verdict`: `accept` (accepted and complete), `not complete` (accepted, which moves no figure) or `refuse`.
 - `proved_by`: null until a Lean proof covers that verifier, then the Lean guarantee's name.
-- `open`: while `proved_by` is null, what that proof waits on.
+- `open`: while `proved_by` is null, what stands between the verdict and proved, stated in words (`the two-round
+  form's soundness is not proved`). A record whose `open` names an issue's id is refused: the print carries no issue
+  id, and the issue goes on the board.
 
 The class is complete when every piece's honest run is `accept`, and a changed id and a changed `max_tokens` are each
 refused, on a piece, by the verifier that accepted that piece's honest run, and no control is accepted. Then the
 output count's 0 is marked `run, not proved`, printed "run (Python verifier, not proved)" with each verdict's run and
-verifier and counted apart from measured, and the class prints as `complete (run, not proved: OPEN open; Python
-verifier for PIECES)`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
+verifier and counted apart from measured, and the class prints as `complete (run, not proved: OPEN; Python verifier
+for PIECES)`, OPEN being each unproved piece's `open`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
 from the field, never from a flag or a name. Short of complete, the inputs print as with no verdicts and the output
 count's line names what is missing. With no run carrying the record the print is as it was before the command read
 any.

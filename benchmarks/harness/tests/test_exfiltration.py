@@ -1140,10 +1140,10 @@ def test_a_field_the_record_lacks_names_its_gap_and_no_share_is_claimed(tmp_path
 #: output before it read any. A change elsewhere that moves the print on purpose pins the new digests here
 NO_VERDICTS = {"text": "61fde301a626b1a1bf2698f6b48ce9fffe6928a444f24ee38962d5c1de0588de",
                "json": "9105f3ca602a3ea5f1463be4f67c9747c2bbc8ea7ddc7a831bde6883eef81816"}
-#: made-up verdicts: a verifier, the open issue its Lean proof waits on, the run that holds the records, and each
+#: made-up verdicts: a verifier, what stands between its verdicts and proved, the run that holds the records, and each
 #: verdict's own run
 VERIFIER = {"module": "made_up.stop_verifier", "commit": "0123456789ab" * 3 + "0123"}
-OPEN = "ISSUE-1"
+OPEN = "the two-round form's soundness is not proved"
 HOLDER = "r20261113-000000-a000"
 ALL = "the stop record, the response tie, the request tie and the compute audit's second stage"
 
@@ -1193,13 +1193,13 @@ def test_with_no_verdicts_of_record_the_print_is_as_it_was_byte_for_byte(tmp_pat
 def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apart_from_measured(tmp_path):
     """Every piece accepted and every control refused by the verifier that accepted its piece, none of them proved: the
     output count's 0 is `run, not proved`, printed "run (Python verifier, not proved)" with each verdict's run and
-    verifier, and the summary counts it apart from measured. The class prints `complete (run, not proved: ... open;
-    Python verifier for ...)`, and no line calls it proved."""
+    verifier, and the summary counts it apart from measured. The class prints `complete (run, not proved: ...; Python
+    verifier for ...)`, with what is open in words and no issue's id, and no line calls it proved."""
 
     base = E.build(store=recorded(tmp_path / "base", planned=False).store, root=REPO)
     doc = E.build(store=with_verdicts(tmp_path, complete()).store, root=REPO)
     stop = doc["stop_class"]
-    said = f"complete (run, not proved: {OPEN} open; Python verifier for {ALL})"
+    said = f"complete (run, not proved: {OPEN}; Python verifier for {ALL})"
     assert (stop["record"], stop["runs"], stop["complete"], stop["mark"], stop["lacks"], stop["said"]) == (
         E.VERDICTS, [HOLDER], True, E.RUN_NOT_PROVED, [], said)
     assert [(v["piece"], v["control"]) for v in stop["verdicts"]] == [
@@ -1211,7 +1211,7 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
     assert count["source"].startswith(
         f"taken at 0 in the sums under `all three` and `design`: the stop class's verdicts of record, `{E.VERDICTS}` "
         f"({HOLDER}), are {said}: the stop record, `accept` on r20261113-000000-a001 by `made_up.stop_verifier` at "
-        f"{VERIFIER['commit']}, not proved, {OPEN} open; the response tie, `accept` on r20261113-000000-a002 by ")
+        f"{VERIFIER['commit']}, not proved: {OPEN}; the response tie, `accept` on r20261113-000000-a002 by ")
     assert ("the response tie, the control with a changed id, `refuse` on r20261113-000000-a006 by `made_up.stop_verifier`"
             in count["source"])
     assert count["source"].endswith("Without them the server chooses a response's output count, which the network "
@@ -1235,7 +1235,7 @@ def test_a_run_not_proved_is_printed_with_its_runs_and_verifier_and_counted_apar
     mixed = [v | {"proved_by": "Made.Up.StopRecordSound", "open": None} if v["piece"] == "stop_record" else v
              for v in complete()]
     stop = E.build(store=with_verdicts(tmp_path / "mixed", mixed).store, root=REPO)["stop_class"]
-    assert (stop["mark"], stop["said"]) == (E.RUN_NOT_PROVED, f"complete (run, not proved: {OPEN} open; Python verifier "
+    assert (stop["mark"], stop["said"]) == (E.RUN_NOT_PROVED, f"complete (run, not proved: {OPEN}; Python verifier "
                                             "for the response tie, the request tie and the compute audit's second stage)")
 
 
@@ -1280,11 +1280,15 @@ def test_a_verdicts_record_whose_field_holds_what_it_cant_is_refused(tmp_path):
                         ({"run": ""}, "`run` is the id of the run that produced the verdict"),
                         ({"verdict": "pass"}, "`verdict` is one of accept, not complete, refuse"),
                         ({"proved_by": ""}, "`proved_by` is null, or the Lean guarantee whose proof covers the verifier"),
-                        ({"open": None}, "`open` names what the Lean proof of the verifier waits on, while `proved_by` "
-                                         "is null")):
+                        ({"open": None}, "`open` states what stands between the verdict and proved, while `proved_by` is "
+                                         "null"),
+                        *(({"open": issue}, "`open` names an issue, and the print carries no issue's id: state what is open "
+                                            "in words \\(e.g. `the two-round form's soundness is not proved`\\), and put the "
+                                            "issue on the board") for issue in ("PRF-419", "waits on PRF-419", "NET-386 and more"))):
         with pytest.raises(ValueError, match=f"^here holds .*: {why}$"):
             E.verdict(v | change, "here")
     assert E.verdict(v | {"proved_by": "G", "open": None, "verifier": VERIFIER | {"more": 1}}, "here")["verifier"] == VERIFIER
+    assert E.verdict(v | {"open": "SHA-512's collision resistance is assumed"}, "here")["open"].startswith("SHA-512")
     with pytest.raises(ValueError, match="^here is a verdict's record, one JSON object, not list"):
         E.verdict([v], "here")
     s = with_verdicts(tmp_path, json.dumps(v) + "\n\n{not json\n")

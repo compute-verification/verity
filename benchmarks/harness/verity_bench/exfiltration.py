@@ -85,6 +85,7 @@ import argparse
 import importlib
 import json
 import math
+import re
 import sys
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
@@ -186,9 +187,12 @@ CONTROLS = {"id": "a changed id", "max_tokens": "a changed `max_tokens`"}
 VERDICT_READS = ("accept", "not complete", "refuse")
 #: a verdict's record: its `piece` and `control`, the `run` that produced it, the `verifier` that checked it (its
 #: `module` and `commit`), the `verdict`, `proved_by` (the Lean guarantee whose proof covers that verifier, null until
-#: one does) and `open` (while `proved_by` is null, what that proof waits on)
+#: one does) and `open` (while `proved_by` is null, what stands between the verdict and proved, stated in words)
 VERDICT_FIELDS = ("piece", "control", "run", "verifier", "verdict", "proved_by", "open")
 VERIFIER_FIELDS = ("module", "commit")
+#: an issue's id, which the print never carries: `open` states what is open, and the issue is on the board (SHA-512
+#: is a hash's name, not an issue)
+ISSUE_ID = re.compile(r"\b(?!SHA-)[A-Z]+-[0-9]+\b")
 #: the audit's GPU time on a served two-stage run, by part, which the share of compute it measures sums: what each part
 #: is, and why a run's record lacks it where it does
 SERVED_PARTS = {
@@ -498,7 +502,10 @@ def verdict(x: Any, where: str) -> dict:
                     (x["proved_by"] is None or text("proved_by"),
                      "`proved_by` is null, or the Lean guarantee whose proof covers the verifier"),
                     (x["proved_by"] is not None or text("open"),
-                     "`open` names what the Lean proof of the verifier waits on, while `proved_by` is null")):
+                     "`open` states what stands between the verdict and proved, while `proved_by` is null"),
+                    (not (isinstance(x["open"], str) and ISSUE_ID.search(x["open"])),
+                     "`open` names an issue, and the print carries no issue's id: state what is open in words (e.g. "
+                     "`the two-round form's soundness is not proved`), and put the issue on the board")):
         if not ok:
             raise ValueError(f"{where} holds {', '.join(f'`{k}` {x[k]!r}' for k in VERDICT_FIELDS if k != 'verifier')}: "
                              f"{why}")
@@ -589,8 +596,8 @@ def stop_class(verdicts: Sequence[Mapping], runs: Sequence[str]) -> dict:
         return out | {"mark": "measured", "said": "complete (measured: proved by "
                       + _listed([f"`{g}`" for g in dict.fromkeys(honest[p]["proved_by"] for p in PIECES)]) + ")"}
     return out | {"mark": RUN_NOT_PROVED,
-                  "said": f"complete (run, not proved: {_listed(list(dict.fromkeys(honest[p]['open'] for p in unproved)))} "
-                          f"open; Python verifier for {_listed([PIECES[p] for p in unproved])})"}
+                  "said": f"complete (run, not proved: {_listed(list(dict.fromkeys(honest[p]['open'] for p in unproved)))}"
+                          f"; Python verifier for {_listed([PIECES[p] for p in unproved])})"}
 
 
 # ---- the network certifier's part, and the requests both parts count over --------------------------------------------
@@ -772,7 +779,7 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
                        f"taken at 0 in the sums under {_names(count['at_zero_in'])}: the stop class's verdicts of record, "
                        f"`{VERDICTS}` ({', '.join(stop['runs'])}), are {stop['said']}: "
                        + "; ".join(f"{_what(v)}, `{v['verdict']}` on {v['run']} by {_by(v)}, "
-                                   + (f"proved by `{v['proved_by']}`" if v["proved_by"] else f"not proved, {v['open']} open")
+                                   + (f"proved by `{v['proved_by']}`" if v["proved_by"] else f"not proved: {v['open']}")
                                    for v in stop["verdicts"])
                        + ". Without them the server chooses a response's output count, which the network certifier's "
                        f"row `{OUTPUT_COUNT}` charges {charged}"))
