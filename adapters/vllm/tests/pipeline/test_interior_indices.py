@@ -14,19 +14,25 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-
-from verity.protocols.spot.verifier import second_stage as SS, service as S
-from verity.protocols.spot.verifier.one_stage import partition as P, registered as RG, registration as R
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import CompositeDefinition, bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.circuits.program import Program
 from verity.circuits.refs import coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
-from verity.definitions.registry import dead_free as DF
 from verity.commitments.windows import rows as CS
-from verity_vllm.pipeline import (boundary_rows as BR, boundary_tables as BT, chunk_rows as CR, interior_rows as IR,
-                                  serving_rows as SRW)
+from verity.definitions.registry import dead_free as DF
+from verity.protocols.spot.verifier import second_stage as SS
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import partition as P
+from verity.protocols.spot.verifier.one_stage import registered as RG
+from verity.protocols.spot.verifier.one_stage import registration as R
+
+from verity_vllm.pipeline import boundary_rows as BR
+from verity_vllm.pipeline import boundary_tables as BT
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import interior_rows as IR
+from verity_vllm.pipeline import serving_rows as SRW
 
 #: two templates of one shape, (x0, best, idx: one I32) -> I32: `A` stands for the unit reading ``c``, `B` for ``i``'s
 A, B = bind(DF.TokenSelectCombineV2, V=64, C=64), bind(DF.TokenSelectCombineV2, V=32, C=32)
@@ -89,7 +95,7 @@ def _boundary_window() -> CS.Binding:
 def _first(links=LINKS):
     """A window stream over `A` and `B` taking ``links``' values a sampled span (`interior_rows.span_values`), a stand-in
     boundary registered and its first stage drawn (spans 0 and 2)."""
-    names = {}
+    names: dict[str, tuple[str, str]] = {}
     values = IR.link_values(links, Q)
     for phase, w in (("serve", _boundary_window()), ("interior", IR.interior_window(MEMBERS, CELLS, "00", [0], values=values))):
         names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
@@ -373,17 +379,17 @@ def test_a_link_names_a_port_of_the_window_and_places_each_of_its_units(staged):
                      (dict(index=None), "is no table read's root or domain")):
         with pytest.raises(ValueError, match=why):
             replace(c, **bad)
-    for bad, why in ((dict(at=(0, 1, NC)), "units reading rows"), (dict(words=0), "rows of 0 words")):
+    for fields, why in ((dict(at=(0, 1, NC)), "units reading rows"), (dict(words=0), "rows of 0 words")):
         with pytest.raises(ValueError, match=why):
-            replace(OPERANDS[0], **bad)
+            replace(OPERANDS[0], **fields)
     per = [_spans(s) for s in first.units]
-    for bad, why in (((replace(c, template="Elsewhere_v1"), i), "a template the window has none of"),
+    for links, why in (((replace(c, template="Elsewhere_v1"), i), "a template the window has none of"),
                      ((replace(c, port="o0"), i), "which is none of its rows"),
                      ((replace(c, port="best"), i), "row is 1 words, not"),
                      ((c, replace(i, at=(0, 1), index=(0, 1))), "places 2 units, not its 4"),
                      ((c, i, replace(OPERANDS[0], words=2)), "row is 1 words, not"),
                      ((c, i, replace(c, value=f"{KEY}/again")), "reads two values")):
         with pytest.raises(ValueError, match=why):
-            _interior(reg, first, per, links=bad)
+            _interior(reg, first, per, links=links)
     with pytest.raises(ValueError, match="holds no value the interior registers"):
         _interior(reg, first, per, device=IR.DeviceCommit({}, {}, {}))
