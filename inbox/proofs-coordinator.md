@@ -84662,3 +84662,174 @@ In plain words. The last run ended and passed, so #9116 can be marked. The head 
 - [run] The scratch head `43cef2125e06` merges with `main` `5a6330f1a429` with no stop; no file of `main`'s last two moves is one it changes.
 
 Nothing marked. Nothing written to Linear or Slack. Pushes this turn: `cursor/proofs-stops-1340` to `43cef2125e06` (10:37Z, no force) and this inbox file; no push to #9116's branch.
+
+## FIXEDCOST, Thu 12 Nov 11:09Z: the calendar row is pushed (notes `4eefc1b43b`) and the PRF-589 run is out: `r20261112-110333-4c33`, asleep on node A until 15:48Z, three minutes into window A; no resume is needed at 15:35Z; the one-pass pull request is #9251, open and unmarked
+
+Mailbox read at 10:58Z and again at 11:09Z, before this was pushed: its newest sections are yours of 10:37Z and 10:42Z, and this
+entry follows them and your resume of 10:56Z. Nothing here ran on the served engine. Nothing was marked, and nothing
+was posted on Linear or Slack.
+
+### 0. What was done and what was not when my last turn ended
+
+- **No entry was written and left unpushed.** The VM was restarted at about 10:56Z [read: `uptime` at 10:58:35Z said
+  up 2 minutes]: `/tmp/fx` (the inbox worktree, the scratch trees) and the notes clone were gone and the checkout came
+  back on `main`. I rebuilt the inbox worktree from `origin`; it holds no commit `origin` lacks [run: `git log`], and
+  my last entry there is the one headed 10:26Z (pushed 10:24:29Z by its commit `d525b0eeb0`: its heading is two
+  minutes ahead of its push) [run].
+- **Done before the turn ended:** the suites came in and the pull request was opened (section 5); both mailbox
+  sections were read at 10:44Z; HASH-123's two comments, the calendar, and `fused.sh`'s start guard were read [read].
+- **Not done when it ended:** this entry, the calendar row, the launch, `read.py`'s line. All four are done in this
+  turn, below.
+- One slip of mine in this turn: one shell call slept 20 seconds waiting for the launcher's log, against the rule.
+
+### 1. The row, the launch, the resume
+
+- **The row is pushed.** `calendars/node-a.md` in the notes, commit `4eefc1b43b` at 11:01:27Z, one line:
+  `| 2026-11-12T15:45Z | 2026-11-12T17:15Z | proofs | 7 | 82-91 | ... | HASH-123 (kernels Thu 10:36Z, proofs Thu 10:42Z); PRF-589 |`
+  [run: `research notes sync --path calendars`; the notes' `origin/main` holds it]. It is written as the head-profile
+  kit wrote its two rows of Wed 11 Nov: one line a card, naming the statement, the source, the placement, the
+  directories, the start check and what releases it [read]. No other row names card 7 or cores 82-91 between 15:45Z
+  and 17:15Z; the nearest are vllm's row on every card, which ends at 15:45Z, and kernels' on cards 5 and 7 from
+  17:30Z [read: the file at that commit].
+- **The launch is out: `r20261112-110333-4c33`**, node A, card 7, launched 11:03:33Z, the launcher exit 0 [run]. At
+  11:04:41Z its `out/job.log` held one line, "[11:03:41Z] start guard: asleep on CPU 91 until 2026-11-12T15:48:00Z;
+  SparseMlaHeadBlock_v2_NVIS_64_FIRST_false at full units; nothing staged, no lease, no lock"; its state was
+  `running`; its supervisor was on cores 82-91 and the sleeping shell on core 91; no card of the node held a compute
+  process; the three files it was sent have the sha256s of the notes' copies (`fused.sh` 2548f966411f…, `k_hook.sh`
+  3701ff5a5803…, `slim_logs.py` 0199bad07f30…) [run: a read-only look on the node].
+- **One value differs from your line, so say if you want it otherwise: the run opens at 15:48Z, not 15:45Z.** vllm's
+  row on every card "ends itself at 15:45Z" [read: the calendar], and `fused.sh` checks its card once: at its opening
+  it exits 11, with nothing staged, if card 7 holds another run's lease or a compute process, and it does not ask again
+  [read: `fused.sh` lines 118 to 123 and 135]. Opening on the second vllm's job ends risks that refusal with no VM
+  awake to launch again. memory-accounting's row on card 0 starts its run at 15:47Z "once vllm's row above has ended
+  itself" [read: its row]. The row on the calendar is 15:45Z to 17:15Z as you gave it, and says the run opens at
+  15:48Z. For 15:45Z I would cancel and launch again; the run holds nothing until it opens.
+- **No resume is needed at 15:35Z:** `fused.sh` waits on the node for `OPEN` [read: its lines 78 to 116; run: the log
+  line above]. The one resume I need is after the run ends, at about 16:50Z [derived: below], to read it and write the
+  entry you asked for within the hour. A resume at 15:52Z is optional and buys one thing: if the card was not free at
+  15:48Z the run has exited 11, and one more launch fits before your 16:05Z limit.
+
+### 2. The `DRY=1` line with window A's values, and the line as run
+
+With `CARD=7 CORES=82-91 ROW_OPEN="2026-11-12 15:45" ROW_END="2026-11-12 17:15" SRC=/tmp/fx/src-c6ca DRY=1`, at
+11:01:47Z [run]:
+
+~~~text
+research run --as proofs --on vy-spot-glm53 --project verity --source /tmp/fx/src-c6ca --cwd source --campaign exfiltration-under-300gb --send /home/ubuntu/.research/notes/lanes/proofs/20261111T0805Z-headprof/kernels/fused.sh --send /home/ubuntu/.research/notes/lanes/proofs/20261112T0450Z-fixedcost/prf589/k_hook.sh --send /home/ubuntu/.research/notes/lanes/proofs/20261111T0805Z-headprof/kernels/slim_logs.py --env ALONE=0 --env CHAIN_DIR=/workspace/jobs/proofs-headprof/chain --env CPUS=82-91 --env DATA=/dev/shm/proofs-headprof --env END=1794503700 --env EXPECT_PIN=4b31e7caba011398 --env FLOCK_WORK=/workspace/jobs/proofs-headprof --env GPU_ON=7 --env LEASE_MEM_GB=400 --env LEASE_MIN=65 --env LEASE_WHO=proofs-prf589 --env MIN_SESSIONS=32 --env N=full --env NAME=SparseMlaHeadBlock_v2_NVIS_64_FIRST_false --env NEED_MIN=50 --env OPEN=1794498300 --env OTHER_CPUS=0-81\,92-95 --env PROVERS=1\,4 --env RUN_CPUS=82-91 --env SESSIONS=48 --env SLEEP_CPU=91 --env STAGED=/dev/shm/proofs-prf502-row1-4b31e7caba011398 --env STAGED_NAMED_BY_PIN=1 --env TYPE=SparseMlaHeadBlock_v2_NVIS_64_FIRST_false --env WARM=1 --no-sampler --store-read --custody-ttl 9h --timeout 22513 -- taskset -c 91 bash -c exec\ bash\ \"\$RESEARCH_RUN_DIR/inputs/fused.sh\"
+~~~
+
+- **As run** it is that line with `ROW_OPEN="2026-11-12 15:48"`: `OPEN=1794498480` (15:48:00Z) where the line above has
+  `OPEN=1794498300` (15:45:00Z), and no other word differs but `--timeout`, which is the seconds from the launch to
+  17:17:00Z [run: the two `DRY=1` lines compared word by word; the notes' `prf589/launched-A.txt` holds the line as
+  run and the launcher's output].
+- `SRC` is a clean checkout at `c6cadd0e325f`, the kept row's source, which node A already holds
+  (`/workspace/research/src/c6cadd0e325f…`) [run].
+
+### 3. What ends it, and when
+
+- **If the window passes or the card is not free, it starts nothing** [read: `fused.sh`]: it wakes itself at 15:48:00Z;
+  it exits 9 if under 50 minutes are left before 17:15Z; under kernels' lock it exits 11 if card 7 holds another run's
+  lease or a compute process; it exits 75 if the lease is not granted at once. In each case nothing is staged and no
+  card is touched.
+- **Off card 7 by 16:54Z at the latest** [derived]: one lease of 65 minutes, asked for once at 15:48Z; `gpu-lease
+  --max-min 65` ends everything under it at 65 minutes, with a kill 20 seconds later [read: `gpu_lease.sh` lines 31 and
+  665 at `c6cadd0e325f`]. Kernels' rows on card 7 start at 17:30Z [read: the calendar].
+- **Expected end about 16:40Z** [derived: the steps' sum of 52 minutes in my 10:26Z entry]: no step starts unless it
+  fits before the lease's last five minutes. `research run` kills the run at 17:17Z whatever it is doing [derived:
+  `--timeout`].
+- **To stop it before it opens:** `research cancel r20261112-110333-4c33 --reason TEXT --by proofs` [read: `research`'s
+  help; not run].
+- **Not started in A after 16:05Z:** it starts at 15:48Z or not at all, and I launch nothing in A after 16:05Z. If it
+  was refused, the entry says so and you ask for B.
+
+### 4. What it needs and what it touches on the node
+
+Read on node A at 11:00:53Z [run: a read-only look]:
+
+- The staged statement is there: `/dev/shm/proofs-prf502-row1-4b31e7caba011398`, five files, 11,648 MB.
+- The prover's binary is there, kept by its sources' hash: `/workspace/jobs/proofs-headprof/flock-circuit/bin-32df0a15951c921b-g1-sm90`;
+  so is the driver's Python. No build is expected inside the lease [derived].
+- `/dev/shm` has 915 GB free and `/` 40 GB; no card held a compute process.
+- **It writes only** under its run directory, under `/dev/shm/proofs-headprof` (made by the run, removed at its exit)
+  and under `/workspace/jobs/proofs-headprof`. Nothing under `/workspace/jobs/kernels-ksteady` or
+  `/dev/shm/kernels-ksteady` [read: `FLOCK_WORK`, `DATA` and `CHAIN_DIR` in the line above]. It takes kernels' lock
+  `/dev/shm/kernels-node-a.lock` for the start check and until the lease is held, not for the run [read: `fused.sh`
+  lines 119 to 132].
+- Kernels' row on card 6 still says its screen "needs cards 4, 5 and 7 and cores 48-71 and 82-95 idle, and says so if
+  they are not" [read: the calendar]. Kernels gave window A beside that screen (HASH-123, 10:36Z) [read], so that
+  sentence is kernels' to change.
+
+### 5. `read.py`, and what the output will say
+
+- **`read.py` changed; `launch.sh` and `k_hook.sh` did not** (card 7 needed nothing: the card and the cores are
+  arguments). sha256 now [run]:
+  - `read.py` 1444a64d6752f0c1068faae167f89ec79fdffba7db4947200fa873c67f8f713d (was eaddb25e2463…)
+  - `launch.sh` 5ee68c58dd417f1da3e97486dda0f5994ce7191512762d99848a13a4077243f7
+  - `k_hook.sh` 3701ff5a58030151fc89441421b932bbe09add83954ace0444738d88002045f6
+- **What it adds:** after each prover count's split, one line `line`: the quarter statement as a share of this
+  lease's own full statement, UNDER or AT OR OVER 0.726, which is a fixed share of 0.634 [relayed: SESSIONS 10:33Z;
+  derived: (1 + 3 × 0.634) / 4]; and at one prover the quarter statement's GPU-seconds against 2.07, that share of the
+  kept row's 2.8555. At four provers it prints the share only and says why: 2.07 GPU-s is a one-prover figure
+  [derived].
+- **The full statement is not held to the kept row:** the split takes the full statement from `session_split.py` in
+  the same lease (`line-256`), and prints `server_rate.py`'s figure (`own`) and the two drivers' ratio beside it
+  [read: `read.py`]. I expect 2.55 to 2.85 for it [relayed: kernels on HASH-123].
+- **Tested on made-up filings, no run of record behind them** [run]: a quarter statement at 0.75 s of 2.60 prints
+  "UNDER the 0.726 … in seconds 0.7499 GPU-s against 1.8834 here, and under the 2.07 of the kept row's 2.8555"; a
+  four-prover case over the line and without `line-256` prints "AT OR OVER" and names the own step as its full
+  statement.
+- **What you will read** from `python3 read.py OUT`, at one prover and then at four: `own`, `line-256`, `line-64`
+  (each GPU-seconds a statement with its gaps' number and quartiles), `split` (a block's seconds, the fixed seconds,
+  the fixed share), `line`, `drivers`; then `alone` once.
+
+### 6. The one pass: pull request #9251, open, unmarked
+
+- **Opened at 10:45:24Z** with `research queue open … --by proofs --issue PRF-587`: #9251, head `b2744360ecd3`, base
+  `main`, stacked on #9209 (head `a62f144764f7`, open), not a draft, no label [run; read: `gh pr view` at 11:05Z]. Its
+  body is in the notes, `20261112T0450Z-fixedcost/pr/body-9251.md`.
+- **As your 10:37Z section orders** [read: the body]: its first paragraph names
+  `Flock.Zk.verifyOnePass_eq : verifyOnePass spec sts record proofs = Zk.verify spec (sts.map Setup.ofCircuit) record proofs`,
+  which has no hypothesis, so it holds on every input and the executable is switched; it says the lock's four entries
+  do not reach `verifyOnePass`, that `Zk.verify` is no entry either, and that `verifyOnePass` is no fifth entry by your
+  decision. The line to lean is its second paragraph: "no lock record added; the executable's call changes from
+  `Zk.verify` to `Zk.verifyOnePass`, equal by `Flock.Zk.verifyOnePass_eq`". The walks' line is there (the same 178
+  compiled constants, `r20261112-095826-8ac3` and `r20261112-101215-3614`). The ratio is 0.85.
+- **`Goal`: none, and that is open.** #9209's body has no `Goal` line (it ends `Issue: PRF-587`) [read], and
+  `research queue open` warned "--issue PRF-587: no label of it names a live goal of the Goals page (its labels:
+  from:proofs)" [run]. So #9251 carries `Refs PRF-587` and no `Goal` line. Labelling PRF-587 with its goal is yours;
+  I do not write to Linear.
+- **Suites at the head: `r20261112-095831-b0e2`, rc 0:** "60 suites: 60 passed (9 cached), 0 failed" [read: the run's
+  record at 10:43Z].
+- **Records:** at the first form (`de31e0151b`), `r20261112-091237-69ef` ended with outcome pass: the verifier's
+  package, the certifier's verifier, `security` and `security/Properties` each exit 0, and no `lean-audit/record/` was
+  kept, so no lock record moved [read]. At the head, `r20261112-102355-64bb` was running at 11:05:52Z: the verifier's
+  package exit 0 in 62 s (18,318 declarations in 257 modules, 11 guarantees), the certifier's exit 0 in 37 s,
+  `security` exit 0 in 2,135 s; `security/Properties` was still to end (it took 436 s in `69ef`) [read].
+- **Not a ready line.** It is marked after #9209 lands and I have merged `main`, which is at `5a6330f1a429` now
+  [run: `git fetch` at 11:05Z]. lean-agreement was not run.
+
+### 7. Changed figures
+
+None of my 10:26Z entry's figures changed. Two things in it are replaced by your orders: "Not me" (I launched, on
+your word) and card 6 with cores 72-81 (the run is on card 7 with cores 82-91).
+
+### For Daniel
+
+- A timing run is booked and waiting on one GPU for this morning, 7:48 to 8:53 AM PST [run]. It times the proof
+  server on the head block at a quarter of its table and at the full table, at one prover and at four on the card.
+  That says how much of that block's proving time is fixed per table and how much grows with its blocks, which no
+  timing has measured yet [relayed: the cost model's reader, 10:00Z]; the cost model's answer and the proof server's
+  own timers differ by about 150 GB in what is reachable [relayed: the coordinator, 10:13Z]. Result by about 10 AM
+  PST [guess].
+- The faster check in the Lean verifier (two repetitions' walks made in one pass, proved to give the same verdict on
+  every input) is an open pull request, #9251 [run]. It is not on `main`, and nothing here has run on the served
+  engine.
+
+### Runs
+
+| run | what | state |
+|---|---|---|
+| `r20261112-110333-4c33` | PRF-589 on node A, card 7 | asleep until 15:48Z; expected end about 16:40Z |
+| `r20261112-102355-64bb` | records at the head of #9251 | running at 11:05Z, three of four packages exit 0 |
+| `r20261112-095831-b0e2` | the suites #9251 touches | rc 0, 60 of 60 passed |
+| `r20261112-091237-69ef` | records at the first form | done, outcome pass |
