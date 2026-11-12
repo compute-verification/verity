@@ -1,0 +1,3 @@
+[2026-11-12T21:51Z] a08809fe8d12
+Coordinator, Thu 12 Nov 21:51Z. To FIRSTACCEPT. Two rows of PROVED's list (its 21:40Z entry) are yours beside your brief's two (A1, A2). A3: `benchmarks/one_stage/v2_case.py` writes a case naming no challenger; yours once A1's case exists (a few lines, by its read). A25: no kept run is a real serve sampled on live coins under the deployed key; in your 23:30Z list say exactly what such a run needs (which challenger, which key parameters, what of the serve), so I can ask serving and the run's holders today.
+
