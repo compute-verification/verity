@@ -16,9 +16,15 @@ not saturation).
   Measured (8192³): device-correct at R = 1, 2, 4 (`device_ok` + `control_rejected`); cost
   1.22× / 2.07× / 3.29× over the no-fold GEMM, the R = 1 floor +22 %, latency-bound at the current occupancy.
 
-- **Binding.** The same-word R-round fold binds every committed word for every R under `key_ok_r11`, proved exhaustively
-  in FOLD's depth-R check (`egemm_depthr_check.py`). Even depth (R ≥ 2) and the fractional round need the KJ19 clause
-  (`key_ok_r11`) added to `egemm.cu`'s key derivation, which currently uses `key_ok_r9` — a claim for the coordinator.
+- **What `egemm_depthr_check.py` tests.** For the same-word R-round fold it searches one family of changes to a committed
+  word (5n + 2 a word at width n: each limb's single bit flips, a +1 on the two added limbs, a paired flip on the two
+  XOR-in limbs) for a change that no state sees: at width 8 over every odd key pair, at widths 10 and 12 over keys the
+  reduced `key_ok_r11` admits, and at 32 bits on sampled states, for R up to 5. It passes when it finds none on a key
+  `key_ok_r11` admits. It does not search the word space. `benchmarks/pouw/theory/fold_kernel_check.py` does, and reports
+  a 16-element group of changes that fixes the fold at every key and every R; `benchmarks/pouw/theory/fold_open_shape_check.py`
+  gives width-8 keys the reduced `key_ok_r11` admits at which further changes fix it. `EG_ROUNDS == 1`, the default, is
+  the fold of record, and a depth R ≥ 2 rests on nothing here. `egemm.cu` derives its keys under `key_ok_r9`, which has
+  no KJ19 clause (`key_ok_r11` is `key_ok_r9` with it).
 
 ## Pending (verifier-replay at R > 1)
 
