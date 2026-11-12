@@ -105896,3 +105896,85 @@ Clock: `date -u` read 22:33Z. Branch `cursor/proofs-runcoins-2d88` at `4473d67ac
 - Whether the device releases a second family after one digest (section 2).
 - The break counts a replayed genuine signature as a forgery (your point 5).
 - No one but me has read the new statements.
+
+## PROVED, Thu 12 Nov 22:34Z: the replay read: the compiled check does exclude an earlier session's signed files and coins (four checks, named below), and the reader's property is proved for a device with any history; the leg's device model holds one audit only, so the theorem today speaks only of a challenger key that never signed before this audit
+
+**In plain words, for Daniel.** The challenger is the auditor's device that flips an audit's coins and signs a log of them. Its key lives across audits, so a prover holds signatures the device made in earlier ones. The question was whether a prover can pass off an earlier audit's signed material as this audit's. In the code, by my reading, it cannot. The verifier finds the session in the device's own signed ledger, at the window the auditor's parameters name. The ledger may open a window only once. The session's files must be the ones that ledger entry sealed. The coins must be the ones the signed log shows released after this audit's own registration. The theorem does not say this yet, and the gap is wider than a trick a prover might play. The verifier requires the device's whole ledger from its first line, so on any device that has run before, an honest audit's evidence also contains earlier signatures. The theorem's model of the device knows only this audit's signatures, counts every other one as a forgery, and then promises nothing. So today the theorem speaks only of an audit on a key that has never signed before. Half of the repair exists: the property of the code that reads the coins is proved for a device with any history. The other half, a model of the device that holds its earlier sessions and ledger lines, is not written.
+
+Clock: `date -u` read 22:34Z before the push. Mailbox read at `de56f10be0` (the 22:25Z message, which also came by the hook). No file of the tree changed; no run of mine is out; I ran no Lean.
+
+### 1. What the compiled check does, in the order it runs [read]
+
+All in `verity/protocols/spot/verifier/lean/Spot/`.
+
+| # | check | where |
+|---|---|---|
+| 1 | The key, the family and the window are the verifier's own parameters; `after` is this audit's registration digest. Nothing of them comes from the evidence. | `OneStage.coinsOf`, `OneStage.lean:475-478`; v2's trees the same, `OneStageZk.lean:674-676` |
+| 2 | The ledger is read from its first line: line `i` has `seq = i` and `prev` the SHA-512 of the line before; each line's signature verifies; leaves strictly increase. | `verifyLedger`, `ChallengerSession.lean:574-575`, `:578-580` |
+| 3 | A root or a session opened a second time is refused; a session ends once, its record's leaf between its open's and its end's and used once. | `:596-597`, `:624-634`, `:671-675` |
+| 4 | An open naming another key is refused before any signature is read. | `checked`, `:684-691` |
+| 5 | The window's session is the one win whose root is the window; it is ended and closed, and its end names the record's leaf, the commitment and the sealed files. | `auditedOpen`, `:722`, `:727-736` |
+| 6 | The session's files are that session's: the close's session id, the record's host, the record's leaf and commitment root, the SHA-512 of the release log and of the refused hellos. | `sessionNamed`, `:802-818` |
+| 7 | The close's signature is over the record's message, the session id, the line count and the log's chain; the log's lines are that count and that chain. | `sessionOf`, `:274-283`; `closeMessage`, `:174-181` |
+| 8 | The session ran from a commit the host's pins log records on main's first-parent line. | `pinnedSession`, `:897-901` |
+| 9 | The session withheld its commitment until it closed. | `withheldOn`, `ChallengerCoins.lean:95-100`; `drawCoins`, `ChallengerDraw.lean:40` |
+| 10 | The coins are exactly those the signed log shows released after `after`: the segment's `after` is the verifier's, each opening is its family's coin `start + i` opened after `after`, and the list is the log's. | `challengerStream`, `ChallengerCoins.lean:61-62`, `:65-67`, `:70-73` |
+
+Your three, one by one:
+
+- **The session's digest in the signed message.** In the close, yes: it signs the session id and the log's chain (row 7). In the record, no: the record's message is the role, the key's identifier, the host and the commitment (`recordMessage`, `ChallengerRecord.lean:54-57`), with no session id, window or time. The record is tied to its session by the ledger's end, which names its leaf and its commitment's root (rows 5, 6).
+- **The ledger read from its first line.** Yes (row 2).
+- **The registration's digest before the coins.** Yes (rows 1, 10).
+
+[derived] So an earlier session's record, close, log or coins cannot stand in for this window's. Its id, leaf, commitment and file digests are not the ones the ledger's lines for this window name, short of a SHA-512 collision, and a second open of the window is refused. Rows 3, 6, 10 and 1 are the four that do it.
+
+Two things the check does not do:
+
+- It does not exclude earlier ledger lines. It requires them (row 2).
+- It has no clock. That the window in the parameters is this period's is the auditor's parameter, not a check. With an old window and the old registration, the old audit accepts again, as a statement about the old commitment.
+
+### 2. Does the model reflect it?
+
+**The reader's property: yes, at any history** [read].
+
+- `DrawnByDeviceAt` (`security/Properties/Challenger.lean:371-375`) is stated for every history `dev`. A history holds, per key, a list of runs and a list of ledger lines (`History`, `:113-115`), and `signedBy` is all of them (`:122-130`).
+- Its conclusion is the freshness: what `drawCoins` reads is the coins that a run the device's own ledger opens withheld on the verifier's window (`OpensOn`, `:136-138`) released after `after`; or a break.
+- It is proved: `drawnByDevice`, `security/Proofs/Properties/Challenger/Drawn.lean:54`.
+- At a history that holds the earlier runs and lines, a genuine earlier signature is no break.
+- What it leaves to the device model, in its own words (`:48-50`): "What the device releases when, and that it opens each window once, are the device's behaviour on `trusted-host`, which these properties don't take: a soundness argument reads them off the device model."
+
+**The leg's device model: no** [read]. All in `security/Proofs/Properties/Verity/Sampled/`.
+
+- The history at a play is one run, the play's, and the setup's ledger (`dev`, `Device.lean:468-475`).
+- The setup's ledger is this play's lines only: the ones the request fixes and the ones at the close (`setupAt`, `Device.lean:1105-1107`; `Deployment.opens`, `.closes`, `:1092-1093`), at most `ledgerLines θ` a play (`:1095`).
+- The forger's signed messages are the play's signatures (`Binding.lean:724`); `Q` is `ledgerLines θ + 2` (`Device.lean:1127`).
+- `PrintsLog` asks every run of the history to have printed the play's log (`Lines.lean:133-136`). With an earlier run in the history it is false as stated.
+- The rule that the device opens only the auditor's live window is named and not held: "the leg's assembly takes the live-window rule as a hypothesis or a field" (`Device.lean:1085-1089`). [run: `rg 'OpensOn|live.window'` over `Sampled*`] I found no such hypothesis or field.
+
+**What follows** [derived].
+
+- Soundness's case: a strategy that puts an earlier genuine signature in its evidence has error `⊤`.
+- The wider case: no strategy is needed. `findBreak` checks every ledger line in the evidence (`signatures`, `security/Properties/Challenger.lean:155-177`; `:344-347`), and row 2 makes the evidence hold every line from the device's first. On a ledger that is not new, an honest audit's evidence holds earlier lines, each a "forgery" at the one-play history. [relayed: PERIODREAD 22:28Z found the same for its two period statements; read by me.]
+- [read] The auditor host keeps one ledger, appended to from `seq` 0 across sessions (`verity/composite/device/live_challenger/auditor.py:142`, `:490`, `:832`).
+- So the theorem as it stands speaks only of an audit whose challenger key signed nothing before it: a key and a ledger made for that audit. A session on a key made for the run fits. A real serve on the auditor's host, whose ledger has earlier lines, does not.
+
+### 3. What closing it takes [derived]
+
+1. The history with the key's earlier runs and ledger lines, in `Deployment`, `dev` and the forger's signed messages. `Q` then counts every signature the key has made, and the published forgery term is read at that `Q`.
+2. `PrintsLog` and `Binds` restated at the one run the ledger opens on the sample's window. `accepted_run` already ends there (`Binding.lean:484-492`).
+3. One fact of the device: it signs one line a `seq`, so the evidence's ledger is the start of its own. Row 3 then gives that the window's run is the only one.
+
+The property in section 2 is the base for all three, and it needs no change.
+
+### Not established
+
+- That no accepted evidence can carry an earlier session's signature: I read the ten checks and reasoned from them; no lemma says it at a history with earlier runs.
+- Whether Friday's runs use a key and ledger made for the run or the auditor host's.
+- That the three steps are all; I did not read every theorem that instantiates `dev`.
+- I did not read the Python twins of rows 1 to 10 line by line; the difftest holds them to the Lean.
+
+### To post
+
+- On the new row (replayed earlier signature), for soundness: "Read of the code and the model. The compiled check excludes an earlier session's record, close, log and coins: the ledger opens a root once (`verifyLedger`), the session's files are the ones its end sealed (`sessionNamed`), the coins are the ones released after this registration (`challengerStream`), and the window is the verifier's parameter. `DrawnByDevice` is proved at any history, so it is the base. The leg's `dev` holds one play, so the hole is also at every honest audit on a ledger that is not new, since the check requires the ledger from line 0. Three pieces to close: the history with earlier runs and lines (and `Q` over the key's life), `PrintsLog` at the window's run, one line a `seq`."
+- For the goal's clause 3, until it is closed: "the theorem covers an audit on a challenger key and ledger made for that audit; an audit on the auditor host's standing ledger is outside it".
+- A question for the lead of the first accept of record and of Friday's runs: is the challenger's key and ledger made for the run, or the auditor host's?
