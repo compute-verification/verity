@@ -126,6 +126,7 @@ public import Proofs.Flock.Claims.KS.ZkFitsW
 public import Proofs.Flock.Claims.KS.ZkBoundW
 public import Proofs.Flock.Claims.KS.ZkLiveW
 public import Proofs.Flock.Claims.KS.JointR
+public import Proofs.Flock.Claims.KS.TableAt
 public import Proofs.Flock.Claims.KS.ZkXferW
 public import Proofs.Flock.Claims.KS.ZkTrimW
 public import Proofs.Flock.Claims.KS.ZkSimW
@@ -547,7 +548,11 @@ merged by round, with a term no smaller (`JointR`: `Claims.Escapes.mergeR`, `Cla
 `Claims.Escapes.term_le_mergeR`), so `OneWait` follows from every table's bound counted per round
 (`Claims.Flock.TableBoundJR`, `Claims.Flock.oneWait_of_tableBoundJR`, `Claims.Flock.tableBoundJR_of_extend`), and the
 deployed masked verifier is KS from `ZkLiveAccWJ` where some run accepts and `ExtendJ`
-(`FlockDeploy.KS.zk_KS_of_tableBoundJR`, `FlockDeploy.KS.zk_KS_of_liveAccWJ`). At a masked statement in scope table
+(`FlockDeploy.KS.zk_KS_of_tableBoundJR`, `FlockDeploy.KS.zk_KS_of_liveAccWJ`). Every table's bound counted per
+round is a bound at each table, so the extractor at one table of a session (`Flock.EAt`), whose waits stop at
+`k_j = ⌈4·N_j/e⌉` accepted reruns with `N_j` that table's word's length alone, is KS at that table's own relation, at
+the tables' errors summed (`TableAt`: `Claims.Flock.oneWait_le_at`, `Claims.Flock.KSAt_of_tableBoundJR`). At a masked
+statement in scope table
 `j`'s word has level 0's `2^logLen` columns (`ZkXferW`: `FlockDeploy.KS.zkLevel0_d_eq`,
 `FlockDeploy.KS.wordLenJ_zkTabs`), so the live sessions' bound at the deployed decoders right at the witness-lane
 verdict (`FlockDeploy.KS.ZkXferWJ`) gives `ZkLiveAccWJ` (`FlockDeploy.KS.zkLiveAccWJ_of_xferWJ`): with `ExtendJ`,
