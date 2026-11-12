@@ -109889,3 +109889,30 @@ All seven are fixed at `9e36b042cba3`; I fixed the same patterns in `Entry.lean`
 ### To post
 
 Nothing.
+
+## TWOLEG, Thu 12 Nov 23:55Z: a Lean slot on vy-nebius-2 has kept my difftest `8d5f` waiting 35 minutes and my build too, so nothing of this hour has compiled; both STAGECOINS needs are taken (head `052eb3aba5`), and `DevAgrees` at `formReading` is written
+
+Both of STAGECOINS's asks are on my branch `cursor/proofs-twoleg-c5e5`, and I pushed everything; nothing is left unpushed. `ProjectionOf` now reads `CoinsAgree` at `.first`, `.second` and `.sessions`. The form refuses first-stage bytes past what the run's first stage read. `DevAgrees` at the form's reading is proved from three named premises, one per group of rounds, which say what the stages' and the sessions' pieces give. None of this has compiled. Build `491a` waited 35 minutes at a stale head, so I cancelled it. Its replacement `r20261112-235505-a6dc` builds all seven files at `052eb3aba5` and is in the same line.
+
+- [read] STAGECOINS's need 1, taken at `9af21118fe`. `CoinsAgree`, in STAGECOINS's text word for word, is in `Projection.lean`. `ProjectionOf` takes it at all three groups, the sessions' included. `CoinsRead` stays defined, because STAGECOINS's `coinsAgree_of_coinsRead` reads it. ASSEMBLY proves against `9af21118fe` or later. [derived] The assembly still closes: `DevAgrees` gives `CoinsAgree`'s inner premise, and `CoinsAgree` gives `AcceptsRun`'s coin premise.
+- [read] STAGECOINS's need 2, yes, at `6caa280aed`. In `SampledTwo.lean`, `prepare` calls `sourceRead ξ run` after `Spot.Run.run`. It refuses with `SOURCE_READ` when the run's `read` is less than `ξ.size`. A refused run has no `read` and is already refused. `Steps.lean`: `accepted_steps` concludes `sourceRead ξ run = .ok ()`, and `sourceRead_le` gives `ξ.size ≤ read` from it. That is STAGECOINS's `SourceRead`, once the run's `read` is the reading's. [read] The refusal sits after an accepted run, and the twin stops at the template circuits, so the difftest can't reach it without a fixture whose run passes. Three `#guard`s pin it instead: a refusal, an acceptance at equal length, and a refused run.
+- [read] `DevAgrees` at `formReading`, at `052eb3aba5`, in the new file `SampledTwo/DevAgrees.lean` (a lakefile root). `ElemsBelow u c c'`: the two coins' elements below `u` are equal. `coinBytes_take` and `coinByte_of_elems` show the bytes below `16u` are then equal, since a coin's bytes are its elements' 16 bytes each, in order. `prefixAgree_of_elems`: so are the first `w` bytes, for `w ≤ 16u`. `devAgrees_formReading` takes three premises. `FirstElems` and `SecondElems` say that at a stage round the release and the run's coin share their elements below some `u`, with the run's bytes of that coin at most `16u`. `SessionsAgree` is the sessions' `S.agree`.
+- [derived] Who owes the premises. The shared elements are the coin map's agreement (COINMAP's `ElemAgrees` below `usedOf`). The width bound is `sourceRead_le` plus what the stage coins' pieces give: the stage read no more bytes than the device released. That is STAGECOINS's at round 0, and its `stageWidth` twin at rounds 1 to `stage`.
+- [relayed] HELDOF is not launched. When it asks under its NEEDS for one line in the form (decide `two` at the copies `heldOf` built, or refuse), I write it, as its own small commit.
+- [relayed] GATHER: the interior registration registers no value, so the two-round proof is of that design. Nothing in my files assumed otherwise.
+
+STOP RULE: nothing listed changes. `sourceRead` is a refusal of the off form. It makes the verifier accept nothing it refuses today.
+
+NEEDS:
+1. STAGECOINS: delete your own copy of `CoinsAgree` and read mine (`Proofs.Properties.Verity.SampledTwo.Projection`, at `9af21118fe`), so the vocabulary has one definition.
+2. COINMAP and STAGECOINS: `devAgrees_formReading` takes your parts as `FirstElems`, `SecondElems` and `SessionsAgree` (DevAgrees.lean). Say if your statements land in another shape.
+3. Infra, through you: Lean slots on vy-nebius-2. Every proofs worker's try waits more than ten minutes.
+
+Runs:
+- `r20261112-235505-a6dc`: the build of SampledTwo.lean, Projection, Reading, Claim, Refused, Steps and DevAgrees at `052eb3aba5`, waiting for a slot. ETA [guess]: 30 to 60 minutes once a slot frees.
+- `r20261112-232001-8d5f`: the difftest at `b04e0a9fd9`, waiting since 23:20Z. The twin has changed only in its docstring since then. ETA [guess]: about 10 minutes once it starts.
+- `r20261112-231929-491a`: cancelled (stale head).
+
+To post: nothing.
+
+Not established: that any of `9af21118fe`, `6caa280aed` or `052eb3aba5` elaborates. The do-block case split in `accepted_steps` and `prefixAgree_of_bytes`'s `Array.ext` step are the likeliest to need a fix.
