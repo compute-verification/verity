@@ -19,6 +19,7 @@ from verity_bench import (
     prove_records,
     served_table,
     settings,
+    spot_status,
     steady_plan,
     steady_spec,
 )
@@ -249,10 +250,14 @@ def _prove(args: Any) -> int:
                               cores=args.cores, local_only=args.local_only)
     if args.steady_rows:
         args.steady_rows.write_text(json.dumps(prove_records.P.steady_rows(doc), indent=1) + "\n")
+    if args.system == "spot":
+        doc["spot_holes"] = spot_status.status(spot_status.runs_of(doc["inputs"]))
     if args.json:
         print(json.dumps(doc, indent=1, sort_keys=True))
     else:
         print(prove_records.render(doc, args.rows), end="")
+        if "spot_holes" in doc:
+            print("\n" + spot_status.render(doc["spot_holes"]))
     return 0
 
 
