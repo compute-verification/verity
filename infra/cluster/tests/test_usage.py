@@ -240,6 +240,9 @@ def test_wasters_ranks_one_days_holdings_and_finds_a_day_with_no_hours(tmp_path,
     assert [(w["node"], w["owner"], w["idle_s"]) for w in rep["wasters"]] == [("vy-nebius-2", "memory-accounting", 900)]
     rc, out = run(capsys, "wasters", "--day", "2026-10-01", "--file", f)
     assert rc == 1 and "finding: no hours of 2026-10-01" in out
+    assert "not measured: no hour of that day was read" in out and "no holding held a GPU idle" not in out
+    rc, out = run(capsys, "wasters", "--day", "2026-10-03", "--top", "1", "--file", record_file(tmp_path, day_of_free_time()))
+    assert rc == 0 and "no holding held a GPU idle that day" in out
 
 
 def test_wasters_say_the_hours_they_cover_and_a_day_short_of_the_hours_that_ended_is_a_finding(tmp_path, capsys, monkeypatch):

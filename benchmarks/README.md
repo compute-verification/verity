@@ -52,8 +52,8 @@ says. These are the directories that have one:
 | `verity bench word_codec` | the KV cache's Sloth codec on one GPU: its tests and its benchmark at each width |
 
 A directory without a runner is run by the commands its README names, or its main module's docstring where it has no
-README. `verity-bench` is the harness's own command. `judge.py` and `latency_compare.py`, beside the directories,
-compare recorded runs' results.
+README. `verity-bench` is the harness's own command. `judge.py`, beside the directories, compares recorded runs'
+results.
 
 ## The harness
 

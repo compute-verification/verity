@@ -52,9 +52,8 @@ SURFACE = {
     "vllm.distributed.parallel_state:get_tp_group": "the TP group: its device communicator, and a PoUW H1 rank's TP rank",
     "vllm.forward_context:set_forward_context": "a forward context with no attention metadata, for the frontend's export",
     # compilation and CUDA graphs
-    "vllm.compilation.backends": "VllmBackend, whose compiled graphs the compiled source renumbers",
-    "vllm.compilation:cuda_graph": "CUDAGraphWrapper, whose replays the compiled sources hook",
-    "vllm.compilation:piecewise_backend": "PiecewiseBackend, whose pieces the compiled sources hook",
+    "vllm.compilation:cuda_graph": "CUDAGraphWrapper, whose replays the served compiled source hooks",
+    "vllm.compilation:piecewise_backend": "PiecewiseBackend, whose pieces the served compiled source hooks",
     "vllm.v1.worker:workspace": "the engine's persistent MoE workspace, which export_compat resets",
     "vllm.v1.worker.gpu:cudagraph_utils": "CudaGraphManager, whose captures the served compiled source hooks",
     "vllm.v1.worker.gpu:model_runner": "the V2 model runner, whose CUDA graph dispatch the served compiled source hooks",

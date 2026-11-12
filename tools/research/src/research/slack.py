@@ -4042,7 +4042,16 @@ def page_request(body: dict, area: str, markdown: str, db: dict) -> dict:
                            "Deadline": {"date": {"start": body["deadline"]}},
                            "Lane checked": {"checkbox": True},
                            "Asked by": {"url": body["agent_url"]}},
-            "markdown": with_reply(markdown), "markdown_version": "v2"}
+            "markdown": with_reply(display_math(markdown)), "markdown_version": "v2"}
+
+
+#: a display equation on one line: Notion shows `$$ x $$` as its literal text, and renders it only with each `$$` on a line of its own
+ONE_LINE_DISPLAY = re.compile(r"(?m)^([ \t]*)\$\$[ \t]*(\S(?:.*\S)?)[ \t]*\$\$[ \t]*$")
+
+
+def display_math(markdown: str) -> str:
+    """Each one-line `$$ x $$` as the three lines `$$`, `x`, `$$`; inline `$x$` and display blocks already split stay."""
+    return ONE_LINE_DISPLAY.sub(lambda m: f"{m[1]}$$\n{m[1]}{m[2]}\n{m[1]}$$", markdown)
 
 
 def with_reply(markdown: str) -> str:

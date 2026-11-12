@@ -1,5 +1,6 @@
-"""`research run --on auto`'s placement: a free slot of a CPU node's pool (`spill`) first, then node 2's Verity share (the queue,
-`AUTO_NODE`) when it can start the job now, then the shortest pool line, and node 2's line for a job no pool fits.
+"""`research run --on auto`'s placement: the CPU node's pool (`spill`) with the most places for the job first, then node 2's
+Verity share (the queue, `AUTO_NODE`) when it can start the job now, then the shortest pool line, and node 2's line for a job
+no pool fits.
 
 Node 2's share is 48 cores that queued runs claim whole (research.cores) in one first-come line, so two large runs (a 16-job
 quick tier and a 32-core Lean check) can hold all 48 for hours while dozens of small runs wait behind them, with cpu-1's idle
@@ -8,13 +9,17 @@ cores unused. So before queueing, `read` asks each machine at once, over the ssh
 node 2 for its share's live claims and waiters, and each CPU node (`spill`) for its pool's `slot.py --status --json` and the
 memory slot.py finds free there (`free_gb`, read once a pool). `choose` then takes, in order:
 
-  - a pool where a slot that fits the job (not trains-only, at least its CPUs) is free and unblocked for every waiter ahead
-    and this job, the machine's free memory covering what the job would reserve there as slot.py admits it (`_blocked`:
-    the larger of the slot's mem= and the job's ask, which no cgroup enforces);
+  - the pool with the most places for the job, the first by number among equals. A place is a slot that fits the job (not
+    trains-only, at least its CPUs), idle and unblocked, with the machine's free memory covering what the job would reserve
+    there (`_need`: the larger of the slot's mem=, or its book=, and the job's ask, which no cgroup enforces) once the
+    waiters ahead have taken their own slots and memory, each by the ask its ticket names, as slot.py admits them (`_pool`).
+    Idle slots are places only as far as the free memory goes, since every run that starts reserves its own. The most
+    places, not the first pool that has one: a launch's read and its run's joining the line are half a minute apart, so the
+    launches of one half minute read the same lines, and sent to one place all but one of them wait;
   - else node 2's share when it can start the job now, with no one waiting there (a run once queued 100 min behind cpu-6's 8
     held slots and 9 waiters while node 2's 48 CPUs sat free);
-  - else the pool with the shortest wait, as waiters ahead per fitting slot, leaving out a pool whose line is stalled on
-    memory (`STALL_MIN`): a job placed there waits with it, however short the line;
+  - else the pool with the shortest wait, as the waiters that stay in its line per slot that runs, leaving out a pool whose
+    line is stalled on memory (`STALL_MIN`): a job placed there waits with it, however short the line;
   - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node,
     and CPU work there has held its GPUs at 0% under a load of 235 on 120 cores while cpu-5 ran at 8 of 192. A node 2
     that carries remote.RUNS_VIA_SLOT_FILE counts as unread: its launcher refuses a run that doesn't come through a check
@@ -81,6 +86,8 @@ DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
 #: a pool whose line has waited this long beside a free slot is stalled on memory and takes no job (`_pool`), nor does one whose
 #: every fitting slot is idle and blocked with slot.py's memory reason, which contains MEMORY_BLOCK
 STALL_MIN, MEMORY_BLOCK = 5, " GB of memory free"
+#: slot.py's BACKFILL_MAX_GB: a run asking at most this many GB passes the lane waiters ahead that only memory keeps from starting
+BACKFILL_MAX_GB = 32
 #: a launch is on time when its run starts within this many minutes; one `expect` finds late is told so, or refused (REFUSE)
 START_WITHIN_MIN = 10
 #: how long a pool run holds its slot, in minutes, as `expect` takes it: the mean over the pools' runs, since a line of n runs
@@ -371,58 +378,107 @@ class Stalled(ValueError):
         self.waiting = waiting
 
 
+def _need(slot: dict, mem_gb: float) -> int:
+    """The GiB a run asking ``mem_gb`` GB reserves in ``slot``: slot.py raises a slot's mem= to the run's ask (its `asking`: GB
+    as GiB, rounded up) and one without mem= to that ask. A slot with book= reserves the larger of that and the ask, in place
+    of its mem= (slot.py's `booked`)."""
+    return max(slot.get("book") or slot.get("mem") or 0, -(-int(mem_gb * 1e9) // 2 ** 30) if mem_gb > 0 else 0)
+
+
 def _blocked(slot: dict, free_gb: Any, mem_gb: float) -> str | None:
     """What keeps a job asking ``mem_gb`` GB from taking ``slot`` now, as slot.py decides it at admission: what blocks the slot
-    for any check (its `blocked`), or less memory free than the job would reserve there. slot.py raises a slot's mem= to the
-    job's ask (its `asking`: GB as GiB, rounded up) and one without mem= to that ask, so the machine's free memory (the
-    pool's `free_gb`, GiB less what live reservations haven't reached) decides, not the slot's mem=. A slot with book= reserves
-    the larger of that and the ask, in place of its mem= (slot.py's `booked`). A document without it
-    (no pool's since the probe reads it) leaves the slot's own `blocked`."""
+    for any check (its `blocked`), or less memory free than the job would reserve there (`_need`). So the machine's free
+    memory (the pool's `free_gb`, GiB less what live reservations haven't reached) decides, not the slot's mem=. A document
+    without it (no pool's since the probe reads it) leaves the slot's own `blocked`."""
     if slot.get("blocked"):
         return str(slot["blocked"])
-    need = max(slot.get("book") or slot.get("mem") or 0, -(-int(mem_gb * 1e9) // 2 ** 30) if mem_gb > 0 else 0)
+    need = _need(slot, mem_gb)
     if need and isinstance(free_gb, (int, float)) and free_gb < need:
         return f"{free_gb:g}{MEMORY_BLOCK}, under the {need} GB this job would reserve there"
     return None
 
 
+def _behind(ahead: list[dict], mem_gb: float, free_gb: float) -> list[dict]:
+    """The waiters of ``ahead`` a run asking ``mem_gb`` GB waits behind with ``free_gb`` GiB free, as slot.py counts them (its
+    `ahead`): all of them, but that a run asking at most BACKFILL_MAX_GB passes a lane waiter whose own ask is over what is
+    free. A priority waiter, or one whose ticket names no ask, is never passed."""
+    if mem_gb > BACKFILL_MAX_GB:
+        return ahead
+    return [w for w in ahead if w.get("priority") or not w.get("mem_gb") or w["mem_gb"] * 1e9 / 2 ** 30 <= free_gb]
+
+
 def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
-    """A pool's fitting slots, free ones among them and waiters; ValueError when no slot of it fits the job. A slot fits by its
-    CPUs: slot.py gives a job any slot and raises its memory to the job's ask, so a slot's mem= rules none out (`_blocked`)."""
+    """A pool as a job joining its line now finds it: the slots that run, the places it has for this job, the waiters it waits
+    behind where it has none, and how to say it; ValueError when no slot of it fits the job. A slot fits by its CPUs: slot.py
+    gives a job any slot and raises its memory to the job's ask, so a slot's mem= rules none out (`_blocked`).
+
+    A place is an idle slot with the memory free for what this job reserves there, after the line ahead has taken its own,
+    as slot.py admits it: each waiter in turn takes the first idle slot whose reservation (`_need`, by the ask its ticket
+    names) fits the memory left, which its reservation then leaves smaller; one that can't stays, and so does every waiter
+    behind it but those that pass it (`_behind`). The job has a place for each idle slot it could then take, the memory left
+    counted down with each, and none while a waiter it can't pass stays. So ten idle slots beside memory for two runs are
+    two places, and none once two waiters have taken them.
+
+    A job with no place waits behind every waiter that stays, those it would pass now too: it passes a waiter only while
+    memory is short for that one, and the memory or the slot the job itself waits for goes first to the earlier waiters it
+    fits. Counted without them, a pool out of memory with a line of small runs read as the shortest line there was."""
     if not isinstance(doc, dict) or "error" in doc:
         raise ValueError(doc.get("error") if isinstance(doc, dict) else doc or "not read")
     if not doc.get("slots"):
         raise ValueError(f"{doc.get('file')} lists no slot")
-    fit = [{**s, "blocked": _blocked(s, doc.get("free_gb"), mem_gb)} for s in doc["slots"]
-           if not s.get("trains") and cpulist(s["cpus"]) >= cpus]
-    if not fit:
+    free_gb = doc.get("free_gb")
+    slots = [s for s in doc["slots"] if not s.get("trains") and cpulist(s["cpus"]) >= cpus]
+    if not slots:
         raise ValueError(f"no slot of {doc.get('file')} gives {cpus} CPUs")
+    fit = [{**s, "blocked": _blocked(s, free_gb, mem_gb)} for s in slots]
     # a window (slot.py's `window ...` reason) closes a slot for hours or days, unlike a memory or disk block
     open_ = [s for s in fit if not str(s.get("blocked") or "").startswith("window ")]
     if not open_:
         raise ValueError(f"every slot of {doc.get('file')} that fits is closed by a window ({fit[0]['blocked']})")
     free = [s for s in open_ if s.get("holder") is None and not s.get("blocked")]
     waiters = doc.get("waiters") or []
-    waiting = len(waiters)
-    # a waiter retries every 20 s (slot.py's POLL_S), so one still waiting beside a free slot waits on what this job's ask
-    # doesn't show: the memory its own --mem-gb asks (cpu-3's head asked 256 GB for hours while its other slots sat free)
-    if free and waiters and (head := max(w.get("minutes") or 0 for w in waiters)) >= STALL_MIN:
-        raise Stalled(f"its line is stalled: a run has waited {head} min while slot {free[0]['name']} is free, for memory "
-                      f"it asks beyond what that slot shows", waiting)
-    if all(s.get("holder") is None and MEMORY_BLOCK in str(s.get("blocked")) for s in open_):
+    # what a run may take now, whatever it asks: the slots nothing holds and nothing blocks for every check
+    idle = [s for s in slots if s.get("holder") is None and not s.get("blocked")]
+    left = free_gb if isinstance(free_gb, (int, float)) else math.inf
+
+    def take(ask: float) -> bool:
+        nonlocal left
+        for s in idle:
+            if not (need := _need(s, ask)) or need <= left:
+                idle.remove(s)
+                left -= need
+                return True
+        return False
+
+    stay, started = [], 0
+    for w in waiters:
+        if _behind(stay, ask := w.get("mem_gb") or 0, left) or not take(ask):
+            stay.append(w)
+        else:
+            started += 1
+    ahead = _behind(stay, mem_gb, left)
+    # a waiter retries every 20 s (slot.py's POLL_S), so one that stays this long beside an idle slot waits on memory, and so
+    # would this job behind it (cpu-3's head asked 256 GB for hours while its other slots sat free)
+    if idle and ahead and (head := max(w.get("minutes") or 0 for w in ahead)) >= STALL_MIN:
+        raise Stalled(f"its line is stalled: a run has waited {head} min while slot {idle[0]['name']} is free, for more "
+                      f"memory than the {left:g} GB free there", len(waiters))
+    if not started and all(s.get("holder") is None and MEMORY_BLOCK in str(s.get("blocked")) for s in open_):
         raise Stalled(f"its line is stalled: every slot of it that fits waits on memory and none runs ({open_[0]['blocked']})",
-                      waiting)
+                      len(waiters))
+    places = 0
+    while not ahead and take(mem_gb):
+        places += 1
     why = (f"slots {', '.join(s['name'] + (' free' if s in free else ' held' if s.get('holder') else ' blocked') for s in fit)}; "
-           f"{waiting} waiting")
-    # the line drains through the slots that run: a slot blocked on memory or disk adds no throughput until it clears
-    running = [s for s in open_ if s.get("holder") is not None or not s.get("blocked")]
-    return max(len(running), 1), len(free), waiting, why
+           f"{len(waiters)} waiting" + (f", {places} place{'' if places == 1 else 's'} for this job" if places != len(free) else ""))
+    # the line drains through the slots that run: one left idle, or blocked on memory or disk, adds no throughput until it clears
+    running = sum(s.get("holder") is not None for s in open_) + started
+    return max(running, 1), places, 0 if places else len(stay), why
 
 
 def _ahead(fit: int, free: int, waiting: int) -> float:
-    """A pool's line as a run joining it sees it (`_pool`'s numbers): 0 while a slot is free for every waiter and this run, else
-    the waiters ahead and this run, per slot that runs. `choose` ranks the pools by it and `expect` turns it into minutes."""
-    return 0 if free > waiting else (waiting + 1) / fit
+    """A pool's line as a run joining it sees it (`_pool`'s numbers): 0 while it has a place for this run, else the waiters it
+    waits behind and this run, per slot that runs. `choose` ranks the pools by it and `expect` turns it into minutes."""
+    return 0 if free else (waiting + 1) / fit
 
 
 def _lean(doc: Any, pool: str | None) -> tuple[float | None, str]:
@@ -457,7 +513,7 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
         said = (f"{AUTO_NODE}'s share: {share['free']} of {share['share']} CPUs free, {share['claims']} claim(s), "
                 f"{share['waiters']} waiting")
     of = f" of Lean pool `{lean_pool}`" if lean_pool else ""
-    ranked, stalled, notes = [], [], [said]
+    ranked, stalled, notes, most = [], [], [said], None
     for i, (machine, pool) in enumerate(_pools(docs)):
         doc = docs.get(machine)
         try:
@@ -474,9 +530,13 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str
             notes.append(f"{machine}'s {pool} pool skipped: {e}")
             continue
         notes.append(f"{machine}'s {pool} pool: {why}{lean}")
-        if free > waiting and not line:
-            return (machine, pool), "; ".join(notes) + ": a slot is free there now" + (f", and one{of} with it" if of else "")
+        if free and not line and (most is None or free > most[0]):
+            most = (free, (machine, pool))
         ranked.append((line, _ahead(fit, free, waiting), i, (machine, pool)))
+    if most is not None:
+        places, target = most
+        return target, "; ".join(notes) + (f": {target[0]}'s {target[1]} pool has the most places for it ({places}): a slot is "
+                                           f"free there now") + (f", and one{of} with it" if of else "")
     starts = share is not None and share.get("fits") and not share["waiters"] and _lean(n2, lean_pool)[0] == 0
     if ranked and starts:
         return None, "; ".join(notes) + (f": no pool has a slot and one{of} free" if of else ": no pool slot is free") + \
@@ -557,8 +617,8 @@ def expect(docs: dict[str, dict | str], target: tuple[str, str] | None, cpus: in
     if not minutes and not line:
         return Wait(0, "", False)
     oldest = max((w.get("minutes") or 0 for w in doc[target[1]].get("waiters") or []), default=0)
-    behind = (f"{waiting} waiting ahead" + (f" (the oldest for {oldest:g} min)" if oldest else "")
-              + f" for the {fit} slot{'s' if fit > 1 else ''} that fit it, " + (f"{free} free" if free else "all held"))
+    behind = (f"{waiting} waiting ahead" + (f" (the oldest for {oldest:g} min)" if oldest and waiting else "")
+              + f" for the {fit} slot{'s that run' if fit > 1 else ' that runs'} there")
     if not line:
         return Wait(minutes, behind, minutes > START_WITHIN_MIN)
     cpu = f"about {_whole(minutes)} min for a CPU slot ({behind})" if minutes else "a CPU slot is free there now"
@@ -567,10 +627,10 @@ def expect(docs: dict[str, dict | str], target: tuple[str, str] | None, cpus: in
 
 def smaller(docs: dict[str, dict | str], cpus: int, mem_gb: float, lean_pool: str | None = None
             ) -> tuple[int, float, tuple[str, str]] | None:
-    """The smallest change of a job's request that starts it now: (CPUs, GB, the pool that takes it), the request cut to a
+    """The smallest change of a job's request that starts it now: (CPUs, GB, a pool that takes it), the request cut to a
     slot that is free in some pool and to the memory free on its machine (`_blocked`), where `expect` then gives it no wait
-    (the first such pool, as `choose` takes it). Of several, the one that keeps the most of what was asked, as its
-    share of the CPUs plus its share of the memory. None when no smaller request starts now."""
+    (the first such pool; `choose` takes the one with the most places for it). Of several, the one that keeps the most of
+    what was asked, as its share of the CPUs plus its share of the memory. None when no smaller request starts now."""
     cpus = max(cpus, 1)
     shapes = set()
     for machine, pool in _pools(docs):
