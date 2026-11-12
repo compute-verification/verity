@@ -16,7 +16,8 @@ instance's composite decodes (`CaseOf`):
   (`checkBlobsAtWith true`), so that nothing a piece proves of an accepted play rests on the switch being off.
 * **The run of record's input** (`inputOfCase`): the `Spot.Run.Input` the check hands `Spot.Run.run` (`inputAt`), whose
   acceptance RUNCOINS's `RunAcceptsPlay` reads (`AcceptedTwo`).
-* **The reading** (`formReading`), round by round of `SpotFlock.V h`, as RUNCOINS's play reads the run
+* **The reading** (`formReading`, at the coin map's reading of the device's releases, `dev`, a parameter), round by
+  round of `SpotFlock.V h`, as RUNCOINS's play reads the run
   (`proverSeq`, `seqCoins`, `PlayCoins`):
   * the statement: the boundary registration's record, its canonical JSON's bytes (`recordMsg`, which
     `SpotFlock.jsonMsg` reads back);
@@ -121,9 +122,11 @@ def inputOn (C : CaseOf) (o : Verity.Exchange) : Option Spot.Run.Input :=
 def readsAt (h : SpotFlock.Held) (n : ℕ) : Prop :=
   n ≠ h.stage + 1 ∧ n < SpotFlock.off h h.ms.length
 
-/-- **The two-stage form's reading** at the session of record `A`, the instance's case of a play `C` and the
-sessions' reading `S` (module docstring, **the reading**). -/
-noncomputable def formReading (A : Live₂) (C : CaseOf) (S : SessionReading) : Reading A where
+/-- **The two-stage form's reading** at the session of record `A`, the instance's case of a play `C`, the sessions'
+reading `S` and the coin map's reading of the device's releases in a log `dev`, which the coin map owes (module
+docstring, **the reading**). -/
+noncomputable def formReading (A : Live₂) (C : CaseOf) (S : SessionReading)
+    (dev : List Verity.Release → ℕ → Option FlockDeploy.Coin) : Reading A where
   coin o n :=
     if n = 0 then (inputOn C o).bind fun i => coinOf i.source
     else if hn : n - 1 < A.h.stage then
@@ -141,7 +144,7 @@ noncomputable def formReading (A : Live₂) (C : CaseOf) (S : SessionReading) : 
     else match SpotFlock.slotOf A.h (n + 1) with
       | some t => S.msg o t (n - SpotFlock.off A.h t)
       | none => some []
-  dev _ _ := none
+  dev := dev
   reads n := readsAt A.h n
   stmt o := (inputOn C o).bind fun i => recordMsg i.record
   agree o n c c' :=

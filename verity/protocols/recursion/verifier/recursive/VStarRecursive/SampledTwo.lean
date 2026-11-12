@@ -11,7 +11,8 @@ refused while the two-stage form is outside the soundness theorem (`checkBlobsAt
   auditor's, fixed before any coin:
   * `boundary`: the boundary registration's parameters, as the stream's run reads them (`OneStage.paramsParsed`); its
     program's proof blocks under its query are one stratum, the replay block's one Definition (`ONE_DEFINITION`), so a
-    share of replay blocks by count is their share by weight;
+    share of replay blocks by count is their share by weight; it names the challenger at the interior's key
+    (`ONE_KEY`), so both stages' coins are read under one key;
   * `rule`: the selection, two-stage only (`Select.Rule.twoStage`);
   * `values` and `public`: the Spec's boundary values (`{"name", "registered"}`) and the items both registrations
     show; `challenger`: the challenger's name its receipts carry; `delta`: the audit records' δ;
@@ -76,6 +77,9 @@ def ONE_DEFINITION : String :=
     "one Definition's, so a share of them by count is a share by weight"
 
 /-- The refusal of public outputs: no verdict this form computes reports any. -/
+def ONE_KEY : String :=
+  "the boundary and the interior name one challenger key: both stages' coins are read under the run's one key"
+
 def OUTPUTS_REFUSED : String :=
   "the two-stage form's check has no public outputs: the second stage's verdicts report none"
 
@@ -128,7 +132,7 @@ def paramsAt (j : Json) : V OneStage.Params := do
 def split (j : Json) (what : String) : V Json := do
   let .obj _ := j | throw s!"the {what} is not an object"
   let .str form := getD j "form" | throw s!"the {what} names no form"
-  if form != TWO_STAGE then throw s!"the {what}' form {form} is not \"{TWO_STAGE}\""
+  if form != TWO_STAGE then throw s!"the {what} name the form {form}, not \"{TWO_STAGE}\""
   pure (Json.mkObj (without j "form"))
 
 /-- The parameters (module docstring, **params**). -/
@@ -147,6 +151,9 @@ def paramsOfJson (j : Json) : V Params := do
   let it := getD j "interior"
   keysAre it #["members", "params", "replay", "values"] "the interior's parameters"
   let ip := getD it "params"
+  let key := getD (getD (getD j "boundary") "challenger") "key"
+  if key matches .null then throw ONE_KEY
+  if !jeq key (getD (getD ip "challenger") "key") then throw ONE_KEY
   let interior ← paramsAt (Json.mkObj (without ip "proofs"))
   let circuits ← Spot.Run.templateCircuits (getD ip "proofs") interior.verifier.query
   let .obj _ := getD it "replay" | throw "the interior's replay is not a program object"
@@ -247,11 +254,12 @@ def inputAt (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidenc
   let .str received₂ := getD e.interior.base.receipt "received" | throw "the interior's receipt names no place"
   pure (c₂, ξ₂, r, inputOf p c ξ ξ₂ e received₂ vs)
 
-/-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output. -/
-def prepare (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
+/-- Check steps 1 to 5: the interior audit's verdict at its coins, and the run of record's output, its round 2 at the
+switch `form`. -/
+def prepare (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence) (bs : Core.Blobs) :
     V (Core.Outcome OneStage.Public Core.Integrity × Json) := do
   let (c₂, ξ₂, r, i) ← inputAt p c ξ e bs
-  let run ← Spot.Run.run i
+  let run ← Spot.Run.run i form
   pure (OneStage.checkAt p.audit.base c₂ (some ξ₂) { e.interior.base with verdicts := r.out }, run)
 
 /-- **The last step** (check, 6) at the switch `form`: the interior audit's verdict where it doesn't accept; where it
@@ -274,7 +282,7 @@ def finish : Core.Outcome OneStage.Public Core.Integrity → Json → Core.Outco
 an accepted two-stage audit read it at `form = true`, so that nothing they prove rests on the switch being off. -/
 def checkBlobsAtWith (form : Bool) (p : Params) (c : OneStage.Commitment) (ξ : ByteArray) (e : Evidence)
     (bs : Core.Blobs) : Core.Outcome OneStage.Public Core.Integrity :=
-  match prepare p c ξ e bs with
+  match prepare form p c ξ e bs with
   | .error err => .reject s!"two-stage: {err}"
   | .ok (two, run) => finishWith form two run
 
@@ -312,6 +320,24 @@ theorem checkBlobsAt_refuses (hF : FORM = false) (p : Params) (c : OneStage.Comm
 theorem checkBlobs_refuses (hF : FORM = false) (p : Params) (c : OneStage.Commitment) (e : Evidence)
     (bs : Core.Blobs) (pub : OneStage.Public) (prof : Core.Integrity) : checkBlobs p c e bs ≠ .accept pub prof :=
   checkBlobsAt_refuses hF p c e.source e bs pub prof
+
+def PROTOCOL : String := "verity/sampled-proofs/two-stage/v1"
+
+def protocol : Core.BlobProtocol where
+  id := PROTOCOL
+  Params := Params
+  Commitment := OneStage.Commitment
+  Evidence := Evidence
+  Public := OneStage.Public
+  Profile := Core.Integrity
+  params := paramsOfJson
+  commitment := OneStage.commitmentOf
+  evidence := evidenceOf
+  digest c := c.digest
+  check p c e := checkBlobs p c e Core.Blobs.empty
+  publicJson := OneStage.publicJson
+  profileJson := Core.Integrity.toJson
+  checkBlobs := checkBlobs
 
 #guard (paramsOfJson (Json.mkObj [("form", "one-stage")])).toOption.isNone
 #guard match paramsOfJson (Json.mkObj [("form", TWO_STAGE), ("outputs", Json.arr #["y"])]) with
