@@ -407,6 +407,65 @@ def test_a_setting_the_serve_did_not_turn_on_is_off(tmp_path: Path):
     assert r["cost"]["verdict"] == "not shown"
 
 
+def test_the_value_settings_in_force_are_the_adapters_record_as_each_server_and_the_replay_kept_it(tmp_path: Path):
+    """An arm's record and the replay's hold the adapter's record of the value settings in force (the benchmark's
+    ``settings``): the report keeps each whole and names the variables ours's differs from stock's in and the
+    replay's from ours's. A job whose directories hold none says not recorded."""
+    out = job(tmp_path)
+    replayed(out)
+    _, txt, r = run(out)
+    assert "\n  value settings in force: not recorded (no arm's record and no replay's holds the adapter's record of them)\n" in txt
+    assert r["value_settings"] == {"arms": {"compiled": {"compiled": None}, "record": {"record": None}}, "replay": None,
+                                   "lifetimes_differ": [], "differ": {"ours_from_stock": None, "replay_from_ours": None}}
+    # the records as the benchmark makes them (`serve_tax.value_settings`): stock's server's, ours's with the canonical
+    # top-k besides, and a replay's engine's, which is given another variable and lacks one the servers have
+    base = {"NCCL_P2P_DISABLE": "1", "VLLM_API_KEY": "a credential's value", "HOME": "/no/value/setting"}
+    served = base | {"VLLM_BATCH_INVARIANT": "0"}
+    stock, ours = S.value_settings(served), S.value_settings(served | {"VERITY_DSA_TOPK": "canonical"})
+    replay = S.value_settings(base | {"VERITY_DSA_TOPK": "canonical", "VLLM_ENABLE_V1_MULTIPROCESSING": "0"})
+    assert (len(stock["values"]), len(ours["values"]), len(replay["values"])) == (3, 4, 4)
+    out = tmp_path / "kept" / "out"
+    corpus_arm(out, "compiled", [100.0, 101.0, 102.0], settings=stock)
+    corpus_arm(out, "compiled-again", [100.5, 101.0, 101.5], settings=stock)
+    corpus_arm(out, "record", [99.0, 100.0, 101.0], trace=True, settings=ours)
+    replayed(out, settings=replay)
+    _, txt, r = run(out)
+    assert ("\n  circuit compiled ahead of serving: no: nothing in this job compiles the settings' circuit\n"
+            "  value settings in force, the adapter's record of each server's environment (serve_tax.value_settings): "
+            f"compiled 3 set, SHA-512 {stock['digest'][:12]}; record 4 set, SHA-512 {ours['digest'][:12]}, differing from "
+            f"compiled's in VERITY_DSA_TOPK; the replay's engine 4 set, SHA-512 {replay['digest'][:12]}, differing from "
+            "record's in VLLM_BATCH_INVARIANT, VLLM_ENABLE_V1_MULTIPROCESSING\ntokens: ") in txt
+    assert r["value_settings"] == {
+        "arms": {"compiled": {"compiled": stock}, "record": {"record": ours}}, "replay": replay, "lifetimes_differ": [],
+        "differ": {"ours_from_stock": ["VERITY_DSA_TOPK"],
+                   "replay_from_ours": ["VLLM_BATCH_INVARIANT", "VLLM_ENABLE_V1_MULTIPROCESSING"]}}
+    # a credential is in the record by its name alone, and the difference is in no verdict
+    assert "a credential's value" not in txt + json.dumps(r) and "settings_differ" not in r["cost"]
+    # a job in lifetimes: each lifetime's record is kept; an arm whose lifetimes hold different ones says so, and a
+    # side with no record is not recorded and compared with nothing
+    out = tmp_path / "lifetimes" / "out"
+    for k, mine in enumerate((ours, replay), 1):
+        corpus_arm(out, f"compiled.{k}", [100.0, 101.0], arm="compiled", lifetime=k, reps=2)
+        corpus_arm(out, f"record.{k}", [99.0, 100.0], trace=True, arm="record", lifetime=k, reps=2, settings=mine)
+    replayed(out, "record.1", settings=ours)
+    _, txt, r = run(out, "--again", "")
+    assert ("(serve_tax.value_settings): compiled not recorded; "
+            f"record 4 set, SHA-512 {ours['digest'][:12]}; the replay's engine 4 set, SHA-512 {ours['digest'][:12]}, the "
+            "same as record's\n"
+            "  NOT ONE RECORD: record's lifetimes hold different value settings; the line above reads its first "
+            "lifetime's\ntokens: ") in txt
+    assert r["value_settings"]["arms"] == {"compiled": {"compiled.1": None, "compiled.2": None},
+                                           "record": {"record.1": ours, "record.2": replay}}
+    assert r["value_settings"]["lifetimes_differ"] == ["record"]
+    assert r["value_settings"]["differ"] == {"ours_from_stock": None, "replay_from_ours": []}
+    # a record that is not in the adapter's form ends this line and not the report
+    (out / "record.1" / "meta.json").write_text(json.dumps(
+        json.loads((out / "record.1" / "meta.json").read_text()) | {"settings": {"schema": "another"}}))
+    _, txt, r = run(out, "--again", "")
+    assert "\n  value settings in force: the adapter's record of them can't be read from the job's files: KeyError: " in txt
+    assert r["value_settings"]["unread"] and "tokens: reproduced" in txt
+
+
 def test_speculative_decoding_and_the_models_own_limit_are_read_from_the_launch_line(tmp_path: Path):
     out = tmp_path / "out"
     spec = ("--speculative-config.method", "mtp", "--speculative-config.num_speculative_tokens", "5")

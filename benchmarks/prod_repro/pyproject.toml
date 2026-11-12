@@ -29,4 +29,6 @@ inputs = [
     "adapters/vllm/verity_vllm/pipeline/advice_code/pool.py",
     "adapters/vllm/verity_vllm/pipeline/advice_code/replay.py",
     "adapters/vllm/verity_vllm/pipeline/advice_code/schedule.py",
+    # the record of the value settings in force, which the suite makes as the benchmark does (serve_tax.value_settings)
+    "adapters/vllm/verity_vllm/settings.py",
 ]

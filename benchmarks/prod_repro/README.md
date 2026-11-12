@@ -110,7 +110,13 @@ replay that differs, the first token that does and the first step.
   header. A context limit the launch line leaves to vLLM (`--max-model-len auto`) is the one the engine took: the
   header's where the arm kept a step trace, else the one vLLM's own log line says it fitted (stock keeps no trace);
   `not resolved` where neither says, and two arms that both leave it to vLLM then count as sharing it. A limit under
-  the model's own is printed as below it.
+  the model's own is printed as below it. The last line is the value settings in force: the adapter's record of the
+  variables set in each server's environment that can change what an engine computes, which the benchmark keeps in
+  each lifetime's `meta.json` and of the replay's engine in `replay.json` (`serve_tax.value_settings`). It gives how
+  many are set and the record's SHA-512 for stock, ours and the replay, and names the variables ours's record
+  differs from stock's in and the replay's from ours's; `out/prod_repro.json` holds every record whole, a credential
+  by its name alone. It is in no verdict: ours's server is given variables stock's is not. A directory that holds no
+  such record is `not recorded`.
 - **tokens**: the requests of the replayed window, their served tokens, the tokens the replay kept for them and how
   many differ; the engine steps and how many have other rows than the served schedule; how many of the window's
   requests began from a prefix-cache hit and the longest hit; the mode served and replayed; how the window's

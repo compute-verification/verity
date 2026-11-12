@@ -18,7 +18,9 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
   (``--private``, the benchmark's PRIVATE; `topk_kept`);
 - the settings each of the two arms ran with, read from its launch line, its engine's own configuration (the step
   trace's header) and its counters: a setting the serve did not turn on is ``off``, and one its files can't confirm
-  says so;
+  says so; and the adapter's record of the value settings in force in each server's environment and in the replay's
+  engine's, where the benchmark kept it (`value_settings`): how many variables are set, the record's digest, and by
+  name the ones ours's differs from stock's in and the replay's from ours's;
 - ``tokens``: the served window the replay re-ran (`replay.window`), how many of its requests and served tokens the
   replay's kept tokens were compared with (`replay.token_diff`) and how many differ, with the steps that differ and
   the requests of the window that began from a prefix-cache hit. Where they differ: the first token that does (its
@@ -136,6 +138,8 @@ NOT_SESSIONS = ("the interval over lifetime pairs is the benchmark's for a sessi
 #: (`serve_tax.session_cost`'s ``same_work``)
 UNEQUAL = ("the arms did not do the same work (one left a request unserved, they served another count of output "
            "tokens, or their prefix caches served different shares of the prompts in some rep)")
+#: the hex digits printed of a record's SHA-512 (the report's JSON holds it whole)
+DIGEST_SHOWN = 12
 #: the line where the benchmark's own cost has none on the requests that went on past an end-of-text token
 #: (`serve_tax.past_end_text`): an arm's passes hold that count only where its server kept the served ids and its
 #: record names the model's end-of-text ids
@@ -411,6 +415,32 @@ def settings_differ(a: dict, b: dict) -> list[str]:
     x, y = a["context_limit"], b["context_limit"]
     limits = x["given"] != y["given"] if None in (x["tokens"], y["tokens"]) else x["tokens"] != y["tokens"]
     return out + ["the context limit"] * limits
+
+
+def value_settings(dirs: dict[str, list[Path]], stock: str | None, ours: str, replay_dir: Path) -> dict:
+    """The adapter's record of the value settings in force (`serve_tax.value_settings`: each variable set that can
+    change what an engine computes, a credential by name only, and their SHA-512), as the benchmark kept it of the
+    environment each server was started with (``settings`` in a lifetime's meta.json) and of the replay's engine's
+    (in replay.json): each directory's record whole (``arms``, ``replay``; None for one that holds none, as a job
+    served before the benchmark kept it), the arms whose lifetimes do not hold one record (``lifetimes_differ``),
+    and the variables, by name, that one side alone sets or sets to another value (``differ``: ours's first
+    lifetime against stock's, the replay against it; None where a side has no record). It is beside the settings
+    and in no verdict: ours's server is given variables stock's is not."""
+    def kept(f: Path) -> dict | None:
+        return json.loads(f.read_text()).get("settings") if f.is_file() else None
+
+    def differ(a: dict | None, b: dict | None) -> list[str] | None:
+        if a is None or b is None:
+            return None
+        return sorted(k for k in a["values"].keys() | b["values"].keys() if a["values"].get(k) != b["values"].get(k))
+
+    arms = {a: {d.name: kept(d / "meta.json") for d in dirs.get(a, [])} for a in (stock, ours) if a}
+    first = {a: next(iter(recs.values()), None) for a, recs in arms.items()}
+    replay = kept(replay_dir / "replay.json")
+    return {"arms": arms, "replay": replay,
+            "lifetimes_differ": sorted(a for a, recs in arms.items() if len({r and r["digest"] for r in recs.values()}) > 1),
+            "differ": {"ours_from_stock": differ(first.get(stock), first.get(ours)),
+                       "replay_from_ours": differ(first.get(ours), replay)}}
 
 
 # --------------------------------------------------------------------------------------------------------- the tokens
@@ -784,6 +814,7 @@ def report(out: Path, stock: str | None, ours: str, again: str | None, load: str
             "load": load, "arms": {"stock": stock, "again": again, "ours": ours, "served": sorted(by)},
             "ran": {"arms": states, "unread": unread, "replay": state, "replay_engine": engine},
             "settings": sets, "circuit_ahead_of_serving": NO_CIRCUIT,
+            "value_settings": read("the adapter's record of them", lambda: value_settings(dirs, stock, ours, replay_dir)),
             "tokens": toks, "cost": line,
             "advice": read("the advice", lambda: advice(dirs[ours], ours, replayed or load, rep, replay_dir))
             if ours in dirs else not_measured(f"{ours} was not served")}
@@ -1038,6 +1069,33 @@ def _engine(e: dict) -> list[str]:
     return lines
 
 
+def _values(v: dict, stock: str | None, ours: str) -> list[str]:
+    """The adapter's record of the value settings in force (`value_settings`): for each arm and the replay how many
+    variables are set and the record's digest, and by name the ones ours's differs from stock's in and the replay's
+    from ours's; not recorded for a side whose directory holds none."""
+    if v.get("unread"):
+        return [f"  value settings in force: {v['why']}"]
+    first = {a: next(iter(recs.values()), None) for a, recs in v["arms"].items()}
+    if not any(first.values()) and v["replay"] is None:
+        return ["  value settings in force: not recorded (no arm's record and no replay's holds the adapter's record of them)"]
+
+    def one(name: str, rec: dict | None, differ: list[str] | None, other: str) -> str:
+        if rec is None:
+            return f"{name} not recorded"
+        against = ("" if differ is None else f", the same as {other}" if not differ else
+                   f", differing from {other} in {', '.join(differ)}")
+        return f"{name} {len(rec['values']):,} set, SHA-512 {rec['digest'][:DIGEST_SHOWN]}{against}"
+
+    d = v["differ"]
+    sides = [*([one(stock, first.get(stock), None, "")] if stock else []),
+             one(ours, first.get(ours), d["ours_from_stock"], f"{stock}'s"),
+             one("the replay's engine", v["replay"], d["replay_from_ours"], f"{ours}'s")]
+    return ["  value settings in force, the adapter's record of each server's environment (serve_tax.value_settings): "
+            + "; ".join(sides),
+            *(f"  NOT ONE RECORD: {a}'s lifetimes hold different value settings; the line above reads its first lifetime's"
+              for a in v["lifetimes_differ"])]
+
+
 def _verdict(c: dict) -> str:
     """A cost's verdict in words: yes, no, or not shown and why."""
     if c["verdict"] == UNDER:
@@ -1122,7 +1180,8 @@ def text(r: dict) -> str:
               _limit(r),
               _setting("KV cache", "kv_cache", r),
               _setting("torch.compile and CUDA graphs", "compiled", r),
-              f"  circuit compiled ahead of serving: {r['circuit_ahead_of_serving']}"]
+              f"  circuit compiled ahead of serving: {r['circuit_ahead_of_serving']}",
+              *_values(r["value_settings"], stock, ours)]
     if not t["measured"]:
         lines.append(f"tokens: not measured: {t['why']}")
     else:
