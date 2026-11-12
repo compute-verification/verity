@@ -430,19 +430,20 @@ SENSITIVITIES = {
 }
 #: the matrix products a trace's rows and a run's op log both give as (m, K, n), by one rule (training_slowdown.capture.
 #: structure's GEMMs and `log_products`): a batched product is left out, since a capture's attention, by the math
-#: backend, has no counterpart in a run's fused attention
+#: backend, has no counterpart in a record written before training_slowdown 4.22.0, which holds a fused attention
+#: kernel as one row
 PLAIN_PRODUCTS = ("mm", "_int_mm", "_scaled_mm", "addmm", "addmm_", "mv", "addmv", "addmv_", "dot", "vdot", "addr",
                   "addr_")
-#: the scaled-dot-product attention ops an op log names
+#: the fused attention kernels an op log written before training_slowdown 4.22.0 names, one row a kernel call
 SDPA = ("_scaled_dot_product_flash_attention", "_scaled_dot_product_efficient_attention",
         "_scaled_dot_product_cudnn_attention")
 
 
 def log_products(op: str, shapes: list) -> list[tuple[int, int, int, int]] | None:
     """An op log's op's matrix products as (b, m, K, n), from its tensor operands' shapes in training_slowdown.flops's
-    order; None for an op this doesn't place, and an error for shapes that aren't its operands'. Attention (scaled dot
-    product, [B, H, L, E] operands) is its products as torch's FLOP formula counts them, the query heads sharing a key
-    head stacked as rows of one product."""
+    order; None for an op this doesn't place, and an error for shapes that aren't its operands'. A fused attention
+    kernel's row (`SDPA`, [B, H, L, E] operands) is its products as torch's FLOP formula counts them, which is how
+    the record that holds it was counted: the query heads sharing a key head stacked as rows of one product."""
     s = [tuple(x) for x in shapes]
     if op in ("mm", "_int_mm", "_scaled_mm"):
         (m, K), (_, n) = s[0], s[1]

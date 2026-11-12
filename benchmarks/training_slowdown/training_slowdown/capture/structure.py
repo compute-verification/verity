@@ -6,10 +6,11 @@ Every matmul-class node (``mm``, ``addmm``, ``bmm``, ``baddbmm``, ``addbmm``, ``
 the varied captures, `trace`). A matmul-like op outside that list is refused. `macs` is the GEMMs' MACs. The rest of
 the step's share of |C| is counted by training_slowdown.flops's rule, so `c_macs` matches the harness's count: one MAC per output
 element of each elementwise multiplication (`elementwise_macs`: ``mul``, ``div``, ``addcmul``, ``addcdiv``, ``lerp``,
-``add`` and ``sub`` with a scale, their in-place and ``_foreach_`` forms, fused optimizer steps at their unfused forms'
-multiplications), dense linear algebra at n³ per matrix (`approx_macs`), and any other forward op that combines an
-activation with a parameter that differs from θ (a norm with a trained gain, an add then ``exp``) at one MAC per element
-of its largest operand or result (only its indices and result, for a gather), as training_slowdown.flops counts it.
+``add`` and ``sub`` with a scale, their in-place and ``_foreach_`` forms, fused optimizer steps at a constant per
+parameter, never below their unfused forms' multiplications), dense linear algebra at n³ per matrix (`approx_macs`),
+and any other forward op that combines an activation with a parameter that differs from θ (a norm with a trained gain,
+an add then ``exp``) at one MAC per element of its largest operand or result (only its indices and result, for a
+gather), as training_slowdown.flops counts it.
 
 Terms are the training ontology's, with T2 read as deep use of activations that depend on the run's own persistent
 values, however the circuit is written.

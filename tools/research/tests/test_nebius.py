@@ -881,6 +881,8 @@ def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_not
     for n in creates:
         assert f"research deploy install {n} --by infra --ref origin/main --apply" in r.stdout
     assert ("NEBIUS_DATA_DISK=vy-nebius-1-data" in r.stdout) == (path == "reattach")
+    assert not re.search(r"\bcat [^|'>]*(\.ssh/vy-cluster'|lean-cache\.env)", r.stdout)       # a key or env file is copied, never printed
+    assert r.stdout.count("tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | ") == nodes and "sudo tar -C /etc/verity -cf - lean-cache.env' | " in r.stdout
     assert subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", "elsewhere"], capture_output=True).returncode == 2
 
 

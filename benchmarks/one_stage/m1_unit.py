@@ -34,8 +34,9 @@ Program it refuses every session once its checks pass.
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v3{N=6144,EPS=...,BLOCK=256}' --out DIR \\
       [--structural iv/hybrid/4 [--tmpl-unit-bin flock-tmpl-unit] | --reads slots] [--bin flock-circuit --lean flock-verify] [--n 1]
 
-Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, k_log, vus_per_block and
-chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdict.
+Prints ``M1U {json}`` per phase: the build's seconds and peak RSS, the unit's ANDs and rows, unit_cells (the cells its layout
+takes of its slot of 2^unit_log: a template's with its copies aligned), k_log, block_bits (where its block's last range ends,
+of 2^k_log), vus_per_block and chunk_cap (`a6.chunk_cap`'s rule), then the stage, the session and Lean's verdict.
 """
 from __future__ import annotations
 
@@ -443,6 +444,7 @@ def main() -> int:
     import a11_kinds as K
     from verity_flock import class_statement as CS
     from verity_flock import ir_lower as IL
+    from verity_flock import tmpl as TMPL
     from verity_vllm.pipeline import serving_rows as SRW
 
     from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -479,8 +481,11 @@ def main() -> int:
     tm = getattr(st.low, "template", None)
     own = None if tm is None else {"defs": len(tm.defs), "rows": sum(len(df.rows) for df in tm.defs),
                                    "refs": sum(len(x) + len(y) for df in tm.defs for _c, x, y in df.rows)}
-    say("built", seconds=round(time.time() - t, 1), structural=a.structural, reads=a.reads, template=own, ands=c["ands"], unit_rows=c.get("rows"),
-        nnz=c.get("nnz_a", 0) + c.get("nnz_b", 0), lookups=m.get("per_vu", {}), k_log=m["k_log"], unit_log=m["unit_log"],
+    seconds = round(time.time() - t, 1)
+    cells = st.low.layout.useful if tm is None else TMPL.layout(tm, a.structural)[tm.root].size
+    say("built", seconds=seconds, structural=a.structural, reads=a.reads, template=own, ands=c["ands"], unit_rows=c.get("rows"),
+        nnz=c.get("nnz_a", 0) + c.get("nnz_b", 0), lookups=m.get("per_vu", {}), k_log=m["k_log"], unit_cells=cells, unit_log=m["unit_log"],
+        block_bits=max((r["pos0"] + r["count"]) << r["slot_log"] for r in m["ranges"]),
         vus_per_block=m["vus_per_block"], chunk_cap=cap, pin=st.pin, circuit_bytes=(d / "circuit.txt").stat().st_size,
         domain=st.low.domain, stage_ands=getattr(st.low, "caps", None))
     if not a.bin:

@@ -39,7 +39,10 @@ operands' dtype (`_math_attention`): the dtype a step under autocast runs its fu
 `CaptureRefused` names what stops a capture, with the user's source line where there is one: a tensor value read into
 Python (``aten._local_scalar_dense``: an ``if`` on a tensor, ``.item()``), an output shape set by values
 (``aten.nonzero``), an op with no fake kernel (a custom kernel), a control-flow higher-order op (``torch.cond``), a fused
-op whose products this package doesn't count, or a graph that changes with the batch size.
+op whose products this package doesn't count, a graph that changes with the batch size, or a deep copy of a tensor
+the trace runs on (``copy.deepcopy`` of the model, of a parameter or of an optimizer): a fake has no data to copy, and
+a process that copies one anyway corrupts its heap and dies later. A step that needs the weights as they were
+copies the state dict, ``{k: v.detach().clone() for k, v in model.state_dict().items()}``.
 """
 from __future__ import annotations
 
@@ -54,8 +57,8 @@ from typing import Any, Callable, Iterable, Sequence
 
 import torch
 import torch.utils._pytree as pytree
-from torch._subclasses.fake_tensor import (DataDependentOutputException, DynamicOutputShapeException, FakeTensorMode,
-                                           UnsupportedOperatorException)
+from torch._subclasses.fake_tensor import (DataDependentOutputException, DynamicOutputShapeException, FakeTensor,
+                                           FakeTensorMode, UnsupportedOperatorException)
 from torch.fx.experimental.proxy_tensor import make_fx
 
 __all__ = ["BACKWARD", "Capture", "CaptureRefused", "STEP", "capture_step", "capture_steps"]
@@ -65,12 +68,16 @@ STEP = "te_capture::step::"
 _TORCH_DIR = os.path.dirname(torch.__file__)
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _CONTROL_FLOW = {"cond", "while_loop", "map", "map_impl", "scan", "associative_scan", "flat_apply", "invoke_subgraph"}
+#: why a step that deep-copies a tensor the trace runs on is refused, with what to write instead
+DEEP_COPY = ("the step deep-copies a tensor of the model's (copy.deepcopy of the model, of a parameter or of an "
+             "optimizer), and the trace runs on tensors without data: copy the state dict instead, "
+             "{k: v.detach().clone() for k, v in model.state_dict().items()}")
 
 
 class CaptureRefused(Exception):
     """The step is not one fixed graph this package can count. `reason` is one of ``dynamic_control_flow``,
-    ``data_dependent_shape``, ``custom_kernel``, ``uncounted_op``, ``batch_dependent`` or ``trace``; `op` the ATen op or
-    construct; `where` the user's source line, if found."""
+    ``data_dependent_shape``, ``custom_kernel``, ``uncounted_op``, ``batch_dependent``, ``deep_copy`` or ``trace``;
+    `op` the ATen op or construct; `where` the user's source line, if found."""
 
     def __init__(self, reason: str, op: str | None, message: str, where: str | None = None) -> None:
         self.reason, self.op, self.where = reason, op, where
@@ -172,7 +179,7 @@ def _user_frame(tb) -> str | None:
     best = None
     for fs in traceback.extract_tb(tb):
         f = os.path.abspath(fs.filename)
-        if f.startswith(_TORCH_DIR) or os.path.dirname(f) == _HERE or "contextlib" in f:
+        if f.startswith(_TORCH_DIR) or os.path.dirname(f) == _HERE or "contextlib" in f or f == copy.__file__:
             continue
         best = fs
     if best is None:
@@ -185,6 +192,8 @@ def _refusal(e: BaseException) -> CaptureRefused:
     if isinstance(e, CaptureRefused):
         return e
     where = _user_frame(e.__traceback__)
+    if isinstance(e, _DeepCopy):
+        return CaptureRefused("deep_copy", None, DEEP_COPY, where)
     f = getattr(e, "func", None)
     op = str(f) if f is not None else None
     text = str(e).strip()
@@ -278,6 +287,29 @@ def _math_attention():
         torch.backends.cuda.allow_fp16_bf16_reduction_math_sdp(was)
 
 
+class _DeepCopy(Exception):
+    """A deep copy of a fake tensor, met while a capture records (`_no_deep_copy`)."""
+
+
+@contextlib.contextmanager
+def _no_deep_copy():
+    """While the capture records, a deep copy of a fake tensor raises (`_refusal` makes it the refusal, `DEEP_COPY`):
+    torch's own copies the data of a tensor that has none. In force for the recording alone, and undone on every way
+    out of it, so a deep copy outside a trace is torch's as before."""
+    deepcopy = torch.Tensor.__deepcopy__
+
+    def refuse(self, memo):
+        if isinstance(self, FakeTensor):
+            raise _DeepCopy
+        return deepcopy(self, memo)
+
+    torch.Tensor.__deepcopy__ = refuse
+    try:
+        yield
+    finally:
+        torch.Tensor.__deepcopy__ = deepcopy
+
+
 def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: torch.nn.Module,
            optimizers: Sequence[torch.optim.Optimizer], leaves: list, spec, device, measured: int | None = None) -> Capture:
     """One `make_fx` capture of `steps` in order, each as ``step(fake_model, batch, fake_optimizers)`` on one fake model
@@ -299,7 +331,7 @@ def _trace(steps: Sequence[Callable[[torch.nn.Module, Any, list], Any]], model: 
                 step(fake_model, pytree.tree_unflatten(flat, spec), fake_opts)
 
     try:
-        with _marked_backward(), _math_attention():
+        with _marked_backward(), _no_deep_copy(), _math_attention():
             gm = make_fx(run, tracing_mode="fake", _allow_non_fake_inputs=True)(*[f[i] for f in fakes for i in tensor_at])
     except Exception as e:
         raise _refusal(e) from e

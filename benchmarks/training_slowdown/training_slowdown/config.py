@@ -1,7 +1,9 @@
-"""An attack config: one TOML file naming a start, a route and its dials, the training budget, the seeds, and what the
-grade reads (the target gain, the policy, the honest config). `load(path)` reads one and refuses, by name, a key the
-schema lacks, a start the registry lacks, a route `routes/` lacks, a dial the route lacks, of another type or of a
-value its plan refuses, a policy neither the calculator's registry nor `policy.py` names, and an honest config at another start or gain.
+"""An attack config: one TOML file naming a start, a route and its dials, the training budget, the seeds, which of the
+start's data the job is served, and what the grade reads (the target gain, the policy, the honest config). `load(path)`
+reads one and refuses, by name, a key the schema lacks, a start the registry lacks, a route `routes/` lacks, a dial the
+route lacks, of another type or of a value its plan refuses, two dials written of which the route reads one, a `windows`
+outside `WINDOWS`, a policy neither the calculator's registry nor `policy.py` names, and an honest config at another
+start or gain.
 
     start = "s-t20"                       # a start in starts.toml
     route = "subset"                      # routes/subset.py
@@ -10,14 +12,23 @@ value its plan refuses, a policy neither the calculator's registry nor `policy.p
     seeds = { search = [0], final = [0, 101, 102] }
     policy = "console"                    # policy.CONSOLE's rule, or a [policy.*] table of verity/protocols/inference_only/rho/data
     honest = "s-t20-1.1x-reference"       # another config beside this one, at the same start and gain
+    windows = "fresh"                     # only the windows the start's own training did not read
 
     [dials]                               # the route's DIALS; any other key is refused
     trainable = "blocks.5.*,norm"
 
+Which windows a job is served is the harness's, and a config's to ask for, never a route's. Without `windows` a job is
+served every window of the start's data, in its seed's order. With `windows = "fresh"` it is served that order without
+the windows of any part the start's own training read (`training_slowdown.data.Stream`), and its record lists the
+windows it was served; the job refuses the config on a start whose installed `start.json` doesn't name the parts it
+read (`training_slowdown.starts.parts_read`).
+
 The digest (`Config.digest`) is the sha256 of the canonical JSON of what decides a job's run (`Config.run`): the start
-and its θ's file, its data, the route and its VERSION, every dial (the route's defaults filled in) and the budget. The
-seeds and the split name a job within it (`Job.label`); the target, the policy and the honest config are only the
-grade's, and a new `training_slowdown` VERSION leaves it alone (the record says which VERSION wrote it).
+and its θ's file, its data, the route and its VERSION, every dial (the route's defaults filled in), the budget and,
+only where the config asks, `windows`, less the dials of the route's `LATER` that the config leaves at their default:
+such a dial's default is the step without the dial, so a config digests as it did before its route had it. The seeds
+and the split name a job within it (`Job.label`); the target, the policy and the honest config are only the grade's,
+and a new `training_slowdown` VERSION leaves it alone (the record says which VERSION wrote it).
 """
 from __future__ import annotations
 
@@ -31,6 +42,7 @@ from types import ModuleType
 
 from . import calculator, starts
 from .data import SPLITS
+from .screen import screen
 
 ROUTES = Path(__file__).with_name("routes")
 #: the policies stated relative to the start, in `training_slowdown.policy` (`CONSOLE`)
@@ -38,17 +50,17 @@ RULES = ("console",)
 LABEL_KEY = "training-slowdown"
 
 SCHEMA = {"start": str, "route": str, "target": dict, "budget": dict, "seeds": dict, "policy": str, "honest": str,
-          "dials": dict}
-OPTIONAL = ("honest", "dials")
+          "windows": str, "dials": dict}
+OPTIONAL = ("honest", "windows", "dials")
+#: what a config's `windows` may ask for; a config without the key is served every window
+WINDOWS = ("fresh",)
 TABLES = {"target": {"gain": (int, float)}, "budget": {"steps": int, "batch": int, "minutes": (int, float)},
           "seeds": {s: list for s in SPLITS}}
 REQUIRED_IN = {"target": ("gain",), "budget": ("steps", "batch"), "seeds": ()}
 
 
 def route(name: str) -> ModuleType:
-    """The route module `name`, its source screened before it is imported (`run.screen`)."""
-    from .run import screen
-
+    """The route module `name`, its source screened before it is imported (`screen.screen`)."""
     path = ROUTES / f"{name}.py"
     if not path.is_file() or name.startswith("_"):
         have = sorted(p.stem for p in ROUTES.glob("*.py") if not p.stem.startswith("_"))
@@ -64,7 +76,8 @@ def _is(value, kind) -> bool:
 
 
 def dials(mod: ModuleType, given: dict, where: str) -> dict:
-    """The route's DIALS with `given` over them, each of its default's type (an int where a float is due is one)."""
+    """The route's DIALS with `given` over them, each of its default's type (an int where a float is due is one), and
+    at most one written of each group of the route's `EITHER`."""
     out = dict(mod.DIALS)
     for k, v in given.items():
         if k not in out:
@@ -75,6 +88,10 @@ def dials(mod: ModuleType, given: dict, where: str) -> dict:
             raise SystemExit(f"{where}: dial {k!r} is {type(v).__name__} {v!r}, the route's is "
                              f"{type(out[k]).__name__} ({out[k]!r})")
         out[k] = float(v) if isinstance(out[k], float) else v
+    for group in getattr(mod, "EITHER", ()):
+        if len(both := [k for k in group if k in given]) > 1:
+            raise SystemExit(f"{where}: dials {' and '.join(both)} say one thing in two ways and route "
+                             f"{mod.__name__.rsplit('.', 1)[-1]} reads one of them (its EITHER): write one")
     return out
 
 
@@ -97,19 +114,26 @@ class Config:
     route: str
     route_version: int
     dials: dict
+    #: the route's `LATER` dials this config leaves at their default, which its digest leaves out
+    undigested: tuple
     budget: dict
     seeds: dict
     target: dict
     policy: str
     honest: str
+    windows: str = ""
 
     @property
     def name(self) -> str:
         return self.path.stem
 
     def run(self) -> dict:
+        """What decides a job's run. `windows` is in it only where the config asks, so a config that doesn't keeps
+        the digest it had before a config could."""
         return {"start": self.start.name, "theta": self.start.theta_file_sha256, "data": self.start.data,
-                "route": self.route, "route_version": self.route_version, "dials": self.dials, "budget": self.budget}
+                "route": self.route, "route_version": self.route_version,
+                "dials": {k: v for k, v in self.dials.items() if k not in self.undigested}, "budget": self.budget,
+                **({"windows": self.windows} if self.windows else {})}
 
     @property
     def digest(self) -> str:
@@ -158,6 +182,9 @@ def load(path: Path, reg: dict | None = None) -> Config:
             raise SystemExit(f"{where}: seeds.{split} is {ss}, not distinct non-negative integers")
     if not any(seeds.values()):
         raise SystemExit(f"{where}: no seed")
+    if raw.get("windows", WINDOWS[0]) not in WINDOWS:
+        raise SystemExit(f"{where}: windows is {raw['windows']!r}, not {' or '.join(map(repr, WINDOWS))} (the windows "
+                         f"the start's own training did not read); drop the key for every window of the start's data")
     if raw["policy"] not in (names := [*RULES, *calculator.policies()]):
         raise SystemExit(f"{where}: no policy {raw['policy']!r} (have {', '.join(names)}: policy.py's rule, or a "
                          f"[policy.*] table of verity/protocols/inference_only/rho/data)")
@@ -169,8 +196,10 @@ def load(path: Path, reg: dict | None = None) -> Config:
     except ValueError as e:
         raise SystemExit(f"{where}: {e}") from None
     return Config(path=path, text=text, start=start, route=raw["route"], route_version=int(mod.VERSION),
-                  dials=given, budget=dict(raw["budget"]), seeds=dict(seeds),
-                  target=dict(raw["target"]), policy=raw["policy"], honest=raw.get("honest", ""))
+                  dials=given, undigested=tuple(k for k in getattr(mod, "LATER", ()) if given[k] == mod.DIALS[k]),
+                  budget=dict(raw["budget"]), seeds=dict(seeds),
+                  target=dict(raw["target"]), policy=raw["policy"], honest=raw.get("honest", ""),
+                  windows=raw.get("windows", ""))
 
 
 def start_of(path: Path, reg: dict | None = None) -> starts.Start:

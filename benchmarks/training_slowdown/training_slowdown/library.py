@@ -7,7 +7,7 @@ is read under. There is one kind of entry, whatever its route computes: a new on
 has, or a new route and a config of it. ENTRY is a config's file or its name there; none is every entry.
 
 For each entry the command builds its route's model at the start's shape, traces its step on a CPU as a job does
-after its last step (`run.trace_step`: on fake tensors, so it trains nothing and reads no weights and no data), and
+after its last step (`traced.trace_step`: on fake tensors, so it trains nothing and reads no weights and no data), and
 reads the slowdown on that step from the benchmark's one entry point (`calculator.slowdown`): the least slowdown of
 any partition of the traced step into the policy's blocks, by the slowdown calculator's bound of record on the work
 the theorem charges (the products whose two operands both depend on the update). It prints one row an entry: the
@@ -34,7 +34,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import calculator, config, policy, run, starts
+from . import calculator, config, policy, starts, traced
 from .capture import products
 from .codecs import Identity
 from .grade import per_period
@@ -74,7 +74,7 @@ PARTS = {
 def entries(names: list[str] = ()) -> list[Path]:
     """The entries' config files: each of `names` (a file, or a name in `ENTRIES`), or every entry by name."""
     if not names:
-        return sorted(ENTRIES.glob("*.toml"))
+        return sorted(ENTRIES.glob("*.toml"), key=lambda p: p.stem)
     out = []
     for name in names:
         path = next((p for p in (Path(name), ENTRIES / f"{name}.toml") if p.is_file()), None)
@@ -92,7 +92,7 @@ def classified(trace: dict, k: float) -> dict | None:
 
 
 def bound(trace: dict, c: float, k: float) -> dict:
-    """The slowdown at (c, k) on a traced step (`run.trace_step`'s), as `calculator.slowdown` gives it on the trace
+    """The slowdown at (c, k) on a traced step (`traced.trace_step`'s), as `calculator.slowdown` gives it on the trace
     at the step's own gates: its `slowdown` and what `binds`, with the calculator's bound (`bound`) and the choice
     of the work it read (`figure`). No slowdown, and why in `binds`, on a step the capture refused, on one whose
     elementwise ops fan out into a product's operand (its `p_match`), at a k the trace has no rows at, and past the
@@ -118,7 +118,7 @@ def bound(trace: dict, c: float, k: float) -> dict:
 
 
 def trains(graph, of: int) -> dict:
-    """What a traced step trains, from the capture's graph (`run.traced_step`'s): the parameters the step writes (a
+    """What a traced step trains, from the capture's graph (`traced.traced_step`'s): the parameters the step writes (a
     buffer it writes, such as an average of the weights, is none), and their share of the start's `of` parameters.
     Adapters a route adds beside the start's weights count over the start's."""
     n = sum(math.prod(p["shape"]) for p in graph.params if p["trained"])
@@ -160,7 +160,7 @@ def row(cfg: config.Config) -> dict:
     if not all(isinstance(c, Identity) for _, c in route.plan(cfg.dials).rules):
         return out | {"slowdown": None, "binds": CODED}
     model, optimizers = route.build(cfg.start.shape, cfg.dials)
-    trace, graph = run.traced_step(cfg, route, model, optimizers, "cpu")
+    trace, graph = traced.traced_step(cfg, route, model, optimizers, "cpu")
     if graph is not None:
         out |= {"step": {"gates": trace["circuit"]["gates"], "tokens": trace["tokens"],
                          "priced_in": priced_in(trace), "capture": trace["capture"],

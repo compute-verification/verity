@@ -93,9 +93,10 @@ def test_the_command_traces_each_entry_and_prints_its_row_and_its_run_over_each_
 
 def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture_approximates(tmp_path):
     """Two optimizers on the tiny start. AdamW trains every parameter and no op of its step is approximated. Shampoo
-    has no rule for the embedding, so it trains the rest, and its roots are eigendecompositions the capture counts
-    at n³ MACs a matrix: the row holds those MACs and their gates at the price the capture gives one, and the printed
-    row says their share of the step's gates."""
+    on the block and the final gain trains all but the embedding, and its roots are eigendecompositions the capture
+    counts at n³ MACs a matrix: the row holds those MACs and their gates at the price the capture gives one, and the
+    printed row says their share of the step's gates. With the embedding under AdamW beside it, it trains every
+    parameter and has the same roots."""
     reg = starts.registry(tiny_registry(tmp_path / "reg"))
 
     def row(name: str, **dials) -> dict:
@@ -118,6 +119,9 @@ def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture
     said = f"; approximated: {approx['share']:.2%} of the step's gates are linear algebra at n³ MACs a matrix"
     assert library.line(part)[-1] == part["binds"] + said and library.line(whole)[-1] == whole["binds"]
     assert library.line(whole)[2] == "100%" and library.line(part)[2] == f"{100 * part['trains']['share']:.3g}%"
+    beside = row("beside", trainable="*", opt="shampoo")
+    assert beside["trains"] == whole["trains"] and beside["step"]["approximated"]["macs"] == approx["macs"]
+    assert beside["step"]["gates"] > part["step"]["gates"] and library.line(beside)[2] == "100%"
 
 
 def test_a_row_prints_the_dtypes_its_circuit_prices_the_steps_products_in():
