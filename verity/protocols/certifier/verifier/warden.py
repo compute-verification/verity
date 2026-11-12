@@ -97,6 +97,17 @@ With lengths rows the network certifier:
   the run's last window. `connection_rows` lays them out as the lengths and fails tables, commits them and signs
   their one head.
 
+**The content rows** (`WardenParams.content`, none by default: the classes of a schedule with lengths rows, each
+(P, O, rows), `content_rows`' "The classes"): the network certifier also keeps, of each request it releases, the
+request's bytes as it cut them into cells and the id of each `DATA` cell it released, four bytes an id, and hands them
+with the release (`Released.request`, `Released.ids`), so that `connection_rows` lays three more tables a class under
+the same head. The hand copies an execution phase's ids and makes nothing else: the tables are laid, committed and
+signed by whoever takes the hand, never on the tick.
+Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
+it, or to where that hand would have been for a release it never hands (the last point above), and no longer; of a
+connection it never released it keeps nothing. The classes enter the parameters' digest; a schedule without content
+rows hashes nothing of them and keeps its digest, and its network certifier keeps and hands what it did.
+
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
 cap (limit), the server's connection failing (upstream), an egress cell out of the egress form (format), ingress past
@@ -200,6 +211,7 @@ class WardenParams:
     egress: str = "id"  # the egress form, one of `EGRESS_FORMS`
     max_tokens_cap: int | None = None  # the response cap (the module docstring's), or none
     lengths: int | None = None  # the lengths rows' form (the module docstring's "The lengths rows"): 1, or none
+    content: tuple[tuple[int, int, int], ...] | None = None  # the content rows' classes, each (P, O, rows), or none
 
 
     def __post_init__(self) -> None:
@@ -238,6 +250,8 @@ class WardenParams:
                                  f"most the window ({self.window}) and egress_cells at most {1 << 16}")
             _request_form().layout(self.cell_bytes)
             _connection_rows().check_slots(self.stride_releases, self._stride_that_fits)
+        if self.content is not None:
+            object.__setattr__(self, "content", _content_rows().classes(self))
 
     def _stride_that_fits(self, most: int) -> str:
         """What a schedule whose slot stride releases more than `most` requests changes: its longest stride that
@@ -291,15 +305,15 @@ class WardenParams:
     @cached_property
     def digest(self) -> bytes:
         """The 64 bytes each record head's `parameters` carries. A schedule without a response cap has neither the
-        cap nor its reason in what it hashes, and one without lengths rows not their form, so its digest is the one
-        it had before either was a parameter."""
+        cap nor its reason in what it hashes, one without lengths rows not their form and one without content rows
+        not their classes, so its digest is the one it had before any of them was a parameter."""
         values = {k: v for k, v in asdict(self).items() if k not in OPTIONAL_FIELDS or v is not None}
         return tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(values | {"kinds": sorted(KIND_NAMES),
                                                                             "reasons": list(self.reasons)}))
 
 
 #: `WardenParams`' fields that are unset by default, each left out of the digest of a schedule that leaves it unset
-OPTIONAL_FIELDS = ("max_tokens_cap", "lengths")
+OPTIONAL_FIELDS = ("max_tokens_cap", "lengths", "content")
 #: `WardenParams`' integer fields, every one but `egress` and the optional ones: the schedule the period check reads
 #: (`scheduleOf`) beside its `max_tokens_cap` when it has one, whose egress form is the id form and which has no lengths
 #: rows
@@ -323,6 +337,13 @@ def _connection_rows():
     rows holds its slot stride's releases to. Imported at its first use: `connection_rows` imports this module."""
     from verity.protocols.certifier.verifier import connection_rows
     return connection_rows
+
+
+def _content_rows():
+    """`content_rows`, whose reading of a schedule's classes (`content_rows.classes`) a schedule with content rows
+    holds them to. Imported at its first use: `content_rows` imports this module."""
+    from verity.protocols.certifier.verifier import content_rows
+    return content_rows
 
 
 def _id_request_cell(params: WardenParams, c: _Connection, made: bytes) -> bool:
@@ -448,18 +469,24 @@ class _Connection:
     ended: int | None = None  # the bucket of the connection's last cells
     bytes_in: int = 0
     bytes_out: int = 0
+    request: bytes = b""  # with content rows, its request's bytes as cut, from its release to its hand
+    ids: bytearray = field(default_factory=bytearray)  # with content rows, each released DATA cell's id, a u32
     tasks: list[asyncio.Task] = field(default_factory=list)
 
 
 class Released(NamedTuple):
     """One released request as the lengths rows hold it (the module docstring's "The lengths rows"): `order`, N, its
     place in the release order; `request_bytes`, its request's; `outputs`, n, its response's `DATA` cells before its
-    `END` or `FAIL`; and `failed`, whether it ended in a `FAIL`."""
+    `END` or `FAIL`; and `failed`, whether it ended in a `FAIL`. With content rows (the module docstring's "The
+    content rows") also `request`, those bytes as the network certifier cut them, and `ids`, each of those cells' id
+    in order, a little-endian u32 each (`content_rows.ids_of` reads them); without them both are empty."""
 
     order: int
     request_bytes: int
     outputs: int
     failed: bool
+    request: bytes = b""
+    ids: bytes = b""
 
 
 def _pad(c: _Connection, cell_bytes: int) -> bytes:
@@ -689,8 +716,8 @@ class Warden:
             raise RuntimeError(f"window {w - 1} released a request whose connection is live, or failed as its "
                                f"client's, at window {w}'s close")
         self.hand_lengths(w - 1, tuple(tuple(
-            Released(c.release, c.bytes_in, c.egress_cells - (c.failed is None), c.failed is not None)
-            for c in stride) for stride in strides))
+            Released(c.release, c.bytes_in, c.egress_cells - (c.failed is None), c.failed is not None, c.request,
+                     bytes(c.ids)) for c in stride) for stride in strides))
 
     async def _reports(self, pacer: Pacer) -> None:
         async for report in pacer.reports():
@@ -818,6 +845,8 @@ class Warden:
         c.held += b"".join(sent)
         if c.ingress_end == t:
             c.release, self.requests_released = self.requests_released, self.requests_released + 1
+            if self.params.content is not None:
+                c.request = bytes(c.held)
             whole = with_release(bytes(c.held), c.release, self.run_id, t)
             c.held.clear()
             if c.server is None:
@@ -859,10 +888,12 @@ class Warden:
                     failed = "upstream" if c.upstream else "late"
                 if kind is not None:
                     made = cell(kind, c.ordinal, bytes(c.egress[:p]), B)
-                    if self.params.egress == "bytes" or parse_cell(made) is not None:
+                    if self.params.egress == "bytes" or (read := parse_cell(made)) is not None:
                         out.append(made)
                         del c.egress[:p]
                         c.egress_cells += 1
+                        if kind == DATA and self.params.content is not None:
+                            c.ids += read.id.to_bytes(4, "little")
                         if kind == END:
                             c.ended = t
                         continue
