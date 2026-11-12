@@ -94723,3 +94723,52 @@ For the table:
 - [run] Ended since 17:54Z: `r20261112-164720-cb51` (lean's own tree at `f3ffe4e2bbcb`, the 27 suites its 9 differing files reach): 27 of 27 passed, 28,816 tests; with `c09d` that is every quick suite on lean's own bytes at that tip. `r20261112-165959-48b8` (every head in, 28 Lean files under `security/`): 28 tries exit 0.
 
 Branches: `cursor/proofs-landing-closes-99d1` at `826cea0776932dff8b9890eb77f0458b79ca7358`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none.
+
+## CROSSCLOSE, Thu 12 Nov 18:25Z: the rows for `main` `30d6fcc92ff7`: lean's next merge takes `FlockVerify.lean` from `b7fb9c30eab1` and the pin from the new `716bd4cad467`; #9253's row is now `fed2063c5d79`, #9091's the new `ceffc70c0052`; #9229 and #9091 now stop against `main` itself
+
+All of this is against one trial, not pushed: lean's head `238ad6621c27` merged with `main` `30d6fcc92ff7`, closed, `fc1882fd87809f4a9ed4275ed1d7db6d2b13de68`. Both tips unchanged at 18:24Z [run: `git fetch`].
+
+**Lean's next merge: two files of ours by path** [run]
+
+| file | sha | blob | what it is |
+|---|---|---|---|
+| `verity/protocols/flock/verifier/FlockVerify.lean` | `b7fb9c30eab1` | `ee4aab1a9baf` | git's merge outside the two stops; inside, each line is the one side's that changed it (my 18:17Z entry) |
+| `verity/protocols/pous/lean/TRUSTED.sha256` | **`716bd4cad4675c948948374f8b40596529fd4c88`** new | `a08ebe4756ba` | its command's output on the merged tree; one line differs from lean's head's, the digest of `security/Proofs/lakefile.toml`, where both sides add roots and git merges with no stop |
+
+- [run] `pins.py --stale` exit 0 on the trial. `test_no_long_module_grows` passes on it (the file is 2,017 lines; lean's head's is 2,025, `main`'s 1,987).
+- The three `lake-manifest.json` stops are lean's (generated). In my trial they are `main`'s bytes, a stand-in [guess that it is not what lean will have].
+
+**The open heads against that merge** [run: `git merge-tree` of each head with the trial]
+
+| head | stops in | row |
+|---|---|---|
+| #9237 | `test_difftest.py`, the import line, once | `82a48d3a8dda` (`d9eedb9620de`), as before |
+| #9176, #9080 | nothing | none needed; git gives `991d5feffbe1` (`1e9547d76fd1`'s) |
+| #9212 | nothing | none needed; `797c39d4c99b` (`2f6a899ce9cb`'s) |
+| #9075 | nothing | none needed; `07b08a1d7864` (`7d09ccd7ccc2`'s) |
+| #9253 | `FlockVerify.lean`, once | **`fed2063c5d79`** (`2404be2d8b25`), not `b58ece80e982` any more: #9234 is under it now. Git's merge outside the stop; inside, the head's `verifyCmdBy` docstring and header, then lean's usage string, each the one side's that changed it |
+| #9091 | the pin | **`ceffc70c005281a7800ab13636ecc2ccec83e23f`** new (`7be654194625`), its command's output with the head in; it replaces `0add9868cafe` |
+| #9229 | `security/Proofs/Flock/SpotFlock/Code.lean` | not a row: see below |
+
+- [run] The README never stops; with #9199 on `main` git gives it right in each case (as I said at 17:23Z: by path only `test_difftest.py`).
+- [run] The twelve joined rows for `test_difftest.py` stand: `main`'s thirteen landings do not touch that file.
+
+**Two of our heads now stop against `main` itself, lean's line or not** [run: `git merge-tree` of each open head with `main` `30d6fcc92ff7` alone]
+
+- **#9229** (`9e075516baff`, Lane proofs): `security/Proofs/Flock/SpotFlock/Code.lean`, one stop, in the module docstring: #9208 (on `main` now) and #9229 each add a clause to the same sentence about `stmtOk` (`recordsOk`; `SecondStage.namesOk`). The queue will refuse it [guess]. Its worker's to merge, not a close of mine; both clauses want keeping [guess].
+- **#9091** (`675dea740d6a`): the pin, since #8569 and #8676 changed it on `main`. Its worker regenerates it when it takes `main`. With lean's line in as well the pin is `ceffc70c0052`'s.
+- The other six (#9237, #9176, #9212, #9080, #9075, #9253) merge with `main` alone with no stop.
+
+**Tries of the new rows, launched 18:22Z to 18:23Z, none ended** [run]
+
+- `r20261112-182234-9fdd`: the trial whole (with a two-line stand-in for the `Registry` rename, `c04d04289624`): Lean tries of `FlockVerify.lean` and six files of the flock verifier, `test_pous_trusted.py`, then every quick suite the merge touches from lean's head. ETA 20:30Z [guess]; the tries and the pin's test by 18:50Z [guess].
+- `r20261112-182303-e169`: with #9253 in and `fed2063c5d79` (`89f60e213c20`): six Lean tries, then the repository's, the flock prover's and `benchmarks/verifier_cost`'s suites. ETA 19:15Z [guess].
+- `r20261112-182335-606d`: with #9091 in and `ceffc70c0052` (`4a910e71732a`): #9091's nine Lean files, `test_pous_trusted.py`, the repository's and PoUS's verifier suites. ETA 19:30Z [guess].
+- **So `716bd4cad467`, `ceffc70c0052` and the use of `b7fb9c30eab1` and `fed2063c5d79` on this `main` are cut and read, not yet tried.**
+
+**Older runs** [run: polled 18:24Z]
+
+- `r20261112-165537-6644` (every marked head in, on lean's old tip): 77 of 80 suites passed, 0 failed.
+- `r20261112-171809-f6bf` (the closed merge at `main` `4520abe708b0`): 115 of 125 passed, 0 failed.
+
+Branches: `cursor/proofs-landing-closes-99d1` at `ceffc70c005281a7800ab13636ecc2ccec83e23f`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none of mine. For you to pass on if you wish: #9229 and #9091 each need `main` taken by their workers.
