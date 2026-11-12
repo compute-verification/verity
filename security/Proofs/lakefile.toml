@@ -72,7 +72,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.NetworkCertifier.Records", "Proofs.Properties.Spot.PlanCheck", "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Spot.Credited", "Proofs.Properties.Spot.HistoryTable", "Proofs.Properties.Core.Period",
   "Proofs.Properties.NetworkPeriod", "Proofs.Properties.Accounting.Requirement", "Proofs.Properties.NetworkScan",
-  "Proofs.Properties.NetworkScan.ViewCut",
+  "Proofs.Properties.NetworkScan.ViewCutWitness",
   "Proofs.Properties.Accounting.Remote", "Proofs.Properties.Accounting.Remote.Coins",
   "Proofs.Properties.Accounting.Remote.Frozen", "Proofs.Properties.Accounting.Remote.Order",
   "Proofs.Properties.Accounting.Remote.Pooled", "Proofs.Properties.Accounting.Served",
