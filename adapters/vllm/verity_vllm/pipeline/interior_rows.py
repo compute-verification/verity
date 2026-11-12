@@ -405,12 +405,13 @@ def interior_ports(members: Members, n_rho: Cells, boundary: str, sample: Sequen
 @dataclass(frozen=True)
 class Interior:
     """An interior registration: its record, its ports and leaf layer as the challenger derives them from the released
-    public bodies, the commitment it opens from, each span's index entries, a list a template, the sampled spans'
+    public bodies (None for a record that names none), the commitment it opens from, each span's index entries, a list a
+    template, the sampled spans'
     tables as round 1 served them, none where no template reads one, and the block's returns round 1's record commits,
     each with that port as the serve opens it (its rows, salts and tree)."""
     record: dict[str, Any]
     ports: dict[str, dict[str, Any]]
-    leaf_layer: str
+    leaf_layer: str | None
     committed: CS.Committed
     entries: list[list[list[list[Any]]]]
     tables: tuple[HT.HistoryTable, ...] = ()
@@ -468,7 +469,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
              salt_key: bytes | None = None, device: DeviceCommit | None = None, wires: Sequence[Any] = (),
              tables: Sequence[HT.HistoryTable] = (), served: Mapping[str, Any] | None = None,
              positions: int | None = None, links: Sequence[Link] = (), rows: Sequence[Any] = (),
-             window_root: str | None = None, returns: Sequence[tuple[Return, LK.Port]] = ()) -> Interior:
+             window_root: str | None = None, returns: Sequence[tuple[Return, LK.Port]] = (),
+             leaf_layer: bool = True) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s: one template's span, or one a template in the
     check's order, as `pieces` gives a token select's), template t's each padded to its n_t units (``n_rho``, as
     `interior_window` takes it) by whole instances (`Span.padded`), committed template-major and registered after
@@ -496,7 +498,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     (`links.Port`: its rows and salts). The output port that writes one is committed under the serve's salts at the
     rows its units write (`Return.rows`), so each row's ``b || c`` is round 1's leaf there and a session reads it at
     round 1's root (`write`). A replayed unit whose output is not round 1's row at its place is refused before
-    anything is committed, by slot and row, never by content."""
+    anything is committed, by slot and row, never by content. ``leaf_layer`` False: the record names no leaf layer
+    and the interior has none (`rows.registration`'s ``layer``), so the challenger holds it to its roots alone."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
     per = [(s,) if isinstance(s, Span) else tuple(s) for s in spans]
@@ -603,8 +606,8 @@ def interior(spans: Sequence[Span | Sequence[Span]], n_rho: Cells, boundary: str
     provenance = {"row": row, "interior": True, "replay_sample": [int(u) for u in sample],
                   **({"replay": replay} if replay is not None else {})}
     rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=R,
-                          entries=[given[v].entry() for v in IL.values(links)])
-    layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
+                          entries=[given[v].entry() for v in IL.values(links)], layer=leaf_layer)
+    layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)}) if leaf_layer else None
     return Interior(rec, ports, layer, c, [[s.entries for s in p] for p in per], tcs, tuple(returns))
 
 
@@ -673,7 +676,7 @@ def write(it: Interior, directory: str | Path) -> dict[str, Any]:
     window = {k: v for k, v in it.record["window"].items() if k not in ("kind", "run")}
     CS.write(c, directory, window, {"interior": True, "members": [m.key for m in w.members], "entries": it.entries},
              kind=it.record["window"]["kind"], registered=registered, registrar=R, previous=it.record["previous"],
-             entries=it.record.get("registered", ()))
+             entries=it.record.get("registered", ()), layer=it.leaf_layer is not None)
     return json.loads((Path(directory) / "registration.json").read_text())
 
 

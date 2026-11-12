@@ -664,7 +664,10 @@ def warm(a: argparse.Namespace, sets: dict, mine: CS.Window, jobs: int = 1) -> l
 
 def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
     """A sampled member's prover's file and its circuit, under the header its public file was held to before the sample, the
-    circuit held to its compose's line first (`held`)."""
+    circuit held to its compose's line first (`held`). A member nothing of which was staged before the sample (`audit`'s
+    ``roots_only``) gets its public file here too, the prover's own, held to nothing: its session's statement is restaged
+    from the two files at its sampled proof blocks (`sampled_only`), and every row that statement reads is opened
+    against a root of the registration."""
     m, st_dir = mm["m"], mm["st"]["dir"]
     held(mm["circuit"], mm["circ"], mm["read"])
     if mm["circuit"] != st_dir / "circuit.txt":
@@ -672,8 +675,13 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
         for f in sorted((mm["circuit"].parent / "tables").glob("*.u32")):    # a circuit with lookups reads the MUFU tables
             (st_dir / "tables").mkdir(exist_ok=True)
             link(f, st_dir / "tables" / f.name)
-    got = FI.flock_input_files(served, mm["k"], mm["circ"], st_dir / "prover", write=("inst",), files=files)
+    unstaged = mm["header"] is None    # `audit`'s ``roots_only``: nothing of the member was staged before the sample
+    got = FI.flock_input_files(served, mm["k"], mm["circ"], st_dir / "prover", write=("inst", "pub") if unstaged else ("inst",),
+                               files=files)
     link(Path(got["inst"]), st_dir / f"inst-{m.n}.bin")
+    if unstaged:    # the prover's own files at its population, which no check reads: its statement is restaged from them
+        link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
+        mm["header"], mm["st"]["public"] = a0.public_header(st_dir, m.n), a0.sha512_file(st_dir / f"pub-{m.n}.bin")
     with open(got["inst"], "rb") as f:
         if dict(json.loads(f.readline()), rows=False) != mm["header"]:
             raise RuntimeError(f"member {mm['k']}'s prover's file is not under the header its public file was held to")
@@ -762,7 +770,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     shutil.copy(served / "registration.json", out / "registration.json")
 
     # each member: the verifier's circuit, the public file under it, and every check on that file before the sample; the prover's
-    # file and the circuit's link only for a sampled member, after the sample (`stage`)
+    # file and the circuit's link only for a sampled member, after the sample (`stage`). ``a.roots_only``: the registration
+    # names no leaf layer, so no member's public file is made before the sample and no check reads one: a sampled member is
+    # staged after it, at its sampled proof blocks alone (`sampled_only`), every row its session reads opened against a
+    # root of the record
+    roots_only = bool(getattr(a, "roots_only", False))
+    if roots_only and (not getattr(a, "sampled_only", False) or plain(a) or history is not None or mine.row_tables):
+        raise ValueError("roots_only is of a --zk audit whose statements hold only their sampled proof blocks "
+                         "(sampled_only), with no history and no row table to check before the sample")
     files = (json.loads((served / "window.json").read_text()), rec)
     roots = {r["port"]: r for r in rec["roots"]}
     members, publics, checks, composed, programs_ok, kept, read = [], {}, {}, {}, {}, {}, set()
@@ -798,13 +813,23 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             circ = circuit_of(circuit, made, read)
             composed[m.template] = (circuit, made, circ)
         compose_s = round(time.time() - t, 1)
-        got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
-        link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
         meta = circ.meta
-        header = a0.public_header(st_dir, m.n)
-        fv = header["frame_v3"]
         if (m.template, circ.pin) not in programs_ok:   # a function of the circuit's META and the template: once per circuit
             programs_ok[m.template, circ.pin] = a0.template_program_ok(meta, defn)
+        if roots_only:      # nothing of the member's size before the sample: its circuit's own checks alone
+            ok = {"partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
+                  "program": meta.get("program_sha512") == part["program"],
+                  "template_program": programs_ok[m.template, circ.pin]}
+            checks[f"m{k}"] = {"ok": all(ok.values()), "codes": [c for c, v in ok.items() if not v], "detail": {}}
+            members.append({"k": k, "m": m, "defn": defn, "header": None, "circuit": circuit, "circ": circ, "read": read,
+                            "st": {"dir": st_dir, "meta": meta, "pin": made["pin"], "partition_file": out / "partition.json",
+                                   "program_file": out / "program.json", "public": None},
+                            "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
+            continue
+        got = FI.flock_input_files(served, k, circ, st_dir / "prover", write=("pub",), files=files)
+        link(Path(got["pub"]), st_dir / f"pub-{m.n}.bin")
+        header = a0.public_header(st_dir, m.n)
+        fv = header["frame_v3"]
         ok = {"pin": header.get("circuit_sha512") == made["pin"],
               "partition": meta.get("partition") == {"rule": P.FORMAT, "digest": pd},
               "program": meta.get("program_sha512") == part["program"],
@@ -825,15 +850,16 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                "program_file": out / "program.json",
                                "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
-    summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
-    leaf_layer = CS.leaf_layer(publics)
+    summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": 0 if roots_only else len(members),
+                          "roots_only": roots_only}
+    leaf_layer = None if roots_only else CS.leaf_layer(publics)
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
                                      history=hist, **tie(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
-    if any(m.wired for m in mine.members):
+    if any(m.wired for m in mine.members) and not roots_only:
         bad = WI.check(mine.members, publics)
         summary["wiring_reference"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
     w = rec.get("window", {})
@@ -885,7 +911,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
     (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
     after: dict[str, dict] = {}
-    if any(m.wired for m in mine.members):
+    if any(m.wired for m in mine.members) and not roots_only:
         bad = WI.check_drawn(mine.members, publics, union_draw["units"])
         after["wiring"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
         if bad:
@@ -1141,10 +1167,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         other = CS.expected_ports(replace(mine, run="00" * 32))
         v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table, **tie(a))
         neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
-        first = members[0]["m"].key
-        flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
-        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **tie(a))
-        neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        if roots_only:
+            v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer="00" * 64, work_table=table, **tie(a))
+            neg["leaf-layer-the-record-does-not-name (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
+        else:
+            first = members[0]["m"].key
+            flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
+            v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **tie(a))
+            neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
         if hist is not None:
             name = min(hist["registered"])
             root = hist["registered"][name]
@@ -1154,7 +1184,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             neg["history-root-not-its-writers-strings"] = {"refused": v.codes == (R.HISTORY,), "codes": list(v.codes)}
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
         neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
-        neg.update(wiring_negatives(mine.members, publics))
+        if not roots_only:
+            neg.update(wiring_negatives(mine.members, publics))
         if proved:
             v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
             neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}

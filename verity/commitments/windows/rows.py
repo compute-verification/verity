@@ -829,21 +829,23 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
 
 
 def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served",
-                 registrar: Any, entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+                 registrar: Any, entries: Sequence[Mapping[str, Any]] = (), layer: bool = True) -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the window, made by ``registrar`` (core's ``one_stage.registration``: its
     ``record``, ``KINDS``): its program, query and law, the scheme, every port's root, leaves and window domain, the leaf layer,
     and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
     the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters
     (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``served``: these roots are the integration's
     own commitment as it ran, made before any sample; ``stand-in``: a fresh commitment to values opened from its record afterwards,
-    whose link to the record's roots is provenance."""
+    whose link to the record's roots is provenance.  ``layer`` False: the record names no leaf layer (null), so it is held
+    to its roots alone, by a verifier that holds none: every row a session of its window reads is then read registered,
+    opened against a root of the record."""
     if kind not in registrar.KINDS:
         raise ValueError(f"window kind {kind!r} is not one of {registrar.KINDS}")
     w = c.window
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
-    publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
+    layer_of = leaf_layer({m.key: c.public_body(k) for k, m in enumerate(w.members)}) if layer else None
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
-                            leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table,
+                            leaf_layer=layer_of, previous=previous, work_table=w.work_table,
                             registered=list(entries))
 
 
@@ -1154,7 +1156,7 @@ def read_private(window_dir: str | Path, win: Mapping[str, Any], k: int) -> byte
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
           kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any,
           index_salt: bytes | None = None, previous: str | None = None,
-          entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
+          entries: Sequence[Mapping[str, Any]] = (), layer: bool = True) -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`, by ``registrar``, which also names and digests
     the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous`` and registering
     the values' ``entries``; the window's provenance gets the index's hiding leaf (`index_leaf`), so the
@@ -1168,7 +1170,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     to ``v<j>-private.bin`` (``window.json``'s ``value_rows``); and a wired port (``wired_rows``), each row and salt its
     writer's output row's, which the writer's own file holds.  At the 4,32,4 class the members' bodies read 5,282,498 value
     rows, 37,787 of them distinct, and 9,657,548 wired rows of 3,750,680 output rows.  `Bodies` makes a member's prover
-    body from the files."""
+    body from the files.  ``layer`` False: a registration that names no leaf layer (`registration`)."""
     d = Path(out_dir)
     d.mkdir(parents=True, exist_ok=True)
     ib = index_bytes(index)
@@ -1179,7 +1181,7 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
     with _private(d / INDEX_SALT) as f:
         f.write(salt)
     rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, previous, kind=kind, registrar=registrar,
-                       entries=entries)
+                       entries=entries, layer=layer)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     trees: dict[int, RT.RowTable] = {}
     members, paths, read = [], {}, {}
