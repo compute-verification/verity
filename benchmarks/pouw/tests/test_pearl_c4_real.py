@@ -103,7 +103,7 @@ def test_real_activation_replay(tmp_path, replayed):
     (row,) = RT.rows([s], RT.Fraction(1, 1000))
     assert row["x_rows"] == M and row["x_dnf_fail_split"] == 0 and row["w_rows"] == N and row["debited"] == 1
     assert abs(sum(row["mean_share"].values()) - t["ratio"]) < 1e-9 and "flag" not in row
-    assert row["macs"] == M * N * (K - K // 100) and RT.mac_shares([row])["synthetic"]["over_cap"] == 0
+    assert row["macs"] == M * N * (K - K // 100) and RT.mac_shares([row])["synthetic"]["over_bound"] == 0
     elsewhere = s | {"capture": str(tmp_path / "not-here")}
     assert RT.rows([elsewhere], RT.Fraction(1, 1000))[0]["x_rows"] is None
     assert RT.rows([elsewhere], RT.Fraction(1, 1000), captured / "manifest.json")[0]["x_rows"] == M
@@ -125,9 +125,9 @@ def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_caps():
     rows = {r["linear"]: r for r in table}
     assert rows[names[0]]["flag"] == "first down_proj" and rows[names[2]]["flag"] == "last down_proj"
     assert "flag" not in rows[names[1]] and "flag" not in rows[names[3]]
-    assert rows[names[2]]["over_cap"] == 0 and rows[names[2]]["over_cap_tight"] == 1 and rows[names[0]]["over_cap_tight"] == 0
+    assert rows[names[2]]["over_bound"] == 0 and rows[names[2]]["over_bound_tight"] == 1 and rows[names[0]]["over_bound_tight"] == 0
     share = RT.mac_shares(table)["m"]
-    assert share["macs"] == 4 * 256 * 1024 * 8111 and share["over_cap"] == 0 and share["over_cap_tight"] == 1 / 8
+    assert share["macs"] == 4 * 256 * 1024 * 8111 and share["over_bound"] == 0 and share["over_bound_tight"] == 1 / 8
     assert "12.50% at 1/1000" in RT.markdown(table, RT.Fraction(1, 1000))
 
 
