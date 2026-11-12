@@ -5,8 +5,11 @@ keep of each execution phase's hand, the offline check of what it kept, and the 
 of that form (`warden`'s "The lengths rows") and `--content P,O[,ROWS] ...` its content rows' classes, in order
 (`content_rows`' "The classes"): a class's size of prompt ids, its size of ids released and, under form 1 and only
 there, the rows of each of its three tables. Under form 2 a class is `P,O`: its tables hold a row a release filed in
-it and no other. `warden_serve`'s `serve` and `rehearse` take both, and `rehearse` passes them to its `serve`.
-Without them the schedule, its digest and everything the run writes are what they were.
+it and no other. `--request-words`, with `--lengths 2`, `--content` and the schedule's `--max-tokens-cap`, gives it
+request words (`content_rows`' "A request's words"): a fourth table a class, each released request's `max_tokens`,
+`ignore_eos` and count of prompt ids as the network certifier reads them. `warden_serve`'s `serve` and `rehearse`
+take the three, and `rehearse` passes them to its `serve`. Without them the schedule, its digest and everything the
+run writes are what they were.
 
 **The hand** (`hand`, `Keeper`). With lengths rows the network certifier hands an execution phase's releases once
 the next one's records are published (`Warden.hand_lengths`): on its ticker, after that execution phase's last bucket
@@ -42,9 +45,9 @@ counting it at an execution phase that isn't complete.
 
 **The cost** of a close, for a schedule and its classes:
 
-    python connection_rows_run.py cost --out FILE [--lengths 1|2] [--classes P,O[,ROWS] ...] [--load grid|rows]
-        [--phases 5] [--cell-bytes 512] [--slots 8] [--lanes 16] [--window 600] [--every 1] [--delay 30]
-        [--ingress-cells 96] [--egress-cells 4097] [--height 10]
+    python connection_rows_run.py cost --out FILE [--lengths 1|2] [--classes P,O[,ROWS] ...] [--request-words]
+        [--load grid|rows] [--phases 5] [--cell-bytes 512] [--slots 8] [--lanes 16] [--window 600] [--every 1]
+        [--delay 30] [--ingress-cells 96] [--egress-cells 4097] [--height 10]
 
 It loads an execution phase (`loaded`): with `--load grid`, releases of each class in turn, each of its class's
 longest request and most ids, until the classes' rows, the lengths table's slots or the cells the schedule's grids
@@ -52,7 +55,9 @@ carry in an execution phase are used up; with `--load rows`, every row of every 
 that much. `--lengths` is the lengths rows' form, 1 by default. Under 2 the classes are `P,O`, the default ones the
 same sizes, and an execution phase holds at most R = `WardenParams.phase_releases` releases over all the classes:
 `--load grid` stops there too, and `--load rows` is R releases of the one class whose rows are the most bytes, the
-costliest close the schedule has. It then times, over `--phases` execution phases: the device's own hand of it to
+costliest close the schedule has. With `--request-words` (under `--lengths 2`) the schedule has request words
+under the greatest response cap it takes, and each release's request is the canonical id request of its class's
+most prompt ids, which the publisher's build reads the words of. It then times, over `--phases` execution phases: the device's own hand of it to
 `warden_serve`'s publisher process (`Warden._emit_lengths`, what the ticker does at the close: `hand_ms`), the
 pickling of the queue's items, which the queue's thread does in the ticker's process (`pickle_ms`, and the longest
 item's), and, in the publisher's process, the build, the commit and the signature (`rows.jsonl`'s cost). The result
@@ -76,6 +81,7 @@ import certifier_serve as cs
 from verity.protocols.certifier.verifier import connection_rows as CR
 from verity.protocols.certifier.verifier import content_rows as CT
 from verity.protocols.certifier.verifier import warden_rows as WR
+from verity.protocols.certifier.verifier.active import id_request
 from verity.protocols.certifier.verifier.certificate import Direction, Issuer
 from verity.protocols.certifier.verifier.grid import Record
 from verity.protocols.certifier.verifier.warden import LENGTHS_FORMS, Released, Warden, WardenParams, _Connection
@@ -115,18 +121,24 @@ def flags(q: argparse.ArgumentParser) -> None:
                         "class's size of prompt ids, its size of ids released and, under --lengths 1 and only "
                         "there, its tables' rows; under --lengths 2 its tables hold a row a release filed in it "
                         "(default: none)")
+    q.add_argument("--request-words", action="store_true",
+                   help="with --lengths 2, --content and --max-tokens-cap: the request words (content_rows' \"A "
+                        "request's words\"), a fourth table a class of each released request's max_tokens, "
+                        "ignore_eos and count of prompt ids as the network certifier reads them (default: none)")
 
 
 def schedule(params: WardenParams, args: argparse.Namespace) -> WardenParams:
     """`params` with the connection rows `args` names (`flags`); the same schedule where it names none."""
     content = getattr(args, "content", None)
-    return replace(params, lengths=getattr(args, "lengths", None), content=content and tuple(content))
+    return replace(params, lengths=getattr(args, "lengths", None), content=content and tuple(content),
+                   request_words=True if getattr(args, "request_words", False) else None)
 
 
 def flags_of(params: WardenParams) -> list[str]:
     """The flags that give a schedule `params`' connection rows: none for a schedule without them."""
     out = [] if params.lengths is None else ["--lengths", str(params.lengths)]
-    return out + ([] if params.content is None else ["--content", *(",".join(map(str, c)) for c in params.content)])
+    out += [] if params.content is None else ["--content", *(",".join(map(str, c)) for c in params.content)]
+    return out + (["--request-words"] if params.request_words else [])
 
 
 # The hand, and the publisher's keep of it.
@@ -332,7 +344,9 @@ def loaded(params: WardenParams, load: str) -> list[tuple[int, int]]:
     """An execution phase's releases for the cost, in release order: each one's (request bytes, ids), the longest
     request and the most ids its class holds in the schedule (the module docstring's "The cost"). Where a class's
     rows are a count (`content_rows.counted`) the releases are at most the execution phase's, `phase_releases`, and
-    `rows` is that many of the one class whose rows are the most bytes."""
+    `rows` is that many of the one class whose rows are the most bytes. In a schedule with request words a
+    release's request is a canonical id request, so a class whose longest one the schedule's ingress doesn't take
+    is refused."""
     if params.content is None or load not in ("grid", "rows"):
         raise ValueError("the cost is of a schedule with content rows, loaded to its grid or to its rows")
     B, slots = params.cell_bytes, CR.strides_of(params) * params.stride_releases
@@ -340,8 +354,14 @@ def loaded(params: WardenParams, load: str) -> list[tuple[int, int]]:
         slots = min(slots, params.phase_releases)
     cells = params.slots * params.lanes * params.window
     listed = CT.sized(params)
-    sizes = [(min(CT.request_room(B, p), params.ingress_cells * params.payload), min(o, params.egress_cells - 1))
-             for p, o, _ in listed]
+    most = params.ingress_cells * params.payload
+    sizes = [(min(CT.request_room(B, p), most), min(o, params.egress_cells - 1)) for p, o, _ in listed]
+    if params.request_words:
+        for i, (p, _, _) in enumerate(listed):
+            if CT.request_room(B, p) > most:
+                raise ValueError(f"with request words the cost's requests are canonical id requests, and class {i}'s "
+                                 f"of {p} prompt ids is {CT.request_room(B, p)} bytes, past the {most} the "
+                                 f"schedule's ingress takes: more ingress_cells, or a class of fewer prompt ids")
     if CT.counted(params) and load == "rows":
         own = [i for i, (size, n) in enumerate(sizes)
                if CT.file(params, Released(0, size, n, False, bytes(size), bytes(4 * n))) == i]
@@ -365,6 +385,16 @@ def loaded(params: WardenParams, load: str) -> list[tuple[int, int]]:
     return out
 
 
+def _request(params: WardenParams, n: int, size: int, ids: int) -> bytes:
+    """Release n's request for the cost, of `size` bytes: any bytes, or in a schedule with request words the
+    canonical id request of that length, of its class's prompt ids, whose `max_tokens` is the release's ids."""
+    if not params.request_words:
+        return bytes([n % 251 + 1]) * size
+    B = params.cell_bytes
+    prompt = next(p for p, _, _ in CT.sized(params) if CT.request_room(B, p) == size)
+    return id_request(model="", user="", prompt=[n] * prompt, max_tokens=ids, frame_bytes=B, offset=0)
+
+
 def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) -> Warden:
     """A network certifier at the close of execution phase 1 with `releases` as execution phase 0's, each ended in
     its `END`, laid in its slot strides in order. Under form 2 its run goes on past execution phase 1, so that
@@ -372,7 +402,8 @@ def _device(params: WardenParams, releases: Sequence[tuple[int, int]], lengths) 
     device = Warden(params, None, origin=0.0, windows=3 if params.closes else 2, lengths=lengths)
     K = params.stride_releases
     made = [_Connection(n + 1, None, None, None, 0, release=n, bytes_in=size, egress_cells=ids + 1, ended=0,
-                        request=bytes([n % 251 + 1]) * size, ids=bytearray((n % 251 + 1).to_bytes(4, "little") * ids))
+                        request=_request(params, n, size, ids),
+                        ids=bytearray((n % 251 + 1).to_bytes(4, "little") * ids))
             for n, (size, ids) in enumerate(releases)]
     strides = [made[j * K:(j + 1) * K] for j in range(CR.strides_of(params))]
     device._released[0], device._whole[0] = strides, True
@@ -430,6 +461,9 @@ def parser() -> argparse.ArgumentParser:
     c.add_argument("--classes", type=_class, nargs="+", default=None, metavar="P,O[,ROWS]",
                    help="the content rows' classes: P,O,ROWS under --lengths 1 and P,O under --lengths 2 (default: "
                         "six classes a power of four apart, of 16 rows each under --lengths 1)")
+    c.add_argument("--request-words", action="store_true",
+                   help="under --lengths 2: the schedule has request words, under a response cap of its most ids "
+                        "(egress_cells − 1), and each release's request is a canonical id request")
     c.add_argument("--load", choices=("grid", "rows"), default="grid")
     c.add_argument("--phases", type=int, default=5)
     c.add_argument("--height", type=int, default=cs.HEIGHT, help="the LMS key's tree height")
@@ -442,10 +476,11 @@ def parser() -> argparse.ArgumentParser:
 def costed(args: argparse.Namespace) -> WardenParams:
     """The schedule the `cost` command's flags name."""
     classes = args.classes or (CLASSES if args.lengths == 1 else [c[:2] for c in CLASSES])
+    words = {"max_tokens_cap": args.egress_cells - 1, "request_words": True} if args.request_words else {}
     return WardenParams(cell_bytes=args.cell_bytes, slots=args.slots, lanes=args.lanes, window=args.window,
                         every=args.every, delay=args.delay, ingress_buckets=args.delay,
                         ingress_cells=args.ingress_cells, egress_cells=args.egress_cells, lengths=args.lengths,
-                        content=tuple(classes))
+                        content=tuple(classes), **words)
 
 
 def main(argv=None) -> int:
