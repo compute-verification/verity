@@ -76951,3 +76951,53 @@ Tags as in my 07:29Z entry. This follows it; the allocator entry stands as poste
 
 For the table:
 - `Flock.Witness` split: on a branch at `61d7f8e5f1cc`, builds (Flock's package and the security proofs' 28 modules), records run and quick tier out, not a pull request.
+
+## STOPS, Thu 12 Nov 07:46Z: No: no design of ours must be accepted with wires and no rows. #9116 is at `9d26ebc07702` with the regenerated lock, and its ready line holds once the quick tier `r20261112-073033-0e1f`, still running, ends rc 0. Against lean's remote-merge branch it stops in one file, `test_difftest.py`
+
+In plain words: the answer for vllm is no. The verifier never accepts a wire without its rows, and the rows come from the same place as the wires, so whoever has one has the other. The one design of ours whose writer has several units a block is my own token select by units, on the scratch branch, and my own test there expects it to be refused with the wires alone. #9116 now carries the regenerated lock, pushed. Its test run is not finished, so I give the ready line with that condition and end my turn on the run. I changed nothing to avoid the stop against lean's branch.
+
+Tags: [run] a command I ran now; [read] a file, log or record I read now; [derived] from those; [relayed] another lane's statement I did not check; [guess] mine, unchecked.
+
+**Ready line, once `r20261112-073033-0e1f` ends rc 0 with no failed suite:** `research queue ready 9116 --mark --sha 9d26ebc077028fab2deb7bce27fa0e03b3f6ca75 --by proofs`
+- **Stops against `cursor/lean-remote-merge-landing-fc8d` in one file:** `verity/protocols/spot/verifier/lean/tests/test_difftest.py`. The close is owed (CROSSCLOSE).
+- **Moves one lock record**, said in its body as a notice: `Spot.SecondStage.Own` gains `returns`.
+
+**1. The yes or no for vllm: no** (your item 3, by Thu 17:00Z).
+- **The verifier never accepts a wire without rows** [read, `main` `bcaf58a45d53`]. `verity/protocols/spot/verifier/lean/Spot/SecondStage.lean` lines 641 to 646, `wiresOk`: every wire needs its reader's units placed by its rows, and its rows a block equal to its writer's units a block. Lines 620 to 623, `placed`: a port with no rows is not placed. So a run with a wire and no rows for it is refused with `second-wires`, whatever the writer's size. The Python is the same: `second_stage.py` line 749.
+- **A design that has wires has their rows** [read]. Same file, lines 592 to 613: `wiresOf` and `replayRows` both read `wireRuns`, which gives each wire with its rows. Both take only the replay block's program and its id. So no caller can hold the wires and lack the rows.
+- **The one design of ours with a writer of several units a block needs its rows** [read]. It is the token select by units (`TokenSelectUnits_v1{V=256,K=2}` inlined, 12 writer units a block), on `cursor/proofs-stops-1340` only. My own test there expects the interior with the wires alone to be refused: `adapters/vllm/tests/pipeline/test_interior_rows.py` lines 495 and 496 at `eb6b79a1da90`. The command there passes the rows (`two_stage.py` line 454, `rows=d.rows`).
+- **On `main` no design of the served command has such a wire** [run: a probe on my VM, not a run of record]. The token select class has no wire, and its inlined form has none round 2 derives. `TokenSelectUnits` is in no file on `main` [run: `git grep`].
+- **The one test on `main` that passes wires alone stays accepted under #8707** [read]. `adapters/vllm/tests/pipeline/test_interior_wires.py` line 119, with its one wire at line 115 and `CELLS = (1, 1, 2)` at line 31: the wire's writer has one unit a block, which #8707 still takes without rows. #8707's head leaves that test as it is.
+- **What I did not read:** other workers' open branches. The no covers `main`, #8707's head and my scratch branch.
+- **One thing that follows, for whoever lands the token select by units:** on `main` the served command passes the interior its wires and no rows (`benchmarks/one_stage/two_stage.py` lines 442 and 561 to 562), because `main`'s interior takes none. Under #8707 the first served class with a wire to a writer of several units stops at the command until it passes `SS.replay_rows`. My scratch commit already does; it goes with that commit.
+
+**2. #9116: the lock is committed and pushed; the quick tier is out.**
+- **Head `9d26ebc07702`** on `cursor/proofs-return-579f`, one commit on `f7c857994a36`, pushed without force [run].
+- **The commit is `bb70`'s regenerated `security/lean-audit.json`, taken whole** [run]. I fetched it from the evidence store (the run dir's copy was evicted after custody). Its sha256 is the one the run's result records, `78a739c8661a...`.
+- **What it changes** [run: a comparison as JSON]. Only the lock's `reads`, for two modules:
+  - `Spot.SecondStage`: `Spot.SecondStage.Own` rehashed, and `Spot.SecondStage.Own.returns` added.
+  - `Proofs.Flock.SpotFlock.Code`: `SpotFlock.ownOf` and `SpotFlock.codesOk` rehashed. They read `Own`.
+  - Every other section is equal, the guarantees' records among them. Two keys of `shape` change order only.
+  - At 06:07Z I called the two digests "guarantees' digests". They are the two read modules' digests.
+- **`bb70` itself** [read]: rc 0, a fast-path result with no kernel replay. The Spot verifier's Lean, `security/Proofs` and `security/Properties` pass; `security` regenerated with that one change, the same as `9217` gave before the merge.
+- **The body** carries the lock's line as a notice and not a gate, the head and the runs [run: `research queue edit`]. `Goal proofs/spot-two-stage-e2e` and `Refs VLLM-370` stand.
+- **The quick tier, `r20261112-073033-0e1f`** on `vy-nebius-cpu-11`, at `9d26ebc07702`: `suites.py --changed d6075b75d289 --quick` after its own `uv sync`, `--cwd source`. `d6075b75d289` is the `main` the head holds. It took its slot at 07:35Z. The change touches 65 suites, 3 from the cache. At 07:44Z, 3 had passed and none failed [read]. The same suites without `--quick`, after a Lean build, took 77 minutes in `98f1`, so about 08:40Z [guess]; its slot ends at 09:35Z at the latest.
+- **I did not merge `main` in again** [run]. `main` is at `bcaf58a45d53`, 321 commits on. It changed none of #9116's ten files and not the lock, and the head merges with it cleanly. A second merge would put the head past the commit the lock was regenerated at.
+
+**3. The merge-trees** [run 07:43Z].
+- **With `main` at its tip, `bcaf58a45d53`:** no conflict, tree `cb6d38bcbd83`. Also none with #9095's head, nor with `main` and #9095 together.
+- **With `cursor/lean-remote-merge-landing-fc8d` at `1ab0a942376e`** (it moved from `de28a691126b` while I worked; the same result at both): it names one file, `verity/protocols/spot/verifier/lean/tests/test_difftest.py`. Git merges the other six files both sides change: `security/lean-audit.json`, the verifier's `README.md`, `Spot/Pieces.lean`, `Spot/Run.lean`, `service.py` and `tests/test_two_stage.py`.
+- **The stop is one hunk, for CROSSCLOSE** [read]: the list of the difftest's pieces with their counts. Lean's side adds `(POP_ORDER, 300), (PUBLIC_UNITS, 300), (LINK_POINTS, 500)` after `FLEET`. Mine adds `(REPLAY_RETURNS, 200)` after `REPLAY_WIRES`. Both are additions to one list.
+- **By name, nothing of mine uses what lean's side renames** [run: a script over both diffs; nothing was built on the merged tree]. Lean's side renames `service.Session` to `ProofRun` and `Spot.Slots.Layout` to `SlotOrder`, and removes `Sequential`. No added line of #9116 names any of them, nor any other declaration lean's side removes in the Spot and Flock verifiers' Lean, the base packages or `security/Definitions`.
+- **Lean's side changes two files that read `Own`** [read]: `security/Proofs/Flock/SpotFlock/Code.lean` and `Facts.lean`, one type's name in `filesOk` and in two lemmas. The changed lines build no `Own`.
+- I changed nothing in #9116 for any of this.
+
+**4. Your mailbox's items 1 and 2** (read 07:26Z; its newest section is yours of 06:55Z).
+- **The reader's four sites are not in #9116; they go in the pull request after #9095 lands** [run]. The four lines exist only on #9095's branch. #9095 is marked and admitted but not on `main` (`research queue status`, 07:39Z), so #9116's branch does not hold them, and I do not merge an unlanded head into it.
+  - **They are renames of code, not of the test** [read]. `got.stage1()` is `First.stage1` of `two_stage.py`, called in its two test files. `second.law` and `S.second_law` are the Python verifier's names (`second_law`: 14 lines in 5 files; `law` is a field of three records in `service.py`). `again.draw` is `First.draw`, which #9082 renames [read last turn, at its head then].
+  - **My proposal:** I rename `First.stage1` in that pull request. The verifier's `law` is one rename across `service.py` and the difftest, larger than a test's fix. Say if you want it from me or from whoever renames the verifier's vocabulary.
+- **The scratch branch stays scratch** [read]. The vLLM lane named its merge on VLLM-339 at 07:13Z: `cursor/vllm-stops-on-8707-4e51` at `5ec0795fd4a6`.
+  - I read it. It is one merge commit of my `eb6b79a1da90` and #8707's `50a328084c0c`. My design test there expects #8707's two messages (lines 496 and 499).
+  - **I have not pulled it into `cursor/proofs-stops-1340` yet.** It conflicts with `main`'s tip in seven files [run], all #8707's own with #9028 [relayed]. Pulling it now would stop my scratch branch from taking `main` until #8707's remerge lands. I pull it when #8707 is on `main`, or now if you say so.
+
+**Checkpoint** note written this turn. **I wait on** `r20261112-073033-0e1f`, about 08:40Z. When it ends I put its verdict in #9116's body.
