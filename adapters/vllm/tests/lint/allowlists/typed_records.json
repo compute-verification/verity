@@ -247,7 +247,6 @@
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "schema-literal", "symbol": "PaddedGreedyRequest", "detail": "verity-vllm/padded-greedy-request/v1"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "schema-literal", "symbol": "StochasticEngineStep", "detail": "verity-vllm/stochastic-engine-step/v1"},
     {"file": "verity_vllm/program/frontend/vllm_meta.py", "kind": "schema-literal", "symbol": "StochasticRequest", "detail": "verity-vllm/stochastic-request/v1"},
-    {"file": "verity_vllm/program/model.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/program/predict/aot.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/aot-comparison/v1"},
     {"file": "verity_vllm/program/predict/aot.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/program/predict/build.py", "kind": "schema-literal", "symbol": "<module>", "detail": "predict-build/derived/v1"},

@@ -71,6 +71,7 @@ def test_a_head_is_its_chain(T: int) -> None:
     assert np.array_equal(got, _run_head(T, DR, DV, BN, 0.0625, qn, qr, kv))
 
 
+@pytest.mark.slow
 def test_a_token_is_its_chains_at_the_served_statics() -> None:
     """GLM-5.3's statics (NH = 8, DR = 64, DV = 512, BN = 64, the scale 1/16) at T = 130: three blocks a head, the first visited
     one of 2 keys; the 8 heads' chains are the whole `SparseMla_v1` Call."""
