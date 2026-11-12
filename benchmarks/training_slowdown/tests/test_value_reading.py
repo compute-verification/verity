@@ -1,6 +1,8 @@
 """The value test of `circuit_properties.work`'s default reading, the circuit alone with nothing stated: on small
 attention steps, evaluated word by word (`serve3_reference.materialize`), no two MACs a product it charges reads one
 pair of values beyond the share a sequence's start leaves (`Work.keep`), where the batch repeats tokens within its rows.
+Two pairs count as one where both operands agree to a relative `TOL` = 2^-16 in either order (`distinct`), so a pair
+of values a step rounds a hair apart is no distinct pair.
 
 Each step is `test_program_reading.loop`'s scan of three iterations of a training step under AdamW at random weights,
 and the third iteration's products are the ones compared. The batch repeats a token within each row and meets
@@ -46,6 +48,8 @@ V, D, T, L = 8, 4, 4, 2
 K0 = 65536.0
 #: two rows of T + 1 tokens, each repeating a token, the loss reading the first T
 BATCH = torch.tensor([[1, 2, 1, 3, 5], [4, 1, 4, 6, 7]])
+#: the relative distance within which two operand values count as one
+TOL = 2.0 ** -16
 #: batches that break the premise, each by its first row but the last: the other row is one the held batch could have
 BROKEN = {"a run of one token first": [[1, 1, 2, 4, 5], [6, 7, 0, 5, 1]],
           "one token": [[3, 3, 3, 3, 3], [6, 7, 0, 5, 1]],
@@ -153,8 +157,24 @@ def pairs(prog, tab) -> dict:
     return by
 
 
+def _close(x: np.ndarray, y) -> np.ndarray:
+    return (x == y) | (np.abs(x - y) <= TOL * np.maximum(np.abs(x), np.abs(y)))
+
+
+def distinct(ps: list) -> int:
+    """How many of ``ps``' pairs of words are distinct at `TOL`: each, in turn, unless both its values are close to
+    an earlier distinct pair's, in either order."""
+    a = np.array(sorted(set(ps)), dtype=np.uint32).reshape(-1, 2).view(np.float32).astype(np.float64)
+    reps, m = np.empty_like(a), 0
+    for v in a:
+        r = reps[:m]
+        if not ((_close(r[:, 0], v[0]) & _close(r[:, 1], v[1])) | (_close(r[:, 0], v[1]) & _close(r[:, 1], v[0]))).any():
+            reps[m], m = v, m + 1
+    return m
+
+
 def repeats(ps: list) -> int:
-    return len(ps) - len(set(ps))
+    return len(ps) - distinct(ps)
 
 
 def fed_by(step, node: int, test) -> bool:
@@ -198,7 +218,7 @@ def test_what_the_circuit_alone_charges_reads_distinct_pairs(case):
     charged = [ps for reason, ps in by.values() if not reason]
     assert charged
     for ps in charged:
-        assert len(set(ps)) >= keep * len(ps)
+        assert distinct(ps) >= keep * len(ps)
     pv = first_pv(step, by)
     assert by[pv][0] and repeats(by[pv][1])
     if case == "after_mask":
