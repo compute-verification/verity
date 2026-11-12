@@ -18,7 +18,7 @@ import pytest
 from test_steady import DROP, END, SESSIONS, START, lease, made
 from verity_config import ConfigError
 
-from verity_bench import jobs, kit, settings
+from verity_bench import jobs, kit, served_table, settings
 from verity_bench import prove_records as R
 from verity_bench import steady as S
 from verity_bench import steady_node as N
@@ -109,7 +109,6 @@ def test_a_spec_was_added_when_its_first_path_was(tmp_path, monkeypatch):
 
     import subprocess
 
-    from verity_bench import served_table
     from verity_bench.vllm.presets import FORMER_SPECS
 
     def commit(at: int, *argv: str) -> None:
@@ -853,7 +852,7 @@ def test_a_spec_outside_the_specs_directory_or_without_history_is_looked_up_on_t
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "here"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(Store(tmp_path, root).config))
     (elsewhere := root / "elsewhere.toml").write_text((root / path).read_text())
-    with pytest.raises(ValueError, match="elsewhere.toml isn't a spec of benchmarks/specs.*--local-only"):
+    with pytest.raises(ValueError, match=f"elsewhere.toml isn't a spec of {served_table.SPECS}, .*--local-only"):
         P.make_plan(elsewhere, root=root)
     with pytest.raises(ValueError, match="git has no commit adding benchmarks/specs/steady.toml"):
         P.make_plan(root / path, root=root)
