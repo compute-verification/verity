@@ -1190,6 +1190,84 @@ def test_r7_reuses_an_earlier_outputs_commitment():
     assert {e["domain"] for e in G.reads_file(prog, Q, {"W": 2}, {"W": "cd" * 64})["ports"].values()} == {reg.entry()["domain"]}
 
 
+#: The entry and root a verifier built from a registration it read under the deployment's key: a link's certified rows,
+#: a value that is none of the program's parameters
+CERTIFIED = {"link-0/in/7": {"root": "cd" * 64, "leaves": 3, "words": 64, "domain": "ef" * 64}}
+
+
+def test_r7_takes_the_verifiers_certified_entries():
+    """A value the verifier holds a certified entry for (`certified`) is one of the record's registered values beside
+    the ones it expects registered: the record names it once, its entry is the verifier's on every key, its root
+    included (`R7-certified`), and a verifier that holds no entry for it refuses the record (`R7-values`). With an entry
+    and no parameter registered the verifier expects a v2 record, whose registered values are then the certified ones
+    alone, and without the entry it refuses that record by its keys. A certified value that is one the verifier
+    expects a parameter registered under or fills, pins, holds or takes from an earlier run, or an entry in another
+    form, is refused before the record is read."""
+    prog = _program()
+    reg = _registered(prog)
+    rec, ports = _record(prog, reg)
+    kw = {"law": LAW, "scheme": SCHEME, "ports": ports, "registered": {"W": 2}}
+    (value, mine), = CERTIFIED.items()
+    e = {"value": value, **mine}
+    both = {**rec, "registered": [reg.entry(), e]}
+    assert R.check(both, prog, Q, **kw, certified=CERTIFIED).ok
+    assert R.check({**both, "registered": [e, reg.entry()]}, prog, Q, **kw, certified=CERTIFIED).ok
+    assert R.check(both, prog, Q, **kw, certified={value: {**mine, "word_bits": 16}}).ok
+    assert R.check(both, prog, Q, **kw).codes == ("R7-values",)
+    assert R.check(both, prog, Q, **kw, certified={}).codes == ("R7-values",)
+    assert R.check(rec, prog, Q, **kw, certified=CERTIFIED).codes == ("R7-values", "R7-certified")
+    assert R.check({**rec, "registered": [reg.entry(), e, e]}, prog, Q, **kw, certified=CERTIFIED).codes == ("R7-values",)
+    cases = [({"root": "ab" * 64}, ("R7-certified",)), ({"root": "xy"}, ("R7-root", "R7-certified")),
+             ({"leaves": 4}, ("R7-leaves",)), ({"leaves": 3.0}, ("R7-leaves",)), ({"words": 32}, ("R7-words",)),
+             ({"domain": "00" * 64}, ("R7-domain",)), ({"word_bits": 32}, ("R7-word_bits",)),
+             ({"word_bits": 16}, ("R7-word_bits",)), ({"extra": 1}, ("R7-registered",))]
+    for change, codes in cases:
+        got = R.check({**rec, "registered": [reg.entry(), {**e, **change}]}, prog, Q, **kw, certified=CERTIFIED)
+        assert got.codes == codes, change
+    # the verifier's own value is held as it was, the certified one beside it
+    own = {**both, "registered": [{**reg.entry(), "leaves": 4}, e]}
+    assert R.check(own, prog, Q, **kw, certified=CERTIFIED).codes == ("R7-leaves",)
+    assert R.check(both, prog, Q, **{**kw, "registered": {"W": 3}}, certified=CERTIFIED).codes == ("R7-registered",)
+    assert R.check({**both, "registered": [reg.entry(), {**e, "root": "ab" * 64}]}, prog, Q,
+                   **{**kw, "registered": {"W": 3}}, certified=CERTIFIED).codes == ("R7-registered", "R7-certified")
+    # leaves of 32 bits name their width in the verifier's entry and in the record's
+    wide = {value: {**mine, "word_bits": 32}}
+    rec32 = {**rec, "registered": [reg.entry(), {**e, "word_bits": 32}]}
+    assert R.check(rec32, prog, Q, **kw, certified=wide).ok
+    assert R.check(rec32, prog, Q, **kw, certified=CERTIFIED).codes == ("R7-word_bits",)
+    assert R.check(both, prog, Q, **kw, certified=wide).codes == ("R7-word_bits",)
+    # a program none of whose parameters is registered: the record's registered values are the certified ones alone
+    lone = _program(w=16)
+    served, ports1 = _record(lone, reg)
+    kw1 = {"law": LAW, "scheme": SCHEME, "ports": ports1}
+    v1 = R.record(lone, Q, LAW, SCHEME, served["roots"], SERVED)
+    only = R.record(lone, Q, LAW, SCHEME, served["roots"], SERVED, registered=[e])
+    assert only["format"] == "verity/registration/v2" and only["registered"] == [e]
+    assert R.check(only, lone, Q, **kw1, certified=CERTIFIED).ok
+    assert R.check(only, lone, Q, **kw1, registered={}, certified=CERTIFIED).ok
+    assert R.check(only, lone, Q, **kw1).codes == ("keys",)
+    assert R.check(v1, lone, Q, **kw1).ok and R.check(v1, lone, Q, **kw1, certified=CERTIFIED).codes == ("keys",)
+    assert R.check({**only, "registered": []}, lone, Q, **kw1, certified=CERTIFIED).codes == ("R7-values", "R7-certified")
+    assert R.check({**only, "registered": [{**e, "root": "ab" * 64}]}, lone, Q, **kw1,
+                   certified=CERTIFIED).codes == ("R7-certified",)
+    assert R.check({**only, "registered": [e, reg.entry()]}, lone, Q, **kw1, certified=CERTIFIED).codes == ("R7-values",)
+    for bad in ({"W": mine}, {value: {**mine, "root": "CD" * 64}}, {value: {**mine, "root": "cd"}},
+                {value: {**mine, "leaves": True}}, {value: {**mine, "words": -1}}, {value: {**mine, "words": 64.0}},
+                {value: {**mine, "domain": 5}}, {value: {**mine, "word_bits": 8}}, {value: {**mine, "word_bits": True}},
+                {value: {**mine, "extra": 1}}, {value: {k: x for k, x in mine.items() if k != "root"}}, {value: None},
+                {value: [mine]}, [value], {7: mine}, "x"):
+        with pytest.raises(ValueError):
+            R.check(both, prog, Q, **kw, certified=bad)
+    # a certified value is the verifier's by its entry alone: it names it nowhere else
+    seeded, check, _, _ = _seeded_case()
+    with pytest.raises(ValueError):
+        R.check(seeded, **check, certified={"pouw.roots": mine})
+    for named in ({"supplied": {value: [[{"port": "x"}]]}}, {"pinned": {value: "cd" * 64}}, {"held": [value]},
+                  {"schemas": {value: G.SCHEMA_V2}}, {"outputs": {value: {"record": "ee" * 64, "port": "x"}}}):
+        with pytest.raises(ValueError):
+            R.check(both, prog, Q, **kw, **named, certified=CERTIFIED)
+
+
 def test_r7_holds_a_windows_history_to_the_previous_records_port():
     """A window's history (`outputs: {value: {"port": P}}`, the earlier windows' outputs it reads) is port P of the log's
     last record, the one R6 holds `previous` to, whose digest the verifier takes from the log (`last_digest`): the entry
