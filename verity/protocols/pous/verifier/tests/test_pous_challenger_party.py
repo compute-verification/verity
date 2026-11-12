@@ -49,7 +49,7 @@ def _in_process() -> tuple[period.Run, run.Point, run.Setup, list[bytes], bytes]
     return p, point, published, blocks, b"".join(mc.block_digest(b) for b in blocks)
 
 
-def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: int = CP.WARMUPS,
+def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: int = CS.WARMUPS,
            draw=os.urandom) -> tuple[bytes, run.ChallengePhaseRecord, int]:
     """One session with the challenger's side in a thread and the prover's here, over a socket pair."""
     a, b = socket.socketpair()

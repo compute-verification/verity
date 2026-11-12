@@ -346,3 +346,6 @@ def run_timed(challenger: UnsignedRounds, respond: Callable[[int], bytes | tuple
         block, report = out if isinstance(out, tuple) else (out, None)
         challenger.respond(block, path(i) if path is not None else None, report)
     return challenger.result()
+
+
+__all__ = ["CHALLENGES", "DEADLINE_NS"]

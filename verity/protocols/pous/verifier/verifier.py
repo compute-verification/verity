@@ -197,3 +197,7 @@ class VerifierKey:
         """Root-only check: `block` with the server's audit `path` is label `i` under `root`."""
         return (type(block) is bytes and len(block) == self.params.block_bytes
                 and verify_path(self.root, self.params.blocks, i, leaf_hash(self.params, self.salt, i, block), path))
+
+
+__all__ = ["DIGEST_BYTES", "MerkleTree", "VerifierKey", "leaf_hash", "node_hash", "path_length", "row_digest",
+           "row_leaf", "verify_path"]
