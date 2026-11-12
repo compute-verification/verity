@@ -17,7 +17,6 @@
     {"file": "verity_vllm/acquire/sources/narrowed_source.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/check/c2_rules.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 22},
     {"file": "verity_vllm/check/commit_tokens.py", "kind": "schema-literal", "symbol": "CommitTokens", "detail": "verity-vllm/commit-tokens/v1"},
-    {"file": "verity_vllm/check/fold_compare.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/fold-summary/v1"},
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/gates/v1"},
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-ir/query-use/v1"},
@@ -193,7 +192,6 @@
     {"file": "verity/definitions/registry/ref_prims.py", "kind": "schema-literal", "symbol": "ref_vocab_manifest", "detail": "verity-ir/ref-vocab/v0"},
     {"file": "verity/definitions/registry/sparse_mla_split.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity/mufu-lg2-quadratic/v1"},
     {"file": "verity/definitions/word.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/unit-rule/v1"},
-    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"},
-    {"file": "verity_vllm/check/match_oracle.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 24}
+    {"file": "verity_vllm/engine/kernel_identity.py", "kind": "schema-literal", "symbol": "collect", "detail": "verity-vllm/kernel-identity/v1"}
   ]
 }

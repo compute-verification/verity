@@ -734,7 +734,6 @@
     {"file": "verity_vllm/pipeline/boundary_windows.py", "kind": "misc", "symbol": "BoundaryWindows.check", "detail": ""},
     {"file": "verity_vllm/pipeline/boundary_windows.py", "kind": "var-annotated", "symbol": "BoundaryWindows.__init__", "detail": "", "count": 2},
     {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "attr-defined", "symbol": "_StepPart.after_sample", "detail": ""},
-    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "attr-defined", "symbol": "_StepPart.before_forward", "detail": "", "count": 5},
-    {"file": "tests/check/capture_map_check.py", "kind": "misc", "symbol": "check", "detail": ""}
+    {"file": "verity_vllm/commit/committer/native_collect.py", "kind": "attr-defined", "symbol": "_StepPart.before_forward", "detail": "", "count": 5}
   ]
 }
