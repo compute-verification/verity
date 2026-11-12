@@ -2,12 +2,20 @@
 (`verity_flock.proof_server.ProofServer`'s ``provers``), its sessions back to back, each K in turn.
 
     python benchmarks/one_stage/server_rate.py --bin flock-circuit --staged Z --types frw13,frw2 --provers 1,2,4 --out DIR \\
-        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2]] [--tmpl-unit-bin B]
+        --device D [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2] [--lean-program F]] \\
+        [--tmpl-unit-bin B] [--wide-leaf]
 
 * **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit drawn: a
   sampled replay block at the full statement. A templated one (``verity/flock-circuit/tmpl`` in its circuit's META, as
   `served_units/stage.py` stages a table read) is proved and verified with its unit's rows at their positions, which
   ``--tmpl-unit-bin`` (`flock-tmpl-unit`) places once into ``stage/unit.placed`` from the circuit's template section.
+* **The statement version**: fast100's, or with ``--wide-leaf`` the wide level-0 leaf's (`flock-circuit --wide-leaf`),
+  which every prover and verifier of the row then carries; the row says which (``wide_leaf``), and its Lean verdict is
+  asked under the version's own statement name (`WIDE_LEAF`). The two versions of a staged statement are two rows,
+  each run of the script one version. A row is held to the version its sessions ran: each finished session's
+  ``identity.profile`` (`PROFILES`) is counted in the row's ``profile`` beside the one the row asked for, and one that
+  differs voids the row, either way. A `flock-circuit` that does not know ``--wide-leaf`` ignores it and proves
+  fast100's statement, accepted.
 * **Load**: ``--warm`` sessions a prover, all finished before any timed one is submitted (a prover and its verifier load
   the circuit on their first session; ``ready_s``), then ``--sessions`` timed ones (at least 8 K) with K (ahead + 2)
   outstanding.
@@ -26,7 +34,18 @@
   on: their ``count``, their ``list`` and the ``numa_nodes`` that hold them (`cores`).
 * **The verdict of record** (``--lean``): at K = 1, the last ``--lean-sessions`` sessions get Lean `flock-verify verify
   --zk` on their record on the server's verdict pool, one at a time and after the steady window, each with its own CPU
-  seconds and peak RSS (`os.wait4`), the circuit and the public file archived once a type.
+  seconds and peak RSS (`os.wait4`), the circuit and the public file archived once a type. ``--lean-program`` is the
+  row's Program's descriptor, archived with them and handed to `verify` (``--program``); without it every Lean verdict
+  is `verify`'s refusal of a session without its program, and says so. The row keeps what the verdict says of the
+  Program (`PROGRAM_FIELDS`): ``program_sha512`` only when it is held to the circuit, else ``program_handed_sha512`` and
+  ``program_note``, which on a statement under the provisional unit cover says the Program was handed and not held to
+  the circuit.
+  With ``--wide-leaf`` the verdict is asked under the version's own name, ``verity/flock-circuit+wide-leaf`` or
+  ``verity/flock-circuit/tmpl+wide-leaf``, and the name alone selects the version: `flock-verify` has no
+  ``--wide-leaf`` argument, takes a wide-leaf name only with ``--zk`` and with no ``--rec-…`` argument, and refuses
+  every other name that ends ``+wide-leaf`` as an unknown statement (exit 2). A `flock-verify` whose `Flock/Tags.lean`
+  does not list the two names refuses them the same way, and a row then records that refusal for each session
+  (`no_verdict`), not a verdict on the proof.
 
 Writes DIR/rate.json (a row a type and K, as each ends) and DIR/<type>-k<K>/ (the server's logs and session records; no
 circuit, prover file or proof). A type whose server fails at some K is recorded with its error, and the next goes on.
@@ -36,9 +55,9 @@ provers on the rest (`ProofServer`'s placement). Either way a row keeps it (``ve
 seconds a statement over the timed sessions beside the provers' (``verifier_cpu_s_per_statement``).
 
 A row is **void** when any session was refused (a refused session files fast, so it would raise the rate), any of the
-server's processes exited nonzero, or a prover's log reports the device out of memory: it has no rate
-(``statements_per_s`` is null), ``void`` lists the reasons, and a ``VOID`` line says so. The run exits 1 when any row is
-void or failed.
+server's processes exited nonzero, a prover's log reports the device out of memory, or a finished session ran another
+statement version than the row's: it has no rate (``statements_per_s`` is null), ``void`` lists the reasons, and a
+``VOID`` line says so. The run exits 1 when any row is void or failed.
 """
 from __future__ import annotations
 
@@ -64,11 +83,18 @@ from verity_flock import circuit as FC
 from verity_flock.proof_server import ProofServer, Statement
 
 STATEMENT_ID = "verity/flock-circuit"
+#: what the wide level-0 leaf's version adds to a statement's name, flat or templated, for the Lean verifier
+WIDE_LEAF = "+wide-leaf"
+#: the profile a session's identity names under each statement version (`flock-circuit`'s ``identity``), by ``--wide-leaf``
+PROFILES = {False: "fast100", True: "fast100-wide-leaf"}
 #: flock-circuit's statement shape: m = k_log + nbl is at most 35 (`a6.M_MAX`)
 M_MAX = 35
 #: the rule that decides a row's ``flat``, kept in the row's ``cache``
 FLAT_RULE = ("every prover's statement-cache hit rate over the last quarter of its timed sessions is within 0.01 of the "
              "third quarter's")
+#: what a `verify` verdict says of the Program it was handed, kept in a row's Lean verdict: its digest as
+#: ``program_sha512`` only when the Program is held to the circuit, else as ``program_handed_sha512`` with ``program_note``
+PROGRAM_FIELDS = ("program_sha512", "program_handed_sha512", "program_note")
 PAGE_KB = os.sysconf("SC_PAGE_SIZE") // 1024
 #: where the kernel lists each NUMA node's CPUs
 NODES = Path("/sys/devices/system/node")
@@ -125,8 +151,9 @@ def staged(z: Path, t: str, tmpl_unit_bin: str | None = None) -> tuple[Statement
 
 
 def statement_blocks(stage: dict) -> dict:
-    """The proof blocks of a staged statement (its ``n`` instances) and the most one statement of its circuit holds
-    (`a6.chunk_cap`: ``vus_per_block`` instances in each of 2^(M_MAX - k_log) blocks; None without the circuit's shape)."""
+    """The proof blocks of a staged statement (its ``n`` instances) and the most one statement of its circuit holds, by
+    the bound `a6.py` chunks a population at (``vus_per_block`` instances in each of 2^(M_MAX - k_log) blocks; None
+    without the circuit's shape)."""
     k, g = stage.get("k_log"), stage.get("vus_per_block") or 1
     return {"blocks": stage["n"], "full": g << (M_MAX - k) if isinstance(k, int) and k <= M_MAX else None}
 
@@ -134,7 +161,7 @@ def statement_blocks(stage: dict) -> dict:
 def cache_flat(sessions: list[tuple[str, bool, dict | None]]) -> tuple[bool, dict]:
     """Whether the provers' statement caches had stopped filling over the timed sessions (`FLAT_RULE`), and the hit series
     that says so. ``sessions``: each session's prover, whether it was a warm one, and its record's ``stmt_cache``: the
-    prover's lookups so far and the drawn statements it holds, each built once, so a statement held is a miss.
+    prover's lookups so far and the sampled statements it holds, each built once, so a statement held is a miss.
 
     A prover's timed sessions, in the order of its lookups, are cut into four quarters. A quarter's hit rate is
     1 - held / lookups over what it added to the quarter before it (the first: to the prover's last warm session); a record's
@@ -239,6 +266,20 @@ def void_reasons(refused: int, sessions: int, exits: dict[str, int], out: Path) 
     return why
 
 
+def version_reasons(asked: str, ran: dict[str, int]) -> list[str]:
+    """Why a row's sessions are not the row's statement version (empty when they are): ``ran`` counts the finished
+    sessions by the profile their identity names ("none" for a record that names none), ``asked`` is the row's. It holds
+    both ways: a wide-leaf row over fast100 sessions, and a fast100 row over wide-leaf ones."""
+    other = {p: c for p, c in ran.items() if p != asked}
+    if not other:
+        return []
+    why = (f"{sum(other.values())} of {sum(ran.values())} finished sessions ran another statement version than the row's "
+           f"{asked!r}: " + ", ".join(f"{c} at {p!r}" for p, c in sorted(other.items())))
+    if asked == PROFILES[True] and PROFILES[False] in other:
+        why += "; a flock-circuit that does not know --wide-leaf ignores it: build the prover from a tree whose flock-circuit has it"
+    return [why]
+
+
 def throttled() -> dict:
     """The cgroup's CPU throttling so far (cgroup v2's cpu.stat; none without it)."""
     p = Path("/sys/fs/cgroup/cpu.stat")
@@ -269,18 +310,33 @@ def cores(cpus=None, nodes: Path | None = None) -> dict:
     return {"count": len(mine), "list": cpu_list(mine), "numa_nodes": sorted(held)}
 
 
+def no_verdict(statement: str, rc: int, said: str) -> str:
+    """Why a `flock-verify verify` that printed no VERDICT line gave none, from its exit code and what it wrote
+    (``said``). A statement name it does not know is said as that: the refusal is of the name, before any proof is read,
+    and a wide-leaf name is known only to a `flock-verify` whose `Flock/Tags.lean` lists it."""
+    if "unknown statement" not in said:
+        return f"no verdict (rc {rc})"
+    why = f"no verdict (rc {rc}): this flock-verify does not know the statement {statement!r} and refused it unread"
+    if statement.endswith(WIDE_LEAF):
+        why += ("; the wide level-0 leaf's names are known only to a flock-verify built from a tree whose "
+                "Flock/Tags.lean lists them, so this says nothing of the proof")
+    return why
+
+
 class Lean:
     """Lean `flock-verify verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
     file and tables archived once, in scratch outside ``out`` (`close` removes it); ``statement``, the one `verify` sets
-    up. `verify` runs in `verifier_env`: under the verifier's allocator setting unless this process's environment sets
+    up; ``program``, the Program's descriptor `verify` is handed (``--program``), archived with them: without it `verify`
+    refuses every session, for lack of its program. A verdict keeps what `verify` says of the Program (`PROGRAM_FIELDS`).
+    `verify` runs in `verifier_env`: under the verifier's allocator setting unless this process's environment sets
     its own, which both the seconds and the peak read."""
 
-    def __init__(self, lean: str, d: Path, out: Path, statement: str = STATEMENT_ID) -> None:
-        self.lean, self.out, self.statement = lean, out, statement
+    def __init__(self, lean: str, d: Path, out: Path, statement: str = STATEMENT_ID, program: Path | None = None) -> None:
+        self.lean, self.out, self.statement, self.program = lean, out, statement, program
         self.archive = Path(tempfile.mkdtemp(prefix="server-rate-archive-"))
         tables = sorted(str(f) for f in (d / "tables").glob("*") if f.is_file()) if (d / "tables").is_dir() else []
-        p = subprocess.run([lean, "archive-put", str(self.archive), str(d / "circuit.txt"), str(d / "pub.bin"), *tables],
-                           capture_output=True, text=True)
+        p = subprocess.run([lean, "archive-put", str(self.archive), str(d / "circuit.txt"), str(d / "pub.bin"), *tables,
+                            *([str(program)] if program else [])], capture_output=True, text=True)
         (out / "archive-put.log").write_text(p.stdout + p.stderr)
         self.keys = {Path(x.split()[1]).name: x.split()[0] for x in p.stdout.splitlines() if len(x.split()) == 2}
         self._one = threading.Lock()
@@ -290,7 +346,8 @@ class Lean:
 
     def __call__(self, s) -> dict:
         cmd = [self.lean, "verify", "--statement", self.statement, "--archive", str(self.archive),
-               "--circuit", self.keys.get("circuit.txt", ""), "--public", self.keys.get("pub.bin", ""), "--zk",
+               "--circuit", self.keys.get("circuit.txt", ""), "--public", self.keys.get("pub.bin", ""),
+               *(["--program", self.keys.get(self.program.name, "")] if self.program else []), "--zk",
                "--session", str(s.dir)]
         log = self.out / f"lean-{s.label.replace('/', '-')}.log"
         with self._one, open(log, "w") as f:
@@ -302,9 +359,10 @@ class Lean:
             wall = time.monotonic() - t
             f.write(stdout)
         line = next((x for x in stdout.splitlines() if x.startswith("VERDICT ")), None)
-        v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode})"}
-        return {"accepted": v.get("accepted") is True, "why": v.get("why"), "wall_s": round(wall, 2),
-                "cpu_s": round(ru.ru_utime + ru.ru_stime, 2), "user_s": round(ru.ru_utime, 2),
+        v = (json.loads(line.split(" ", 1)[1]) if line
+             else {"accepted": False, "why": no_verdict(self.statement, p.returncode, log.read_text(errors="replace"))})
+        return {"accepted": v.get("accepted") is True, "why": v.get("why"), **{k: v[k] for k in PROGRAM_FIELDS if k in v},
+                "wall_s": round(wall, 2), "cpu_s": round(ru.ru_utime + ru.ru_stime, 2), "user_s": round(ru.ru_utime, 2),
                 "maxrss_gib": round(ru.ru_maxrss / 2**20, 2)}
 
 
@@ -312,8 +370,9 @@ def one(a, dev: str, t: str, K: int) -> dict:
     st, n, d = staged(Path(a.staged), t, a.tmpl_unit_bin)
     out = Path(a.out) / f"{t}-k{K}"
     out.mkdir(parents=True, exist_ok=True)
-    statement = STATEMENT_ID if st.tmpl_unit is None else FC.TMPL_STATEMENT
-    lean = Lean(a.lean, d, out, statement) if a.lean and K == 1 and a.lean_sessions else None
+    statement = (STATEMENT_ID if st.tmpl_unit is None else FC.TMPL_STATEMENT) + (WIDE_LEAF if a.wide_leaf else "")
+    program = Path(a.lean_program) if a.lean_program else None
+    lean = Lean(a.lean, d, out, statement, program) if a.lean and K == 1 and a.lean_sessions else None
     draw = {"law": "subset", "population": n, "k": n, "units": list(range(n))}
     timed_n = max(a.sessions, 8 * K)
     total, window = K * a.warm + timed_n, K * (a.ahead + 2)
@@ -321,9 +380,10 @@ def one(a, dev: str, t: str, K: int) -> dict:
     gpu, t_start, cpu0 = Device(dev), time.monotonic(), throttled()
     wall = time.time() - t_start
     devices, stage = [dev], json.loads((d / "stage.json").read_text())
-    rec: dict = {"type": t, "provers": K, "gpus": len(devices), "cores": cores(), "n": n, "pin": st.pin, "verify_ahead": a.ahead,
+    rec: dict = {"type": t, "provers": K, "wide_leaf": a.wide_leaf, "gpus": len(devices), "cores": cores(), "n": n, "pin": st.pin,
+                 "verify_ahead": a.ahead,
                  "warm": a.warm, "sessions": timed_n, "device": dev, "stage": stage | statement_blocks(stage)}
-    ps = ProofServer(a.bin, out, devices=devices, provers=K, verify_ahead=a.ahead, verdicts=1,
+    ps = ProofServer(a.bin, out, devices=devices, provers=K, verify_ahead=a.ahead, verdicts=1, wide_leaf=a.wide_leaf,
                      env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
     host = Host(ps)
     provers_cpu = lambda: cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))  # noqa: E731
@@ -420,6 +480,9 @@ def one(a, dev: str, t: str, K: int) -> dict:
             except Exception as e:  # noqa: BLE001 -- a failed verdict is recorded, not raised
                 rec["lean"].append({"label": s.label, "error": str(e)[:400]})
         lean.close()
+    # read before the records are thinned below: what each finished session says it ran
+    ran = Counter(str(((r["s"].live or {}).get("identity") or {}).get("profile") or "none") for r in done if r["s"].live)
+    rec["profile"] = {"asked": PROFILES[a.wide_leaf], "ran": dict(sorted(ran.items()))}
     with open(out / "sessions.jsonl", "w") as f:
         for r in done:
             live = {k: v for k, v in (r["s"].live or {}).items() if k not in ("verdict", "buckets", "roots", "unit_draw", "identity")}
@@ -428,7 +491,7 @@ def one(a, dev: str, t: str, K: int) -> dict:
                                 "prover": r["s"].prover, "error": r["error"], "live": live}, default=str) + "\n")
     with open(out / "device.tsv", "w") as f:
         f.writelines(f"{x - t_start:.3f}\t{u:g}\t{m:g}\n" for x, u, m in gpu.samples)
-    if why := void_reasons(len(bad), len(done), rec["exits"], out):
+    if why := void_reasons(len(bad), len(done), rec["exits"], out) + version_reasons(rec["profile"]["asked"], rec["profile"]["ran"]):
         rec |= {"void": why, "statements_per_s": None}
     return rec
 
@@ -446,7 +509,11 @@ def main() -> int:
     ap.add_argument("--ahead", type=int, default=2)
     ap.add_argument("--lean", default=None)
     ap.add_argument("--lean-sessions", type=int, default=2)
+    ap.add_argument("--lean-program", default=None, help="the row's Program's descriptor, which Lean `verify` is handed "
+                    "(--program); without it every Lean verdict is its refusal of a session without its program")
     ap.add_argument("--tmpl-unit-bin", default=None, help="flock-tmpl-unit: places a templated statement's unit")
+    ap.add_argument("--wide-leaf", action="store_true",
+                    help="the wide level-0 leaf's statement version: every prover and verifier runs with --wide-leaf")
     ap.add_argument("--deadline", type=float, default=0, help="UTC epoch seconds after which no type and K starts")
     a = ap.parse_args()
     out = Path(a.out)

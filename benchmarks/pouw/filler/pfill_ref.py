@@ -28,6 +28,16 @@ for _name, _path in (("dfill_ref", Path(__file__).with_name("dfill_ref.py")),
 smix, dseed = sys.modules["dfill_ref"].smix, sys.modules["dfill_ref"].dseed
 RF = sys.modules["receipt_folds"]  # the receipts reference: the folds' steps, key rules and pfill's lane starts
 
+#: what the tests and the receipts reference's conformance check read
+__all__ = [
+    "BITS", "BU", "CTR_B", "CTR_KEY", "DOMS", "DOM_BU", "DUO", "E2M1", "KINDS", "LI", "M32", "R9", "RAM", "S8",
+    "TN", "W", "XIN13", "XOR", "absorb", "block", "bu_columns", "bu_products", "digest", "dom_of", "fold", "ho_ok",
+    "key_ok", "key_ok_r9", "keys", "packed_receipt", "packed_words", "popcount", "q_receipt", "q_words", "receipt",
+    "rotl", "rows", "tile_words", "u_of", "words",
+]
+
+#: a uint32 word, or an array of them
+U32 = np.ndarray | int
 W, TN = 8, 1024
 DOM = 0x5046494C4C2D7631  # "PFILL-v1": the s8 tile
 DOM4 = 0x5046494C4C2D6634  # "PFILL-f4": the e2m1 tile
@@ -88,7 +98,8 @@ def keys(rows: np.ndarray, r9: bool = False) -> tuple[int, int, int, int]:
     return RF.pfill_keys(rows, r9)
 
 
-def absorb(nc: int, y, z, d0, d1, d2, d3, a0, a1, k0, k1):
+def absorb(nc: int, y: U32, z: U32, d0: U32, d1: U32, d2: U32, d3: U32, a0: U32, a1: U32, k0: U32,
+           k1: U32) -> tuple[U32, U32]:
     """One MMA's step of a lane's chain, (y, z) from its words (d0, d1, d2, d3) = rows (g, g + 8) x columns (2t, 2t + 1),
     by the receipts reference's steps; every argument uint32 (arrays or scalars)."""
     if nc == RAM:
@@ -196,7 +207,10 @@ def ho_ok(c0: int, c1: int, tile: int, steps: int, kind: int = S8, w: int = W) -
     kind, tn = int(kind), 128 * w
     a = a_rows(c0, c1, tile, steps, kind, w).reshape(w, steps, 16)
     full = np.uint64((1 << (64 if kind == E2M1 else 32)) - 1)
-    same = lambda x, y: ((x == y) | (x == (y ^ full))).any()  # noqa: E731
+
+    def same(x: np.ndarray, y: np.ndarray) -> np.bool_:
+        return ((x == y) | (x == (y ^ full))).any()
+
     if same(a[:, :, :8], a[:, :, 8:]) or same(a[:, :-4, 8:], a[:, 4:, :8]):
         return False
     n = np.arange(tn // 8)[:, None] * 8 + 2 * np.arange(4)[None, :]  # [j, t]: column 8 j + 2 t

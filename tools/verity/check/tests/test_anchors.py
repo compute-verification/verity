@@ -1,5 +1,5 @@
 """`anchors.py`: a move that leaves a `Path(__file__)` join reaching somewhere else is listed, one that keeps every target is
-not."""
+not; `importlib.resources.files` is read as the directory of what it names."""
 from __future__ import annotations
 
 import ast
@@ -73,6 +73,67 @@ def test_the_evaluator_reads_each_anchored_form():
     assert A.joins("a/b/c.py", LIB) == [(2, ""), (3, "data/table.json"), (4, "pkg/target/release"), (5, "a/b"),
                                         (9, "a/b/fixtures")]
     assert A.joins("a/b/c.py", "X = 1\n") == []
+
+
+#: a resolver as a caller that knows the import roots passes: a package's directory, and for a module the one holding it
+PACKAGE = {"pkg": "src/pkg", "pkg.ops": "src/pkg/ops", "pkg.ops.mufu": "src/pkg/ops"}.get
+
+FILES = '''from importlib import resources
+from importlib.resources import files
+from pathlib import Path
+ROOT = Path(str(resources.files("pkg"))).resolve().parent
+MANIFESTS = ROOT / "manifests"
+SESSION = ROOT.parent / "benchmarks" / "session"
+TABLES = str(resources.files(__package__) / "tables")
+PINS = files("pkg.ops") / "pins" / NAME
+
+
+def home(rel):
+    return str(Path(str(resources.files(rel.split("/", 1)[0]))).resolve().parent)
+'''
+
+
+def test_resources_files_is_the_directory_of_what_it_names():
+    def at(src: str, package=PACKAGE, bare=frozenset()) -> str | None:
+        return A.anchor(ast.parse(src, mode="eval").body, "src/pkg/ops/mufu.py", {}, package, bare)
+
+    assert at('resources.files("pkg")') == "src/pkg"
+    assert at('importlib.resources.files("pkg.ops.mufu") / "tables"') == "src/pkg/ops/tables"
+    assert at('str(resources.files("pkg.ops") / "tables")') == "src/pkg/ops/tables"
+    assert at('Path(str(resources.files("pkg"))).resolve().parent') == "src"
+    assert at('pathlib.Path(resources.files("pkg")).parents[1]') == ""
+    for own in ("resources.files(__package__)", "resources.files(__name__)", "importlib.resources.files()"):
+        assert at(own, package=None) == "src/pkg/ops"
+    assert at('files("pkg")') is None and at('files("pkg")', bare=frozenset({"files"})) == "src/pkg"
+    assert at('resources.files("pkg")', package=None) is None, "a literal name is read only through a resolver"
+    assert at('resources.files("gone")') is None and at('resources.files(rel.split("/", 1)[0])') is None
+    assert at('resources.files("pkg", "ops")') is None and at('tree.files("pkg")') is None
+
+
+def test_a_chain_on_resources_files_is_read_through_its_names():
+    """A literal name's chain reaches from its package's directory, each bound name carrying it on; a name given at run
+    time isn't read, nor, without a resolver, a literal one, while `__package__` is the file's own directory either way."""
+    assert A.joins("src/pkg/config.py", FILES, PACKAGE) == [
+        (4, "src"), (5, "src/manifests"), (6, "benchmarks/session"), (7, "src/pkg/tables"), (8, "src/pkg/ops/pins")]
+    assert A.joins("src/pkg/config.py", FILES) == [(7, "src/pkg/tables")]
+    assert A.joins("src/pkg/config.py", FILES.replace("from importlib.resources import files\n", "\n"), PACKAGE)[-1] == (
+        7, "src/pkg/tables"), "a bare `files` the file doesn't import from `importlib.resources` is another function"
+
+
+def test_path_or_str_of_a_bound_name_is_a_use_and_a_join_on_it_is_read():
+    src = ('import pathlib, sys\nHERE = pathlib.Path(__file__).parent\nsys.path.insert(0, str(HERE))\n'
+           'DATA = Path(str(HERE)) / "data"\nME = str(__file__)\n')
+    assert A.joins("a/b/c.py", src) == [(2, "a/b"), (4, "a/b/data"), (5, "a/b/c.py")]
+
+
+def test_a_file_moved_away_from_its_packages_data_is_listed(tmp_path):
+    root = _repo(tmp_path)
+    (root / "pkg/src/lib.py").write_text('from importlib import resources\nDATA = resources.files(__package__) / "fixtures"\n')
+    _git(root, "add", "-A")
+    _git(root, "commit", "-qm", "package data")
+    assert _move(root, ("pkg/src", "pkg/core")) == []
+    assert _move(root, ("pkg/core/lib.py", "pkg/lib.py")) == [
+        "pkg/core/lib.py:2 (now pkg/lib.py): reached pkg/core/fixtures, which went to pkg/core/fixtures; no join there reaches it"]
 
 
 def test_a_move_that_keeps_depth_and_neighbours_passes_once_its_paths_are_rewritten(tmp_path):

@@ -249,17 +249,15 @@ units the expanded rows give, each unit `(template, unit)`. -/
 def Wiring.Reads (c : Wiring) (x y : String × Int) : Prop :=
   ∃ w ∈ c.wires, ∃ e ∈ w.entries, x = (e.2.1, e.2.2.1) ∧ y = (e.1.1, (e.1.2.1 : Int))
 
-/-- **The wires `check` accepts are acyclic**: no unit reads itself through a chain of wires, since along every wire the
-rank of the reader unit's range in the order exceeds the writer's: the writer lies in the wire's box over the reader
-indices in the reader unit's range (`Wire.writerAt_mem_box`), and the order's closed form ranks every range meeting that
-box below it. -/
-theorem check_acyclic {c : Wiring} {S : Summary} (h : check c = .ok S) (x : String × Int) :
-    ¬ Relation.TransGen c.Reads x x := by
+/-- **The wires `check` accepts rank the units**: the rank of a unit's range in the order, under which along every wire
+the reader unit's exceeds the writer's: the writer lies in the wire's box over the reader indices in the reader unit's
+range (`Wire.writerAt_mem_box`), and the order's closed form ranks every range meeting that box below it. -/
+theorem check_ranked {c : Wiring} {S : Summary} (h : check c = .ok S) :
+    ∃ ρ : String × Int → Nat, ∀ x y, c.Reads x y → ρ x < ρ y := by
   obtain ⟨o, ho, hin⟩ := checkRef_order (check_sound h).2
   have hok := orderOf_ok ho
-  let ρ : String × Int → Nat := fun x => (rangeOf o x.1 x.2.toNat).getD 0
-  have step : ∀ x y, c.Reads x y → ρ x < ρ y := by
-    rintro x y ⟨w, hw, e, he, rfl, rfl⟩
+  refine ⟨fun x => (rangeOf o x.1 x.2.toNat).getD 0, ?_⟩
+  · rintro x y ⟨w, hw, e, he, rfl, rfl⟩
     obtain ⟨rt, wt, hr, hwt, hc, hd, hb⟩ := wireCode_shape (check_wireCode h w hw)
     simp only [boundsOk, Bool.and_eq_true, decide_eq_true_eq] at hb
     simp only [Wire.entries, List.mem_map, List.mem_range] at he
@@ -294,8 +292,14 @@ theorem check_acyclic {c : Wiring} {S : Summary} (h : check c = .ok S) (x : Stri
     have hbx := w.writerAt_mem_box hlo hhi
     obtain ⟨b, hb', hbm⟩ := rangeOf_some hok hwt (u := (w.writerAt i).toNat) (by omega)
     have := hblk b (mem_ranksIn_iff.2 ⟨_, Int.toNat_le_toNat hbx.1, by have := Int.toNat_le_toNat hbx.2; omega, hbm⟩)
-    simp only [ρ, Int.toNat_natCast, ha, hb', Option.getD_some]
+    simp only [Int.toNat_natCast, ha, hb', Option.getD_some]
     exact this
+
+/-- **The wires `check` accepts are acyclic**: no unit reads itself through a chain of wires, since the wires rank the
+units (`check_ranked`). -/
+theorem check_acyclic {c : Wiring} {S : Summary} (h : check c = .ok S) (x : String × Int) :
+    ¬ Relation.TransGen c.Reads x x := by
+  obtain ⟨ρ, step⟩ := check_ranked h
   have chain : ∀ a b, Relation.TransGen c.Reads a b → ρ a < ρ b := by
     intro a b hab
     induction hab with
@@ -414,6 +418,17 @@ theorem writerOf_eq {c : Wiring} {S : Summary} (h : check c = .ok S) (t : String
   have hw := check_wires h
   rw [List.find?_flatMap, map_findSome?, Summary.writerOf, hS]
   exact findSome?_congr fun w hw' => (entries_find? (hw w hw').1 (hw w hw').2 t u p r).symm
+
+/-- **A row's writer is a unit its reader's unit reads**: the writer `Summary.writerOf` gives a reader row is an edge of
+the dataflow between units, so it ranks below the reader (`check_ranked`). -/
+theorem writerOf_reads {c : Wiring} {S : Summary} (h : check c = .ok S) {t : String} {u : Nat} {p : String} {r : Nat}
+    {wt : String} {wu : Int} {out : String} (hw : S.writerOf t u p r = some (wt, wu, out)) :
+    c.Reads (wt, wu) (t, (u : Int)) := by
+  rw [writerOf_eq h] at hw
+  obtain ⟨e, he, h2⟩ := Option.map_eq_some_iff.1 hw
+  obtain ⟨w, hw', hew⟩ := List.mem_flatMap.1 (List.mem_of_find?_eq_some he)
+  have h1 : e.1 = (t, u, p, r) := by simpa using List.find?_some he
+  exact ⟨w, hw', e, hew, by rw [h2], by rw [h1]⟩
 
 /-! ## The counts multiplied through -/
 
