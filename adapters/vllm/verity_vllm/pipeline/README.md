@@ -95,8 +95,8 @@ imports `ChallengerGate`), `commit_plan` (`key`, `keyed`, `write`), `cpu_replay`
 import `commit` for `assert_pristine`, `baseline_state`, `class_coverage`, `git_head`, `make_committer` and
 `run_workload` (the benchmarks for three of them), `c2_replay` for `arrivals`, `programs_of_record`, `request_labels`,
 `rss_kb` and `seed_of`, `gpu_lease` for the lease (`acquire`, `give_back`, `leased`, `run`, `run_main`,
-`hide_devices`, `use_environ`, `cuda_initialised`) and its record's names (`DRIVER`, `MATCH_LEG_KEPT`, `RECORD`,
-`WEIGHTS_HASH`), and `source_identity` for `TREE`, `code_identity_of` and `tree_identity`. `commit_arb` and
-`compiled_merge` are commands and nothing else, only `commit` reads `admission_bound`, and only `admission_bound` and
-`cpu_replay` read `telemetry.admission`. Four private names are imported from another module, all of `gpu_lease`:
-`_HELD`, `_kept_by`, `_no_device` and `_watch`.
+`hide_devices`, `use_environ`, `cuda_initialised`), its record's names (`DRIVER`, `RECORD`, `WEIGHTS_HASH`) and the
+reason a Match stage keeps its GPUs, and `source_identity` for `TREE`, `code_identity_of` and `tree_identity`.
+`commit_arb` and `compiled_merge` are commands and nothing else, only `commit` reads `admission_bound`, and only
+`admission_bound` and `cpu_replay` read `telemetry.admission`. Four private names are imported from another module,
+all of `gpu_lease`: `_HELD`, `_kept_by`, `_no_device` and `_watch`.
