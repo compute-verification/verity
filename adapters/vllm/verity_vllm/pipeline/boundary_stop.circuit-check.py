@@ -6,7 +6,7 @@ from typing import Any
 
 
 def _stop_roots() -> list[Any]:
-    """`EgressStop_v1` at a small class with two stop ids and with none, and at T = 1,024 ids with GLM-5.3's three
+    """`EgressStop_v2` at a small class with two stop ids and with none, and at T = 1,024 ids with GLM-5.3's three
     stop ids and a model of 131,072 ids."""
     from verity_vllm.pipeline.boundary_stop import egress_stop
 
