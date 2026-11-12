@@ -1,0 +1,70 @@
+# The training harness's two numbers, where it still says rho: what
+# `tools/move/rename.py --map tools/move/slowdown_harness_map.toml` renames in `benchmarks/training_slowdown/`. It moves
+# no path and renames no module, key or Lean declaration, so its change is an ordinary one, reviewed as such; the
+# harness's own suite is its evidence.
+# - The harness has two numbers. S, a config's slowdown, is p times the other one and keeps its names. The other is
+#   what the slowdown calculator gives at a job's record, the slowdown lower bound there: `bound` in code, "the bound"
+#   in prose.
+# - In the grade (`grade.py` and its test): `rho_of` is `bound_of`, a local `rho` is `bound`, and the constant that
+#   says how the bound of record stands to it, `BOUND_IS_RHO`, is `OF_RECORD_IS_BOUND`. The block's `text` calls
+#   the bound of record `of_record`, as `grade` and `bound_of` do, so `bound` is free there.
+# - In `formalism.py`, whose `bound()` is the one bound over kinds: `published`'s local is `value`, and Fit's ratio
+#   c/(c − d), which is no bound of the calculator's, is `fit_ratio`. A test's helper that computes the products term
+#   by hand is `term`.
+# What stays: every key that says rho (`"rho"`, `"rho_fit"`), quoted or in backticks, since `slowdown.json` stores
+# `published`'s and the others feed it; ρ inside a formula (`S = p·ρ`, `C·ρ`, `ρ ≥ …`, the block's `S = p x rho`), which
+# is written out by hand; the calculator's directory and module, which its own move renames; and `work.py`'s ρ_a, a
+# row's rate.
+
+[words]
+
+# --- the grade
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/training_slowdown/grade.py", "benchmarks/training_slowdown/tests/test_grade.py"]
+words = { "BOUND_IS_RHO" = "OF_RECORD_IS_BOUND", "rho's products term is this bound" = "the bound's products term is this one", "rho is it" = "the bound is it", "beside rho and never in it" = "beside the bound and never in it", "rho is unmeasured" = "the bound is unmeasured", "ρ is unmeasured" = "the bound is unmeasured", 'add("rho",' = 'add("bound",', "rho" = "bound" }
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/training_slowdown/grade.py"]
+words = { "ρ, the bound of record and the periods ---------" = "the bound, the bound of record and the periods -", "where ρ is one" = "where the bound has an unmeasured kind" }
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/training_slowdown/grade.py", "benchmarks/training_slowdown/tests/test_grade.py",
+         "benchmarks/training_slowdown/tests/test_one_calculator.py", "benchmarks/training_slowdown/training_slowdown/calculator.py"]
+words = { "rho_of" = "bound_of" }
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/tests/test_grade.py"]
+words = { "test_rho_reads_the_first_planned_search_seed" = "test_the_bound_reads_the_first_planned_search_seed", "test_rho_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it" = "test_the_bound_is_the_traced_search_records_at_the_policy_and_s_is_p_times_it", "test_no_rho_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is_taken_again" = "test_no_bound_from_a_trace_the_grade_cannot_read_and_the_reason_says_how_it_is_taken_again", "test_no_rho_from_a_step_the_formalism_refuses_or_a_prefix_no_update_precedes" = "test_no_bound_from_a_step_the_formalism_refuses_or_a_prefix_no_update_precedes", "test_rho_is_the_bound_of_record_where_products_bind" = "test_the_bound_is_the_bound_of_record_where_products_bind", "test_the_bound_of_record_is_the_calculators_and_rho_follows_it" = "test_the_bound_of_record_is_the_calculators_and_the_bound_follows_it" }
+
+# --- the formalism
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/training_slowdown/formalism.py"]
+words = { "rho_fit" = "fit_ratio", "rho is unmeasured" = "the bound is unmeasured", "rho" = "value", "slowdown ρ" = "slowdown bound", "ρ is then only a lower bound" = "the bound then counts only the measured kinds" }
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/tests/test_formalism.py"]
+words = { "rho" = "term", "would score ρ = 1" = "would score a bound of 1" }
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/tests/test_one_calculator.py"]
+words = { "rho" = "bound" }
+
+# --- prose: the symbol, where it stands as a word
+
+[[words_in]]
+files = ["benchmarks/training_slowdown/README.md", "benchmarks/training_slowdown/grader/grader.py",
+         "benchmarks/training_slowdown/training_slowdown/*.py", "benchmarks/training_slowdown/training_slowdown/routes/__init__.py",
+         "benchmarks/training_slowdown/tests/test_grade.py", "benchmarks/training_slowdown/tests/test_formalism.py"]
+words = { ". ρ's products term is this bound" = ". The bound's products term is this bound of record", '"""ρ' = '"""The bound', ". ρ" = ". The bound", "the bound ρ" = "the bound", "no ρ" = "no bound", "No ρ" = "No bound", "its ρ" = "its bound", "whose ρ" = "whose bound", "the ρ" = "the bound", "a published ρ" = "a published bound", "record's ρ" = "record's bound", "grade's ρ" = "grade's bound", "console's ρ" = "console's bound", "v2's ρ" = "v2's bound", "published ρ" = "published bound", "the same ρ" = "the same bound", "ρ" = "the bound" }
+
+[rewrite]
+# Never rewritten: the earlier moves and their maps.
+exclude = ["tools/move/**"]
+
+[keep]
+# - a key, quoted or in backticks: stored (`slowdown.json`'s) or feeding the stored one; the block's row head is no key
+# - a formula, written out by hand: S = p·ρ, C·ρ, ρ ≥ …, and the block's own `S = p x rho`, ` x rho N` and `|C| x rho`
+# - the calculator's directory and module, which its move renames
+patterns = ['''(?<!add\()"rho(_fit)?"|'rho(_fit)?'|`rho(_fit)?`''', 'p·ρ', 'C·ρ', 'ρ ≥', 'p x rho', ' x rho \{', '\|C\| x rho', 'inference_only/rho', 'from rho import']
