@@ -1,9 +1,11 @@
 """a5's wiring negatives (`a5.wiring_negatives`) on a window whose layer 1 reads layer 0's rows: at two units a member, at one
 (the torch loop's wired circuit, `--cap 1`) and on a fan-out (every reader unit reading writer unit 0), each negative is
 stated and the verifier's wiring check refuses it. In the last two, rotating a wire's writers is the honest wire. Where no
-other unit writes a row of the reader's words, the unit is rewired to a row of other words, and that is refused too."""
+other unit writes a row of the reader's words, the unit is rewired to a row of other words, and that is refused too. In a
+shared-row member whose wired port is not its first, the flipped string is the one unit 0 reads at that port."""
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 
@@ -23,7 +25,8 @@ import a5
 
 GEMM = bind(G.Gemm, K=16, N=16, **G.GEMM_AMPERE)
 WIDE = bind(G.Gemm, K=16, N=32, **G.GEMM_AMPERE)
-GID, WID = descriptor_id(GEMM), descriptor_id(WIDE)
+BIG = bind(G.Gemm, K=16, N=256, **G.GEMM_AMPERE)
+GID, WID, BID = descriptor_id(GEMM), descriptor_id(WIDE), descriptor_id(BIG)
 UNITS = 4
 RNG = np.random.default_rng(0)
 
@@ -82,3 +85,46 @@ def test_a_shared_row_readers_flipped_wired_row_is_its_drawn_units_own():
     assert WI.string_at(reader, publics["R"], "cv", 0) == n * WI.BC_BYTES
     neg = a5.wiring_negatives((writer, reader), publics)
     assert neg["wired-row-not-its-writer-s-output (§16.13)"] == {"refused": True}
+
+
+class Held:
+    """A registered value as the committer reads it: its rows of 16-bit leaves, one salt a row, a root and each row's path
+    (stand-ins)."""
+
+    def __init__(self, name: str, rows: np.ndarray) -> None:
+        self.name = self.value = name
+        self.rows, self.words, self.word_bits, self.leaves = rows, rows.shape[1], 16, len(rows)
+        self.salts = [hashlib.shake_256(b"salt %d" % i).digest(WI.SALT_BYTES) for i in range(len(rows))]
+        self.root = hashlib.sha512(b"root " + name.encode()).digest()
+
+    def path(self, position: int) -> bytes:
+        return hashlib.sha512(b"path %d " % position + self.name.encode()).digest()
+
+
+def test_a_wired_row_is_flipped_where_its_unit_reads_it_in_a_shared_row_member_whose_wired_port_is_not_its_first():
+    """A reader whose ``x`` is a registered row of its own and whose ``w`` is its writer's output is a shared-row member, its
+    body its ports' tables and then its units' refs, with the wired port its second. The flipped string is the row of the
+    wired port's table that unit 0's ref names, so the wiring check refuses it; the body's second string is a row of the
+    ``x`` table, which no wire reads."""
+    xs = bf16(UNITS, 16)
+    circuit = I.Circuit("held", ((BIG, UNITS), (GEMM, UNITS)), external=(f"{BID}/x",),
+                        wires=(I.Wire(GID, "w", BID, "o0", at=0, radix=(UNITS,), base=0, step=(1,)),),
+                        registered=I.Registered({"xs": UNITS * 16},
+                                                reads=(I.Read(GID, "x", "xs", at=0, radix=(UNITS,), base=0, step=(16,)),)))
+    win = I.Window(circuit, "ab" * 64, {"law": "stratified", "k": 2}, 2, registered={"xs": Held("xs", xs)})
+    x, w = bf16(UNITS, 16), bf16(UNITS, 256, 16)
+    y = gemm(BIG, x, w)
+    win.record(BIG, [x, w], [y])
+    win.record(GEMM, [xs, y.reshape(UNITS, 16, 16)], [gemm(GEMM, xs, y.reshape(UNITS, 16, 16))])
+    c = win.close(salt_key=bytes(32))
+    ms = win.window.members
+    reader = next(m for m in ms if m.wired)
+    assert win.mismatches() == {} and reader.tables == (("x", 2), ("w", 2)) and [p for p, _o, _ws in reader.wired] == ["w"]
+    publics = {m.key: c.public_body(k) for k, m in enumerate(ms)}
+    assert WI.check(ms, publics) == {}
+    neg = a5.wiring_negatives(ms, publics)
+    assert set(neg) == {"chunk-wired-to-another-unit (§16.13)", "wired-row-not-its-writer-s-output (§16.13)"}
+    assert [name for name, v in neg.items() if not v["refused"]] == []
+    second = bytearray(publics[reader.key])
+    second[WI.BC_BYTES] ^= 1
+    assert WI.check(ms, {**publics, reader.key: bytes(second)}) == {}
