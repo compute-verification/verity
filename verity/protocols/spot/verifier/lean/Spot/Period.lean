@@ -41,15 +41,23 @@ namespace Spot.Period
 open Lean (Json)
 open Flock (V)
 
-/-- Why the ledger's half refuses: the ledger is not the auditor's (`coin`), it does not reach the monitoring period's
-end (`early`), a window is in no period (`outside`), a window's period is open or holds a session that is no window
-(`period`), or there is no window, a reserve never opened or a window not ended (`missing`). -/
+/-- Why a period's check refuses. The ledger's half: the ledger is not the auditor's (`coin`), it does not reach the
+monitoring period's end (`early`), a window is in no period (`outside`), a window's period is open or holds a session
+that is no window (`period`), or there is no window, a reserve never opened or a window not ended (`missing`). The
+audits' half (`Spot.PeriodAudit`): a window's session is not the one the ledger sealed, or did not run main's code or
+withhold its coins (`coin`); it sampled no registration (`missing`) or several (`members`); the evidence is not one
+case for each registration it sampled (`evidence`); the parameters at the window are not one-stage v2's (`names`); or
+one-stage v2 rejects a case (`audit`). -/
 inductive Code where
   | coin
   | early
   | outside
   | period
   | missing
+  | members
+  | evidence
+  | names
+  | audit
   deriving DecidableEq, Repr, Inhabited
 
 def Code.name : Code → String
@@ -58,6 +66,10 @@ def Code.name : Code → String
   | .outside => "outside"
   | .period => "period"
   | .missing => "missing"
+  | .members => "members"
+  | .evidence => "evidence"
+  | .names => "names"
+  | .audit => "audit"
 
 /-- The verifier's own parameters for the ledger's half (module docstring). -/
 structure Params where

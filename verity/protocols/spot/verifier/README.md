@@ -207,8 +207,17 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   stamped at or after its start to the first stamped at or after its stop, so monitoring periods that follow one
   another split the entries exactly whatever the stamps say. It refuses a ledger that does not reach the stop, a
   window in no period of the lane, a period left open or listing a session that is no window, a reserve never opened
-  and a window that has not ended. It reads the ledger only: no window is audited here, and nothing calls it yet but
-  its difftest.
+  and a window that has not ended. It reads the ledger only: no window is audited here.
+- **Sampled proofs' period** (`Spot/PeriodAudit.lean`, `verity/sampled-proofs/period/v1`, Lean only, with the same
+  reference): the check that every window of a lane's monitoring period passed the one-stage audit on its proofs
+  (`OneStageZk`), on the one sample its challenger session gave it. Its commitment is the auditor's ledger; its
+  evidence is the host's pins log and, for each window, the session's files and one case. The verifier's parameters
+  are the period's alone: a case supplies its registration's public file's digest and its sample's segment, and
+  nothing else of what one-stage reads. Only a window of one registration passes: a session whose signed log shows
+  coins of the sample's family released after several registrations (several ranks', or one registered again) is
+  refused, as is a public file that shares rows among members. It publishes each window with the registration
+  audited and the lane's other sessions, of which it holds nothing. Nothing calls it yet but its difftest, and it
+  has no executable.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).
