@@ -33,25 +33,31 @@ import time
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.acquire import as_loaded as AL
 from verity_vllm.acquire.sources import taps as TAPS
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.component_programs import post_load_tensors
+from verity_vllm.commit import step_rows
 from verity_vllm.config import UsageError, group, option, workload_arg
 from verity_vllm.engine import served as SV
-from verity_vllm.pipeline import commit_coins as CC, replay_bundle as RB
+from verity_vllm.log import init_logger
+from verity_vllm.pipeline import commit_coins as CC
+from verity_vllm.pipeline import replay_bundle as RB
 from verity_vllm.pipeline.tp import c2 as C2
 from verity_vllm.pipeline.tp import config_run as TPC
 from verity_vllm.pipeline.tp import phases as PH
+from verity_vllm.pipeline.tp import run_root as RT
 from verity_vllm.pipeline.tp import serving_rows as SRT
 from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_shard_from
-from verity_vllm.commit import step_rows
-from verity_vllm.pipeline.tp import run_root as RT
 from verity_vllm.records.commit_run import TP_SCHEMA as SCHEMA
+from verity_vllm.records.schema_ids import LATE_READ_CHECK_SCHEMA
+
+logger = init_logger(__name__)
 
 
 def tree_of_record(root: str | os.PathLike | None = None) -> dict:
@@ -81,7 +87,10 @@ def schedule(pairs: int, only_arm: str | None) -> list[tuple[int, str]]:
 def ring_slots(committer: str, window_mb: str | None, window_slots: str | None, retain: str | None) -> int | None:
     """The ranks' window ring slots as their committers read VERITY_WINDOW_MB / VERITY_WINDOW_SLOTS / VERITY_RETAIN (an unset window
     is `native_collect.window_mb_default`), None when they stage in per-step blocks."""
-    from verity_vllm.commit.committer.native_collect import WINDOW_SLOTS, window_mb_default
+    from verity_vllm.commit.committer.native_collect import (
+        WINDOW_SLOTS,
+        window_mb_default,
+    )
 
     window = (window_mb or "").strip() or window_mb_default(committer == "native_collect_v2b", retain or "device")
     return int(window_slots or WINDOW_SLOTS) if float(window) > 0 else None
@@ -108,7 +117,8 @@ def build_program_digest(d: str | None) -> tuple[str | None, str | None]:
             return components_fold_digest(json.loads(c.read_text())["program"]["digest"] for c in comps), kind
         kind = "request Program"
         return json.loads((P / "result.json").read_text())["program"]["digest"], kind
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        logger.warning("[tp2commit] the Build's record under %s is unreadable (read as %s): %r", d, kind or "a workload Program", e)
         return None, kind
 
 
@@ -163,16 +173,16 @@ class Options:
     required_manifest: str | None = option("--required-manifest", default=None, help="the merged TP manifest (verity_vllm.pipeline.cli build-global --programs-root <rank r dir> --rank r ... --ranks W): the population of record per rank (rows with rank=r)")
     relabel_rank: str | None = option("--relabel-rank", default=None, help="NEGATIVE ('relabel rank 0 as rank 1'): `<from>:<to>` -- rank <from> tags its partials part_rank<to>; coverage must FAIL naming rank <from>")
     wrong_root_rank: int | None = option("--wrong-root-rank", type=int, default=None, help="NEGATIVE ('wrong root on one rank'): the commitment vector carries a wrong run root for this rank; its openings/context must FAIL")
-    xrank_per_stratum: int = option("--xrank-per-stratum", type=int, default=2, help="cross-rank collective-output pass: picks per (site, kind, phase) stratum, seeded by the pair's combined root; " "each pick evaluates the committed received output against the definition over the two ranks' COMMITTED partials (all_reduce: bf16(f32+f32); " "all_gather: concat) on a row subset; a FAIL names the site; 0 disables (component result None)")
-    flip_partial: str | None = option("--flip-partial", default=None, help="NEGATIVE: `<rank>:<module suffix>[:ulp]` -- that rank commits its genuine partial at that ONE site but feeds the collective a different " "tensor (element 0: 2x+1024, or with `:ulp` ONE bf16 ulp -- the discriminating case where tokens stay equal and only the cross-rank pass can name it); " "every per-rank record stays self-consistent; the cross-rank collective-output pass must FAIL naming the site")
+    xrank_per_stratum: int = option("--xrank-per-stratum", type=int, default=2, help="cross-rank collective-output pass: picks per (site, kind, phase) stratum, seeded by the pair's combined root; each pick evaluates the committed received output against the definition over the two ranks' COMMITTED partials (all_reduce: bf16(f32+f32); all_gather: concat) on a row subset; a FAIL names the site; 0 disables (component result None)")
+    flip_partial: str | None = option("--flip-partial", default=None, help="NEGATIVE: `<rank>:<module suffix>[:ulp]` -- that rank commits its genuine partial at that ONE site but feeds the collective a different tensor (element 0: 2x+1024, or with `:ulp` ONE bf16 ulp -- the discriminating case where tokens stay equal and only the cross-rank pass can name it); every per-rank record stays self-consistent; the cross-rank collective-output pass must FAIL naming the site")
     omit_partial_site: str | None = option("--omit-partial-site", default=None, help="NEGATIVE: `<rank>:<module suffix>` -- that rank drops the partial of ONE collective site only (e.g. 1:layers.3.mlp.down_proj); coverage must FAIL naming the rank and the site")
     omit_rank_partials: int | None = option("--omit-rank-partials", type=int, default=None, help="NEGATIVE ('omit rank 1's partials'): this rank collects collective outputs only; coverage must FAIL naming this rank")
     value_check: bool = option("--value-check", default=False, action="store_true", help="one extra instrumented run per rank: committed bytes vs hook-time reference clones + re-execution (module outputs and TP partials)")
-    match_dir: str | None = option("--match-dir", default=None, help="tp2_match run dir (<dir>/capture/tokens.json = the Match record's per-request generated ids): per rank, " "every committed sampled-ids row is attributed to its request by the rank's request->rows map and compared to the record; a mismatch FAILS the row")
-    swap_requests: str | None = option("--swap-requests", default=None, help="NEGATIVE: `<rank>:<ra>:<rb>[:<lo>-<hi>]` -- that rank labels request ra's rows as rb and rb's as ra (equal-count requests keep " "the identity counts; with `:<lo>-<hi>` the swap applies ONLY on engine steps lo..hi = the decode-only swap: prefill rows untouched, each swapped row one token, " "coverage/composition blind -- the per-(step, request) attribution alone must FAIL naming the rank)")
-    no_match_oracle: bool = option("--no-match-oracle", default=False, action="store_true", help="with --match-dir: skip the per-rank compare of every committed TP partial / MoE received output against " "the capture recorder's stored collectives (TP family); default = run it and gate on it")
-    require_fold_match: bool = option("--require-fold-match", default=False, action="store_true", help="the --match-dir MUST carry the per-rank fold Match (fold_match/tp2_fold_match.json + " "tp2_rank_match.json): its peer_binding digests are bound to the recorder rows the match oracle compared the committed partials against, " "both ranks, every (step, k); absence or any mismatch FAILs the row by name (default: absent = component None, Match collective-level ◐)")
-    no_sampled_replay: bool = option("--no-sampled-replay", default=False, action="store_true", help="skip the per-rank sampled exact replay + boundary linkage (default with " "--required-manifest: run it on every rank and gate on it -- O1: absence / partial / mismatch = FAIL named)")
+    match_dir: str | None = option("--match-dir", default=None, help="tp2_match run dir (<dir>/capture/tokens.json = the Match record's per-request generated ids): per rank, every committed sampled-ids row is attributed to its request by the rank's request->rows map and compared to the record; a mismatch FAILS the row")
+    swap_requests: str | None = option("--swap-requests", default=None, help="NEGATIVE: `<rank>:<ra>:<rb>[:<lo>-<hi>]` -- that rank labels request ra's rows as rb and rb's as ra (equal-count requests keep the identity counts; with `:<lo>-<hi>` the swap applies ONLY on engine steps lo..hi = the decode-only swap: prefill rows untouched, each swapped row one token, coverage/composition blind -- the per-(step, request) attribution alone must FAIL naming the rank)")
+    no_match_oracle: bool = option("--no-match-oracle", default=False, action="store_true", help="with --match-dir: skip the per-rank compare of every committed TP partial / MoE received output against the capture recorder's stored collectives (TP family); default = run it and gate on it")
+    require_fold_match: bool = option("--require-fold-match", default=False, action="store_true", help="the --match-dir MUST carry the per-rank fold Match (fold_match/tp2_fold_match.json + tp2_rank_match.json): its peer_binding digests are bound to the recorder rows the match oracle compared the committed partials against, both ranks, every (step, k); absence or any mismatch FAILs the row by name (default: absent = component None, Match collective-level ◐)")
+    no_sampled_replay: bool = option("--no-sampled-replay", default=False, action="store_true", help="skip the per-rank sampled exact replay + boundary linkage (default with --required-manifest: run it on every rank and gate on it -- O1: absence / partial / mismatch = FAIL named)")
     replay_per_stratum: int = option("--replay-per-stratum", type=int, default=2)
     replay_max: int = option("--replay-max", type=int, default=2000, help="cap on the stratified sample per rank (never below one VU per stratum)")
     replay_seed: int | None = option("--replay-seed", type=int, default=None, help="targeted seed, prover-chosen (default: each rank's run root's first 8 bytes, no coin: a measurement, O6)")
@@ -183,13 +193,13 @@ class Options:
                                               "seals a replay bundle (<out>/replay_bundle_p<pair>_rank<r>/, verity_vllm.pipeline.replay_bundle) and the Commit's "
                                               "verdict stays PENDING (exit 0 when every check this process runs passes) until `verity-vllm tp-commit-replay <out>` "
                                               "replays the bundles on CPU against the checkpoint and decides it as this process would have (TP2 and TP8 only: `c2.deferral_skipped`)")
-    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the PINNED checkpoint snapshot (safetensors shards + config.json): each rank " "builds its weights of record from its rank Program's shard map (engine-free) and compares every served shard's sha256 " "to it right after register_weights; a difference FAILs named (rank, param). Required with --required-manifest unless " "--no-weights-pin (then the record says 'weights unpinned (MAN-09)' and the Commit FAILs closed)")
+    checkpoint_dir: str | None = option("--checkpoint-dir", default=None, help="the PINNED checkpoint snapshot (safetensors shards + config.json): each rank builds its weights of record from its rank Program's shard map (engine-free) and compares every served shard's sha256 to it right after register_weights; a difference FAILs named (rank, param). Required with --required-manifest unless --no-weights-pin (then the record says 'weights unpinned (MAN-09)' and the Commit FAILs closed)")
     checkpoints_manifest: str | None = option("--checkpoints-manifest", default=None, help="manifests/checkpoints.json (default: the repo's) -- the shard sha256s of record")
     checkpoint_model: str | None = option("--checkpoint-model", default=None, help="HF repo id selecting the checkpoints.json entry when --checkpoint-dir is not its local_path")
     no_weights_pin: bool = option("--no-weights-pin", default=False, action="store_true", help="do not require the weights pin (the record stays 'weights unpinned (MAN-09)'; verdict FAIL closed)")
-    serve_shard_from: list[str] | None = option("--serve-shard-from", action="append", default=None, help="NEGATIVE ('TP shard / reference mismatch'): <rank>:<served param name>:<from_rank> -- rank <rank> serves " "rank <from_rank>'s shard of that parameter, composed from the SAME pinned checkpoint (every byte is checkpoint bytes; the shard set over the " "world is unchanged; only the rank<->slice assignment the rank Program's shard map prescribes is wrong -- a whole-tensor hash cannot see it). " "The per-rank weights pin must FAIL naming the rank and the parameter. Repeatable: 0:X:1 1:X:0 = the two ranks swap their shards of X.")
-    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE (flipweight, TP form): <rank>:<served param name>:<flat index>[:<value>] -- one element of that " "rank's shard changed before register_weights; the weights pin must FAIL naming (rank, param)")
-    replay_challenge: str | None = option("--replay-challenge", default=None, help="a challenge string (hex/string): each rank's replay " "seed = sha256(challenge | that rank's run root)[:8]; who issued it is not checked, and --challenger-gate refuses this flag; without it the seed is the rank's run root alone, no coin (a measurement)")
+    serve_shard_from: list[str] | None = option("--serve-shard-from", action="append", default=None, help="NEGATIVE ('TP shard / reference mismatch'): <rank>:<served param name>:<from_rank> -- rank <rank> serves rank <from_rank>'s shard of that parameter, composed from the SAME pinned checkpoint (every byte is checkpoint bytes; the shard set over the world is unchanged; only the rank<->slice assignment the rank Program's shard map prescribes is wrong -- a whole-tensor hash cannot see it). The per-rank weights pin must FAIL naming the rank and the parameter. Repeatable: 0:X:1 1:X:0 = the two ranks swap their shards of X.")
+    flip_weight: str | None = option("--flip-weight", default=None, help="NEGATIVE (flipweight, TP form): <rank>:<served param name>:<flat index>[:<value>] -- one element of that rank's shard changed before register_weights; the weights pin must FAIL naming (rank, param)")
+    replay_challenge: str | None = option("--replay-challenge", default=None, help="a challenge string (hex/string): each rank's replay seed = sha256(challenge | that rank's run root)[:8]; who issued it is not checked, and --challenger-gate refuses this flag; without it the seed is the rank's run root alone, no coin (a measurement)")
     challenger_gate: str | None = option("--challenger-gate", default=None, metavar="CMD", help="the auditor host's challenger gate, its command as one string: the Commit reserves one session before its engine and opens it on its first instrumented pair's TP run root, and each pair's opening positions and population identities are its coins, opened after that pair's TP run root (verity_vllm.pipeline.commit_coins); without it each pair's coins are this process's own, a measurement that credits nothing")
     challenger_peer: str | None = option("--challenger-peer", default=None, metavar="NAME", help="with --challenger-gate: this machine's name in the auditor host's peers")
     replay_target: list[str] | None = option("--replay-target", action="append", default=None, help="<op_path>[@<step>]: add every VU of a module to every rank's sample")
@@ -224,9 +234,9 @@ def main(args: Options) -> int:
     deferral_skipped = C2.deferral_skipped(args)
     relabel = None
     if args.relabel_rank:
-        a, b = args.relabel_rank.split(":")
-        relabel = {str(int(a)): int(b)}
-    swap_requests = None
+        relabel_from, relabel_to = args.relabel_rank.split(":")
+        relabel = {str(int(relabel_from)): int(relabel_to)}
+    swap_requests: dict[str, list[Any]] | None = None
     if args.swap_requests:
         parts = args.swap_requests.split(":")
         sr, sa, sb = parts[:3]
@@ -256,13 +266,13 @@ def main(args: Options) -> int:
     engine_env.require_inductor(kw)
     llm, build_s, topo = PH.engine(lambda: LLM(**kw), args.tp, args.rpc_timeout, model=cp["repo"], enforce_eager=kw.get("enforce_eager"), case=case, max_num_seqs=args.max_num_seqs)
     TT.require_ranks(llm, target, args.rpc_timeout)
-    served = SV.require(llm, wl, target, out, args.rpc_timeout)
+    served: dict[str, Any] | None = SV.require(llm, wl, target, out, args.rpc_timeout)
     eng = va.Engine(llm=llm, runner=None, model=None, cp=cp, kwargs=kw, env_flags=env_flags, build_s=build_s, case=case, target=target)
     world = len(topo)
-    versions = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
+    versions: dict[str, Any] = {"schema": SCHEMA, "git_head": git_head(), "tree": tree_of_record(), "argv": sys.argv, "tp": args.tp, "build_s": round(build_s, 1),
                 "engine_kwargs": {k: v for k, v in kw.items() if k not in ("model", "tokenizer")},
                 "effective_execution": va.effective_execution_doc(llm), "target": TT.as_json(target), "served": served,
-                "env": settings.redact({k: v for k, v in os.environ.items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT"))}),
+                "env": settings.redact({k: v for k, v in settings.environ().items() if k.startswith(("NCCL_", "VLLM_", "CUBLAS", "NATIVE_COLLECT"))}),
                 "env_required": {k: v for k, v in engine_env.snapshot().items() if k == "NCCL_P2P_DISABLE"}, "ranks": topo,
                 "root_combination": "tp_run_root = SHA-512(tag || u32 world || (u32 rank || root_rank)...)",
                 "root_tag": RT.TP_ROOT_TAG.decode(), "commit_scheme": args.commit_scheme,
@@ -289,13 +299,14 @@ def main(args: Options) -> int:
     if man_doc is not None:
         pdr = man_doc.get("program_digest_per_rank") or {}
         for r in range(world):
-            if pds.get(r) is None:
+            of_build = pds.get(r)
+            if of_build is None:
                 # the manifest names each rank's Program, but the manifest is an INPUT: without this rank's Build the
                 # wrong-Program check (manifest of another Program that is internally consistent) would be vacuous -> refuse, never default
                 raise SystemExit(f"fail-closed: --required-manifest needs --build-rank{r} (this rank's Build result.json) so the manifest's Program "
                                  f"for rank {r} ({str(pdr.get(str(r)))[:16]}) is checked against the Build, not against itself")
-            elif pdr.get(str(r)) not in (None, pds[r]):
-                raise SystemExit(f"fail-closed: --build-rank{r} Program {pds[r][:16]} != manifest Program for rank {r} {str(pdr.get(str(r)))[:16]}")
+            elif pdr.get(str(r)) not in (None, of_build):
+                raise SystemExit(f"fail-closed: --build-rank{r} Program {of_build[:16]} != manifest Program for rank {r} {str(pdr.get(str(r)))[:16]}")
         if int(man_doc.get("ranks") or 1) != world:
             raise SystemExit(f"fail-closed: manifest ranks={man_doc.get('ranks')} != tp={world}")
     # workload -> request order / arrivals / caps (B>1 population; commit_delta's convention: r<i> in workload order)
@@ -312,7 +323,7 @@ def main(args: Options) -> int:
     # (B1: the request Program itself) and, at B>=2, the component digests the GP-01 workload_program of that rank composed (its workload
     # digest is the manifest's per-rank digest, checked above) -- the worker refuses any loaded Program outside this set BY NAME
     replay_cfg = None
-    retain_env = os.environ.get("VERITY_RETAIN")
+    retain_env = settings.raw("VERITY_RETAIN")
     if args.required_manifest and not args.no_sampled_replay:
         import re as _re
         of_record: dict[str, list[str]] = {}
@@ -336,7 +347,7 @@ def main(args: Options) -> int:
                       "requests": [{"request_id": request_ids[str(r.get("request_id"))], "arrive_step": int(r.get("arrive_step") or 0), "prompt_len": len(r["prompt_token_ids"]),
                                     "max_tokens": int(r.get("max_tokens") or sampling.get("max_tokens") or 1), "prompt_token_ids": [int(t) for t in r["prompt_token_ids"]], "seed": int(r["seed"]) if r.get("seed") is not None else (int(sampling["seed"]) if sampling.get("seed") is not None else None)} for r in reqs],
                       "per_stratum": int(args.replay_per_stratum), "max_evaluate": int(args.replay_max), "seed": args.replay_seed, "workers": args.replay_workers,
-                      "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": ring_slots(args.committer, os.environ.get("VERITY_WINDOW_MB"), os.environ.get("VERITY_WINDOW_SLOTS"), retain_env)}
+                      "challenge": args.replay_challenge, "targets": list(args.replay_target or []), "ring_slots": ring_slots(args.committer, settings.raw("VERITY_WINDOW_MB"), settings.raw("VERITY_WINDOW_SLOTS"), retain_env)}
         versions["sampled_replay"] = {"of_record": of_record, "per_stratum": replay_cfg["per_stratum"], "max_evaluate": replay_cfg["max_evaluate"], "seed": args.replay_seed,
                                       "challenge": args.replay_challenge, "rule": "MAN-06 O1-O6 per rank: the rank's Programs of record x the rank's map x the rank's committed members + weight shards"}
         if args.replay_k:
@@ -344,7 +355,7 @@ def main(args: Options) -> int:
     SRT.require(args, replay_cfg)
     TPC.replay_host(replay_cfg, versions, out, ranks_at_once=args.replay_ranks_at_once)
     # the weights of record per rank: each rank composes its record from ITS rank Program + the pinned checkpoint shards
-    weights_pin_cfg = None
+    weights_pin_cfg: dict[str, Any] | None = None
     if args.checkpoint_dir:
         weights_pin_cfg = {"checkpoint_dir": str(args.checkpoint_dir), "checkpoints_manifest": args.checkpoints_manifest, "model": args.checkpoint_model,
                            "program_dirs": {str(r): str(builds[r]) for r in range(world) if builds.get(r)}}
@@ -422,7 +433,7 @@ def main(args: Options) -> int:
     xrank_families = collective_kinds.cross_rank_families(world)      # the cross-rank families of THIS world, from the registry's composites
     xrank_on = args.xrank_per_stratum > 0 and not args.no_tp_partials
     runs = schedule(args.pairs, args.only_arm)
-    stopped = None
+    stopped: dict[str, Any] | None = None
     for pair in range(args.pairs):
         order = [a for p, a in runs if p == pair]
         for k, arm in enumerate(order):
@@ -433,19 +444,19 @@ def main(args: Options) -> int:
                     if len(inst) != world:
                         raise SystemExit("fail-closed: install did not reach every rank")
                 cpu0 = llm.collective_rpc(TRACE.thread_cpu, timeout=args.rpc_timeout)
-                r = run_workload(eng, reqs, sampling)
+                result = run_workload(eng, reqs, sampling)
                 cpu = TRACE.cpu_delta(cpu0, llm.collective_rpc(TRACE.thread_cpu, timeout=args.rpc_timeout))
-                ran.update(wall_s=round(r["wall_s"], 4), steps=len(r["step_wall_s"]))
+                ran.update(wall_s=round(result["wall_s"], 4), steps=len(result["step_wall_s"]))
                 row = {"schema": SCHEMA, "label": args.label, "workload": args.workload, "workload_sha256": wl.get("sha256"), "case": case, "model": cp["repo"],
                        "tp": args.tp, "pair": pair, "order_in_pair": k, "arm": arm, "committer": None if arm == "control" else args.committer,
-                       "wall_s": r["wall_s"], "iterations": r["iterations"], "engine_steps": len(r["step_wall_s"]), "generated_tokens": r["generated_tokens"],
-                       "prompt_tokens": r["prompt_tokens"], "generated_tokens_per_s": r["generated_tokens"] / r["wall_s"],
-                       "step_wall_prefill_s": r["step_wall_s"][0], "step_wall_decode_mean_s": statistics.fmean(r["step_wall_s"][1:]) if len(r["step_wall_s"]) > 1 else None,
-                       "step_wall_s": r["step_wall_s"], "step_tokens_out": r["step_tokens_out"], "thread_cpu_s": cpu,
+                       "wall_s": result["wall_s"], "iterations": result["iterations"], "engine_steps": len(result["step_wall_s"]), "generated_tokens": result["generated_tokens"],
+                       "prompt_tokens": result["prompt_tokens"], "generated_tokens_per_s": result["generated_tokens"] / result["wall_s"],
+                       "step_wall_prefill_s": result["step_wall_s"][0], "step_wall_decode_mean_s": statistics.fmean(result["step_wall_s"][1:]) if len(result["step_wall_s"]) > 1 else None,
+                       "step_wall_s": result["step_wall_s"], "step_tokens_out": result["step_tokens_out"], "thread_cpu_s": cpu,
                        "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "commit_started": started}
                 if tokens_ref is None:
-                    tokens_ref = r["tokens"]
-                row["tokens_equal_ref"] = r["tokens"] == tokens_ref
+                    tokens_ref = result["tokens"]
+                row["tokens_equal_ref"] = result["tokens"] == tokens_ref
                 if arm != "control":
                     t_f = time.perf_counter()
                     fin = TPL.finalize(llm, args.rpc_timeout, f"work.pair{pair}.{arm}", last=pair == args.pairs - 1 and k == len(order) - 1 and not args.value_check and not args.trace_dir,
@@ -521,6 +532,8 @@ def main(args: Options) -> int:
                                   "openings": {k2: op_r.get(k2) for k2 in ("n", "verified", "generate_s", "verify_s", "bytes_mean", "error")},
                                   "classes": f["classes"], "weight_registration": f["weight_registration"],
                                   "persistent_bytes": f["persistent_bytes"], "temporary_bytes_peak": f["temporary_bytes_peak"]}
+                        ok: bool | None
+                        why: str | None
                         ok, why = commit_verdict(cblock, row["tokens_equal_ref"], min_openings=min(64, args.openings), declaration=f["declaration"],
                                                  required_classes=required_classes)
                         # the rank's binding map + coverage against its expected population gate the verdict too
@@ -570,7 +583,7 @@ def main(args: Options) -> int:
                     # population-sampled openings per rank (bind's challenge_identities from the COMBINED root + the rank's map digest)
                     pop_open = {}
                     if all((f.get("binding") or {}).get("map_digest") for f in fin):
-                        po = []
+                        po: list[dict[str, Any]] = []
                         for rk_c, croot in sorted(claimed.items()):
                             # one RPC per rank so each rank verifies against ITS claimed root (the commitment-vector entry)
                             po_r = llm.collective_rpc("tp2_commit_open_population", timeout=args.rpc_timeout,
@@ -593,7 +606,7 @@ def main(args: Options) -> int:
                     # each rank COMMITTED, evaluated bit-exactly against the definition over the two ranks' COMMITTED partials (picks seeded by the
                     # combined root, stratified per site x kind x phase).  The only evaluator of the collective-output VUs from committed bytes (the
                     # per-rank replay has none); a FAIL names the site and fails the ranks whose received output is not the definition.
-                    xr = {"result": None, "why": "not run (--xrank-per-stratum 0)"}
+                    xr: dict[str, Any] = {"result": None, "why": "not run (--xrank-per-stratum 0)"}
                     if xrank_on:
                         try:
                             import torch as _torch
@@ -686,10 +699,10 @@ def main(args: Options) -> int:
                         print(f"[tp2commit] COMMIT FAIL (pair {pair}): {row['commit']['commit_fail_reason']}", flush=True)
                 TPL.reset(llm, args.rpc_timeout)
             rows.append(row)
-            with (out / "runs.jsonl").open("a") as f:
-                f.write(json.dumps(row, default=str) + "\n")
+            with (out / "runs.jsonl").open("a") as jsonl:
+                jsonl.write(json.dumps(row, default=str) + "\n")
             c = row.get("commit") or {}
-            print(f"[tp2commit] pair {pair} {arm}: {r['wall_s']:.3f}s steps {len(r['step_wall_s'])} tokens_equal {row['tokens_equal_ref']}"
+            print(f"[tp2commit] pair {pair} {arm}: {result['wall_s']:.3f}s steps {len(result['step_wall_s'])} tokens_equal {row['tokens_equal_ref']}"
                   + (f" root {c.get('tp_run_root', '')[:16]} leaves {c.get('leaves')} openings {c.get('openings')} verdict {c.get('commit_fail_reason')}" if arm != "control" else ""),
                   flush=True)
             if not args.all_pairs and not (all_pass and row["tokens_equal_ref"]):
@@ -718,18 +731,18 @@ def main(args: Options) -> int:
             inst = llm.collective_rpc("tp2_commit_value_check_install", timeout=args.rpc_timeout)
             if len(inst) != world:
                 raise SystemExit("fail-closed: value-check install did not reach every rank")
-            r = run_workload(eng, reqs, sampling)
+            result = run_workload(eng, reqs, sampling)
             vres = llm.collective_rpc("tp2_commit_value_check", timeout=args.rpc_timeout)
-        vcheck = {"schema": "verity/commit-integ/value-check-tp/v1", "label": "measured", "tp": args.tp, "tokens_equal_ref": r["tokens"] == tokens_ref,
+        vcheck = {"schema": "verity/commit-integ/value-check-tp/v1", "label": "measured", "tp": args.tp, "tokens_equal_ref": result["tokens"] == tokens_ref,
                   "per_rank": {int(v["rank"]): v for v in vres}, "ranks_answered": sorted(int(v["rank"]) for v in vres),
-                  "verdict": ("PASS" if len(vres) == world and all(v.get("verdict") == "PASS" for v in vres) and r["tokens"] == tokens_ref else "FAIL"),
+                  "verdict": ("PASS" if len(vres) == world and all(v.get("verdict") == "PASS" for v in vres) and result["tokens"] == tokens_ref else "FAIL"),
                   "method": (vres[0].get("method") if vres else None)}
         (out / "value_check.json").write_text(json.dumps(vcheck, indent=1, default=str) + "\n")
         # the late-read detector record, per rank, from the same value-check run
         t64 = {int(v["rank"]): (v.get("t6_4") or {"result": False, "error": "no t6_4 in the rank's value-check result"}) for v in vres}
         # aggregate: True only when every rank is True; None (not applicable) when every rank recorded applicable False (dense TP row); else False
         t64_all_na = bool(t64) and all(v.get("applicable") is False and v.get("result") is None for v in t64.values())
-        (out / "t6_4_check.json").write_text(json.dumps({"schema": "verity/commit-integ/t6_4-check/v1", "tp": args.tp, "per_rank": t64,
+        (out / "t6_4_check.json").write_text(json.dumps({"schema": LATE_READ_CHECK_SCHEMA, "tp": args.tp, "per_rank": t64,
                                                            "applicable": (not t64_all_na),
                                                            "result": (None if t64_all_na else bool(len(t64) == world and all(v.get("result") is True for v in t64.values()))),
                                                            "layers_compared": sum(int(v.get("layers_compared") or 0) for v in t64.values()),
@@ -800,7 +813,7 @@ def main(args: Options) -> int:
     sr_comp, lk_comp = C2.sampled_replay_components(rows, versions)
     wp_comp = C2.weights_pin_component(rows, versions)
     from verity_vllm.check.match import xrank_collectives as _XC
-    xr_comp = _XC.fold_pairs(xrank_pairs) if xrank_pairs else {"result": None, "pairs": 0, "why": "no instrumented pair"}
+    xr_comp: dict[str, Any] = _XC.fold_pairs(xrank_pairs) if xrank_pairs else {"result": None, "pairs": 0, "why": "no instrumented pair"}
     xr_comp["per_pair_artifacts"] = [str(out / f"xrank_pair{p}.json") for p in range(len(xrank_pairs)) if (out / f"xrank_pair{p}.json").exists()]
     (out / "xrank_collectives.json").write_text(json.dumps({"schema": "verity/tp2/xrank-collectives-fold/v1", "tp": args.tp} | xr_comp, indent=1, default=str) + "\n")
     (out / "weights_pin.json").write_text(json.dumps({"schema": "verity-sweep/tp-weights-pin/v1", "tp": args.tp} | wp_comp, indent=1, default=str) + "\n")
@@ -844,7 +857,7 @@ def main(args: Options) -> int:
     ctl = [r for r in rows if r["arm"] == "control"]
     trt = [r for r in rows if r["arm"] != "control"]
     deltas = [t["wall_s"] - c["wall_s"] for t, c in zip(trt, ctl)]
-    summ = {"schema": SCHEMA, "commit_started": started, "label": args.label, "tp": args.tp, "committer": args.committer, "pairs": args.pairs, "openings": args.openings,
+    summ: dict[str, Any] = {"schema": SCHEMA, "commit_started": started, "label": args.label, "tp": args.tp, "committer": args.committer, "pairs": args.pairs, "openings": args.openings,
             "pairs_run": len({r["pair"] for r in rows}), "stopped": stopped,
             "control_wall": [r["wall_s"] for r in ctl], "treatment_wall": [r["wall_s"] for r in trt], "delta_wall": deltas,
             "delta_wall_mean": statistics.fmean(deltas) if deltas else None,

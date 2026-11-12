@@ -1,8 +1,11 @@
 """`pouw_h1_gpu.py`'s engine flags reach the engine it builds: ``--engine-arg KEY=VALUE`` over the workload's ``LLM()``
-keywords, and ``--no-batch-invariant`` as the target's ``batch_invariant``."""
+keywords, and ``--no-batch-invariant`` as the target's ``batch_invariant``. Its ``--check-challenger``, the verifier's side
+on no GPU, fails closed, and its `producer` is the module at its path."""
 from __future__ import annotations
 
+import hashlib
 import json
+import sys
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -13,6 +16,9 @@ if TYPE_CHECKING:
 else:
     torch = pytest.importorskip("torch")
 
+from verity.protocols.spot.device import remote as R
+
+from tests.protocols import challenger_host as CH
 from tests.protocols import pouw_h1_gpu as G
 from verity_vllm.engine import build as B
 from verity_vllm.program.frontend.target_profile import TargetProfile
@@ -116,3 +122,67 @@ def test_the_period_program_under_ks_declares_the_linears_at_those_ks_alone(monk
     assert unit is not None and child[0][0] == [list(s) for s in shapes] and child[0][4:] == [True, "sm_90"]
     G.period_program(llama, 32, 4, j10r=True, arch="sm_90")
     assert len(declared[1][0]) == 8
+
+
+def test_check_challenger_fails_closed_and_its_record_says_why(tmp_path, capsys):
+    """``pouw_h1_gpu.py --check-challenger CALLS DIR`` over a record that carries no coins and a ledger head with no entry
+    exits 1, and its record (``pouw_h1_challenger.json``) says why at each step. Without ``--window`` the key is read from
+    DIR's ``out/``: with none there nothing is read under the pin, so there is no credit, and a period is refused for the
+    unread ledger. With ``--window`` the key is read from DIR itself: one under another pin is no key; the pinned one
+    leaves the session untrusted (the ledger opens none for the window), a credit of none, and no such period."""
+    _private, key = CH.challenger_key(3)
+    pin = hashlib.sha512(key.public).hexdigest()
+    calls, ledger, window, tree = (tmp_path / n for n in ("calls.json", "windows.jsonl", "window.json", "tree"))
+    calls.write_text(json.dumps({"commitment": {}, "calls": []}))
+    ledger.write_text("")
+    window.write_text(json.dumps({"root": "00" * 64}))
+    tree.mkdir()
+
+    def check(pinned: str, *argv: str) -> dict:
+        rc = G.main(["--out", str(tmp_path / "out"), "--check-challenger", str(calls), str(tree), "--key-sha512", pinned,
+                     "--ledger", str(ledger), *argv])
+        assert "POUW-H1-CHALLENGER FAIL rounds=0 host=None" in capsys.readouterr().out
+        doc = json.loads((tmp_path / "out" / "pouw_h1_challenger.json").read_text())
+        assert rc == 1 and doc["ok"] is False and doc["rounds"] == 0 and doc["pinned_public_sha512"] == pinned
+        assert doc["manifest"].startswith("the window's salt can't be derived from its record")
+        assert "error" in doc[R.RECORD] and "error" in doc[R.CLOSE]
+        return doc
+
+    doc = check(pin, "--period", "p")
+    assert doc["reason"].startswith(f"CoinError: no challenger key at {tree / 'out' / R.KEY} (")
+    assert "key" not in doc and "credit" not in doc and doc["window_file"] is None
+    assert doc["period"] == {"name": "p", "reasons": ["ValueError: no key the pin names, so the auditor's ledger is unread"]}
+    (tree / R.KEY).write_text(json.dumps(key.to_json()))
+    doc = check("ab" * 64, "--window", str(window))
+    assert doc["reason"].startswith(f"CoinError: the challenger key at {tree / R.KEY} is {pin[:16]}..., not the auditor's")
+    assert "key" not in doc and "credit" not in doc and "period" not in doc
+    doc = check(pin, "--window", str(window), "--period", "p")
+    assert doc["key"] == {"W": key.W, "H": key.H, "public_sha512": pin} and doc["window"] == {"root": "00" * 64}
+    assert doc["reason"].startswith("the challenger's session is not trusted: ")
+    assert doc["credit"]["credit"] is None and doc["credit"]["manifest"] == doc["manifest"]
+    assert doc["period"] == {"name": "p", "reasons": ["the auditor's ledger has no period p"]}
+    (tree / "out").mkdir()
+    (tree / "out" / R.KEY).write_text(json.dumps(key.to_json()))
+    doc = check(pin)
+    assert doc["key"]["public_sha512"] == pin and "window" not in doc and doc["credit"]["credit"] is None
+    assert doc["reason"].startswith("the window's coins were held in the serving process")
+    with pytest.raises(SystemExit):
+        G.main(["--out", str(tmp_path / "out"), "--check-challenger", str(calls), str(tree), "--key-sha512", pin])
+    assert "--check-challenger needs --key-sha512" in capsys.readouterr().err
+
+
+def test_the_producer_is_the_module_at_its_path_loaded_once(tmp_path, monkeypatch):
+    """`pouw_h1_gpu.producer` runs the file at `PRODUCER` as a module of its own, once a process, and registers it under
+    no name: a second call hands the same module back. The file here is a stand-in for the benchmark's."""
+    path = tmp_path / "producer.py"
+    path.write_text("LOADS = [__name__]\n")
+    monkeypatch.setattr(G, "PRODUCER", path)
+    G.producer.cache_clear()
+    try:
+        mod = G.producer()
+        assert mod.LOADS == ["served_h1_producer"] and mod.__file__ == str(path)
+        mod.LOADS.append("kept")
+        assert G.producer() is mod and G.producer().LOADS == ["served_h1_producer", "kept"]
+        assert "served_h1_producer" not in sys.modules
+    finally:
+        G.producer.cache_clear()

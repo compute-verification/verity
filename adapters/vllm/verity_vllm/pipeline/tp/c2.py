@@ -75,7 +75,7 @@ def _rank_record(cblock: dict, name: str) -> dict:
 
 
 def _replay_block(sr: dict, name: str) -> dict:
-    """A replay record's block ``name`` (`sample`, `population`, `strata_keys`, `weights`); empty for a record without it, which is
+    """A replay record's block ``name`` (`sample`, `population`, `strata`, `strata_keys`, `weights`); empty for a record without it, which is
     a replay that did not run (`rank_replay.not_run`, a deferred rank's record, no record at all): each of its fields then reads None
     and adds nothing to a sum over the ranks."""
     block = sr.get(name)
@@ -202,8 +202,7 @@ def replay_gates(cblock: dict, sr_: dict, lk_: dict, ok: bool, why: str | None, 
     (`no_evaluator_gate`) go INTO the verdict, fail closed, by the dense committer's rules -- not behind the gates above: a PASS-graded
     replay over a population that does not reconcile, or with a family nothing evaluates, is named.  So does the cuBLAS route pin
     (`route_pin_gate`): a rank that binds the pin's routes and served under other conditions is named."""
-    strata = sr_.get("strata")                  # a replay that did not run sampled no stratum
-    cblock["sampled_replay"] = ({k: v for k, v in sr_.items() if k not in ("strata", "trace")} | {"strata_n": len(strata) if strata else 0}) if sr_ else None
+    cblock["sampled_replay"] = ({k: v for k, v in sr_.items() if k not in ("strata", "trace")} | {"strata_n": len(_replay_block(sr_, "strata"))}) if sr_ else None
     cblock["boundary_linkage"] = lk_ or None
     if replay_on and ok:
         if sr_.get("result") is not True:
@@ -230,9 +229,12 @@ def pin_gate(cblock: dict, wp_: dict, ok: bool, why: str | None, *, rank: int, r
     earlier gates: a served shard that is not the checkpoint of record is the first-named fault even when its downstream symptoms
     (match oracle mismatches at the first collective input) already failed the rank (measured b1_tp12 neg_flip_weight_r1: oracle 826
     mismatches on rank 1 AND weights_pin False naming down_proj)."""
-    differing = wp_.get("mismatched")           # the served weights that differ from the checkpoint's; a pin that found none, or compared none, lists none
-    cblock["weights_pin"] = ({k: v for k, v in wp_.items() if k != "mismatched"}
-                             | {"mismatched": differing[:8] if differing else [], "mismatched_n": len(differing) if differing else 0}) if wp_ else None
+    if wp_:
+        stated = {k: v for k, v in wp_.items() if k != "mismatched"}
+        differing = wp_.get("mismatched")       # the served weights that differ from the checkpoint's; a pin that found none, or compared none, lists none
+        cblock["weights_pin"] = stated | {"mismatched": differing[:8] if differing else [], "mismatched_n": len(differing) if differing else 0}
+    else:
+        cblock["weights_pin"] = None
     if required:
         pin_why = None
         if wp_.get("result") is False:
@@ -268,7 +270,7 @@ def c2_and_pin_gates(cblock: dict, f: dict, ok: bool, why: str | None, *, rank: 
     return pin_gate(cblock, wp_, ok, why, rank=rank, required=required)
 
 
-def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: set[str] | list[str]) -> None:
+def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: frozenset[str] | set[str] | list[str]) -> None:
     """Self-describing record: the replay's unreplayable collective families name the pass that evaluated them
     (`collective_kinds.evaluated_cross_rank`: the world's cross-rank families and every routed all-reduce) and its site coverage of each."""
     from verity_vllm.program.frontend.collective_kinds import evaluated_cross_rank
@@ -281,7 +283,7 @@ def annotate_unreplayable(srs: list[dict], xr: dict, pair: int, xrank_families: 
         for u_ in _replay_list(sr, "unreplayable"):
             fam_ = str(u_.get("family"))
             if evaluated_cross_rank(fam_, xrank_families):
-                picked, c_ = (byf.get(fam_) if byf else None), (cov.get(fam_) if cov else None)
+                c_, picked = (cov.get(fam_) if cov else None), (byf.get(fam_) if byf else None)
                 u_["evaluated_by"] = {"pass": "cross_rank_collectives (TP-12)", "result": xr.get("result"),
                                       "picks": picked.get("picks") if picked else None, "equal": picked.get("equal") if picked else None,
                                       "sites": c_.get("sites") if c_ else None, "sites_covered": c_.get("covered") if c_ else None,
@@ -375,7 +377,6 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
     popn = {r_: _replay_block(s, "population") for r_, s in srs.items()}
     keys = {r_: _replay_block(s, "strata_keys") for r_, s in srs.items()}
     wts = {r_: _replay_block(s, "weights") for r_, s in srs.items()}
-    families = [p["by_family"] for p in popn.values() if p.get("by_family")]      # a rank whose population names no family adds none
     unrep: dict[str, dict] = {}
     for r_, s in srs.items():
         for u in _replay_list(s, "unreplayable"):
@@ -390,6 +391,7 @@ def sampled_replay_components(rows: list[dict], versions: dict) -> tuple[dict, d
         values = _strata_key(k_, "lifetime", "values")
         for lv, n_ in (values.items() if values else ()):
             lifetimes[lv] = lifetimes.get(lv, 0) + int(n_)
+    families = [p["by_family"] for p in popn.values() if p.get("by_family")]      # a rank whose population names no family adds none
     sr_comp: dict[str, Any] = {"result": sr_ok if all(s for s in srs.values()) else None,
                "method": ("per rank, in the rank's committing process (tp2_worker finalize): sampled_replay on THIS rank's binding map (identity.rank == r), "
                           "THIS rank's request Programs of record (derive_step --tp 2 --rank r; components per (LP, T)), the rank's committed members and "
