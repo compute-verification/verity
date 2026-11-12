@@ -178,11 +178,11 @@ def read(make, loss, batch: torch.Tensor) -> Reading:
     model = make()
     g = capture_step(model, torch.optim.AdamW(model.parameters(), **LF.ADAMW), loss, batch)
     raw = products.raw_on_dial(g)
-    size = products.step_gates(g, None)
+    size = products.step_gates(g)
     r = Reading(step, {}, {}, {}, {}, size)
     for k in KS:
         blk = raw if k == raw["k"] else raw["at"][str(int(k))]
-        r.rows[k] = [products.priced(row, None) for row in blk["rows"]]
+        r.rows[k] = [products.priced(row, raw["capture"]) for row in blk["rows"]]
         record = TW.products_of_trace({"k": k, "rows": r.rows[k], "capture": raw["capture"], "p_match": blk["p_match"],
                                        "tokens": g.tokens})
         r.he[k] = record["he"]
