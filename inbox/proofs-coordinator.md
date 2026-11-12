@@ -90957,3 +90957,78 @@ Not in it: network's rule for the mark, `Row.premises`, the name `egress` for th
 ### Runs and what I wait on
 
 `r20261112-130251-279b` on `vy-nebius-cpu-9`, running, about 14:50Z. Next: the closes for #9199 and #9237 with a run each, then one entry. No open choice.
+
+## COUNT, Thu 12 Nov 14:14Z: priced again at `main` `3d8530f5268a` (run `r20261112-140527-dc31`): on the prices the pricing run was sent the cells are unchanged, yet Row A rises 1.6% to 4.0% because `main`'s serving charge leaves a smaller budget at the 10% point; on the steady rows the store holds today 88 block types cost more and the three rows C rise 4.0% to 5.6%; the plan of record's figure is 2,635.9 GB at its own budget and 2,698.8 GB at `main`'s 10% point (all modeled)
+
+**What ran**
+
+- [run] `r20261112-140527-dc31`: `research run --on auto --cwd source`, `main` `3d8530f5268a` (fetched between 14:03Z and 14:05Z, clean), 14:05Z to 14:07Z, exit 0, record `art:587e1d67419b246527f700f7e0e59091b99435c4af7d972021b9edf31c95347e` (`out/rows_read.txt`, `out/plan10.txt`, `out/control.txt`, `out/prices.txt`, `out/cells_diff_sent.txt`, `out/cells_diff_store.txt`). It runs the pricing run's own tools (the scripts, environment, lever and row file of `r20261111-163515-2cd7`) for the two configurations the seven rows read, then the rows' reader, then the plan of record's case.
+- [run] The tree's `workload` card has the value of the card the pricing run built from the census (192 block types) and the tree's world is the pricing run's (4.687e7 locations, 0.4), so no file of the tree is replaced.
+- The pricing run's command takes benchmarks' prices from a sent file, not from a card, so "priced at `main`" has two readings and the run did both: **(a)** the file the pricing run was sent; **(b)** the table `verity bench prove --system flock --workload glm53` builds from the store's labelled records. [local] I read (b) on the VM at 13:54Z, at `main` `3498d4ad6546`. [run] The run's machine has no store remote, `verity bench prove` refused there, and the run used the sent copy of that table. [read] `git diff 3498d4ad6546 3d8530f5268a`: no file under `benchmarks/harness`, `benchmarks/prove`, `benchmarks/spot_figures`, `verity/protocols/spot` or `verity/circuits` differs.
+
+**1. The seven rows** (GB an adversary can exfiltrate in a world's year at the 10% point; a datacenter's 600 s verification phase, 12,500 machines; K is the count of sampled replay blocks a phase; modeled, nothing here ran on the served engine)
+
+| Row | before: the pricing run's tree `a5e4e56a1171` | `main`, prices (a) | `main`, prices (b) |
+|---|---|---|---|
+| Row A, the partition `main` defines, the program's read at 609.3 s | 9,060.1 (K 28) | 9,395.6, +3.70% (K 27) | 9,395.6, +3.70% (K 27) |
+| Row A, the same, read at 692.0 s | 9,757.0 (K 26) | 10,147.3, +4.00% (K 25) | 10,147.3, +4.00% (K 25) |
+| Row A, the best designed configuration, read at 609.3 s | 3,720.7 (K 68) | 3,833.5, +3.03% (K 66) | 3,833.5, +3.03% (K 66) |
+| Row A, the same, read at 692.0 s | 4,016.0 (K 63) | 4,080.8, +1.61% (K 62) | 4,147.7, +3.28% (K 61) |
+| Row C, the check as timed | 933.8 (K 38) | 935.3, +0.16% (K 19) | 985.7, +5.56% (K 36) |
+| Row C, the fold | 710.8 (K 25) | 710.8, 0 (K 25) | 740.5, +4.17% (K 24) |
+| Row C, the one pass | 683.5 (K 26) | 683.5, 0 (K 26) | 710.8, +4.00% (K 25) |
+
+- [run] All three columns are the same run. The first is the rows' reader on the pricing run's rows at this `main`: it gives the seven figures as quoted.
+- [run] **What prices each row's proving seconds** (the prover's seconds of the row's sampled proof blocks and sessions). It is the same to 0.03 points in all three columns:
+  - the two Row A rows on the partition `main` defines: a steady row 99.99% (the block type's own 99.50%, a steady row of another block type of its Definition and K, scaled, 0.49%); a `proof_overhead` card entry 0.008%; the planner's default 0.002% (10 block types, from `k_log` alone);
+  - the five rows on the best designed configuration: a steady row 99.96% to 99.97% (its own 98.93% to 98.99%, its Definition and K's 0.97% to 1.04%); a card entry 0.028% to 0.030%; the planner's default 0.003% to 0.005%;
+  - `PageCopy`, which the pricing run prices as no block type, under 0.001% in every row.
+
+**3. What moved each row that moves by more than 1%**
+
+- **Row A, all four rows, under prices (a): no block type's price.** [run] All 193 cells (each one's blocks, output bits, seconds a block, seconds a statement, statement size and commit bytes) equal the pricing run's to 6e-16, and so do the 192 priced block types' prover and verifier seconds and what prices each. [derived] For 178 of the 192 that is by construction, since the price is the sent file's; what it shows is that the tree's part (census, lever, the planner's split of a price into a statement's and a block's seconds, the verifier's seconds, the table sizes) did not move.
+- [run] **What moved is the budget at the 10% point**: 6.5538e14 to 6.4562e14 GPU-seconds a world's year (-1.49%) on the partition `main` defines, 6.5535e14 to 6.4495e14 (-1.59%) on the best designed configuration.
+  - [derived] -1.45% of it is the serving charge, 4.3387% to 4.4193% of compute. [read] `benchmarks/spot_figures/cards/serve_tax.glm-5.3.json`: its `tokens` tax went from 2.0393% to 2.1199% in commit `9fa7b98c26` (11 Nov 19:12Z), which added three modeled parts: the step record 0.0668%, the two-stage boundary commitment 0.0098%, the history tables 0.0040%.
+  - [derived] The remaining -0.04% and -0.13% are the compile charge in the tree's own rows, which follows the count `main`'s planner samples.
+- [derived] **The count is whole, so a row moves in steps.** The rows had 0.11% to 0.51% of their budget unspent before, so a budget 1.5% smaller costs each one or two sampled replay blocks: 28 to 27 is +3.70%, 26 to 25 is +4.00%, 68 to 66 is +3.03%, 63 to 62 is +1.61%. No row moved by 1.5%.
+- **The fourth Row A row and the three rows C, under prices (b): the steady rows.** [run] At the count and samples each row has under (a), prices (b) add 0.48%, 2.34%, 3.08% and 3.20% of the budget, where the rows had 0.41%, 2.04%, 1.84% and 0.76% unspent, so each drops a step: 62 to 61, 25 to 24, 26 to 25, and the check as timed to 36 at the sampling rate it had before, where it had 38 (under (a) it sat at 19 with twice the proof blocks in each, 935.3 GB). The other three Row A rows take the added 0.20% to 0.51% inside what they had unspent and do not move.
+- [run] The block types, with their share of the added seconds in the fold's row (within 1 point of it in the other six), each priced before and after by its own steady row, 1 prover, full statements:
+
+  | Block type | ms a block, before | after | the new steady row | share |
+  |---|---|---|---|---|
+  | `ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}` | 0.4578 | 0.9838 | `art:50643e061cd0` (`r20261111-024513-0916`) | 36.5% |
+  | `ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}` | 1.3092 | 2.1539 | `art:5c68224409fb` (`r20261111-024504-0faf`) | 20.2% |
+  | `DsaRMSNorm_v1{N=2048,...}` | 1.4756 | 2.5411 | `art:8cda4fc5dd6c` (`r20261111-024829-46a2`) | 5.9% |
+  | `Fp8GroupQuantUe8m0_v1{K=2048,G=128}` | 1.2396 | 1.9752 | `art:4bd4663e125a` (`r20261111-024820-649a`) | 5.0% |
+  | `CublasSplitKGemmF32Out_v1{K=6144,N=1,SPLIT_K=3,...}` | 0.8527 | 1.7321 | `art:1864b292c297` (`r20261111-024454-e0f2`) | 4.4% |
+  | `DsaIndexerQ_v1{H=32,D=128,ROPE=64}` | 8.7427 | 11.2184 | `art:e32c681fa91f` (`r20261111-024657-933c`) | 4.1% |
+  | the other 187 block types | | | | 23.9% |
+
+- [read] **Why they moved: the host cores a prover was timed on.** For all 32 block types whose own steady row differs, the row in the pricing run's file timed its one prover on 24 host cores and the row `main` reads timed it on 10 (each art's `checks.json`, `cpus`). `verity bench prove` prices a block type at 10 host cores a card unless told otherwise (`--cores`, `benchmarks/prove/README.md`). The pricing run's file was built from 261 steady-state records, the newest run `r20261111-024327-fbdc`; the table at `main` reads 448, the newest `r20261111-083025-3a29`.
+- [run] In all, 88 of 192 block types are priced otherwise: 32 by a new row of their own, 55 that follow a steady row of their Definition and K (the head block's 11.154 to 11.834 ms a block), one that gained its own row. A served token's prover seconds, every block type at the table's figure, go from 10,153.55 to 11,849.36 GPU-seconds (+16.7%).
+- [local] The two fused expert block types, 48.0% and 18.7% of those seconds, keep their rows (2.3152 and 2.4065 ms a block), which were timed at 10 cores already. The table names them `MoeExpertFp8ReadGemm_v1{...}` and `MoeExpertFp8ReadGemmW_v1{...}` where the planner's block types are `Fused[...]`; [run] the run pairs the two by their blocks a served token and `k_log`, one to one.
+
+**2. The plan of record's figure at this `main`**
+
+- [run] **At its own budget: 2,635.9 GB** (2,767.7 with the 1.05, "assumed 60.56 s"), K 27, 193 block types, its largest session 4 tables of its type, past the GPU prover's 1. The control of the card's pull request, unchanged, exits 0: no planner input differs from the plan of record's by more than 1e-9.
+- [run] **That budget is no longer the 10% point at `main`**: the case's total there is 10.086% of compute, for the same serving charge. At `main`'s 10% point, total 10.0000%: **2,698.8 GB** (2,833.7 with the 1.05), +2.39%, K 94 (another design of the planner's: more sampled replay blocks, 694,447 sessions a phase against 797,817).
+- [run] Under prices (b): 2,670.3 GB at its own budget (+1.30%, K 95) and **2,727.8 GB** at `main`'s 10% point (2,864.2 with the 1.05, +3.48%, K 93).
+- [run] What prices a sampled replay block's proving in this figure: a steady row 99.99% (its own 99.54%, its Definition and K's 0.45%), the planner's default 0.011% (12 block types), the rest under 0.004%. [derived] So the clause "97.9% of its proving seconds at the planner's assumed default price" belongs to the driver's 6,770.4 GB (run `r20261112-124742-a3fe`, no steady row handed in) and not to this figure; the 4 tables belong to both.
+- 3,504.8 is untouched: I did not rerun it.
+
+**What the pricing run's command needed at `main`**, each because the tree refuses the original ([run], `inputs/count_reprice.py`)
+
+- `verity.ml.circuits.partition_v2` is loaded from `verity.circuits.partition_v2`, where the layout put it.
+- `SUCC_COLS=off` is left unset: `main`'s case has no column split to turn off.
+- A row is run at a datacenter's verification phase as well as with none named: `main`'s planner samples a whole count of a phase's replay blocks and has no design at one machine's phase. The cells are the same at both.
+- The pricing run's bounds by width and its shares of the design are left out; they read planner functions `main` no longer has, and the rows' reader takes neither.
+- Two of the pricing run's ten configurations ran, the two the seven rows read, at its six budgets.
+
+**Not established**
+
+- [local] Column (b) rests on a table read on the VM, not in the run. The run checked only that the copy it used is that table.
+- [local] 7 block types, 0.027% of a served token's prover seconds, are still priced from steady rows timed at 12 or 24 cores, above the 10.
+- Whether 10 host cores a card is the host a datacenter's prover has: it is `verity bench prove`'s default, and I have no reading on it. Column (a) is the same rows with those 32 block types timed at 24 cores.
+- The verifier's seconds a statement in the seven rows are the pricing run's (its flags on the tree's figures, equal at `main`); nothing here re-timed a verifier.
+- The driver's three rows (6,770.4, 4,887.1, 1,452.5 GB) are not rerun at `3d8530f5268a`; they ran at `1885cf1fe08c`, and no file they read differs.
+- [guess] If you quote one column to Daniel, (b) is what `main` prices today and (a) shows what the tree alone changed; I would give both with the serving charge and the 10 cores named.
