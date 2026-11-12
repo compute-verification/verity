@@ -73,22 +73,12 @@ owner = "lean"
 part = "lean"
 group = 4
 
-# Group 5: the early Lean check on a merge (stale records, broken builds); its failure stops the whole run.
-[[job]]
-name = "lean-changed"
-owner = "lean"
-part = "lean"
-group = 5
-halts = true
-# Off the merge gate by drive's policy (policy.toml's `off_gate`) and in no shard, of these plans or an auto one
-# (`shards.NO_SHARD`): it catches nothing the audit doesn't.
-
-# Group 6: the suites that use Lean, on the verifier lean-build built, beside the partition check and the agreement.
+# Group 5: the suites that use Lean, on the verifier lean-build built, beside the partition check and the agreement.
 [[job]]
 name = "lean-suites"
 owner = "ci"
 part = "tests"
-group = 6
+group = 5
 after = "lean-build"
 # V*'s stager and its Lean mirror (VStar.In) stay in step: core_vstar's `part_in` difftest holds one to the other.
 merge_requires = ["verity/protocols/flock/prover/python/verity_flock/rec_vstage.py", "verity/protocols/flock/prover/python/verity_flock/rec_outer.py",
@@ -97,13 +87,13 @@ merge_requires = ["verity/protocols/flock/prover/python/verity_flock/rec_vstage.
                   "verity/protocols/spot/verifier/one_stage/registered.py", "verity/protocols/flock/verifier/VStar/In.lean",
                   "verity/protocols/recursion/verifier/vstar_cli/", "verity/protocols/recursion/verifier/recursive/"]
 
-# Group 7: no merge above the check's base grows the vLLM integration's lint ratchets (`ratchet_gate.py`, as the base has it):
+# Group 6: no merge above the check's base grows the vLLM integration's lint ratchets (`ratchet_gate.py`, as the base has it):
 # on a train, each `Queue: #N` merge against the one below, so a failure names its PR.
 [[job]]
 name = "ratchet-gate"
 owner = "vllm"
 part = "tests"
-group = 7
+group = 6
 # Off the merge gate by drive's policy (policy.toml's `off_gate`) and out of the plans. It runs in drive's after-landing run
 # (`--deferred`, every job, its base the last verified commit; sharded, in its last shard), where a red's culprit is the
 # landing whose merge it names.

@@ -1,4 +1,4 @@
-import SampledProofs
+import Spot
 
 /-!
 `population-time FILE [--no-ref]`: on one `{"descriptor", "query", "population"}` input, `Partition.unitGates` (which runs
@@ -9,7 +9,7 @@ after the program is parsed, one `PHASE {json}` line each on stdout; exit 1 if t
 `unitGates`', the layout's `popOk` from the ranges', or `popOk` fails. `population.sh` builds it against the checkout's verifier and runs it; it is a measurement, not a verifier.
 -/
 
-open Lean SampledProofs
+open Lean Spot
 
 def statusKb (field : String) : IO Nat := do
   let s ← IO.FS.readFile "/proc/self/status"

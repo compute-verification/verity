@@ -135,10 +135,13 @@ research run --as proofs --project verity --on vy-nebius-cpu-11 --source . --cwd
 ~~~
 
 `whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
-`whole_run.py` writes, per N, an accepted `run` input (`run`: a stratified v1 audit on challenger coins with N/8 more
-ports) or the program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's
-three templates, or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition
-walks every gate, so `l5` takes `desc`). `whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
+`whole_run.py` writes, per N, an accepted `run` input (`run`: a v1 audit on challenger coins with N/8 more ports) or the
+program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's three templates,
+or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition walks every gate,
+so `l5` takes `desc`). The audit's law is the stratified rate of two in the population, `stratified-rate:2/P` over its
+P units, on `toy` the stratified sampling design at K = 3. Stated over P, it samples one unit of each template and two
+of `toy`'s largest at every N, so the sample stays four units while the population it is timed against grows.
+`whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
 `Slots.popOk`'s layout split into `Partition.evaluate`, `Partition.unitGates`, `Slots.inputGates` and `Slots.layout`; on
 a program alone, `Program.parse`, one `Desc.gates` and one `TemplateQuery.gates` per range, the input gates' count and,
 with `-- --unit-gates`, `Partition.unitGates`; `-- --unit-gates --ref` adds `Partition.unitGatesRef`, the walk unit by
@@ -238,3 +241,8 @@ has none.
 
 Apart from `nci_glm`'s inputs and `flock_served`'s saved step, nothing here is a served Program: `on_bits`'s output and `nci_glm`'s derived Programs are
 this benchmark's constructions, and nothing outside this directory reads them.
+
+The suite (`tests/test_mains.py`, which `check` runs after its Lean steps) holds every `<name>/Main.lean` here to the
+verifier it times: each must still elaborate in the checkout's package, and `whole_run.py toy 146 --check` must still
+accept the run it writes. It builds no executable and runs no benchmark; a main in a new directory is held without being
+listed.
