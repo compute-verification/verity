@@ -250,6 +250,18 @@ def test_a_request_states_its_prompt_length_one_of_three_ways_and_one_that_state
             shapes(none)
 
 
+def test_a_row_that_pins_no_revision_names_no_snapshot_dir(tmp_path):
+    """`score.phi_of` finds a row's config.json under `hf_home` by its checkpoint's revision.  A row whose engine block pins none
+    names no dir there, which is `os.path.join`'s TypeError; given a `config` it is that config's φ, with no revision."""
+    w = json.loads((WORKLOADS / f"{DSV4}.json").read_text())
+    bare = {**w, "engine": {k: v for k, v in w["engine"].items() if k != "revision"}}
+    with pytest.raises(TypeError, match="NoneType"):
+        S.phi_of({"row": DSV4, "workload": bare}, hf_home=str(tmp_path))
+    config = str(HF_CONFIG_DIR / "DSV4_PRO.config.json")
+    full, pinless = (S.phi_of({"row": DSV4, "workload": doc}, config=config).to_json() for doc in (w, bare))
+    assert pinless["model"]["revision"] is None and {**pinless, "model": full["model"]} == full
+
+
 def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
     """`score.phi_of` on a row whose declared manifest states no `requests`: φ's workload holds none, and the rest of φ is the
     row's as with them."""

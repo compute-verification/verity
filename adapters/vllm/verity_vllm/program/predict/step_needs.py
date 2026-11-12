@@ -22,6 +22,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from verity_vllm.config import MANIFESTS, RowEngine, row_file
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
@@ -55,11 +56,10 @@ def workload_phi(row: str, case: str) -> Phi:
     pinned copy (`hf_configs/<case>.config.json`), as `score.phi_of` makes it."""
     from . import score as S
     w = json.loads(row_file(row).read_text())
-    revision = RowEngine.of(w).revision
-    if revision is None:
-        raise ValueError(f"{row}: its engine block states no checkpoint revision, which names its snapshot's dir")
     home = Path(tempfile.mkdtemp(prefix="step-needs-hf-"))
-    cp = Path(S.hf_config_path(str(home), w["model"], revision))
+    model = w["model"]
+    revision: Any = RowEngine.of(w).revision   # a row that pins none names no snapshot dir: os.path.join's TypeError
+    cp = Path(S.hf_config_path(str(home), model, revision))
     cp.parent.mkdir(parents=True, exist_ok=True)
     cp.write_bytes((HF_CONFIG_DIR / f"{case}.config.json").read_bytes())
     return S.phi_of({"row": row, "workload": w}, hf_home=str(home))
@@ -224,7 +224,8 @@ class StepNeeds:
         out.append((self.kind("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=float(C["ROUTED_SCALING_FACTOR"]), KERNEL=kernel), n)
                    if kernel else (Need("sigmoid-router", _id("grouped-topk", E=E, M=M), "no capture", "at other statics"), n))
         out.append((self.kind("fp8_group_quant_ue8m0", K=H, G=G), n))
-        cfg = fused_moe_config(E, INTER, str(self.net.device), "fp8_w8a8", (G, G), M)
+        device: Any = self.net.device   # φ's `device_name` as it states it: one that is no str names no tuned file (AttributeError)
+        cfg = fused_moe_config(E, INTER, device, "fp8_w8a8", (G, G), M)
         why: str | None
         if cfg is None:
             why = f"no tuned fused-MoE config at M={M}"

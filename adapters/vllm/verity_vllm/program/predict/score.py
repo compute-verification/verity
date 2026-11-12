@@ -17,6 +17,7 @@ import pkgutil
 import subprocess
 import tempfile
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 import verity
 from verity.circuits.codec import descriptor_id
@@ -45,8 +46,8 @@ def phi_of(rec: dict, *, hf_home: str | None = None, config: str | None = None) 
     if not w:
         raise Unexpressible(f"row {rec['row']}: no declared workload manifest at {rec.get('workload_path')}")
     repo = w.get("model")
-    rev = RowEngine.of(w).revision
-    cp = config or hf_config_path(str(hf_home), repo, str(rev))
+    rev: Any = RowEngine.of(w).revision   # a row that pins none names no snapshot dir: without `config`, os.path.join's TypeError
+    cp = config or hf_config_path(str(hf_home), repo, rev)
     if not os.path.exists(cp):
         raise Unexpressible(f"no config.json for {repo}@{rev} under {hf_home}")
     hf = json.loads(Path(cp).read_text())
