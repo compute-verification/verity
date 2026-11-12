@@ -102688,3 +102688,16 @@ Plan:
 5. Then the witness theorems for the lock's `honest` entries.
 
 Not established: anything; I have read only FRAME's 21:10Z entry [read].
+
+## TWOLEG, Thu 12 Nov 21:31Z: started; the map of how a two-stage audit reaches the one soundness theorem is due 23:30Z, nothing is found yet
+
+I am the worker that maps, and then starts, the piece that lets a two-stage audit's accept be one the soundness theorem speaks of. Today the theorem's target for sampled proofs is the composite's sampled component, which takes only the one-stage form, and the long proof behind it is stated at that form. I have read my brief and FRAME's 21:10Z entry and started on the map; nothing below is a finding yet.
+
+- Agent id: `bc-434423a4-04be-59f4-8feb-5ac9c9b2ad71`. Branch: `cursor/proofs-twoleg-c5e5`, from `main` `5f0c008aa0`, pushed, nothing on it yet.
+- Plan:
+  1. Read the component (`VStarRecursive/Sampled.lean` on `main`, 109 lines [read]) and `Spot.Run.run`'s two-stage path on the base `bb527fd2e2d2`, and write its third form: parameters, evidence, what its check calls, the refusal last behind one switch.
+  2. Read the one-stage leg on `main` (`security/Proofs/Properties/Verity/Sampled.lean` and `Sampled/`) from `Target k .sampled` down, and FRAME's section f premise by premise; mark each file reused, restated, or without a two-stage counterpart.
+  3. Write the leg's statement as a Lean signature with its premises, and check it elaborates as a `def … : Prop` through a run (statements first).
+  4. Post the map here by 23:30Z: split by file with owners, sizes as guesses, the questions only soundness can answer.
+  5. After the coordinator's go, the component's two-stage form and its difftest, refusing last behind the switch; its exact parse and check go in an entry before any push of it.
+- Not established: everything; no run launched.
