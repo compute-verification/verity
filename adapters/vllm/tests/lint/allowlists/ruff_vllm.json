@@ -1,7 +1,6 @@
 {
   "rule": "ruff with vLLM's rules (adapters/vllm/tests/lint/ruff_vllm.toml)",
   "entries": [
-    {"file": "conftest.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/acquire/test_gate.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/check/test_challenge_seeds.py", "kind": "I001", "symbol": "test_sampled_replay_draws_its_challenge_seed_from_the_challenge_module", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/check/test_compiler_form.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
@@ -62,7 +61,6 @@
     {"file": "tests/pipeline/test_serving_rows_flashinfer_parts.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_serving_rows_splits.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_serving_rows_weights.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "tests/pipeline/test_source_identity.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/_wout_prototype_20260917.py", "kind": "E702", "symbol": "check", "detail": "Multiple statements on one line (semicolon)"},
     {"file": "tests/program/_wout_prototype_20260917.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted", "count": 2},
     {"file": "tests/program/b1_authored.py", "kind": "E741", "symbol": "AttentionHead", "detail": "Ambiguous variable name: `l`", "count": 2},
