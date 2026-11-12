@@ -8,10 +8,10 @@ from synthetic import SHAPE, run_job, tiny_registry, write_config
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from training_slowdown import config, run, starts
-from training_slowdown.codecs import ScaledQuant
+from training_slowdown.codecs import ScaledQuant, SparseTernary
 from training_slowdown.data import Data, Stream
 from training_slowdown.model import LM
-from training_slowdown.routes import ema, subset
+from training_slowdown.routes import ema, qat, subset
 from training_slowdown.routes._optimizers import newton_schulz
 from training_slowdown.traced import trace_step
 
@@ -223,6 +223,98 @@ def test_three_rates_under_one_optimizer_are_torchs_three_groups():
         assert not torch.equal(p, start[n]) and torch.allclose(p, by_name[n], rtol=0, atol=1e-6), n
 
 
+def ternary(v: torch.Tensor, keep: float) -> torch.Tensor:
+    """Sparse ternary rounding by hand: a latent's entries at least as large as its ceil(keep · n)-th largest
+    magnitude, and not zero, each keep their sign, at their mean magnitude as f16 holds it; the rest are 0."""
+    flat = v.detach().flatten().double()
+    kept = (flat.abs() >= flat.abs().topk(math.ceil(keep * flat.numel())).values[-1]) & (flat != 0)
+    scale = flat[kept].abs().mean().float().half().double() if kept.any() else 0.0
+    return (flat.sign() * kept * scale).view_as(v).float()
+
+
+def test_a_qat_step_reads_the_start_plus_its_codes_and_steps_the_latents_straight_through():
+    """Route `qat` against its steps written by hand, at a first step and at one in the cooldown. The weights a
+    step's forward reads are the start plus the rounding of the latents as the step found them (the start itself at
+    the first step, whose latents are zero). Each latent then moves by Muon's rule on the gradient of the loss at
+    those weights, taken as the latent's own, clipped over all the latents, at the scheduled rate: here with the
+    gradient from a forward of the start's own model on the weights built by hand, the momentum and the scaled step
+    written out, and Newton-Schulz the route's (held to the polar factor above). What the step leaves, and `output`
+    hands over, is the rounding of the latents it wrote; every other weight is the start's, and the output has no
+    latent. A latent is compared within Newton-Schulz's bf16 rounding, a rounding to within f16's last bit of the
+    scale: a kept entry more or fewer is a whole scale off. A kept state's load, which holds the latents, leaves each
+    layer's copy of the start the very tensor it held, which the counter names; θ's load makes the copy anew."""
+    targets = ("blocks.0.wq.weight", "blocks.0.w_gate.weight", "blocks.0.w_down.weight")
+    dials = qat.DIALS | {"targets": ",".join(targets), "keep": 0.3, "lr": 0.02, "warmup": 4.0, "decay": 0.5,
+                         "cooldown": "sqrt", "clip": 0.01}
+    torch.manual_seed(0)
+    model, (opt,) = qat.build(SHAPE, dials)
+    theta = {k: v.clone() for k, v in model.state_dict().items() if not k.endswith(".v")}
+    layers = qat.coded(model, dials)
+    assert sorted(layers) == sorted(targets) and all(not layer.v.any() for layer in layers.values())
+    gen, n = torch.Generator().manual_seed(1), 8
+
+    def rounded(v, k):
+        """How far off a weight may be from the start plus `v`'s rounding by hand."""
+        return ternary(v, dials["keep"]), 2.0 ** -10 * ternary(v, dials["keep"]).abs().max() + 1e-7 * theta[k].abs().max()
+
+    for t, rate in ((0, 1 / 4), (6, 1 - math.sqrt(0.5))):
+        rows = torch.randint(0, SHAPE["vocab"], (3, 9), generator=gen)
+        before = {k: layer.v.detach().clone() for k, layer in layers.items()}
+        momentum = {k: opt.state[layer.v]["buf"].clone() if opt.state[layer.v] else torch.zeros_like(layer.v)
+                    for k, layer in layers.items()}
+        qat.step(model, rows, [opt], dials, t, n)
+        weights = {}
+        for k, layer in layers.items():
+            q, off = rounded(before[k], k)
+            assert (layer.weight - (theta[k] + q)).abs().max() <= off, (t, k)
+            assert t > 0 or torch.equal(layer.weight, theta[k])
+            weights[k] = (theta[k] + q).requires_grad_()
+        logits = torch.func.functional_call(LM.of(SHAPE), theta | weights, (rows[:, :-1],))
+        F.cross_entropy(logits.flatten(0, 1), rows[:, 1:].flatten()).backward()
+        norm = torch.sqrt(sum((w.grad ** 2).sum() for w in weights.values()))
+        assert norm > dials["clip"]   # the clip binds
+        for k, layer in layers.items():
+            g = weights[k].grad * (dials["clip"] / norm)
+            buf = 0.95 * momentum[k] + g
+            out, into = g.shape
+            want = before[k] - dials["lr"] * rate * max(1.0, out / into) ** 0.5 * newton_schulz(g + 0.95 * buf)
+            move = (want - before[k]).abs().max()
+            assert move > 0 and (layer.v - want).abs().max() <= 0.1 * move, (t, k)
+            assert layer.v.grad is None and layer.weight.grad is None
+    out = qat.output(model, dials)
+    assert set(out) == set(theta)
+    for k in theta:
+        if k in layers:
+            q, off = rounded(layers[k].v, k)
+            assert q.count_nonzero() >= math.ceil(0.3 * q.numel())   # more where magnitudes tie at the least kept
+            assert (SparseTernary.apply(theta[k], *out[k]) - (theta[k] + q)).abs().max() <= off
+        else:
+            assert torch.equal(out[k], theta[k])
+    held = {k: layer.start for k, layer in layers.items()}
+    model.load_state_dict({k: v.clone() for k, v in model.state_dict().items()})
+    assert all(layer.start is held[k] and torch.equal(layer.start, theta[k]) for k, layer in layers.items())
+    model.load_state_dict(theta)
+    assert all(layer.start is not held[k] and torch.equal(layer.start, theta[k]) for k, layer in layers.items())
+
+
+def test_qats_rate_falls_linearly_or_as_one_less_a_square_root():
+    linear = qat.DIALS | {"warmup": 50.0, "decay": 0.4}
+    falls = [qat.schedule(linear, t, 1400) for t in (0, 24, 49, 840, 1120)]
+    assert falls == [subset.schedule(linear, t, 1400) for t in (0, 24, 49, 840, 1120)]
+    assert falls == pytest.approx([1 / 50, 0.5, 1, 1, 0.5])
+    root = linear | {"cooldown": "sqrt"}
+    assert [qat.schedule(root, t, 1400) for t in (0, 49, 840, 1120, 1399)] == pytest.approx([
+        1 / 50, 1, 1, 1 - math.sqrt(0.5), 1 - math.sqrt(1 - 1 / 1400 / 0.4)])
+    with pytest.raises(ValueError, match="cooldown 'cosine' is none of linear, sqrt"):
+        qat.plan(root | {"cooldown": "cosine"})
+    with pytest.raises(ValueError, match="keep is a share"):
+        qat.plan(root | {"keep": 0.0})
+    with pytest.raises(SystemExit, match="names no matrix of the start"):
+        qat.build(SHAPE, root | {"targets": "norm"})
+    with pytest.raises(SystemExit, match="groups of 7 don't divide blocks.0.wq.weight's 256 entries"):
+        qat.build(SHAPE, root | {"group": 7})
+
+
 def loop(tmp_path, **over):
     """A route's three steps through the harness's own loop, in this process: the record, each checkpoint's output
     model as the evaluator is handed it, the route's model after the run, θ and the step's trace."""
@@ -305,6 +397,45 @@ def test_a_lora_runs_checkpoints_are_the_start_with_its_adapters_merged(tmp_path
     merges = [r for r in trace["rows"] if r["phase"] == "forward" and not r["token_dims"]]
     assert sum(r["count"] for r in merges) == 2 and all(r["dims"]["k"] == 2 and r["affected"] == [True, True]
                                                         for r in merges)
+
+
+def test_a_qat_runs_checkpoints_are_the_start_plus_the_codes_it_trained(tmp_path):
+    """Route `qat` through the harness: θ loads into a model that holds latents and codes θ has none of, every op is
+    counted and priced, and each checkpoint's output is what the library's codec rebuilds on θ from the codes the
+    route handed over: the weights the route's next step would train on, bit for bit, and θ everywhere else. E is
+    those codes, at most two bits an entry, and the checkpoint states the digest of the model the route trains, its
+    latents among it (`trained_sha256`). The count takes the coded matrices' products as updated from the second
+    step on. The step traces, and what one step hands the next forward is the codes:
+    the update's cut is two bits an entry and a 16-bit scale a matrix, where the latents and Muon's momentum, 32
+    bits an entry each, are carried state no token op reads."""
+    targets = ("blocks.0.wq.weight", "blocks.0.w_up.weight")
+    rec, outputs, model, theta, trace = loop(tmp_path, route="qat", dials={
+        "targets": ",".join(targets), "keep": 0.5, "lr": 1e-2})
+    assert rec["invalid"] == [] and "refused" not in trace
+    entries = sum(theta[k].numel() for k in targets)
+    for cp in rec["checkpoints"]:
+        assert (cp["format"], cp["changed"], cp["parts"], cp["rebuild_macs"]) == ("codecs", 2, 2, 2 * entries)
+        assert cp["trained_sha256"] != cp["output_sha256"] and 8 * cp["e_bytes"] <= 2 * entries + 8 * 600
+    assert [cp["step"] for cp in rec["checkpoints"]] == [0, 1, 2]
+    assert rec["checkpoints"][-1]["trained_sha256"] == run.theta_sha256(model.state_dict())
+    layers = qat.coded(model, config.dials(qat, {"targets": ",".join(targets)}, "test"))
+    assert set(outputs[-1]) == set(theta) and sorted(layers) == sorted(targets)
+    for k, v in outputs[-1].items():
+        if k in targets:
+            layer = layers[k]
+            assert torch.equal(v, SparseTernary.apply(theta[k], layer.scales, layer.plus, layer.minus))
+            assert torch.equal(layer.start, theta[k]) and not torch.equal(v, theta[k]) and v.dtype == theta[k].dtype
+            assert not torch.equal(v, layer.weight)   # the route's own weight is the last step's, a step behind
+            kept = (v != theta[k]).sum().item()
+            assert kept == int(layer.plus.sum() + layer.minus.sum()) >= math.ceil(0.5 * v.numel())
+        else:
+            assert torch.equal(v, theta[k])
+    first, second = (rec["steps"][t]["by"].get("fwd/updated", 0) for t in (0, 1))
+    assert first == 0 and second == trace["tokens"] * entries   # the first step's codes are zero: its forward reads θ
+    c = trace["circuit"]
+    assert c["update_cut_bits"] == c["u1_bits"] == 2 * entries + 16 * len(targets)
+    assert c["state_bits"] == 2 * 32 * entries and c["grad_cut_bits"] == 32 * entries
+    assert not trace["p_match"] and not trace["data_dependent"] and not trace["carried_scalars"]
 
 
 @pytest.mark.slow

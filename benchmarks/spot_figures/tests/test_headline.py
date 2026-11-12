@@ -3,6 +3,7 @@ request count and split, and leaves the planner as it found it; the figure reads
 import json
 from math import isclose
 
+import cards
 import pytest
 
 from breakeven import headline as H
@@ -110,8 +111,10 @@ def test_the_figure_reads_the_10_percent_point():
 @pytest.mark.slow
 def test_a_planner_row_describes_itself_and_restores_the_planner():
     """One row on the planner (about 6 s): its split is its own bound's plan, its requests its line's (not the
-    census's), its heads eight, and every name and table the row's path set is as it was after it. Catches a planner
-    change that renames or rebinds what the driver sets, which the plain dicts above can't."""
+    census's), its heads eight, its verification phase a datacenter's window with a whole count of its replay blocks
+    sampled, a cut block's table as many of its pieces as the cut makes of one block, and every name and table the
+    row's path set is as it was after it; a beta that pays for no sampled replay block of the phase is refused.
+    Catches a planner change that renames or rebinds what the driver sets, which the plain dicts above can't."""
     P = H.planner()
     names = [(P.reprice, "apply_server"), (P.reprice, "K_MAX"), (P.sweep, "make_line"), (P.f1, "model"),
              (P.tc, "two_stage_design")]
@@ -125,6 +128,17 @@ def test_a_planner_row_describes_itself_and_restores_the_planner():
     assert isclose(got["requests"], p["replay_sample"] / p["q"], rel_tol=1e-9)
     assert got["requests"] < got["census_scope"]["requests"]
     assert got["total"] == got["serve"] + got["edge"] + got["beta"] + got["compile"] + got["pool"]
+    phase = got["verification_phase"]
+    assert phase["name"] == "datacenter" and phase["machines"] > 1 and phase["seconds"] == H.RUN_S
+    assert isinstance(phase["sampled"], int) and 1 <= phase["sampled"] <= phase["replay_blocks"]
+    assert p["replay_sample"] == pytest.approx(phase["sampled"] * got["requests"] / phase["replay_blocks"])
+    assert phase["sessions"] > len(p["cells"]) and phase["limit"]
+    measured = {b["block"]: b for b in cards.load("proof_overhead", "GLM-5.3")["value"]["blocks"]}
+    cut = [c for c in p["cells"] if c.get("split") and c["block"] in measured]
+    assert cut and all(c["table"] == c["split"] * P.tc.table_blocks(measured[c["block"]]["k_log"]) for c in cut)
+    with pytest.raises(ValueError, match="pays for no sampled replay block"):
+        H.run(H.spec_of("(i) honest", "world year", 1e-6), P=P)
+    assert [getattr(o, n) for o, n in names] == before
 
 
 QUANT = "Fp8GroupQuantUe8m0_v1{K=2048,G=128}"
@@ -215,23 +229,32 @@ def test_a_row_s_split_gives_each_basis_s_share():
 @pytest.mark.slow
 def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
     """Two rows on the planner (about 12 s): with a steady-state row mapped to the 64-key split part, the planner
-    prices that block at the row (its plan's proving says `steady` for it and the bound falls with the cheaper block),
-    every other block as without it, and a row for no block of the line stops the row. Catches the planner's own
+    prices that block at the row (the row's seconds a block and the measured verifier's, in statements of the row's
+    blocks; its plan's proving says `steady` for it and the bound falls with the cheaper block), every other block as
+    without it, and a row for no block of the line stops the row. Catches the planner's own
     pricing no longer taking a row by the line's block, which the stand-in pricing above can't."""
     P = H.planner()
     part = next(x["block"] for x in P.levers.priced_strata("tokens") if x["block"].startswith("SparseMlaSplitPart_v1{T=64,"))
     rows = tmp_path / "rows.json"
-    rows.write_text(json.dumps({"rows": [{"block": "Head_v1{NVIS=64}", "statement_seconds": 0.256, "blocks": 256,
+    rows.write_text(json.dumps({"rows": [{"block": "Head_v1{NVIS=64}", "statement_seconds": 0.128, "blocks": 128,
                                           "provers": 1, "record": "art:head"}]}))
     where = tmp_path / "map.json"
     where.write_text(json.dumps({"Head_v1{NVIS=64}": part}))
     base, _ = H.run(H.spec_of("(i) honest", "world year", 0.4), P=P)
-    got, p = H.run(H.spec_of("(i) honest", "world year", 0.4, steady=H.steady(rows, where, P)), P=P)
+    spec = H.spec_of("(i) honest", "world year", 0.4, steady=H.steady(rows, where, P))
+    row, reads = H.evaluate(spec, P)
+    p = H.plan(spec, row, reads, {}, P)
+    got = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
     assert "steady" not in base and "steady" not in base["split"]["priced"]
     assert got["steady"] == {"priced": [{"block": part, "type": "Head_v1{NVIS=64}", "per_block": 1, "provers": 1,
                                          "record": "art:head"}], "unread": []}
+    priced = next(x for x in reads["pricing"] if x["block"] == part)
+    card = next(x for x in P.levers.priced_strata("tokens") if x["block"] == part)
+    assert card["statement_blocks"] != 128 and card["priced"] != "steady"
+    assert (priced["priced"], priced["basis"], priced["statement_blocks"]) == ("steady", "steady: art:head", 128)
+    assert isclose(priced["seconds_per_block"], 0.128 / 128 + H.V_OTHER[1] / P.reprice.CORE_PER_GPU, rel_tol=1e-12)
     cell = next(c for c in p["cells"] if c["block"] == part)
-    assert isclose(got["split"]["priced"]["steady"], cell["share"], rel_tol=1e-12) and cell["cap"] == 256
+    assert isclose(got["split"]["priced"]["steady"], cell["share"], rel_tol=1e-12)
     assert isclose(got["split"]["basis"]["steady"], cell["share"], rel_tol=1e-12)
     assert isclose(sum(got["split"]["basis"].values()), 1.0, rel_tol=1e-9) and H.NO_BASIS not in got["split"]["basis"]
     assert got["bound_bits"] < base["bound_bits"]

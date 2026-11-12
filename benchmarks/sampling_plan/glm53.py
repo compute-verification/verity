@@ -2,9 +2,10 @@
 (`glm53_blocks.json`) is `benchmarks/one_stage/block_census.py`'s `card.json` over the Commit Build it names (``build``,
 ``commit``), the census itself in the store (``source``): per proof-block Definition its count in one request of the served
 workload over every rank (``prefill``: the prefill step of ``prompt_len`` tokens; ``decode``: the ``decode_steps`` decode
-steps), its output bits, its estimated ANDs (an upper bound: leaves lowered once, nothing shared or folded), its served MACs,
-the bytes of the rows it opens and its block's log2 as Flock stages it; and, by row family, the rows no cut fits
-(``gaps``: their Definitions, rows per phase, ANDs and why), which no candidate covers.
+steps), its output bits, its estimated ANDs (leaves lowered once, table reads counted apart: not a statement's ``ands``
+with its reads inline, as `m1_families` says), its served MACs, the bytes of the rows it opens and its block's log2 as
+Flock stages it; and, by row family, the rows no cut fits (``gaps``: their Definitions, rows per phase, ANDs and why),
+which no candidate covers.
 
 Each Definition is one candidate (`optimize.Candidate`), its own op type with the one cut the census took: its units the
 request's count times ``requests``, its work its own ANDs (the planner credits Boolean work; MACs are informational), its
