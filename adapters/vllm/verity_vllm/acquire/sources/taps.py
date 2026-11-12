@@ -135,7 +135,8 @@ def attach_rank(com: Any, model: Any, manifest_path: str | None, rank: int, **gi
     """A TP rank's side: attach each tap that is on with the rank's rows of the merged manifest, and the route source when a capture
     map describes the rank's model (`route_source`, absent when none does), per source its stats, or its refusal."""
     man = json.loads(Path(manifest_path).read_text()) if manifest_path else {}
-    mine = dict(man, identities=[r for r in identity_rows(man) if int(r.get("rank", 0)) == int(rank)])
+    rows = man.get("identities")
+    mine = dict(man, identities=[r for r in (rows if rows else ()) if int(r.get("rank", 0)) == int(rank)])
     out: dict[str, Any] = {}
     for f, key, mod, _fam, _cls in SOURCES:
         if not given.get(f):
@@ -181,7 +182,7 @@ def for_ranks(taps: TapSources) -> Any:
 def _recorded(rank: Mapping[str, Any], key: str) -> Any:
     """What a rank recorded of the source `key` when it made its committer (`attach_rank`'s result); None where it recorded none."""
     sources = rank.get("tap_sources")
-    return None if sources is None else sources.get(key)
+    return sources.get(key) if sources else None
 
 
 def require_on_every_rank(made: list[dict[str, Any]], required_classes: tuple[str, ...], versions: dict[str, Any], taps: TapSources, *,

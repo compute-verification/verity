@@ -45,6 +45,7 @@ NAMED = 100
 
 def run(manifest: Mapping[str, Any], rt: RuntimeTree, *, programs: Iterable[str | Path] = ()) -> AcquisitionPlan:
     prefix, aliases = str(manifest.get("wrapper_prefix") or ""), manifest.get("op_path_aliases")
+    aliases = aliases if aliases else {}
     programs = list(programs)
     corr = (AcquireCorrespondence.from_programs(rt, programs, wrapper_prefix=prefix, aliases=aliases) if programs
             else AcquireCorrespondence(rt, wrapper_prefix=prefix, aliases=aliases))
@@ -96,7 +97,8 @@ def call_boundaries(manifest: Mapping[str, Any], *roots: str | None) -> dict[str
 def call_boundaries_of(manifest: Mapping[str, Any], plan: Plan | None) -> dict[str, Any]:
     """`call_boundaries` of `manifest` with its host plan given (None when it names no identity the call-boundary source evaluates)."""
     on = taps.attached(manifest)
-    ids = sum(1 for r in manifest["identities"] if r.get("family") == CB.FAMILY)
+    rows = manifest.get("identities")
+    ids = sum(1 for r in (rows if rows else []) if r.get("family") == CB.FAMILY)
     uncovered, unattached = (plan.uncovered if plan else []), CB.unattached(manifest, on)
     return {"schema": CALL_BOUNDARIES_SCHEMA, "pass": not uncovered and not unattached, "identities": ids,
             "claimed": ids - (plan.identities if plan else 0), "covered": plan.covered if plan else 0, "uncovered": len(uncovered),
