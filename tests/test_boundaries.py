@@ -196,7 +196,7 @@ _LISTED = {*_UNIT_AT, *NO_UNIT}
 ML_TREES = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
 CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement", "difftest",
-              "protocols/certifier/device", "protocols/flock/sigma", "protocols/inference_only/verifier",
+              "protocols/certifier/device", "protocols/compose", "protocols/flock/sigma", "protocols/inference_only/verifier",
               "protocols/recursion", "protocols/remote", "protocols/tests")
 _SIDE_AT = {t: side for side, trees in (("ml", ML_TREES), ("core", CORE_TREES)) for t in trees}
 #: Import names ``verity`` never imports or names as a string: the other workspace distributions, external runtimes, and the
@@ -990,8 +990,8 @@ def _path_loads(nodes: Iterable[ast.AST], reaches: Callable[[ast.AST], bool], lo
 
 
 def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str, list[str]]:
-    """Each file of ``texts`` (repository path -> source) outside ``benchmarks/`` (and ``archive/``, which has rules of its
-    own) that imports a module of ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
+    """Each file of ``texts`` (repository path -> source) outside ``benchmarks/`` that imports a module of
+    ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
     import-call string or a ``"module:attr"`` string), or a path into ``benchmarks/`` (``_into_benchmarks``) put on
     ``sys.path`` or loaded by file.  A path is traced through the file's own names and parameter defaults, through other
     files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``), and through any function, wherever it
@@ -1002,7 +1002,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
              re.compile(rf"""["'](?:{alt})(?:\.\w+)*[.:]\w+["']""")]
     quoted = re.compile(r"""["'][^"'\n]*\bbenchmarks\b[^"'\n]*["']""")
     loads = ("sys.path", *PATH_LOADERS)
-    ours = {rel: text for rel, text in texts.items() if not rel.startswith(("benchmarks/", "archive/"))}
+    ours = {rel: text for rel, text in texts.items() if not rel.startswith("benchmarks/")}
     trees: dict[str, ast.AST] = {}
     constants: set[str] = set()
 

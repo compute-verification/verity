@@ -451,11 +451,11 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
             lg["delta"][n] for n in al.ledger.DELTA_PARTS]
         assert honest["error"]["delta_rejection"] > 0 and honest["error"]["named_terms"] == al.NAMED_TERMS
         assert doc["line"][t]["error"] == doc["credit"]["error"] == al.union_error([honest])
-        assert next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:")).endswith(
+        printed = next(x for x in al.table(doc).splitlines() if x.startswith(f"line {t}:"))
+        assert ", error δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), δ = " in printed
+        assert printed.endswith(
             "): the ledger's δ (profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the "
-            "credited "
-            "sessions, "
-            "beside Σ_t Adv(prf t) (claim prf/sha-512), named and in no total")
+            "credited sessions; Σ_t adv_t (claim prf/sha-512) is named, with no value and in no total")
         assert doc["conditional_on"] == al.CONDITIONAL_ON
         assert list(doc["conditional_on"]) == ["NoOutsideCompute", "binding-split"]
         assert doc["boundary"] == {"checked": False, "reason": "off by default (--boundary)"}
@@ -881,7 +881,8 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     assert e["total"] == float(total) and e["log2_total"] == al.timing.log2(total)
     assert sum(parts.values()) - total == parts["delta_hiding"] and e["delta_slack"] > 300 * e["delta_profile"]
     assert e["named_terms"] == al.NAMED_TERMS == {"prf_advantage": {
-        "claim": "prf/sha-512", "term": "Σ_t Adv(prf t)", "value": None, "in_total": False}}
+        "claim": "prf/sha-512", "term": "Σ_t adv_t", "value": None, "in_total": False,
+        "status": "SHA-512 stream as PRF: not priced, not assumed"}}
     uncharged = session(2.0 ** -40, 700, 2.0 ** -60, charged=False)
     assert Fraction(uncharged["ledger"]["declared"]["memory"][al.ledger.SNAPSHOT]["delta"]) == total - Fraction(
         48 * 700, 2 ** 64) and al.session_error(uncharged) == e
@@ -909,6 +910,36 @@ def test_the_line_records_the_ledgers_delta_in_its_parts_and_their_sum_over_its_
     assert out["T=1s"]["error"] == credit["error"] == {"sessions": [0, 1], "total": float(both), "exact": str(both),
                                                        "log2": al.timing.log2(both), "named_terms": al.NAMED_TERMS}
     assert out["T=60s"]["error"] == {"sessions": [], "total": 0.0, "exact": "0", "log2": None, "named_terms": {}}
+
+
+def test_no_error_the_auditors_line_renders_comes_without_the_prf_term_it_leaves_out():
+    """The line's error is never printed as a bare δ. In the Markdown table it reads δ + Σ_t adv_t (SHA-512 stream as
+    PRF: not priced, not assumed), the ledger's words (`ledger.DELTA_FORM`), with δ's number after it, and every error
+    of the document that has a session (a session's, a T's, the line of record's) names the term beside its total,
+    as the ledger's own records do (`ledger.NAMED_TERMS`). A T that credits no session prints no error."""
+    assert al.NAMED_TERMS is al.ledger.NAMED_TERMS
+    d = {"profile": 2.0 ** -40, "slack": 96 * 2.0 ** -67, "hiding": al.ledger.hiding_over(96), "binding": 0.0,
+         "sketch": 0.0, "rejection": 48 * 96 * 2.0 ** -64}
+    total = 0.0
+    for x in d.values():
+        total += x
+    memory = {f: {"delta": total, "named": al.ledger.NAMED_TERMS} for f in al.ledger.FORMS}
+    e = al.session_error({"k": 0, "samples": 48,
+                          "ledger": {"delta": d, "inputs": {"passes": 96}, "declared": {"memory": memory}}})
+    held = {f: {**dict.fromkeys(al.SHARES, 0.5), "exact": dict.fromkeys(al.SHARES, "1/2")} for f in al.line.FORMS}
+    rows = [{"k": 0, "T": "T=1s", "shares_auditor_clock": held, "error": e, "credit": {"ok": True, "zero": []}},
+            {"k": 1, "T": "T=60s", "shares_auditor_clock": held, "error": e,
+             "credit": {"ok": False, "zero": ["not accepted: the Lean refused it (receipt)"]}}]
+    out, credit = al.credited_line(rows)
+    text = al.table({"sessions": [], "line": out, "credit": credit, "line_by": "python", "conditional_on": {},
+                     "boundary": {"checked": False, "reason": "off by default (--boundary)"}}).splitlines()
+    credited, zero = (next(x for x in text if x.startswith(f"line {t}:")) for t in ("T=1s", "T=60s"))
+    assert al.ledger.DELTA_FORM == "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
+    assert f", error {al.ledger.DELTA_FORM}, δ = {e['total']:.3g} (2^{e['log2_total']:.2f}): " in credited
+    assert "error" not in zero and [x for x in text if "error" in x] == [credited]
+    for error in (e, out["T=1s"]["error"], credit["error"]):
+        assert error["total"] > 0 and error["named_terms"] == al.ledger.NAMED_TERMS
+    assert out["T=60s"]["error"]["sessions"] == [] and out["T=60s"]["error"]["total"] == 0.0
 
 
 # Gate runs 8 and 9's accepted sessions (their verifier.json): (passes, the memory line's δ every form records, the

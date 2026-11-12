@@ -102,6 +102,7 @@ def test_a_rejected_session_pools_nothing():
     r = monitoring.table({"verdict": "reject", "reason": "the session was rejected: payload-path", "public": None,
                           "profile": None}, 1, 600)
     assert r["periods"] is None and "payload-path" in r["why"]
+    assert r["except_also"] == monitoring.EXCEPT, "a table that pools nothing still says what its δ leaves out"
 
 
 def test_the_cli_reads_a_legs_bandwidth_json(tmp_path, capsys):
@@ -120,3 +121,7 @@ def test_each_period_is_labelled_as_one_session_scaled_up():
     for name, row in r["periods"].items():
         assert row["basis"] == f"one session scaled up to {row['sessions']} sessions, not a measured {name}"
     assert set(r["statement"]) == {"name", "file"}
+    # no δ or eps of a table is read alone: beside its deltas it says the term each leaves out, in the ledger's words
+    assert r["deltas"] and r["except_also"] == monitoring.EXCEPT
+    assert "δ + Σ_t adv_t" in r["except_also"]
+    assert "(SHA-512 stream as PRF: not priced, not assumed)" in r["except_also"]

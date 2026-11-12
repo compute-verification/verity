@@ -1,4 +1,4 @@
-"""`StepGraph.c_macs`, `StepGraph.structure()` and `RunGraph.record()`, training_slowdown.flops's record form, against hand counts
+"""`StepGraph.c_macs` and `StepGraph.structure()`, a step in training_slowdown.flops's record form, against hand counts
 on the 2-layer MLP."""
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 
 from models import TinyLM, lm_loss, mlp
-from training_slowdown.capture import capture_run, capture_step
+from training_slowdown.capture import capture_step
 
 FI, H, O, N = 3, 5, 2, 4
 GEMM = N * (2 * FI * H + 3 * H * O)
@@ -32,23 +32,18 @@ def test_sgd_update_is_one_mac_per_parameter_element(foreach):
     assert g.c_macs == GEMM + PARAMS
 
 
-def test_record_rows_and_step_order():
+def test_a_steps_updated_rows_are_of_the_weights_it_reads_as_updated():
+    """The same step read as a run's first, whose weights are θ's (`updated=()`), and as a later one, which reads
+    what it trains as updated (the default): the first has no updated row, and the counts are the same."""
     m = mlp(FI, H, O)
     g0 = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), mse, batch(), updated=())
-    g1 = g0.with_updated(g0.trained)
-    rec = capture_run([(1, g0), (2, g1), (1, g0)]).record()
-    steps = rec["steps"]
-    assert [s["step"] for s in steps] == [0, 1, 2, 3]
-    assert steps[0]["struct"] == steps[3]["struct"] != steps[1]["struct"] == steps[2]["struct"]
-    assert rec["structures"][steps[0]["struct"]]["updated"] == []
+    g1 = capture_step(m, torch.optim.SGD(m.parameters(), lr=0.1), mse, batch())
+    assert g0.digest == g1.digest and g1.updated == g1.trained == g0.trained and g0.updated == frozenset()
+    assert g0.structure()["updated"] == []
     # one row per forward updated MAC node: [MACs per token, updated MACs per token upstream, MACs, tokens, the
     # narrowest width of its update-dependent operands]
-    assert rec["structures"][steps[1]["struct"]]["updated"] == [[FI * H, 0, N * FI * H, N, 32],
-                                                               [H * O, FI * H, N * H * O, N, 32]]
-    assert [(s["tokens"], s["macs"], s["matmul_macs"], s["elementwise_macs"]) for s in steps] == [(N, GEMM + PARAMS, GEMM,
-                                                                                                    PARAMS)] * 4
-    assert rec["totals"]["macs"] == 4 * (GEMM + PARAMS) == sum(s["macs"] for s in steps)
-    assert rec["setup"]["macs"] == rec["tail"]["macs"] == 0
+    assert g1.structure()["updated"] == [[FI * H, 0, N * FI * H, N, 32], [H * O, FI * H, N * H * O, N, 32]]
+    assert [(g.tokens, g.c_macs, g.macs, g.elementwise_macs) for g in (g0, g1)] == [(N, GEMM + PARAMS, GEMM, PARAMS)] * 2
 
 
 def test_bits_are_the_updated_weights_width():

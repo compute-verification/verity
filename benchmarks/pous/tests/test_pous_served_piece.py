@@ -222,7 +222,7 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
     assert row["verdict"] == "accept" and row["owner"] == "memory-accounting" and row["protocol"] == TEST_PROTOCOL
     assert row["quantity"] == answer["public"] == {"certified": False, "eps": "0", "s_bits": 0}
     leg = BR.leg("pous", row, server=NODE, runs=[])
-    assert leg["quantity"] == {"symbol": "S_cert", "value": 0, "unit": "bits", "certified": False}
+    assert leg["quantity"] == {"symbol": "S0", "value": 0, "unit": "bits", "certified": False}
 
     prof = answer["profile"]
     w_bytes = sum(n * k for n, k in SHAPES.values()) * LAYERS

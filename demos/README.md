@@ -32,8 +32,8 @@ guarantee assumes; each subprotocol states its guarantee in `security/`, and the
 hypotheses, so no demo's `proof` is past `none`. `lifecycle/` is the only demo that steps through the whole
 remote composite, H1's development one, on CPU with a stand-in prover. Its demo is the vLLM demo
 (`verity demo vllm`), on H1's development executable: one served run of Llama-3.2-1B INT8 on one H200, sampled proofs
-and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs remote's
-sampled-proofs half. The inference-only policy runs in `lifecycle/` only: no served run produces the declared
+and PoUW on the served model, whose PoUW verdict is a development run that credits nothing. The inference-only policy
+runs in `lifecycle/` only: no served run produces the declared
 division yet. Five other things are called "remote" (PoUB among them);
 `verity/protocols/remote/verifier/README.md`, "Which remote", lists them.
 
@@ -89,15 +89,6 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   its placement is `placement.toml`, which `run.sh` reads, and its scripts reach the integration by `PYTHONPATH`; it is
   not a package. The auditor's devices (the verifier, the network certifier and the memory challenger) are not placed:
   the Lean verifier runs on the GPU node with the endpoint and the prover, and the other two may run there too.
-- `h200/` (`run` `runs`, `proof` `none`): remote's sampled-proofs half at a frozen shape on one H200. The
-  frozen multi-query attention shape is served on one GPU node with every value committed a step. `verity demo h200
-  --out OUT` runs its step driver, `run.py` (on the CPU at small shapes, or an H200 at the frozen shape), and writes a
-  replay bundle and a block record; `phases.sh` runs the sampled-proof-block proving, one phase a run, from the step's commit on
-  the H200 to its sampled proof blocks proved. In its run of record, 8 proof blocks sampled by one live coin are each proved by
-  Flock `--zk` and accepted by the Lean verifier, and a flipped bit is refused. It is not `placed`: the Lean verifier ran
-  on a CPU node beside the prover. It claims only sampled proofs: PoUS and network certification (onsite's
-  subprotocols) and the memory wipe (onsite's) exist here as a skeleton on fixture coins, not as runs, and nothing
-  claims them.
 - `onsite_served/` (`run` `moved`, `proof` `none`): onsite's run configuration for the served window. One
   `verity run` configuration (`config.toml`) of onsite's seven subprotocols on the served int8 window: its
   parties, channels and each subprotocol's piece, PoUS's at 320 challenges, which `verity run --on MACHINE --bindings FILE`

@@ -9,7 +9,7 @@
   "Difftest": {
    "imports": ["Lean", "Base.Canon"],
    "except": [],
-   "why": "the harness is code: Lean core and the base's canonical JSON (`core_base`), no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct); the harness is code: Lean core and C-Flock's canonical JSON, no Mathlib and nothing of Security"
+   "why": "the harness is code: Lean core and the base's canonical JSON (`core_base`), no Mathlib and nothing of Security; the harness is code: Lean core and C-Flock's canonical JSON, no Mathlib and nothing of Security"
   },
   "DifftestExample": {
    "imports": ["Difftest"],

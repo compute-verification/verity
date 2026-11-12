@@ -127,7 +127,6 @@
         "verity/composite/device/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
-        "benchmarks/latency_compare.py",
         "benchmarks/private_circuit/",
         "benchmarks/verifier_cost/",
         "benchmarks/proof_throughput/",
@@ -243,7 +242,7 @@
         "security/Proofs/Nci/",
         "benchmarks/pouw/",
         "verity/protocols/pouw/clear/",
-        "benchmarks/pouw/machine_model/",
+        "benchmarks/machine_model/",
         "verity/protocols/pouw/receipts/",
         "benchmarks/numerical/",
         "benchmarks/ppl/",
@@ -293,10 +292,7 @@
         "security/Proofs/Accounting/HMu/",
         "security/Proofs/Accounting/PouwWork.lean",
         "security/Proofs/Accounting/TS.lean",
-        "security/Proofs/Accounting/TS/",
-        "archive/examples/h200/",
-        "archive/examples/dither_full_util/",
-        "archive/benchmarks/pouw/"
+        "security/Proofs/Accounting/TS/"
       ],
       "branch_suffixes": [
         "e3fa",
@@ -618,8 +614,7 @@
         "pyproject.toml",
         "uv.lock",
         ".gitattributes",
-        ".gitignore",
-        "archive/"
+        ".gitignore"
       ]
     },
     {

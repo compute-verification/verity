@@ -32,7 +32,7 @@ package's.
 | --- | --- | --- | --- | --- |
 | `network-check` | `verity/network-certificate/v4` | `NetworkCheck.Check` | one spatial unit's certified link-windows: every egress link in order, then every ingress link, under the certifier's LMS key in its session | `audit.py`'s `Audit` (`check_link`, `check_ingress_link`) |
 | `network-records` | `verity/network-records/v3` | `NetworkCheck.Records` | the same audit over raw, committed and certified records, with the egress grid compared or not | `audit.py`'s `Audit` |
-| `network-period` | `verity/certifier/v0` | `NetworkCheck.Period` | a certification period, the onsite composite protocol's communication component (below) | `tests/period_case.py` |
+| `network-period` | `verity/certifier/v0` | `NetworkCheck.Period` | a certification period, the onsite configuration's communication component (below) | `tests/period_case.py` |
 | `network-check-difftest` | none | `NetworkCheck.Difftest` | that `certificate.py`'s encodings are `NetworkCheck.Certificate`'s, byte for byte | `certificate.py` |
 
 The other modules:
@@ -72,7 +72,7 @@ bits a covert sender in the server can move through the network certifier in the
 - `lean_audit.Audit` is `audit.Audit` with every verdict taken from one `network-records verdicts` process.
   `VERITY_NETWORK_RECORDS_EXE` names a built executable; without it, the first request runs `lake build
   network-records` here.
-- The onsite composite protocol (`verity/protocols/onsite/verifier`) composes `verity/certifier/v0` as its communication
+- The onsite configuration (`verity/protocols/onsite/verifier`) composes `verity/certifier/v0` as its communication
   component (`Core.Onsite.components`). The composition's difftest takes the period's mirror and cases from
   `tests/period_case.py`.
 

@@ -47,6 +47,10 @@
   exactly within 2^22 and serves verity_int8's epilogue on it. Its window: the registration record, the instance
   positions and domains, where a unit's words and A rows are committed, and the verifier's refusals of the certifier's
   record (`PouwCheck/Opening.lean` is its Lean reader).
+* `window_statement`: an execution phase's statement on its committed entry rows (`PouwWindowStatement`,
+  `window.window_problem` in gates), one unit an execution phase: ok iff the P rows are entry rows of the layout, the
+  calls, one filler, then empty entries, whose ranges tile [0, N) at the public registered level, every call's -h3 root
+  the pass's public one and the calls' pass tiles in order.
 
 `traced_as(scheme, m, k, n)` is what a composition (the vLLM integration's protocol options) calls: for a scheme whose circuit
 is here, the Programs sampled proofs traces for one PoUW linear and its weight, their partition queries, the served outputs

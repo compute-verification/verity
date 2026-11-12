@@ -959,8 +959,8 @@ def reuse_lowerings():
 
 
 def sized(fn) -> dict:
-    """`m1_families`' estimate of the unit (an upper bound on its ANDs) and M0's block for it (``rows_log``: its rows'
-    in-circuit hashing alone, a lower bound whatever its ANDs)."""
+    """`m1_families`' estimate of the unit (its leaves' ANDs, table reads apart: not its ``ands`` staged with reads
+    inline) and M0's block for it (``rows_log``: its rows' in-circuit hashing alone, a lower bound whatever its ANDs)."""
     import math
 
     import m1_families as MF

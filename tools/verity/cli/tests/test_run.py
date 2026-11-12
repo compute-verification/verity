@@ -181,7 +181,7 @@ def capped(cap):
 
 def test_an_uncapped_certifier_configuration_hashes_as_before_the_cap():
     cfg = K.check(config(), REG.components, REG.workloads)
-    assert not {"max_tokens_cap", "lengths"} & set(cfg["params"]["verity/certifier/v0"])
+    assert not {"max_tokens_cap", "lengths", "content"} & set(cfg["params"]["verity/certifier/v0"])
     assert K.digest(cfg) == UNCAPPED_ONSITE
 
 

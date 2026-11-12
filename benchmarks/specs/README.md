@@ -9,6 +9,9 @@ every key a spec may hold, how a point is timed, and what a result says. This fi
   else `stock`, else its first arm.
 - A **sweep** (`verity-bench/vllm-sweep/v0`) is the points a spec runs: the product of its batches, prompt lengths
   and traffic shapes, every request sampled greedily. A spec names one by its id.
+- A **steady-state spec** (`verity-bench/steady-spec/v0`) is the proof server's rate at steady state: block types, each a
+  row with its staged statement's pin, timed at each of its prover counts on one card with the spec's cores. Its points
+  run only with `--direct NODE`.
 
 ~~~text
 verity-bench plan SPEC     # each point's identity, and its passing run if it has one
@@ -57,6 +60,11 @@ its checkpoint pin, and that every spec and sweep here has its line below.
   stock FP8 on the same graph path and compiled stock FP8, at 6 reps.
 - `llama31-8b-fp8-1gpu-bandwidth-ablation`: where the audit's time goes, by part and with the top-up off
   (`verity-bench breakdown`).
+
+## The proof server at steady state
+
+- `glm53-flock-steady-head-block-h200`: GLM-5.3's sparse MLA head block at 64 visible keys, in both its forms, at one,
+  two and four provers on one H200 with ten cores, each statement fetched from the store.
 
 ## Sweeps
 

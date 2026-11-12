@@ -32,6 +32,13 @@ before its own root left the node. So every read serves at most one receipt of t
 (`IntegrityProfile.bound`). Pooled over the session's windows instead, the openings bound the wrong receipts of all
 of them at once, and each window's share, except with \(\delta\) for the session (§10).
 
+No δ of this protocol's is read alone. A window's openings are sampled from SHA-512's keyed stream under its coin, so
+the error the statements carry (`PooledSample`, `LineHeld`) is \(\delta + \sum_t \mathrm{adv}_t\), \(\mathrm{adv}_t\)
+window \(t\)'s PRF advantage, and nothing prices that term and no guarantee assumes it. Wherever this document, a
+record or a printed line gives a δ, or an ε or an error that holds one, the number is δ and it reads
+\(\delta + \sum_t \mathrm{adv}_t\) (SHA-512 stream as PRF: not priced, not assumed): `ledger.DELTA_FORM`, with the term
+named in the object that carries the δ (`ledger.NAMED_TERMS`).
+
 `ledger` turns that into γ, given the node's capacity \(R\) (its read bandwidth over every registered tier, its GPUs'
 HBM plus its host's DRAM; specified or measured, §1 "The node, and its one \(R\)" and "Which \(R\) is the headline")
 and its on-chip storage \(S_{\text{chip}}\). Over the session's span \(\Sigma = D_{W-1} - b_{-1}\), the credited reads
@@ -48,9 +55,9 @@ opened like any other, but not credited.
 | term | what it is | where it comes from |
 | --- | --- | --- |
 | \(\mu_{\text{timing}}\) | \(1 - \sum_t U^{c}_t b / (R\Sigma)\), \(U^{c}_t\) window \(t\)'s credited receipts: the span the credited receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out, post-seed blocks without a verdict) | the record |
-| \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`GammaTerms.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`GammaTerms.horizon`, §10) | the record's profiles, at δ |
+| \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`GammaTerms.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`GammaTerms.horizon`, §10) | the record's profiles, at \(\delta + \sum_t \mathrm{adv}_t\) (SHA-512 stream as PRF: not priced, not assumed) |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
-| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2` (`SLACK_LOG2`, 67: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-50}\) up to \(2^{17}\) passes, more than an hour of the node's 41.2 ms passes over gate runs 8 and 9's 532.6 GB store); 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | proved (`Accounting.Guarantees.Remote.AuditRO`, applied per pass) |
+| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2` (`SLACK_LOG2`, 67: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-50}\) up to \(2^{17}\) passes, more than an hour of the node's 41.2 ms passes over gate runs 8 and 9's 532.6 GB store); 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | `Accounting.Guarantees.Remote.AuditRO`, proved for one pass; the ledger applies it per pass (§8, "Lean") |
 | \(\mu_{\text{rebuild}}\) | \(C_{\text{sq}} b / (E_{\text{sq}} R)\): blocks re-encoded from their payloads in place of reads, each at least the record's codec's \(E_{\text{sq}}\) squarings (`Codec.encode_squarings`: 98,016 at p1024/k3/masked, 65,344 at k = 2, 65,152 at p512/k2) at the node's stated ceiling of \(C_{\text{sq}}\) squarings a second at that width (`Rebuild`) | the record's codec, and assumption 5 stated per width (`WorkHardness(p, k)`) |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | under a registration that binds \(z\) only (0 otherwise): relays that meet \(z\) and a copy of the block over a link (§4) | a model |
@@ -77,8 +84,9 @@ session reserves append coins), and \(s_t = \min(s, |L_t|)\). Sampled \(g > 1\) 
 cap \(s\) over them together. It takes the chance that the two runs' roots differ as
 0: the prover holds nothing of a window's openings coin before its roots (§4), but that its play then fixes them by the
 cut is not yet stated in Lean (the gap `binding-split`, §8). The sample has no hiding term: the prover is sent the coin
-commitment only once the session has its outcome (§4). The windows' PRF advantages are the sample's third term: named
-with their claim (`prf/sha-512`, `ledger.PRF_CLAIM`), with no value. The memory line's \(\delta\) carries the
+commitment only once the session has its outcome (§4). The windows' PRF advantages \(\sum_t \mathrm{adv}_t\) are the
+sample's third term, which nothing prices and no guarantee assumes: named with their claim (`prf/sha-512`,
+`ledger.PRF_CLAIM`) beside every δ, with no value and in none. The memory line's \(\delta\) carries the
 binding term and, while `LineHeld` reads the prover's records through the commitment, the commitment's hiding terms
 (\(n \cdot 2^{-191}\) over \(n\) windows, `ledger.hiding`), beside its \(2^{-\text{slack}}\) a pass. Under the default
 receipt kind, sketch-sha512, a receipt also rests on the receipts' sketch (`SketchBound`,
@@ -683,7 +691,8 @@ None of this moves γ: \(\delta_s\) adds to the failure probability, not to the 
 \(\delta_s\) to the memory line's δ and to γ's error (`ledger.sketch`), not to a term of γ. That δ is the profile's
 δ, AuditRO's \(2^{-41}\) a pass and \(\delta_s\): over one node's 10-minute horizon at 50 passes a second,
 \(2^{-40} + 2^{-26.13} + 2^{-30.19} = 2^{-26.04}\) (\(2^{-26.13}\) at \(F = 1\)). The stated claim at \(2^{-40}\) (§10) is
-the openings' δ; the line's total is above it on the slack alone, whatever \(F\).
+the openings' δ; the line's total is above it on the slack alone, whatever \(F\). Both leave out
+\(\sum_t \mathrm{adv}_t\) (SHA-512 stream as PRF: not priced, not assumed; §1).
 
 What each costs on the GPU: one RTX PRO 6000 (sm_120, 2,092 MHz), an 8 GiB pass of 2,097,152 blocks, best of
 3. τ is a pass's time over one plain read of the same
@@ -985,7 +994,8 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   uncredited and doesn't enter the store, so no append is credited and they carry no workload. Revisit this when
   appends are credited.
 - **The memory line**, a session total only, in three forms, each with its ε and δ: the registered bytes the session
-  shows held in node memory are at least \((1 - \varepsilon) N b\), except with probability δ.
+  shows held in node memory are at least \((1 - \varepsilon) N b\), except with probability
+  \(\delta + \sum_t \mathrm{adv}_t\) (SHA-512 stream as PRF: not priced, not assumed).
   - *Snapshot*: the registered blocks in node memory at the start of each credited pass, averaged over those passes.
   - *Time-held*: the registered blocks in node memory at each instant of the credited span, averaged over the span.
     Only a paced session whose every pass reads every registered block has one ("Pacing").
@@ -1004,8 +1014,9 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   at the receipts each sample requested, \(k_t\) the record's `samples`, not the \(\min(k_t, U_t)\) it took: a sample
   that opens all its receipts is charged \(k_t\) too, as `LineHeld`'s error is. These are the ledger's parts
   (`ledger.DELTA_PARTS`), the horizon's profile and slack and then these four. `LineHeld`'s error also carries the
-  windows' PRF advantages, \(\sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which have no numeric value: the ledger names
-  them by their claim (prf/sha-512, `ledger.PRF_CLAIM`) and puts them in no δ.
+  windows' PRF advantages, \(\sum_t \mathrm{adv}_t = \sum_t \mathrm{Adv}(\mathrm{prf}\,t)\), which nothing prices and no
+  guarantee assumes, so they have no numeric value: the ledger names them by their claim (prf/sha-512,
+  `ledger.PRF_CLAIM`), puts them in no δ, and each form's record carries them beside its δ (`ledger.NAMED_TERMS`).
 
   Statement C in full is that no device outside the node computes for it during the session. Identity is only its
   links clause: a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the
@@ -1332,9 +1343,17 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   keeps them, and the leaves' salts: 64 bytes a 4 KiB block and 192 a leaf of 16, about 1/60 of what it read in the
   window. Keeping each tree above its leaves and re-reading an opened leaf's 16 blocks instead costs a small fraction of
   the reads again (about 0.06–0.1%). The reference keeps every pass whole.
-- **Lean.** The statement is `Accounting.Guarantees.RemoteSessionRunConservation` (and `RemoteWindowRunConservation`,
-  each with a `Relay` form): `Accounting.SecurityProofs.Remote.Conservation` at the per-pass routes proved for
-  it. The openings are
+- **Lean.** A session's published `q_bytes` is its receipts less a bound on the wrong ones that covers
+  `Accounting.Guarantees.Remote.PooledSample`'s on its record (`RemoteAudit.Protocol.certify`,
+  `Properties.RemoteAudit.PooledCovers`). Its `eps` is that statement's δ and term per sampled receipt; the statement's
+  PRF advantages (`prf/sha-512`) and its receipts' binding term are not in `eps`. γ's other terms are the ledger's
+  arithmetic, which no Lean property covers. The statements γ is modelled on are the lock's `deployed` entries,
+  `RemoteSessionConservationSketchDeployed` (sketch receipts, provers that keep sectors verbatim) and
+  `RemoteSessionConservationDeployed` (whole-block receipts). `RemoteSessionRunConservation` is the whole-block
+  statement at every parameter, read as a run of the remote audit. They take n windows of P passes, one sample of 2,773
+  a window and no clock; a paced session's groups, the receipts it samples a group and its timing term are not shown to
+  be an instance. The one deployed statement on a paced session's record is the memory line's,
+  `Properties.RemoteAudit.Line.LineHeld`. The conservation statements' openings are
   `Accounting.Guarantees.RateWindowSample`, a window's pooled sample over its passes' receipts, and `RateSessionSample`,
   the monitoring period and every window at once, both from `PooledSampling`, the causal bound over the monitoring
   period. They take windows of one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ
@@ -1448,7 +1467,8 @@ correct receipts. The same event bounds every window's share by itself: \(f_t < 
 \(\ln(1/\delta)/s_t\), with no union over the windows.
 
 The stated claim is that hybrid: short by under 0.15% over a 10-minute horizon (for \(\mu_{\text{sample}}\),
-below) and by under 1% in every window (for the whole \(\gamma_t\)), at \(2^{-40}\), with the window stated at
+below) and by under 1% in every window (for the whole \(\gamma_t\)), at \(\delta = 2^{-40}\), which reads
+\(\delta + \sum_t \mathrm{adv}_t\) (SHA-512 stream as PRF: not priced, not assumed; §1), with the window stated at
 \(T\) = 60 s and 33,273 openings. For \(\mu_{\text{sample}}\) it
 needs \(d \ge 2{,}773\) openings a window and \(d \cdot n \ge 18{,}470\) over the horizon's \(n\) windows. The stated
 window's 33,273 give each window a floor of 0.083%, and the horizon's 10 windows \(\ln(2^{40})/(d\,n)\) = 0.0083%.

@@ -69,67 +69,89 @@ public import Definitions.Accounting.Wipe
 /-!
 # Resource accounting's definitions (trusted)
 
-Resource accounting turns the subprotocols' guarantees into bounds on what a device computed, read, held and sent. Its
-definitions are the device model every resource audit is about, the actual circuit the device evaluates, a joint
-audit's run on it, and each audit's game read as one of that run's audits. This module imports every module of them;
-the lock's `layers` lists what they may import:
+Resource accounting bounds what a device computed, read, held and sent, by reading each subprotocol's guarantee as an
+account on one device model.
 
-* **The device and the actual circuit.** `Device` (the device model); `Actual`, `Physical`, `Confidence` and `Bridge`
-  (the actual circuit, its physical assumptions, its runs, strategies and confidence set, and the device's schedule it
-  induces); `Window` (a location with the ring's oracle locations); `CostModel` (the cost model of the actual circuit's
-  provers); `Additive` (a device's period on the machine model 𝓜); `Gates` (the gate model the lower bounds on a
-  registered circuit are proved over); `Requirement` (what a registered circuit needs of a device's memory).
-* **The joint audit.** `Joint` (a joint audit's run, and what each audit's guarantee says about it); `PerRun` (per-run
-  audits); `JointPeriod` and `JointBridge` (a period audited by every subprotocol, and each subprotocol's per-period
-  guarantee read as its account); `NetWitness` (the period run the network certifier's bridge fails at) and
-  `JointBridge.CommOfPooledLeakAcceptedWitness` (an honest run of its monitoring period, pooled); `JointLive`
-  (a period as a causal game, its claims on a fixed extractor's values);
-  `Wipe` (the streamed-label wipe on the device model); `ReadUnit` (a unit that returns one row of a registered table
-  at an index another unit picks, and what binds it to that row).
-* **Each audit's game.** The compute audit: `Pouw` and `PouwWork` (PoUW's game, and its work on one node of the actual
-  circuit), `PouwWitness` (the run its witnesses fail at), `Compose` and `ComposeMonitoringPeriod` (PoUW as a compile pass over a registered circuit, over one execution phase
-  and over a monitoring period), `HMu` and `CoinFlow` (the receipt-luck premise H-μ⁺ and a Program's coin flow),
-  `Served`, `Filler`, `BoundReceipt` and `BoundSketch` (receipts bound to the matmul), and `TS`, `Headline` and
-  `HeadlineDc` (the tensor–scalar model and the headline instances' exact data). The capacity audit: `Capacity`,
-  `Memory` and `Responder`. The bandwidth audit: `Bandwidth`, `BandwidthAudit`, the rate audit's games (`RateAudit*`),
-  `Tag`, `Schedule` and `Carrier`. PoUB's node and run: `Remote`.
-* **The overhead lower bound's inputs.** `Slowdown` (tasks, classes, thresholds and slowdown) and `ServingBlocks`
-  (server blocks and a training class's counts).
+## Read first
 
-## Top guarantees
+The lock's `deployed` guarantees for the area, the bandwidth audit's and PoUB's, each with the module that states it:
 
-Each is `Accounting.Guarantees.X`, stated in the file named under `Security/Definitions/Accounting/Guarantees/` and
-proved as `Accounting.SecurityProofs.X` in the file of that name under `Security/Proofs/Accounting/` unless another is
-named.
+* `Accounting.Guarantees.RemoteSessionConservationDeployed` (`Definitions.Accounting.Guarantees.RateAuditDeployed`):
+  PoUB at its deployed parameters.
+* `Accounting.Guarantees.RemoteSessionConservationSketchDeployed` (the same module): PoUB's sketch session at the
+  deployed receipt parameters, under the per-pass hash budget.
+* `Accounting.Guarantees.StackedSessionConservationSketchDeployed` (`Definitions.Accounting.Guarantees.Stacking`): PoUB
+  with a store per pass. `Accounting.Guarantees.StackedRequirementSketchDeployed` (the same module) reads
+  it against a registered circuit's requirement.
+* `Accounting.Guarantees.Remote.SketchBoundDeployed` (`Definitions.Accounting.Guarantees.RemoteSketch`): the sketch
+  bound at the deployed receipts.
+* `Accounting.Guarantees.Remote.AuditRO` (`Definitions.Accounting.Guarantees.RemotePass`): the bandwidth audit in the
+  random-oracle model. It is the bandwidth audit's row in `security/README.md`.
+* `Properties.RemoteAudit.Line.LineHeld` (`Properties.Accounting.Remote.Line`): the memory line of record,
+  link-charged. It is PoUB's row in `security/README.md`.
 
-* `Joint`, `CovertResidual` (`Joint.lean`): on any device, the probability that the compute, bandwidth and capacity
-  audits all accept while some account is below its certificate, or beyond its residual, is at most `εW + εQ + εS`.
-* `JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive` (`JointLive.lean`): the joint guarantee over one
-  period, over `m` periods and over `B` server blocks with the memory wipes that open them, as one causal game over the
-  five subprotocols' per-period guarantees.
-* `ComputeOfPouw` (`Pouw.lean`): PoUW's guarantee is the compute guarantee, at certificate `(1 − γ)(1 − εs)·W`.
-* `Compose.CircuitCredit` (`Compose.lean`) and `ComposeMonitoringPeriod.CircuitCreditPeriod` (`ComposeMonitoringPeriod.lean`): PoUW's
-  credit on a registered circuit it compiles, over one execution phase and over a monitoring period's accepted prefix.
-* `TS.Sm90SheetHeadline` (`HeadlineDc.lean`, proved in `HeadlineDc/Sm90.lean`) and `TS.Sm120SheetHeadline`
-  (`Headline.lean`, proved in `Headline/Sm120.lean`): the headline at H200's and sm_120's data sheets.
-* `CapacityOfStateBound` (`Capacity.lean`): a state-bounded game's soundness is the capacity guarantee.
-* `Memory.Adds` (`Memory.lean`): memory adds against PoUS's guarantee, counting the help.
-* `BandwidthOfAudit` (`BandwidthAudit.lean`): the bandwidth audit's guarantee is the bandwidth guarantee; the bandwidth
-  audit's own guarantee is `Bandwidth.Guarantees.AuditRO` (`Bandwidth.lean`, proved in `Bandwidth/AuditRO.lean`), in
-  the random-oracle model.
-* `AccelAdditive` (`Additive.lean`): instructions that different subprotocols issue together use at most a period's
+The area's other guarantees are `Accounting.Guarantees.X`, stated in the module named under
+`Definitions.Accounting.Guarantees` and proved under `Proofs.Accounting`:
+
+* `Joint` and `CovertResidual` (`Joint`): on any device, the probability that the compute, bandwidth and capacity audits
+  all accept while some account is below its certificate, or beyond its residual, is at most `εW + εQ + εS`.
+* `JointPeriodLive`, `JointPooledLive` and `JointPooledBlocksLive` (`JointLive`): the joint guarantee over one period,
+  over `m` periods and over `B` server blocks, as one causal game over the subprotocols' per-period guarantees.
+* `ComputeOfPouw` (`Pouw`): PoUW's guarantee is the compute guarantee, at certificate `(1 − γ)(1 − εs)·W`.
+* `Compose.CircuitCredit` (`Compose`) and `ComposeMonitoringPeriod.CircuitCreditPeriod` (`ComposeMonitoringPeriod`):
+  PoUW's credit on a registered circuit it compiles, over one execution phase and over a monitoring period.
+* `TS.Sm90SheetHeadline` (`HeadlineDc`) and `TS.Sm120SheetHeadline` (`Headline`): the headline at H200's and sm_120's
+  data sheets.
+* `CapacityOfStateBound` (`Capacity`): a state-bounded game's soundness is the capacity guarantee.
+* `Memory.Adds` (`Memory`): memory adds against PoUS's guarantee, counting the help.
+* `BandwidthOfAudit` (`BandwidthAudit`): the bandwidth audit's guarantee is the bandwidth guarantee.
+* `AccelAdditive` (`Additive`): instructions that different subprotocols issue together use at most a period's
   `ρ_r·T` units of each resource `r`.
-* `ServingBlocks.ServingBlockBound` (`ServingBlocks.lean`): a training class's counted weight is at most the overhead
-  lower bound's sum over server blocks, plus the dark remainder's.
+* `ServingBlocks.ServingBlockBound` (`ServingBlocks`): a training class's counted weight is at most the overhead lower
+  bound's sum over server blocks, plus the dark remainder's.
+
+## Assumptions
+
+The area's premises are stated in the modules under `Definitions.Accounting.Assumptions`. The lock's named assumptions
+are in `Definitions.Assumptions`.
+
+## Map
+
+This module imports the area's definitions; the lock's `layers` lists what they may import.
+
+* The device and the actual circuit. `Device` is the device model. `Actual`, `Physical`, `Confidence` and `Bridge` are
+  the actual circuit, its physical assumptions, its runs, strategies and confidence set, and the schedule it induces.
+  `Window` is a location with the ring's oracle locations, `CostModel` the cost model of the actual circuit's provers,
+  and `Additive` a device's period on the machine model 𝓜. `Gates` is the gate model of the lower bounds on a
+  registered circuit, and `Requirement` what a registered circuit needs of a device's memory.
+* The joint audit. `Joint` is a joint audit's run and what each audit's guarantee says about it, and `PerRun` the
+  per-run audits. `JointPeriod` and `JointBridge` are a period audited by every subprotocol, with each per-period
+  guarantee read as its account. `JointLive` is a period as a causal game. `NetWitness` is the run the network
+  certifier's bridge fails at, and `JointBridge.CommOfPooledLeakAcceptedWitness` an honest run of its monitoring
+  period, pooled.
+* The wipe and reads. `Wipe` is the streamed-label wipe on the device model. `ReadUnit` is a unit that returns one row
+  of a registered table at an index another unit picks.
+* The compute audit. `Pouw`, `PouwWork` and `PouwWitness` are PoUW's game, its work on one node of the actual circuit
+  and the run its witnesses fail at. `Compose` and `ComposeMonitoringPeriod` are PoUW as a compile pass over a
+  registered circuit. `HMu` and `CoinFlow` are the receipt-luck premise and a Program's coin flow. `Served`, `Filler`,
+  `BoundReceipt` and `BoundSketch` bind receipts to the matmul. `TS`, `Headline` and `HeadlineDc` are the
+  tensor–scalar model and the headline instances' exact data.
+* The capacity audit: `Capacity`, `Memory` and `Responder`.
+* The bandwidth audit. `Bandwidth` is its game in the random-oracle model, and `BandwidthAudit` that game as the
+  bandwidth audit of a joint run. `RateAudit` and the modules named after it are the rate audit's games. `Tag` is the
+  block tags, `Schedule` a deterministic schedule and `Carrier` device memory whose contents are a circuit's values.
+  `Remote` is PoUB's vocabulary: the node, its parameters, a run and its routes.
+* The overhead lower bound's inputs. `Slowdown` is tasks, classes, thresholds and slowdown, and `ServingBlocks` server
+  blocks and a training class's counts.
 
 ## Where to look
 
-* Named assumptions: `Security/Definitions/Accounting/Assumptions/`; guarantees:
-  `Security/Definitions/Accounting/Guarantees.lean` and `Guarantees/`.
-* Properties of the code: `Security/Properties/Accounting/`; proofs: `Security/Proofs/Accounting.lean` and
-  `Security/Proofs/Accounting/`.
-* Locks: `Security/lean-audit.json` (the guarantees) and `Security/Properties/lean-audit.json` (the properties).
-* Which of these statements protocol soundness rests on: `Security/README.md`.
+* Guarantees: `security/Definitions/Accounting/Guarantees.lean` and `Guarantees/`. Premises:
+  `security/Definitions/Accounting/Assumptions/`.
+* Properties of the code: `security/Properties/Accounting/`. Proofs: `security/Proofs/Accounting.lean` and
+  `security/Proofs/Accounting/`.
+* Locks: `security/lean-audit.json` (the guarantees) and `security/Properties/lean-audit.json` (the properties).
+* Which of these statements protocol soundness rests on: `security/README.md`.
 -/
 
 @[expose] public section

@@ -86,8 +86,9 @@ parts beside it: the windows' profile δ, AuditRO's 2^-slack a pass (the slack i
 41 in a record that doesn't say, where it dominates: 2^-29.95 over a 60 s session's 2118 passes), the coin
 commitment's hiding terms n·2^-191, the receipts' binding term at the session's bounds, δs, the sketch's, and the
 sample's rejection Σ_t k_t/2^64, k_t the session's `samples` (the hiding, the binding and the rejection added to the
-total of a record whose ledger didn't charge them), plus the windows' PRF advantages by name (`NAMED_TERMS`, claim
-prf/sha-512), which have no number and are in no total. The line at each T, and the line of record over every T
+total of a record whose ledger didn't charge them). The total leaves out the windows' PRF advantages Σ_t adv_t, which
+nothing prices and the line doesn't assume: every error names them (`NAMED_TERMS`, claim prf/sha-512) with no number,
+in no total, and reads `ledger.DELTA_FORM` where printed. The line at each T, and the line of record over every T
 (`credit`'s `error`), fail with at most the sum of their credited sessions' totals: the least share is read off
 whichever session the run made least, so the union bound holds where a maximum wouldn't.
 
@@ -181,10 +182,9 @@ the same two readings."""
 LINE_BY = ("lean", "python")
 """Who computes the line (`line_of_record`): the Lean verifier, held exactly to `line.py` on the same inputs, which is
 of record, or `line.py` alone."""
-NAMED_TERMS = {"prf_advantage": {"claim": ledger.PRF_CLAIM, "term": "Σ_t Adv(prf t)", "value": None,
-                                 "in_total": False}}
-"""`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which its claim
-prices and no number here does. Every error records it by name, outside its total."""
+NAMED_TERMS = ledger.NAMED_TERMS
+"""`LineHeld`'s error beyond δ: each window's PRF advantage, one oracle-access distinguisher a window, which nothing
+prices and the line doesn't assume (the ledger's). Every error records it by name, outside its total."""
 CONDITIONAL_ON = {"NoOutsideCompute": (
     "statement C in full: no device outside the node computes for it during the session. LineHeld reads it from the "
     "network certifiers' record (no counted ingress over the credited passes, Accounting.Remote.Held.Assumptions."
@@ -1102,10 +1102,10 @@ def table(doc: dict) -> str:
                    + " / ".join(f"{row[x]['filler_time']:.4%}" for x in b) + " (snapshot weights "
                    + " / ".join(f"{row[x]['snapshot']:.4%}" for x in b) + ", filler "
                    + " / ".join(f"{row[x]['filler_snapshot']:.4%}" for x in b) + ")"
-                   + (f", error {row['error']['total']:.3g} (2^{row['error']['log2']:.2f}): the ledger's δ "
-                      "(profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the credited sessions, "
-                      "beside "
-                      "Σ_t Adv(prf t) (claim prf/sha-512), named and in no total"
+                   + (f", error {ledger.DELTA_FORM}, δ = {row['error']['total']:.3g} "
+                      f"(2^{row['error']['log2']:.2f}): the ledger's δ "
+                      "(profile δ + P·2^-slack + Σ_t hide_t + bind + δs + Σ_t k_t/2^64) summed over the credited "
+                      f"sessions; Σ_t adv_t (claim {ledger.PRF_CLAIM}) is named, with no value and in no total"
                       if row["error"]["sessions"] else ""))
     out.append(f"line by {doc['line_by']}; {doc['credit']['summary']}")
     out += [f"conditional on {name}: {what}" for name, what in doc["conditional_on"].items()]

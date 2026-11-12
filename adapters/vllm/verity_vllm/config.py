@@ -307,12 +307,27 @@ def checkpoint_dir(model: str, revision: str, hf_home: str, checkpoints: str | P
     return local
 
 
-#: The vLLM commit this tree derives and serves on: ``vllm.__version__`` must carry ``+g<VLLM>`` (``TargetProfile.vllm_revision``).
+#: The vLLM commit this tree derives and serves on: the running vLLM's version with its commit (`vllm_revision`) must
+#: carry ``+g<VLLM>`` (``TargetProfile.vllm_revision``).
 #: A move of it rewrites, in one change: the wheel URL, its sha256 and its readiness check in ``ops/pod_bootstrap.sh``; this name,
 #: which every workload file's ``engine.vllm`` states; benchmarks' ``VLLM_PIN`` (``verity_bench.vllm.presets``) and each benchmark
 #: spec's ``vllm_pin``; and PoUW's serving venv (``benchmarks/pouw/pearl_c_vllm/setup.sh``).  ``git grep`` of the old short sha
 #: lists the rest.
 VLLM = "d9105ea80"
+
+
+def vllm_revision() -> str:
+    """The installed vLLM's version with its commit in it, which a target's ``vllm_revision`` is held to: its ``__version__``
+    where that carries ``+g<commit>`` (the pin's does), and at a tagged build, whose version names none, with
+    ``+g<commit>`` after it.  It imports vLLM when called."""
+    import vllm
+
+    version = str(vllm.__version__)
+    if "+g" in version:
+        return version
+    from vllm._version import __commit_id__
+
+    return f"{version}+g{__commit_id__.removeprefix('g')}"
 
 #: A row file (``workloads/<row>.json``): the workload and its pinned ``engine`` block (:class:`RowConfig`), the typed record
 #: ``records.workload.Workload``.
@@ -690,6 +705,13 @@ class CommitConfig:
                                            "deferred Commit (REPLAY_DEFERRED=1; slim refused) commits them at its C2 site, before its "
                                            "bundle is sealed (c2_replay.serving_rows); a TP row's, one window per "
                                            "rank, from tp-commit itself (verity_vllm.pipeline.tp.serving_rows; needs REPLAY_DEFERRED=1)")
+    serving_rows_tables: str | None = option("--serving-rows-tables", env="SERVING_ROWS_TABLES", default=None, metavar="REGISTRATION_JSON",
+                                             help="the per-expert cut's tables registration (verity-vllm tp-register-tables --out; {rank} "
+                                                  "in its path its rank's): the windows commit the tables their reads read under it, so "
+                                                  "their records declare them (verity_vllm.pipeline.expert_rows.of_request); needs "
+                                                  "SERVING_ROWS and SERVING_ROWS_TABLES_KEY")
+    serving_rows_tables_key: str | None = option("--serving-rows-tables-key", env="SERVING_ROWS_TABLES_KEY", default=None, metavar="KEY",
+                                                 help="the committer's key file SERVING_ROWS_TABLES is registered under (--new-key's)")
     remote_verifier: str | None = option("--remote-verifier", env="REMOTE_VERIFIER", default=None, metavar="HOST:PORT",
                                          help="the PoUB session's verifier: the Commit proves its store to it in lockstep "
                                               "with its first instrumented run (verity_vllm.protocols.remote_bandwidth.remote; single-GPU rows)")

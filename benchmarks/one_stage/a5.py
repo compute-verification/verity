@@ -1171,6 +1171,12 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
     return neg
 
 
+def own_replay():
+    """The `replay.py` beside this file, loaded by its path and never by its name: a process with `network_traces` on
+    its path, as the audit over a network certifier's run has, holds that directory's `replay` under the name."""
+    return AC._module("one_stage_replay", HERE / "replay.py")
+
+
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
@@ -1187,7 +1193,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
     parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case."""
     try:
-        import replay as RP
+        RP = own_replay()
 
         d = str(Fraction(delta).limit_denominator(10**12))
         p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table, partition=partition, **(tied or {}))
@@ -1231,7 +1237,7 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     it staged the file: before the sample it takes itself, and after one its caller handed it. `v2_case.py`'s is that
     digest as the kept window's own v2 case names it, or, for a window that keeps none, the kept file's own, taken
     after the audit."""
-    import replay as RP
+    RP = own_replay()
     from verity.protocols.spot.verifier.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
@@ -1250,7 +1256,7 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     ``blobs``, the paths of the statements' files and of the pinned lookup ``tables`` their circuits look up. The
     statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
     (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
-    import replay as RP
+    RP = own_replay()
     from verity.protocols.spot.verifier.one_stage import proofs as PF
 
     names = {m.name: [PF.file_sha512(s / "session.json") for s in m.proof.sessions] for m in members}
@@ -1273,7 +1279,7 @@ def case_with_form(case: dict, form: str = "one-stage") -> dict:
     """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as sampled proofs' (`SAMPLED_PROOFS`): its params and
     its evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
     rest."""
-    import replay as RP
+    RP = own_replay()
 
     evidence = json.loads(bytes.fromhex(case["evidence"]))
     if not isinstance(evidence, dict) or "form" in evidence or "form" in case["params"]:

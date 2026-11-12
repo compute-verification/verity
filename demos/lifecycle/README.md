@@ -1,6 +1,6 @@
 # Lifecycle: the onsite and remote composites, stepped through
 
-A minimal worked example of the two composite protocols, `verity/onsite/v0` and remote's H1 development executable
+A minimal worked example of onsite, `verity/onsite/v0`, and of remote's H1 development executable
 `verity/remote/v0` (H1's period as its work, which no configuration names), run through the
 whole lifecycle with the pieces that exist: from the hardware registration to the monitoring period's verdict. Its point
 is the interfaces it exposes, listed in (b) and (c); where an interface doesn't exist yet, the demo writes the smallest

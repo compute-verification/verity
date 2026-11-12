@@ -22,14 +22,20 @@ TP stand-in (adapters/vllm's `tests.pipeline.served_tp`, deferred), without prov
   reads it only from its own Build of each Program, which its compile writes (`own_builds`, `naming.write_build`), whatever the
   row dir holds under the same digests, and its compile command runs with no vLLM importable.
 * A served window's circuit record states its window ingress at each step, so the leak count prints a window figure, the
-  advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`)."""
+  advice's charge under its named premise, beside the run figure, which stays vacuous (`records_audit.declared_count`).
+* The per-expert fused cut over a block-FP8 MoE layer's committed step (adapters/vllm's `tests.pipeline.served_experts`, no
+  engine): the step sealed as serve-openai seals a closed window, then committed by `commit1` with the tables' registration
+  and the checkpoint, is the window the row driver's in-Commit hook commits over the same step (`_same_commitment`), a
+  stand-in `source1` accepts; it is refused without the tables or the checkpoint, and a TP rank's window is handed both."""
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import random
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -875,6 +881,53 @@ def test_phi_of_a_served_engine_is_advice_compiles_and_reads_its_target_and_exec
     assert PP.phi_of_serve({**serve, "execution": "eager"}).execution == "eager"
 
 
+#: a served engine's record as ``serve.json`` holds it (`LLM.engine_record`'s): an engine serving below its model's length
+ENGINE = {"execution": "bi-eager", "env_flags": {},
+          "engine_kwargs": {"max_model_len": 512, "max_num_batched_tokens": 512, "max_num_seqs": 8, "enable_prefix_caching": False,
+                            "tensor_parallel_size": 1}}
+
+
+def _advice_compile() -> Any:
+    """vllm's ``tools/advice_compile.py``, which writes a served window's row dir's Builds, loaded by its file."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("advice_compile",
+                                                  HERE.parents[2] / "adapters" / "vllm" / "tools" / "advice_compile.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("label", ["serve.json's", "its engine record's"])
+def test_a_served_engines_phi_is_the_one_its_row_dirs_builds_are_compiled_under(tmp_path, label):
+    """`advice_compile` writes a served window's row dir's Builds and I2 reads each by the digest of the Program it compiles,
+    so the two read one φ of one ``serve.json`` (`predict.phi.served_phi`), its engine's args and world included, wherever
+    it states its execution: a request Program's length rule reads the engine's ``max_model_len``, so under a φ stating
+    none I2 compiles, for an engine serving below its model's length, a Program no Build holds. A launch that left the
+    length to vLLM states the length its engine fitted on both sides. The bodies the two compile are one too."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+
+    AC = _advice_compile()
+    serve = {"model": "unsloth/Llama-3.2-1B", "revision": "9535bd9b1d1dea6acafbdc4813b728796aeb28da", "default_seed": DEFAULT_SEED,
+             "target": TARGET, "engine": ENGINE, **({"execution": "bi-eager"} if label == "serve.json's" else {})}
+    (tmp_path / "serve.json").write_text(json.dumps(serve))
+    (tmp_path / "advice" / "w0").mkdir(parents=True)
+    (tmp_path / "advice" / "w0" / "registration.json").write_text(json.dumps({"window": 0}))
+    reqs = [_serve_request(0, list(range(5)), 3, [0], "r0"), _serve_request(1, list(range(3)), 2, [0], "r1")]
+    (tmp_path / "requests.jsonl").write_text("".join(json.dumps(q) + "\n" for q in reqs))
+    _advice, meta, bodies, _reg = AC.served_inputs(tmp_path, 0)
+    built = AC.phi_of(meta, json.loads(pinned_hf_config(serve["model"], serve["revision"]).read_text()), 0)
+    phi = PP.phi_of_serve(serve)
+    assert phi.to_json() == built.to_json()
+    assert phi.engine == {"max_model_len": 512, "max_num_batched_tokens": 512, "max_num_seqs": 8, "enable_prefix_caching": False,
+                          "env": {}}
+    assert (phi.tp, phi.execution) == ({"world": 1, "rank": 0}, "bi-eager")
+    assert PP.serve_ingress(PP.serve_requests(tmp_path, 0)) == bodies
+    fitted = {**ENGINE, "effective": {"max_model_len": 4032}, "engine_kwargs": {**ENGINE["engine_kwargs"], "max_model_len": -1}}
+    assert PP.phi_of_serve({**serve, "engine": fitted}).engine == {**phi.engine, "max_model_len": 4032}
+    assert AC.phi_of({**meta, "engine_record": fitted}, phi.hf_config, 0).engine == {**phi.engine, "max_model_len": 4032}
+
+
 def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
     """A pinned served model's φ reads the pin's config.json of record (`pinned_hf_config`, advice_compile's too), so an int8
     serve compiles on both sides with its quantization config beside the target's int8 scope, never the bf16 fixture's."""
@@ -893,8 +946,8 @@ def test_a_served_pins_phi_reads_its_config_of_record_as_advice_compile_does():
 
 def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(monkeypatch):
     """The served I2 is named as the server names its compiler, and its digest is a single-GPU window's I2's (one
-    `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ, the default seed, ℓ and the served
-    model name move it as they move a single-GPU one's."""
+    `I2Compiler.digest`) with the server's compiler (`served_identity`) as its code: φ (the engine's args among its
+    fields), the default seed, ℓ and the served model name move it as they move a single-GPU one's."""
     serve = {"model": "m/x", "revision": "r", "default_seed": DEFAULT_SEED, "execution": "bi-eager", "target": TARGET}
     reg = PP.registered_of_serve(serve, None, None, PP.CAP_BITS)
     one = PP.I2Compiler(reg, {}, "", name=SERVER[0], code=SERVER[1])
@@ -906,6 +959,8 @@ def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(mon
         ({**serve, "model": "m/y"}, PP.CAP_BITS), ({**serve, "revision": "s"}, PP.CAP_BITS),
         ({**serve, "execution": "eager"}, PP.CAP_BITS), ({**serve, "target": {**TARGET, "device_name": "other"}}, PP.CAP_BITS),
         (serve, 2 * PP.CAP_BITS))] + [replace(reg, default_seed=DEFAULT_SEED + 1), replace(reg, served_model="llama")]
+    others += [replace(reg, phi=PP.phi_of_serve({**serve, "engine": engine})) for engine in (
+        ENGINE, {**ENGINE, "engine_kwargs": {**ENGINE["engine_kwargs"], "max_model_len": 1024}})]
     digests = {PP.I2Compiler(r, {}, "", name=SERVER[0], code=SERVER[1]).digest for r in others}
     assert len(digests) == len(others) and one.digest not in digests
 
@@ -915,13 +970,14 @@ def test_a_served_windows_compiler_is_a_single_gpu_i2s_over_the_servers_code(mon
 SERVE_EDITS = {"model": {"model": "verity-int8/Llama-3.2-1B-INT8"}, "revision": {"revision": "0" * 40},
                "default_seed": {"default_seed": DEFAULT_SEED + 1}, "execution": {"execution": "eager"},
                "engine-execution": {"engine": {"execution": "eager", "pin": {"world": 1}}},
+               "engine-args": {"engine": {"execution": "bi-eager", "pin": {"world": 1}, "engine_kwargs": {"max_model_len": 512}}},
                "target": {"target": {**TARGET, "device_name": "other-gpu"}}, "hf_config": None}
 
 
 @pytest.mark.parametrize("field", list(SERVE_EDITS))
 def test_a_served_window_under_another_serve_json_than_its_advice_was_registered_under_is_refused(tmp_path, monkeypatch, field):
     """The served compiler's digest covers every field the compile reads of ``serve.json`` (`I2Compiler.digest`), so a window
-    whose ``serve.json`` says another model, revision, execution or target than the one `verity-vllm advice` registered its
+    whose ``serve.json`` says another model, revision, execution, target or engine args than the one `verity-vllm advice` registered its
     advice under (or whose verifier compiles under another config) is refused by name before any commit (`serve_check`'s
     ``compiler``, and ``advice``: its advice tree's domain is the registered compiler), and the records audit's compiler
     table (`compiler_doc`, ``prove_path.py compiler``) holds another digest; one recording another default seed is refused
@@ -1639,3 +1695,103 @@ def test_window_commits_pearl_tie_cuts_the_circuit_at_ws_scheme_over_the_windows
     (d / "retention.json").write_text(json.dumps({"rounds": [1, 2]}))
     with pytest.raises(ValueError, match=r"retained rounds \[1, 2\]"):
         tie()
+
+
+@pytest.fixture(scope="module")
+def fused(tmp_path_factory) -> dict:
+    """A block-FP8 MoE layer's committed step with the per-expert tables' registration, the checkpoint and the fused cut's
+    partition; over that one step, the row driver's window (``hook``: the in-Commit hook's, ``served``) and a serve-openai
+    window's sealed row dir (``served``), which names no Programs."""
+    pytest.importorskip("torch")
+    root = tmp_path_factory.mktemp("fused")
+    p = subprocess.run([sys.executable, "-m", "tests.pipeline.served_experts", str(root)], cwd=VLLM, capture_output=True, text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+    return json.loads(p.stdout.strip().splitlines()[-1])
+
+
+@dataclass(frozen=True)
+class OfRecord(Listing):
+    """A compiler whose Program for the window's one request is the Program of record in ``program_dir``, in place of the
+    registered compiler's Programs for the window's advice."""
+
+    program_dir: str = ""
+
+    def load(self, rank, world, requests):
+        with gzip.open(Path(self.program_dir) / "instances.json.gz", "rt") as f:
+            inst = json.load(f)
+        return SimpleNamespace(progs={"r0": inst}, dirs={"r0": self.program_dir}, digs={"r0": inst["digest"]}, arrivals={"r0": 0})
+
+
+def _fused_args(c: dict, **over) -> argparse.Namespace:
+    return argparse.Namespace(**{"bundle": c["served"]["bundle"], "row_dir": c["served"]["row_dir"], "partition": c["partition"],
+                                 "workers": 1, "serving_rows_tables": c["tables"]["registration"],
+                                 "serving_rows_tables_key": c["tables"]["key"], "checkpoint_dir": c["checkpoint"], **over})
+
+
+def _same_commitment(a: Path, b: Path) -> None:
+    """Windows ``a`` and ``b`` commit one thing, as the fixture's own module holds two windows of its layer to one commitment
+    (``tests.pipeline.served_experts --same``): one population program, partition, law, port domains, circuit record and index,
+    the same registered roots, and the same committed rows in every member, each unit's opening of its table among them."""
+    p = subprocess.run([sys.executable, "-m", "tests.pipeline.served_experts", "--same", str(a), str(b)], cwd=VLLM, capture_output=True,
+                       text=True)
+    assert p.returncode == 0, p.stderr[-3000:]
+
+
+@pytest.mark.slow
+def test_a_served_windows_fused_cut_is_the_row_drivers_window_given_the_tables_and_the_checkpoint(fused, tmp_path):
+    """`commit1` on the sealed served window, the per-expert tables read under the committer's key and the expert weights
+    composed from the checkpoint (the window's bundle carries none), against the in-Commit hook's window over the same
+    committed step.  Minutes: a window of this cut builds its templates' gates once a process, here and in the fixture's, and
+    its registration walks them at each write.  It catches what the adapter's test of `deferred_rows.from_bundle` can't:
+    this command's own window maker, on a sealed window that names no Programs, committing other rows, tables or weights
+    than the Commit's own window of the step.  A copy of the window with one bit of one row flipped is refused."""
+    a, compiler = _fused_args(fused), PP.Capped(OfRecord(program_dir=fused["program_dir"]))
+    bound = AW.binding(compiler, "ad" * 64, 8)
+    got = PP.commit1(a, compiler, [], bound, tmp_path / "w")
+    assert got["run"] == fused["run_root"] and got["population"] == sum(n for pair in fused["units"].values() for n in pair)
+    _same_commitment(Path(fused["hook"]), tmp_path / "w")
+    flipped = tmp_path / "flipped"
+    shutil.copytree(tmp_path / "w", flipped)
+    raw = bytearray((flipped / "m0-private.bin").read_bytes())
+    raw[0] ^= 1
+    (flipped / "m0-private.bin").write_bytes(bytes(raw))
+    with pytest.raises(AssertionError, match="the rows of port"):
+        _same_commitment(Path(fused["hook"]), flipped)
+    hook, mine = _registered(Path(fused["hook"]))["window"], _registered(tmp_path / "w")["window"]
+    assert (hook["kind"], hook["run"]) == ("served", fused["run_root"]) and "of" not in hook and "link" not in hook
+    assert mine["kind"] == "stand-in" and mine["of"]["bundle_manifest_sha256"] == fused["served"]["manifest_sha256"]
+    assert mine["of"]["rows"] == PP.ROWS1 and mine["served_programs"] == {"r0": fused["program_digest"]}
+    window, held = PP.window1(a, compiler, [], bound)
+    assert PP.source1(mine, window, held)["codes"] == []
+    assert PP.source1(hook, window, held)["codes"] == ["kind", "of", "link", "compiler", "advice"]
+
+
+@pytest.mark.slow
+def test_a_served_windows_fused_cut_is_refused_without_the_tables_or_the_checkpoint(fused, tmp_path):
+    """Each refusal by name and before any registration is written (seconds once the templates are built, over a minute
+    alone): only a sealed window shows that it brings neither the tables nor the expert weights, so that `commit1` refuses
+    the cut unless it is handed both."""
+    compiler = PP.Capped(OfRecord(program_dir=fused["program_dir"]))
+    with pytest.raises(ValueError, match=r"is not among the committer's tables \(commit_tables\)"):
+        PP.commit1(_fused_args(fused, serving_rows_tables=None), compiler, [], {}, tmp_path / "w1")
+    with pytest.raises(ValueError, match=r"read under its committer's key file \(--tables-key\)"):
+        PP.commit1(_fused_args(fused, serving_rows_tables_key=None, bundle="no-bundle"), compiler, [], {}, tmp_path / "w2")
+    with pytest.raises(LookupError, match=r"registered tensor \S+\.experts\.w\S+ \(checkpoint\) does not open against the committed "
+                                          r"weights root: no checkpoint given"):
+        PP.commit1(_fused_args(fused, checkpoint_dir=None), compiler, [], {}, tmp_path / "w3")
+    assert not any((tmp_path / d / "registration.json").exists() for d in ("w1", "w2", "w3"))
+
+
+def test_a_tp_ranks_window_is_handed_the_tables_and_the_checkpoint(monkeypatch, tmp_path):
+    assert PP.tables_of(argparse.Namespace(serving_rows_tables=None, serving_rows_tables_key="k")) is None
+    assert PP.checkpoint_of(argparse.Namespace(checkpoint_dir=None)) is None
+    got = {}
+    monkeypatch.setattr(PP, "compiler_of_args", lambda a: "compiler")
+    monkeypatch.setattr(PP, "checkpoint_of", lambda a: ("checkpoint", a.checkpoint_dir))
+    monkeypatch.setattr(AW, "commit_window", lambda commit, r, partition, out, compiler, requests, bound, **kw:
+                        got.update(kw, at=(commit, r, partition, str(out), compiler)) or {"run": "x"})
+    a = argparse.Namespace(tp_commit="c", partition="p", out=str(tmp_path), workers=1, forge=None, checkpoint_dir="ck",
+                           serving_rows_tables="t-rank{rank}.json", serving_rows_tables_key="k")
+    assert PP.commit_rank((a, 3, [], {})) == {"run": "x", "forged": None}
+    assert got == {"at": ("c", 3, "p", str(tmp_path / "rank3"), "compiler"), "workers": 1,
+                   "tables": {"key": "k", "registration": "t-rank{rank}.json"}, "checkpoint": ("checkpoint", "ck")}

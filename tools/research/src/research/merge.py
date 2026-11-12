@@ -1719,11 +1719,16 @@ AFTER_LAND_THEN_REMOVE = 'r=$1; shift; "$@"; s=$?; cd / && git -C "$r" worktree 
 
 def _own_tree(repo: Path, commit: str) -> Path | None:
     """A detached worktree of ``commit`` for the after-landing command alone, since the caller's checkout moves on under it
-    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).
-    None when ``repo`` can't make one."""
+    (drive's queue clone is reset and cleaned every tick, which would take a running `post_train.py`'s `.venv`).  It goes
+    under TRAIN_TREES when set, as train.sh's trees do, else in the temporary directory: the control pod's TMPDIR is a network
+    volume, where each worktree add and remove takes minutes.  None when ``repo`` can't make one."""
     import shutil
 
-    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-"))
+    from .settings import train_trees
+
+    if root := train_trees():
+        os.makedirs(root, exist_ok=True)
+    tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-", dir=root))
     if _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode:
         shutil.rmtree(tree, ignore_errors=True)
         return None

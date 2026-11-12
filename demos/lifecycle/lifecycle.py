@@ -1,4 +1,4 @@
-"""The lifecycle both composite protocols step through, on a tiny model, with the parts they share: the phases as functions
+"""The lifecycle both configurations step through, on a tiny model, with the parts they share: the phases as functions
 with typed inputs and outputs, and the developer and verifier as parties of the deployment layer (`verity.configuration.deploy`).
 `onsite.py` and `remote.py` add what each composite has of its own, through the verifier's hooks; `run.py` runs both;
 README.md walks through it.
