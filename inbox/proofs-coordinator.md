@@ -74476,3 +74476,258 @@ Mailbox read at 06:13Z: the newest section is yours of 04:56Z [read].
 - The mark waits on the second branch's ready line, which waits on `ad5b` (about 09:00Z [relayed]) and your word on its list; on `a59f` (mine, about 07:30Z); and on your ruling in item 4.
 - The fast-forward of #9108 waits on your word; then I make it.
 - I wait on `a59f`. I launch nothing else before its verdict.
+
+## FIXEDCOST, Thu 12 Nov 06:28Z: final at one table a session: a later session of a statement pays 0.92 to 1.02 of the first session's own seconds on all three block types (the head on 21 sessions) and saves only the reads; against fixed seconds that hold 1,006 core-seconds for the program's file that is 0.004 (small type), 0.02 (MoE), 0.12 (head) in one open call; a session of J tables costs the Lean verifier J one-table sessions plus J more reads of the circuit file (J = 2 to 64); a table's seconds are two folds over one unit's matrix whatever the table holds, so tables buy nothing and blocks a table do
+
+Tags: [run] a command I ran in this job, with its run id; [read] a file or a record I read now, with its place; [relayed]
+another lane's statement I did not check; [derived] arithmetic on tagged figures; [guess]. Times are from `date -u`.
+Mailbox read at 06:28Z: three messages (04:38Z, 05:24Z, 05:38Z), none newer. Nothing in this entry runs on the
+served engine: every number is the CPU prover, the proof server's kept timed runs, or the Lean verifier of `main`
+(`62bf29346f`) on kept sessions and staged statements, one core.
+
+**What changed since my 05:25Z entry, first.**
+
+- The head's figures are now my own run, seven sessions a call, three calls in two orders, not the two-session call
+  I read: later over first is 0.92 to 1.02 (it read 1.007). The seconds are higher than the ones I gave: 249 to 289 s a
+  session on `vy-nebius-cpu-2`, where two of my calls ran at once beside other lanes' work, against 155 s on the idle
+  pinned core of `52e3`. The ratio is the measurement; for seconds a session keep 155 to 160 (idle core) and read 249 to
+  289 as what a loaded node does to them [run `7605`; read `52e3`].
+- The tables figures of the 05:25Z entry stand and are now measured at J = 2, 4, 8, 16 and 64 (they were J = 2 only):
+  the extra read a table and J times the one-table session both hold at every J [run `2254`, `ffdb`].
+- New: the verifier's memory grows with the tables too, since every table keeps its own parse of the circuit file:
+  0.53 GiB at one table to 10.2 GiB at 64 on the 112 MB file [run `2254`].
+- New: a share of a statement's fixed seconds depends on what the fixed seconds hold. The cost model's verifier part is
+  a fresh process plus 1,006 core-seconds for the program's file [read: the cost model's 05:17Z entry]. I give seconds
+  below, and the fraction for each denominator.
+- No other figure of the 05:25Z entry moved.
+
+### 1. The three numbers, final at one table a session
+
+The share of a statement's fixed seconds that a second one-table session of the same statement pays, in a kept process:
+
+| | share | spread | basis |
+|---|---|---|---|
+| Lean verifier, of the session's own seconds (setup at its sample and the check) | 1.00 | GEMM 0.98 to 1.00 (6 later sessions); MoE 0.95 to 0.97 (18); head 0.92 to 1.02 (12 later sessions of the two calls that ran alike; 0.86 to 0.95 in the third, whose first session alone ran beside another call) | [run `af8f`, `89c4`, `7605`] |
+| Lean verifier, of a fresh process's seconds (read of the circuit file, then the session; no program's file) | 0.55 | GEMM 0.575 to 0.589; MoE 0.526 to 0.529; head 0.552 on an idle core [read `52e3`], 0.62 to 0.74 on the loaded node [run `7605`] | the same |
+| prover, of a timed run's seconds a statement | 1.00 | none to give: the timed runs are sessions 2 to 121 of a kept process already, flat to 3% | [read `38d6`, `0dcd`, `fe31`] |
+
+The head's call [run `r20261112-050218-7605`, `vy-nebius-cpu-2`, each call one core; `all-1` and `rev` ran at once]:
+
+| call | read, s | sessions in order, s | later over first |
+|---|---|---|---|
+| seven sessions, file order | 108.5 | 274.5; 259.1; 262.9; 260.7; 253.6; 277.8; 271.3 | 0.924 to 1.012 |
+| the same seven, reversed | 109.5 | 276.3; 262.0; 266.2; 260.0; 254.9; 282.9; 274.0 | 0.922 to 1.024 |
+| the same seven, file order again; its first session ran beside the one-session call below, the rest alone | 112.0 | 288.8; 249.9; 249.2; 251.2; 268.4; 273.9; 253.8 | 0.863 to 0.948 |
+| one session alone in a process (the first of the file) | 111.6 | 287.7 | |
+| one session alone in a process (the last of the file) | 108.1 | 271.6 | |
+
+The same session costs the same first or seventh: 274.5 and 274.0 s; 276.3 and 271.3 s. The sixth place is the slowest
+in both of the calls that ran at once, and the third call's sessions drop by 14% once it runs alone, so the spread is the
+node, not the session's place [run]. The 18 later sessions have median 261.3 s (249.2 to 282.9). Setup at the sample is
+2.30 to 2.35 s of each; peak memory 40.9 GiB a call. None of these sessions is an acceptance: the statements are staged
+without their Program, so each passes every check of the proof and is then refused for want of it, as in the 05:25Z
+entry.
+
+### 2. A block type's first statement and each later one, with the statement kept loaded
+
+Verifier, one core, seconds [run `af8f`, `89c4`, `7605`; read `52e3`]:
+
+| block type (blocks in the statement; circuit file) | first: read of the circuit file | first: its session (setup, check) | each later session | later over first (read and session) |
+|---|---|---|---|---|
+| GEMM K=512 (8,192; 112 MB) | 2.73 to 2.83 | 3.94 to 4.03 | 3.93 to 3.97 | 0.575 to 0.589 |
+| MoE expert read and GEMM K=6144 (1,024; 1.79 GB) | 19.6 to 19.8 | 23.8 to 24.0 | 22.3 to 23.3 | 0.526 to 0.529 |
+| head block (256; 12.19 GB), idle core | 127.6 | 154.8 | 155.9 | 0.552 |
+| head block, loaded node | 108.5 to 112.0 | 274.5 to 288.8 | 249.2 to 282.9 | 0.62 to 0.74 |
+
+- **With the program's file in the first statement's seconds** the fraction is far smaller, and it is not mine to
+  give as measured: my statements carry no Program. If the first statement of a block type pays 1,006 core-seconds for
+  it [relayed: the cost model's flag] and a later session of the call pays none of it (the program is read once a call
+  [read `FlockVerify.lean:1104-1150`; the commit on `main` titled #9042]; on the head a session with its Program costs
+  159.9 s against 154.8 s without [read `52e3`]), the fractions are 3.95 / (1,006 + 6.8) = 0.004 (GEMM),
+  22.9 / (1,006 + 43.6) = 0.022 (MoE) and 155.9 / (1,006 + 282.4) = 0.12 (head) [derived]. So against that denominator
+  the small types already meet 0.005 at one table a session, and the mid-size types and the head do not; the saving is
+  all the program's file, and what it needs is one call kept open across a block type's sessions, not larger sessions.
+  The other measurement of the kept verifier puts the program's read at about 32 s on its statements, not 1,006
+  (44.6 − 13.1 and 72.2 − 39.1) [relayed: the 05:36Z entry's `ba14`]. Which of the two the served program costs today
+  decides this figure: it should be measured once on the served program before the cost model books it.
+- **Prover**, the proof server on one GPU [read `38d6`, `0dcd`, `fe31`]: the first session of a process against each
+  later one, end to end: head 26.08 s then 3.58 s (0.14); MoE 10.00 then 4.71 (0.47); GEMM 6.27 then 2.77 (0.44); and
+  before its first session a process spends 221.1, 40.9 and 8.7 s loading. The cost model's prover part is the later
+  figure already (a warm stream) [read: the 05:17Z entry], so there is nothing more to book on the prover's side at
+  full statements. The prover's seconds for a session of fewer blocks at steady state on a GPU are still unmeasured.
+
+**What in today's code stops a later session from paying only its own seconds:**
+
+1. A fresh verifier process a session. The timed runner's verdict of record starts one `flock-verify verify` a session
+   (`benchmarks/one_stage/server_rate.py:273-292`), and the proof server's verdict is one call a session on its pool
+   (`verity_flock/proof_server.py:18-19`) [read]. `main`'s verifier already takes several sessions in one call
+   (`verify … --session D1 D2 …`) and then reads the circuit file once [run, the tables above] and the program once
+   [read `FlockVerify.lean:1104-1150`].
+2. One public file a call. Sessions that share the circuit file and the public file share a call on `main`; sessions of
+   one block type with different public files, or of different block types, need `verify-members`, which is on two
+   branches and not on `main` [read `FlockVerify.lean:1104-1241`; relayed: the branches' state].
+3. The check itself, which no keeping removes: 3.5 s (GEMM), 22 s (MoE), 151 s (head) a table. It is the floor of a
+   later session, and section 4 says what it is made of.
+4. The release log's lines are a count limit on a verification phase's sessions, not seconds of the verifier; I did not
+   read them.
+
+**Is the kept-verifier measurement's window (`ba14`) my "statement kept loaded"?** No, it is wider, and the two agree
+where they meet. `verify-members` keeps the program's readings (and on the second branch the last circuit file's hash
+and parse) across members that may differ in every argument; my calls keep one circuit file, one public file and the
+program across sessions of one statement, which `main` does today. Both leave a later session its setup and its check:
+there 0.15 and 0.27 of a fresh process on one-block statements bound to their program [relayed], here 0.53 to 0.59 on
+full statements without one. The difference is the denominator (their fresh process reads a program), not the later
+session.
+
+### 3. One session of several tables: the verifier's and the prover's seconds at 1, 2, 4, 8, 16, 64 tables of the same blocks
+
+**The one line.** A session of J tables costs the Lean verifier J × (a one-table session of a table's blocks) + J reads
+of the circuit file on `main`; without the reads, J × the one-table session. Measured at J = 2, 4, 8, 16, 64 on GEMM
+K=512 (64 blocks) and at J = 2, 4, 16 on the MoE type (16 blocks).
+
+GEMM K=512, the same 64 blocks in J tables, CPU prover (`flock-circuit prove --zk --session-tables J`), Lean verifier
+pinned to one core of `vy-nebius-cpu-14`, each session checked twice [run `r20261112-051610-2254`, exit 0]:
+
+| J | blocks a table | verifier's session, s | of which the J reads and setups, s (a table) | the rest, s (a table) | one table of that size alone, s | verifier's peak, GiB | prover end to end, s | one table of that size alone, s |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 64 | 2.53; 2.51 | 0.04 | 2.49; 2.47 | | 0.53 | 1.33 | |
+| 2 | 32 | 8.06; 8.02 | 3.21; 3.19 (1.60) | 4.86; 4.82 (2.42) | 2.48; 2.45 | 0.93 | 1.75 | 0.95 |
+| 4 | 16 | 14.62; 14.82 | 6.37; 6.46 (1.60) | 8.25; 8.35 (2.08) | 2.11; 2.15 | 1.19 | 2.61 | 0.68 |
+| 8 | 8 | 29.32; 29.32 | 13.09; 13.12 (1.64) | 16.23; 16.19 (2.03) | 1.95; 2.02 | 1.72 | 4.02 | 0.55 |
+| 16 | 4 | 59.15; 58.97 | 27.08; 26.63 (1.68) | 32.07; 32.34 (2.01) | 1.97; 2.03 | 2.87 | 7.78 | 0.53 |
+| 64 | 1 | 238.25; 240.33 | 110.91; 110.82 (1.73) | 127.34; 129.50 (2.01) | 1.99; 1.96 | 10.16 | 30.06 | 0.59 |
+
+- The call's own read of the 112 MB file is 2.02 to 2.19 s, paid once beside these; a table's extra read is 1.60 to
+  1.73 s of it (the file's bytes are in memory already; the table parses them again).
+- Verifier: 64 blocks cost 2.5 s in one table and 239 s in 64 tables. Without the reads they would cost 128 s: a table
+  of one block costs 2.0 s, a table of 64 costs 2.5 s, a table of 8,192 costs 3.9 s [run `2254`, `af8f`].
+- Prover (CPU, a fresh process a session, its start left out): J tables cost 0.80 to 0.96 of J one-table sessions
+  (1.03 to 1.08 on the MoE type below), and 1.3, 2.0, 3.0, 5.9 and 22.7 times the one table of the same 64 blocks.
+  It builds one statement a table (its statement cache holds J after J lookups) [run].
+
+The MoE type (1.79 GB circuit file), the same 16 blocks in J tables [run `r20261112-051610-ffdb`, exit 0]:
+
+| J | blocks a table | verifier's session, s | of which the J reads and setups, s (a table) | the rest, s (a table) | one table of that size alone, s | verifier's peak, GiB | prover end to end, s | one table of that size alone, s |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 16 | 22.54; 21.76 | 0.50 | 22.04; 21.26 | | 7.1 | 4.26 | |
+| 2 | 8 | 93.75; 95.65 | 51.08; 51.39 (25.6) | 42.67; 44.26 (21.7) | 22.01; 22.35 | 10.4 | 7.46 | 3.45 |
+| 4 | 4 | 189.69; 188.04 | 105.06; 104.06 (26.1) | 84.63; 83.98 (21.1) | 21.36; 20.62 | 13.2 | 14.48 | 3.51 |
+| 16 | 1 | 783.75; 793.98 | 421.21; 428.96 (26.6) | 362.54; 365.02 (22.7) | 21.60; 20.58 | 29.8 | 56.09 | 3.38 |
+
+There a table's extra read (25.6 to 26.6 s) is more than the call's own (18.9 to 20.2 s) and more than the table's
+check; the prover's J tables cost 1.03 to 1.08 of J one-table sessions.
+
+**What it means for the question.** A session's fixed seconds are paid once a table on both sides, and a table's
+seconds hardly move with the blocks it holds. So more tables a session buy no saving at all, and the saving is in more
+blocks a table: the 8,192-block GEMM statement costs the verifier 0.48 ms a block and the prover's timed run 0.17 ms of
+a GPU a block, against 2.0 s (verifier) and 0.59 s (the CPU prover, end to end) for a table of one block [derived
+from `af8f`, `fe31`, `2254`]. What bounds the blocks a table holds is in the sizing entry: by read it is the proof
+system's schedule, a table of at most 2^35 bits (`Flock/Schedule.lean:52`, `Flock/WideLeaf.lean:13-34`), with a block
+of at most 2^27 (`Flock/HmRow.lean:55`, `Flock/Statement.lean:120`); the three timed statements are all at 2^35 already
+(`m` 35 in each [run `6967`, `a4b0`, `7027`]).
+
+### 4. Where a table's seconds go, as far as measured (the profile is the 08:00Z entry's)
+
+One lincheck fold alone, at seeded coins, on the parsed circuit (`benchmarks/verifier_cost/flock_read`), against the
+check of one session of that statement:
+
+| block type | entries of the unit's matrix | one fold, s | a session's check on the same machine, s | two folds over the check | run |
+|---|---|---|---|---|---|
+| GEMM K=512, 8,192 blocks | 8.3 M | 0.71 (0.68, 0.75) | 3.75 | 0.38 | `r20261112-052845-6967` [run], exit 0, `vy-nebius-cpu-1` |
+| MoE, 1,024 blocks | 214.6 M | 9.09 (8.93, 9.25) | 21.6 | 0.84 | `r20261112-054227-a4b0` [run], exit 0, `vy-nebius-cpu-4` |
+| head block, 256 blocks | 1,368.4 M | 127.3 (one run) | 233.8 | 1.09 | `r20261112-054227-7027` [run], exit 0, `vy-nebius-cpu-4`, loaded |
+
+So the larger the unit's matrix, the more of the check is the two repetitions' folds over it: 38% at 8.3 million
+entries, 84% at 214.6 million, all of it within the machine's noise at 1,368 million (the head's fold alone and its
+session were timed minutes apart on a loaded node). A fold costs 0.04 to 0.09 µs an entry, each entry visited once
+[derived]. That is what a table's fixed seconds are on the verifier's side: 2 × 0.04 to 0.09 µs × the entries of one
+unit's matrix, whatever the table holds.
+
+The check of one session by a sampled profile split at the verifier's own phase lines (199 Hz, classes by symbol)
+[run `r20261112-060154-4835`, `r20261112-060153-e9b8`, `r20261112-060154-3dfe`, exit 0, `vy-nebius-cpu-12`, a loaded
+node, so its seconds are above the pinned ones]:
+
+| block type | the check there, s | the matrix walk's own code | field arithmetic (the coins' tensor, the scaling, the projection) | allocation and reference counts | kernel (page faults, the clock) | region values and openings | other |
+|---|---|---|---|---|---|---|---|
+| GEMM K=512, 8,192 blocks | 3.87 | 10% | 26% | 28% | 10% | 21% | 5% |
+| MoE, 1,024 blocks | 30.0 | 17% | 29% | 27% | 22% | 2% | 3% |
+| head block, 256 blocks | 322.4 | 22% | 6% | 23% | 47%, of which 30% is the kernel answering the clock | 0.1% | 3% |
+
+- In time the check is two equal halves, one a repetition. On the MoE type a repetition is, in tenths: the tensor of
+  its coins 2, the walk 4, the scaling and the projection 3, region values and openings 1 [run `e9b8`]. On the head the
+  walk is 8 to 9 tenths of a repetition [run `3dfe`].
+- The walk's own code is a tenth to a fifth of the check; allocation, reference counts and the kernel are 38% (GEMM),
+  49% (MoE) and 70% (head). The field vectors are Lean arrays whose elements are heap objects (`Array F128`,
+  `Base/Field.lean:13`), and the walk replaces one element for every entry of the matrix
+  (`Flock/Comp.lean:204-207`) [read]. On the head, 30% of the check is the kernel answering `clock_gettime` (the
+  nodes' clock source makes it a system call) [run `3dfe`]; the caller is not in my samples, and I take it to be the
+  allocator's slow path, entered once a page of objects is used up [guess: one profile with call chains settles it,
+  out next]. So most of a head session's 155 s may be how the fold is written and not the fold: that sizing is the
+  08:00Z entry's.
+- Also out: a small head block verified flat and templated, each verify profiled the same way
+  (`r20261112-060430-b54d`, waiting for a slot on `vy-nebius-cpu-5` at 06:28Z).
+
+### 5. The mailbox's second item, and the mend
+
+`benchmarks/verifier_cost/flock_sessions.sh` did not build `flock-read`: it copied the closure the cached build is the
+root of and took it for the verifier's own directory, so `lean-toolchain` was not found. Mended in one commit,
+`775d31fb2d` on `cursor/proofs-fixedcost-46fc` (pushed 05:50Z, one file, no verifier touched), and run:
+`r20261112-052928-8b20`, exit 0, `flock-read` built (368 jobs) and the phases file written; its sessions at 1, 2 and 4
+blocks of GEMM K=512 cost 2.00, 1.93 and 1.98 s after a 2.05 s read [run]. It is a branch, not a pull request; say if
+you want one.
+
+### 6. The issue's text for the extra read a table (not built, as you said)
+
+- **Title:** A session of several tables reads its circuit file once, not once a table.
+- **What is so today** [read]. `Stmt.setupTablesBy` (`verity/protocols/flock/verifier/Flock/ProgramRead.lean:359-450`)
+  and `Stmt.setupTablesOf` (`Flock/HmRow.lean:2591-2680`) set up a one-table session on the call's parsed circuit
+  (`setupOne`: `Stmt.setupHiddenBy … parsed`, `Stmt.setupHiddenOf parsed`), and each table of a several-table session
+  through `setup { tags with identity := tags.tableIdentity count j } (some part)`, which is `Stmt.setupHidden t
+  circuitFile …` and parses the file again (`HmRow.lean:2369`: `HmOut.parseCommit tags circuitFile tables`). Measured:
+  1.60 to 1.73 s a table on a 112 MB file, 25.6 to 26.6 s on a 1.79 GB one, and one more parsed circuit held a table
+  (29.8 GiB at 16 tables of the 1.79 GB file against 7.1 at one).
+- **The change.** In the several-table branch of both, set up table j by `Stmt.setupHiddenBy readDesc readProg parsed
+  { tags with identity := tags.tableIdentity count j } publicFile coins (some part) …` (and `Stmt.setupHiddenOf parsed
+  …` in `setupTablesOf`), keeping the refusals after it as they are. Nothing else moves; the `setupH` branch of a
+  statement without hidden outputs is left as it is.
+- **The equation to extend.** `Stmt.setupTables_eq` (`HmRow.lean:2691`) and `Stmt.setupTablesOf_eq_by`
+  (`ProgramRead.lean:460`), with `buildSessionBy_read` (`FlockVerify.lean:310`) above them, say the read-once form is
+  `Stmt.setupTables` on the file. They are `rfl` today because the several-table branch is the same term on both sides.
+  After the change they need one lemma: `HmOut.parseCommit` (`HmRow.lean:1825`) does not read the tags' `identity`,
+  `HmOut.parseCommit { tags with identity := i } file tables = HmOut.parseCommit tags file tables`. By read it holds:
+  under `Flock/` the identity is read only where a statement's digest is formed (`Statement.lean:245`,
+  `HmRow.lean:1594`, `:2414`, `:2571`, `ProgramRead.lean:339`), never in a parse; the proof has to walk `parseCommit`,
+  `parseTmpl`, `parse`, `HmRow.parse` and `Typed.read` to show it, which is the work of the issue [guess: I have not
+  written it].
+- **The test.** The existing several-table verifies must give byte-identical verdicts and Σ
+  (`verity/protocols/flock/prover/tests/test_lean_session_tables.py`, `Flock/Test/TableCap.lean`); add to the first a
+  session of two tables whose verdict and Σ are compared with the build before the change, and a timing guard in
+  `benchmarks/verifier_cost/` (a two-table session's setup under twice a one-table session's). `lean-agreement`
+  against upstream's verifier must stay green.
+- **What it does not do.** It removes the reads (40 to 55% of a several-table session here) and the memory of J
+  parses, not the J checks.
+
+### Runs
+
+| run | what | machine | state |
+|---|---|---|---|
+| `r20261112-050218-7605` | head, seven kept sessions a call, two orders, then two one-session calls and the seven again alone | `vy-nebius-cpu-2` | exit 0 |
+| `r20261112-051610-2254` | tables, GEMM K=512, 64 blocks, J = 1 to 64 | `vy-nebius-cpu-14` | exit 0 |
+| `r20261112-051610-ffdb` | tables, the MoE type, 16 blocks, J = 1, 2, 4, 16 | `vy-nebius-cpu-14` | exit 0 |
+| `r20261112-052845-6967` | one fold and a flat profile, GEMM | `vy-nebius-cpu-1` | exit 0 |
+| `r20261112-054227-a4b0` | one fold and a flat profile, MoE | `vy-nebius-cpu-4` | exit 0 |
+| `r20261112-054227-7027` | one fold and a flat profile, head | `vy-nebius-cpu-4` | exit 0 |
+| `r20261112-052928-8b20` | the mended `flock_sessions.sh`, GEMM, 1, 2, 4 blocks | `vy-nebius-cpu-12` | exit 0 |
+| `r20261112-055014-8db1`, `-9da7`, `-e5d4` | profile split at the verifier's phase lines, first try: its samples came without symbols | `vy-nebius-cpu-12` | `8db1` cancelled by me at 06:01Z; the other two exit 0, unused |
+| `r20261112-060154-4835`, `r20261112-060153-e9b8` | the same, mended: GEMM, MoE | `vy-nebius-cpu-12` | exit 0 |
+| `r20261112-060154-3dfe` | the same, head | `vy-nebius-cpu-12` | exit 0 |
+| `r20261112-060430-b54d` | a small head block flat and templated, each verify profiled | `vy-nebius-cpu-5` | waiting for a slot at 06:28Z |
+
+The scripts and the checkpoint are in `lanes/proofs/20261112T0450Z-fixedcost/` and
+`lanes/proofs/20261112T0513Z-report-fixedcost.md` of the notes, synced 06:22Z.
+
+**Next, for 08:00Z:** the profile of one head session and one small type (matrix walk, field arithmetic, the second
+repetition); the most that one pass for both repetitions, a session's tables and a call's sessions can save; the fold
+from the template's description, with where today's `Zk.verify` stands against the rule that a verifier's work follows
+the description; what bounds a table's blocks and the verifier's seconds a block at 4, 16 and 64 times more; the
+prover's per-table part.
