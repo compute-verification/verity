@@ -20,9 +20,9 @@ from collections.abc import Iterable
 from dataclasses import asdict
 
 from .. import search as S
-from ..ctx import Reject, Table, Z3Ctx
+from ..ctx import Table, Z3Ctx
 from ..gadgets import Epilogue
-from ..params import REAL, Params
+from ..params import REAL, Params, Reject
 from ..search import (
     GOLDILOCKS,
     M31,
@@ -52,7 +52,7 @@ from .params import V2
 from .step import _group
 from .tables import all_tables, leadnorm_table
 
-__all__ = ["SPECS_V2", "main", "modular_queries_v2", "table_selfcheck", "z3_group_step_v2"]
+__all__ = ["SPECS_V2", "main", "modular_queries_v2", "table_selfcheck", "wrapfree_queries_v2", "z3_group_step_v2"]
 
 
 def _nz(x):

@@ -47,7 +47,8 @@ from . import reference
 from .params import REAL, TINY, Params, Reject
 from .step import check_step_expr, gen_step
 
-__all__ = ["SPECS", "Spec", "exhaustive", "single_hint_search", "z3_gadget", "z3_group_step", "main"]
+__all__ = ["GOLDILOCKS", "M31", "ModZ3Ctx", "QueryResult", "SPECS", "Spec", "exhaustive", "render", "single_hint_search",
+           "z3_gadget", "z3_group_step", "main"]
 
 P40 = 2**40 - 87                 # a 40-bit prime (relation.py's stated field size)
 M31 = 2**31 - 1                  # Mersenne31

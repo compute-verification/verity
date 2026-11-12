@@ -31,8 +31,8 @@ from .gadgets import (
 )
 from .params import REAL, Params, Reject
 
-__all__ = ["accepts_step", "accepts_vu", "check_step", "check_step_expr", "check_vu", "check_vu_expr", "gen_step",
-           "gen_vu", "step_output", "vu_output"]
+__all__ = ["accepts_step", "accepts_vu", "check_step", "check_step_expr", "check_vu", "check_vu_expr", "contracts",
+           "gen_step", "gen_vu", "step_output", "vu_output"]
 
 
 def _k(p: Params) -> int:
