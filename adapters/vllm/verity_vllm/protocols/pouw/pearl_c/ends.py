@@ -57,8 +57,9 @@ class _Pass:
 
 class _RunState:
     """What `PearlCDeviceRun.__init__` sets and its four base classes (`PassEnds`, `passes.EpochCalls`,
-    `graphs.GraphCalls`, `lanes.LaneCalls`) read of each other and of the run, declared once: annotations only, so the
-    class holds no value and ``hasattr`` on a run reads as before.  A tensor, a weight's side and a graph are ``Any``."""
+    `graphs.GraphCalls` with its base `forwards.ForwardCalls`, `lanes.LaneCalls`) read of each other and of the run,
+    declared once: annotations only, so the class holds no value and ``hasattr`` on a run reads as before.  A tensor, a
+    weight's side and a graph are ``Any``."""
     scheme: C.PearlC
     entry: str
     kernel: Kernel
@@ -119,9 +120,11 @@ class _RunState:
     _defers_a: Callable[..., Any]
     _end_aside: Callable[..., Any]
     _ended: Callable[..., Any]
+    _graph_key: Callable[..., Any]
     _graphed: Callable[..., Any]
     _lane_graph: Callable[..., Any]
     _offsets: Callable[..., Any]
+    _retained: Callable[..., Any]
     _widen_later: Callable[..., Any]
 
 

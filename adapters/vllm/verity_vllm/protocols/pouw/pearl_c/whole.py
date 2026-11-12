@@ -3,7 +3,7 @@ captured with every call's graph steps (`pouw_pearl_c_graphs`) inside it, so a d
 per call, and runs no call's Python.
 
 vLLM captures one set of graphs at start, over what its linears ran then (its own apply).  `WholeStep` keeps a set per key:
-`VLLM` for the start's, used while no Pearl-C arm executes, and `GraphCalls.whole_key` (hashing, omitted steps, schedule,
+`VLLM` for the start's, used while no Pearl-C arm executes, and `ForwardCalls.whole_key` (hashing, omitted steps, schedule,
 retained) for each Pearl-C pass kind, which `prepare` captures, the arm's passes and with hashing its retained passes, through
 vLLM's ``capture_model`` inside a scratch pass the first time the arm is active.  vLLM's eager decode isn't its FULL graph's
 bit for bit, so a retained pass replays the graph its timed pass did.  On the runner's graph manager it patches, on the
@@ -13,8 +13,8 @@ instance:
   without graphs, when the key has no set (no pass open, `enabled` off, graphs off, a schedule the graph path doesn't run)
   or its set lacks the batch; where the key is a Pearl-C pass's, outside `prepare`, the run hears of it first
   (`eager_forward`, which with ``whole_eager`` runs the pass on side lanes);
-* ``run_fullgraph``: before vLLM's launch of the replay, `GraphCalls.whole_replay` with the calls the capture recorded,
-  every call's slot in one upload; after it, while the GPU runs the forward, `GraphCalls.whole_replayed`, the rest of the
+* ``run_fullgraph``: before vLLM's launch of the replay, `ForwardCalls.whole_replay` with the calls the capture recorded,
+  every call's slot in one upload; after it, while the GPU runs the forward, `ForwardCalls.whole_replayed`, the rest of the
   forward's host work: the pass's records, a retained pass's files, and the next forward's slots staged.
 
 The calls inside a capture are those made while vLLM's stream captures; vLLM's warm-up forward just before, outside the
