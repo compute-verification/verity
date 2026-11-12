@@ -272,8 +272,6 @@ theorem parseStrataRate_fixed (kind : String) (hk : kind = "subset" ∨ kind = "
   unfold Select.parseStrataRate
   rw [split1_colon kind (Nat.repr K) hka (not_mem_repr (by decide) K)]
   simp only [hr, Bool.false_and, Bool.false_eq_true, ↓reduceIte]
-  repeat' split
-  all_goals rfl
 
 /-- **A fixed count is no rate**: `kind:K`, for a `subset`, `stratified` or `work` design, at any `K`: it is no rate
 design, no stratified or work rate design, and where it is a sampling design (`1 ≤ K`) its kind is not `bernoulli`. -/
