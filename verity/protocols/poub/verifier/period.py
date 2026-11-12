@@ -48,12 +48,14 @@ from verity.protocols.pous.verifier.period import records
 from verity.protocols.spot.verifier.profile import WINDOW_DELTA
 from verity.commitments.identity import canonical_json_bytes
 
-from . import audit, codec, pooled, receipts
+from . import audit, codec, ledger, pooled, receipts
 from . import coins as C
 
 PROTOCOL = "verity/remote-bandwidth/v0"
 DELTA = WINDOW_DELTA
-"""`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`)."""
+"""`audit.DELTA`'s exact value, the pooled bound's δ (`RemoteAudit.Protocol.DELTA`).  An accepted session's `eps` is this
+δ and its samples' rejected first words, and leaves out Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): it
+reads δ + Σ_t adv_t (`ledger.DELTA_FORM`)."""
 WORD_BYTES = 64
 DATA_BYTES = WORD_BYTES - 1
 """Each 64-byte little-endian piece of a block carries 63 bytes of the store under a zero top byte, so every word is below
@@ -297,7 +299,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     here. With `remote-audit-protocol` among the period's tools the Lean verifier answers and must agree
     with the Python; it writes `out/bandwidth.case.json` (onsite's bandwidth case) and `out/bandwidth.json`. Which host
     ran each party, and whether `trusted-host`'s premise holds (`verifier_party.placement`), go in
-    `bandwidth.json` and in an accepted answer's profile (`placement`)."""
+    `bandwidth.json` and in an accepted answer's profile (`placement`); `bandwidth.json` names the term its `eps`
+    leaves out beside it (`ledger.NAMED_TERMS`)."""
     from . import verifier_party  # noqa: PLC0415  (it imports this module)
 
     doc = json.loads((Path(period_dir) / "period.json").read_text())
@@ -319,6 +322,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     out.mkdir(parents=True, exist_ok=True)
     (out / "bandwidth.case.json").write_text(json.dumps(period.case, sort_keys=True))
     (out / "bandwidth.json").write_text(json.dumps({"answer": answer_, "eps": str(period.eps), "lean": lean,
+                                                    "named": ledger.NAMED_TERMS,
                                                     "placement": where | {"reported_host": side["host"]},
                                                     "q_bytes": period.public("q_bytes"), "seconds": seconds,
                                                     "store_bytes": len(store)}, sort_keys=True, indent=1))

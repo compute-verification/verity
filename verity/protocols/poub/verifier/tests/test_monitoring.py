@@ -107,3 +107,14 @@ def test_each_period_is_labelled_as_one_session_scaled_up():
     for name, row in r["periods"].items():
         assert row["basis"] == f"one session scaled up to {row['sessions']} sessions, not a measured {name}"
     assert set(r["statement"]) == {"name", "file"}
+
+
+def test_a_table_says_the_prf_term_its_deltas_and_eps_leave_out():
+    """No δ or `eps` of a table is read alone: the table carries, beside its `deltas`, the term each leaves out, every
+    session's Σ_t adv_t in the ledger's words, whether or not the session was accepted."""
+    for answer in (ALL_DRAWN, {"verdict": "reject", "reason": "the session was rejected", "public": None,
+                               "profile": None}):
+        r = monitoring.table(answer, 1, 600)
+        assert r["deltas"] and r["except_also"] == monitoring.EXCEPT
+        assert "δ + Σ_t adv_t" in r["except_also"]
+        assert "(SHA-512 stream as PRF: not priced, not assumed)" in r["except_also"]
