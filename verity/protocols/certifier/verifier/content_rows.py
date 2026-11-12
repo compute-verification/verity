@@ -49,15 +49,18 @@ the most rows its tables have under either form).
 **The tables** (`tables`) of an execution phase are made from its releases in release order, each with its request's
 bytes and its ids as the network certifier cut and released them (`warden.Released`), and from each release's class,
 which is an argument. Row r of class i's three tables is the r-th of the execution phase's releases filed in class
-i. A release filed in no class, or in a class whose rows are all held, is unfiled: it has no content row, and its
-slots of the lengths and fails tables are the ones it had. A release filed in a class that doesn't hold it, its
-request longer than `request_room` or its ids more than O, is refused, never cut short.
+i. A release filed in no class is unfiled: it has no content row, and its slots of the lengths and fails tables are
+the ones it had. A release filed in a class that doesn't hold it, its request longer than `request_room` or its ids
+more than O, is refused, never cut short.
 
 - Under form 1 every row after the last held one is zero bytes. So a table's size is the schedule's whatever the
-  load, a class's held rows are its first, and how many are held is a value.
+  load, a class's held rows are its first, and how many are held is a value. A release filed in a class whose rows
+  are all held is unfiled, as one filed in no class is.
 - Under form 2 a table is its held rows and nothing after them. A class's three tables have one count of rows, the
   releases filed in it, and that count is public wherever the tables are committed (`connection_rows`' "The signed
-  head"); a class in which none is filed has three tables of no row. A class's rows are all held at R of them.
+  head"); a class in which none is filed has three tables of no row. A class's rows are all held at R of them, and
+  a release filed in it past them is refused, naming the release, the class and R: R bounds an execution phase's
+  releases, so releases with one past it are no execution phase's of the schedule, and none of them is laid.
 
 **The filing** (`file`): a release's class is the first the schedule lists that holds it. The rule reads the
 release as the network certifier cut it and nothing a server says. It has one caller, `connection_rows.tables`, and
@@ -270,7 +273,7 @@ def classes(params: WardenParams) -> tuple[tuple[int, ...], ...]:
 
 def sized(params: WardenParams) -> tuple[tuple[int, int, int], ...]:
     """Each class of a schedule as (P, O, the most rows each of its tables has): the class's own rows under form 1
-    and, where a table's rows are a count (`counted`), R = `WardenParams.phase_releases`. None for a schedule
+    and, where a table's rows are a count (`counted`), R = `WardenParams.phase_releases`. `()` for a schedule
     without content rows."""
     if params.content is None or not counted(params):
         return params.content or ()
@@ -285,7 +288,7 @@ def names(i: int) -> tuple[str, str, str]:
 def tables_of(params: WardenParams) -> tuple[tuple[str, int, int], ...]:
     """The content tables a schedule's head lists after the lengths and fails tables, class by class in the
     schedule's order: each one's (name, rows, a row's bytes), the rows the table's own under form 1 and the most it
-    has where they are a count (`counted`). None for a schedule without content rows."""
+    has where they are a count (`counted`). `()` for a schedule without content rows."""
     B = params.cell_bytes
     return tuple(t for i, (P, O, rows) in enumerate(sized(params))
                  for t in zip(names(i), (rows,) * 3, (request_bytes(B, P), response_bytes(O), END_BYTES)))
@@ -323,8 +326,8 @@ def tables(params: WardenParams, released: Sequence[Released],
     """An execution phase's content tables (the module docstring's "The tables") from its releases in release order
     and each one's class in `filing`, None for a release filed in none: each table its held rows and, under form 1,
     zero rows to the class's rows. ValueError for a schedule without content rows, releases out of order or without
-    the content of their lengths slots, a class the schedule doesn't list, or a release filed in a class that
-    doesn't hold it."""
+    the content of their lengths slots, a class the schedule doesn't list, a release filed in a class that doesn't
+    hold it, or under form 2 a release filed in a class past its R-th, naming the release, the class and R."""
     if params.content is None:
         raise ValueError("the schedule has no content rows (WardenParams.content)")
     if len(filing) != len(released):
@@ -349,6 +352,10 @@ def tables(params: WardenParams, released: Sequence[Released],
                              f"{i}, which holds {request_room(B, P)} bytes and {O} ids")
         if len(filed[i]) < rows:
             filed[i].append(r)
+        elif counted(params):
+            raise ValueError(f"release {r.order} is filed in class {i} past the class's {rows} rows: R = {rows} "
+                             f"(WardenParams.phase_releases) bounds an execution phase's releases, so these are "
+                             f"not one execution phase's of the schedule")
     out: dict[str, list[bytes]] = {}
     for i, ((P, O, rows), mine) in enumerate(zip(listed, filed)):
         made = ([request_row(r.request, B, P) for r in mine], [response_row(ids_of(r.ids), O) for r in mine],
