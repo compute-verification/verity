@@ -5622,6 +5622,10 @@
     {"file": "security/Proofs/Flock/SamplingGeneric/SpotFirstHit.lean", "count": 1},
     {"file": "security/Proofs/Flock/SamplingGeneric/TwoFirstHitKS.lean", "count": 1},
     {"file": "security/Proofs/Flock/SamplingGeneric/TwoOffClassAt.lean", "count": 4},
-    {"file": "security/Proofs/Flock/SpotFlock/OffClassAt.lean", "count": 5}
+    {"file": "security/Proofs/Flock/SpotFlock/OffClassAt.lean", "count": 5},
+    {"file": "security/Proofs/Flock/SamplingGeneric/RerunCalls.lean", "count": 2},
+    {"file": "security/Proofs/Flock/SamplingGeneric/TwoFirstHitAvg.lean", "count": 42},
+    {"file": "security/Proofs/Flock/SamplingGeneric/TwoOffClassAvg.lean", "count": 4},
+    {"file": "security/Proofs/Flock/SamplingGeneric/TwoOneWaitAvg.lean", "count": 3}
   ]
 }
