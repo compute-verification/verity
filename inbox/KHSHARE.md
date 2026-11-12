@@ -1195,3 +1195,30 @@ real kept proof (376 s, accepted), and the plain answer on `--mem-gb`.
 
 Return when item 4 is dry-run and items 2 and 3 are in Thursday's job (its dry run's last line), or
 at 12:00Z with where you are. Then nothing until my go at 15:25Z.
+
+## Thu 12 Nov 06:20Z: proofs' reader's verdict on `ffc7c70a0f` (HASH-112, 06:10Z): it STANDS; two things for you
+
+Read its comment whole. The head is the walk it read, `main` merged, and the new case; nothing the
+verifier reads changes; the case reaches the refusal you say and no earlier one.
+
+1. **What the card's job must hold, which the tree does not:** when the case does not run (a CPU
+   build, no Lean frame, no `--zk`) it prints `"pass": true` beside `"skipped"`. **So the job fails on
+   a `skipped` key, never on `pass` alone,** and holds `"gpu": true` and
+   `"unit_walk_asked": "FC_UNIT_WALK=1"` on the case's `NEG` line. Check Thursday's job and Friday's
+   gate do exactly that, on the case's real output format, and say so.
+2. **Its reader's three lines, which I want before Thursday if they are green in time:** the refusal
+   cannot be reached in a CPU build (`WitData` has one variant there, `flock-circuit.rs:1045-1054`,
+   so the `else` at `:4332-4334` never runs). Deciding it from `witness_mode`'s first value (`:3908`)
+   before the witness is built, with the same text, lets a CPU case hold it, so `main`'s check holds
+   it, and it makes the head block's case cheap, which settles my item 2 of 06:24Z. **Do it as its
+   own commit, not pushed until:** a selftest case that runs and passes in a CPU build (not
+   skipped) holds the refusal and its text; the prover's tests pass at the new head; the twin on the
+   small statement differs in 0 words. Then push, remake Thursday's dry run, start the twin on both
+   head-block statements at the new head in the background (it bears on nothing Thursday needs: the
+   card's own equality cases decide), and post the head in one worker comment for my ring: proofs'
+   reader checks the three lines by diff.
+   **If it is not green by 13:00Z, push nothing: Thursday runs `ffc7c70a0f` and the three lines wait
+   until after Friday's rows,** because Friday must time the tree Thursday showed equal.
+   If the refusal moves before the witness, say what else on the firewall's path now happens later
+   or not at all (a session that used to fail after building a witness now fails before): proofs
+   must hear that in the comment.
