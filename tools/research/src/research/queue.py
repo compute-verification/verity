@@ -114,6 +114,10 @@ candidate and those above it are built again without them in the same tick.
                                                    --until ends the windows at a past time, for a day that is over
     research queue stats --log FILE [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`)
+    research queue stranded [--json] [--moves] [--pool P] [--min MINUTES]
+                                                   the jobs waiting in one machine's line while a place that could run them
+                                                   stands free on another, read from every CPU machine at once; exit 1 with
+                                                   one (`research.stranded`)
     research queue checked-heads [--tip REV] [--json] [--out FILE]
                                                    the commits on REV's first-parent line (default origin/main) whose own `check`
                                                    passed and landed them, oldest first, one a line: each train's head, by drive's
@@ -7000,6 +7004,10 @@ def main(argv: list[str]) -> int:
         from .vqueue_loop import main as vqueue_main
 
         return vqueue_main(argv[1:])
+    if argv[:1] == ["stranded"]:                # jobs in one line beside a free place in another (`stranded.main`)
+        from .stranded import main as stranded_main
+
+        return stranded_main(argv[1:])
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "open", "edit", "link", "stats",
                                             "checked-heads", "review", "delegate", "shadow-report", "vqueue", "map-moves",

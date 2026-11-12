@@ -766,6 +766,15 @@ def unverified_main(ctx: Ctx) -> list[Finding]:
 
 #: the control pod's nightly loop's state (infra/control/nightly_check.py): `last`, its newest outcome and when it was read;
 #: `since`, when the loop first ran there; `night`, the one in progress
+def stranded(ctx: Ctx) -> list[Finding]:
+    """A job waiting in one machine's line while a place that could run it stands free on another, for 10 minutes: a check
+    job rings ci, one incident a job; any other pool infra, one a pool. Then infra's: a pool not read or shut by a disk floor, a
+    line stalled on memory, a wait for a Lean slot, a machine whose /etc/vy/peers is short (`research.stranded`)."""
+    from . import stranded as s
+
+    return s.findings(ctx)
+
+
 NIGHTLY_STATE = "data/watchers/nightly-check.json"
 NIGHTLY_SILENT_S = 36 * 3600
 
@@ -1530,6 +1539,13 @@ MONITORS: list[Monitor] = [
             "infra/control/README.md's watchers steps; one stuck on a run that never ends gives it up an hour past the run's "
             "timeout. The log's `launch:` line is the command, to run a night by hand.",
             every_s=600, for_s=1800, unread_s=3600),
+    Monitor("stranded", "infra", "warn", "relay", stranded,
+            "`research queue stranded --moves` prints each stranded job, the machines with a place for it and its move. A "
+            "check job (ci): launch its shard's twin on the first machine of its move, with the same pair, once every waiter "
+            "carries one. A lane pool (infra): read why `--on auto` put each job there and fix the placement rule. Shut: the "
+            "pool's machine (its disk floor, or why it can't be read). Stalled: set `peaks=` on the pool's slots. Lean: the "
+            "machine's Lean slots. Peers: put every CPU machine in that machine's /etc/vy/peers, with the key accepted.",
+            every_s=120, clear_s=300),
 ]
 BY_ID = {m.id: m for m in MONITORS}
 
