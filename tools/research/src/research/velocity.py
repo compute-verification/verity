@@ -512,12 +512,17 @@ def main(argv: list[str], now: datetime | None = None) -> int:
     form.add_argument("--line", action="store_true", help="one line for a chat")
     form.add_argument("--json", action="store_true")
     ns = p.parse_args(argv)
+    now = now or datetime.now(UTC)
     try:
         since, until = (when(t) if t else None for t in (ns.since, ns.until))
+        if until and until > now:
+            raise ValueError(f"--until {ns.until}: it is not in the past; without --until the window ends now")
+        if since and since >= (until or now):
+            raise ValueError(f"--since {ns.since}: it is not before the window's end")
     except ValueError as e:
         print(f"research velocity: {e}", file=sys.stderr)
         return 2
-    r = read(ns, since, until, now or datetime.now(UTC))
+    r = read(ns, since, until, now)
     print(json.dumps(r, indent=1, ensure_ascii=False, default=str) if ns.json else line(r) if ns.line else render(r))
     if ns.line and _saved(r["dumps"]["later"]):
         print(f"research velocity: the page read is {_saved(r['dumps']['later'])}", file=sys.stderr)

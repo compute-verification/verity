@@ -206,6 +206,10 @@ def test_the_command_compares_two_dumps_and_exits_0_with_the_rows_it_cant_read_s
         "1 finished, 1.0 days earlier less 0.5 later (net +0.5). Landing not read; agents not read; machines not read; asks not "
         "read.\n")
     assert V.main(["--since", "yesterday"], now=NOW) == 2
+    assert V.main(["--until", "2026-11-09T18:01-08:00"], now=NOW) == 2          # a minute after now: no window ends there yet
+    assert V.main(["--since", "2026-11-09T18:00-08:00"], now=NOW) == 2
+    err = capsys.readouterr().err
+    assert "--until 2026-11-09T18:01-08:00: it is not in the past" in err and "it is not before the window's end" in err
     assert V.main(["--from", "sweep:goals.json; true", "--to", str(B)], now=NOW) == 0     # not a dump's name: nothing is run
     assert "the sweep's dumps are named goals-YYYYMMDDTHHMMZ.json.gz" in capsys.readouterr().out
     assert V.main(["--since", "2026-11-09T12:00-08:00", "--until", "2026-11-09T18:00-08:00", "--json"], now=NOW) == 0
