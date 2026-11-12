@@ -33,7 +33,7 @@ uncaptured.  Each step names the Definitions its batch selects:
     size's tokens) splits it NS ways: NS = 1 is `Attention_v4` with the tile's MASKED_FROM, NS > 1 (decode only)
     `Fa3AttentionSplit_v1`.  FA2 splits a decode step `fa2_num_splits` ways (`Attention_v5`, `Fa2AttentionSplit_v1`).
 
-The manifest's identities are compiled.build's: one per (step, request, committed value), the request's rows of the value
+The manifest's identities are one per (step, request, committed value), the request's rows of the value
 (element_range [0, tokens x width); the logits and the sampled id one row per request), `step` request-relative.  program_digest
 is over the Program (every piece's calls with their Definitions and operands, the attention ops, the logits) and the step plans.
 The Build carries the compile artifact it read (`artifact`, `served_artifact.record`), the workload's pin.
