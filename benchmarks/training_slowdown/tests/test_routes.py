@@ -241,7 +241,8 @@ def test_a_qat_step_reads_the_start_plus_its_codes_and_steps_the_latents_straigh
     written out, and Newton-Schulz the route's (held to the polar factor above). What the step leaves, and `output`
     hands over, is the rounding of the latents it wrote; every other weight is the start's, and the output has no
     latent. A latent is compared within Newton-Schulz's bf16 rounding, a rounding to within f16's last bit of the
-    scale: a kept entry more or fewer is a whole scale off."""
+    scale: a kept entry more or fewer is a whole scale off. A kept state's load, which holds the latents, leaves each
+    layer's copy of the start the very tensor it held, which the counter names; θ's load makes the copy anew."""
     targets = ("blocks.0.wq.weight", "blocks.0.w_gate.weight", "blocks.0.w_down.weight")
     dials = qat.DIALS | {"targets": ",".join(targets), "keep": 0.3, "lr": 0.02, "warmup": 4.0, "decay": 0.5,
                          "cooldown": "sqrt", "clip": 0.01}
@@ -289,6 +290,11 @@ def test_a_qat_step_reads_the_start_plus_its_codes_and_steps_the_latents_straigh
             assert (SparseTernary.apply(theta[k], *out[k]) - (theta[k] + q)).abs().max() <= off
         else:
             assert torch.equal(out[k], theta[k])
+    held = {k: layer.start for k, layer in layers.items()}
+    model.load_state_dict({k: v.clone() for k, v in model.state_dict().items()})
+    assert all(layer.start is held[k] and torch.equal(layer.start, theta[k]) for k, layer in layers.items())
+    model.load_state_dict(theta)
+    assert all(layer.start is not held[k] and torch.equal(layer.start, theta[k]) for k, layer in layers.items())
 
 
 def test_qats_rate_falls_linearly_or_as_one_less_a_square_root():

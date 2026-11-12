@@ -17,7 +17,9 @@ scales, which is all the next forward reads of the training; the latents and Muo
 too, only the update rule reads.
 
 The latents are parameters θ has none of, and θ's copies and the codes are buffers no state dict holds: θ's load
-leaves them as built, but for each copy, which takes θ's matrix as loaded, in θ's own dtype. The output hands over
+leaves them as built, but for each copy, which takes θ's matrix as loaded, in θ's own dtype. A kept state's load,
+which holds the latents, leaves each copy the tensor θ's load gave, the one the counter holds, for the harness to
+write the kept copy into in place (`Harness.resume`). The output hands over
 the last codes in place of the matrices (`output`): E is the library's packing of them, and the model a checkpoint
 scores is what the library decodes from E on θ, the weights the next step would train on.
 """
@@ -57,7 +59,7 @@ def coded(model: torch.nn.Module, dials: dict) -> dict[str, Linear]:
 
 
 def start_as_loaded(layer: Linear, state: dict, prefix: str, *_) -> None:
-    if (w := state.get(prefix + "weight")) is not None:
+    if (w := state.get(prefix + "weight")) is not None and prefix + LATENT[1:] not in state:
         layer.start = w.detach().clone()
 
 
