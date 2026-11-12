@@ -45,6 +45,8 @@ def test_a_record_outside_the_run_directory_is_no_evidence(tmp_path, monkeypatch
 
 
 def test_outside_a_run_nothing_is_written(tmp_path, monkeypatch):
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
     R.write(tmp_path / "bench.json", True, "a checker", "a detail", [])
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
     R.write(tmp_path / "bench.json", True, "a checker", "a detail", [])
