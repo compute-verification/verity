@@ -106,6 +106,21 @@ def _jsonable(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
 
 
+def _block(doc: dict, name: str) -> dict:
+    """The block `name` of a document this rank reads: its own facts, the driver's weights pin and replay options, its weights of
+    record, the manifest of record.  Empty for a document that holds none, or holds it null or empty: each field read off it is then
+    None, which its reader takes as not stated (no Program dir for this rank, a world of 1, no digest for this rank)."""
+    block = doc.get(name)
+    return block if block else {}
+
+
+def _listed_for(per_rank: dict | None, rank: int) -> list:
+    """What a per-rank option of the driver (`{"<rank>": [...]}`: the post-load tensors, the shards to serve from another rank) lists
+    for this rank; empty for an option the driver left out and for one that lists nothing for this rank."""
+    listed = (per_rank or {}).get(str(rank))
+    return list(listed if listed else [])
+
+
 def _per_request(stated: Any, n_req: int) -> dict[str, int]:
     """A number for each request `r<i>` of the batch, from the table the driver stated: 0 for a request the table leaves
     out, and for every request when there is no table."""
@@ -280,7 +295,7 @@ class TP2CaptureWorkerExtension:
         rank_dir.mkdir(parents=True, exist_ok=True)
         runner = self.model_runner
         model = runner.get_model()
-        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
+        post_load = register_post_load_tensors(model, _listed_for(post_load_tensors, rank))
         engine = va.Engine(llm=_LLMShim(self), runner=runner, model=model, cp=dict(cp), kwargs=dict(engine_kwargs),
                            env_flags=dict(env_flags), build_s=0.0, case=case, target=target)
         header = make_header(engine, workload, adapter_revision=adapter_revision, wheel_sha256=wheel_sha256, vllm_commit=vllm_commit,
@@ -572,7 +587,7 @@ class TP2CaptureWorkerExtension:
         rank = int(facts["tp"]["rank"])
         runner = self.model_runner
         model = runner.get_model()
-        post_load = register_post_load_tensors(model, list((post_load_tensors or {}).get(str(rank)) or []))
+        post_load = register_post_load_tensors(model, _listed_for(post_load_tensors, rank))
         eng = SimpleNamespace(llm=_LLMShim(self), runner=runner, model=model, cp=cp, kwargs=engine_kwargs, env_flags={}, build_s=0.0, case=case)
         args = SimpleNamespace(arena_mb=arena_mb, chunk=None, hash_threads=None, profile_hooks=False, commit_scheme=commit_scheme)
         com = make_committer(kind, eng, args, f"{run_id}/rank{rank}")
@@ -591,7 +606,7 @@ class TP2CaptureWorkerExtension:
         try:
             from verity_vllm.acquire.sources.moe_source import MoeBlockSource
 
-            msrc = MoeBlockSource(com, model, world=int((facts.get("tp") or {}).get("world_size") or 1), manifest=man)
+            msrc = MoeBlockSource(com, model, world=int(_block(facts, "tp").get("world_size") or 1), manifest=man)
             if msrc.layers:
                 com.attach_source(msrc)
                 res["moe_source"] = {"layers": len(msrc.layers), "tensors_per_layer": msrc.stats.get("tensors_per_layer"),
@@ -651,7 +666,7 @@ class TP2CaptureWorkerExtension:
         # Program's shard map prescribes is wrong.  Applied BEFORE register_weights (the rank commits what it serves); the per-rank pin,
         # composed for THIS rank, must FAIL naming the parameter.  A replicated parameter cannot be mis-served this way (refused by name).
         res["serve_shard_from"] = None
-        ssf = list((serve_shard_from or {}).get(str(rank)) or []) if isinstance(serve_shard_from, dict) else []
+        ssf = _listed_for(serve_shard_from, rank) if isinstance(serve_shard_from, dict) else []
         if ssf:
             if not (isinstance(weights_pin, dict) and weights_pin.get("checkpoint_dir")):
                 raise RuntimeError(f"rank {rank}: --serve-shard-from needs --checkpoint-dir (the other rank's shard is composed from the pinned checkpoint)")
@@ -700,7 +715,7 @@ class TP2CaptureWorkerExtension:
         if isinstance(weights_pin, dict) and weights_pin.get("checkpoint_dir"):
             try:
                 from verity_vllm.check import weights_of_record as WR
-                pdir = (weights_pin.get("program_dirs") or {}).get(str(rank))
+                pdir = _block(weights_pin, "program_dirs").get(str(rank))
                 if not pdir:
                     raise RuntimeError(f"rank {rank}: no rank Program dir for the weights of record")
                 if not os.path.exists(os.path.join(str(pdir), "instances.json.gz")):
@@ -712,7 +727,7 @@ class TP2CaptureWorkerExtension:
                     pdir = subs[0]
                 rec = WR.build_record(str(pdir), str(weights_pin["checkpoint_dir"]), checkpoints_manifest=weights_pin.get("checkpoints_manifest"),
                                       model=weights_pin.get("model"), shard_pin=weights_pin.get("shard_pin"))
-                rtp = (rec.get("tp") or {})
+                rtp = _block(rec, "tp")
                 world_ = int(facts["tp"]["world_size"])
                 if int(rtp.get("world") or 1) != world_ or int(rtp.get("rank") or 0) != int(rank):
                     raise RuntimeError(f"rank {rank}: weights of record built from a Program of tp={rtp}, not this rank's (world {world_}, rank {rank})")
@@ -731,7 +746,7 @@ class TP2CaptureWorkerExtension:
                     chk["result"] = False
                     chk["why"] = (f"rank {rank}: checkpoint shards NOT pinned by manifests/checkpoints.json (all_shards_pinned={chk.get('all_shards_pinned')!r}): "
                                   f"the record is over the files at the checkpoint dir, not the checkpoint of record (W1); " + str(chk.get("why") or ""))[:400]
-                elif isinstance(chk["w2_program_of_record"]["rank_program_digest_of_record"], str) and os.path.exists(os.path.join(str((weights_pin.get("program_dirs") or {}).get(str(rank))), "instances.json.gz")) \
+                elif isinstance(chk["w2_program_of_record"]["rank_program_digest_of_record"], str) and os.path.exists(os.path.join(str(_block(weights_pin, "program_dirs").get(str(rank))), "instances.json.gz")) \
                         and str(rec.get("program_digest") or "") not in ("", chk["w2_program_of_record"]["rank_program_digest_of_record"]):
                     chk["result_before_w2"] = chk.get("result")
                     chk["result"] = False
@@ -772,7 +787,7 @@ class TP2CaptureWorkerExtension:
         if hasattr(com, "identity_check"):
             try:
                 from verity_vllm.acquire import fa2_plane_classes as FP
-                _pdir = ((replay or {}).get("programs") or {}).get(str(rank)) or ((weights_pin or {}).get("program_dirs") or {}).get(str(rank))
+                _pdir = _block(replay or {}, "programs").get(str(rank)) or _block(weights_pin or {}, "program_dirs").get(str(rank))
                 _impls, _impls_path = FP.attention_impls_of_record(program_dir=_pdir, programs_root=_pdir) if _pdir else (None, None)
                 _decls = FP.declarations_from_attention_impls(_impls) if _impls else []
                 if _decls:
@@ -798,7 +813,7 @@ class TP2CaptureWorkerExtension:
             # this rank's Program digest must be the manifest's digest for this rank (a manifest of another Program = wrong Program)
             try:
                 man = json.loads(Path(required_manifest).read_text())
-                pdr = (man.get("program_digest_per_rank") or {}).get(str(rank))
+                pdr = _block(man, "program_digest_per_rank").get(str(rank))
                 if pdr is None and isinstance(man.get("program_digest"), str):
                     pdr = man["program_digest"]
                 if not program_digest:
@@ -806,7 +821,7 @@ class TP2CaptureWorkerExtension:
                     self._tp2_commit["program_digest"] = pdr
                 res["required_manifest"] = {"path": required_manifest, "manifest_digest": man.get("manifest_digest"), "complete": man.get("complete"),
                                             "program_digest_for_rank": pdr, "program_digest_matches": (pdr == program_digest),
-                                            "identities": (man.get("populations") or {}).get("identities"), "ranks": man.get("ranks")}
+                                            "identities": _block(man, "populations").get("identities"), "ranks": man.get("ranks")}
                 self._tp2_commit["manifest_doc"] = man
             except Exception as e:  # noqa: BLE001
                 res["required_manifest"] = {"path": required_manifest, "error": repr(e)[:300]}
