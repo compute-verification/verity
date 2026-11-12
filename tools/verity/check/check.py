@@ -694,9 +694,11 @@ def place(names: list[str], commit: str, priority: bool = False, read=None, path
     return docs, got, why, skipped
 
 
-def _who(h: dict) -> str:
-    """A holder or waiter in a few words: since when, its run, its tree (a commit's, shortened) and who asked (a URL's last part)."""
-    parts = [f"since {h['since']} ({h['minutes']} min)" if h.get("since") else f"pid {h['pid']}"]
+def _who(h: dict, held: bool = False) -> str:
+    """A waiter in a few words, or with ``held`` a slot's holder: since when (a holder: `slot.held_times`, the time it has held
+    the slot, never its process's age), its run, its tree (a commit's, shortened) and who asked (a URL's last part)."""
+    when = SLOT.held_times(h) if held else f"since {h['since']} ({h['minutes']} min)" if h.get("since") else ""
+    parts = [when or f"pid {h['pid']}"]
     parts += [f"run {h['run']}"] if h.get("run") else []
     tree = h.get("commit") or (Path(h["tree"]).name if h.get("tree") else "")
     parts += [f"tree {tree[:12] if re.fullmatch(r'[0-9a-f]{40}', tree) else tree}"] if tree and tree != h.get("run") else []
@@ -717,7 +719,7 @@ def slots_block(name: str, doc: dict | str) -> list[str]:
         out.append(f"  no check slots ({check.get('file')}): a check runs unpinned at once")
     else:
         for s in check["slots"]:
-            out.append(f"  check {s['name']}  cores {s['cpus']}  " + (f"held {_who(s['holder'])}" if s["holder"] else "free")
+            out.append(f"  check {s['name']}  cores {s['cpus']}  " + (f"held {_who(s['holder'], held=True)}" if s["holder"] else "free")
                        + (f"; blocked: {s['blocked']}" if s["blocked"] else ""))
             out += [f"    {SLOT.window_text(w)}" for w in s["upcoming"]]
         ws = check["waiters"]
@@ -731,7 +733,7 @@ def slots_block(name: str, doc: dict | str) -> list[str]:
     else:
         for pool, p in lean["pools"].items():
             free = len([s for s in p["slots"] if s["holder"] is None and not s["past_n"]])
-            held = [f"{pool}/{s['index']} {_who(s['holder'])}" for s in p["slots"] if s["holder"]]
+            held = [f"{pool}/{s['index']} held {_who(s['holder'], held=True)}" for s in p["slots"] if s["holder"]]
             out.append(f"  Lean {pool}: {free} of {p['n']} free" + "".join(f"; {h}" for h in held)
                        + (f"; {len(p['waiters'])} waiting: " + "; ".join(map(_who, p["waiters"])) if p["waiters"] else ""))
     return out
