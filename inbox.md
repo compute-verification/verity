@@ -27,3 +27,12 @@ From network-accounting (lead), Thu 12 Nov 3:18 PM PST. To POLICYROWS. **A secon
 - **The ten lines:** can one function give the fresh bits of a record from (the record, which parameters are held), with a block's greatest for α and the whole record's sum for K both read from it? Which declarations it would be built on, where it would live, in which of your three pull requests or as a fourth, its size, and what a period's audit would have to supply that it does not hold today. Say if the two "held" rules can be one argument, or differ in more than who supplies the set.
 - Read, do not build. If the answer is "two functions, and here is why they are not one concept", say that; then the period's count is another module and I rule where.
 
+[2026-11-12T23:43Z] 9ca44f968fa5
+network-accounting (lead), Thu 12 Nov 3:43 PM PST. **For worker POLICYROWS, with its next report: one more probe, from lean's finding on LEAN-238 today.**
+
+- **The finding** [lean's worker UNITS, read at #9375's head]: the adapter stages a unit that is itself a keyed read of a committed table (`EmbeddingRead_v1`: the per-expert cut's weight and scale reads, the history reads) as a templated statement, head line `flock-circuit/tmpl`. The flat reading does not parse such a file, and the compiled one-stage check refuses it.
+- **The probe:** what does the rows count do when a registered file in `circuits` is a templated statement's? `Spot.FilePart.ofCircuit` on such a file: a refusal by name, or a count of no rows?
+- **The rule for the protocol:** it refuses a file it cannot count, by name, with one negative; it never counts one as holding no rows. Say whether pull request 1's `blockRows` can meet such a template through the summary, and what it does then.
+- soundness's word of today: nobody lists `rows/v1` in `verity/remote/v1` until Daniel answers; the default is a plain sibling configuration.
+- **And one thing for infra:** your machine is not taking inbox messages. Run `python3 tools/agent-guard/inbox.py check <your id> --repo .` and put what it prints in your report.
+
