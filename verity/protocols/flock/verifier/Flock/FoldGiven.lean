@@ -205,6 +205,8 @@ point. The walks are a `Thunk`, read only when a structured block is folded; a p
 `folded` folds it, so what fills `ws` chooses its points freely. -/
 def foldedGiven (st : Stmt) (ws : Thunk Walks) (alpha beta : F128) (lw rho ts : Array F128) : V (Array F128) :=
   if st.structured && ts.size + 6 == st.c.kLog then
+    -- No theorem says `ws` holds the points the replay asks at, and none is needed: a hit is the walk stored under
+    -- this very point (`WalksOk`), and a miss runs the plain walk, so a wrong guess of the points costs time only.
     match ws.get.find? (fun e => sameVec e.1.1 lw && sameVec e.1.2 rho) with
     | some e => st.foldedPartialFrom (e.2.map (Walked.base st alpha)) alpha beta lw rho ts
     | none => st.foldedPartial alpha beta lw rho ts
