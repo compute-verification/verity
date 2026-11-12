@@ -281,7 +281,10 @@ Lean's job in `check` and the tools around the audit:
 - `warm.py`: the Lean audit of a ready mark's merge, which builds a Lean change before a candidate holds it.
 - `siblings.py`, `axiom_probe.py`: what `verity lean try` runs beside lean: the sibling check and the axiom probe.
   The sibling check leaves out, and counts as unchecked, a module whose build, or an import's, is not of its source
-  as it is (by the hash Lake's trace states).
+  as it is (by the hash Lake's trace states). It leaves out uncounted, FILE's own module aside, what no root loads
+  beside the rest: the other executables' roots, and every module under an `exempt` prefix of the package's lock (the
+  name or below it, as the audit matches it), so two scripts that each declare `main` don't clash. It never fails on
+  the lock: with none, or one that can't be read (which it says on stderr), it leaves out the executables' roots alone.
 - `unread.py`, `unread-caps.json`, `unread_gate.py`: the Lean nothing reads, its ratchet's caps, and the queue's
   landing gate on its seeds (drive.toml's `landing_gates`). A PR that adds proof modules no guarantee reads yet sets
   its area's entry in the JSON file to the check's count in its own diff, with no room, and lists in its body each
