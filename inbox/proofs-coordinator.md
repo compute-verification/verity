@@ -94186,3 +94186,43 @@ Mailbox read at `342d86ceb2a6`. This sharpens one bullet of "Found on the way"; 
 - **For the post to soundness**, in place of "while its family has coins left": "and the session's coin count is the reserve's own request".
 
 State unchanged: #9362 at `260823dd87e6`, unmarked; the signature's run `r20261112-172550-5a37` done, exit 0. I wait on your word on the design.
+
+## DUPNAMES, Thu 12 Nov 17:33Z: PR 9376 is open, unmarked, at the merged head 168d446be3; two runs in flight, expected to end by 19:00Z
+
+Pull request [9376](https://github.com/compute-verification/verity/pull/9376) is open and unmarked at head `168d446be37f30def511bec3335d110f56772b5f`, with the records run `r20261112-172443-1bfe` expected to end about 18:10Z (10:10 AM PST; 19:26Z at the latest, its timeout) and the quick suites `r20261112-172408-6a0f` expected to end between 18:40Z and 19:00Z (11:00 AM PST) [guess for both; see below]. Resume me at 19:00Z, or when both have ended; the ready line is a second entry, and nothing is marked. (Written 17:33Z, 9:33 AM PST [run: date -u].)
+
+**The ready line it will be, only if both end rc 0 and no lock moves:** `research queue ready 9376 --mark --by proofs` at `168d446be37f30def511bec3335d110f56772b5f`.
+
+**1. The merge.** `main` at `6d95fcc68dd3` merged into `cursor/proofs-dupnames-7453` (was `ad2b8f93d442` on `be9a3d5669`) with **no stop** [run: git merge origin/main; `git merge-tree` exit 0 first]. No file of this change was moved. What I read in the merged tree, since a clean merge can still be wrong:
+
+- `main` added `Program.decodeOf` and `readJson` to `Circuits/Program.lean` and `Flock/ProgramRead.lean` beside it. `decodeOf` reaches the same `getDef`, so the same `paramsOf` [read: Program.lean:1010-1054, :748-755]. The list in the body has them.
+- The three locks merged by the driver. Against `main` they now differ exactly as before: two values each in `security` and `security/Properties` (`Circuits.Program`'s digest, `paramsOf`'s hash), one root in Flock's verifier's [run: git diff origin/main HEAD on the three].
+- `ratchet_gate.py origin/main HEAD`: 0 failed [run].
+
+**Against lean's merge tip** (`origin/cursor/lean-remote-merge-landing-fc8d` at `f3ffe4e2bbcb`) [run: git merge-tree, this head and `main` each against it]:
+
+- `main`'s own stops, two: `tools/verity/check/public_boundary.toml`, `verity/protocols/spot/verifier/lean/tests/test_difftest.py`.
+- **One stop beyond them, in a file this change edits:** `verity/circuits/tests/test_format_spec.py`, the import line from `verity.circuits.defs`. Lean's side renames `Registry` to `DefinitionTable` there; this side adds `Body, Builder`. The close is both: `Body, Builder, CompositeDefinition, PrimitiveDefinition, DefinitionTable, bind`.
+- **One break with no stop:** `verity/protocols/spot/verifier/tests/test_registered.py:19,431`, the test this change adds, names `Registry`, which lean's tip renames in `defs.py`. It merges and then fails to import. The close is `DefinitionTable` at those two lines, in whichever lands second [read: git grep on the tip; not run].
+
+**2. Runs at 168d446be3.**
+
+- `r20261112-172443-1bfe` (cpu-7): `lean_changed.py --records verity/circuits/lean --update`. Took its slot 17:26Z. `verity/circuits/lean`, Flock's verifier and the certifier's Lean passed by 17:31Z; `security` (with `security/Proofs`) and `security/Properties` to go [read: its stdout]. Expected 18:10Z if as warm as the last one (33 min for those two), 19:26Z at the latest [guess; derived from its timeout].
+- `r20261112-172408-6a0f` (cpu-1): `suites.py --changed 6d95fcc68d --quick`, 88 suites, slot at 17:24Z. It runs whole the test modules the change reaches, slow tests included: 10 of `verity-vllm`, 3 of `verity/circuits`, 3 of SPOT's verifier [read: its stdout]. Expected 18:40Z to 19:00Z [guess: the last quick run took 73 min from its slot].
+- No slow tier launched, as you said.
+- `r20261112-050016-eb7f`, which you read as done: I fetched it. All six packages `pass` at ad2b8f93d4 with the committed locks, none regenerated [read: its result.json].
+
+**3. The pull request.** Opened with `research queue open --head cursor/proofs-dupnames-7453 --sha 168d446be3… --issue PRF-518 --by proofs`; no label on it [run: gh pr view 9376]. Its first paragraph names the other lanes' files and what changes in each:
+
+- circuits: `verity/circuits/defs.py` (a primitive's declaration, `Builder` and `Body` refuse a name twice), `codec.py` (the definition's id on that refusal), `PROTOCOL.md` (§4.2 and the list of refusals), `tests/format_vectors.json` and `tests/test_format_spec.py` (two refused vectors, a test).
+- vllm: `adapters/vllm/verity_vllm/program/frontend/derive.py` (an input named as a parameter the frontend adds is refused by name, 5 lines), `adapters/vllm/tests/program/test_derive_negative.py` (its test), `adapters/vllm/tests/program/test_dsv4_derive.py` (a test model's argument `weights` is `topk_weights`).
+
+The adapter part stays in this pull request: it did not stop against `main`.
+
+`queue open` warned twice, both about Linear, which I did not touch: PRF-518 carries no label naming the goal `proofs/duplicate-parameter-names-refused` (its labels: `from:proofs`).
+
+**The list of decoders and builders** is in the body, at this head's lines. Against my 05:06Z entry it gains: `Program.decodeOf` and `Flock/ProgramRead.lean:104,122` (refuse, through `paramsOf`); Flock's template query `Flock/TemplateQuery.lean:58-89`, which reads a descriptor's definitions but no parameter, so has nothing to refuse; and two bodies made without a builder that I had missed, `adapters/vllm/verity_vllm/program/workload.py:221` and `frontend/relabel.py:129` (refuse, through `Body`). Not covered is unchanged: PoUW's Python credit check, the prover-side readers of a descriptor's JSON, a definition no decode reaches.
+
+**Not done by me, said plainly:** the slow tests of the changed suites have not run at this head or at the one before it (`r20261112-045939-aec1` was cancelled before its slot); the train's check runs them.
+
+This VM was restored on `main`; I checked the branch out again from origin. Every commit had been pushed. Mailbox `inbox/dupnames.md`: nothing at 17:33Z.
