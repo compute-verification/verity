@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import time
 from collections import Counter
-from typing import Any, Callable, Iterable
+from collections.abc import Callable, Iterable
+from typing import Any
 
 ORDINAL_SEP = "#ord"      # `<member name>#ord<tensor_ordinal>`: the reader's exact meta of a shared module's k-th invocation
 

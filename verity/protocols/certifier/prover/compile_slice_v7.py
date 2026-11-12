@@ -126,7 +126,7 @@ def _sig(S):
 
 
 _build = partial(CS._build, code=CODE)
-_DOC = ("a slice of the compile unit, one window whole, as CompileSlice_v1 with its charge ChargeLink_v2{D, 0, 0, K}: "
+_DOC = ("the compile slice's proof block, one window whole, as CompileSlice_v1 with its charge ChargeLink_v2{D, 0, 0, K}: "
         "the committed decisions and a length term for each certified arrival (its certified max_tokens and output "
         "length, in the certified arrivals' row) charged from the window's carry-in to its carry-out and held to the "
         "declared charge (verdict bits load, steps, code, charge, rows, cache)")
@@ -148,13 +148,14 @@ def unit(**st):
 
 
 def demo() -> tuple[dict, Slice]:
-    """`compile_slice.demo` with max_tokens 8, 16 and 255: request 0 runs to its cap, the others stop before it."""
+    """`compile_slice.demo` with max_tokens 8, 16 and 255: request 0 runs to its bound, the others stop before theirs."""
     st, sl = CS.demo()
     return st, Slice(sl.arrivals, sl.decisions, sl.steps, sl.tokens, (8, 16, 255))
 
 
 def demo_async() -> tuple[dict, Slice]:
-    """`compile_slice.demo_async` with max_tokens 4, 64 and 2: request 2's cap is its output length (its ``cap`` 1)."""
+    """`compile_slice.demo_async` with max_tokens 4, 64 and 2: request 2's bound is its output length (its arrival's last
+    field, 1)."""
     st, sl = CS.demo_async()
     return st, Slice(sl.arrivals, sl.decisions, sl.steps, sl.tokens, (4, 64, 2))
 

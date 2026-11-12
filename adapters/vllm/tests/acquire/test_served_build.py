@@ -81,7 +81,9 @@ def test_the_build_is_the_served_computation(art: Path) -> None:
 
 def test_the_gemm_route_follows_the_step(art: Path) -> None:
     plans = {s["step"]: s for s in _build(art)["steps_plan"]}
-    down = lambda s: plans[s]["gemms"]["8192,2048"]
+    def down(s: int) -> dict:
+        return plans[s]["gemms"]["8192,2048"]
+
     assert down(1)["base"] == "CublasSplitKGemm_v1" and down(1)["statics"]["SPLIT_K"] == 3
     assert down(0)["statics"]["SPLIT_K"] == 2
     assert down(6)["base"] == "Gemm_v2"

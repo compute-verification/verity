@@ -524,10 +524,11 @@ def dechunked(raw: bytes) -> tuple[bytes, bytes]:
 
 def test_ids_answers_in_id_form_exactly_the_wardens_id_requests():
     """`IdsProtocol.of`: itself for an id request in its P + 9-byte cells, with or without the network certifier's release
-    headers (`release.with_release`); its base for anything else, the shim's rebuilt POST, an id request in other cells, or
-    bytes that aren't a request."""
+    headers (`release.with_release`: the release, the run and, as the certifier sends it, the release's bucket); its base
+    for anything else, the shim's rebuilt POST, an id request in other cells, or bytes that aren't a request."""
     p = proto.IdsProtocol(payload=proto.ID_PAYLOAD, base=proto.PlainProtocol())
     assert p.of(id_request()) is p and p.of(REL.with_release(id_request(), 3, b"run")) is p
+    assert p.of(REL.with_release(id_request(), 3, b"run", 7)) is p
     assert p.of(shims_request(18097)) is p.base and p.of(id_request(140)) is p.base
     assert p.of(b"") is p.base and p.of(id_request()[:-1]) is p.base
     assert proto.PlainProtocol().of(id_request()).name == "plain"
@@ -543,7 +544,7 @@ def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_pa
     for payload in (140, proto.ID_PAYLOAD):
         ids = proto.IdsProtocol(True, payload=payload, base=proto.PlainProtocol(True))
         with Serving(tmp_path / str(payload), commit=False, protocol=ids) as s:
-            raw = s.send(REL.with_release(id_request(payload), 0, b"run"))
+            raw = s.send(REL.with_release(id_request(payload), 0, b"run", 5))
             assert s.send(id_request(payload)) == raw
             status, whole = s.post("/v1/completions", dict(CERTIFIER_BODY, stream=False, max_tokens=2))
         assert raw == b"".join(IT.id_event(t, payload) for t in (4853, 4884)) + IT.TRAILER

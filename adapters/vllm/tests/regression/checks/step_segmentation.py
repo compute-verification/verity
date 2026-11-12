@@ -16,10 +16,14 @@ ending at a sampling event -- what a correct segmentation of a one-token-per-ste
 """
 from __future__ import annotations
 
-import gzip
 import hashlib
-import json
 import os
+
+from verity.circuits.codec import descriptor_id
+
+from verity_vllm.pipeline import global_program as GP
+from verity_vllm.program import sampling_event as SE
+from verity_vllm.program import workload as W
 
 from .. import resolver
 
@@ -49,7 +53,6 @@ def component_dirs(wp: dict) -> dict[str, str]:
 
 
 def sampling_events(hist: dict) -> int:
-    from verity_vllm.program import sampling_event as SE
     return sum(int(n) for spec, n in (hist or {}).items() if SE.is_sampling_event(spec))
 
 
@@ -92,10 +95,8 @@ def expected(row: resolver.Row) -> dict:
 
 def recompute(desc: dict) -> dict:
     """`request_component` (current code) over one component descriptor: its segmentation and the sampling events in its body."""
-    from verity.circuits.codec import descriptor_id
-    from verity_vllm.pipeline import global_program as GP  # the registry set build_workload decodes components with
-    from verity_vllm.program import sampling_event as SE
-    from verity_vllm.program import workload as W
+
+    # the registry set build_workload decodes components with
     comp = W.request_component(desc, GP.REGISTRY, None, canon={})
     specs = [descriptor_id(n.fn) for n in comp.fn.body.nodes]
     return {"program_digest": comp.program_digest, "n_nodes": comp.n_nodes, "steps": len(comp.step_nodes),
@@ -113,24 +114,23 @@ def actual(row: resolver.Row) -> dict:
         wp_p, ch_p = row.candidate("build_workload/workload_program.json"), row.candidate("build_workload/chronology.json")
         if wp_p is None or ch_p is None:
             return {"source": "candidate", **{k: resolver.not_applicable("the candidate has no build_workload/ documents") for k in _KEYS}}
-        wp = json.load(open(wp_p))
+        wp = resolver.read_json(wp_p)
 
         def read(rel):
             p = row.candidate(rel)
-            return json.load(open(p)) if p is not None else None
-        out = lift(wp, json.load(open(ch_p)), _histograms(read, component_dirs(wp).values()))
+            return resolver.read_json(p) if p is not None else None
+        out = lift(wp, resolver.read_json(ch_p), _histograms(read, component_dirs(wp).values()))
         out["consistent"] = _consistent(out["requests"], {})
         return dict(out, source="candidate")
     wp = row.json("build_workload/workload_program.json")
     dirs = component_dirs(wp)
     comps: dict[str, dict] = {}
-    for d in sorted(set(dirs.values())):
-        with gzip.open(row.path(f"{d}/descriptor.json.gz"), "rt") as f:
-            comps[d] = recompute(json.load(f))
+    for comp_dir in sorted(set(dirs.values())):
+        comps[comp_dir] = recompute(row.json(f"{comp_dir}/descriptor.json.gz"))
     reqs = {}
     for r in wp["requests"]:
         d = _dir_of(r, dirs)
-        if d not in comps:
+        if d is None or d not in comps:
             raise resolver.NotResolvable(f"{row.key}: request {r['request_id']} names no derived component dir (inputs.derived: {sorted(dirs)})")
         c = comps[d]
         reqs[r["request_id"]] = {"cap": int(r["cap"]), "component": d, "program_digest": c["program_digest"], "n_nodes": c["n_nodes"],

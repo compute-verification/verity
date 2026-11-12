@@ -17,9 +17,14 @@ import pytest
 torch = pytest.importorskip("torch")
 
 from verity_vllm.commit import binding as B  # noqa: E402
-from verity_vllm.query.manifest.bind import Binder  # noqa: E402
+from verity_vllm.commit.committer.native_host import (  # noqa: E402
+    NativeHostCommitter,
+    TensorMeta,
+    _dtype_name,
+    _StepJob,
+)
 from verity_vllm.query.manifest import format as RM  # noqa: E402
-from verity_vllm.commit.committer.native_host import NativeHostCommitter, TensorMeta, _StepJob, _dtype_name  # noqa: E402
+from verity_vllm.query.manifest.bind import Binder  # noqa: E402
 
 V, H, TOKENS = 8, 16, 3
 PD = hashlib.sha256(b"program").hexdigest()
