@@ -1037,6 +1037,7 @@ def test_witness_block_in_bits_beyond_theta() -> None:
     assert in_bits_beyond_theta(prog, one) == _walk_in_bits(prog, one, structure)
 
 
+@pytest.mark.slow
 def test_s_step_reference_mode() -> None:
     """The brief's step: the lf model's s size (d 512, 6 layers, 8 heads, SwiGLU 1408, tied embeddings, vocabulary 50,304, context
     1024), batch 2, plain AdamW, in reference mode, with the z-loss (`_z_loss`). Every op of its forward and its cross-entropy

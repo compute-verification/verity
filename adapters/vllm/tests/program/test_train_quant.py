@@ -287,6 +287,7 @@ def test_int64_adds_shifts_and_ands(rules) -> None:
     _check(through_bytes, torch.randint(0, 4, (4, 16), generator=torch.Generator().manual_seed(17)), rules=rules)
 
 
+@pytest.mark.slow
 @BOTH
 def test_static_amounts_across_a_wide_tensor(rules) -> None:
     """Codes shifted left by a row of eight static amounts, and a column shifted right by them, one row past what a constant

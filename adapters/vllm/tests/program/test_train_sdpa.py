@@ -34,7 +34,7 @@ def _refusal(f, xs, cc=CC) -> Unsupported:
     return u
 
 
-@pytest.mark.parametrize("shape", sorted(FT.TRAIN_SDPA))
+@pytest.mark.parametrize("shape", [pytest.param(s, marks=pytest.mark.slow) if s == (2, 8, 1024, 64) else s for s in sorted(FT.TRAIN_SDPA)])
 def test_flash_forward_is_one_batch_of_the_captured_head(shape) -> None:
     prog = _program(_sdpa(0.0, True, scale=0.125), *_meta(shape, shape, shape), rules=training_rules(cc=CC))
     calls = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]
