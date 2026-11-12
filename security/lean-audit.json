@@ -470,26 +470,6 @@
    "digest": "bd59936e8a7d2ff64bdd5dd376cada99e5c95eb7a7c6679b8b240ab613cd6205",
    "why": "The recursion's interface: each session's witness is in the outer system's relation unless the stop fired, which RecZK takes of any recursion and lean/rec-zk proves at the deployed recursion (d17ae87c)."
   },
-  "Verity.Sampled.Instance.LogOpensRecorded": {
-   "owner": "@soundness",
-   "digest": "42a5f620cdf195873b4935d15e97a3c747de211499a2716f7dc02f214f09c794",
-   "why": "The deployments the guarantee describes, by ruling: at each session's accepted play, the device's log opens only the rounds the record v2 parses holds."
-  },
-  "Verity.Sampled.Instance.RegisteredFiles": {
-   "owner": "@soundness",
-   "digest": "81205422acabcad7d2a0e783aa8f0f9f4351653a3b629e817f3964b889b277e5",
-   "why": "The deployments the guarantee describes: the registered files are the ones the parameters' digests name, so they pass the file check wherever some files do."
-  },
-  "Verity.Sampled.Instance.SessionRegistered": {
-   "owner": "@soundness",
-   "digest": "3b1413ac284ced301f7340233cdaa993a041033fc9a9246fb2a948b6c6e3f42a",
-   "why": "The deployments the guarantee describes: each session the deployment runs is the one v2 sets up on the registered files wherever an accepted play names them."
-  },
-  "Verity.Sampled.Instance.SessionsReady": {
-   "owner": "@soundness",
-   "digest": "b3c68dd91b99363dd6daa4b0f4778d150f32fe80fb2820969ce9c4ebdee6a386",
-   "why": "The deployments the guarantee describes: each session's files give `sha512/row/v2` or `sha512/row-seg/v1` rows, 64-byte frame-v3 domains, two leaves a port, distinct roots and rows under 2^64 bits."
-  },
   "Verity.Sound": {
    "owner": "@proofs",
    "digest": "8ce08e78994d35e34dd4fb619f6366bee293379b3c7442a8007d53d80d5a5bd7",
@@ -3344,6 +3324,30 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Verity.Sampled.Instance.LogOpensRecorded": {
+   "owner": "@soundness",
+   "digest": "42a5f620cdf195873b4935d15e97a3c747de211499a2716f7dc02f214f09c794",
+   "issue": "PRF-579",
+   "due": "2026-11-20"
+  },
+  "Verity.Sampled.Instance.RegisteredFiles": {
+   "owner": "@soundness",
+   "digest": "81205422acabcad7d2a0e783aa8f0f9f4351653a3b629e817f3964b889b277e5",
+   "issue": "PRF-579",
+   "due": "2026-11-20"
+  },
+  "Verity.Sampled.Instance.SessionRegistered": {
+   "owner": "@soundness",
+   "digest": "3b1413ac284ced301f7340233cdaa993a041033fc9a9246fb2a948b6c6e3f42a",
+   "issue": "PRF-579",
+   "due": "2026-11-20"
+  },
+  "Verity.Sampled.Instance.SessionsReady": {
+   "owner": "@soundness",
+   "digest": "b3c68dd91b99363dd6daa4b0f4778d150f32fe80fb2820969ce9c4ebdee6a386",
+   "issue": "PRF-579",
+   "due": "2026-11-20"
+  },
   "Verity.Vocab.InferenceOnlySound": {
    "owner": "@lean",
    "digest": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
@@ -3417,9 +3421,6 @@
     "Claims.ZKServer.Loop.Src": "the prover-side firewall's randomness, trusted for the zero-knowledge guarantees only: every input the firewall host takes from its operating system is the random tape, uniform (flock-firewall-os-src)",
     "FlockSoundness.Assumptions.KeyedStreamsUniform": "commitment hiding, trusted for the zero-knowledge guarantees only: the deployed salts' keyed SHA-512 streams pass a test as uniform bytes do, up to its advantage (prf/sha-512)",
     "FlockSoundness.Assumptions.Zk.HashDerivedKeyHm96": "commitment hiding, trusted for the zero-knowledge guarantees only: hm96-sha512's salt key is not among the keys its hiding bound fails for, so a leaf hides at 2^-193 (hash-derived-key)"
-   },
-   "Verity.Sampled.remote_soundness_deployedReady": {
-    "Hash.Assumptions.LmsUnforgeable": "the remote verifier never talks to the onsite devices and gets each device's LMS signature only as a witness inside the proof, so the signature's unforgeability is the remote audit's to trust"
    }
   }
  },
@@ -3437,8 +3438,7 @@
   "Flock.SecurityProofs.SampledKSLiveV5",
   "Flock.SecurityProofs.SessionLoopZKDeployed",
   "NetTiming.SecurityProofs.PeriodLeakAccepted",
-  "Pous.SecurityProofs.StreamedWipe",
-  "Verity.Sampled.remote_soundness_deployedReady"
+  "Pous.SecurityProofs.StreamedWipe"
  ],
  "trust_gap": {
   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": [
@@ -3479,8 +3479,7 @@
    "Claims.ZKServer.LeanRelease.LiveRoundEq",
    "Flock.Guarantees.LoopInnerRound0"
   ],
-  "NetTiming.SecurityProofs.PeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.ScopeAcc"],
-  "Verity.Sampled.remote_soundness_deployedReady": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound"]
+  "NetTiming.SecurityProofs.PeriodLeakAccepted": ["Claims.SamplingGeneric.Compiled.KS", "NetTiming.CertifierRegisters", "NetTiming.ScopeAcc"]
  },
  "meaning": [
   "Definitions.Core",
@@ -5359,25 +5358,25 @@
   "Flock.SecurityProofs.SampledKSLivePub": {
    "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier (PRF-501, open to Fri 20 Nov)",
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
    "unfolded_hash": "7fd46bf15476328a61e775044cf5e635272a550b81a510ff9eec581611e10441"
   },
   "Flock.SecurityProofs.SampledKSLiveV2": {
    "type_hash": "43e16e73206c75e215db6b95d1b2daba857ef90f89f56300e63260c0414d8aa5",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier (PRF-501, open to Fri 20 Nov)",
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
    "unfolded_hash": "64f9164f92efc9d937a54d08caa5423fc610bd0640242d548cbead1e01b161fd"
   },
   "Flock.SecurityProofs.SampledKSLiveV3": {
    "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier (PRF-501, open to Fri 20 Nov)",
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
    "unfolded_hash": "3038bb63a193349152665cde3a07d198fa381d40704b23d24849ff44d5b84a83"
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
    "missing": "nontrivial",
-   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier (PRF-501, open to Fri 20 Nov)",
+   "why": "nontrivial instance needs a fixture the kernel builds, or the statement restated to conclude a claims predicate over the record's verifier",
    "unfolded_hash": "be09fddb90ee4dba3399a3e320dce315bf85a755a558e76b96fa25f10b781465"
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
@@ -25609,13 +25608,15 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [
+    "domain": [],
+    "open": [
      "Verity.Sampled.Instance.LogOpensRecorded",
      "Verity.Sampled.Instance.RegisteredFiles",
      "Verity.Sampled.Instance.SessionRegistered",
-     "Verity.Sampled.Instance.SessionsReady"
+     "Verity.Sampled.Instance.SessionsReady",
+     "Verity.Vocab.InferenceOnlySound",
+     "Verity.Vocab.PouwSound"
     ],
-    "open": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound"],
     "reads": [
      "FlockSoundness.Assumptions.HmRowComputes",
      "FlockSoundness.Assumptions.SHA512CRExpected",
@@ -28125,11 +28126,11 @@
    "Pouw.SecurityProofs.OnsiteFreed": "frozen (verdict): a probability statement over quantified work and certifier verdicts whose soundness is the premises RemoteWorkFloor and CertifierSeesImports, not a property of one function; it gets the shape when the onsite protocol's verdict is a named Lean function the event reads.",
    "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v and link cost t' + v per run for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text.",
    "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the law the verifier draws under from the registration (lawOf: drawnLaw, deriveLaw over Partition.strata, else flockLaw, and subset 0 where it names none), never a Bernoulli law (the verifier refuses one, OneStage.coveredLaw, notBernoulli_lawOf), which PopMatches puts on its layout's strata (LawOn, lawOn_drawsUnder), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
-   "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session art:88544efa's files, pinned by SHA-512, parse to a descriptor in scopeOkH whose public input ports parse and whose public file loads over them, and that no two of its ports' published domains are one, PortRoots.dupId, each conjunct as run r20261110-180627-2665 evaluated it with the verifier's compiled functions on the two files: three ports, each published domain 64 bytes, no two equal, and dupId true once one port's domain is set to another's; what was evaluated is the files' form, and today's flock-verify verify --zk refuses that session as stored, at setup, since its registered reads name only the port cs and the verifier wants every port), every hypothesis that statement takes of the files holds there (RowsOk, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupId, the draw sizes' divisibility), and its tags are in TagsOkZHJ, the case in which it gives its bound; it reads SampledKSLiveV5Honest (security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
+   "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session's files, pinned by SHA-512, parse to a descriptor in scopeOkH whose public input ports parse and whose public file loads over them, and that no two of its ports' published domains are one, PortRoots.dupId, each conjunct as a recorded run evaluated it with the verifier's compiled functions on the two files: three ports, each published domain 64 bytes, no two equal, and dupId true once one port's domain is set to another's; what was evaluated is the files' form, and today's flock-verify verify --zk refuses that session as stored, at setup, since its registered reads name only the port cs and the verifier wants every port), every hypothesis that statement takes of the files holds there (RowsOk, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupId, the draw sizes' divisibility), and its tags are in TagsOkZHJ, the case in which it gives its bound; it reads SampledKSLiveV5Honest (security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": "frozen (no-function): It is stated over an arbitrary registered circuit (Verity.RegisteredCircuit) with a training class's counted operations, a partition (Verity.Partition) whose units S are the serving blocks and a (c, k)-partition of inference blocks refining it (Verity.Partition.IsCK, Verity.Partition.Refines), and takes the serving blocks' sizes, the per-block caps, the operations' bodies and their overlap, and the uncertified caps as named premises about it (security/Definitions/Accounting/ServingBlocks.lean), not a function's acceptance; it is Theorem 3 per serving block, summed through Verity.SecurityProofs.ServingBlockSum and Verity.SecurityProofs.InferenceCap, with what a serving block's own cap leaves charged to its unregistered inputs (omega_max mu k_S), and Layer 2's envelopes supply its premises.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.ServingBlockBound, it is stated over an arbitrary declaration, its counted operations and partitions under named premises about them, not a function's acceptance; it keeps only the inference cap, the remote case.",
    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": "frozen (no-function): It is a counting fact about an arbitrary circuit's counted operations and a partition refining another (Verity.Partition.Refines), with no premise, not about a function's acceptance.",
-   "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of art:31c671f6's honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables and publishes pairwise distinct domains for its ports, PortRoots.dupId, each conjunct as run r20261110-183541-1e60 evaluated it with the verifier's compiled functions on the two files, beside verify --zk accepting that session: two ports, each published domain 64 bytes, no two equal, and dupId true once one port's domain is set to the other's), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH, dupId); it reads SampledKSLiveHonest (security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text.",
+   "Flock.SecurityProofs.SampledKSLiveHonest": "frozen (no-function): the honest witness of SampledKSLiveV2, SampledKSLiveV3 and SampledKSLivePub, not a run of a Lean function: from one named premise, ServedFilesParse (that the one-stage audit's --zk session files of the honest case, pinned by SHA-512, parse to a descriptor in scopeOkH whose public file loads with no shared-row tables and publishes pairwise distinct domains for its ports, PortRoots.dupId, each conjunct as a recorded run evaluated it with the verifier's compiled functions on the two files, beside verify --zk accepting that session: two ports, each published domain 64 bytes, no two equal, and dupId true once one port's domain is set to the other's), every hypothesis those statements take of the files holds there (Built, TagsOkZHJ, untyped tags, the parse, the public file, scopeOkH, dupId); it reads SampledKSLiveHonest (security/Proofs/Flock/Bridge/Honest.lean), so the lock records its text.",
    "Nci.SecurityProofs.DampenerRemotePeriod": "frozen (no-function): It composes the remote protocol's overhead bound over a monitoring period of T windows on live coins from CertificateSlack, the union over the windows, the per-identity escape tail and VerdictLag, under the named TerminalDetection (security/Definitions/Nci/Assumptions/Remote.lean) and (H) and (E) on each declared day's work (security/Definitions/Assumptions.lean), with each protocol's per-window bound (CircuitCredit's conclusion, the sampled-proofs window's draw-miss and knowledge-soundness bounds) and each day's count verdict (Nci.CompliesAtMost, what NciCheck.Properties.DescCountsCK gives a published complies) taken as a hypothesis, not from a function's acceptance; joining the windows to their protocols' verifiers is what would give it one.",
    "Nci.SecurityProofs.DampenerRemotePeriod_honest": "frozen (no-function): It states that DampenerRemotePeriod's premises hold at a constructed honest developer over one window at p = 3 * 2^-40, a value no guarantee gives, and eps' = 2p/10^-6, with one declared day, the toy Nci.Cut.Toy complying with CompliesAtMost 1 2 2 under (H) at unit costs and (E) at b = 2, with the failure probability at most 10^-6 and the overhead bound above 1, an existence over the statement's parameters, not a function's acceptance.",
    "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": "frozen (no-function): It states that at AcceptAll, one window at a PoUW verifier that accepts every certificate and no declared day, every other premise of DampenerRemotePeriod holds, its PoUW per-window bound fails, and its conclusion fails, so it is false without that bound: a counterexample at an instance, not a function's acceptance.",
@@ -28287,7 +28288,7 @@
    "Flock.SecurityProofs.UnrelLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released, b its failure budget (Flock.StopCount.UnrelWithin), at every order of the record's ops (Flock.StopCount.opsRun: Firewall.Record's openSession, finish, stop, release, slot and admit, and the Loop's wait) and every stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), the Lean record's ops with no acceptance of a Lean function to take, so the lock records its text. The deployed opener is Python's Firewall, so for the deployment it rests on the firewall's difftests.",
    "Flock.SecurityProofs.UnreleasedLeBudget": "frozen (no-function): at most b of a stream's sessions are left with a statement not released (Flock.StopCount.UnreleasedWithin: of any sessions, distinct, each opened on the stream if opened at all), b its failure budget, at every run (Flock.StopCount.run, the model RecStopsOfRun is about), message counts and stream, with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
    "Flock.SecurityProofs.StreamStopBudget": "frozen (no-function): at every run a stream's joint stop (Flock.StopCount.streamStop) is a Pattern at its failure budget b, at most b of its sessions stopping (Flock.StopCount.StreamStopWithin), and a Pattern at b takes Σ_{|S| ≤ b} Π_{i ∈ S} Σ_p (M_p + 1) values (card_streamStops), with no premise; it reads Flock.StopCount (security/Proofs/Flock/Recursive/StopCountStream.lean and StopCountBudget.lean), a model of the record's ops with no acceptance of a Lean function to take, so the lock records its text.",
-   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets) and the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded) as domain premises; it takes the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved"
+   "Verity.Sampled.remote_soundness_deployedReady": "frozen (premise): Verity.remote_soundness_of_subprotocols at the deployed vocabulary (Verity.Sampled.Instance.vocab at the constructions Instance.constructionsAt assembles), with SPOT's target proved from Flock's live V5 chain (Verity.Sampled.spotSound_of_targets); it takes as open premises the deployment's inputs (SessionsReady, RegisteredFiles, SessionRegistered, LogOpensRecorded), each owed of the compiled check, and the base's PoUW and inference-only targets (Verity.Vocab.PouwSound, InferenceOnlySound at remote), until each is proved"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

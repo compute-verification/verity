@@ -10,26 +10,26 @@ public import Proofs.Properties.Verity.Sampled.Unbound
 public import Proofs.Properties.Verity.Sampled.RecursiveRefused
 
 /-!
-# SPOT's leg at the deployed device, from the coupling
+# SPOT's target at the deployed device, from the coupling
 
 `Verity.Vocab.SpotSound` at composite `k`, for a vocabulary whose sampled fields are the deployment's sessions
 (`Deployed`, `Covers`), from one target, a `Prop` the owning goal proves: **the coupling** (`CouplingTarget`, at each
-session): the sampled verdict in the period's game is at most as likely as flock-verify `--zk`'s acceptance in the live
-audit at the projected strategy, plus the messages' two-continuation finders, the coin trees' hiding term, the read
-finder's collision and the forger's forgery (draw-from-log).
+session): the sampled verdict in the period's game is at most as likely as Flock's `--zk` verifier's acceptance in the
+live audit at the projected strategy, plus the messages' two-continuation finders, the coin trees' hiding term, the read
+finder's collision and the forger's forgery (the sample read from the log).
 
-What the leg reads that is proved: Flock's knowledge soundness of the live session (`SampledKSLiveV5`), applied at the
+What the proof reads that is proved: Flock's knowledge soundness of the live session (`SampledKSLiveV5`), applied at the
 session's sample (`Live.v5_at`, along `Live.L_eq`), A3 and `live-verifier` at the deployed device (`Live.deployed`,
 `Live.hCust`), the sampling design's miss (`Flock.Bridge.pa_partOf`, `Flock.Bridge.nsOf_sum`), the bridge from the
-committed files' unbound units to the session's faulty proof blocks (`Live.unbound_subset_faulty_part`), and, at
+committed files' unbound units to the session's incorrect proof blocks (`Live.unbound_subset_faulty_part`), and, at
 parameters that don't name the one-stage form, that SPOT accepts nothing (`recursiveForm_refused`).
 
 * `Live.ks`: at a session, a strategy of the live audit whose extracted transcript fails the claim at the session's share
   is accepted with probability at most the session's error (`Live.sessionDelta`). V5 at `B` the extracted witness's
   incorrect set gives the live acceptance at most the sampling design's miss of `B` plus the tables', binding and roots'
   errors; through the bridge `B` holds more than an `ε` share of the proof blocks, so its miss is at most the sample's
-  term (`Live.drawMiss`).
-* `spotSound_of_targets`: the leg. Where `error`'s premises hold and the claim fails, the coupling bounds the
+  term of the session's error (`Live.sessionDelta`).
+* `spotSound_of_targets`: SPOT's target. Where `error`'s premises hold and the claim fails, the coupling bounds the
   verdict by the live acceptance at the projected strategy and the finders' terms: `Live.ks` bounds the first, the strict
   birthday bound (`StrictBirthday`) each two-continuation finder at `2t + 2h` calls, `FinderCR` the read finder at the
   published bound, and `LmsUnforgeable` the forger at `ε_forge`, so the sum is at most the session's `Live.delta` plus
@@ -82,10 +82,10 @@ variable (A : Live)
 
 open Classical in
 /-- **V5 at the session, at any sample equal to V5's**: `SampledKSLiveV5` at the session's binders, the link finders
-charged `t + w` per run and the tables' finders at `2t + 2v` and `t + v`, at a sample `L` that is
-`Flock.Bridge.execSel` at the session's bytes and law; at `L = A.L` (`Live.L_eq`) its simulator and extractor are the
-session's (`Live.sim`, `Live.Xr`). The session's `--zk` tags are in `TagsOkZHJ` (`Live.hTags`), so V5's bound is the
-one it states there, and `live-verifier` at the registration's law is the sample file's (`Live.hsub`, `Live.hCust`). -/
+charged `t + w` per run and the tables' finders at `2t + 2v` and `t + v`, at a sample `L` that is `Flock.Bridge.execSel`
+at the session's bytes and sampling design; at `L = A.L` (`Live.L_eq`) its simulator and extractor are the session's
+(`Live.sim`, `Live.Xr`). The session's `--zk` tags are in `TagsOkZHJ` (`Live.hTags`), so V5's bound is the one it states
+there, and `live-verifier` at the registration's sampling design is the sample file's (`Live.hsub`, `Live.hCust`). -/
 theorem v5_at (L : FlockSoundness.Audit.Law A.n) (hL : Flock.Bridge.execSel (n := A.n) A.src A.design A.n = L) (t : ℕ)
     (B : Finset ℕ) (τ : FlockSoundness.Game.Strategy (auditLive L A.Reg (liveOfZJ A.dg (planZHJP A.dj A.y₀) A.N A.wr))) :
     let σ := simZJA execArith hs512 (planZHJP A.dj A.y₀) (AcceptsZKP A.I A.own) A.wr
@@ -126,10 +126,10 @@ theorem v5_at (L : FlockSoundness.Audit.Law A.n) (hL : Flock.Bridge.execSel (n :
 theorem units_eq : A.fileRead.units = A.n :=
   (Flock.Bridge.unitsOfFile_eq (Flock.Bridge.parsedOf_eq A.hD A.hpubO A.hU)).trans A.hnO
 
-/-- **The session's knowledge soundness at a claim that fails**: a strategy of the live audit whose
-extracted transcript `tr`, on the committed files `r` the session reads, fails the claim at the session's share under
-openings that hold wherever the deployed commitment opens and at the constants, is accepted by flock-verify `--zk` with
-probability at most the session's error at `t` calls, where the session's per-finder premises hold at `t`. -/
+/-- **The session's knowledge soundness at a claim that fails**: a strategy of the live audit whose extracted transcript
+`tr`, on the committed files `r` the session reads, fails the claim at the session's share under openings that hold
+wherever the deployed commitment opens and at the constants, is accepted by Flock's `--zk` verifier with probability at
+most the session's error at `t` calls, where the session's per-finder premises hold at `t`. -/
 theorem ks {r : Verity.FileRead} (hr : r = A.fileRead)
     (op : (g : Fin r.circuit.N) → BitVec (r.circuit.w g) → Prop) (hop : A.OpensUnder r op) (hc : ConstsOpen r op)
     (tr : r.circuit.Trace) (τ : FlockSoundness.Game.Strategy A.game) (htr : HEq tr (A.extract τ)) (t : ℕ)
@@ -185,7 +185,7 @@ theorem sqrt_le_twoRun {f : Claims.Finder} (hf : Claims.StrictBirthday Verity.sh
     (hq : ∀ s, (f.cost s : ℝ) ≤ q) : ENNReal.ofReal (Real.sqrt (f.Pr Verity.sha512Msg)) ≤ Live.twoRun q :=
   ENNReal.ofReal_le_ofReal (Real.sqrt_le_sqrt (hf q hq))
 
-/-- **SPOT's leg at the deployed device**: soundness's vocabulary at `.sampled` reading the constructions `K`
+/-- **SPOT's target at the deployed device**: soundness's vocabulary at `.sampled` reading the constructions `K`
 at the deployment's sessions `S` (`Deployed`), which cover the one-stage form (`Covers`), meets SPOT's target
 at composite `k`, from the coupling at each session (`CouplingTarget`). Off the one-stage form SPOT accepts nothing
 (`recursiveForm_refused`). -/
