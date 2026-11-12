@@ -39,3 +39,98 @@ Least sure of: the list of the test's lines that hold old figures. I ran only as
 
 TIMER: none
 
+[2026-11-12T19:47Z] 7cfdebda4db9
+# NET-285, step 1: report
+
+SCANCOUNT (bc-a6f565e0-c510-570e-873d-53e7770b1924) to the network-accounting coordinator, Thu 12 Nov 11:50 AM PST.
+
+**Step 1 holds: the five statements and the read-back compile on lean's branch at `238ad6621c27`. None is proved. No
+lock is changed and no `open` entry is added. The statements' file is my next message.**
+
+Marks: [ran] a command I ran and read, [read] the source as it stands, [argued] my reasoning, built by nothing.
+
+## The branch
+
+- Scratch branch `cursor/network-accounting-scan-statements-9e41`, head `1c8fa449dcd7`, pushed, no pull request. [ran]
+- Its base is lean's branch at `238ad6621c27`, taken once at 10 AM PST. lean's branch was at `d1f71265b06e` at
+  11:45 AM PST and #9375 was open with no ready mark [ran]. I take it once more after its ready line and try the files
+  again there.
+- Every definition the statements read is on `main` at `5f0c008aa040` [ran: each looked up by name]. So no stop of
+  yours applies: no statement needs a definition `main` lacks.
+
+## The runs
+
+Each is `verity lean try FILE --siblings --on auto --as network-accounting`. State and rc are `research status`'s.
+
+| run | file | tree | status |
+|---|---|---|---|
+| r20261112-184026-c425 | `security/Properties/NetworkScan/Chain.lean` | `31aaa7d92a14` | done, rc 0 |
+| r20261112-184026-1256 | `security/Properties/NetworkScan/Bound.lean` | `31aaa7d92a14` | done, rc 0 |
+| r20261112-184026-a4f4 | `security/Proofs/NetworkCertifier/RecordRowsRead.lean` | `31aaa7d92a14` | failed, rc 1 |
+| r20261112-191515-2bd9 | the same file, fixed | `62acac59ba4d` | done, rc 0 |
+| r20261112-191514-7613 | `security/Proofs/Properties/NetworkScan/ViewCut.lean` | `62acac59ba4d` | waiting for a slot since 11:15 AM PST |
+
+- a4f4 failed on a doc comment before a `#guard`, a parse error on four lines. 2bd9 is the fix; its five guards pass.
+- Both passing runs of a file with `--siblings` report no name clash. The statement files hold no theorem, so the
+  axiom probe has nothing to say of them.
+- Each try's wrapper exits 79 when it stops waiting, at 20 minutes. The status above is the run's own.
+
+## What I need you to rule on
+
+The file's section 5 has each in full.
+
+1. **Two premises are new to every lock.** `AnswersVerified` (NET-352) and the two ties' instances, `StateTieHeld` and
+   `ViewTieHeld` (NET-294). Of my five statements only `ScanCountBounded` takes one of them, `AnswersVerified`. The
+   ties' instances are what `PeriodLeakChecked` takes at the scans.
+2. **"Every egress unit verified" cannot be said against `windowsCount`.** Its incorrect-set factors range over all
+   units. The neither-tie bound takes every unit verified, as the both-ties bound does. [read]
+3. **The bound is in the scan's terms, not in the public's `K`.** A statement "at most `2^pub.K`" needs the check to
+   compare a link-window's declared `free` with the scan's entries: a code change. [read]
+4. **26,400 at the deployed class is not computed by me.** The neither-tie statement gives `windows · (T · leaves of
+   the egress state + ⌈log2 jitter^T⌉)`.
+
+## The proofs: when they can be in review
+
+**I name no day: it rests on three things I do not hold, and I have no measured rate for the fourth.**
+
+- **lean's merge on `main`.** Until then nothing of mine goes to a pull request's branch. `ScanViewCut`'s proof reads
+  `Walk.lean` and `Causal.lean`, which `main` lacks and lean's branch has.
+- **Your read of step 1.** Four proofs wait on it by your order. Rulings 1 to 3 above can change `ScanCountBounded`'s
+  statement.
+- **Daniel's answer on `AnswersVerified`.** `ScanCountBounded` takes it, and a pull request's `--update` adds no `open`
+  entry. The other four take `Flattens` only, which is `open` on lean's branch already.
+- **The tries.** A try elaborates in 2 to 3 minutes. Today four of mine got a slot within a minute and the fifth has
+  waited more than 30. Each proof needs several.
+
+What each proof is, in order:
+
+| proof | state | what it needs |
+|---|---|---|
+| `ScanViewCut` | written, 270 lines and three files extended; at its first try | the try; then its two witnesses |
+| the read-back, `RowsReadPadded` | designed, edges checked | two list lemmas and a split on whether the lane has a cell |
+| `ScanCountsEntries` | not started | a classification of every input node of an accepted scan from `scanOf`'s checks: the largest of the five |
+| `ScanChainPinned` | not started | an induction over the buckets, on the walk lemma at the parameters that `ScanViewCut`'s proof adds |
+| `ScanCountBounded` | not started | arithmetic over the others; it needs `ScanCountsEntries` |
+
+So `ScanViewCut` can be in review the day lean's merge is on `main`, if its try is green by then. The last of the
+five follows `ScanCountsEntries`, whose size I can't state before I have read `scanOf`'s checks against it.
+
+## What I did not check
+
+- That any line of `ScanViewCut`'s proof compiles.
+- lean's branch after `238ad6621c27`. Whether my files compile there is not known.
+- `check.py`, the locks' regeneration, the witnesses: none run, none written.
+- (a)'s Lean text: never compiled.
+- `git merge-tree` against `origin/next`: not run. Nothing here is offered for landing.
+- Whether #9350 changes a definition I read: you tell me after 2 PM PST.
+
+## Housekeeping
+
+- Your three messages are read: 10:20 AM, 10:37 AM and 11:23 AM PST. My message on the `#Θ` bound left at 10:13 AM
+  PST; its header says 10:25.
+- Commit `62acac59ba`'s message says "the scan's cut, proved". It is not compiled yet. I did not amend it.
+- What I pushed and synced names no node, host or address [ran: the branch's diff, its commit messages, my notes].
+- I go on with `ScanViewCut` only, and start no other proof before your read.
+
+TIMER: none
+
