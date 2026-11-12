@@ -19,6 +19,10 @@
 #   SMALL_SERVE_PY and SMALL_SECOND_PY name another script for the serve and for `second` (two_stage_control.py: a
 #   negative control's class, and the prover that claims its changed ids); such a run exits 0 only if the control held
 #   as an honest class does, so a control that is refused exits 1 with its summary's reason
+#   SMALL_AFTER="SCRIPT ARGS" runs one more script on the second stage's files before they are removed, given --audit
+#   (the second stage's audit directory), --bin, --lean and --out (two_stage_drawn.py --members 0,19: members restaged
+#   at their sampled proof blocks alone); its log is $OUT/after.log, its records $OUT/after, and its exit goes to
+#   machine.txt, never to this script's
 # On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
 # RECORD --ssh-key KEY" as both SMALL_FIRST and SMALL_SECOND (the last --challenger given is the one taken), and
 # SMALL_ARGS="--serve NONCE" with a nonce no run has used: the gate opens a run's root once, ever.
@@ -79,4 +83,13 @@ for d in first second; do
      | xargs -0 -r -I{} sh -c 'printf "%s  %s  %s\n" "$(sha512sum < "$1" | cut -d" " -f1)" "$(stat -c %s "$1")" "$1"' _ {}) > "$O/$d/large.txt"
 done
 [ -f "$W/second/summary.json" ] || exit 2
+if [ -n "${SMALL_AFTER:-}" ]; then
+  arc=0
+  # shellcheck disable=SC2086
+  "${PY[@]}" $SMALL_AFTER --audit "$W/second/audit" --bin "$BIN" --lean "$LEAN" --out "$W/after" > "$O/after.log" 2>&1 || arc=$?
+  grep '^DRAWN-HELD ' "$O/after.log" || tail -30 "$O/after.log"
+  echo "after rc=$arc" | tee -a "$O/machine.txt"
+  mkdir -p "$O/after"
+  [ ! -d "$W/after" ] || (cd "$W/after" && find . "${RECORDS[@]}" -size -64M -print0 | xargs -0 -r -I{} cp --parents {} "$O/after/")
+fi
 "${PY[@]}" benchmarks/one_stage/two_stage_small.py expect "$W/second/summary.json" "${UNLINKED[@]}" | tee "$O/expect.txt"
