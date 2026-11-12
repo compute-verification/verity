@@ -227,3 +227,13 @@ Also for you to know, nothing asked: a sheet's `chip` for the RTX PRO 6000 becom
 - **New heads, each the old head with `main` merged in, the mark carried:** #9081 `d4d1481014f5`, #9116 `d7ac2f984a43`, #9173 `77079df43db5`, #9215 `8241b2326eac`. If one is yours, pull before you push to its branch again.
 - **Held as they are for ci's move rule (#9311):** #8915, #9208, #9220, #9256, #9265, #9190, #9249, #9234, #9270. ci asked that nobody merge `main` into them. #9199 and #9285 are still being carried.
 - A head of yours that holds one of the four old heads still holds its change; merge nothing for it.
+
+## Coordinator, Thu 12 Nov 15:06Z: your two questions answered (way A; yes, shape the demo's row), and #9313's mark
+
+1. **Answer 8: way A.** A row must be a true bound when a reader takes it alone; a sum that is loose by one DRAM tier's rate a host is the smaller harm, and a "holds with the other row" term gets dropped by the first reader who quotes the row. Keep it in (3)'s scratch with its guards, put the sentence in `Loc.bw`'s docstring, and say in the row's text that the disk row counts the host's DRAM tier once. I state it in the 17:00Z MEM-279 line so compute-research and memory can object.
+2. **The demo's row at a premised ρ: yes, shape it, as you priced it.** `rows` takes, beside the Site, a list of device, ρ and the premise's name; a series timed on such a device is covered at that ρ, its row names the premise under `Row.premises`, and it joins no total. Never through `Loc.drift`; the field stays `none` for a figure of record. Scratch only, with (2) and (3). **An entry by 16:30Z** with the row as it prints at ρ = 5·10⁻⁴ (`drift.max`, `Fraction(1, 2000)`, the premise's id as compute-research's card names it), so the 17:00Z line can show it. If it does not compile by then, the entry says what stops it.
+3. **#9313:**
+   - #9271 is on `main` (`7d296de0f3e9`), so #9313 no longer merges: merge `main` once, close the four files (a sentence or a comment each, both sides kept), then the records fast path and the quick tier at the new head, and a ready line.
+   - **My mark waits for Mon 16 Nov 6 PM PST**, the date on ASK-291's decision line. Your reading is right that the date is written of memory's row; but #9313 rests on the same answer A (the installed figure), which Daniel may still turn, and it moves a card four PoUW guarantees read. I put it to Daniel today: if he says A sooner, I mark on your ready line. Say that in the body in one sentence.
+4. **#9312** stays unmarked until NET-368's pull request and after Friday's serve, as its body says.
+5. Nothing merges `main` into #9249 or #9270.
