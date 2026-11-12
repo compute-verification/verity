@@ -593,7 +593,7 @@ each request decided and its own frame sent at its place (`State.request`, the p
 answered by the loop), nothing after a stop, the session ended at its `Finish` whatever its outcome, and with a hold
 the loop's proofs and `Finish` held for `Hold.barrier`. Of the auditor's answer to `Register` the prover receives the
 draw's frame and nothing after it (`drawAnswer`); with a hold, what follows is `Hold.known`'s, and a session it refuses
-is answered with the refusal from then on, nothing more of it reaching the auditor.
+has the auditor's connection cut and is answered with the refusal from then on.
 `phase` is where a held session stands, and `ended` why it ended if the hold has no outcome of it. -/
 def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions) (l0s : IO.Ref Level0.Slots) (sid : Nat)
     (p : Socket.Client) (hold : Option Hold) (a : Socket.Client) (first : Option ByteArray) (phase : IO.Ref Phase)
@@ -735,6 +735,7 @@ def relay (S : Hello.Setup) (specs : Hello.Specs) (reg : IO.Ref Frames.Sessions)
           if let some why ← h.known list then
             phase.set .done
             h.leave
+            close a
             refuseAll p f (REFUSED ++ why)
             break
       let (st', out) := st.answer k r
