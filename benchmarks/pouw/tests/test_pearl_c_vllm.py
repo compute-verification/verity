@@ -1280,7 +1280,7 @@ def test_a_served_y_that_is_not_the_unscale_of_its_u_rejects_the_run(tmp_path):
 def test_a_pass_whose_y_trees_hold_the_poison_is_rejected(tmp_path):
     """The no-write control on y: a pass whose y trees are what launches that wrote nothing into them leave, the 0xA5
     poison, each root its last node (as `_retained` retains a given ``y_tree``), its y rows and everything else honest, is
-    rejected at its drawn tiles' y openings, by the one-pass verifier the harness runs and by the passes' verifier."""
+    rejected at its sampled tiles' y openings, by the one-pass verifier the harness runs and by the passes' verifier."""
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     source = b"verifier" * 4
     assert VR.verify(path, 3, 1, "test", source, coins=published(path))["accepted"]
