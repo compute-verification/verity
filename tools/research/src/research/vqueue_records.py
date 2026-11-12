@@ -38,7 +38,6 @@ from .landing import (ACTIVE, CI, LEAN_STEP, NOT_STARTED, PROGRESS, SIGTERM_RC, 
 from .merge import AUDIT, bookkeeping_warnings, lean_report
 from .queue import IDENTITY, QueueError, _git, _out
 from .vqueue import FAIL, INFRA, PASS, PENDING, RecordsRun
-from .vqueue_slim import lean_key
 
 #: what is told of the bookkeeping a records run repaired, and to whom (`bookkeeping_told`)
 Told = tuple[str, tuple[str, ...]]
@@ -219,6 +218,7 @@ def _owners(lock: dict, line: str) -> tuple[str, ...]:
 
 def same_inputs(repo: Path, a: str, b: str) -> bool:
     """Whether commits ``a`` and ``b`` have the same Lean inputs (`vqueue_slim.lean_key`), so the same lock records."""
+    from .vqueue_slim import lean_key
     return (key := lean_key(repo, a)) is not None and key == lean_key(repo, b)
 
 
