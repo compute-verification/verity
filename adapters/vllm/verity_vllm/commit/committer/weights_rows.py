@@ -29,8 +29,8 @@ class WeightsRows:
     def device_root(self, t: int, entry: list, flat: Any) -> bytes:
         """`host_root` of a CUDA tensor's bytes, on its device."""
         import torch
-
         from verity.commitments.merkle import merkle_depth
+
         from verity_vllm.commit.committer.native_ext import ext
 
         e, RB = ext(), step_rows.ROW_BYTES
