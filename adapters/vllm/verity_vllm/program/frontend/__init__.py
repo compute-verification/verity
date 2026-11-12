@@ -6,8 +6,8 @@
                             not semantic components of gate outputs.
 
 `derive` (needs torch) turns a traced torch model into a `Program`. `correspond` (program correspondence across
-reference encodings) and `provenance` (export/derivation provenance records) are pure `verity.circuits` and import
-without torch. Dead gates are `verity.circuits.liveness`.
+reference encodings) and `provenance` (the registry's version, which a derivation's provenance holds) are pure
+`verity.circuits` and import without torch. Dead gates are `verity.circuits.liveness`.
 
 What the translator imports from the rest of the adapter. Its modules are those directly in this directory but
 `train_step`, which derives a training step on top of it; `rules/` is not counted here. Every import they make of
@@ -35,21 +35,12 @@ and answers by the pinned revision's rule where it does not. The modules that st
 """
 
 from verity_vllm.program.frontend.correspond import CorrespondenceReport, correspond  # noqa: F401
-from verity_vllm.program.frontend.provenance import (  # noqa: F401
-    DerivationRule,
-    RuleApplication,
-    registry_version,
-)
+from verity_vllm.program.frontend.provenance import registry_version  # noqa: F401
 
 try:
     import torch as _torch
 except ImportError:  # pure-circuit use (no torch): the analyses above are still available
     _torch = None
 else:
-    from verity_vllm.program.frontend.errors import (  # noqa: F401
-        CODES,
-        DeadGateWarning,
-        FrontendError,
-    )
+    from verity_vllm.program.frontend.errors import CODES, FrontendError  # noqa: F401
     from verity_vllm.program.frontend.program_identity import check_identity  # noqa: F401
-    from verity_vllm.program.frontend.value_types import type_of  # noqa: F401
