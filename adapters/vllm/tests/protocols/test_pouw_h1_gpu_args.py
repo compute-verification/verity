@@ -133,7 +133,7 @@ def test_check_challenger_fails_closed_and_its_record_says_why(tmp_path, capsys)
     _private, key = CH.challenger_key(3)
     pin = hashlib.sha512(key.public).hexdigest()
     calls, ledger, window, tree = (tmp_path / n for n in ("calls.json", "windows.jsonl", "window.json", "tree"))
-    calls.write_text(json.dumps({"commitment": {"coin_source": "challenger"}, "calls": []}))
+    calls.write_text(json.dumps({"commitment": {}, "calls": []}))
     ledger.write_text("")
     window.write_text(json.dumps({"root": "00" * 64}))
     tree.mkdir()
@@ -165,7 +165,7 @@ def test_check_challenger_fails_closed_and_its_record_says_why(tmp_path, capsys)
     (tree / "out" / R.KEY).write_text(json.dumps(key.to_json()))
     doc = check(pin)
     assert doc["key"]["public_sha512"] == pin and "window" not in doc and doc["credit"]["credit"] is None
-    assert doc["reason"].startswith("the window carries no challenger session")
+    assert doc["reason"].startswith("the window's coins were held in the serving process")
     with pytest.raises(SystemExit):
         G.main(["--out", str(tmp_path / "out"), "--check-challenger", str(calls), str(tree), "--key-sha512", pin])
     assert "--check-challenger needs --key-sha512" in capsys.readouterr().err
