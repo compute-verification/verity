@@ -402,8 +402,8 @@ def heldReg (d : String) : Lean.Json :=
   Lean.Json.mkObj [("program", .str d), ("roots", Lean.Json.arr #[Lean.Json.mkObj
     [("port", "SlotEntry_v1{KO=1}/c0/o0"), ("leaves", Lean.toJson (1 : ℕ)), ("root", "r"), ("domain", "d")]])]
 
-/-- Its honest side: an execution phase whose tied audit is registered under the class circuit `c` holds it. -/
-theorem rowsCircuitHeld_honest : held (some "c") #[heldReg "c"] tiedWindow = true := by
+/-- An execution phase whose tied audit is registered under the class circuit `c` is held to it. -/
+theorem tiedWindow_held : held (some "c") #[heldReg "c"] tiedWindow = true := by
   decide +kernel
 
 /-- An execution phase whose tied audit is registered under another Program than the class circuit `c` does not. -/
@@ -423,6 +423,20 @@ theorem rowsCircuitHeld_nontrivial : ¬ RowsCircuitHeldOf acceptAllRows := by
       tiedWindow rfl
   rw [tiedWindow_swapped] at hh
   cases hh
+
+/-- **`RowsCircuitHeld`'s honest lemma**: the period check accepts a period in the rows form whose parameters name a
+class circuit, `heldPeriod` with nothing registered. A period with an execution phase needs the network certifier's
+LMS signatures and one-stage's answers, which the period's difftest builds and checks against the mirror, with its
+tied audit registered under the class circuit; `tiedWindow_held` is `held` of such a phase's registrations. -/
+theorem rowsCircuitHeld_honest :
+    ∃ (pub : Public) (prof : Profile), check heldPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ = .accept pub prof := by
+  have hb : (match check heldPeriod ⟨#[], #[], .empty⟩ ⟨#[], #[]⟩ with
+      | .accept _ _ => true
+      | _ => false) = true := by
+    decide +kernel
+  split at hb
+  · exact ⟨_, _, ‹_›⟩
+  · cases hb
 
 /-! ## The rows form charges a tied audit sampled in part -/
 
