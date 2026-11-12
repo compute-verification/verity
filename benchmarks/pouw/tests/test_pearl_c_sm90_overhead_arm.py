@@ -180,6 +180,28 @@ def test_the_tiles_are_the_served_pipeline_s(m):
     assert OA.tiles_of(m, n) * R.NB == R.Pipeline.sizes(R.BM, n, k, OA.m16(m))["leaves"]
 
 
+def test_the_gate_is_the_call_s_check_as_the_harness_s_verdict():
+    """`gate` waits for the device, then hands the call's check to the harness as its `GateResult`, which `check_gate`
+    takes."""
+    class Dev:
+        synced = 0
+
+        def sync(self) -> None:
+            self.synced += 1
+
+    class Call:
+        outputs = ("y", "a_root")
+
+        def check(self) -> tuple[bool, dict[str, str], dict]:
+            return True, {"y": "all", "a_root": "all"}, {"index": OA.INDEX}
+
+    dev, call = Dev(), Call()
+    g = OA.PearlPlus().gate(dev, call, A.Shape("o", 16, 64, 64), frozenset({"hash"}))
+    assert isinstance(g, A.GateResult) and dev.synced == 1
+    assert (g.ok, g.checked, g.detail) == (True, {"y": "all", "a_root": "all"}, {"index": OA.INDEX})
+    A.check_gate(g, call)
+
+
 def test_without_a_window_of_record_no_epsilon_is_invented(tmp_path, monkeypatch):
     pinned = tmp_path / "overhead_arm.json"
     pinned.write_text(json.dumps({"cubin": OA.pinned()}))

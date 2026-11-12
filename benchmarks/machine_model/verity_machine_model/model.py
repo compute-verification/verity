@@ -17,6 +17,11 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+__all__ = ["Attack", "CLAIMS", "COPIES", "Census", "DATA", "DEVICES", "Entry", "Floor", "Model", "Row", "STATUSES",
+           "Vector", "all_attacks", "attacks", "card", "census", "census_files", "census_lines", "citations", "cites",
+           "device", "devices", "entries", "floors", "holds", "kind_lists", "measured_cost", "model", "rows",
+           "run_lists", "u_of", "vector", "vectors"]
+
 DATA = Path(__file__).resolve().parents[1] / "data"
 DEVICES = DATA / "devices"
 DEVICE = "sm_120"   # data/ itself, the RTX PRO 6000: the default device

@@ -10,15 +10,24 @@ import json
 import math
 import struct
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import ModuleType
+from typing import TYPE_CHECKING
 
 import torch
 import torch.nn.functional as F
 
 import models
 from matmul import MM, Run, Softmaxed, run_chain
+
+if TYPE_CHECKING:
+    from gates import Gates
+    from glm import GlmLayer
+
+#: what a calibration pass hands each linear's input to (and the attention's keys, as `keys`), by name
+Collect = Callable[[str, torch.Tensor], None]
 
 #: F8_E4M3 is read as its bytes: a block-FP8 layer decodes them with their scales (`glm.dequant`)
 DTYPES = {"BF16": torch.bfloat16, "F16": torch.float16, "F32": torch.float32, "I64": torch.int64, "I32": torch.int32,
@@ -122,7 +131,7 @@ class Weights:
             return True
         return int(name.split(".")[2]) < layers
 
-    def read(self, names) -> dict:
+    def read(self, names: Iterable[str]) -> dict:
         out = {}
         by_file: dict = {}
         for n in names:
@@ -195,7 +204,7 @@ def inv_freq(cfg: Config) -> torch.Tensor:
     return torch.where(medium, smoothed, llama)
 
 
-def rotary(cfg: Config, T: int, device, dtype=torch.bfloat16) -> tuple[torch.Tensor, torch.Tensor]:
+def rotary(cfg: Config, T: int, device: torch.device | str, dtype: torch.dtype = torch.bfloat16) -> tuple[torch.Tensor, torch.Tensor]:
     inv = inv_freq(cfg).to(device)
     pos = torch.arange(T, device=device)[None]
     inv_e = inv[None, :, None].expand(1, -1, 1).to(dtype=torch.float, device=device)
@@ -216,7 +225,7 @@ def row_chunk(rep: int, s: int) -> int:
 # ---------------------------------------------------------------- one layer
 
 class Layer:
-    def __init__(self, cfg: Config, li: int, tensors: dict, device):
+    def __init__(self, cfg: Config, li: int, tensors: dict, device: torch.device | str):
         self.cfg, self.li = cfg, li
         p = f"model.layers.{li}."
         self.t = {n[len(p):]: t.to(device=device, dtype=torch.bfloat16) for n, t in tensors.items()}
@@ -225,7 +234,7 @@ class Layer:
     def weight(self, name: str) -> torch.Tensor:
         return self.t[f"{name}.weight"]
 
-    def forward(self, h: torch.Tensor, cos, sin, run: Run | None = None, collect=None) -> torch.Tensor:
+    def forward(self, h: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, run: Run | None = None, collect: Collect | None = None) -> torch.Tensor:
         c = self.cfg
         res = h
         x = rms_norm(h, self.t["input_layernorm.weight"], c.eps)
@@ -244,7 +253,7 @@ class Layer:
         m = F.silu(self.linear("mlp.gate_proj", x, run, collect)) * self.linear("mlp.up_proj", x, run, collect)
         return res + self.linear("mlp.down_proj", m, run, collect)
 
-    def linear(self, name: str, x: torch.Tensor, run: Run | None, collect=None) -> torch.Tensor:
+    def linear(self, name: str, x: torch.Tensor, run: Run | None, collect: Collect | None = None) -> torch.Tensor:
         w, b = self.t[f"{name}.weight"], self.t.get(f"{name}.bias")
         if collect is not None:
             collect(name, x.reshape(-1, x.shape[-1]).float())
@@ -258,14 +267,14 @@ class Layer:
             y = y + b.float()
         return y.to(x.dtype).reshape(*x.shape[:-1], w.shape[0])
 
-    def attention(self, q, k, v, run: Run | None) -> torch.Tensor:
+    def attention(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor, run: Run | None) -> torch.Tensor:
         if run is None or not (run.steps_for("qk", "qk") or run.steps_for("pv", "pv")):
             o = F.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=0.0, scale=self.scaling, is_causal=True,
                                                enable_gqa=True)
             return o.transpose(1, 2).contiguous()
         return self.edited_attention(q, k, v, run)
 
-    def edited_attention(self, query, key, value, run: Run) -> torch.Tensor:
+    def edited_attention(self, query: torch.Tensor, key: torch.Tensor, value: torch.Tensor, run: Run) -> torch.Tensor:
         """Per KV group, in FP32: S = Q K^T through the arm's attention chain, the causal softmax (or the chain's own,
         when it returns `Softmaxed`), O = P V through it; query rows in chunks past 8K (the rows are independent). On the
         check window, the attention's relative error against FP32 attention on the same inputs (a diagnostic)."""
@@ -323,12 +332,8 @@ def head(cfg: Config, norm_w: torch.Tensor, head_w: torch.Tensor, h: torch.Tenso
                                       reduction="none") for c, i in enumerate(range(0, T - 1, LOSS_ROWS))])
 
 
-def hf_layer(cfg: Config, snapshot: Path, li: int, layer: Layer):
-    """HF transformers' own decoder layer with the same weights and SDPA attention, or None without transformers."""
-    try:
-        import transformers
-    except ImportError:
-        return None
+def hf_layer(transformers: ModuleType, cfg: Config, snapshot: Path, li: int, layer: Layer) -> tuple[torch.nn.Module, torch.nn.Module]:
+    """HF `transformers`' own decoder layer with the same weights and SDPA attention, and its RoPE module."""
     hc = transformers.AutoConfig.from_pretrained(str(snapshot))
     hc._attn_implementation = "sdpa"
     mod = {"llama": transformers.models.llama.modeling_llama.LlamaDecoderLayer,
@@ -348,23 +353,24 @@ def hf_layer(cfg: Config, snapshot: Path, li: int, layer: Layer):
     return hl.eval(), rot_cls(hc).to(dev)
 
 
-def make_layer(cfg: Config, li: int, tensors: dict, device):
+def make_layer(cfg: Config, li: int, tensors: dict, device: torch.device | str) -> Layer | GlmLayer:
     if cfg.arch == "glm_moe_dsa":
         import glm
         return glm.GlmLayer(cfg, li, tensors, device)
     return Layer(cfg, li, tensors, device)
 
 
-def check_reference(gates, cfg: Config, snapshot: Path, layer: Layer, h: torch.Tensor, cos, sin, out: torch.Tensor) -> None:
+def check_reference(gates: Gates, cfg: Config, snapshot: Path, layer: Layer, h: torch.Tensor, cos: torch.Tensor, sin: torch.Tensor, out: torch.Tensor) -> None:
     """The engine's bf16 layer output equals HF's layer on the same input, bit for bit (and its RoPE tables HF's)."""
     if cfg.arch == "glm_moe_dsa":
         import glm
         return glm.check_reference(gates, cfg, snapshot, layer, h, cos, sin, out)
-    hf = hf_layer(cfg, snapshot, layer.li, layer)
-    if hf is None:
+    try:
+        import transformers
+    except ImportError:
         gates.skip("hf_reference", "transformers is not importable")
         return
-    hl, rot = hf
+    hl, rot = hf_layer(transformers, cfg, snapshot, layer.li, layer)
     pos = torch.arange(h.shape[1], device=h.device)[None]
     with torch.no_grad():
         hcos, hsin = rot(h, pos)
