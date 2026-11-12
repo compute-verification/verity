@@ -57,7 +57,12 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
 
   A `serve_tax` card gives each server configuration's serve tax, what its change to the serving engine costs on
   every token against its `baseline`, as one number with its range, `priced` or `measured`, a lower bound or not, and
-  its parts. `total_cost.py priced-card` prices one from the model's cards; a measured value replaces a priced one
+  its parts. A part has a name, its share with its range, its source, and how it got its share (`status`: `modeled`
+  from the code and a measured rate, `simulated` on served traces, or `measured` on the served engine); a priced tax
+  is the sum of its parts, and a card where it isn't is refused. (A)'s parts are the certified-tick rule, the step
+  record, the two-stage boundary commitment, the history tables, the token commits with the replay-block edge
+  snapshot, and the deterministic top-k, and the break-even planner's `Case.tax` reads each by name.
+  `total_cost.py priced-card` prices a card from the model's cards; a measured value replaces a priced one
   configuration by configuration, and the figure plots a priced tax hollow.
 
   A `serving_rate` card is the engine's measured computed tokens, prompt and output, a GPU-second on the mix its

@@ -3,7 +3,7 @@ hook on a stand-in for vLLM's Model Runner V2 reading each MLA layer's rows at t
 across chunked prefill, decode, padding and a recompute after a preemption; the builder's tables over them under the
 class's names and domains, refused for a request whose rows don't match its lengths or after a step the hook couldn't
 read; a cache that doesn't hold bf16 latent rows refused; the channel between the two processes; and the window's boundary
-commitment (`boundary_rows.BoundaryWindows`) waiting for each class's tables' roots and listing them beside its values,
+commitment (`boundary_windows.BoundaryWindows`) waiting for each class's tables' roots and listing them beside its values,
 registered by both verifiers from public items alone; every table of a class filled to its C rows, so that no published
 string shows a request's length; and what round 2 opens, kept on the node, a served table loaded by its name."""
 
@@ -24,7 +24,7 @@ from verity.commitments import history as HT
 from verity.commitments.windows import rows as CS
 from verity_vllm.commit import history_tables as H
 from verity_vllm.engine.hooks import Hooks
-from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT
+from verity_vllm.pipeline import boundary_rows as BR, boundary_tables as BT, boundary_windows as BW
 from verity_vllm.records.boundary_tables import ROOTS
 
 RUN = "a" * 128
@@ -321,7 +321,7 @@ class Scheduler:
 
 def windows(out, latents: BT.Latents, make, lines: list, keep: BT.Kept | None = None):
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-tables")
-    bw = BR.BoundaryWindows(out, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
+    bw = BW.BoundaryWindows(out, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
                             tables=BT.LocalChannel(BT.Builder(latents, make, keep=keep)), layers=(0, 3), capacity=CAP)
     return bw.install(sched, hooks), sched, hooks
 
@@ -406,16 +406,16 @@ def test_a_class_registers_nothing_when_rank_0_built_no_tables_or_answered_other
 
 def test_the_tables_private_directory_is_never_under_what_leaves_the_node(tmp_path):
     cfg = {"check": "c", "tables": {"private": str(tmp_path / "node"), "layers": 2, "capacity": CAP, "timeout_s": 5}}
-    bw = BR.BoundaryWindows.of(cfg, tmp_path / "out", public=[tmp_path / "run"])
+    bw = BW.BoundaryWindows.of(cfg, tmp_path / "out", public=[tmp_path / "run"])
     bw.stop()
     assert (bw.layers, bw.capacity, bw.tables.timeout_s, bw.tables.dir) == ((0, 1), CAP, 5.0, tmp_path / "node" / "channel")
     for under in (tmp_path / "out" / "node", tmp_path / "run" / "x"):
         with pytest.raises(ValueError, match="which leaves the node"):
-            BR.BoundaryWindows.of({**cfg, "tables": {**cfg["tables"], "private": str(under)}}, tmp_path / "out",
+            BW.BoundaryWindows.of({**cfg, "tables": {**cfg["tables"], "private": str(under)}}, tmp_path / "out",
                                   public=[tmp_path / "run"])
     assert BT.layers_of([3, 61]) == (3, 61)
     with pytest.raises(ValueError, match="both rank 0's channel and their layers"):
-        BR.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, layers=(0,))
+        BW.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, layers=(0,))
 
 
 def modes(root) -> set[tuple[str, int]]:
