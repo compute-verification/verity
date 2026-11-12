@@ -5,10 +5,11 @@ served run's files with the reference's verdicts on it.
 A made run's files stand in for a served run's: the record difftest's vectors' served class's shape at two slots and
 three positions, its Program, circuit record, registration log, limits and count's limits each written as a file the
 way a serve writes them. The first test is that the script reads them back as the vectors' own case, pins
-included, and that its verdicts are the reference's. The second is each option's case. The third is that the
-reference form-only, which the script runs, gives the whole reference's verdict on every shaped case and walks no
-leaf. The fourth runs the compiled command on the script's cases and on a refusal of each of the form's two
-expanded rules, and holds its two lines to the reference's verdicts on every field.
+included, and that its verdicts are the reference's. The second is each option's case, and the third `--format`'s on
+every made case that states a format. The fourth is that the reference form-only, which the script runs, gives the
+whole reference's verdict on every shaped case and walks no leaf. The fifth runs the compiled command on the
+script's cases and on a refusal of each of the form's two expanded rules, and holds its two lines to the
+reference's verdicts on every field.
 """
 
 from __future__ import annotations
@@ -69,14 +70,19 @@ def _files(case: dict, where: Path) -> list[str]:
             "--limits", str(where / "limits.json"), "--count", str(where / "count.json")]
 
 
-def _more(case: dict) -> dict:
-    """`case` with a key `MORE` in its record's `registered`, the run's record committing that text."""
-    doc = json.loads(case["instance"]["record"])
-    doc["registered"][MORE] = {}
+def _restated(case: dict, doc: dict) -> dict:
+    """`case` with `doc` its record, the run's record committing that text."""
     record = script.circuit_bytes(doc).decode()
     log = [*case["trusted"]["log"][:-1], {**case["trusted"]["log"][-1]}]
     log[-1]["window"] = {**log[-1]["window"], "circuit": vectors.digest_of(record)}
     return {**case, "instance": {**case["instance"], "record": record}, "trusted": {**case["trusted"], "log": log}}
+
+
+def _more(case: dict) -> dict:
+    """`case` with a key `MORE` in its record's `registered`."""
+    doc = json.loads(case["instance"]["record"])
+    doc["registered"][MORE] = {}
+    return _restated(case, doc)
 
 
 def _written(args: list[str], out: Path, name: str, *more: str) -> tuple[dict, dict]:
@@ -131,6 +137,37 @@ def test_each_option_makes_the_case_it_says(shaped, tmp_path):
         script.served_case(inst["program"], inst["record"], log, limits, drop=("registered.nothing",))
     with pytest.raises(ValueError, match="registers no such value"):
         script.served_case(inst["program"], inst["record"], log, limits, unregister="weights/nothing")
+    with pytest.raises(ValueError, match="has no format for nothing"):
+        script.served_case(inst["program"], inst["record"], log, limits, formats=("nothing=-",))
+
+
+def test_format_makes_the_case_of_a_record_with_that_format(shaped, tmp_path):
+    """On every made case whose record states a format: `--format P=JSON` with P's own format, and with it taken
+    out and set again, is the case as its files make it; with P's format out, a schema of another name and the
+    other width, it is the case the files of a record so stated make, verdicts included. A schema of another name is
+    refused `inputs` in every one, and no made case that complies does once its format is out or of the other
+    width."""
+    stating = {what: m["case"] for what, m in shaped.items()
+               if json.loads(m["case"]["instance"]["record"]).get("registered", {}).get("formats")}
+    said = set()
+    for k, (what, made) in enumerate(stating.items()):
+        doc = json.loads(made["instance"]["record"])
+        p, own = sorted(doc["registered"]["formats"].items())[0]
+        args, out = _files(made, tmp_path / f"run{k}"), tmp_path / "out"
+        held = _written(args, out, f"{k}-made")
+        said.add(held[1]["check"].get("error") or held[1]["check"]["complies"])
+        assert _written(args, out, f"{k}-own", "--format", f"{p}={json.dumps(own)}") == held, what
+        assert _written(args, out, f"{k}-again", "--format", f"{p}=-", "--format", f"{p}={json.dumps(own)}") == held, what
+        for how, stated in (("out", None), ("other", {**own, "row_schema": "hm96-sha512/row/v3"}),
+                            ("width", {**own, "word_bits": 16 if own["word_bits"] == 32 else 32})):
+            formats = {q: f for q, f in {**doc["registered"]["formats"], p: stated}.items() if f}
+            there = _restated(made, {**doc, "registered": {**doc["registered"], "formats": formats}})
+            want = _written(_files(there, tmp_path / f"run{k}-{how}"), out, f"{k}-{how}-files")
+            got = _written(args, out, f"{k}-{how}", "--format", f"{p}={json.dumps(stated) if stated else '-'}")
+            assert got == want, (what, how)
+            assert how != "other" or got[1] == {"check": {"error": "inputs"}, "count": {"error": "inputs"}}, what
+            assert not (held[1]["check"].get("complies") and got[1]["check"].get("complies")), (what, how)
+    assert said == {True, "formats", "inputs"}
 
 
 def test_form_only_is_the_whole_references_verdict_and_walks_no_leaf(shaped, monkeypatch):
