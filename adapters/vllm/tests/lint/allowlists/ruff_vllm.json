@@ -1380,7 +1380,6 @@
     {"file": "verity_vllm/check/replay/driver.py", "kind": "T201", "symbol": "_parallel_replay", "detail": "`print` found", "count": 2},
     {"file": "verity_vllm/check/replay/linkage.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/check/replay/linkage.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`"},
-    {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "I001", "symbol": "recompute_run", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/check/replay/stoch_recompute.py", "kind": "T201", "symbol": "main", "detail": "`print` found", "count": 3},
     {"file": "verity_vllm/check/result.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Iterable`"},
     {"file": "verity_vllm/check/result.py", "kind": "UP037", "symbol": "CheckResult.from_dict", "detail": "Remove quotes from type annotation"},

@@ -41,8 +41,10 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+from verity.definitions.registry import sampling_topp_difftest
 
 from verity_vllm.config import option, workload_arg, workload_file
+from verity_vllm.properties.admission import evaluate_spec
 from verity_vllm.records.fields import RecordError
 from verity_vllm.records.workload import Workload
 
@@ -105,13 +107,11 @@ def _manifest_facts(path: str | Path) -> dict[str, dict]:
 
 def _eval_job(job: tuple) -> tuple[int, np.ndarray, float]:
     """One sampled row through the Definition of record: GumbelTopPTokenSelect_v1{V,S} on (bf16 logits row, top_p, seed, pos, T) ->
-    (token, the masked fp32 row it went through, seconds).  Module-level so a worker process can run it."""
-    from verity.definitions.registry import sampling_topp_difftest as D
-
-    from verity_vllm.properties.admission import evaluate_spec
+    (token, the masked fp32 row it went through, seconds).  Module-level so a worker process can run it; the interpreter and the
+    Definition are this module's imports, so a forked worker starts with both loaded."""
     V, S, words = job
     t1 = time.time()
-    out = evaluate_spec(D.spec({"V": int(V), "S": int(S)}), words)
+    out = evaluate_spec(sampling_topp_difftest.spec({"V": int(V), "S": int(S)}), words)
     tok = int(out[0])
     if tok & 0x80000000:
         tok -= 1 << 32
@@ -427,31 +427,29 @@ def draw_accounting(draws_seen: dict[str, list[dict]], workload: str | Path | No
 def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = None, workload: str | Path | None = None,
                   jobs: int | None = None, build_dir: str | Path | None = None, evaluator: str = "lane",
                   reference_rows: int = 0) -> dict:
-    from verity_vllm.program import sampling_rng as R
     from verity_vllm.check.fold_compare import SnapshotStore
-    from verity_vllm.properties.admission import evaluate_spec
     from verity_vllm.observe.events import SampleEnd, StepStart, TritonLaunch, ViewDesc
-    from verity_vllm.observe.log import read_log
-    from verity.definitions.registry import sampling_topp_difftest as D
+    from verity_vllm.observe.log import header_of, read_log
+    from verity_vllm.program import sampling_rng as R
 
     t0 = time.time()
     events = list(read_log(log_path))
-    header = events[0]
+    header = header_of(events)
     run_facts = _request_facts(header)                     # what the run was GIVEN (the capture header's request records)
     facts = dict(run_facts)
     header_vs_manifest: list[str] = []
     if workload is not None:
         # the manifest of record is the authority for the declared inputs; the header must agree with it (else FAIL, named)
         mf = _manifest_facts(workload)
-        for rid, f in mf.items():
+        for rid, m in mf.items():
             h = run_facts.get(rid)
             if h is not None:
                 for k in ("seed", "temperature", "top_p", "top_k"):
-                    a, b = f.get(k), h.get(k)
+                    a, b = m.get(k), h.get(k)
                     same = (a == b) if k in ("seed", "top_k") else (a is not None and b is not None and _f32_bits(a) == _f32_bits(b))
                     if not same:
                         header_vs_manifest.append(f"{rid}: manifest declares {k}={a!r} but the run's header records {k}={b!r}")
-        facts = {rid: dict(run_facts.get(rid, {}), **f) for rid, f in mf.items()} or facts
+        facts = {rid: dict(run_facts.get(rid, {}), **m) for rid, m in mf.items()} or facts
     store = SnapshotStore(snapshots_dir)
     per_step: dict[int, dict] = {}
     cur: StepStart | None = None
@@ -625,9 +623,9 @@ def recompute_run(log_path: Path, snapshots_dir: Path, max_rows: int | None = No
         ref_check.update(reference_evaluator="lane", rows_requested=int(reference_rows), rows_checked=len(pick), seconds=round(time.time() - t_ref, 1),
                          rows=[{"step": rows[pending[k][0]]["step"], "row": rows[pending[k][0]]["row"]} for k in pick],
                          selection="seeded sample over the value-checked rows (seed = sampled_rows_total x 7919 + rows pending)")
-        for k, (rtok, rmasked, rsecs) in zip(pick, ref_results):
-            tok, masked_rec, _ = results[k]
-            rec = rows[pending[k][0]]
+        for n, (rtok, rmasked, rsecs) in zip(pick, ref_results):
+            tok, masked_rec, _ = results[n]
+            rec = rows[pending[n][0]]
             same_tok, same_row = int(tok) == int(rtok), bool(masked_rec.shape == rmasked.shape and (masked_rec == rmasked).all())
             rec["reference_lane_walk"] = {"token": int(rtok), "token_equal": same_tok, "masked_row_equal": same_row, "eval_seconds": rsecs}
             if not (same_tok and same_row):
