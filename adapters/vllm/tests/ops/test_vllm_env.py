@@ -1,0 +1,68 @@
+"""verity_vllm/ops/vllm_env.sh: which builds it installs, and what it does with a directory that already exists.
+
+The install itself (a wheel, torch) cannot run here.  What can: the script parses; with the pin it installs exactly
+`engine.stock.BUILDS`; it refuses the pin, whose environment is pod_bootstrap.sh's, and a build it doesn't know; it
+leaves a directory that holds the build as it is and prints its path last; and it refuses a directory that holds
+anything else without touching it."""
+from __future__ import annotations
+
+import re
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from verity_vllm.engine import stock
+
+SCRIPT = Path(__file__).resolve().parents[2] / "verity_vllm" / "ops" / "vllm_env.sh"
+BASH = shutil.which("bash") or "/bin/bash"
+NEW = stock.BUILDS[1]
+
+
+def run(tmp_path: Path, **env: str) -> subprocess.CompletedProcess:
+    return subprocess.run([BASH, str(SCRIPT)], capture_output=True, text=True,
+                          env={"PATH": "/usr/bin:/bin", "HOME": str(tmp_path), "WORK": str(tmp_path / "work"), **env})
+
+
+def venv(tmp_path: Path, commit: str | None) -> Path:
+    """A directory whose ``bin/python`` answers the script's one question as a vLLM of ``commit`` would (None: no vLLM)."""
+    d = tmp_path / "venv"
+    (d / "bin").mkdir(parents=True)
+    (d / "bin" / "python").write_text(f"#!/bin/sh\necho {commit}\n" if commit else "#!/bin/sh\nexit 1\n")
+    (d / "bin" / "python").chmod(0o755)
+    return d
+
+
+def test_script_parses() -> None:
+    r = subprocess.run([BASH, "-n", str(SCRIPT)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+
+
+def test_it_has_a_case_for_every_build_of_the_tree() -> None:
+    cases = re.findall(r"^  ([0-9a-f]{9})\)", SCRIPT.read_text(), re.M)
+    assert sorted(cases) == sorted(stock.BUILDS), "a build of engine.stock.BUILDS has no case in vllm_env.sh, or one too many"
+    assert f"BUILD=${{SERVE_VLLM:-{NEW}}}" in SCRIPT.read_text()
+
+
+@pytest.mark.parametrize("build, says", [(stock.BUILDS[0], "pod_bootstrap.sh"), ("0123456789", "no build of engine.stock.BUILDS")])
+def test_it_refuses_the_pin_and_a_build_it_does_not_know(tmp_path: Path, build: str, says: str) -> None:
+    r = run(tmp_path, SERVE_VLLM=build)
+    assert r.returncode == 3 and r.stderr.startswith("VLLM_ENV_FAIL_BUILD: ") and says in r.stderr, r.stderr
+    assert not r.stdout and not (tmp_path / "work").exists()
+
+
+def test_a_directory_that_holds_the_build_is_left_as_it_is(tmp_path: Path) -> None:
+    d = venv(tmp_path, NEW)
+    before = sorted(p.relative_to(d) for p in d.rglob("*"))
+    r = run(tmp_path, VENV=str(d))
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.splitlines()[-1] == str(d) and sorted(p.relative_to(d) for p in d.rglob("*")) == before
+
+
+@pytest.mark.parametrize("commit", [stock.BUILDS[0], None])
+def test_a_directory_that_holds_anything_else_is_refused_and_kept(tmp_path: Path, commit: str | None) -> None:
+    d = venv(tmp_path, commit)
+    r = run(tmp_path, VENV=str(d))
+    assert r.returncode == 3 and r.stderr.startswith("VLLM_ENV_FAIL_OTHER: ") and not r.stdout, (r.stdout, r.stderr)
+    assert (d / "bin" / "python").exists()

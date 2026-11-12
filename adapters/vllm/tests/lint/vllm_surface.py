@@ -1,5 +1,5 @@
 """The closed list of vLLM's modules and names that the integration's library code imports, at the pin
-(`verity_vllm.config.VLLM`).
+(`verity_vllm.config.VLLM`); `test_vllm_surface.py` resolves it at whichever build of `engine.stock.BUILDS` is installed.
 
 `SURFACE` maps each to why the integration needs it: ``"vllm.mod"`` for a module imported whole (``import vllm.mod``) and
 ``"vllm.mod:name"`` for a name imported from one (``from vllm.mod import name``). `test_vllm_surface.py` refuses an
@@ -11,6 +11,8 @@ from __future__ import annotations
 SURFACE = {
     # the engine and its requests
     "vllm": "the package, for its version, which records and facts carry beside config.VLLM",
+    "vllm._version:__commit_id__": "the installed build's commit, which engine.stock names it by: a tagged build's version "
+                                   "carries none",
     "vllm:LLM": "the engine engine.build builds, as the tensor-parallel capture, commit and match drivers do",
     "vllm:EngineArgs": "the arguments engine.stock builds a stock in-process LLMEngine from",
     "vllm:SamplingParams": "a request's sampling parameters, which the adapter, the servers and served_match pass",
