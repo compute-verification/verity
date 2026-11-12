@@ -63,16 +63,6 @@ Q_SRC_SHA = "7380a1385db787ceded52869fe395160e859d22710ca46f20d1d0fdef2f41043"
 INDEX_SHARE_SRC_SHA = "ad40bdb415664d3b65e3e4163863158096f2ea52f2e2a3e01ff8be63aeb98f63"
 
 
-def _same(a: Any, b: ViewDesc) -> bool:
-    return isinstance(a, ViewDesc) and (a.alloc, a.offset, a.shape, a.strides, a.dtype) == (
-        b.alloc,
-        b.offset,
-        b.shape,
-        b.strides,
-        b.dtype,
-    )
-
-
 def _module(node: TreeNode) -> str:
     return getattr(node.enter, "module", None) or ""
 
@@ -316,7 +306,7 @@ class DsaQ:
         if bad:
             return unsupported(node, "fused-q constexprs differ from the recorded GLM-5.3 pin", mismatches=bad)
         q, qo, cs = a.get("q_pe_ptr"), a.get("q_pe_out_ptr"), a.get("q_pe_cos_sin_ptr")
-        if not all(isinstance(v, ViewDesc) for v in (q, qo, cs)):
+        if not (isinstance(q, ViewDesc) and isinstance(qo, ViewDesc) and isinstance(cs, ViewDesc)):
             return unsupported(node, "fused-q RoPE pointers are not bound")
         M = q.shape[0]
         pos = step_positions(node, ctx, a.get("pos_ptr"), M)
@@ -340,7 +330,8 @@ class DsaQ:
         if c.get("HAS_INDEXER") is True:
             iq, ics, iw = a.get("index_q_ptr"), a.get("index_q_cos_sin_ptr"), a.get("index_weights_ptr")
             iqo, iwo = a.get("index_q_fp8_ptr"), a.get("index_weights_out_ptr")
-            if not all(isinstance(v, ViewDesc) for v in (iq, ics, iw, iqo, iwo)):
+            if not (isinstance(iq, ViewDesc) and isinstance(ics, ViewDesc) and isinstance(iw, ViewDesc) and isinstance(iqo, ViewDesc)
+                    and isinstance(iwo, ViewDesc)):
                 return unsupported(node, "indexer-layer fused-q pointers are not bound")
             if c.get("NUM_INDEX_Q_HEADS") != 32 or c.get("INDEX_Q_HEAD_DIM") != 128 or c.get("INDEX_Q_HALF_ROT_DIM") != 32:
                 return unsupported(node, "index-Q dimensions differ from the recorded GLM-5.3 pin")
@@ -505,7 +496,8 @@ class DsaIndexShare:
         req, blocks, source, out, valid = (a.get(k) for k in
                                            ("req_id_ptr", "block_table_ptr", "token_indices_ptr", "out_ptr", "valid_count_ptr"))
         M = len(ctx.start.rows)
-        if not all(isinstance(v, ViewDesc) for v in (req, blocks, source, out, valid)):
+        if not (isinstance(req, ViewDesc) and isinstance(blocks, ViewDesc) and isinstance(source, ViewDesc) and isinstance(out, ViewDesc)
+                and isinstance(valid, ViewDesc)):
             return unsupported(node, "IndexShare conversion pointers are not bound")
         if req.shape != (M,) or req.dtype != "int32" or blocks.dtype != "int32" or blocks.rank != 2 \
                 or source.shape != out.shape or source.shape != (M, 2048) or source.dtype != out.dtype or source.dtype != "int32" \
@@ -533,11 +525,11 @@ class DsaSparseMla:
             return None
         a, outs = bound_args(node), node.output_views()
         q, qv, k, v = a.get("q"), a.get("q_v"), a.get("k"), a.get("v")
-        if not all(isinstance(x, ViewDesc) for x in (q, qv, k, v)) or not outs:
+        if not (isinstance(q, ViewDesc) and isinstance(qv, ViewDesc) and isinstance(k, ViewDesc) and isinstance(v, ViewDesc)) or not outs:
             return unsupported(node, "FA3 sparse MLA q/q_v/k/v/out pointers are not bound")
         out = outs[0]
         M, NH, DR, DV = q.shape[0], q.shape[1], q.shape[2], qv.shape[2]
-        if (M, NH, DR, DV) != (len(ctx.start.rows), 8, 64, 512) or qv.shape != (M, NH, DV) or out.shape != (M, NH, DV):
+        if (len(ctx.start.rows), 8, 64, 512) != (M, NH, DR, DV) or qv.shape != (M, NH, DV) or out.shape != (M, NH, DV):
             return unsupported(node, "FA3 sparse MLA views differ from [M,8,64]/[M,8,512]", q=repr(q), q_v=repr(qv), out=repr(out))
         if not (q.dtype == qv.dtype == k.dtype == v.dtype == out.dtype == "bfloat16"):
             return unsupported(node, "FA3 sparse MLA views are not bf16")
@@ -573,7 +565,7 @@ class DsaSparseMla:
         if int(tp.num_sms) != 132:
             return unsupported(node, "GLM-5.3 sparse split heuristic is pinned to the record target's 132-SM launch", num_sms=tp.num_sms)
         splits = launch_num_splits(valid, int(tp.num_sms), 2048, ns_arg)
-        parts = []
+        parts: list[Compute] = []
         for i, ((req, position), n, ns) in enumerate(zip(ctx.start.rows, valid, splits)):
             try:
                 slots = kv_slots(ctx, req, n, layer=_module(node))

@@ -500,10 +500,10 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
     from vllm.model_executor.layers.fused_moe.fused_moe import fused_experts
 
     gen = torch.Generator(device="cuda").manual_seed(seed)
-    E, I, Gm = NUM_EXPERTS, MOE_I, MOE_G
-    w1, w2 = _weights(gen, (E, 2 * I, HIDDEN)), _weights(gen, (E, HIDDEN, I))
-    s1 = H._scales(gen, (E, 2 * I // Gm, HIDDEN // Gm), -12, -6)
-    s2 = H._scales(gen, (E, HIDDEN // Gm, I // Gm), -12, -6)
+    E, inter, Gm = NUM_EXPERTS, MOE_I, MOE_G
+    w1, w2 = _weights(gen, (E, 2 * inter, HIDDEN)), _weights(gen, (E, HIDDEN, inter))
+    s1 = H._scales(gen, (E, 2 * inter // Gm, HIDDEN // Gm), -12, -6)
+    s2 = H._scales(gen, (E, HIDDEN // Gm, inter // Gm), -12, -6)
     pair_groups(w1.view(torch.uint8), s1.view(torch.int32), Gm)
     pair_groups(w2.view(torch.uint8), s2.view(torch.int32), Gm)
     x = _activation(gen, M, HIDDEN, Gm)
@@ -548,7 +548,7 @@ def moe_launches(work: Path, name: str, M: int, hot: int, seed: int) -> tuple[li
         rec["statics_ok"] = (L["block_shape"] == [Gm, Gm] and L["flags"] == [True, False, False, False, False] and not L["bias"]
                              and L["mul_routed_weight"] == (kind == "w2") and L["top_k"] == (TOP_K if kind == "w13" else 1)
                              and n_pairs == M * TOP_K and L["KB"] == 32 and not L["SWAP"] and L["config"] == H.BATCH_INVARIANT_CONFIG
-                             and K == (HIDDEN if kind == "w13" else I) and N == (2 * I if kind == "w13" else HIDDEN))
+                             and K == (HIDDEN if kind == "w13" else inter) and N == (2 * inter if kind == "w13" else HIDDEN))
         rec["operands_ok"] = bool(fed)
         launches.append(rec)
         sel = torch.as_tensor(used, device="cuda")

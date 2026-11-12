@@ -192,7 +192,7 @@ def shared_expert(node: TreeNode, ctx: StepContext, mms: tuple[TreeNode, TreeNod
                                    child_id=act.id, child_reason=getattr(sr, "reason", None), want=want)
             if not _same(whole_view(sr.operands[0]), prev):
                 return unsupported(node, f"the shared expert's {aop} does not read the gate_up GEMM's output",
-                                   act_input=repr(sr.operands[0].view), gate_up=repr(prev))
+                                   act_input=repr(whole_view(sr.operands[0])), gate_up=repr(prev))
             out.append((act.id, dataclasses.replace(sr, spec=spec or sr.spec, hint=f"{hint}/shared/{aop}", pattern=pattern)))
             prev = whole_view(sr.outputs[0])
         mr = DynamicDeepGemmFp8Linear().match(mm, ctx)
@@ -200,7 +200,7 @@ def shared_expert(node: TreeNode, ctx: StepContext, mms: tuple[TreeNode, TreeNod
             return unsupported(node, f"the shared expert's {what} {K_DYN_MM} did not resolve", child_id=mm.id,
                                child_reason=getattr(mr, "reason", None), child_detail=getattr(mr, "detail", None))
         if not _same(whole_view(mr.operands[0]), prev):
-            return unsupported(node, f"the shared expert's {what} GEMM does not read its input", gemm_input=repr(mr.operands[0].view),
+            return unsupported(node, f"the shared expert's {what} GEMM does not read its input", gemm_input=repr(whole_view(mr.operands[0])),
                                expected=repr(prev))
         if mr.spec.bindings.get("K") != K or mr.spec.bindings.get("N") != N:
             return unsupported(node, f"the shared expert's {what} GEMM is not [K={K}, N={N}]", bindings=dict(mr.spec.bindings))
@@ -364,7 +364,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
         if not isinstance(scores, ViewDesc) or not isinstance(bias, ViewDesc):
             return unsupported(node, "grouped_topk arguments not bound as expected", args={k: repr(v) for k, v in ra.items()})
         got = (ra.get("n_group"), ra.get("topk_group"), ra.get("topk"), ra.get("renormalize"), ra.get("scoring_func"))
-        rsf, want = as_float(ra.get("routed_scaling_factor")), float(as_float(C["ROUTED_SCALING_FACTOR"]))
+        rsf, want = as_float(ra.get("routed_scaling_factor")), float(C["ROUTED_SCALING_FACTOR"])
         if got != (1, 1, TOPK, True, 1) or rsf != want:
             return unsupported(node, "grouped_topk is not one group, renormalized, sigmoid, TOPK at the profile's routed_scaling_factor",
                                observed=list(got) + [rsf], expected=[1, 1, TOPK, True, 1, want])
@@ -480,7 +480,7 @@ class MoEFusedSharedExpertsFp8(MoEFusedExpertsFp8):
                                child_reason=getattr(qr, "reason", None))
         if not _same(whole_view(qr.operands[0]), whole_view(sr.outputs[0])) or not (sc.up.id < sc.rsilu.id < q.id < sc.down.id):
             return unsupported(node, f"the routed {K_QUANT} does not read the SiLU output between the two launches",
-                               quant_input=repr(qr.operands[0].view), silu_output=repr(sr.outputs[0].view))
+                               quant_input=repr(whole_view(qr.operands[0])), silu_output=repr(whole_view(sr.outputs[0])))
         return [(sc.rsilu.id, dataclasses.replace(sr, spec=bind(_ACT.SiluMul, I=INTER), hint=f"{hint}/silu_and_mul", pattern=self.name)),
                 (q.id, dataclasses.replace(qr, hint=f"{hint}/w2_act_quant", attribution=(), pattern=self.name))]
 

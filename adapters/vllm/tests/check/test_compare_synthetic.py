@@ -125,8 +125,9 @@ def test_snapshot_store_roundtrip(tmp_path, folded):
     call = FunctionCall(r.program.circuit, r.program.circuit.root_scope, len(r.program.root.body.nodes) - len(r.body.nodes) + m["node"])
     assert [int(w) for w in words] == [t[g] for g in call.returns]
     # a strided sub-view (one head of a [NH, D] row) extracts the right elements
-    sub = ViewDesc(view.alloc, view.offset + C["D"], (C["D"],), (1,), view.dtype, view.device)
-    assert [int(w) for w in store.extract(s, sub)] == [t[g] for g in call.returns][C["D"]:2 * C["D"]]
+    d = int(C["D"])
+    sub = ViewDesc(view.alloc, view.offset + d, (d,), (1,), view.dtype, view.device)
+    assert [int(w) for w in store.extract(s, sub)] == [t[g] for g in call.returns][d:2 * d]
 
 
 def test_provenance_and_subcircuits_bit_exact(tmp_path, folded):

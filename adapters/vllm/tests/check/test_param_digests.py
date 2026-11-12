@@ -3,6 +3,7 @@ implementation, as `weights_of_record.live_param_digests` had it): digests, dtyp
 from __future__ import annotations
 
 import hashlib
+from typing import Any
 
 import numpy as np
 import pytest
@@ -10,11 +11,13 @@ import pytest
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.check.param_digests import param_digests
 
-torch = pytest.importorskip("torch")
+torch: Any = pytest.importorskip("torch")
 
 
 def reference(model, *, include_buffers=True, raw_for=WR.ENGINE_ROTARY_RE):
-    out, raws, seen = {}, {}, {}
+    out: dict[str, dict] = {}
+    raws: dict[str, np.ndarray] = {}
+    seen: dict[int, str] = {}
     items = list(model.named_parameters())
     if include_buffers:
         items += list(model.named_buffers())

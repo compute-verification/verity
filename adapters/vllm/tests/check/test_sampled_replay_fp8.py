@@ -6,7 +6,9 @@ tests/program/test_derived_rows_fp8.py); negatives: a flipped output word, a per
 field (refused by name, never a silent cast)."""
 from __future__ import annotations
 
+import hashlib
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -19,7 +21,8 @@ from verity_vllm.check.replay import opening as OP
 from verity_vllm.query.required import Q_MODULE_BODY_ID
 
 EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
-V, H, I, LP, T, G = 8, 256, 128, 2, 2, 128     # H, I multiples of the 128 block; gate_up N = 2I = 256
+V, H, INTER, LP, T, G = 8, 256, 128, 2, 2, 128     # H, INTER multiples of the 128 block; gate_up N = 2 INTER = 256
+I = INTER                                          # the width's old name, which tests of two other directories import
 
 
 
@@ -48,10 +51,10 @@ def _program_fp8():
     `<module>/cutlass_scaled_mm_<s>[k]`, the GEMM's args = (quant refs [0,K), quant refs [K, K+K/G), weight slice, scale slice))."""
     fields = [("model.model.embed_tokens.weight", V * H, 16, f"Array<{V},Array<{H},Value<16>>>"),
               ("model.model.layers.0.input_layernorm.weight", H, 16, f"Array<{H},Value<16>>"),
-              ("model.model.layers.0.mlp.gate_up_proj.weight", 2 * I * H, 8, f"Array<{2 * I},Array<{H},Value<8>>>"),
-              ("model.model.layers.0.mlp.gate_up_proj.weight_scale_inv", (2 * I // G) * (H // G), 32, f"Array<{2 * I // G},Array<{H // G},Value<32>>>"),
-              ("model.model.layers.0.mlp.down_proj.weight", H * I, 8, f"Array<{H},Array<{I},Value<8>>>"),
-              ("model.model.layers.0.mlp.down_proj.weight_scale_inv", (H // G) * (I // G), 32, f"Array<{H // G},Array<{I // G},Value<32>>>"),
+              ("model.model.layers.0.mlp.gate_up_proj.weight", 2 * INTER * H, 8, f"Array<{2 * INTER},Array<{H},Value<8>>>"),
+              ("model.model.layers.0.mlp.gate_up_proj.weight_scale_inv", (2 * INTER // G) * (H // G), 32, f"Array<{2 * INTER // G},Array<{H // G},Value<32>>>"),
+              ("model.model.layers.0.mlp.down_proj.weight", H * INTER, 8, f"Array<{H},Array<{INTER},Value<8>>>"),
+              ("model.model.layers.0.mlp.down_proj.weight_scale_inv", (H // G) * (INTER // G), 32, f"Array<{H // G},Array<{INTER // G},Value<32>>>"),
               ("model.model.norm.weight", H, 16, f"Array<{H},Value<16>>")]
     off, woff, wbits = 0, {}, {}
     for n, c, b, _t in fields:
@@ -78,13 +81,13 @@ def _program_fp8():
             ln = add(f"RMSNormTriton_v1{{N={H},EPS={EPS}}}", f"model.model.layers.0.input_layernorm/triton_launch_{s}[{k}]",
                      [[["n", e, 0, H]], W("model.model.layers.0.input_layernorm.weight")])
             q1 = add(f"Fp8GroupQuant_v1{{K={H},G={G}}}", f"model.model.layers.0.mlp.gate_up_proj/per_token_group_fp8_quant_{s}[{k}]", [[["n", ln, 0, H]]])
-            gu = add(f"ScaledMmFp8BlockSharedScale_v1{{K={H},N={2 * I},G={G}}}", f"model.model.layers.0.mlp.gate_up_proj/cutlass_scaled_mm_{s}[{k}]",
+            gu = add(f"ScaledMmFp8BlockSharedScale_v1{{K={H},N={2 * INTER},G={G}}}", f"model.model.layers.0.mlp.gate_up_proj/cutlass_scaled_mm_{s}[{k}]",
                      [[["n", q1, 0, H]], [["n", q1, H, H + H // G]], W("model.model.layers.0.mlp.gate_up_proj.weight"),
                       W("model.model.layers.0.mlp.gate_up_proj.weight_scale_inv")])
-            act = add(f"SiluMul_v1{{I={I}}}", f"model.model.layers.0.mlp.act_fn/silu_and_mul_{s}[{k}]", [[["n", gu, 0, 2 * I]]])
-            q2 = add(f"Fp8GroupQuant_v1{{K={I},G={G}}}", f"model.model.layers.0.mlp.down_proj/per_token_group_fp8_quant_{s}[{k}]", [[["n", act, 0, I]]])
-            dn = add(f"ScaledMmFp8BlockSharedScale_v1{{K={I},N={H},G={G}}}", f"model.model.layers.0.mlp.down_proj/cutlass_scaled_mm_{s}[{k}]",
-                     [[["n", q2, 0, I]], [["n", q2, I, I + I // G]], W("model.model.layers.0.mlp.down_proj.weight"),
+            act = add(f"SiluMul_v1{{I={INTER}}}", f"model.model.layers.0.mlp.act_fn/silu_and_mul_{s}[{k}]", [[["n", gu, 0, 2 * INTER]]])
+            q2 = add(f"Fp8GroupQuant_v1{{K={INTER},G={G}}}", f"model.model.layers.0.mlp.down_proj/per_token_group_fp8_quant_{s}[{k}]", [[["n", act, 0, INTER]]])
+            dn = add(f"ScaledMmFp8BlockSharedScale_v1{{K={INTER},N={H},G={G}}}", f"model.model.layers.0.mlp.down_proj/cutlass_scaled_mm_{s}[{k}]",
+                     [[["n", q2, 0, INTER]], [["n", q2, INTER, INTER + INTER // G]], W("model.model.layers.0.mlp.down_proj.weight"),
                       W("model.model.layers.0.mlp.down_proj.weight_scale_inv")])
             nm = add(f"RMSNormFusedCuda_v2{{N={H},EPS={EPS}}}", f"model.model.norm/fused_add_rms_norm_{s}[{k}]",
                      [[["n", dn, 0, H]], [["n", e, 0, H]], W("model.model.norm.weight")])
@@ -196,7 +199,7 @@ def test_mixed_width_struct_parses_the_declared_leaf_widths(fp8_world):
     assert pi.weight_bits("model.model.layers.0.mlp.gate_up_proj.weight_scale_inv") == 32
     assert pi.weight_bits("model.model.norm.weight") == 16
     ws = pi.weight_slice(*fp8_world.woff["model.model.layers.0.mlp.down_proj.weight_scale_inv"])
-    assert ws[0] == "model.model.layers.0.mlp.down_proj.weight_scale_inv" and ws[3] == [H // G, I // G]
+    assert ws[0] == "model.model.layers.0.mlp.down_proj.weight_scale_inv" and ws[3] == [H // G, INTER // G]
 
 
 def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_is_interior(fp8_world):
@@ -216,8 +219,6 @@ def test_honest_fp8_program_replays_bit_exactly_the_gemm_rows_are_vus_the_quant_
     assert rep["evaluators"]["ScaledMmFp8BlockSharedScale_v1"].startswith("verity.definitions.numerics.derived_rows.scaled_mm_fp8_block_row")
     assert rep["evaluators"]["Fp8GroupQuant_v1"].startswith("verity.definitions.numerics.derived_rows.fp8_group_quant_row")
     # the twins name what pinned them: fixture sha256 (the file in the tree), kernels, device, date, tests
-    import hashlib
-    from pathlib import Path
     prov = rep["evaluator_provenance"]
     assert set(prov) == {"Fp8GroupQuant_v1", "ScaledMmFp8BlockSharedScale_v1"}
     npz = Path(__file__).resolve().parents[2] / prov["ScaledMmFp8BlockSharedScale_v1"]["fixture"]
@@ -243,7 +244,7 @@ def test_gemm_vu_replay_record_composes_the_quant_and_reads_both_weight_widths(f
     assert ("weights", None, 8) in kinds and ("weights", None, 32) in kinds
     assert rec["inputs"][0]["range"] == [0, H] and rec["inputs"][1]["range"] == [H, H + H // G]          # the two ports of the quant
     assert rec["inputs"][0]["inputs"][0]["kind"] == "committed" and rec["inputs"][0]["inputs"][0]["identity"][2] == "model.layers.0.input_layernorm"
-    assert rec["outputs"] == [{"member": "out", "width": 2 * I, "equal": True, "differing_elements": 0, "first_diff": None}]
+    assert rec["outputs"] == [{"member": "out", "width": 2 * INTER, "equal": True, "differing_elements": 0, "first_diff": None}]
 
 
 def test_flipped_fp8_gemm_output_word_fails_named(fp8_world):
