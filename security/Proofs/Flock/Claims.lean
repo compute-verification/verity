@@ -8,6 +8,7 @@ public import Proofs.Flock.Claims.Aggregate
 public import Proofs.Flock.Claims.Bits
 public import Proofs.Flock.Claims.ERep
 public import Proofs.Flock.Claims.ERepCost
+public import Proofs.Flock.Claims.ChargeOnce
 public import Proofs.Flock.Claims.Bridge
 public import Proofs.Flock.Claims.Numbers
 public import Proofs.Flock.Claims.NumbersTable

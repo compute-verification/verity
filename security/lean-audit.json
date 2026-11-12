@@ -4412,6 +4412,9 @@
   "Flock.SecurityProofs.SpotKSTwo": {
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   },
+  "Flock.SecurityProofs.SpotOneWaitTwo": {
+   "nontrivial": "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial"
+  },
   "Flock.SecurityProofs.SessionLoopZKAnyDeployed": {
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
    "nontrivial": "Flock.SecurityProofs.SessionLoopZKAnyDeployed_nontrivial"
@@ -5249,6 +5252,11 @@
   },
   "Flock.SecurityProofs.SpotKSTwo": {
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d",
+   "missing": "honest",
+   "why": "honest instance needs a built two-stage layout and frame"
+  },
+  "Flock.SecurityProofs.SpotOneWaitTwo": {
+   "type_hash": "8acc03ad45f091d7827560e89cfbb9c551d450fc3fea21d4ad34396eb914d372",
    "missing": "honest",
    "why": "honest instance needs a built two-stage layout and frame"
   },
@@ -13057,6 +13065,24 @@
    },
    "type_hash": "791097081f3e7b50579e4ab8db33f0a47fda4245185e1d8516ab0ad01ead91c2"
   },
+  "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerOneWaitTwoXAt_nontrivial :",
+    "  Not",
+    "    (Claims.SamplingGeneric.CompiledTwo.OneWaitTwoXAt FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool)",
+    "      List.nil Claims.Witness.Sampling.toyStmt Claims.Witness.Sampling.toyPart Claims.Witness.SamplingGeneric.toyTwo",
+    "      Claims.Witness.silentP 0)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "9fcae30504dd02d8369e243d98a93d0b3c6b4acd3b803d76becf4a46e2bda05e"
+  },
   "Claims.SamplingGeneric.compilerZK": {
    "owner": "@proofs",
    "signature": ["Claims.SamplingGeneric.compilerZK : Claims.SamplingGeneric.CompilerZK"],
@@ -16373,6 +16399,18 @@
     "reads": []
    },
    "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d"
+  },
+  "Flock.SecurityProofs.SpotOneWaitTwo": {
+   "owner": "@proofs",
+   "signature": ["Flock.SecurityProofs.SpotOneWaitTwo : Flock.Guarantees.SpotOneWaitTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["SpotFlock.Built"],
+    "open": ["Claims.ExpectedCR", "Claims.SamplingGeneric.CompiledTwo.Scope", "SpotFlock.Addresses"],
+    "reads": []
+   },
+   "type_hash": "8acc03ad45f091d7827560e89cfbb9c551d450fc3fea21d4ad34396eb914d372"
   },
   "Flock.SecurityProofs.StreamStopBudget": {
    "owner": "@network-accounting",
@@ -27593,6 +27631,7 @@
    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": "frozen (no-function,world-unlisted): CircuitWorkMonitoringPeriod's credit in live words (RT4-INT-8): under its premises at a, b > 0, an accepted period has at least (1 - eps(j))+ of its accepted prefix's live words fixed right (Accounting.Compose.creditPrefix), eps(j) = r(j) N_w/(min(a, b) N_live) at the realized prefix j = PeriodRun.prefixLen (Accounting.Compose.epsPrefix), never at the cap n, except with probability delta_s + n (delta_bind + delta_ks), so a prefix whose eps is at least 1 earns nothing; not a Lean function, an Accounting.TS.prob event that shape.events does not list, with CircuitWorkMonitoringPeriod's claims off the premises list. Proved from CircuitWorkMonitoringPeriod's assembly (creditPrefix_le, with UnitFixed keeping an accepted run's fixed words nonnegative). A credit of words, not of time: the headline's time credit needs CreditOfWork on each credited window's run and is not stated.",
    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.WindowPlay, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.Outcomes.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, SampledRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposeMonitoringPeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under the PouwH1Tile_v2 tile the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
    "Flock.SecurityProofs.SpotKSTwo": "frozen (obligation,no-function): ksTwo_spot at SPOT[Flock]'s two-stage code (SpotFlock.code), knowledge sound at SHA-512 with that code's facts, its coins' bytes and its sessions' runs proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), open until the frame's slots prove it; it reads SpotKSTwo (security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SpotOneWaitTwo": "frozen (obligation,no-function): oneWaitTwoXAt_of_event at SPOT[Flock]'s two-stage code (SpotFlock.code): the committed form at the boundary trace that an extraction of one wait a session fixes (CompiledTwo.OneWaitTwoXAt: the event, the threshold form and the headline) at the error SpotFlock.εoneWaitAt = 3·κ_s + 2·√(k·γ_s·Pr[B]) + 2·(2·runCost + 4·firstHitCost)/2^256, the two costs at one wait a session, at the most SHA-512 calls a run of the prover makes and the sample's three expected counts, at a statement in scope (CompiledTwo.Scope) and where SHA-512 meets the linear expected-time bound (Claims.ExpectedCR) at the one-wait compiled verifier's B_conf,X and at its two by-class finders at every number of tries they stop at, the scope and the three bounds hypotheses of its own statement, so that its record names them; with the code's facts proved, at a built session frame (SpotFlock.Built, part of what it says) and from one fact of that frame, an address for each gate a needed unit opens (SpotFlock.Addresses), an open premise; it reads SpotOneWaitTwo (security/Proofs/Flock/SpotFlock/OneWaitTwo.lean) over SPOT[Flock]'s code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SessionLoopZKAnyDeployed": "frozen (no-function,world-unlisted): Claims.Flock.ZK's bound per outcome at the session loop's release at the deployed tables (Masked.dataE, at the loop's own link and Finish: ofLoopLink, LeanRelease.withFiles, Loop.realOf): as a simulation statement against every malicious verifier it has no acceptance of a function to take; it is at any values whose unswitched round encoding is causal (RefSession.UnCausal), at a relation whose statements' table witnesses are valid (RefSession.Complete), where the transport's trusts at the unswitched prover hold at the relation's statements (LeanRelease.TrustsStop), premises that aren't on the list.",
    "Pouw.SecurityProofs.EndToEndEps": "frozen (conjecture,no-function,hash): EndToEnd in ε form. It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is sampled uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1": "frozen (conjecture,no-function,hash): GapFromTTNCP_U_v1 in ε form. It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is sampled uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
@@ -34758,6 +34797,17 @@
     "Verity.Expand.AndPair.C": "4343b1b856274671d009a9537cbf8ec9aef1b640aeb1b2c0d2e4f72b4cc34a60",
     "Verity.Expand.AndPair.P": "ce39aafe34737938b1d9ebbc911d79d256802dcd373431afd28d00999f0a0490",
     "Verity.Expand.AndPair.d": "9f54454d09b3179a29cb266aba9baf38cc3aaef95c4c6cf98245745636c533d1"
+   }
+  },
+  "Definitions.Core.FirstHit": {
+   "digest": "d14b7555b48c9aa09755e4830267fa0c4593d11b976cd20d70e42bf9707618c7",
+   "definitions": {
+    "Verity.FirstHit.classFinderAt": "1149e6634be571e3d8d44bfb6b2e650b3bcfb09787d7b992afbf75fcbc9f6509",
+    "Verity.FirstHit.clsOf": "e39003c3518f494f20a99e2e140f0ce770f549d62c045ed2afec925b8e7d4021",
+    "Verity.FirstHit.firstIdx": "a89db9e9a7b0472e8461ac411da0e08adfefbda659451d619a11ce1f659e706a",
+    "Verity.FirstHit.loopCostAt": "8d34714c937c040d3929f3066d6c368bdc0fa9a46fbc7e6185afdf0a34459939",
+    "Verity.FirstHit.outOfAt": "a14671265dba96094fada0207a57d21ad168607ff7dfe11a5e9acf5243a5b051",
+    "Verity.FirstHit.sampleFinderAt": "a62db64dd0111de912f16b0f40557c2839893e1d5ccc561d492785dc9f572941"
    }
   },
   "Definitions.Core.Formalism": {
@@ -51536,10 +51586,26 @@
     "Flock.Guarantees.SpotKSTwo": "dad9e5b89978f6e5ccad6a2ef9ceed7e4885f11196f4a068960fac5e693b6955"
    }
   },
+  "Proofs.Flock.SamplingGeneric.OneWait": {
+   "digest": "b5f4244478e93e51ea07c03b2c6b463fd4599d73b4a170b7e0b6e311bdbdd5cd",
+   "definitions": {
+    "Claims.SamplingGeneric.Arg.oneWait": "df569a960fdc793ad4cce5bc194d72e7bdcaf7e430d58de6c0b43b965d77be91",
+    "Claims.SamplingGeneric.Compiled.oneWait": "fec07a11f379a50ecd880dd76743c4551f6601113b89dc06558992402fca439c",
+    "Claims.SamplingGeneric.CompiledTwo.oneWait": "5de96ec89d5d3b4dc3e650eb061a6ce50e4303297515f67db5db0664f62b1941"
+   }
+  },
   "Proofs.Flock.SamplingGeneric.OpensTwo": {
    "digest": "3b04380d4516b54b6847950f2087aa97237b215dce937da5db38264cc635989f",
    "definitions": {
     "Claims.SamplingGeneric.SessionOpensTwo": "9b1b9bc7b9d5915277d92a99a9543464d7132f21a88708a6c121802fe0a6bda3"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.RunExtAt": {
+   "digest": "0d7527c4ba5c9dfd6c70ff117bc78bb31ec6a5b9ccba189be0e9c59d0381a4ed",
+   "definitions": {
+    "Claims.SamplingGeneric.Compiled.callsBy": "50be7171eae32b29960b84c88e31aee7547d55fcfe70f1ec19e125b0ba21c47e",
+    "Claims.SamplingGeneric.Compiled.collBy": "42d8a02d29f4dd8338e184e6811dc0d9f37186da8f626b3c696ef279c90be0d5",
+    "Claims.SamplingGeneric.Compiled.runExtAt": "f86244af3fd53f5af996261f7d61f22d2648ea25343210c12a0f8b5aee68c31d"
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoAt": {
@@ -51561,6 +51627,12 @@
     "SamplingDeploy.RegMatchesTwo": "010176ca7357f449b882b5e04a73a378932601c3e554eee932bd0096237589b3"
    }
   },
+  "Proofs.Flock.SamplingGeneric.TwoCount": {
+   "digest": "f3bf0569d7933c42b74b437ee7e66f6651116516681c83f7db1020df0dc13d1b",
+   "definitions": {
+    "Claims.Sampling.gateBlock": "385e5c761cba82de37dc1e1f09ec20d3858fe872c23d270772eb630cc6cdfa34"
+   }
+  },
   "Proofs.Flock.SamplingGeneric.TwoDeployed": {
    "digest": "d4c1c5d9a8d222fdac50a702572888bee745faa4170fccb01c3320a77963a5e3",
    "definitions": {
@@ -51568,6 +51640,54 @@
     "SamplingDeploy.Code.ReplayCap": "35191193418830bf3e43b2588c54da4b4ed1cd313c6688a7e6ff3f991b93eec6",
     "SamplingDeploy.Code.footOf": "26c847cb32d9917981de58b2addca7725aa4c51243368427e0105786cf19ced6",
     "SamplingDeploy.compiledTwo": "f769ceaeb1605ddc3667206c2eff548c9b80b07c9267ab95ad9de253a2487e4c"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoFirstHitAt": {
+   "digest": "088e062f5daae84d073d17b380eeffd0d9050cc54433126e2cc5c2fcda7f5008",
+   "definitions": {
+    "Claims.SamplingGeneric.Compiled.firstHitCost": "907c25574455a240127333d8f6afe41ddd8d288a1d341ab81fed5871b166d042",
+    "Claims.SamplingGeneric.Compiled.firstSlots": "efdbcf0768fe9dae34b80b01ba0bd1876711234ac3fb9675aca52d52991e8d25",
+    "Claims.SamplingGeneric.Compiled.runCost": "46736f47f08a3a68c3265480e1d149a063935c0c7ca2b19ab7bc57f8902c4243",
+    "Claims.SamplingGeneric.Compiled.sampleNeeds": "0bd5cecf31aec26eb0209f8e278d5d7f4ffa7270e55d5cd05ccb5e9c00540fde",
+    "Claims.SamplingGeneric.Compiled.sessCountIn": "4af0b335666eff9640a7781225e488ae18b4c0160f6054e28c65f513150ed0e3"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoOffClassAt": {
+   "digest": "459744ddd4daa1419bac132b2e39b3cdac17fba17c6932b2263642e9ce700cd7",
+   "definitions": {
+    "Claims.SamplingGeneric.Compiled.runCalls": "bc66b6c7f196ab9080fc0cd99f62cd480457bf06a13e102ed8ec89be9bf6cc51"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoOneWaitAt": {
+   "digest": "83a313f338ad9f470f502f3c4530cae2739feeda52c7346450a18f12a2f74f97",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.εclsOneWait": "9a099a82e81a12e079edb3610636315ca94acf016581c641fa0957b642996a65"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoOneWaitKS": {
+   "digest": "79e5ac293ce06ff9865f5436f1462e3d7178908753c122d1b3b86f60a1ad1566",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.OneWaitTwoXAt": "e1b6c8db409445ad622c3894562dcadbc6693be228a465edbb9f3e0b12fd2b2d"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoReg": {
+   "digest": "99c04bc6afe28b94ee29bce1b466c6ed5d2531f2468a8b1ad31aaabda7de9014",
+   "definitions": {
+    "Claims.SamplingGeneric.CompiledTwo.iop": "81b288afcba5c6c859faff364024a4da37ac8a9952aabf43640980fc155abb82",
+    "Claims.SamplingGeneric.CompiledTwo.iopTable": "b899ca4debb7eaf2dcb25d9dab56ba9b2853c40e30204e793cd2c1e142b4ce73"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoRegFirstHit": {
+   "digest": "0a2155ff814744b4d0aa2f31383a1e8865714c0e7ce08b704dfbe0c3625ec9e5",
+   "definitions": {
+    "Claims.SamplingGeneric.Compiled.callsAt": "54f388abe88ccd03077630d8e19135b1b12729992474d537a0d9522a8e989955"
+   }
+  },
+  "Proofs.Flock.SamplingGeneric.TwoRegFirstHitClass": {
+   "digest": "137fd4f5dfcce67d7b766c1a5f010f9c1f64f8d3ba24f0e663cbe3b73019b9dc",
+   "definitions": {
+    "Claims.SamplingGeneric.Compiled.finderXCls": "0fb93c441b2aae01b940b2fa7ee4cbd30bd713f6428939e72824e23255b90a12",
+    "Claims.SamplingGeneric.CompiledTwo.finderICls": "7bc86bf9cd605d4b26feee5e5e39615400fdad7f8e062f139a40264149ae0241"
    }
   },
   "Proofs.Flock.SessionLoop.Concrete.Delta": {
@@ -55190,11 +55310,26 @@
     "SpotFlock.pickAny": "7035d3477e163a89b58e7da0fe0d14f1fe02bff0bfc9e443e5fb84baabf5037b"
    }
   },
+  "Proofs.Flock.SpotFlock.OneWaitTwo": {
+   "digest": "f55b00a5f3509a32d2bda47e4063fd03befdde9f66012b64243f32af269a4d27",
+   "definitions": {
+    "Flock.Guarantees.SpotOneWaitTwo": "efb747c3393fa9f6421697c439014164765079215946f894a4a0aa2753778bd6",
+    "SpotFlock.clsAt": "8baa83e71da053175c1e9012326514a7d08fa078bda83ed521d50f06576f45a8",
+    "SpotFlock.needsAt": "9d0a96c3ea5034412f28e09d7a9c12dca45a5bc685ddfa603e9747786a79925b",
+    "SpotFlock.εoneWaitAt": "daaa5bc874ffc04705e66e32826f8c0cec3b7987f16d461d9e416b61e05b5f22"
+   }
+  },
   "Proofs.Flock.SpotFlock.Opens": {
    "digest": "d643b2043be515565265141125bf9b95bf82fb5574b1381fd8db46cc13afb71b",
    "definitions": {
     "SpotFlock.seenAt": "cc2b5db558db502f8081781f2ceacf47cc23f29588dc4e8fe23be764a5fe3849",
     "SpotFlock.unitStmt": "7a42f82f5bbb0b9dddd5105c74e740a3cfedae6a54789fb2e500e98b085fe3b5"
+   }
+  },
+  "Proofs.Flock.SpotFlock.OpensWhole": {
+   "digest": "0fcaea2e64eba7e45ef124ef56bd680df04e6e77b3b04c18d6c18a878b1bf455",
+   "definitions": {
+    "SpotFlock.gateKey": "1208d994ab45752f2fcb3e9205e5fed36b0d54229f99888657a3d2f8ce78a7b4"
    }
   },
   "Proofs.Flock.SpotFlock.Placement": {
