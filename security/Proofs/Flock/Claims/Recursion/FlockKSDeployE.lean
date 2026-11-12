@@ -300,7 +300,7 @@ theorem accE_cols {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : Claims.Prover
   unfold cols at hu
   split at hu
   · rename_i rr hrr
-    obtain ⟨f', s', spec', sts', st, hf', hs', hst, hm⟩ := runOf_m hrr
+    obtain ⟨f', s', spec', sts', st, hf', hs', hst, hm, -⟩ := runOf_m hrr
     rw [hf] at hf'
     cases hf'
     rw [hx, hs] at hs'

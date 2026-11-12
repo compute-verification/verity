@@ -3,6 +3,8 @@ module
 public import Proofs.Flock.Claims.Complete.Link
 public import Proofs.Flock.Claims.Complete.Zk.Discharge
 public import Proofs.Flock.Claims.Complete.Zk.Skeleton
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
 import Flock.With.SimVerify
 import Flock.With.SimWalk
 import Mathlib.Algebra.Order.Floor.Extended

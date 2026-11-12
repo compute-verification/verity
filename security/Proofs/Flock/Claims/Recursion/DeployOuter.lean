@@ -297,7 +297,7 @@ def runOfO (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun := do
   let lv ← (liveOf spec f.record).toOption
   let extras ← (tab.extra lv.points).toOption
   pure { m := tab.m, kLog := tab.kLog, claims := 2 + extras.size, hashLen := tab.merkle.digestLen,
-         saltLen := saltLenOf true tab,
+         saltLen := saltLenOf true tab, wideLeaf := tab.wideLeaf,
          reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                   (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
 

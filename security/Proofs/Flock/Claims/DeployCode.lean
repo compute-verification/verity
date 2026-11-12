@@ -381,8 +381,9 @@ def saltLenOf (zk : Bool) (tab : Setup) : Option ℕ :=
 
 /-- **What the column reader takes of a run's table `j`**, with no hash: from the last message's statement, record and
 proof files, table `j`'s `m`, `kLog`, claim count and Merkle widths (its setup's, its claims at the session's link
-points), and its two reps' recorded rounds (the record's streams `<t>/rep0`, `<t>/rep1`, at `2j` and `2j + 1` in
-`spec.repStreams` order) and proof files (at the same two places, as `verify` reads them). -/
+points), its statement version at the masked record (the plain reader reads none), and its two reps' recorded rounds
+(the record's streams `<t>/rep0`, `<t>/rep1`, at `2j` and `2j + 1` in `spec.repStreams` order) and proof files (at the
+same two places, as `verify` reads them). -/
 def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun := do
   let f ← lastFinal s
   let (_, spec, sts) ← setupOf zk f.stmt
@@ -391,7 +392,7 @@ def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun :=
   let lv ← (liveOf spec f.record).toOption
   let extras ← (tab.extra lv.points).toOption
   pure { m := tab.m, kLog := tab.kLog, claims := 2 + extras.size, hashLen := tab.merkle.digestLen,
-         saltLen := saltLenOf zk tab,
+         saltLen := saltLenOf zk tab, wideLeaf := zk && tab.wideLeaf,
          reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                   (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
 
@@ -402,8 +403,9 @@ variable [S : ZkSetup]
 
 /-- **What the column reader takes of a run's table `j`**, with no hash: from the last message's statement, record and
 proof files, table `j`'s `m`, `kLog`, claim count and Merkle widths (its setup's, its claims at the session's link
-points), and its two reps' recorded rounds (the record's streams `<t>/rep0`, `<t>/rep1`, at `2j` and `2j + 1` in
-`spec.repStreams` order) and proof files (at the same two places, as `verify` reads them). -/
+points), its statement version at the masked record (the plain reader reads none), and its two reps' recorded rounds
+(the record's streams `<t>/rep0`, `<t>/rep1`, at `2j` and `2j + 1` in `spec.repStreams` order) and proof files (at the
+same two places, as `verify` reads them). -/
 def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun := do
   let f ← lastFinal s
   let (_, spec, sts) ← setupOf zk f.stmt
@@ -412,7 +414,7 @@ def runOf (zk : Bool) (s : Claims.Seen) (j : ℕ) : Option Claims.Flock.ZkRun :=
   let lv ← (liveOf spec f.record).toOption
   let extras ← (tab.extra lv.points).toOption
   pure { m := tab.m, kLog := tab.kLog, claims := 2 + extras.size, hashLen := tab.merkle.digestLen,
-         saltLen := saltLenOf zk tab,
+         saltLen := saltLenOf zk tab, wideLeaf := zk && tab.wideLeaf,
          reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                   (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] }
 

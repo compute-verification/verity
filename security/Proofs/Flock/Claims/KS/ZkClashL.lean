@@ -100,6 +100,7 @@ theorem rawLevelRows_zk (hs : Hashes Flock.V) {seen : Claims.Seen} {f : Final} {
   have hrun : runOf true seen j = some
       { m := (Setup.ofCircuit sts[j]).m, kLog := (Setup.ofCircuit sts[j]).kLog, claims := 2 + extras.size,
         hashLen := (Setup.ofCircuit sts[j]).merkle.digestLen, saltLen := saltLenOf true (Setup.ofCircuit sts[j]),
+        wideLeaf := (Setup.ofCircuit sts[j]).wideLeaf,
         reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                  (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] } := by
     unfold runOf

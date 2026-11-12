@@ -441,6 +441,7 @@ def test_release_is_one_pass_whose_limit_holds_every_window(capsys) -> None:
     assert RUN.main(["run", "--dry-run", "--steps", "oprove", "--release", "--env", "TREE_FROM=local"]) == 0
     cmd = capsys.readouterr().out.split()
     assert "RELEASE=1" in cmd and "REPEAT=1" in cmd and "WARM=0" in cmd and "RUNS=1" in cmd and cmd[-1] == "TREE_FROM=local"
+    assert "RELEASE_BUDGET=1" in cmd
     limit = {c: int(x[x.index("--timeout") + 1][:-1]) for c, x in (("plain", plain), ("release", cmd))}
     assert limit["release"] - RUN.RELEASE_LEAD_MIN > 1.9 * limit["plain"] - 2 * RUN.SETUP_MIN
 
