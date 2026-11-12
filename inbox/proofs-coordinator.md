@@ -69773,3 +69773,73 @@ Everything here is read from the tree, from the store's records and from one run
 - #9121 is not marked: its quick tier has not started.
 - HASH-98: nothing staged, by your instruction; the built `k_log` of `main`'s three v1 types is not checked.
 - #9075's ready line: waits for #9092 on `main`.
+
+## 03:59Z KEPT: job 2: the fault is real and since 25 Oct no audit over a network certifier's run has written a case; the mend is #9124, open and unmarked at `c307cc49b2`, its quick tier `e586` running. Job 3: `9916` and `277b` both passed and the second pull request's body is filled. Your 03:24Z question is answered at the end: yes, refused, by a count on `main`
+
+Tags: [read] file:line on `main` at `be9a3d5669` unless a head is named; [run] run id; [local] one script and two test files on the agent VM; [guess].
+
+### Job 2. The finding
+
+**Real fault, not expected.** Your question, "does a warden audit report a case as an error it should run?": yes, every case, every time.
+
+- **Which `replay`.** Two files are named `replay.py`: `benchmarks/one_stage/replay.py` (has `params`) and `benchmarks/network_traces/replay.py`, the network certifier's traces replay (has none). `a5_warden.py` puts `benchmarks/network_traces` first on the path and imports `warden_serve` (`a5_warden.py:76-78`), which imports `active_replay` (`warden_serve.py:137`), which imports `replay` at its top (`active_replay.py:109`). `a5.write_case` then says `import replay` and gets the module the process already holds (`a5.py:1121-1124`) [read]. `warden_replay.py` is not involved.
+- **Reproduced.** In a process that has imported `a5_warden`, on `main`'s tree: `replay` is `benchmarks/network_traces/replay.py`, it has no `params`, and the one file `write_case` writes is `case-error.txt`, `AttributeError: module 'replay' has no attribute 'params'` [run: `r20261112-032210-c1d1`, exit 0; local the same].
+- **Since** `7b7630b5e2` (25 Oct), which added `write_case`; `a5_warden.py` had the path line from its first commit `9293837ce9` (24 Oct). So it has never worked [read: `git log -S`].
+- **What it hides.** The `except` writes `case-error.txt` and returns before any case (`a5.py:1129-1131`): no `case.json`, `case-python.json`, `case-v2.json`, `case-sampled.json` or `case-v2-members.json` [read]. The same for the two-rank transfer-gate audit, which imports `a5_warden` (`a5_tp_gates.py:81`) [read].
+- **What it does not touch.** The audit's own record is computed before `write_case` and takes nothing from it (`a5.py:973-980`, `:1010`) [read]. No audit passed or failed for this.
+- **So what was lost:** Lean and today's Python never ran on the case of such an audit; `composite.py` had no sampled-proofs piece from one (`composite.py:8`, its docstring); `v2_case.py` could not take the public file's digest the audit staged and fell back to the kept file's own (`v2_case.py:108`) [read].
+- **The tests routed round it.** `test_a5_case_v2.py` loaded `replay.py` by its path and put it under the bare name for each test, with a docstring that names this clash. So the case tests passed in a state no audit runs in [read: `test_a5_case_v2.py:22-33` on `main`].
+
+### Job 2. The mend: [#9124](https://github.com/compute-verification/verity/pull/9124), open, NOT marked
+
+`cursor/proofs-warden-replay-2953` at `c307cc49b2f690fd5b413f104a7c1ad993e5d136`, from `main` `be9a3d5669`. 3 files, +33 −15, all in `benchmarks/one_stage`. No Lean, no lock, no verifier.
+
+- **`a5.py`:** `own_replay()` loads the `replay.py` beside it by its path, under the name `one_stage_replay`, and the four readers call it in place of `import replay`.
+- **Why `a5.py` and not `a5_warden.py`, which you named.** The mend in `a5_warden.py` is to put its own `replay` under the bare name after its imports. That changes what every later import in the process gets, and breaks in the other order. `a5.py` saying which file it means changes nothing for any other module. The case code in `a5.py` is ours (`7b7630b5e2`, #8927, #9024). vLLM's lane also edits `a5.py` (#8455 is open); this is one helper and four one-line substitutions. **Say if you want it in `a5_warden.py` instead.**
+- **The test:** `test_the_audits_case_is_written_where_replay_names_the_network_certifiers_module` in `benchmarks/one_stage/tests/test_a5_warden.py`. It puts the module `warden_serve` reads under the bare name, checks that it has no `params`, and has `a5.write_case` write `case.json` and `case-python.json` and no `case-error.txt`. `test_a5_case_v2.py` now reads `a5.own_replay()`; its own loader is deleted.
+- **The durable fix** is one name for one file: rename one of the two `replay.py`. Every importer of one of them changes, so not here.
+
+**Checks**
+- [run] `r20261112-032248-417a` at `9055e0c5ff`, the two test files: 22 passed, the new test among them. The head differs from that commit in two docstrings and the test's name.
+- [local] at the head `c307cc49b2`, the two test files: 13 passed.
+- [local] the no-growth lints (`ratchet_gate.py origin/main HEAD`): passed. They failed at my first commit: the lint counts the retired name in a file's whole text, a module's name in backticks included, so the docstrings and the test's name say "network certifier".
+- [run, not ended] quick tier `r20261112-033407-e586` on cpu-2, `--changed be9a3d5669 --quick`: took its slot at 03:56Z; 4 suites (`benchmarks/one_stage`, `benchmarks/prove_path`, `repository`, `verity-graph`). **ETA about 04:30Z [guess].**
+- Not run: an audit over a network certifier's run, end to end. It needs a prover and a node.
+
+**The ready line, once `e586` ends with 0 failed** (I report it at my next resume and put it in the body): `research queue ready 9124 --mark --by proofs`, head `c307cc49b2`. It touches nothing Lean, no lock and no verifier, so I expect the low-risk lane [guess: I did not read `drive.toml`'s `lowrisk_excludes`].
+
+**What I did not decide**
+- **The issue.** I opened it with `Issue: none` (reported on VLLM-335, no issue of its own). Link one with `research queue link 9124 --issue KEY`.
+- **After it lands**, the first such audit writes its case, and anything else wrong in that case shows under its own message. This fault masked any such thing, so expect it may show one.
+
+### Job 3. My runs
+
+- **`r20261112-015719-9916`** (quick tier at `01488189d0`, `--changed 0963ff842e --quick`): ended rc 0. 60 suites, 60 passed, none cached, 0 failed [run].
+- **`r20261112-021332-277b`** (the Lean check, `--records verity/protocols/flock/verifier`, at `01488189d0`): ended 03:45Z rc 0. Every package passed: the verifier's (21,832 declarations in 255 modules, 11 guarantees) and the four that require it (the certifier's Lean, `security`, `security/Proofs`, `security/Properties`). Only `propext`, `Classical.choice`, `Quot.sound`. No record regenerated. It is the fast result (lean-fast/v1): without the kernel replay or the tests [run].
+- **The second pull request's body** is filled, no open slot: `lanes/proofs/20261112T0135Z-draft-keptcircuit-pr-body.md` in the notes. The branch `cursor/proofs-keptcircuit-7c1e` is at `01488189d0`, on a branch, not on `main`, not open. It waits on the first, which waits on #8949 and #9042; both are still open and `main` is still `be9a3d5669` (03:52Z).
+
+### Your 03:24Z question: a member with two coin trees
+
+**Yes, it is refused, and the refusal is already on `main`: a count.** Every coin tree the challenger's signed log shows must be a session's of the evidence, and a statement has exactly one session. Nothing new is owed by soundness's scan for this. Read only; nothing run.
+
+- **What an unfinished session leaves.** The challenger samples a session's tree at the prover's `Hello` and writes a `coin-tree` line before the root leaves its host (`verity/protocols/spot/device/challenger.py:1849-1869`, `remote.py:307-316`). Its signed close covers the log line for line (`Spot/ChallengerSession.lean:267-285`). So a session that reached `Hello` is in the log whether or not it finished. One that died before `Hello` left no tree and no coin, and proving it again is not a second sample.
+- **One statement's audit, the form `main` accepts** (`Spot/OneStageZk.lean`):
+  - the evidence names exactly one session (`oneSession`, `:714-716`);
+  - the trees are read from the one session the auditor's ledger opens on the window (`treesOf`, `:674-677`; `trustedTreesOf`, `Spot/ChallengerTrees.lean:277-282`);
+  - **the refusal:** `sessionsTreeReason`, `Spot/ChallengerTrees.lean:270-271`, called at `OneStageZk.lean:711`: "the challenger's release log shows 2 coin trees and the sessions use 1: a tree no session records is a second sample, and each session's coins are flipped once". It runs before the session is verified (`checkOneAt`, `:750-758`).
+- **A window of several members** (the per-member form; on `main` it accepts nothing, `MULTI_REFUSED`, `:772`, `:1249-1258`):
+  - a second statement for a member is refused (`heldStep`, `:883`), and so is a statement with other than one session, "never retried" (`:890-893`);
+  - **the refusal:** `membersTreeReason`, `Spot/ChallengerTrees.lean:442-443`, called at `OneStageZk.lean:1223`: the same count. A member's tree must also end with its closing round (`:385-392`), which an unfinished session's tree does not. The file checks this very case when it is built: two `Hello`s, one session closed and presented, refused with that sentence (`#guard`, `Spot/ChallengerTrees.lean:531-532`).
+- **A second process** changes nothing where the trees are the window's: the ledger opens a window's root once ("a second open for root … or session …", `Spot/ChallengerSession.lean:596-597`), and a tree from any other challenger is not in that log (`NO_TREE`, `Spot/ChallengerTrees.lean:220`). So its tree lands in the same log and the count refuses.
+- **The Python that mirrors it:** `sessions_tree_reason`, `challenger.py:1018-1020`, the same count.
+
+**Where nothing refuses it** [read, and one guess]
+- **The per-session verifier.** `verify` and `verify-members` read no line of the challenger's log. Each accepts the second session; it cannot know of the first tree. The refusal is the audit's only.
+- **A proof server on a challenger of its own** (`FLOCK_CHALLENGER=1`, a5's default: `a5.py:106-110`, `verity_flock/challengers.py:1-7`). Within one server the same count refuses a second tree. A second process is a second server with a second challenger: each log shows one tree, and nothing I read ties the two logs. What would refuse it is the count over the window's one log, that is, the sessions' trees taken from the auditor's session on the window, which is the only place `Spot.OneStageZk` takes them from. I did not read whether a5's own code can start a second server for a member, nor which of the two the kept driver's sessions use [not read].
+- **A window whose audit is never presented.** If the second attempt is made under another window, the first window's log holds a tree with no session; refused if that window's audit is presented. Whether the period's check refuses a window opened and never audited, I did not read.
+
+### State when I end this turn
+
+- Run still out: **`r20261112-033407-e586`** (quick tier of #9124), ETA about 04:30Z [guess]; its limit is 180 min from 03:56Z.
+- Branches, all pushed, none marked: `cursor/proofs-keptverify-604f` at `0963ff842e` (not open, waits on #8949 and #9042); `cursor/proofs-keptcircuit-7c1e` at `01488189d0` (not open); `cursor/proofs-warden-replay-2953` at `c307cc49b2` (#9124, open, unmarked).
+- Next, on resume: `e586`'s verdict into #9124's body and the ready line; then the first branch's merge once #8949 and #9042 are on `main`.
