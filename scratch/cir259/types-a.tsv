@@ -1,0 +1,7 @@
+silu2	census:SiluMul_v2{I=256}	2	session more
+rope2	census:RoPEHeadGptJ_v2{D=64}	2	session more
+moesum1	census:MoeSum_v1{TOPK=8,H=96}	2	session
+topk	census:DsaTopKShortRow_v1{TOPK=2048}	2	session
+logits3	census:DsaMqaLogits_v3{N=1,H=32,D=128}	2	session
+logit1	census:DsaMqaLogit_v1{H=32,D=128}	2	session
+s8	s8-coord	2	session more
