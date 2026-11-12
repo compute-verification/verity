@@ -152,11 +152,10 @@ def allreduce_settings(header) -> dict | None:
     pc = facts.get("parallel_config")
     if not pc or not isinstance(pc.get("disable_custom_all_reduce"), bool):
         return None
-    env: dict = {}
-    for part in (facts.get("nccl_env"), (getattr(header, "profile", None) or {}).get("engine_flags")):
-        if part:
-            env.update(part)
-    return T.settings_of(pc["disable_custom_all_reduce"], env)
+    nccl = facts.get("nccl_env")
+    env = {**(nccl if nccl else {})}
+    flags = (getattr(header, "profile", None) or {}).get("engine_flags")
+    return T.settings_of(pc["disable_custom_all_reduce"], {**env, **(flags if flags else {})})
 
 
 def capture_device(header) -> tuple[str, int] | None:

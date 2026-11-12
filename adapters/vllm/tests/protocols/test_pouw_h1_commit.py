@@ -701,6 +701,36 @@ def test_each_routed_expert_calls_rows_are_the_commits_and_an_idle_experts_its_z
     assert all(v["credit"] for v in run.gated().values())
 
 
+def test_the_fills_measures_time_each_step_to_the_next_ones_stamp_and_the_last_to_the_end():
+    """`pouw_h1_gpu.served_measures`: a step's seconds run to the next step's stamp and the last step's to the window's
+    end, the tokens are held to the plain run's, and each request to the static schedule at its token limit."""
+    got = [{"token_ids": [5, 6], "finish_reason": "length", "num_cached_tokens": 0}]
+    m = GPU.served_measures(got, got, 2, 2, 10.0, 14.0, {0: 10.5, 1: 12.0})
+    assert m["step_s"] == [1.5, 2.0] and m["decode_step_s_median"] == 2.0
+    assert m["serve"] == {"sequences": 1, "tokens": 2, "s": 4.0, "step_s": 2.0, "tokens_per_s": 0.5}
+    assert m["same_tokens"] and m["tokens_digest"] == GPU.tokens_digest(got)
+    assert m["static_schedule"] == {"ok": True, "problems": []}
+    other = GPU.served_measures(got, [{**got[0], "token_ids": [5, 7]}], 2, 2, 10.0, 14.0, {0: 10.5})
+    assert not other["same_tokens"] and other["step_s"] == [3.5] and other["decode_step_s_median"] is None
+
+
+def test_the_harness_editor_zeroes_every_call_or_moves_one_code_of_its_first_call_of_two_rows():
+    """`pouw_h1_gpu.editor`'s ``a-zero`` hands H1 every call's codes all zero. Its ``a-row-off`` moves row 1's first code
+    by one, to 1 or from 1 to 2, in the first call of two rows or more, and hands every other call's as the arm quantized
+    them. Neither names an expert site, and neither writes into the arm's codes."""
+    xq = torch.arange(12, dtype=torch.int8).reshape(3, 4)
+    kept, row = xq.clone(), xq[:1]
+    zero = GPU.editor("a-zero")
+    assert [int(zero(None, xq).abs().sum()) for _ in range(2)] == [0, 0] and zero.at is None
+    off = GPU.editor("a-row-off")
+    assert off(None, row) is row
+    got, want = off(None, xq), kept.clone()
+    want[1, 0] = 1
+    assert torch.equal(got, want) and got is not xq and torch.equal(xq, kept)
+    assert off(None, xq) is xq and off.at is None
+    assert GPU.editor("a-row-off")(None, torch.ones(2, 2, dtype=torch.int8)).tolist() == [[1, 1], [2, 1]]
+
+
 def test_one_expert_calls_rows_off_the_commits_are_refused_by_core(tmp_path, monkeypatch):
     """H1 handed all-zero codes at one routed expert call (`pouw_h1_gpu.editor`'s ``a-zero-expert``, expert 0's down at
     step 0), with an honest Commit: the Commit registers its own tree for that step's A table of K = I, so the serving

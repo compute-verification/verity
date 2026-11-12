@@ -423,9 +423,10 @@ class _Fold:
         # Program -- one `seed` / `seed_<i>` parameter (Array<1, Value<64>>, i = the request's index, like the prompts) between the
         # prompts and the weights; the sampler instance reads it through a `Param("seed", ...)` operand (resolver).  Layout:
         # prompts..., seeds..., weights (weights stay the LAST input node: cb_a.compare / batch_decomp rely on that).
-        samp = h.workload.get("sampling")
+        sampling = h.workload.get("sampling")
+        samp = dict(sampling) if sampling else {}
         self.seed_param = {}      # request index -> parameter index
-        if not samp or samp.get("greedy") is not True:
+        if samp.get("greedy") is not True:
             for i, r in enumerate(reqs):
                 if r.get("seed") is not None:
                     self.seed_param[i] = len(params)
@@ -437,7 +438,8 @@ class _Fold:
         # `_finish`.  Layout: prompts..., seeds..., peers..., weights (weights stay the LAST input node; the codec lowers a homogeneous bf16
         # RecordType to ONE Input16 node per request, so the request-owned Input nodes stay the leading ones -- batch_decomp).  A TP1 log
         # (no tp2 note) allocates nothing here: its layout and digests are unchanged.
-        tp = (h.notes or {}).get("tp2")
+        tp2 = (h.notes or {}).get("tp2")
+        tp = dict(tp2) if tp2 else {}
         self.tp = None
         if tp and int(tp.get("world_size") or 1) > 1:
             if tp.get("rank") is None:
