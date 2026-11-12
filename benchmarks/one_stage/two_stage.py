@@ -493,10 +493,11 @@ class Design:
     and the verifier derive the same one: the block's descriptor id ``key``; one unit of each of the check's templates
     as an interior window lays it out (``members``, `interior_rows.member`) and each one's proof blocks in a replay
     block (``cells``, the stream's); the block's parameters its templates' ports read, as the interior registers their
-    values (``links``, `interior_rows.links`); its wires (`second_stage.replay_wires`); and its returns (``returns``,
+    values (``links``, `interior_rows.links`); its wires (`second_stage.replay_wires`); its returns (``returns``,
     `interior_rows.returns`: a template's output port, the name round 2 gives the block's return it writes, the row
-    each unit writes, and whether round 1's record commits it). The interior never registers a return: round 2 reads
-    one only at a port round 1's record commits."""
+    each unit writes, and whether round 1's record commits it); and the rows its links' and wires' ports read
+    (``rows``, `second_stage.replay_rows`), which say which of a writer's units a block each unit of a wired port
+    reads. The interior never registers a return: round 2 reads one only at a port round 1's record commits."""
 
     key: str
     members: tuple[CS.Member, ...]
@@ -504,12 +505,13 @@ class Design:
     links: tuple[IR.Link, ...]
     wires: tuple[SS.Wire, ...]
     returns: tuple[IR.Return, ...]
+    rows: tuple[SS.Rows, ...] = ()
 
     def window(self, boundary: str, sample: Sequence[int]) -> CS.Binding:
         """The interior window of the replay sample ``sample`` after the boundary registration ``boundary``
         (`interior_rows.interior_window`): public items alone."""
         return IR.interior_window(self.members, self.cells, boundary, sample, self.wires,
-                                  IR.link_values(self.links, len(sample)))
+                                  IR.link_values(self.links, len(sample)), self.rows)
 
 
 def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlinked: bool = False) -> Design:
@@ -529,7 +531,8 @@ def design(layout: BR.Layout, record: Mapping[str, Any] | None = None, *, unlink
         raise ValueError(f"replay block {key} makes no wires round 2 derives (`second_stage.replay_wires`): "
                          f"{SS.WIRES_WHY}")
     links = IR.links(layout.program, key, record, members, cells)
-    return Design(key, members, cells, links, tuple(wires), IR.returns(layout.program, key, record, members, cells))
+    return Design(key, members, cells, links, tuple(wires), IR.returns(layout.program, key, record, members, cells),
+                  SS.replay_rows(layout.program, key))
 
 
 def rule_of(layout: BR.Layout, replay: str, k: int | Mapping[str, int],
@@ -624,7 +627,7 @@ def replayed(again: First, c: BR.Committed, capture: Path, directory: Path, *, w
     sample = [int(u) for u in again.sample.units]
     per, launches = spans_of(c, capture, sample, rids)
     it = IR.interior(per, d.cells, again.registration.digest, sample, row=again.pub["window"], links=d.links,
-                     wires=d.wires, served=again.record, window_root=window_root, salt_key=salt_key,
+                     wires=d.wires, rows=d.rows, served=again.record, window_root=window_root, salt_key=salt_key,
                      returns=[(x, c.port(x.value)) for x in d.returns if x.held])
     record = IR.write(it, directory)
     tie = {**({"registered": IR.link_words(d.links), "schemas": IR.link_schemas(d.members, d.links)} if d.links else {}),
