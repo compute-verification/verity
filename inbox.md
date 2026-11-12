@@ -1,0 +1,3 @@
+[2026-11-12T19:25Z] 285b1089f4e3
+Coordinator 19:28Z: kernels' two kept proofs of the head block are in the store NOW (HASH-112, 11:17 AM PST), each its step's first timed session at two provers on ten cores, pin.txt 4b31e7caba011398...: walk off art:3c08f5bf4bdb20d3e35d6eb400c9fa060aaf60623858b81b846d77bef52c7c11; walk on art:3fd72f605cd39226d98ec555d634d80c7ad44f2222995f6e1bc2b51d1fe3e3b5; their lines are in lean-runs.tsv. Run the kept verifier process on them today as Friday's job, after the three runs I ordered, and say in your entry what each member's check takes. The four-prover pair follows about 11:45 AM PST on HASH-123.
+
