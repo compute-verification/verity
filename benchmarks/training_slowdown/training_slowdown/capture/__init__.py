@@ -5,7 +5,7 @@ narrowest cut between the step's gradient side and its new persistent values, T1
 a run as the sum of its distinct step graphs (`run`); and the optional lowering onto Verity's Definitions (`lower`)."""
 from training_slowdown.capture.run import RunGraph, capture_run, schedule_updated
 from training_slowdown.capture.structure import CLASSES, Matmul, StepGraph
-from training_slowdown.capture.trace import CaptureRefused, capture_fn, capture_step, phase
+from training_slowdown.capture.trace import CaptureRefused, capture_fn, capture_step, capture_steps, phase
 
-__all__ = ["CLASSES", "CaptureRefused", "Matmul", "RunGraph", "StepGraph", "capture_fn", "capture_run", "capture_step", "phase",
-           "schedule_updated"]
+__all__ = ["CLASSES", "CaptureRefused", "Matmul", "RunGraph", "StepGraph", "capture_fn", "capture_run", "capture_step",
+           "capture_steps", "phase", "schedule_updated"]

@@ -6,8 +6,11 @@ cancel, held again within the hour, a run unreadable for an hour, and an outage,
 line is posted nowhere) leads with top's handle, and rings top's inbox thread as `ring_decision` does for a decided card (the inbox is in the front door, so the post's
 own route can't ring it). A cloud worker (a Task subagent) that went idle, or has been ACTIVE for hours, leads with its lane's
 handle and rings that inbox the same way, for its coordinator to resume it with Task (the watch can't start a worker's run;
-the doorbell also counts toward the coordinator's own ready-to-wake rule). A worker alert is never posted unrung: one whose
-lane no handle owns (nor its parent's) leads with infra's handle and says its lane is unknown. A silent worker (ACTIVE 90 min with no note
+the doorbell also counts toward the coordinator's own ready-to-wake rule). A worker the watch could place under no lane
+(`unplaced`: no Task call it saw by an agent a handle owns, no registration) leads with infra's handle once, saying so, for
+infra to find its launcher; its alerts, which the watch marks `quiet`, are posted with no handle and no lane and ring no one.
+An alert of a worker whose registered lane no handle owns, which the watch doesn't mark, leads with infra's handle and says
+its lane is unknown. A silent worker (ACTIVE 90 min with no note
 and no push) leads with the record's handle and rings it the same way; a silent coordinator (60 min, its record's owner top)
 rings top. A `research run` that ended on a node leads with its
 sender's handle (a coordinator's own, a worker's launcher's, for a run whose sender is a lane, the lane's), and its doorbell is
@@ -19,10 +22,11 @@ handle owned, as a lane's worker by the issue key or the handle its name starts 
 its `issue`, or `handle`) rings that lane
 whatever its result and its sender's status, and says how the lane was found, so a wrong placement shows where it rings; the
 worker's later runs are any worker's. The runs of one read whose sender
-no handle owns, and no name places, are one post that leads with infra's handle, naming each run's sender, rung as an alert. A record this relay can't render
+no handle owns, and no name places, are one post that leads with infra's handle, naming each run's sender, rung as an alert;
+one whose senders infra was all rung for at an earlier run (`quiet`) rings no one. A record this relay can't render
 (a kind it doesn't know, or one missing what its sentence needs) is posted as its raw JSON to infra, never as a sentence of ?s.
-A record the watch marks `quiet` (a run its own lane cancelled, a worker relaunch it declined) is posted with no handle and
-rings no one. Each line posted is kept by its sha256 beside the offset (`sent_path`, 3 days), so a restart, or an offset lost or
+A record the watch marks `quiet` (a run its own lane cancelled, a worker relaunch it declined, an alert or a run of an
+agent it placed nowhere and rang infra for already) is posted with no handle and rings no one. Each line posted is kept by its sha256 beside the offset (`sent_path`, 3 days), so a restart, or an offset lost or
 reset, never posts it again.
 A failure the watch acted on (`FAIL`: held, stalled, held unread, crashed, idle after
 its run ended, relaunched) leads with the record's `owner` and rings its inbox: top's for a coordinator, the launcher's handle for a
@@ -98,12 +102,14 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "outage": "{count} coordinators have been down (latest run ERROR) since {since}: {handles}. The watch restarts each every "
                  "{every_min} min until it comes back; a person may need to report it to Cursor or relaunch them",
        "held_unread": "did nothing itself for {minutes} min since {since} while a worker it waits on streamed, so its "
-                      "follow-ups sat unread ({reason}); the watch {action}"}
+                      "follow-ups sat unread ({reason}); the watch {action}",
+       "unplaced": "is under no lane: the watch saw no Task call for it by an agent a handle owns, and no workers.d entry "
+                   "or note names its launcher or a lane"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived"}       # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "dropped", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
-UNROUTED = "infra"      # rung for a worker whose lane no handle owns: a worker alert is never posted unrung
+UNROUTED = "infra"      # rung once for a worker the watch can't place, and for one whose lane no handle owns
 UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted
 RING_RUN = [sys.executable, "-m", "research", "msg", "ring-run"]
 RUNBELL_RE = re.compile(r"^from runs, run \S+ rc ")      # ring-run's doorbell
@@ -147,12 +153,13 @@ def renderable(rec: dict) -> bool:
 
 
 def rung(rec: dict) -> str | None:
-    """The handle whose inbox the alert rings, if any. A worker's is always someone's: only its coordinator can resume it, and
-    one whose lane is unknown goes to infra (`UNROUTED`), who finds that coordinator; so does a record `text` can't render."""
+    """The handle whose inbox the alert rings, if any. A worker's is its lane's: only its coordinator can resume it. One the
+    watch could place under no lane (`unplaced`) goes to infra (`UNROUTED`), who finds its launcher, and so does an alert of a
+    worker whose lane no handle owns, and a record `text` can't render."""
     if not renderable(rec):
         return UNROUTED
-    if rec.get("quiet"):        # the watch's own judgement that nobody must act: a run its lane cancelled, a relaunch declined
-        return None
+    if rec.get("quiet"):        # the watch's own judgement that nobody must act: a run its lane cancelled, a relaunch declined,
+        return None             # an alert of a worker or a run of a sender it placed nowhere and rang infra for already
     if rec.get("kind") == "run_ended" and rec.get("sender_status") == "ACTIVE" and not rec.get("placed_by"):
         return None             # its sender is in a turn and sees its own run end; if it then idles, the watch resumes it
     if rec.get("kind") in TOP or (rec.get("kind") == "silent" and rec.get("owner") == "top"):
@@ -172,9 +179,18 @@ def rung(rec: dict) -> str | None:
 
 
 def unknown(rec: dict) -> str:
-    """What a worker alert says when no handle owns the worker or its parent, so infra knows why it was rung."""
-    return (f" Its lane is unknown (no handle owns it or its parent), so @{UNROUTED} is rung to find its coordinator."
-            if is_worker(rec) and lane_of(rec) is None else "")
+    """What a worker alert says when no handle owns the worker or its parent: why infra is rung, or why nobody is."""
+    if not is_worker(rec) or lane_of(rec) is not None:
+        return ""
+    if rec.get("kind") == "unplaced":
+        by = (f" The Task call it saw came from <https://cursor.com/agents/{p}|{str(p)[:11]}>, which no handle owns."
+              if (p := rec.get("parent")) else "")
+        return (f"{by} @{UNROUTED} is rung this once, to find its launcher: until a Task call the watch sees, a workers.d entry "
+                "or a note places it (or, at the end of a run it sent, its name), its alerts are posted and ring no one.")
+    if rec.get("quiet"):
+        return (f" The watch knows no lane for {'them' if rec.get('kind') == 'workers_failed' else 'it'} and rang @{UNROUTED} "
+                "once to say so: nobody is rung.")
+    return f" Its lane is unknown (no handle owns it or its parent), so @{UNROUTED} is rung to find its coordinator."
 
 
 def found(rec: dict) -> str:
@@ -238,6 +254,14 @@ def text(rec: dict) -> str:
         return f"{lead}*Agent watch:* agent {name} ({link}) {line}.{again}"
     if rec.get("kind") == "run_ended":
         run = f"run {rec.get('run')} ({rec.get('what') or '?'})"
+        if rec.get("role") == "unknown":
+            runs = rec.get("runs") or []
+            listed = "; ".join(unsent(u) for u in runs[:UNSENT_LISTED]) + (
+                f"; and {len(runs) - UNSENT_LISTED} more" if len(runs) > UNSENT_LISTED else "")
+            end = (f"@{UNROUTED} was rung for each of these senders at an earlier run of its, so nobody is rung."
+                   if rec.get("quiet") else f"@{UNROUTED} is rung to find who sent them.")
+            return (f"{lead}*Agent watch:* {len(runs)} research run{'s' if len(runs) != 1 else ''} ended whose sender no handle "
+                    f"owns (not a coordinator, a worker the watch knows, its parent, or a lane): {listed}. {end}")
         if rec.get("quiet"):
             who = (f"worker {name} ({link})" if rec.get("role") == "worker" else f"{name} ({link})" if rec.get("agent")
                    else f"lane {rec.get('handle') or '?'}")
@@ -255,13 +279,6 @@ def text(rec: dict) -> str:
                     f"{placed(rec)}")
         if rec.get("role") == "coordinator":
             return f"{lead}*Agent watch:* your {run} ({link}) {line}; resume."
-        if rec.get("role") == "unknown":
-            runs = rec.get("runs") or []
-            listed = "; ".join(unsent(u) for u in runs[:UNSENT_LISTED]) + (
-                f"; and {len(runs) - UNSENT_LISTED} more" if len(runs) > UNSENT_LISTED else "")
-            return (f"{lead}*Agent watch:* {len(runs)} research run{'s' if len(runs) != 1 else ''} ended whose sender no handle "
-                    f"owns (not a coordinator, a worker the watch knows, its parent, or a lane): {listed}. @{UNROUTED} is rung "
-                    "to find who sent them.")
         return f"{lead}*Agent watch:* {run} of lane {rec.get('handle')} {line}."
     if rec.get("kind") == "workers_failed":
         members = rec.get("members") or []
