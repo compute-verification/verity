@@ -1154,15 +1154,26 @@ def openedRow (own : Own) (registered : Array String) (mine : Array (String × A
       | none => false)
     | none => false
 
+/-- Whether some template's reference statement (`Own.refReads`) reads value `v` at a port no link names it at: a port
+`second-values` then lets every session of the template read `v` at, with no link's check of it. -/
+def readUnlinked (own : Own) (v : String) : Bool :=
+  own.refReads.any fun (t, ref) => (entries (getD ref "ports")).any fun (p, e) =>
+    (match getD e "value" with
+      | .str w => w == v
+      | _ => false) &&
+      !(own.links.getD #[]).any fun x => x.template == t && x.port == p && x.value == v
+
 /-- **The inputs a replay block may read**: the first value the interior registration registers (its `registered`
 entries' values, in the record's order) that a replay block's input may not read, none for none. A value passes where
 the verifier holds it without the prover: one it pinned or holds to an earlier record (`own.fixed`), or one it fills
 from its own bytes (`ownValues`). Any other passes only as the opened row of a read against a root round 1 committed:
-at least one link names it, and each link that does is such a row's (`openedRow`). So every input of a replay block the
-prover gives after the first stage's sample is a row a read opens under a root the verifier supplies, at a key the
-prover no longer chooses, and the prover's choice of it is SHA-512's collision: the links at round 1's ports, the
-wires and the values the verifier holds are the block's other inputs, none the interior registration's to choose.
-That the circuit a session proves under a read's id is the read's is the template check's (`Flock.ReadNet.check`). -/
+at least one link names it, each link that does is such a row's (`openedRow`), and no template's reference statement
+reads it at a port no link names it at (`readUnlinked`), so nothing reads the row but its opening. So every input of
+a replay block the prover gives after the first stage's sample is a row a read opens under a root the verifier
+supplies, at a key the prover no longer chooses, and the prover's choice of it is SHA-512's collision: the links at
+round 1's ports, the wires and the values the verifier holds are the block's other inputs, none the interior
+registration's to choose. That the circuit a session proves under a read's id is the read's is the template check's
+(`Flock.ReadNet.check`). -/
 def inputsFailure (own : Own) : Option String :=
   let names := (match getD own.interior "registered" with | .arr es => es | _ => #[]).filterMap fun e =>
     match getD e "value" with
@@ -1171,7 +1182,8 @@ def inputsFailure (own : Own) : Option String :=
   let mine := ownValues own
   names.find? fun v =>
     let links := (own.links.getD #[]).filter (·.value == v)
-    !(own.fixed.contains v || mine.any (·.1 == v)) && !(!links.isEmpty && links.all (openedRow own names mine))
+    !(own.fixed.contains v || mine.any (·.1 == v)) &&
+      (!(!links.isEmpty && links.all (openedRow own names mine)) || readUnlinked own v)
 
 /-- `second-interior-order` unless the interior record names the replay sample in its order (`interiorOrderOk`), then
 `second-interior-names` unless no value the interior registration registers is of a name the boundary registration's

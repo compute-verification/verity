@@ -1220,16 +1220,26 @@ def _opened_row(own: Own, registered: set[str], mine: Mapping[str, Any], x: Link
             and isinstance(verdict, str) and bool(mine.get(verdict)) and all(r == VERDICT_ONE for r in mine[verdict]))
 
 
+def _read_unlinked(own: Own, v: str) -> bool:
+    """`SecondStage.readUnlinked`: whether some template's reference statement (``own.ref_reads``) reads value ``v`` at
+    a port no link names it at: a port `second-values` then lets every session of the template read ``v`` at, with no
+    link's check of it."""
+    at = {(x.template, x.port) for x in own.links or () if x.value == v}
+    reads = [(t, ports) for t, ref in own.ref_reads if isinstance(ports := _get(ref, "ports"), Mapping)]
+    return any((t, p) not in at for t, ports in reads for p, e in ports.items() if _get(e, "value") == v)
+
+
 def inputs_failure(own: Own) -> str | None:
     """`SecondStage.inputsFailure`: the first value the interior registration registers (its ``registered`` entries'
     values, in the record's order) that a replay block's input may not read, None for none. A value passes where the
     verifier holds it without the prover: one it pinned or holds to an earlier record (``own.fixed``), or one it fills
     from its own bytes (`_own_values`). Any other passes only as the opened row of a read against a root round 1
-    committed: at least one link names it, and each link that does is such a row's (`_opened_row`). So every input of a
-    replay block the prover gives after the first stage's sample is a row a read opens under a root the verifier
-    supplies, at a key the prover no longer chooses, and the prover's choice of it is SHA-512's collision: the links
-    at round 1's ports, the wires and the values the verifier holds are the block's other inputs, none the interior
-    registration's to choose."""
+    committed: at least one link names it, each link that does is such a row's (`_opened_row`), and no template's
+    reference statement reads it at a port no link names it at (`_read_unlinked`), so nothing reads the row but its
+    opening. So every input of a replay block the prover gives after the first stage's sample is a row a read opens
+    under a root the verifier supplies, at a key the prover no longer chooses, and the prover's choice of it is
+    SHA-512's collision: the links at round 1's ports, the wires and the values the verifier holds are the block's
+    other inputs, none the interior registration's to choose."""
     es = _get(own.interior, "registered")
     names = [v for e in (es if isinstance(es, list) else ()) if isinstance(v := _get(e, "value"), str)]
     registered, mine = set(names), _own_values(own)
@@ -1237,7 +1247,7 @@ def inputs_failure(own: Own) -> str | None:
         if v in own.fixed or v in mine:
             continue
         links = [x for x in own.links or () if x.value == v]
-        if not (links and all(_opened_row(own, registered, mine, x) for x in links)):
+        if not (links and all(_opened_row(own, registered, mine, x) for x in links)) or _read_unlinked(own, v):
             return v
     return None
 

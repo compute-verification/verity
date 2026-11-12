@@ -751,6 +751,11 @@ private def exReading : Own :=
   (v, if v == "one" then #[VERDICT_ONE, #[("bytes", "00000000")]] else rows) } == some "row"
 #guard inputsFailure { exReading with refReads := #[] } == some "row"
 #guard inputsFailure { exReading with links := some (exReadLinks.push ⟨"Other_v1", "x", "row"⟩) } == some "row"
+-- nor may a port no link names read the row: a reference statement's read of it there is refused
+#guard inputsFailure { exReading with refReads := exReading.refReads.push
+  ("Other_v1", Json.mkObj [("ports", Json.mkObj [("x", Json.mkObj [("value", "salt")])])]) } == some "salt"
+#guard inputsFailure { exReading with refReads := exReading.refReads.push
+  (exRead, Json.mkObj [("ports", Json.mkObj [("row", Json.mkObj [("value", "row")])])]) } == none
 #guard inputsFailure { exReading with
   links := some (exReadLinks.filter (·.port != "tok"))
   wires := some #[⟨exRead, "tok", "Pair_v0", "o0"⟩]

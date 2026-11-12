@@ -709,6 +709,10 @@ READ_VALUES = ("tok", "root", "domain", "row", "salt", "path", "one")
     (_holding(READ_VALUES, [SS.Link("Other_v1{V=8}", x.port, x.value) for x in READ_LINKS],
               ref_reads=(("Other_v1{V=8}", READ_REF[0][1]),)), "row"),
     (_holding((*READ_VALUES, "w")), "w"),
+    (_holding(READ_VALUES, ref_reads=((READ_T, {"ports": {"o1": {"value": "one"}, "w": {"value": "row"}}}),)), "row"),
+    (_holding(READ_VALUES, ref_reads=(*READ_REF, ("Other_v1", {"ports": {"x": {"value": "salt"}}}))), "salt"),
+    (_holding(READ_VALUES, ref_reads=((READ_T, {"ports": {"o1": {"value": "one"}, "row": {"value": "row"},
+                                                          "tok": {"value": "tok"}, "x": {"value": "one"}}}),)), None),
 ])
 def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(own, value):
     """`second_stage.inputs_failure`, the first value of the interior registration that a replay block's input may not
@@ -718,7 +722,9 @@ def test_the_interior_registration_gives_a_replay_block_only_a_reads_opened_row(
     wire, and its verdict port reads a value filled with 1 at every row; and are refused, the row named, where the key
     is unlinked, the verdict's value has a row that is not 1, no row, is pinned and not filled, is the interior's own
     port or is not named, where another template reads the row too, or the template is no read. A key or a root the
-    prover registers is refused by its own name, and so is a value no link names."""
+    prover registers is refused by its own name, and so is a value no link names. A row, a salt or a path that a
+    reference statement reads at a port no link names it at is refused too: only its opening may read it; a reference
+    reading it at its link's port, or reading a value the verifier fills anywhere, changes nothing."""
     assert SS.inputs_failure(own) == value
     found = dict(SS._interior_failures(own)).get("second-inputs")
     assert found == (None if value is None else {"value": value, "why": SS.INPUTS_WHY})

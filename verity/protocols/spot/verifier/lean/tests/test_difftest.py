@@ -4716,21 +4716,22 @@ def _opening(c: dict, x: int) -> dict:
     unlinked; its root is the prover's, filled from a root of the interior record, or unlinked; its verdict reads a
     value with a row that is not 1, with no row, one the verifier doesn't fill, one it pinned, none, or its reference
     reads are another template's; its row is read by another template too, or by a port of the read that is no opened
-    row's; or the interior registers a value no link names."""
+    row's; the interior registers a value no link names; or a reference statement, the read's or another template's,
+    reads the row or its salt at a port no link names it at."""
     rec, links, wires, refs = c.get("interior"), c.get("links"), c.get("wires"), c.get("ref_reads")
     if not (isinstance(rec, dict) and isinstance(links, list) and isinstance(wires, list)
             and (refs is None or isinstance(refs, dict))):
         return c
     held = rec.get("registered") if isinstance(rec.get("registered"), list) else []
     names = {p: f"{OPENING}/{p}" for p in OPENING_PORTS}
-    one, kind = f"{OPENING}/one", x % 20
+    one, kind = f"{OPENING}/one", x % 22
     registered = [*names.values(), one]
     mine = {names["tok"]: [[{"bytes": "00000002"}]], names["root"]: [[{"history": "t/root"}]],
             names["domain"]: [[{"history": "t/domain"}]], one: [[{"bytes": "00000001"}], [{"bytes": "00000001"}]]}
     linked = [{"template": OPENING, "port": p, "value": v} for p, v in names.items()]
     wired, fixed = list(wires), list(c["fixed"]) if isinstance(c.get("fixed"), list) else []
     ref: dict | None = {"ports": {"o1": {"value": one}}}
-    at = OPENING
+    at, more = OPENING, {}
     if kind == 1:
         del mine[names["tok"]]
     elif kind == 2:
@@ -4779,10 +4780,14 @@ def _opening(c: dict, x: int) -> dict:
         mine[one] = [[{"bytes": "00000001"}, {"bytes": "00000001"}]]
     elif kind == 19:
         ref = None
+    elif kind == 20:
+        ref = {"ports": {"o1": {"value": one}, "w": {"value": names["row"]}}}
+    elif kind == 21:
+        more = {"other": {"ports": {"w": {"value": names["salt"]}}}}
     supplied = c.get("supplied") if isinstance(c.get("supplied"), dict) else {}
     entries = [{**INTERIOR_VALUES[0], "value": v} for v in registered]
     return {**c, "interior": {**rec, "registered": [*held, *entries]}, "links": [*links, *linked], "wires": wired,
-            "supplied": {**supplied, **mine}, "fixed": fixed, "ref_reads": {**(refs or {}), at: ref}}
+            "supplied": {**supplied, **mine}, "fixed": fixed, "ref_reads": {**(refs or {}), **more, at: ref}}
 
 #: A change to a second_statements input, its `x` drawn: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot drawn more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
@@ -6941,11 +6946,12 @@ def test_round_two_takes_the_opened_row_of_a_read_whose_table_key_and_verdict_th
     reads, in its reference statement's reads, a value the verifier fills with 1 at every row (`_opening`). The row is
     refused by name where the key is unlinked, the root is unlinked, the verdict reads a value with a row that is not
     1, with no row, one the verifier pinned or doesn't fill, or none, where another template or another port of the
-    read reads the row too; the key or the root is, where the prover registers it; and a value no link names is. The
+    read reads the row too, by a link or, with none, by its reference statement's reads; the key or the root is, where
+    the prover registers it; a value no link names is; and the salt is, where another template's reference reads it. The
     read's template is no part's here, so every case is refused as a design too (`second-links`)."""
     honest = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], allow=True)
-    others = {1: "tok", 6: "root", 7: "root", 17: "unread"}
-    for x in range(20):
+    others = {1: "tok", 6: "root", 7: "root", 17: "unread", 21: "salt"}
+    for x in range(22):
         case = _opening(honest, x)
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (x, got)
