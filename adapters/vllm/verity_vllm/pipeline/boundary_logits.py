@@ -81,10 +81,10 @@ def root(answer: Mapping[str, Any], layout: Any) -> bytes:
     leaves, words and domain, or saying why rank 0 committed none."""
     if answer.get("error") is not None:
         raise ValueError(f"rank 0 committed no logits: {answer['error']}")
-    e, port = answer.get("entry") or {}, layout.logits_port
+    e, port = answer.get("entry"), layout.logits_port
     want = {"value": port, "leaves": layout.leaves(port), "words": layout.words(port),
             "domain": layout.domain(port).domain_id.hex()}
-    if {k: e.get(k) for k in want} != want or len(bytes.fromhex(str(e.get("root", "")))) != 64:
+    if not isinstance(e, Mapping) or {k: e.get(k) for k in want} != want or len(bytes.fromhex(str(e.get("root", "")))) != 64:
         raise ValueError(f"rank 0's logits {e.get('value')!r} aren't the class's {port} at its leaves, words and domain")
     return bytes.fromhex(e["root"])
 
@@ -222,7 +222,7 @@ class Builder:
         try:
             return {**head, "entry": self._commit(doc), "error": None}
         except (ValueError, KeyError, TypeError, OSError) as e:
-            for s in doc.get("spans") or ():
+            for s in doc.get("spans", ()):
                 self.logits.take(str(s[0]))
             return {**head, "entry": None, "error": f"{type(e).__name__}: {e}"}
 

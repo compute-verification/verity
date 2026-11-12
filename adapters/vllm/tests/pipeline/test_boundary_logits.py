@@ -113,6 +113,7 @@ def test_the_sampler_hook_keeps_each_emitting_requests_row_in_order_and_nothing_
     call(hook, batch(a=(5, 1, 5), b=(4, 2, 6)), {"a": logit("a", 1), "b": logit("b", 0)})
     call(hook, batch(a=(6, 1, 5)), {"a": logit("a", 2)})
     a, b = hook.logits.take("a"), hook.logits.take("b")
+    assert a is not None and b is not None
     assert np.array_equal(a, np.stack([logit("a", j) for j in range(3)])) and np.array_equal(b, logit("b", 0)[None])
     assert hook.logits.requests() == [] and hook.logits.failed is None
 
@@ -122,7 +123,7 @@ def test_a_call_the_hook_cant_read_fails_the_logits_and_every_later_build_says_w
     b = batch(a=(0, 5, 5))
     b.num_draft_tokens = 1
     call(hook, b, {"a": logit("a", 0)})
-    assert "draft tokens" in hook.logits.failed
+    assert hook.logits.failed is not None and "draft tokens" in hook.logits.failed
     got = BL.Builder(hook.logits).build({"window": 0, "run": "r" * 128, "prompt": 8, "outputs": 4, "stopped": None,
                                          "program": "cd" * 64, "partition": "ef" * 64, "value": BR.LOGITS,
                                          "rows": 4 * K, "words": N, "spans": [["a", 1, "stop"]]})
@@ -176,7 +177,8 @@ class Scheduler:
     """vLLM's V1 scheduler as `BoundaryWindows` wraps it: the step's outputs are ``outputs``."""
 
     def __init__(self, max_model_len: int = 64) -> None:
-        self.cache_config, self.outputs, self.max_model_len = NS(enable_prefix_caching=False), {}, max_model_len
+        self.outputs: dict = {}
+        self.cache_config, self.max_model_len = NS(enable_prefix_caching=False), max_model_len
 
     def add_request(self, request):
         return None
@@ -192,8 +194,8 @@ class Scheduler:
         return []
 
 
-def serve(out, check, logits: BL.Logits, keep: BL.Kept, lines: list, stop: Stop | None = None,
-          served: dict | None = None) -> tuple[BW.BoundaryWindows, BL.Logits]:
+def serve(out, check, logits: BL.Logits, keep: BL.Kept, lines: list, stop: Stop | None = None, *,
+          served: dict) -> tuple[BW.BoundaryWindows, BL.Logits]:
     """A window of ``served`` (request: (prompt, ids served, finish)), each id's logits kept on rank 0 as the sampler
     hook keeps them, closed and committed."""
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-logits")
@@ -224,7 +226,8 @@ def test_each_classs_commitment_waits_for_its_select_inputs_and_round_2_opens_th
     words, its root rank 0's; the challenger's copy of the layout from ``commit.json`` alone registers it; its files
     reopen to the same roots; and rank 0's kept rows, readable by their owner only, recommit to that root and are each
     token's logits as its units read them, b's last token's again past its 3 ids."""
-    lines, keep = [], BL.Kept(tmp_path / "private" / "logits")
+    lines: list = []
+    keep = BL.Kept(tmp_path / "private" / "logits")
     served = {"a": ([1, 2, 3, 4, 5], [9, 9, 9, 9], "STOP"), "b": ([6, 7, 8], [9, 9, 9], "LENGTH")}
     _bw, logits = serve(tmp_path / "out", check, BL.Logits(), keep, lines, served=served)
     assert all("error" not in x for x in lines) and logits.requests() == []
@@ -252,7 +255,8 @@ def test_under_a_stop_rule_the_stop_class_and_its_sibling_each_commit_and_keep_t
     after 3 ids, so the rule doesn't end it as served and it is in that class's sibling p8-o4-nostop. Each lists
     ``logits`` after ``o0`` (and the stop class `b.stop` after them), each registers against its layout under the
     verifier's copy of the rule, and rank 0 keeps each class's rows apart, a's last token's again at its fourth."""
-    lines, keep = [], BL.Kept(tmp_path / "private" / "logits")
+    lines: list = []
+    keep = BL.Kept(tmp_path / "private" / "logits")
     served = {"a": ([1, 2, 3, 4, 5], [9, 9, 7], "STOP"), "c": ([1, 2, 3, 4, 5, 6], [9, 9, 9], "ABORTED")}
     serve(tmp_path / "out", check, BL.Logits(), keep, lines, stop=RULE, served=served)
     assert all("error" not in x for x in lines), lines
@@ -271,7 +275,7 @@ def test_under_a_stop_rule_the_stop_class_and_its_sibling_each_commit_and_keep_t
 
 
 def test_a_class_registers_nothing_when_rank_0_committed_no_logits(tmp_path, check):
-    lines = []
+    lines: list = []
     logits = BL.Logits()
     logits.fail("step 3: TypeError: draft tokens")
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-logits")
