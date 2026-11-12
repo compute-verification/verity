@@ -1255,11 +1255,11 @@ def okCheck (cs : V (Array ScanOk.Const)) (w : Nat) (reg : Json) : Option (Core.
   | .ok ks => if ScanOk.held ks reg then none else some (.reject, s!"execution phase {w}: {okRefusal}")
   | .error e => some (.reject, s!"execution phase {w}: the scan's ok bits' constants do not compute: {e}")
 
-/-- The ok findings of the registrations `windows` at the constants `cs`, one an execution phase from `first`, in
+/-- The ok findings of the registrations `regs` at the constants `cs`, one an execution phase from `first`, in
 order (`okCheck`): comparisons alone, no hash an execution phase. -/
-def okChecksAt (cs : V (Array ScanOk.Const)) (first : Nat) (windows : Array Json) :
+def okChecksAt (cs : V (Array ScanOk.Const)) (first : Nat) (regs : Array Json) :
     Array (Option (Core.Verdict × String)) :=
-  windows.zipIdx.map fun (reg, i) => okCheck cs (first + i) reg
+  regs.zipIdx.map fun (reg, i) => okCheck cs (first + i) reg
 
 /-- The rows form's ok findings, one an execution phase, in order: the schedule's constants (`ScanOk.consts` at its
 `T`, the one place the period hashes for them, once) and each registration held to them (`okChecksAt`); none in the
