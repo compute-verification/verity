@@ -242,8 +242,9 @@ leaves no result.json, and the pack is then in the attempt's run record alone (`
 where it uploads nothing: `--no-custody-r2` and a run without `--on`, and a run whose runner is killed or whose machine is lost.
 `--record` sends presigned URLs of the newest recorded checks' packs, failed and cancelled ones' too, since a pack holds only
 passes, up to `GATHER_BYTES` of them, with the packs the Lean audits of ready marks left (`PACKERS`), those of the marks of the PRs
-this checkout holds before the newest (`verdict_url_file`): the launcher fetches none, and the run fetches and imports each before
-its steps (`verdicts_fetched`), beside a `--verdicts-in` pack, never in its place, so every machine reuses every pass a recorded
+this checkout holds before the newest, and before all of them the packs of the runs `TRAIN_CARRY_FROM` names, held to no
+`GATHER_BYTES` (`carried_packs`: the shards a rebuilt candidate of the verified queue replaces) (`verdict_url_file`): the
+launcher fetches none, and the run fetches and imports each before its steps (`verdicts_fetched`), beside a `--verdicts-in` pack, never in its place, so every machine reuses every pass a recorded
 check earned; each pack imported is named in the result's `verdicts`.  With `--no-cache` it sends both packs of each recorded
 check of the commit first (`commit_packs`), and the run imports only the entries it compares with (`COMPARED`, and
 circuit-check's under `--circuit-cache`): its fresh suites' `contradicts` then reads every pass the commit was recorded with, not
@@ -1434,7 +1435,8 @@ VERDICT_URL_TTL_S = 6 * 3600
 def verdict_url_file(d: Path, store=None, heads: list[str] | tuple[str, ...] | None = None,
                      commit: str | None = None) -> Path | None:
     """`VERDICT_URLS` in ``d`` (mode 600): the packs `verdict_packs` selects among those the store's remote holds, after the packs
-    of ``commit``'s own recorded checks when it is given (`commit_packs`, which an uncached check compares with), each with a GET
+    of ``commit``'s own recorded checks when it is given (`commit_packs`, which an uncached check compares with) and those of
+    the runs `TRAIN_CARRY_FROM` names (`carried_packs`), each with a GET
     of its blob that the remote signs for `VERDICT_URL_TTL_S`, for the run to fetch and import before its steps
     (`verdicts_fetched`): the launcher lists and signs, and fetches nothing.  ``heads`` are `verdict_packs`'; the launcher, which
     gives neither them nor a ``store``, sends for the PRs this checkout's queue merges hold (`common.merged_heads`).  None, with
@@ -1454,7 +1456,8 @@ def verdict_url_file(d: Path, store=None, heads: list[str] | tuple[str, ...] | N
         if own:
             print(f"check: verdicts: {len(own)} packs of {len({p['run'] for p in own})} recorded checks of {commit[:12]}, every "
                   f"pass it was recorded with: {', '.join(dict.fromkeys(p['run'] for p in own))}", flush=True)
-        listed = list({p["sha256"]: p for p in [*own, *newest]}.values())
+        carried = carried_packs(store, remote=True)
+        listed = list({p["sha256"]: p for p in [*own, *carried, *newest]}.values())
         packs = [{"run": p["run"], "sha256": p["sha256"], "bytes": p["bytes"], "url": sign(object_key(p["sha256"]), VERDICT_URL_TTL_S)}
                  for p in listed]
     except Exception as e:  # noqa: BLE001  (no URL: the check reuses only its node's passes and the one given)
@@ -1541,11 +1544,31 @@ def commit_packs(store, commit: str, remote: bool = False) -> list[dict]:
     ``commit`` and each of its after-landing runs (`plan.own_checks`, newest first), the passes `check.py --plan` reads for it too:
     every pass the commit was recorded with, held to no `GATHER_BYTES`.  With ``remote``, one the store's remote doesn't hold is
     passed over, as no URL fetches it.  Read after `verdict_packs`, which refreshes the recent attempts."""
+    return run_packs(store, _load("plan").own_checks(store, commit), remote)
+
+
+def run_packs(store, rids: list[str], remote: bool = False) -> list[dict]:
+    """{run, sha256, bytes} of both packs (`PACK_FILES`) of each run ``rids`` names that published them, in that order; with
+    ``remote``, one the store's remote doesn't hold is passed over."""
     packs = []
-    for rid in _load("plan").own_checks(store, commit):
+    for rid in rids:
         for name in PACK_FILES:
             if (got := pack_file(store, rid, name)) is not None and (got[1].get("remote") or not remote):
                 packs.append({"run": rid, "sha256": got[1]["sha256"], "bytes": got[1]["bytes"]})
+    return packs
+
+
+def carried_packs(store, remote: bool = False) -> list[dict]:
+    """`run_packs` of the runs `TRAIN_CARRY_FROM` names: the verified queue's shards of the candidates it dropped that a rebuilt
+    candidate replaces (`research.vqueue_slim.start`'s ``after``), whose passes its check reuses before any other's, so neither
+    the newest checks' `GATHER` nor `GATHER_BYTES` leaves them out; each one named that published no pack is printed."""
+    if not (rids := [r for r in (SETTINGS.TRAIN_CARRY_FROM or "").split(",") if r]):
+        return []
+    packs = run_packs(store, rids, remote)
+    gone = [r for r in rids if not any(p["run"] == r for p in packs)]
+    print(f"check: verdicts: {len(packs)} packs of the {len(rids) - len(gone)} runs TRAIN_CARRY_FROM names that published one, "
+          f"held to no GATHER_BYTES: {', '.join(dict.fromkeys(p['run'] for p in packs)) or 'none'}"
+          + (f"; none of {', '.join(gone)}" if gone else ""), flush=True)
     return packs
 
 

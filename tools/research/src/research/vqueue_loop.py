@@ -2533,10 +2533,13 @@ class Loop:
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
         try:
             audit = self._audit_from(d, main, line, below, lent)
+            after = self.slim.replaced(Past.read(self.log_path, self.now() - self.slim.CARRY_WAIT_S).lines,
+                                       line.get("members") or (), self.now()) if self.gate == CHECK_GATE else {}
             rec, error = self.slim.start(d, line["sha"], line["base"],
                                          **({"shards": self.shards} if self.gate == CHECK_GATE else {}),
                                          **({"audit_from": audit} if audit else {}),
-                                         **({"deselect": f} if (f := getattr(self.world, "deselect_file", None)) else {})), None
+                                         **({"deselect": f} if (f := getattr(self.world, "deselect_file", None)) else {}),
+                                         **({"after": after} if after else {})), None
         except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
             rec, error = None, f"{type(e).__name__}: {e}"[-600:]
         return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,

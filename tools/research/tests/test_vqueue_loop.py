@@ -3644,6 +3644,7 @@ class Runs:
 
     def __init__(self, env: Env, loop: Loop, monkeypatch, on: str = "m1,m2,m3"):
         monkeypatch.setattr(M, "required_steps", lambda *a, **k: {})
+        monkeypatch.setattr(vqueue_slim, "left", lambda d, rid: self.state.get(rid, ("running",))[0] == "done")
         self.tmp, self.launches, self.state, self.dirs, self.cancelled = env.tmp / "runs", [], {}, [], []
         loop.world.on = on
         d = loop.world.slim_driver()
