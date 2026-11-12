@@ -3303,7 +3303,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="a warm-up load at the lowest rate first, or a short pass of vLLM's client (0: none)")
     r.add_argument("--commit-wait-s", type=float, default=900.0,
                    help="the boundary-rows arm: how long the server is held after its loads for its commits (await_commits)")
-    r.add_argument("--drain-s", type=float, default=600.0)
+    r.add_argument("--drain-s", type=float, default=600.0,
+                   help="the trace corpus's client: how long after a load's last arrival it waits for the answers still "
+                        "out; a request unanswered by then is cut and counted unserved")
     r.add_argument("--startup-s", type=float, default=1800.0)
     r.add_argument("--window-s", type=float, default=600.0, help="the Commit period the tokens arm closes at")
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")

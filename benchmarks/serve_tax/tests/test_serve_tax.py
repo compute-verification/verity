@@ -2026,6 +2026,12 @@ def test_run_sh_serves_the_arms_lifetimes_in_the_order_named_then_turned_round_o
     assert rc != 0 and "run this under research run" in out
     sh = (S.HERE / "run.sh").read_text()
     assert '[ -n "${WARM_S:-}" ] && count+=(--warm-s "$WARM_S")' in sh and sh.count('"${count[@]}"') == 1
+    # so is how long the corpus client waits for a load's last answers: a request at the context limit needs more
+    assert run_sh(ARMS="prod", RATES="limit=1000", DRAIN_S="long") == (
+        2, "serve-tax: DRAIN_S=long: the seconds the corpus client waits for answers after a load's last arrival\n")
+    rc, out = run_sh(ARMS="prod", RATES="limit=1000", DRAIN_S="2400")
+    assert rc != 0 and "run this under research run" in out
+    assert '[ -n "${DRAIN_S:-}" ] && count+=(--drain-s "$DRAIN_S")' in sh
 
 
 def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anything():
