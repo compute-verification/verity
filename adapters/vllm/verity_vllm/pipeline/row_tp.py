@@ -59,6 +59,13 @@ from verity_vllm.pipeline.row_driver import Row, Stop, stage_on
 TP_UTIL = "0.6"
 
 
+def _deferred(summary: Any, field: str) -> Any:
+    """`field` of what a Commit's summary says of the replay it deferred (``replay_deferred``); None when there is no summary,
+    it says nothing of a deferred replay, or what it says has no such field."""
+    deferred = (summary or {}).get("replay_deferred")
+    return deferred.get(field) if deferred else None
+
+
 def _tail_bytes(path: str, n: int = 200) -> str:
     try:
         with open(path, "rb") as f:
@@ -582,7 +589,7 @@ class TpRow(Row):
         """True when the Commit ran every check but the ranks' C2 replay, which it deferred to their sealed bundles (`--replay-deferred`,
         `commit/replay_deferred.json`): the stage is PENDING until `replay` decides it."""
         sm = R.load_json(f"{self.d}/commit/summary.json") or {}
-        bundles = (sm.get("replay_deferred") or {}).get("bundles") or []
+        bundles = _deferred(sm, "bundles")
         if not (self.ck_.replay_deferred == "1" and rck == 0 and sm.get("pass") is None and bundles):
             return False
         self.verdict("commit", "PENDING", f"rc={rck} wall={wall}s {R.tp_commit_line(self.d)}; {len(bundles)} rank replay bundles sealed "
@@ -595,7 +602,7 @@ class TpRow(Row):
         """The deferred C2 of the Commit, on CPU (`tp-commit-replay`), from every rank's sealed bundle: each rank's shards composed from
         the checkpoint of record at (world, rank) and opened against its committed weights root.  Its exit decides the stage."""
         d = self.d
-        if skipped := ((R.load_json(f"{d}/commit/summary.json") or {}).get("replay_deferred") or {}).get("skipped"):
+        if skipped := _deferred(R.load_json(f"{d}/commit/summary.json"), "skipped"):
             self.log(f"replay: nothing deferred, the Commit replayed every rank in process ({skipped})")
             return
         self.tl("stage.replay", "start")
