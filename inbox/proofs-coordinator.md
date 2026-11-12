@@ -96113,3 +96113,77 @@ record beyond the four), commit the records, read `dd6c` by suite, then open the
 ready line. For #9091, the ready line at `bc68ae1efece` waits on `6cf3`, `a789` and `0377`, and the body's edit goes
 with it. The first to end that matters is `cafc` if the Lean does not build: resume me on any of the five ending
 with a failure.
+
+## CROSSCLOSE, Thu 12 Nov 19:06Z: no gap: `verify` and every member of `verify-members` run the one body `verifyCmdBy`, where `RegBound.check` stands directly before `Registered.checkCoverBy`, and no session is accepted without passing both
+
+**no gap.** Read only, nothing run. Lean's head is still `e209a56847d4` at my 19:03Z fetch (it has not moved past it):
+`verity/protocols/flock/verifier/FlockVerify.lean` is blob `ee4aab1a9baf` (2,017 lines), `Flock/VerifyMembers.lean`
+`c149c77f9a68`, `Flock/RegBound.lean` `f05be979b15b`. Line numbers are that head's.
+
+**Where the check stands, and the order.**
+
+- [read] `FlockVerify.lean:1112`: `if let some own := registered then r.2.forM fun (st : Stmt) => RegBound.check st.c
+  st.pub program own bound declared`. Line 1113, the next: `r.2.forM fun (st : Stmt) => Registered.checkCoverBy read.prog
+  st.c program partition registered params`. So `RegBound.check` runs **before** `checkCoverBy`, on every statement of the
+  session (`r.2`), both in `setupOf`'s one `Except` block (1103 to 1131), after `buildSessionBy` (1110).
+- [read] It is in `verifyCmdBy`'s body (954 to 1229) and nowhere else on a path that accepts. The only other call is
+  `statement`'s (1392), which prints a derived statement and accepts nothing.
+
+**No accept returns before it.**
+
+- [read] One place prints an acceptance: `emit` (960 to 966), `"accepted": true` only for `.ok (.ok ())`. It is called
+  twice: 979, with `.error why` (`refuseAll`), and 1204, `emit dir (checked.map refusals) …`.
+- [read] `checked` (1168 to 1175) binds `let (spec, tabs, _) ← st` at 1171, before it verifies a proof. `st` starts as
+  an error (1148) and is assigned twice: `setupOf draw` (1152), or the population's earlier `setupOf none` (1150, kept at
+  1153).
+- [derived] So an accepted session's setup returned `.ok`, which it does only past lines 1112 and 1113. A `RegBound.check`
+  error leaves `setupOf` as `setup: …` (1131) and the session's line says `"accepted": false`.
+- [read] Every `return` in the body: 33 `return 2` from 957 to 1096, each before the loop and with no `VERDICT`; the two
+  `refuseAll` at 981 and 982, which refuse every session; and the last line, 1229. None of them accepts.
+
+**Each path.**
+
+- [read] `verify`: dispatch 2000 → `verifyCmd` (1232 to 1233) = `verifyCmdBy (fun program => (ProgramRead.of
+  program).readers) args upstream`.
+- [read] `verify-members`, #9190's kept process: dispatch 2001 → `verifyMembersCmd` (1256 to 1260) → `VerifyMembers.run
+  (verifyMember (ProgramRead.of program))`. `VerifyMembers.run` (`Flock/VerifyMembers.lean:91` to 116) calls `member
+  args` at its line 103 and itself prints only `MEMBER {…}` lines (112), never a `VERDICT`. `verifyMember` (1240 to 1241)
+  = `verifyCmdBy (fun program => (kept.orOf program).readers) args`. The same body, the same line 1112.
+- [read] `verifyMember_eq` (1245 to 1250) states `verifyMember (ProgramRead.of kept) = fun args => verifyCmd args` with
+  no hypothesis, by `congrArg` over the readers (`ProgramRead.readers_orOf`, `readers_of`).
+- [read] What the kept program reaches in the body: `readers` is read once (1102, `read`), and `read` four times: 1105
+  (`checkProgramBy read.desc`), 1110 (`buildSessionBy read.desc read.prog`), 1113 (`checkCoverBy read.prog`), 1132
+  (`read.digest`). `RegBound.check` takes none of it: it is handed the member's own `program` bytes and decodes them
+  itself (`Flock/RegBound.lean:121` to 128, `regParamsOf`, `Program.decode b`), and only when the file binds ports.
+- [derived] So nothing kept from another member reaches `RegBound.check`; a member's call of it is `verify`'s on the same
+  arguments.
+- [read] `agree` (1273 to 1283) is `verifyCmd args (some verdicts)`: the same body, and it prints `AGREEMENT` lines, never
+  an acceptance.
+- [read, docstring only] `rec-compose` (1940) prints an `accepted` of its own (1974) over the `VERDICT` lines in logs of
+  `verify` calls (1926 to 1939); I did not read its body. It verifies no session itself.
+- [read] #9253 is **not in that tree**: `Flock/CircuitRead.lean` is absent at `e209a56847d4` and `verifyCmdBy` (954)
+  takes no circuit readers. In the file with it in (my close `fed2063c5d79`, blob `2404be2d8b25`): `verifyCmdBy` (939)
+  takes `circuits : CircuitRead.Readers`; `RegBound.check` is line 1103 and `checkCoverBy` 1104, same block, same order;
+  `verify` (1224 to 1225) and `verifyMember` (1235 to 1237) both call it. There the circuit `st.c` that `RegBound.check`
+  reads is, for a member, parsed through what the member before it kept (994, 1083 to 1084), and `verifyMember_eq` (1242
+  to 1251) takes that back to `verify` by `CircuitRead.readers_eq`. No path around the check there either.
+
+**What the merge changed in that body** [derived, by `diff` of the text from `def verifyCmdBy` to the end of
+`verifyMembersCmd`, `main` `30d6fcc92ff7` against lean's head]: four hunks and no more. The usage string; `bound` read
+out of the registered file (1028 to 1030); the `--interface` input (1032 to 1034, exit 2 if it can't be read); and line
+1112, where `main` had `Registered.checkComplete st.c own` at the same place under the same guard (`main`'s line 1085).
+`verifyCmd`, `verifyMember`, `verifyMember_eq` and `verifyMembersCmd` are `main`'s line for line.
+
+**Two things that are not gaps the merge opens**, said here so nobody finds them later as news.
+
+- [read] The guard: the check runs only under `--registered F` (1112, `if let some own := registered`), as
+  `checkComplete` did on `main`. With no bound ports in `F` it is `Registered.checkComplete` (`Flock/RegBound.lean:168`;
+  `check_empty`, 190 to 192, by `rfl`).
+- [read] A call with no `--session` sets nothing up (`setupOf` is called only in the loop, 1152), prints no `VERDICT` and
+  exits 0 (1229). [derived] Both sides had this before the merge: the loop and the last line are outside the four hunks.
+
+**Unread or not run.** `rec-compose`'s body. Whether `verifyMember_eq` builds at these bytes is lean's own build's to
+say: my try of this file (`r20261112-182234-9fdd`) was still waiting for a slot at 18:50Z, and my VM restarted at
+19:00Z, so I read its state next. The only Python outside tests that starts `verify-members` at this head is
+`benchmarks/verifier_cost/flock_members.py` (line 109), a measurement [read, by `git grep` over `*.py`; shell scripts
+not searched].
