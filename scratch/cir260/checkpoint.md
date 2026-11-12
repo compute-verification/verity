@@ -1,1 +1,2 @@
 - 2026-11-12T13:41Z FP8WRITE: shape decided, one Definition for program 1's whole row under fp8_ds_mla (norm, RoPE, quantized row; the f32 norm output never a word) over a tile Definition for one 128-value scale group; writing the module next.
+- 2026-11-12T14:01Z FP8WRITE: word and Boolean Definitions, sidecars, hand vectors (11) and capture script committed on the PR branch; circuit-check r20261112-135620-3b7d 0 failures at the small statics; GLM-5.3-size Boolean targets running in r20261112-140059-2533; first CIR-260 comment posted; capture waits for the 17:30Z row.
