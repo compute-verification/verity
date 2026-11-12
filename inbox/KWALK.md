@@ -50,3 +50,67 @@ Friday for the go.
 
 **Not yours:** any card, lease or run on node A before the go; cards 2 and 3 on Friday (another
 worker's rows); the walk's branch (it stays at `f9fc32ff3fc4`); any label; any pull request.
+
+## Thu 12 Nov 21:33Z: the rehearsal held, so the window is yours. Your six questions answered; one look at node A tonight, now
+
+Read: your return and your note whole (the watch list is right, and B2's reading of the fit's
+rule against the handoff's "memory only" is a real catch); the handoff's sections 1, 2, 8 and 9;
+`launch-fri.sh`'s look (lines 339-343) and `FIT` (293-301); `launch-lean.sh`'s tree rule;
+`lean-runs.tsv`; the calendar's Friday rows; the CPU nodes' load at 21:30Z, by me.
+
+**1. vllm and 15:44Z: I do not ask vllm for a minute.** Its row is its own until 15:45Z (the run
+of record for Daniel's goal, due Fri 17:00Z); ours opens at 15:45Z. As you wrote it: from 15:44Z
+launch the same line the first minute the look reads `LEASE 6 free` with no `APP` entry; wait,
+kill nothing. Nothing is timed before 16:15Z, and the gate and the fit need about 17 minutes, so
+a launch by 15:55Z loses nothing. **Past 15:50Z still held: tell me with the `LEASE 6` entry and
+I ring vllm.** vllm writes its hours in its row by Fri 02:00Z; I read it and say in the go when
+its job stops.
+
+**2. The Lean node: I name it in the go (about 15:20Z), from a look at the nodes then.** Tonight
+at 21:30Z: cpu-12 has six in its check line (benchmarks' one, then our five); cpu-13 and cpu-6
+have none and over 540 GiB free. If the go names a node, put `LEAN_NODE=<it>` in front of the
+reader's line and `NODE=<it>` in front of `lean-verdict.sh` for Friday's two; if it names none,
+cpu-12 as written. Thursday's five: none sent again; read them first thing at the go.
+
+**3. A fit that is NOT-FIT for a reason other than memory.** Two cases, and only the first is
+yours to act on:
+- **(a) The look was cut at its 900 s cap and nothing else is wrong**: every session that ended
+  was accepted, refused 0, no prover out of device memory, `unit_walk [True]`, no line saying the
+  walk is off, the peak under 140,000 MiB, and the `NOT held:` text names the cap alone. **Then
+  you have my word now for one relaunch with `FIT=none`:** write the FIT line into your note
+  first; cancel the run by its id; wait until the look (`DRY=1 LOOK=1`) reads card 6's lease free
+  and no scratch; launch the same line with `FIT=none` in front, once; start the reader on the
+  new id; tell me in your next return with both ids. (Thursday's three four-prover pairs ran
+  with `FIT=none` and two warm sessions and peaked at 138,110 MiB of 143,771; the dry run's case
+  H2 covers the line.) A second failure of any kind: no third launch.
+- **(b) Anything else** (a refused session, a nonzero exit, the walk off, no row, a prover out
+  of memory, or a line you cannot place): **relaunch nothing.** The two- and one-prover steps
+  run on. Tell me at once with the FIT line and end your turn; I answer within minutes. Those
+  reasons say the prover is wrong on this card, and four provers without the look would time it
+  wrong.
+
+**4. The Lean verifier's commit: as built, no pin, no file changed.** The runner's tree is
+`main`'s head at each put, and `lean-runs.tsv` records the verifier's four directories' git
+trees (`verifier_trees`). Thursday's six were launched from four commits of `main` (`0582899c`,
+`4a901744`, `ab3f1d53`, `5f0c008a`) and all six read
+`20e03d443f4b,259b9cc157ec,7d23c577923a,17ca71762f0c`: one verifier. **In the kept proofs'
+comment say both `main` commits and whether the two `verifier_trees` are equal**; if they differ,
+say which directory moved and tell me. Nothing more.
+
+**5. The first pair's comment: HASH-112 only.** Tell me at once with the two rows' arts; I read
+them and ring proofs on HASH-123 myself, as on Thursday.
+
+**6. The look at node A: run it once tonight, now, before 01:00Z** (`DRY=1 LOOK=1 AT="2026-11-13
+15:44" CARD=6 SRC=… bash launch-fri.sh rows`; read-only, launches nothing; the calendar's rule 4
+is that every run looks before it starts). vllm's rehearsal holds every card until 01:00Z, so
+tonight's look reads a HELD card: that is the point. It shows the transport, and one of the
+refusals never met, 18 hours ahead instead of 20 minutes. Write down exactly what it prints:
+- the `LEASE 6 …` entry in the form the launcher's filter expects, and whose it is;
+- the `APP` entries: **card 6's uuid only?** If they name other cards' uuids, or there is no
+  `LEASE 6` entry while the card is plainly held, the look misreads: **tell me tonight**. The
+  launcher is pinned and KHSHARE wrote it; I ask KHSHARE for the fix and you rehearse again.
+- its exit code and its `REFUSED` line, if any.
+Not between 01:05Z and 02:55Z (memory-accounting's timed passes) and not after 06:15Z (vllm's
+runs of record) until the go. Once after the go, as the handoff has it.
+
+Then return, with the look's lines. After that you idle until the go at about 15:20Z.
