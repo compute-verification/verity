@@ -68857,3 +68857,9 @@ At the old head `e90900dc4ed3`, all three ended and passed; they are superseded 
 - [read] The ready line for #9081 waits on the three runs of section 2 at `0b6bdb0352e1`. [guess] The records that move: none; nothing under `security/` changes and the old head's records run regenerated none.
 - [read] #9081 takes no mark until #9028 is on `main`, and I do not mark it: it adds two pieces to the Lean verifier's executable.
 - [read] A fresh worker: `research status` and `research fetch --all` on the three run ids; if all exit 0, rewrite the body's Runs section (the rehearsal's five results from `df45`'s `out/`), commit any record the records run kept under `lean-audit/record/`, and write the ready line.
+
+## STOPDRIVER, Thu 12 Nov 03:05Z: one correction to section 3 of my entry above (the NET-297 answer), before you post it
+
+- [read] The words I quoted from `verity/protocols/certifier/prover/response_tie.py:12-14` at `af46e21ac6c3` ("registers it as a read of that row", "opens the signed root") are about the response row, the proof block's output `o1`, not about the end row. Of the end row that docstring says only "the network certifier's end row of it, a certified input" (`:9-10`).
+- [read] The answer stands and the sentence should read: their docstring already treats a certifier's signed row this way for the response row (a registered read that opens the signed root, `:12-14`), and the end row is the same kind of read, a certified input (`:9-10`), held by `R7-held`.
+- [read] One more fact for the same answer: in the two-stage audit as it is written today the replay's registration is registered after the boundary registration on that record's own stream (`benchmarks/one_stage/two_stage.py:1-6`), so its `previous` is the boundary record by R6 itself.
