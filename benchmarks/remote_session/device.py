@@ -739,24 +739,24 @@ class DeviceStore:
                     self.host_done[g][slot].record(gpu.host_main)
                 first, count = self.pads[g]
                 x = self.seg_ring[hbm]
-                if self.leaf_ctas:
-                    rc = rc or so.rs_leaf_pass(self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(),
-                                               x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
-                                               x["kept"][slot].data_ptr(), self.h0, self.chunk, self.leaf_ctas,
-                                               first * lc, count * lc, ring["pad"].data_ptr(),
-                                               ring["pad_out"].data_ptr(), s.cuda_stream, gpu.side.cuda_stream,
-                                               int(self.leaf_receipts))
+                leaf = bool(self.leaf_ctas) and not rc
+                if leaf:
+                    rc = so.rs_leaf_pass(self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(),
+                                         x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
+                                         x["kept"][slot].data_ptr(), self.h0, self.chunk, self.leaf_ctas, first * lc,
+                                         count * lc, ring["pad"].data_ptr(), ring["pad_out"].data_ptr(),
+                                         s.cuda_stream, gpu.side.cuda_stream, int(self.leaf_receipts))
                 else:
                     rc = rc or so.rs_pass(self.data_g[hbm].data_ptr(), self.n[hbm], self.base[hbm], pk.data_ptr(),
                                           x["ctr"].data_ptr(), x["ys"].data_ptr(), x["dig"].data_ptr(),
                                           x["up"].data_ptr(), x["kept"][slot].data_ptr(), self.h0, self.chunk,
                                           self.sketch_ctas, first * lc, count * lc, ring["pad"].data_ptr(),
                                           ring["pad_out"].data_ptr(), s.cuda_stream, gpu.side.cuda_stream, 0)
-                if rc == 5:
+                if leaf and rc == 5:
                     raise RuntimeError(f"rs_leaf_pass on GPU {gpu.index}: the shard does not fit the leaf pass (h0 "
                                        f"{self.h0} over 8, or its kernels on this device); pass_mode(0) is rs_pass's")
                 if rc:
-                    raise RuntimeError(f"{'rs_leaf_pass' if self.leaf_ctas else 'rs_pass'} on GPU {gpu.index}: {rc}")
+                    raise RuntimeError(f"{'rs_leaf_pass' if leaf else 'rs_pass'} on GPU {gpu.index}: {rc}")
                 if host:
                     s.wait_event(self.host_done[g][slot])
                 self.ended[g][slot].record(s)
@@ -1400,10 +1400,11 @@ class GpuBackend:
                        ys: list[bytes]) -> dict:
         """The leaf pass (`rs_leaf_pass`) over `small` under `seed`, against the pass the gate has just held to the
         reference (its `root` and handle `kept`) and the reference's receipts `ys`: its root and every kept level are
-        that pass's, written by it over 0xA5 (the same seed's levels are otherwise still in the ring from that pass);
-        it writes nothing into the shards' receipt arrays, filled with 0xA5 before it, which the check of the receipts
-        refuses; asked for its receipts, the root is the same and they are the reference's byte for byte; and its
-        sessions are accepted when honest and rejected at a receipt with 1/16 of the blocks dropped."""
+        that pass's, made from leaves and written into levels that were 0xA5 before it (the same seed's levels are
+        otherwise still in the ring from that pass, and its leaves in the leaves' buffer from the gate's own first leaf
+        pass); it writes nothing into the shards' receipt arrays, filled with 0xA5 before it, which the check of the
+        receipts refuses; asked for its receipts, the root is the same and they are the reference's byte for byte; and
+        its sessions are accepted when honest and rejected at a receipt with 1/16 of the blocks dropped."""
         torch = self.torch
         shards = [s for s in range(len(small.n)) if not small.on_host[s]]
         want = [ys[small.base[s]:small.base[s] + small.n[s]] for s in shards]
@@ -1418,8 +1419,9 @@ class GpuBackend:
 
         def poison() -> None:
             small.sync()
+            small.offload_jobs.join()   # no earlier pass's levels are still on their way out of the ring
             for s in shards:
-                for k in ("ys", "kept"):
+                for k in ("ys", "dig", "kept"):
                     small.seg_ring[s][k].view(torch.uint8).fill_(0xA5)
 
         out = {"ctas": self.leaf_ctas}
