@@ -25,7 +25,8 @@ that capture's `served`.
   bind     MtpEhNorm_v1, TritonBlockRMSNorm_v1 and the units of MtpEhNorm_v1's cut (`mtp_draft.eh_cut`) bind at the served statics.
 
 GO = the gate, the switches, both launches deterministic, every word of every row equal to the twin, the reference equal to the
-twin on every sampled row, every alternative refuted on at least PER_ALT words, the PTX, the SASS and the bindings, no error.
+twin on every sampled row, every alternative refuted on at least PER_ALT words, the PTX, the SASS and the bindings. A phase that
+raises ends the script with its traceback and writes no record.
 
     cd adapters/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_mtp_eh_norm_capture_gpu.py --out DIR --scratch /tmp --want-cc 9.0 --want-sms 132 --min-driver 575
@@ -334,27 +335,20 @@ def bind_check() -> dict[str, Any]:
     from verity.definitions.registry import mtp_draft as MD
 
     out: dict[str, Any] = {}
-    whole = lambda: bind(MD.MtpEhNorm, H=H, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS)  # noqa: E731
+
+    def whole() -> Any:
+        return bind(MD.MtpEhNorm, H=H, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS)
+
     makes = [whole, lambda: bind(DN.TritonBlockRMSNorm, N=H, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
              *((lambda i=i: MD.eh_cut(whole())[i][0]) for i in range(3))]
     for make in makes:
-        try:
-            fn = make()
-            out[fn.id] = bool(fn.signature())
-        except Exception as e:  # noqa: BLE001
-            out[f"error/{len(out)}"] = DS._error(e)
+        fn = make()
+        out[fn.id] = bool(fn.signature())
     return {"bindings": out, "ok": len(out) == len(makes) and all(v is True for v in out.values())}
 
 
 # ------------------------------------------------------------------------------------------------------------------------ compare
 def compare(job: dict[str, Any]) -> dict[str, Any]:
-    try:
-        return _compare(job)
-    except Exception as e:  # noqa: BLE001
-        return {k: job[k] for k in ("case", "span")} | {"error": DS._error(e)}
-
-
-def _compare(job: dict[str, Any]) -> dict[str, Any]:
     """Rows [r0, r1) of one launch: each half against the twin, `MtpEhNorm_v1`'s reference on the sampled rows, each alternative's
     words counted where they differ from the kernel's, and the position alternatives on the e half."""
     from verity.circuits.defs import bind
@@ -418,7 +412,7 @@ def _case_ok(t: dict[str, Any]) -> bool:
 
 def _verdict(doc: dict[str, Any]) -> bool:
     s = doc["summary"]
-    return bool(doc["gate"]["ok"] and doc["served"].get("ok") is True and not doc["errors"] and doc["ptx"].get("ok") is True
+    return bool(doc["gate"]["ok"] and doc["served"].get("ok") is True and doc["ptx"].get("ok") is True
                 and doc["bind"].get("ok") is True
                 and {x["case"] for x in doc["launches"]} == set(CASES)
                 and all(x["checks"] and all(v is True for v in x["checks"].values()) for x in doc["launches"])
@@ -433,34 +427,20 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     work = Path(tmp.name)
     env, cleared = DS.environment(work)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "env": env, "env_cleared": cleared, "served": DS.served(),
-                           "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms), "errors": {},
+                           "environment": G._environment(), "gate": C.gate(min_driver, want_cc, want_sms),
                            "launches": []}
     print(f"[glm53-mtp-eh-norm] gate {json.dumps(doc['gate'])} served {json.dumps(doc['served'])} cleared {sorted(cleared)}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / RECORD).write_text(json.dumps(seal_record(doc, False), indent=1) + "\n")
         print("GLM53-MTP-EH-NORM GATE-FAIL", flush=True)
         raise SystemExit(3)
-    jobs: list[dict[str, Any]] = []
-    try:
-        jobs = gpu(outdir, doc)
-    except Exception as e:  # noqa: BLE001
-        doc["errors"]["gpu"] = DS._error(e)
-        print(f"[glm53-mtp-eh-norm] gpu ERROR {doc['errors']['gpu']}", flush=True)
-    for name, fn in (("ptx", lambda: ptx(work / "triton_cache", outdir)), ("bind", bind_check)):
-        try:
-            doc[name] = fn()
-        except Exception as e:  # noqa: BLE001
-            doc["errors"][name] = DS._error(e)
-            doc[name] = {"ok": False}
+    jobs = gpu(outdir, doc)
+    doc["ptx"] = ptx(work / "triton_cache", outdir)
+    doc["bind"] = bind_check()
     print(f"[glm53-mtp-eh-norm] ptx {json.dumps(doc['ptx'])[:1500]}", flush=True)
     print(f"[glm53-mtp-eh-norm] bind {json.dumps(doc['bind'])}; comparing {len(jobs)} jobs on {workers} workers", flush=True)
-    doc["comparisons"] = []
     with ProcessPoolExecutor(max_workers=workers, mp_context=multiprocessing.get_context("spawn"), initializer=_worker_init) as ex:
-        for res in ex.map(compare, jobs):
-            if "error" in res:
-                doc["errors"][f"compare/{res['case']}/{res['span'][0]}"] = res["error"]
-                continue
-            doc["comparisons"].append(res)
+        doc["comparisons"] = list(ex.map(compare, jobs))
     doc["summary"] = summary(doc["comparisons"])
     for key, t in doc["summary"]["cases"].items():
         print(f"[glm53-mtp-eh-norm] words {key:9s} rows={t['rows']} words={t['words']} !={t['mismatch']} rows!={t['rows_differ']} "
@@ -471,7 +451,7 @@ def run(out: str, scratch: str | None, min_driver: int, want_cc: str, want_sms: 
     totals = {k: sum(t[k] for t in doc["summary"]["cases"].values()) for k in TOTALS}
     print(f"GLM53-MTP-EH-NORM {'GO' if doc['ok'] else 'NO-GO'} {doc['digest']} served={doc['served'].get('ok')} "
           f"words={json.dumps(totals)} refuted={json.dumps(doc['summary']['refuted'])} "
-          f"ptx={doc['ptx'].get('ok')} bind={doc['bind'].get('ok')} errors={sorted(doc['errors'])}", flush=True)
+          f"ptx={doc['ptx'].get('ok')} bind={doc['bind'].get('ok')}", flush=True)
     return doc
 
 

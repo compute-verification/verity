@@ -28,7 +28,8 @@ is `glm53_bf16_gemm_capture_gpu`'s served-default capture at one more shape (`MO
            the contiguous/f32/forward one fitting.
   bind     Gemm_v2 and CublasSplitKGemm_v1 at each split the routes hold bind with this shape's signature.
 
-GO = all of it, no error.
+GO = all of it, no compare error. A phase that raises ends the script with its traceback and writes no record; a scan process
+that fails is its chunk's `ok` False, its log kept.
 
     cd adapters/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_mtp_eh_proj_capture_gpu.py --out DIR --scratch /tmp
@@ -79,7 +80,7 @@ def scan_chunk(a: argparse.Namespace, outdir: Path, lo: int, hi: int) -> dict[st
     (sub / "scan.log").write_text(proc.stdout + proc.stderr)
     try:
         doc = json.loads((sub / "scan.json").read_text())
-    except Exception as e:  # noqa: BLE001
+    except (OSError, json.JSONDecodeError) as e:
         doc = {"ok": False, "cases": {}, "errors": {"scan": BG._error(e)}}
     doc["returncode"] = proc.returncode
     return doc
@@ -188,11 +189,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     from vllm.model_executor.layers.utils import dispatch_unquantized_gemm
     from verity.definitions.registry import bf16_gemm_check as BC
 
-    try:
-        doc["switch"] = BG.switch(True)
-    except Exception as e:  # noqa: BLE001
-        doc["errors"]["switch"] = BG._error(e)
-        doc["switch"] = {"ok": False}
+    doc["switch"] = BG.switch(True)
     if a.scans:
         scans = [json.loads((Path(a.scans) / f"{lo}-{hi}" / "scan.json").read_text()) for lo, hi in SCAN_CHUNKS]
     else:
@@ -200,56 +197,37 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     doc["scan"] = {"chunks": [{"m": [lo, hi], "ok": s.get("ok"), "returncode": s.get("returncode"), "errors": s.get("errors"),
                                "classes": {k: c.get("classes") for k, c in s.get("cases", {}).items()}}
                               for (lo, hi), s in zip(SCAN_CHUNKS, scans)]}
-    try:
-        table = BG.route_table(scans, "this run")
-        doc["routes"] = table["routes"][BG.route_key(MODEL, PHASE, NAME)]
-        doc["route_conditions"] = table["conditions"]
-        doc["scan"]["ok"] = table["m_max"] == M_MAX
-    except Exception as e:  # noqa: BLE001
-        doc["errors"]["routes"] = BG._error(e)
-        doc["scan"]["ok"] = False
+    table = BG.route_table(scans, "this run")
+    doc["routes"] = table["routes"][BG.route_key(MODEL, PHASE, NAME)]
+    doc["route_conditions"] = table["conditions"]
+    doc["scan"]["ok"] = table["m_max"] == M_MAX
     print(f"[glm53-mtp-eh-proj] scan ok={doc['scan']['ok']} routes ({len(doc['routes'])} runs) {json.dumps(doc['routes'])[:3000]}",
           flush=True)
     jobs: list[dict[str, Any]] = []
     with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
-        try:
-            BG.distributed(work)
-            gemm = dispatch_unquantized_gemm()
-            doc["selection"] = {"linear_gemm": getattr(gemm, "__name__", None)}
-            doc["selection"]["ok"] = doc["selection"]["linear_gemm"] == "default_unquantized_gemm"
-        except Exception as e:  # noqa: BLE001
-            doc["errors"]["selection"] = BG._error(e)
+        BG.distributed(work)
+        gemm = dispatch_unquantized_gemm()
+        doc["selection"] = {"linear_gemm": getattr(gemm, "__name__", None)}
+        doc["selection"]["ok"] = doc["selection"]["linear_gemm"] == "default_unquantized_gemm"
         weights = BG.Weights(work, 4000)
         doc["expected"] = launch_ms(doc["routes"]) if doc["routes"] else []
         for i, M in enumerate(doc["expected"]):
-            try:
-                split = split_at(doc["routes"], M)
-                rec, job = BG.launch(work, weights, {}, MODEL, PHASE, NAME, M, 7000 + i, True, split)
-                reduce = bool(rec["profile"].get("reduction_kernels"))
-                rec["route_split"] = split
-                rec["route_ok"] = reduce == (split is not None) and (split is None or rec["profile"].get("split_k") == split)
-                doc["launches"].append(rec)
-                jobs += jobs_of(job)
-                doc.setdefault("kept", []).append(keep_words(outdir, job))
-                print(f"[glm53-mtp-eh-proj] M={M:5d} split={split} reduce={reduce} route_ok={rec['route_ok']} "
-                      f"det={rec['deterministic']} operands={rec['operands_ok']} profile={rec['profile'].get('ok')} "
-                      f"kernels={[k['name'][:60] for k in rec['profile'].get('launches', [])]} us={rec['us']:.1f}", flush=True)
-            except Exception as e:  # noqa: BLE001
-                doc["errors"][f"M{M}"] = BG._error(e)
-                print(f"[glm53-mtp-eh-proj] M={M} ERROR {doc['errors'][f'M{M}'][:400]}", flush=True)
-        try:
-            doc["switch_after"] = BG.configuration(True)
-        except Exception as e:  # noqa: BLE001
-            doc["errors"]["switch_after"] = BG._error(e)
-            doc["switch_after"] = {"ok": False}
+            split = split_at(doc["routes"], M)
+            rec, job = BG.launch(work, weights, {}, MODEL, PHASE, NAME, M, 7000 + i, True, split)
+            reduce = bool(rec["profile"].get("reduction_kernels"))
+            rec["route_split"] = split
+            rec["route_ok"] = reduce == (split is not None) and (split is None or rec["profile"].get("split_k") == split)
+            doc["launches"].append(rec)
+            jobs += jobs_of(job)
+            doc.setdefault("kept", []).append(keep_words(outdir, job))
+            print(f"[glm53-mtp-eh-proj] M={M:5d} split={split} reduce={reduce} route_ok={rec['route_ok']} "
+                  f"det={rec['deterministic']} operands={rec['operands_ok']} profile={rec['profile'].get('ok')} "
+                  f"kernels={[k['name'][:60] for k in rec['profile'].get('launches', [])]} us={rec['us']:.1f}", flush=True)
+        doc["switch_after"] = BG.configuration(True)
         del weights
         torch.cuda.empty_cache()
     splits = sorted({r[2] for r in doc["routes"] if r[2] is not None})
-    try:
-        doc["bind"] = bind_check(splits)
-    except Exception as e:  # noqa: BLE001
-        doc["errors"]["bind"] = BG._error(e)
-        doc["bind"] = {"ok": False}
+    doc["bind"] = bind_check(splits)
     print(f"[glm53-mtp-eh-proj] bind {json.dumps(doc['bind'])}; comparing {len(jobs)} jobs on {a.workers} workers", flush=True)
     for x in doc["launches"]:
         doc["cases"][f"M{x['M']}"] = {"split": x["route_split"], "launch_ok": BG._launch_ok(x), "route_ok": x["route_ok"],

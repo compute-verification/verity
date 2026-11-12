@@ -27,7 +27,8 @@ One GPU process writes `<out>/glm53_mtp_indexer_logits_capture.json`, the proper
            of `DsaMqaLogit_v3{32,128}` on two entries a job.
   bind     DsaMqaLogit_v3{32,128} binds.
 
-GO = all of it, no error, and every compared word resolved (these operands keep every logit finite).
+GO = all of it, no compare error, and every compared word resolved (these operands keep every logit finite). A phase that
+raises ends the script with its traceback and writes no record.
 
     cd adapters/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_mtp_indexer_logits_capture_gpu.py --out DIR --scratch /tmp
@@ -182,11 +183,8 @@ def bind_check() -> dict[str, Any]:
     from verity.circuits.defs import bind
     from verity.definitions.registry import dsa
 
-    try:
-        fn = bind(dsa.DsaMqaLogitV3, H=H, D=D)
-        return {"bindings": {fn.id: bool(fn.signature())}, "ok": bool(fn.signature())}
-    except Exception as e:  # noqa: BLE001
-        return {"error": DS._error(e), "ok": False}
+    fn = bind(dsa.DsaMqaLogitV3, H=H, D=D)
+    return {"bindings": {fn.id: bool(fn.signature())}, "ok": bool(fn.signature())}
 
 
 # ------------------------------------------------------------------------------------------------------------------------ run
@@ -214,21 +212,14 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         print("GLM53-MTP-INDEXER-LOGITS GATE-FAIL", flush=True)
         raise SystemExit(3)
     jobs: list[dict[str, Any]] = []
-    try:
-        doc["selection"] = selection()
-    except Exception as e:  # noqa: BLE001
-        doc["errors"]["selection"] = DS._error(e)
+    doc["selection"] = selection()
     print(f"[glm53-mtp-indexer-logits] selection {json.dumps(doc['selection'])}", flush=True)
     rng = np.random.default_rng(20261112)
     for i, (name, spec) in enumerate(CASES):
-        try:
-            rec, js = launch(outdir, name, operands(lengths(spec, rng), 9000 + i), 500 + i)
-            doc["launches"].append(rec)
-            jobs += js
-            print(f"[glm53-mtp-indexer-logits] launch {name} {json.dumps(rec)[:1500]}", flush=True)
-        except Exception as e:  # noqa: BLE001
-            doc["errors"][f"launch/{name}"] = DS._error(e)
-            print(f"[glm53-mtp-indexer-logits] launch {name} ERROR {doc['errors'][f'launch/{name}'][:600]}", flush=True)
+        rec, js = launch(outdir, name, operands(lengths(spec, rng), 9000 + i), 500 + i)
+        doc["launches"].append(rec)
+        jobs += js
+        print(f"[glm53-mtp-indexer-logits] launch {name} {json.dumps(rec)[:1500]}", flush=True)
     doc["bind"] = bind_check()
     print(f"[glm53-mtp-indexer-logits] bind {json.dumps(doc['bind'])}; comparing {len(jobs)} jobs on {a.workers} workers", flush=True)
     doc["cases"] = {}
