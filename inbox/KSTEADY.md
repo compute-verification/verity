@@ -1612,3 +1612,11 @@ your VM and the store:
 3. **#8989:** look whether #8572 and #8665 are on `main` now; if they are, push your prepared merge and
    say the head. #8679, #8953, #8895, #8909 and #8573 merged at 21:59Z.
 End your turn when 1 and 2 are posted. Checkpoint and push at each step.
+- **Added 01:24Z: #8989 MERGED as it was, at `7c22f08d32ab`, at 22:22:54Z**, with #8979, #9034, #8976, #8980,
+  #8993 and #9033; the kit (#8572, #8665) is still open, at new heads (`f25ae4fc3f29`, `021420a05f70`). So
+  item 3 above is void: there is nothing to push to #8989. The switch to the kit (`kit.lease`,
+  `kit.RESULT_SCHEMA`, the kit's writer and host stamp, `cuda_toolkit`) becomes a follow-up pull request
+  on `main` once the kit is there, or benchmarks does it in the kit's own pull requests now that the kit
+  lands second. **Look at the two kit heads and say on HASH-115 which it is**: whether their new heads
+  already switch the point's code, and if not, what your follow-up holds. Do not open it before the kit
+  is on `main`.
