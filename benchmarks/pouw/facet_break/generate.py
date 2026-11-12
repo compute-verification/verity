@@ -999,7 +999,7 @@ def main(argv: list[str] | None = None) -> int:
                         "near-frontier sweep of the lanes the first batch beat or nearly beat; l2: L2-resident loads "
                         "against the table route's L2 facet; ji: the joint issue rows' schedule search (ji.cuh); "
                         "jifine: the sweep around its break; jipair: two dispatch pipes beside the HMMA forms; r4: "
-                        "the break on every other form, its repeats, and ALU work beside the MMA; rt: RT-FACET's "
+                        "the break on every other form, its repeats, and ALU work beside the MMA; rt: the "
                         "schedule axes on the low-accumulator break (na 5, unroll, placement, uniform co-issue); rt2: "
                         "rt's unroll and uniform co-issue crossed, unroll 8 for the instruction cache; rt3: the FMA "
                         "lane at unroll 8 to 32, past rt2's best; rt4: rt3's break again and around it; rt5: rt3's unroll on every other MMA form; rt6: rt5's break past its "
