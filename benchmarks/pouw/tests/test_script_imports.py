@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 import sys
 import tomllib
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 
 import conftest as CT
@@ -17,14 +17,6 @@ TESTS = Path(__file__).resolve().parent
 #: the suite NAME is another directory's. Like a lint's list, an entry may stand before its script is in the tree, and
 #: it goes in the commit that makes the script load the file
 EXCUSED = frozenset({("pearl_c_sm90", "run")})
-
-
-def holders() -> dict[str, list[Path]]:
-    """Each script's module name with the directories that hold it, in the path's order."""
-    held, order = defaultdict(set), CT.script_dirs()
-    for p in CT.scripts():
-        held[p.stem].add(p.parent)
-    return {name: [d for d in order if d in dirs] for name, dirs in held.items()}
 
 
 def imported(path: Path) -> set[str]:
@@ -44,7 +36,7 @@ def test_a_name_two_directories_hold_is_imported_by_name_from_one_of_them_at_mos
     holder's directory, which means whichever holder it put on the path itself. Nobody asks by name for a NAME that
     `AHEAD` gives to no directory, and `AHEAD` names no directory it need not. `EXCUSED` lets one script of a directory
     ask beside its own file, and no second one."""
-    shared = {name: dirs for name, dirs in holders().items() if len(dirs) > 1}
+    shared = {name: dirs for name, dirs in CT.holders().items() if len(dirs) > 1}
     ahead = [POUW / d for d in CT.AHEAD]
     wrong, used, excused = [], set(), set()
     for path in [*CT.scripts(), *sorted(TESTS.glob("*.py"))]:
@@ -84,7 +76,7 @@ def test_no_script_is_another_suites_unless_this_suites_inputs_hold_it():
 def test_load_names_each_script_apart():
     names = Counter(CT.load_name(p.relative_to(POUW)) for p in CT.scripts())
     assert not [name for name, n in names.items() if n > 1]
-    assert not names.keys() & holders().keys()
+    assert not names.keys() & CT.holders().keys()
 
 
 def test_load_is_the_files_module_under_its_own_name_and_runs_it_once():
@@ -94,7 +86,36 @@ def test_load_is_the_files_module_under_its_own_name_and_runs_it_once():
 
 
 def test_a_name_ahead_gives_a_directory_is_that_directorys_by_name():
-    assert len(holders()["report"]) > 1 and Path(report.__file__) == POUW / "harness" / "report.py"
+    assert len(CT.holders()["report"]) > 1 and Path(report.__file__) == POUW / "harness" / "report.py"
+
+
+def _first_import(name: str) -> Path:
+    """The file a first ``import NAME`` runs: what the import system's finders give, asked in their order."""
+    for finder in sys.meta_path:
+        if (spec := finder.find_spec(name, None)) is not None:
+            return Path(spec.origin)
+    raise ModuleNotFoundError(name)
+
+
+def test_a_name_two_directories_hold_stays_its_first_holders_whatever_is_first_on_the_path(monkeypatch):
+    """A script a launcher starts has its own directory first on ``sys.path``, and many put it there themselves, so under
+    the suite the path's order does not last past the first script a test imports. With any other holder's directory put
+    first, a first ``import NAME`` is still the first holder's file. Without `FirstHolder` it would be the other's, which
+    is what the finder is for."""
+    shared = {name: dirs for name, dirs in CT.holders().items() if len(dirs) > 1}
+    assert {"derive", "report", "run"} <= shared.keys()
+    for name, (first, *others) in shared.items():
+        for other in others:
+            monkeypatch.setattr(sys, "path", [str(other), *sys.path])
+            assert _first_import(name) == first / f"{name}.py"
+            with monkeypatch.context() as without:
+                without.setattr(sys, "meta_path", [f for f in sys.meta_path if not isinstance(f, CT.FirstHolder)])
+                assert _first_import(name) == other / f"{name}.py"
+    # and it answers for nothing else: a name one directory holds, another package's, or a submodule's
+    [finder] = [f for f in sys.meta_path if isinstance(f, CT.FirstHolder)]
+    for name in ("conftest", "bench", "json", "verity"):
+        assert finder.find_spec(name) is None
+    assert finder.find_spec("report", [str(POUW)]) is None
 
 
 def test_a_file_that_fails_to_load_leaves_no_module_behind(tmp_path, monkeypatch):
