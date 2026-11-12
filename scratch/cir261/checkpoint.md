@@ -1,0 +1,1 @@
+2026-11-12T13:45Z FP8READBACK: pin read (source and sm_90 SASS); Fp8DsMlaUpconvertRow_v1{DN,DR} drafted and evaluating; next: tests, sidecar, circuit-check run, capture script for the 17:30Z window on card 3.
