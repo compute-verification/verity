@@ -50,7 +50,7 @@ from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Valu
 from verity_vllm.program import inputs
 from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
 from verity_vllm.program.frontend.provenance import registry_version
-from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
+from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs, declare_weights
 from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
 from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
 from verity.definitions.replay import replayer
@@ -724,13 +724,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
                   else None)
     registered_inputs = RegisteredInputs.declare(params, ruleset, ep, mode) if registered_values else None
     wrec_t = RecordType(*[(w.name, w.type) for w in leaves]) if leaves else None
-    if wrec_t is not None:
-        params.append(("weights", wrec_t))
-    names = [n for n, _ in params]
-    for un in user_names:
-        if names.count(un) > 1:
-            refuse("shape", ph_nodes[un], None, f"input {un!r} has the name of a parameter this function gets beside its inputs "
-                                                f"({', '.join(names[len(user_names):])}): a Definition's parameter names are distinct")
+    declare_weights(params, wrec_t, {un: ph_nodes[un] for un in user_names})
 
     B = Builder(tuple(params), Value(1))  # ret type is set once the outputs are known
     pcolls = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
