@@ -168,7 +168,7 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
                 logger.warning("[delta] REPLAY BUNDLE (pair %s): no plan (%.300r); the C2 replay runs in this process", pair, e)
                 return False
             replay, read = planned.get("replay"), t.nbytes()
-            sr_p: dict[str, Any] = {} if replay is None else replay  # a plan with no replay of its own: its picks are unknown
+            sr_p: dict[str, Any] = replay if replay else {}  # a plan with no replay of its own: its picks are unknown
             slim = {"bytes": read, "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
                     "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
             logger.info("[delta] REPLAY BUNDLE (pair %s): slim -- %s picks + linkage read %s MiB of the store in %s s (unresolved %s)", pair,
@@ -219,13 +219,13 @@ def pending_verdict(commit: dict, tokens_equal: bool | None, *, min_openings: in
 def awaits_replay(c: dict) -> bool:
     """Whether a run's Commit record has no pass yet and its sampled replay is the deferred one (`deferred_records`)."""
     sr = c.get("sampled_replay")
-    return c.get("commit_pass") is None and sr is not None and sr.get("grade") == "deferred"
+    return c.get("commit_pass") is None and (sr.get("grade") if sr else None) == "deferred"
 
 
 def commit_of(row: dict) -> dict:
     """A run's Commit record; an empty one for a row that holds none, which neither passed nor awaits a replay."""
     commit = row.get("commit")
-    return {} if commit is None else commit
+    return commit if commit else {}
 
 
 def pass_of(rows: list[dict]) -> bool | None:
