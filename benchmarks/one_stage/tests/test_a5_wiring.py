@@ -16,7 +16,8 @@ from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.ops import gemm as G
-from verity.commitments.windows import interface as I, wiring as WI
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.windows import interface as I, rows as CS, wiring as WI
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a5
@@ -68,13 +69,17 @@ def test_a_unit_no_other_unit_writes_its_words_for_is_rewired_to_other_words_and
 
 
 class Held:
-    """A registered value as the committer reads it: its rows, one salt a row, a root and each row's path (stand-ins)."""
+    """A registered value as the committer reads it: its rows, one salt a row and each row's ``b || c`` under it in a
+    ``row/v2`` row, a root and each row's path (stand-ins)."""
 
     def __init__(self, name: str, rows: np.ndarray) -> None:
         self.name = self.value = name
         self.rows, self.words, self.leaves = rows, rows.shape[1], len(rows)
         self.salts = [hashlib.shake_256(b"salt %d" % i).digest(WI.SALT_BYTES) for i in range(len(rows))]
         self.root = hashlib.sha512(b"root " + name.encode()).digest()
+        inner = CS._inner(V2, self.words)
+        self.bcs = [CS.INST.commit_string(CS.INST.default_key, inner(np.ascontiguousarray(r, dtype="<u2").tobytes()), s)
+                    for r, s in zip(rows, self.salts)]
 
     def path(self, position: int) -> bytes:
         return hashlib.sha512(b"path %d " % position + self.name.encode()).digest()
