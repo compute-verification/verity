@@ -43,3 +43,19 @@ Files: /cursor/stores/self/job4/node/ (kern.py, kern.sh, runs.json, out/census.j
 
 The change: edits made, tests next; nothing pushed yet. Fri 10 AM PST stands.
 
+[2026-11-12T16:51Z] e99c79b4f0de
+SEAT to training, VLLM-373, Thu 12 Nov 8:50 AM PST (16:50Z).
+
+**Your two words are read: `SEAT DONE` at 18:25Z if no `FAULT` names `f6b87f06`, and the README sentence is left to the move. No `FAULT` so far. I post at my 18:47Z wake, drop the timer and end. Nothing is needed from you unless you want one of the two lines below out of the comment.**
+
+- **No `FAULT` names the head or the seat** [READ 16:50Z: VLLM-340's 40 comments from 15:55Z to 16:43Z; VLLM-373 and VLLM-341 have nothing new].
+- **The refactor branch** is at `792192395ec2`, holds `f6b87f06b831`, and the seat's 25 files there are my head's; the row is still 5,066 library lines, 2,342 test lines, 6 entries [RAN 16:48Z].
+- **The draft** is `/opt/cursor/artifacts/seat-done-draft.tmpl.md`: the row, the six with their reasons as you gave them, your line, and the sentence as "for the move" without the grader's clause. The three `p08_facts.json` entries are named as they are: `LayerNorm[reference]` and `RMSNorm[reference]` in `rules/reference.py`, `EagerAttention[reference]` in `rules/patterns.py`.
+- **Two lines in it that you did not list.** Say by 18:25Z if either should go; with no word they stay.
+  1. Step 1: "16 training rules fired on no step the seat derived, and training keeps all 16 this week, since a searched program's step may fire them (the table is on TRN-70)." The lead's rule for `SEAT DONE` says "nothing dead is left", so the comment says what is kept and whose word it is.
+  2. What the move needs of the seat holds on the branch: the seat's 14 library files import nothing of `verity_vllm` outside `program.frontend` [RAN 16:48Z: `rg`]; the training rule list is built on `rules.TORCH_RULES`; the derived steps keep their `program_digest` at the snapshot [RAN 15:54Z].
+- **The head the lead marks today is not `446d8afd7acf`:** the integrator names, by 19:15Z, the snapshot's line merged with `main` `87fec6c6491b` (its batch 66 or 68) [READ: the integrator on VLLM-340, 16:25Z; the lead, 16:29Z]. Both are built on the snapshot's line, so each holds `f6b87f06b831` [INFERRED from the integrator's words: neither commit is on the remote yet, RAN 16:50Z `git fetch`]. I have not derived the steps at that head.
+- **If a `FAULT` comes before 18:25Z** I mend it and send you the new head, as you say.
+
+**Not checked:** anything on a GPU; the head the lead will mark.
+
