@@ -187,6 +187,15 @@ session and every tree a session's, so no statement's coins are flipped twice.  
 order: the sample, then the link, then the other rounds.  The tree's root and key leave at ``Hello``, as
 Flock's live-coin part releases them, so its unopened coins rest on the tree's hm96 hiding.
 
+**A member's session**, one of several an audit runs one after another, ends with a closing round: its tree's
+``session`` round `CLOSING_ROUND`, of no coins, opened after the SHA-512 of the session's evidence (its record, and each
+of its proof files' name and bytes).  It is a round like any other to the challenger, which opens it when asked
+(`open_tree`), and the last line the log shows of that tree.  `member_tree_reason` holds a member's session to its tree
+closed after its evidence (`closes`), the tree without that round the session's as `session_tree_reason` holds one;
+`members_order` reads the trees in the order the log opens them, each tree's rounds together and its closing round
+before the next tree's first; and `members_tree_reason` holds an audit's members' sessions to both, one tree a session
+and every tree a session's.  So the log shows each session's evidence fixed before the next session's first coin.
+
 The first client is PoUW's live window (`verity.protocols.pouw.verifier.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
 `verity.commitments`, `verity.claims` and `verity.hardware.record`, so any client calls it as it is.
@@ -220,7 +229,7 @@ COIN_BYTES = 64
 HM96 = hm96.SHA512
 KEY = HM96.default_key
 #: the most coins one commitment holds
-MAX_COINS = 1 << 20
+MAX_COINS = 1 << 24
 _NAME = frozenset("abcdefghijklmnopqrstuvwxyz0123456789-/")
 _HEX = re.compile(r"(?:[0-9a-f]{2})*")
 COMMITMENT_FORM = ("a live coin commitment is {epoch, families, root, scheme}: families a list of [label, count], root "
@@ -244,7 +253,7 @@ CLOSE_ROLE = "verity/challenger-close/v1"
 LOG_TAG = "verity/challenger/release-log/v1"
 MAX_SESSION_ID = 128
 #: a release log's most coin-tree lines (`coin_trees_of`): each tree the challenger sampled and each round it opened
-MAX_TREE_LINES = 1 << 20
+MAX_TREE_LINES = 1 << 23
 #: a release log's most lines: its head, then a root and its release per coin, and its coin-tree lines
 MAX_LOG_LINES = 2 * MAX_COINS + 1 + MAX_TREE_LINES
 #: a release log line's most characters
@@ -266,6 +275,18 @@ UNUSED_TREE = "a tree no session records is a second sample, and each session's 
 SAMPLE_LINK_FIRST = ("the challenger's release log is not the sample, then the link, then the other rounds: a coin of the "
                      "sample is released after a coin tree's round is opened, or the first round opened is not a "
                      f"tree's {CT.SESSION} stream, the link points")
+#: Lean `Challenger.CLOSING_ROUND`: the round of a coin tree's ``session`` stream that closes a member's session, the
+#: stream's second, after the link points
+CLOSING_ROUND = 1
+#: Lean `Challenger.NO_CLOSING`: the refusal of a member's session whose coin tree's last opening is not its closing
+#: round (`closes`)
+NO_CLOSING = (f"its coin tree's last opening is not its {CT.SESSION} round {CLOSING_ROUND} of no coins, opened after "
+              "the SHA-512 of the session's evidence: a member's session ends with that round")
+#: Lean `Challenger.MEMBERS_ORDER`: the refusal of members' sessions the release log doesn't show one after another, in
+#: the sessions' order (`members_order`)
+MEMBERS_ORDER = ("the challenger's release log does not open the sessions' coin trees one after another, in the "
+                 "sessions' order: a round of a tree is opened before the closing round of the tree opened before it, "
+                 "or after its own")
 CLOSE_FORM = ("a challenger close record is {chain, ended, lines, session, signature}: a 64-byte chain and a signature in "
               "lowercase hex, how the session ended (null when its client closed it), the release log's line count, "
               f"1 to {MAX_LOG_LINES}, and a session id of at most {MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'")
@@ -1068,6 +1089,92 @@ def sample_link_first(label: str, after: bytes, log: Sequence[str]) -> bool:
                 return False
             pending = None
     return True
+
+
+def closes(o: TreeOpening, evidence: str) -> bool:
+    """Whether `o` closes a member's session whose evidence has the SHA-512 `evidence` (lowercase hex): round
+    `CLOSING_ROUND` of the stream ``session``, of no coins, opened after `evidence` (Lean `TreeOpening.closes`)."""
+    return (o.stream, o.round, o.n, o.after, o.coins) == (CT.SESSION, CLOSING_ROUND, 0, evidence, coins_digest(()))
+
+
+def member_tree_reason(trees: dict[str, LoggedTree], tables: Mapping[str, int | None], record: Any,
+                       evidence: str) -> str | None:
+    """Why `record`, the record of a member's ``--zk`` session on the tables `tables` (`session_tree_reason`'s), whose
+    evidence has the SHA-512 `evidence` (lowercase hex), doesn't show its coins to be ones the release log shows the
+    challenger released (`trees`) and its session closed after that evidence; None when it does (Lean
+    `Challenger.memberTreeReason`).  Its ``coin_tree`` is a logged tree (`NO_TREE`), the last round the log shows opened
+    of that tree closes the session after `evidence` (`closes`, `NO_CLOSING`), and the tree without that round is the
+    session's as `session_tree_reason` holds one: so the closing round is the one opening the record doesn't give its
+    stream that `EXTRA_OPENING` lets pass."""
+    ct = record.get("coin_tree") if isinstance(record, dict) else None
+    t = trees.get(ct["root"]) if isinstance(ct, dict) and type(ct.get("root")) is str else None
+    if t is None:
+        return NO_TREE
+    if not t.opened or not closes(t.opened[-1], evidence):
+        return NO_CLOSING
+    return session_tree_reason({t.root: LoggedTree(t.key, t.nonce, t.root, t.spec, t.opened[:-1])}, tables, record)
+
+
+def _open_of(line: str) -> tuple[str, bool] | None:
+    """The tree release log line `line` opens a round of (its root) and whether the round is of the stream ``session``;
+    None of a line that opens no round (Lean `Challenger.openOf`)."""
+    if not open_line(line):
+        return None
+    doc = _event(line)
+    if type(doc.get("tree")) is not str:
+        return None
+    return doc["tree"], doc.get("stream") == CT.SESSION
+
+
+def members_order(log: Sequence[str]) -> list[str] | None:
+    """**The members' sessions one after another**, in the release log's lines `log` (Lean `Challenger.membersOrder`):
+    the trees it opens rounds of, in the order it first opens each, where every round it opens is of the tree opened
+    last, before that tree's second round of its stream ``session`` (its closing round), or the first of the next tree,
+    after it; None where a round of a tree is opened before the closing round of the tree opened before it, or after its
+    own.  A tree opened again after another is listed again, so a list without a tree twice shows each tree's rounds
+    together."""
+    roots: list[str] = []
+    last, closed = None, False
+    for line in log:
+        o = _open_of(line)
+        if o is None:
+            continue
+        root, session = o
+        if last == root:
+            if closed:
+                return None
+            closed = session
+        elif closed or last is None:
+            roots.append(root)
+            last, closed = root, False
+        else:
+            return None
+    return roots
+
+
+def members_tree_reason(trees: dict[str, LoggedTree], log: Sequence[str],
+                        records: Sequence[tuple[str, Mapping[str, int | None], Any, str]]) -> str | None:
+    """**The members' sessions' coins, each session closed before the next begins** (Lean
+    `Challenger.membersTreeReason`): why the members' ``--zk`` sessions `records`, each its name, its tables with their
+    ``root_B`` lengths, its record and its evidence's SHA-512 (lowercase hex), don't show their coins to be the ones the
+    release log `log` shows sampled and opened (`trees`, `coin_trees_of`'s of it), one tree a session, the sessions one
+    after another in the order given; None when they do.  The first session whose coins are not its tree's or whose
+    closing round is not after its evidence (`member_tree_reason`); then no tree two sessions' (`SHARED_TREE`); then
+    every tree a session's (`UNUSED_TREE`); then the log opens the sessions' trees one after another in the sessions'
+    order, each tree's closing round before the next tree's first round (`members_order`, `MEMBERS_ORDER`)."""
+    for name, tables, record, evidence in records:
+        why = member_tree_reason(trees, tables, record, evidence)
+        if why is not None:
+            return f"session {name}'s coins are not the challenger's: {why}"
+    used = [record["coin_tree"]["root"] for _name, _tables, record, _evidence in records]
+    if len(set(used)) != len(used):
+        return f"two sessions' coins are one tree's: {SHARED_TREE}"
+    if len(used) != len(trees):
+        return (f"the challenger's release log shows {len(trees)} coin trees and the sessions use {len(used)}: "
+                f"{UNUSED_TREE}")
+    if members_order(log) != used:
+        return MEMBERS_ORDER
+    return None
 
 
 def _period(s: Any) -> bool:
@@ -2059,4 +2166,6 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT", "SAMPLE_LINK_FIRST", "SHARED_TREE", "TREE_EVENT",
            "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening", "coin_trees_of",
            "coins_digest", "link_after", "link_line", "open_line", "record_rounds", "sample_link_first",
-           "session_tree_reason", "sessions_tree_reason", "tree_line", "tree_spec_reason"]
+           "session_tree_reason", "sessions_tree_reason", "tree_line", "tree_spec_reason",
+           "CLOSING_ROUND", "MEMBERS_ORDER", "NO_CLOSING", "closes", "member_tree_reason", "members_order",
+           "members_tree_reason"]

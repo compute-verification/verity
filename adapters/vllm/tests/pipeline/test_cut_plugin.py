@@ -5,12 +5,16 @@ each step as vLLM's busy loop runs it."""
 from __future__ import annotations
 
 import asyncio
+import importlib
 import json
 import os
 import queue
 import threading
+import tomllib
 from collections import deque
+from pathlib import Path
 from types import SimpleNamespace as NS
+from typing import Any
 
 import pytest
 
@@ -39,21 +43,25 @@ class Req:
         self.request_id, self.num_prompt_tokens, self.max_tokens = f"req-{i}", prompt, max_tokens
         self.num_output_tokens = self.num_computed_tokens = self.num_in_flight_tokens = 0
         self.num_output_placeholders = 0
-        self.status, self.preempted, self.sampling_params = "WAITING", [], NS(**params)
+        self.status, self.sampling_params = "WAITING", NS(**params)
+        self.preempted: list[bool] = []
 
 
 class Sched:
-    """Admits waiting requests in queue order up to ``cap`` running, prefilling each whole, then decodes one token a
+    """Admits waiting requests in queue order up to ``most`` running, prefilling each whole, then decodes one token a
     step; a scheduled token is in flight until `update` processes its step. `_preempt_request` is vLLM's: it frees the
     request's blocks, resets its computed tokens and puts it at the waiting queue's front. ``requests`` is its request
     table, in the order `add_request` received them."""
     block_size = 4
 
-    def __init__(self, cap: int = 3, policy: str = "fcfs", connector=None, dp: int = 1):
-        self.scheduler_config, self.connector, self.cap = NS(policy=policy), connector, cap
+    def __init__(self, most: int = 3, policy: str = "fcfs", connector=None, dp: int = 1):
+        self.scheduler_config, self.connector, self.most = NS(policy=policy), connector, most
         self.vllm_config = NS(parallel_config=NS(data_parallel_size=dp))
-        self.waiting, self.skipped_waiting, self.running, self.requests = Queue(), Queue(), [], {}
-        self.current_step, self.prev_step_scheduled_req_ids, self.reset_preempted_req_ids = 0, set(), set()
+        self.waiting, self.skipped_waiting, self.current_step = Queue(), Queue(), 0
+        self.running: list[Req] = []
+        self.requests: dict[str, Req] = {}
+        self.prev_step_scheduled_req_ids: set[str] = set()
+        self.reset_preempted_req_ids: set[str] = set()
         self.held: dict[str, int] = {}
         self.kv_cache_manager = NS(get_block_ids=lambda rid: ([0] * self.held.get(rid, 0),))
         self.steps: list[dict] = []
@@ -75,10 +83,10 @@ class Sched:
 
     def schedule(self):
         self.current_step += 1
-        step = {"prev": set(self.prev_step_scheduled_req_ids), "admitted": [], "scheduled": {}}
+        step: dict[str, Any] = {"prev": set(self.prev_step_scheduled_req_ids), "admitted": [], "scheduled": {}}
         for r in self.running:
             step["scheduled"][r.request_id] = 1
-        while self.waiting and len(self.running) < self.cap:
+        while self.waiting and len(self.running) < self.most:
             r = self.waiting.popleft()
             r.status = "RUNNING"
             self.running.append(r)
@@ -130,7 +138,8 @@ class Core:
     deep). ``wait`` is the test's clock passing while the input loop waits on its queue."""
 
     def __init__(self, sched: Sched, async_scheduling: bool = False, wait=lambda dt: None) -> None:
-        self.scheduler, self.batch_queue = sched, deque() if async_scheduling else None
+        self.scheduler = sched
+        self.batch_queue: deque | None = deque() if async_scheduling else None
         self.input_queue, self.aborts_queue = Inputs(wait), NS(mutex=threading.Lock(), queue=deque())
 
     def _process_input_queue(self) -> None:
@@ -252,7 +261,10 @@ def test_the_edge_holds_each_open_request_at_its_released_count(engine) -> None:
         t[0] += dt
         if t[0] >= 3:
             behind.pop("req-1", None)
-    released = lambda r: r.num_output_tokens - behind.get(r.request_id, 0)  # noqa: E731
+
+    def released(r: Any) -> int:
+        return r.num_output_tokens - behind.get(r.request_id, 0)
+
     sched, cut = Sched(), CP.Cut(every_steps=4, hold_s=5, released=released, clock=lambda: t[0], poll_s=1.0)
     steps = serve(engine(lambda core: cut), sched, [Req(0), Req(1)], wait=wait)
     e0 = cut.edges[0]
@@ -330,6 +342,12 @@ def test_make_refuses_what_it_cannot_cut_and_register_adds_the_edge_to_the_seam(
         seam.uninstall()
 
 
+def test_the_distribution_declares_register_as_a_vllm_general_plugin() -> None:
+    project = tomllib.loads((Path(__file__).resolve().parents[2] / "pyproject.toml").read_text())["project"]
+    module, _, attr = project["entry-points"]["vllm.general_plugins"]["verity_cut"].partition(":")
+    assert importlib.import_module(module) is CP and getattr(CP, attr) is CP.register
+
+
 @pytest.mark.parametrize("raw, why", [
     ('{"every_s": 70, "every_steps": 4}', "one of every_s and every_steps"),
     ('{"hold_s": 1}', "one of every_s and every_steps"),
@@ -404,7 +422,7 @@ def test_the_sent_feed_counts_each_streamed_response_s_output_ids_as_they_leave(
 def test_the_cut_polls_the_sent_counts_and_holds_at_them(engine) -> None:
     """The engine runs ahead of what the server has sent: the cut waits until each open request's sent count, read by
     ``poll`` on each ask of the seam's input loop, reaches its emitted one."""
-    recs: list[dict] = []
+    recs: list[list[dict]] = []
     feed = deque([[{"key": "req-00000", "sent": 2}], [{"key": "req-00000", "sent": 4}]])
     sent = CP.Sent(lambda: recs.pop() if recs else [])
     sched = Sched()

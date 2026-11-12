@@ -5,8 +5,8 @@ import NciCheck
 `PHASE {json}` line per step on stdout (milliseconds, resident and peak RSS in MB): the file's read, the instance's JSON
 parse, `NciCheck.parse`, three of the decoder's parts on their own (the program text's JSON parse, `Flock.canon` of it and
 SHA-512 of that, each a step `Flock.Program.decode` takes, on the whole descriptor), Flock's decoder
-(`Flock.Program.decode`, which parses the program's text again and hashes it),
-`NciCheck.Widths.reinterpretation`, `Prog.orderViolation`, the layout checks, `walkable`, `analyze` split into each reached
+(`Flock.Program.decode`, which parses the program's text again, hashes it and refuses a reference that reads a leaf at
+another width), `Prog.orderViolation`, the layout checks, `walkable`, `analyze` split into each reached
 Definition's summary (`summarize`, callees first, the `TOP` slowest named with their body nodes and return pieces, and
 the `TOP` with the most return pieces; one of at least `BIG` body nodes, 2^17 unless given, step by step, with its
 return's pieces before and after `coalesce`: `summarizeTimed`) and the
@@ -130,15 +130,12 @@ def main (args : List String) : IO UInt32 := do
   let h ← IO.lazyPure fun _ => Flock.Sha512.hash ct.toUTF8
   report "decode_sha512" t [("digest_bytes", toJson h.size)]
   let t ← IO.monoNanosNow
-  let P ← orFail "decode" (Flock.Program.decode i.program.toUTF8)
+  let .ok P := Flock.Program.decode i.program.toUTF8
+    | report "decode" t [("refused", toJson true)]; IO.println (NciCheck.Desc.check j).compress; return 0
   let body := (P.defs[P.root]!).body
   let nodes := P.defs.foldl (fun n d => n + d.body.nodes.size) 0
   report "decode" t [("definitions", toJson P.defs.size), ("body_nodes", toJson nodes),
     ("root_nodes", toJson body.nodes.size), ("gates", toJson (P.defs[P.root]!).gates)]
-  let t ← IO.monoNanosNow
-  let ri := NciCheck.Widths.reinterpretation P
-  report "widths" t [("refused", toJson ri.isSome)]
-  if ri.isSome then IO.println (NciCheck.Desc.check j).compress; return 0
   let t ← IO.monoNanosNow
   let ov := P.orderViolation
   report "order" t [("refused", toJson ov.isSome)]

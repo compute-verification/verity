@@ -40,17 +40,29 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   cloud agent, runs on), owner top, under the same once-an-hour limit;
 - **in a long call** when a tool call the parent waits on has been running for `LONG_CALL_S` (recorded, never cancelled: a
   build or a wait may be legitimate, unless it is a holder's held unread);
-- **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once every `RESTART_S` and
+- **crashed** when the platform has it stopped with an error: for an agent on the list, its latest run ended in ERROR
+  (or its own status reads ERROR, should the list give one: v1 documents none, an errored run leaving its agent IDLE; a
+  worker read by id is told by another sign, below). The watch starts a new run, at most once every `RESTART_S` and
   `MAX_RESTARTS` times in a row (a run can error within a minute, run after run), then records it as
-  **erroring**, for a person. A latest run that FINISHED ends the row, and so does a coordinator back from ERROR for
+  **erroring**, for a person: top for a coordinator, its launcher's handle for a worker. A restart the API refuses (other
+  than 409) is one of the row and is made again `RESTART_S` later, so an agent the watch can't start ends erroring, and a
+  coordinator relaunched, as one whose restarts each ended in ERROR does, never as one refused try nothing follows.
+  A latest run that FINISHED ends the row, and so does a coordinator back from ERROR for
   `STICK_S` (a restarted run reads RUNNING for a while before it errors again, so seeing it running is not enough). When
   `OUTAGE_MIN` or more coordinators are down at once, it is the platform's failure: each is restarted every `OUTAGE_RETRY_S`,
   not counted and never relaunched, until it comes back; and once `RING_MIN` have been down `RING_DOWN_S`, an **outage**
   record (the relay posts it to the top coordinator and the registry's human) is written, again every `RING_EVERY_S` while it lasts. A sweep the API
   refuses with 429 waits its Retry-After (`rate_wait`) rather than asking again every minute.
-- **dropped** when an IDLE agent's `updatedAt` is `DROPPED_S` past the end of its latest run, which FINISHED, and no newer
-  run exists: a message reached it and never became a run. Cursor shows such an agent in ERROR while the API's latest run
-  reads FINISHED, so the restart above never sees it. Recorded once per `updatedAt`, rung to its owner.
+- **dropped** when an agent out of a turn (IDLE; one the platform has in error is crashed, never dropped) changed
+  (`updatedAt`) `DROPPED_S` past the end of its latest run, which FINISHED, with no newer
+  run, has sat unchanged `DROPPED_S` since, and its conversation ends on a message it wrote nothing after (`unanswered`):
+  a message reached it and became neither a run nor a turn. Its latest run reads FINISHED, so the restart above never
+  sees it. The times alone don't say so: a turn a Task resume runs is no run the API lists, and its end moves `updatedAt`
+  the same way, so the conversation tells the two apart, whoever resumed the agent and whether or not the watch saw the
+  call: a turn that ran left assistant text after its message. It is read once per such change and only then; one the
+  API won't read, or with no message in it, is read again every `DROPPED_RETRY_S` and recorded after `DROPPED_UNREAD_S`
+  all the same, with `unread_minutes` in place of the record's `unanswered`, the relay saying its answer is unchecked.
+  Recorded once per `updatedAt`, rung to its owner.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
 cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h while its agent's `updatedAt` moves, is recorded once as **stuck**: runs sit in CREATING behind a
@@ -84,13 +96,20 @@ any run on an agent waiting on background work, so otherwise every such wake is 
 A cloud worker (a coordinator's Task subagent) is not in `GET /v1/agents`, lists no runs, and can't be started (POST runs:
 400 legacy workflow), so only its coordinator can resume it, and a lane's workers can all stop mid-step unnoticed for hours. The watch finds workers in the `origin:` of the notes (`--notes`, a research-notes clone)
 under `lanes/` modified in the last `WORKER_NOTES_S`, and in `workers.d/*.json` beside `--log` (`{agent_id, lane,
-launched_by}`, for a coordinator that registers its workers; one with `placed_by` the watch wrote itself, for a sender it placed
-by its name, below), and in the `task` tool calls of every run it follows (the
-call's `args.agentId` is the worker launched or resumed, so a worker named nowhere else is still watched), minus the coordinators and every agent the list has.
-A worker's lane is its launcher's, the first of these that gives a handle: the agent whose Task call the watch saw launch or
-resume it, whatever its registration says (only that agent can resume it); its registration (a workers.d entry's
-`launched_by`, else its lane; a note's lane, else the coordinator its origin names); the coordinator its brief names
-(`learn`, read at the end of a run it sent); at such a run's end, its name (`place_by_name`, below). A worker none of these places has no handle and no lane, never one made up for it: it is recorded
+launched_by}`, for a coordinator, or a worker, that registers the workers it launches; one with `integrates` is a swarm's
+integrator's, below; one with `placed_by` the watch wrote
+itself, for a sender it placed by its name, below), and in the `task` tool calls of every run it follows (the
+call's `args.agentId` is the worker launched or resumed, so a worker named nowhere else is still watched), minus the coordinators and every agent the list has
+with a run (one it has with none, which the sweep can't judge, is read as a worker).
+A worker's lane is its launcher's, by one rule for a worker and for a run's sender (`placed`), the first of these that gives
+a handle: the agent whose Task call the watch saw launch or resume it, whatever its registration says (only that agent can
+resume it); its registration (a workers.d entry's `launched_by`, else its lane; a note's lane, else the coordinator its
+origin names); the agent its brief names (`learn`, read at the end of a run it sent: a coordinator, else an agent the watch
+places); at such a run's end, its name (`place_by_name`, below). A launcher that is itself a worker is placed the same way,
+so a worker a worker launched is that worker's coordinator's: the chain is followed `LAUNCHERS_MAX` launchers up, and
+launchers that name each other place nobody. The watch follows only the runs of agents the list has, so a Task call a
+Task subagent makes is never seen: the workers it launches are placed by their registration or their brief.
+A worker none of these places has no handle and no lane, never one made up for it: it is recorded
 once as **unplaced**, with the agent whose Task call named it if the watch saw one (a run's sender no handle owns in
 that run's record instead, below), for the relay to ring infra, who finds its launcher, and from then on its alerts are
 marked `quiet` (posted, ringing no one: nobody the watch knows could resume it) until something places it. A worker whose registration names a lane no handle owns keeps that lane, and the
@@ -99,28 +118,63 @@ it reads each one once (`GET /v1/agents/{id}`; `WORKERS_NEW` first reads a sweep
 note of its changes; a 404 never again), and records **worker_idle** when it went from ACTIVE to IDLE (once per transition,
 at its `updatedAt`, which moves on a status change and not during work), unless its parent's Task call completed as it
 stopped (`reported_back`: it reported back), and **worker_long** once when it has been ACTIVE for
-`--worker-long-h` (6). It records only; the relay rings the lane's handle. A worker's worker_idle and idle_after_run are
+`--worker-long-h` (6). A worker that stopped with an error is **crashed** as any agent is, by the one sign the platform
+gives of it: v1 reads it IDLE however its turn ended and lists no run for a turn a Task resume ran, so the watch reads
+its status as the legacy `GET /v0/agents/{id}` gives it (`stopped`: ERROR; FINISHED or EXPIRED otherwise, CREATING or
+RUNNING in a turn), when a stop may have happened (it left ACTIVE, its `updatedAt` moved, as a Task resume's message
+moves it, or a note, a registration or a Task call named it again) and every `STOP_S` while v0 has it in a turn or the
+read fails, `STOPS_SWEEP` such reads a sweep at most. It is recorded once per stop, with the issue key in its name
+(`issue`), in place of that stop's worker_idle and never as dropped, and not again until it has run and stopped again;
+the watch can't start it, and the record says so. It records only; the relay rings the lane's handle. A worker's
+worker_idle, crashed and idle_after_run are
 held with its parent's others (`bursts` in `state.json`) and posted once none has joined for `BURST_QUIET_S`, or `BURST_S`
 after the first: one alone as itself, several as one **workers_failed** naming them all. Each names the wake-up the worker
 says it set (`subscribe_timer`, "a wake-up in 15 minutes") in its last messages, `GET /v0/agents/{id}/conversation`. That
 endpoint is the only conversation the API has, and it carries only user and assistant text: a tool call left without its
 result, the shape of those stops, is not visible to the watch, so a worker that stops is judged by its IDLE alone.
 
-An agent that works but says nothing is **silent**: a worker ACTIVE for `SILENT_S` (90 min), or a coordinator for
+A swarm's seats hand in by commenting on the issue their integrator takes them from, and an integrator that stopped
+answers none. Its lead names that issue in the integrator's workers.d entry (`{agent_id, lane, launched_by, integrates:
+"TEAM-7"}`, with `signs: "NAME"` when the integrator isn't named `TEAM-7 NAME: ...`), and the watch records
+**handin_waiting**, once per comment, when the issue's oldest comment with none of the integrator's after it is `HANDIN_S`
+(2 h) old (`watch_handins`), for the handle `placed` gives the integrator. The team's agents all post through one Linear
+app, so a comment's author doesn't say whose it is and its signature does (`research msg linear comment` signs HANDLE
+with `--as HANDLE`, and LANE/NAME with `--worker NAME`): the integrator's comments are those signed LANE/NAME with its
+NAME, and every other, its lead's included, is a hand-in. The watch reads the issue from Linear itself (`Linear`: the
+app's client-credentials grant from the `LINEAR_CLIENT_ID=` and `LINEAR_CLIENT_SECRET=` lines of `--gh-env`, its token kept
+in `linear-token.json` beside `--log`; only each comment's id, time and signature, never its text), when a hand-in may
+first be due and not at every sweep. A read that fails records nothing and is made again at the next sweep, at most once a
+sweep per issue; with no credential nothing is read or recorded, and the log says so once.
+
+An agent that works but says nothing is **silent**: a worker ACTIVE for `SILENT_S` (90 min), or a coordinator in one turn for
 `COORD_SILENT_S` (60 min, its record's `owner` top, whom the relay rings), with no note of
 its (a note whose `origin:` names it, new or changed by its mtime; for a coordinator also any note of its lane, under
-`lanes/<handle>/` or with `lane: <handle>`, since it signs with its lane) and no push to its branches. Its branches are the API's
+`lanes/<handle>/` or with `lane: <handle>`, since it signs with its lane) and no push to its branches. A coordinator works
+through Slack, Linear and its workers for hours with neither, so its assistant text counts too, and it is judged only in a
+turn: ACTIVE with the run it is judged by RUNNING, from the sweep that first saw that run so (`active` in `state.json`). One
+whose run waits on background work, is queued or has ended is between turns, where the rules above judge it. Its text is its
+run's `assistant` events and their `text-delta` twins, timed as they arrive like every event (text a stream started again
+replays counts once), which costs no read. Before one is recorded, and only then, the watch reads its runs again
+(`in_turn`): a sweep's own reads are minutes old by then, and a turn that ended meanwhile is no silence. With no stream
+being received (nothing from it in `STREAM_LIVE_S`, or started within that: a goal run, a stream past its retention, a
+broken one), it also reads its conversation, which carries no times: assistant text the watch hasn't read there before is
+a sign of life at that read, and the same text as at the last read is silence since then (`texts`), so such a
+coordinator's first record comes up to a window late. A read that fails records nothing and is made again
+`SILENT_RETRY_S` later; a conversation unread at every try for a further window is recorded all the same, with
+`unread_minutes`, the relay saying its text is unchecked. The record's `active_minutes` are a worker's ACTIVE spell and a
+coordinator's turn (`role`). Its branches are the API's
 (`git.branches` of its runs, or of a worker's GET), a worker's workers.d `branch`, those its notes' origins name, and every
 head ending in its id's last four characters (a coordinator's `cursor/...-1037`), widened by `same_task` to the heads a task
 moved to (`cursor/lean-one18-v2-fc8d` beside `cursor/lean-one18-fc8d`); pushes are read every `HEADS_EVERY_S` with
 `git ls-remote --heads` of `--git-remote` (the deploy key fixtures_export.sh fetches with), a branch's push time being when the
-watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
-note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
-after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
-worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more:
+watch first saw its sha (`heads.json` beside `--log`). The window counts from the latest of a worker's ACTIVE spell's start
+or a coordinator's turn's, its newest note, push and text, and the first heads read, so a fresh deploy judges nobody for a
+window. It is recorded once, and again after a second window (`SILENT_RINGS`), then not until one of those moves; the relay
+rings a worker's launcher's handle, and top for a coordinator. A silent agent still showing nothing `NO_STEP_S` (6 h) after
+its last activity is recorded once more:
 a worker is archived (`POST /v1/agents/{id}/archive`, which stops it and frees its slot) and recorded as **archived**, rung to
-its lane, which relaunches it from its last note or drops it; a coordinator, or a worker the API won't archive, is recorded as
-**no_step**, rung to top.
+its lane, which relaunches it from its last note or drops it; a coordinator still in that turn, or a worker the API won't
+archive, is recorded as **no_step**, rung to top.
 Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
 stream event, since no_step advises stopping and archiving it, and a coordinator working only in Slack makes no note or push for hours.
 Without `--notes` and heads read in the last `HEADS_STALE_S`, nobody is judged.
@@ -130,19 +184,26 @@ does. Every `every_s` of `--nodes` (`infra/control/agent_watch_nodes.json`, depl
 node names, the ssh options with the key, optionally `machines_d`), the watch reads each node's runs that ended since its last
 read over one ssh (`RUNS_READER`, host, port, user and runs root from the node's machines.d entry in the notes clone), and
 records each once as **run_ended** for whoever sent it (the request's `submitted_by`, else the command's `--by`, else the job's
-lane): a coordinator's own handle, or a former one's (`lineage`), a worker's launcher's (its coordinator resumes it with Task:
-Cursor refuses a run on a worker), or its parent's when the watch learned it from a Task call, else the lane's (`--by`, the
+lane): a coordinator's own handle, or a former one's (`lineage`), a worker's as `placed` gives it above (its coordinator
+resumes it with Task: Cursor refuses a run on a worker), else the lane's (`--by`, the
 job's lane, or a handle `submitted_by` names) when that is a handle, else the handle of the branch whose head the run's tree was
 (`branch_handle`: the registry's `branch_suffixes`, or `cursor/<handle>-...`). A sender none of these places is placed by its
-name (`place_by_name`) when the name starts with an issue key (`TEAM-7 NAME: ...`, as a worker is named after its issue) whose
-Linear team is exactly one lane's, or with a lane's handle before `-`, `:`, `/` or a space (`lane-topic: ...`; `name_lane`).
-A lane here is a registry handle with a Linear team (`linear`) that a cloud agent holds (`placing`); a key whose team several
-lanes share places only when the name also names exactly one of them as a whole word. The watch takes the name the agent list
+name (`place_by_name`) when the name names one lane (`name_lane`): by the issue key it starts with (`TEAM-7 NAME: ...`, as a
+worker is named after its issue) when its Linear team is exactly one lane's, else by a lane's handle it starts with, before
+`-`, `:`, `/` or a space (`lane-topic: ...`), else by its issue keys further in (`NAME: TEAM-7 step 2`) when they are all
+one team's. A lane here is a registry handle with a Linear team (`linear`) that a cloud agent holds (`placing`); a key whose
+team several lanes share places when the name also names exactly one of them as a whole word, else, for a key the name
+starts with, by the lane the issue is under, as the team's Linear client reads it (`label_lane`: the issue is read from
+Linear once per such sender and what it gave is kept): the one of them its `lane:` label names (`placed_by: "label"`), and
+with no such label the team's own lane, the one of them the registry gives no `linear_label` (`placed_by: "team"`). The
+watch takes the name the agent list
 or an earlier sweep gave it, else reads it once (`GET /v1/agents/{id}`, the first time it meets the sender), writes the sender
-to workers.d as that lane's worker (`{agent_id, lane, role, name, placed_by: "name", issue}` or `placed_by: "handle"`, an entry
+to workers.d as that lane's worker (`{agent_id, lane, role, name, placed_by: "name", issue}`, `placed_by: "label"` or
+`"team"` with its `issue`, or `placed_by: "handle"`, an entry
 any other source overrides) and records the run for that handle as a worker's, with `placed_by`, so the relay rings the lane
-once and says how it was found. A name that starts with neither, a team no lane or several have, a handle that is no lane,
-and a name the API won't give place nobody: the runs of one read whose sender no handle owns are one
+once and says how it was found. A name with no such key or handle, with keys of two teams, a team no lane has, a team
+several have whose issue's label names none of them or which no Linear credential lets the watch read, a
+handle that is no lane, and a name the API won't give place nobody: the runs of one read whose sender no handle owns are one
 `run_ended` with role `unknown`, each run with its `sender`, for the relay to ring infra once. Such a sender is a stray,
 watched as a worker is, under no lane, and infra is rung for it that once (`unplaced`): a read whose senders infra was all
 rung for is marked `quiet`. A run whose handle
@@ -177,8 +238,9 @@ sweep that fails leaves the last one. With `$AGENT_WATCH_PG_URL` set, the same b
 overwriting, into Neon's `store_private.agent_watch_status` (`Publisher`, through `psql`; the newest `STATUS_ROWS` kept), for
 readers off the pod. `state.json` beside it keeps what must outlive a restart (the watch restarts on every
 deploy): when it last cancelled or restarted each agent, and recorded it ready to wake, the restart counts, the continue runs still to start, the runs
-already recorded, and since when each coordinator has been ACTIVE and each silent spell's rings. `watch.lock` beside it keeps a second watch from running. The control pod holds no Slack credential, so
-infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
+already recorded, the turn each coordinator is in and since when, each silent spell's rings, the assistant text last
+read in a coordinator's conversation, and since when a conversation `dropped` asked for has gone unread. `watch.lock` beside it keeps a second watch from running. The control pod holds no
+Slack credential, so infra's relay reads the findings over ssh and posts each in #agent-alerts. Cancelling and restarting don't wait for it.
 `--once --dry-run` runs one sweep that follows no stream and sends no POST (each is printed).
 """
 from __future__ import annotations
@@ -187,6 +249,7 @@ import argparse
 import base64
 import calendar
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -236,7 +299,26 @@ RING_EVERY_S = 3600         # ... again this often while it lasts
 RATE_WAIT_S = (120, 900)    # a sweep refused with 429 waits Retry-After, else from the first, doubling, to the second
 UNREADABLE_S = 3600         # a latest run the API won't read this long is recorded again, for a person
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
-DROPPED_S = 5 * 60          # an IDLE agent changed this long after its latest run ended, with none newer, was dropped
+IN_TURN = ("CREATING", "RUNNING")   # `GET /v0/agents/{id}`'s status of an agent in a turn; FINISHED, ERROR or EXPIRED out of one
+STOP_S = 5 * 60             # a worker's v0 status the watch can't take as its stop's (in a turn, unread, or read within
+#                             `DROPPED_S` of its change) is read again this often
+STOPS_SWEEP = 20            # v0 statuses read a sweep: a fresh deploy reads one for each worker it watches
+HANDIN_S = 2 * 3600         # a comment on an integrator's issue with none of the integrator's after it, this old: its lead is rung
+HANDIN_RETRY_S = 10 * 60    # an issue Linear answers for with an error (no such issue) is read again this often
+HANDIN_PAGE, HANDIN_PAGES = 100, 3  # an issue's comments are read newest first, back to the integrator's last, this far at most
+LINEAR_API = "https://api.linear.app/graphql"
+LINEAR_TOKEN_URL = "https://api.linear.app/oauth/token"
+LINEAR_SCOPES = "read,write"    # the one scope set every client of the app asks for: a grant with another revokes its live tokens
+LINEAR_EARLY_S = 3600           # a cached token is replaced this long before it expires
+LINEAR_TIMEOUT_S = 20           # a call to Linear; a sweep makes no other once one fails
+LANE_LABEL = "lane:"            # an issue's label naming its lane, for a team several lanes share
+ISSUE_QUERY = ("query($id: String!, $n: Int!, $after: String) { issue(id: $id) { url state { type } "
+               "labels { nodes { name } } comments(first: $n, after: $after) { pageInfo { hasNextPage endCursor } "
+               "nodes { id createdAt botActor { userDisplayName } user { name } } } } }")
+DROPPED_S = 5 * 60          # an agent out of a turn that changed this long after its latest run ended, with none newer, and
+                            # has sat unchanged as long since, is dropped if its conversation ends on a message it never answered
+DROPPED_RETRY_S = 10 * 60   # ... a conversation the API won't read is read again this often,
+DROPPED_UNREAD_S = 60 * 60  # and one unread this long is recorded all the same, its answer unchecked
 RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
 RUNS_PAGES = 10             # (an agent can have 52 runs cancelled on arrival in 50 min), or, before a CREATING run is
 #                             recorded as stuck, to one the watch can follow; at most this many pages
@@ -246,8 +328,8 @@ TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
 # while its agent's `updatedAt` moves (with that still too, the wait is stalled: cancelled and continued)
 STUCK = {"CREATING": 10 * 60, "WAITING_FOR_BACKGROUND_WORK": 2 * 3600}
 GOAL = "run-goal-"              # a goal run's id: the runs endpoint and its stream take only run-<uuid> (400)
-#: a Linear issue key (its team's key, a number) at the very start of an agent's name: a worker is named after its issue
-ISSUE_KEY_RE = re.compile(r"([A-Z]+)-[0-9]+\b")
+#: a Linear issue key (its team's key, a number) as a whole word of an agent's name: a worker is named after its issue
+ISSUE_KEY_RE = re.compile(r"(?<![\w-])([A-Z]+)-[0-9]+\b")
 SUBAGENT = {"tool-call-delta"}          # interaction_update types that report a subagent's progress, not the parent's
 CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothing for {mins} min after {after}, and "
             "cancelled it). Read your inbox and carry on from where you stopped.")
@@ -306,7 +388,7 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "dropped", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
                 "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step",
-                "outage", "archived", "unplaced")
+                "outage", "archived", "unplaced", "handin_waiting")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -325,17 +407,22 @@ REPORT_RE = re.compile(r"\b(?:final|report(?:s|ed)?|summary|nothing (?:changed|t
 STEP_RE = re.compile(r"(?:now |next,? |then |first,? |last,? |ok(?:ay)?,? )?(?:let me|let's|i'll|i will|i'm going to|"
                      r"going to|(?!\w*thing\b)\w+ing\b)", re.IGNORECASE)
 WAIT_RE = re.compile(r"\b(?:wait(?:s|ing)?|wake[- ]?up|wakes?|timer|resumes?|ring(?:s|-run)?|until)\b", re.IGNORECASE)
-LEARN_PER_READ = 4              # unknown senders whose conversation one node read reads for the coordinator their brief names
+LEARN_PER_READ = 4              # unknown senders whose conversation one node read reads for the launcher their brief names
 LEARN_RETRY_S = 6 * 3600        # a sender whose brief named none is read again after this long
+LAUNCHERS_MAX = 8               # launchers `placed` follows up from an agent in one asking: a coordinator further up places it
+                                # only once the watch holds a handle for an agent between them
 WORKER_NOTES_S = 12 * 3600      # a note modified this recently names its author as a worker to watch
 WORKER_IDLE_S = 12 * 3600       # a worker IDLE this long is read again only when a note of its changes
 #: how far before a worker's IDLE read its parent's Task call may complete and still be its report back
 TASK_DONE_SLACK_S = 120
 WORKER_LONG_S = 6 * 3600        # ACTIVE this long is recorded once (--worker-long-h)
-WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, and in no recent note, is forgotten
+WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, in no recent note and no integrator, is forgotten
 WORKERS_NEW = 20                # workers read for the first time per sweep: a fresh notes clone names hundreds
 SILENT_S = 90 * 60              # ACTIVE with no note of its and no push to its branches this long: rung, again a window later
-COORD_SILENT_S = 60 * 60        # ... a coordinator's window, rung to top (a coordinator can hang for hours)
+COORD_SILENT_S = 60 * 60        # ... a coordinator's window, in one turn and with no assistant text either, rung to top
+STREAM_LIVE_S = 3 * 60          # a stream started this long ago that gave anything this recently, a heartbeat included, has
+                                # shown all the text its run wrote: a coordinator's conversation is read only without one
+SILENT_RETRY_S = 10 * 60        # a coordinator whose turn or conversation a failed read left unjudged is judged again after this
 SILENT_RINGS = 2                # rings per silent spell; then none until it shows activity
 NO_STEP_S = 6 * 3600            # ... and still nothing this long: one `no_step`, rung to top (workers sat ACTIVE
                                 # with no step for days, each rung twice as silent and then by no one)
@@ -469,51 +556,77 @@ def placing(registry: Path | None) -> dict[str, str]:
 
 
 def name_lane(name: str, registry: Path | None) -> tuple[str, dict] | None:
-    """(handle, how) when an agent's `name` names one lane (`placing`) by how it starts, `how` being what the worker's entry
-    and its run's record say of it. A Linear issue key first (`TEAM-7 NAME: ...`, as a worker is named after its issue): its
-    team's handle (`placed_by: name`, `issue`), and for a team several handles share (a lane with no team of its own files
-    under another's), the one of them the name also names as a whole word, when it names exactly one (`named` too). Else a
-    handle, the longest that fits, followed by `-`, `:`, `/` or a space (`lane-topic: ...`; `placed_by: handle`). None,
-    never a guess, for anything else: a key or a handle further in is one the agent works with, which can be another lane's."""
+    """(handle, how) when an agent's `name` names one lane (`placing`), `how` being what the worker's entry and its run's
+    record say of it. A Linear issue key it starts with first (`TEAM-7 NAME: ...`, as a worker is named after its issue):
+    its team's handle (`placed_by: name`, `issue`), and for a team several handles share (a lane with no team of its own
+    files under another's), the one of them the name also names as a whole word, when it names exactly one (`named` too).
+    Else a handle it starts with, the longest that fits, followed by `-`, `:`, `/` or a space (`lane-topic: ...`;
+    `placed_by: handle`). Else the issue keys further in (`NAME: TEAM-7 step 2`, `NAME (TEAM-7)`), each a whole word
+    whose team some registry handle has, when they are all one team's: the first of them, read as a key at the start is.
+    None, never a guess, for anything else: a name with keys of two teams names its issue and one it works with, and
+    nothing says which; a handle further in is one the agent works with."""
     lanes = placing(registry)
-    if m := ISSUE_KEY_RE.match(name):
-        mine = [h for h, team in lanes.items() if team == m[1]]
+
+    def of(key: re.Match) -> tuple[str, dict] | None:
+        mine = [h for h, team in lanes.items() if team == key[1]]
         named = [h for h in mine if re.search(rf"(?<![\w-]){re.escape(h)}(?![\w-])", name)] if len(mine) > 1 else []
         if len(mine) == 1 or len(named) == 1:
-            return (named or mine)[0], {"placed_by": "name", "issue": m[0], **({"named": named[0]} if named else {})}
+            return (named or mine)[0], {"placed_by": "name", "issue": key[0], **({"named": named[0]} if named else {})}
+        return None
+
+    if (m := ISSUE_KEY_RE.match(name)) and (got := of(m)):
+        return got
     led = [h for h in lanes if name.startswith(h) and ((after := name[len(h):len(h) + 1]) in ("-", ":", "/") or after.isspace())]
-    return (max(led, key=len), {"placed_by": "handle"}) if led else None
+    if led:
+        return max(led, key=len), {"placed_by": "handle"}
+    teams = {str(h["linear"]) for h in read_json(registry).get("handles") or [] if h.get("linear")}
+    keys = [m for m in ISSUE_KEY_RE.finditer(name) if m[1] in teams]
+    return of(keys[0]) if len({m[1] for m in keys}) == 1 else None
+
+
+def issue_of(name: str, registry: Path | None) -> dict[str, str]:
+    """`{"issue": KEY}` for the first Linear issue key in an agent's `name` whose team some registry handle has, as a worker
+    is named after its issue; {} for a name with none."""
+    teams = {str(h["linear"]) for h in read_json(registry).get("handles") or [] if h.get("linear")}
+    return next(({"issue": m[0]} for m in ISSUE_KEY_RE.finditer(name) if m[1] in teams), {})
 
 
 def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: dict[str, str], t: float) -> dict[str, dict]:
     """agent id -> {"lane", "handle", "heard", "branches"}: each cloud worker (a Task subagent, which `GET /v1/agents` doesn't
-    list) named by `workers_d/*.json` (`{agent_id, lane, launched_by, branch}`, which a coordinator writes for the workers it
-    launches) or by the `origin:` of a note under `notes/lanes/` modified in the last `WORKER_NOTES_S`, minus the coordinators
-    (`coords`). Its handle is its launcher's (`launched_by`), else its lane's when the lane is a handle, else that of a
-    coordinator its note's origin names (`started by proofs bc-...`); `heard` is the newest such file's mtime; `branches` the
-    `branch` its workers.d file names; `parent` its launcher (`launched_by`, or that coordinator), if known. A workers.d entry
-    with `placed_by` is the watch's own, for a sender it placed by its name (`place_by_name`): it is read last, so a lane or a
-    handle that an entry a coordinator wrote, or a note, gives always wins over it."""
+    list) named by `workers_d/*.json` (`{agent_id, lane, launched_by, branch}`, which a coordinator or a worker writes for the
+    workers it launches) or by the `origin:` of a note under `notes/lanes/` modified in the last `WORKER_NOTES_S`, minus the
+    coordinators (`coords`). Its handle is its launcher's (`launched_by`) when that is a coordinator, else its lane's when the
+    lane is a handle, else that of a coordinator its note's origin names (`started by proofs bc-...`); `heard` is the newest
+    such file's mtime; `branches` the `branch` its workers.d file names; `parent` its launcher (`launched_by`, or that
+    coordinator), if known; `by` the `launched_by` alone, which `Watch.placed` follows when it is a worker and so gives no
+    handle here (a note's coordinator is never followed: its lane comes first). A workers.d entry with `placed_by` is the
+    watch's own, for a sender it placed by its name (`place_by_name`): it is read last, so a lane or a handle that an entry
+    a coordinator wrote, or a note, gives always wins over it. An entry with `integrates` (an issue key) is a swarm's
+    integrator's: its worker carries that and `signs`, how its comments on the issue are signed ("" when the entry
+    doesn't say), for `Watch.watch_handins`."""
     names = {str(h.get("handle")) for h in read_json(registry).get("handles") or []}
     out: dict[str, dict] = {}
     placed: list[tuple] = []
 
     def add(agent: str, lane: str, handle: str | None, heard: float, branches: tuple[str, ...] = (),
-            parent: str | None = None) -> None:
-        w = out.setdefault(agent, {"lane": lane, "handle": handle, "heard": heard, "branches": [], "parent": parent})
+            parent: str | None = None, by: str | None = None) -> None:
+        w = out.setdefault(agent, {"lane": lane, "handle": handle, "heard": heard, "branches": [], "parent": parent, "by": by})
         w["lane"], w["handle"], w["heard"] = w["lane"] or lane, w["handle"] or handle, max(w["heard"], heard)
-        w["branches"], w["parent"] = sorted({*w["branches"], *branches}), w["parent"] or parent
+        w["branches"], w["parent"], w["by"] = sorted({*w["branches"], *branches}), w["parent"] or parent, w["by"] or by
 
     for p in sorted(workers_d.glob("*.json")) if workers_d.is_dir() else []:
         d = read_json(p)
         if (m := AGENT_RE.fullmatch(str(d.get("agent_id") or ""))) and m[0] not in coords:
             lane, by = str(d.get("lane") or ""), AGENT_RE.search(str(d.get("launched_by") or ""))
             handle = (lineage(registry, coords, by[0]) if by else None) or lane_handle(lane, names)
-            row = (m[0], lane, handle, p.stat().st_mtime, (str(d["branch"]),) if d.get("branch") else (), by[0] if by else None)
+            row = (m[0], lane, handle, p.stat().st_mtime, (str(d["branch"]),) if d.get("branch") else (),
+                   *([by[0]] * 2 if by else ()))
             if d.get("placed_by"):
                 placed.append(row)
             else:
                 add(*row)
+                if ISSUE_KEY_RE.fullmatch(key := str(d.get("integrates") or "")):
+                    out[m[0]].update(integrates=key, signs=str(d.get("signs") or ""))
     for p, heard, fm in recent_notes(notes, t):
         ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or note_lane(notes, p)
         launcher = next((i for i in ids if i in coords), None)
@@ -584,6 +697,17 @@ def reported(text: str) -> bool:
     (`REPORT_RE`)."""
     s = text.strip()
     return bool(s) and ("\n" in s or s.endswith("?") or bool(re.search(r"\bDONE\b", s) or REPORT_RE.search(s)))
+
+
+def unanswered(msgs: list[dict]) -> bool | None:
+    """Whether a conversation ends on a message its agent wrote nothing after: of its user messages and its assistant
+    texts, the last is a user's. None for a conversation with neither, which says nothing either way."""
+    for m in reversed(msgs):
+        if m.get("type") == "user_message":
+            return True
+        if m.get("type") == "assistant_message" and str(m.get("text") or "").strip():
+            return False
+    return None
 
 
 def mid_step(text: str) -> bool:
@@ -740,6 +864,103 @@ def node_runs(cfg: dict, notes: Path | None, node: str, since: float,
     return rows, ""
 
 
+class NoCredential(ValueError):
+    """The file the watch is handed holds no Linear app credential."""
+
+
+def post_json(url: str, data: bytes, headers: dict[str, str]) -> dict:
+    """POST `data` to `url`, one of this file's two literal https URLs of Linear, and return its JSON answer."""
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")  # noqa: S310 (a literal https URL)
+    with urllib.request.urlopen(req, timeout=LINEAR_TIMEOUT_S) as r:  # noqa: S310 (a literal https URL)
+        return json.loads(r.read())
+
+
+class Linear:
+    """An issue's state, labels and comments from Linear, read as the team's client reads them (`research.linear`, which
+    this file, run alone on the pod, can't import): the app's client-credentials grant (`LINEAR_CLIENT_ID=` and
+    `LINEAR_CLIENT_SECRET=` lines of `env_file`, read at each call so a rotated secret needs no restart) gives a token,
+    always for `LINEAR_SCOPES`, kept in `cache` (0600) until `LINEAR_EARLY_S` before it expires and fetched again once
+    when Linear refuses it (401); the token goes as a Bearer header to the GraphQL endpoint. A comment's text is never
+    asked for: only its id, its time and who signed it. `NoCredential` when the file is missing or holds none; a `ValueError`
+    for an answer that isn't the issue (Linear says it can't find it; another shape); any other failure is the
+    transport's (`OSError`)."""
+
+    def __init__(self, env_file: Path, cache: Path, clock: Callable[[], float] = time.time,
+                 http: Callable[[str, bytes, dict[str, str]], dict] | None = None):
+        self.env_file, self.cache, self.clock, self.http = env_file, cache, clock, http or post_json
+
+    def credential(self) -> tuple[str, str]:
+        lines = self.env_file.read_text().splitlines() if self.env_file.is_file() else []
+        got = {k.strip().removeprefix("export ").strip(): v.strip().strip("\"'") for k, _, v in (ln.partition("=") for ln in lines)}
+        if not (got.get("LINEAR_CLIENT_ID") and got.get("LINEAR_CLIENT_SECRET")):
+            raise NoCredential(f"no LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET in {self.env_file}")
+        return got["LINEAR_CLIENT_ID"], got["LINEAR_CLIENT_SECRET"]
+
+    def token(self, fresh: bool) -> str:
+        client, secret = self.credential()
+        tag = hashlib.sha256(client.encode()).hexdigest()[:16]
+        c = {} if fresh else read_json(self.cache)
+        if (c.get("client") == tag and c.get("scope") == LINEAR_SCOPES and isinstance(c.get("access_token"), str)
+                and isinstance(c.get("expires_at"), int | float) and c["expires_at"] - LINEAR_EARLY_S > self.clock()):
+            return c["access_token"]
+        basic = base64.b64encode(f"{client}:{secret}".encode()).decode()
+        form = urllib.parse.urlencode({"grant_type": "client_credentials", "scope": LINEAR_SCOPES}).encode()
+        r = self.http(LINEAR_TOKEN_URL, form, {"Authorization": f"Basic {basic}",
+                                               "Content-Type": "application/x-www-form-urlencoded"})
+        token = r.get("access_token") if isinstance(r, dict) else None
+        if not isinstance(token, str) or not token:
+            raise OSError("Linear's client-credentials grant returned no access_token")
+        self.cache.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.cache, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"client": tag, "scope": LINEAR_SCOPES, "access_token": token,
+                       "expires_at": self.clock() + float(r.get("expires_in") or 0)}, f)
+        return token
+
+    def issue(self, key: str, after: str | None = None) -> dict:
+        """Issue `key` (`TEAM-7`) as `{url, state, labels, comments, after}`: its state's type (`started`, `completed`,
+        ...), its labels' names, and `HANDIN_PAGE` of its comments, newest first, from the newest or from the cursor
+        `after`, each `{id, t, by}` (its time and who signed it, `signed`); `after` is the cursor of the next page, None
+        when this is the last. One call (a second when the cached token was refused)."""
+        body = json.dumps({"query": ISSUE_QUERY, "variables": {"id": key, "n": HANDIN_PAGE, "after": after}}).encode()
+        for fresh in (False, True):
+            token = self.token(fresh)
+            try:
+                r = self.http(LINEAR_API, body, {"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+                break
+            except urllib.error.HTTPError as e:
+                if e.code != 401 or fresh:              # a cached token Linear no longer takes is fetched again, once
+                    raise
+        got = (r.get("data") or {}).get("issue") if isinstance(r, dict) else None
+        if not isinstance(got, dict) or r.get("errors"):
+            said = [str(x.get("message", "?")) for x in (r.get("errors") if isinstance(r, dict) else None) or [] if isinstance(x, dict)]
+            raise ValueError("Linear: " + ("; ".join(said) or f"no issue {key}"))
+        try:
+            page = got["comments"]
+            comments = [{"id": str(c["id"]), "t": epoch(c["createdAt"]), "by": signed(c)} for c in page["nodes"]]
+            if any(c["t"] is None for c in comments):
+                raise TypeError("a comment with no time")
+            return {"url": str(got.get("url") or ""), "state": str(got["state"]["type"]),
+                    "labels": [str(x["name"]) for x in got["labels"]["nodes"]], "comments": comments,
+                    "after": str(page["pageInfo"]["endCursor"]) if page["pageInfo"]["hasNextPage"] else None}
+        except (KeyError, TypeError, AttributeError) as e:
+            raise ValueError(f"Linear: {key} came in another shape ({type(e).__name__}: {e})") from None
+
+
+def signed(c: dict) -> str:
+    """Who signed a Linear comment: the name the team's app posted it under (`research msg linear comment`: a lane's
+    HANDLE with `--as`, `LANE/NAME` with `--worker NAME`), else the person who wrote it."""
+    return str((c.get("botActor") or {}).get("userDisplayName") or (c.get("user") or {}).get("name") or "")
+
+
+def signer(name: str) -> str:
+    """How a worker named after its issue (`TEAM-7 NAME: ...`) signs its comments when its entry doesn't say: NAME, the
+    word after the key; "" for a name of another shape."""
+    m = re.match(r"[A-Z]+-[0-9]+[\s:]+([A-Za-z0-9][A-Za-z0-9._-]{0,39})", name)
+    return m[1] if m else ""
+
+
 def github_prs(remote: str, env_file: Path, pages: int = 10) -> Callable[[], list[dict]]:
     """A reader of `remote`'s open PRs on GitHub (`{"branch", "body"}` each, newest first, up to `pages` of 100), with the token
     `env_file`'s `GH_TOKEN=` line holds, read at each call so a rotated token needs no restart."""
@@ -818,6 +1039,13 @@ def followed(runs: list[dict]) -> dict | None:
     """The run of `runs` (newest first) the watch follows: the newest RUNNING or waiting on background work, a goal run
     apart, whose stream can't be read."""
     return next((x for x in runs if x.get("status") in FOLLOW and not str(x.get("id")).startswith(GOAL)), None)
+
+
+def judge_of(runs: list[dict], latest: str | None) -> dict | None:
+    """The run of `runs` (newest first) an agent is judged by: the one followed, else its newest that started or is CREATING,
+    else its `latest`."""
+    return (followed(runs) or next((x for x in runs if started(x) or x.get("status") == "CREATING"), None)
+            or next((x for x in runs if x.get("id") == latest), None))
 
 
 def overdue(runs: list[dict], t: float) -> list[tuple[dict, float]]:
@@ -924,6 +1152,11 @@ class Run:
     last_kind: str = "start"            # start | text | call | tool_done | turn_ended
     last_t: float = 0.0                 # the parent's last event
     bg_t: float = 0.0                   # its subagents' last progress
+    opened_t: float = 0.0               # when the sweep last started its stream, which then replays the run from its start
+    heard_t: float = 0.0                # the last thing its stream gave, a heartbeat included
+    said_t: float = 0.0                 # its last assistant text the watch hadn't been given before
+    said_n: int = 0                     # characters of assistant text since its stream was last started ...
+    said_max: int = 0                   # ... and the most a stream of its has given: text a replay repeats is no new text
     agent_t: float = 0.0                # its agent's `updatedAt` as the last sweep listed it
     calls: dict[str, float] = field(default_factory=dict)   # open tool calls the parent waits on: callId -> started
     bg: set[str] = field(default_factory=set)               # open calls it went on past: background work
@@ -953,9 +1186,14 @@ class Watch:
                  nodes: Path | None = None, sh: Callable[[list[str], str | None, float], tuple[int, str, str]] = run_cmd,
                  launcher: Path | None = None, launch: Callable[[list[str], dict[str, str]], tuple[int, str, str]] = run_env,
                  launch_api: Callable[[str], object] = lambda key: Api(key),
-                 open_prs: Callable[[], list[dict]] | None = None):
+                 open_prs: Callable[[], list[dict]] | None = None, linear: Linear | None = None):
         self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
         self.open_prs, self.prs_read = open_prs, -float("inf")
+        self.linear, self.linear_said = linear, False       # the Linear reader, and whether its missing credential was said
+        self.linear_off = ""                                # why no issue is read for the rest of this sweep, if so
+        self.linear_refused: set[str] = set()               # issues Linear wouldn't give at this sweep
+        self.integrators: dict[str, dict] = {}              # worker whose entry has `integrates` -> issue, signs, lane, heard
+        self.handin_next: dict[str, float] = {}             # issue -> when a hand-in on it may next be due (not saved)
         self.pr_branches: dict[str, set[str]] = {}  # agent id (full or short) an open PR's body names -> that PR's branches
         self.pr_lanes: dict[str, set[str]] = {}     # lane an open PR's `Lane NAME` line names -> that PR's branches
         self.notes, self.worker_long_s = notes, worker_long_s
@@ -974,6 +1212,7 @@ class Watch:
         self.worker_status: dict[str, str] = {}             # worker -> its status as this sweep read it, for status.json
         self.slow_convs: dict[str, float] = {}              # agent -> until when its conversation goes unread (CONV_SKIP_S)
         self.agent_status: dict[str, str] = {}              # listed agent -> its status as this sweep read it, for run_ended
+        self.runless: frozenset[str] = frozenset()          # listed agents with no run: read as workers, by id
         self.registry, self.routes, self.timers = registry, routes, timers
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
         self.runs: dict[str, Run] = {}
@@ -991,10 +1230,18 @@ class Watch:
         self.left: set[str] = set(s.get("left", []))              # agents past MAX_RESTARTS, recorded once
         self.pending: dict[str, dict] = s.get("pending", {})      # agent -> a continue run the API refused, tried again
         self.done: dict[str, float] = s.get("done", {})           # runs judged once (ERROR, stuck, unreadable) -> when
+        # a change `dropped` is to judge (its `done` key) whose conversation went unread -> [since when, the last try]
+        self.conv_unread: dict[str, list[float]] = s.get("conv_unread", {})
         self.woken: dict[str, float] = s.get("woken", {})         # agent -> when the watch last recorded it ready to wake
-        self.workers: dict[str, dict] = s.get("workers", {})      # worker -> lane, handle, status, updated, since, read, ...
-        self.active: dict[str, float] = s.get("active", {})       # coordinator -> since when the watch has seen it ACTIVE
+        self.workers: dict[str, dict] = s.get("workers", {})      # worker -> lane, handle, parent, by, status, updated, ...
+        # coordinator in a turn -> {"run": the turn's run, "since": when the watch first saw it RUNNING}
+        self.active: dict[str, dict] = {a: v for a, v in s.get("active", {}).items() if isinstance(v, dict)}
         self.silent: dict[str, dict] = s.get("silent", {})        # agent -> {"from": its last activity, "rings"} while silent
+        self.texts: dict[str, dict] = s.get("texts", {})          # coordinator -> {"sig": the assistant text its conversation
+                                                                  # showed, digested, "t": when the watch first read it so}
+        self.blind: dict[str, float] = s.get("blind", {})         # coordinator due a silent record -> its conversation unread
+                                                                  # since when
+        self.unjudged: dict[str, float] = {}                      # coordinator a failed read left unjudged -> when (not saved)
         self.awaiting: dict[str, dict] = s.get("awaiting", {})    # agent -> the research runs that ended for it to act on
         self.relaunched: dict[str, float] = s.get("relaunched", {})   # agent -> when the watch last tried to relaunch it
         self.owners: dict[str, str] = s.get("owners", {})         # listed agent a coordinator launched -> that coordinator's handle
@@ -1005,12 +1252,14 @@ class Watch:
         self.back: dict[str, float] = s.get("back", {})           # agent -> since when it has been back from ERROR
         self.rung_outage: float = s.get("rung_outage", 0.0)       # when the last `outage` record was written
         self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again (not saved)
-        self.learn_tried: dict[str, float] = {}                   # sender whose brief named no coordinator -> when (not saved)
+        self.learn_tried: dict[str, float] = {}                   # sender whose brief named no launcher -> when (not saved)
+        self.stops_left = STOPS_SWEEP                             # v0 statuses the current sweep may still read
         self.learn_left = 0                                       # briefs the current node read may still read
 
     def save(self) -> None:
         t = self.clock()
         self.done = {k: v for k, v in self.done.items() if v >= t - 2 * 86400}
+        self.conv_unread = {k: v for k, v in self.conv_unread.items() if v[1] >= t - 2 * 86400}
         self.woken = {k: v for k, v in self.woken.items() if v >= t - RECANCEL_S}
         self.relaunched = {k: v for k, v in self.relaunched.items() if v >= t - 2 * 86400}
         with self.kids_lock:
@@ -1019,7 +1268,9 @@ class Watch:
         tmp = self.state_path.with_suffix(".tmp")
         tmp.write_text(json.dumps({"freed": self.freed, "errors": self.errors, "left": sorted(self.left),
                                    "pending": self.pending, "done": self.done, "woken": self.woken,
+                                   "conv_unread": self.conv_unread,
                                    "workers": self.workers, "active": self.active, "silent": self.silent,
+                                   "texts": self.texts, "blind": self.blind,
                                    "awaiting": self.awaiting, "relaunched": self.relaunched, "owners": self.owners,
                                    "children": children, "bursts": self.bursts, "down": self.down, "back": self.back,
                                    "rung_outage": self.rung_outage}) + "\n")
@@ -1155,7 +1406,7 @@ class Watch:
                 if x["kind"] == "worker_idle" and self.reported_back(x["agent"], x.get("idle_t", t)):
                     continue
                 idle_t = x.pop("idle_t", t)
-                items.append({**x, **self.wake_of(x["agent"], idle_t)})
+                items.append({**x, **({} if x["kind"] == "crashed" else self.wake_of(x["agent"], idle_t))})
             if not items:
                 continue
             if len(items) == 1:
@@ -1217,9 +1468,12 @@ class Watch:
 
     def restart(self, a: dict, run: str, t: float) -> None:
         """A new run on an agent whose latest run ended in ERROR, at most once every `RESTART_S` and `MAX_RESTARTS` times in a
-        row; then a coordinator is relaunched."""
+        row; then a coordinator is relaunched. A restart the API refuses (other than 409) counts as one of the row and is
+        made again `RESTART_S` later, so an agent it never starts ends as `erroring` too, and never as one refused try. Each
+        record names its owner, top for a coordinator and its launcher's handle for a worker, and a worker's its issue."""
         r = Run(a["id"], run, a.get("name") or "")
         n = self.errors.get(a["id"], 0)
+        own = {**self.owned(a["id"]), **({} if a["id"] in self.coords else issue_of(r.name, self.registry))}
         if a["id"] in self.coords and self.outage():
             if t - self.freed.get(a["id"], -OUTAGE_RETRY_S) < OUTAGE_RETRY_S:
                 return
@@ -1230,13 +1484,13 @@ class Watch:
                 new = self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": AFTER_ERROR}})
                 action = "restarted in an outage (not counted toward its limit)"
                 self.record("crashed", r, status="ERROR", action=action, down=down,
-                            new_run=((new or {}).get("run") or {}).get("id"), **self.owned(a["id"]))
+                            new_run=((new or {}).get("run") or {}).get("id"), **own)
             except urllib.error.HTTPError as e:
                 self.record("crashed", r, status="ERROR", action=f"restart in an outage failed: HTTP {e.code}; again in "
-                            f"{OUTAGE_RETRY_S // 60} min", down=down, **self.owned(a["id"]))
+                            f"{OUTAGE_RETRY_S // 60} min", down=down, **own)
             except (urllib.error.URLError, OSError, ValueError) as e:
                 self.record("crashed", r, status="ERROR", action=f"restart in an outage failed: {type(e).__name__}: {e}; again "
-                            f"in {OUTAGE_RETRY_S // 60} min", down=down, **self.owned(a["id"]))
+                            f"in {OUTAGE_RETRY_S // 60} min", down=down, **own)
             return
         if run in self.done:                        # restarted already: only the next ERROR run counts
             return
@@ -1246,7 +1500,7 @@ class Watch:
                 self.save()
                 handle = self.coords.get(a["id"])
                 self.record("erroring", r, status="ERROR", restarts=n,
-                            action="relaunching it" if handle else "none: left for a person", **self.owned(a["id"]))
+                            action="relaunching it" if handle else "none: left for a person", **own)
                 if handle:
                     self.relaunch_coordinator(a, handle, f"ended in ERROR after {n} restarts in a row", run, t)
             return
@@ -1257,7 +1511,7 @@ class Watch:
         try:
             new = self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": AFTER_ERROR}})
             self.record("crashed", r, status="ERROR", action=f"restarted ({n + 1} of {MAX_RESTARTS})",
-                        new_run=((new or {}).get("run") or {}).get("id"), **self.owned(a["id"]))
+                        new_run=((new or {}).get("run") or {}).get("id"), **own)
         except urllib.error.HTTPError as e:
             if e.code == 409:                       # agent_busy: one of its own events already started a run; not ours to count
                 self.freed.pop(a["id"], None)
@@ -1265,9 +1519,17 @@ class Watch:
                 self.done.pop(run, None)
                 self.save()
             else:
-                self.record("crashed", r, status="ERROR", action=f"restart failed: HTTP {e.code}", **self.owned(a["id"]))
+                self.refused(r, run, n + 1, f"HTTP {e.code}", own)
         except (urllib.error.URLError, OSError, ValueError) as e:
-            self.record("crashed", r, status="ERROR", action=f"restart failed: {type(e).__name__}: {e}", **self.owned(a["id"]))
+            self.refused(r, run, n + 1, f"{type(e).__name__}: {e}", own)
+
+    def refused(self, r: Run, run: str, n: int, why: str, own: dict) -> None:
+        """A restart the API refused: recorded, and its run left unjudged so `restart` makes the next try of the row."""
+        self.done.pop(run, None)
+        self.save()
+        then = f"the next in {RESTART_S // 60} min" if n < MAX_RESTARTS else "the last"
+        self.record("crashed", r, status="ERROR", action=f"got no restart from the API ({why}): try {n} of {MAX_RESTARTS}, {then}",
+                    **own)
 
     @staticmethod
     def ready(status: str | None, last: float | None, bell: float | None, t: float, every: float | None = None) -> str | None:
@@ -1322,6 +1584,8 @@ class Watch:
             if r is None:
                 return
             t = self.clock()
+            if event != "error":
+                r.heard_t = t
             kind = data.get("type") if event == "interaction_update" else None
             if event in ("status", "result"):
                 if str(data.get("status")) in TERMINAL:
@@ -1355,6 +1619,10 @@ class Watch:
                     r.last_kind = "turn_ended"
                 elif kind == "user-message-appended":
                     r.last_kind = "start"
+            if event == "assistant" or kind == "text-delta":
+                r.said_n += len(str(data.get("text") or "")) or 1
+                if r.said_n > r.said_max:           # past what a stream of its gave before: not a replay's
+                    r.said_max, r.said_t = r.said_n, t
             r.last_t = t
 
     def classify(self, r: Run, t: float) -> str | None:
@@ -1482,13 +1750,35 @@ class Watch:
             self.save()
 
     def dropped(self, a: dict, last: dict | None, t: float, **detail) -> None:
-        """Record `a` **dropped**, once per `updatedAt`, when it is IDLE and moved `DROPPED_S` past the end of its latest run
-        ``last``, which FINISHED: a message reached it and never became a run."""
-        if (a.get("status") == "IDLE" and last and last.get("status") == "FINISHED"
+        """Record `a` **dropped**, once per `updatedAt`: out of a turn (IDLE), changed `DROPPED_S` past the end
+        of its latest run ``last``, which FINISHED, unchanged `DROPPED_S` since, and its conversation ending on a message it
+        wrote nothing after (`unanswered`). The conversation is read once it is so, and never before: a turn a Task resume
+        ran is no run the API lists and moves `updatedAt` as a dropped message does, and only its text tells them apart. One
+        the API won't read, or that holds no message, is read again every `DROPPED_RETRY_S`, and after `DROPPED_UNREAD_S`
+        the agent is recorded all the same, with `unread_minutes` where the record otherwise says `unanswered`. An agent
+        the platform reports in error is never dropped: it is `crashed`."""
+        if not (a.get("status") == "IDLE" and last and last.get("status") == "FINISHED"
                 and (moved := epoch(a.get("updatedAt"))) is not None and (ended := epoch(last.get("updatedAt"))) is not None
-                and moved - ended >= DROPPED_S and self.once(f"dropped:{a['id']}:{a.get('updatedAt')}", t)):
-            self.record("dropped", Run(a["id"], str(last.get("id") or ""), a.get("name") or ""), status="IDLE",
-                        since=iso(moved), ended=iso(ended), **detail, **self.owned(a["id"]))
+                and moved - ended >= DROPPED_S and t - moved >= DROPPED_S):
+            return
+        key = f"dropped:{a['id']}:{a.get('updatedAt')}"
+        since, tried = self.conv_unread.get(key) or (t, None)
+        if key in self.done or (tried is not None and t - tried < DROPPED_RETRY_S):
+            return
+        msgs = self.conversation(a["id"])
+        if (left := None if msgs is None else unanswered(msgs)) is None and t - since < DROPPED_UNREAD_S:
+            self.conv_unread[key] = [since, t]
+            self.save()
+            return
+        self.conv_unread.pop(key, None)
+        self.once(key, t)
+        if left is False:
+            print(f"{iso(t)} {a['id']} changed at {iso(moved)} with no run after the one that ended at {iso(ended)}: its "
+                  "conversation ends with its own text, so a turn the API lists no run for ran", file=sys.stderr, flush=True)
+            return
+        self.record("dropped", Run(a["id"], str(last.get("id") or ""), a.get("name") or ""), status=a["status"],
+                    since=iso(moved), ended=iso(ended), **detail, **self.owned(a["id"]),
+                    **({"unread_minutes": int((t - since) // 60)} if left is None else {"unanswered": True}))
 
     def read(self, a: dict, run: str) -> dict | None:
         """The run's record (a terminal one is read once); None, and recorded once, when the API won't read it."""
@@ -1538,15 +1828,45 @@ class Watch:
             runs = [info]
         return runs + [x for x in listed if x.get("id") not in {y["id"] for y in runs}]
 
-    def watch_workers(self, coords: dict[str, str], listed: set[str], t: float) -> None:
-        """Read each known worker (`GET /v1/agents/{id}`, at most once a sweep): record `worker_idle` when it went from ACTIVE
-        to IDLE, and `worker_long` once when it has been ACTIVE `worker_long_s`. A worker has no runs the API lists and can't
-        be started (400 legacy workflow), so only its coordinator can resume it (Task); the watch records, never acts. Its
-        handle is its launcher's by the Task call the watch saw, else its registration's, else its brief's coordinator's; one
-        with neither a handle nor a lane is recorded once as `unplaced`, and its alerts are marked `quiet`."""
+    def stopped(self, agent: str, w: dict, status: str, prev: str | None, t: float) -> bool:
+        """Whether a worker read by id, out of a turn, stopped with an error, by the platform's own word: its status as
+        `GET /v0/agents/{id}` gives it (ERROR; FINISHED or EXPIRED otherwise, CREATING or RUNNING in a turn). v1 reads such a
+        worker IDLE however its turn ended, a turn a Task resume ran is no run it lists, and the run its `latestRunId` names
+        may be weeks older than its last turn, so nothing else says it; should v1 give ERROR as the agent's status, that is
+        it too, with no further read. v0 is read when a stop may have happened since the last read (`stop` in the worker's
+        entry): the watch saw it leave ACTIVE, its `updatedAt` moved, which a Task resume's message does, or something named
+        it again (a Task call, a note, a registration); and again every `STOP_S` while that read can't be taken as the
+        stop's: v0 has it in a turn, the read failed, or it came within `DROPPED_S` of the change, when a turn may not have
+        begun. `STOPS_SWEEP` reads a sweep at most; one left over is made at the next."""
+        if status == "ERROR":
+            return True
+        s, updated = w.get("stop") or {}, w["updated"]
+        new = prev == "ACTIVE" or s.get("at") != updated or w["heard"] > s.get("t", 0.0)
+        open_ = s.get("status") in (*IN_TURN, "") or s.get("t", 0.0) - updated < DROPPED_S
+        if not new and not (open_ and t - s["t"] >= STOP_S):
+            return s.get("status") == "ERROR"
+        if self.stops_left <= 0:
+            return False
+        self.stops_left -= 1
+        try:
+            got = str((self.api.get(f"/v0/agents/{agent}") or {}).get("status") or "")
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            self.say("v0 status", f"a worker's v0 status went unread ({agent}: {type(e).__name__}: {e}); read again in "
+                     f"{STOP_S // 60} min, and no worker is recorded in error meanwhile", t)
+            got = ""
+        w["stop"] = {"at": updated, "t": t, "status": got}
+        return got == "ERROR"
+
+    def place_workers(self, coords: dict[str, str], listed: set[str], t: float) -> dict[str, dict]:
+        """Each worker the notes, workers.d and the Task calls seen name, with the handle `placed` gives it, as a run's
+        sender's is, and for one the list has, its owner (`owners`): before the sweep judges any agent, so a failure it
+        records at the first sweep that meets the agent names who follows it up. Returns the Task calls' workers."""
         before = json.dumps([self.workers, self.owners], sort_keys=True)
         names = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
-        for agent, d in workers(self.notes, self.log.with_name("workers.d"), self.registry, coords, t).items():
+        found = workers(self.notes, self.log.with_name("workers.d"), self.registry, coords, t)
+        self.integrators = {agent: {"issue": d["integrates"], "signs": d["signs"], "lane": d["lane"], "heard": d["heard"]}
+                            for agent, d in found.items() if d.get("integrates")}
+        for agent, d in found.items():
             if agent in listed and d["handle"]:                 # an agent a coordinator launched through the API: it owns it
                 self.owners[agent] = d["handle"]
             if d["handle"] and stray(self.children.get(agent)):
@@ -1559,34 +1879,56 @@ class Watch:
                 w["branches"] = sorted({*w.get("branches", []), *d["branches"]})
             if d.get("parent") and not w.get("parent"):
                 w["parent"] = d["parent"]
+            if d["by"]:
+                w["by"] = d["by"]
+            else:
+                w.pop("by", None)
         with self.kids_lock:
             kids = dict(self.children)
-        parents: dict[str, str | None] = {}         # parent -> its handle, read once a sweep
-        for agent, c in kids.items():
+        known: dict[str, str | None] = {}           # agent -> the handle it coordinates, read once a sweep
+        for agent in [*kids, *(a for a, w in self.workers.items() if w.get("by") and a not in kids)]:
             if agent in coords:
                 continue
-            p = c["parent"]
-            if p not in parents:
-                parents[p] = self.parent_handle(p, coords) if p else None
-            if agent in listed and parents[p]:
-                self.owners[agent] = parents[p]
+            c, h = kids.get(agent) or {}, self.placed(agent, coords, known)
+            if h and stray(c):                                  # a stray its registration's launcher now places is that lane's
+                with self.kids_lock:
+                    self.children.pop(agent, None)
+                c = {}
+                kids.pop(agent)
+            if agent in listed and h:
+                self.owners[agent] = h
             w = self.workers.setdefault(agent, {"heard": 0.0})
             lane, handle = w.get("lane") or "", w.get("handle")
-            if not p:                                           # a stray is nobody's, whatever an earlier sweep wrote of it
+            if stray(c):                                        # a stray is nobody's, whatever an earlier sweep wrote of it
                 lane, handle = "" if lane_handle(lane, names) else lane, None
-            elif (h := parents[p]) and not (c.get("brief") and handle):
-                # its launcher's: the Task call says who can resume it, over its registration; a brief only places one
-                # nothing else has. A lane it has under that handle, or under none, stays its lane
+            elif h:                                             # a lane it has under that handle, or under none, stays its lane
                 lane, handle = lane if lane and handle in (None, h) else h, h
-            w.update(parent=p, lane=lane, handle=handle, heard=max(w["heard"], c["t"]), name=w.get("name") or c.get("name") or "")
-        self.worker_status, new = {}, 0
+            w.update(lane=lane, handle=handle)
+            if c:
+                w.update(parent=c["parent"], heard=max(w["heard"], c["t"]), name=w.get("name") or c.get("name") or "")
+        if json.dumps([self.workers, self.owners], sort_keys=True) != before:
+            self.save()
+        return kids
+
+    def watch_workers(self, coords: dict[str, str], listed: set[str], t: float, kids: dict[str, dict]) -> None:
+        """Read each known worker (`GET /v1/agents/{id}`, at most once a sweep): record `worker_idle` when it went from ACTIVE
+        to IDLE, `worker_long` once when it has been ACTIVE `worker_long_s`, and `crashed` once per stop when the platform
+        says it stopped with an error (`stopped`), in place of any other record of that stop. A worker has no runs the API
+        lists and can't be started (400 legacy workflow), so only its coordinator can resume it (Task); the watch records,
+        never acts. One with neither a handle nor a lane (`place_workers`) is recorded once as `unplaced`, and its alerts
+        are marked `quiet`. An agent the list has is the sweep's to read, but for one with no run (`runless`), which the
+        sweep can't judge: it is read here as any worker."""
+        before = json.dumps([self.workers, self.owners], sort_keys=True)
+        self.worker_status, new, self.stops_left = {}, 0, STOPS_SWEEP
         # the most recently heard first: `WORKERS_NEW` a sweep reaches a worker heard today before a backlog heard last week
         for agent, w in sorted(self.workers.items(), key=lambda kv: (-kv[1].get("heard", 0.0), kv[0])):
-            if agent in listed or agent in coords:              # an agent the sweep reads already, or a coordinator now
+            if (agent in listed and agent not in self.runless) or agent in coords:  # the sweep's to read, or a coordinator now
                 self.workers.pop(agent)
                 continue
             idle_long = w.get("status") == "IDLE" and t - w.get("updated", t) >= WORKER_IDLE_S
-            if w.get("gone") or (idle_long and w["heard"] <= w.get("read", 0)):
+            stop = w.get("stop") or {}
+            turn = stop.get("status") in IN_TURN and t - stop["t"] >= STOP_S    # v0 has it in a turn: read until that ends
+            if w.get("gone") or (idle_long and w["heard"] <= w.get("read", 0) and not turn):
                 continue
             if "read" not in w:
                 if new >= WORKERS_NEW:
@@ -1622,6 +1964,20 @@ class Watch:
                 if self.unplaced(agent, t) and not stray(kids.get(agent)):
                     self.record("unplaced", r, judged=False, role="worker", lane="", status=status,
                                 **({"parent": w["parent"]} if w.get("parent") else {}))
+            if status in ("ACTIVE", "ARCHIVED"):
+                w.pop("error", None)
+                w.pop("stop", None)
+            elif self.stopped(agent, w, status, prev, t):
+                # one record of the stop: no `worker_idle` for the same change, and no `dropped`, which is a message
+                # that never became a turn
+                if (w.get("error") or {}).get("at") != updated and (prev == "ACTIVE" or t - updated >= DROPPED_S):
+                    w["error"] = {"at": updated, "t": t}
+                    self.hold("crashed", r, t, w, role="worker", status="ERROR", since=iso(t),
+                              action="can't start a run on a worker: resume it with Task, which only the agent that launched "
+                                     "it can, or relaunch it", **issue_of(w["name"], self.registry), **detail)
+                continue
+            else:
+                w.pop("error", None)
             if status == "ACTIVE":
                 if prev != "ACTIVE":                            # updatedAt moves on a status change, not during work
                     w["since"], w["long"] = updated, False
@@ -1641,17 +1997,138 @@ class Watch:
             elif status == "ARCHIVED":
                 w["gone"] = True
             # a Task worker's runs aren't the API's, so its `latestRunId` never moves (one kept a week-old id through ten runs):
-            # only a worker whose runs the API lists can drop a message, and an IDLE read right after an ACTIVE one is a run that
-            # ended
+            # one seen working so is never asked, an IDLE read right after an ACTIVE one is a turn that ended, and any other
+            # change is a turn the watch didn't see or a dropped message, which its conversation tells apart (`dropped`)
             if (status == "IDLE" and not w.get("no_runs") and w.get("idle_at") != updated
                     and (latest := info.get("latestRunId"))):
                 self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, role="worker", **detail)
+        # an integrator is kept while its entry stands: its name says which comments on its issue are its own
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
-                      and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S]:
+                      and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S and a not in self.integrators]:
             self.workers.pop(agent)
         self.owners = {a: h for a, h in self.owners.items() if a in listed}
         if json.dumps([self.workers, self.owners], sort_keys=True) != before:
             self.save()
+
+    def read_issue(self, key: str, t: float, after: str | None = None) -> dict | None:
+        """Issue `key` from Linear (`Linear.issue`), or None when it went unread, which `linear_off` and `linear_refused`
+        tell apart for the rest of the sweep. With no credential (said once for the process's life) or a read that failed
+        on the way (said, at most once an hour), no issue is read again this sweep (`linear_off`). When Linear answers
+        that it can't (no such issue; said, at most once an hour for the issue), that issue isn't (`linear_refused`)."""
+        if self.linear_off or key in self.linear_refused:
+            return None
+        try:
+            if self.linear is None:
+                raise NoCredential("the watch was started without --gh-env")
+            return self.linear.issue(key, after)
+        except NoCredential as e:
+            self.linear_off = "credential"
+            if not self.linear_said:
+                self.linear_said = True
+                print(f"{iso(t)} no Linear credential ({e}): no hand-in waiting on an integrator is recorded, and no "
+                      "sender is placed by its issue's lane label", file=sys.stderr, flush=True)
+        except ValueError as e:
+            self.linear_refused.add(key)
+            self.say(f"linear:{key}", f"issue {key} unread: {e}", t)
+        except Exception as e:  # noqa: BLE001 (a read of Linear that fails, however it does, never stops a sweep)
+            self.linear_off = "unread"
+            self.say("linear", f"Linear unread ({type(e).__name__}: {e}): nothing is recorded from it, and it is read again "
+                     "at the next sweep", t)
+        return None
+
+    def watch_handins(self, coords: dict[str, str], t: float) -> None:
+        """Record **handin_waiting**, once per comment, when the oldest comment on an integrator's issue with no later
+        comment of the integrator's is `HANDIN_S` old: a swarm's seats hand in by commenting on the issue their integrator
+        takes them from (its workers.d entry's `integrates`), and one that stopped answers none. The integrator's comments
+        are those signed with its name: the team's agents all post through one Linear app, which signs a comment with the
+        name it was posted under (`signed`), a lane's HANDLE or, for a worker, `LANE/NAME`; the entry's `signs` is that
+        NAME, else the word after the issue key in the agent's own name (`signer`), and a comment is the integrator's
+        when it is signed `LANE/NAME` with that NAME, whatever its case and whichever the lane. Every other comment is a
+        hand-in, its lead's own included. The record is for the handle `placed` gives the integrator. A closed issue
+        takes none. An issue is read when a hand-in on it may first be due (`HANDIN_S` after its oldest waiting comment,
+        or after a read that found none waiting, or one recorded already): one call, more only to page back,
+        `HANDIN_PAGES` pages at most, to the integrator's last comment. A read that fails records nothing: the issue is
+        read again at the next sweep, and no other is read at this one; an issue Linear won't give is read again
+        `HANDIN_RETRY_S` later."""
+        swarms: dict[str, list[str]] = {}
+        for agent, x in sorted(self.integrators.items(), key=lambda kv: kv[1]["heard"]):
+            swarms.setdefault(x["issue"], []).append(agent)
+        self.handin_next = {k: v for k, v in self.handin_next.items() if k in swarms}
+        for key, agents in sorted(swarms.items()):
+            if t < self.handin_next.get(key, 0.0):
+                continue
+            names = {a: self.names.get(a) or str((self.workers.get(a) or {}).get("name") or "") for a in agents}
+            signs = {a: self.integrators[a]["signs"] or signer(names[a]) for a in agents}
+            if unsigned := [a for a in agents if not signs[a]]:
+                self.say(f"signs:{key}", f"{key}'s integrator ({', '.join(unsigned)}) has no name read that starts `TEAM-7 NAME` "
+                         "and its workers.d entry has no `signs`: nothing says which comments are its own, so no hand-in on "
+                         "it is recorded", t)
+                continue
+
+            its = {x.lower() for x in signs.values()}
+
+            def own(c: dict) -> bool:
+                _, worker, name = c["by"].rpartition("/")
+                return bool(worker) and name.lower() in its
+
+            comments, issue, after = [], None, None
+            for _ in range(HANDIN_PAGES):
+                if (issue := self.read_issue(key, t, after)) is None:
+                    break
+                comments, after = comments + issue["comments"], issue["after"]
+                if not after or any(own(c) for c in comments):
+                    break
+            if issue is None:
+                if self.linear_off:
+                    return
+                self.handin_next[key] = t + HANDIN_RETRY_S
+                continue
+            comments.sort(key=lambda c: c["t"])
+            last = max((i for i, c in enumerate(comments) if own(c)), default=-1)
+            waiting, older = comments[last + 1:], bool(last < 0 and after)  # older: more wait than the pages read hold
+            self.handin_next[key] = t + HANDIN_S
+            if issue["state"] in ("completed", "canceled") or not waiting:
+                continue
+            oldest = waiting[0]
+            done = f"handin:{key}:{'older' if older else oldest['id']}"
+            if done in self.done:
+                self.done[done] = t                 # kept for as long as it waits: once per comment, however long
+            elif t - oldest["t"] < HANDIN_S:
+                self.handin_next[key] = oldest["t"] + HANDIN_S
+            elif self.once(done, t):
+                agent = agents[-1]                  # the entry written last: a relaunched integrator's
+                handle = self.placed(agent, coords)
+                self.record("handin_waiting", Run(agent, "", names[agent]), judged=False, role="worker", issue=key,
+                            url=issue["url"], comment=oldest["id"], by=oldest["by"] or "?", since=iso(oldest["t"]),
+                            minutes=int((t - oldest["t"]) // 60), waiting=len(waiting), signs=signs[agent],
+                            lane=self.integrators[agent]["lane"], **({"handle": handle} if handle else {}),
+                            **({"older": True} if older else {}))
+
+    def label_lane(self, agent: str, name: str, t: float) -> tuple[str, dict] | None:
+        """(handle, how) for a sender named after an issue of a team several lanes share (`TEAM-7 NAME`), which its name
+        alone places nowhere: the lane the issue is under, as the team's Linear client reads it. That is the lane its
+        `lane:` label names, when one of those lanes (`placed_by: label`); with no such label, the team's own lane, the
+        one of them the registry gives no `linear_label` (a lane with no team of its own files in another's, each issue
+        under its label), when that is exactly one (`placed_by: team`). The issue is read once per sender and what it gave
+        is kept: a placement in workers.d (`place_by_name`), and an issue that places nobody in `done` for as long as the
+        sender is met. Only a read that failed, or that Linear answered it can't, is made again, at the sender's next
+        run's end."""
+        lanes, m = placing(self.registry), ISSUE_KEY_RE.match(name)
+        mine = [h for h, team in lanes.items() if m and team == m[1]]
+        if len(mine) < 2:
+            return None
+        if (key := f"label:{agent}") in self.done:
+            self.done[key] = t
+            return None
+        if (issue := self.read_issue(m[0], t)) is None:
+            return None
+        self.once(key, t)
+        label = next((x[len(LANE_LABEL):] for x in issue["labels"] if x.startswith(LANE_LABEL)), None)
+        own = [str(h.get("handle")) for h in read_json(self.registry).get("handles") or []
+               if h.get("handle") in mine and not h.get("linear_label")]
+        if label in mine:
+            return label, {"placed_by": "label", "issue": m[0]}
+        return (own[0], {"placed_by": "team", "issue": m[0]}) if label is None and len(own) == 1 else None
 
     def read_prs(self, t: float) -> None:
         """Every `HEADS_EVERY_S`, the open PRs (`open_prs`, `{"branch", "body"}` each): a push to a PR's branch is the activity of
@@ -1698,18 +2175,21 @@ class Watch:
         write_atomic(self.heads_path, (json.dumps(self.heads, sort_keys=True) + "\n").encode())
 
     def watch_silence(self, known: dict[str, dict], t: float) -> None:
-        """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
+        """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since, branches}: a worker ACTIVE
+        since then, a coordinator in the turn of `run` since then, with its `latest` run) with no
         note of its (`note_times`), no push to its branches (its own, the ones its notes name, those of open PRs whose body names
         it, every head ending in its id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task`
         finds for any of these; with none of these, its lane's: `cursor/<lane>-*` and open PRs whose `Lane NAME` line is it, and
-        its lane's agents' runs) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
-        the latest of those, its ACTIVE spell's start and the first heads read; again after a second window, then not until one
-        of those moves. Needs
+        its lane's agents' runs), no start or end of a research run it sent (`run_ends`' `ran`) and, for a coordinator, no
+        assistant text (its run's stream's, and what a read of its conversation found new) for `SILENT_S`, or a coordinator's
+        `COORD_SILENT_S`, counted from the latest of those, `since` and the first heads read; again after a second window,
+        then not until one of those moves. A coordinator is recorded only once `quiet` confirms it. Needs
         `--notes` and heads read in the last `HEADS_STALE_S`."""
         changed = False
-        for agent in [a for a in self.silent if a not in known]:
-            self.silent.pop(agent)
-            changed = True
+        for d, gone in ((self.silent, known), (self.blind, known), (self.unjudged, known), (self.texts, self.coords)):
+            for agent in [a for a in d if a not in gone]:
+                d.pop(agent)
+                changed = True
         if self.notes is None or not self.git_remote or t - self.heads.get("t", -HEADS_STALE_S) >= HEADS_STALE_S:
             if changed:
                 self.save()
@@ -1737,8 +2217,12 @@ class Watch:
                 ran = max((x for a, x in ran_by.items() if x is not None and (a == agent or (known.get(a) or {}).get("lane") == k["lane"]
                                                                               or (known.get(a) or {}).get("handle") == k["lane"])),
                           default=ran)
+            with self.lock:
+                r = self.runs.get(k["run"]) if coord else None
+                said = r.said_t if r and r.said_t else None
+            read = (self.texts.get(agent) or {}).get("t") if coord else None
             last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, ran,
-                                   self.heads["t0"]) if x is not None)
+                                   self.heads["t0"], said, read) if x is not None)
             s = self.silent.get(agent)
             if s and s["from"] != last:
                 self.silent.pop(agent)
@@ -1746,7 +2230,7 @@ class Watch:
             n = s["rings"] if s else 0
             if n >= SILENT_RINGS:
                 still = max(last, k.get("acted") or last)
-                if s and not s.get("no_step") and t - still >= NO_STEP_S:
+                if s and not s.get("no_step") and t - still >= NO_STEP_S and (not coord or self.in_turn(agent, k, t)):
                     s["no_step"] = True
                     changed = True
                     why = None if coord else self.archive(agent)
@@ -1760,29 +2244,102 @@ class Watch:
                 continue
             if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue
+            unread = None
+            if coord:
+                if t - self.unjudged.get(agent, -SILENT_RETRY_S) < SILENT_RETRY_S:
+                    continue
+                changed = True
+                if (quiet := self.quiet(agent, k, t)) is None:
+                    self.unjudged[agent] = t
+                if not quiet:
+                    continue
+                unread = self.blind.pop(agent, None)
             self.silent[agent] = {"from": last, "rings": n + 1}
             changed = True
             self.record("silent", Run(agent, k["run"], k["name"]), since=iso(last), minutes=int((t - last) // 60),
                         active_minutes=int((t - k["since"]) // 60), window=n + 1, lane=k["lane"],
-                        branches=sorted(b for b in mine if b in heads) or sorted(mine),
-                        **({"handle": k["handle"]} if k["handle"] else {}), **({"owner": "top"} if coord else {}))
+                        branches=sorted(b for b in mine if b in heads) or sorted(mine), role="coordinator" if coord else "worker",
+                        **({"handle": k["handle"]} if k["handle"] else {}), **({"owner": "top"} if coord else {}),
+                        **({"unread_minutes": int((t - unread) // 60)} if unread is not None else {}))
         if changed:
             self.save()
 
-    def parent_handle(self, parent: str, coords: dict[str, str]) -> str | None:
-        """The handle a worker's `parent` answers to: its own (`lineage`), the coordinator that launched it, or its own launcher's."""
-        return lineage(self.registry, coords, parent) or self.owners.get(parent) or (self.workers.get(parent) or {}).get("handle")
+    def in_turn(self, agent: str, k: dict, t: float) -> bool | None:
+        """Whether a coordinator is, by its runs read again, still in the turn the sweep saw it in (`k`, its `known` entry):
+        the run it is judged by is that turn's and RUNNING. A sweep's own reads are minutes old by the time it judges
+        silence, and a turn that ended meanwhile is no silence. None when the read fails."""
+        runs = self.runs_of({"id": agent, "name": k["name"], "status": "ACTIVE", "latestRunId": k["latest"]}, t, stuck=True)
+        if not runs:
+            return None
+        judge = judge_of(runs, k["latest"])
+        return bool(judge) and judge["id"] == k["run"] and judge.get("status") == "RUNNING"
+
+    def quiet(self, agent: str, k: dict, t: float) -> bool | None:
+        """Whether a coordinator with no note, push, run or streamed assistant text for its window is silent: still in its turn
+        (`in_turn`), and with no assistant text either. Its run's stream, when it is being received (`STREAM_LIVE_S`), has
+        shown every text of the run, each timed as it came, so nothing more is read. Without one (a goal run, a stream past
+        its retention, a broken one) its conversation is read, which carries no times: text the watch hasn't read there
+        before (`texts`) is a sign of life dated at this read, and the same text as at the last read is silence since that
+        read. None when a read failed and the next try decides; a conversation unread at every try for a further window
+        (`blind`) hides nothing: it is silent, the text unchecked."""
+        if not (turn := self.in_turn(agent, k, t)):
+            return turn
+        with self.lock:
+            r = self.runs.get(k["run"])
+            live = r is not None and t - r.heard_t < STREAM_LIVE_S <= t - r.opened_t
+        if not live and (msgs := self.conversation(agent)) is None:
+            return True if t - self.blind.setdefault(agent, t) >= COORD_SILENT_S else None
+        self.blind.pop(agent, None)
+        if live:
+            return True
+        said = "\0".join(str(m.get("text") or "") for m in msgs if m.get("type") == "assistant_message")
+        sig = hashlib.sha256(said.encode()).hexdigest()[:16]
+        if (self.texts.get(agent) or {}).get("sig") == sig:
+            return True
+        self.texts[agent] = {"sig": sig, "t": t}
+        return False
+
+    def placed(self, agent: str, coords: dict[str, str], known: dict[str, str | None] | None = None,
+               chain: tuple[str, ...] = ()) -> str | None:
+        """The handle `agent` answers to, by the one rule a worker and a run's sender are both placed by, or None when
+        nothing places it. Its own when it coordinates or coordinated (`lineage`, kept in `known` for a caller that asks of
+        many). Else its launcher's, found by this same rule, so a worker a worker launched is its launcher's coordinator's:
+        the agent whose Task call the watch saw launch or resume it (only that agent can resume it), else the one its
+        registration names (`by`: a workers.d entry's `launched_by`). Else the handle the watch holds for it: its
+        registration's or its note's lane, the lane a name placed it under, an API launch's owner (`owners`); a stray
+        holds none. Else its brief's launcher's (`learn`), which only places one nothing else has. `chain` is the agents
+        asked on the way here: one met again is asked nothing more, so launchers that name each other place nobody, and
+        past `LAUNCHERS_MAX` of them the next is asked only whether it coordinates."""
+        known = {} if known is None else known
+        if agent not in known:
+            known[agent] = lineage(self.registry, coords, agent)
+        if known[agent] or agent in chain or len(chain) >= LAUNCHERS_MAX:
+            return known[agent]
+        with self.kids_lock:
+            kid = dict(self.children.get(agent) or {})
+        w, chain = self.workers.get(agent) or {}, (*chain, agent)
+        task, brief = (None, kid.get("parent")) if kid.get("brief") else (kid.get("parent"), None)
+        for by in (task, w.get("by")):
+            if by and (h := self.placed(by, coords, known, chain)):
+                return h
+        if h := self.owners.get(agent) or (None if stray(kid) else w.get("handle")):
+            return h
+        return self.placed(brief, coords, known, chain) if brief else None
 
     def learn(self, agent: str, coords: dict[str, str], t: float) -> dict:
         """A sender no route knows, learned from its brief (its conversation's first user message): a worker of the first
         agent id there that is a coordinator (`lineage`: WIDTHS' "a cloud worker of the circuits coordinator (agent bc-...)"),
-        else of the current coordinator of the first registry handle it names ("a worker for the proofs lane"), kept in `children` as a Task call's worker is; {} when it names neither, read again `LEARN_RETRY_S` later."""
+        else of the first that is an agent the watch places (`placed`: a worker of a worker names the worker), else of the
+        current coordinator of the first registry handle it names ("a worker for the proofs lane"), kept in `children` as a
+        Task call's worker is; {} when it names none, read again `LEARN_RETRY_S` later."""
         if t - self.learn_tried.get(agent, -LEARN_RETRY_S) < LEARN_RETRY_S:
             return {}
         self.learn_tried[agent], self.learn_left = t, self.learn_left - 1
         msgs = self.conversation(agent) or []
         brief = next((str(m.get("text") or "") for m in msgs if m.get("type") == "user_message"), "")
-        parent = next((i for i in AGENT_RE.findall(brief) if i != agent and lineage(self.registry, coords, i)), None)
+        ids = [i for i in dict.fromkeys(AGENT_RE.findall(brief)) if i != agent]
+        parent = next((i for i in ids if lineage(self.registry, coords, i)), None) or next(
+            (i for i in ids if self.placed(i, coords, chain=(agent,))), None)
         if parent is None:
             names = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
             handle = next((h for h in re.findall(r"@([a-z][a-z0-9-]*)", brief) if h in names), None)
@@ -1801,14 +2358,15 @@ class Watch:
         return dict(kid)
 
     def place_by_name(self, agent: str) -> tuple[str, str, dict] | None:
-        """A sender no handle owns, placed by its name: when the name starts with an issue key of one lane's Linear team, or
-        with a lane's handle (`name_lane`), the sender is written to `workers.d` as that lane's worker, with how it was placed
-        (`placed_by: name` and the `issue`, or `placed_by: handle`; `workers` reads such an entry last, so its coordinator's
-        own entry or a note wins), and is that lane's worker from this run on, as a stray a note names is. Returns (the lane's
-        handle, the name, how it was placed), or None when nothing places it and it stays a stray: a name that starts
-        with neither, or one the API won't give. The name is the one the watch has (the agent list's, `watch_workers`' read,
-        `learn`'s); only a sender it has never read costs a `GET /v1/agents/{id}`, once: a failed read leaves a stray, which
-        `watch_workers` reads from the next sweep on."""
+        """A sender no handle owns, placed by its name: when the name names one lane (`name_lane`: an issue key of one lane's
+        Linear team, or a lane's handle it starts with; else `label_lane`: the lane the issue it starts with is under, for
+        a team several lanes share), the sender is written to `workers.d` as that lane's worker, with how
+        it was placed (`placed_by: name`, `label` or `team` and the `issue`, or `placed_by: handle`; `workers` reads such an
+        entry last, so its coordinator's own entry or a note wins), and is that lane's worker from this run on, as a stray a note
+        names is. Returns (the lane's handle, the name, how it was placed), or None when nothing places it and it stays a
+        stray: a name that names no one lane, or one the API won't give. The name is the one the watch has (the agent list's,
+        `watch_workers`' read, `learn`'s); only a sender it has never read costs a `GET /v1/agents/{id}`, once: a failed read
+        leaves a stray, which `watch_workers` reads from the next sweep on."""
         t, w = self.clock(), self.workers.get(agent) or {}
         with self.kids_lock:
             kid = dict(self.children.get(agent) or {})
@@ -1827,7 +2385,7 @@ class Watch:
             if agent not in self.names:             # a listed agent has its row in status.json already
                 self.worker_status[agent] = str(info.get("status") or "unknown")
         name = name[:120]
-        if not (found := name_lane(name, self.registry)):
+        if not (found := name_lane(name, self.registry) or self.label_lane(agent, name, t)):
             return None
         handle, how = found
         write_atomic(self.log.with_name("workers.d") / f"placed-{agent}.json", (json.dumps(
@@ -1836,14 +2394,17 @@ class Watch:
             with self.kids_lock:
                 self.children.pop(agent, None)
             w.pop("lane", None)
-        if agent in self.names:                     # a listed agent has an owner, not a worker's entry (`watch_workers`)
-            self.owners[agent] = handle
+        if agent in self.names and agent not in self.runless:   # a listed agent the sweep reads has an owner, not a
+            self.owners[agent] = handle                         # worker's entry (`watch_workers`)
         else:
             w = self.workers.setdefault(agent, {"heard": 0.0})
             w.update(lane=w.get("lane") or handle, handle=handle, name=name, heard=max(w["heard"], t))
         self.save()
-        print(f"{iso(t)} run ends: placed {agent} ({name}) as @{handle}'s worker by its name's "
-              + (f"issue key {how['issue']}" if "issue" in how else "leading handle"), file=sys.stderr, flush=True)
+        print(f"{iso(t)} run ends: placed {agent} ({name}) as @{handle}'s worker by "
+              + {"label": f"the lane label of its name's issue {how.get('issue')}",
+                 "team": f"its name's issue {how.get('issue')}, which has no lane label: its team's own lane",
+                 "name": f"its name's issue key {how.get('issue')}"}.get(how["placed_by"], "its name's leading handle"),
+              file=sys.stderr, flush=True)
         return handle, name, how
 
     def own_cancel(self, row: dict, agent: str, handle: str, name: str, parent: str | None, coords: dict[str, str]) -> bool:
@@ -1870,8 +2431,8 @@ class Watch:
     def run_ends(self, coords: dict[str, str], t: float) -> None:
         """Every `every_s` of `--nodes` (`{"nodes": [...], "ssh": [...], "machines_d"?, "every_s"?}`), each node's runs that
         ended since its last read (`RUNS_READER`, one ssh per node, host and root from its machines.d entry), each recorded once
-        as `run_ended` for the handle of whoever sent it: a coordinator's own or a former one's, a worker's launcher's or its
-        parent's (only its coordinator can resume it, with Task), else its lane's (`--by`, the job's lane, or a handle named in
+        as `run_ended` for the handle of whoever sent it: a coordinator's own or a former one's, a worker's launcher's
+        (`placed`: only its coordinator can resume it, with Task), else its lane's (`--by`, the job's lane, or a handle named in
         `submitted_by`) when that is a handle. The read's runs no handle owns are one record, with no handle and role `unknown`,
         marked `quiet` when infra was rung for each of its senders at an earlier run (`unplaced`).
         `run_ends.json` keeps each node's last read, the runs already seen, and when each sender sent its newest ended run (its
@@ -1934,9 +2495,10 @@ class Watch:
 
     def ring_run(self, node: str, row: dict, coords: dict[str, str], handles: set[str], ended: float,
                  quiet: set[str] = frozenset()) -> dict | None:
-        """Record `row`'s end for its sender's handle, a sender no handle owns being first placed by its name where that names
-        one lane (`place_by_name`); a run whose sender is still nobody's is returned instead, for `run_ends` to
-        record with the read's others as one (a day's unowned senders can send hundreds of runs: one ring each would bury infra)."""
+        """Record `row`'s end for its sender's handle: the one `placed` gives it, read from its brief first when the watch
+        knows no launcher for it (`learn`), else the run's own lane or its branch's, else the lane its name names
+        (`place_by_name`); a run whose sender is still nobody's is returned instead, for `run_ends` to record with the
+        read's others as one (a day's unowned senders can send hundreds of runs: one ring each would bury infra)."""
         sent = str(row.get("submitted_by") or "")
         by = AGENT_RE.search(sent)
         agent = by[0] if by else ""
@@ -1948,21 +2510,17 @@ class Watch:
             if kid:
                 kid["t"] = self.clock()             # a worker still sending runs is never forgotten
         met = stray(kid)                            # met before and placed by nothing: still unknown
-        known = agent in coords or agent in self.owners or w.get("parent") or (kid and not met) or (w.get("handle") and not met)
-        if agent and not known and not lineage(self.registry, coords, agent) and self.learn_left > 0:
+        coord = lineage(self.registry, coords, agent) if agent else None
+        handle = self.placed(agent, coords, {agent: coord}) if agent else None
+        if agent and not handle and not w.get("parent") and (met or not kid) and self.learn_left > 0:
             kid = self.learn(agent, coords, self.clock())
+            handle = self.placed(agent, coords, {agent: coord})
         parent = w.get("parent") or kid.get("parent")
         placed: dict = {}
-        if agent in coords:
-            handle, role, name = coords[agent], "coordinator", self.names.get(agent, "")
-        elif agent and (h := lineage(self.registry, coords, agent)):
-            handle, role, name = h, "coordinator", self.names.get(agent, "")
-        elif agent in self.owners:                 # an agent a coordinator launched through the API, a relaunched worker
-            handle, role, name = self.owners[agent], "worker", self.names.get(agent, "") or str(kid.get("name") or "")
-        elif w.get("handle") and not met:
-            handle, role, name = w["handle"], "worker", str(w.get("name") or "")
-        elif parent and (h := self.parent_handle(parent, coords)):
-            handle, role, name = h, "worker", str(w.get("name") or kid.get("name") or self.names.get(agent, ""))
+        if coord:
+            role, name = "coordinator", self.names.get(agent, "")
+        elif handle:                                # its launcher's, by the rule `watch_workers` places a worker by
+            role, name = "worker", str(self.names.get(agent) or w.get("name") or kid.get("name") or "")
         elif lane:
             handle, role, name = lane, "lane", ""
         elif h := branch_handle(self.branch_of(str(row.get("tree") or "")), self.registry, handles):
@@ -2221,15 +2779,18 @@ class Watch:
         """One pass: find each live agent's current run and follow it, record runs stuck in CREATING, restart an ERROR one,
         start refused continue runs, then judge every followed run."""
         t = self.clock()
+        self.linear_off, self.linear_refused = "", set()
         live, agents = {}, list(self.api.agents())
         # the key sees every agent on the account (its owner's own too);
         # only Verity's are followed, restarted or woken, and only they are status rows
         listed, agents = {a["id"] for a in agents}, [a for a in agents if verity(a)]
+        self.runless = frozenset(a["id"] for a in agents if not a.get("latestRunId"))
         self.coords = coords = holders(self.registry, self.routes)
         self.holders_all = all_holders(self.registry, self.routes)
+        kids = self.place_workers(coords, listed, t)
         for a in agents:
             recent = t - (epoch(a.get("updatedAt")) or 0) < IDLE_RECENT_S
-            if a.get("latestRunId") and (a.get("status") == "ACTIVE" or (a.get("status") == "IDLE" and recent)):
+            if a.get("latestRunId") and (a.get("status") == "ACTIVE" or (a.get("status") in ("IDLE", "ERROR") and recent)):
                 live[a["id"]] = a
         current: dict[str, tuple[dict, dict]] = {}      # run -> (agent, run record)
         judged: dict[str, dict] = {}                    # run -> agent: the run each agent read is judged by
@@ -2249,19 +2810,22 @@ class Watch:
             last = next((x for x in runs if x.get("id") == latest), None)
             if follow:
                 current[follow["id"]] = (a, follow)
-            judge = follow or next((x for x in runs if started(x) or x.get("status") == "CREATING"), None) or last
+            judge = judge_of(runs, latest)
             judged[judge["id"] if judge else latest] = a
             if judge:
                 judges[a["id"]] = judge
                 self.status_of[a["id"]] = (judge["id"], str(judge.get("status")))
+            # in error by its latest run, or by its own status should the list give one (v1 documents none: an errored
+            # run leaves its agent IDLE)
+            error = a.get("status") == "ERROR" or bool(last and last.get("status") == "ERROR")
             if a["id"] in coords:
-                self.track(a["id"], last.get("status") if last else None, t)
-            if last and last.get("status") == "FINISHED":   # not a run going: a restart runs a minute before it errors
+                self.track(a["id"], "ERROR" if error else last.get("status") if last else None, t)
+            if error:
+                errored.append((a, latest))
+            elif last and last.get("status") == "FINISHED":     # not a run going: a restart runs a minute before it errors
                 if self.errors.pop(a["id"], None) is not None or a["id"] in self.left:
                     self.left.discard(a["id"])
                     self.save()
-            elif last and last.get("status") == "ERROR":
-                errored.append((a, latest))
             self.dropped(a, last, t)
         for x in [x for x in self.down if x not in coords]:
             self.down.pop(x)
@@ -2283,21 +2847,28 @@ class Watch:
                 continue
             if why := self.ready(info.get("status"), last, bells.get(handle), t, every.get(handle)):
                 self.wake_up(a, handle, info["id"], why, t, info.get("status"))
-        self.watch_workers(coords, listed, t)
+        self.watch_workers(coords, listed, t, kids)
         self.names = {a["id"]: str(a.get("name") or "") for a in agents}
         self.agent_status = {a["id"]: str(a.get("status") or "") for a in agents}
         known, active = {}, {}
         for a in agents:
-            if a["id"] in coords and a.get("status") == "ACTIVE":
-                active[a["id"]] = since = self.active.get(a["id"], t)
-                judge = judges.get(a["id"]) or {}
-                with self.lock:
-                    r = self.runs.get(judge.get("id") or "")
-                acted = max((x for x in (epoch(a.get("updatedAt")), epoch(judge.get("updatedAt") or judge.get("createdAt")),
-                                         r.last_t if r and r.last_kind != "start" else None) if x is not None), default=None)
-                known[a["id"]] = {"name": self.names[a["id"]], "handle": coords[a["id"]], "lane": coords[a["id"]],
-                                  "run": judge.get("id") or a.get("latestRunId") or "", "since": since,
-                                  "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a)), "acted": acted}
+            if a["id"] not in coords or a.get("status") != "ACTIVE" or not a.get("latestRunId"):
+                continue
+            judge, turn = judges.get(a["id"]), self.active.get(a["id"])
+            if judge is not None:           # with its runs unread at this sweep, the turn it was last seen in stands
+                # an ACTIVE agent whose run is not RUNNING is between turns: a background wait, a run queued, or one that ended
+                turn = None if judge.get("status") != "RUNNING" else (
+                    turn if turn and turn["run"] == judge["id"] else {"run": judge["id"], "since": t})
+            if turn is None:
+                continue
+            active[a["id"]], judge = turn, judge or {}
+            with self.lock:
+                r = self.runs.get(turn["run"])
+            acted = max((x for x in (epoch(a.get("updatedAt")), epoch(judge.get("updatedAt") or judge.get("createdAt")),
+                                     r.last_t if r and r.last_kind != "start" else None) if x is not None), default=None)
+            known[a["id"]] = {"name": self.names[a["id"]], "handle": coords[a["id"]], "lane": coords[a["id"]],
+                              "run": turn["run"], "latest": a["latestRunId"], "since": turn["since"],
+                              "branches": sorted(self.branches.get(a["id"], set()) | pushed_branches(a)), "acted": acted}
         if active != self.active:
             self.active = active
             self.save()
@@ -2322,6 +2893,8 @@ class Watch:
                 r.status, r.agent_t = x["status"], epoch(a.get("updatedAt")) or 0.0
                 start = not r.streaming
                 r.streaming = True
+                if start:
+                    r.opened_t, r.said_n = self.clock(), 0
             if start:
                 start_stream(r)
         with self.lock:
@@ -2349,6 +2922,7 @@ class Watch:
             write_atomic(self.log.with_name("status.json"), body := status_bytes(snapshot(self, judged, t)))
         if self.publish:
             self.publish(body, t)
+        self.watch_handins(coords, t)       # last: a slow Linear holds up nothing else of the sweep
 
 
 def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
@@ -2357,8 +2931,9 @@ def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
     its newest run that started or is CREATING, else its latest). `watch_state` is the last finding on that run (a long call
     only while it lasts), else `followed` or `ok`; `since` is when that finding began; `run_status` is the run's status when
     the watch last read it. A worker the sweep read is a row too, with no run (`run_id` "", `run_status` unknown): its
-    `watch_state` is `worker_idle` while idle after the watch saw it ACTIVE, `worker_long` while that long spell lasts, else
-    `ok`. A value outside the pinned enums raises, so the last valid file stays."""
+    `watch_state` is `crashed` while the platform has it stopped with an error, `worker_idle` while idle after the watch
+    saw it ACTIVE, `worker_long` while that long spell lasts, else `ok`. A value outside the pinned enums raises, so the
+    last valid file stays."""
     agents = []
     for run, a in live.items():
         agent, r = a["id"], w.runs.get(run)
@@ -2376,7 +2951,8 @@ def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
                        "watch_state": state, "since": since, "restart_count": int(w.errors.get(agent, 0))})
     for agent, status in w.worker_status.items():
         k = w.workers.get(agent, {})
-        state, since = (("worker_idle", iso(k["idle_at"])) if status == "IDLE" and k.get("idle_at") is not None else
+        state, since = (("crashed", iso(k["error"]["t"])) if status != "ACTIVE" and k.get("error") else
+                        ("worker_idle", iso(k["idle_at"])) if status == "IDLE" and k.get("idle_at") is not None else
                         ("worker_long", iso(k["since"])) if status == "ACTIVE" and k.get("long") else ("ok", None))
         agents.append({"agent_id": agent, "run_id": "", "agent_status": status if status in AGENT_STATUSES else "unknown",
                        "run_status": "unknown", "watch_state": state, "since": since, "restart_count": 0})
@@ -2516,7 +3092,9 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--nodes", type=Path, default=Path("/data/agent-watch/nodes.json"),
                     help="the nodes whose ended runs ring their sender's handle (no file: none)")
     lp.add_argument("--gh-env", type=Path, default=None,
-                    help="a file with a GH_TOKEN= line: --git-remote's open PRs, whose bodies name the agents their pushes count for")
+                    help="a file with a GH_TOKEN= line (--git-remote's open PRs, whose bodies name the agents their pushes count "
+                         "for) and the Linear app's LINEAR_CLIENT_ID= and LINEAR_CLIENT_SECRET= lines (the comments of the "
+                         "issues integrators take hand-ins on, and a shared team's issues' lane labels)")
     lp.add_argument("--launcher", type=Path, default=None,
                     help="launch_coordinator.py, for a coordinator's relaunch (default: the --registry checkout's "
                          "infra/cursor/launch_coordinator.py); relaunching also needs launch.env beside --log")
@@ -2548,7 +3126,8 @@ def main(argv: list[str] | None = None) -> int:
     launcher = ns.launcher or (ns.registry.resolve().parents[3] / "infra/cursor/launch_coordinator.py" if ns.registry else None)
     watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, timers=ns.timers, wake=ns.wake, publish=publish, notes=ns.notes,
                   worker_long_s=ns.worker_long_h * 3600, git_remote=ns.git_remote, nodes=ns.nodes, launcher=launcher,
-                  open_prs=github_prs(ns.git_remote, ns.gh_env) if ns.gh_env and ns.git_remote else None)
+                  open_prs=github_prs(ns.git_remote, ns.gh_env) if ns.gh_env and ns.git_remote else None,
+                  linear=Linear(ns.gh_env, ns.log.with_name("linear-token.json")) if ns.gh_env else None)
     if ns.dry_run:
         watch.launch = lambda argv, env: (print(f"dry-run: {shlex.join(argv)}", file=sys.stderr, flush=True), (1, "", "dry-run"))[1]
         watch.launch_api = lambda key: api

@@ -11,6 +11,8 @@ binaries; and, where a CUDA toolkit is present, real builds."""
 
 from __future__ import annotations
 
+import ctypes
+import hashlib
 import json
 import struct
 import subprocess
@@ -21,7 +23,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "harness"))
 
-import sass_gate as SG  # noqa: E402
+import sass_gate as SG
 
 FIX = Path(__file__).parent / "fixtures" / "sass_gate"
 NOTES = json.loads((FIX / "tool_notes.json").read_text())
@@ -828,13 +830,35 @@ def elf(machine: int, sections: dict[str, bytes]) -> bytes:
     return header + body + table
 
 
-def fatbin(entries: list[tuple[int, bytes, int]]) -> bytes:
-    """A fatbin of (kind, payload, flags) entries: 2 an ELF, 1 PTX."""
+def fatbin(entries: list[tuple]) -> bytes:
+    """A fatbin of (kind, payload, flags) entries: 2 an ELF, 1 PTX. A Zstandard entry (`zstd`) adds the two sizes its
+    header states: its frame's and its content's."""
     body = b""
-    for kind, payload, flags in entries:
+    for kind, payload, flags, *sizes in entries:
+        stored, size = sizes or (0, 0)
         padded = payload + bytes(-len(payload) % 8 + 8)
-        body += struct.pack("<HHIQ", kind, 0x101, 64, len(padded)) + bytes(24) + struct.pack("<Q", flags) + bytes(16) + padded
+        body += (struct.pack("<HHIQI", kind, 0x101, 64, len(padded), stored) + bytes(20) + struct.pack("<QQQ", flags, 0, size)
+                 + padded)
     return struct.pack("<IHHQ", SG.FATBIN_MAGIC, 1, 16, len(body)) + body
+
+
+def frame(content: bytes) -> bytes:
+    """`content` as one Zstandard frame, by the library the gate reads one with."""
+    z = SG._libzstd()
+    z.ZSTD_compressBound.restype = z.ZSTD_compress.restype = ctypes.c_size_t
+    z.ZSTD_compressBound.argtypes = [ctypes.c_size_t]
+    z.ZSTD_compress.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_size_t, ctypes.c_int]
+    out = ctypes.create_string_buffer(z.ZSTD_compressBound(len(content)))
+    n = z.ZSTD_compress(out, len(out), content, len(content), 3)
+    assert not z.ZSTD_isError(n)
+    return out.raw[:n]
+
+
+def zstd(kind: int, content: bytes, stored: int | None = None, size: int | None = None, data: bytes | None = None) -> tuple:
+    """A Zstandard entry holding `content`, as nvcc writes one; `stored`, `size` and `data` put something else in its
+    header or its payload."""
+    data = frame(content) if data is None else data
+    return kind, data, 0x8011, len(data) if stored is None else stored, len(content) if size is None else size
 
 
 def test_the_fatbin_parser_finds_every_cubin_of_every_fatbin_even_same_named_ones():
@@ -855,6 +879,76 @@ def test_the_fatbin_parser_finds_every_cubin_of_every_fatbin_even_same_named_one
 def test_what_the_parser_cannot_read_fails(data, match):
     with pytest.raises(SG.SassGateFailed, match=match):
         SG.device_code(data, "x")
+
+
+#: the cubin `cuobjdump -xelf` unpacks from the object zstd_entry.fatbin is the device code of (zstd_entry.sh prints it)
+ZSTD_CUBIN_SHA256 = "aa7a9540e14790463e92ddaab238f4b6501ac5e4157482906f61691fc833521f"
+
+
+def test_a_zstandard_entry_nvcc_wrote_is_read_as_the_cubin_cuobjdump_unpacks():
+    data = (FIX / "zstd_entry.fatbin").read_bytes()
+    kind, _, ehs, _ = struct.unpack_from("<HHIQ", data, 16)
+    assert (kind, struct.unpack_from("<Q", data, 16 + 40)[0], data[16 + ehs:20 + ehs]) == (2, 0x8011, SG.ZSTD_MAGIC)
+    cubins, ptx = SG.device_code(data, "zstd_entry.fatbin")
+    assert [hashlib.sha256(c).hexdigest() for c in cubins] == [ZSTD_CUBIN_SHA256] and ptx == []
+    assert struct.unpack_from("<H", cubins[0], 0x12)[0] == SG.EM_CUDA and SG._elf_size(cubins[0]) == len(cubins[0])
+    assert ".text.scale_add" in SG._sections(cubins[0])
+    assert SG.device_code(elf(62, {".text": b"\x90" * 16, ".nv_fatbin": data}), "k.o") == (cubins, [])
+
+
+def test_zstandard_entries_are_read_each_from_its_own_frame_even_same_named_ones():
+    a, b = elf(SG.EM_CUDA, {".text.k": b"\x01" * 40}), elf(SG.EM_CUDA, {".text.k": b"\x02" * 4000})
+    two = fatbin([zstd(2, a), zstd(1, b"fma.rn.ftz.f32 %f4, %f1, %f2, %f3;\0"), (2, a, 0x11)]) + bytes(8) + fatbin([zstd(2, b)])
+    assert len(two) < len(b)
+    assert SG.device_code(elf(62, {".nv_fatbin": two}), "lib.so") == ([a, a, b], ["fma.rn.ftz.f32 %f4, %f1, %f2, %f3;"])
+
+
+CUBIN = elf(SG.EM_CUDA, {".text.k": b"\x01" * 400})
+
+
+@pytest.mark.parametrize("entry,match", [
+    (zstd(2, CUBIN, size=len(CUBIN) + 1), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, size=len(CUBIN) - 1), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, size=SG.MAX_INFLATED + 1), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, stored=0), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, stored=1 << 20), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, data=SG.ZSTD_MAGIC + CUBIN), "its frame doesn't bear out"),
+    (zstd(2, CUBIN, stored=len(frame(CUBIN)) - 1), "libzstd can't read"),
+    (zstd(2, CUBIN, data=frame(CUBIN) + bytes(3)), "libzstd can't read"),
+    (zstd(2, CUBIN, data=frame(CUBIN) + frame(CUBIN)), "libzstd can't read"),
+])
+def test_a_zstandard_entry_that_is_not_what_its_header_states_fails_with_the_fix(entry, match):
+    with pytest.raises(SG.SassGateFailed, match=match) as ex:
+        SG.device_code(fatbin([entry]), "x")
+    assert "build with nvcc --no-compress, or ship the cubin" in str(ex.value)
+
+
+def test_a_zstandard_entry_without_the_library_fails_with_the_fix(monkeypatch):
+    def absent(name):
+        raise OSError(f"{name}: cannot open shared object file")
+    entry = fatbin([zstd(2, CUBIN)])
+    monkeypatch.setattr(SG, "_ZSTD", [])
+    monkeypatch.setattr(SG.ctypes, "CDLL", absent)
+    with pytest.raises(SG.SassGateFailed, match=r"no libzstd\.so\.1 to read it with .*build with nvcc --no-compress"):
+        SG.device_code(entry, "x")
+    assert SG.device_code(fatbin([(2, CUBIN, 0x11)]), "x") == ([CUBIN], [])
+
+
+def test_a_payload_stored_as_it_is_under_the_zstandard_flag_is_read_as_it_was():
+    text = b"add.rn.f32 %f1, %f2, %f3;\0"
+    assert SG.device_code(fatbin([zstd(2, CUBIN, data=CUBIN), zstd(1, text, data=text)]), "x") == ([CUBIN], [text[:-1].decode()])
+    with pytest.raises(SG.SassGateFailed, match="unknown fatbin entry"):
+        SG.device_code(fatbin([zstd(2, CUBIN, data=b"\x01" * 64)]), "x")
+
+
+@pytest.mark.parametrize("entry,match", [
+    (zstd(2, b"\x01" * 64), "unknown fatbin entry"),
+    (zstd(2, CUBIN[:-8]), "a cubin of"),
+    ((2, frame(CUBIN), SG.FATBIN_COMPRESSED | SG.FATBIN_ZSTD, len(frame(CUBIN)), len(CUBIN)), "compressed fatbin entry"),
+])
+def test_a_zstandard_entrys_content_is_held_to_what_a_stored_one_is(entry, match):
+    with pytest.raises(SG.SassGateFailed, match=match):
+        SG.device_code(fatbin([entry]), "x")
 
 
 def test_has_device_code_reads_the_section_headers(tmp_path):
@@ -984,7 +1078,9 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
     listings can't: a toolkit whose expansions or notes differ, and a real host ELF's fatbin. A build passes only from a
     toolkit pinned for its target with a numeric run; an sm_90a cubin from any other fails closed (12.9 writes it no ptxas
     note, 13.0 unpinned arguments), and one from 13.0.1 fails only on the div and sqrt slow-path bodies its numeric run
-    didn't pin (`test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested`)."""
+    didn't pin (`test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested`). The library is built a
+    second time with its device code compressed (nvcc's --compress-mode=size, a Zstandard entry), and that build's verdict is
+    the uncompressed build's, the file's own path, digest and size aside."""
     try:
         tools = SG.find_tools()
     except SG.SassGateFailed as ex:
@@ -996,9 +1092,11 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
     pinned = any(t["version"] in version and t["branch"] in version and t["numeric"] and f"-arch {arch} -m 64" in t["args"]
                  for t in SG.load_pins()["toolkits"].values())
     base = [str(nvcc), "-O3", "-std=c++17", "-gencode", f"arch=compute_{arch[3:]},code={arch}", *flags]
-    for out, extra in (("probe.cubin", ["-cubin"]), ("libprobe.so", ["-Xcompiler", "-fPIC", "-shared", "--no-compress"])):
+    recs = {}
+    for out, extra in (("probe.cubin", ["-cubin"]), ("libprobe.so", ["-Xcompiler", "-fPIC", "-shared", "--no-compress"]),
+                       ("libprobe-zstd.so", ["-Xcompiler", "-fPIC", "-shared", "--compress-mode=size"])):
         subprocess.run([*base, *extra, "-o", str(tmp_path / out), str(FIX / src)], check=True)
-        rec = SG.scan(tmp_path / out, tools, None)
+        rec = recs[out] = SG.scan(tmp_path / out, tools, None)
         code = [c for c in rec["cubins"] if c["functions"]]
         assert rec["cross_check"]["agree"] and len(code) == 1, (out, rec["cross_check"], len(code))
         assert (code[0]["toolkit"] is not None) is pinned, (out, code[0]["unpinned"])
@@ -1015,3 +1113,7 @@ def test_a_real_build(tmp_path, arch, src, flags, ok):
         elif pinned:
             fns = {o["function"] for o in rec["offending"]}
             assert fns and (fns <= FP32_KERNELS or src == "ftz_refused.cu"), (out, fns)
+    packed = (tmp_path / "libprobe-zstd.so").read_bytes()
+    typ, off, size = SG._sections(packed)[".nv_fatbin"]
+    assert packed[off:off + size].count(SG.ZSTD_MAGIC) >= 1 and b"\x7fELF" not in packed[off:off + size]
+    assert all(recs["libprobe-zstd.so"][k] == v for k, v in recs["libprobe.so"].items() if k not in ("path", "sha256", "bytes"))

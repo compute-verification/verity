@@ -44,8 +44,11 @@ STORED_ONLY = ("updatedAt", "updatedBy", "wasDue", "priority", "prioritySet", "p
 
 
 class Route:
-    def __init__(self, url: str = GOALS) -> None:
-        self.base = url
+    """The page's route. ``key`` is a site key with `events:read`, for a machine that holds no Cursor identity: it only
+    reads. Without one every call carries this agent's identity."""
+
+    def __init__(self, url: str = GOALS, key: str | None = None) -> None:
+        self.base, self.key = url, key
         self._oidc = _Identity(GOALS)
 
     def call(self, body: dict | None = None) -> list[dict]:
@@ -53,9 +56,16 @@ class Route:
         data = None if body is None else json.dumps(body).encode()
         headers = {"Content-Type": "application/json"} if data else {}
         what = f"{method} {GOALS}"
+        if self.key and body is not None:
+            raise SlackError(f"{what}: a site key only reads the page; a write carries an agent's Cursor identity")
+
+        def send(token: str) -> dict:
+            return http_json(method, self.base, data, {"Authorization": f"Bearer {token}", **headers})
         try:
-            out = self._oidc.send(lambda t: http_json(method, self.base, data, {"Authorization": f"Bearer {t}", **headers}))
+            out = send(self.key) if self.key else self._oidc.send(send)
         except urllib.error.HTTPError as e:
+            if e.code == 401 and self.key:
+                raise RouteError(f"{what}: the route rejected the site key (HTTP 401): it takes a live one with events:read", 401) from None
             if e.code == 400:
                 try:
                     message = json.loads(e.read(65536)).get("message")

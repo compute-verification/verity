@@ -57,8 +57,12 @@ H200s. An entry without both, or an instruction `EXCEPTABLE` doesn't list, fails
 
 The cubins come from a .cubin, a fatbin, or a host ELF's .nv_fatbin section (parsed here, since ``cuobjdump -xelf`` writes
 same-named cubins over each other), each disassembled by nvdisasm; ``cuobjdump -sass`` of the whole binary must list the same
-flagged instructions, or the gate fails. A compressed fatbin entry fails too (build with nvcc's ``--no-compress``, or ship the
-cubin), as does a PTX entry with an .ftz or .approx instruction or div.full. Passes are cached by the binary's sha256, this
+flagged instructions, or the gate fails. A fatbin entry nvcc compressed as a Zstandard frame (its ``--compress-mode=size``, and
+what CUDA 13.3's nvcc writes of a large cubin by default) is read from that frame by the system's ``libzstd.so.1``, and the
+cross-check holds the result to cuobjdump's own reading. An entry the gate can't read fails, with the build that needs no
+reader (nvcc's ``--no-compress``, or ship the cubin): one in the older compression, a Zstandard one where there is no
+``libzstd.so.1``, and one whose frame isn't the size its header states. So does a PTX entry with an .ftz or .approx instruction
+or div.full. Passes are cached by the binary's sha256, this
 file's, the pins' and the tools' versions (``POUW_SASS_GATE_CACHE``, default ``~/.cache/pouw-harness/sass-gate``; ``none``
 disables).
 
@@ -76,6 +80,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import ctypes
 import hashlib
 import json
 import os
@@ -105,6 +110,11 @@ PAGE = 4096
 PTX_BAD = re.compile(r"\.(ftz|approx)\b|\bdiv\.full\b")
 FATBIN_MAGIC = 0xBA55ED50
 FATBIN_COMPRESSED = 0x2000
+#: an entry whose payload is one Zstandard frame (it begins with the format's magic): the frame's bytes are the u32 at
+#: offset 16 of the entry's header (the payload pads them to 8), and its content's the u64 at offset 56
+FATBIN_ZSTD = 0x8000
+ZSTD_MAGIC = b"\x28\xb5\x2f\xfd"
+MAX_INFLATED = 1 << 31
 EM_CUDA = 190
 SHT_NOTE = 7
 MAX_LISTED = 20
@@ -1305,8 +1315,47 @@ def _elf_size(data: bytes) -> int:
     return max(ends)
 
 
+_ZSTD: list[ctypes.CDLL] = []
+
+
+def _libzstd() -> ctypes.CDLL:
+    """The system's Zstandard library, loaded by the first entry that needs it."""
+    if not _ZSTD:
+        z = ctypes.CDLL("libzstd.so.1")
+        z.ZSTD_getFrameContentSize.restype = ctypes.c_ulonglong
+        z.ZSTD_getFrameContentSize.argtypes = [ctypes.c_char_p, ctypes.c_size_t]
+        z.ZSTD_decompress.restype = ctypes.c_size_t
+        z.ZSTD_decompress.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_size_t]
+        z.ZSTD_isError.restype = ctypes.c_uint
+        z.ZSTD_isError.argtypes = [ctypes.c_size_t]
+        _ZSTD.append(z)
+    return _ZSTD[0]
+
+
+def _inflate(payload: bytes, stored: int, size: int, where: str) -> bytes:
+    """A Zstandard entry's content: the one frame in the payload's first `stored` bytes, which must hold exactly the `size`
+    bytes the entry's header states. Anything else fails, with the build that needs no reader."""
+    fix = "build with nvcc --no-compress, or ship the cubin"
+    try:
+        z = _libzstd()
+    except (OSError, AttributeError) as ex:
+        raise SassGateFailed(f"{where}: a Zstandard-compressed fatbin entry, and no libzstd.so.1 to read it with ({ex}); "
+                             f"{fix}") from ex
+    frame = payload[:stored]
+    if not (0 < stored <= len(payload) and 0 < size <= MAX_INFLATED and z.ZSTD_getFrameContentSize(frame, stored) == size):
+        raise SassGateFailed(f"{where}: a Zstandard-compressed fatbin entry whose header ({stored} bytes holding {size}) "
+                             f"its frame doesn't bear out; {fix}")
+    out = ctypes.create_string_buffer(size)
+    n = z.ZSTD_decompress(out, size, frame, stored)
+    if z.ZSTD_isError(n) or n != size:
+        raise SassGateFailed(f"{where}: a Zstandard-compressed fatbin entry libzstd can't read as the {size} bytes its "
+                             f"header states; {fix}")
+    return out.raw
+
+
 def fatbin_entries(data: bytes, where: str) -> tuple[list[bytes], list[str]]:
-    """The ELF cubins and PTX texts of one or more concatenated fatbins; a compressed or unknown entry fails."""
+    """The ELF cubins and PTX texts of one or more concatenated fatbins, a Zstandard entry's read from its frame; an entry
+    in the older compression or of an unknown kind fails."""
     cubins, ptx, pos = [], [], 0
     while pos < len(data):
         magic, _, hsz, fsz = struct.unpack_from("<IHHQ", data, pos)
@@ -1320,10 +1369,15 @@ def fatbin_entries(data: bytes, where: str) -> tuple[list[bytes], list[str]]:
             if flags & FATBIN_COMPRESSED:
                 raise SassGateFailed(f"{where}: a compressed fatbin entry (kind {kind}) the gate can't read; build with "
                                      "nvcc --no-compress, or ship the cubin")
+            room = psz
+            if flags & FATBIN_ZSTD and payload[:4] == ZSTD_MAGIC:
+                payload = _inflate(payload, struct.unpack_from("<I", data, e + 16)[0],
+                                   struct.unpack_from("<Q", data, e + 56)[0], where)
+                room = len(payload)
             if kind == 2 and payload[:4] == b"\x7fELF":
                 size = _elf_size(payload)
-                if size > psz:
-                    raise SassGateFailed(f"{where}: a cubin of {size} bytes in a {psz}-byte fatbin entry")
+                if size > room:
+                    raise SassGateFailed(f"{where}: a cubin of {size} bytes in a {room}-byte fatbin entry")
                 cubins.append(payload[:size])
             elif kind == 1:
                 ptx.append(payload.rstrip(b"\0").decode("utf-8", "replace"))

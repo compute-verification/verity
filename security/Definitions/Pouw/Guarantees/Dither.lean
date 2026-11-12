@@ -262,15 +262,15 @@ a replica's size.
 So the accepted share is published with its `ε`. A failed replica voids only its own period, and on the accepted set
 `S` the fleet frees at most `Σ_{u ∈ S} ε_u C_u + Λ_S (ln (Λ / Λ_S) + ln (1/δ_coin))`, `Λ_S = Σ_{u ∈ S} 1/η_u`, for every
 `S` at once: at equal rates `η = q / C`, `ε_u + ln(N / (s δ_coin)) / q` of the accepted credit at `s` accepted
-replicas. The union bound over replicas paid `ln(N / δ_coin) / q` at every `s`: at the served parameters (ACCEL's
-PROTOCOL.md: `δ_coin = 1e-6`, `q = 13,816` checks a replica-week) the luck's share is 0.1000% with every replica
-accepted, against the union's 0.2177% (H200 V4) and 0.2206% (RTX PRO 6000 V4). A headline taking the smaller of this
-bound and another tier's runs each at `δ_coin / 2`.
+replicas. The union bound over replicas paid `ln(N / δ_coin) / q` at every `s`: at D6's design point, which is not
+served (ACCEL's PROTOCOL.md: `δ_coin = 1e-6`, `q = 13,816` checks a replica-week), the luck's share is 0.1000% with
+every replica accepted, against the union's 0.2177% (H200 V4) and 0.2206% (RTX PRO 6000 V4). A headline taking the
+smaller of this bound and another tier's runs each at `δ_coin / 2`.
 
 The failure is `δ_coin + Σ_u κmax_u`: pooling takes `ln N` out of the luck, not `Σ_u κ_u` out of the failure.
 Each `κ_u` carries its `k` sampling blocks' degenerate dithers, `k (κ_dmm + κ_dsha)`, beside `κ_S` and `δ_crypto`
 (`WorkMoment`), so the failure stays near `δ_coin` only within the budget of a replica's `κ` at most `δ_coin / N` and
-a sampling block's `κ_dmm + κ_dsha` at most `δ_coin / (N k)`: at the served fleet (`δ_coin = 1e-6`, H200 V4) about
+a sampling block's `κ_dmm + κ_dsha` at most `δ_coin / (N k)`: at D6's design fleet (`δ_coin = 1e-6`, H200 V4) about
 `2^-43` and `2^-73`. No premise yet gives `κ_dmm` or `κ_dsha` a value.
 
 Its rate stays one replica's: replicas that cheat on one shared coin attain it (`Proofs.Pouw.Pool`'s
