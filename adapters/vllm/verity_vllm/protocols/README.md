@@ -15,6 +15,6 @@ module. From the package itself: `Context`, `Refused`, `WeightsView`, `adapter`,
 `linear.vllm_site`: `attach` and `discover`. From the store's modules: `NodeMemory` of `registry`, `PageLayout` of its
 own `interface`, `Lines` of `memory_map`, `Binder`, `Every`, `WeightRegion` and `model_weights` of `binder`, and
 `StoreBackend` and `prove` of `remote`; one test of `verity` also reads `registry`'s private `_page_blocks`. No name of
-`pous.py` or `spot.py` is imported from outside: each is reached as its option, through the package. `interface`, both
-modules of `linear/` and the store's `registry`, `interface`, `memory_map` and `binder` declare these names in
-`__all__`.
+`pous.py` or `spot.py` is imported from outside: each is reached as its option, through the package. The package,
+`interface`, both modules of `linear/` and the store's `registry`, `interface`, `memory_map` and `binder` declare these
+names in `__all__`.

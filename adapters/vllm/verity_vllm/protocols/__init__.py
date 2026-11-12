@@ -62,7 +62,7 @@ from verity_vllm.protocols.interface import Context, Installed, Option, Target
 __all__ = ["ADAPTERS", "DRIVERS", "RECORD_SCHEMA", "SITES", "Composition", "Context", "Installed", "Option", "Refused", "Target",
            "adapter", "driver",
            "WeightsView", "at_capture", "at_commit", "at_row", "capture_context", "commit_context", "commit_guard", "engine_fills",
-           "from_engine", "install", "into_verdict", "load_settings",
+           "from_engine", "install", "into_verdict", "load_settings", "own_auditor",
            "parse", "refusals", "register_weights", "requires_build", "undeclared", "weights_view", "CIRCUITS", "circuit_registry",
            "traced_as"]
 
