@@ -24,6 +24,7 @@ import hashlib
 import importlib.util
 import sys
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
@@ -33,7 +34,7 @@ ROOTS = 1 << 12
 POISON = 0xA5
 
 
-def rows_bench():
+def rows_bench() -> ModuleType:
     name = "served_zk_rows_bench"
     if name not in sys.modules:
         spec = importlib.util.spec_from_file_location(name, HERE / "rows_bench.py")
