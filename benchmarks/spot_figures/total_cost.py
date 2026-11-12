@@ -512,7 +512,7 @@ def _point(job: tuple) -> dict:
         count = two_stage_exfil(cells, {x.stratum: 1 for x in cells}, g.replay_blocks, 0.0, m.delta, m.served,
                                 form == "patterns")
         top = min(g.footprint, sum(x.n * x.bits for x in cells))
-        one += two_stage_price(f1.split_cells(cells, None), dict.fromkeys(range(len(cells)), 1), 1)[2]
+        one += two_stage_price(f1.split_cells(cells, "template"), dict.fromkeys(range(len(cells)), 1), 1)[2]
         return {"exfiltration": {"y": min(count, served), "count": count, "binds": "served", "plan": None,
                                  **({"lean": None, "planner": None, "theta": None} if lean else {}),
                                  "registration_sample": 0, "shared": 0.0, "padding": 0.0, "sessions": 0.0,

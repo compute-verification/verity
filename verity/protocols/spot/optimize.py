@@ -51,7 +51,8 @@ incorrect proof blocks of 2^{b(T)}, each T charged its own blocks' committed bit
 log2 (a wholly incorrect replay block is charged all its bits, so the bound is near Λ/q of them), `two_stage_price`
 prices a sampled replay block's proving, each type's statements its own or its verification phase's
 (`two_stage_statements`), and `two_stage_design` the design with the least bound at a budget, width-stratified
-(the public size classes up to a threshold in one stratum, each wider one in its own) or uniform (one stratum).
+(the public size classes up to a threshold in one stratum, each wider one in its own; on request also each distinct
+width in its own, `two_stage_strata`), uniform (one stratum) or by template (each template a stratum).
 """
 from __future__ import annotations
 
@@ -1406,7 +1407,24 @@ def _size_class(bits: float) -> int:
     return w
 
 
+def two_stage_strata(cells: Iterable[Cell], merged: int | str | None) -> list[Cell]:
+    """The cells in the strata of a `two_stage_design` row whose `merged` is this: the public size classes
+    (`unit_class`) up to `merged` in stratum 0 and each wider class in the stratum of its bits; `merged` None, each
+    distinct width in a stratum of its own, named by the width's place among the cells' widths in increasing order; or
+    `merged` "template", a by-template design's, each cell the stratum of its position."""
+    cells = list(cells)
+    if merged == "template":
+        return [replace(c, stratum=i) for i, c in enumerate(cells)]
+    if merged is None:
+        place = {bits: i for i, bits in enumerate(sorted({c.bits for c in cells}))}
+        return [replace(c, stratum=place[c.bits]) for c in cells]
+    return [replace(c, stratum=0 if (w := _size_class(c.bits)) <= merged else w) for c in cells]
+
+
 def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
+                     widths: bool = False,
+                     margin: float = 0.0,
+                     kappas: Sequence[float] | None = None,
                      boundary: float = 0.0, h: float = 0.0, stratify: bool | str = True, served: float | None = None,
                      union: bool = False, registration: float = 0.0, fanout: int = 1,
                      sessions: str = "statements") -> dict | None:
@@ -1414,12 +1432,15 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
     to a threshold into stratum 0 and gives each wider class a stratum of its own, the threshold chosen with κ: at the
     narrowest class every class is its own stratum, and at the widest the design is the uniform one, so it is never
-    worse.  At each κ of `KAPPAS` it samples k_t = κ n_t (b_t + ℓ_t)/B of stratum t's n_t proof blocks, at least 1 and at
+    worse.  A class's stratum is sampled at the rate its widest block asks, so with `widths` the family also holds the
+    designs that give each distinct width a stratum of its own (`merged` None, `two_stage_strata`): a block narrower
+    than its class's widest is then sampled at its own bits' rate, and the design is again never worse.  At each κ of
+    `KAPPAS` it samples k_t = κ n_t (b_t + ℓ_t)/B of stratum t's n_t proof blocks, at least 1 and at
     most n_t, at b_t the stratum's widest bits, ℓ_t = log2(e R n_t) and B a replay block's bits: at κ = 1 one incorrect
     proof block of a stratum's widest, with its location, leaks as much a unit of escape as a wholly incorrect replay
     block does.  With `stratify` "template" each cell is a stratum of its own, the strata the verifier's two-stage
     rule registers (`Spot.Select.Counts`: one whole count a template of the check): the row's `k` is each cell's
-    count by its position in `cells`, its `merged` None, and `two_stage_counts` writes it by name.  Under a
+    count by its position in `cells`, its `merged` "template", and `two_stage_counts` writes it by name.  Under a
     served-output cap (`served`, `union` and `fanout`, as `two_stage_exfil` takes them) b_t is at
     most the cap read at the fan-out and B is a replay block's capped charge, every T counted.
 
@@ -1441,8 +1462,15 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     the smallest table allows), each count held to its table, and no K above a template's table has a design.  Both
     are priced at a proof block's seconds and one fixed cost a session (`two_stage_statements`).
 
+    With `margin` m > 0 the family also holds, at each threshold and κ, the design that samples (1 + m) k_t, at most
+    n_t, of every stratum but the one whose statements cost the most proving at those k: where one stratum is most of
+    the proving a margin on the rest costs little, and the design is again never worse.  With `kappas`, some of
+    `KAPPAS`, the family holds only the designs at those κ: k_t grows with κ, so a caller that holds down the proof
+    blocks a sampled replay block proves pins it.
+
     Its row:
-    `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `registration`, `registration_sample` (K, the
+    `merged` (the widest size class in stratum 0, None where each width is a stratum, "template" where each cell is),
+    `kappa`, `margin` (m where its k carry it, else 0), `k`, `q`, `registration`, `registration_sample` (K, the
     replay blocks a verification phase samples; 0 with no `registration`), `shared` and `padding` (their shares of
     proving), `sessions` (a verification phase's sessions, `two_stage_statements`'s, over all its sampled replay
     blocks), `form` (the `sessions` asked for), `largest` and `tables` (the largest session in proof blocks, and the
@@ -1453,6 +1481,10 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     `Claims.Sampling.AdmissibleTwoRankin` alone: it misses each set of replay blocks with probability at most the
     product of 1 − q over them, which a uniform K of n does at q = K/n."""
     cells = list(cells)
+    if not margin >= 0:
+        raise ValueError(f"a margin is at least 0, not {margin}")
+    if kappas is not None and not (kappas and set(kappas) <= set(KAPPAS)):
+        raise ValueError(f"a design's κ are some of KAPPAS, not {tuple(kappas)}")
     if not cells or not budget >= boundary:
         return None
     if stratify not in (True, False, "template"):
@@ -1464,9 +1496,11 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
                          "(`stratify` \"template\" and a `registration`)")
     if sessions == "table" and any(c.table == inf for c in cells):
         raise ValueError("a session of one table needs each cell's `table`, its type's proof blocks a table holds")
-    classes = [_size_class(c.bits) for c in cells]
+    classes = {_size_class(c.bits) for c in cells}
     by_template = stratify == "template"
-    thresholds = [None] if by_template else sorted(set(classes)) if stratify else [max(classes)]
+    thresholds: list[int | str | None] = ["template"] if by_template else sorted(classes) if stratify else [max(classes)]
+    if stratify is True and widths:
+        thresholds.append(None)
     charge = fsum(c.n * c.bits for c in cells)
     if served is not None:
         charge = two_stage_exfil(cells, {c.stratum: 1 for c in cells}, 1, 0.0, 0.5, served, union, fanout=fanout)
@@ -1476,17 +1510,24 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     if sessions == "table":
         top = floor(min(min(c.table for c in cells), registration))
         tables = sorted({x for x in [2 ** e for e in range(top.bit_length())] + [top] if 1 <= x <= top})
-    for merged in thresholds:
-        split = ([replace(c, stratum=i) for i, c in enumerate(cells)] if by_template
-                 else [replace(c, stratum=0 if w <= merged else w) for c, w in zip(cells, classes)])
+    for merged, m in [(t, x) for t in thresholds for x in ((0.0, margin) if margin > 0 else (0.0,))]:
+        split = two_stage_strata(cells, merged)
         strata: dict[int, float] = {}
         widest: dict[int, float] = {}
         for c in split:
             strata[c.stratum] = strata.get(c.stratum, 0.0) + c.n
             widest[c.stratum] = max(widest.get(c.stratum, 0.0), min(c.bits, inf if served is None else served * fanout))
         for kappa in KAPPAS:
+            if kappas is not None and kappa not in kappas:
+                continue
             k = {t: min(ceil(n), max(1, ceil(kappa * n * (widest[t] + 1 / _LN2F + log2(replay_blocks * n)) / charge)))
                  if charge > 0 else 1 for t, n in strata.items()}
+            if m:
+                cost: dict[int, float] = {}
+                for c, r in zip(split, two_stage_statements(split, k)):
+                    cost[c.stratum] = cost.get(c.stratum, 0.0) + r["prove"]
+                most = max(cost, key=cost.__getitem__)
+                k = {t: v if t == most else min(ceil(strata[t]), ceil((1 + m) * v)) for t, v in k.items()}
             if (key := (merged, *sorted(k.items()))) in seen:
                 continue
             seen.add(key)
@@ -1512,7 +1553,7 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
                 per = replay + interior + prove
                 sampled = q * replay_blocks
                 rows.append({"design": "template" if by_template else "stratified" if stratify else "uniform",
-                             "merged": merged, "kappa": kappa,
+                             "merged": merged, "kappa": kappa, "margin": m,
                              "k": k, "q": q, "registration": registration,
                              "registration_sample": count if registration else 0,
                              "shared": fsum(r["prove"] for r in st if r["shared"]) / prove if prove > 0 else 0.0,
@@ -1558,5 +1599,5 @@ __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BIT
            "max_harm", "max_harm_check", "met_replay", "needs_benchmark", "overlaps", "perturb", "pinned_ands",
            "registration_count", "registration_sample", "SESSIONS", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
            "touched", "two_stage_counts", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin",
-           "two_stage_statements", "weigh",
+           "two_stage_statements", "two_stage_strata", "weigh",
            "work_draws", "work_law"]

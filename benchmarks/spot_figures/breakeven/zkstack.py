@@ -55,7 +55,7 @@ def bits(r: float, t: float, delta: float, served: float, replay_blocks: float) 
 def design(g, m, budget: float, span: float, t: float) -> dict | None:
     """The planner's designs at `budget`, each priced as `optimize.two_stage_design` prices it, under this form; None
     when none is within the budget."""
-    split = f1.split_cells(list(g.cells), None)
+    split = f1.split_cells(list(g.cells), "template")
     strata = {x.stratum: x.n for x in split}
     charge = sum(x.n * x.bits for x in split)
     widest = {x.stratum: min(x.bits, m.served) for x in split}
@@ -73,7 +73,7 @@ def design(g, m, budget: float, span: float, t: float) -> dict | None:
             continue
         q = count / (span or g.replay_blocks)
         r2 = min(min(k[s], n) / n for s, n in strata.items())
-        rows.append({"merged": None, "k": k, "q": q, "r2": r2,
+        rows.append({"merged": "template", "k": k, "q": q, "r2": r2,
                      "kdelta": k_delta(q * r2, m.delta / (C_EXTRACT ** 2 * t)),
                      "bits": bits(q * r2, t, m.delta, m.served, g.replay_blocks),
                      "replay_sample": q * g.replay_blocks, "registration_sample": count if span else 0})

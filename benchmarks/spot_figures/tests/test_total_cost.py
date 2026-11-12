@@ -295,17 +295,17 @@ def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
 
 
 def test_a_by_template_designs_strata_are_its_cells():
-    """A by-template design's row has no merged size class: each cell is a stratum by its position
-    (`figure1.split_cells`), so its write form and computed share are those of the width-stratified row with the same
-    strata, and the series carry its counts by position."""
+    """A by-template design's row has no merged size class (its `merged` is "template"): each cell is a stratum by
+    its position (`figure1.split_cells`), so its write form and computed share are those of the width-stratified row
+    with the same strata, and the series carry its counts by position."""
     cells = [Cell(100, 16, prove=1.0, fixed=50.0, cap=1000), Cell(1, 64, stratum=64, prove=1.0, cap=10)]
     width = {"merged": 16, "k": {0: 2, 64: 1}, "q": 1e-3, "registration_sample": 0}
-    template = {"design": "template", "merged": None, "k": {0: 2, 1: 1}, "q": 1e-3, "registration_sample": 0}
-    assert [c.stratum for c in f1.split_cells(cells, None)] == [0, 1]
+    template = {"design": "template", "merged": "template", "k": {0: 2, 1: 1}, "q": 1e-3, "registration_sample": 0}
+    assert [c.stratum for c in f1.split_cells(cells, "template")] == [0, 1]
     assert [c.stratum for c in f1.split_cells(cells, 16)] == [0, 64]
     assert t.computed_proving(cells, template, (True, False)) == t.computed_proving(cells, width, (True, False))
     assert t.write_form(cells, template, 4, .01, 500) == t.write_form(cells, width, 4, .01, 500) > 0
-    assert f1._plan(template) == {"merged": None, "q": 1e-3, "k": {"0": 2, "1": 1}}
+    assert f1._plan(template) == {"merged": "template", "q": 1e-3, "k": {"0": 2, "1": 1}}
     assert f1._plan(width)["k"] == {"<=16": 2, "64": 1}
 
 
@@ -345,7 +345,7 @@ def test_a_design_names_the_first_limit_of_the_second_stages_code_it_meets(monke
     tables, then the release log's lines, then one layout's bytes; none where it is within all three."""
     cells = [Cell(100.0, 16.0, prove=1e-3, fixed=5.0, cap=64, commit_bytes=2.0, table=64),
              Cell(4.0, 4096.0, prove=1e-2, fixed=5.0, cap=8, commit_bytes=512.0, table=4)]
-    row = {"merged": None, "form": "statements", "registration_sample": 3, "k": {0: 10, 1: 2}, "tables": 2.0}
+    row = {"merged": "template", "form": "statements", "registration_sample": 3, "k": {0: 10, 1: 2}, "tables": 2.0}
     got = t.limits(cells, row)
     assert t.draw_width(100) == (7 + 64 + 7) // 8 == 9 and t.draw_width(4) == (3 + 64 + 7) // 8
     assert got["draw_bytes"] == 3 * ((2 * 10 * 9 + 64) + (2 * 2 * 9 + 64))
@@ -476,7 +476,7 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
                                                             strict=True):
                 assert isinstance(k, int) and k >= 0 and (one <= 1) == (k >= 1), n
                 assert (binds, plan, share) == ("served", None, None) if k == 0 else 0 < share < 1, n
-                assert sessions == 0 if k == 0 else plan["merged"] is None and sessions > 0, n
+                assert sessions == 0 if k == 0 else plan["merged"] == "template" and sessions > 0, n
                 assert k == 0 or all(v == int(v) >= 1 for v in plan["k"].values()), n
         samples = [lines[n]["registration_sample"][at] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert samples == sorted(samples), name

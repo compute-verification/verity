@@ -558,7 +558,10 @@ class WindowCommitmentRecord:
     is the fan-out F its registration verdict published on the challenger's program (R8, `Verdict.fanout`): a two-stage
     registration's is its replay grain's, the N at which `plancheck.two` prices it in the capped form.
     `rests_on_period_check` is the tied values its verdict let through (`Verdict.rests_on_period_check`): its acceptance
-    rests on the network period check."""
+    rests on the network period check. `returned` is the bits one replay block of a two-stage registration returns,
+    counted on the challenger's own program (`second_stage.replay_returned`): no served cap S below it prices the
+    registration (`plancheck.two`'s `returned`). None for a one-stage registration, an interior one, and a replay
+    block whose links can't be derived."""
 
     record: Mapping[str, Any]
     receipt: Mapping[str, Any]
@@ -568,6 +571,7 @@ class WindowCommitmentRecord:
     received_at: float | None = None
     fanout: int | None = field(default=None, compare=False)
     rests_on_period_check: tuple[str, ...] = field(default=(), compare=False)
+    returned: int | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)
@@ -1950,7 +1954,7 @@ class Stream:
                 return list(v.codes)
             salted_at = None if deadline is None else self._salted_at
             got["registration"] = self._registration(record, len(self._entries), salted_at, got.get("received_at"),
-                                                     v.fanout, v.rests_on_period_check)
+                                                     v.fanout, v.rests_on_period_check, self._returned(got["program"]))
             op["registration"] = _registration_token(got["registration"])
             return None
         d = self._decide(op, {"received_at": received, "checks": checks})
@@ -2002,9 +2006,15 @@ class Stream:
 
     def _registration(self, record: Mapping[str, Any], order: int, salted_at: float | None = None,
                       received_at: float | None = None, fanout: int | None = None,
-                      rests_on_period_check: tuple[str, ...] = ()) -> WindowCommitmentRecord:
+                      rests_on_period_check: tuple[str, ...] = (), returned: int | None = None) -> WindowCommitmentRecord:
         return WindowCommitmentRecord(dict(record), R.receipt(record, self.challenger, received=str(len(self._log))),
-                                      R.digest(record), order, salted_at, received_at, fanout, rests_on_period_check)
+                                      R.digest(record), order, salted_at, received_at, fanout, rests_on_period_check,
+                                      returned)
+
+    def _returned(self, program: Program) -> int | None:
+        """The bits one replay block of a two-stage stream's registration returns (`second_stage.replay_returned`, on
+        the challenger's own `program`, its replay blocks' population); None for a one-stage stream's."""
+        return None if self.replay is None else SS.replay_returned(program, descriptor_id(self.replay))
 
     def _append(self, reg: WindowCommitmentRecord) -> None:
         self._logged(dict(reg.record), reg.digest)
