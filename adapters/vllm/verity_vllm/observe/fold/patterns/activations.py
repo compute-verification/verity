@@ -88,4 +88,4 @@ class SiluAndMulWithClamp(SiluAndMul):
             limit_bits(limit)
         except (TypeError, ValueError) as e:
             return unsupported(node, f"silu_and_mul_with_clamp's limit: {e}", limit=repr(a.get("limit")))
-        return {"LIMIT": float(limit)}
+        return {"LIMIT": limit}

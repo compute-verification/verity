@@ -52,10 +52,13 @@ from verity_vllm.pipeline.tp import config_run as TPC
 from verity_vllm.pipeline.tp import rank_replay as RR
 from verity_vllm.pipeline.tp import run_root as RT
 from verity_vllm.program.compiled_relations import warm_vml
+from verity_vllm.records.schema_ids import TP_RANK_REPLAY_SCHEMA
+
+__all__ = ["Options", "Refused", "main"]
 
 logger = init_logger(__name__)
 
-RESULT_SCHEMA = "verity-vllm/tp-rank-replay/v1"
+RESULT_SCHEMA = TP_RANK_REPLAY_SCHEMA
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -93,17 +96,20 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
     ``awaiting=False`` (a reader of the committed values, `tp.serving_rows.from_bundle`): the rank's replay was deferred to this
     bundle and is pending or passed; a rank whose replay failed is refused."""
     ctx, bdir = b["context"], Path(b["path"])
-    ent = next((x for x in dd.get("bundles") or [] if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None)
+    listed = dd.get("bundles")                         # a deferred record that lists no bundle names none of this pair and rank, refused below
+    ent = next((x for x in listed if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None) if listed else None
     if ent is None or ent.get("manifest_sha256") != b["manifest_sha256"]:
         raise Refused(f"{C2.DEFERRED} names no bundle of pair {pair} rank {rank} with manifest sha256 {b['manifest_sha256'][:16]}")
     if (int(ctx["pair"]), int(ctx["tp"]["rank"]), int(ctx["tp"]["world"])) != (pair, rank, int(dd["world"])):
         raise Refused(f"{bdir}: its context is pair {ctx['pair']} tp {ctx['tp']}, not pair {pair} rank {rank} of world {dd['world']}")
     row = next((r for r in _rows(out) if r["pair"] == pair and r["arm"] != "control"), None)
-    c = ((row or {}).get("commit") or {}).get("per_rank", {}).get(str(rank))
+    commit = row.get("commit") if row else None      # None too for a run that never reached its commit
+    c = commit.get("per_rank", {}).get(str(rank)) if commit else None
     if row is None or c is None or "replay_deferred" not in c or c.get("commit_pass") is not None and (awaiting or c["commit_pass"] is not True):
         raise Refused(f"pair {pair} rank {rank}: no rank " + ("awaiting its deferred replay" if awaiting else "whose deferred replay is pending or passed")
                       + f" in {out / 'runs.jsonl'}")
-    vec = {int(v["rank"]): bytes.fromhex(v["run_root"]) for v in row["commit"].get("commitment_vector") or []}
+    vector = row["commit"].get("commitment_vector")     # one run root a rank; a commit without it combines into no TP run root, refused below
+    vec = {int(v["rank"]): bytes.fromhex(v["run_root"]) for v in vector} if vector else {}
     try:
         combined = RT.combine(json.loads((out / "versions.json").read_text()).get("root_tag"), int(dd["world"]), vec).hex()
     except ValueError as e:
@@ -118,7 +124,8 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
             raise Refused(f"rank {rank}: {what} {str(got)[:16]} is not the rank's run root of record {str(c.get('run_root'))[:16]}")
     bmap = json.loads((bdir / "binding_map.json").read_text())
     canon = json.dumps(bmap.get("entries"), sort_keys=True, separators=(",", ":"), default=str).encode()     # `binding.build_binding_map`'s digest
-    want = (c.get("binding") or {}).get("map_digest")
+    binding = c.get("binding")                         # a rank committed without a binding has no map of record, and no bundle's map is then its
+    want = binding.get("map_digest") if binding else None
     if not want or {bmap.get("digest"), hashlib.sha256(canon).hexdigest()} != {want} or (bmap.get("run_root"), int(bmap.get("rank") or 0)) != (c.get("run_root"), rank):
         raise Refused(f"rank {rank}: the bundle's binding map {str(bmap.get('digest'))[:16]} is not the rank's map of record {str(want)[:16]}")
     run.weight_registration = c.get("weight_registration")
@@ -169,7 +176,8 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
     try:
         p = RR.load(cfg, rank, int(dd["world"]))
         index = ck() if ck else checkpoint_index(o)
-        words, wc = CPU.open_weights(bdir, tree, (c.get("weight_registration") or {}).get("root"), index, threads=o.threads,
+        registered = c.get("weight_registration")      # a rank committed without one registered no root for its shards to open against
+        words, wc = CPU.open_weights(bdir, tree, registered.get("root") if registered else None, index, threads=o.threads,
                                      tp={"world": int(dd["world"]), "rank": rank}, roles=registered_roles(p))
         # the bytes the relations consume are the checkpoint's, opened against the run's committed weights root: self-consistency
         # with the run as in the rank's process, from the checkpoint's bytes; the pin of record stays the Commit's weights pin
@@ -181,7 +189,8 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
         sr, lk = RR.evaluate(p, cfg, bmap=bmap, committed=OC.OpenedReader(store, run), weights_of=lambda prefix: CPU.provider(words, prefix, consumed),
                              weights_check=wc, run_root=run.run_root, manifest_doc=man, worker_peak=CPU.worker_peak(o))
         sr["engine_of_replay"], sr["engine_of_record"] = sr.get("engine_of_record"), ctx.get("engine_of_record")
-        attest = CPU.weights_attest(c, wc, consumed, words, tree.get("extra") or {}, b)
+        extra = tree.get("extra")                       # the tree's leaves beside the shards'; a tree written without the block has none
+        attest = CPU.weights_attest(c, wc, consumed, words, extra if extra else {}, b)
     except PoolDoesNotFit:
         raise
     except Exception as e:  # noqa: BLE001  -- fail closed, as the rank's process: an unrunnable replay is 'not evaluated', never PASS
@@ -190,10 +199,11 @@ def replay_rank(o: Options, out: Path, dd: dict[str, Any], pair: int, rank: int,
            "host": socket.gethostname(), "sampled_replay": sr, "boundary_linkage": lk, "weights_check": wc, "weights_attest": attest,
            "wall_s": round(time.perf_counter() - t0, 3), "peak_rss_bytes": _peak_rss(), "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
     C2.write_atomic(result_path(out, pair, rank), json.dumps(doc, indent=1, default=str) + "\n")
-    smp = sr.get("sample") or {}
+    sample = sr.get("sample")                           # a replay that did not run sampled nothing: each count below then reads None
+    picked, evaluated, equal, mismatch_n = (sample.get(k) if sample else None for k in ("picked", "evaluated", "equal", "mismatch_n"))
     logger.info("[tp-replay] SAMPLED REPLAY (pair %s, rank %s): result %s grade %s picked %s evaluated %s equal %s mismatch %s; boundary linkage %s "
-                "%s/%s; %s s, peak RSS %s MiB; %s", pair, rank, sr.get("result"), sr.get("grade"), smp.get("picked"), smp.get("evaluated"),
-                smp.get("equal"), smp.get("mismatch_n"), lk.get("result"), lk.get("linked"), lk.get("pairs"), doc["wall_s"],
+                "%s/%s; %s s, peak RSS %s MiB; %s", pair, rank, sr.get("result"), sr.get("grade"), picked, evaluated,
+                equal, mismatch_n, lk.get("result"), lk.get("linked"), lk.get("pairs"), doc["wall_s"],
                 doc["peak_rss_bytes"] >> 20, sr.get("why") or "")
     return doc
 
@@ -222,7 +232,9 @@ def fold(out: Path) -> bool | None:
         pair, per_rank = int(row["pair"]), row["commit"]["per_rank"]
         finp = out / f"finalize_pair{pair}.json"
         fin = json.loads(finp.read_text())
-        xr = dd["xrank"].get(str(pair)) or {}
+        xr = dd["xrank"].get(str(pair))                # the pair's cross-rank verdict of record
+        if not xr:
+            xr = {}                                     # a pair the Commit ran no cross-rank pass on: no result, so no collective is waived below
         reasons = []
         for rk in sorted(per_rank, key=int):
             c = per_rank[rk]
@@ -236,7 +248,8 @@ def fold(out: Path) -> bool | None:
                 c["commit_pass"], c["commit_fail_reason"] = ok, why
                 c["replay_deferred"]["replayed"] = {k: res.get(k) for k in ("where", "host", "manifest_sha256", "wall_s", "peak_rss_bytes", "utc", "weights_attest")}
                 f_ = next(x for x in fin if int(x["rank"]) == int(rk))
-                f_["sampled_replay"] = dict(f_.get("sampled_replay") or {}, sampled_replay=sr, boundary_linkage=lk, wall_s=res["wall_s"], where="cpu")
+                at_commit = f_.get("sampled_replay")    # what the rank's finalize recorded of its replay at the Commit (the deferral), kept under the result
+                f_["sampled_replay"] = dict(at_commit if at_commit else {}, sampled_replay=sr, boundary_linkage=lk, wall_s=res["wall_s"], where="cpu")
             if c.get("commit_pass") is False:
                 reasons.append(f"rank {rk}: {c.get('commit_fail_reason')}")
         row["commit"]["commit_pass"] = not reasons
@@ -271,7 +284,7 @@ def fold(out: Path) -> bool | None:
         C2.write_atomic(srp, json.dumps(sj, indent=1, default=str) + "\n")
     trt = [r for r in rows if r["arm"] != "control"]
     summ = json.loads((out / "summary.json").read_text())
-    summ["commit_pass"] = [(r.get("commit") or {}).get("commit_pass") for r in trt]
+    summ["commit_pass"] = [r["commit"].get("commit_pass") if r.get("commit") else None for r in trt]   # None too for a run that never reached its commit
     summ["sampled_replay"] = {k: sr_comp.get(k) for k in C2.SR_SUMMARY_KEYS}
     summ["boundary_linkage"], summ["query_population"] = lk_comp, qp_comp
     all_pass = bool(dd["all_pass"]) and all(c is True for c in summ["commit_pass"]) and qp_comp.get("result") is not False

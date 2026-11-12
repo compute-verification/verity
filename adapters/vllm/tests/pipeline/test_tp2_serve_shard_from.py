@@ -160,3 +160,17 @@ def test_negative_applied_is_recognised():
     assert all(v["applied"] is True for v in a.values()) and set(a) == {"flip_partial", "swap_requests", "omit_partial_site"}
     # the wrong rank requested (rank 0 did not flip) -> not applied
     assert negatives_applied("0:layers.3.mlp.down_proj", None, None, xr, made)["flip_partial"]["applied"] is False
+
+
+def test_a_pair_without_dumps_and_a_make_without_a_partial_source_leave_a_negative_not_applied():
+    from verity_vllm.pipeline.tp.negatives import negatives_applied
+    made = [{"rank": 0, "swap_requests_applied": None}, {"rank": 1, "swap_requests_applied": None, "tp_partial_source": None}]
+    # no pair's cross-rank pass wrote its dumps: the rank has no count, so the flip is unknown
+    a = negatives_applied("1:layers.3.mlp.down_proj", None, "1:layers.3.mlp.down_proj", [{"result": None}, {"dumps": None}, {"dumps": []}], made)
+    assert a["flip_partial"] == {"rank": "1", "flipped_collective_inputs_per_pair": [], "applied": None}
+    # the rank's make names no partial source: it omitted no site
+    assert a["omit_partial_site"] == {"rank": "1", "omit_site_per_rank": [None], "applied": False}
+    # one pair of two wrote its dumps: the count is that pair's alone
+    xr = [{"result": None}, {"dumps": [{"rank": 1, "flipped_collective_inputs": 8}]}]
+    assert negatives_applied("1:layers.3.mlp.down_proj", None, None, xr, made)["flip_partial"] == {
+        "rank": "1", "flipped_collective_inputs_per_pair": [8], "applied": True}

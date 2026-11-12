@@ -6,6 +6,7 @@ fails by name."""
 from __future__ import annotations
 
 import copy
+from typing import Any
 
 import numpy as np
 import pytest
@@ -21,21 +22,21 @@ from verity_vllm.acquire import served_moe as SM
 from verity_vllm.check.replay import served_check as SC
 from verity_vllm.query.manifest.format import manifest_digest
 
-V, H, E, TOPK, VPT, I = 64, 32, 8, 2, 4, 16
+V, H, E, TOPK, VPT, INTER = 64, 32, 8, 2, 4, 16
 LAYER = "model.layers.0.mlp.experts"
-SCHEDULE = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 3},
-            {"request_id": "r1", "arrive": 1, "prompt_tokens": 40, "max_tokens": 2}]
+SCHEDULE: list[dict[str, Any]] = [{"request_id": "r0", "arrive": 0, "prompt_tokens": 3, "max_tokens": 3},
+                                  {"request_id": "r1", "arrive": 1, "prompt_tokens": 40, "max_tokens": 2}]
 STEPS = 3
 EMB, OUT = "c00.embedding/buf0", "c00.moe_forward/buf1"
 LG, RW, RI, UP, ACT, DOWN = (f"c00.moe/{n}" for n in SM.PLANES)
-FACTS = {"gate": {"weight": "gate", "shape": [E, H]}, "w13": {"weight": "w13", "shape": [E, 2 * I, H]},
-         "w2": {"weight": "w2", "shape": [E, H, I]}, "E": E, "top_k": TOPK, "renormalize": True, "VPT": VPT, **SM.REQUIRED}
+FACTS = {"gate": {"weight": "gate", "shape": [E, H]}, "w13": {"weight": "w13", "shape": [E, 2 * INTER, H]},
+         "w2": {"weight": "w2", "shape": [E, H, INTER]}, "E": E, "top_k": TOPK, "renormalize": True, "VPT": VPT, **SM.REQUIRED}
 SMALL = {"BLOCK_SIZE_K": 64, "BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 32, "GROUP_SIZE_M": 1, "num_stages": 3, "num_warps": 4}
 WIDE = {"BLOCK_SIZE_K": 32, "BLOCK_SIZE_M": 64, "BLOCK_SIZE_N": 64, "GROUP_SIZE_M": 1, "num_stages": 3, "num_warps": 4}
 #: the steps' M: 4 (3 prefill rows, piecewise), 41 (eager), 2 (a full graph of two decodes)
 RECORD = {"layers": {LAYER: FACTS}, "pieces": {"0": LAYER}, "cc": [9, 0],
           "configs": {"4": {"False": SMALL, "True": SMALL}, "41": {"False": WIDE, "True": WIDE}, "2": {"False": WIDE, "True": SMALL}}}
-UPK, DOWNK = SM.plan_key(E, H, 2 * I, False), SM.plan_key(E, I, H, True)
+UPK, DOWNK = SM.plan_key(E, H, 2 * INTER, False), SM.plan_key(E, INTER, H, True)
 
 
 def _build() -> dict:
@@ -67,7 +68,7 @@ def _words(a) -> np.ndarray:
 def _weights() -> dict[str, np.ndarray]:
     rng = np.random.default_rng(3)
     return {"embed": _words(rng.standard_normal((V, H))), "gate": _words(rng.standard_normal((E, H)) * H ** -0.5),
-            "w13": _words(rng.standard_normal((E, 2 * I, H)) * H ** -0.5), "w2": _words(rng.standard_normal((E, H, I)) * I ** -0.5),
+            "w13": _words(rng.standard_normal((E, 2 * INTER, H)) * H ** -0.5), "w2": _words(rng.standard_normal((E, H, INTER)) * INTER ** -0.5),
             "lm_head": _words(rng.standard_normal((V, H)) * H ** -0.5)}
 
 
@@ -80,15 +81,17 @@ def _block(plan: dict, x: np.ndarray, W: dict) -> dict[str, np.ndarray]:
     n = len(x)
     gate = plan["gemms"][f"{H},{E}"]
     lg = SC.GEMMS[gate["base"]](gate["statics"], x, W["gate"])
-    rw, ri = np.zeros((n, TOPK), np.uint32), np.zeros((n, TOPK), np.int32)
-    up, ac, down = (np.zeros((n, TOPK, w), np.uint16) for w in (2 * I, I, H))
-    out = np.zeros((n, H), np.uint16)
+    rw: np.ndarray = np.zeros((n, TOPK), np.uint32)
+    ri: np.ndarray = np.zeros((n, TOPK), np.int32)
+    planes: list[np.ndarray] = [np.zeros((n, TOPK, w), np.uint16) for w in (2 * INTER, INTER, H)]
+    up, ac, down = planes
+    out: np.ndarray = np.zeros((n, H), np.uint16)
     for t in range(n):
         r = R.moe_router({"E": E, "TOPK": TOPK, "VPT": VPT}, [lg[t]], renormalize=True)
         rw[t], ri[t] = r["router_w"], r["router_ids"].astype(np.int32)
         for k in range(TOPK):
             up[t, k] = _expert(plan["moe"][UPK], [x[t], ri[t, k], W["w13"]], False)
-            ac[t, k] = silu_mul_expf({"I": I}, [up[t, k]])["out"]
+            ac[t, k] = silu_mul_expf({"I": INTER}, [up[t, k]])["out"]
             down[t, k] = _expert(plan["moe"][DOWNK], [ac[t, k], ri[t, k], rw[t, k], W["w2"]], True)
         out[t] = R.moe_sum({"TOPK": TOPK, "H": H}, [down[t].reshape(-1)])["sum"]
     return {LG: lg, RW: rw, RI: ri, UP: up.reshape(n, -1), ACT: ac.reshape(n, -1), DOWN: down.reshape(n, -1), OUT: out}
@@ -161,7 +164,7 @@ def _r0(served, step: int) -> int:
     return next(lo for r, lo, _hi in served[2][step].rows if r == "r0")
 
 
-@pytest.mark.parametrize("name,col", [(LG, 3), (RW, 1), (RI, 0), (UP, 2 * I + 5), (ACT, I + 1), (DOWN, H + 7), (OUT, 4)])
+@pytest.mark.parametrize("name,col", [(LG, 3), (RW, 1), (RI, 0), (UP, 2 * INTER + 5), (ACT, INTER + 1), (DOWN, H + 7), (OUT, 4)])
 def test_a_flipped_word_fails_its_value(served, name, col):
     row = _r0(served, 1)
 
@@ -187,7 +190,8 @@ def _steps_apart(served) -> tuple[dict, list[SC.Step], dict]:
     hidden-state row 1 + 2^-8 in the first group of eight, four 2^-25 in the second, against each expert's first w13 row of ones
     there (the two-group 25-bit adder drops the 2^-25s, the one-group 26-bit adder carries them past the bf16 tie)."""
     build, W, _steps, _prompts = served
-    x, w = np.zeros(H, np.float32), np.zeros(H, np.float32)
+    x: np.ndarray = np.zeros(H, np.float32)
+    w: np.ndarray = np.zeros(H, np.float32)
     at = [0, 1, 8, 9, 10, 11]
     x[at], w[at] = [1, 2 ** -8, *[2 ** -25] * 4], 1
     W = {**W, "embed": np.tile(_words(x), (V, 1)), "w13": W["w13"].copy()}
@@ -202,7 +206,7 @@ def test_the_expert_gemm_is_the_plans_step(served):
     assert SC.check(build, steps, W.__getitem__, seed=None, rows=8, prompts=prompts)["ok"]
     other = copy.deepcopy(build)
     plan = other["steps_plan"][1]
-    plan["moe"][UPK] = SV.bound(M.MoeExpertGemm, E=E, K=H, N=2 * I)
+    plan["moe"][UPK] = SV.bound(M.MoeExpertGemm, E=E, K=H, N=2 * INTER)
     rep = SC.check(other, steps, W.__getitem__, seed=None, rows=8, prompts=prompts)
     assert (1, UP) in _failed(rep) and rep["steps"]["1"][UP]["definition"] == plan["moe"][UPK]["definition"]
     assert rep["steps"]["1"][UP]["bad"] == rep["steps"]["1"][UP]["pairs"]

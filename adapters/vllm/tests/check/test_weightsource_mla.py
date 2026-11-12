@@ -9,11 +9,11 @@ import pytest
 from verity.circuits.types import Array, RecordType
 from verity.definitions.registry.prims import BF16, F32
 
-from verity_vllm.check.checkpoint_words import mla_moe_sources
+from verity_vllm.check.checkpoint_words import mla_field_words, mla_moe_sources
 from verity_vllm.check.fold_compare import WeightSource
 from verity_vllm.program.frontend.rules.family import _field_intervals
 
-H, V, NL, FD, NH, QL, L, DN, DR, DV, I, ID, E, MAX_POS = 4, 8, 3, 1, 2, 2, 2, 1, 2, 1, 2, 3, 2, 4
+H, V, NL, FD, NH, QL, L, DN, DR, DV, INTER, ID, E, MAX_POS = 4, 8, 3, 1, 2, 2, 2, 1, 2, 1, 2, 3, 2, 4
 
 
 def _mat(n: int, k: int, t=BF16) -> Array:
@@ -25,8 +25,8 @@ def _mla_weights_type() -> RecordType:
     attn = [("ln1", Array(H, BF16)), ("qkv_a_w", _mat(QL + L + DR, H)), ("q_a_ln", Array(QL, BF16)), ("q_b_w", _mat(NH * (DN + DR), QL)),
             ("kv_a_ln", Array(L, BF16)), ("kv_b_w", _mat(NH * (DN + DV), L)), ("o_w", _mat(H, NH * DV)), ("ln2", Array(H, BF16))]
     dense = RecordType(*attn, ("gate_up_w", _mat(2 * ID, H)), ("down_w", _mat(H, ID)))
-    moe = RecordType(*attn, ("gate_w", _mat(E, H, F32)), ("gate_bias", Array(E, F32)), ("sh_gate_up_w", _mat(2 * I, H)),
-                 ("sh_down_w", _mat(H, I)), ("w13", Array(E, _mat(2 * I, H))), ("w2", Array(E, _mat(H, I))))
+    moe = RecordType(*attn, ("gate_w", _mat(E, H, F32)), ("gate_bias", Array(E, F32)), ("sh_gate_up_w", _mat(2 * INTER, H)),
+                 ("sh_down_w", _mat(H, INTER)), ("w13", Array(E, _mat(2 * INTER, H))), ("w2", Array(E, _mat(H, INTER))))
     return RecordType(("embed", _mat(V, H)), ("dense_layers", Array(FD, dense)), ("layers", Array(NL - FD, moe)), ("norm", Array(H, BF16)),
                   ("cos_sin", _mat(MAX_POS, DR)), ("lm_head", _mat(V, H)))
 
@@ -45,11 +45,11 @@ def _tensors() -> dict[str, tuple[str, list[int]]]:
                         p + "mlp.down_proj.weight": ("BF16", [H, ID])})
             continue
         out.update({p + "mlp.gate.weight": ("BF16", [E, H]), p + "mlp.gate.e_score_correction_bias": ("F32", [E]),
-                    p + "mlp.shared_experts.gate_proj.weight": ("BF16", [I, H]), p + "mlp.shared_experts.up_proj.weight": ("BF16", [I, H]),
-                    p + "mlp.shared_experts.down_proj.weight": ("BF16", [H, I])})
+                    p + "mlp.shared_experts.gate_proj.weight": ("BF16", [INTER, H]), p + "mlp.shared_experts.up_proj.weight": ("BF16", [INTER, H]),
+                    p + "mlp.shared_experts.down_proj.weight": ("BF16", [H, INTER])})
         for e in range(E):
-            out.update({f"{p}mlp.experts.{e}.{q}_proj.weight": ("BF16", [I, H]) for q in ("gate", "up")})
-            out[f"{p}mlp.experts.{e}.down_proj.weight"] = ("BF16", [H, I])
+            out.update({f"{p}mlp.experts.{e}.{q}_proj.weight": ("BF16", [INTER, H]) for q in ("gate", "up")})
+            out[f"{p}mlp.experts.{e}.down_proj.weight"] = ("BF16", [H, INTER])
     return out
 
 
@@ -57,7 +57,7 @@ def _write(path, tensors) -> dict[str, np.ndarray]:
     header, blobs, words, off = {}, [], {}, 0
     for i, (name, (dt, shape)) in enumerate(sorted(tensors.items())):
         n = int(np.prod(shape))
-        w = (np.arange(n, dtype=np.uint32) + 1000 * (i + 1)).astype(np.uint16 if dt == "BF16" else np.uint32)
+        w: np.ndarray = (np.arange(n, dtype=np.uint32) + 1000 * (i + 1)).astype(np.uint16 if dt == "BF16" else np.uint32)
         if dt == "F32":
             w = w | np.uint32(0x3F800000)
         words[name] = w
@@ -82,6 +82,13 @@ def test_only_a_record_with_dense_layers_and_an_array_of_layers_has_mla_sources(
     assert mla_moe_sources(Array(FD, BF16)) is None
     with pytest.raises(ValueError, match="an array w13 in each of its layers"):
         mla_moe_sources(RecordType(*((k, Array(2, BF16) if k == "layers" else t) for k, t in wt.fields)))
+
+
+def test_a_name_that_is_no_layer_field_is_refused_by_name():
+    sources = mla_moe_sources(_mla_weights_type())
+    assert sources is not None
+    with pytest.raises(ValueError, match="^norm: not a layer field of an MLA Program$"):
+        mla_field_words(sources, "norm", lambda tensor, field: np.zeros(0, dtype=np.uint16))
 
 
 def test_mla_moe_fields_read_their_own_layer(tmp_path):
