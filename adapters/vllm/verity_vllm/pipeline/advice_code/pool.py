@@ -86,7 +86,6 @@ class BlockPool:
         self.caching = engine.enable_prefix_caching
         # with a draft: every allocation takes slots for this many tokens past its row, and a hit drops its last block
         self.lookahead = engine.num_speculative_tokens
-        self.drop_last_hit = engine.num_speculative_tokens > 0 and engine.eagle_block_drop
         self.watermark_blocks = int(engine.watermark * engine.num_gpu_blocks)
         self.free: _Free | _FreeFork = _Free(range(1, engine.num_gpu_blocks))  # block 0 is the null block
         self.ref = [0] * engine.num_gpu_blocks
@@ -102,7 +101,7 @@ class BlockPool:
         assert isinstance(self.free, _Free)
         k = object.__new__(BlockPool)
         k.B, k.L, k.caching, k.watermark_blocks = self.B, self.L, self.caching, self.watermark_blocks
-        k.lookahead, k.drop_last_hit = self.lookahead, self.drop_last_hit
+        k.lookahead = self.lookahead
         k.free, k.ref, k.block_hash, k.owner = _FreeFork(self.free), list(self.ref), list(self.block_hash), list(self.owner)
         k.by_hash, k.mine = dict(self.by_hash), set()
         k.req_blocks = {i: list(bs) for i, bs in self.req_blocks.items()}
@@ -161,7 +160,7 @@ class BlockPool:
             if not blocks:
                 break
             out.append(next(iter(blocks)))
-        if self.drop_last_hit and out:
+        if self.lookahead and out:
             out.pop()
         return out
 

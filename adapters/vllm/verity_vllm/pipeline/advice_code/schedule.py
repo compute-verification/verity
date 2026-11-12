@@ -33,18 +33,19 @@ class BlockHashes:
 
 
 #: `SpeculativeConfig` settings under which the scheduler's rows are not the ones the replay models
-_SPECULATIVE_REFUSED = ("num_speculative_tokens_per_batch_size", "parallel_drafting", "disable_padded_drafter_batch")
+_SPECULATIVE_REFUSED = ("num_speculative_tokens_per_batch_size", "parallel_drafting", "disable_padded_drafter_batch",
+                        "disable_eagle_block_drop")
 
 
-def speculative(config: dict[str, Any]) -> tuple[int, bool]:
-    """A step trace header's draft settings as the replay takes them: K, the drafts a decode row carries (0 with no
-    `speculative` entry), and whether a prefix hit drops its last block. The entry is the `SpeculativeConfig` fields that
-    are set; `num_lookahead_tokens` and `num_prefill_lookahead`, where the header has the scheduler's own, must be K and
-    1. Everything else is refused by name: another method, K by batch size, parallel drafting, an unpadded drafter batch,
-    a multi-module MTP."""
+def speculative(config: dict[str, Any]) -> int:
+    """K, the drafts a decode row carries, from a step trace header's draft settings (0 with no `speculative` entry).
+    The entry is the `SpeculativeConfig` fields that are set. Where the header has the scheduler's own
+    `num_lookahead_tokens`, `num_prefill_lookahead`, `use_eagle_block_drop` and `draft_slots`, they must be K, 1, true
+    and 0, as one MTP module's are. Everything else is refused by name: another method, K by batch size, parallel
+    drafting, an unpadded drafter batch, a prefix hit that keeps its last block, a multi-module MTP."""
     spec = config.get("speculative")
     if not spec:
-        return 0, True
+        return 0
     if spec.get("method") != "mtp":
         raise ValueError(f"speculative method {spec.get('method')!r}: the replay models `mtp` only")
     for name in _SPECULATIVE_REFUSED:
@@ -53,10 +54,10 @@ def speculative(config: dict[str, Any]) -> tuple[int, bool]:
     k = spec.get("num_speculative_tokens")
     if type(k) is not int or k <= 0:
         raise ValueError(f"speculative num_speculative_tokens={k!r}: a positive integer")
-    for name, want in (("num_lookahead_tokens", k), ("num_prefill_lookahead", 1)):
+    for name, want in (("num_lookahead_tokens", k), ("num_prefill_lookahead", 1), ("use_eagle_block_drop", 1), ("draft_slots", 0)):
         if config.get(name) is not None and int(config[name]) != want:
             raise ValueError(f"{name}={config[name]!r} under `mtp` with {k} drafts: the replay models {want} (one MTP module)")
-    return k, not spec.get("disable_eagle_block_drop", False)
+    return k
 
 
 @dataclass(frozen=True)
@@ -86,15 +87,10 @@ class Engine:
         """K, the drafts a decode row carries: none (`DraftEngine`)."""
         return 0
 
-    @property
-    def eagle_block_drop(self) -> bool:
-        """Whether a prefix hit gives up its last block: not without a draft."""
-        return False
-
     @classmethod
     def from_header(cls, config: dict[str, Any]) -> Engine:
         asy = config.get("scheduler") == "AsyncScheduler" if config.get("scheduler") else config.get("async_scheduling")
-        k, drop = speculative(config)
+        k = speculative(config)
         kw: dict[str, Any] = dict(
             max_num_seqs=int(config["max_num_seqs"]), max_num_batched_tokens=int(config["max_num_batched_tokens"]),
             max_model_len=int(config["max_model_len"]), num_gpu_blocks=int(config["num_gpu_blocks"]),
@@ -105,18 +101,17 @@ class Engine:
             watermark=float(config.get("watermark", 0.0) or 0.0),
             scheduler_reserve_full_isl=bool(config.get("scheduler_reserve_full_isl", True)),
             policy=str(config.get("policy", "fcfs")))
-        return DraftEngine(**kw, num_speculative_tokens=k, eagle_block_drop=drop) if k else cls(**kw)
+        return DraftEngine(**kw, num_speculative_tokens=k) if k else cls(**kw)
 
 
 @dataclass(frozen=True)
 class DraftEngine(Engine):
     """An engine that serves with a draft, speculative decoding by the model's own MTP module: a decode row carries up to
-    `num_speculative_tokens` (K) drafts after its token, every allocation takes slots for K tokens past its row, and
-    with `eagle_block_drop` a prefix hit gives up its last block (`replay`'s docstring has the rules). A class of its
-    own: `Engine`'s fields are the engine class the certifier's replay circuits take, which have no draft."""
+    `num_speculative_tokens` (K) drafts after its token, every allocation takes slots for K tokens past its row, and a
+    prefix hit gives up its last block (`replay`'s docstring has the rules). A class of its own: `Engine`'s fields are
+    the engine class the certifier's replay circuits take, which have no draft."""
 
     num_speculative_tokens: int = 1
-    eagle_block_drop: bool = True
 
     def __post_init__(self) -> None:
         super().__post_init__()
