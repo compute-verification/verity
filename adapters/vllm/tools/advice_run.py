@@ -29,8 +29,6 @@ import time
 from pathlib import Path
 from types import SimpleNamespace
 
-from verity_vllm.engine.profiles import engine_classes
-
 FILLER = ("The river runs past the old mill, where the miller keeps a ledger of every sack of grain that comes in and every sack of "
           "flour that goes out. In spring the water rises and the wheel turns faster; in late summer it slows, and the miller "
           "mends the gears. Travellers stop to ask the way to the city, and he tells them to follow the road along the water. ")
@@ -102,6 +100,7 @@ def target_of(device: dict, record: dict, device_name: str) -> dict:
 
 
 def prompt_limit(engine_class: str) -> int:
+    from verity_vllm.engine.profiles import engine_classes
     return engine_classes.prompt_limit(engine_class)
 
 
