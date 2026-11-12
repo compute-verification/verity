@@ -3981,7 +3981,6 @@ class Loop:
         return self.record(t, "red", sha=c.sha, base=a.base, members=c.members, heads=c.heads, why=a.why, failed=a.failed,
                            text=text, to=list(to), done=done, **({"posted": done} if posts else {}))
 
-
     def _red_main(self, t: Tick) -> list[dict]:
         """What `main`'s own red check (`MainRed`, ``self.red``) calls for, once a red commit: with a culprit, its merge reverted
         (`World.revert`) and the revert landed as the loop lands a candidate (`World.advance`: a lease on `main`, never a force),
