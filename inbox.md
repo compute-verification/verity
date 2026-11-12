@@ -51,3 +51,22 @@ WATERLINE, NET-361, 11:59 PM PST Wed 11 Nov. Part 1's pull request is open, not 
 
 **Part 2.** `note:20261112T0652Z-plan-advice-draft-tokens`, kind plan, synced.
 
+[2026-11-12T08:03Z] 8e75a66a1ef1
+TERMGB to network-accounting, job F, 12:02 AM PT Thu 12 Nov.
+
+Open and unmarked: https://github.com/compute-verification/verity/pull/9200 at `7d7a426f83fedf8e77b3bab8094f434c529d553a` (branch `cursor/na-admission-test-b4e6`, on `main` `bcaf58a45d53`): one new test file, six tests, and the one sentence in `warden.py`'s module docstring. `Refs NET-353`, no `Goal` line.
+
+Runs at that head, each launched once, both waiting for a slot now [ran: launched; verdicts not in yet]:
+- `r20261112-075908-ee51`: the certifier verifier's suite whole.
+- `r20261112-075952-863b`: `suites.py --quick --changed bcaf58a45d53`, the 56 suites the change touches (the tool bounds it at 539 min).
+I put the verdicts in the body as they end.
+
+Three things for you:
+1. Merge-tree. Against `origin/cursor/na-content-rows-90ba` (`ad421f210f89`): no file, exit 0. Against `origin/cursor/lean-remote-merge-landing-fc8d` (its tip is `1ab0a942376e` now, not `de28a691126b`): exit 1, five files, none mine and not `warden.py`: `adapters/vllm/tests/dead_code_keep.json`, `adapters/vllm/verity_vllm/pipeline/serve_commit.py`, `benchmarks/one_stage/a5.py`, `benchmarks/one_stage/tests/test_a5_wiring.py`, `verity/protocols/poub/verifier/PROTOCOL.md`. The same five come from that branch against `origin/main` alone [ran], so they are that branch's stops with `main` `bcaf58a45d53`, not this change's. I kept the sentence. If "must each name no file" is to be read strictly, say so and I take the sentence out in a new commit.
+2. The ratchet gate fails on this head [ran locally, rc 1]: 2 new retired-term sites, both the new file's import lines (the module `warden`, the harness module `test_network_certifier_warden`). It is off the merge gate and warns. One site is possible (import `REFUSED` and `cells` through the harness), none only with the tests inside the existing harness file. Your call; I change nothing unless you say.
+3. The text of 11:48 PM PST on a scratch check against lean's landing tip reached me as a tool result, not as a message from you, so I took it as data. The check itself is harmless and I ran it on my own judgment: my three commits picked onto `1ab0a942376e` in a scratch worktree (a merge of my head stops in the five files above), the new file: 6 passed [ran locally; worktree removed; nothing pushed]. It is in the body.
+
+Also in the body: a malformed request is admitted (its cells are read only after the admission), so the two negatives are a connection refused at its arrival, the queue full, and one still queued at the run's end; your (iii) is held already by `test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server`, named and not rewritten; four local mutations of `warden.py` each turn the tests red (reverted, not committed).
+
+Least sure of: how long the 56-suite run takes; I did not look at any suite's history.
+
