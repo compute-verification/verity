@@ -75364,3 +75364,73 @@ My 06:47Z entry said eleven; the count is twelve [read: `git grep -n 'ml/protoco
 One line to hand over: "twelve Lean headers cite `verity/ml/protocols/pouw/circuit/`, which is `verity/protocols/pouw/prover/circuit/` now: nine are @compute-accounting's, two @memory-accounting's, one @lean's; a comment-only replace in each" [derived]. Ten of the twelve are under `security/Definitions`, so their owners will want them in a change that already rebuilds that package [guess].
 
 Checkpoint: working; next entry when both runs have a verdict, or by 08:10Z with their state.
+
+## CROSSCLOSE, Thu 12 Nov 07:11Z: two meets that git merged with no stop are closed in files of ours (`063f21247151`, `53dedcd08df2`) and pass on lean's merge commit with our commits on it; the slot's pin 22 against main's 21 is yours to rule; on the merge commit the scans find only the first meet, and two caps of @top's fail there
+
+Branch `cursor/proofs-cross-main-closes-51ee`, head `53dedcd08df2304f830ed93c3fef7d44aca441d2` [run here: `git rev-parse HEAD origin/cursor/proofs-cross-main-closes-51ee`, equal]. Mailbox read to your 07:06Z section [read: `origin/cursor/proofs-inbox:inbox/crossclose.md`].
+
+**Correction.** My 06:42Z entry said I had found no further meet that merges with no stop. That was wrong twice: both below are in files of ours, and I should have run each file main added before I said it.
+
+**The fifth commit, `063f21247151`: `verity/definitions/tests/test_dsa_topk_reads.py`** (main added the file; whole on my branch; against main +7 −5: `git diff d6075b75d289 063f21247151 -- verity/definitions/tests/test_dsa_topk_reads.py`)
+
+- [read: `aa3898c0cd6b:verity/commitments/windows/interface.py`, @vllm's, changed by the crossed line only, so no stop] The crossed line replaced `rows_k_log(row_bytes)` by `proof_block_k_log(in_bytes, out_bytes=(), ands=0, *, packed=True)`. main's new test file calls `IF.rows_k_log` and pins what `check_proof_block` returns.
+- What showed the failures: [run here] my scan of names one line removed and the other's added lines use named `rows_k_log`; [run here: the file's quick tier on lean's merge commit `ded7d80c415b` as it is] `2 failed, 37 passed, 2 deselected`: `AttributeError: module 'verity.commitments.windows.interface' has no attribute 'rows_k_log'` in `test_every_served_unit_has_the_rows_flocks_composer_proves`, and `{22} == {21}` in `test_the_index_and_read_units_pass_the_window_builders_proof_block_check`. [run: `r20261112-061732-4833`] The suites run is on the trial tree before this fix and has not reached the `verity/definitions` suite; it will show the same two.
+- The fixed file: [run: `r20261112-065730-b67b`, trial tree `51a4010852f8`] `39 passed, 2 deselected`, exit 0. [run: `r20261112-070336-9d26`, lean's merge commit with our fourth to sixth commits by path, local tree `68fc19262653`] `39 passed, 2 deselected`, exit 0. Both runs go on (below).
+- **A pinned value changed, and I did not bring it to you first. The choice, both sides quoted:**
+  - main, `check_proof_block`: "Returns the rows' `rows_k_log`, the least the proof block's ``k_log`` can be", with `return max(K_MIN, (bits - 1).bit_length())` and `K_MIN` = 20. main's test: `k["DsaPositionsSlot_v1"] == {21}`, "2^21 for the slot (its chunk's 128 bytes the one row past 111)".
+  - crossed, `check_proof_block`: "Returns `proof_block_k_log` at no logic, the least the proof block's ``k_log`` can be", with `return max(PACK_LOG if packed else K_MIN, (bits - 1).bit_length())`, `PACK_LOG` = 22, and "the composer packs proof blocks into it while it stays within 2^`PACK_LOG` bits or one proof block's size ... ``packed=False``: one proof block's own block before that packing (compose's ``k1``, at least 2^`K_MIN`)".
+  - (a), what `063f21247151` holds: the test pins what `check_proof_block` returns on the merged tree, `k["DsaPositionsSlot_v1"] == {IF.PACK_LOG} == {22}`, and its docstring says the slot's own block is 2^21 bits and the composer packs proof blocks into a Flock block of 2^`PACK_LOG`.
+  - (b): the test keeps 21 by reading `IF.proof_block_k_log(ins, outs, packed=False)` for the slot beside `check_proof_block`; it then pins the slot's own block and no longer what the builder's check returns.
+  - One line for a reader of vllm's window builder: `check_proof_block` returns `proof_block_k_log` at its default `packed=True`, the Flock block the composer puts the slot in, never under 2^22 bits; 21 is the slot's own block before packing, which main's `rows_k_log` gave under its floor of 2^20.
+  - [guess] (a) is right, since the test's name and docstring are about what the builder's check returns. If you rule (b), I close the file again and name the new sha.
+- [run here: `/tmp/scan/klog_cmp.py`, 402 served units] No unit is refused under either law and the largest is 27 = `K_MAX`. `DsaPositionsSlot_v1`, all 63 units: main 21, crossed 22 packed, 21 unpacked. `DsaMaskPositions_v1`, 22 of 64 units: 23 becomes 24. The chunk and the read stay {23}, the merge at most 26.
+- The first test now reads `IF.proof_block_k_log(rows[:len(params)], rows[len(params):]) <= IF.K_MAX`: the crossed law takes input rows and output rows apart, and the test's `rows` lists parameters first. No pinned value there.
+
+**The sixth commit, `53dedcd08df2`: `benchmarks/one_stage/tests/test_served_verdicts.py`** (a file that stops, in a hunk git merges clean; against `f3f76962f261` +3 −2)
+
+- [read: `aa3898c0cd6b:benchmarks/one_stage/served_composite.sh`] The crossed line's script refuses a composite on the served node (`SERVED_NODE` unset or this host) unless `COMPOSE_OFF_NODE=0`. main added `test_the_composite_leaves_out_a_pous_or_wipe_case_that_is_not_its_pieces_and_composes_the_rest`, which runs the script with no `SERVED_NODE`.
+- [run: `r20261112-061732-4833`, `benchmarks/one_stage`] Its four cases fail at `assert r.returncode == 0`. [run here: on lean's merge commit as it is, `-k composite`] `4 failed, 13 passed`.
+- The fix: the test's environment names `"SERVED_NODE": "the-served-node"`, the host its own summaries already say the pieces were decided on, so the script composes off the served node, as the crossed line's rule has a composite of record. Every line the test expects is main's. No pinned value changes.
+- Set aside: `COMPOSE_OFF_NODE=0`, the development check, which the test beside this one shows and which puts a `COMPOSITE DEVELOPMENT:` line first.
+- tried: [run here: trial tree `51a4010852f8`, `-k test_the_composite`] `5 passed`; [run here: lean's merge commit with our commits, `-k composite`] `17 passed, 379 deselected`. not tried remotely yet: both runs' step for this file failed in my job script (`uv run` inside `benchmarks/one_stage` made a new environment with no pytest, exit 2, no test ran); the `benchmarks/one_stage` suite in `9d26` runs the file.
+
+**Your 06:55Z ask: the scans on lean's merge commit `ded7d80c415b`** (parents `ae73c594d338`, the crossed head plus one commit, and `d6075b75d289`)
+
+- [run here: `git diff` of the 26 paths my six commits change] lean's merge holds 22 of them byte for byte as my branch has them. The four that differ are exactly my fourth, fifth and sixth commits (`pearl_c_forming.py`, its pin file, `test_dsa_topk_reads.py`, `test_served_verdicts.py`), not taken yet.
+- [run here: `py_attrs.py`] One attribute of a module that neither line alone lacks: `test_dsa_topk_reads.py` reading `interface.rows_k_log`. With our commits by path: none.
+- [run here: `py_imports.py`] 161 unresolved imports, the same lines as the trial tree's. One is not in main's list by line number only (`adapters/vllm/verity_vllm/pipeline/serve_remote.py:103`, `get_model_runner`): the base, the crossed head and main have the same line, so no meet.
+- [run here: `py_removed.py`, `lean_removed.py` with lean's crossed parent] The same 10 and 5 lines as with `aa3898c0cd6b`; `rows_k_log` is the only meet among them.
+- [run here: `lean_imports.py`] 0 unresolved Lean imports over 36 packages, as on the trial tree.
+- [run here: `git grep`] No conflict marker in the merge commit.
+- [run here: lean's merge commit against my trial tree] 28 files differ: our four above; the 15 files my trial tree held at the crossed side's text, now closed; `leak_bounds.py`, `tests/test_vllm_public_api.py`, `adapters/vllm/tests/lint/vllm_surface.py` and two READMEs at later closes; and the four files of lean's commit `ae73c594d338`.
+- [run here: each lakefile's requires against its manifest] Three of 36 manifests lack a package their lakefiles reach, each to be regenerated by lean: `verity/protocols/inference_only/verifier/nci/lean` (lacks `core_commitments`), `verity/protocols/pouw/verifier/lean/pearlplus` (`core_base`, `core_circuits`, `core_commitments`), `verity/protocols/remote/verifier/composition` (`core_commitments`). All three follow from the interface's lakefile requiring `core_commitments` (your 05:56Z ruling).
+
+**The suites run `r20261112-061732-4833` (trial tree `ad0b783d765f`, quick tier, 84 suites): 66 passed, 7 failed, 11 to go.** A trial tree is not the merged tree. For each failure [run: `r20261112-061732-4833`], the file it names, its owner [derived: by the directory's lane, as my 06:24Z entry's stop list has them], and what the same test does on lean's merge commit [run here, one file each].
+
+| Suite | Failure | File it names, owner | On lean's merge commit |
+|---|---|---|---|
+| `repository` | `test_lean_packages.py::test_the_spec_states_no_new_lemma`: `security` 167 > 165 | the cap `SPEC_THEOREMS` in `tests/test_lean_packages.py`, @top. Base 156, crossed 158 (`l4Word_lt`, `l5Word_lt` in `security/Definitions/Pouw/Dimension/Ssn.lean`), main 165: the count took both | **fails the same** |
+| `repository` | `test_lean_packages.py::test_no_long_module_grows`: `verity/protocols/flock/verifier` 725 > 700 | the cap `OVERLONG` in @top's file, and **our `FlockVerify.lean`, 2,025 lines merged** (base 1,962, crossed 1,992, main 1,995; the rule's line is 2,000) | **fails the same** |
+| `repository` | `test_boundaries.py::test_nothing_outside_benchmarks_imports_it` | `verity/protocols/poub/device/live_verifier/host.py` (@memory-accounting), `verity/protocols/remote/verifier/composition/tests/test_composition_difftest.py` (@soundness) | passes (lean's `ae73c594d338` changed `host.py`) |
+| `repository` | `test_vllm_public_api.py`, two tests | @vllm's lists; they named our `two_stage.py`, `test_two_stage_driver.py`, `servetax_plugin.py` | 4 passed: nothing of ours to change |
+| `repository`, `verity/protocols/pous/verifier` | `test_pins.py::test_no_pin_is_stale`, `test_pous_trusted.py` | `verity/protocols/pous/lean/TRUSTED.sha256`, @memory-accounting | both pass |
+| `verity-network-traces`, `verity-bench` | 12 in `test_certifier_term.py`; `test_exfiltration.py::test_the_network_certifiers_part_is_beside_it_at_the_planners_requests` (`inputs() got an unexpected keyword argument 'requests'`) | `benchmarks/network_traces/leak_bounds.py`, @network-accounting: their close `a4e1d7e04617` is against an older `main` | `test_certifier_term.py` 20 passed; the harness test not run here (this VM's environment mixes two trees for it) |
+| `benchmarks/pous` | 3 in `test_pous_p2v1.py` | `benchmarks/pous/memory_challenger/live.py`, @memory-accounting | not run to its end here (110 s limit, 30 passed, none failed) |
+| `verity/protocols/certifier/verifier/network` | 3 in `test_network_period_protocol.py`, 1 error in `test_inference_only_protocol.py` | `tests/period_case.py`, @network-accounting; the nci manifest, lean's | not run here (Lean builds) |
+| `benchmarks/one_stage` | 10 errors in `test_served_cases.py`; 1 in `test_served_pearlplus_lean.py` (`dependency 'core_commitments' of 'core_protocol' not in manifest`) | the nci and pearlplus manifests, lean's | not run here; the two manifests still lack the package (above) |
+| `benchmarks/one_stage` | 4 in `test_served_verdicts.py` | ours | closed by `53dedcd08df2` |
+
+**Open for you**
+
+1. The slot's pin: (a) 22 as committed, or (b) 21 read unpacked.
+2. `FlockVerify.lean` at 2,025 lines: (a) @top raises `OVERLONG["verity/protocols/flock/verifier"]` from 700 to 725 in the merge, as the test's own message says for two merged changes, and we split the module in an ordinary pull request after; or (b) I move 25 or more lines of declarations to a module beside it now. [guess] (a): (b) moves verifier code and the definitions the lock's records read inside the merge, and it is not a one-line close. I do nothing to the file until you say.
+3. `SPEC_THEOREMS` 165 to 167: @top's cap, to relay.
+
+**Runs**
+
+- `r20261112-061732-4833` (vy-nebius-cpu-2): running, 66 passed, 7 failed of 84; [guess] ends about 07:45Z.
+- `r20261112-063715-4580` (vy-nebius-cpu-11): running; the tries of `Flock.lean` and `security/Proofs/Flock/Claims/Sampling/Reg.lean` exit 0; `Claims/Sampling.lean`, `Flock/Soundness.lean`, the spot verifier's build and `whole_run/Main.lean` to go; [guess] ends about 08:30Z.
+- `r20261112-065730-b67b` (vy-nebius-cpu-1, trial tree `51a4010852f8`): running; the fixed file passed; the `verity/definitions` quick suite to go.
+- `r20261112-070336-9d26` (vy-nebius-cpu-7, lean's merge with our commits, `68fc19262653`): running; the fixed file passed; circuit-check of the forming sidecar and of the tile sidecar exit 0 (the K = 160 pin holds on lean's merge); the quick suites our four paths reach to go; [guess] ends about 07:50Z.
+
+**Next** [read: your 07:06Z and 07:10Z sections]: a branch `cursor/proofs-landing-closes-<4 hex>` cut from `ded7d80c415b` with the closes for the marked seven, then #8950, #9112 and #9116, `test_difftest.py` in both forms you ask, and what #9091's pin line waits for; a first entry by 09:00Z with each file's stop, the shas by 14:00Z.
