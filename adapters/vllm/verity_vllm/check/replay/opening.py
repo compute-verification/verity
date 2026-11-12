@@ -101,7 +101,7 @@ class CommittedStore:
         """The entries of the RESOLVED (canonical path, invocation) -> (entries, canonical, invocation, invocations bound under the key)."""
         canon, inv = self.resolve(op_path)
         bound = self.idx.get((rid, int(step), canon, member))
-        es_all = [] if bound is None else bound                                  # None: the map binds nothing under the key
+        es_all = bound if bound else []                                          # None: the map binds nothing under the key
         return [x for x in es_all if _invocation(x) == inv], canon, inv, sorted({_invocation(x) for x in es_all})
 
     def has(self, rid: str, step: int, op_path: str, member: str) -> bool:

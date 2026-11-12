@@ -20,7 +20,8 @@ says which files it holds. A file needs another when it:
 * is a lakefile whose package `require`s the other's by path, or a pyproject whose distribution depends on the other's or
   whose script runs a module of it;
 * reaches it by a path anchored on its own place (`anchors.py`: a load, a `sys.path` entry, a data file, a script's
-  `$(dirname "$0")/..`), or a shell script names it by a path from the root;
+  `$(dirname "$0")/..`) or on a package's (`resources.files("pkg")`, the directory an import of `pkg` from the file
+  finds), or a shell script names it by a path from the root;
 * runs a command the other's distribution provides (`research`, `cluster`): a shell command, or a Python subprocess call
   or `shutil.which`;
 * is a Lean module, of its package's lakefile; a lakefile, of its manifest and toolchain; a Python file, of its nearest
@@ -378,6 +379,14 @@ class Tree:
             return []
         return []
 
+    def _package(self, name: str, f: str) -> str | None:
+        """The directory `importlib.resources.files(name)` is from ``f``: the package's own, or the one holding the module;
+        None when the tree holds no module of that whole name."""
+        hit = next(iter(self._module(name, f)), None)
+        if hit is None or not hit.removesuffix("/__init__.py").removesuffix(".py").endswith(name.replace(".", "/")):
+            return None
+        return os.path.dirname(hit) if hit in self.files else hit
+
     def _packages(self, f: str) -> list[str]:
         """The `__init__.py` of each package above ``f``, which importing it runs."""
         out, d = [], os.path.dirname(f)
@@ -440,7 +449,7 @@ class Tree:
                 out += [Edge(f, t, n.lineno, "python import", f"from {n.module} import {a.name}")
                         for a in n.names for t in self._module(f"{n.module}.{a.name}", f)[:1]
                         if t != f and t.endswith((f"/{a.name}.py", f"/{a.name}/__init__.py", f"/{a.name}"))]
-        for line, reached in ANCHORS.joins(f, text):
+        for line, reached in ANCHORS.joins(f, text, lambda name: self._package(name, f)):
             out += self._path(f, line, reached)
         _, _, commands, _ = self.python
         if not any(c in text for c in commands) and not ("python" in text and "-m" in text):

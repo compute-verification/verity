@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from tests.engine.fake_scheduler import FakeRequest, FakeScheduler, drive
+from verity.protocols.certifier.verifier import replay_step as RS
 from verity_vllm.engine import step_trace as ST
 
 
@@ -215,6 +216,29 @@ def test_the_header_says_where_the_launch_left_the_context_limit_to_vllm():
         assert ST.scheduler_config(sched) == stated
     del sched.vllm_config.model_config.original_max_model_len
     assert ST.scheduler_config(sched) == stated
+
+
+class _Every(SimpleNamespace):
+    """A stand-in that has every attribute: the ones it is given, and 1 for any other name."""
+
+    def __getattr__(self, name):
+        return 1
+
+
+def test_every_key_the_header_can_hold_is_on_one_of_the_replay_steps_lists():
+    """The replay step's binding refuses an engine key it does not know (`replay_step.statics`), and a committing serve
+    hands it this header's config at start. So a key the recorder starts to write has to be placed on one of the
+    binding's four lists in the same change, or that serve stops at start. The stand-in has every attribute, so a name
+    the recorder starts to pick is in its dict; a key written on a condition needs the condition met here."""
+    sched = _Every(scheduler_config=_Every(), cache_config=_Every(cache_dtype="fp8"), vllm_config=_Every(
+        model_config=_Every(original_max_model_len=-1), speculative_config=_Every()))
+    widest = ST.scheduler_config(sched)
+    assert {"scheduler", "max_model_len", "max_model_len_auto", "kv_cache_dtype", "speculative", "policy"} <= set(widest)
+    assert set(widest["speculative"]) == set(ST.SPECULATIVE)
+    placed = {*RS.ENGINE_READ, *RS.ENGINE_DRAFT, *RS.ENGINE_HELD, *RS.ENGINE_INERT}
+    assert sorted(set(widest) - placed) == [], (
+        "step_trace.scheduler_config writes a key replay_step.statics refuses. Put it on one of replay_step's lists: "
+        "ENGINE_READ with a static if a scheduler step depends on it, ENGINE_INERT with why if none does")
 
 
 def test_the_header_holds_the_cache_format_and_speculative_settings_an_engine_was_built_with():

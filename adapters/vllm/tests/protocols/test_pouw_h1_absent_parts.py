@@ -1,6 +1,7 @@
 """What H1's readers make of a part their input leaves out: a rank's release whose committer states no errors, a pull
-from a rank that shipped no acquisitions, a window's record with no commitment object, a slot of a round the round
-log does not hold, and an engine that holds no executor in its own process."""
+from a rank that shipped no acquisitions, a window whose details state no tie to the Commit, a call with no tables,
+commitments that name no session, a manifest row with no tables, a window's record with no commitment object, a slot
+of a round the round log does not hold, and an engine that holds no executor in its own process."""
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -10,11 +11,12 @@ import pytest
 from verity.protocols.spot.device.challenger import OPENING_FORM, LiveCommitment
 
 from tests.protocols.test_pouw_h1_served import _unit
+from verity_vllm.protocols.pouw.h1 import CHALLENGER, H1Run
 from verity_vllm.protocols.pouw.h1.challenger import drawn_of
-from verity_vllm.protocols.pouw.h1.commit import ROOT_BYTES, SCHEME
+from verity_vllm.protocols.pouw.h1.commit import ROOT_BYTES, SCHEME, UNTIED
 from verity_vllm.protocols.pouw.h1.ranks import Holder, RankExtension, executor_of
-from verity_vllm.protocols.pouw.h1.requests import RoundOpening, slot_reason
-from verity_vllm.protocols.pouw.h1.served import declared, descriptor
+from verity_vllm.protocols.pouw.h1.requests import RoundOpening, slot_reason, table_root
+from verity_vllm.protocols.pouw.h1.served import Served, declared, descriptor
 
 #: what a rank's release hands on of its committer's finalize beside the errors (`h1rank_release`)
 COUNTS = {"expected_tensors": 2, "committed_tensors": 2, "errors_n": 0}
@@ -48,7 +50,8 @@ def _released(extra: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-@pytest.mark.parametrize("stated", [{}, {"errors": None}, {"errors": []}])
+@pytest.mark.parametrize("stated", [{}, {"errors": None}, {"errors": []}, {"errors": 0}],
+                         ids=["absent", "null", "empty", "a false value"])
 def test_a_rank_whose_committer_states_no_errors_releases_none(stated):
     assert _released({**COUNTS, **stated}) == {"lo": 3, "run_root": bytes(ROOT_BYTES).hex(), "commit_scheme": SCHEME,
                                                "name": "stand-in", **COUNTS, "errors": []}
@@ -96,12 +99,68 @@ def test_the_first_ranks_acquisitions_are_the_windows_and_its_ids_the_steps():
     assert (tap.took, tap.refused) == ([("site/0", 2, None), ("ids", 2, 2)], [])
 
 
-@pytest.mark.parametrize("none", [{}, {"acquired": None}, {"acquired": []}])
+@pytest.mark.parametrize("none", [{}, {"acquired": None}, {"acquired": []}, {"acquired": 0}],
+                         ids=["absent", "null", "empty", "a false value"])
 def test_a_rank_that_shipped_no_acquisitions_feeds_nothing_and_is_still_the_first_rank(none):
     """The rank holding linear 0 answers with no ``acquired`` (it has no Commit): the tap takes nothing of it, and the
     next rank's ids are still not the first rank's."""
     tap = _pulled(_rank(0, **none), _rank(4, acquired=SHIPPED))
     assert (tap.took, tap.refused) == ([("site/0", 2, None)], ["engine step 2: a rank's input ids are not the first rank's"])
+
+
+#: the gate's verdict for the served call of `_window`
+CREDITED = {"linear": "q", "credit": True, "reason": None}
+#: a table's root as a manifest row states it
+ROOT = "ab" * 64
+
+
+def _window(details: dict[str, Any], tables: dict[int, Any]) -> Any:
+    """What `H1Run.gated` and `H1Run.credit_bits` read of a window: a served call (0) that the gate credits and a call
+    (1) that was not served, under the challenger's coins and with every request entered; its `details` and its calls'
+    `tables`."""
+    calls = [SimpleNamespace(index=0, m=1, module="q"), SimpleNamespace(index=1, m=0, module="r")]
+    run = SimpleNamespace(calls=calls, details=details, tables=tables, coin_source=CHALLENGER, request_gaps=list,
+                          verdict=lambda call: dict(CREDITED))
+    run.gated = lambda: H1Run.gated(run)
+    return run
+
+
+@pytest.mark.parametrize("details", [{}, {"roots1": None}, {"roots1": {}}, {"roots1": 0}, {"roots1": {"reason": None}}],
+                         ids=["absent", "null", "empty", "a false value", "tied"])
+def test_a_window_whose_details_state_nothing_against_its_tie_to_the_commit_keeps_the_gates_credit(details):
+    assert H1Run.gated(_window(details, {})) == {0: CREDITED}
+
+
+def test_a_window_whose_tie_to_the_commit_states_a_reason_loses_the_gates_credit():
+    assert H1Run.gated(_window({"roots1": {"reason": "ids"}}, {})) == {0: {**CREDITED, "credit": False, "reason": UNTIED}}
+
+
+@pytest.mark.parametrize("tables", [{}, {0: None}, {0: {}}, {0: 0}, {0: {"a": ROOT}}, {0: {"a": ROOT, "z": None}}],
+                         ids=["absent", "null", "empty", "a false value", "an A table alone", "a null z"])
+def test_a_credited_call_with_no_z_table_has_no_credit_bit(tables):
+    assert H1Run.credit_bits(_window({}, tables)) == {0: False, 1: False}
+
+
+def test_a_credited_call_with_a_z_table_has_its_credit_bit_and_a_call_not_served_has_none():
+    assert H1Run.credit_bits(_window({}, {0: {"z": ROOT}, 1: {"z": ROOT}})) == {0: True, 1: False}
+
+
+@pytest.mark.parametrize("session", [{}, {"session": None}, {"session": {}}, {"session": 0}, {"session": {"session": None}}],
+                         ids=["absent", "null", "empty", "a false value", "an object that names none"])
+def test_commitments_that_name_no_session_give_a_window_with_no_key_of_its_own_none(session):
+    commits = {"weights_root": "00" * 64, "requests_root": "00" * 64, **session}
+    with pytest.raises(ValueError, match="the window has no key: neither one given nor a window-open root"):
+        Served.key(SimpleNamespace(window=None), commits)
+
+
+@pytest.mark.parametrize("row", [{}, {"tables": None}, {"tables": {}}, {"tables": 0}, {"tables": {"z": ROOT}}],
+                         ids=["absent", "null", "empty", "a false value", "a z table alone"])
+def test_a_manifest_row_with_no_a_table_states_no_root_of_it(row):
+    assert table_root(row, "a") is None
+
+
+def test_a_manifest_rows_table_root_is_its_tables_entry_of_that_name():
+    assert table_root({"tables": {"a": ROOT, "z": None}}, "a") == ROOT
 
 
 def _descriptor() -> bytes:

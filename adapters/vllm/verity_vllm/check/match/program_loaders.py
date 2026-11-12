@@ -101,10 +101,10 @@ def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: boo
                 # only the PARAMETER-space runs ("p": prompt / weights reads -- O(instances)) of each
                 # operand are kept from `operand_refs`; the node-space runs ("n": the attention K/V reads, O(LP^2) over a long prefill) are
                 # the same references `RootView.inst[*].args` holds and are never read from the rows.  Operand arity is preserved (one list per
-                # operand, possibly empty) so `operand_roots[k]` still names operand k below.
-                refs = o.get("operand_refs")   # a row without its operands' references retains none
+                # operand, possibly empty) so `operand_roots[k]` still names operand k below.  The row's `node` is read first: a line
+                # that is not an object is refused there, before any field it may leave out is looked for.
                 rows.append({"node": o["node"], "step": o.get("step"), "row": o.get("row"), "rows": o.get("rows"), "hint": o.get("hint"),
-                             "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in refs] if refs else [],
+                             "spec": o.get("spec"), "operand_refs": [[r for r in a if r[0] in ("p", "P")] for a in _operand_refs(o)],
                              "pattern": o.get("pattern"),
                              "request": o.get("request"),  # the fold's own attribution when recorded
                              "position": o.get("position"),  # prefix_reads links a cached row to its producer by position (and layer: hint)
@@ -118,6 +118,13 @@ def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: boo
 LOAD_NOTES: dict[str, dict] = {}   # fold dir -> {"source": "record files", "instances_schema": <header schema>, "operand_refs_form": runs|progressions}
 
 
+def _operand_refs(row: dict) -> list:
+    """An instance row's operand references, one list per operand (a line of `instances.jsonl`, or the row retained from it); none
+    on a row that carries no list."""
+    refs = row.get("operand_refs")
+    return refs if refs else []
+
+
 def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], cls: type[RootView] = RootView, compact: bool = False) -> RootView:
     """The rest of load_oracle over the retained rows."""
     # weight layout: the WEIGHTS parameter's offset ranges -> weight name from the hints ("module/param.name"). The fold lays
@@ -127,7 +134,7 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
     # the weights Record is the LAST root parameter (fold contract) -- its index is the largest `p` index any instance reads,
     # not `n_input_nodes - 1`: a Record that is not width-homogeneous (FP8: e4m3 weights, f32 block scales, bf16 norms) is encoded as
     # ONE Input node per leaf field (436 for Qwen3-4B-FP8 at B=1), so the node count no longer says how many prompt parameters there are.
-    p_idx = {i for o in rows for a in o["operand_refs"] for r in a for i in _p_indices(r)}   # the retained rows always carry the list (`load_oracle`)
+    p_idx = {i for o in rows for a in _operand_refs(o) for r in a for i in _p_indices(r)}
     w_param = max(p_idx) if p_idx else n_in - 1
     # the fold states its parameter layout by name (program.json `params`): the weights index is read from it when present
     # (exact, even for a fold whose instances read no weight -- a fixture) and cross-checked against the instances' largest "p" index.
@@ -186,8 +193,8 @@ def _finish_oracle(d: str, label: str, pj: dict, desc: dict, rows: list[dict], c
         hint = o.get("hint") or ""
         mod, _, tail = hint.rpartition("/")
         name = f"{mod}.cos_sin_cache" if tail in ("rope.q", "rope.k") else tail or hint
-        oroots = o["operand_roots"]   # None where the fold recorded no weight names for the instance's operands
-        for k, a in enumerate(o["operand_refs"]):
+        oroots = o.get("operand_roots")   # none where the fold recorded no weight names for the instance's operands
+        for k, a in enumerate(_operand_refs(o)):
             nm = oroots[k] if oroots and k < len(oroots) and oroots[k] else name
             for r in a:
                 if (w := _p_w_span(r, w_param)) is not None:

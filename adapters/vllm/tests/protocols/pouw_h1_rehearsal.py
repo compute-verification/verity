@@ -206,7 +206,8 @@ class Gate:
     """The gate's verbs as ``argv + VERB``, each call and its answer kept in ``log``."""
 
     def __init__(self, argv: list[str]) -> None:
-        self.argv, self.log = argv, []
+        self.argv = argv
+        self.log: list[dict[str, Any]] = []
 
     def raw(self, *args: str) -> tuple[int, bytes]:
         from tests.protocols.pouw_h1_gpu import gate_argv
@@ -361,7 +362,7 @@ def check(calls: Path, tree: Path, pin: str, ledger: list[Path], out: Path, wind
     doc = GPU.check_challenger(str(calls), str(tree / "out" if window is not None else tree), pin, str(out),
                                [str(p) for p in ledger], None if wfile is None else str(wfile), period, descriptor,
                                [str(p) for p in pins or ()], main,
-                               None if draw is None else str(draw / "out" if window is not None else draw))
+                               draw_directory=None if draw is None else str(draw / ("out" if window is not None else "")))
     return {k: doc.get(k) for k in ("ok", "reason", "manifest", "period", "credit")}
 
 
