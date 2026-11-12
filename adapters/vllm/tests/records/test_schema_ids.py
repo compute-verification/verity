@@ -38,6 +38,7 @@ ON_DISK = {
     "GATES_SCHEMA": "verity-gen/gates/v1",
     "GENERATED_WORKLOAD_SCHEMA": "verity-sweep/workload/v1",
     "GLOBAL_PROGRAM_SCHEMA": "cb-a/global-program/v1",
+    "GPU_LEASE_SCHEMA": "verity-vllm/gpu-lease/v1",
     "IMPORT_PATH_RUNTIME_SCHEMA": "verity/tp2/import-path-runtime/v1",
     "INSTANCE_SEQUENCE_SCHEMA": "cb-a/instance-sequence/v2",
     "INT8_ERROR_REPORT_SCHEMA": "verity-vllm/int8-error-report/v1",

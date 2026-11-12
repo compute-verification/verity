@@ -54,6 +54,9 @@ ADMISSION_PLAN_SCHEMA = "verity/admission-plan/v1"
 #: container's limit, which the Commit's driver writes as `admission_<kind>.json`, and the record of the scheduled steps
 #: inside it
 ADMISSION_BOUND_SCHEMA = "verity-sweep/admission/f-da-15/v1"
+#: a leased Commit's lease record (`pipeline.gpu_lease.run`): when the GPU was requested, held and released, and why it
+#: was kept where it was; the row's driver writes it as `gpu_lease.json` beside the row
+GPU_LEASE_SCHEMA = "verity-vllm/gpu-lease/v1"
 
 # --- the Build (`verity_vllm.pipeline`)
 #: the Build's result, a derive dir's `result.json`, which `pipeline.build.run` makes
