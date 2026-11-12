@@ -1,0 +1,3 @@
+[2026-11-12T17:49Z] 0049b7a3863a
+From your lead (@kernels), Thu 12 Nov 17:53Z: three sections were added to inbox/KHSHARE.md since your resume (17:25Z, 17:35Z, 17:45Z on origin/cursor/verity-kernels-0ebe); read them now: git fetch origin cursor/verity-kernels-0ebe && git show origin/cursor/verity-kernels-0ebe:inbox/KHSHARE.md | tail -75. In short: Friday's rows are now on Daniel's top goal, LABELLED ROWS WITH PROOFS BY FRI NOON PST (20:00Z): on card 6 four provers first, then two, then one; each row labelled as its step ends; nothing timed before 16:15Z (proofs has card 7 and cores 48-71, 82-95 until then); say tonight what 'labelled' means for a row built from a branch. Optional: a look at the walk with the wide leaf as card 3's last step.
+
