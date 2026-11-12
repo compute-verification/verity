@@ -166,10 +166,15 @@ def served(out, key, *, windows: int = 4, process: bool = False, params: WardenP
 
 def refused(out, edit) -> list[str]:
     """The check's problems of the run in `out` once `edit` has changed its files, which are then put back."""
+    return checked(out, edit)["problems"]
+
+
+def checked(out, edit) -> dict:
+    """The check's result of the run in `out` once `edit` has changed its files, which are then put back."""
     saved = {p: p.read_bytes() for p in out.iterdir()}
     edit()
     try:
-        return ws.check(out)["problems"]
+        return ws.check(out)
     finally:
         for p in set(out.iterdir()) - set(saved):
             p.unlink()
@@ -476,6 +481,33 @@ def test_a_line_not_back_by_its_last_tick_is_never_written_and_its_execution_pha
     s = result["summary"]["connection_rows"]
     assert (s["registered"], s["of"]) == (3, 4)
     assert s["heads"] == {"offset": 3, "wait": wait, "late": [], "missed": [1]}
+
+
+def test_the_check_refuses_a_line_one_bucket_late_at_a_wait_of_zero_and_takes_one_at_the_waits_last_tick(tmp_path):
+    """The tick a kept run's line says it left at, changed, against the schedule's. At a wait of 0 a line that left
+    one bucket after its due tick is refused, naming its execution phase and the ticks: the network certifier
+    never writes one, so a run that holds one isn't the schedule's. At a wait of 2 the same line passes one bucket
+    late and at the last tick the wait allows, counted late, and is refused one bucket past that."""
+    strict, patient = tmp_path / "strict", tmp_path / "patient"
+    served(strict, tmp_path / "key", params=TIMED)
+    served(patient, tmp_path / "key-2", params=dataclasses.replace(TIMED, head_wait=2))
+
+    def at(run, tick: int) -> tuple[bool, list[str], list[int]]:
+        def edit() -> None:
+            lines = left(run)
+            lines[1][crr.TICK] = tick
+            (run / crr.ROWS).write_text("".join(json.dumps(x) + "\n" for x in lines))
+
+        result = checked(run, edit)
+        return (result["accepted"], [p for p in result["problems"] if "execution phase" in p],
+                result["summary"]["connection_rows"]["heads"]["late"])
+
+    past = "execution phase 1's line left at tick {}, and it is due at tick {} or within the {} after it"
+    assert at(strict, DUE[1]) == (True, [], [])
+    assert at(strict, DUE[1] + 1) == (False, [past.format(DUE[1] + 1, DUE[1], 0)], [])
+    assert at(patient, DUE[1] + 1) == (True, [], [1])
+    assert at(patient, DUE[1] + 2) == (True, [], [1])
+    assert at(patient, DUE[1] + 3) == (False, [past.format(DUE[1] + 3, DUE[1], 2)], [])
 
 
 def test_the_check_holds_each_line_to_its_tick_and_only_a_schedule_with_a_head_offset_hands_lines_back(tmp_path):
