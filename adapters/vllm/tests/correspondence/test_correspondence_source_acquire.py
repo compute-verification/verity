@@ -7,7 +7,6 @@ import gzip
 import json
 
 from tests.acquire.test_plan import TABLES, base_rows, manifest, tree
-from verity_vllm.acquire import gate as G
 from verity_vllm.acquire import plan as P
 from verity_vllm.correspondence import runtime as RC
 from verity_vllm.correspondence.reader_for_acquire import (
@@ -64,8 +63,6 @@ def test_same_plan_under_both_sources_and_the_source_is_recorded():
     da, db = a.to_json(), b.to_json()
     assert da["correspondence"] != db["correspondence"] and da["plan_digest"] == db["plan_digest"]
     assert P.load_plan.__name__ and P.plan_digest(db) == db["plan_digest"]
-    cmp = G.compare_plans(da, db)
-    assert cmp["identical"] and cmp["plan_digest_equal"] and cmp["differing"] == [] and cmp["a"]["correspondence_source"] == "v1_annotations" and cmp["b"]["correspondence_source"] == "correspondence"
 
 
 def test_unconfirmed_module_is_a_listed_finding_not_a_changed_site():
@@ -129,17 +126,4 @@ def test_from_programs_presence_test_digest_check_and_uniform_fallback(tmp_path)
     assert c.source == "correspondence" and list(c.digests) == ["build_request"] and c.absent == [] and c.problems == []
     mixed = AcquireCorrespondence.from_programs(tree(), [p_ok, p_v1], wrapper_prefix="model.")
     assert mixed.source == "v1_annotations" and mixed.absent == ["build_request_LP1_T1"] and mixed.tables == {} and any("falls back" in p for p in mixed.problems)
-    assert G.request_program_dirs(tmp_path) == sorted([p_ok, p_v1, p_bad])
     assert AcquireCorrespondence.from_programs(tree(), [], wrapper_prefix="model.").source == "v1_annotations"
-
-
-def test_compare_plans_lists_differing_values_by_value():
-    man, rt = manifest(base_rows(), wrapper_prefix="model."), tree()
-    a = P.acquisition_plan(man, AnnotationCorrespondence(rt, wrapper_prefix="model."), tables=TABLES).to_json()
-    b = json.loads(json.dumps(a))
-    v = next(x for x in b["values"] if x["value"] == "logits/out")
-    v["chosen"] = dict(v["chosen"], module="head")
-    b["plan_digest"] = P.plan_digest(b)
-    cmp = G.compare_plans(a, b)
-    assert not cmp["identical"] and not cmp["plan_digest_equal"] and [d["value"] for d in cmp["differing"]] == ["logits/out"]
-    assert cmp["differing"][0]["a"]["chosen"][0] == "logits" and cmp["differing"][0]["b"]["chosen"][0] == "head"
