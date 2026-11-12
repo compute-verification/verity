@@ -98,7 +98,7 @@ def test_the_verifiers_statements_are_the_ones_v_star_stages(tmp_path, shape):
     """The verifier's statements at the shape are V*'s, in order, then RecCap over each later level's tops and over level 0's
     128 nodes, each passes the check under its own name and count, and the hm96 calls they record at most are the
     stager's count (`rec_budget.recorded_calls`). At SHAPES[0], the deployed dense shape, this is the one run of a whole
-    list through `RecVStar.statements`' checks: `Flock.Test.RecCap` pins its parts in the interpreter and builds none."""
+    list through `RecVStar.statements`' checks: Flock's interpreted `#guard`s pin its parts and build none."""
     inner = _inner(tmp_path / "inner.json", *shape)
     rc, line = _statements(inner)
     assert rc == 0 and line["statements"] == _listed(*shape) and _caps(*shape)[-1] == ["rec-cap/n128", 128], line
