@@ -33,7 +33,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import multiprocessing
 import shutil
+import signal
 import subprocess
 import sys
 from dataclasses import dataclass, fields, replace
@@ -1248,6 +1250,123 @@ def test_an_attempt_that_died_after_its_receipt_spends_its_directory_and_its_ans
     assert RA.main(argv) == 1 and "a new serve directory" in capsys.readouterr().err and _files(out) == kept
     assert SI.answer(out, written.rec) == {"commitment": R.digest(written.rec), "profile": None, "protocol": SI.PROTOCOL,
                                            "public": None, "reason": SI.NO_SUMMARY, "verdict": "reject"}
+
+
+def _argv(written, out):
+    return ["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"], "--run", RUN,
+            "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(out), "--skip-negatives",
+            "--challenger", "local", "--main", "m.txt"]
+
+
+def test_a_second_audit_started_while_the_first_runs_is_refused_and_changes_nothing(tmp_path, monkeypatch, capsys):
+    """Two audits started at once on one ``--out`` both find no receipt, which a5 writes long after the start, and
+    both would draw. The audit holds an exclusive lock on the ``--out``'s lock file for its whole life (`held`): a
+    second start while the first runs (here from inside the first's a5, before its receipt) exits 1 before a5 or the
+    challenger's session, says another audit is running, and changes nothing under the ``--out``; the first goes on to
+    its own answer. Once it returned its lock is free, and its receipt is what refuses the next."""
+    import a5 as A5
+    import a5_coins as AC
+
+    written = _write(tmp_path / "w", advice=False)
+    out, ran, second = tmp_path / "out", [], {}
+
+    def a5_audit(a, sets, window, *rest, **kw):
+        ran.append("a5")
+        if len(ran) == 1:
+            with RA.held(out) as free:
+                assert not free
+            before = _files(out)
+            second.update(exit=RA.main(_argv(written, out)), err=capsys.readouterr().err, unchanged=_files(out) == before,
+                          files=sorted(before))
+        window.mkdir(parents=True, exist_ok=True)
+        (window / "registration.json").write_text(json.dumps(written.rec))
+        (window / "receipt.json").write_text(json.dumps({"registration": R.digest(written.rec), "verifier": A5.CHALLENGER}))
+        (window / "audit.json").write_text(json.dumps({
+            "accepted": True, "registration": written.rec, "proved_units": [1, 3], "checks": {"draw": {"ok": True}},
+            "draw": {"law": "subset", "k": 2, "population": written.rec["population"], "units": [1, 3]},
+            "wrong_units": {"delta": 0.5, "bound": 3}}))
+        return {"checks_before_draw": {"registration": True}, "audit": {"accepted": True}, "draw": [1, 3], "negatives": {}}, True
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    monkeypatch.setattr(A5, "audit", a5_audit)
+    assert RA.main(_argv(written, out)) == 0 and ran == ["a5"]
+    assert second["exit"] == 1 and second["unchanged"] and second["files"] == [RA.LOCK]
+    assert "another audit is running" in second["err"] and "nothing under it was changed" in second["err"]
+    assert SI.answer(out, written.rec)["verdict"] == "accept" and (out / RA.LOCK).read_bytes() == b""
+    with RA.held(out) as free:
+        assert free
+    assert RA.main(_argv(written, out)) == 1 and "a new serve directory" in capsys.readouterr().err and ran == ["a5"]
+
+
+def test_the_mark_is_read_again_under_the_lock(tmp_path, monkeypatch, capsys):
+    """An attempt that ran whole between a second start's read of the mark and its taking the lock left its receipt:
+    the second reads the mark again once it holds the lock, and starts nothing."""
+    import a5 as A5
+
+    written = _write(tmp_path / "w", advice=False)
+    out, spent, reads = tmp_path / "out", RA.spent, []
+
+    def between(o):
+        reads.append(spent(o))
+        if len(reads) == 1:
+            (o / "window").mkdir(parents=True)
+            (o / "window" / "receipt.json").write_text(json.dumps({"registration": R.digest(written.rec)}))
+        return reads[-1]
+
+    monkeypatch.setattr(RA, "spent", between)
+    monkeypatch.setattr(A5, "audit", lambda *a, **kw: pytest.fail("a second attempt ran"))
+    assert RA.main(_argv(written, out)) == 1 and reads[0] is None and "a new serve directory" in reads[1]
+    assert "a new serve directory" in capsys.readouterr().err and not (out / "summary.json").exists()
+
+
+def _holder(out, told, stay):
+    """A process that takes an ``--out``'s lock as an audit does, forks a process that stays, says whether it took the
+    lock and never ends by itself."""
+    with RA.held(out) as mine:
+        multiprocessing.get_context("fork").Process(target=_stays, args=(told, stay)).start()
+        told.send(mine)
+        signal.pause()
+
+
+def _stays(told, stay):
+    stay.recv()
+    told.send("the forked process outlived the holder")
+
+
+def test_the_lock_is_its_process_alone_and_ends_with_it_whatever_it_forked(tmp_path, monkeypatch, capsys):
+    """A lock, not a marker: another process that holds an ``--out``'s lock refuses the audit there, and when that
+    process is killed outright, before any receipt, the ``--out`` is open again and the audit runs. A process it
+    forked while it held the lock (as the audit forks its negatives' workers) closed its copy of the lock's file, so it
+    holds nothing: it is still alive when the audit takes the lock."""
+    import a5 as A5
+    import a5_coins as AC
+
+    written = _write(tmp_path / "w", advice=False)
+    out, ran = tmp_path / "out", []
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    monkeypatch.setattr(A5, "audit", lambda *a, **kw: (ran.append("a5"), ({"checks_before_draw": {"registration": False}}, False))[1])
+    ctx = multiprocessing.get_context("fork")
+    (told, tell), (stay, release) = ctx.Pipe(duplex=False), ctx.Pipe(duplex=False)
+    holder = ctx.Process(target=_holder, args=(out, tell, stay))
+    holder.start()
+    try:
+        assert told.recv() is True
+        before = _files(out)
+        assert RA.main(_argv(written, out)) == 1 and ran == [] and _files(out) == before == {RA.LOCK: b""}
+        assert "another audit is running" in capsys.readouterr().err
+        holder.kill()
+        holder.join()
+        assert RA.main(_argv(written, out)) == 1 and ran == ["a5"]
+        assert json.loads((out / "summary.json").read_text())["checks_before_draw"] == {"registration": False}
+    finally:
+        holder.kill()
+        holder.join()
+        release.send(None)
+    assert told.recv() == "the forked process outlived the holder"
 
 
 def test_a5s_part_of_the_audit_runs_under_its_memo_and_the_summary_counts_the_checks(written, tmp_path, monkeypatch):

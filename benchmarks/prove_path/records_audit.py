@@ -75,11 +75,17 @@ With ``--negative-workers N`` a5's negatives that ask the verifier again run N a
 forked from the audit (`a5.NegativeWorkers`); the summary's ``negative_workers`` is each one's own seconds and memory.
 
 An ``--out`` an attempt reached its draw under is that attempt's alone, whatever it wrote after: ``audit`` refuses to
-start on it (`spent`) and changes nothing under it. The evidence is a5's receipt (``window/receipt.json``), which
-`a5.audit` writes once its checks before the draw are made and before it draws, or the audit record after it
-(`served_integrity.ATTEMPT`); an attempt its checks before the draw refused wrote the receipt too, and its ``--out`` is
-spent with it. Nothing resamples: a second attempt after a draw would draw again, and where the first was refused its
-verdict would be in no record. A second attempt on a registration takes a new serve directory, and nothing clears one.
+start on it (`spent`) and changes nothing under it. The mark is the registration's receipt, written before the draw:
+``window/receipt.json``, which `a5.audit` writes once its checks before the draw are made and before it draws; the
+audit record after it says the same (`served_integrity.ATTEMPT`). An attempt its checks before the draw refused wrote
+the receipt too, and its ``--out`` is spent with it. Nothing resamples: a second attempt after a draw would draw again,
+and where the first was refused its verdict would be in no record. A second attempt on a registration takes a new
+serve directory, and nothing clears one.
+
+One audit at a time runs under an ``--out``: ``audit`` holds an exclusive lock on the ``--out``'s `LOCK` file from
+before it reads the mark until it returns (`held`), and refuses to start where another process holds it, changing
+nothing. The lock is the audit's process's alone (no process it starts holds it) and ends with it, so an attempt that
+died before its receipt leaves its ``--out`` open to the next.
 
 ``warm``: a window's templates and binding are public, so every template its composers make is composed into a5's compose
 cache before the timed audit (`warm`, `a5.warm`), under the tree and ``FLOCK_*`` environment the audit then runs in, since
@@ -156,6 +162,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import fcntl
 import hashlib
 import importlib
 import json
@@ -841,17 +848,69 @@ def spent(out: Path) -> str | None:
             "wrote after, and a second attempt on a registration is a new serve directory (a new --out)")
 
 
+#: the file under an audit's ``--out`` whose exclusive lock the audit holds for its whole life (`held`); it stays, empty
+LOCK = "audit.lock"
+_held: set[int] = set()
+
+
+def _let_go() -> None:
+    """In a process forked from this one: close its copies of the locks' files, so the lock stays this process's alone."""
+    while _held:
+        os.close(_held.pop())
+
+
+os.register_at_fork(after_in_child=_let_go)
+
+
+@contextlib.contextmanager
+def held(out: Path) -> Iterator[bool]:
+    """An exclusive lock on ``out``'s `LOCK` file for the block, never waited for: yields whether this process took
+    it. Where another holds it, nothing under ``out`` is changed. The lock is on this process's open file alone: a
+    process forked from it closes its copy, and one it starts by a command never has it, so the lock ends when the
+    block does or the process dies, whatever it started."""
+    out.mkdir(parents=True, exist_ok=True)
+    fd = os.open(out / LOCK, os.O_RDWR | os.O_CREAT, 0o644)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        _held.add(fd)
+        try:
+            yield True
+        finally:
+            _held.discard(fd)
+    finally:
+        os.close(fd)
+
+
 def audit(a: argparse.Namespace) -> int:
+    """The audit (module docstring) into ``a.out``, the one audit under it: it starts only where no attempt reached
+    its draw (`spent`) and no other audit is running (`held`), and refuses, exit 1, changing nothing, otherwise.
+    -> `_audit`'s exit."""
+    out = Path(a.out)
+    if why := spent(out):
+        print(f"records_audit.py audit: {why}", file=sys.stderr)
+        return 1
+    with held(out) as mine:
+        if not mine:
+            print(f"records_audit.py audit: another audit is running under {out} (it holds the lock on {out / LOCK}), "
+                  "so no audit starts here and nothing under it was changed: an --out is one attempt's", file=sys.stderr)
+            return 1
+        if why := spent(out):
+            print(f"records_audit.py audit: {why}", file=sys.stderr)
+            return 1
+        return _audit(a)
+
+
+def _audit(a: argparse.Namespace) -> int:
     """The audit (module docstring) into ``a.out``: ``summary.json`` and a ``RECORDS`` line, its ``definitions`` the module
     each member template's Definition is in and ``loaded`` the ``verity*`` packages the process loaded. -> 0 when it passed."""
     import a5 as A5
     import a5_coins as AC
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
-    if why := spent(out):
-        print(f"records_audit.py audit: {why}", file=sys.stderr)
-        return 1
-    out.mkdir(parents=True, exist_ok=True)
     law = D.parse_law(a.law)
     try:
         mine, doc, sets = verifier_window(wdir, law, Path(a.template_sets) if a.template_sets else None)
