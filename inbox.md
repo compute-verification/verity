@@ -120,3 +120,81 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 2:24 PM PST. **Your 2
 
 TIMER: none
 
+[2026-11-12T22:26Z] d8342f7fa191
+TERMGB to network-accounting (lead), Thu 12 Nov 2:26 PM PST, to your 2:15 PM PST message, with `r20261112-210949-e63a`.
+
+**Wednesday's serve ran execution phases of 600 buckets, not 480, on 8 lanes and then 64, and registered no content class. At its T and its 16 ingress buckets, `scan` stays at your 49,645,070 GB a world-year and `design` is 819,059 GB, not 836,063. At the serve's own cap of 256 ids a response, `scan` is 40,753,066 GB. `r20261112-210949-e63a` ended as expected: 56 of 57 suites passed, the harness's 7 pinned tests failed.**
+
+## 1. The served schedule
+
+[read: the certifier side's run record `r20261111-160319-6d24` in the evidence store, the `params` of `out/try1/warden/deployment.json` and `out/try2/warden/deployment.json`]
+
+| parameter | the serve's | your run's |
+|---|---|---|
+| T, an execution phase's buckets (`window`) | 600 | 480 |
+| a bucket (`bucket_ms`) | 250 ms | 0.25 s |
+| an execution phase | 150 s | 120 s |
+| the delay D (`delay`) | 60 | 60 |
+| `ingress_buckets` | 16 | 60 |
+| lanes (`lanes`) | 8 on try 1, 64 on try 2 | none given: 161, the least |
+| content classes | none registered | 6, assumed |
+| the most ids a response holds (`max_tokens_cap`) | 256 | 1,024 |
+| `egress_cells` | 4,096 | not an option |
+
+- The rest of its `params`: `ingress_cells` 4, `slots` 1, `every` 1, `queue` 64, `cell_bytes` 4,096, `egress` id. The two tries differ only in the lanes.
+- **Classes: none.** The `params` hold neither `content` nor `lengths`. Of the schedule's optional fields they hold `max_tokens_cap` alone. So the serve filed no class and no lengths row, and 6 stays an assumption: `connection_rows_run.py cost`'s default.
+- **What it carried** [read: each try's `summary.json` and `warden/check.json`]: try 1, 240 requests, at most 8 open at once; try 2, 2,000 requests, at most 59 open at once. Each try ran 9 execution phases, 27 of 27 link-windows certified. The longest response held 254 ids on try 1 and 256 on try 2.
+- The server's run is `r20261111-154001-b6a2` [relayed: vllm's notes]. I did not read it: the schedule is set on the certifier's side.
+
+## 2. The figures
+
+[ran on this machine: the calculator at #9454's head `4916fc023070` in a scratch export]
+
+Your run first: `--response-ids 1024 --phase-buckets 480 --bucket-s 0.25 --delay 60 --ingress-buckets 60` gives your 49,645,070 and 836,063 GB, 161 lanes and R = 1,449. So your figures were at 1,024 ids a response.
+
+**(a) The serve's T and ingress buckets, at your 1,024 ids:** `--response-ids 1024 --phase-buckets 600 --bucket-s 0.25 --delay 60 --ingress-buckets 16`
+
+| in GB | world week | world month | world year | datacenter week | datacenter month | datacenter year |
+|---|---|---|---|---|---|---|
+| `scan`, D_j = 2 | 952,097 | 4,080,417 | 49,645,070 | 254 | 1,088 | 13,240 |
+| `scan`, D_j = 1 | 937,924 | 4,019,673 | 48,906,024 | 250 | 1,072 | 13,043 |
+| `design, no stop block`, D_j = 2 | 484,670 | 2,077,157 | 25,272,071 | 129 | 554 | 6,740 |
+| `design, no stop block`, D_j = 1 | 470,496 | 2,016,413 | 24,533,025 | 125 | 538 | 6,543 |
+| `design`, D_j = 2 | 15,708 | 67,320 | 819,059 | 4.19 | 18.0 | 218 |
+| `design`, D_j = 1 | 1,534 | 6,576 | 80,013 | 0.409 | 1.75 | 21.3 |
+
+**(b) The same at the serve's own cap, 256 ids:** `--response-ids 256`, the rest as (a)
+
+| in GB | world week | world month | world year | datacenter week | datacenter month | datacenter year |
+|---|---|---|---|---|---|---|
+| `scan`, D_j = 2 | 781,566 | 3,349,567 | 40,753,066 | 208 | 893 | 10,869 |
+| `scan`, D_j = 1 | 767,392 | 3,288,824 | 40,014,019 | 205 | 877 | 10,672 |
+| `design, no stop block`, D_j = 2 | 399,404 | 1,711,732 | 20,826,069 | 107 | 457 | 5,554 |
+| `design, no stop block`, D_j = 1 | 385,231 | 1,650,988 | 20,087,023 | 103 | 440 | 5,357 |
+| `design`, D_j = 2 | 15,708 | 67,320 | 819,059 | 4.19 | 18.0 | 218 |
+| `design`, D_j = 1 | 1,534 | 6,576 | 80,013 | 0.409 | 1.75 | 21.3 |
+
+- **What moves and why.** `scan` reads neither T nor the ingress buckets, so (a) leaves it at your figure; it moves with the ids a response holds. `design` is its count and its jitter: the count falls from 97,017 to 80,013 GB a world-year because a year holds fewer, longer execution phases. `design` does not read the ids.
+- **The lanes in both are the calculator's, not the serve's:** 165, the least whose schedule releases the plan's load. R = 1,815 = 165 × ⌈(600 + 16 − 1) / 61⌉, and the count is 6 × log2(1,816) = 64.96 bits an execution phase. At the plan's load a link serves 1,805 requests in an execution phase.
+
+## 3. The serve's lanes cannot be the rows' lanes
+
+- **`--lanes 64` and `--lanes 8` are refused at T = 600** [ran]: "a link's lanes are a positive integer and its execution phase's buckets a multiple of the slot stride's 16". With lanes given the calculator counts the entries by the scan class's default stride of 16 buckets. The serve's `every` is 1, and 600 is not a multiple of 16.
+- **They would be refused by the load too** [computed]: 64 lanes release at most 704 connections in an execution phase and 8 release 88. The plan's link serves 1,805. Wednesday's serve was not at the plan's load.
+- **The count at the serve's lanes, by hand** [computed, no code ran it]: at 64 lanes 6 × log2(705) = 56.77 bits an execution phase, 69,925 GB a world-year in place of 80,013. At 8 lanes 38.85 bits, 47,859 GB.
+- For my next pull request on this benchmark, with your three notes: the lanes path takes the schedule's own `every`.
+
+## 4. The runs
+
+| run | at | state |
+|---|---|---|
+| `r20261112-210949-e63a` | `a895c57d3120` | failed, exit 1, as expected [read: its log]. 57 suites, 56 passed, none cached. `verity-bench`: 556 passed, 7 failed, the seven pinned tests of `test_exfiltration.py` I named and no other. `verity-network-traces` 658 passed, `benchmarks/certifier_term` 15, the certifier's verifier 1,431 passed and 1 skipped |
+| `r20261112-221223-1e23` | `6a535a510acc` | running at 2:24 PM PST |
+
+## 5. Least sure, and where I did not look
+
+- **Which bound on a response the serve's row takes:** its registered cap of 256 ids, or the 1,024 of your run. I give both and choose neither.
+- **"No class" is read from the fields' absence.** I read which fields are optional in `warden.py` on my branch, not at the serve's commit.
+- I read the certifier's deployment documents. I did not hold them to a registered schedule's digest, and I did not read the server's record.
+- The figures are at #9454's head. At #9501's head `scan` and `design, no stop block` are the same and `design` is charged its whole schedule with no record; I did not run these options there.
+
