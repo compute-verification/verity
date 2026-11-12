@@ -6212,22 +6212,58 @@ def test_every_public_items_code_is_reached(pieces):
     assert seen == {"keys", "unsalted", "query", "roots", "undeclared", "reject"}, sorted(seen)
 
 
+def _reported(a: dict, v: str) -> dict:
+    """The reads a v2 audit's verdict of record reports, changed, by name: all of them (`all`); with a value the
+    registration doesn't name (`unnamed`); less `v`'s (`unread`); none (`empty`) or no report (`none`); one of `v`'s
+    ports at another root (`one-port`) or all of them (`another-root`); with a root port's value (`root-port`)."""
+    opened = a["evidence"]["verdicts"]["lean"]["registered"]
+    p = next(k for k in sorted(opened) if opened[k]["value"] == v)
+    return {"all": opened, "unnamed": {**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}},
+            "unread": {k: e for k, e in opened.items() if e["value"] != v}, "empty": {}, "none": None,
+            "one-port": {**opened, p: {**opened[p], "root": "12" * 64}},
+            "another-root": {k: {**e, "root": "12" * 64} if e["value"] == v else e for k, e in opened.items()},
+            "root-port": {**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}}
+
+
+def _reporting(a: dict, got) -> dict:
+    lean = {**a["evidence"]["verdicts"]["lean"], "registered": got}
+    return {**a, "evidence": {**a["evidence"], "verdicts": {"lean": lean}}}
+
+
 def test_a_v2_audit_reads_the_sessions_registered_roots(server):
-    """A v2 audit of each program accepts when the verifier reports the sessions' registered reads opened against
-    the registered roots (and a value the registration doesn't name is not its to read), and rejects them opened against
-    another root, a value's reads missing, a root port's value read as registered, or none reported."""
+    """A v2 audit of each program accepts when each read the verifier reports of the record's own values is of a
+    registered value, opened against its registered root: every value's reads, a value's reads missing, none reported,
+    and a value the registration doesn't name beside them (not its to read). It rejects a read opened against another
+    root, by one port of a value or by all of them, and a root port's value read as registered."""
     for s in REGISTERED_SETUPS:
         a = _v2_audit(s, s.values[1])
-        opened = a["evidence"]["verdicts"]["lean"]["registered"]
-        p = sorted(opened)[0]
-        v = opened[p]["value"]
-        for got, want in ((opened, "accept"), ({**opened, "extra.0": {"root": "ab" * 64, "value": "extra"}}, "accept"),
-                          ({**opened, p: {**opened[p], "root": "12" * 64}}, "reject"),
-                          ({k: e for k, e in opened.items() if e["value"] != v}, "reject"),
-                          ({**opened, "x.0": {"root": ROOTS["x"], "value": "x"}}, "reject"), ({}, "reject"), (None, "reject")):
-            lean = {**a["evidence"]["verdicts"]["lean"], "registered": got}
-            case = _json(_case({**a, "evidence": {**a["evidence"], "verdicts": {"lean": lean}}}))
-            assert D.replay(ONE_STAGE, case, server)[0] == want, (s.program.fn.id, got)
+        v = sorted(e["value"] for e in a["record"]["registered"])[0]
+        for name, want in (("all", "accept"), ("unnamed", "accept"), ("unread", "accept"), ("empty", "accept"),
+                           ("none", "accept"), ("one-port", "reject"), ("another-root", "reject"), ("root-port", "reject")):
+            case = _json(_case(_reporting(a, _reported(a, v)[name])))
+            assert D.replay(ONE_STAGE, case, server)[0] == want, (s.program.fn.id, name)
+
+
+def test_the_record_fails_a_read_not_of_a_registered_root_and_no_missing_read(pieces):
+    """The record of a v2 audit of each program, Lean's and Python's the same: accepted, with no `registered` check,
+    when a registered value has no reported read, by its reads missing or none reported; and failing `registered`,
+    naming the value read, when all of a value's reads are opened against another root or a root port's value is read as
+    registered."""
+    for s in REGISTERED_SETUPS:
+        a = _v2_audit(s, s.values[1])
+        named = sorted(e["value"] for e in a["record"]["registered"])
+        v = named[0]
+        for name, wrong, opened in (("unread", None, None), ("empty", None, None), ("none", None, None),
+                                    ("another-root", [v], named), ("root-port", ["x"], sorted({*named, "x"}))):
+            case = _record_case(_reporting(a, _reported(a, v)[name]), str(Fraction(0.1)))
+            kind, line = D.replay(RECORD_PORT, case, pieces)
+            assert kind == "output", line
+            rec = json.loads(json.loads(line))
+            assert codec.canonical_json(rec["checks"]) == codec.canonical_json(audit_record_of(copy.deepcopy(case))["checks"])
+            assert rec["accepted"] is (wrong is None), (s.program.fn.id, name)
+            assert rec["checks"].get("registered") == (None if wrong is None else {
+                "ok": False, "codes": ["registered"],
+                "detail": {"registered": named, "opened": opened, "wrong": wrong}}), (s.program.fn.id, name)
 
 
 def _accepted_record_case(kind: str, delta: float) -> dict:
