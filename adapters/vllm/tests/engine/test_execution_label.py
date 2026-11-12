@@ -14,6 +14,7 @@ from tests import fake_vllm
 
 pytest.importorskip("verity_vllm.pipeline.match")
 from verity_vllm.pipeline import match as rc
+from verity_vllm.pipeline import match_workload
 
 EAGER_ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 COMPILED_ROW = "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-compiled"
@@ -68,7 +69,7 @@ def test_adapter_execution_of_workload_and_labels():
     assert va.execution_label_of(True) == "bi-eager" and va.execution_label_of(False) == "bi-compiled" and va.execution_label_of(None) is None
     assert va.execution_label_of(True, False) == "eager" and va.execution_label_of(False, False) == "compiled"
     assert va.execution_label_of(False, None) is None
-    assert va.EXECUTION_ENFORCE_EAGER is rc.ENFORCE_EAGER          # the laptop's table is the pod's
+    assert va.EXECUTION_ENFORCE_EAGER is match_workload.ENFORCE_EAGER          # the laptop's table is the pod's
 
 
 def test_load_workload_carries_row_id_and_execution(tmp_path):
