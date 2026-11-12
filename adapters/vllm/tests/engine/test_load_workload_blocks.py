@@ -4,10 +4,11 @@ hold refused by name."""
 from __future__ import annotations
 
 import json
+from typing import Any
 
 import pytest
 
-BASE = {"schema": "verity-vllm/workload/v2", "requests": [{"request_id": "a", "prompt_token_ids": [1, 2], "max_tokens": 4}]}
+BASE: dict[str, Any] = {"schema": "verity-vllm/workload/v2", "requests": [{"request_id": "a", "prompt_token_ids": [1, 2], "max_tokens": 4}]}
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "logprobs": None, "seed": None, "n": 1, "variant": "greedy", "greedy": True}
 ROW = "m__bf16__h200__tp1__b1__i8__o4__mixed__greedy__bi-eager"
 

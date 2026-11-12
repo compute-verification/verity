@@ -3,11 +3,13 @@ empty) attributes nothing; the partial-prefill steps it totals and the loop's fi
 ones it wrote itself a few lines before.  Hand-built collectors, no engine."""
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from verity_vllm.engine import chunks
 
-NOTHING = {"source": "outputs", "steps_scheduled_tokens": None, "max_prefill_chunks": 0, "chunked_prefill_observed": False,
+NOTHING: dict[str, Any] = {"source": "outputs", "steps_scheduled_tokens": None, "max_prefill_chunks": 0, "chunked_prefill_observed": False,
            "partial_prefill_steps_total": 0, "internal_request_ids": None, "consistent": True, "problems": [], "corrections": None}
 
 
@@ -27,8 +29,9 @@ def test_a_timing_record_without_requests_attributes_nothing(timing):
 
 def test_the_partial_prefill_steps_of_every_request_are_totalled():
     # the outputs of iteration j come from the forward of iteration j - 1 (lag 1); two forwards serve no token before the first
-    timing = {"engine_steps": 4, "output_lag_steps": 1, "requests": {"a": {"first_step": 0, "finish_step": 3, "n_generated": 2},
-                                                                    "b": {"first_step": 1, "finish_step": 3, "n_generated": 2}}}
+    timing: dict[str, Any] = {"engine_steps": 4, "output_lag_steps": 1,
+                              "requests": {"a": {"first_step": 0, "finish_step": 3, "n_generated": 2},
+                                           "b": {"first_step": 1, "finish_step": 3, "n_generated": 2}}}
     col = _collector([False, True, True, True, True], [{}, {}, {}, {"a": 1, "b": 1}, {"a": 1, "b": 1}])
     out = chunks.attribute(timing, col, {"a": 9, "b": 9})
     assert timing["requests"]["a"]["partial_prefill_steps"] == [0, 1] and timing["requests"]["b"]["partial_prefill_steps"] == [1]
@@ -38,8 +41,8 @@ def test_the_partial_prefill_steps_of_every_request_are_totalled():
 def test_a_reverted_correction_restores_the_three_fields_the_loop_wrote():
     # one request on a sync engine: its last forward is freed inside step(), so the schedule's deltas read a lag of 1 for a true 0
     loop = {"arrive_step_realized": 0, "first_step": 0, "finish_step": 2}
-    timing = {"engine_steps": 3, "output_lag_steps": 0,
-              "requests": {"r0": {"arrive_step": 0, **loop, "finish_reason": "length", "admit_iter": 0, "finish_iter": 2, "n_generated": 3}}}
+    r0 = {"arrive_step": 0, **loop, "finish_reason": "length", "admit_iter": 0, "finish_iter": 2, "n_generated": 3}
+    timing: dict[str, Any] = {"engine_steps": 3, "output_lag_steps": 0, "requests": {"r0": r0}}
     col = _collector([True, True, True], [{"r0": 1}] * 3, [{"r0-01234567": (2, 2)}, {"r0-01234567": (3, 2)}, {}])
     out = chunks.attribute(timing, col, {"r0": 2})
     c = out["corrections"]
@@ -56,8 +59,8 @@ def test_a_reverted_correction_restores_the_three_fields_the_loop_wrote():
 
 def test_a_reverted_correction_takes_off_a_field_the_loop_never_wrote():
     # the loop left no `arrive_step_realized`; the correction writes one, and the revert removes it again
-    timing = {"engine_steps": 3, "output_lag_steps": 0,
-              "requests": {"r0": {"first_step": 0, "finish_step": 2, "admit_iter": 0, "finish_iter": 2, "n_generated": 3}}}
+    r0 = {"first_step": 0, "finish_step": 2, "admit_iter": 0, "finish_iter": 2, "n_generated": 3}
+    timing: dict[str, Any] = {"engine_steps": 3, "output_lag_steps": 0, "requests": {"r0": r0}}
     col = _collector([True, True, True], [{"r0": 1}] * 3, [{"r0-01234567": (2, 2)}, {"r0-01234567": (3, 2)}, {}])
     out = chunks.attribute(timing, col, {"r0": 2})
     assert out["corrections"]["applied"] is False and out["corrections"]["loop"]["requests"]["r0"]["arrive_step_realized"] is None

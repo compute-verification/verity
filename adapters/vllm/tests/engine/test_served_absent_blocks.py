@@ -8,7 +8,7 @@ import pytest
 from verity_vllm.engine import served as SV
 
 COMPILED = {"execution": "compiled"}
-ENGINE_BLOCKS = [None, {}, {"env": None, "args": None, "reasons": None}, {"env": {}, "args": {}, "reasons": {}}]
+ENGINE_BLOCKS: list[dict | None] = [None, {}, {"env": None, "args": None, "reasons": None}, {"env": {}, "args": {}, "reasons": {}}]
 
 
 def test_a_workload_with_no_engine_block_declares_what_its_execution_and_the_harness_set():
