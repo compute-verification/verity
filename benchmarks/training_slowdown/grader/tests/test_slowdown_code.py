@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 import torch
 from conftest import CC, LF, STEP, dot_alone, k16_steps, route_factor
+from test_grader import SOFTMAX, differences, fused_keys
 
 import grader as G
 from verity_config.settings import of
@@ -101,8 +102,8 @@ def test_the_command_line(fresh, steps, tmp_path, capsys, unit_prices) -> None:
     got = json.loads(out.read_text())
     assert got["format"] == G.READ and got["slowdown_code"]["checked"] and "against" not in got
     t, C = got["totals"], got["C"]["gates"]
-    assert capsys.readouterr().out == (f"grader: {t['products']} products, N {t['N']:,}, O {t['O']:,}, |C| {C:,} "
-                                       f"({t['gates']:,} products')\n")
+    assert capsys.readouterr().out == (f"grader: {t['products']} products (0 of them 0 fused attention ops'), N {t['N']:,}, "
+                                       f"O {t['O']:,}, |C| {C:,} ({t['gates']:,} products')\n")
     trace.write_text(json.dumps({"capture": G.CAPTURE, "gates": 500, "rows": []}))
     assert G.main([*argv, "--trace", str(trace)]) == 0
     a = json.loads(out.read_text())["against"]
@@ -121,10 +122,13 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
     """The slowdown code's capture of the same tiny step (`capture_step`, its product rows with each GEMM at its operands'
     dtype) beside what the grader reads of the step's circuit: the same products, N, O and token dims at every (phase, op,
     dims), and the same operand widths but at the bf16 steps' attention products, which the circuit wires at the 32 bits
-    torch's math path computes them in and the trace takes at the 16 bits their operands were passed at. On sm_120, priced at
-    the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a bf16 MAC that dot's over 16) times
-    their routes' factor (`route_factor`: the zeros grid.z slices pad their residue tiles with are dots the trace doesn't
-    count)."""
+    torch's math path computes them in and the trace takes at the 16 bits their operands were passed at. On sm_120 the step
+    keeps the card's flash attention, which the trace computes as the math path does, and they differ at attention's (phase,
+    dims) alone (`differences`), in four columns: the count, by the backward's scores, which the math path saves; N and O,
+    the head Definitions' multiply-adds and outputs against whole rectangles, where the scores are; and the widths of the
+    products with an operand of the softmax's (`SOFTMAX`), bf16 on the card, f32 on the math path. Priced at the tensor-core
+    dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a bf16 MAC that dot's over 16) times their routes'
+    factor (`route_factor`: the zeros grid.z slices pad their residue tiles with are dots the trace doesn't count)."""
     dtype, cc = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}[step]
     directory, _, commit = SLOWDOWN_CODE.rpartition("@")
     code = G.load_slowdown_code(Path(directory), commit)
@@ -141,8 +145,13 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
     h = G.load_handover(s.path)
     out = G.read(h, code)
     a = G.against(out, code.products.rows(g), code)
-    assert a["agree"] == {"count": True, "N": True, "O": True, "widths": dtype is None, "token_dims": True}, a["rows"]
-    assert all(a["totals"]["circuit"][x] == a["totals"]["trace"][x] for x in ("count", "N", "O"))
+    if cc:
+        scores = fused_keys(out, ("scores",))
+        assert differences(a, out) == {"count": {k for k in scores if k[0] == "backward"}, "N": scores, "O": scores,
+                                       "widths": fused_keys(out, SOFTMAX)}, a["rows"]
+    else:
+        assert a["agree"] == {"count": True, "N": True, "O": True, "widths": dtype is None, "token_dims": True}, a["rows"]
+        assert all(a["totals"]["circuit"][x] == a["totals"]["trace"][x] for x in ("count", "N", "O"))
     if cc:
         factor = route_factor(k16_steps(h), out["products"])
         assert a["C"]["mm"]["trace"] > 0 and a["C"]["mm"]["ratio"] == pytest.approx(factor), a["C"]
