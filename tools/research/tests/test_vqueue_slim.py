@@ -991,6 +991,37 @@ def test_a_step_the_check_judges_failed_while_a_shard_runs_circuit_check_fails_i
         assert "verdict" not in rec and "still_running" not in rec and rec["early"]["state"] == FAIL
 
 
+@pytest.mark.parametrize("third", ["running", "ended"])
+def test_a_shard_refused_at_its_prebuild_never_planned_its_steps_and_holds_no_pass(world, monkeypatch, tmp_path, third):
+    """Shard 2 passed its preflights, then its C++ prebuild failed: check.py records a `prebuild` step and stops before it
+    plans its groups, so its live record names none of its steps, and its part of pytest's suites never ran.  Shard 3 holds
+    every step shard 2 would have (pytest, flock-rust-tests), all passed.  The check doesn't pass early while shard 3 runs
+    circuit-check, and once every shard ended it is infra, never a pass."""
+    from research.landing import LIVE as LIVE_FILE, PREFLIGHT
+
+    h, base, sha, _ = _harness(world, monkeypatch)
+    rec = start(h.d, sha, base, shards=3)
+    _shards_now(h, tmp_path, running=((3, "circuit-check"),) if third == "running" else ())
+    refused, other = h.evidence[1], h.evidence[2]
+    rows = [*({"step": s, "status": "passed"} for s in PREFLIGHT),
+            {"step": "prebuild", "status": "failed", "rc": 2, "log": "prebuild.log", "detail": "refused: prebuild exited 2"}]
+    (refused / "prebuild.log").write_text("error: g++ died\n")
+    (refused / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
+    (refused / LIVE_FILE).write_text(json.dumps({"schema": "check-live/v1", "state": "failed",
+                                                 "steps": [{"step": r["step"], "state": r["status"]} for r in rows]}))
+    h.run_state[refused.name] = ("done", 1, None)
+    with (other / "steps.jsonl").open("a") as f:
+        f.write(json.dumps({"step": "flock-rust-tests", "status": "passed"}) + "\n")
+    live = json.loads((other / LIVE_FILE).read_text())
+    live["steps"].append({"step": "flock-rust-tests", "state": "passed"})
+    (other / LIVE_FILE).write_text(json.dumps(live))
+    got = judge(h.d, rec)
+    if third == "running":
+        assert got == Verdict(PENDING) and "verdict" not in rec
+    else:
+        assert got.state == INFRA and rec["verdict"]["state"] == INFRA
+
+
 def test_lean_audit_s_failures_are_what_it_prints_under_each_failed_package_but_its_run_s_counts():
     log = ("lean-audit: verity/hardware/world: PASS reused\n" + AUDIT.format(n=1)
            + "  tamper: /w/lean-audit-scratch-1-x/security/Proofs/A.olean changed\n"
