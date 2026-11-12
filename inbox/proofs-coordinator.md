@@ -92725,3 +92725,34 @@ Read at that head by our worker CLOSEROUND; nothing was run. Line numbers are th
 - **#9199 and #9230** are untouched by this read. `git merge-tree` of #9319's head against the twin's head and
   #9237's `9d4aec0111fb` stops in the same one region of `a5.py` [run].
 - Checkpoint note: `20261112T1526Z-report-closeround.md`, to be replaced by one written after this entry.
+
+## OUTBITS, Thu 12 Nov 15:58Z: the whole-unit proving run is launched: `r20261112-155548-66b2` on vy-nebius-2, one GPU slot, 192 GB reserved; it should end about 17:00Z, at the latest 19:56Z
+
+1. **The run.**
+   - [run] `r20261112-155548-66b2`, launched 15:55:48Z on `vy-nebius-2` (8 RTX PRO 6000 Blackwell Server Edition of 97,887 MiB; 192 CPUs, 1,716 GiB), in GPU slot `g0` (cores 0 to 7), taken 15:55:54Z. Tree: `cursor/circuits-cir265-scratch-6f04` at `e39ad449a67a0f46b3e0f456ab7c7e115981bc3c`, shipped as it is; nothing is pushed to it.
+   - [run] Ask: `research run --on vy-nebius-2 --pool gpu --mem-gb 192 --timeout 240m`: the slot's 8 cores, a reservation of 192 GB (the slot holds 192.2 GB; a reservation, not a cap), 240 minutes counted from taking the slot. The GPU comes from `gpu-lease 1 --wait --max-min M` around each unit's session only: M is 30 for the positions unit and 90 for the whole mask.
+   - Why 192: [relayed] staging peaks at 23.94 and 20.69 GiB (circuits), and the job stages both at once. [read] The prover and its verifier process at a block of 2^27 are not measured, and the lease runs them in a memory scope of its own, capped by default at 90% of the node's memory over its 8 GPUs: [derived] about 193 GiB. I reserved what that cap lets the sessions take.
+   - When: [guess] about 17:00Z if each session takes minutes. [run] At the latest 19:56Z, its timeout. At 15:48Z all 8 GPUs were free, and the windows file's last lines are of October.
+2. **The route is not the team skill's.**
+   - [run] `research run --on auto --gpu-host` was placed on node 2 and refused there (`r20261112-154440-1ee2`: "this machine takes a `research run` only through its check slots (/etc/vy/runs-via-slot)").
+   - [run] Node 2's GPU slots are `/workspace/research/locks/gpu/slots`, one per GPU (g0 to g3 of 8 cores, g4 to g7 of 6). A slot gives cores and no GPU; the lease gives the GPU. Under `--pool` the workload runs at `nice 19` on the slot's own cores.
+   - [read] The team skill's Machines line sends every GPU job through `--on auto`. That fails today for a GPU job, and the refusal names the pools `proofs`, `research` and `soundness`, not `gpu`. Friction for infra, through you.
+3. **What the job does** (`whole_units_job.sh` and `whole_units.py`, in my notes under `20261112T1535Z-whole-units/`).
+   - [read] `uv sync`, then circuits' two commands at once into a scratch directory.
+   - [read] Pins: `staged.json`'s `pin` and the circuit file's own SHA-512 against circuits' value, and the ANDs, rows, nonzeros, bytes, `k_log` and the block's end against the comment's. A unit whose pin differs gets no prover.
+   - [run] The prover is built from this tree in scratch (`prove_time.sh STEPS=build`, the CUDA prover, `SM=120`). Node 2 keeps no build for `prove_time.sh` and has no CUDA 13.3 under `/usr/local`; the job reads the toolkit under `/workspace/jobs/zk-cost/cuda-root`.
+   - [read] Before any lease: `flock-circuit statement --zk --gpu --instances pub.bin --circuit circuit.txt --pin PIN` on each staged circuit. It builds the statement under the prover's own checks and prints `k_log`, `nbl`, `dense_m` and `regions`. The job writes `nRegions` (`regions`), `mPts` (24 + `nbl`) and m, holds them to `nRegions ≤ 1024`, `mPts ≤ 64`, `k_log ≤ 27` and 25 ≤ m ≤ 35, and starts no prover for a unit the binary refuses or whose range fails. The refusal's text is kept.
+   - [read] What I made beside `staged.json` for `PT_STATEMENTS`: `inst.bin` and `pub.bin` linked up from `round/`, and a `stage.json` holding `n` 1, `k_log`, `unit_log`, the ANDs, the pin and class, `macs` 0, a `tag` (`cir265-positions`, `cir265-whole`) and `vus_per_block` from the binary's `STATEMENT` line. Nothing else of `stage.py`'s fields.
+   - [read] One session a unit, positions first: `prove_time.sh STEPS=prove PT_STATEMENTS=DIR PT_DEVICE=gpu WARM=0 RUNS=1 VCPUS=4`. That is a verifier process (`serve --zk --draw subset:1`, so the unit is in its sample) on 4 cores and the prover (`prove --zk --gpu`) on the other 4, coins from the OS, the ZK server's send check off, as that script runs every session. The verdict is that verifier process's, not the Lean verifier's.
+   - [read] Seconds: the prover's `LIVE` line (`prove_total_s`, `e2e_s`, its phases) and the session's wall time. One session with none before it, so its seconds include the first session's set-up on the card.
+   - [read] Peak memory: on the host, GNU time's peak RSS of the prover and a 0.5 s sampler of `VmHWM` for the staging, statement, verifier and prover processes, with the lease scope's `memory.peak`; on the card, the leased GPU's `memory.used` every 0.2 s.
+4. **Your two opens, as far as they go before the run reads them.**
+   - [derived] One instance gives `nbl` = max(3, ⌈log2 1⌉) = 3 (`Flock/HmRow.lean`, `Stmt.setupH`; the prover's `circuit.rs:2927`), so `mPts` = 27 for both units, under 64, and m = `k_log` + 3 = 28 (positions) and 30 (the whole mask): witnesses of 2^28 and 2^30 bits, under 2^35.
+   - [read] `nRegions` is not known until the circuit is staged. The run reads it before any lease.
+   - [read] The device prover has two bounds of its own beside `Stmt.InRange`: at most 2^32 − 1 nonzeros in one matrix of a slot type (`GPU_NNZ_MAX`, `circuit.rs:2827`) and at most 12 slot types (`flock-circuit.rs:7339`). [relayed] The whole mask has 516,933,829 nonzeros in all, so the first holds.
+5. **Short runs before the launch**, each under two minutes in slot `g0`.
+   - [run] `r20261112-154841-fe86` (what the node has) and `r20261112-154948-4db2` (where a build and a toolkit are).
+   - [run] `r20261112-155228-058e`: the real command for 120 s, stopped by its timeout as meant. Both stagings were running, at 9.0 and 6.5 GiB, and the first of the two cargo builds had ended in 1 min 36 s.
+   - [run] The trial left 29 MB of scratch, which this run removed at its start. If this run is stopped from outside, `/workspace/tmp/whole-units.7yjBhn` may be left, and I remove it.
+6. **Item 3, the half I already hold.** [derived, from my 13:52Z entry] Of the 34 templates that change class when a template is sized by its row, none passes the widest class (262,144 bits): the 32 `DsaTopKDigitCount_v1` go from 4,096 to 8,192 bits and the two picks from 32 to 64 and from 128 to 256. What moves by name (registration digests, partition files, pins, served ids) comes with the `unit_block` read, by Fri 13 Nov 20:00Z.
+7. **Next.** An entry the hour the run ends, and one by Fri 13 Nov 16:00Z in any case. Way (3) is untouched.
