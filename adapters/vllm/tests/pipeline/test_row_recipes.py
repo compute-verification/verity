@@ -171,3 +171,25 @@ def test_the_run_stores_tools_read_a_row_recipe_as_the_parser_does(where: str, n
         for stage in STAGES:
             p = tool_parse([*launcher, "row", *argv], stage=stage)
             assert (p["row"], p["role"], p["model"], p["revision"], p["stage"]) == (o.row, o.role, o.repo, o.rev, named or stage)
+
+
+ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+NAMED = (ROW, "R", "org/repo", "rev1")
+
+
+@pytest.mark.parametrize("argv, stage, named", [
+    (["verity-vllm", "row", "stage", "match", *NAMED, "--lp", "8"], "match", NAMED),
+    (["/venv/bin/python", "-m", "verity_vllm.pipeline.cli", "row", "stage", "commit", *NAMED], "commit", NAMED),
+    (["bash", "/tree/run_row_v2.sh", "stage", "match", *NAMED], "match", NAMED),
+    (["bash", "/tree/row_pod.sh", *NAMED, "match,commit"], "match,commit", NAMED),
+    (["bash", "/tree/tp_stage.sh", *NAMED, "commit"], "commit", NAMED),
+    (["bash", "/tree/row_pod.sh", "stage", "match", ROW, "R"], "build", ("stage", "match", ROW, "R")),   # no stage line of its own
+    (["verity-vllm", "row", *NAMED, "--stages", "commit"], "commit", NAMED),
+    (["verity-vllm", "row", *NAMED], "build", NAMED),
+    (["verity-vllm", "row", "stage"], "build", ("stage", None, None, None)),                            # `stage` and no stage after it
+])
+def test_the_run_stores_tools_read_a_stage_line_and_an_earlier_runners_argv(argv: list[str], stage: str, named: tuple):
+    """`row stage STAGE ...` names its stage before the row, as the earlier `run_row_v2.sh stage` did; `row_pod.sh` and `tp_stage.sh`
+    named their stages after the revision; any other line's stage is its `--stages`, else the Tool's own (here `build`)."""
+    p = tool_parse(argv, stage="build")
+    assert (p["stage"], (p["row"], p["role"], p["model"], p["revision"])) == (stage, named)
