@@ -54,9 +54,17 @@ def test_the_pinned_corpus_is_a_whole_sha512_and_a_commit_of_its_repository():
     for name in (S.AGENTIC, S.AGENTIC_FULL):
         load = S.LOADS[name]
         assert load.file is S.AGENTX and load.sessions and not load.number and not load.plan and load.dataset == S.TIMED_TRACE
-    ds = S.AGENTX
-    assert re.fullmatch(r"[0-9a-f]{128}", ds.sha512) and re.fullmatch(r"[0-9a-f]{40}", ds.revision) and ds.size > 0
+    for ds in (S.AGENTX, S.AGENTX_256K):
+        assert re.fullmatch(r"[0-9a-f]{128}", ds.sha512) and re.fullmatch(r"[0-9a-f]{40}", ds.revision) and ds.size > 0
     assert (S.LOADS[S.AGENTIC].context, S.LOADS[S.AGENTIC_FULL].context) == (131072, 1048576)
+    # the publisher's own cut of the sessions for the recipe's context is a file of its own, at the recipe's limit: no
+    # session of it is cut by ours
+    at_limit = S.LOADS[S.AGENTIC_256K]
+    assert at_limit.file is S.AGENTX_256K and S.AGENTX_256K.repo == S.AGENTX.repo + "-256k" and S.AGENTX_256K != S.AGENTX
+    assert at_limit.context == 262144 == S.MODELS["glm53"].published_context and at_limit.sessions and not at_limit.number
+    assert at_limit.dataset == S.TIMED_TRACE and S.context_of({S.AGENTIC_256K: (4,)}, 262144) == 262144
+    with pytest.raises(SystemExit, match="load agentic-256k's requests need a context of 262144"):
+        S.context_of({S.AGENTIC: (4,), S.AGENTIC_256K: (4,)}, 131072)
 
 
 def turn(n_in: int, n_out: int, ids: list[int]) -> dict:
@@ -454,6 +462,23 @@ def test_cost_prints_a_sessions_loads_cost_over_the_arms_own_stock(tmp_path: Pat
     assert ok and first == text.splitlines()[0] and what["loads"] == ["agentic"] and what["arm"] == "prod-record"
     assert [(m["name"], m["value"], m["ci95"], m["target"], m["verdict"], m["users"]) for m in measurements] == [
         ("agentic", 0.5, [0.4, 0.6], 1.0, "meets", 4)]
+    # a job that served two sessions loads has a cost of each: the first's is the report, the second's is beside it
+    two = []
+    for a, slower in zip(arms(), (1.0, 1.01, 1.0)):
+        other = served(a["arm"], [x["output_tok_per_s"] / 1000 / slower for x in a["loads"]["agentic@4"]], load=S.AGENTIC_256K)
+        two.append(a | {"loads": a["loads"] | other["loads"], "planned": a["planned"] | other["planned"]})
+        files.append(tmp_path / f"{a['arm']}.two.json")
+        files[-1].write_text(json.dumps(two[-1]))
+    assert S.session_loads(two, "prod") == ["agentic", "agentic-256k"] and S.session_loads(two, "no such arm") == []
+    assert S.session_cost(two, "prod-record", "prod", load=S.AGENTIC_256K)["value"] == 1.51
+    assert S.session_cost(two, "prod-record", "prod")["load"] == "agentic" and S.session_cost(two, "prod-record", "prod", load="chat") is None
+    assert S.main(["cost", *map(str, files[3:]), "--arm", "prod-record", "--out", str(tmp_path / "two")]) == 0
+    first, second = capsys.readouterr().out.split("serving cost on load ")[1:]
+    assert first.startswith("agentic: prod-record over prod: 0.50% [0.40%, 0.60%]")
+    assert second.startswith("agentic-256k: prod-record over prod: 1.51% [1.41%, 1.61%]")
+    assert (tmp_path / "two" / "serving_cost.txt").read_text() == "serving cost on load " + first
+    assert (tmp_path / "two" / "serving_cost.agentic-256k.txt").read_text() == "serving cost on load " + second
+    assert json.loads((tmp_path / "two" / "serving_cost.agentic-256k.json").read_text())["load"] == "agentic-256k"
     # arms that served no sessions load are costed as before, over compiled
     assert S.session_cost([served("compiled", [2.0] * 6, load="chat"), served("record", OURS, load="chat")], "record",
                           "compiled") is None

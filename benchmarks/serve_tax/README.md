@@ -296,18 +296,22 @@ sent none, so vLLM samples its requests as it samples any without a seed, and wh
 is in `prod-record`'s cost over `prod`, a change of ours like the record and the top-k. The seed is the client's; a
 served request need not send one.
 
-The loads `agentic` and `agentic-full` are a coding agent's recorded sessions: SemiAnalysis's AgentX traces
+The loads `agentic`, `agentic-full` and `agentic-256k` are a coding agent's recorded sessions: SemiAnalysis's AgentX traces
 (`serve_tax.AGENTX`, Apache-2.0), a line a session, each request its prompt's and its output's tokens and an id for
 each 64-token block of its prompt, with no token and no text. vLLM's client makes a block's tokens from its id
 (its `timed_trace` dataset), so a turn's prompt begins with the tokens of the turn before it and the engine's prefix
 cache serves them. The tokens are synthetic, so the share of its drafts the engine accepts is a synthetic prompt's;
 `cost` prints it. A session is its own chain of requests, without the groups its subagents sent, up to the first
 request that does not fit the load's context with its output: 131,072 tokens for `agentic`, the model's own limit for
-`agentic-full` (`serve_tax.session_lines`). The load is closed-loop. Its rung is its users (`--loads agentic=4`), each
+`agentic-full` (`serve_tax.session_lines`). `agentic-256k` reads the publisher's own cut of the same sessions for a
+context of 262,144 tokens (`serve_tax.AGENTX_256K`), the recipe's limit on these cards, in which no request passes
+that context, so no session of it is cut by ours. The load is closed-loop. Its rung is its users (`--loads agentic=4`), each
 a client of its own with one request in flight that sends its sessions' turns in order, each once the turn before has
 ended, so no turn arrives before the prompt it repeats is computed; `PASS_PROMPTS=agentic=N` is the turns each user
 sends in a pass. A pass's rate is the sum of its users' rates (`serve_tax.merged`). Its users' sessions must fit the
-engine's KV pool together, or the prefix cache evicts what a later turn repeats.
+engine's KV pool together, or the prefix cache evicts what a later turn repeats. A job that serves two such loads
+has a cost of each: `cost` prints the first's and then the others', each written beside the first's as
+`serving_cost.<load>.{json,txt}`.
 
 `cost` on such a load prints `serve_tax.session_cost`: the arm's cost over its stock arm with its 95% interval over
 reps, the noise floor (the second lifetime's cost over the first), and the verdict against `--target` or

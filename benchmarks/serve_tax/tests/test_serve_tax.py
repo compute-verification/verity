@@ -1066,8 +1066,8 @@ def test_a_loads_dataset_file_is_the_nodes_copy_of_the_pinned_one_or_nothing(tmp
 def test_the_pinned_dataset_is_a_whole_sha512_and_a_commit_of_its_repository():
     ds = S.LOADS["chat"].file
     assert re.fullmatch(r"[0-9a-f]{128}", ds.sha512) and re.fullmatch(r"[0-9a-f]{40}", ds.revision) and ds.size > 0
-    assert [n for n, load in S.LOADS.items() if load.file] == ["chat", "agentic", "agentic-full"]
-    assert list(S.LOADS) == ["chat", "long", "prefix", "agentic", "agentic-full"]
+    assert [n for n, load in S.LOADS.items() if load.file] == ["chat", "agentic", "agentic-full", "agentic-256k"]
+    assert list(S.LOADS) == ["chat", "long", "prefix", "agentic", "agentic-full", "agentic-256k"]
 
 
 def test_drive_bench_keeps_the_clients_result_and_counts_its_failed_requests(tmp_path: Path,

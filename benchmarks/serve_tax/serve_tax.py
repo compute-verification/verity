@@ -131,7 +131,7 @@ one arm from two jobs, each a load of its own, are one arm (`joined`), so a load
 ``--result`` writes the run's result.json too (`result_of`): each load's cost a measurement, and the number one under
 the model's metric id once every load has run.
 
-A sessions load (`Load.sessions`: ``agentic``, ``agentic-full``) is an agent's recorded sessions (`session_lines`),
+A sessions load (`Load.sessions`: ``agentic``, ``agentic-full``, ``agentic-256k``) is an agent's recorded sessions (`session_lines`),
 each a chain of requests of which each begins as the one before it does. Its rung is its users: each is a client of
 its own with one request in flight, which sends its sessions' turns in order, each once the turn before has ended, so
 a turn finds its session's prefix computed (`drive_bench`, `merged`). `cost` on such a load is `session_cost`: the
@@ -902,13 +902,19 @@ PAIRS = (Planned(0.0, 130808, 256), Planned(0.0, 130807, 256, after=0, blocks=20
 
 #: the flags of vLLM's client's timed_trace dataset: a file of lengths and block ids, a block of `BLOCK` tokens
 TIMED_TRACE = ("--dataset-name", "timed_trace", "--timed-trace-chunk-hash-size", str(BLOCK))
-#: the sessions loads (`Load.sessions`): the agent's sessions cut at the context the serve holds today, and whole
-AGENTIC, AGENTIC_FULL = "agentic", "agentic-full"
+#: the sessions loads (`Load.sessions`): the agent's sessions cut at the context the serve holds today, whole, and
+#: as their publisher cut them for the recipe's context
+AGENTIC, AGENTIC_FULL, AGENTIC_256K = "agentic", "agentic-full", "agentic-256k"
 #: SemiAnalysis's AgentX traces (Apache-2.0): recorded sessions of a coding agent, a line a session, each request its
 #: prompt's and its output's tokens and an id for each block of `BLOCK` prompt tokens, with no token and no text
 AGENTX = Dataset("semianalysisai/cc-traces-weka-062126", "23f152f6f0f9399a85901b89a6458def0ef16729", "traces.jsonl",
                  1847151435, "e9737b2661bf90958672b5aa7b133bf009bd2642d43fb3c22060e85b9f15a4ac"
                  "ed11b887571578abdfdc7b14df3b72a0825440628437dad16701697e48386470")
+#: the same sessions as their publisher cut them for a context of 262,144 tokens (Apache-2.0), in the same form: no
+#: request of it, with its output, passes that context
+AGENTX_256K = Dataset("semianalysisai/cc-traces-weka-062126-256k", "8fecd2fc56694469f758f0afbbb6335ad3043740", "traces.jsonl",
+                      568864747, "a6c659d9d773a3b00552266103937cad1cd6a7f1233fb98aa00f2ff6f706c4d7"
+                      "7ebf1bf7b640485ba0df5cebf2321242e85ecf786182f98d32137d5a173d679d")
 #: the fewest turns a session is sent with (`session_lines`): its opening request and the first to carry its context
 SESSION_TURNS = 2
 
@@ -919,7 +925,7 @@ SESSION_TURNS = 2
 #: engine, so its goodput counts the time per output token alone. prefix: the load that repeats a prefix, which chat
 #: and long do not; its cost is the row under the number and never enters it. One request in flight, so each second
 #: request starts once the prompt it repeats is computed; from a table of its own (``--dataset prefix=FILE``), its
-#: requests leave as they arrive instead (`ARRIVING`). agentic and agentic-full: sessions (`Load.sessions`), which
+#: requests leave as they arrive instead (`ARRIVING`). agentic, agentic-full and agentic-256k: sessions (`Load.sessions`), which
 #: repeat most of every prompt; a cost on them is `session_cost` and never enters the number.
 LOADS = {
     "chat": Load("ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset)",
@@ -942,6 +948,10 @@ LOADS = {
                        "up to the model's own context limit, of synthetic token ids (SemiAnalysis's AgentX traces; "
                        "vLLM's timed_trace dataset)", TIMED_TRACE, 24, (1,), 1048576, AGENTX, slo=("tpot",),
                        number=False, sessions=True),
+    AGENTIC_256K: Load("a coding agent's recorded sessions, each turn's prompt beginning as the turn before it, as their "
+                       "publisher cut them for a context of 262,144 tokens, of synthetic token ids (SemiAnalysis's "
+                       "AgentX traces, the 256k copy; vLLM's timed_trace dataset)", TIMED_TRACE, 24, (4,), 262144,
+                       AGENTX_256K, slo=("tpot",), number=False, sessions=True),
 }
 
 
@@ -2422,8 +2432,16 @@ def own_noise(reps: dict[int, dict]) -> dict | None:
             "lifetimes": [[x, y] for x, y in zip(order[::2], order[1::2], strict=False)]}
 
 
-def session_cost(arms: list[dict], arm: str, reference: str, target: float | None = None) -> dict | None:
-    """The cost of ``arm`` over ``reference`` on the sessions load both served (`Load.sessions`), from arms' metrics
+def session_loads(arms: list[dict], reference: str) -> list[str]:
+    """The sessions loads (`Load.sessions`) ``reference`` served, in its order; none for an arm not among ``arms``."""
+    ref = joined(arms).get(reference)
+    return [n for n in bench_loads(ref) if LOADS[n].sessions] if ref else []
+
+
+def session_cost(arms: list[dict], arm: str, reference: str, target: float | None = None,
+                 load: str | None = None) -> dict | None:
+    """The cost of ``arm`` over ``reference`` on the sessions load both served (`Load.sessions`; ``load``, or the
+    first the reference served: `session_loads`), from arms' metrics
     (one arm's directories joined: `joined`), every figure in percent: the reference's output tokens a second over
     the arm's, less one, at the users both served, with its 95% interval over reps (`serving_cost`). Its verdict is
     against ``target`` (`SESSION_TARGET` where none is given), the interval widened by the noise floor: the size of
@@ -2445,7 +2463,7 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
     if reference not in by:
         raise SystemExit(f"cost: no directory of arm {reference} (given: {', '.join(by) or 'none'})")
     ref = by[reference]
-    load = next((n for n in bench_loads(ref) if LOADS[n].sessions), None)
+    load = next((n for n in bench_loads(ref) if LOADS[n].sessions and load in (None, n)), None)
     if load is None:
         return None
     c = serving_cost(ref, by[arm], load) if arm in by else None
@@ -3236,6 +3254,8 @@ def main(argv: list[str] | None = None) -> int:
         reference = a.reference or stock_of(a.arm)
         rep = session_cost(arms, a.arm, reference, a.target)
         text = session_text(rep) if rep else None
+        # each further sessions load the reference served has a report of its own, printed after the first's
+        more = [session_cost(arms, a.arm, reference, a.target, n) for n in session_loads(arms, reference)[1:]] if rep else []
         if rep is None:
             rep = cost_report(arms, a.arm, reference, a.target)
             text = cost_text(rep)
@@ -3245,9 +3265,12 @@ def main(argv: list[str] | None = None) -> int:
             a.out.mkdir(parents=True, exist_ok=True)
             (a.out / "serving_cost.json").write_text(json.dumps(rep, indent=1))
             (a.out / "serving_cost.txt").write_text(text)
+            for r in more:
+                (a.out / f"serving_cost.{r['load']}.json").write_text(json.dumps(r, indent=1))
+                (a.out / f"serving_cost.{r['load']}.txt").write_text(session_text(r))
         if a.result:
             write_result(rep, a.out)
-        print(json.dumps(rep) if a.json else text, end="\n" if a.json else "")
+        print(json.dumps(rep) if a.json else text + "".join(map(session_text, more)), end="\n" if a.json else "")
         return 0
     if a.cmd == "metrics":
         print("\n".join(json.dumps(x) for x in arms))
