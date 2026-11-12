@@ -59,9 +59,7 @@ import sys
 from collections import Counter
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
-from pathlib import Path
 
-sys.path.append(str(Path(__file__).parent))     # appended: the tests import this module by path
 import eps_budget as EB
 from verity_machine_model import headline
 from verity_machine_model.eps import PRODUCTS, design, honest, table
@@ -152,8 +150,8 @@ class Tile:
 def tiles(program, calls: Collection[int] | None = None) -> Counter:
     """The H1 tile units a Program `SCHEME` or `SCHEME_V3` compiled runs in its root Calls `calls` (all of them by default), by shape,
     each once per activation (a batch or scan multiplies its callee's, as `logical.work` counts)."""
-    from verity.protocols.pouw.prover.circuit import h1tile
     from verity.circuits.program import is_input
+    from verity.protocols.pouw.prover.circuit import h1tile
     versions = {id(h1tile.PouwH1Tile): 1, id(h1tile.PouwH1Tile3): 3}
     memo: dict[int, Counter] = {}
 
