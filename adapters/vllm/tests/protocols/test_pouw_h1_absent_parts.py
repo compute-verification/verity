@@ -10,10 +10,10 @@ import pytest
 from verity.protocols.spot.device.challenger import OPENING_FORM, LiveCommitment
 
 from tests.protocols.test_credit_gate import _descriptor
-from verity_vllm.protocols.pouw.h1 import challenger as PHC
-from verity_vllm.protocols.pouw.h1 import commit as CT
-from verity_vllm.protocols.pouw.h1 import ranks as PHR
-from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1.challenger import drawn_of
+from verity_vllm.protocols.pouw.h1.commit import ROOT_BYTES, SCHEME
+from verity_vllm.protocols.pouw.h1.ranks import Holder, RankExtension
+from verity_vllm.protocols.pouw.h1.requests import RoundOpening, slot_reason
 
 #: what a rank's release hands on of its committer's finalize beside the errors (`h1rank_release`)
 COUNTS = {"expected_tensors": 2, "committed_tensors": 2, "errors_n": 0}
@@ -23,13 +23,13 @@ class _Committer:
     """What `RankExtension.h1rank_release` reads of a rank's committer: rows-sha512's scheme, its name and its finalize's
     ``extra``."""
 
-    commit_scheme, name = CT.SCHEME, "stand-in"
+    commit_scheme, name = SCHEME, "stand-in"
 
     def __init__(self, extra: dict[str, Any]) -> None:
         self.extra, self.closed = extra, False
 
     def finalize(self) -> SimpleNamespace:
-        return SimpleNamespace(run_root=bytes(CT.ROOT_BYTES), extra=self.extra)
+        return SimpleNamespace(run_root=bytes(ROOT_BYTES), extra=self.extra)
 
     def close(self) -> None:
         self.closed = True
@@ -39,7 +39,7 @@ def _released(extra: dict[str, Any]) -> dict[str, Any]:
     """What the rank at linear 3 releases when its committer's finalize states `extra`; the committer closed, the tap off
     and the hooks out, in that order, and the rank left with no window."""
     com, done = _Committer(extra), []
-    rank = PHR.RankExtension()
+    rank = RankExtension()
     rank._h1rank = {"run": SimpleNamespace(lo=3), "sent": 0, "hooks": SimpleNamespace(uninstall=lambda: done.append("hooks")),
                     "commit": (com, SimpleNamespace(untap=lambda: done.append("tap")))}
     out = rank.h1rank_release()
@@ -49,7 +49,7 @@ def _released(extra: dict[str, Any]) -> dict[str, Any]:
 
 @pytest.mark.parametrize("stated", [{}, {"errors": None}, {"errors": []}])
 def test_a_rank_whose_committer_states_no_errors_releases_none(stated):
-    assert _released({**COUNTS, **stated}) == {"lo": 3, "run_root": bytes(CT.ROOT_BYTES).hex(), "commit_scheme": CT.SCHEME,
+    assert _released({**COUNTS, **stated}) == {"lo": 3, "run_root": bytes(ROOT_BYTES).hex(), "commit_scheme": SCHEME,
                                                "name": "stand-in", **COUNTS, "errors": []}
 
 
@@ -82,7 +82,7 @@ def _pulled(*outs: dict[str, Any]) -> _Tap:
     """The window's tap after one pull that the ranks answer with `outs`."""
     tap = _Tap()
     run = SimpleNamespace(served=SimpleNamespace(tap=tap), shapes_=[(1, 1)])
-    holder = PHR.Holder(run, SimpleNamespace(collective_rpc=lambda method: list(outs)), [{"decode_query_len": 1}], None)
+    holder = Holder(run, SimpleNamespace(collective_rpc=lambda method: list(outs)), [{"decode_query_len": 1}], None)
     assert holder.pull() == 0 and sorted(holder.ranks) == sorted(o["lo"] for o in outs)
     return tap
 
@@ -105,18 +105,18 @@ def test_a_rank_that_shipped_no_acquisitions_feeds_nothing_and_is_still_the_firs
 
 @pytest.mark.parametrize("record", [{}, {"commitment": None}, {"commitment": []}, {"commitment": "a root"}])
 def test_a_record_with_no_commitment_object_is_refused_at_its_draw_coin(record):
-    assert PHC.drawn_of(record, {"root": "00"}, 1, _descriptor()) == (
+    assert drawn_of(record, {"root": "00"}, 1, _descriptor()) == (
         None, ("draw", "the window's draw coin is malformed (the window's record carries no commitment object)"))
 
 
 @pytest.mark.parametrize("commitment", [{}, {"draw": None}, {"draw": {}}, {"draw": {"coin": {}}}])
 def test_a_commitment_whose_draw_holds_no_opened_coin_is_refused_at_its_draw_coin(commitment):
-    assert PHC.drawn_of({"commitment": commitment}, {"root": "00"}, 1, _descriptor()) == (
+    assert drawn_of({"commitment": commitment}, {"root": "00"}, 1, _descriptor()) == (
         None, ("draw", f"the window's draw coin is malformed ({OPENING_FORM})"))
 
 
 def test_a_slot_of_a_round_the_log_does_not_hold_is_refused_before_anything_is_opened():
     """`slot_reason` hands on the round's own refusal: the coins' commitment, the salt and the step's calls go unread."""
     coins = LiveCommitment("pouw-h1/rounds", 0, (("round", 2),), bytes(64))
-    slot = RQ.RoundOpening(round=3, position=0, value=b"", path=())
-    assert RQ.slot_reason([{"round": 0}, {"round": 1}], coins, b"salt", 4, [], slot) == "the round log has no round 3"
+    slot = RoundOpening(round=3, position=0, value=b"", path=())
+    assert slot_reason([{"round": 0}, {"round": 1}], coins, b"salt", 4, [], slot) == "the round log has no round 3"
