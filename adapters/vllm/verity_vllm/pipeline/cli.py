@@ -241,7 +241,7 @@ def process_settings(environ: MutableMapping[str, str]) -> None:
 
 def main(argv: list[str] | None = None) -> Any:
     process = argv is None
-    argv = sys.argv[1:] if process else list(argv)
+    argv = sys.argv[1:] if argv is None else list(argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(usage(), file=sys.stdout if argv else sys.stderr)
         return 0 if argv else 2
