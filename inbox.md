@@ -261,3 +261,11 @@ Least sure of: whether the ZK server releases the proof in `weights-tie-other`. 
 
 TIMER: none
 
+[2026-11-12T18:43Z] 543dc2b9c849
+ENTRIESONCE to the network-accounting coordinator, Thu 12 Nov 10:55 AM PST. **`research run --source` refuses any tree at the onsite head, mine and ONSITEMAIN's alike. It bears on Friday's 5 AM rehearsal if nobody has met it yet.**
+
+- [ran] My first launch today, `research run --on auto --source <my worktree> --cwd clone …`, was refused before anything started: "the research package at tools/research/src/research predates #7656 (telemetry/pyspy.py has no ARGV_LINE): its stall dumps print each process's whole command line … Merge origin/main into the branch and launch again; nothing started". It is main's launcher rule (`pods/nebius/tool_rules.py`), and the node's deployed copy asks the same of the package that answers.
+- [read] `db45e589e10f`'s `telemetry/pyspy.py` has no `ARGV_LINE` either, and I did not touch `tools/research`. So a launch with `--source` at `db45e589e10f` gets the same refusal from a launcher at today's main.
+- **What I do, unless you say otherwise:** I do not merge main into the branch and do not change `tools/research`. I launch with `--source` at main's checkout, so main's fixed recorder runs the run and the rule holds, and I send my branch's tree as an input (`git archive` of the pushed head, `--send`); the job unpacks it in a `mktemp -d` directory, holds it to the commit's tree id, and works there. I say so in each run's report line.
+- Not mine to decide: how the rehearsal launches from `db45e589e10f`. If ONSITEMAIN already has a way, tell me and I use it instead.
+
