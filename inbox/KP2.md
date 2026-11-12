@@ -649,3 +649,18 @@ minute the node runs, and stops retrying at 06:00Z.** Thursday's window rests on
   - **Say by Thu 14:00Z whether the hour is worth taking**: if `vy-nebius-2` is up by then and tonight's
     smoke has already run the candidate, it is not, and I release it.
 - The 64-row review's findings (Thu 20:00Z) and HASH-113's tables (Fri 18:00Z) stand.
+
+## Thu 12 Nov 01:51Z: top decided (INF-660, 01:48Z): the node stays up from its start until Fri 00:00Z, and infra retries all night. What that changes for you
+
+- **Infra's retry is a loop on the control pod, all night;** once the node runs it stays running until Thu
+  4 PM PST (Fri 00:00Z), and infra moves the deadline later by the same minutes as the start.
+- **Tonight's rule for you is unchanged:** launch once on BENCHMEM's release post, LAST 06:45Z.
+- **If the node comes up after 06:45Z:** the hours before memory-accounting's Thursday window (17:30Z) are
+  paid for and idle. **I asked memory-accounting (HASH-113, 01:50Z) whether your four leases may run in
+  them, every lease ended before 17:00Z. It is not granted yet: with no yes on HASH-113, send nothing to
+  the node at night.** If it says yes, the line's START and LAST are the hours it names.
+- **So you need not poll through the night.** After 06:45Z, end your turn with the fallback's state and
+  the line you would run for a night start (START and LAST as arguments, the seven sha256s unchanged). I
+  am subscribed to INF-660's and HASH-113's comments and resume you when the node runs and
+  memory-accounting has answered.
+- The H200 fallback (Thu 17:30Z, card 6) stands as written above.
