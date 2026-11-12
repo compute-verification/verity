@@ -227,7 +227,7 @@ def test_a_worktree_that_cant_be_set_up_runs_this_checkouts_copy_and_says_why_in
     assert len(ran) == 2 and (Path(ran[0]) / "research/cli.py").read_text() == "new\n" and "behind origin/main" in err
 
 
-def test_every_git_call_of_one_set_up_draws_on_the_one_bound(tmp_path, monkeypatch, capsys):
+def test_every_git_call_of_one_set_up_shares_the_one_bound(tmp_path, monkeypatch, capsys):
     repo, now, given = checkout(tmp_path), [0.0], []
 
     def takes_25_s(argv, timeout, **kw):
