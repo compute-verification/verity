@@ -6,8 +6,8 @@ origin/main's `research` on the path, and gives the export command it runs for m
 
 Main is the commit the clone has checked out: its code runs, and its registry (fixtures/artifacts.json) is what a head's
 is compared with. A pass over a head exports only the head's new ids: the entries of its registry that main's registry
-doesn't name and that the registry of the head's merge base with main doesn't either. An id main had when the head
-branched and has dropped since is therefore not the head's, and a head behind main re-publishes nothing.
+doesn't name and never has, at any commit of main's first-parent history. An id main once registered was public while
+it did and nothing deletes from the export, so a head never re-publishes what main dropped, however far behind it is.
 
 `heads` reads the pull requests whose head is still a branch of origin, which every open pull request from a branch of
 this repository is: one `git ls-remote`, then a fetch of each head that moved into a ref of its own
@@ -84,17 +84,21 @@ def fetch(clone: str, refspecs: list[str]) -> None:
 
 
 class Registries:
-    """What each commit's registry registers that main's doesn't. One `git cat-file --batch` reads the registries of every
-    commit asked for at once, and a commit this clone lacks, like one without a registry, registers nothing."""
+    """What each commit's registry registers that main's never has. One `git log` names the commits of main that changed
+    the registry and one `git cat-file --batch` reads the registries of every commit asked for at once, so a pass starts
+    the same few git commands however many heads it reads. A commit this clone lacks, like one without a registry,
+    registers nothing."""
 
     def __init__(self, clone: str, main: str):
         self.clone, self.main = clone, main
         self._docs: dict[str, dict | str | None] = {}       # the document, None without one, or why it can't be read
-        self.load([main])
+        was = git(clone, "log", "--first-parent", "--format=%H", main, "--", REGISTRY).decode().split()
+        self.load([main, *was])
         doc = self._docs[main]
         if not isinstance(doc, dict):
             raise Failed(f"main {main[:9]}: {doc or f'no {REGISTRY}'}")
-        self.main_ids = self.ids(doc)
+        #: every id main's registry names or has named
+        self.main_ids = self.ids(doc).union(*(self.ids(d) for d in map(self._docs.get, was) if isinstance(d, dict)))
 
     @staticmethod
     def ids(doc: dict) -> set[str]:
@@ -117,26 +121,18 @@ class Registries:
                 try:
                     doc = json.loads(body) if head[1] == b"blob" else None
                     parsed[head[0]] = doc if isinstance(doc, dict) else f"{REGISTRY} is not a JSON object"
-                except ValueError as e:
+                except (ValueError, RecursionError) as e:
                     parsed[head[0]] = f"{REGISTRY} is not JSON ({e})"
             self._docs[rev] = parsed[head[0]]
 
     def new(self, rev: str) -> dict[str, str]:
-        """{id: path} for each entry of ``rev``'s registry that neither main's registry nor the registry of ``rev``'s merge
-        base with main names; `Failed` when one of the two can't be read."""
+        """{id: path} for each entry of ``rev``'s registry that main's registry has never named; `Failed` when ``rev``'s
+        can't be read."""
         self.load([rev])
         doc = self._docs[rev]
         if isinstance(doc, str):
             raise Failed(doc)
-        new = {a: p for a, p in F.entries(doc or {}).items() if a not in self.main_ids}
-        base = git(self.clone, "merge-base", self.main, rev, ok=(0, 1)).decode().strip() if new else ""
-        if base:
-            self.load([base])
-            was = self._docs[base]
-            if isinstance(was, str):
-                raise Failed(f"its merge base with main, {base[:9]}: {was}")
-            new = {a: p for a, p in new.items() if a not in self.ids(was or {})}
-        return new
+        return {a: p for a, p in F.entries(doc or {}).items() if a not in self.main_ids}
 
     def change(self, rev: str) -> str | None:
         """A name for what ``rev`` registers anew, the same for two commits that register the same ids at the same paths, and

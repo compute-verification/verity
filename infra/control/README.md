@@ -212,7 +212,7 @@ though: the steward's lease makes its copy stand by, but kill the old guard firs
 
 - **main's registry**: every id `origin/main`'s `fixtures/artifacts.json` registers.
 - **each marked head's new ids** (`fixtures_export.py heads`): for every pull request marked ready at its head, the ids its
-  registry holds that main's doesn't name and that the registry at the head's merge base with main doesn't either. So a
+  registry holds that main's registry doesn't name and never has, at any commit of main's first-parent history. So a
   fixture a pull request registers is public before a machine checks the pull request, and a head behind main re-publishes
   nothing main has dropped. This pass replaced the one over `next`, which nothing moves.
 

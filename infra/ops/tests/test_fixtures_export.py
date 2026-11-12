@@ -231,17 +231,19 @@ def test_a_pass_that_cannot_pull_the_marks_exports_no_head_and_fails(pod):
     assert "pass rc=0 " in p.stdout and "heads pass rc=1\n" in p.stdout
 
 
-def test_a_head_behind_main_republishes_nothing_that_main_dropped(pod):
-    """Two heads branched when main registered `b`; main has dropped it since. `b` is in their registries and not in
-    main's, but it was in their merge base's, so it is not theirs: only `c`, which one of them added, is exported."""
+def test_a_head_republishes_nothing_that_main_dropped(pod):
+    """Main registered `b` once and has dropped it. Two heads that branched before the drop still hold `b`, and a third,
+    branched after it, registers `b` again: `b` is in each registry and not in main's, but main has named it, so it is
+    no head's. Only `c`, which one of them added, is exported."""
     pod.commit("main", {REGISTRY: A | B})
     pod.mark(7, pod.pr(7, {REGISTRY: A | B | C}))
     pod.mark(8, pod.pr(8, {"README": "a head that changes no registry\n"}))
     pod.commit("main", {REGISTRY: A})
+    pod.mark(9, pod.pr(9, {REGISTRY: A | B}))
     p = pod.run("once")
     assert p.returncode == 0, p.stdout + p.stderr
     assert [c["registry"] for c in pod.heads_calls()] == [pod.registry(C)]
-    assert "2 pull request(s) on a branch of origin, 1 registering ids main lacks" in p.stdout
+    assert "3 pull request(s) on a branch of origin, 1 registering ids main lacks" in p.stdout
 
 
 def test_a_mark_carries_to_a_later_head_that_registers_the_same_new_ids_and_so_does_an_ejection(pod):
