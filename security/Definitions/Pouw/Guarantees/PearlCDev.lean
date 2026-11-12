@@ -35,7 +35,7 @@ the capped credit on `Ss` (`KernelWithin`), TT_OUT rev1 at W1 gives `G_g` on the
 `g = 1 − (1 − 1/400)/ω`. -/
 def GapDevRev1K : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
-    (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Shape → Prop) (ω : ℚ),
+    (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Pouw.PearlC.Shape → Prop) (ω : ℚ),
     KernelWithin d ρ c Ss ω → TTOutPearlCDevRev1W1 dv salt d sem ρ →
     Pouw.PearlC.GGap (Pouw.PearlC.W1.w1Priced dv salt) (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss)
       ((1 - (1 - 1 / 400) / ω : ℚ) : ℝ) δPearlC
@@ -44,7 +44,7 @@ def GapDevRev1K : Prop :=
 from TT_OUT rev1 per audit tile at W1. -/
 def SampledDevRev1K : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
-    (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Shape → Prop) (ω : ℚ),
+    (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Pouw.PearlC.Shape → Prop) (ω : ℚ),
     KernelWithin d ρ c Ss ω → TTOutTilePearlCDevRev1W1 dv salt d sem ρ →
     Pouw.PearlC.GGapSampled (Pouw.PearlC.W1.w1Priced dv salt) (pearlCProtocolDevRev1K d sem ρ c)
       (pearlCTilesDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss) ((1 - (1 - 1 / 400) / ω : ℚ) : ℝ) δPearlC
@@ -57,7 +57,7 @@ and whose `Cls` is T3's CR hypotheses: at a session with an empty `Cls`, `F.audi
 hold with `Bad` everything. -/
 def HiddenFlockDevRev1K : Prop :=
   ∀ {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : Pouw.PearlC.W1.W1Device)
-    (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Shape → Prop) (ω : ℚ)
+    (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ c : ℚ) (Ss : Pouw.PearlC.Shape → Prop) (ω : ℚ)
     (F : TileReadSession Q R S) (δzk : ℕ → ℝ),
     KernelWithin d ρ c Ss ω → (∀ q, 0 ≤ δzk q) → TTOutTilePearlCDevRev1W1 dv salt d sem ρ →
     TileReadSound (pearlCProtocolDevRev1K d sem ρ c) (pearlCDomainDevOn d Ss) F δzk →

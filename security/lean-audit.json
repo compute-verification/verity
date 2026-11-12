@@ -370,6 +370,10 @@
    "digest": "3b60969f8f81104b0596a2883beb8066d6bf0d7e7b08219325779dc298b062a1",
    "why": "Route U's instance on the domain: `W_ref` is `wrefU f`, every unit has at least `n₀` columns and `g₀ ≥ d/(3k)`, the conditions `GapFromTTNCP_U_v1` takes inline."
   },
+  "Pouw.PearlC.KernelWithin": {
+   "owner": "@compute-accounting",
+   "why": "What a gap statement over every device record asks of the record: on the shapes its domain holds, the honest kernel's W_ref is non-negative and within ω of the credit left under the cap, the ω its gap 1 − (1 − 1/400)/ω is a function of."
+  },
   "Pouw.Protocol.WrefWithin": {
    "owner": "@compute-research",
    "digest": "cac063df365f7c845e896f15d04ac61e77ab0c59876e7f1a913d3fd4f2841858",
@@ -22972,6 +22976,9 @@
    "type_hash": "484a5865bb47ec8908f82b4f73e13fcc54d4d64f8472920431bf1136e0cc3fb7",
    "unfolded_hash": "d31dd92315d6f2cca2938207e52aa5ac7c40ee25023a75fe5f3c2229940edb64"
   },
+  "Pouw.SecurityProofs.PearlC.GapDevRev1K": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.PearlC.GapFp4Sm120_16384": {
    "owner": "@compute-accounting",
    "signature": ["Pouw.SecurityProofs.PearlC.GapFp4Sm120_16384 : Pouw.Guarantees.PearlC.GapFp4Sm120_16384"],
@@ -23943,6 +23950,9 @@
    "type_hash": "ce977e24e7cbcf47fc30f4709e41dda9ec3ece88dce12c461fd22d7b91057f85",
    "unfolded_hash": "834cfa917252bb63ebb42a8cdcb5a80ea37f50323b8be9832043f1507855fd4a"
   },
+  "Pouw.SecurityProofs.PearlC.HiddenFlockDevRev1K": {
+   "owner": "@compute-accounting"
+  },
   "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": {
    "owner": "@compute-accounting",
    "signature": [
@@ -23965,6 +23975,9 @@
    },
    "type_hash": "1e54f1c04ee114ed2c890933ced37f2e30c19cd92e5e38f76578dc52ab5daa1c",
    "unfolded_hash": "2908260473ff052baa58169ed5e8de3f88e263f8f5cbb7abd0fea2bddf0fc4aa"
+  },
+  "Pouw.SecurityProofs.PearlC.SampledDevRev1K": {
+   "owner": "@compute-accounting"
   },
   "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384": {
    "owner": "@compute-accounting",
@@ -27759,7 +27772,10 @@
    "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1, given the model conditions RowSeedNoise and SplitClosed, which are definitions, not assumptions (security/Definitions/Pouw/Assumptions/PearlC/TTOutRowSeed.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.EndToEnd": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
+   "Pouw.SecurityProofs.PearlC.GapDevRev1K": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutPearlCDevRev1W1 at every device record and W1 setting it ranges over, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.CodeImage.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
+   "Pouw.SecurityProofs.PearlC.HiddenFlockDevRev1K": "frozen (conjecture,obligation,hash,vacuous): It takes TTOutTilePearlCDevRev1W1 (the device's timing at the cap at the W1 machine, W1.w1Priced) at every device record and W1 setting it ranges over, the open obligation TileReadSound and the binding TileReadBinds, with collision resistance inside the prover class (security/Definitions/Pouw/PearlC/FlockTile/Audit.lean:52, :93-97), and it holds trivially for an empty class until TileRead lands. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.CodeImage.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192": "frozen (conjecture,obligation,hash,vacuous): It takes TTOutTilePearlCDevRev1W1 (the device's timing at the cap at the W1 machine, W1.w1Priced), the open obligation TileReadSound and the binding TileReadBinds, with collision resistance inside the prover class (security/Proofs/Pouw/PearlC/FlockTile/Statement.lean:32-33, :47-51), and it holds trivially for an empty class until TileRead lands. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
+   "Pouw.SecurityProofs.PearlC.SampledDevRev1K": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1 at every device record and W1 setting it ranges over, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.CodeImage.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTileFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise it bounds guessers only: B̃ is drawn from H, and no W1 program computes the noise (W1 has no oracle instruction), so it says nothing about a program that computes SHA-512's noise until F1 (W1 with the oracle) or D-SK over SHA-512.",
    "Pouw.SecurityProofs.PearlC.SampledFp4Sm120_8192": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTileFp4Sm120W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise it bounds guessers only: B̃ is drawn from H, and no W1 program computes the noise (W1 has no oracle instruction), so it says nothing about a program that computes SHA-512's noise until F1 (W1 with the oracle) or D-SK over SHA-512.",
    "Pouw.SecurityProofs.PearlC.SampledH100Rev1_16384": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCH100Rev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
