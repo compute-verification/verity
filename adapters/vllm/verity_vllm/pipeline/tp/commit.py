@@ -55,7 +55,15 @@ from verity_vllm.pipeline.tp import warmup as WU
 from verity_vllm.pipeline.tp.import_path import write_import_path_runtime
 from verity_vllm.pipeline.tp.negatives import negatives_applied, parse_serve_shard_from
 from verity_vllm.records.commit_run import TP_SCHEMA as SCHEMA
-from verity_vllm.records.schema_ids import LATE_READ_CHECK_SCHEMA
+from verity_vllm.records.schema_ids import (
+    LATE_READ_CHECK_SCHEMA,
+    TP_SAMPLED_REPLAY_SCHEMA,
+    TP_VALUE_CHECK_SCHEMA,
+    TP_WEIGHTS_PIN_SCHEMA,
+    XRANK_COLLECTIVES_FOLD_SCHEMA,
+)
+
+__all__ = ["Options", "main"]
 
 logger = init_logger(__name__)
 
@@ -260,7 +268,7 @@ def main(args: Options) -> int:
     cp = prof.checkpoint_for(case, args.checkpoints)
     kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=args.tp)
     kw.update({"enable_prefix_caching": False, "max_num_seqs": int(args.max_num_seqs), **target_kw})
-    kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k not in ("tensor_parallel_size",)})
+    kw.update({k: v for k, v in C2.block_of(wl, "engine_args_required").items() if k not in ("tensor_parallel_size",)})
     kw.update(parse_engine_args(args.engine_arg), worker_extension_cls=EXTENSION)
     print(f"[tp2commit] tp={args.tp} case={case} committer={args.committer} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
     engine_env.require_inductor(kw)
@@ -297,7 +305,7 @@ def main(args: Options) -> int:
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
     man_doc = require_partition(json.loads(Path(args.required_manifest).read_text()), None, None) if args.required_manifest else None
     if man_doc is not None:
-        pdr = man_doc.get("program_digest_per_rank") or {}
+        pdr = C2.block_of(man_doc, "program_digest_per_rank")
         for r in range(world):
             of_build = pds.get(r)
             if of_build is None:
@@ -329,7 +337,7 @@ def main(args: Options) -> int:
         of_record: dict[str, list[str]] = {}
         for r in range(world):
             digs = set()
-            pdr_ = (man_doc.get("program_digest_per_rank") or {}).get(str(r)) if man_doc else None
+            pdr_ = C2.block_of(man_doc, "program_digest_per_rank").get(str(r)) if man_doc else None
             if pdr_:
                 digs.add(str(pdr_))
             wp_ = Path(builds[r]) / "build_workload" / "workload_program.json" if builds.get(r) else None
@@ -337,8 +345,8 @@ def main(args: Options) -> int:
                 try:
                     wdoc = json.loads(wp_.read_text())
                     if str(wdoc.get("workload_digest")) == str(pdr_):                 # only a composition the manifest names is of record
-                        for q in wdoc.get("requests") or []:
-                            spec = str(((q.get("component") or {}).get("specialization")) or "")
+                        for q in C2.list_of(wdoc, "requests"):
+                            spec = str((C2.block_of(q, "component").get("specialization")) or "")
                             digs.update(_re.findall(r'program_digest=\\?"([0-9a-f]{128})', spec))
                 except Exception as e:  # noqa: BLE001
                     print(f"[tp2commit] rank {r}: GP-01 workload_program unreadable for the replay's of-record set: {e!r}", flush=True)
@@ -396,10 +404,10 @@ def main(args: Options) -> int:
     (out / "committer_make.json").write_text(json.dumps(made, indent=1, default=str) + "\n")
     # the per-rank attention plane classes (fa2_plane_classes on THIS rank's Program record) -- said per rank
     for m in made:
-        apc = m.get("attention_plane_classes") or {}
+        apc = C2.block_of(m, "attention_plane_classes")
         print(f"[tp2commit] rank {m.get('rank')}: X-03 attention plane classes: {apc.get('declarations', 0)} layer declaration(s) from {apc.get('source')} "
               f"-> classes {apc.get('classes')} heads(NH,KVH,D) {apc.get('per_rank_heads')}; {apc.get('rule')}" + (f"; ERROR {apc['error']}" if apc.get("error") else ""), flush=True)
-    versions["attention_plane_classes"] = {str(m.get("rank")): {k: v for k, v in (m.get("attention_plane_classes") or {}).items() if k != "rank"} for m in made}
+    versions["attention_plane_classes"] = {str(m.get("rank")): {k: v for k, v in C2.block_of(m, "attention_plane_classes").items() if k != "rank"} for m in made}
     # an MoE model's bound block is a required class of every rank (as in commit_delta): the ranks report the
     # attached MoeBlockSource; all ranks must agree (a rank without MoE layers on an MoE model is a named refusal, not a silent hole)
     moe_ranks = [int(m["rank"]) for m in made if isinstance(m.get("moe_source"), dict) and int((m["moe_source"] or {}).get("layers") or 0) > 0]
@@ -414,12 +422,12 @@ def main(args: Options) -> int:
         print(f"[tp2commit] MoE block source attached on every rank ({versions['moe_source'][0]}); required classes {list(required_classes)}", flush=True)
     required_classes = TAPS.require_on_every_rank(made, required_classes, versions, args.tap_sources, explicit_classes=args.required_classes is not None)
     for m in made:
-        asz = m.get("arena_sizing") or {}
-        rm = m.get("required_manifest") or {}
+        asz = C2.block_of(m, "arena_sizing")
+        rm = C2.block_of(m, "required_manifest")
         print(f"[tp2commit] rank {m['rank']}: {m['committer']} weights {str(m.get('weight_registration'))[:200]}; arena "
               f"{ {k: asz.get(k) for k in ('decode_block_bytes', 'prefill_block_bytes', 'step_bound_bytes', 'device_free_bytes')} }"
               + (f"; manifest {str(rm.get('manifest_digest'))[:16]} identities {rm.get('identities')} program_matches {rm.get('program_digest_matches')} complete {rm.get('complete')}" if rm else "")
-              + (f"; tp partials {m.get('tp_partial_source')}" if (m.get("tp_partial_source") or {}).get("relabel_rank") is not None else ""), flush=True)
+              + (f"; tp partials {m.get('tp_partial_source')}" if C2.block_of(m, "tp_partial_source").get("relabel_rank") is not None else ""), flush=True)
         if rm and rm.get("program_digest_matches") is False:
             raise SystemExit(f"fail-closed: rank {m['rank']}: manifest Program digest != this rank's Program digest")
     with PH.TL.span("prep.warmup_instrumented", kind=args.committer) as warm:
@@ -463,33 +471,33 @@ def main(args: Options) -> int:
                                        defer={"out": str(out), "pair": pair} if args.replay_deferred else None)
                     t_ready = time.perf_counter() - t_f
                     if args.replay_deferred:
-                        bundles_of[pair] = {int(f["rank"]): (f.get("sampled_replay") or {}).pop("bundle", None) for f in fin}
+                        bundles_of[pair] = {int(f["rank"]): C2.block_of(f, "sampled_replay").pop("bundle", None) for f in fin}
             if arm != "control":
                 if match_capture_dir is not None:
-                    differs = sorted((w for f in fin for w in (((f.get("match_oracle") or {}).get("witnesses") or {}).get("differs") or [])),
+                    differs = sorted((w for f in fin for w in C2.list_of(C2.block_of(C2.block_of(f, "match_oracle"), "witnesses"), "differs")),
                                      key=lambda w: (int(w["step"]), int(w["k"]), int(w["rank"])))
                     print(f"[tp2commit] match oracle (tp partials vs capture), {len(differs)} differing MoE align witness(es)"
                           + (f", first rank {differs[0]['rank']} step {differs[0]['step']} k {differs[0]['k']} {differs[0]['module']} implies {differs[0]['implies']}" if differs else "") + ": " + "; ".join(
                         f"rank {f['rank']} {mo.get('verdict')} steps {mo.get('steps_compared')} tensors {mo.get('tensors')} "
                         f"equal {mo.get('equal')} mismatch {mo.get('mismatch_n')} missing {mo.get('missing_n')} "
-                        f"not_in_oracle {mo.get('not_in_oracle_n')} witnesses equal {(mo.get('witnesses') or {}).get('equal')} unpaired {(mo.get('witnesses') or {}).get('unpaired_n')} "
+                        f"not_in_oracle {mo.get('not_in_oracle_n')} witnesses equal {C2.block_of(mo, 'witnesses').get('equal')} unpaired {C2.block_of(mo, 'witnesses').get('unpaired_n')} "
                         f"{mo.get('by_member')} {mo.get('error') or ''}"
-                        for f in sorted(fin, key=lambda f: f["rank"]) for mo in [f.get("match_oracle") or {}]), flush=True)
+                        for f in sorted(fin, key=lambda f: f["rank"]) for mo in [C2.block_of(f, "match_oracle")]), flush=True)
                 if replay_cfg is not None:
                     for f in sorted(fin, key=lambda f: f["rank"]):
-                        srr = ((f.get("sampled_replay") or {}).get("sampled_replay") or {})
-                        lkr = ((f.get("sampled_replay") or {}).get("boundary_linkage") or {})
-                        smp, popn = srr.get("sample") or {}, srr.get("population") or {}
+                        srr = C2.block_of(C2.block_of(f, "sampled_replay"), "sampled_replay")
+                        lkr = C2.block_of(C2.block_of(f, "sampled_replay"), "boundary_linkage")
+                        smp, popn = C2.block_of(srr, "sample"), C2.block_of(srr, "population")
                         print(f"[tp2commit] sampled replay rank {f['rank']}: result {srr.get('result')} grade {srr.get('grade')} population {popn.get('vus')} strata {popn.get('strata_n')} "
                               f"picked {smp.get('picked')} evaluated {smp.get('evaluated')} equal {smp.get('equal')} mismatch {smp.get('mismatch_n')} not_evaluated {smp.get('not_evaluated_n')} "
-                              f"weights self-consistent {((srr.get('weights') or {}).get('equal'))} (not a pin) wall {((srr.get('timing') or {}).get('wall_s'))}s; boundary linkage {lkr.get('result')} "
+                              f"weights self-consistent {(C2.block_of(srr, 'weights').get('equal'))} (not a pin) wall {(C2.block_of(srr, 'timing').get('wall_s'))}s; boundary linkage {lkr.get('result')} "
                               f"{lkr.get('linked')}/{lkr.get('pairs')}; {srr.get('why') or ''}", flush=True)
-                        for uf in (srr.get("unreplayable") or [])[:8]:
+                        for uf in C2.list_of(srr, "unreplayable")[:8]:
                             print(f"[tp2commit]   rank {f['rank']} unreplayable: {uf}", flush=True)
                 for f in sorted(fin, key=lambda f: f["rank"]):
-                    wpp = f.get("weights_pin") or {}
+                    wpp = C2.block_of(f, "weights_pin")
                     print(f"[tp2commit] weights pin rank {f['rank']}: result {wpp.get('result')} root_of_record {str(wpp.get('root_of_record'))[:16]} compared {wpp.get('compared')} "
-                          f"mismatched {len(wpp.get('mismatched') or [])} missing {len(wpp.get('missing') or [])} unpinned {len(wpp.get('unpinned') or [])} "
+                          f"mismatched {len(C2.list_of(wpp, 'mismatched'))} missing {len(C2.list_of(wpp, 'missing'))} unpinned {len(C2.list_of(wpp, 'unpinned'))} "
                           f"shards_pinned {wpp.get('all_shards_pinned')}; {wpp.get('why') or ''}", flush=True)
                 if args.omit_rank is not None:
                     fin = [f for f in fin if int(f["rank"]) != args.omit_rank]      # NEGATIVE: one rank's commitment missing from the vector
@@ -537,7 +545,7 @@ def main(args: Options) -> int:
                         ok, why = commit_verdict(cblock, row["tokens_equal_ref"], min_openings=min(64, args.openings), declaration=f["declaration"],
                                                  required_classes=required_classes)
                         # the rank's binding map + coverage against its expected population gate the verdict too
-                        b = f.get("binding") or {}
+                        b = C2.block_of(f, "binding")
                         cblock["binding"] = b
                         if b.get("error"):
                             cblock["binding_note"] = b["error"]
@@ -546,11 +554,11 @@ def main(args: Options) -> int:
                             cblock["binding_note"] = b["skipped"]
                             if man_doc is not None:
                                 ok, why = False, f"identity coverage not run: {b['skipped']}"
-                        elif not (b.get("coverage") or {}).get("ok"):
-                            ok, why = False, f"identity coverage: {(b.get('coverage') or {}).get('missing_n')} of {(b.get('coverage') or {}).get('expected_n')} required identities have no binding (first: {((b.get('coverage') or {}).get('missing') or [None])[0]})"
+                        elif not C2.block_of(b, "coverage").get("ok"):
+                            ok, why = False, f"identity coverage: {C2.block_of(b, 'coverage').get('missing_n')} of {C2.block_of(b, 'coverage').get('expected_n')} required identities have no binding (first: {(C2.block_of(b, 'coverage').get('missing') or [None])[0]})"
                         elif b.get("context") and b["context"].get("ok") is False:
                             ok, why = False, f"binding map context: {b['context'].get('why')}"
-                        elif (b.get("coverage") or {}).get("error"):
+                        elif C2.block_of(b, "coverage").get("error"):
                             ok, why = False, f"identity coverage: {b['coverage']['error']}"
                         if ok and f.get("run_root_actual"):
                             # the claimed root differs from the rank's actual root: openings verified against the claim must have failed
@@ -582,7 +590,7 @@ def main(args: Options) -> int:
                         print(f"[tp2commit] binding maps: {[(d_.get('rank'), str(d_.get('digest') or d_.get('skipped'))[:16], d_.get('entries_n')) for d_ in dumped]}", flush=True)
                     # population-sampled openings per rank (bind's challenge_identities from the COMBINED root + the rank's map digest)
                     pop_open = {}
-                    if all((f.get("binding") or {}).get("map_digest") for f in fin):
+                    if all(C2.block_of(f, "binding").get("map_digest") for f in fin):
                         po: list[dict[str, Any]] = []
                         for rk_c, croot in sorted(claimed.items()):
                             # one RPC per rank so each rank verifies against ITS claimed root (the commitment-vector entry)
@@ -598,7 +606,7 @@ def main(args: Options) -> int:
                                 per_rank[rk]["commit_pass"] = False
                                 per_rank[rk]["commit_fail_reason"] = f"population openings: {o.get('verified')}/{o.get('opened')} verified, {o.get('unbound_n')} unbound ({o.get('error')})"
                                 reasons.append(f"rank {rk}: {per_rank[rk]['commit_fail_reason']}")
-                            elif (o.get("context") or {}).get("ok") is False:
+                            elif C2.block_of(o, "context").get("ok") is False:
                                 per_rank[rk]["commit_pass"] = False
                                 per_rank[rk]["commit_fail_reason"] = f"binding map context vs claimed root: {o['context'].get('why')}"
                                 reasons.append(f"rank {rk}: {per_rank[rk]['commit_fail_reason']}")
@@ -623,14 +631,14 @@ def main(args: Options) -> int:
                                 Path(fn).unlink(missing_ok=True)      # the picks are re-derivable from the retained records; the JSON verdict is the evidence
                             (out / f"xrank_pair{pair}.json").write_text(json.dumps({"schema": "verity/tp2/xrank-collectives/v1", "tp": args.tp, "commit_started": started} | xr, indent=1, default=str) + "\n")
                             print(f"[tp2commit] cross-rank collectives pair {pair}: result {xr['result']} picks {xr['picks']} equal {xr['equal']} mismatch {xr.get('mismatch_n')} "
-                                  f"missing {xr.get('missing_n')} families {sorted(xr.get('by_family') or {})} flipped {[d_.get('flipped_collective_inputs') for d_ in xd]}; {xr.get('why') or ''}", flush=True)
+                                  f"missing {xr.get('missing_n')} families {sorted(C2.block_of(xr, 'by_family'))} flipped {[d_.get('flipped_collective_inputs') for d_ in xd]}; {xr.get('why') or ''}", flush=True)
                         except Exception as e:  # noqa: BLE001
                             xr = {"result": False, "why": f"cross-rank collective pass did not run: {e!r}"[:300], "pair": pair}
                             print(f"[tp2commit] cross-rank collectives pair {pair}: ERROR {e!r}", flush=True)
                     xrank_pairs.append(xr)
                     if xr.get("result") is False:
                         # the ranks named by the first mismatches (received != definition) fail; when none is named (not evaluable) every rank fails
-                        bad = {int(r_) for m_ in (xr.get("mismatches") or []) for r_, ok_ in (m_.get("received_equals_definition_per_rank") or {}).items() if not ok_}
+                        bad = {int(r_) for m_ in C2.list_of(xr, "mismatches") for r_, ok_ in C2.block_of(m_, "received_equals_definition_per_rank").items() if not ok_}
                         for rk in (sorted(bad) if bad else sorted(per_rank)):
                             per_rank[rk]["commit_pass"] = False
                             per_rank[rk]["commit_fail_reason"] = f"cross-rank collective outputs (TP-12): {xr.get('why')}"
@@ -638,15 +646,15 @@ def main(args: Options) -> int:
                     for rk in per_rank:
                         per_rank[rk]["cross_rank_collectives"] = {k: xr.get(k) for k in ("result", "picks", "equal", "mismatch_n", "missing_n", "why")}
                     try:
-                        C2.annotate_unreplayable([((f_.get("sampled_replay") or {}).get("sampled_replay") or {}) for f_ in fin], xr, pair, xrank_families)
+                        C2.annotate_unreplayable([C2.block_of(C2.block_of(f_, "sampled_replay"), "sampled_replay") for f_ in fin], xr, pair, xrank_families)
                         (out / f"finalize_pair{pair}.json").write_text(json.dumps(fin, indent=1, default=str) + "\n")
                     except Exception as e:  # noqa: BLE001
                         print(f"[tp2commit] unreplayable.evaluated_by annotate failed: {e!r}", flush=True)
-                    skipped = [str((c.get("binding") or {}).get("skipped")) for c in per_rank.values() if (c.get("binding") or {}).get("skipped")]
+                    skipped = [str(C2.block_of(c, "binding").get("skipped")) for c in per_rank.values() if C2.block_of(c, "binding").get("skipped")]
                     pending = sorted(rk for rk, c in per_rank.items() if c.get("commit_pass") is None)
                     if pair == 0 or reasons or pending:
-                        cov_ok = all((c.get("binding") or {}).get("coverage", {}).get("ok") for c in per_rank.values()) and not reasons
-                        man_hdrs = {r: ((c.get("binding") or {}).get("population") or {}).get("manifest") for r, c in per_rank.items()}
+                        cov_ok = all(C2.block_of(c, "binding").get("coverage", {}).get("ok") for c in per_rank.values()) and not reasons
+                        man_hdrs = {r: C2.block_of(C2.block_of(c, "binding"), "population").get("manifest") for r, c in per_rank.items()}
                         cov = {"checker": ("verity/coverage/binding-r15-tp04 (verity_vllm.commit.binding per TP rank; population of record = the required manifest "
                                            "(Program(rank) x canonical query, rows with rank=r: instance outputs incl. AllReduce2/AllGather2 outputs + tp_rank_partials + fa2 hidden + weights + tokens); "
                                            "coverage counted per rank; no rank folded)" if man_doc else
@@ -654,22 +662,22 @@ def main(args: Options) -> int:
                                "verdict": ("NOT_RUN" if len(skipped) == len(per_rank) else ("PASS" if cov_ok else "FAIL")), "rules_version": versions["rules_version"], "world": world, "ranks_present": sorted(per_rank),
                                "skipped": skipped or None,
                                "population_source": "required-manifest" if man_doc else "structural",
-                               "required_manifest": ({"path": args.required_manifest, "manifest_digest": man_doc.get("manifest_digest"), "identities": (man_doc.get("populations") or {}).get("identities"),
-                                                      "by_family": (man_doc.get("populations") or {}).get("by_family"), "complete": man_doc.get("complete"), "ranks": man_doc.get("ranks"),
-                                                      "program_digest_per_rank": man_doc.get("program_digest_per_rank"), "query_digest": (man_doc.get("query") or {}).get("query_digest"),
-                                                      "tp_rule": (man_doc.get("query") or {}).get("tp")} if man_doc else None),
-                               "manifest_digest": (man_doc.get("manifest_digest") if man_doc else "+".join(str((c.get("binding") or {}).get("population", {}).get("digest"))[:16] for _r, c in sorted(per_rank.items()))),
-                               "manifest_digests_per_rank": {r: (c.get("binding") or {}).get("population", {}).get("digest") for r, c in per_rank.items()},
+                               "required_manifest": ({"path": args.required_manifest, "manifest_digest": man_doc.get("manifest_digest"), "identities": C2.block_of(man_doc, "populations").get("identities"),
+                                                      "by_family": C2.block_of(man_doc, "populations").get("by_family"), "complete": man_doc.get("complete"), "ranks": man_doc.get("ranks"),
+                                                      "program_digest_per_rank": man_doc.get("program_digest_per_rank"), "query_digest": C2.block_of(man_doc, "query").get("query_digest"),
+                                                      "tp_rule": C2.block_of(man_doc, "query").get("tp")} if man_doc else None),
+                               "manifest_digest": (man_doc.get("manifest_digest") if man_doc else "+".join(str(C2.block_of(c, "binding").get("population", {}).get("digest"))[:16] for _r, c in sorted(per_rank.items()))),
+                               "manifest_digests_per_rank": {r: C2.block_of(c, "binding").get("population", {}).get("digest") for r, c in per_rank.items()},
                                "manifest_rows_per_rank": {r: (h or {}).get("rows_for_rank") for r, h in man_hdrs.items()} if man_doc else None,
                                # informational only: the manifest coverage above is the verdict; this is the old structural population beside it
                                "structural_coverage_ok_per_rank": {r: (h or {}).get("structural_coverage_ok") for r, h in man_hdrs.items()} if man_doc else None,
                                "structural_coverage_note": "informational (not a verdict): coverage of the collector's structural population, recorded beside the manifest coverage",
-                               "population_n_per_rank": {r: (c.get("binding") or {}).get("population", {}).get("n") for r, c in per_rank.items()},
-                               "binding_map_digest": "+".join(str((c.get("binding") or {}).get("map_digest"))[:16] for _r, c in sorted(per_rank.items())),
-                               "binding_map_digests_per_rank": {r: (c.get("binding") or {}).get("map_digest") for r, c in per_rank.items()},
+                               "population_n_per_rank": {r: C2.block_of(c, "binding").get("population", {}).get("n") for r, c in per_rank.items()},
+                               "binding_map_digest": "+".join(str(C2.block_of(c, "binding").get("map_digest"))[:16] for _r, c in sorted(per_rank.items())),
+                               "binding_map_digests_per_rank": {r: C2.block_of(c, "binding").get("map_digest") for r, c in per_rank.items()},
                                "binding_map_files": {r: f"binding_map_rank{r}.json" for r in per_rank},
-                               "program_digests_per_rank": {r: (c.get("binding") or {}).get("program_digest") for r, c in per_rank.items()},
-                               "coverage_per_rank": {r: {k2: (c.get("binding") or {}).get("coverage", {}).get(k2) for k2 in ("ok", "expected_n", "bound_n", "missing_n", "extra_n", "physical_copies_n")} for r, c in per_rank.items()},
+                               "program_digests_per_rank": {r: C2.block_of(c, "binding").get("program_digest") for r, c in per_rank.items()},
+                               "coverage_per_rank": {r: {k2: C2.block_of(c, "binding").get("coverage", {}).get(k2) for k2 in ("ok", "expected_n", "bound_n", "missing_n", "extra_n", "physical_copies_n")} for r, c in per_rank.items()},
                                "identity_coverage": (None if len(skipped) == len(per_rank) else cov_ok), "openings_population": ("expected population" if pop_open else None),
                                "openings_checked": sum(int(o.get("opened") or 0) for o in pop_open.values()), "openings_ok": sum(int(o.get("verified") or 0) for o in pop_open.values()),
                                "openings_unbound": sum(int(o.get("unbound_n") or 0) for o in pop_open.values()),
@@ -678,7 +686,7 @@ def main(args: Options) -> int:
                                "value_correctness_note": ("value correspondence (C2) is a separate labelled check: --value-check -> value_check.json (per rank: module outputs by "
                                                           "value_check.ValueChecker, TP partials by TPPartialSource.compare); never folded into this coverage verdict"),
                                # per-(request, engine step) attribution of the committed sampled ids against the Match record, per rank
-                               "attribution_per_rank": {r: ({k2: (c.get("attribution") or {}).get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "why", "swap_requests_negative")}
+                               "attribution_per_rank": {r: ({k2: C2.block_of(c, "attribution").get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "why", "swap_requests_negative")}
                                                             if c.get("attribution") is not None else None) for r, c in per_rank.items()},
                                "attribution_reference": versions.get("match_record"),
                                "openings_after_release": True, "collector_variant": "windowed", "retention": retain_env or "host",
@@ -701,7 +709,7 @@ def main(args: Options) -> int:
             rows.append(row)
             with (out / "runs.jsonl").open("a") as jsonl:
                 jsonl.write(json.dumps(row, default=str) + "\n")
-            c = row.get("commit") or {}
+            c = C2.block_of(row, "commit")
             print(f"[tp2commit] pair {pair} {arm}: {result['wall_s']:.3f}s steps {len(result['step_wall_s'])} tokens_equal {row['tokens_equal_ref']}"
                   + (f" root {c.get('tp_run_root', '')[:16]} leaves {c.get('leaves')} openings {c.get('openings')} verdict {c.get('commit_fail_reason')}" if arm != "control" else ""),
                   flush=True)
@@ -733,7 +741,7 @@ def main(args: Options) -> int:
                 raise SystemExit("fail-closed: value-check install did not reach every rank")
             result = run_workload(eng, reqs, sampling)
             vres = llm.collective_rpc("tp2_commit_value_check", timeout=args.rpc_timeout)
-        vcheck = {"schema": "verity/commit-integ/value-check-tp/v1", "label": "measured", "tp": args.tp, "tokens_equal_ref": result["tokens"] == tokens_ref,
+        vcheck = {"schema": TP_VALUE_CHECK_SCHEMA, "label": "measured", "tp": args.tp, "tokens_equal_ref": result["tokens"] == tokens_ref,
                   "per_rank": {int(v["rank"]): v for v in vres}, "ranks_answered": sorted(int(v["rank"]) for v in vres),
                   "verdict": ("PASS" if len(vres) == world and all(v.get("verdict") == "PASS" for v in vres) and result["tokens"] == tokens_ref else "FAIL"),
                   "method": (vres[0].get("method") if vres else None)}
@@ -752,13 +760,13 @@ def main(args: Options) -> int:
                                                                                 else sum(int(v.get("clone_mismatches") or 0) for v in t64.values())),
                                                            "out_tensors_vs_clone": sum(int(v.get("out_tensors_vs_clone") or 0) for v in t64.values()),
                                                            "clone_rule": next((v.get("clone_rule") for v in t64.values() if v.get("clone_rule")), None),
-                                                           "pairs": [dict(p, rank=r) for r, v in sorted(t64.items()) for p in (v.get("pairs") or [])][:400],
+                                                           "pairs": [dict(p, rank=r) for r, v in sorted(t64.items()) for p in C2.list_of(v, "pairs")][:400],
                                                            "rule": next((v.get("rule") for v in t64.values() if v.get("rule")), None)},
                                                           indent=1, default=str) + "\n")
         for v in sorted(vres, key=lambda v: v["rank"]):
-            mo, tp_ = v.get("modules") or {}, v.get("tp_partials") or {}
+            mo, tp_ = C2.block_of(v, "modules"), C2.block_of(v, "tp_partials")
             print(f"[tp2commit] VALUE CHECK rank {v['rank']}: {v['verdict']} | modules {mo.get('verdict')} tensors {mo.get('tensors')} tap-eq {mo.get('tap_equal')} "
-                  f"tap-mismatch {mo.get('tap_mismatch_n')} reexec {mo.get('reexec_equal')}/{mo.get('reexec_tensors')} missing {len(mo.get('missing_in_commit') or [])} "
+                  f"tap-mismatch {mo.get('tap_mismatch_n')} reexec {mo.get('reexec_equal')}/{mo.get('reexec_tensors')} missing {len(C2.list_of(mo, 'missing_in_commit'))} "
                   f"| tp partials {tp_.get('verdict')} tensors {tp_.get('tensors')} tap-eq {tp_.get('tap_equal')} reexec {tp_.get('reexec_equal')}/{tp_.get('reexec_tensors')} "
                   f"missing {tp_.get('missing_n')} by_member {tp_.get('by_member')}", flush=True)
         if vcheck["verdict"] != "PASS":
@@ -769,7 +777,7 @@ def main(args: Options) -> int:
             if covp.exists():
                 cj = json.loads(covp.read_text())
                 cj["value_correctness"] = vcheck["verdict"] == "PASS"
-                roots_seen = sorted({str((r.get("commit") or {}).get("tp_run_root")) for r in rows if r["arm"] != "control" and (r.get("commit") or {}).get("tp_run_root")})
+                roots_seen = sorted({str(C2.block_of(r, "commit").get("tp_run_root")) for r in rows if r["arm"] != "control" and C2.block_of(r, "commit").get("tp_run_root")})
                 cj["value_correspondence"] = {"method": vcheck["method"], "result": vcheck["verdict"] == "PASS", "file": "value_check.json", "artifact": str(out / "value_check.json"),
                                               # per-component grades: what ran, what it was compared against
                                               # `tap_reexec` is NOT a live oracle: the reference clone is taken in the committing process at hook time
@@ -783,8 +791,8 @@ def main(args: Options) -> int:
                                                              "linkage": C2.linkage_component(rows, versions),
                                                              "root_compare": {"result": None, "reference": ("no known-good TP2 run root pinned (known_roots has no tp2 entry); the instrumented pairs' combined roots were " + ("identical: " + roots_seen[0][:16] if len(roots_seen) == 1 else f"NOT identical: {[x[:16] for x in roots_seen]}")) if roots_seen else "no run root"},
                                                              "replay": {"result": None, "reference": "not run (no independent replay of a TP2 run in this attempt)"}},
-                                              "oracle": (vres[0].get("oracle") if vres else None), "identities_checked": {r_: {"module_outputs": (v.get("modules") or {}).get("tensors"), "tp_partials": (v.get("tp_partials") or {}).get("tensors")} for r_, v in vcheck["per_rank"].items()},
-                                              "per_rank": {r_: {"verdict": v.get("verdict"), "modules": (v.get("modules") or {}).get("verdict"), "tp_partials": (v.get("tp_partials") or {}).get("verdict")}
+                                              "oracle": (vres[0].get("oracle") if vres else None), "identities_checked": {r_: {"module_outputs": C2.block_of(v, "modules").get("tensors"), "tp_partials": C2.block_of(v, "tp_partials").get("tensors")} for r_, v in vcheck["per_rank"].items()},
+                                              "per_rank": {r_: {"verdict": v.get("verdict"), "modules": C2.block_of(v, "modules").get("verdict"), "tp_partials": C2.block_of(v, "tp_partials").get("verdict")}
                                                            for r_, v in vcheck["per_rank"].items()}}
                 covp.write_text(json.dumps(cj, indent=1, default=str) + "\n")
         except Exception as e:  # noqa: BLE001
@@ -815,14 +823,14 @@ def main(args: Options) -> int:
     from verity_vllm.check.match import xrank_collectives as _XC
     xr_comp: dict[str, Any] = _XC.fold_pairs(xrank_pairs) if xrank_pairs else {"result": None, "pairs": 0, "why": "no instrumented pair"}
     xr_comp["per_pair_artifacts"] = [str(out / f"xrank_pair{p}.json") for p in range(len(xrank_pairs)) if (out / f"xrank_pair{p}.json").exists()]
-    (out / "xrank_collectives.json").write_text(json.dumps({"schema": "verity/tp2/xrank-collectives-fold/v1", "tp": args.tp} | xr_comp, indent=1, default=str) + "\n")
-    (out / "weights_pin.json").write_text(json.dumps({"schema": "verity-sweep/tp-weights-pin/v1", "tp": args.tp} | wp_comp, indent=1, default=str) + "\n")
+    (out / "xrank_collectives.json").write_text(json.dumps({"schema": XRANK_COLLECTIVES_FOLD_SCHEMA, "tp": args.tp} | xr_comp, indent=1, default=str) + "\n")
+    (out / "weights_pin.json").write_text(json.dumps({"schema": TP_WEIGHTS_PIN_SCHEMA, "tp": args.tp} | wp_comp, indent=1, default=str) + "\n")
     # the peer-input BINDER: the fold Match's peer_binding digests (fold peers_r[s,k] leaf == recorder
     # partial of rank 1-r at (s,k)) against the recorder rows the match oracle compared the COMMITTED partials to (bit-exact) -- by value,
     # both directions, every (step, k) of every rank.  False -> FAIL named; absent -> None (◐) unless --require-fold-match (then FAIL named)
     from verity_vllm.check.match import rank_match as _RM
     fb_comp = (_RM.commit_binding(args.match_dir, world=world, require=args.require_fold_match,
-                                  match_oracle=(None if match_capture_dir is None else {str(r_): (c.get("match_oracle") or {}) for r_, c in C2.last_per_rank(rows).items()}))
+                                  match_oracle=(None if match_capture_dir is None else {str(r_): C2.block_of(c, "match_oracle") for r_, c in C2.last_per_rank(rows).items()}))
                if args.match_dir else {"result": (False if args.require_fold_match else None), "why": "no --match-dir: no fold Match record to bind the peer inputs to" + (" -- REQUIRED" if args.require_fold_match else "")})
     (out / "fold_match_binding.json").write_text(json.dumps({"tp": args.tp} | fb_comp, indent=1, default=str) + "\n")
     print(f"[tp2commit] fold-Match peer binding (D90, R1 at Commit): result {fb_comp.get('result')} bindings {fb_comp.get('n_bindings')} recorder {fb_comp.get('n_recorder')} "
@@ -847,10 +855,10 @@ def main(args: Options) -> int:
     except Exception as e:  # noqa: BLE001
         print(f"[tp2commit] coverage.json sampled_replay annotate failed: {e!r}", flush=True)
     if replay_cfg is not None:
-        (out / "sampled_replay.json").write_text(json.dumps({"schema": "verity-sweep/tp-sampled-replay/v1", "tp": args.tp, "sampled_replay": sr_comp, "boundary_linkage": lk_comp,
+        (out / "sampled_replay.json").write_text(json.dumps({"schema": TP_SAMPLED_REPLAY_SCHEMA, "tp": args.tp, "sampled_replay": sr_comp, "boundary_linkage": lk_comp,
                                                              "per_pair_artifacts": [str(out / f"finalize_pair{r['pair']}.json") for r in rows if r["arm"] != "control"],
                                                              "note": "per-rank full records (strata, mismatches, programs) live in finalize_pair<k>.json[rank].sampled_replay",
-                                                             "unreplayable_collectives_evaluated_by": {"pass": "cross_rank_collectives (TP-12)", "families": sorted(set(xrank_families) | {u["family"] for u in sr_comp.get("unreplayable") or [] if u.get("evaluated_by")}),
+                                                             "unreplayable_collectives_evaluated_by": {"pass": "cross_rank_collectives (TP-12)", "families": sorted(set(xrank_families) | {u["family"] for u in C2.list_of(sr_comp, "unreplayable") if u.get("evaluated_by")}),
                                                                                                         "result": xr_comp.get("result"), "by_family": xr_comp.get("by_family"), "artifact": "xrank_collectives.json"}},
                                                             indent=1, default=str) + "\n")
 
@@ -862,17 +870,17 @@ def main(args: Options) -> int:
             "control_wall": [r["wall_s"] for r in ctl], "treatment_wall": [r["wall_s"] for r in trt], "delta_wall": deltas,
             "delta_wall_mean": statistics.fmean(deltas) if deltas else None,
             "delta_wall_pct": (statistics.fmean(deltas) / statistics.fmean(r["wall_s"] for r in ctl) * 100) if deltas else None,
-            "tp_run_roots": [(r.get("commit") or {}).get("tp_run_root") for r in trt],
-            "per_rank_roots": [{k: v["run_root"] for k, v in ((r.get("commit") or {}).get("per_rank") or {}).items()} for r in trt],
+            "tp_run_roots": [C2.block_of(r, "commit").get("tp_run_root") for r in trt],
+            "per_rank_roots": [{k: v["run_root"] for k, v in C2.block_of(C2.block_of(r, "commit"), "per_rank").items()} for r in trt],
             "per_rank_coverage": [{k: {"leaves": v["leaves"], "tensors": v["tensors"], "bytes_bound": v["bytes_bound"], "classes": v["classes"], "openings": v["openings"]}
-                                   for k, v in ((r.get("commit") or {}).get("per_rank") or {}).items()} for r in trt],
-            "tokens_equal": [r["tokens_equal_ref"] for r in rows], "commit_pass": [(r.get("commit") or {}).get("commit_pass") for r in trt],
+                                   for k, v in C2.block_of(C2.block_of(r, "commit"), "per_rank").items()} for r in trt],
+            "tokens_equal": [r["tokens_equal_ref"] for r in rows], "commit_pass": [C2.block_of(r, "commit").get("commit_pass") for r in trt],
             "value_check": (None if vcheck is None else {"verdict": vcheck["verdict"], "per_rank": {r_: v.get("verdict") for r_, v in vcheck["per_rank"].items()}}),
             "attribution": (None if match_tokens is None else {"match_record": versions.get("match_record"),
-                                                               "per_rank": {r_: {k2: (c.get("attribution") or {}).get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "why")}
+                                                               "per_rank": {r_: {k2: C2.block_of(c, "attribution").get(k2) for k2 in ("ok", "steps_checked", "rows_checked", "mismatches_n", "why")}
                                                                             for r_, c in C2.last_per_rank(rows).items()}}),
             # committed TP partials / MoE received outputs vs the Match capture's stored collectives, per rank
-            "match_oracle": (None if match_capture_dir is None else {r_: {k2: (c.get("match_oracle") or {}).get(k2) for k2 in TPS_SUMMARY_KEYS}
+            "match_oracle": (None if match_capture_dir is None else {r_: {k2: C2.block_of(c, "match_oracle").get(k2) for k2 in TPS_SUMMARY_KEYS}
                                                                      for r_, c in C2.last_per_rank(rows).items()}),
             "oracle_compare": C2.oracle_compare_component(rows, versions, man_doc),
             # the C2 of record, form (A) per rank, folded over ranks and pairs (full records in finalize_pair<k>.json)
@@ -885,7 +893,7 @@ def main(args: Options) -> int:
             "query_population": qp_comp,
             "weights_pin": {k: wp_comp.get(k) for k in ("result", "per_rank", "why", "checkpoint_dir")},
             "required_manifest": (None if man_doc is None else {"path": args.required_manifest, "manifest_digest": man_doc.get("manifest_digest"),
-                                                                "identities": (man_doc.get("populations") or {}).get("identities"), "program_digest_per_rank": man_doc.get("program_digest_per_rank")}),
+                                                                "identities": C2.block_of(man_doc, "populations").get("identities"), "program_digest_per_rank": man_doc.get("program_digest_per_rank")}),
             "negatives": versions["negatives"], "served": versions["served"],
             "pass": all_pass and all(r["tokens_equal_ref"] for r in rows), "required_classes": list(required_classes)}
     if args.only_arm:

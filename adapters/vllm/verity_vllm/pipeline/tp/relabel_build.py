@@ -84,8 +84,10 @@ def _where(d: dict) -> Any:
 
 def _compare_file(name: str, a: str, b: str) -> dict | None:
     if name in TELEMETRY:
-        with open(a) as fa, open(b) as fb:
-            x, y = json.load(fa), json.load(fb)
+        with open(a) as f:                                    # one side read whole before the other is opened
+            x = json.load(f)
+        with open(b) as f:
+            y = json.load(f)
         for p in TELEMETRY[name]:
             _drop(x, p)
             _drop(y, p)

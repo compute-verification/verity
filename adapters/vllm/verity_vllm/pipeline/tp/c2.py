@@ -65,6 +65,20 @@ def last_per_rank(rows: list[dict]) -> dict:
     return {}
 
 
+def block_of(doc: dict, name: str) -> dict:
+    """The block ``name`` of a document the Commit's driver reads: the workload, the manifest of record, a rank's answer to one of its
+    calls (its make, its finalize, an opening, a value check), the cross-rank pass's result, a rank's commit block, a run's row.  Empty
+    for a document that holds none, or holds it null or empty: each field read off it is then None."""
+    block = doc.get(name)
+    return block if block else {}
+
+
+def list_of(doc: dict, name: str) -> list:
+    """The list ``name`` of such a document; empty for a document that lists none."""
+    listed = doc.get(name)
+    return listed if listed else []
+
+
 def _rank_record(cblock: dict, name: str) -> dict:
     """A rank's record ``name`` on its commit block (`sampled_replay`, `boundary_linkage`, `weights_pin`, `attribution`,
     `match_oracle`); empty for a rank that holds none: the gate that writes it had nothing to write (it writes None: no replay, no

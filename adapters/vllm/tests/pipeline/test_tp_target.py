@@ -135,7 +135,8 @@ def test_tp_capture_builds_checks_and_attests_the_declared_target(tmp_path, stan
 def test_tp_capture_without_a_declared_target_changes_nothing(tmp_path, stand_ins):
     llm = _LLM()
     out = _capture(tmp_path, llm, None, stand_ins)
-    assert os.environ["VLLM_USE_DEEP_GEMM"] == "1" and "moe_backend" not in llm.kw
+    # the engine was built (its arguments name the world) and no target's backend is among them
+    assert os.environ["VLLM_USE_DEEP_GEMM"] == "1" and "tensor_parallel_size" in llm.kw and "moe_backend" not in llm.kw
     assert llm.methods()[:2] == ["tp2_probe", "tp2_install"] and llm.rpcs[1][1]["target"] is None
     assert json.loads((out / "versions.json").read_text())["target"] is None
 

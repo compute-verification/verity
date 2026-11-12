@@ -63,10 +63,10 @@ def _run_unless(reuse: bool, out: Path, cmd: list[str], log: Path, timeout: int 
 
 
 def _load(p: Path) -> dict | None:
-    """The JSON document at ``p``; None when the file is missing or does not parse."""
+    """The JSON document at ``p``; None when the file is missing or does not parse (one nested past the parser's depth does not)."""
     try:
         return json.loads(p.read_text())
-    except (OSError, ValueError):
+    except (OSError, ValueError, RecursionError):
         return None
 
 
@@ -87,10 +87,11 @@ def _listed(doc: dict, name: str) -> list:
 
 def _load_links(p: Path) -> dict | None:
     """a rank's tp_links.json through `read_tp_links` (v1 -> v2 in memory; every link carries `peers` and `module`, the
-    recorder-vocabulary module path from the derive's recorded model root); None when the file is missing or is not one."""
+    recorder-vocabulary module path from the derive's recorded model root); None when the file is missing or is not one (a document
+    nested past the parser's depth, or one that counts a world, a rank or a collective with an infinite number, is not)."""
     try:
         return read_tp_links(str(p))
-    except (OSError, ValueError, TypeError, AttributeError):
+    except (OSError, ValueError, TypeError, AttributeError, RecursionError, OverflowError):
         return None
 
 
