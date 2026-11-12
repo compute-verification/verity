@@ -333,6 +333,9 @@ def test_a_tp_build_summary_reads_each_ranks_results_without_their_program(tmp_p
         assert R.tp_build_digests(str(tmp_path)) == ("p" * 16, ""), step
     _put(tmp_path / "build_summary.json", {**s, "ranks": {**s["ranks"], "rank1": {"build_step": {"program_digest": "s" * 64}}}})
     assert R.tp_build_digests(str(tmp_path)) == ("p" * 16, "s" * 16)
+    three = {**s["ranks"], "rank1": {"build_step": {"program_digest": "s" * 64}}, "rank2": {"workload": {}}}
+    _put(tmp_path / "build_summary.json", {**s, "tp": {"world": 3}, "ranks": three})
+    assert R.tp_build_digests(str(tmp_path)) == ("p" * 16, "s" * 16 + "/")   # a rank without its step joins as an empty digest
 
 
 def test_a_tp_rows_manifest_and_commit_lines_read_documents_with_blocks_left_out(tmp_path):
