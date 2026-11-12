@@ -152,6 +152,36 @@ def test_a_credited_call_with_a_z_table_has_its_credit_bit_and_a_call_not_served
     assert H1Run.credit_bits(_window({}, {0: {"z": ROOT}, 1: {"z": ROOT}})) == {0: True, 1: False}
 
 
+class _Settling(SimpleNamespace):
+    """`_window`'s window with its `tables` read as `H1Run.tables` is, a property that settles the tables still hashing:
+    it counts its reads and raises what a failed hash raises."""
+
+    reads = 0
+
+    @property
+    def tables(self) -> dict[int, Any]:
+        self.reads += 1
+        raise RuntimeError("a table's hash failed")
+
+
+def _settling(details: dict[str, Any]) -> Any:
+    run: Any = _Settling(**{name: part for name, part in vars(_window(details, {})).items() if name not in ("tables", "gated")})
+    run.gated = lambda: H1Run.gated(run)
+    return run
+
+
+def test_a_window_with_no_call_the_gate_credits_gives_its_credit_bits_without_settling_its_tables():
+    run = _settling({"roots1": {"reason": "ids"}})
+    assert H1Run.credit_bits(run) == {0: False, 1: False} and run.reads == 0
+
+
+def test_a_call_the_gate_credits_settles_the_windows_tables_and_a_failed_hash_raises_there():
+    run = _settling({})
+    with pytest.raises(RuntimeError, match="a table's hash failed"):
+        H1Run.credit_bits(run)
+    assert run.reads == 1
+
+
 @pytest.mark.parametrize("session", [{}, {"session": None}, {"session": {}}, {"session": 0}, {"session": {"session": None}}],
                          ids=["absent", "null", "empty", "a false value", "an object that names none"])
 def test_commitments_that_name_no_session_give_a_window_with_no_key_of_its_own_none(session):
@@ -168,6 +198,11 @@ def test_a_manifest_row_with_no_a_table_states_no_root_of_it(row):
 
 def test_a_manifest_rows_table_root_is_its_tables_entry_of_that_name():
     assert table_root({"tables": {"a": ROOT, "z": None}}, "a") == ROOT
+
+
+def test_a_manifest_row_whose_tables_are_a_list_raises_at_the_read_of_its_entry():
+    with pytest.raises(AttributeError):
+        table_root({"tables": ["x"]}, "a")
 
 
 def _descriptor() -> bytes:
