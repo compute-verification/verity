@@ -298,11 +298,8 @@ def built_from(trace: Path, name: str) -> tuple[str | None, bool]:
 
 def dep_hash(trace: Path) -> str | None:
     """The hash of all its inputs that ``trace`` states (`depHash`, sixteen hex digits), under which Lake found the outputs
-    of a module it took; None where it states none."""
-    try:
-        h = json.loads(trace.read_text()).get("depHash")
-    except (OSError, ValueError, AttributeError):
-        return None
+    of a module it took; None where it states none. ``trace`` is one `built_from` has read as a taken build's."""
+    h = json.loads(trace.read_text()).get("depHash")
     return h if isinstance(h, str) and re.fullmatch(r"[0-9a-f]{16}", h) else None
 
 
@@ -320,16 +317,17 @@ def _keys():
 ENTRY_HASH = re.compile(rb'"hash"\s*:\s*"([0-9a-f]{16})"')
 
 
-def indexed(store: Path, wanted: set[tuple[str, str, str]]) -> tuple[dict[tuple[str, str, str], set[str]], int]:
+def indexed(store: Path, wanted: set[tuple[str, str, str]]) -> tuple[dict[tuple[str, str, str], set[str]], int, int]:
     """({(package, module, Lake's input hash): the digest of every Lean source the entries of ``store``'s index under it
-    record}, for the triples in ``wanted``; the count of entries read). Every entry is read: the index is named by keys,
-    which a module's input hash doesn't give. An entry is a compile of the module on this node, or one a bundle brought
-    from another, which the Lean check takes builds from on the same terms. One `module_keys.valid` refuses, or that isn't
-    JSON, is passed over. An entry that records no source is under its triple with nothing."""
+    record}, for the triples in ``wanted``; the count of entries read; the count of those that couldn't be read or aren't
+    JSON). Every entry is read: the index is named by keys, which a module's input hash doesn't give. An entry is a
+    compile of the module on this node, or one a bundle brought from another, which the Lean check takes builds from on
+    the same terms. One `module_keys.valid` refuses, or one not read, is passed over: what it would have said about a
+    module is not counted. An entry that records no source is under its triple with nothing."""
     got: dict[tuple[str, str, str], set[str]] = {}
-    keys, hashes, n = store / _keys().INDEX, {h for _, _, h in wanted}, 0
+    keys, hashes, n, unread = store / _keys().INDEX, {h for _, _, h in wanted}, 0, 0
     if not wanted or not keys.is_dir():
-        return got, n
+        return got, n, unread
     with os.scandir(keys) as it:
         for e in it:
             if not e.name.endswith(".json"):
@@ -342,6 +340,7 @@ def indexed(store: Path, wanted: set[tuple[str, str, str]]) -> tuple[dict[tuple[
                     continue
                 d = json.loads(raw)
             except (OSError, ValueError):
+                unread += 1
                 continue
             if not _keys().valid(d) or (at := (d["scope"], d["module"], d["hash"])) not in wanted:
                 continue
@@ -349,7 +348,7 @@ def indexed(store: Path, wanted: set[tuple[str, str, str]]) -> tuple[dict[tuple[
             got.setdefault(at, set()).update(
                 v for k, v in (files.items() if isinstance(files, dict) else ())
                 if isinstance(k, str) and k.endswith(".lean") and isinstance(v, str))
-    return got, n
+    return got, n, unread
 
 
 #: the `lake` arguments, module targets after them, of the pass that compiles nothing: all else a build does, with a
@@ -445,10 +444,7 @@ def in_index(index: Path, packages: list[Path], at: dict[str, tuple[Path, Path]]
     none to look up. A package whose `lakefile.toml` names none has no module looked up."""
     scope: dict[Path, str] = {}
     for q in packages:
-        try:
-            name = tomllib.loads((q / "lakefile.toml").read_text()).get("name")
-        except (OSError, ValueError):
-            name = None
+        name = tomllib.loads(f.read_text()).get("name") if (f := q / "lakefile.toml").is_file() else None
         if isinstance(name, str):
             scope[q / LIB] = name
     reach, todo = set(), list(asked)
@@ -466,10 +462,12 @@ def in_index(index: Path, packages: list[Path], at: dict[str, tuple[Path, Path]]
     if not wanted:
         return set(), ""
     t0 = time.monotonic()
-    got, n = indexed(index, set(wanted))
+    got, n, unread = indexed(index, set(wanted))
     ok = {m for k, m in wanted.items() if got.get(k) == {"sha512:" + hashlib.sha512(at[m][0].read_bytes()).hexdigest()}}
     return ok, (f"the index records the source as it is of {len(ok)} of the {len(wanted)} other builds Lake took that "
-                f"a stub could load ({n} entries read in {time.monotonic() - t0:.0f} s)")
+                f"a stub could load ({n} entries read"
+                + (f", {unread} of them unreadable and passed over," if unread else "")
+                + f" in {time.monotonic() - t0:.0f} s)")
 
 
 def plan(pkg: Path, rel: str, lake: Callable[[list[str]], tuple[int, str, float, int]] | None = None,

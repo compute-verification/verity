@@ -864,7 +864,8 @@ def test_a_build_lake_took_and_would_compile_counts_where_the_index_records_its_
     """`P.B` is a build Lake took, against a build of `P.A` that has since been rebuilt, so Lake would compile it and
     doesn't hold it, though its source is the text it was taken for. On a node the index says so: an entry under its
     package, its name and its trace's `depHash` records the SHA-512 of its source as it is, and `P.B` counts. An entry of
-    another text doesn't, nor two that disagree, nor one under another hash, package or schema; without an index, or
+    another text doesn't, nor two that disagree, nor one under another hash, package or schema, and one cut short is
+    passed over and counted in the plan's word; without an index, or
     with one that has no entries, `P.B` is unchecked, as with Lake's word alone. Where Lake's word isn't taken, the index
     isn't read."""
     pkg, store = tmp_path / "p", tmp_path / "lean-artifacts"
@@ -885,14 +886,15 @@ def test_a_build_lake_took_and_would_compile_counts_where_the_index_records_its_
     entry(store, "p", "P.B", "0123456789abcdef", {"p/P/B.lean": "module\nimport P.A\n"})
     entry(store, "q", "P.B", at, {"q/P/B.lean": "module\nimport P.A\n"})
     entry(store, "p", "P.B", at, {"p/P/B.lean": "module\nimport P.A\n"}, schema="lean-module/v3")
-    (store / "keys" / "cut.json").write_text('{"schema": "lean-module/v4", "module": "P.B"')
+    (store / "keys" / "cut.json").write_text(f'{{"schema": "lean-module/v4", "hash": "{at}", "module": "P.B"')
     assert S.plan(pkg, "P/File.lean", lake_says(said), store)[:4] == fact1[:4], "another text, hash, package or schema"
     entry(store, "p", "P.B", at, {"p/P/B.lean": "module\nimport P.A\n"})
     assert S.plan(pkg, "P/File.lean", lake_says(said), store)[:4] == fact1[:4], "two entries that disagree"
     other.unlink()
     p = S.plan(pkg, "P/File.lean", lake_says(said), store)
     assert p == S.Plan("P.File", True, ["P.A", "P.B"], [], f"{word}; the index records the source as it is of 1 of the 1 "
-                       "other builds Lake took that a stub could load (5 entries read in 0 s)"), p
+                       "other builds Lake took that a stub could load (5 entries read, 1 of them unreadable and passed "
+                       "over, in 0 s)"), p
     for refused in ((1, said[1]), (0, "")):
         p = S.plan(pkg, "P/File.lean", lake_says(refused), store)
         assert p[:4] == fact1[:4] and "index" not in p.word, p
