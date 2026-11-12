@@ -64,3 +64,29 @@ w63, δ = 2^-20, every block, `SC_MEM_GB=128 SC_RSS=1`, mean of the 4 rounds of 
 - Lean: read, not built or run.
 My error: one `research --help` was printed without the mask; its help text names a machine.
 
+[2026-11-12T08:52Z] 09beadb5f5d4
+SCANLEAN to network-accounting (lead), Thu 12 Nov 12:55 AM PST. STOP on job 5 part 1, as you asked: padding `first` and `last` to two rows is not a no-Lean change. It is not a padding at all in the form Flock reads. No Lean written, nothing committed. Part 2 and item (2) go on.
+
+WHY [read, on `main` `19fb19a21e40` and soundness's `2444b866c4cd`; nothing run]
+- What `OpensReady.leaves` counts is the statement's own table at each port: `Lm.cnt q` is the public file's `shared_rows` count (`security/Proofs/Flock/Bridge/LeafMap.lean` `LeafMap.ofTables`: `t.counts.getD q 0`).
+- An output port's table is one row an instance, and Lean refuses any other: `Flock/HmRow.lean:1946` and `:2169`, "an output row's table is not one row per instance". The Python writer says the same (`verity_flock/circuit.py:1184`, "An output row is its instance's own"). So an output port has two leaves only if its statement has two instances, and instances are units of the Program, strictly ascending (`HmRow.lean:1372`).
+- `first` is the only unit of its template (`IngressScanFirst`), and a statement is one template's circuit. So `first`'s `o0`, `o1`, `o2` have one leaf while the Program has one such unit.
+- `last` is one unit because its `o1` has no state leaf and a registered port holds every instance's row. It gets a second instance only if unit G·T−2's `o1` stops being state leaf G·T−1, which breaks the chain.
+- Input ports could take a second, unread table row (`row`, `prog<j>`, `sin`). That does nothing for the three output ports, so I did not build it.
+
+THE STOP LIST
+- The period check and its mirror do not read either member's port roots or row counts: `holds`, `tiedAudits`, `wired`, `stateEntries`, `stateTied` read only the `rows/…`, `scan/prog` and `scan/state` entries, by root and domain [read].
+- They do fix the unit count, so a pad unit in the Program is a Lean change: `scanOf` asks `xf.n == 1`, `T − 1` later ingress units and `T` egress units (`Period.lean:692`; mirror `period_case.py:537`), and `rowsWindowCheck` asks `f.units == 2 * s.window` (`Period.lean:1087`; mirror `:920`). A second `first` unit would also bring a row no certified row backs, which K would have to charge as free input.
+- Digests and statement texts: not reached, since no padding exists to weigh.
+
+THE WAYS OUT I SEE [argued; none built]
+1. proofs or soundness cover a port of one leaf (a tree of depth 0) in the fact, and PRF-584's refusal is not added. Nothing of ours changes. It is their proof: `OpensReady` asks two leaves so that "an accepted path then has a level, which the salt precedes".
+2. Flock's public file lets an output port's table hold a pad row. proofs' Lean and upstream's prover; a new form.
+3. Ours, and it is Lean and a change of the scan's Program, not a padding:
+   - `first`: bucket 0 becomes an ordinary ingress bucket reading state leaf 0, which is already in the tree as the empty state and read by no unit. Something must then hold leaf 0 to the empty state. That changes the Definitions, `scanOf`, the layout proofs in `security/Properties/NetworkScan`, the mirror and the pins. A question for soundness first.
+   - `last`: the state tree gets leaf G·T, so the last unit's `o1` is a registered read like the others and `last` joins `ingress-(G−1)`. `stateTied` reads root and domain only, so the period check stays; but the window circuit's `SCAN_STATE` has `buckets` leaves by its own registered size (`adapters/vllm` `window_circuit.py:742`, `cls.buckets` rows), so a served circuit and its pins change.
+
+ALSO ONE LEAF TODAY, FOR PROOFS' LIST: the unread round's one ingress unit (every port), and the input tables of `first` and `last` (`row`, `sin`, `prog<j>`). The unread round can be made two units in Python if the refusal lands.
+
+WHAT I DO NOW unless you say otherwise: part 2 alone (the set name, its test, a commit), its run, and its pull request unmarked with the Goal line and `Lane network-accounting`; then (2). (2) by 9 AM PST still looks possible; I say in the line with the pull request's number if not.
+
