@@ -523,8 +523,8 @@ def _grid() -> None:
     print()
     _sizing(gap)
     print()
-    print(f"# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
-          f"deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
+    print("# appendix, live coins: a coin a pass, no chain; μ_timing + μ_overlap a pass in steady state at the least "
+          "deadline; floor = the trusted RTT floor as a fraction of RTT; U = RTT + 2J − floor")
     print("| pass ms | RTT ms | floor | U ms | Δ = pass | Δ* ms | at Δ* | chained |")
     print("| --- | --- | --- | --- | --- | --- | --- | --- |")
     for p in (20, 50):
@@ -583,6 +583,10 @@ def _grid() -> None:
         print(f"| {name} | {math.log2(c):.2f} | 2^{log2(sketch_failure(c, p, outside=1)):.2f} | "
               f"2^{log2(sketch_failure(c, p)):.2f} | 2^{log2(sketch_failure(c, p, rows=64)):.2f} |")
 
+
+__all__ = ["CHIP_BYTES", "GPUS", "GPU_CHIP_BYTES", "GPU_READ_BYTES_PER_S", "GPU_SHA512_PER_S", "GPU_SPEC_BYTES_PER_S",
+           "GPU_SQUARINGS_PER_S", "GPU_WRITE_BYTES_PER_S", "HOST_CHIP_BYTES", "HOST_READ_BYTES_PER_S",
+           "HOST_SPEC_BYTES_PER_S", "HOST_WRITE_BYTES_PER_S", "READ_BYTES_PER_S", "SPEC_BYTES_PER_S", "log2"]
 
 if __name__ == "__main__":
     _grid()

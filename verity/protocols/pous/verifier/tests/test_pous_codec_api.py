@@ -6,17 +6,31 @@ import itertools
 import random
 
 import pytest
-from verity.commitments.identity import canonical_json_bytes, tagged_sha512
 
+from verity.commitments.identity import canonical_json_bytes, tagged_sha512
+from verity.protocols.pous.device.memory_challenger import block_digest
 from verity.protocols.pous.verifier import setup
-from verity.protocols.pous.verifier.audit import HonestResponder, UnsignedRounds, challenge_key, run_timed
+from verity.protocols.pous.verifier.audit import (
+    HonestResponder,
+    UnsignedRounds,
+    challenge_key,
+    run_timed,
+)
 from verity.protocols.pous.verifier.codec import Codec, encode_segments, split
 from verity.protocols.pous.verifier.layout import Layout, decode_tensor
-from verity.protocols.pous.device.memory_challenger import block_digest
 from verity.protocols.pous.verifier.params import Params
 from verity.protocols.pous.verifier.primitives import reference
-from verity.protocols.pous.verifier.scheme import P3, decode_segment, encode, encode_segment
-from verity.protocols.pous.verifier.verifier import VerifierKey, leaf_hash, segment_leaves
+from verity.protocols.pous.verifier.scheme import (
+    P3,
+    decode_segment,
+    encode,
+    encode_segment,
+)
+from verity.protocols.pous.verifier.verifier import (
+    VerifierKey,
+    leaf_hash,
+    segment_leaves,
+)
 
 PARAMS = Params(8, 64, 3, 4)
 PRIMS = reference(PARAMS)

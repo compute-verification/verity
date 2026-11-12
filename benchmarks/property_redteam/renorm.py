@@ -28,12 +28,14 @@ Past the exhaustive sizes, byte fields of L limbs take product families of small
 
 from __future__ import annotations
 
+import argparse
 import itertools
 import json
 import math
 import random
 from collections.abc import Sequence
 from dataclasses import dataclass
+from fractions import Fraction
 
 import numpy as np
 from gates import Builder, is_charged, op_affine, op_mma, proven
@@ -245,8 +247,6 @@ def _egcd(a: int, b: int) -> tuple[int, int, int]:
 
 
 def _det(M: list[list[int]]) -> int:
-    from fractions import Fraction
-
     n = len(M)
     A = [[Fraction(x) for x in r] for r in M]
     det = Fraction(1)
@@ -266,8 +266,6 @@ def _det(M: list[list[int]]) -> int:
 
 
 def _inverse_unimodular(M: list[list[int]]) -> list[list[int]]:
-    from fractions import Fraction
-
     n = len(M)
     A = [[Fraction(x) for x in r] + [Fraction(int(i == j)) for j in range(n)] for i, r in enumerate(M)]
     for i in range(n):
@@ -799,8 +797,6 @@ def p1024_top_constraint(n: int = 4000, seed: int = 11) -> dict:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    import argparse
-
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--out", default="renorm.json")
     ap.add_argument("--sizes", default="4:3,4:4,4:5,4:6,4:7,4:8,16:2,16:3,16:4,256:1,256:2")

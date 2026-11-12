@@ -16,20 +16,20 @@ import os
 import socket
 import threading
 
-import pytest
-
 import pous_fakes
 import pous_test_signer as ts
+import pytest
+
 from verity.configuration.deploy import sources as S
 from verity.configuration.deploy.party import Send
 from verity.configuration.deploy.runtime import run as deploy_run
 from verity.configuration.deploy.stream import Side
+from verity.configuration.wire import Message
 from verity.protocols.pous.device import challenger_party as CP
 from verity.protocols.pous.device import challenger_session as CS
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import period, run
 from verity.protocols.pous.verifier.schemes.p2 import P2Params
-from verity.configuration.wire import Message
 
 STORE = hashlib.shake_256(b"a tiny MLP's weights").digest(600)
 COINS = hashlib.sha512(b"the period's live coins").digest()
@@ -59,7 +59,7 @@ def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: i
         with a:
             got["session"] = CP.serve(CS.Polled(a), CS.request_of("n0", point, root), signer=signer,
                                       log=ts.session_log(), coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(),
-                                      warmups=warmups, draw=draw)
+                                      warmups=warmups, entropy=draw)
 
     t = threading.Thread(target=side)
     t.start()
@@ -133,12 +133,12 @@ def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
     _, point, published, blocks, _ = _in_process()
     sid, old, rounds = _split(point, published.root, lambda i: blocks[i], ts.TestSigner(b"same key", 2),
                               draw=S.SeededCoins(b"hiding").draw)
-    caps = {CS.CHALLENGER: {"signer": ts.TestSigner(b"same key", 2), "log": ts.session_log()},
-            CS.PROVER: {"store": lambda i: blocks[i]}}
+    capabilities = {CS.CHALLENGER: {"signer": ts.TestSigner(b"same key", 2), "log": ts.session_log()},
+                    CS.PROVER: {"store": lambda i: blocks[i]}}
     clock = S.VirtualClock(S.VirtualTime(Clock()()), 1_000)
     r = deploy_run({"protocol": CS.ID, "params": CS.request_of("n0", point, published.root)},
-                   [CS.CHALLENGER, CS.PROVER], "live", None, protocols={CS.ID: CP.PROTOCOL}, capabilities=caps,
-                   authenticate=False,
+                   [CS.CHALLENGER, CS.PROVER], "live", None, protocols={CS.ID: CP.PROTOCOL},
+                   capabilities=capabilities, authenticate=False,
                    sources={CS.CHALLENGER: {"clock": clock, "coins": GivenCoins(S.SeededCoins(b"hiding").draw)}})
     assert r.status == "completed", r.outcomes
     assert r.outcomes[CS.CHALLENGER] == {"outcome": {"session": old.to_json(), "session_id": sid.hex()},
@@ -233,10 +233,9 @@ def _refused(request, salts: mc.SaltLog, log: mc.SessionLog) -> str:
     with pytest.raises(CP.Refusal) as e:
         CP.designate(request, salts, log)
     a, b = socket.socketpair()
-    with a, b, a.makefile("rwb") as f:
-        with pytest.raises(CP.Refusal) as served:
-            CP.serve(f, request, signer=ts.TestSigner(b"unused", 2), log=log, salts=salts, coins=COINS,
-                     domain=period.SESSION_DOMAIN, clock=Clock())
+    with a, b, a.makefile("rwb") as f, pytest.raises(CP.Refusal) as served:
+        CP.serve(f, request, signer=ts.TestSigner(b"unused", 2), log=log, salts=salts, coins=COINS,
+                 domain=period.SESSION_DOMAIN, clock=Clock())
     assert str(served.value) == str(e.value)
     return str(e.value)
 
@@ -248,7 +247,7 @@ def test_an_audits_session_runs_under_the_id_its_salt_fixes(tmp_path) -> None:
     from the coins) is refused."""
     p, point, published, blocks, digests = _in_process()
     salts, log = _salt_log(tmp_path), ts.session_log(tmp_path)
-    source = CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, draw=lambda n: COINS)
+    source = CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, entropy=lambda n: COINS)
     assert source == COINS and salts.get(AUDIT) == (published.commitment, published.salt)
     signer = ts.TestSigner(b"auditor", 2)
     sid, session = _audit_session(point, published, lambda i: blocks[i], signer, salts, log)
@@ -270,7 +269,7 @@ def test_a_second_session_for_an_audit_is_refused_never_redrawn(tmp_path) -> Non
     coins again, and the session log holds the one id."""
     _, point, published, blocks, _ = _in_process()
     salts, log = _salt_log(tmp_path), ts.session_log(tmp_path)
-    CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, draw=lambda n: COINS)
+    CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, entropy=lambda n: COINS)
     sid, _ = _audit_session(point, published, lambda i: blocks[i], ts.TestSigner(b"once", 2), salts, log)
     request = CS.request_of("n0", point, published.root, audit=AUDIT, published=published)
     assert _refused(request, salts, log) == (f"a session has run for audit {AUDIT.hex()}: the memory challenger runs one "
@@ -312,7 +311,7 @@ def test_a_setup_under_the_provers_salt_fails_the_verifier_though_its_root_carri
     _, point, _, _, _ = _in_process()
     mine = period.setup_store(STORE, hashlib.sha512(b"the prover's own coins").digest(), point)
     salts, log = _salt_log(tmp_path), ts.session_log(tmp_path)
-    CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": mine.published.commitment.hex()}, draw=lambda n: COINS)
+    CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": mine.published.commitment.hex()}, entropy=lambda n: COINS)
     shown = run.Setup(mine.published.blocks, mine.published.commitment, mine.published.root, salts.get(AUDIT)[1])
     assert shown.salt != mine.published.salt
     signer = ts.TestSigner(b"fooled", 2)

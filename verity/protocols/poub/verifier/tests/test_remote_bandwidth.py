@@ -12,12 +12,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from remote_bandwidth_fakes import Clock, Entropy
-from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
+
+from verity.commitments.randomness import frame
 from verity.protocols.poub.verifier import audit, codec, coins, receipts, timing
 from verity.protocols.poub.verifier.audit import AuditRun, Params, SessionError
-from verity.commitments.randomness import frame
+from verity.protocols.spot.verifier.profile import IntegrityProfile, Subset
 
 N = 20
 NODE = b"node-under-test"
@@ -171,7 +171,7 @@ def test_an_honest_session_is_accepted_and_recorded(store) -> None:
     assert all(a < b for w in r.windows for a, b in zip(w.steps, w.steps[1:])) and len(w1["steps"]) == 3
     assert w1["opened_ns"] == 3000 + A + 1
     assert w1["profile"]["levels"] == [{"name": "receipt", "query": None, "size": 3 * N, "draw": {"subset": 7}}]
-    assert r.end_ns == SCHEDULE.span_ns and A == timing.deadline(300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5)
+    assert r.end_ns == SCHEDULE.span_ns and timing.deadline(300, gap_ns=10, down_ns=20, up_ns=30, jitter_ns=5) == A
 
 
 def partial(t: int, i: int) -> receipts.Plan:
@@ -768,7 +768,7 @@ def test_passes_off_the_chain_are_rejected(store, run, verdicts) -> None:
 def test_a_root_after_its_deadline_rejects_the_session(store) -> None:
     late = dataclasses.replace(SCHEDULE, arrivals=tuple((t, i, a + 100 if (t, i) == (0, 3) else a)
                                                         for t, i, a in SCHEDULE.arrivals))
-    assert SCHEDULE.arrivals[3] == (0, 3, 1293) and 1293 + 100 > SCHEDULE.deadlines[0]
+    assert SCHEDULE.arrivals[3] == (0, 3, 1293) and SCHEDULE.deadlines[0] < 1293 + 100
     s, *_ = drive(store, params(), late)
     assert s.failed == audit.Verdict(0, False, "late")
     with pytest.raises(SessionError, match="rejected"):
@@ -1054,7 +1054,7 @@ def test_the_node_constants_are_the_sums_over_its_devices() -> None:
     assert timing.READ_BYTES_PER_S == 8 * 1.539e12 + 606.8e9 and timing.SPEC_BYTES_PER_S == 8 * 1.597e12 + 819.2e9
     assert timing.CHIP_BYTES == 8 * 263_163_904 + 1_000_341_504 == 3_105_652_736
     assert timing.HOST_CHIP_BYTES == 2 * (336 * 2 ** 20 + 2 * 2 ** 20 + 64 * (2 * 2 ** 20 + (48 + 64 + 64) * 2 ** 10))
-    assert timing.SQUARINGS_PER_S == {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()}
+    assert {w: 8 * r for w, r in timing.GPU_SQUARINGS_PER_S.items()} == timing.SQUARINGS_PER_S
     assert timing.SHA512_PER_S == 8 * timing.GPU_SHA512_PER_S
     gpu = 94 * 10 ** 9
     host = timing.spanning(gpu) - 8 * gpu
