@@ -76,7 +76,7 @@ GPU_SPEC_BYTES_PER_S = 1.597e12
 the census's `rtx-pro-6000-server` entries cite them), which no measured kernel reaches."""
 HOST_READ_BYTES_PER_S = 606.8e9
 """The host DRAM's measured read rate: 8 GPUs' pinned H2D and 56 CPU readers at once, 319.2 + 287.6 GB/s, the most any
-reader mix measured; DRAM bounds the sum, not the root complex."""
+reader mix measured; DRAM caps the sum, not the root complex."""
 HOST_SPEC_BYTES_PER_S = 819.2e9
 """The host DRAM's specified read bandwidth: 16 channels of DDR5-6400."""
 READ_BYTES_PER_S = GPUS * GPU_READ_BYTES_PER_S + HOST_READ_BYTES_PER_S
@@ -590,8 +590,7 @@ def _grid() -> None:
 
 __all__ = ["CHIP_BYTES", "GPUS", "GPU_CHIP_BYTES", "GPU_READ_BYTES_PER_S", "GPU_SHA512_PER_S", "GPU_SPEC_BYTES_PER_S",
            "GPU_SQUARINGS_PER_S", "GPU_WRITE_BYTES_PER_S", "HOST_CHIP_BYTES", "HOST_READ_BYTES_PER_S",
-           "HOST_SPEC_BYTES_PER_S", "HOST_WRITE_BYTES_PER_S", "LINK_WINDOW_BYTES", "READ_BYTES_PER_S",
-           "SPEC_BYTES_PER_S", "SQUARINGS_PER_S", "log2"]
+           "HOST_SPEC_BYTES_PER_S", "HOST_WRITE_BYTES_PER_S", "READ_BYTES_PER_S", "SPEC_BYTES_PER_S", "log2"]
 
 if __name__ == "__main__":
     _grid()
