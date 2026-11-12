@@ -108506,3 +108506,45 @@ The entry fact and the second half of one tree a gate at `addressOf h`, from `Ne
 - `SourcesNamed` (a premise today, in the design's evaluation after L1's rest) leaves out every unit that reads a registered value at a port no link names: weights or a table read the usual way. If Friday's templates read any value that way, the two-round theorem as it stands says nothing of Friday's run, whatever else is proved. GATHER's answer on (a) to (f) decides this; I have not read Friday's circuits.
 - That the list of section 7 is complete: only the finished proof says so.
 - That Friday's registration meets `wiresAlike`, `returnedWhole`, `writtenUnwired`, `refReadsOwn`, `scopeOkH`.
+
+## STAGECOINS, Thu 12 Nov 23:24Z: both stages' statements are written and proved from named premises, waiting for a Lean slot (11 and 32 checks ahead on vy-nebius-2); `CoinsRead` can't hold at round 0 as an equality, and I propose `CoinsAgree`
+
+**In plain words.** I wrote the two files of piece D. Each proves that the coin the form's reading takes for a stage agrees with the device's release on the bytes that stage read, from four or three named premises, and proves outright what the run of record itself establishes. Nothing has compiled yet: both tries are waiting in vy-nebius-2's check line, which I counted at 11 and 32 checks ahead at 23:22Z, so a Lean slot is making me wait more than ten minutes. The brief's statement, `CoinsRead` (the reading's coin *equals* the device's release), is false at round 0 for an honest play; I state and prove a weaker one that the projection's assembly can still use (below).
+
+**Branch** `cursor/proofs-stagecoins-71b1` at `7011f427b7` [run: `git ls-remote`], which merges TWOLEG's base at `b04e0a9fd9`.
+
+**Files** [read: my branch]. `security/Proofs/Properties/Verity/SampledTwo/FirstCoins.lean` (about 260 lines) and `SecondCoins.lean` (about 190), each a root on a line of its own in `security/Proofs/lakefile.toml`. Every theorem has a proof written; none has elaborated yet.
+
+**Runs** [run: `research inspect`, 23:22Z].
+- `r20261112-231635-703c`: `verity lean try FirstCoins.lean --siblings` at `f7cd4b969c`, waiting in the check line.
+- `r20261112-232118-215b`: the same for `SecondCoins.lean` at `d8d8169423`, waiting.
+
+**Why not `CoinsRead` at round 0 (a counterexample)** [derived from `Reading.lean`'s `coinOf` and the run's coin check, `Spot/Run.lean`'s `coinsHold`]. An honest first stage reads 10 bytes of one 64-byte coin the device released, and the evidence carries those 10 bytes. The reading's coin for round 0 is those 10 bytes followed by zeros (`coinOf`). The device's release is the whole coin, whose bytes 10 to 63 are random, so not all zero. So `Rd.coin o 0 ≠ Rd.dev o.log 0` on an accepted honest play, whatever `dev` reads, unless `dev` itself zeroes what the stage didn't read (it can't: `dev` sees only the log). The same happens at the second stage's last coin.
+
+**What I prove instead** [read: `FirstCoins.lean`]:
+```lean
+def CoinsAgree (A : Live₂) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (g : Group) : Prop :=
+  ∀ o, Acc o → Good o → ∀ i, Rd.reads i → groupOf A i = g → ∀ c, Rd.coin o i = some c →
+    ∀ c', (∀ d, Rd.dev o.log i = some d → Rd.agree o i d c') → Rd.agree o i c c'
+```
+It says: the reading's coin agrees with any coin the device's release agrees with. `CoinsRead` implies it (`coinsAgree_of_coinsRead`, proved). It is what the assembly needs: put `c' := r i` and `DevAgrees` (TWOLEG's new piece) gives the inner premise, so `CoinsAgree` gives `AcceptsRun`'s coin premise directly.
+
+**The theorems** [read: my branch; not compiled]:
+- `coinsAgree_first A C S dev Good (hShow : FirstShown C Good) (hDev : DevFirst C dev) (hRead : SourceRead C) (hB : CoinsOfBytes) : CoinsAgree A (formReading A C S dev) (FormAccepts C) Good .first`.
+- `coinsAgree_second A C S dev Good (hShow : SecondShown C Good) (hDev : DevSecond A C dev) (hB : StagesOfBytes) : CoinsAgree A (formReading A C S dev) (FormAccepts C) Good .second`.
+- What the run itself gives, proved with no premise: `run_firstRead` (an accepted `Spot.Run.run i form`, at either value of `form`, read `read` bytes of its first stage under `Select.select` with coins that hold) and `firstRead_of_accepts` (so does the run the accepted form ran on the play's input).
+- The second stage needs no premise about the run: its bytes are computed by the form itself (`OneStageZk.coinsOf`, a `drawCoins` under the interior audit's own key and family after the interior registration's digest).
+
+**STOP RULE.** Nothing. My files add definitions and theorems only; nothing touches a lock, the form, `Sampled.lean` or the switch, and nothing rests on the switch being off (the run lemma holds at either value of `form`).
+
+**NEEDS.**
+1. TWOLEG: replace `CoinsRead` with `CoinsAgree` (above) in `Projection.lean`'s `ProjectionOf`, at each of `.first` and `.second` (the sessions' group may keep either; `CoinsRead` gives `CoinsAgree`). Counterexample above. Until then I go on with `CoinsAgree` as my statement.
+2. TWOLEG (the form, a refusal only): refuse evidence whose first-stage bytes `e.source` are longer than what the run's first stage read (`read`, which the run already reports). Today the run checks only `i.source.extract 0 read`, so bytes past `read` are unchecked and the reading's round-0 coin carries them. Honest evidence carries exactly the bytes read, so nothing honest is refused. I take it as the premise `SourceRead C`.
+3. COINMAP: `DevFirst C dev` and `DevSecond A C dev` (exact text in my files): where bytes whose bits start the coins the play's log shows released in a stage's family after its digest (`Verity.Sampled.freshCoins`), the coin map's coin for that stage's round starts with those bytes. The first stage's family is the one the evidence's segment names (`firstDraw`); the second's is the interior audit's parameters'.
+4. CUT: (a) merge TWOLEG's base: `Cut.lean` at `3dc3e5e5ea` doesn't elaborate on it, since `boundary` is now `OneStage.Params` (so `boundaryOf p` is `pure p.boundary`); (b) `LogIsDevice o` holds vacuously where `readsLogs o.sent` is empty (a key not at the deployed parameters, or a read that fails), so `Good` says nothing on such a play: I need either `Good` to also require a read, or a lemma that on accepted plays `readsLogs` is not empty.
+5. REDRAW (or RUNCOINS): the run's coin check (`coinsReason`) reads the coins under the key the evidence carries and the family its segment names; CUT's `firstDraws` reads them under the parameters' key. To prove `FirstShown` from `LogIsDevice` I need RUNCOINS's `CheckReadsDraw` at the parameters' key (what the run accepted, `drawCoins` also accepts under the parameters' key, and the bytes read start its coins).
+6. Me: `CoinsOfBytes` and `StagesOfBytes` (any short enough bytes are a coin's, padded with zeros); `FirstShown` and `SecondShown` from `LogIsDevice` and the above, in a new file `SampledTwo/StageLog.lean`, once CUT's `Cut.lean` elaborates on our base.
+
+**To post.** Nothing.
+
+**Not established.** Nothing of mine has compiled. The premises in NEEDS are unproved. The first stage's family is chosen by the evidence, not the parameters, and the coins' signature is not bound to the current monitoring period (an earlier period's passes); neither is worked around, and both are noted in the files' docstrings.
