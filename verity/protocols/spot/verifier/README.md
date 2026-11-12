@@ -212,7 +212,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
     certifier, and a run's coins leave it only on the peer's certifier coin link, which the gate refuses to open
     without (`auditor.coin_ports`).
   - `OneClock`, an assumption under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
-    ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
+    ingress and receipt times are read on one clock. Deployed, that is the auditor host's; the challenger's release
+    log and a `Stream` read its raw monotonic clock (`challenger.raw_ns`, `raw_s`). A challenger on a device of its
+    own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.protocols.spot.verifier.one_stage` is the one-stage audit's reference: `registration`,
   `draw` (the sample's checks, not a sampler), `partition`, `audit` and `verdict`. `consumers` reads its profile. `service` is the proof system over it, whose `Stream`

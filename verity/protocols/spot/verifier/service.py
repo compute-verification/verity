@@ -160,7 +160,6 @@ import copy
 import hashlib
 import math
 import re
-import time
 from dataclasses import dataclass, field
 from fractions import Fraction
 from typing import Any, Callable, Mapping, NoReturn, Sequence, TypeVar
@@ -174,6 +173,7 @@ from verity.protocols.spot.verifier.profile import Bernoulli, IntegrityProfile, 
 from . import second_stage as SS
 from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
 from .one_stage.verdict import Verdict, _Collect
+from verity.protocols.spot.device.challenger import raw_s
 from verity.protocols.spot.device.coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -1566,7 +1566,7 @@ class Stream:
     """
 
     def __init__(self, spec: Spec, unit: SpecializedDefinition | Sequence[SpecializedDefinition], *, budget: int, delta: float, challenger: str,
-                 coins: ChallengerCoins | None = None, clock: Callable[[], float] = time.monotonic,
+                 coins: ChallengerCoins | None = None, clock: Callable[[], float] = raw_s,
                  sampler: Sampler | None = None, rounds: int = 1, prover: str | None = None,
                  values: Sequence[tuple[str, int, int | Sequence[int]]] = (), log: Sequence[Mapping[str, Any]] = (),
                  replay: SpecializedDefinition | None = None, program: Program | None = None,

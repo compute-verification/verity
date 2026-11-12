@@ -44,12 +44,13 @@ checks the openings, each against the coin it was given.
 
 Every message is fail-closed.  The challenger refuses a frame that isn't the next of that sequence in exactly that form,
 a coin other than its family's next (coin i after the family's i-th root, once: `LiveRecord`) and a root that isn't 64
-bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never resamples).  It appends each
-release to `releases.jsonl` (`LiveRecord.log`'s two events, a line each in canonical JSON, integer nanoseconds on its
-monotonic clock), fsynced, before the opening leaves its host, and answers the client's close only once its signed close
-is written.  A session served with a `secret` (the auditor host's gate gives one to the window's opener) refuses a hello
-that doesn't carry it, so no other process that reaches the port takes the session's coins first.  `greet` reads the
-hello alone, so a server can refuse a bad one and take the next connection: a refused hello releases nothing.
+bytes; a refusal or a broken stream ends the session, and no coin opens twice (a retry never resamples).  It appends
+each release to `releases.jsonl` (`LiveRecord.log`'s two events, a line each in canonical JSON, integer nanoseconds on
+its host's raw clock, `challenger.raw_ns`), fsynced, before the opening leaves its host, and answers the client's close
+only once its signed close is written.  A session served with a `secret` (the auditor host's gate gives one to the
+window's opener) refuses a hello that doesn't carry it, so no other process that reaches the port takes the session's
+coins first.  `greet` reads the hello alone, so a server can refuse a bad one and take the next connection: a refused
+hello releases nothing.
 
 **The device's caps.**  The challenger's host never writes evidence v2 refuses (`coins.coins_within` at `coins.LIMITS`,
 Lean `Challenger.LIMITS`, and each line's length): past each bound, each defined once in `challenger`, it refuses and
@@ -374,7 +375,7 @@ def greet(sock: socket.socket, secret: bytes | None = None) -> str | None:
     return why
 
 
-def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time.monotonic_ns,
+def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = Ch.raw_ns,
           secret: bytes | None = None, greeted: bool = False) -> str | None:
     """Serve one client's session on the connected stream `sock` (`open_session`), on the release log's clock `clock`
     (integers, the log being canonical JSON): None when the client closed it, else why it ended.  With `secret`, the
