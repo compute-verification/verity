@@ -47,6 +47,8 @@ from typing import Any
 from verity_vllm.engine.engine_driver import external_id
 from verity_vllm.engine.handle import scheduler_or_none
 
+__all__ = ["ForwardCounter", "realized_arrive_steps", "run_requests_arrivals"]
+
 
 def structural_output_lag(eng: Any) -> int | None:
     """The output lag the engine's architecture implies: 1 for vLLM V1 (`engine_core`), 0 for V0 (`model_executor`, no core), None

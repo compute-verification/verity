@@ -65,6 +65,12 @@ from verity_vllm.engine.run_facts import (  # noqa: F401
 )
 from verity_vllm.program import prefix_plan as PP
 
+__all__ = ["Engine", "WARMUP_SEED", "build_engine", "case_of", "effective_execution_doc", "execution_label_of",
+           "execution_of_workload", "fresh_prefix_cache", "generated_kernels_of_this_process", "load_workload",
+           "loaded_code_objects", "loaded_code_objects_delta", "observed_flash_attn_version", "parse_engine_args",
+           "resolved_async_scheduling", "run_requests", "sampling_params", "target_mismatches", "target_of_workload",
+           "throwaway_requests", "versions_doc"]
+
 
 def load_workload(path: str | Path, max_tokens: int | None = None) -> dict:
     """The workload file (`workloads/workload_32x16_1req.json`, `workload_qwen15_32x16_1req.json`) ->
