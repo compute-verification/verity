@@ -63,6 +63,7 @@ HERE = Path(__file__).resolve().parent
 VLLM = HERE.parents[2] / "adapters" / "vllm"
 sys.path.insert(0, str(HERE.parent))
 import prove_path as PP  # noqa: E402
+import records_audit as RA  # noqa: E402
 
 sys.path.insert(0, str(HERE.parents[1] / "one_stage"))
 import a5 as A5  # noqa: E402
@@ -274,7 +275,7 @@ def test_an_audit_listens_on_ports_no_other_audit_holds():
 
 
 #: the ZK server's reason for holding back a forged unit's proof, as the prover's record of the session gives it
-HELD = "FIREWALL-REFUSED: circuit: the constraints lincheck final fail on a rep's pads"
+HELD = f"{RA.ZK_SERVER_REFUSED}: circuit: the constraints lincheck final fail on a rep's pads"
 #: the verifier's reason on a session whose proof never arrived
 NO_PROOF = "R7: no proof for circuit/rep0 (lone rep)"
 #: Lean's refusals on no proof: for want of a session's proof file, and at the statement's setup
