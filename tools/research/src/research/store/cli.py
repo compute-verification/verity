@@ -19,12 +19,16 @@
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
   research data evict --target-free-gb N [--dry-run] [--runs [--runs-dir D] [--verify-remote]] [--min-mb M] [--keep-trees] [--keep-registry FILE]...
-                     [--src-dir D [--src-origin URL]] [--json]
+                     [--src-dir D [--src-origin URL]] [--requests-dir D] [--scratch-dir D] [--locks] [--uv-cache D [--uv-keep-h H]] [--json]
                                                    free disk: evict blobs (and trees/) whose artifacts are PRESERVED on the remote, largest first;
                                                    --runs also evicts preserved big files of finished run dirs (oldest first); exit 1 if the target is not reached;
                                                    --src-dir deletes the shipped source trees on origin that nothing uses, whatever the target,
                                                    even when the store pass fails (exit 3; `error` in the JSON)
                                                    --keep-registry keeps every blob of the registry's artifacts (fixtures/artifacts.json)
+                                                   what nothing else removes, whatever the target (leftovers.py; each its own report in the JSON):
+                                                   --requests-dir the request directories whose run dir is gone, --scratch-dir the clones of
+                                                   runs that are over, --locks the store's free lock files, --uv-cache the uv cache's editable
+                                                   shards and temporary build directories nothing wrote for H hours (default 48)
   research data verify ART [--json]                PRESERVED check against the remote (exit 1 when not preserved)
   research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
                                                    the durability gate: exit 0 iff the attempt manifest, every output artifact AND every local
@@ -362,8 +366,12 @@ def cmd_evict(argv: list[str]) -> int:
     """Free local disk by evicting copies whose bytes are PRESERVED on the remote (`evict.py`): store blobs held only by artifacts with a
     verified remote replica (largest first) and the `trees/` cache, and with `--runs` the big files of finished run directories whose
     `run_files` artifact is verified (oldest first).  Stops when the free space reaches `--target-free-gb`.  Never touches pending
-    objects, manifests, attempts, labels or the catalog.  `--dry-run` reports without removing anything."""
+    objects, manifests, attempts, labels or the catalog.  `--dry-run` reports without removing anything.  Whatever the target, it
+    also removes what it is pointed at that nothing else removes (`leftovers.py`): request directories whose run dir is gone, the
+    clones of runs that are over, the store's free lock files and a uv cache's idle editable shards and build directories.  One
+    of these passes that fails is its report's `error` and stops no other."""
     from . import evict as EV  # noqa: PLC0415
+    from . import leftovers as LO
 
     ap = _ap("evict")
     ap.add_argument("--target-free-gb", required=True, type=float, metavar="N", help="stop once this much is free on the store's filesystem")
@@ -386,6 +394,21 @@ def cmd_evict(argv: list[str]) -> int:
     ap.add_argument("--src-keep-h", type=float, default=EV.SRC_KEEP_S / 3600, metavar="H",
                     help="--src-dir: keep a tree changed, or named by a run recorded, within H hours (default 2); a node short of "
                          "inodes under many shipped commits takes less")
+    ap.add_argument("--requests-dir", default=None, metavar="DIR",
+                    help="also remove each request directory under DIR (<root>/requests) whose run dir is gone, an hour or its "
+                         "launch's time limit after its last write (leftovers.py `evict_requests`; reads /proc as --src-dir does)")
+    ap.add_argument("--scratch-dir", default=None, metavar="DIR",
+                    help="also remove each clone under DIR (<root>/scratch) whose run is over: its runner and its workload have "
+                         "exited (leftovers.py `evict_clones`; reads /proc as --src-dir does)")
+    ap.add_argument("--locks", action="store_true",
+                    help="also unlink the store's lock files (locks/*.lock) over an hour old, each while holding its lock "
+                         "(leftovers.py `evict_locks`)")
+    ap.add_argument("--uv-cache", default=None, metavar="DIR",
+                    help="also remove the editable shards and temporary build directories of the uv cache at DIR that nothing wrote "
+                         "for --uv-keep-h hours and no live process names, a shard under its own lock (leftovers.py `evict_uv`; "
+                         "reads /proc as --src-dir does)")
+    ap.add_argument("--uv-keep-h", type=float, default=LO.UV_KEEP_S / 3600, metavar="H",
+                    help="--uv-cache: keep a shard or build directory written within H hours (default 48)")
     ap.add_argument("--json", action="store_true")
     ns = ap.parse_args(argv)
     st = LocalStore(ns.store)
@@ -406,8 +429,25 @@ def cmd_evict(argv: list[str]) -> int:
         rep["error"] = f"store pass: {type(e).__name__}: {e}"
         if not ns.json:
             print(f"research data evict: {rep['error']}", file=sys.stderr)
+
+    def leftover(key: str, fn: Callable[..., dict], where: Path, **kw: float) -> None:
+        try:
+            rep[key] = fn(where, dry_run=ns.dry_run, log=say, **kw)
+        except Exception as e:  # noqa: BLE001  one pass that fails must not hide what the others did
+            rep[key] = {"error": f"{type(e).__name__}: {e}"}
+            if not ns.json:
+                print(f"research data evict: {key}: {rep[key]['error']}", file=sys.stderr)
+
+    if ns.requests_dir:     # before the source trees: a request without a run dir keeps the tree it names
+        leftover("requests", LO.evict_requests, Path(ns.requests_dir))
+    if ns.scratch_dir:
+        leftover("clones", LO.evict_clones, Path(ns.scratch_dir))
     if ns.src_dir:
         rep["src"] = EV.evict_src(Path(ns.src_dir), origin=ns.src_origin, dry_run=ns.dry_run, keep_s=ns.src_keep_h * 3600, log=say)
+    if ns.locks:
+        leftover("locks", LO.evict_locks, st.root)
+    if ns.uv_cache:
+        leftover("uv", LO.evict_uv, Path(ns.uv_cache), keep_s=ns.uv_keep_h * 3600)
     if ns.json:
         _dump(rep)
     if rep.get("error"):

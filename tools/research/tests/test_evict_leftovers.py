@@ -1,9 +1,10 @@
 """`research data evict`'s passes over what nothing else removes (`store/leftovers.py`): a uv cache's idle editable shards and
 build directories, the store's lock files, request directories whose run dir is gone, and the clones of runs that are over.
 Each group shows the removal and everything that must stay: in use by a live process, too young, a lock held, a run that has not
-ended, a name or layout the pass does not know, a `research keep` record.  Every path is under `tmp_path`, /proc is a directory there, and time is the
-`now` and `clock` each pass is given."""
+ended, a name or layout the pass does not know, a `research keep` record.  Every path is under `tmp_path`, /proc is a directory
+there, and time is the `now` and `clock` each pass is given."""
 import fcntl
+import inspect
 import json
 import os
 import threading
@@ -695,3 +696,57 @@ def test_a_pass_names_the_first_twenty_of_each_kind_and_counts_them_all(tmp_path
     assert len([ln for ln in lines if ln.startswith("locks: deleted /")]) == 20
     assert len([ln for ln in lines if ln.startswith("locks: kept /")]) == 20
     assert len(lines) == 41 and lines[-1] == "locks: deleted 25 of 50 (0.0 GB, 25 inodes); kept 25 unknown:25"
+
+
+# ---- the command ------------------------------------------------------------------------------------------------------------------------
+
+def test_the_cli_runs_each_pass_it_is_pointed_at_and_one_that_fails_stops_no_other(tmp_path, monkeypatch, capsys):
+    from research.store.cli import main
+    seen = {}
+
+    def fake(name, **ret):
+        takes = inspect.signature(getattr(L, f"evict_{name}"))
+
+        def run(where, **kw):
+            takes.bind(where, **kw)                 # the command gives a pass only what it takes
+            seen[name] = (where, kw)
+            if name == "requests":
+                raise OSError("disk went away")
+            return {"deleted": 0, "error": None, **ret}
+        return run
+
+    for name in ("uv", "locks", "requests", "clones"):
+        monkeypatch.setattr(L, f"evict_{name}", fake(name))
+    store = tmp_path / "store"
+    argv = ["evict", "--store", str(store), "--target-free-gb", "0", "--dry-run", "--json"]
+    assert main(argv) == 0 and set(json.loads(capsys.readouterr().out)) == {"store"} and not seen, "each pass only where it is pointed"
+    assert main([*argv, "--uv-cache", str(tmp_path / "uv"), "--locks", "--requests-dir", str(tmp_path / "requests"),
+                 "--scratch-dir", str(tmp_path / "scratch")]) == 0
+    rep = json.loads(capsys.readouterr().out)
+    assert rep["uv"] == rep["locks"] == rep["clones"] == {"deleted": 0, "error": None}
+    assert rep["requests"] == {"error": "OSError: disk went away"}
+    assert {n: w for n, (w, _) in seen.items()} == {"uv": tmp_path / "uv", "locks": store, "requests": tmp_path / "requests",
+                                                    "clones": tmp_path / "scratch"}
+    assert all(kw["dry_run"] is True for _, kw in seen.values()) and seen["uv"][1]["keep_s"] == L.UV_KEEP_S == 48 * 3600
+    main([*argv, "--uv-cache", str(tmp_path / "uv"), "--uv-keep-h", "72"])
+    capsys.readouterr()
+    assert seen["uv"][1]["keep_s"] == 72 * 3600
+
+
+def test_the_command_unlinks_the_free_lock_files_of_the_store_it_is_given(tmp_path, capsys):
+    """The command with the pass itself: the one that reads no /proc, over files made long before and long after any time the
+    command reads.  The dry run says what would go and changes nothing; the same command without it unlinks exactly that."""
+    from research.store.cli import main
+    store = tmp_path / "store"
+    old, new = lock_file(store, key(1)), lock_file(store, key(2))
+    os.utime(old, (1.0, 1.0))
+    os.utime(new, (2.0**33, 2.0**33))
+    argv = ["evict", "--store", str(store), "--target-free-gb", "0", "--json", "--locks"]
+    before = snapshot(store / "locks")
+    assert main([*argv, "--dry-run"]) == 0
+    rep = json.loads(capsys.readouterr().out)["locks"]
+    assert rep["dry_run"] is True and rep["deleted_first"] == [str(old)] and rep["kept_by"] == {"recent": 1}
+    assert snapshot(store / "locks") == before
+    assert main(argv) == 0
+    rep = json.loads(capsys.readouterr().out)["locks"]
+    assert rep["error"] is None and rep["deleted_first"] == [str(old)] and not old.exists() and new.exists()

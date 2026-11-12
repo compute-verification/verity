@@ -42,6 +42,9 @@ Two kinds of local copy can go, and only these:
   The one process it passes over unread is an nginx worker whose configuration cannot name a tree (`_nginx_worker`): RunPod's
   proxy, which runs as `nobody` on every pod, where the pass has no CAP_SYS_PTRACE.
 
+`leftovers.py` holds the command's other passes, over what a node's work leaves that nothing else removes: request directories
+whose run dir is gone, the clones of runs that are over, the store's lock files, a uv cache's idle shards.
+
 Never touched: pending (unpushed or unverified) objects, `manifests/`, `attempts/`, `labels/`, `catalog.sqlite`, `scratch/`.
 Artifacts that are flagged `remote` in the catalog but never verified are counted in `held_back_bytes` so the operator can
 `research data verify` / `push` them first.  `free_fn` is the free-space probe (an `os.statvfs` over the store root by default);
