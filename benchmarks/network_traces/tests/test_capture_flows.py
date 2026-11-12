@@ -549,38 +549,38 @@ def _served(out: Path, key: Path, requests: list[bytes], responses: list[bytes],
 
     async def main() -> Warden:
         clock = VirtualClock(-tau / 2)
-        warden = Warden(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
+        relay = Warden(params, connect, origin=0.0, windows=1, clock=clock, sleep=clock.sleep, publish=publisher,
                         withhold=publisher.withhold, watermark=open_watermark if watermark else None)
-        running = asyncio.create_task(warden.run())
+        running = asyncio.create_task(relay.run())
         tasks = []
         for request in requests:
             reader = asyncio.StreamReader()
             reader.feed_data(cells(request, params.cell_bytes))
             reader.feed_eof()
-            tasks.append(asyncio.create_task(warden.handle(reader, _Writer(warden))))
-        await warden.until(lambda w: w.ordinals + w.refused == len(requests))
+            tasks.append(asyncio.create_task(relay.handle(reader, _Writer(relay))))
+        await relay.until(lambda w: w.ordinals + w.refused == len(requests))
         for t in range(params.window):
-            await warden.until(settled)
+            await relay.until(settled)
             clock.advance(t * tau)
-            await warden.until(lambda w, t=t: w.ticks > t)
+            await relay.until(lambda w, t=t: w.ticks > t)
             if t == 0 and order is not None:
-                assert len(warden.active) == len(requests)
-                warden.active.sort(key=order)
+                assert len(relay.active) == len(requests)
+                relay.active.sort(key=order)
         await running
         await asyncio.gather(*tasks)
-        return warden
+        return relay
 
-    warden = asyncio.run(main())
+    relay = asyncio.run(main())
     publisher.close()
     (out / "deployment.json").write_text(json.dumps(ws.deployment_record(
         params, signer.public_key(), SESSION, origin_unix=0.0, windows=1, listen=(CERTIFIER[0], 1), upstream=SERVER,
-        slack=warden.slack, run_id=warden.run_id)))
-    log: dict = {"connections": warden.log}
+        slack=relay.slack, run_id=relay.run_id)))
+    log: dict = {"connections": relay.log}
     if watermark:
-        log["watermark"] = {"last": warden.watermarked and list(warden.watermarked), "lost": warden.watermark_lost,
-                            "error": warden.watermark_error}
+        log["watermark"] = {"last": relay.watermarked and list(relay.watermarked), "lost": relay.watermark_lost,
+                            "error": relay.watermark_error}
     (out / "warden.json").write_text(json.dumps(log))
-    return warden, servers, mark
+    return relay, servers, mark
 
 
 def _sent(writer: _Writer) -> bytes:
@@ -603,8 +603,8 @@ def _three(tmp_path: Path):
     out.mkdir()
     requests = [ws.http_request({"prompt": "x" * n}, "h:1") for n in (10, 200, 30)]
     responses = [_response([" a", " b"]), _response([" word"] * 40), _response([])]
-    warden, servers, mark = _served(out, key, requests, responses)
-    return out, warden, requests, responses, servers, mark
+    relay, servers, mark = _served(out, key, requests, responses)
+    return out, relay, requests, responses, servers, mark
 
 
 def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each_direction(tmp_path, capsys):
@@ -612,11 +612,11 @@ def test_a_capture_of_the_servers_side_agrees_with_the_certifiers_record_in_each
     is what the server's side saw: the request with its release headers one way, the response's bytes the other, and
     the watermark stream's head, lines and end. A capture of those bytes agrees in each direction and pairs every
     connection, the watermark's by its bytes to the server; the server's answer on it is given and is in no sum."""
-    out, warden, requests, responses, servers, mark = _three(tmp_path)
-    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in warden.log}
-    assert [_sent(s) for s in servers] == [with_release(r, release[k + 1][0], warden.run_id, release[k + 1][1])
+    out, relay, requests, responses, servers, mark = _three(tmp_path)
+    release = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in relay.log}
+    assert [_sent(s) for s in servers] == [with_release(r, release[k + 1][0], relay.run_id, release[k + 1][1])
                                            for k, r in enumerate(requests)]
-    assert _sent(mark).startswith(watermark_head(warden.run_id)) and _sent(mark).endswith(WATERMARK_END)
+    assert _sent(mark).startswith(watermark_head(relay.run_id)) and _sent(mark).endswith(WATERMARK_END)
     record = cf.record_counts(out)
     assert record["phase_records"] == {"certified": 3, "of": 3}
     assert record["connections"] == [
@@ -668,13 +668,13 @@ def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ing
     params = dataclasses.replace(PARAMS, lanes=12, queue=12)
     requests = [ws.http_request({"prompt": "x" * (10 + k if k % 2 == 0 else 100 + 5 * k)}, "h:1") for k in range(12)]
     responses = [_response([" w"] * (k + 1)) for k in range(12)]
-    warden, servers, mark = _served(out, key, requests, responses, params=params, order=lambda c: -c.ordinal)
-    logged = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in warden.log}
+    relay, servers, mark = _served(out, key, requests, responses, params=params, order=lambda c: -c.ordinal)
+    logged = {e["ordinal"]: (e["release"], e["ingress_end"]) for e in relay.log}
     by_bucket: dict[int, list[int]] = {}
     for o in sorted(logged, key=lambda o: logged[o][0]):
         by_bucket.setdefault(logged[o][1], []).append(o)
     assert list(by_bucket.values()) == [[11, 9, 7, 5, 3, 1], [12, 10, 8, 6, 4, 2]]
-    assert [_sent(s) for s in servers] == [with_release(r, logged[k + 1][0], warden.run_id, logged[k + 1][1])
+    assert [_sent(s) for s in servers] == [with_release(r, logged[k + 1][0], relay.run_id, logged[k + 1][1])
                                            for k, r in enumerate(requests)]
     record = cf.record_counts(out)
     assert record["phase_records"] == {"certified": 3, "of": 3}
@@ -682,7 +682,7 @@ def test_a_requests_place_in_the_release_order_is_its_end_cells_place_in_the_ing
     assert [c["to_server"] for c in record["connections"]] == [*(len(_sent(s)) for s in servers), len(_sent(mark))]
     assert all(c["exact"] for c in record["connections"])
     by_ordinal = {o: n for n, (_, o) in enumerate(sorted((a, o) for o, (_, a) in logged.items()))}
-    assert [o for o in sorted(logged) if len(with_release(requests[o - 1], by_ordinal[o], warden.run_id, logged[o][1]))
+    assert [o for o in sorted(logged) if len(with_release(requests[o - 1], by_ordinal[o], relay.run_id, logged[o][1]))
             != len(_sent(servers[o - 1]))] == [2, 4, 10, 12]
     seen = _seen(tmp_path, [*((_sent(s), r) for s, r in zip(servers, responses)), (_sent(mark), b"")])
     got = cf.read([seen], *_given(), run=out)["compared"]
