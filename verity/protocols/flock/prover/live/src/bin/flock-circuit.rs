@@ -5001,7 +5001,8 @@ fn level_widths(widths: &[usize]) -> serde_json::Map<String, Value> {
 /// outputs by what they are to the seeds: `after_a_seed` reads one, through other rows too (the hashing past each first
 /// compression, the seeds among them), `before_the_seeds` reads none and is read by one of those, `other` is the rest
 /// (what the unit computes beside its hashing; `other_own_levels` its levels with every row outside it given), then the
-/// outputs' rows. `--widths` adds a `WIDTHS` line, the rows of each level after the cut. With `--walk`, a `SEEDED`
+/// outputs' rows; `with_the_rounds_given`: the levels were every found round's committed words seeds too (the schedule
+/// only: nothing computes those seeds). `--widths` adds a `WIDTHS` line, the rows of each level after the cut. With `--walk`, a `SEEDED`
 /// line: over the instance file's unit slots (`--slots N`: the first N), whether the walk on the cut schedule
 /// (`unit_ab_seeded`, the seeds' z the host evaluator's, `unit_rows_z`) packs `unit_ab_into`'s words, every word compared,
 /// and whether one seed off in one slot is refused. With `--native` too, a `NATIVE` line: the same walk and compare on seeds
@@ -5075,7 +5076,17 @@ fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     let given: Vec<u32> = (first..cp).filter(|&i| feeds[i] || i >= outputs).map(|i| i as u32).collect();
     let at_own = levels(&schedule_seeded(net, &given));
     let own_levels = other.iter().map(|&i| at_own[i]).max().unwrap_or(0);
+    // the same cut with every found round's committed (e, a) given too: what a round is deep, not a compression
+    let mut given_rounds = seed.clone();
+    comps.iter().flat_map(|x| x.words.iter()).for_each(|&(e, a)| (e..e + 64).chain(a..a + 64).for_each(|r| given_rounds[r as usize] = true));
+    let round_seeds: Vec<u32> = (first..cp).filter(|&i| given_rounds[i]).map(|i| i as u32).collect();
+    let at_rounds = levels(&schedule_seeded(net, &round_seeds));
+    let deepest = |rows: &mut dyn Iterator<Item = usize>| rows.map(|i| at_rounds[i]).max().unwrap_or(0);
+    let rounds_given = json!({"seeds": round_seeds.len(), "levels": deepest(&mut (first..cp)),
+                              "hashing_levels": deepest(&mut (first..outputs).filter(|&i| feeds[i])),
+                              "other_levels": deepest(&mut (first..outputs).filter(|&i| !feeds[i]))});
     let mut line = json!({"net": ni, "name": c.nets[ni].0, "seeds": seeds.len(), "levels": full.levels(), "cut_levels": cut.levels(),
+                          "with_the_rounds_given": rounds_given,
                           "after_a_seed": side((first..outputs).filter(|&i| after[i]).collect()),
                           "before_the_seeds": side((first..outputs).filter(|&i| feeds[i] && !after[i]).collect()),
                           "other": side(other), "other_own_levels": own_levels, "outputs": side((outputs..cp).collect()),
