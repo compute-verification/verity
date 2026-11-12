@@ -3,13 +3,14 @@
 [--as LANE] [--timeout S] [--dry-run]`: a Lean change built before the candidate that holds it, off the check slots.
 
 A candidate's Lean audit restores every module a run has built before and compiles the rest: the modules at or above its
-own Lean change, which no run has built while the change waits. That build is then on the queue's path, in the candidate's
-records run or its first shard, and again in each candidate stacked on it that another machine checks meanwhile. This builds
-the change where no check waits for it: the Lean audit of a ready mark's merge (`tools/verity/lean/warm.py --base BASE --out
-DIR`, in the node's Lean slots of pool `audit`), as a `research run` of the tree in MACHINE's pool NAME (default `research`,
-whose cores no check slot holds), with N GB reserved in the machine's ledger. The run leaves what it built in MACHINE's own
-caches, the ones a check there reads, and among its files (`common.MARK_AUDIT_OUT`): the bundles of the module versions it
-compiled and the pack of the Lean verdicts it stored. Every later check's launcher lists those (`lean_audit.shared_bundles`,
+own Lean change, which no run has built while the change waits. It then replays through the kernel each module whose
+`.olean` files, or those of any module below it, no replay has passed with (`replay_keys` of `tools/verity/lean/check.py`):
+everything above the change, recompiled or not. Both are then on the queue's path, in the candidate's records run or its
+first shard. This does them where no check waits: the Lean audit of a ready mark's merge (`tools/verity/lean/warm.py --base
+BASE --out DIR`, in the node's Lean slots of pool `audit`), as a `research run` of the tree in MACHINE's pool NAME (default
+`research`, whose cores no check slot holds), with N GB reserved in the machine's ledger. The run leaves what it built in MACHINE's own caches, the
+ones a check there reads, and among its files (`common.MARK_AUDIT_OUT`): the bundles of the module versions it compiled and
+the pack of the Lean verdicts it stored. Every later check's launcher lists those (`lean_audit.shared_bundles`,
 `check.verdict_packs`: the newest such runs', and, however old, those of a run whose command names the head of a PR the
 launcher's tree holds, `heads`), so the candidate's audit restores them on whichever machine it runs.
 
@@ -19,6 +20,13 @@ launcher's tree holds, `heads`), so the candidate's audit restores them on which
     lean_prebuild.py origin/main --base REV  a landing, read against REV, the tip before it: MACHINE's caches at `main`
     lean_prebuild.py origin/main --whole     every package, for a machine whose caches hold nothing: one that joins the
                                              machines the first shards run on compiles every module in its first audit otherwise
+
+What a candidate gains depends on how much of its Lean the tree holds. The modules restore wherever their own inputs are
+the same, so a tree with some of the candidate's Lean changes saves their compiling. A replay's verdict is reused only
+where every module below is the same too, so only a tree with exactly the candidate's Lean content, every head it holds
+and no other, saves the replay: build the batch as it will be pinned, and pin what was built. MACHINE must build in the
+sandbox (that file's `sandboxed`): one that can't uses no cache and keeps nothing it builds, which its audit's first lines
+say.
 
 The change is read against BASE: `--base`, else where COMMIT left `main` (`MAIN`), and with `--whole` the history's first
 commit, from which every package is reached. The audit needs the memory `tools/verity/lean/check.py` refuses below
