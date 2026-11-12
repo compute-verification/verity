@@ -1536,7 +1536,9 @@ class World:
             r = _git(self.repo, "show", f"{sha}:{REPLICA_MAP.as_posix()}", check=False)
             try:
                 doc = json.loads(r.stdout) if not r.returncode else {}
-            except ValueError:
+            except ValueError as e:
+                self.log(f"research queue vqueue: {sha[:12]}'s {REPLICA_MAP} isn't JSON ({e}): none of its fixtures is "
+                         "exported, and its check reads the registry and fails")
                 doc = {}
             self._registries[sha] = fixture_entries(doc) if isinstance(doc, dict) else {}
         return self._registries[sha]
