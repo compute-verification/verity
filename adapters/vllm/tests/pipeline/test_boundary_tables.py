@@ -412,7 +412,7 @@ def test_history_tables_refuse_a_scheduler_that_caches_prefixes(tmp_path):
     sched, hooks, lines = Scheduler(), Hooks(tag="test-boundary-tables-caching"), []
     sched.cache_config.enable_prefix_caching = True
     bw = BW.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
-                            tables=BT.LocalChannel(BT.Builder(BT.Latents([0, 3]))), layers=(0, 3), capacity=CAP)
+                            tables=BT.LocalChannel(BT.Builder(BT.Latents([0, 3]))), layers=(0, 3))
     try:
         with pytest.raises(ValueError, match="history tables need prefix caching off"):
             bw.install(sched, hooks)
