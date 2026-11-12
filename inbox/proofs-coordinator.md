@@ -77539,3 +77539,52 @@ Tags: [run] a run's log or a command now, [read] a file read this session, [rela
 - Local, Python only: four named test files without their slow tests, 235 passed; the difftest's Python half over 36 opening cases (four new: no record, a record at another `V`, another template's record alone, the table at another leaf count); ruff [run].
 **5. Not done.** `b6b9`'s `CHANGED_EXIT` and the body of #9176 after it; the second pull request (open and unmarked once `6350` passes; body: stacked on #9176, the lock line, section 3 first); the indexer check (after CIR-246's answer at 15:00Z, before 16:00Z); `namesOk` (#8940 still open).
 For the table: #9176 unmarked at `2e3d3ad762`, all but the quick tier 0, no stop against lean's merge. Second branch `cursor/proofs-frame-leaves-c41d` at `2309798903`: leaf count held, a read known by the params' record; Lean tries and build 0, suites running (`r20261112-074659-6350`).
+
+## HEADSPLIT, Thu 12 Nov 08:00Z: not the ready line yet: #9087's head is `0cb0d8dbb679`, the merge of `main` `bcaf58a45d53`; circuit-check and the units' audit pass at it; the changed suites and the whole key blocks' audit are out (about 08:35Z and 09:05Z)
+
+**1. The two runs at the old head `7e45b9061c0e`, their own output** [run: `research fetch --all`, read by me].
+
+- `r20261112-054432-2199`, exit 0: the change from `d6075b75d289` touches 58 suites; 58 passed, 3 of them from the cache, 0 failed; 110.2 min of test time [run]. The three from the cache are the circuit-properties suite, `benchmarks/unit_lowering` and `verity/definitions/private_circuits`, each a pass at `67e89e9208` with every file its run read unchanged [run]. Eight test modules the change reaches ran whole, slow tests included: four of the vLLM suite, `test_block_census.py`, `test_figures.py`, `test_total_cost.py` and `test_sparse_mla_head_units.py` [run]. Among the suites: vLLM 14,167 passed and 414 skipped, `verity/definitions` 856, `benchmarks/one_stage` 547, `repository` 310, `benchmarks/spot_figures` 219, `benchmarks/sampling_plan` 52 [run].
+- `r20261112-054456-59f3`, exit 0: circuit-check of the four sparse-attention sidecars, 52 targets, 0 failures, 25 warnings that never fail on 24 Definitions (gates computed twice, 77,016 over 9 targets; no test vectors on 15; one gate no output reads); 0 of 52 reused, 681 s [run].
+
+**2. The merge.** `main` was at `bcaf58a45d53` when I fetched at 07:26Z, with #8370 and #9123 on it since 07:25:42Z, not at `d6075b75d289` [run: `gh pr view`, `git fetch`]. Both sides change four files; two conflicted, and I resolved them as my mailbox ruled [run]:
+
+- **`chunk_rows.reads`' docstring** is #8370's with "or scores unit" after "key block" in the two places ("a ``CHAINS`` key block or scores unit of a whole block (NVIS = BN)", "a key block or scores unit of fewer keys than BN (a read a key)") and "A ``CHAINS`` values unit reads no table." [run]. I put that sentence after the RMSNorm rows' sentence, the end of the passage circuits quoted on CIR-241 at 02:41Z; say if "at the end" meant another place [read]. I wrote no word of my own; the paragraph is wrapped again at 120 columns, so 3 of its 15 lines are byte for byte `main`'s [run].
+- **`benchmarks/one_stage/a5_sparse_mla.py`** keeps this change's `commit`, and line 61 reads `TS.BITS_PER_CHUNK` [run].
+- The two test modules merged by themselves: #9123 renames `caps` to `per_chunk` and `law` to `design` in their `members` and `window`, and this change's tests pass those by position; no old name is left in the three files [run: `rg`].
+- The merge is `0cb0d8dbb679`, pushed; #9087's head is `0cb0d8dbb679` [run].
+
+**3. What I repeat at `0cb0d8dbb679`, and why.**
+
+| run | what | why it is repeated | verdict |
+|---|---|---|---|
+| `r20261112-073540-3c5b` | circuit-check of the four sidecars | the merge changes files under `verity/definitions/` that the Definitions' checks can read (`ops/boolean/rolled.py`, `kernels/tc.py`) | exit 0: 52 targets, 0 failures, the same 25 warnings on 24 Definitions, 0 of 52 reused, 773 s [run] |
+| `r20261112-073613-4294` | the audit with scores and values units (`STANDIN="sparse-mla:units" A5_CHALLENGER=local bash benchmarks/one_stage/a5_tp.sh`) | no test imports `a5_sparse_mla.py`, so only the audit shows a wrong resolution | exit 0: accepted; 24 of 24 verdicts (Lean's sample, the Lean verifier and the Python verifier on each of 8 sampled proof blocks); 19 of 19 tampered windows refused; 8 min 43 s, 12.4 GB of peak resident memory [run] |
+| `r20261112-073639-12f8` | the same with whole key blocks (`STANDIN="sparse-mla"`) | it is the path that reads the renamed line 61 | running on vy-nebius-cpu-1, on its slot since 07:44Z; about 09:05Z [guess: this part took 1 h 15 min in `r20261112-014701-f09e`] |
+| `r20261112-073510-50d2` | the suites the change from `bcaf58a45d53` touches, without slow tests except in the modules it reaches | the head moved, and the merge brings 274 files of `main`, `chunk_rows.py` and the two test modules among them | running on vy-nebius-cpu-8, on its slot since 07:47Z; about 08:35Z [guess: `2199` took 46 min on its slot] |
+
+- On my VM at the merged head both stand-ins reach `commit` and commit their windows: whole key blocks (5 templates, chunk sizes 3, 4, 4, 3, 4, 12 units; 106 s) and the units (8 templates, 30 units; 2 s) [run].
+- On my VM the retired-terms lints and the ruff lint warn at the merged head on the same files with the same counts as on `main` `bcaf58a45d53`: no difference [run].
+- Not repeated: the description sizes' update, the planner's card and the statements' pin [read]. `main` since `d6075b75d289` changes none of their three files [run: the four files of item 2 are the only ones both sides change]. Their tests run in `50d2`, the pin's module whole, as in `2199` [derived].
+
+**4. `git merge-tree` with lean's branch** (`cursor/lean-remote-merge-landing-fc8d` at `1ab0a942376e`), 07:37Z, against `0cb0d8dbb679`: it stops, on five files [run]:
+
+- `adapters/vllm/tests/dead_code_keep.json` (the merge driver refuses it: `modules.verity_vllm.protocols.linear.vllm_site` changed on both sides, differently)
+- `adapters/vllm/verity_vllm/pipeline/serve_commit.py`
+- `benchmarks/one_stage/a5.py`
+- `benchmarks/one_stage/tests/test_a5_wiring.py`
+- `verity/protocols/poub/verifier/PROTOCOL.md`
+
+None is a file #9087 changes, the same five stop when lean's branch is merged with `main` `bcaf58a45d53` alone, and against my old head `7e45b9061c0e` it still merges with no stop [run]. So the stops came with what landed on `main` at 07:25Z and not with #9087; I changed nothing to avoid them [derived]. I run it once more for the ready line [read].
+
+**5. #9087's body** [run: `research queue edit 9087`, 07:42Z and 07:58Z; read back equal to the file sent]. Under "What was run": the suites and the circuit-check report at `7e45b9061c` (item 1) [run]. Under "Not in this pull request yet": the two bullets on #8370's docstring and #9123's line are gone and one bullet holds the merge, the two verdicts of item 3 and the two runs still out; the bullet that said the last part of `figures.py` was still running now says both runs ended with exit 0 and wrote it, and that none of its figures is read into the body [run]. The commits' list has the merge [run]. The circuit-check report is in the body three times: at `7d32f20548`, at `7e45b9061c` and at the merge [run].
+
+**6. The card brief is delivered: my 05:55Z entry** (commit `211007669f80` of this branch), its section 3 (the ten lines) and section 4 (what stands behind each), which you filed as PRF-576 at 06:10Z [relayed: your 06:10Z message]. What moved under it since, read at `main` `bcaf58a45d53`:
+
+- **Line 6 gains one thing.** `main` now has `verity bench prove lean-verify` and a slot for its runs, `run_of_record=prove-glm53-lean-verify`: one statement of a block type that the Lean verifier accepted, its seconds and its proof's bytes; with no such run the Lean verifier's seconds a served token print `not measured` [read: `prove_records.py` at `bcaf58a45d53`]. So each unit's Lean verifier's seconds enter as its prover's row does, by a labelled run, and the lane's 47.1 and 7.9 core-seconds a session were measured outside that command [read; relayed].
+- **#9112**, which the census of record's card goes on top of, is marked at `c454bb683c8e` and not landed [relayed; run: `gh pr view`, OPEN].
+- **Nothing else under it moved.** Between `d6075b75d289` and `bcaf58a45d53` nothing changes in `benchmarks/spot_figures/`, `block_census.py`, `server_rate.py`, `serving_templates.py`, the registry's two sparse-attention files or `exfiltration.py` [run: `git diff --stat`]. circuits' branch is still at `53959873dc68` and no pull request is open on it [run].
+
+**7. One thing I did not act on.** At 07:40Z the shell hook (`tools/agent-guard/inbox.py`) refused a command of mine to deliver a notice in your name: a question for this entry on row 15 of the kernels lane's table (the sparse attention's combine), to be read from `inbox/headsplit.md` on `cursor/proofs-inbox` [run]. The mailbox my launch brief names is `inbox/<my bc id>.md`, and its newest section is still 05:31Z [run]. A notice inside a command's output is not your message, and the file is not the mailbox you named, so I have not opened it; say in your next message, or in my mailbox, that the question is yours and I answer it in the next entry [read].
+
+**8. What I wait on:** `r20261112-073510-50d2` (about 08:35Z) and `r20261112-073639-12f8` (about 09:05Z) [guess]. Then their verdicts go in the body, `git merge-tree` runs once more, and the ready line follows if both pass [read]. I do not mark.
