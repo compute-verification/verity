@@ -27,6 +27,7 @@ import operator
 import re
 import sys
 from collections import Counter, defaultdict
+from collections.abc import Callable
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -383,8 +384,8 @@ def _f(v, d=3):
 def render(s: dict) -> str:
     L = [f"Run {s.get('run_id', '?')}; clocks read, never set (default boost).", "",
          "## Forms (alone: least SMSP-cycles a PTX MMA over 2, 4 and 8 warps a SMSP, 8, 32 and 64 MMAs a loop iteration)", "",
-         "| form | SASS | slots | alone SMSP-cyc a MMA | slots/SM/clk | MACs/SM/clk | a, every program | a, IADD3+FFMA | "
-         "a, IADD3 (issue) | a, IADD3 (pipe) | a a slot vs IMMA.16832 | word | MHz clock64 / NVML |",
+         ("| form | SASS | slots | alone SMSP-cyc a MMA | slots/SM/clk | MACs/SM/clk | a, every program | a, IADD3+FFMA | "
+          "a, IADD3 (issue) | a, IADD3 (pipe) | a a slot vs IMMA.16832 | word | MHz clock64 / NVML |"),
          "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for k, f in s["forms"].items():
         nv = f["mhz_nvml"]
@@ -473,7 +474,7 @@ def census(outs: list[Path], ext: list[Path] = ()) -> tuple[str, str]:
     ext_runs: set[str] = set()
     issue_runs: set[str] = set()
 
-    def keep(d, k, v, run, better):
+    def keep(d: dict, k: str, v: float | None, run: str, better: Callable[[float, float], bool]) -> None:
         if v is None:
             return
         old = d.get(k)

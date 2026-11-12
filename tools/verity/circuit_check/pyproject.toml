@@ -142,11 +142,12 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
           "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/engine/spec.py",
           "adapters/vllm/verity_vllm/engine/__init__.py", "adapters/vllm/verity_vllm/engine/served_seed.py",
           "adapters/vllm/verity_vllm/llm.py", "adapters/vllm/verity_vllm/pipeline/program_graph.py",
-          # boundary_rows defines TemplateInlined_v1, which its sidecar binds; its template lookup imports serving_templates
-          # when a named target builds
+          # boundary_rows defines TemplateInlined_v1, which its sidecar binds; it imports boundary_tables, and its
+          # template lookup imports serving_templates when a named target builds
           "adapters/vllm/verity_vllm/pipeline/__init__.py", "adapters/vllm/verity_vllm/pipeline/boundary_rows.py",
           "adapters/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
           "adapters/vllm/verity_vllm/pipeline/serving_templates.py",
+          "adapters/vllm/verity_vllm/pipeline/boundary_tables.py",
           "adapters/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/protocols/spot/verifier/__init__.py",
           "verity/protocols/certifier/verifier/cache_step.py", "verity/protocols/certifier/verifier/cache_step.circuit-check.py",
@@ -186,7 +187,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py",
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_ambient.py", "tests/test_cache.py", "tests/test_structural.py"]
+tests = ["tests/test_ambient.py", "tests/test_cache.py", "tests/test_structural.py", "tests/test_structural_slots.py"]
 paths = [
     "benchmarks/numerical/python/verity_numerical/bench",
     "verity/protocols/certifier",
@@ -230,7 +231,7 @@ paths = [
 tests = ["tests/test_attention_split.py", "tests/test_attention_split_digests_*.py", "tests/test_bodies.py",
          "tests/test_declared_tables.py", "tests/test_metadata_files.py", "tests/test_named_targets.py",
          "tests/test_pinned_targets.py", "tests/test_ranges.py", "tests/test_split_prims_serve.py",
-         "tests/test_structural.py", "tests/test_targets.py"]
+         "tests/test_structural.py", "tests/test_structural_slots.py", "tests/test_targets.py"]
 paths = [
     "adapters/vllm/verity_vllm/engine/served_seed.py",
     "adapters/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
@@ -239,6 +240,10 @@ paths = [
     "adapters/vllm/verity_vllm/program/frontend/seed_rule.py",
     "adapters/vllm/verity_vllm/records/boundary_commit.py",
 ]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_targets.py"]
+paths = ["verity/protocols/flock/prover/python/verity_flock/struct_slots.circuit-check.py"]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_shard.py", "tests/test_split_prims_serve.py"]
