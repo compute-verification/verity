@@ -3714,16 +3714,19 @@ def test_a_dry_run_starts_no_records_run_judges_none_and_says_what_it_would(env)
     assert "(records run: pending) (its check waits for its records run)" in said and "would " not in said, said
 
 
+@pytest.mark.parametrize("rules, who", [(None, OWN), (AUTHORED, NAMED)], ids=["as its own", "as the rules' author"])
 @pytest.mark.parametrize("changes", [False, True])
-def test_end_to_end_on_a_lock_run_its_records_commit_lands_naming_each_statement_change_it_makes(env, changes):
+def test_end_to_end_on_a_lock_run_its_records_commit_lands_naming_each_statement_change_it_makes(env, changes, rules, who):
     """The real `vqueue_records` on a real Landing, faked only where it reaches a machine (the launch, the runs' states, their
     evidence and run dirs): a lock run runs on the Lean candidate's tree before its check and regenerates `pkg`'s records, and
     its records commit, a lock commit the merge gate vouches for, is checked and lands in the candidate's place.  When the regenerated records change guarantee T's statement, they land all the same, nobody rung or ejected, and
-    the records commit names the change with T's owner in the candidate's lock, as the spec DM shows it once it lands."""
+    the records commit names the change with T's owner in the candidate's lock, as the spec DM shows it once it lands.  The
+    candidate and its records commit are the queue's own, or the author's the rules at `main` name (`Rules.author`), and the
+    gate vouches for the records commit whichever made it."""
     from research.landing import LEAN_STEP, Landing
     from test_landing import _live_run, _steps_run
 
-    main = env.main()
+    main = _main_to(env, {"ci/queue.toml": rules}) if rules else env.main()
     lock = {"guarantees": {"T": {"owner": "@proofs"}}, "reads": {}}
     one = env.put(1, {"pkg/A.lean": "theorem a : True := trivial\n", "pkg/lean-audit.json": json.dumps(lock)})
     loop = env.loop(vqueue.decide, records=vqueue_records)
@@ -3741,7 +3744,7 @@ def test_end_to_end_on_a_lock_run_its_records_commit_lands_naming_each_statement
     built, started = loop.tick()
     sha, (rid,) = built["sha"], started["record"]["ids"]
     assert (built["base"], built["records_first"], started["record"]["tip"], launched) == (main, True, sha, [(sha, "m1")])
-    assert loop.tick() == [] and _checks(env) == []
+    assert loop.tick() == [] and _checks(env) == [] and _who(env.o.origin, sha) == who
     regenerated = json.dumps({**lock, "reads": {"Pkg.M": "2"}}) + "\n"
     states[rid] = ("done", 0, None)
     evidence.append(_steps_run(env.tmp, rid, {LEAN_STEP: "passed"}))
@@ -3754,6 +3757,7 @@ def test_end_to_end_on_a_lock_run_its_records_commit_lands_naming_each_statement
     judged, fixed = loop.tick()
     new = fixed["sha"]
     assert (judged["why"], fixed["repairs"], fixed["enqueued"], _checks(env)) == ("judged pass", sha, True, [f"ready:{new}"])
+    assert _who(env.o.origin, new) == who
     body = _git(env.o.origin, "log", "-1", "--format=%B", new)
     named = ["pkg: guarantee T: changed (@proofs)"] if changes else []
     assert body == lock_message("#1", rid, f"queue/{sha[:12]}", sha, [], ["pkg/lean-audit.json"], named).strip(), body
