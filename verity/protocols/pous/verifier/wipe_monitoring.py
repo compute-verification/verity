@@ -20,8 +20,8 @@ adaptive prover.
 No number here prices a PRF's advantage, and none assumes it away. The table says so beside each number that is short
 by it, in the same closing words (`UNPRICED`).
 
-`short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
-(`verity.protocols.reporting`), and T is the core's `block_count` (`verity.periods`).
+`short_sessions` is PoUB's too (`verity.protocols.poub.verifier.monitoring`). The periods and δs are the reporting
+grid's (`verity.protocols.reporting`), and T is the core's `block_count` (`verity.periods`).
 
 A wipe signed `UNCOUNTED` stays vacuous: `counted` refuses every `wipe-egress/v1` record (`REFUSED`), because the memory
 challenger signs its session's times on its monotonic clock and a record's window (`t0_unix_ns`, `t1_unix_ns`) is real
