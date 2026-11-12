@@ -6,10 +6,10 @@ public import Definitions.Core.Prob
 /-!
 # The compute dampener, remote protocol: the vocabulary
 
-The remote protocol's dampener (NCI, PoUW and network accounting, with no memory layer: `benchmarks/nci/tiers.py` at
-tiers T1 and T2, with no wipes and no sampling) is `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` with `ρ ≥ 1`. Its terms past
-`r̂` come from reading the monitored compute residual `r̂ = 1 − W_cert/C` (`residualShare`) against what the developer
-can do outside it:
+The remote protocol's dampener (NCI, PoUW and network accounting, with no memory layer:
+`verity/protocols/inference_only/nci/tiers.py` at tiers T1 and T2, with no wipes and no sampling) is
+`1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` with `ρ ≥ 1`. Its terms past `r̂` come from reading the monitored compute
+residual `r̂ = 1 − W_cert/C` (`residualShare`) against what the developer can do outside it:
 
 * the certificate slack `ε'`: PoUW certifies each window, and a window's certificate may be wrong, so the work certified
   correctly falls short of `W_cert` by at most the capacity of the windows whose certificates are wrong
@@ -25,9 +25,9 @@ PoUW's deficit `ε_W` (`CircuitCredit`'s `ε`) adds one more: a certificate that
 of its credited work that did not run, so the work certified correctly and run is at least `(1 − ε_W) W_cert`, and the
 residual read there is `r̂ + ε_W W_cert/C`.
 
-`remoteDampener` is the hardware multiple the bound gives, as `benchmarks/rho`'s `theorem.multiple_bound` computes it
-with `reference_efficiency=False` (`benchmarks/nci`'s compute dampener on `tiers.evaluate`'s terms);
-`hardwareMultiple` is the one a developer needs.
+`remoteDampener` is the hardware multiple the bound gives, as `verity/protocols/inference_only/rho`'s
+`theorem.multiple_bound` computes it with `reference_efficiency=False` (the slowdown on
+`verity/protocols/inference_only/nci`'s `tiers.evaluate` terms); `hardwareMultiple` is the one a developer needs.
 -/
 
 @[expose] public section
@@ -59,9 +59,9 @@ over the hardware-time an unconstrained developer at model-FLOP utilization `MFU
 multiplications, `(2/κ) M/MFU₀`; at least 1, since the unconstrained developer has the same recipe and hardware. -/
 noncomputable def hardwareMultiple (mfu κ M C U : ℝ) : ℝ := max 1 (mfu / efficiency κ M C U)
 
-/-- **The dampener** `ρ = max(1, 1/(s + x/MFU₀))` (`benchmarks/rho`'s `theorem.multiple_bound` with
-`reference_efficiency=False`; at `s = 0` it is `max(1, MFU₀/x)`): unmonitored compute, the share `s`, trains like the
-unconstrained developer, at `MFU₀`, and the other terms `x` are counted at peak. -/
+/-- **The dampener** `ρ = max(1, 1/(s + x/MFU₀))` (`verity/protocols/inference_only/rho`'s `theorem.multiple_bound`
+with `reference_efficiency=False`; at `s = 0` it is `max(1, MFU₀/x)`): unmonitored compute, the share `s`, trains like
+the unconstrained developer, at `MFU₀`, and the other terms `x` are counted at peak. -/
 noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))
 
 end Nci.Dampener
