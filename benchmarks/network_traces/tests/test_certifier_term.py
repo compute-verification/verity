@@ -307,7 +307,7 @@ def test_the_counts_schedule_is_the_cost_runners_by_default_and_each_part_is_an_
     the count at beside its own."""
     import connection_rows_run as CR
     cost = CR.parser().parse_args(["cost", "--out", "x"])
-    assert (len(cost.classes), cost.delay, cost.lanes, cost.window) == (6, 30, 16, 600)
+    assert (len(CR.CLASSES), cost.delay, cost.lanes, cost.window) == (6, 30, 16, 600)
     assert (LB.CLASSES, LB.DELAY, LB.COST_LANES, LB.COST_BUCKETS) == (6, 30, 16, 600)
     assert CR.__file__ == str(ROOT / LB.COST_RUNNER) and "ingress_buckets=args.delay" in Path(CR.__file__).read_text()
     inp = LB.inputs()
@@ -342,21 +342,36 @@ def test_the_count_is_the_schedules_bound_on_a_phases_releases_by_class():
         assert (least.lanes, least.releases, least.given) == (lanes, 2 * lanes, False)
         assert least.releases >= least.load > 2 * (lanes - 1) or not requests
         assert least.bits == 6 * math.log2(2 * lanes + 1)
-    # given lanes are the schedule's, whatever a link serves
-    for lanes in (1, 4, 5, 512):
+    # given lanes are the schedule's where it releases what a link serves, and are refused where it releases fewer
+    for lanes in (5, 6, 512):
         given = LB.counted(small(lanes=lanes))
         assert (given.lanes, given.releases, given.given, given.load) == (lanes, 2 * lanes, True, 10)
         assert given.bits == 6 * math.log2(2 * lanes + 1)
+    for lanes in (1, 4):
+        with pytest.raises(ValueError, match=f"a schedule of {lanes} lanes releases at most {2 * lanes} connections "
+                                             "in an execution phase, fewer than the 10 a link serves in one, so it "
+                                             "does not serve the load the rows count: give at least 5 lanes "
+                                             r"\(--lanes\), or none for the least"):
+            LB.counted(small(lanes=lanes))
     # the classes, the delay and the ingress buckets are the schedule's
     assert LB.counted(small(classes=1)).bits == math.log2(11) and LB.counted(small(classes=0)).bits == 0
     assert LB.counted(small(delay=7, ingress_buckets=1)) == LB.Count(6, 3, False, 12, 10, 6 * math.log2(13))
     wide, narrow = LB.counted(small(delay=7)), LB.counted(small(delay=60, ingress_buckets=20))
     assert (wide.lanes, wide.releases) == (2, 10) and (narrow.lanes, narrow.releases) == (10, 10)
     # at the command's own class and load
-    for inp, lanes in ((LB.inputs(), 36), (LB.inputs(response_ids=1_024), 36), (LB.inputs(lanes=16), 16)):
+    for inp, lanes in ((LB.inputs(), 36), (LB.inputs(response_ids=1_024), 36), (LB.inputs(lanes=36), 36),
+                       (LB.inputs(lanes=64), 64)):
         at = LB.counted(inp)
         assert 1_540 < at.load < 1_541 and (at.lanes, at.releases) == (lanes, 43 * lanes)
-        assert at.bits == 6 * math.log2(43 * lanes + 1) and (at.releases >= at.load) == (lanes == 36)
+        assert at.bits == 6 * math.log2(43 * lanes + 1) and at.given == (inp["lanes"].value is not None)
+    # the cost runner's 16 lanes release 688 in the command's execution phase, fewer than a link serves there
+    for lanes, releases in ((16, "688"), (35, "1,505")):
+        with pytest.raises(ValueError, match=f"a schedule of {lanes} lanes releases at most {releases} connections in "
+                                             "an execution phase, fewer than the 1,540 a link serves in one, so it "
+                                             r"does not serve the load the rows count: give at least 36 lanes \(--l"):
+            LB.table(LB.inputs(lanes=lanes))
+    with pytest.raises(ValueError, match="releases at most 688 connections"):
+        LB.main(["--lanes", "16"])
 
 
 def test_the_count_is_charged_by_link_on_the_designs_rows_and_on_no_other():
@@ -368,7 +383,7 @@ def test_the_count_is_charged_by_link_on_the_designs_rows_and_on_no_other():
     assert not LB.Kind("on main", (), "a row").count and LB.Terms(1, 2, 3, 4).count == 0
     assert LB.Terms(1, 2, 3, None, 5).certifier == 11
     rate = Fraction(1, 1_000)
-    for inp in (small(), small(failure_rate=rate, lanes=4), LB.inputs(),
+    for inp in (small(), small(failure_rate=rate, lanes=5), LB.inputs(),
                 LB.inputs(requests="census", failure_rate=rate), LB.inputs(world_requests=1e16, lanes=512, classes=3)):
         a_phase = LB.counted(inp).bits
         for (_, _, name), r in rows(inp).items():
@@ -387,32 +402,47 @@ def test_the_count_is_charged_by_link_on_the_designs_rows_and_on_no_other():
 
 def test_the_document_says_how_the_count_is_counted_and_the_lines_say_whether_it_is_over_the_target():
     """The document's ``count`` holds the schedule, R, the bits a class and a link's phase, the rows it is on, its
-    charge over the world's year beside the target, and the same rule at the cost runner's schedule: 336 releases
-    and 6 · log2 337 bits. Where the count alone is over the target no failure rate meets it, and the document's
-    rate is None; where it is not, the rate is the largest at which the failed connections' charge and the count
-    are within the target. A given schedule that releases fewer than a link serves is said not to serve the load."""
+    charge over the world's year beside the target, and the same rule at the cost runner's own schedule, which is
+    that runner's and no row's: its six classes, 336 releases and 6 · log2 337 bits, whatever the command's classes
+    are. The line names the schedule: its lanes and whether they are given or the least, R, the bits, and that the
+    classes, the delay and the ingress buckets are assumed, the cost runner's or as given. Where the count alone is
+    over the target no failure rate meets it, and the document's rate is None; where it is not, the rate is the
+    largest at which the failed connections' charge and the count are within the target. The two rows that hold the
+    lengths by a stop block and are not the design's say in their own lines why they are charged no count."""
     doc = LB.document(small())
     count, a_phase = doc["count"], 6 * math.log2(11)
     assert {k: v for k, v in count.items() if k not in ("world_year", "cost_runner")} == {
         "rows": [NO_STOP, "design"], "classes": 6, "lanes": 5, "lanes_given": False, "delay": 30, "ingress_buckets": 30,
-        "releases": 10, "holds_load": True, "bits_a_class": math.log2(11), "bits_a_phase": a_phase}
+        "releases": 10, "bits_a_class": math.log2(11), "bits_a_phase": a_phase}
     assert count["world_year"] == {"bits": a_phase * 739_125, "GB": a_phase * 739_125 / LB.GB,
                                    "of_target": a_phase * 739_125 / (300 * LB.GB)}
-    assert count["cost_runner"] == {"lanes": 16, "buckets": 600, "delay": 30, "ingress_buckets": 30, "releases": 336,
-                                    "bits_a_phase": 6 * math.log2(337)}
+    runner = {"classes": 6, "lanes": 16, "buckets": 600, "delay": 30, "ingress_buckets": 30, "releases": 336,
+              "bits_a_phase": 6 * math.log2(337)}
+    assert count["cost_runner"] == runner == LB.document(small(classes=2, delay=7, lanes=64))["count"]["cost_runner"]
     assert count["world_year"]["bits"] == next(r for r in doc["rows"] if (r["scope"], r["period"], r["row"]) == (
         "world", "year", "design"))["count"]["bits"]
     text = LB.render(doc).splitlines()
     said = next(line for line in text if line.startswith("The count, on the rows "))
+    theirs = (f"own schedule is not these rows': at its 16 lanes and its execution phase of 600 buckets, R = 336 and "
+              f"the count is {LB._n(6 * math.log2(337))} bits a link's execution phase.")
     assert said == (
         f"The count, on the rows `{NO_STOP}` and `design`: the head of a link's execution phase states how many of "
         "its releases each of 6 content classes holds, one of R + 1 values a class, so a link's execution phase is "
         f"charged 6 x log2(R + 1) = {LB._n(a_phase)} bits, whatever it serves. R = 10 is the most connections a "
         "schedule of 5 lanes releases in an execution phase: 5 x ⌈(32 + 30 - 1) / (30 + 1)⌉. No lanes are given "
         "(--lanes), so they are the least whose schedule releases the 10 requests a link serves in an execution "
-        "phase, the least the rule can charge at this load. At the lengths rows' cost runner's schedule, 16 lanes "
-        f"and an execution phase of 600 buckets, R = 336 and the count is {LB._n(6 * math.log2(337))} bits a link's "
-        "execution phase.")
+        "phase, the least the rule can charge at this load. The classes, the delay and the ingress buckets are "
+        f"assumed, at the values of the lengths rows' cost runner. That runner's {theirs}")
+    given = LB.render(LB.document(small(classes=2, delay=7, lanes=64)))
+    assert ("R = 320 is the most connections a schedule of 64 lanes releases in an execution phase: 64 x ⌈(32 + 7 - 1) "
+            "/ (7 + 1)⌉. The lanes are given (--lanes). The classes, the delay and the ingress buckets are assumed, "
+            f"as given. The lengths rows' cost runner's {theirs}") in given
+    for name in ("lengths", "all three"):
+        own = next(line for line in text if line.startswith(f"- {name} (a change to the scan): "))
+        assert own.endswith("; it is charged no count: its tables are of the lengths rows' form 1, the schedule's "
+                            "rows whatever the load, so the head states none")
+    assert {name for name, kind in LB.ROWS.items() if LB.NO_COUNT in kind.counts} == {"lengths", "all three"}
+    assert not any(LB.ROWS[name].count for name in ("lengths", "all three"))
     held = next(line for line in text if line.startswith("With the lengths held by a stop block and the release "))
     assert doc["failure_rate_at_target"] == 1.0 and (
         "(simulated), the design's term over the world's year is the failed connections' charge and the count. The "
@@ -430,13 +460,11 @@ def test_the_document_says_how_the_count_is_counted_and_the_lines_say_whether_it
         assert (f"The count alone is {LB._n(over['GB'])} GB, {LB._n(over['of_target'])} times the target, so the "
                 "world's year meets the target at no failure rate. Without that card the jitter alone, ") in held
     assert LB.document(LB.inputs())["count"]["world_year"]["of_target"] > 300
-    # a given schedule that releases fewer than a link serves
-    few = LB.document(small(lanes=4))
-    assert (few["count"]["lanes"], few["count"]["lanes_given"], few["count"]["releases"]) == (4, True, 8)
-    assert not few["count"]["holds_load"] and (
-        "The lanes are given (--lanes): that schedule releases fewer than the 10 requests a link serves in an "
-        "execution phase, so it does not serve this load. At the lengths rows' cost runner's ") in LB.render(few)
-    assert LB.document(small(lanes=5))["count"]["holds_load"] and "does not serve" not in LB.render(doc)
+    # a given schedule that releases fewer than a link serves is refused, and the least that does is not
+    with pytest.raises(ValueError, match="a schedule of 4 lanes releases at most 8 connections"):
+        LB.document(small(lanes=4))
+    held = LB.document(small(lanes=5))["count"]
+    assert (held["lanes"], held["lanes_given"], held["releases"]) == (5, True, 10)
 
 
 def test_the_set_time_card_is_an_input_marked_simulated_and_the_documents_figure_carries_its_mark():
@@ -610,8 +638,8 @@ def test_the_document_names_its_value_unit_commit_and_run(capsys):
     assert "| lanes " in text and "| none " in text
     assert f"| world | year   | all three, {CARD} |" in LB.render(few) and "| node" not in LB.render(few)
     assert LB.render(LB.document(small())).splitlines()[2] == "commit unknown, run none"
-    slots = LB.document(small(lanes=4))
-    assert "4 lanes x 2 strides" in slots["entries_rule"] and "by capacity" in slots["entries_rule"]
+    slots = LB.document(small(lanes=5))
+    assert "5 lanes x 2 strides" in slots["entries_rule"] and "by capacity" in slots["entries_rule"]
 
 
 def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_d_j_1_carries_its_label():
@@ -620,7 +648,7 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
     the term without the jitter is beside it only under the label, in the document and in each table's headers."""
     label = "with a simulated set-time card"
     assert (LB.OF_RECORD, LB.SET_TIME) == (2, label) and LB.OF_RECORD in LB.JITTERS
-    for given in ({}, {"failure_rate": Fraction(1, 100), "lanes": 4}):
+    for given in ({}, {"failure_rate": Fraction(1, 100), "lanes": 5}):
         for doc in (LB.document(small(**given)), LB.document(small(**given), only=["node"], periods=["week"])):
             assert (doc["value"], doc["unit"]) == ((2 * 73_912_500 + 739_125 * 32) / LB.GB, "GB")
             assert doc["with_set_time_card"] == {"value": 2 * 73_912_500 / LB.GB, "unit": "GB", "label": label,
@@ -711,7 +739,7 @@ def test_a_row_that_rests_on_the_set_time_card_carries_the_label():
     carries = {name for name, kind in LB.ROWS.items() if "timing" in (kind.changes or ())}
     assert carries == {"timing", "all three"}
     rate = Fraction(1, 10 ** 6)
-    for inp in (small(), small(failure_rate=Fraction(1, 100), lanes=4), LB.inputs(), LB.inputs(failure_rate=rate),
+    for inp in (small(), small(failure_rate=Fraction(1, 100), lanes=5), LB.inputs(), LB.inputs(failure_rate=rate),
                 LB.inputs(requests="census"), LB.inputs(world_requests=1.778e16, response_ids=1_024)):
         doc = LB.document(inp)
         assert len(doc["rows"]) == 72 and [r["row"] for r in doc["rows"][:8]] == list(NAMES)

@@ -155,9 +155,11 @@ with none given it moves only as the least lanes that serve them do.
   - The lanes are the input the entries read (`--lanes`). With none given the schedule is not known, so the count
     is at the least lanes whose schedule releases what a link serves in an execution phase: any schedule that
     serves the load releases at least as many, so it is the least the rule can charge. With lanes given the count
-    is at them, and the lines above the tables say so where that schedule releases fewer than a link serves.
-  - The rows `lengths` and `all three` carry no count: they say that a stop block holds a response's output count
-    to its ids, and not that its tables are a class's held rows.
+    is at them. Lanes whose schedule releases fewer than a link serves in an execution phase are refused, with both
+    numbers and the least lanes that do: the rows would count a schedule that does not carry the connections they
+    charge.
+  - The rows `lengths` and `all three` are charged no count, and each says so in its own line: its tables are of
+    the lengths rows' form 1, the schedule's rows whatever the load, so the head states none.
 - **term**: the four summed, the network certifier's own term, at each D_j. The term of record is the one at
   D_j = 2. The one at D_j = 1 is printed beside it only as "with a simulated set-time card", never as the
   term.
@@ -193,8 +195,10 @@ with none given it moves only as the least lanes that serve them do.
 The lines above the tables give the rule for the term of record, that the card is simulated, and the rule for the
 rows that carry the label, each row's rule, one link's execution phase (its requests, a connection's bits, N2's
 schedules, the jitter at each D_j, a slot entry's bits), the count (its rows, its bits a link's execution phase, R
-and the schedule R is of, and the same rule at the cost runner's own schedule, 16 lanes and an execution phase of
-600 buckets), and the target as bits a link's execution phase and a request over the world's year. Then they say
+and the schedule R is of: its lanes, given or the least, and its classes, delay and ingress buckets, the cost
+runner's or as given; and the same rule at the cost runner's own schedule, 16 lanes and an execution phase of 600
+buckets, which is that runner's and not these rows'), and the target as bits a link's execution phase and a request
+over the world's year. Then they say
 what the design's term over the world's year is with the release times taken once by a network certifier whose
 network card releases at a set time (simulated), the failed connections' charge and the count: the largest failure
 rate at which it meets the target, the document's `failure_rate_at_target`, or, where the count alone is over the
@@ -202,9 +206,9 @@ target, that no failure rate meets it, and the document's rate is null. Last the
 without that card, at D_j = 2 over the world's year, in GB and as a multiple of the target.
 
 The document's `count` holds how the count is counted: its rows, the schedule (`classes`, `lanes` and whether they
-were given, `delay`, `ingress_buckets`), R as `releases`, whether that schedule releases what a link serves
-(`holds_load`), the bits a class and a link's execution phase, its charge over the world's year beside the target,
-and the cost runner's schedule's R and bits. Each row holds its own `count`, in bits and GB.
+were given, `delay`, `ingress_buckets`), R as `releases`, the bits a class and a link's execution phase, its charge
+over the world's year beside the target, and the cost runner's own schedule with its R and bits (`cost_runner`).
+Each row holds its own `count`, in bits and GB.
 
 ## Where the scale comes from
 
