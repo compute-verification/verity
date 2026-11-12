@@ -36,9 +36,9 @@ ceil(p X / B) for X of its units sampled); every other unit keeps its dp4 bucket
 every session's slots to its template. dp4t keys the body's buckets by (template class, Z): registered types by their
 registered unit's template (every GEMM tc step one class, at every K), generic types by their whole subcircuit's, each
 class within a factor of two; at most :data:`BUCKETS_T` buckets, the dp on Z within each class. A class sampled fewer than
-:data:`RARE_DRAWS` times per audit is rare: each of its types a bucket of its own, at B = 1 or 16, with the public count at
+:data:`RARE_SAMPLES` times per audit is rare: each of its types a bucket of its own, at B = 1 or 16, with the public count at
 its 1 − 2⁻⁴⁰ quantile, like the tail. The menu stays fixed per model. The caps are dp4's (the cap search's session holds
-the workload's largest templates). The what-if registers every generic body type sampled at least :data:`RARE_DRAWS` times
+the workload's largest templates). The what-if registers every generic body type sampled at least :data:`RARE_SAMPLES` times
 as a tc-step-like unit.
 
 **Staging** (:func:`staging`), once per template shape, apart from proving: building the circuit text and the instances
@@ -87,10 +87,10 @@ CAP_SEARCH = tuple(range(16, 41))
 #: ρ for the power-of-two table: RoPE's and RMSNorm's registered layouts (GEMM's is 27.9, attention's 27.9-29.6)
 RHO_TABLE = 26.5
 MENU_K = 4
-#: ``dp4t``: at most this many body buckets, keyed by (template class, Z); a class sampled fewer than :data:`RARE_DRAWS` times
+#: ``dp4t``: at most this many body buckets, keyed by (template class, Z); a class sampled fewer than :data:`RARE_SAMPLES` times
 #: per audit (mean) is rare, each of its types a bucket of its own at B = 1 or 16 (whichever costs less at the public count)
 BUCKETS_T = 8
-RARE_DRAWS = 16
+RARE_SAMPLES = 16
 #: candidate 3's slot sumcheck, measured by proofs' K1 on vy-nebius-2's 32 threads (upper bounds,
 #: Lean builds loaded the node): ns per entry per rep at ν = 20 and 28, the middle of wide-Morton (the band's low end) and
 #: uniform columns (its high end, the worst case); reps; the committed bits' bytes per entry (8; 64 encoded at rate 1/8);
@@ -482,7 +482,7 @@ def template_class(u: P.Unit, nets: Mapping[str, Mapping[str, Any]] | None) -> t
 
 
 def menu_t(N: int, K: int, units: Sequence[P.Unit], nets: Mapping[str, Mapping[str, Any]] | None,
-           budget: int = BUCKETS_T, rare: float = RARE_DRAWS) -> tuple[list[tuple[tuple[str, int], float, list[P.Unit]]],
+           budget: int = BUCKETS_T, rare: float = RARE_SAMPLES) -> tuple[list[tuple[tuple[str, int], float, list[P.Unit]]],
                                                                        list[P.Unit]]:
     """``dp4t``: the body's buckets keyed by (template class, Z), and its rare types. Every GEMM tc step shares one class
     (one registered unit at every K). A class sampled at least ``rare`` times per audit gets one bucket, and the rest of
@@ -553,7 +553,7 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
              staging_coef: Mapping[str, Sequence[float]] | None = None, menu: str = "dp4", register_bulk: bool = False,
              **kw: Any) -> dict[str, Any]:
     """One workload's audit under ``menu``, unsplit and at each cap. ``register_bulk``: a what-if with every generic body
-    type sampled at least :data:`RARE_DRAWS` times per audit registered as a GEMM tc-step-like unit (its template, circuit
+    type sampled at least :data:`RARE_SAMPLES` times per audit registered as a GEMM tc-step-like unit (its template, circuit
     text and staging those of one tc step)."""
     K = int(inv["K"])
     N, units, skipped = P.units_of(inv, name)
@@ -565,7 +565,7 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
         tc = {"kind": "registered", "nnz": TC_STEP_NNZ, "bytes": kw.get("bytes_per_nnz", BYTES_PER_NNZ) * TC_STEP_NNZ,
               "ands": REGISTERED_STAGING[0][3]}
         for u in body:
-            if u.label in nets and nets[u.label]["kind"] == "generic" and K * u.n / N >= RARE_DRAWS:
+            if u.label in nets and nets[u.label]["kind"] == "generic" and K * u.n / N >= RARE_SAMPLES:
                 nets[u.label] = dict(tc)
                 registered.append(u.label)
     for net in nets.values():
@@ -712,7 +712,7 @@ def _menu_table(pr: Mapping[str, Any]) -> list[str]:
          "Prover hours per audit at the node cap and the slot sumcheck's share; buckets body + rare + tail; the heaviest "
          "session at the node cap (Z, its largest template, prove + sumcheck, peak); the caps; the body's padding unsplit "
          "(zpad, pad_mean, public, as in the padding table, the rare buckets included); the types the what-if registers "
-         f"(generic body types drawn at least {RARE_DRAWS} times per audit, each as one GEMM tc step's template).", "",
+         f"(generic body types sampled at least {RARE_SAMPLES} times per audit, each as one GEMM tc step's template).", "",
          "| workload | menu | buckets | prover h mean / public | sumcheck share | heaviest session | cap: node / GPU | "
          "zpad / pad_mean / public | registered |", "|" + "---|" * 9]
     for ws in zip(pr["workloads"], pr["workloads_dp4t"], pr["whatif_registered"]):
@@ -777,7 +777,7 @@ def render(pr: Mapping[str, Any]) -> str:
           "sumcheck) on one prover, body and tail, mean / public session counts. Staging: the dp4 top bucket's largest "
           "template shape, and the largest of every shape in the workload.", "",
           "| workload | dp4 top Z | top session k_log | top session prove | top session RSS | unsplit in range | cap: node / GPU | "
-          "units split at node cap (draw share) | sessions at node cap (mean / public) | prover h at node cap | "
+          "units split at node cap (share of the sample) | sessions at node cap (mean / public) | prover h at node cap | "
           "prover h at GPU cap | staging, dp4 top | staging, largest shape | staging fits node | staging all shapes |",
           "|" + "---|" * 15]
     for w in pr["workloads"]:
