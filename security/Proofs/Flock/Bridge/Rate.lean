@@ -17,11 +17,10 @@ least the rate at whatever sizes the prover registers. This file holds that step
   `k = Spot.Rate.count`, `stratified K` at `K = Spot.Rate.stratK` over the strata's sizes, and `work K` at floors
   `Spot.Rate.floor`;
 * `lawOn_rate`: under `LawOn law ns kd` and `RateOn num den law (Σ ns)`, `num · Σ ns ≤ den · kd`; `lawOn_rate_div`:
-  `num/den ≤ kd / Σ ns` in the reals, the hypothesis `q ≤ kd/n` a pooled statement takes, at `q = num/den`.
+  `num/den ≤ kd / Σ ns` in the reals (`rate_le_share`).
 
-Every pooled statement fixes each window's population before the period. A prover that picks a window's population
-after seeing earlier windows' coins is outside them. Under a rate the bound does not depend on the population, so the
-adaptive statement should hold; it is a different theorem and is not proved.
+The statements over a period of `SamplingBlock`s take a share `q ≤ kd/n` as a hypothesis and sample a uniform subset,
+so they read this at `subset k` alone (`Proofs.Flock.Bridge.RatePeriod`).
 -/
 
 @[expose] public section
@@ -100,12 +99,17 @@ theorem lawOn_rate {law : Flock.Draw.Law} {ns : List ℕ} {kd num den : ℕ} (h 
     rw [hk s hs]
     exact hr s hs
 
-/-- **The rate as a pooled statement reads it**: under `lawOn_rate`'s hypotheses, over a population that is not
-empty, `num/den ≤ kd / Σ ns`. -/
+/-- A count `kd` of `n` units, `n` not zero, with `num · n ≤ den · kd`, is at least the share `num/den` of them. -/
+theorem rate_le_share {num den n kd : ℕ} (h : num * n ≤ den * kd) (hd : 0 < den) (hn : 0 < n) :
+    (num : ℝ) / den ≤ (kd : ℝ) / n := by
+  rw [div_le_div_iff₀ (by exact_mod_cast hd) (by exact_mod_cast hn), mul_comm (kd : ℝ)]
+  exact_mod_cast h
+
+/-- **The rate as a share**: under `lawOn_rate`'s hypotheses, over a population that is not empty,
+`num/den ≤ kd / Σ ns`. -/
 theorem lawOn_rate_div {law : Flock.Draw.Law} {ns : List ℕ} {kd num den : ℕ} (h : LawOn law ns kd)
     (hr : RateOn num den law ns.sum) (hd : 0 < den) (hn : 0 < ns.sum) :
-    (num : ℝ) / den ≤ (kd : ℝ) / (ns.sum : ℕ) := by
-  rw [div_le_div_iff₀ (by exact_mod_cast hd) (by exact_mod_cast hn), mul_comm (kd : ℝ)]
-  exact_mod_cast lawOn_rate h hr
+    (num : ℝ) / den ≤ (kd : ℝ) / (ns.sum : ℕ) :=
+  rate_le_share (lawOn_rate h hr) hd hn
 
 end Flock.Bridge
