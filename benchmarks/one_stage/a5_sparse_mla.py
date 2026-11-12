@@ -58,7 +58,7 @@ def stand_in(units: bool) -> tuple[str, dict, list[str], dict[str, int]]:
     templates and each one's chunk size: the fixture's row in whole key blocks, or with ``units`` its row at DV = 64 in scores
     and values units."""
     tag, row, tmpls, chunk = ((b"verity/a5/sparse-mla-split-stand-in/units/v1", TS.row(TS.HALF), TS.UNITS_BITS, TS.UNITS_BITS_CHUNK)
-                              if units else (b"verity/a5/sparse-mla-split-stand-in/v1", TS.row(), TS.BITS, TS.BITS_CAPS))
+                              if units else (b"verity/a5/sparse-mla-split-stand-in/v1", TS.row(), TS.BITS, TS.BITS_PER_CHUNK))
     return hashlib.sha512(tag).hexdigest(), {"fixture": FIXTURE, "row": row}, tmpls, chunk
 
 

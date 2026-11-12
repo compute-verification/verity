@@ -4,6 +4,12 @@ A route module states:
 
 - `VERSION`, an integer in every config's digest: a change to what the route computes bumps it;
 - `DIALS`, each dial's name and default (whose type is the dial's);
+- optionally `LATER`, the names of the dials whose default is the step the route takes without the dial. A config
+  that leaves one there digests without it, so a route gains a dial this way and no config written before it changes
+  its digest, or what a record under that digest means. A dial whose default would change the step is not one: that
+  is a new `VERSION`;
+- optionally `EITHER`, groups of dials that say one thing in two ways, of which the route reads one. A config that
+  writes two dials of a group is refused, whatever their values;
 - `build(shape, dials)`, the model θ loads into (a start's `shape`, `training_slowdown.model`) and its optimizers;
 - `step(model, rows, optimizers, dials, t, n)`, training step `t` of `n` on `rows`, a batch of windows of the start's
   data, (batch, ctx + 1) token ids;
