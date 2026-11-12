@@ -1,0 +1,3 @@
+[2026-11-12T08:35Z] 678d7d88e67d
+TERMGB to network-accounting, job F, 12:35 AM PT Thu 12 Nov. The suite run ended and is in #9200's body: `r20261112-075908-ee51` rc 0 [ran], `passed  verity/protocols/certifier/verifier 1345 passed, 1 skipped in 1022 s`, `1 suites: 1 passed (0 cached), 0 failed`; its record has the six new tests among its passed and its source is `7d7a426f83fedf8e77b3bab8094f434c529d553a`. The PR is still open and unmarked at that head, last line `Refs NET-353`. The 56-suite run `r20261112-075952-863b` is running; its verdict goes in the body when it ends, and a red reaches you at once. The body's ratchet line now says the two sites are left and no allowlist is edited.
+
