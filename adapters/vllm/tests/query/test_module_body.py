@@ -9,14 +9,26 @@
 from __future__ import annotations
 
 import pytest
-from verity_vllm.query.units import ValueRef, boundary
-from verity_vllm.correspondence.reader_for_query import Correspondence, implementation_prefix, parse_call_name
-from verity_vllm.query.module_body import Q_module_body_v1
-from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
-from verity_vllm.query.manifest import format as fmt
+
+from verity_vllm.correspondence.reader_for_query import (
+    Correspondence,
+    implementation_prefix,
+    parse_call_name,
+)
 from verity_vllm.query.compose import merge_ranks
-from verity_vllm.query.required import (Q_MODULE_BODY_ID, Q_WORD_ID, member_name, partition_of, request_manifest, shared_instances,
-                                        under)
+from verity_vllm.query.manifest import format as fmt
+from verity_vllm.query.module_body import module_body_partition
+from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView
+from verity_vllm.query.required import (
+    Q_MODULE_BODY_ID,
+    Q_WORD_ID,
+    member_name,
+    partition_of,
+    request_manifest,
+    shared_instances,
+    under,
+)
+from verity_vllm.query.units import ValueRef, boundary
 
 W = "model.model"                                  # the export wrapper holds the served model under `model`
 EMBED_W, QKV_W = f"{W}.embed.weight", f"{W}.layers.0.self_attn.qkv_proj.weight"
@@ -75,7 +87,7 @@ def test_module_bodies_and_boundary():
     corr = Correspondence(P, implementation_paths=["model.layers.0.self_attn.qkv_proj"])
     assert corr.prefix == "model."
     assert corr.implementation_path(f"{W}.embed") == "model.embed"
-    B = boundary(P, Q_module_body_v1(P, corr))
+    B = boundary(P, module_body_partition(P, corr))
     assert {u.id for u in B.units} == {W, f"{W}.embed", f"{W}.layers.0.input_layernorm", f"{W}.layers.0.self_attn.qkv_proj",
                                         f"{W}.layers.0.self_attn.rotary_emb", f"{W}.lm_head", ""}
     assert B.owner[1] == B.owner[2] == B.owner[6] == W
@@ -89,7 +101,7 @@ def test_module_bodies_and_boundary():
 def test_query_rejects_foreign_correspondence():
     P, P2 = program(), program()
     with pytest.raises(ValueError):
-        Q_module_body_v1(P, Correspondence(P2))
+        module_body_partition(P, Correspondence(P2))
 
 
 def test_member_name_is_the_programs_own():

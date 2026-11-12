@@ -11,7 +11,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
 from verity.definitions.numerics import derived_rows as DR
@@ -19,6 +18,7 @@ from verity.definitions.numerics import rows
 from verity.definitions.numerics.dsa_norm_rows import block_rmsnorm_rows
 from verity.definitions.registry import dsa_norm
 from verity.definitions.registry.prims import bits_of
+
 from verity_vllm.query.manifest import format as RM
 
 FIXTURE = json.loads((Path(__file__).with_name("fixtures") / "dsv4_q_norm_commit_20261021.json").read_text())

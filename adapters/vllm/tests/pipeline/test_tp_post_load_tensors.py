@@ -14,10 +14,10 @@ pytest.importorskip("torch")
 
 import torch
 
-from verity_vllm.observe.capture import Capture, ObserverConfig
-from verity_vllm.pipeline.tp.rank_worker import register_post_load_tensors
-from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.check.component_programs import post_load_tensors
+from verity_vllm.observe.capture import Capture, ObserverConfig
+from verity_vllm.pipeline.row_driver import Stop
+from verity_vllm.pipeline.tp.rank_worker import register_post_load_tensors
 
 NAME = "model.layers.0.hc_attn_fn_broadcast"
 

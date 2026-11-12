@@ -86,6 +86,35 @@ class Spec:
     reads: int = 0
     copies: list = field(default_factory=list)
     index: int = -1
+    #: its table reads as `Site`s, for a lowering that lays them out in lookup slots (`struct_slots`)
+    sites: list = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Site:
+    """A table read in a Definition's rows: its table, each index bit's references and the value's width, each live value
+    bit not constant over the table with the column holding it, and the read's columns ``[lo, hi)``: its inline rows, or
+    (``slot``) only its value bits, which a lookup slot gives."""
+
+    table: str
+    idx: tuple[tuple[int, ...], ...]
+    width: int
+    vals: tuple[tuple[int, int], ...]
+    lo: int
+    hi: int
+    slot: bool
+
+
+class _SlotRead:
+    """A read whose value a lookup slot gives (`struct_slots`): only its live value bits' columns, which no row writes, and
+    a library table's bits constant over the table folded, as `ir_lower._Read` folds them."""
+
+    def __init__(self, C: Circuit, g: int, bits: list[int], at: int):
+        self.table, self.idx, _w = C.lookups[g]
+        self.const_bits = IL.table_const_bits(self.table, bits)
+        self.bits = [j for j in bits if j not in self.const_bits]
+        self.at, self.rows = at, len(self.bits)
+        self.out_col = {j: at + t for t, j in enumerate(self.bits)}
 
 
 @dataclass(slots=True)
@@ -195,8 +224,10 @@ def _operand_bits(C: Circuit, words: list[list[L]]) -> tuple[tuple, list[int]]:
 
 class _Lowerer:
     def __init__(self, circuit, support: int = SUPPORT, fold_cap: int = FOLD_CAP, fold_gates: int = FOLD_GATES,
-                 column_order: bool = True, gather: bool = True, prim_calls: int | None = PRIM_CALL_ANDS):
+                 column_order: bool = True, gather: bool = True, prim_calls: int | None = PRIM_CALL_ANDS,
+                 slots: dict[str, tuple[int, int]] | None = None):
         self.circuit = circuit
+        self.slots = slots or {}
         self.in_column_order = column_order
         self.gather = gather
         self.support = support
@@ -426,7 +457,10 @@ class _Lowerer:
             else:
                 g, j = data[v]
                 if g not in reads:
-                    reads[g] = IL._Read(C, g, sorted(value_bits[g]), n)
+                    t, idx, w = C.lookups[g]
+                    slot = self.slots.get(t)
+                    Rd = _SlotRead if slot is not None and slot[0] == len(idx) and w <= slot[1] else IL._Read
+                    reads[g] = Rd(C, g, sorted(value_bits[g]), n)
                     n += reads[g].rows
                 if j in reads[g].const_bits:
                     const_bit[v] = reads[g].const_bits[j]
@@ -471,6 +505,8 @@ class _Lowerer:
             sp.rows.sort(key=lambda r: r[0])
             sp.refs += nrefs
         sp.reads = len(reads)
+        sp.sites = [Site(r.table, tuple(refs(f) for f in r.idx), C.lookups[g][2], tuple((j, r.out_col[j]) for j in r.bits),
+                         r.at, r.at + r.rows, isinstance(r, _SlotRead)) for g, r in reads.items()]
 
         def ret(t: tuple) -> tuple:
             if t[0] == "c":
@@ -515,6 +551,8 @@ def _read_rows(reads: dict, refs, K: int) -> tuple[list, int]:
     list of ints, so a read's tens of millions of references share 2^lo int objects."""
     out, nrefs = [], 0
     for r in reads.values():
+        if isinstance(r, _SlotRead):
+            continue
         ra: dict[int, list] = {}
         rb: dict[int, list] = {}
         r.fill(ra, rb, lambda f: list(refs(f)))
@@ -592,14 +630,16 @@ class Ports:
 
 def lower(target, support: int = SUPPORT, name: str = "unit", fold_cap: int = FOLD_CAP,
           fold_gates: int = FOLD_GATES, column_order: bool = True, gather: bool = True,
-          ports: Ports | None = None, prim_calls: int | None = PRIM_CALL_ANDS) -> tuple[T.Tmpl, _Lowerer, Spec]:
+          ports: Ports | None = None, prim_calls: int | None = PRIM_CALL_ANDS,
+          slots: dict[str, tuple[int, int]] | None = None) -> tuple[T.Tmpl, _Lowerer, Spec]:
     """``target`` (a bound composite) as a templated unit: one input group, its root's copy, one output group, the constant
     last (``ir_lower.layout``'s order). The input group is the argument leaves and the output group one port of the return
     leaves, or ``ports``' ports. ``prim_calls``: a primitive node whose piece is at least this many ANDs is a call (None: only
-    a table read is)."""
+    a table read is). ``slots``: a read of a table it maps to ``(index bits, most value bits)``, at those widths, is a
+    `_SlotRead`, its value columns written by no row, for `struct_slots` to split out (each Definition's `Spec.sites`)."""
     sys.setrecursionlimit(100000)
     _prog, root = IL.standalone(target)
-    lw = _Lowerer(root.circuit, support, fold_cap, fold_gates, column_order, gather, prim_calls)
+    lw = _Lowerer(root.circuit, support, fold_cap, fold_gates, column_order, gather, prim_calls, slots)
     args = list(dict.fromkeys(root.args))
     widths = [IL._width(root.circuit.gate(a).prim) for a in args]
     C = Circuit()

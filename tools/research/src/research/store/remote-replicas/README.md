@@ -53,12 +53,13 @@ to set). `research run` reports which of the three happened: `PRESERVED on the r
 ## PRESERVED, and how `push` checks it
 
 **PRESERVED** means: for the manifest and every blob, the remote holds an object of the right size whose content was checked,
-by one of two checks, and the replica record (`replicas.verified`) says which:
+by one of three checks, and the replica record (`replicas.verified`) says which:
 
 ~~~text
 etag-md5          `push --verify head` (default): HEAD after upload; Content-Length == bytes and the single-part ETag == hex MD5 of
-                  the local bytes (S3 and R2 make a single-PUT object's ETag its MD5; a `-` in the ETag marks multipart, which is not
-                  an MD5, and such an object falls back to read-back). One extra round trip per object.
+                  the local bytes (S3 and R2 make a single-PUT object's ETag its MD5). One extra round trip per object.
+etag-multipart    the same HEAD for an object uploaded in parts: its ETag == the one the local file's parts yield (the MD5 of
+                  the parts' MD5s); an ETag the client can't reproduce falls back to read-back.
 sha256-readback   `push --verify readback`, `verify`, `put --preserve`'s manifest: download and sha256 against the manifest.  Costs
                   the object's bytes again.  Manifests are always read back (they are small); blobs on request.
 ~~~

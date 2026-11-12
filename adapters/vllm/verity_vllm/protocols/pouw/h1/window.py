@@ -31,14 +31,20 @@ from __future__ import annotations
 import contextlib
 import json
 import time
-from typing import Any, Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
+from typing import Any
 
 from verity.protocols.pouw.verifier import credit as CR
 from verity.protocols.pouw.verifier import salt as PS
 from verity.protocols.pouw.verifier import window as Wd
 from verity.protocols.pouw.verifier.audit import salt_of
 from verity.protocols.spot.device import remote
-from verity.protocols.spot.device.challenger import CoinError, LiveCommitment, LiveOpening, LiveRecord
+from verity.protocols.spot.device.challenger import (
+    CoinError,
+    LiveCommitment,
+    LiveOpening,
+    LiveRecord,
+)
 
 from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
