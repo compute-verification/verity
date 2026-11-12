@@ -101,7 +101,15 @@ if "rows" in lst["by"].get("eager", {}) and "rows" in lst["by"].get("compiled", 
 put("list.json", lst)
 if not fns:
     sys.exit(2)
-IDS = [r["id"] for r in lst["by"]["eager"]["rows"]]
+#: names outside the list, swept the same way: Friday's select at vllm's binding (NET-390, 12:19 PM PST)
+EXTRA = ["GreedySelect_v1{V=154880,N=7744}"]
+for x in EXTRA:
+    try:
+        from verity_vllm.pipeline.serving_rows import template as _tpl
+        fns[x] = _tpl(x).fn
+    except Exception as e:  # noqa: BLE001
+        say("extra", x, "names no template:", err(e))
+IDS = [r["id"] for r in lst["by"]["eager"]["rows"]] + [x for x in EXTRA if x in fns]
 
 # ---- ranks ---------------------------------------------------------------------------------------------------------------
 ranks: dict = {}
@@ -231,6 +239,8 @@ blocks_wanted = set()
 for tid in IDS:
     fam = spec_base(tid)
     blocks_wanted |= {d for d, v in CARD.items() if fam in v["of"]}
+    if tid in EXTRA:
+        blocks_wanted |= {u for u, _n in cuts.get(tid, {}).get("units", []) if u != tid}
 for tid in IDS:
     if rss_gb() > GUARD_GB:
         stopped = f"stopped at template {tid}: {rss_gb():.1f} GiB"
