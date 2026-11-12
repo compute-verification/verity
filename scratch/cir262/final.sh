@@ -2,7 +2,8 @@
 # on the final head, in a clone:
 #  1. the capture of record (inputs/capture.tar: sass/ and capture/ of the card run's $OUT) compared again by this head's
 #     script, its record held byte for byte to the card run's own record (inputs/glm53_flashmla_fp8_capture.json);
-#  2. circuit-check's own pins update pass on the module's sidecar (what it wrote is saved, then undone);
+#  2. circuit-check's own pins update pass on the module's sidecar (what it wrote is saved, then undone), then
+#     circuit-check on the sidecar, on heads at served sizes and on one whole token;
 #  3. the suites the change from BASE touches (quick tier) and the repository suite whole.
 set -uo pipefail
 OUT=${OUT:-$RESEARCH_RUN_DIR/out}; mkdir -p "$OUT"
@@ -28,16 +29,19 @@ fi
 rm -rf "$S"
 date -u +"recompared %FT%TZ rc=$rr"
 
-CC_ARGS=--update-pins SERVED=0 bash "$I/cc2.sh"; rp=$?
+mkdir -p "$OUT/pins" "$OUT/cc"
+OUT="$OUT/pins" CC_ARGS=--update-pins SERVED=0 bash "$I/cc2.sh"; rp=$?
 git status --short > "$OUT/git-status-after-pins.txt"
 git diff > "$OUT/update-pins.diff"
 git ls-files --others --exclude-standard | grep -v '^\.venv' > "$OUT/untracked-after-pins.txt" || true
 echo "pins: rc=$rp, $(wc -l < "$OUT/git-status-after-pins.txt") path(s) changed, $(wc -c < "$OUT/update-pins.diff") bytes of diff"
 git checkout -q -- . && git clean -fdq -e .venv
 git status --short | head -5
+OUT="$OUT/cc" SERVED=1 bash "$I/cc2.sh"; rc_cc=$?
 bash "$I/suites.sh"; rs=$?
-echo "rc recompare=$rr pins=$rp suites=$rs" >> "$OUT/rc.txt"
+echo "rc recompare=$rr pins=$rp circuit-check=$rc_cc suites=$rs" >> "$OUT/rc.txt"
 cat "$OUT/rc.txt"
 [ "$rr" = 0 ] || exit "$rr"
 [ "$rp" = 0 ] || exit "$rp"
+[ "$rc_cc" = 0 ] || exit "$rc_cc"
 exit "$rs"
