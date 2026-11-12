@@ -80,7 +80,10 @@ it, and fast-forwards `main` only to a candidate with no new failure, each gatin
   unmarked PR stacked on its PRs is told to merge `main`. A failure its base shares blames no PR and holds nothing: @ci
   and the owners of what fails are rung once. Otherwise the PRs whose change touches what the failure names are its
   suspects (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks
-  and their logs, several are bisected, and the candidates above are dropped and built again. A failure of the machines
+  and their logs, several are bisected, and in the same tick the candidate and those above it are built again in order
+  without the suspects; a PR a reviewer holds or someone else ejects or unmarks leaves the same way, taking no other PR
+  out. A failure above the lowest candidate waits for its base's check unless only its own PRs meet it, where `main`'s
+  word decides it. A failure of the machines
   is retried and rung to @infra. A red off the gate (circuit-check, ratchet-gate) holds nothing; under `--gate check`, one
   its base's run doesn't share is rung to who acts on it, and under graph2 to no one.
   Only the loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
@@ -127,10 +130,14 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   `cursor/<lane>-<topic>-<hex>` from `origin/main` and push only there, and names an inbox branch it reads hourly
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
-- **Every agent runs Claude Fable 5.2.** Pick a subagent's effort by how conceptually heavy its task is, and pass it
-  as `Task`'s `model` (`claude-fable-5-2-<effort>`; `inherit` only when you run Fable 5.2 yourself), a standing
-  request for every agent here: `max` for the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for
-  slightly heavy work, `medium` for routine execution, `low` for trivial lookups.
+- **Pick a worker's model by its task**, as `Task`'s `model`, a standing request for every agent here: the strongest
+  only where a weaker one would err and no check would catch it. Tier 1, `claude-fable-5-2-xhigh`: no check decides it
+  and an error is expensive (what a guarantee says, protocol or attack design, a proof with no known route, an open root
+  cause, a ruling, review of a verifier, lock or statement, soundness-path code, a claim to Daniel). Tier 2,
+  `claude-opus-5-5-high`: skilled work a check decides (a specified change with tests, a swarm seat, a proof of a fixed
+  statement, a merge resolving code, ordinary review). Tier 3, `claude-sonnet-5-5-medium`: procedure and reading (clean
+  merges, renames, counts, docs-only review). The brief names the tier: the lowest that fits, one up after two failed
+  checks.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
   its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
@@ -157,7 +164,7 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
 - **Waiting is a bug** (AGENTS.md, Working principles): fix a repeated wait of over about 10 minutes at the source, or
   take it to its owner that day with its numbers.
 - **Don't wait for Daniel: decide and act.** A claim (what a guarantee says or rests on) is the lane's. A PR that
-  changes a lock record needs no ask: its owner marks it, and the landing DM is his notice (Daniel, 11 Nov). A claim
+  changes a lock record needs no ask: its owner marks it, and the landing DM is his notice. A claim
   decided ahead of its PR goes on its ask page decided provisionally, for him to review or reverse (the asking-daniel
   skill). A click only his account can make (the GitHub
   organization's admin, billing, the Nebius and Cloudflare consoles, his Cursor settings) gets a way around it where one

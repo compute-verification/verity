@@ -1,0 +1,11 @@
+# The metrics: one [[metric]] per number a lead is held to, which the console's Metrics tab shows from the evidence
+# store. Its format and rules are benchmarks/README.md's "Metrics"; tests/test_metrics_registry.py enforces them.
+
+[[metric]]
+id = "vllm/serving-cost-glm53"
+title = "GLM-5.3's serving cost over stock vLLM"
+owner = "vllm"
+unit = "percent of stock's serving compute"
+better = "lower"
+command = "research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.sh --model glm53"
+every = "7d"

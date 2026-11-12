@@ -1,5 +1,6 @@
 """The figure of record's driver (`breakeven/headline.py`): a row counts every sparse-MLA head, carries its own plan's
 request count and split, and leaves the planner as it found it; the figure reads the 10% point off pinned rows."""
+import json
 from math import isclose
 
 import pytest
@@ -124,3 +125,124 @@ def test_a_planner_row_describes_itself_and_restores_the_planner():
     assert isclose(got["requests"], p["replay_sample"] / p["q"], rel_tol=1e-9)
     assert got["requests"] < got["census_scope"]["requests"]
     assert got["total"] == got["serve"] + got["edge"] + got["beta"] + got["compile"] + got["pool"]
+
+
+QUANT = "Fp8GroupQuantUe8m0_v1{K=2048,G=128}"
+#: a line of two blocks as the planner hands them to its pricing, and the steady-state rows a census names them by
+LINE = [{"block": b, "per_token": 1.0, "seconds_per_block": 1.0, "fixed_seconds": 8.0, "statement_blocks": 4,
+         "ands": 10, "k_log": 24, "priced": "measured", "macs": 0} for b in (QUANT, COMBINE)]
+MEASURED = {QUANT: {"block": QUANT, "statement_seconds": 4.0, "blocks": 8, "provers": 1, "record": "art:quant"},
+            "Combine_v9{DV=8}": {"block": "Combine_v9{DV=8}", "statement_seconds": 16.0, "blocks": 64, "provers": 1,
+                                 "record": "art:combine"},
+            "Gone_v1{N=1}": {"block": "Gone_v1{N=1}", "statement_seconds": 1.0, "blocks": 4, "provers": 1,
+                             "record": "art:gone"}}
+
+
+def planner_price(strata, steady=None, verify=0.0, **_kw):
+    """Stands for `reprice.apply_server`: a block with a steady-state row at its row's seconds with no fixed seconds,
+    every other as it came, and the verifier's 2 s a statement where asked."""
+    out = []
+    for x in strata:
+        if r := (steady or {}).get(x["block"]):
+            x = x | {"seconds_per_block": r["statement_seconds"] / r["blocks"], "fixed_seconds": 0.0,
+                     "statement_blocks": r["blocks"], "priced": "steady", "basis": f"steady: {r['record']}"}
+        else:
+            x = x | {"basis": "reprice.CACHE"}
+        out.append(x | {"fixed_seconds": x["fixed_seconds"] + 2.0 * verify})
+    return out
+
+
+def test_a_steady_row_prices_the_line_s_block_its_map_names():
+    """A row prices the line's block of its own name; the map says where the names differ, cuts a row of one of a
+    block's n column blocks to the block, and lists a row mapped to null as unread. A stale entry, a statement that
+    isn't whole blocks of its target and two rows for one block are refused."""
+    by, unread = H.placed(MEASURED, {"Combine_v9{DV=8}": [COMBINE, 8], "Gone_v1{N=1}": None})
+    assert list(by) == [QUANT, COMBINE] and unread == ["Gone_v1{N=1}"]
+    assert by[QUANT] == MEASURED[QUANT] | {"type": QUANT, "per_block": 1}
+    assert by[COMBINE] == {"block": COMBINE, "type": "Combine_v9{DV=8}", "statement_seconds": 16.0, "blocks": 8,
+                           "per_block": 8, "provers": 1, "record": "art:combine"}
+    assert H.placed(MEASURED, {"Gone_v1{N=1}": PAGES})[0][PAGES]["type"] == "Gone_v1{N=1}"
+    with pytest.raises(ValueError, match=r"names 1 block types no steady-state row measures: \['Other_v1'\]"):
+        H.placed(MEASURED, {"Other_v1": None})
+    with pytest.raises(ValueError, match="a statement of 4 blocks isn't whole blocks of `PageCopy"):
+        H.placed(MEASURED, {"Gone_v1{N=1}": [PAGES, 3]})
+    with pytest.raises(ValueError, match="takes two steady-state rows, `Fp8GroupQuant.*` and `Gone_v1.N=1.`: map one to null"):
+        H.placed(MEASURED, {"Gone_v1{N=1}": QUANT})
+
+
+def test_a_block_with_a_steady_row_costs_what_the_row_measured():
+    """Priced by the planner alone, the quant type takes the host walk and the combine the row's scale. With a
+    steady-state row each costs its row's seconds a block and the measured verifier, and neither: the row timed the
+    whole statement, and a lever on it would rescale a measurement."""
+    scale, core = H.comb(1.0), 2.0
+    plain = H.pricing(planner_price, scale, core, [])(LINE, verify=1.0)
+    assert plain[0]["seconds_per_block"] == 1.0 + H.QUANT_WALK + H.V_OTHER[1] / core
+    assert plain[1]["seconds_per_block"] == 4.0 * (1.0 + H.V_OTHER[1] / core) and plain[1]["priced"] == "measured"
+    rows, _ = H.placed(MEASURED, {"Combine_v9{DV=8}": [COMBINE, 8], "Gone_v1{N=1}": None})
+    calls = []
+    got = H.pricing(planner_price, scale, core, calls, rows)(LINE, verify=1.0)
+    assert [x["seconds_per_block"] for x in got] == [0.5 + H.V_OTHER[1] / core, 2.0 + H.V_OTHER[1] / core]
+    assert [x["fixed_seconds"] for x in got] == [2.0 * H.V_OTHER[0]] * 2 and [x["statement_blocks"] for x in got] == [8, 8]
+    assert [x["priced"] for x in got] == ["steady", "steady"]
+    assert [x["basis"] for x in calls[-1][1]] == ["steady: art:quant", "steady: art:combine"]
+
+
+def test_a_steady_row_that_prices_no_block_of_the_line_is_refused_by_name():
+    """A row whose block, its own name or its map's, is none of the line's is no silent drop: the pricing refuses it
+    with the census type, the block it was mapped to and the fix."""
+    rows, _ = H.placed(MEASURED, {"Combine_v9{DV=8}": "Combine_v1{DV=512}"})
+    with pytest.raises(ValueError) as refused:
+        H.pricing(planner_price, {}, 2.0, [], rows)(LINE)
+    assert str(refused.value) == (
+        "2 steady-state rows price no block of this line: `Combine_v9{DV=8}` (as `Combine_v1{DV=512}`); `Gone_v1{N=1}`. "
+        "Map each to the line's block it measures, or to null to list it unread (--steady-map)")
+
+
+def test_a_row_s_split_gives_each_basis_s_share():
+    """The plan's proving by what priced it: every steady-state row's blocks under `steady`, the rest under the
+    planner's table, a column cut's note left off, and the carried pages under the copy stratum's own model."""
+    p = plan()
+    p["cells"].append({"block": QUANT, "share": 0.5, "prove_s": 2.0, "taken": 1.0})
+    calls = [(True, [CALLS[0][1][0] | {"priced": "steady", "basis": "steady: art:combine"},
+                     LINE[0] | {"basis": "reprice.CACHE, cut into 32 column blocks"}])]
+    strata = [{"block": PAGES, "priced": "modeled", "basis": H.COPY_BASIS}]
+    got = H.plan_split(p, calls, strata)
+    assert got["priced"] == {"steady": 0.75, "measured": 0.5, "modeled": 0.25}
+    assert got["basis"] == {"steady": 0.75, "reprice.CACHE": 0.5, H.COPY_BASIS: 0.25}
+    assert H.plan_split(plan(), CALLS, STRATA)["basis"] == {H.NO_BASIS: 1.0}
+
+
+@pytest.mark.slow
+def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
+    """Two rows on the planner (about 12 s): with a steady-state row mapped to the 64-key split part, the planner
+    prices that block at the row (the row's seconds a block and the measured verifier's, in statements of the row's
+    blocks; its plan's proving says `steady` for it and the bound falls with the cheaper block), every other block as
+    without it, and a row for no block of the line stops the row. Catches the planner's own
+    pricing no longer taking a row by the line's block, which the stand-in pricing above can't."""
+    P = H.planner()
+    part = next(x["block"] for x in P.levers.priced_strata("tokens") if x["block"].startswith("SparseMlaSplitPart_v1{T=64,"))
+    rows = tmp_path / "rows.json"
+    rows.write_text(json.dumps({"rows": [{"block": "Head_v1{NVIS=64}", "statement_seconds": 0.128, "blocks": 128,
+                                          "provers": 1, "record": "art:head"}]}))
+    where = tmp_path / "map.json"
+    where.write_text(json.dumps({"Head_v1{NVIS=64}": part}))
+    base, _ = H.run(H.spec_of("(i) honest", "world year", 0.4), P=P)
+    spec = H.spec_of("(i) honest", "world year", 0.4, steady=H.steady(rows, where, P))
+    row, reads = H.evaluate(spec, P)
+    p = H.plan(spec, row, reads, {}, P)
+    got = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
+    assert "steady" not in base and "steady" not in base["split"]["priced"]
+    assert got["steady"] == {"priced": [{"block": part, "type": "Head_v1{NVIS=64}", "per_block": 1, "provers": 1,
+                                         "record": "art:head"}], "unread": []}
+    priced = next(x for x in reads["pricing"] if x["block"] == part)
+    card = next(x for x in P.levers.priced_strata("tokens") if x["block"] == part)
+    assert card["statement_blocks"] != 128 and card["priced"] != "steady"
+    assert (priced["priced"], priced["basis"], priced["statement_blocks"]) == ("steady", "steady: art:head", 128)
+    assert isclose(priced["seconds_per_block"], 0.128 / 128 + H.V_OTHER[1] / P.reprice.CORE_PER_GPU, rel_tol=1e-12)
+    cell = next(c for c in p["cells"] if c["block"] == part)
+    assert isclose(got["split"]["priced"]["steady"], cell["share"], rel_tol=1e-12)
+    assert isclose(got["split"]["basis"]["steady"], cell["share"], rel_tol=1e-12)
+    assert isclose(sum(got["split"]["basis"].values()), 1.0, rel_tol=1e-9) and H.NO_BASIS not in got["split"]["basis"]
+    assert got["bound_bits"] < base["bound_bits"]
+    with pytest.raises(ValueError, match="1 steady-state rows price no block of this line: `Head_v1.NVIS=64.`"):
+        H.run(H.spec_of("(i) honest", "world year", 0.4, steady=H.steady(rows, None, P)), P=P)

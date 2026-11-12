@@ -36,14 +36,15 @@ from verity.definitions.registry import lifted as L
 from verity.definitions.registry import moe_pad as MP
 from verity.definitions.registry.prims import BF16, F32, I32
 
-E, VPT, H, I = 4, 2, 16, 16
+E, VPT, H, INTER = 4, 2, 16, 16
+I = INTER   # the name `test_moe_pad_route_a3.py` imports
 BOT16, BOT32, BOT1 = L.enc_bot(16), L.enc_bot(32), L.enc_bot(1)
 INV16, INV32, INV1 = L.inv(16), L.inv(32), L.inv(1)
 ON, OFF = L.enable_word(1), L.enable_word(0)      # the enable words: Active(1) / Active(0) (B7)
 X_T = Array(H, BF16)
 WG_T = Array(E, Array(H, BF16))
-W13_T = Array(E, Array(2 * I, Array(H, BF16)))
-W2_T = Array(E, Array(H, Array(I, BF16)))
+W13_T = Array(E, Array(2 * INTER, Array(H, BF16)))
+W2_T = Array(E, Array(H, Array(INTER, BF16)))
 
 
 def bf16(v) -> list[int]:
@@ -61,8 +62,8 @@ def weights():
     wg: np.ndarray = np.zeros((E, H), dtype=np.float32)
     for e in range(E):
         wg[e, e] = 1.0
-    return {"wg": bf16(wg), "w13": bf16(rng.normal(0, 0.3, (E, 2 * I, H))), "w2": bf16(rng.normal(0, 0.3, (E, H, I))),
-            "w13_np": rng.normal(0, 0.3, (E, 2 * I, H)).astype(np.float32)}
+    return {"wg": bf16(wg), "w13": bf16(rng.normal(0, 0.3, (E, 2 * INTER, H))), "w2": bf16(rng.normal(0, 0.3, (E, H, INTER))),
+            "w13_np": rng.normal(0, 0.3, (E, 2 * INTER, H)).astype(np.float32)}
 
 
 def token_for_route(route: tuple[int, ...], seed: int = 0) -> list[int]:
@@ -151,7 +152,7 @@ def MoeRouteSpecialisedNEGATIVE(B, S, x, wg, w13, w2, a):
 
 @pytest.mark.parametrize("TOPK", [1, 2])
 def test_a_one_program_per_envelope_every_admitted_route_is_an_assignment_to_the_same_circuit(TOPK, weights):
-    sp = MP.block(E, TOPK, VPT, H, I)
+    sp = MP.block(E, TOPK, VPT, H, INTER)
     prog = Program(sp)
     d0, gates0, nodes0 = program_digest(encode_program(prog)), prog.gates, [(n.fn.id, n.form, n.name) for n in sp.body.nodes]
     routes = MP.admitted_routes(E, TOPK)
@@ -164,18 +165,18 @@ def test_a_one_program_per_envelope_every_admitted_route_is_an_assignment_to_the
         assert tuple(a.ids) == route, (route, a.ids)                       # the value space is walked in full
         seen.add(tuple(a.ids))
         patterns.add(tuple(a.s))
-        assert Program(MP.block(E, TOPK, VPT, H, I)).gates == gates0      # rebuilt after seeing the route: the same circuit
+        assert Program(MP.block(E, TOPK, VPT, H, INTER)).gates == gates0      # rebuilt after seeing the route: the same circuit
     assert seen == set(routes)
     assert len(patterns) == len({frozenset(r) for r in routes})            # each selected SET is one activity pattern of the fixed slots
     # the same envelope built again (a fresh bind) has the same digest, gates and node set: nothing about x, the route or the weights is in it
-    p2 = Program(MP.block(E, TOPK, VPT, H, I))
+    p2 = Program(MP.block(E, TOPK, VPT, H, INTER))
     assert program_digest(encode_program(p2)) == d0 and p2.gates == gates0
-    assert [(n.fn.id, n.form, n.name) for n in MP.block(E, TOPK, VPT, H, I).body.nodes] == nodes0
+    assert [(n.fn.id, n.form, n.name) for n in MP.block(E, TOPK, VPT, H, INTER).body.nodes] == nodes0
     # the NEGATIVE: the route-specialised builder's digest and gate count move with the route it observed
-    digs = {route: program_digest(encode_program(Program(bind(MoeRouteSpecialisedNEGATIVE, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I, ROUTE=route))))
+    digs = {route: program_digest(encode_program(Program(bind(MoeRouteSpecialisedNEGATIVE, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER, ROUTE=route))))
             for route in routes}
     assert len(set(digs.values())) == len(routes), "a builder that specializes to the observed route has one Program per route -- prohibited"
-    assert Program(bind(MoeRouteSpecialisedNEGATIVE, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I, ROUTE=routes[0])).gates < gates0
+    assert Program(bind(MoeRouteSpecialisedNEGATIVE, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER, ROUTE=routes[0])).gates < gates0
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -185,8 +186,8 @@ def test_a_one_program_per_envelope_every_admitted_route_is_an_assignment_to_the
 
 @pytest.mark.parametrize("TOPK", [1, 2])
 def test_b_selected_slots_ids_weights_and_y_are_bit_exact_to_the_moe01_indexed_read_block(TOPK, weights):
-    sp = MP.block(E, TOPK, VPT, H, I)
-    rf = bind(MoeIndexedReadRef, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
+    sp = MP.block(E, TOPK, VPT, H, INTER)
+    rf = bind(MoeIndexedReadRef, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
     for route in MP.admitted_routes(E, TOPK):
         x = token_for_route(route, seed=hash(route) % 1000)
         _, _, outs = run(sp, lifted_inputs(x, weights))
@@ -208,7 +209,7 @@ def test_b_selected_slots_ids_weights_and_y_are_bit_exact_to_the_moe01_indexed_r
 
 @pytest.mark.parametrize("TOPK", [1, 2])
 def test_c_unselected_slots_are_disabled_bot_in_weight_and_output_never_inv_and_the_selected_side_is_never_bot(TOPK, weights):
-    sp = MP.block(E, TOPK, VPT, H, I)
+    sp = MP.block(E, TOPK, VPT, H, INTER)
     for route in MP.admitted_routes(E, TOPK):
         _, t, outs = run(sp, lifted_inputs(token_for_route(route), weights))
         a = Assignment(TOPK, outs)
@@ -246,7 +247,7 @@ def test_c_unselected_slots_are_disabled_bot_in_weight_and_output_never_inv_and_
 
 @pytest.mark.parametrize("TOPK", [1, 2])
 def test_c2_a_disabled_block_is_all_bot_with_every_slot_enable_active0_nothing_is_painted_and_an_enabled_block_on_a_bot_token_is_inv(TOPK, weights):
-    sp = MP.block(E, TOPK, VPT, H, I)
+    sp = MP.block(E, TOPK, VPT, H, INTER)
     x = token_for_route(MP.admitted_routes(E, TOPK)[-1])
     # a DISABLED block (a = 0: the continuation's post-prefix row) on an ACTIVE token: every value it produces is bot (A9.3), whatever it reads
     _, _, outs = run(sp, lifted_inputs(x, weights, enable=OFF))
@@ -298,7 +299,7 @@ def test_c2_a_disabled_block_is_all_bot_with_every_slot_enable_active0_nothing_i
 
 
 def test_d_selected_outputs_follow_the_slot_order_and_the_two_orders_of_a_pair_are_two_assignments(weights):
-    sp = MP.block(E, 2, VPT, H, I)
+    sp = MP.block(E, 2, VPT, H, INTER)
     for (p, q) in [(0, 3), (3, 0), (1, 2), (2, 1)]:
         _, _, outs = run(sp, lifted_inputs(token_for_route((p, q)), weights))
         a = Assignment(2, outs)
@@ -324,7 +325,7 @@ def test_d_selected_outputs_follow_the_slot_order_and_the_two_orders_of_a_pair_a
 
 
 def test_negatives_substituted_ids_omitted_inactive_early_inactivation_bad_encodings_on_the_local_relations(weights):
-    sp = MP.block(E, 2, VPT, H, I)
+    sp = MP.block(E, 2, VPT, H, INTER)
     route = (2, 0)
     x = token_for_route(route)
     _, _, outs = run(sp, lifted_inputs(x, weights))
@@ -370,14 +371,14 @@ def test_negatives_substituted_ids_omitted_inactive_early_inactivation_bad_encod
 
 
 def test_negative_an_unselected_expert_cannot_influence_the_output_and_a_selected_one_does(weights):
-    sp = MP.block(E, 2, VPT, H, I)
+    sp = MP.block(E, 2, VPT, H, INTER)
     route = (1, 3)
     x = token_for_route(route)
     _, _, o = run(sp, lifted_inputs(x, weights))
     a = Assignment(2, o)
     e_off, e_on = 0, 1
     w13 = list(weights["w13"])
-    per_e = 2 * I * H
+    per_e = 2 * INTER * H
     # perturb EVERY word of the unselected expert 0's w13: y, u, the selected z, ids and weights are bit-identical
     w_off = dict(weights, w13=[(v ^ 0x0040) if e_off * per_e <= i < (e_off + 1) * per_e else v for i, v in enumerate(w13)])
     _, _, o2 = run(sp, lifted_inputs(x, w_off))
@@ -403,9 +404,9 @@ def TwoTokensSharedExperts(B, S, x0, x1, wg, w13, w2, a0, a1):
 
 def test_negative_cross_request_mixing_a_disabled_row_beside_an_enabled_one_changes_nothing_of_the_enabled_one(weights):
     TOPK = 2
-    two = bind(TwoTokensSharedExperts, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
+    two = bind(TwoTokensSharedExperts, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
     x1 = token_for_route((3, 1), seed=7)
-    _, _, alone = run(MP.block(E, TOPK, VPT, H, I), lifted_inputs(x1, weights))
+    _, _, alone = run(MP.block(E, TOPK, VPT, H, INTER), lifted_inputs(x1, weights))
     n_rec = len(alone)
     shared = [L.lift_words(WG_T, weights["wg"]), L.lift_words(W13_T, weights["w13"]), L.lift_words(W2_T, weights["w2"])]
     _, _, both = run(two, [L.bot_words(X_T), L.lift_words(X_T, x1)] + shared + [[OFF], [ON]])
@@ -415,7 +416,7 @@ def test_negative_cross_request_mixing_a_disabled_row_beside_an_enabled_one_chan
     assert a0.y == [BOT16] * H and a0.ids == [BOT32] * TOPK and a0.a == [OFF] * E  # token 0: disabled, no route, no output -- and no edge to token 1
     # and two ENABLED tokens with different routes beside each other: each equals its own single-token run (shared weights, no shared state)
     x0 = token_for_route((0, 2), seed=3)
-    _, _, alone0 = run(MP.block(E, TOPK, VPT, H, I), lifted_inputs(x0, weights))
+    _, _, alone0 = run(MP.block(E, TOPK, VPT, H, INTER), lifted_inputs(x0, weights))
     _, _, both2 = run(two, [L.lift_words(X_T, x0), L.lift_words(X_T, x1)] + shared + [[ON], [ON]])
     assert both2[:n_rec] == alone0 and both2[n_rec:] == alone
     # the per-slot enable a_{r,e} = LEnable(a_r, [e selected for r]) on a pattern where the SAME expert is selected by one
@@ -431,10 +432,10 @@ def test_negative_cross_request_mixing_a_disabled_row_beside_an_enabled_one_chan
 
 
 def test_lmoe_ffn_returns_y_only_takes_the_enable_last_and_the_specified_class_is_unchanged():
-    sp = bind(MP.LMoeFfn, E=E, TOPK=2, VPT=VPT, H=H, I=I)
+    sp = bind(MP.LMoeFfn, E=E, TOPK=2, VPT=VPT, H=H, I=INTER)
     params, ret = sp.signature()
     assert ret == Array(H, MP.V(16))
-    assert L.has_enable(sp) and L.has_enable(MP.block(E, 2, VPT, H, I)) and params[-1] == (L.ENABLE_PARAM, L.ENABLE_T)
+    assert L.has_enable(sp) and L.has_enable(MP.block(E, 2, VPT, H, INTER)) and params[-1] == (L.ENABLE_PARAM, L.ENABLE_T)
     # nothing new in the specified class: the block uses LSelect32, LBot32, LFixedSelect4x16, LEnable (their enabled _v2 forms) and
     # strict / constant lifts only
     import re
@@ -442,13 +443,13 @@ def test_lmoe_ffn_returns_y_only_takes_the_enable_last_and_the_specified_class_i
     for fid in L.specified_ids():
         assert allowed.match(fid), fid
     # ids read without the ORDINARY class's `ORD=<mask>` static (`Lifted[MoeSum_v1]_v2{TOPK=2,H=16,ORD=0}` now; none on the first stack)
-    used = {re.sub(r",ORD=[^,}]*", "", n.fn.id) for n in MP.block(E, 2, VPT, H, I).body.nodes}
+    used = {re.sub(r",ORD=[^,}]*", "", n.fn.id) for n in MP.block(E, 2, VPT, H, INTER).body.nodes}
     assert {"Lifted[LSelect32_v1]_v2", "Lifted[LBot32_v1]_v2", "LEnable_v1", MP.fixed_select_enabled(E, 16).id, "Lifted[I32Eq_v1]_v2",
             "Lifted[MoeExpertBody_v1]_v2{H=16,I=16}", "Lifted[MoeSum_v1]_v2{TOPK=2,H=16}"} <= used, used
     assert MP.fixed_select_enabled(E, 16).id == f"Lifted[{MP.fixed_select(E, 16).id}]_v2"
     assert all(f.startswith("Lifted[") or f in L.specified_ids() for f in used), used
     # every computed gate of the block takes an enable (B7): the only callee without one is LEnable itself (an enable is owned by no body)
-    for n in MP.block(E, 2, VPT, H, I).body.nodes:
+    for n in MP.block(E, 2, VPT, H, INTER).body.nodes:
         assert L.has_enable(n.fn) or n.fn.id == "LEnable_v1", n.fn.id
 
 
@@ -476,9 +477,9 @@ def CallsTheTwin(B, S, x, wg, w13, w2):
 
 @pytest.mark.parametrize("TOPK", [1, 2])
 def test_moe_ffn_fixed_unlifted_twin_equals_moe01_and_its_lift_of_record_is_the_hand_authored_padded_block_on_both_paths(TOPK, weights):
-    fixed = bind(MP.MoeFfnFixed, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
-    ref01 = bind(MoeIndexedReadRef, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
-    padded = bind(MP.LMoeFfn, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
+    fixed = bind(MP.MoeFfnFixed, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
+    ref01 = bind(MoeIndexedReadRef, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
+    padded = bind(MP.LMoeFfn, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
     d_fixed, d_padded = program_digest(encode_program(Program(fixed))), program_digest(encode_program(Program(padded)))
     for route in MP.admitted_routes(E, TOPK):
         x = token_for_route(route, seed=hash(route) & 0xFFFF)
@@ -497,7 +498,7 @@ def test_moe_ffn_fixed_unlifted_twin_equals_moe01_and_its_lift_of_record_is_the_
     # decoded, lifts its twin node to bind(LMoeFfn), not to a replay
     from verity.circuits.codec import decode_program
     from verity.circuits.defs import REGISTRY
-    dec = decode_program(encode_program(Program(bind(CallsTheTwin, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I))), REGISTRY)
+    dec = decode_program(encode_program(Program(bind(CallsTheTwin, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER))), REGISTRY)
     node = next(n for n in dec.root.body.nodes if getattr(n.fn, "defn", None) is not None and n.fn.defn.id == "MoeFfnFixed_v1")
     assert L._is_decoded(node.fn) and node.fn.bindings == fixed.bindings
     ldec_twin = L.lift_def(node.fn)
@@ -507,7 +508,7 @@ def test_moe_ffn_fixed_unlifted_twin_equals_moe01_and_its_lift_of_record_is_the_
     assert not any(n.fn.id.startswith("Lifted[MoeFfnFixed") for n in ldec.body.nodes)
     # (iii) the NEGATIVE the hook supersedes: the twin's body REPLAYED with lifted callees computes every slot Active (no bot anywhere,
     # g = Active(0.0f) on the unselected slots), a different Program from the padded block that agrees with it on y
-    strict = bind(StrictReplayOfTwinNEGATIVE, E=E, TOPK=TOPK, VPT=VPT, H=H, I=I)
+    strict = bind(StrictReplayOfTwinNEGATIVE, E=E, TOPK=TOPK, VPT=VPT, H=H, I=INTER)
     x = token_for_route(MP.admitted_routes(E, TOPK)[0], seed=1)
     prog_s = Program(strict)
     t_s = ref.materialize(prog_s, lifted_inputs(x, weights))

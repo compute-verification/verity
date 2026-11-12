@@ -20,7 +20,8 @@
 #   VM                 platform gpu-rtx6000* with preset 8gpu-192vcpu-1744gb; the service account NEBIUS_VM_SA_ID (default the
 #                      launching one; `none` for no lease) is attached so the VM's lease can stop the VM itself
 # Other shapes and regions come from the environment: NEBIUS_VM_NAME, NEBIUS_REGION, NEBIUS_PROJECT_ID, NEBIUS_PLATFORM_PREFIX (cpu-d3,
-# gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_DATA_DISK names the data disk
+# gpu-h200-sxm), NEBIUS_PRESET, NEBIUS_IMAGE_FAMILY, NEBIUS_DATA_GIB, NEBIUS_DATA_TYPE (network_ssd, or network_ssd_non_replicated
+# and network_ssd_io_m3 in multiples of 93 GiB) and NEBIUS_RATE_USD_PER_HOUR; NEBIUS_DATA_DISK names the data disk
 # (default <vm>-data), so a VM can boot on another one's kept data disk, its filesystem untouched; NEBIUS_FILESYSTEM_ID attaches an
 # existing shared filesystem at /workspace/fs, and NEBIUS_PREEMPTIBLE=1 makes the VM preemptible, at most at the per-GPU-hour cap of
 # the pricing policy NEBIUS_SPOT_POLICY_ID (else whatever the spot price is).  GPU clocks are locked only on gpu-rtx6000.
@@ -42,7 +43,10 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
-[ $((DATA_GIB % 93)) -eq 0 ] || [ "$DATA_TYPE" != network_ssd_non_replicated ] || die "NEBIUS_DATA_GIB=$DATA_GIB is not a multiple of 93"
+case $DATA_TYPE in   # refused here, before the boot disk is created: Nebius would refuse the data disk after it
+  network_ssd_non_replicated|network_ssd_io_m3)
+    [ $((DATA_GIB % 93)) -eq 0 ] || die "NEBIUS_DATA_GIB=$DATA_GIB is not a multiple of 93, the unit $DATA_TYPE disks come in: $((DATA_GIB / 93 * 93)) is the next size down" ;;
+esac
 if [ "$dry" = 0 ]; then
   [ "$yes" = 1 ] || die "this starts billing at \$$RATE_USD_PER_HOUR/h: pass --yes (or --dry-run)"
   [[ $max_hours =~ ^[0-9]+$ ]] && [ "$max_hours" -ge 1 ] || die "--max-hours H (whole hours >= 1): the VM stops itself after it"

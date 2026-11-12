@@ -705,7 +705,7 @@ def bind_check() -> dict[str, Any]:
         "Dsv4MlaCompressC128_v1{W=8,R=16,...}": lambda: entry_fn("c128", LAYERS["c128"].window),
         "FlashMlaKvRow_v1{DN=448,DR=64,QT=64}": lambda: bind(F.FlashMlaKvRow, DN=NOPE, DR=ROPE, QT=QB),
     }
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in targets.items():
         try:
             out[name] = bool(make().signature())

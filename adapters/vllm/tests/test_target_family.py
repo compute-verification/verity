@@ -175,3 +175,22 @@ def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_
         i = st.index("--snapshot-max-bytes")
         assert st[i + 1] == "33554432" and st[i - 1] == "0,1" and st[i + 2] == "--skip"
         assert [x for x in st if x != "--snapshot-max-bytes" and x != "33554432"] == unset
+
+
+def test_a_builds_target_reads_a_summary_whose_step_target_or_applicability_is_absent_null_or_empty():
+    """`verity_vllm.target_family.built_target`: a Build summary's `step`, its `target` and its `applicability` may each be
+    absent, null or empty, and each then states nothing. A stated compute capability wins; without one, an applicability
+    that names Hopper is 9.0."""
+    hopper = {"tensor_core_family": "Hopper"}
+    summaries: tuple[dict, ...] = ({}, {"step": None}, {"step": {}})
+    targets: tuple[dict, ...] = ({}, {"target": None}, {"target": {}}, {"target": {"num_sms": 132}})
+    for summary in summaries:
+        assert tf.built_target(summary) is None
+    for target in targets:
+        assert tf.built_target({"step": {**target, "num_units": 1}}) is None
+        assert tf.built_target({"step": {**target, "applicability": hopper}}) == (9, 0)
+        assert tf.built_target({"step": {**target, "applicability": {"gemm_target": "hopper"}}}) == (9, 0)
+        for app in (None, {}, {"gemm_target": "ampere"}, {"tensor_core_family": None, "gemm_target": None}):
+            assert tf.built_target({"step": {**target, "applicability": app}}) is None
+    assert tf.built_target({"step": {"target": {"compute_capability": [8, 9]}, "applicability": hopper}}) == (8, 9)
+    assert tf.built_target({"step": {"target": {"compute_capability": "9.0"}}}) == (9, 0)

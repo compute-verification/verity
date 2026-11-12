@@ -30,6 +30,9 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
+__all__ = ["INSTANCES_GZ_LEVEL", "instance_rows", "read_instances", "write_instances", "write_instances_file",
+           "write_program_instances"]
+
 #: `instances.json.gz`'s gzip level.  A long context's text is mostly the attention Calls' key and value runs (B1 4096/512: 8.6 GB),
 #: which level 6 compresses in under a third of level 9's CPU time, 2% larger, and which inflates as fast at either level.
 INSTANCES_GZ_LEVEL = 6
