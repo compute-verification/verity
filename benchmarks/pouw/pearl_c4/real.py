@@ -81,7 +81,7 @@ def npz_manifest(path: Path) -> dict:
     return {"model": path.name, "npz": str(path), "inputs": inputs}
 
 
-def capture_sha256(job: "Job") -> str:
+def capture_sha256(job: Job) -> str:
     """The capture's identity: its manifest's sha256, or an npz's own (hashed once, kept in the output directory)."""
     if not job.npz:
         return sha256(job.capture / "manifest.json")
