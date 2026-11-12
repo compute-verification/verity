@@ -15,7 +15,7 @@ COEF = {"rss_gib": (1.0, 2.0, 3.0, 0.0), "prove_s": (0.5, 4.0, 8.0, 0.0), "wall_
 TINY = {"bytes_per_nnz": 4, "glue": 0}
 
 
-def test_lstsq_recovers_an_affine_law():
+def test_lstsq_recovers_an_affine_function():
     xs = [(0, 0), (1, 0), (0, 1), (2, 3), (5, 1)]
     assert PR.lstsq(xs, [1 + 2 * a + 3 * b for a, b in xs]) == pytest.approx([1, 2, 3])
 
@@ -25,13 +25,13 @@ def test_the_fit_over_the_source_runs():
     assert len(f["points"]) == len(PR.SOURCE) == 64
     assert f["coef"]["rss_gib"] == pytest.approx([1.229, 3.956, 2.535, 135.3], abs=2e-2)
     assert f["coef"]["prove_s"][2] == 0 and f["max_residual"]["rss_gib"] < 8 and f["max_residual"]["prove_s"] < 1.25
-    posted = PR.fit(PR.HIDDEN_ZK, PR.POSTED_LAWS)
+    posted = PR.fit(PR.HIDDEN_ZK, PR.POSTED_FITS)
     assert posted["coef"]["rss_gib"] == pytest.approx([3.526, 4.000, 3.040, 0], abs=2e-3)
 
 
 def test_the_registered_check():
-    """The posted column missed both registered sessions by more than 25%, its session model and its sampling design alike; the refit
-    holds them within 25%."""
+    """The posted column missed both registered sessions by more than 25%, its session model and its fit alike; the refit holds them within
+    25%."""
     rows = PR.check(PR.fit()["coef"])
     assert [r["K"] for r in rows] == [16384, 32768] and [r["k_log"] for r in rows] == [26, 27]
     for r in rows:
@@ -127,11 +127,11 @@ def test_netlists_and_staging():
     assert n == {"r": {"kind": "registered", "nnz": 8, "bytes": 16, "ands": 2},
                  "t": {"kind": "tree", "nnz": 16, "bytes": 32, "ands": 3},
                  "g": {"kind": "generic", "nnz": 1000, "bytes": 2000, "ands": 50}}
-    law = PR.staging_fit()
+    coef = PR.staging_fit()
     for r in PR.STAGING:
-        assert abs(PR._at(law["peak_gib"], [r[2] / 1e6]) / r[4] - 1) < 0.1
+        assert abs(PR._at(coef["peak_gib"], [r[2] / 1e6]) / r[4] - 1) < 0.1
     floor = max(r[5] for r in PR.REGISTERED_STAGING)
-    assert PR.staging(n["r"], law)["peak_gib"] == floor and PR.staging(n["g"], law)["peak_gib"] < floor
+    assert PR.staging(n["r"], coef)["peak_gib"] == floor and PR.staging(n["g"], coef)["peak_gib"] < floor
 
 
 def test_pieces_pmf():

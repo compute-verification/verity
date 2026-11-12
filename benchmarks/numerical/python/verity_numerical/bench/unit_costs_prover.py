@@ -9,9 +9,10 @@ instances, its block ``2^k_log`` bits per instance and ``D = 2^dense_m`` bits in
 netlist shared by the instances, plus the SHA-512 and hm96 glue), the prove's median time, the prover process's wall time
 (circuit load included) and peak RSS (GiB), and the prover's threads.
 
-**The sampling design** (:func:`fit`): each of RSS, prove time and process wall time is affine in (D / 2^30, circuit bytes / GiB), by
-least squares: RSS over every record, unweighted; the times over the 32-thread records, weighted by 1 / y² (relative
-residuals). The fitted coefficients and every residual are in the output.
+**The fit** (:func:`fit`): each of RSS, prove time and process wall time is affine in (D / 2^30, circuit bytes / GiB, one
+block's bits 2^k_log / 2^30), prove time without the circuit bytes (:data:`FITS`), by least squares: RSS over every record,
+unweighted; the times over the 32-thread records, weighted by 1 / y² (relative residuals). The fitted coefficients and
+every residual are in the output.
 
 **A session** (:func:`session`) of B slots at bound Z, each slot one unit of at most Z nonzeros with ρ nonzeros per row:
 rows = Z / ρ; ``k_log`` = max(22, ceil(log2(rows + 1)) + 2), the slot rounded up to a power of two and at most doubled again
@@ -27,7 +28,7 @@ is out of range: flock-circuit refuses it.
 (``unit_costs_padding``); each shape's sessions (mean and the public 1 − 2⁻⁴⁰ count), its session's RSS and prove time, and
 the prover time per audit, Σ sessions x session time (with the slot sumcheck below), on one prover. **The cap** is the
 largest power of two Z at which a B = 16 session at the workload's least ρ is in range and fits one node's memory
-(:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU law taken as a bound on the CUDA prover's). A unit over the cap
+(:data:`NODE_GIB`; :data:`GPU_GIB` for one GPU's, the CPU fit taken as a bound on the CUDA prover's). A unit over the cap
 is split below the subcircuit into ceil(z / cap) pieces, its pieces in a bucket of their own at the cap (sessions
 ceil(p X / B) for X of its units sampled); every other unit keeps its dp4 bucket.
 
@@ -220,18 +221,19 @@ def lstsq(xs: Sequence[Sequence[float]], ys: Sequence[float], ws: Sequence[float
     return _solve(A, b)
 
 
-#: each sampling design's features (0: D / 2^30, 1: circuit bytes / GiB, 2: one block's bits, 2^k_log / 2^30); prove time leaves out the
-#: circuit text, whose coefficient fitted with it is negative and below its error
-LAWS = {"rss_gib": (0, 1, 2), "prove_s": (0, 2), "wall_s": (0, 1, 2)}
-#: the column as posted at b41137f42: every sampling design over (D, circuit bytes), fitted on :data:`HIDDEN_ZK`
-POSTED_LAWS = {"rss_gib": (0, 1), "prove_s": (0, 1), "wall_s": (0, 1)}
+#: each fit's features (0: D / 2^30, 1: circuit bytes / GiB, 2: one block's bits, 2^k_log / 2^30); prove time leaves out
+#: the circuit text, whose coefficient fitted with it is negative and below its error
+FITS = {"rss_gib": (0, 1, 2), "prove_s": (0, 2), "wall_s": (0, 1, 2)}
+#: the column as posted at b41137f42: every fit over (D, circuit bytes), on :data:`HIDDEN_ZK`
+POSTED_FITS = {"rss_gib": (0, 1), "prove_s": (0, 1), "wall_s": (0, 1)}
 
 
 def features(D: float, cb: float, block: float) -> tuple[float, float, float]:
     return D / 2 ** 30, cb / 2 ** 30, block / 2 ** 30
 
 
-def _law(xs: Sequence[Sequence[float]], ys: Sequence[float], use: Sequence[int], ws: Sequence[float] | None = None) -> list[float]:
+def _coef(xs: Sequence[Sequence[float]], ys: Sequence[float], use: Sequence[int],
+          ws: Sequence[float] | None = None) -> list[float]:
     c = lstsq([[x[j] for j in use] for x in xs], ys, ws)
     out = [c[0], 0.0, 0.0, 0.0]
     for j, v in zip(use, c[1:]):
@@ -243,12 +245,12 @@ def _at(c: Sequence[float], x: Sequence[float]) -> float:
     return c[0] + sum(a * v for a, v in zip(c[1:], x))
 
 
-def fit(source: Sequence[tuple] = SOURCE, laws: Mapping[str, Sequence[int]] = LAWS) -> dict[str, Any]:
-    """The three laws over ``laws``' features and each record's residuals."""
+def fit(source: Sequence[tuple] = SOURCE, fits: Mapping[str, Sequence[int]] = FITS) -> dict[str, Any]:
+    """The three fits over ``fits``' features and each record's residuals."""
     xs = [features(2.0 ** r[4], r[5], 2.0 ** r[3]) for r in source]
     t32 = [i for i, r in enumerate(source) if r[9] == 32]
-    coef = {"rss_gib": _law(xs, [r[8] for r in source], laws["rss_gib"]),
-            **{k: _law([xs[i] for i in t32], [source[i][j] for i in t32], laws[k], [source[i][j] ** -2 for i in t32])
+    coef = {"rss_gib": _coef(xs, [r[8] for r in source], fits["rss_gib"]),
+            **{k: _coef([xs[i] for i in t32], [source[i][j] for i in t32], fits[k], [source[i][j] ** -2 for i in t32])
                for k, j in (("prove_s", 6), ("wall_s", 7))}}
     points = []
     for r, x in zip(source, xs):
@@ -268,7 +270,7 @@ def check(coef: Mapping[str, Sequence[float]], before: Sequence[tuple] = HIDDEN_
     """Each registered session against what the column predicted for it: the fit on ``before`` (the column as posted) at its
     measured D and circuit bytes, and its bound Z under the posted session model (each slot its own netlist of Z nonzeros,
     ρ = :data:`RHO_TABLE`), next to this model's prediction (one tc-step netlist, ``coef``)."""
-    old = fit(before, POSTED_LAWS)["coef"]
+    old = fit(before, POSTED_FITS)["coef"]
     out = []
     for K, r in REGISTERED_SESSIONS:
         Z = K // 16 * TC_STEP_NNZ
@@ -293,7 +295,7 @@ def session(Z: float, rho: float, coef: Mapping[str, Sequence[float]], slots: in
             glue: float = GLUE_BYTES, nets: Sequence[float] | None = None,
             slot: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """One session of ``slots`` slots at bound Z (the module docstring): its rows per slot, k_log, whether it is in range, D,
-    circuit bytes, and the laws' RSS (GiB), prove and process wall seconds. ``nets``: the netlist bytes of the unit types
+    circuit bytes, and the fits' RSS (GiB), prove and process wall seconds. ``nets``: the netlist bytes of the unit types
     it may hold (None: each slot a netlist of its own Z nonzeros). ``slot``: the slot sumcheck's coefficients
     (:data:`SLOT_SUMCHECK`; None: no slot sumcheck), adding its entries, seconds and GiB, and the session's total seconds
     and peak GiB."""
@@ -365,10 +367,10 @@ def staging_fit(ladder: Sequence[tuple] = STAGING) -> dict[str, list[float]]:
             "peak_gib": lstsq(xs, [r[4] for r in ladder], [r[4] ** -2 for r in ladder])}
 
 
-def staging(net: Mapping[str, Any], law: Mapping[str, Sequence[float]],
+def staging(net: Mapping[str, Any], coef: Mapping[str, Sequence[float]],
             registered: Sequence[tuple] = REGISTERED_STAGING) -> dict[str, float]:
-    """One template shape's staging: the sampling design at the ANDs it lowers, a registered type's at least its measured staging."""
-    out = {k: _at(c, [net["ands"] / 1e6]) for k, c in law.items()}
+    """One template shape's staging: the fit at the ANDs it lowers, a registered type's at least its measured staging."""
+    out = {k: _at(c, [net["ands"] / 1e6]) for k, c in coef.items()}
     if net["kind"] == "registered" and registered:
         out = {"wall_s": max(out["wall_s"], *(r[4] for r in registered)),
                "peak_gib": max(out["peak_gib"], *(r[5] for r in registered))}
@@ -548,7 +550,7 @@ def audit(N: int, K: int, units: Sequence[P.Unit], rho: Mapping[str, float], coe
 
 
 def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[float]],
-             slaw: Mapping[str, Sequence[float]] | None = None, menu: str = "dp4", register_bulk: bool = False,
+             staging_coef: Mapping[str, Sequence[float]] | None = None, menu: str = "dp4", register_bulk: bool = False,
              **kw: Any) -> dict[str, Any]:
     """One workload's audit under ``menu``, unsplit and at each cap. ``register_bulk``: a what-if with every generic body
     type sampled at least :data:`RARE_DRAWS` times per audit registered as a GEMM tc-step-like unit (its template, circuit
@@ -567,7 +569,7 @@ def workload(inv: Mapping[str, Any], name: str, coef: Mapping[str, Sequence[floa
                 nets[u.label] = dict(tc)
                 registered.append(u.label)
     for net in nets.values():
-        net["staging"] = staging(net, slaw or staging_fit())
+        net["staging"] = staging(net, staging_coef or staging_fit())
     r0 = min((rho.get(u.label, RHO_TABLE) for u in body), default=RHO_TABLE)
     kw = {**kw, "menu": menu}
     unsplit = audit(N, K, units, rho, coef, nets=nets, **kw)
@@ -608,27 +610,28 @@ def hours(a: Mapping[str, Any], k1_ns: Any = None) -> dict[str, Any]:
     return r
 
 
-def prover(inv: Mapping[str, Any], law: Mapping[str, Any] | None = None,
+def prover(inv: Mapping[str, Any], fitted: Mapping[str, Any] | None = None,
            slot: Mapping[str, Any] | None = SLOT_SUMCHECK, **kw: Any) -> dict[str, Any]:
-    law = law or fit()
-    coef = law["coef"]
-    slaw = staging_fit()
+    fitted = fitted or fit()
+    coef = fitted["coef"]
+    staging_coef = staging_fit()
     reg = [kw.get("bytes_per_nnz", BYTES_PER_NNZ) * TC_STEP_NNZ] * SLOTS
     kw["slot"] = slot
     names = list(dict.fromkeys(r["workload"] for r in inv["rows"]))
     return {"format": "verity/f6-prover/v3", "K": inv["K"], "slots": SLOTS, "menu": f"dp{MENU_K}", "node_gib": NODE_GIB,
-            "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_MAX, "fit": law,
+            "gpu_gib": GPU_GIB, "bytes_per_nnz": BYTES_PER_NNZ, "glue_bytes": GLUE_BYTES, "k_log_max": K_MAX, "fit": fitted,
             "slot_sumcheck": None if slot is None else {
                 **slot, "entries": "slots x the session's largest template (its type's registered table, at most Z)"},
-            "staging_fit": {"coef": slaw, "ladder": [dict(zip(("run", "G", "ands", "wall_s", "peak_gib"), r)) for r in STAGING],
+            "staging_fit": {"coef": staging_coef,
+                            "ladder": [dict(zip(("run", "G", "ands", "wall_s", "peak_gib"), r)) for r in STAGING],
                             "registered": [dict(zip(("run", "lowering", "K", "ands", "wall_s", "peak_gib"), r))
                                            for r in REGISTERED_STAGING]},
             "check": check(coef),
             "pow2": [{"registered": session(2.0 ** j, RHO_TABLE, coef, nets=reg, **kw),
                       "generic": session(2.0 ** j, RHO_TABLE, coef, **kw)} for j in POW2],
-            "workloads": [workload(inv, w, coef, slaw, **kw) for w in names],
-            "workloads_dp4t": [workload(inv, w, coef, slaw, menu="dp4t", **kw) for w in names],
-            "whatif_registered": [workload(inv, w, coef, slaw, menu="dp4t", register_bulk=True, **kw) for w in names]}
+            "workloads": [workload(inv, w, coef, staging_coef, **kw) for w in names],
+            "workloads_dp4t": [workload(inv, w, coef, staging_coef, menu="dp4t", **kw) for w in names],
+            "whatif_registered": [workload(inv, w, coef, staging_coef, menu="dp4t", register_bulk=True, **kw) for w in names]}
 
 
 # --- rendering ---------------------------------------------------------------------------------------------------------------
@@ -660,7 +663,7 @@ def _k1s(ns: Any) -> str:
                      for i, (m, v) in enumerate(pts))
 
 
-def _slot_law(sl: Mapping[str, Any] | None) -> list[str]:
+def _slot_lines(sl: Mapping[str, Any] | None) -> list[str]:
     if not sl:
         return []
     lo, hi = sl["band"]
@@ -740,27 +743,27 @@ def render(pr: Mapping[str, Any]) -> str:
     f = pr["fit"]
     c = f["coef"]
     sc = pr["staging_fit"]["coef"]
-    law = lambda k: " + ".join(f"{v:.4g}{t}" for v, t in zip(c[k], ("", "·D/2^30", "·cb/GiB", "·2^k_log/2^30")) if v)  # noqa: E731
+    line = lambda k: " + ".join(f"{v:.4g}{t}" for v, t in zip(c[k], ("", "·D/2^30", "·cb/GiB", "·2^k_log/2^30")) if v)  # noqa: E731
     L = [f"# F6 prover column: sessions of {pr['slots']} slots, {pr['menu']} buckets, K = {pr['K']}", "",
          "Flock's CPU ZK prover (`flock-circuit prove --zk`, 32 threads, Xeon 6776P), fitted on the source runs below. D: "
          "the session's bits (slots x 2^k_log); cb: its circuit text, the netlists of its distinct unit types at "
          f"{pr['bytes_per_nnz']} B per nonzero (a registered type's one unit, a generic type's whole subcircuit, a tree's "
          f"distinct members) plus {pr['glue_bytes'] / 1e6:.0f} MB of glue. A block is at most 2^{pr['k_log_max']} bits "
          "(Stmt.InRange): flock-circuit refuses a session needing more.", "",
-         f"- peak RSS (GiB) = {law('rss_gib')}; max |residual| {f['max_residual']['rss_gib']:.2f} GiB",
-         f"- prove (s) = {law('prove_s')}; max relative residual {f['max_residual']['prove_s']:.2f}",
-         f"- prover process wall, circuit load included (s) = {law('wall_s')}; max relative residual "
+         f"- peak RSS (GiB) = {line('rss_gib')}; max |residual| {f['max_residual']['rss_gib']:.2f} GiB",
+         f"- prove (s) = {line('prove_s')}; max relative residual {f['max_residual']['prove_s']:.2f}",
+         f"- prover process wall, circuit load included (s) = {line('wall_s')}; max relative residual "
          f"{f['max_residual']['wall_s']:.2f}",
          f"- staging, once per template shape (s) = {sc['wall_s'][0]:.4g} + {sc['wall_s'][1]:.4g}·ANDs/10^6; peak (GiB) = "
          f"{sc['peak_gib'][0]:.4g} + {sc['peak_gib'][1]:.4g}·ANDs/10^6 (circuits' ladder); a registered type at least its "
          "measured staging",
-         f"- fits: one node {pr['node_gib']} GiB (vy-nebius-1/2), one GPU {pr['gpu_gib']:.1f} GiB (RTX PRO 6000; the CPU law as "
-         "a bound)", *_slot_law(pr.get("slot_sumcheck")), "",
+         f"- fits: one node {pr['node_gib']} GiB (vy-nebius-1/2), one GPU {pr['gpu_gib']:.1f} GiB (RTX PRO 6000; the CPU fit as "
+         "a bound)", *_slot_lines(pr.get("slot_sumcheck")), "",
          "## Check: registered GEMM-coordinate sessions", "",
          "Measured against the column as posted (its fit at the measured D and circuit text, and its session model at the "
          "bound Z: each slot its own netlist of Z nonzeros) and against this model.", "",
-         "| K | run | Z | k_log | D | circuit text | peak RSS | posted model | posted law at measured D, cb | this model | "
-         "prove | posted model | posted law | this model |", "|" + "---|" * 14]
+         "| K | run | Z | k_log | D | circuit text | peak RSS | posted model | posted fit at measured D, cb | this model | "
+         "prove | posted model | posted fit | this model |", "|" + "---|" * 14]
     for r in pr["check"]:
         m, po, la, no = r["measured"], r["posted"], r["law_at_measured"], r["now"]
         L.append(f"| {r['K']} | {r['run']} | {P._si(r['Z'])} | {r['k_log']} | 2^{int(math.log2(r['D']))} | "
@@ -802,7 +805,7 @@ def render(pr: Mapping[str, Any]) -> str:
                  f"{gq['circuit_bytes'] / 2 ** 30:.3g} GiB | {gq['rss_gib']:.3g} GiB | {_t(gq['prove_s'])} | "
                  f"{_t(r['sumcheck_s'])} | {r['sumcheck_gib']:.3g} GiB | "
                  f"{_yn(r['peak_gib'] <= pr['gpu_gib'])} / {_yn(gq['peak_gib'] <= pr['gpu_gib'])} |")
-    L += ["", "## Staging", "", "| run | G / lowering | ANDs | wall | peak RSS | law: wall | law: peak |", "|" + "---|" * 7]
+    L += ["", "## Staging", "", "| run | G / lowering | ANDs | wall | peak RSS | fit: wall | fit: peak |", "|" + "---|" * 7]
     for r in pr["staging_fit"]["ladder"]:
         L.append(f"| {r['run']} | G = {r['G']} | {P._si(r['ands'])} | {_t(r['wall_s'])} | {r['peak_gib']:.3g} GiB | "
                  f"{_t(_at(sc['wall_s'], [r['ands'] / 1e6]))} | {_at(sc['peak_gib'], [r['ands'] / 1e6]):.3g} GiB |")
