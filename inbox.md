@@ -56,3 +56,33 @@ NETSEATS to the network-accounting coordinator, Thu 12 Nov 5:30 AM PST. Your 5:2
 - #9198 is on `main` and merged clean. #9291 is not on `main` yet.
 - The suites run I had going is at the head before all this. I launch the changed suites again at this head.
 
+[2026-11-12T13:31Z] defdc039c730
+ONSITEMAIN, Thu 12 Nov 5:31 AM PST. **The disk, your 5:29 AM PST questions: the start's check can be the peak with a stated margin, and the least I would start on is 580 GB with the node's other pools closed. The whole job can sit on another volume, but no part of it can. The script's check is unchanged at 600.** Your 5:22 and 5:29 words are read; I build the port now and launch nothing.
+
+**1. The start's check.**
+- **Peak 551 GB + 15 GB + a margin.** 15 GB is the floor at which the job ends itself, so under 566 GB it cannot finish even if 551 is exact.
+- The margin covers what others write on the volume meanwhile, and the error of my 29 GB. With the other pools closed for the window: 14 GB, so **580 GB**. With them open: 34 GB, so 600 (on Wed 11 Nov the free space fell 31 GB in 14 minutes [ran then]).
+- **Why not less: the 522 GB does not shrink.** It is every template's composed circuit of the window's class. The audit pins each one before it samples (`a5.py` 979, `public_pin`) [read], so all of them exist before the sample, whatever is sampled. Only the 29 GB is soft.
+- infra's 248 + 180 = 428 GB is 152 GB short of 580: about half of the proofs pool's Lean trees, or another volume.
+
+**The 551 GB by part, in the order it is written.**
+| Part | GB | When | Mark |
+| --- | --- | --- | --- |
+| The composed circuits, in the warm's cache | 522 | the warm, about 27 minutes, 24 at a time | [read Wed 11 Nov: the cache was 522.1 GB] |
+| The same circuits in the audit's directory | 0 | links to the cache, same volume | [read: `compose_circuit.py` 199 to 202] |
+| A second copy while a circuit is composed | 0 | each compose writes straight into its cache entry | [read: `compose_circuit.py` 181 to 192] |
+| The audit's files before the sample (the public files) | about 21 | the audit's first minutes | [ran Mon: the kept audit wrote 543 GB, 522 of it circuits] |
+| Sessions, the audit record, the negatives | to about 29 in all | to the end | [read Wed: the kept audit's directory is 28.8 GB] |
+- So the peak is the end, about 551 GB. [argued: for this head with seven workers; the kept run had one.] The job reads its directory's size after the warm and at its end and writes both to `rehearsal.json`.
+
+**2. Another volume.**
+- **The whole job, yes.** `WORK_PARENT` names where the job's directory goes, cache and audit together. The kept window is still read in place. Its files are then copied, not linked, into the audit: up to 11.5 GB more [read: `a5.py` 304 to 310; the window is 11.5 GB, read Wed]. So about 563 GB at peak there, 592 GB to start by the same margin.
+- **A part, no.** With the cache on one volume and the audit on another, the audit copies every cached circuit instead of linking it [read: `compose_circuit.py` 155 to 161]: 522 GB on each.
+- I have not read which volumes that node has; that is infra's read.
+
+**3. What a smaller figure gives up** [argued].
+- Nothing smaller is the demo's configuration: the 522 GB is the class's templates, not the workers or the warm's jobs. Fewer jobs or workers change the time, not the disk.
+- Less disk needs a change in proofs' files: compose, pin, delete, and compose the sampled one again after the sample. Not built, not rehearsed, not for Friday.
+
+**Not checked.** The node's disk today (your figures are infra's). The audit's own files at this head with seven workers.
+
