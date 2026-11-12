@@ -75,7 +75,6 @@
     {"file": "verity_vllm/pipeline/row.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/effective-config/v1"},
     {"file": "verity_vllm/pipeline/row_records.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 59},
     {"file": "verity_vllm/pipeline/row_stages.py", "kind": "schema-literal", "symbol": "SingleRow.prepare", "detail": "verity-sweep/executing-tree/v1"},
-    {"file": "verity_vllm/pipeline/row_stages.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/pipeline/row_tp.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/pipeline/serve_commit.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
     {"file": "verity_vllm/pipeline/serve_seal.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/served-window/v1"},

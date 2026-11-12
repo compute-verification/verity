@@ -16,9 +16,18 @@ from pathlib import Path
 import pytest
 
 from tests.pipeline.test_cublas_names import _node
-from tests.pipeline.test_row import GLM53, ROW, TP_DENSE, TP_MOE, _row, _tp_row
+from tests.pipeline.test_row import (
+    GLM53,
+    ROW,
+    TP_DENSE,
+    TP_MOE,
+    _row,
+    _timeline,
+    _tp_row,
+)
 from verity_vllm.pipeline import cli
 from verity_vllm.pipeline.row_driver import Stop
+from verity_vllm.records.schema_ids import TIMELINE_SCHEMA
 
 TREE = Path(__file__).resolve().parents[2]
 
@@ -178,6 +187,16 @@ def test_a_rows_stages_get_the_names(tmp_path, monkeypatch, capsys):
 
 # ---------------------------------------------------------------------------------------------------------------- a forwarded signal
 
+def test_a_rows_timeline_event_carries_the_timelines_id_and_its_numbers_unquoted(tmp_path):
+    """`Row.tl` writes one line an event under the id the timeline's readers know (`TIMELINE_SCHEMA`): a value that reads as a number,
+    true, false or null goes unquoted, and any other as a string with its quotes and backslashes kept."""
+    r = _row(tmp_path)
+    r.tl("match.fold", "end", ("rc", 0), ("wall", "2.5"), ("ok", "true"), ("left", "null"), ("why", 'said "no" in a\\b'), ("by", None))
+    (event,) = [e for e in _timeline(r) if e["stage"] == "match.fold"]
+    assert (event["schema"], event["proc"], event["pid"], event["ev"], event["hot"]) == (TIMELINE_SCHEMA, r.proc, os.getpid(), "end", False)
+    assert (event["rc"], event["wall"], event["ok"], event["left"], event["why"], event["by"]) == (0, 2.5, True, None, 'said "no" in a\\b', "None")
+
+
 def test_a_signal_goes_to_every_running_stage_and_one_that_has_ended_is_passed_over(tmp_path, monkeypatch):
     r = _row(tmp_path)
     sent: list[tuple[int, int]] = []
@@ -291,6 +310,11 @@ def test_the_row_reads_the_release_through_the_module(tmp_path, monkeypatch):
     for pinned in (prepared("--native-collect-build", str(tmp_path / "nc_own")),
                    prepared(environ={"NATIVE_COLLECT_BUILD": str(tmp_path / "nc_own")})):
         assert pinned.ncb == pinned.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_own")
+    no_dir: tuple[dict, ...] = ({}, {"build_dirs": None}, {"build_dirs": {}}, {"build_dirs": {"native_collect": ""}}, {"build_dirs": {"fa2": "/x"}})
+    for names_none in no_dir:
+        rel.write_text(json.dumps({"tag": "r16-int-3", **names_none}))                 # a release that names no collector build dir
+        r = prepared()
+        assert r.ncb == r.child_env["NATIVE_COLLECT_BUILD"] == str(tmp_path / "nc_default")
 
 
 # ---------------------------------------------------------------------------------------------------------------- the target-family preflight

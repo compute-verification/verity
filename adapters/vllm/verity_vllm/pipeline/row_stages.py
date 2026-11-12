@@ -50,6 +50,7 @@ from verity_vllm.pipeline import row_config as RC
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Row, Stop, copy_first, stage_on
+from verity_vllm.pipeline.row_json import field_of
 from verity_vllm.program import prefix_plan as PP
 
 SKIP = "census,census_reconcile,nonint,nonint_compare,compare,root_policy,golden,wiring,replay_a,replay_chain,fold_2"
@@ -137,7 +138,7 @@ class SingleRow(Row):
             os.remove(f"{self.d}/release.json")
         if not self.ncb_set and os.path.isfile(f"{self.d}/release.json"):
             rel = R.load_json(f"{self.d}/release.json") or {}
-            ncb_rel = (rel.get("build_dirs") or {}).get("native_collect") or ""
+            ncb_rel = field_of(rel.get("build_dirs"), "native_collect") or ""
             if ncb_rel and ncb_rel != self.ncb:
                 self.ncb = self.child_env["NATIVE_COLLECT_BUILD"] = ncb_rel
                 os.makedirs(self.ncb, exist_ok=True)

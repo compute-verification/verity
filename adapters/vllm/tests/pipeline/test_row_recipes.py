@@ -13,16 +13,18 @@ and `${NAME:-WORD}` gives WORD; any other variable gives `STAND_IN`. Words the l
 """
 from __future__ import annotations
 
+import ast
 import re
 import shlex
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from verity_vllm.pipeline import cli
-from verity_vllm.pipeline.research_tools import STAGES
+from verity_vllm.pipeline import cli, research_tools
+from verity_vllm.pipeline.research_tools import STAGES, row_config
 from verity_vllm.pipeline.research_tools import parse as tool_parse
 
 TREE = Path(__file__).resolve().parents[2]
@@ -193,3 +195,23 @@ def test_the_run_stores_tools_read_a_stage_line_and_an_earlier_runners_argv(argv
     named their stages after the revision; any other line's stage is its `--stages`, else the Tool's own (here `build`)."""
     p = tool_parse(argv, stage="build")
     assert (p["stage"], (p["row"], p["role"], p["model"], p["revision"])) == (stage, named)
+
+
+def test_a_row_id_is_read_into_its_ten_fields_and_any_other_id_keeps_its_first_token():
+    """The run store's key reads a row id's fields by position, a count as its number.  An id without the ten fields still gives a
+    derivation of its own: its first token as the model's tag and no other field."""
+    assert row_config(ROW) == {"model_tag": "llama32-1b", "dtype": "bf16", "hw": "l40s", "tp": 1, "batch": 1, "input": 256, "output": 32,
+                               "arrivals": "mixed", "sampling": "greedy", "exec": "bi-eager"}
+    assert row_config(ROW.replace("__tp1__", "__tpX__"))["tp"] == "tpX"                # a count that is no number stays as written
+    for other, tag in (("llama32-1b__bf16", "llama32-1b"), ("llama32-1b_bf16", "llama32-1b_bf16"), ("", "")):
+        fields = row_config(other)
+        assert fields.pop("model_tag") == tag and list(fields.values()) == [None] * 9
+
+
+def test_the_run_stores_tools_load_where_the_adapters_package_is_not_importable():
+    """research's own process loads this file by its path, with no `verity_vllm` to import (`research_tools._research`), so the
+    module's top imports the standard library alone; what it reads of the adapter, it imports where it reads it."""
+    top = ast.parse(Path(research_tools.__file__).read_text()).body
+    froms = {n.module or "" for n in top if isinstance(n, ast.ImportFrom)}
+    plain = {a.name for n in top if isinstance(n, ast.Import) for a in n.names}
+    assert {name.split(".")[0] for name in froms | plain} <= sys.stdlib_module_names
