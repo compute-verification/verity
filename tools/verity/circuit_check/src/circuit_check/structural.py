@@ -66,6 +66,16 @@ class Canon:
         self.next = 0
         self.inputs = [self._node() for _ in range(inputs)]
         self.ands: dict[tuple[int, int], tuple[int, int]] = {}
+        self.reads: dict[tuple, list[int]] = {}
+
+    def READ(self, table: str, idx: Sequence[int], bits: int) -> list[int]:
+        """The ``bits`` low bits of ``table``'s word at the index whose bits are ``idx``, uninterpreted: one node a bit per
+        table and index, so two reads at one index are one value whatever the table holds."""
+        key = (table, tuple(idx))
+        w = self.reads.get(key)
+        if w is None:
+            w = self.reads[key] = [self._node() for _ in range(bits)]
+        return w
 
     def _node(self) -> int:
         self.next += 1
@@ -340,9 +350,13 @@ def _read_bits(C: Any, g: int, bits: list[int], K: Canon, ev) -> tuple[dict[int,
     return out, r.rows
 
 
-def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple[list[tuple], dict]:
+def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon,
+                  slots: dict[str, tuple[int, int]] | None = None) -> tuple[list[tuple], dict]:
     """The canonical bit of each of the flat lowering's output bits, its inputs read as nodes ``0 ..`` in order; a table read
-    as its rows (`_read_bits`)."""
+    as its rows (`_read_bits`), or, of a table ``slots`` maps to ``(index bits, most value bits)`` at those widths, as a
+    lookup slot's word (`Canon.READ`), a library table's bits constant over it constants."""
+    from verity_flock import ir_lower as IL
+
     if C.asserts:
         raise Refused("unsupported", f"the lowering has {len(C.asserts)} assertions, which a template's rows do not carry "
                                      "as gates")
@@ -363,7 +377,8 @@ def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple
         if C.kind[v] == "lookup":
             value_bits.setdefault(C.data[v][0], []).append(C.data[v][1])
     reads: dict[int, dict[int, int]] = {}
-    ands = read_rows = 0
+    consts: dict[tuple, dict[int, int]] = {}
+    ands = read_rows = slot_reads = index_bits = 0
     for v in live:
         if C.kind[v] == "and":
             a, b = C.data[v]
@@ -372,12 +387,25 @@ def lowering_bits(C: Any, ins: list[list], words: list[list], K: Canon) -> tuple
         elif C.kind[v] == "lookup":
             g, j = C.data[v]
             if g not in reads:
-                reads[g], n = _read_bits(C, g, sorted(value_bits[g]), K, ev)
-                read_rows += n
+                table, idx, width = C.lookups[g]
+                slot = (slots or {}).get(table)
+                if slot is not None and slot[0] == len(idx) and width <= slot[1]:
+                    word = K.READ(table, [ev(f) for f in idx], slot[1])
+                    reads[g] = {j2: word[j2] for j2 in value_bits[g]}
+                    ck = (table, tuple(value_bits[g]))
+                    if ck not in consts:
+                        consts[ck] = IL.table_const_bits(table, value_bits[g])
+                    reads[g].update((j2, 1 if c else ZERO) for j2, c in consts[ck].items())
+                    slot_reads += 1
+                    index_bits += len(idx)
+                else:
+                    reads[g], n = _read_bits(C, g, sorted(value_bits[g]), K, ev)
+                    read_rows += n
             val[v] = reads[g][j]
         elif C.kind[v] != "in":
             raise Refused("unsupported", f"the lowering's bit {v} is a {C.kind[v]}")
     return [ev(b) for w in words for b in w], {"live_ands": ands + read_rows, "reads": len(reads),
+                                                 **({"slot_reads": slot_reads, "index_bits": index_bits} if slots else {}),
                                                  "input_ports": len(ins), "input_bits": sum(map(len, ins)),
                                                  "output_bits": sum(map(len, words))}
 
@@ -407,10 +435,11 @@ def evaluate_lowering(C: Any, ins: list[list], words: list[list], lanes: list[in
 
 def error_bound(rec: dict) -> dict:
     """The bound on a wrong verdict, over the check's own coins (the labels): ``M`` counts the forms whose equality it tests
-    (each AND's two operands, their sum and its result; the output bits; the empty form), at most 4 · (template evaluated
-    rows + lowering live ANDs) + output bits + 1, and two distinct ones share a fingerprint with probability at most
-    M² / 2^513."""
-    M = 4 * (rec["template"]["evaluated_rows"] + rec["lowering"]["live_ands"]) + rec["lowering"]["output_bits"] + 1
+    (each AND's two operands, their sum and its result; the output bits; each slot read's index bits on the lowering's
+    side, the template's being its rows'; the empty form), at most 4 · (template evaluated rows + lowering live ANDs) +
+    output bits + index bits + 1, and two distinct ones share a fingerprint with probability at most M² / 2^513."""
+    M = (4 * (rec["template"]["evaluated_rows"] + rec["lowering"]["live_ands"]) + rec["lowering"]["output_bits"]
+         + rec["lowering"].get("index_bits", 0) + 1)
     return {"M": M, "log2": round(2 * math.log2(M) - 513, 1), "statement": "Pr[wrong verdict] <= M^2 / 2^513"}
 
 
@@ -450,29 +479,51 @@ def check_unit(definition: Any, in_rows: Sequence[tuple[str, Sequence[str]]], tm
                   vectors, seed)
 
 
-def _check(tmpl: Any, reference, name: str, rec: dict, theirs: tuple[str, str], exhaustive_bits: int, vectors: int,
-           seed: int) -> dict:
-    """`check`'s verdict on ``tmpl`` against ``reference()``'s ``(C, input words, output words)``, built once the
-    template's side is read and its unroll dropped; ``theirs`` names the reference's side and its inputs in a refusal."""
-    from verity_flock import tmpl as TM
+class _Template:
+    """The template side of a check: its counts, its inputs, its canonical output bits and its evaluation."""
 
-    F = CK.Findings()
-    rec = {**rec, "labels": {"source": "os.urandom", "bits": 512}}
-    try:
+    slots = None
+
+    def __init__(self, tmpl: Any) -> None:
+        from verity_flock import tmpl as TM
+
         if not isinstance(tmpl, TM.Tmpl):
             try:
                 tmpl = TM.parse(tmpl)
             except (AssertionError, IndexError, ValueError) as e:
                 raise Refused("malformed", f"not a {TM.FORMAT} text: {type(e).__name__} {e}") from None
-        rec |= {"defs": len(tmpl.defs), "template_rows": sum(len(d.rows) for d in tmpl.defs),
-                "template_calls": sum(len(d.calls) for d in tmpl.defs)}
-        K = Canon(sum(map(len, ports(tmpl.groups)[0])))
-        mine, rec["template"] = template_bits(tmpl, K)
+        self.t = tmpl
+        self.inputs = sum(map(len, ports(tmpl.groups)[0]))
+
+    def counts(self) -> dict:
+        t = self.t
+        return {"defs": len(t.defs), "template_rows": sum(len(d.rows) for d in t.defs),
+                "template_calls": sum(len(d.calls) for d in t.defs)}
+
+    def bits(self, K: Canon) -> tuple[list[int], dict]:
+        return template_bits(self.t, K)
+
+    def evaluate(self, lanes: list[int], T: int) -> list[int]:
+        return evaluate_template(self.t, lanes, T)
+
+
+def _check(tmpl: Any, reference, name: str, rec: dict, theirs: tuple[str, str], exhaustive_bits: int, vectors: int,
+           seed: int) -> dict:
+    """`check`'s verdict on ``tmpl`` (a template, its text, or a function making a side as `_Template` is one) against
+    ``reference()``'s ``(C, input words, output words)``, built once the template's side is read and its unroll dropped;
+    ``theirs`` names the reference's side and its inputs in a refusal."""
+    F = CK.Findings()
+    rec = {**rec, "labels": {"source": "os.urandom", "bits": 512}}
+    try:
+        side = tmpl() if callable(tmpl) else _Template(tmpl)
+        rec |= side.counts()
+        K = Canon(side.inputs)
+        mine, rec["template"] = side.bits(K)
         widths = rec["template"].pop("input_widths")
         C, ins, words = reference()
         if widths != [len(w) for w in ins]:
             raise Refused("ports", f"input ports of widths {widths}, {theirs[0]} {theirs[1]} {[len(w) for w in ins]}")
-        bits, rec["lowering"] = lowering_bits(C, ins, words, K)
+        bits, rec["lowering"] = lowering_bits(C, ins, words, K, side.slots)
         if len(mine) != len(bits):
             raise Refused("ports", f"{len(mine)} output bits, {theirs[0]} {len(bits)}")
     except Refused as e:
@@ -493,7 +544,7 @@ def _check(tmpl: Any, reference, name: str, rec: dict, theirs: tuple[str, str], 
     exhaustive = n <= exhaustive_bits
     T = 1 << n if exhaustive else vectors
     lanes = _lanes(n, exhaustive, T, seed)
-    got = evaluate_template(tmpl, lanes, T)
+    got = side.evaluate(lanes, T)
     want = evaluate_lowering(C, ins, words, lanes, T)
     bad = [j for j, (a, b) in enumerate(zip(got, want)) if a != b]
     rec["semantic"] = {"inputs": n, "exhaustive": exhaustive, "vectors": T, **({} if exhaustive else {"seed": seed}),
@@ -516,6 +567,11 @@ def _check(tmpl: Any, reference, name: str, rec: dict, theirs: tuple[str, str], 
 
 
 def check_file(target: Any, path: Path, **kw) -> dict:
+    """`check` on the template at ``path``, or, a directory, `structural_slots.check` on the split it holds."""
+    if Path(path).is_dir():
+        from . import structural_slots as SS
+
+        return SS.check(target, path, **kw)
     return check(target, Path(path).read_text(), **kw)
 
 

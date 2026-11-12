@@ -146,7 +146,8 @@ with the reason, when
   branch on a read-back loss): the update the trace shows is the stand-in's, not the run's;
 - a Python number is folded over steps (`trace.carried_scalars`, an EMA of read-back estimates kept as a float): the
   trace carries every earlier step's read-back, so its Δ_grad grows with the step;
-- E is not empty (Δ > 0, or E's size unknown) but the trace shows no update: its affected share is 0, or u(1) is 0.
+- E is not empty (Δ > 0, or E's size unknown) but the trace shows no update: its affected share is 0, or u(1) is 0
+  (each where the trace states it: a job's own trace states no u, and its affected share is its products').
 Any row with a nonempty E whose prefix has no affected gates (no step through its checkpoint reads θ') is refused too.
 """
 from __future__ import annotations
@@ -1437,7 +1438,8 @@ def refusal(row: dict) -> str | None:
         return (f"carried Python number: Delta_grad grows with the step, not measured ({_events(tr['carried_scalars'])}); "
                 f"a program keeps such state as a device tensor")
     e = (row.get("output") or {}).get("e_bytes")
-    none = [w for k, w in (("affected_share", "its affected share is 0"), ("u1_bits", "u(1) is 0")) if not tr.get(k)]
+    none = [w for k, w in (("affected_share", "its affected share is 0"), ("u1_bits", "u(1) is 0"))
+            if not tr.get(k, True)]
     if e != 0 and none:
         return f"update-free trace: E is {_size(e)}, but the traced step shows no update ({' and '.join(none)})"
     return None

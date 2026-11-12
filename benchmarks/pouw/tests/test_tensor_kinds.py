@@ -41,8 +41,8 @@ def test_loops_counts_a_backward_branch_by_address_and_by_label():
     sass = _fn("f", ["IMMA.16832.S8.S8 R8, R4.ROW, R2.COL, R8", "IADD3 R3, R3, R4, R5", "NOP", "ISETP.GE.AND P0, PT, R0, R9, PT"])
     [loop] = TK.loops(TK.parse_sass(sass)["f"])
     assert loop == {"mma": 1, "mma_ops": ["IMMA.16832.S8.S8"], "other": 3, "iadd3": 1, "ffma": 0}
-    labelled = "\tFunction : g\n.L_x_0:\n        /*0000*/  HMMA.16816.F32 R8, R4, R2, R8 ;\n" \
-               "        /*0010*/  @P0 BRA `(.L_x_0) ;\n"
+    labelled = ("\tFunction : g\n.L_x_0:\n        /*0000*/  HMMA.16816.F32 R8, R4, R2, R8 ;\n"
+                "        /*0010*/  @P0 BRA `(.L_x_0) ;\n")
     assert TK.loops(TK.parse_sass(labelled)["g"]) == [
         {"mma": 1, "mma_ops": ["HMMA.16816.F32"], "other": 1, "iadd3": 0, "ffma": 0}]
 

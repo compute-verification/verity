@@ -3,7 +3,7 @@
 # beside IMMA and the integer forms' exactness, then the gate verdicts and the fit.
 #
 #   research run --on MACHINE --project verity --source /workspace --cwd source \
-#     --env GPU_LEASE_WHO=ampere -- bash benchmarks/pouw/tensor_kinds/run_sm80.sh [GROUP...]
+#     --env GPU_LEASE_WHO=LANE -- bash benchmarks/pouw/tensor_kinds/run_sm80.sh [GROUP...]
 #
 # The binaries (one a GROUP of sm80.cu, built in parallel) and gpu_kit's SASS timing gate run outside the lease; the
 # timed GPU work runs under `gpu-lease 1 --wait --max-min 20`, with nvidia-smi sampling the GPU's clock and power every

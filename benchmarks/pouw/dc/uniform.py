@@ -282,7 +282,7 @@ def text(res: dict) -> str:
                        for r, v in res["rows"].items()))
     L.append("facets exceeded: " + ("; ".join(res["violations"]) or "none"))
     sat = res["sat"]
-    L.append(f"issue-saturated streams (baseline issue, then ΔT a uniform instruction added, at the loop's issue):")
+    L.append("issue-saturated streams (baseline issue, then ΔT a uniform instruction added, at the loop's issue):")
     for k, s in sorted(sat["streams"].items()):
         L.append(f"  {k}: issue {s['issue0']:.3f}{'' if s['issue0'] >= sat['min_issue'] else ' (below ' + str(sat['min_issue']) + ', not read)'}  " +
                  "  ".join(f"{n[3:]} {v['dT']:+.3f} ({v['issue']:.3f})" for n, v in sorted(s["points"].items())))
