@@ -230,7 +230,8 @@ def test_replay_json_holds_the_value_settings_in_force_in_the_environment_the_re
                 "tokens": {r["engine_id"]: list(r["served"]) for r in w["requests"]}}
 
     monkeypatch.setattr(R, "replay", replayed)
-    monkeypatch.setattr(sys, "flags", NS(hash_randomization=0))    # `main` refuses a process with hash randomization on
+    # `main` refuses a process with hash randomization on: its own view of `sys`, since the import system reads the real flags
+    monkeypatch.setattr(R, "sys", NS(flags=NS(hash_randomization=0), path=sys.path))
     monkeypatch.setenv("NCCL_P2P_DISABLE", "1")
     monkeypatch.setenv("VLLM_API_KEY", "a credential's value")
     for name in ("VLLM_ENABLE_V1_MULTIPROCESSING", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION"):
