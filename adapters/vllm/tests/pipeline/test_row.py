@@ -234,7 +234,7 @@ def test_killpg_on_the_row_takes_the_stage_and_its_grandchild(tmp_path, sig, rc)
     assert f"CANCELLED by {name}" in (d / "stage.log").read_text()
     row_log = (d / "row.log").read_text()
     assert f"{name} received: forwarding to the running stage" in row_log and f"row cancelled by {name}" in row_log
-    tl = [json.loads(ln) for ln in open(d / "timeline.jsonl")]
+    tl = [json.loads(ln) for ln in (d / "timeline.jsonl").read_text().splitlines()]
     assert {"stage": "row", "ev": "cancelled", "signal": name[3:]}.items() <= tl[0].items()
     assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "cancel"}.items() <= tl[1].items()
 
@@ -340,8 +340,13 @@ def _derive_row(tmp_path, monkeypatch, *argv: str, cpus: int, environ: dict[str,
     (ck / "config.json").write_text(json.dumps({"num_hidden_layers": 16}))
     r.B, r.LP, r.T, r.MML, r.ck, r.tgt_args = s["B"], s["LP"], s["T"], s["I"] + s["O"], str(ck), []
     ran: list[str] = []
+
+    def run_tl(st: str, to: int, lf: str, cmd: list[str], *extra: tuple) -> int:
+        ran.append(st)
+        return 0
+
     monkeypatch.setattr(r, "launch_args", lambda lp, t: [])
-    monkeypatch.setattr(r, "run_tl", lambda st, to, lf, cmd, *extra: ran.append(st) or 0)
+    monkeypatch.setattr(r, "run_tl", run_tl)
     monkeypatch.setattr(R, "_memory_headroom", lambda: 1 << 40)
     monkeypatch.setattr(R, "_cpus", lambda: cpus)
     return r, ran
@@ -675,7 +680,13 @@ def _row_with_build(tmp_path: Path, monkeypatch) -> tuple[SingleRow, list[str]]:
     (Path(r.d) / "build_request" / "instances.json.gz").write_bytes(b"")
     (Path(r.d) / "build_summary.json").write_text(json.dumps({"request": {"program_digest": PD}}))
     built: list[str] = []
-    monkeypatch.setattr(r, "required_manifest", lambda stage: built.append(stage) or _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD) or 0)
+
+    def required_manifest(stage: str) -> int:
+        built.append(stage)
+        _record_manifest(Path(r.d) / "manifest.json", R.QUERY_OF_RECORD)
+        return 0
+
+    monkeypatch.setattr(r, "required_manifest", required_manifest)
     return r, built
 
 
@@ -752,8 +763,13 @@ def test_a_tp_row_runs_the_guarded_build_and_every_tap_its_manifest_names(tmp_pa
     assert t.hidden_so == t.env.hidden_so_fa2_guarded
     assert _tp_row(tmp_path, TP_MOE, environ={"GUARDED_MAX_TAP": "0"}).hidden_so == t.env.hidden_so_fa2
     seen: list[list[str]] = []
+
+    def run_tl(stage: str, to: int, log: str, cmd: list[str]) -> int:
+        seen.append(cmd)
+        return 0
+
     monkeypatch.setattr(R, "tp_rank_workload_digest", lambda bdir, r: f"wd{r}")
-    monkeypatch.setattr(t, "run_tl", lambda stage, to, log, cmd: seen.append(cmd) or 0)
+    monkeypatch.setattr(t, "run_tl", run_tl)
     os.makedirs(t.d)
     t.manifest_global("commit.required_manifest")
     assert {"--norm-scales", "--router-softmax", "--vocab-range"} <= set(seen[0]) and "--guarded-max" not in seen[0]
@@ -838,24 +854,33 @@ def test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_a
     monkeypatch.setattr(R, "derived_ok", lambda p: True)
     with pytest.raises(Stop) as e:
         cpu.match()
-    assert e.value.rc == 11 and "gpu_legs.json" in open(f"{cpu.d}/stages.txt").read()
+    assert e.value.rc == 11 and "gpu_legs.json" in Path(cpu.d, "stages.txt").read_text()
     ran: list[str] = []
+
+    def run_gpu(stage: str, to: int, log: str, cmd: list[str], **kw: Any) -> int:
+        ran.append(stage)
+        return 0
+
+    def run_tl(stage: str, *a: Any) -> int:
+        ran.append(stage)
+        return 0
+
     monkeypatch.setattr(R, "derived_ok", lambda p: False)
-    monkeypatch.setattr(gpu, "run_gpu", lambda stage, to, log, cmd, **kw: ran.append(stage) or 0)
-    monkeypatch.setattr(gpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
+    monkeypatch.setattr(gpu, "run_gpu", run_gpu)
+    monkeypatch.setattr(gpu, "run_tl", run_tl)
     with pytest.raises(Stop) as e:
         gpu.match()
     assert e.value.rc == 0 and ran == ["match.capture", "match.control"]
     assert json.loads(Path(gpu.M, "gpu_legs.json").read_text()) == {"capture_rc": 0, "control_rc": 0}
-    assert open(f"{gpu.d}/stages.txt").read().splitlines()[-1].startswith("match-gpu PASS")
+    assert Path(gpu.d, "stages.txt").read_text().splitlines()[-1].startswith("match-gpu PASS")
     ran.clear()
     monkeypatch.setattr(R, "derived_ok", lambda p: True)
     monkeypatch.setattr(R, "tp_passed", lambda p: True)
 
     monkeypatch.setattr(cpu, "run_gpu", lambda *a, **kw: pytest.fail("a GPU stage in the cpu phase"))
-    monkeypatch.setattr(cpu, "run_tl", lambda stage, *a: ran.append(stage) or 0)
+    monkeypatch.setattr(cpu, "run_tl", run_tl)
     cpu.match()
-    last = open(f"{cpu.d}/stages.txt").read().splitlines()[-1].split()
+    last = Path(cpu.d, "stages.txt").read_text().splitlines()[-1].split()
     assert ran == ["match.check"] and last[:2] == ["match", "PASS"] and last[3] == "rc=0/0/0/-1"
 
 
@@ -943,7 +968,7 @@ def test_a_tp_fold_match_is_sized_to_the_runs_memory(tmp_path, monkeypatch, mem_
     plan = R.fold_plan(t.shapes, 78, 8, int(mem_gb) * 10**9)
     assert 339 * 2**30 < plan["gm_bytes"] < 400 * 10**9 and 36 * 10**9 < plan["fold_bytes"] < 44 * 10**9
     assert leg == plan["leg_s"] > 3 * 7200 and to == leg * (-(-8 // folds) + 2 * -(-8 // ranks) + 1) > 17 * 3600
-    (mark,) = [e for e in map(json.loads, open(t.timeline)) if e["stage"] == "match.fold_plan"]
+    (mark,) = [e for e in _timeline(t) if e["stage"] == "match.fold_plan"]
     assert (mark["rank_workers"], mark["fold_workers"], mark["leg_s"], mark["mem_gb"]) == (ranks, folds, leg, int(mem_gb))
 
 
@@ -955,12 +980,12 @@ def test_a_tp_fold_match_too_big_for_its_memory_runs_one_rank_at_a_time_and_the_
     t.match()
     cmd = seen["match.fold_match"][1]
     assert (cmd[cmd.index("--rank-workers") + 1], cmd[cmd.index("--fold-workers") + 1]) == ("1", "1")
-    assert "WARNING: 300 GB holds no planned GM-01 stage beside one fold" in open(f"{t.d}/row.log").read()
+    assert "WARNING: 300 GB holds no planned GM-01 stage beside one fold" in Path(t.d, "row.log").read_text()
     t, seen = _b8_cpu_half(tmp_path / "explicit", monkeypatch, "--fold-rank-workers", "2", "--fold-timeout", "100", mem_gb="300")
     t.match()
     to, cmd = seen["match.fold_match"]
     assert (cmd[cmd.index("--rank-workers") + 1], cmd[cmd.index("--fold-workers") + 1], cmd[cmd.index("--timeout") + 1]) == ("2", "0", "100")
-    assert to == 100 * (4 + 2 * 4 + 1) and "WARNING" not in open(f"{t.d}/row.log").read()
+    assert to == 100 * (4 + 2 * 4 + 1) and "WARNING" not in Path(t.d, "row.log").read_text()
 
 
 def test_reused_legs_keep_a_b8_ranks_x09_compare_and_rerun_one_cut_short(tmp_path):
