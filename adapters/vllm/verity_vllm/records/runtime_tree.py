@@ -5,9 +5,9 @@ at runtime (`correspondence.reader_for_acquire`) read it.
 Module-tree facts are not correspondence: they say which modules the runtime has, not which module a Program Call was lowered from
 (that is `verity_vllm.correspondence.runtime`).  A tree is taken from a live engine (`runtime_tree_of`), from a model instantiated on
 the meta device as the Build does (`verity_vllm.observe.runtime_tree.meta_runtime_tree`, which needs vLLM) or from paths
-(`runtime_tree_from_paths`: tests, fixtures).  Its one writer is `RuntimeTree.save`, which writes every field, so `from_json` and
-`load` refuse a missing one by name (`fields.MissingField`).  Unlike the package's other records it is not frozen: the meta path
-states the runner's facts on a tree it has built.
+(`runtime_tree_from_paths`: tests, fixtures).  Its one writer is `RuntimeTree.save`, which writes every field; `from_json` and
+`load` read a field the document leaves out, or holds as null or empty, as empty, and refuse another schema than the tree's.
+Unlike the package's other records it is not frozen: the meta path states the runner's facts on a tree it has built.
 """
 from __future__ import annotations
 
@@ -16,8 +16,6 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
-
-from verity_vllm.records.fields import RecordError, required
 
 __all__ = ["RUNNER_PATH", "RuntimeTree", "SCHEMA", "mro_names", "runtime_tree_from_paths", "runtime_tree_of"]
 
@@ -41,18 +39,20 @@ class RuntimeTree:
                 "buffers": sorted(self.buffers)}
 
     @classmethod
-    def from_json(cls, d: Mapping[str, Any], where: str = "the runtime tree") -> RuntimeTree:
-        """The tree as `to_json` wrote it: a field it writes and `d` lacks is refused by name, and so is another schema."""
-        schema = required(d, "schema", where, str)
-        if schema != SCHEMA:
-            raise RecordError(where, "schema", f"is {schema!r}, not {SCHEMA!r}")
-        return cls(modules={str(k): [str(c) for c in v] for k, v in required(d, "modules", where, Mapping).items()},
-                   buffers=[str(b) for b in required(d, "buffers", where, (list, tuple))],
-                   runner=dict(required(d, "runner", where, Mapping)), source=required(d, "source", where, str))
+    def from_json(cls, d: Mapping[str, Any]) -> RuntimeTree:
+        """The tree a document holds.  A field it leaves out, or holds as null or empty, reads as empty; a document that names no
+        schema is read, and one that names another is refused."""
+        schema = d.get("schema")
+        if schema not in (None, SCHEMA):
+            raise ValueError(f"runtime tree schema {schema!r} != {SCHEMA}")
+        modules, buffers, runner, source = d.get("modules"), d.get("buffers"), d.get("runner"), d.get("source")
+        return cls(modules={str(k): [str(c) for c in v] for k, v in modules.items()} if modules else {},
+                   buffers=[str(b) for b in buffers] if buffers else [],
+                   runner=dict(runner) if runner else {}, source=str(source) if source else "")
 
     @classmethod
     def load(cls, path: str | Path) -> RuntimeTree:
-        return cls.from_json(json.loads(Path(path).read_text()), str(path))
+        return cls.from_json(json.loads(Path(path).read_text()))
 
     def save(self, path: str | Path) -> None:
         Path(path).write_text(json.dumps(self.to_json(), indent=1) + "\n")
