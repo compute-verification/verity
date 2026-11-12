@@ -87291,3 +87291,113 @@ Clock read: 12:08Z. PRF-585's branch `cursor/proofs-members-files-61d4` is still
 **Next, on your word.** Pull request 3 is three deep on #9274 until #9043 is on `main`, so it waits for that or goes in as one head with #9274. I start nothing of it until you say which.
 
 [read] Mailbox at 12:09Z: 170 lines, newest section 11:47Z. [run] Checkpoint note synced after this entry.
+
+## OUTBITS, Thu 12 Nov 12:14Z: PRF-588: the top-k sum, the residual add and the K=256 coordinate are at the census's width on a branch (one commit on CIR-251's norm switch; the condition's sessions accepted; vllm's named test passes); rows 6 and 7 and K=1536 are in no file, because circuit-check fails them: yours to rule; #9254's writer: the proof block yes, its count of 0 no
+
+Tags: [run] I ran it, [read] I read it, [relayed] another's claim I did not check, [derived] computed from those, [guess]. Every run below is a `research run --on auto` on a CPU node. None is on the served engine and none reads a served window.
+
+**What I need from you**
+
+1. Rows 6 and 7 and `{K=1536,N=8,G=128}` are not in this change, against your word that they go in it. circuit-check fails each at the census's statics, and PRF-588's own third line asks that it pass for each row touched. What they need is circuits' (part 6) and a file (part 2). Say whether circuits is asked, and whether the file of their own that I propose is right.
+2. #9254: my answer is no as it stands, with the line for circuits (last section).
+3. PRF-588 carries only the label `from:proofs` [read: Linear, about 11:45Z]. I need the goal label for the pull request's body.
+4. `verity/definitions/registry/tp_combine.py:34` (ours) gives `ResidualAdd_v2{N=6144}` as its example of a partial "written as one row of N elements". With the files at N=384 the residual add's output is 16 rows of 384. I left the sentence: whether the TP combine's chunk proof blocks then read those rows as they are is its owner's to say [read].
+
+**State**
+
+- Branch `cursor/proofs-prf588-widths-d9a4`, head `d7766ba013c2`, one commit on `origin/cursor/circuits-cir251-norm-switch-6f04` (`392922f46eb0`), pushed [run].
+- No pull request yet. Its head sits on CIR-251's three commits, which have no pull request and which circuits marks Mon 16 Nov at the earliest [relayed: CIR-251]; mine cannot land before them.
+
+**(1) What on `main` names an id that moves** [run: `git grep -F` of each id on `origin/main` `e52d53383d7f`; owners by `research msg owners --dry-run`]
+
+- `benchmarks/one_stage/glm53_all_families_tp8_step16.json` (@proofs): `MoeSum_v3{TOPK=8,H=3072}` and `ResidualAdd_v2{N=6144}`, each in `templates` and in `chunk_cap`. CIR-251's norm switch rewrites two norm ids on the same line and leaves these.
+- `benchmarks/one_stage/glm53_prefill_tp8_step0.json` (@proofs): the same two, and `ScaledMmFp8BlockSharedScale_v2{K=256,N=1,G=128}`. CIR-251: three norm ids.
+- `benchmarks/one_stage/glm53_prefill_tp8_step0_core.json` (@proofs): the same two. It names no GEMM coordinate. CIR-251: two norm ids.
+- `adapters/vllm/tools/description_sizes.json` (@vllm): one entry for each of the three ids. CIR-251's long-row commit rewrote the file. Its norm commit has not: on `392922f46eb0` the files name three `_v3` norm parts that have no entry, and the file still holds their three `_v2` [run: the tool's `list` against the file]. So vllm's named test fails on that head as it stands.
+- `adapters/vllm/tests/pipeline/test_served_unit_rows.py` (@vllm): `STATEMENTS`, the SHA-512 over the statements of the 43 templates the pinned files name with a `chunk_cap`. It names no id and moves with any. CIR-251's norm commit moved it to `36b89ee9…6b3934ac`.
+- `verity/definitions/registry/tp_combine.py:34` (@proofs): a docstring's example (ask 4).
+- Nothing else. No entry of `fixtures/artifacts.json` (@top), no `.circuit-check.json` pin and no Lean lock names one of the three, or one of the three that replace them [run].
+- Left, because they name a word row at the whole row's statics and not an id that moves: `benchmarks/harness/tests/test_prove.py:1545` (@benchmarks); `benchmarks/spot_figures/breakeven/reprice.py:114-192` and `tests/test_total_cost.py:181` (@proofs), tables keyed by `ResidualAdd_v1{N=6144}`; `benchmarks/served_units/stage.py:9` and `tests/test_names.py:55` (@circuits), whose example `census:MoeSum_v1{TOPK=8,H=3072}` is a width the census does not hold [read].
+
+**(2) The diff, file by file** (commit `d7766ba013c2`: five files, 103 lines in, 103 out) [run]
+
+- The step-16 file: `MoeSum_v3{TOPK=8,H=3072}` (cap 8) becomes `MoeSum_v3{TOPK=8,H=96}` (cap 256); `ResidualAdd_v2{N=6144}` (512) becomes `ResidualAdd_v2{N=384}` (8,192). 25 templates before and after.
+- The prefill file: the same two, each from cap 512 to 8,192; and `ScaledMmFp8BlockSharedScale_v2{K=256,N=1,G=128}` (8,192) becomes `{K=256,N=4,G=128}` (8,192). 20 templates before and after.
+- The prefill-core file: the same two, each to 8,192. 15 templates.
+- No `law` or `scope` line moves, and every other template keeps its cap [run: the edit asserts it].
+- The caps are my rule, yours to overrule. A column block's member keeps the columns it holds today (the file's cap times 32 or 16), and never more than one statement holds, which is 8,192 at k_log 22. The coordinate takes what one statement holds, as the entry it replaces did. What one statement holds is from staging each template [run: `r20261112-112025-8fef`].
+- `description_sizes.json`: written whole by `tools/description_sizes.py update` [run: `r20261112-115359-8120`; 98 measured, 7 kept, 0 failed; 7 of 105 past 4 MiB, none of them new].
+  - In: `MoeSum_v3{TOPK=8,H=96}` at 629,980 bytes, `ResidualAdd_v2{N=384}` at 92,809, the K=256 coordinate at N=4 at 1,066,541.
+  - Out: the three they replace (640,762; 92,832; 1,066,464 bytes).
+  - It also wrote the three `_v3` norm parts CIR-251's head lacks and dropped their `_v2`. Every measured line cites my run, so circuits' own update of this file will conflict with mine on every line, and whoever lands second runs the tool again (one node job, about 80 s).
+- `test_served_unit_rows.py`: `STATEMENTS` is `e05f622b…664588ca`; the count stays 43 [run: computed on the node as the test computes it; then the test passed].
+- vllm's named test, `test_the_record_has_exactly_the_served_templates`, passed with four more test files, 129 tests in all, on the job's tree; the commit's five files are that tree's bytes [run: sha256 compared].
+- Not made: a file for the three wider coordinates. What I would write once they pass circuit-check is a file of their own, `benchmarks/one_stage/glm53_fp8_gemm_tp8_step0.json`: both parts of the block-scaled FP8 linear row (its quantisation, and its GEMM at the census's width) at K = 6144, 2048, 1536 and 256, under the prefill file's scope and law, eight templates. A job wrote it and I did not commit it [run: `r20261112-114959-0cce`].
+  - Why not the served prefill file: under its scope the three would put every K = 6144, 2048 and 1536 coordinate of steps 0 and 1 in the window a served run makes on rank 0, and the file has named only the K=256 coordinates since it was added [read: its first commit]. I have not measured that window. My note from this morning says about 20.5 GB more rows a rank, and that circuits left them out for memory; I cannot point to the working of either now [guess].
+  - What the file costs: two list entries in `adapters/vllm/pyproject.toml` (vllm's); three size entries, measured in that job at 1,122,690, 1,083,608 and 1,078,746 bytes, all under 4 MiB; and one more `law` line for NET-365. `STATEMENTS` does not move for it [run].
+
+**(3) What a Program row commits, before and after**
+
+- Top-k sum, Program row `MoeSum_v1{TOPK=8,H=6144}`. Before: 2 proof blocks, each on an input row of 393,216 bits and an output row of 49,152 [derived from the Definition's ports]. After: 64 proof blocks, each on an input row of 12,288 bits and an output row of 1,536 [run: staged]. The same 884,736 bits, in 128 committed rows where there were 4.
+- Residual add, Program row `ResidualAdd_v1{N=6144}`. Before: 1 proof block on two input rows and one output row of 98,304 bits each. After: 16 proof blocks, each on three rows of 6,144 bits [run: staged]. The same 294,912 bits, in 48 rows where there were 3.
+- The K=256 GEMM part of a block-scaled FP8 linear row of N outputs: N/4 proof blocks where there were N, each reading the activation row and its scales once for four outputs [run: `unit_templates` of the row lists the template N/4 times].
+- A proof block's output size class falls from 65,536 bits to 2,048 (top-k sum) and from 131,072 to 8,192 (residual add) [derived from the output rows above].
+- The rows to prove a whole Program row stay the same by the census's estimate: 32 blocks of 2^22 against one of 2^27, and 16 of 2^22 against one of 2^26 [relayed: circuits]. I did not stage today's two templates: the job staging them reached 47.8 GiB and I cancelled it.
+- One consequence to state: a law that draws a fixed count a stratum (today's `stratified:1`) now draws one proof block of 96 columns where it drew one of 3,072 [derived]. Stating the laws as rates is NET-365's.
+- What moves for a served run: nothing committed at serving. The Commit's record names no partition file [read: `pipeline/tp/c2.py`]. A window is made after the Commit, under the file its maker is handed [read: `pipeline/tp/serving_rows.py:133, 201`]. So a window made with this change has another population Program (the top-k sum's count times 32, the residual add's times 16, the K=256 coordinate's over 4), and another partition digest, registration digest and members' roots. No served run pins one of the three files by digest [relayed: vllm, 11:05Z].
+- What moves in the tree: `STATEMENTS` and the size file, above. `fixtures/artifacts.json` gains no id [run].
+
+**(4) The run for the condition: done, accepted** [run: `r20261112-111640-2011`, vy-nebius-cpu-2, 216 s, rc 0, on `392922f46eb0`]
+
+- Driver: `benchmarks/one_stage/m1_forms.sh`, three cases of `m1_unit.py --bin --lean --n N`. Each binds the template to its population Program, proves one `--zk` session of N proof blocks, and the Lean verifier derives the proof blocks from the Program and checks the session.
+- `ResidualAdd_v2{N=384}`, 16 proof blocks (one Program row's): 275,328 ANDs each, k_log 22; proved in 2.9 s; Lean accepted in 3.73 s.
+- `MoeSum_v3{TOPK=8,H=96}`, 32 proof blocks (half a row's) and 64 (a row's): 501,312 ANDs each, k_log 22; proved in 4.3 s and 5.1 s; Lean accepted in 4.99 s and 5.48 s.
+- The same for the coordinate, which your condition did not name: 16 proof blocks of `ScaledMmFp8BlockSharedScale_v2{K=256,N=4,G=128}`, 251,848 ANDs each, k_log 22; proved in 3.7 s; Lean accepted in 4.15 s [run: `r20261112-120315-8763`, vy-nebius-cpu-5, on `d7766ba013c2`].
+- The limit: each session is a population Program of one template at that count, on values drawn for each proof block, not the column blocks of one served row. That proof block j of a row reads columns [jw, jw + w) is what `test_serving_rows_cols.py` holds, and it passed in my job. No served window has been made under these files.
+
+**(5) What is not in PRF-588's change, and what each takes**
+
+- Rows 6 and 7 and `{K=1536,N=8,G=128}` (in the issue, not in this change): circuits' change of part 6, then the file of part 2 with its size entries, and a session of each. Staged today: K=6144 at N=4 is k_log 25 (204 s, 7.7 GB to stage); K=2048 at N=4 and K=1536 at N=8 are k_log 24 [run: `r20261112-112025-8fef`]. I have proved no session of the three.
+- The seven `EmbeddingShard` kinds (0.513%): the step-16 file names `EmbeddingShard_v2{VS=19360,H=1,START=0}`, rank 0's; the census names one a rank, `START` = 19,360 × rank [run]. Ranks 1 to 7 need a file a rank, or a reader that puts the rank's `START` in; seven size entries either way. I have not read how a file is applied to ranks 1 to 7 today.
+- Rows 8 and 14 and five of the nine kinds (`DsaMqaLogits_v3`, `SparseMlaHeadEnd_v1`, `DsaIndexerQ_v1`, `AllReduceResidualMnnvl_v1`, `DsaTopKShortRow_v1`; 2.22% together): each has a registered Boolean version that binds as a template whose word is the census's name [run: my 08:14Z entry]. Each needs an entry in a file whose scope holds its rows, a staged cap, a size entry, `STATEMENTS` if the file is a pinned one, and a check that the served Program row lists it. None of that is run.
+- The other four of the nine are norm kinds (0.118%): the files name a norm row in two parts and the census names it whole. The census's side moves, circuits' [read].
+- Step 16's FlashInfer row: the step-16 file names `FlashInferFp8Linear_v2{K=256,N=1}`, the row's coordinate at one output, where the census names the row's two parts. The same kind of change as this one; no issue asks it [read].
+- The shares above are of Flock's proving time at one prover, by kernels' table [relayed]. By exact name against the nine partition files, 14 of the census's 45 kinds are named as their Boolean version at the census's statics after this change (6.625%), against 11 before (5.258%). Rows 6 and 7 are 21.2% [run: 1.2 s, binds no template; logs in my artifacts].
+
+**(6) circuit-check**
+
+- The change adds or modifies no Definition, template or lowering. It changes which registered Definition, at which statics, three files name [read: the commit touches no file under `verity/`].
+- The three ids the files newly name pass at those statics: `circuit-check 'MoeSum_v3{TOPK=8,H=96}' 'ResidualAdd_v2{N=384}' 'ScaledMmFp8BlockSharedScale_v2{K=256,N=4,G=128}'`: 3 targets, 0 failures. It reports, without failing, 2,556 redundant gates in the coordinate, and that the coordinate recomputes 30,768 gates across its units [run: `r20261112-115617-035e`, on `392922f46eb0`, whose Definitions my commit does not touch; report `out/prf588-circuit-check.json`].
+- The three wider coordinates fail: `partition/unpartitioned`, "over the partition budget 5000000; `ScaledMmFp8BlockCoordinateGivenScale_v2{K=…,G=128}` is no Call", at 18,141,744 gates (K=6144, N=4), 6,047,728 (K=2048, N=4) and 8,985,672 (K=1536, N=8). Their vectors against the reference pass [run: `r20261112-113146-e778`].
+- What would pass them: the coordinate part held as a Call. Held so (`--as-call`), it passes at K = 1536, 2048 and 6144: 3 targets, 0 failures, 18,507 redundant gates reported [run: `r20261112-115617-035e`].
+- The list that makes it a Call is `targets.CALLEE_CALLS` in circuit-check (@circuits). A test derives that list from the suite's bindings, and an entry the suite does not ask for only warns; so the lasting form is a binding of the coordinate at a served size, which then asks for the entry [read: `test_circuit_check.py:1203`; not run].
+
+**#9254 (CIR-242): no as it stands. The proof block is fine; its count of 0 is not.**
+
+- The partition accepts it. `_check_units` and Lean's `checkTemplates` refuse a template with no gate, or with more bits than a class holds; 0 bits is in the 16-bit class [read]. On the pull request's head `aa394f635390`, the Boolean writer at 64 keys of 64 has 4,096 gates and returns 65,536 bits by its signature, and `_template_bits` gives 0, so class 16. The word form at 16 keys of 16 gives 4,096 [run].
+- Why 0: the writer is wires. Each returned bit is one of its own input bits, not a gate of its activation, and `_template_bits` counts returned gates only. Its only gates are one constant a word that no output reads (circuit-check reports 4,096 dead gates), and they are all that keeps the partition's "has no gate" refusal off it [read].
+- The verifier accepts it. `OneStageZk.templateOk` counts 16 bits for each output leaf of the circuit file: 65,536 at 64 keys, under 262,144 [read]. Circuits proved one and the Lean verifier accepted it [relayed: the pull request's body].
+- No check or theorem excludes it. `Partitions` asks that a block be non-empty and that its committed bits fit a class [read]. It is sized three ways: 0 by the partition's check, in Python and in Lean; 65,536 by `templateOk`; 65,536 by the planner, which reads the signature [read].
+- The count a session's size is priced by does not move. A session's size is from the block's rows, k_log 24 at 64 keys [relayed], and the planner's cost reads the signature's 65,536 bits [read: `block_census.py`].
+- What the 0 does change, which is my reason: `_template_bits` is also the weight the leak bound gives a wrong proof block of a template (`prove_path.charge_terms` and `scan_zk.py`'s: β_δ weighs each template's proof blocks by it). A wrong writer block commits an output row of 65,536 bits that eight heads' proof blocks read, and at 0 it adds nothing to β_δ or to β_δ + λ_δ [read]. Today the writer's input is a free row, so an audit with it reports its bound as vacuous and no figure is wrong yet [read; I ran no audit with a writer in it]. The 0 turns into a wrong figure when the input is bound.
+- The line for circuits, in #9254: the Boolean writer's size class counts the row it returns. Each returned bit is a gate of the writer's own activation, as in the word form, and a test holds `_template_bits` of the served writer to 16 × NVIS × W (65,536 at 64 keys of 64). The constants no output reads go with it.
+- Ours, not circuits', and not in #9254: `_template_bits` and `Spot.Partition.templateBits` size at 0 any proof block that returns its own input. They should count a returned input bit, or refuse it. That is Python, Lean, the difftest and the lock's records: one issue of ours if you want it. Until then a pass-through wider than 262,144 bits passes the partition's check and is refused only by `templateOk`, at each session [read].
+- Beside the count: the pull request says nothing binds the writer's input to the KV cache or the gather [relayed]. Until a proof block computes that row it is free input at its width, whatever the class [derived: AGENTS.md, "Nondeterminism is quantified"].
+
+**Runs**
+
+- `r20261112-111640-2011`: the condition's three sessions, accepted.
+- `r20261112-120315-8763`: the coordinate's session, accepted.
+- `r20261112-115359-8120`: the edit, the size file and `STATEMENTS`, then five test files: 129 passed. The commit is its output.
+- `r20261112-114959-0cce`: the same with the file of the wider coordinates: 132 passed. Not committed.
+- `r20261112-115617-035e`: circuit-check of the three ids, and of the coordinate part as a Call: 0 failures in each.
+- `r20261112-113146-e778`: circuit-check, exit 1: the three failures above. Its first command named bare families and failed as not bound, my mistake.
+- `r20261112-112025-8fef`: cancelled by me at 11:42Z. Its edit stopped on a cap past what one statement holds (my first rule, since corrected), and what still ran was the staging of today's whole-row templates, at 47.8 GiB against the 48 GB I stated. Its six stagings of the new templates are where the caps come from.
+- `r20261112-120214-422c`: the changed suites at quick tier on `d7766ba013c2`: running on vy-nebius-cpu-4 at 12:14Z. I report it with the ready line.
+
+**Merge-trees, for the ready line** [run, 12:11Z]
+
+- Onto `origin/main` `8b536f5c1d62`: clean.
+- Onto `origin/cursor/lean-remote-merge-landing-fc8d` `f3837f57d113`: 13 files stop. `main` itself stops on 24 there now, where you wrote 23. The one stop of mine that is not `main`'s is `verity/definitions/tests/test_dsa_topk_reads.py`, which CIR-251's long-row commit under my branch brings: `392922f46eb0` alone stops on it too. None of my five files stops.
+
+**Next, without waiting for you:** the pull request (opened, not marked) when the suites' run ends, its body saying what is and is not in it. I put no goal label in it until you name one.
