@@ -8,6 +8,7 @@ import torch
 from verity.circuits.refs import Coll, array_of
 from verity.circuits.types import Array, Value
 
+from verity_vllm.log import init_logger
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
@@ -32,6 +33,8 @@ from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 
 # -- KV cache write + attention read (two ops) -----------------------------------------------------------------------------
 
+logger = init_logger(__name__)
+
 
 class _KvWrite:
     """The dummy result of `unified_kv_cache_update`: not a value; the pending (k, v) write of one layer."""
@@ -46,7 +49,8 @@ class _KvWrite:
 def _vllm_op(name: str) -> set:
     try:
         return {getattr(torch.ops.vllm, name).default}
-    except (AttributeError, RuntimeError):  # vLLM has registered no such op here (laptop): the rule has no targets
+    except Exception as e:  # noqa: BLE001 — vLLM has registered no such op here (laptop): the rule has no targets
+        logger.debug_once("a lookup in torch.ops.vllm raised %s: no rule targets the op", type(e).__name__)
         return set()
 
 
