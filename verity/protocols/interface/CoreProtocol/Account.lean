@@ -37,7 +37,7 @@ and the other, which follows.
 * A flow (compute, reads, a link's bits) has one row for the period. A verified amount is its answers' summed. A free
   amount is its answers' summed plus the capacity of the ticks no certified answer's span covers.
 * An amount at a moment (memory) has one row for each accepted answer, a session, and one for the period, which states
-  the least verified (or the most free) of its sessions at their largest error and counts them (`Row.sessions`).
+  the least verified (or the most free) of its sessions at their errors summed and counts them (`Row.sessions`).
 * A row whose error is 1 or more is `Status.noBound`: it prints "no bound at this period" in place of a number.
 * What no accepted answer covers is `Status.notAudited`: charged at capacity.
 
@@ -356,8 +356,6 @@ private def whole : Ratio := ⟨1, 1⟩
 
 private def plus (a b : Ratio) : Ratio := (Ratio.mk' (a.num * b.den + b.num * a.den) (a.den * b.den)).getD whole
 
-private def larger (a b : Ratio) : Ratio := if a.le b then b else a
-
 /-- The row of amount `m` certified as `n` at `error`, against capacity `total`: the other amount follows, and neither
 is printed at an error of 1 or more. A free amount is at most the capacity. -/
 private def certifiedRow (m : Amount) (place reading : String) (total : Option Nat) (n : Nat) (error : Ratio)
@@ -415,7 +413,7 @@ def Amount.rows (m : Amount) (S : Site) (digest : Sheet → String) (A : Site.Re
       let worst : Nat := match m.side with
         | .verified => each.foldl (fun n x => min n x.1) ((each.head?.map fun x => x.1).getD 0)
         | .free => each.foldl (fun n x => max n x.1) 0
-      let error : Ratio := each.foldl (fun e x => larger e x.2) ⟨0, 1⟩
+      let error : Ratio := each.foldl (fun e x => plus e x.2) ⟨0, 1⟩
       (each.zipIdx.map fun (x, i) => certifiedRow m at_ reading total x.1 x.2 1 (some i)) ++
         [certifiedRow m at_ reading total worst error rs.length none]
 
@@ -607,11 +605,11 @@ private def registered (p : Part) (S : Site) : List (String × Nat) := p.capacit
 -- compute's capacity at each reading: the sheet's own figures, and the larger of those and the auditor's estimate
 #guard ((table [] [] { auditor with sheet := fun _ => some (rated .zero 4200000000000000) }).take 2).map
     (fun r => (r.reading, r.capacity)) == [("stated", some 4000000000), ("bound", some 4200000000)]
--- an amount at a moment: a row for each session and one for the period, the least verified at the largest error
+-- an amount at a moment: a row for each session and one for the period, the least verified at the errors summed
 #guard cells ((table [held] [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3) ==
   [("held", "gpu0", "registered", some 8589934592, some 6000000000, some 2589934592, "1/100"),
    ("held", "gpu0", "registered", some 8589934592, some 5000000000, some 3589934592, "1/50"),
-   ("held", "gpu0", "registered", some 8589934592, some 5000000000, some 3589934592, "1/50")]
+   ("held", "gpu0", "registered", some 8589934592, some 5000000000, some 3589934592, "3/100")]
 #guard ((table [held] [session 6000000000 "1/100", session 5000000000 "1/50"]).take 3).map
     (fun r => (r.session, r.sessions)) == [(some 0, 1), (some 1, 1), (none, 2)]
 -- a session that certifies nothing verifies nothing, whatever amount it states
