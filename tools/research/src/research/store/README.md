@@ -490,7 +490,8 @@ research data lookup --tool NAME [--param k=v]... [--input name=art:...]... [--c
                                               -> attempts with that reuse_key (or --any-source: that derivation); ARGV is parsed as `run` would
 research data select [--kind K] [--where meta.key=value]... [--tool T] [--derivation D] [--attempt R] [--label k=v] [--json|--ids]
 research data snapshot --name NAME (--members art:... | --select <select flags>) [--note TEXT]  -> art id (dataset-snapshot/v1)
-research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json]
+research data labels TARGET [--history] [--key K] [--by PAT] [--remote] [--json [--with-tokens]]
+                                              a label_auth or label_delegation token prints as its length unless --with-tokens
                                               --remote: both / LOCAL ONLY (not durable) / REMOTE ONLY per assertion; exit 1 if any is local only
 research data label  TARGET KEY VALUE --by WHO [--ref REF] [--value-json] [--off-vocab]   refuses what the vocabulary (§8.1) cannot place
 research data preserved (RUN|ART)... [--mode head|readback|recorded] [--jobs N] [--json]
