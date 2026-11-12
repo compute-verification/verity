@@ -431,7 +431,10 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     `read_reason`) on the evidence, the audit record failing `coins` where it refuses. Then each negative (`a5_coins.negatives`,
     and the evidence for another window) as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused
     where `coins_reason` refuses and the Lean's run refuses at its select (`coins`). -> (the audit record, None for a late
-    proof or an outcome the stream refuses or holds pending; the negatives; the coins' record)."""
+    proof or an outcome the stream refuses or holds pending; the negatives; the coins' record). The coins' record says
+    whose coins `coins_reason` took (``verified``; None where it refused): the SHA-512 of the challenger key the evidence
+    verified under, and the id of the one session the auditor's ledger opens on the window's root under that key
+    (`challenger.pinned_session`, the read `coins_reason` makes)."""
     after, root = bytes.fromhex(R.digest(rec)), a.window_root
     published = a.coins.evidence()
     ev = AC.evidence(published, segment)
@@ -478,7 +481,13 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         neg[name] = {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted, "python": py,
                      "lean": side}
     checks = (result or {}).get("checks") or {}
+    verified = None
+    if ev is not None and why is None:
+        key = AC.Ch.ChallengerKey.from_json(ev["key"])
+        held = AC.Ch.pinned_session(ev["ledger"], {"root": root}, key, ev["pins"], ev["main"], AC.lms_verify)
+        verified = {"key_sha512": hashlib.sha512(key.public).hexdigest(), "session": held.session}
     record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
+              "verified": verified,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
     return result, neg, record
 
@@ -1101,7 +1110,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             print("A5 " + json.dumps({"no_audit_record": summary["coins"]["outcome"]}, default=str))
             return summary, False
         result["coins"] = {"source": "challenger", "segment": segment, "read": read.hex(),
-                           "outcome": summary["coins"]["outcome"]}
+                           "outcome": summary["coins"]["outcome"], "verified": summary["coins"]["verified"]}
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
@@ -1112,6 +1121,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
     result["checks_before_draw"] = checks
+    result["case_v2"] = case_written(out)
     if after:
         result["checks_after_draw"] = after
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
@@ -1271,6 +1281,16 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
             (out / "case-v2-members.json").write_text(json.dumps(pm, sort_keys=True))
         except Exception as x:  # noqa: BLE001 -- as the v1 case's
             (out / "case-v2-members-error.txt").write_text(f"{type(x).__name__}: {x}\n")
+
+
+def case_written(out: Path) -> dict:
+    """Whether `write_case` left the case for the compiled check, `Spot.OneStageZk`'s, under ``out``
+    (``case-v2.json``): ``{"written": True}``, or ``{"written": False, "why"}`` with why it left none, in the words of
+    the file that says so (``case-v2-error.txt``, or ``case-error.txt`` where the v1 case it is made from failed)."""
+    if (out / "case-v2.json").is_file():
+        return {"written": True}
+    said = next((out / f for f in ("case-v2-error.txt", "case-error.txt") if (out / f).is_file()), None)
+    return {"written": False, "why": said.read_text().strip() if said is not None else "the audit wrote none, and no reason"}
 
 
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,

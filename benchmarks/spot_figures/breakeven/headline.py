@@ -22,13 +22,14 @@ longest output.
 `--steady ROWS.json` prices each block of the row's line that a steady-state row of the file measures at that row
 (`reprice.steady`'s format, which `verity bench prove --steady-rows` writes by census block type), in place of the
 planner's price: the statement's GPU-seconds over its blocks, with the Lean verifier as measured and no walk or scale
-of the row's, which would rescale a measurement. A row prices the line's block of its own name. `--steady-map MAP.json`
-says where the names differ, `{census block type: target}`: the line's block that the row measures; `[block, n]` where
-the row's type is one of the n column blocks the line's block is cut into (n of its blocks a block, a statement of 1/n
-as many); or null, a row this line has no block for, which is listed as unread. A row that prices no block of the line
-and isn't mapped to null is refused by name, so no measurement is dropped unsaid. Each row then names the rows that
-priced it and the ones unread (`steady`), and its split gives the share of the plan's proving each basis prices
-(`split.basis`: `steady`, or the planner's table).
+of the row's, which would rescale a measurement. A row prices the line's block of its own name, and a fused read's
+row (`FUSED`) the line's fused block. `--steady-map MAP.json` says where else the names differ,
+`{census block type: target}`: the line's block that the row measures; `[block, n]` where the row's type is one of the
+n column blocks the line's block is cut into (n of its blocks a block, a statement of 1/n as many); or null, a row
+this line has no block for, which is listed as unread. A row that prices no block of the line and isn't mapped to null
+is refused by name, so no measurement is dropped unsaid. Each row then names the rows that priced it and the ones
+unread (`steady`), and its split gives the share of the plan's proving each basis prices (`split.basis`: `steady`, or
+the planner's table).
 """
 from __future__ import annotations
 
@@ -136,9 +137,11 @@ COMPRESSION_ANDS = 58120
 COPY_ANDS = 2 * (CLASS_MAX // 1024 + 3) * COMPRESSION_ANDS
 #: the compile's core-hours a sampled replay block
 COMPILE_CORE_H = 3.8
-#: the fused reads' types in a plan
-FUSED = {"fr-w13": ("EmbeddingRead_v1{V=256,H=3072}", "MoeExpertFp8BlockGemm_v4"),
-         "fr-w2": ("EmbeddingRead_v1{V=256,H=4096}", "MoeExpertFp8BlockGemmW_v4")}
+#: the fused reads' types in a plan: the read and the GEMM that consumes it, which the line's block is named by
+#: (`levers.fuse_reads`: `Fused[read + GEMM]`), and the one type a census holds the two as (its READ the read, then the
+#: GEMM's parameters)
+FUSED = {"fr-w13": ("EmbeddingRead_v1{V=256,H=3072}", "MoeExpertFp8BlockGemm_v4", "MoeExpertFp8ReadGemm_v1"),
+         "fr-w2": ("EmbeddingRead_v1{V=256,H=4096}", "MoeExpertFp8BlockGemmW_v4", "MoeExpertFp8ReadGemmW_v1")}
 LEFT_OUT = ("PageCopy[",)
 CALL_KEYS = ("block", "kind", "per_token", "seconds_per_block", "fixed_seconds", "statement_blocks", "ands", "k_log",
              "priced", "macs", "basis")
@@ -193,9 +196,19 @@ def planner() -> SimpleNamespace:
     return SimpleNamespace(levers=levers, reprice=reprice, sweep=sweep, f1=f1, opt=opt, tc=tc)
 
 
+def fused_block(name: str) -> str | None:
+    """The line's fused block that a census's fused type measures (`FUSED`); None for any other type."""
+    for read, gemm, census in FUSED.values():
+        head = f'{census}{{READ={{"fn":"{read}"}},'
+        if name.startswith(head):
+            return f"Fused[{read} + {gemm}{{{name[len(head):]}]"
+    return None
+
+
 def placed(rows: dict, where: dict) -> tuple[dict, list]:
     """Steady-state rows by the line's block each prices, and the census types left unread. `rows` is by census block
-    type (`reprice.steady`) and `where` maps a type whose name isn't the line's block: to that block, to
+    type (`reprice.steady`): a type prices the line's block of its own name, a fused read's type the line's fused
+    block (`fused_block`). `where` maps a type that prices another: to that block, to
     `[block, n]` (the type is one of n column blocks of it: n of the row's blocks make one, and a statement holds 1/n as
     many), or to None (unread). A map entry no row has, a statement that isn't whole blocks of the target and two rows
     for one block are refused."""
@@ -203,7 +216,8 @@ def placed(rows: dict, where: dict) -> tuple[dict, list]:
         raise ValueError(f"the map names {len(stale)} block types no steady-state row measures: {stale}; remove them")
     by: dict = {}
     for name, r in rows.items():
-        block, n = (name, 1) if name not in where else (where[name], 1) if not isinstance(where[name], list) else where[name]
+        to = where[name] if name in where else fused_block(name) or name
+        block, n = to if isinstance(to, list) else (to, 1)
         if block is None:
             continue
         if n < 1 or r["blocks"] % n:
@@ -436,7 +450,7 @@ def pricing_split(strata: list) -> dict:
 
 
 def type_of(block: str, known: dict) -> str | None:
-    for t, (read, gemm) in FUSED.items():
+    for t, (read, gemm, _census) in FUSED.items():
         if block.startswith(f"Fused[{read} + {gemm}{{"):
             return t
     return known.get(block)

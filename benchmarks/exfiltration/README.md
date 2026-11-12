@@ -12,6 +12,7 @@ verity bench exfiltration --json          the same as one document: value, unit,
 verity bench exfiltration --share 0.05    read at another share of total compute
 verity bench exfiltration --variant V     read one variant of the row, in a run that holds several
 verity bench exfiltration --response-ids N the network certifier's part for a class of at most N ids a response
+verity bench exfiltration --scan-delta D  the network certifier's errors at another δ of its scans (a fraction)
 verity bench exfiltration --local-only    read this machine's catalog alone, not the store's remote
 verity bench exfiltration --help          every parameter and its default
 ```
@@ -53,6 +54,29 @@ block, sampled on a served audit, holds that count to the response's ids. Until 
 server chooses the count, and the network certifier's row `design, no stop block` charges it, as its schedules.
 The command reads the output count from that row and prints it beside those sums, marked assumed, in every
 monitoring period and where it says no advice is priced.
+
+## The errors
+
+Every figure carries the error summed over everything it covers. A figure whose error is 1 or more is printed as
+"no bound at this period", with that error and no amount: a union bound of 1 or more bounds nothing.
+
+- **The compute audit's part** fails with at most its rows' δ over the monitoring period (`delta_seen`).
+- **The network certifier's part** fails with at most ε, which its document gives each row (`eps`): the δ of each
+  execution phase's scan, summed over every link of the scope and every execution phase of the monitoring period. A
+  scope's monitoring period has one ε, whichever row charges it, and the command refuses a document whose rows of
+  one carry two. So a link's week can carry an amount where the world's year carries none, from the same scans.
+- **The two together** fail with at most the sum of both parts' errors.
+
+The scans' δ is an input of the network certifier's calculator, and this command gives it one. By default it is the δ
+at which the row printed that sums the most execution phases, the world's year, carries an error of 2^-20: 2^-20
+divided by that row's execution phases, which the calculator's own document counts. Every row printed then carries
+that error or less. `verity bench certifier_term`'s result of record takes its δ the same way
+(`benchmarks/certifier_term/README.md`). `--scan-delta D` gives another. Either is marked assumed among the inputs,
+with how it was chosen. No term depends on the scans' δ, so an amount that is printed is the same at any δ; only the
+errors move, and with them which rows are printed at all. The δ printed beside a row is the one the calculator's
+document states among its inputs, never a copy the command keeps.
+
+## The requests
 
 Both parts count the same requests: the sampling plan's, which the network certifier's calculator counts by default
 and reads from the planner in the tree. The command holds no count of its own, so its inputs list that calculator's
@@ -103,11 +127,14 @@ plan of the case, is left out and listed under "Refused".
 - **The figure**: over the world's year, the compute audit's part in GB with its copies of the weights, its bits a
   request and the requests it is priced over, how its proving time is priced by the row's plan, then the network
   certifier's part under each of its rows at D_j = 2, then the two summed, each followed by a line under the
-  network certifier's label for what rests on the set-time card, then the output count. Beside them are the
-  errors: the compute audit's δ over the monitoring period, and the scan's ε, its execution phases' δ summed, which
-  bounds nothing at 1 or more. One more line gives the compute audit's part with the network check's own proving
-  taken off the audit budget (`--network-check-share`, assumed: no run measures it and the planner's rows don't
-  count it).
+  network certifier's label for what rests on the set-time card, then the output count. The network certifier's
+  figures end with their ε over the world's year and the δ of the scans it sums, and the sums with their error.
+  Where the ε is 1 or more the network certifier's part is "no bound at this period", with the ε, in place of every
+  amount of it, the output count among them; where the two parts' errors sum to 1 or more, so are the two together.
+  One line gives the errors: the compute audit's δ over the monitoring period, the network certifier's ε with the
+  scans' δ and the execution phases it sums, and their sum. One more line gives the compute audit's part with the
+  network check's own proving taken off the audit budget (`--network-check-share`, assumed: no run measures it and
+  the planner's rows don't count it).
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
   (derived from other figures) or `assumed`. The compute audit's come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
@@ -119,12 +146,18 @@ plan of the case, is left out and listed under "Refused".
   marked extrapolated. Under it, for each scope whose plan is read, its proving time by how its block families are
   priced, with the plan and its budget.
 - **The network certifier's part over the world's year**: each of its rows' schedules, cells, term at D_j = 2 with
-  its multiple of the weights, term at D_j = 1 in a column whose header carries the label, and the entries. A row
-  whose release times are taken once carries the label in its name.
+  its multiple of the weights, term at D_j = 1 in a column whose header carries the label, and the entries, then the
+  δ of its scans and its ε. A row whose release times are taken once carries the label in its name. A row whose ε is
+  1 or more has "no bound at this period" in place of each amount.
 - **Each monitoring period over all compute**: a week, a month and a year of the reference datacenter and of the
   world, with the compute audit's part as a pooled total and in bits a request, the network certifier's term of
   record under the scan, N2 and the design before its stop block and with it, the two together, and the output
-  count.
+  count. Each part's amounts are followed by its error over that scope and monitoring period: the compute audit's
+  δ, the scans' δ and the network certifier's ε, and the error of the two together. A figure whose error is 1 or more
+  is "no bound at this period".
 - **Each monitoring period over all compute, under the label**: the same scopes, with the network certifier's term
-  and the two together under `all three`, and under each other row at D_j = 1. Every column's header carries the
-  label, and no figure of the table is of record.
+  and the two together under `all three`, and under each other row at D_j = 1. Every amount's column carries the
+  label in its header, and no amount of the table is of record. Each line ends with its errors, the table above's.
+
+With `--json` the document holds the same: a scope's monitoring period has its `eps`, its `error` (the two together's,
+null for a scope no run of record holds) and its `phases`, and an amount that has no bound is null.
