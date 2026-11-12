@@ -17,8 +17,8 @@ side by side; it is not a package.
 | `inbox.py` | Messages to a running agent, on this VM or another. | The team skill; `research digest` |
 | `research.sh` | The `research` on an agent VM's PATH: it runs origin/main's `tools/research/src/research/at_main.py`, which runs the checkout's `research` or, when the checkout is only behind, origin/main's. | `install.sh`; `at_main.py` |
 
-The rest: `task_hook.py` (a coordinator never waits on a local worker in the foreground, and a cloud agent writes
-Linear through `research msg`), `stop_hook.py` (a message still waiting when a turn ends becomes its follow-up),
+The rest: `task_hook.py` (every Task launch names its worker's model, never `inherit`; a coordinator never waits on a
+local worker in the foreground; a cloud agent writes Linear through `research msg`), `stop_hook.py` (a message still waiting when a turn ends becomes its follow-up),
 `worktree_guard.py` (one agent per checkout), `env_guard.py` and `git_guard.sh` (an `env` that redacts values and a
 `git` that keeps credentials out of remote URLs and gives every push `pre_push.py`, which `install.sh` puts ahead of
 the system's), and `settings.py` (every environment variable the hooks share, read once).
