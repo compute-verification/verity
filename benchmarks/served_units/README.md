@@ -28,10 +28,14 @@ Four kinds of type (`stage.py`'s docstring has each):
 
 Files:
 
-- `stage.py UNIT N OUT [--public-weights [--packed]]`: the proof-block types at GLM-5.3's statics (per TP8 rank), the W8A8
+- `stage.py UNIT N OUT [--public-weights [--packed]] [--bind]`: the proof-block types at GLM-5.3's statics (per TP8 rank), the W8A8
   coordinate at Llama-3.2-1B's, and their synthetic values; `--public-weights` stages a `UNITS` type's weight row as public
   input ports on the same values, the block without its weight row's in-circuit opening (a statement the verifier refuses as
   outside the proved scope, after every check), each leaf in its own u16 words, or with `--packed` as the row lays them.
+  `--bind` stages a `UNITS`, `CENSUS` or `READS` statement bound to the population Program of its N instances and that
+  Program's partition object (`Q_template_instances` v0) instead of the provisional unit cover, and writes the verifier's
+  copies beside it (partition.json and program.json, the Lean verifier's `--partition` and `--program`), from which the
+  verifier derives the statement's proof blocks; the circuit is the unbound one but for its binding.
 - `job.sh`: builds, stages, proves and verifies every proof block of `SU_UNITS` (its header lists the checks and the environment);
   the builds, the run and the controls are `benchmarks/pouw/hidden_zk/job.sh`'s.
 - `summarize.py`: `out/<tag>/summary.json` and one table row per proof block.
@@ -49,7 +53,7 @@ Files:
   which a later `prove` balances its GPUs by (`WIN_SECONDS`). `settings.py` declares each variable it reads, with its
   default.
 - `tests/`: `window.py`'s `prove` on a stub `prove_time.sh`, `settings.py`, `ks_form.py` on synthetic circuit heads,
-  `stage.py`'s `census:NAME` and `full/D` on a stub stager, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s,
+  `stage.py`'s `census:NAME`, `full/D` and `--bind` on a stub stager, and `window.py`'s `name()` and `KEY` held to `prove_time.sh`'s,
   with the paths the key hashes (`KEY_PATHS` in each) held to the tree.
 - `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
   the Lean verifier's `ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
