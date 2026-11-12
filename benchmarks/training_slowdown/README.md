@@ -380,9 +380,10 @@ trace failed and the same job: the step was not refused, the process that traced
   have the traced step's cuts, and the block says so where an untraced step's token work fills two blocks or more.
 - The products count charges a token-indexed product for every position past each row's first, as words of its own
   (`work.P_BATCH`). A batch breaks that, to rounding, where two rows share their first two tokens or more, where a
-  row starts with a run of one token, and, on a model with no rotation, where two positions hold one token after
-  earlier tokens in the same proportions (`tests/test_batch_premise.py` holds each on the model's forward). No trace
-  keeps the batch's tokens, so the count takes the premise and measures none of them.
+  row starts with a run of three or more of one token, and, on a model with no rotation, where two positions hold
+  one token and their tokens up to it, its own included, are in the same proportions (`tests/test_batch_premise.py`
+  holds each on the model's forward). No trace keeps the batch's tokens, so the count takes the premise and measures
+  none of them.
 - Bit-for-bit rebuilds need the run's kernels: families are checked on the run's device, right after it trains.
 
 The suite: `uv run tools/verity/check/suites.py benchmarks/training_slowdown`.

@@ -111,10 +111,10 @@ def test_a_row_that_starts_with_a_run_of_one_token_holds_equal_words_along_the_r
 def test_without_the_rotation_one_token_after_the_same_proportions_holds_equal_words_after_the_first_attention(
         monkeypatch):
     """With no rotation an attention's weights read tokens and not places, so its output at a place is a mean of the
-    earlier tokens' values by their numbers: two places with one token whose earlier tokens are in the same
-    proportions hold equal words from the first attention to the second, in any order of those tokens. The second
-    attention reads the words of the places before, which differ between the two, so they part at every product
-    after it, which the last line holds. The control is that token after other proportions."""
+    values of the tokens up to it, its own included, by their numbers: two places with one token whose tokens up to
+    it are in the same proportions hold equal words from the first attention to the second, in any order of those
+    tokens. The second attention reads the words of the places before, which differ between the two, so they part at
+    every product after it, which the last line holds (`PART`). The control is that token after other proportions."""
     monkeypatch.setattr(model, "rope", lambda x, cos, sin: x)
     at = words(PROPORTIONS)
     first, second = at[3:BLOCK + 3], at[BLOCK + 3:]

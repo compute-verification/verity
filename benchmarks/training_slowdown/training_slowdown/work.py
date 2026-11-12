@@ -23,14 +23,14 @@ P_MATCH = "elementwise steps don't fan out (P-match)"
 #: the premise the products term takes on the step's batch, as published strings state it: M charges a token-indexed
 #: product for every position past each row's first (`SHARED_PREFIX`) as words of its own. Three batches break it
 #: (tests/test_batch_premise.py holds each on the model's forward): two rows that share their first two tokens or
-#: more hold equal words at the shared positions, at every layer; a row that starts with a run of one token holds
-#: equal words along the run, at every layer, with the rotation or without it, since attention over equal keys
-#: returns their one value, so a run of r repeats (r − 1)/n of that row's words; and without the rotation, two
-#: positions with one token whose earlier tokens are in the same proportions hold equal words after the first
-#: attention and not after the second. Equal is to rounding, not bit for bit: a float sums one word at two positions
-#: in two orders. The equal words are the forward's, which a forward product and a weight gradient read; the
-#: gradients at two such positions differ wherever a target or a later position's reading of them does. No trace
-#: keeps the batch's tokens, so no record checks the premise
+#: more hold equal words at the shared positions, at every layer; a row that starts with a run of three or more of
+#: one token holds equal words along the run, at every layer, with the rotation or without it, since attention over
+#: equal keys returns their one value, so a run of r charges r − 2 of that row's n positions a second time; and
+#: without the rotation, two positions with one token whose tokens up to it, its own included, are in the same
+#: proportions hold equal words after the first attention and not after the second. Equal is to rounding, not bit
+#: for bit: a float sums one word at two positions in two orders. The equal words are the forward's, which a forward
+#: product and a weight gradient read; the gradients at two such positions differ wherever a target or a later
+#: position's reading of them does. No trace keeps the batch's tokens, so no record checks the premise
 P_BATCH = "past each row's first position, no two positions of the batch hold equal words"
 #: the first training_slowdown whose capture writes a traced step's product rows (training_slowdown.capture.products' `CAPTURE`)
 PRODUCTS_FROM = "4.8"

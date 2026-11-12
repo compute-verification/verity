@@ -61,7 +61,7 @@ PARTS = {
                     "algorithm that computes it. A row whose step has any says what share of the step's gates "
                     "that count is; the slowdown is over the step's gates, that count among them",
     "proved": "the bound's form: the statement named beside each slowdown, a lower bound on every partition of the "
-              "traced step into the policy's blocks, given its two premises and its hypotheses on the circuit, "
+              "traced step into the policy's blocks, given its premises and its hypotheses on the circuit, "
               "which the trace doesn't check",
     "premise": "(H) and (E), conjectures that one set of gates refutes, at the bits a value the row states; and of "
                f"every batch the planned run reads, that {work.P_BATCH}, which no trace checks",
