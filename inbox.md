@@ -96,3 +96,38 @@ Note: `20261112T1307Z-report-net371-digestmove-probe-withheld`, synced. No secon
 
 TIMER: none
 
+[2026-11-12T13:08Z] 72fefcff6f40
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 5:08 AM PST. **A correction to my 4:54 AM PST line before you write NET-352 at noon, and the two lines you asked for at 5:00 AM PST. The conclusion stands: no Lean on the scan's path holds the tie end to end. What I had wrong: I called `V.audit_record` Python. It also runs Lean's record check, and Lean's is the one of record.**
+
+**1. The correction [read]**
+
+- `V.audit_record` (`benchmarks/network_traces/scan_zk.py` 1588-1589) is `verifier.audit_record` (`verity/protocols/spot/verifier/one_stage/verifier.py` 538-579). It runs Python's `audit.audit_record` and Lean's `record` command, and takes Lean's (`RECORD_VERDICT = "lean"`, line 57).
+- Lean's `Spot.Record.checks` (`verity/protocols/spot/verifier/lean/Spot/Record.lean` 109-127) has a `roots` check: each entry of the `session_roots` it is given is at the registration's root of that port. It compares the root alone, not the domain or the leaf count.
+- **Why that is still not the tie.** The map it is given is the prover's own word: the `LIVE` line of the prover's process (`benchmarks/one_stage/a8.py` 229), which the driver names `<member>/<port>` (`scan_zk.py` 1578). No Lean says that map is the header of the public file `flock-verify` held the session to. So Lean checks twice, and Python stands between the two.
+- My sentence "Lean only a member at a time" was wrong for the same reason; the registration's check (`V.check`, 1507) is Lean too. Neither reads a member's public file.
+
+**2. For the body: what `RowsOkHeld` does not say, and the Python that holds the tie today [read]**
+
+- The sentence: `RowsOkHeld` says the registration names each member's `o0` at the constant; it does not say that the statement a member's session proved reads its `o0` at the root the registration names.
+- The Python lines on the scan's path:
+  - `a7.statement_checks`, `benchmarks/one_stage/a7.py` 643-647, called at `scan_zk.py` 1510: each port of the member's public file's header is the registration's `<member>/<port>`, at its root and domain.
+  - `scan_zk.py` 1568-1570: the session's `LIVE` roots are that header's roots.
+  - `scan_zk.py` 1578: the driver names those roots `<member>/<port>` for the record check.
+
+**3. For the body: T below 2**
+
+- **Python tests and benchmarks: none, but the refusal's own case.**
+  - The staging's three setups are at T = 32, 32 and 16 [read: `scan_zk.py` 241-263]; the gate's scan schedule is 32 [read: `auditor.py` 408].
+  - A served run's schedule: `every` divides T (`warden.py` 215-216) and the class holds `every` to its `EVERY` (`ingress_scan.py` 249), which is 16 or 2. So T is at least 2 [read].
+  - The staging cannot name a scan's members at T = 1: `members_of(TEMPLATES, 1, 1)` raises `KeyError` [run locally].
+  - The difftest draws T from 2 and 3, `EQUAL_T` is 3, and `ONE_TICK = 1` is the refusal's case [read: `period_case.py` 1283, 1536-1538].
+- **Lean: three witness schedules are at T = 1, and none is a period `check` accepts with an execution phase** [read; they still build, run r20261112-124635-9d25].
+  - `cappedSchedule` (`security/Properties/NetworkPeriod.lean` 220): `rowsCapPublished_honest` accepts a period with no execution phase.
+  - `slotSchedule` (`security/Proofs/Properties/NetworkPeriod.lean` 150) and `oneSlot` (`security/Proofs/Properties/NetworkScan.lean` 84): statements of the check's parts (`wired`, `tiedIn`, `stateTied`, `chargedOf`) or of a check that accepts everything.
+- **One thing for you to rule.** The honest lemmas of `RowsProgWired`, `RowsStateTied` and `RowsTiedCharged` show the check's parts taking an execution phase at T = 1, a schedule at which `check` now refuses every execution phase. They are still true as statements of the parts. Moving `slotSchedule` to T = 2 changes three properties' witnesses and their records, so I have not touched it. Say if you want it with the `--update`.
+- **Kept runs: I did not read the store's runs one by one.** What I know: the staging's own schedules have only ever been at T = 16 or 32 [run: every `window=` literal in `git log -p --follow` of `scan_zk.py`], and its classes' `EVERY` 2, 3, 8, 10 or 16, so a served run's T was at least 2 if `serves` held `every` then as now [argued]. The one kept run I read, r20261112-103307-25cb, is at T = 16.
+
+**For answer 3, one more read:** the window circuit's `SCAN_STATE` is at T leaves in the adapter's tests too (`adapters/vllm/tests/program/predict/test_window_rows.py` 236, 625), so the extra state leaf is a change in the adapter, not only in the scan.
+
+Still running: suites r20261112-124729-7857. Nothing opened, marked or merged; no `--update`.
+
