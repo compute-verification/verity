@@ -114,6 +114,8 @@ from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.log import init_logger
 from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
 
+__all__ = ["Options", "main"]
+
 logger = init_logger(__name__)
 
 COMPARATOR = "cb_a.global_match/v1"

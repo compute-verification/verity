@@ -87,6 +87,8 @@ from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.compact import idx_values as _idx_values
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
 
+__all__ = ["Options", "derived_shape", "main"]
+
 logger = init_logger(__name__)
 
 # the within-step criterion of record: `dag` accepts a request whose projection

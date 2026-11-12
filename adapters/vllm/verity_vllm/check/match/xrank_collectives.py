@@ -37,6 +37,9 @@ from typing import Any
 
 import numpy as np
 
+__all__ = ["ROUTED_FAMILIES", "check_picks", "coverage_of_unreplayable", "fold_pairs", "is_embedding_site",
+           "pick_strata", "routed_expected", "spec_key", "words"]
+
 
 def collective_family(kind: str, world: int) -> str:
     """The received-output Definition family of a `kind` collective in a `world`-rank communicator, from the registry's own

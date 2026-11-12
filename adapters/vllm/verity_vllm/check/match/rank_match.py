@@ -33,6 +33,8 @@ from typing import Any
 from verity_vllm.engine.collectives.collective_sites import MOE_COLLECTIVE_CLASSES
 from verity_vllm.engine.profiles import layer_classes as LC
 
+__all__ = ["commit_binding", "cross_rank_check", "load_recorder", "own_producers_from_record"]
+
 PARTIAL_PRODUCERS = ("EmbeddingShard_v1", "Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "MoeSum", "MoeExpertSum", "batch:Gemm")   # own-partial producer classes
 LINEAR_PRODUCERS = ("Gemm_v1", "Gemm_v2", "DeepGemmFp8Linear", "FlashInferFp8Linear", "batch:Gemm")
 #: the producer class the ISSUING MODULE's class admits (the link table names the class: `... (RowParallelLinear)`): an all-reduce issued
