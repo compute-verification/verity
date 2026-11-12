@@ -175,16 +175,16 @@ def window_laws(layouts: Sequence["Layout"], k: int = RECORD_K, floors: tuple[tu
     K_c (`--work K_c`) and work table. Within one Program (`ncp2.window`) the calls share their templates' strata and one K,
     which is what `verify` derives there instead.
 
-    **y's floors**: each call's dequantization stratum s has floor f_s = ⌈K_y·n_s/N⌉, n_s its
-    units and N the execution phase's dequantization units, so k_s = min(n_s, f_s) meets k_s·N ≥ K_y·n_s or proves the stratum, and an
-    execution phase samples at most K_y + C of its y cells. K_y = K = 27,713 keeps δ = 2⁻⁴⁰ over the execution phase: a tile-bad and a y-bad
-    wrong set are one family of the audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y, not their sum.
-    The other zero-work templates keep their floors (1 unless ``floors`` names them). Per call these are pinned
-    (`audit_work_floor`); over the execution phase, the per-call split and y's floors are the execution phase pin
-    `audit_window_split_of_record` (`FlockSoundness/Audit/Window.lean`), which takes each call's work
-    in one stratum (`check_work_strata`) and each call's sample under its own key context (`Traced.draw`'s `Ledger`).
-    It also takes an execution phase that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): an execution phase with
-    either empty is refused here, so none is ever sampled or accepted."""
+    **y's floors**: each call's dequantization stratum s has floor f_s = ⌈K_y·n_s/N⌉, n_s its units and N the execution
+    phase's dequantization units, so k_s = min(n_s, f_s) meets k_s·N ≥ K_y·n_s or proves the stratum, and an execution
+    phase samples at most K_y + C of its y cells. K_y = K = 27,713 keeps δ = 2⁻⁴⁰ over the execution phase: a tile-bad
+    and a y-bad wrong set are one family of the audit, so its sampling term is the larger of (1 − ε)^K and (1 − ε)^K_y,
+    not their sum. The other zero-work templates keep their floors (1 unless ``floors`` names them). Per call these are
+    pinned (`audit_work_floor`); over the execution phase, the per-call split and y's floors are the execution phase pin
+    `audit_window_split_of_record` (`security/Proofs/Flock/Soundness/Audit/Window.lean`), which takes each call's work
+    in one stratum (`check_work_strata`) and each call's sample under its own key context (`Traced.draw`'s `Ledger`). It
+    also takes an execution phase that does some work (0 < W, its `hW`) and has y cells (0 < N, its `hN`): an execution
+    phase with either empty is refused here, so none is ever sampled or accepted."""
     if not layouts:
         raise ValueError("a window has at least one call")
     for lay in layouts:
