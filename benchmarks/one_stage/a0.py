@@ -202,11 +202,13 @@ def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
 
 
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
-            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
+            zk: bool = False, env: dict | None = None, prove_timeout: float = 3600,
+            tree_from: Sequence[str] | None = None) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
     Under FLOCK_CHALLENGER=1 a session on the keyed coin tree (`zk`, or `FC_COINS=tree`) takes its tree from a challenger of
     its own under ``out/challenger`` (`verity_flock.challengers`, `serve --tree-from`): ``live["challenger"]`` is its exit
-    and its audit of the session's record, and a session whose challenger failed is refused.
+    and its audit of the session's record, and a session whose challenger failed is refused. With ``tree_from`` (the
+    caller's ``--tree-from`` flags) it takes its tree from the challenger those name instead, whose audit is the caller's.
     `draw_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
@@ -218,7 +220,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     zf = ["--zk"] if zk else []
     tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
     ch = None
-    if own_challenger(env, zk):
+    if tree_from is None and own_challenger(env, zk):
         from verity_flock import challengers as CH
         ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
@@ -226,7 +228,7 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
                               "--instances", str(d / f"pub-{n}.bin"), "--circuit", str(d / "circuit.txt"), *tu, "--tables", str(tables),
                               "--pin", st["pin"], "--operator", "one-stage-a0",
                               *(["--draw-file", str(draw_file)] if draw_file else ["--draw", law]), "--sessions", "1",
-                              *(ch[1] if ch else [])],
+                              *(ch[1] if ch else tree_from or [])],
                              stdout=serve_log, stderr=subprocess.STDOUT, text=True, env=environ(env))
     got = None
     try:
