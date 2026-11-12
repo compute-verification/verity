@@ -46,7 +46,7 @@ private def entry (xs : List Loc) : Entry := { locs := [root, host, gpu] ++ xs }
   "\"parent\":\"node0\",\"scheme\":\"\",\"shared\":[],\"sheet\":\"\",\"tier\":\"dram\",\"time_unit\":null," ++
   "\"timebase\":null}"
 private def auditorJson : Json :=
-  Json.mkObj [("drift", .arr #[Json.mkObj [("drift", "3/5000"), ("id", "cert0")]]),
+  Json.mkObj [("drift", .arr #[Json.mkObj [("drift", "3/5000"), ("id", "vm0")]]),
     ("hosts", .arr #[Json.mkObj [("cards", .arr #[Json.mkObj [("count", (8 : Nat)), ("sku", "k")]]),
       ("chip", (8002732032 : Nat)), ("id", "node0"),
       ("shared", .arr #[Json.mkObj [("bw", (50 : Nat)), ("tier", "disk")]]),
@@ -62,7 +62,7 @@ private def auditorJson : Json :=
 #guard ((Registration.Auditor.ofJson auditorJson).toOption.map fun A => (A.key "cert0", A.scheme "cert0", A.scheme "x")) ==
   some (some "k0", some "lms-sha512/n64-w1-h20/v0", none)
 #guard ((Registration.Auditor.ofJson auditorJson).toOption.map fun A => A.drift.map fun d => (d.1, toString d.2.1)) ==
-  some [("cert0", "3/5000")]
+  some [("vm0", "3/5000")]
 #guard ((Registration.Auditor.ofJson auditorJson).toOption.map fun A => A.timebases) == some [("vm0", "tb0")]
 -- the read rate of a host's leaf alone; with a device's leaf whose sheet is not registered there is none
 #guard (⟨[], (entry [dram (some 6554), hbm none]).locs, []⟩ : Site).readRate (fun _ => "s") ["dram0"] == some 6554
@@ -158,28 +158,21 @@ private def sharing : Registration.Auditor :=
 #guard !decide (Entry.Chips auditor { locs := [root, { host with shared := [(.disk, 50)] }] })
 #guard !decide (Entry.Chips { auditor with hosts := [("node0", { chip := 8002732032, shared := [(.disk, 0)] })] }
   { locs := [root, { host with shared := [(.disk, 0)] }] })
--- a clock's drift: one of the auditor's devices states the auditor's figure for its clock, or none where the auditor
--- has none; refused with another, at 1 or more, and on a location that is not the auditor's device
 private def root2 : String := "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0"
 private def tenth : Figure := if h : 0 ≤ mkRat 1 10 then ⟨_, h⟩ else ⟨0, by decide⟩
 private def one : Figure := ⟨1, by decide⟩
-private def cert (drift : Option Figure) : Loc :=
-  { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key := "k0", scheme := root2, drift }
-private def keyed (drift : List (String × Figure)) (scheme : String := root2) : Registration.Auditor :=
+private def cert : Loc :=
+  { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key := "k0", scheme := root2 }
+private def keyedAt (scheme : String) : Registration.Auditor :=
   { auditor with key := fun i => if i == "cert0" then some "k0" else none,
-                 scheme := fun i => if i == "cert0" then some scheme else none, drift }
+                 scheme := fun i => if i == "cert0" then some scheme else none }
+private def keyed : Registration.Auditor := keyedAt root2
 -- a key's scheme: the auditor's for the device, and one the check knows; none on a location that is not its device
 #guard root2 ∈ SCHEMES
-#guard !decide (Entry.Owners (keyed [] "lms-sha512/n64-w1-h20/v0") { locs := [root, cert none] })
-#guard !decide (Entry.Owners (keyed [] "x") { locs := [root, { cert none with scheme := "x" }] })
-#guard !decide (Entry.Owners (keyed []) { locs := [root, { host with scheme := root2 }] })
-#guard decide (Entry.Owners (keyed [("cert0", tenth)]) { locs := [root, cert (some tenth)] })
-#guard decide (Entry.Owners (keyed []) { locs := [root, cert none] })
-#guard !decide (Entry.Owners (keyed [("cert0", tenth)]) { locs := [root, cert none] })
-#guard !decide (Entry.Owners (keyed []) { locs := [root, cert (some tenth)] })
-#guard !decide (Entry.Owners (keyed [("cert0", one)]) { locs := [root, cert (some one)] })
-#guard !decide (Entry.Owners (keyed []) { locs := [root, { host with drift := some tenth }] })
-#guard (Loc.ofJson (cert (some tenth)).toJson).toOption == some (cert (some tenth))
+#guard decide (Entry.Owners keyed { locs := [root, cert] })
+#guard !decide (Entry.Owners (keyedAt "lms-sha512/n64-w1-h20/v0") { locs := [root, cert] })
+#guard !decide (Entry.Owners (keyedAt "x") { locs := [root, { cert with scheme := "x" }] })
+#guard !decide (Entry.Owners keyed { locs := [root, { host with scheme := root2 }] })
 #guard (Loc.ofJson ({ host with shared := [(.disk, 50)] } : Loc).toJson).toOption == some { host with shared := [(.disk, 50)] }
 -- the JSON of a location that states the unit of time and of a link that says why it is not split
 #guard [root, host].all fun x => (Loc.ofJson x.toJson).toOption == some x
@@ -199,7 +192,7 @@ private def keyed (drift : List (String × Figure)) (scheme : String := root2) :
 private def vm (parent : String := "site0") : Loc :=
   { id := "vm0", kind := .auditorHost, parent := some parent, owner := .auditor, key := "k1", scheme := root2,
     timebase := some "tb0" }
-private def inVm : Loc := { cert none with parent := some "vm0" }
+private def inVm : Loc := { cert with parent := some "vm0" }
 private def uplinks : List Link :=
   [{ id := "up0", ends := ("node0", "cert0"), β := some 1, latency := 0 },
    { id := "up1", ends := ("cert0", outside), β := some 1, latency := 0 }]
@@ -212,13 +205,13 @@ private def uplinks : List Link :=
 private def toVm : Link := { id := "l0", ends := ("node0", "vm0"), β := some 1, latency := 0 }
 #guard !decide (Entry.Kinds empty { locs := [root, host, vm], links := [toVm] })
 private def vmKeyed : Registration.Auditor :=
-  { keyed [] with key := fun i => if i == "vm0" then some "k1" else (keyed []).key i,
-                  scheme := fun i => if i == "vm0" then some root2 else (keyed []).scheme i,
-                  timebases := [("vm0", "tb0")] }
+  { keyed with key := fun i => if i == "vm0" then some "k1" else keyed.key i,
+               scheme := fun i => if i == "vm0" then some root2 else keyed.scheme i,
+               timebases := [("vm0", "tb0")] }
 #guard decide (Entry.Owners vmKeyed { locs := [root, vm, inVm] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with owner := .prover }] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with key := "k9" }] })
-#guard !decide (Entry.Owners (keyed []) { locs := [root, vm] })
+#guard !decide (Entry.Owners keyed { locs := [root, vm] })
 -- its time base: an auditor's host states the auditor's for it, held as its key is; refused with none, with another,
 -- or where the auditor has none for the host; no other location states one, the auditor's device in the host neither
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with timebase := none }] })
@@ -226,6 +219,24 @@ private def vmKeyed : Registration.Auditor :=
 #guard !decide (Entry.Owners { vmKeyed with timebases := [] } { locs := [root, vm] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, vm, { inVm with timebase := some "tb0" }] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { host with timebase := some "tb0" }] })
+-- its clock's drift: an auditor's host states the auditor's figure for its clock, or none where the auditor has none;
+-- refused with another, at 1 or more, and on any other location, the auditor's device in the host among them
+private def drifts (drift : List (String × Figure)) : Registration.Auditor := { vmKeyed with drift }
+private def slow : Loc := { vm with drift := some tenth }
+#guard decide (Entry.Owners (drifts [("vm0", tenth)]) { locs := [root, slow, inVm] })
+#guard decide (Entry.Owners (drifts []) { locs := [root, vm, inVm] })
+#guard !decide (Entry.Owners (drifts [("vm0", tenth)]) { locs := [root, vm] })
+#guard !decide (Entry.Owners (drifts []) { locs := [root, slow] })
+#guard !decide (Entry.Owners (drifts [("vm0", one)]) { locs := [root, { vm with drift := some one }] })
+#guard !decide (Entry.Owners (drifts [("cert0", tenth)]) { locs := [root, vm, { inVm with drift := some tenth }] })
+#guard !decide (Entry.Owners (drifts []) { locs := [root, { host with drift := some tenth }] })
+#guard (Loc.ofJson slow.toJson).toOption == some slow
+-- the clock a device of the auditor's reads is its host's, with the host's drift; a device at the site reads none
+#guard (⟨[], [root, host, slow, inVm], uplinks⟩ : Site).clock? "cert0" == some "vm0"
+#guard (⟨[], [root, host, slow, inVm], uplinks⟩ : Site).drift? "cert0" == some tenth
+#guard (⟨[], [root, host, vm, inVm], uplinks⟩ : Site).drift? "cert0" == none
+#guard (⟨[], [root, host, cert], uplinks⟩ : Site).clock? "cert0" == none
+#guard (⟨[], [root, host, slow, inVm], uplinks⟩ : Site).clock? "vm0" == none
 -- it states no on-chip bytes and no unit of time, and the auditor's inventory holds nothing of it
 #guard decide (Entry.Chips auditor { locs := [root, host, vm] })
 #guard !decide (Entry.Chips auditor { locs := [root, host, { vm with chip := some 1 }] })

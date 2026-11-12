@@ -171,10 +171,11 @@ the bits a second read from or written to a host's leaves of that tier together,
 empty on every other location. `key` is the public key one of the auditor's devices or hosts is registered under, and
 `scheme` the id of the signature scheme that key is of (`SCHEMES`), which says how many levels of keys stand under it;
 both empty on every other location.
-`drift` is how far the clock of one of the auditor's devices may run from real time, as a share of it; none
-on every other location, and a device that states none times nothing. `timeUnit` is the Site's unit of time in seconds,
-on a location of kind `site` and none on every other (`Site.timeUnit`). `timebase` is the SKU of the time base the
-clock of an auditor's host runs on, the card the auditor reads the clock's drift from; none on every other location. -/
+`drift` is how far the clock of an auditor's host may run from real time, as a share of it, and it is the drift of
+every device of the auditor's in that host, which reads that clock (`Site.drift?`); none on every other location, and a
+device at the site, or in a host that states none, times nothing. `timeUnit` is the Site's unit of time in seconds, on a
+location of kind `site` and none on every other (`Site.timeUnit`). `timebase` is the SKU of the time base the clock of
+an auditor's host runs on, the card the auditor reads the clock's drift from; none on every other location. -/
 structure Loc where
   id : String
   kind : Kind
@@ -353,9 +354,9 @@ structure Digests where
 /-- What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the
 SKU's; the tolerance registration allows around an estimate; the key of each of its own devices and hosts, by its id;
 its figures for each memory leaf directly under a host, by the leaf's id; its figures for each host of the prover's, by
-the host's id; how far each of its own devices' clocks may run from real time, by the device's id; and the time base
-of each of its own hosts, its SKU by the host's id. That these figures are the hardware is a public input: no check
-holds it and no premise says it, and a result is over the registered hardware. -/
+the host's id; and for each of its own hosts, by the host's id, how far its clock may run from real time and its time
+base's SKU. That these figures are the hardware is a public input: no check holds it and no premise says it, and a
+result is over the registered hardware. -/
 structure Auditor where
   sheet : String → Option Sheet
   tolerance : Figure
@@ -454,16 +455,19 @@ def Capacity : Prop :=
   (∀ x ∈ e.locs, x.kind = .memory → 0 < x.bytes) ∧
     ∀ x ∈ (S.add e).locs, x.kind = .device → ∀ k ∈ (S.add e).sheet? D.sheet x, (S.add e).held x.id ≤ k.mem
 
-/-- `owner`: each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key, its
-key's scheme, one the check knows (`SCHEMES`), and the auditor's figure for its clock, below 1 where there is one; every
-other new location is the prover's and states no scheme and no clock; and each new auditor's host states its time
-base, the auditor's for it, held as its key is, and no other new location states one. -/
+/-- `owner`: each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key and its
+key's scheme, one the check knows (`SCHEMES`); every other new location is the prover's and states no scheme; and each
+new auditor's host states its time base, the auditor's for it, held as its key is, and the auditor's figure for its
+clock, below 1 where there is one, and no other new location states a time base or a clock. -/
 def Owners : Prop :=
   ∀ x ∈ e.locs,
     (x.kind.auditor = true → x.owner = .auditor ∧ A.key x.id = some x.key ∧ A.scheme x.id = some x.scheme ∧
-      x.scheme ∈ SCHEMES ∧ x.drift = A.drift.lookup x.id ∧ (x.drift.all fun (q : Figure) => decide (q.1 < 1)) = true) ∧
-    (x.kind.auditor = false → x.owner = .prover ∧ x.scheme = "" ∧ x.drift = none) ∧
-    if x.kind = .auditorHost then ∃ t ∈ A.timebases.lookup x.id, x.timebase = some t else x.timebase = none
+      x.scheme ∈ SCHEMES) ∧
+    (x.kind.auditor = false → x.owner = .prover ∧ x.scheme = "") ∧
+    if x.kind = .auditorHost then
+      (∃ t ∈ A.timebases.lookup x.id, x.timebase = some t) ∧ x.drift = A.drift.lookup x.id ∧
+        (x.drift.all fun (q : Figure) => decide (q.1 < 1)) = true
+    else x.timebase = none ∧ x.drift = none
 
 /-- `uncertified`, onsite: every boundary link is certified, or says why no certifier splits it. -/
 def Covered : Prop :=
@@ -609,6 +613,15 @@ devices and hosts are. -/
 def host (i : String) : Option String :=
   (S.loc? i).bind fun x =>
     if x.kind = .host then some x.id else (S.host? x).filter fun h => S.kind? h = some .host
+
+/-- The auditor's host whose clock device `d` of the auditor's reads: the one it is in. None for a device at the
+site. -/
+def clock? (d : String) : Option String :=
+  ((S.loc? d).bind fun x => x.parent).filter fun p => S.kind? p = some .auditorHost
+
+/-- How far the clock device `d` of the auditor's reads may run from real time, as a share of it: what the auditor's
+host it is in states. None for a device at the site or in a host that states none. -/
+def drift? (d : String) : Option Figure := (S.clock? d).bind fun h => (S.loc? h).bind fun x => x.drift
 
 /-- `x` is `i` or lies under it, following at most `n` parents. -/
 def within (i : String) : Nat → Loc → Bool
@@ -862,9 +875,9 @@ def Registration.Auditor.ofJson (j : Json) : V Registration.Auditor := do
     exactly t ["id", "sku"] "a host's time base"
     pure (← Flock.J.str t "id" "a host's time base", ← Flock.J.str t "sku" "a host's time base")
   let drift ← (← Flock.J.arr j "drift" "the auditor").toList.mapM fun d => do
-    exactly d ["drift", "id"] "a device's drift"
-    pure (← Flock.J.str d "id" "a device's drift",
-          ← Figure.ofJson (← Flock.J.get d "drift" "a device's drift") "a device's drift")
+    exactly d ["drift", "id"] "a host's drift"
+    pure (← Flock.J.str d "id" "a host's drift",
+          ← Figure.ofJson (← Flock.J.get d "drift" "a host's drift") "a host's drift")
   let keys ← (← Flock.J.arr j "keys" "the auditor").toList.mapM fun k => do
     exactly k ["id", "key", "scheme"] "a key"
     pure (← Flock.J.str k "id" "a key", ← Flock.J.str k "key" "a key", ← Flock.J.str k "scheme" "a key")
