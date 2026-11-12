@@ -214,11 +214,11 @@ def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int
     from collections import Counter
 
     tp_bad: dict[str, int] = {}
-    tp_sites = man.get("tp_sites") or []
+    tp_sites = man.get("tp_sites")                                    # none for a run with no TP source: left out, null or empty
     tp_counts = Counter(n.rsplit("/", 1)[0] for n in names.elements() if TP_PARTIAL_RE.search(n))
     if tp_sites:
-        tp_want = man.get("tp_site_counts") or {}                     # a mid-module site binds its static call count per step
-        tp_bad = {s: tp_counts.get(s, 0) for s in tp_sites if tp_counts.get(s, 0) != int(tp_want.get(s, 1))}
+        tp_want = man.get("tp_site_counts")                           # a mid-module site binds its static call count per step, any other site one
+        tp_bad = {s: tp_counts.get(s, 0) for s in tp_sites if tp_counts.get(s, 0) != int(tp_want.get(s, 1) if tp_want else 1)}
         tp_bad.update({s: c for s, c in tp_counts.items() if s not in tp_sites})
         rk = man.get("tp_rank")
         if rk is not None and any(not n.endswith(f"_rank{rk}") for n in names if TP_PARTIAL_RE.search(n)):
@@ -375,7 +375,9 @@ def schedule_stream_bound(asz: dict[str, Any], reqs: list[dict[str, Any]], sampl
     sequence of its hidden launch to the step's longest query (the FA3 varlen slab); chunked prefill is not modelled (one step per prompt)."""
     from verity_vllm.acquire.sources.hidden_source import mat_total_words, CHUNK_WORDS, fa2_kblock_n, fa3_tile
 
-    md = asz.get("model") or {}
+    md = asz.get("model")                 # a step bound without its model: one head of 64, one layer, no hidden-value rows
+    if not md:
+        md = {}
     heads, kv_heads = int(md.get("heads") or 1), int(md.get("kv_heads") or 1)
     head_dim, layers = int(md.get("head_dim") or 64), int(md.get("layers") or 1)
     hidden_m1 = bool(md.get("hidden_m1"))
@@ -402,7 +404,8 @@ def schedule_stream_bound(asz: dict[str, Any], reqs: list[dict[str, Any]], sampl
     smp_max = int((sampling or {}).get("max_tokens") or 1)
     rq = []
     for r in reqs:
-        n_p = len(r.get("prompt_token_ids") or []) or int(r.get("prompt_len") or 1)
+        ids = r.get("prompt_token_ids")       # a declared request gives its prompt's ids, or only how many they are
+        n_p = len(ids) if ids else int(r.get("prompt_len") or 1)
         rq.append((int(r.get("arrive_step") or 0), int(n_p), int(r.get("max_tokens") or smp_max)))
     horizon = max((a + n for a, _p, n in rq), default=0)
     steps: list[dict[str, int]] = []
@@ -515,7 +518,9 @@ def bounded_host_bound(ssb: dict[str, Any], *, engine_rss_bytes: int, retain: st
     _terms = {"engine": int(engine_rss_bytes), "levels": levels, "kept": kept, "learn": learn, "replay": replay, "slack": int(slack_bytes), "pairs": pairs_extra,
               "c2_programs": c2, "pool_rounding": pool_rounding, "fork_children": forkc, "c2_residual": c2res, "pool_carry": carry}
     _dom = max(_terms, key=_terms.get)
-    _big = ssb.get("largest_step") or {}
+    _big = ssb.get("largest_step")        # None under a schedule of no request: the record then names no step
+    if not _big:
+        _big = {}
     _hidden_where = ("excluded from host (retain-exclude), opened by replay" if hidden_excluded else
                      ("counted in kept (retain host)" if retain == "host" else "not retained (retain none), opened by replay"))
     dominant = {"host_term": _dom, "host_term_bytes": _terms[_dom], "peak_phase": peak_phase, "peak_phase_bytes": phases[peak_phase],
@@ -697,6 +702,14 @@ def _split_step_names(srcs: list[Any], names: Any, step: int) -> tuple[Any, dict
         names, mine = src.split_step_names(names, step, False)
         bad.update(mine)
     return names, bad
+
+
+def _listed(man: dict[str, Any], field: str) -> Any:
+    """What an expected manifest lists under `field` (its TP sites, its MoE layers, the layers whose router commits one more
+    tensor, the sites ruled out); nothing for a manifest that leaves the field out or gives it null or empty: a run without that
+    source declares none."""
+    got = man.get(field)
+    return got if got else []
 
 
 _MEMTRACE = settings.VERITY_MEMTRACE
@@ -1686,8 +1699,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
     def _step_trace(self, steps: list) -> list[dict[str, Any]]:
         out = []
         for s in steps:
-            metas = self._layouts.get(s.step) or []
-            names = metas.names if hasattr(metas, "scan") else [m.name for m in metas]
+            metas = self._layouts.get(s.step)                             # a step that staged nothing has no layout, or an empty one
+            names = [] if not metas else metas.names if hasattr(metas, "scan") else [m.name for m in metas]
             fa2 = next((n for n in names if n.startswith(HIDDEN_M1_PREFIXES)), None)
             out.append({"step": s.step, "root": s.root[:8].hex(), "tensors": s.n_tensors, "bytes": s.n_bytes, "leaves": s.n_leaves,
                         "layout": s.layout_digest[:8].hex(), "fa2": fa2})
@@ -1810,8 +1823,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
             moe_bad: dict[int, int] = {}
             if man.get("moe_layers"):
                 moe_counts = Counter(k for n in names.elements() if (k := moe_of(n)) is not None)
-                want, rs_layers, hash_layers = (int(man.get("moe_tensors_per_layer") or 0), set(man.get("router_softmax_layers") or []),
-                                                set(man.get("moe_hash_layers") or []))
+                want, rs_layers, hash_layers = (int(man.get("moe_tensors_per_layer") or 0), set(_listed(man, "router_softmax_layers")),
+                                                set(_listed(man, "moe_hash_layers")))
                 moe_bad = {k: moe_counts.get(k, 0) for k in man["moe_layers"] if moe_counts.get(k, 0) != want + (k in rs_layers) + (k in hash_layers)}
                 moe_bad.update({k: c for k, c in moe_counts.items() if k not in man["moe_layers"]})
             elif any(n.startswith("moe/") for n in names):
@@ -1832,8 +1845,8 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
                 verdicts[cols] = violations[-1] if violations and violations[-1]["step"] == step else None
         return {"ok": not violations, "steps_checked": len(self._layouts),
                 "manifest": {"modules": len(expected_modules), "attention_layers": len(man["attention_layers"]), "fa2_hidden_per_layer": man["fa2_hidden_per_layer"],
-                             "sampler_ids": man["sampler_ids"], "moe_layers": len(man.get("moe_layers") or []), "moe_tensors_per_layer": man.get("moe_tensors_per_layer", 0),
-                             "tp_sites": len(man.get("tp_sites") or []), "tp_rank": man.get("tp_rank"), "tp_sites_ruled_out": man.get("tp_sites_ruled_out") or []},
+                             "sampler_ids": man["sampler_ids"], "moe_layers": len(_listed(man, "moe_layers")), "moe_tensors_per_layer": man.get("moe_tensors_per_layer", 0),
+                             "tp_sites": len(_listed(man, "tp_sites")), "tp_rank": man.get("tp_rank"), "tp_sites_ruled_out": _listed(man, "tp_sites_ruled_out")},
                 # which attention-plane rule each step ran and what it was derived from
                 "fa2_rule": {"steps": dict(fa2_rules_used), "attention_decls": len(decls),
                              "policy": {k: v for k, v in self._plane_policy().__dict__.items() if k != "ms" or v} if decls else None,
