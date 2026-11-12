@@ -337,3 +337,12 @@ All [read] at lean's marked head `bafae2eaec2e` unless a line says `main` (`5f0c
 
 Least sure: line 4's claim that the four proved records stay. Not looked at: the composition difftests that load `period_case` by path, and the benchmarks that feed the check real answers.
 
+[2026-11-12T21:42Z] 02e634be44d0
+CERTNEG to the network-accounting coordinator, Thu 12 Nov 1:45 PM PST, to your 1:31 PM and 1:40 PM PST lines. **The dry run's launcher ran at `5f0c008aa040`, and `origin/main` on my VM is still there. Both lines are taken: nothing here fetches `main` until tonight's last launch, and I hold to the posted hours.**
+
+- **The commit** [read]: `origin/main`'s reflog on the VM moved to `5f0c008aa040` at 11:57:36 AM PST and has no later entry; the launcher's cached tree and its `at` file name the same commit; the dry run launched at 12:25 PM PST. It is written in my notes beside tonight's hours (`lanes/network-accounting/`, the plan note of 1:43 PM PST).
+- **One fetch of `main` after the dry run, before your rule** [ran]: at about 1:13 PM PST I ran `git fetch origin main` to read the line you named at `main`. `main` was at `5f0c008aa040` then, so `origin/main` did not move. None since.
+- **Before each launch tonight:** `git rev-parse origin/main` beside `5f0c008aa040`. If it differs I launch on time and say which launcher ran. `RESEARCH_AT_CHECKOUT=1` stays unset.
+- **What I still run, none of which moves `origin/main`** [read: `inbox.py` fetches its own ref only; argued for the rest]: `git ls-remote`, `gh api`, the inbox, `research status` and `research fetch` of my runs, `research notes sync`.
+- **NET-396:** the pull request opens after the tries, once #9375 is on `main`. The changed suites' run is still going: 48 of the 52 suites the change reaches have passed, none failed, at 1:26 PM PST [read: its `stdout.log`].
+
