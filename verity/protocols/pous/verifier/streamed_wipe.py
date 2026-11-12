@@ -111,7 +111,7 @@ def labels(key: bytes, start: int, count: int) -> bytes:
     return bytes(out)
 
 
-def draw_indices(coin_secret: bytes, server: bytes, session: bytes, n: int, k: int) -> tuple[int, ...]:
+def sample_indices(coin_secret: bytes, server: bytes, session: bytes, n: int, k: int) -> tuple[int, ...]:
     """The session's `k` challenges, each uniform in `[0, n)` and independent (with replacement)."""
     key = derive(coin_secret, COIN_DOMAIN, {"server": server, "session": session, "n": n})
     return tuple(key.uniform(n, j) for j in range(k))
@@ -310,7 +310,7 @@ class Challenger:
         if self.indices is None:
             secret = self._coin_secret if self._coin_secret is not None else os.urandom(32)
             c = self.commitment
-            self.indices = draw_indices(secret, c.server, c.session, self.params.labels, self.params.k)
+            self.indices = sample_indices(secret, c.server, c.session, self.params.labels, self.params.k)
         b = len(self.batches)
         first = b * self.params.batch
         idx = self.indices[first:first + self.params.batch]
@@ -484,7 +484,7 @@ def challenges_for(n: int, slack_labels: int, log2_delta: float) -> int:
 
 __all__ = ["COIN_DOMAIN", "COMPLETE", "DEPLOYED_FILL_BYTES", "DEPLOYED_K", "DEPLOYED_LABELS", "EGRESS_MAX_UNITS",
            "EGRESS_UNIT_BITS", "KEY_DOMAIN", "LABEL_BITS", "LABEL_BYTES", "LABEL_TAG", "LATE", "PROTOCOL",
-           "RECORDS_TREE", "RECORD_SCHEMA", "SESSION_TAG", "WRONG", "BatchRecord", "Challenger", "Prover",
-           "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest", "challenges_for", "draw_indices",
-           "egress_units", "label", "labels", "log2_error", "message", "records_root", "retained_bits", "verdict",
+           "RECORDS_TREE", "RECORD_SCHEMA", "SCHEMES", "SESSION_TAG", "WRONG", "BatchRecord", "Challenger", "Prover",
+           "SignedWipe", "Verdict", "WipeCommitment", "WipeParams", "batch_digest", "challenges_for", "egress_units",
+           "label", "labels", "log2_error", "message", "records_root", "retained_bits", "sample_indices", "verdict",
            "wipe_key"]

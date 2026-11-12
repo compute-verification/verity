@@ -119,7 +119,7 @@ def prove(f: BinaryIO, prover: P.Local) -> int:
 
 
 def serve(f: BinaryIO, request: Mapping[str, Any], *, coins: bytes, clock: Callable[[], int] = time.monotonic_ns,
-          sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until) -> P.Period:
+          sleep_until: Callable[[Callable[[], int], int], None] = P._sleep_until) -> P.Run:
     """The verifier's side of one session over the connection `f` (`period.session` against `Remote`), ended with its
     coins disclosed once it has its outcome."""
     remote = Remote(f)
@@ -158,7 +158,7 @@ def request_of(node: str, *, windows: int = 2, passes: int = 1, samples: int = a
 
 
 def period_with(side: Side, request: Mapping[str, Any], store: bytes, *,
-                entropy: Callable[[int], bytes] = os.urandom) -> tuple[P.Period, dict[str, Any]]:
+                entropy: Callable[[int], bytes] = os.urandom) -> tuple[P.Run, dict[str, Any]]:
     """One session with the verifier's side `side` starts and this process the prover of `store`: the period, and the
     side's report (`host`, `passes`)."""
 
@@ -167,7 +167,7 @@ def period_with(side: Side, request: Mapping[str, Any], store: bytes, *,
             return prove(f, P.Local(request["node"], store, entropy=entropy))
 
     got, passes = side.talk(request, drive)
-    return P.Period(got["answer"], got["case"]), {"host": got["host"], "passes": passes}
+    return P.Run(got["answer"], got["case"]), {"host": got["host"], "passes": passes}
 
 
 def main(argv: Sequence[str] | None = None) -> int:

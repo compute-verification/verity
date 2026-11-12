@@ -49,8 +49,8 @@ def _in_process() -> tuple[period.Run, run.Point, run.Setup, list[bytes], bytes]
     return p, point, published, blocks, b"".join(mc.block_digest(b) for b in blocks)
 
 
-def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: int = CP.WARMUPS,
-           draw=os.urandom) -> tuple[bytes, run.ChallengePhaseRecord, int]:
+def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: int = CS.WARMUPS,
+           entropy=os.urandom) -> tuple[bytes, run.ChallengePhaseRecord, int]:
     """One session with the challenger's side in a thread and the prover's here, over a socket pair."""
     a, b = socket.socketpair()
     got: dict = {}
@@ -59,7 +59,7 @@ def _split(point: run.Point, root: bytes, respond, signer: mc.Signer, warmups: i
         with a:
             got["session"] = CP.serve(CS.Polled(a), CS.request_of("n0", point, root), signer=signer,
                                       log=ts.session_log(), coins=COINS, domain=period.SESSION_DOMAIN, clock=Clock(),
-                                      warmups=warmups, entropy=draw)
+                                      warmups=warmups, entropy=entropy)
 
     t = threading.Thread(target=side)
     t.start()
@@ -113,17 +113,17 @@ def test_the_warmups_come_first_and_are_neither_timed_nor_judged() -> None:
 
 class GivenCoins:
     """A coins source that answers its first sample with the period's coins, as `serve` is given them, and the rest
-    from `draw`."""
+    from `entropy`."""
 
-    def __init__(self, draw) -> None:
-        self.draw, self.given = draw, [COINS]
+    def __init__(self, entropy) -> None:
+        self.entropy, self.given = entropy, [COINS]
 
     def start(self, params, identity) -> list:
         return []
 
     def on(self, msg) -> list:
         n = msg.message.fields["n"]
-        return [Send(S.OWNER, Message("Coins", body=self.given.pop() if self.given else self.draw(n)))]
+        return [Send(S.OWNER, Message("Coins", body=self.given.pop() if self.given else self.entropy(n)))]
 
 
 def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
@@ -132,7 +132,7 @@ def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
     and the prover answers the same frames."""
     _, point, published, blocks, _ = _in_process()
     sid, old, rounds = _split(point, published.root, lambda i: blocks[i], ts.TestSigner(b"same key", 2),
-                              draw=S.SeededCoins(b"hiding").draw)
+                              entropy=S.SeededCoins(b"hiding").draw)
     capabilities = {CS.CHALLENGER: {"signer": ts.TestSigner(b"same key", 2), "log": ts.session_log()},
                     CS.PROVER: {"store": lambda i: blocks[i]}}
     clock = S.VirtualClock(S.VirtualTime(Clock()()), 1_000)
