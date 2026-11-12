@@ -745,8 +745,8 @@ registration passed over is never admitted, a statement that reads one is a stop
 stream's budget (§10.5). A statement that reads only registrations already admitted admits none. `flock-firewall
 session`, which holds no record, refuses `--salt-key`. Each leaf's `c` is the SHA-512 of its salt, so a witness passes
 only on the server's salts: one on salts of the stack's own is rejected at its opening, where the value commitments'
-claims are checked (`zk_value_salts`'s `kept`), and a statement the stack committed under its own salts is refused at
-its admission (`own`). A stack that registers more than once also chooses which registrations the auditor's statements
+claims are checked (`zk_value_salts`'s `kept`), and a statement the stack committed under its own salts is refused
+once its `Register` is answered (`own`). A stack that registers more than once also chooses which registrations the auditor's statements
 read: across a stream of `r` registrations with at most `b` passed over, at most
 `log₂ Σ_{i≤b} C(r, i) + Σ_i log₂ m_i` bits, `m_i` registration `i`'s count, 1 on the service of record, so at most
 `log₂ Σ_{i≤b} C(r, i)` (`Verity.Guarantees.RegisteredStreamLeakage`), counted in the stream's bound beside its stops

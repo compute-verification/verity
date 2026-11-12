@@ -6192,8 +6192,8 @@ fn worker_pads_case(gpu: bool) -> Value {
 ///   is served without a second admission, and the auditor rejects the session at its opening, where the value
 ///   commitments' claims are checked;
 /// * `own`: the staged file as the stack committed it, under salts of its own: none of its roots is a table of a
-///   registration on the record, so the loop refuses the session at its admission, its recursive session's stop, and
-///   nothing of it reaches the auditor.
+///   registration on the record, so the loop refuses the session at the auditor's answer to its `Register`, its
+///   recursive session's stop, and of it only `Register` reaches the auditor.
 ///
 /// And the service itself refuses a commit whose body carries a salt beside each digest, a short refs file and a refs file
 /// with a forged tag; the salts it answers open every one of its commitments; the record is number 0, counts one session
@@ -6350,7 +6350,7 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
                  "accepted": kept["accepted"], "proofs": proofs(&kept),
                  "prover_stopped": kept["prover_stopped"].as_str().unwrap_or("").chars().take(200).collect::<String>(),
                  "why": kept["why"].as_str().unwrap_or("").chars().take(200).collect::<String>(), "error": kept["error"]},
-        "own": {"ok": own["accepted"] == false && own["error"].is_null() && seen(&own).is_empty()
+        "own": {"ok": own["accepted"] == false && own["error"].is_null() && seen(&own) == [json!(["register"])]
                     && own_why.contains("no value commitment of the ZK server's")
                     && own_stop.as_str().is_some_and(|w| w.contains("no value commitment of the ZK server's")),
                 "why": own_why.chars().take(400).collect::<String>(), "stop": own_stop, "error": own["error"]},
@@ -6359,7 +6359,7 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
     let pass = service["ok"] == true && ["overwritten", "kept", "own", "admitted"].iter().all(|k| sessions[k]["ok"] == true);
     Ok(json!({"case": "zk_value_salts", "expect": "the server's salts overwrite the stack's, registration 0 is admitted and the session \
                                                  accepted; the stack's kept, registration 0 served again unadmitted, rejected at the opening; \
-                                                 the stack's own commitments refused at admission, its recursive session's stop; a salt in a \
+                                                 the stack's own commitments refused once Register is answered, its recursive session's stop; a salt in a \
                                                  commit, a short refs file and a forged tag refused by the service; registrations numbered \
                                                  0 and 1 on the record, each counting its epoch's one session, a second commit in an epoch \
                                                  refused, each session registered once and in its own epoch",

@@ -27,7 +27,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
-from test_firewall_session_loop import REGISTER, Auditor, Loop, call, record, refusal, slot_left
+from test_firewall_session_loop import FINISH, REGISTER, STOP, Auditor, Loop, call, record, refusal, slot_left, verdict
 
 import _release as R
 import verity_difftest as D
@@ -485,6 +485,30 @@ def test_an_entry_at_no_tree_of_the_statement_is_refused(exe, tmp_path):
               known_list(known_entry(K, root), known_entry(("x", os.urandom(64), SCHEMAS[0]), os.urandom(64))),
               f"known tree 1: {why}")
     assert z.events() == []
+
+
+def test_a_session_that_sends_no_register_has_nothing_admitted(exe, tmp_path):
+    """The registrations are admitted at the answer to `Register`, and nothing of a statement leaves before its
+    `Register` has: under the key, a session whose first request is its `Hello` is stopped where it stands (`Hello` has
+    no place before `Register`), its `Finish` is its recursive session's stop, nothing of it reaches the auditor, and
+    the registration its statement reads is not admitted."""
+    z = Server(exe, tmp_path, 1)
+    auditor = Auditor()
+    lp = Loop(exe, z.state, "r0000", "L0", auditor, tmp_path, public=public(tmp_path / "p.pub", z.roots),
+              flags=("--salt-key", str(z.key)))
+    c = lp.connect()
+    why = STOP + "a Hello before the Register"
+    assert refusal(call(c, b"\x01" + struct.pack("<I", 2) + b"{}")) == why
+    assert verdict(call(c, FINISH)) == {"accepted": False,
+                                        "why": f"{R.REFUSED}{why}: recursive session r0000 stopped at L0"}
+    c.close()
+    slot_left(z.state)
+    lp.close()
+    assert all(frames == [] for frames in auditor.got), auditor.got
+    with z.py.slot("r0000", "L0"):
+        z.py.admit("r0000", "L0", timed=True)
+        z.py.stop("r0000", "L0", why)
+    assert record(z.state) == record(tmp_path / "py") and z.events() == []
 
 
 def test_a_loop_without_the_key_cuts_the_list_and_records_nothing(exe, tmp_path):
