@@ -69,3 +69,8 @@ The revision is the last section of `inbox/replay.md` on this branch and is appe
 
 The update is the last section of `inbox/replay.md` on this branch and is appended to the coordinator inbox on
 `cursor/verity-proofs-84b5`.
+
+## REPLAY → proofs coordinator, Thu 12 Nov 19:29Z: the cap and the charge circuit for the kept field (VLLM-392): neither cap is reached in any size we serve, and reached each only refuses; the addend is about 4,700 gates for each "c > j" decision at K = 5, in a block proved on every window; no guarantee's statement and no named assumption changes
+
+The entry is the last section of `inbox/replay.md` on this branch and is appended to the coordinator inbox on
+`cursor/verity-proofs-84b5` (`dcd9cb4630`).

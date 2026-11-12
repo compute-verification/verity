@@ -1740,3 +1740,284 @@ request (11,186 over 2,000), draft off, VLLM-392 and its date, 0.30 (6,997 bits 
   there; I read the pin only.
 - **New: acceptance on the load Friday serves** [derived]: 70.7% on the try's greedy agentic pass and 49.3% on stock
   chat prompts give 0.66 and 0.87 bits an output token at fixed width. Friday's own figure is neither.
+
+## Entry 4, Thu 12 Nov 19:29Z: the cap and the charge circuit for the kept field (VLLM-392): neither cap is reached in any size we serve, and reached each only refuses; the addend is about 4,700 gates for each "c > j" decision at K = 5, in a block proved on every window; no guarantee's statement and no named assumption changes
+
+**My design note of today answers neither of vllm's two choices differently from your 18:58Z** [read:
+`lanes/proofs/20261112T0217Z-report-cheapest-replay.md`]. It names no window for the kept counts, and since its 13:31Z
+revision its kept row charges "the length of the count's own code"; the 3 bits a row in its body is your fixed-width
+figure beside it. One thing in this read, which the note does not have, bears on choice 1: section 2.5.
+
+Read at `origin/main` `0582899c4392` (fetched 19:01Z) [run]. `main` was `4a90174415b7` at 19:20Z; of the files cited
+below only the certifier's `PROTOCOL.md` changed, one line added at 296, so its line numbers here are one lower than
+on that commit [run: `git diff --stat`]. AGENTS.md reread whole on `main`, the same at both commits [run]. VLLM-392's
+three comments read whole; none after your 18:58Z [read, 19:17Z]. Nothing built; nothing run but `rg`, `git` and
+arithmetic. Tags: [read], [run], [derived], [relayed], [guess]. "Gates" are ANDs.
+
+**The answers**
+
+1. **The cap.** ℓ bounds one execution phase's advice string, and CW one certifier window's charge, 60 s by default.
+   At the highest rate a card on `main` gives, a window holds 134,146 output tokens and a 600 s phase 1.34 million,
+   against vllm's 3.5 million and 28 million: 26 and 21 times under [derived]. Reached, each is a refusal of the run,
+   with no truncation and no uncharged tail, and neither is a soundness matter. ℓ is reached only by one string that
+   covers more than a phase: 3.5 to 8 hours of serving in one record [derived].
+2. **The charge circuit.** The addend is a second counted segment: for each "c > j" decision one
+   `ArithCountStep_v1{18, 1, 20}` and one `BookKT_v1{K(K + 2)}`, 4,736 gates at K = 5, times the class's cap on a
+   window's decisions. That is 2.8e8 gates for a 60 s window at the chat rate, in a block proved on every window
+   [derived]; the one compile-slice block sized on `main` is 1.0e6 gates, at a class far under a chat window's
+   [read]. `ChargeCount_v2` becomes a `_v3` with two more statics, and no new primitive Definition is needed. No
+   guarantee's statement and no named assumption changes [run, read], so I did not stop there. About 11 files and
+   600 to 800 lines for the charge [guess], not counting the replay step and the slice, which are
+   network-accounting's.
+
+### 1. The cap
+
+**1.1 What each bounds, and where it is fixed.**
+
+| | ℓ (`cap_bits`) | CW |
+|---|---|---|
+| Bounds | The length in bits of one advice string: one execution phase's advice a_j [read: ARCHITECTURE.md:21, :24, :127; `security/Definitions/Core/Compiler.lean:213-217`; `RegisteredCircuit.lean:41`, `a_le : ∀ x ∈ a, x.length ≤ b.B.ℓa`]. In the adapter it is the whole `v1.encode` of one certified record, every window's charge together and the padding [read: `codec.py:8`, `:553-554`; `steps.py:343`, "the session's certified record"] | One certifier window's charge: the counted bits of its segment, the finish's 2 and its length terms' tail, below 2^20 [read: `arith_encode.py:156-157`, `:307`, `:316`; `window_charge.py:27`, `:60`, `:277-283`, `:511-515`] |
+| Kind | A registration parameter: the capped compiler's digest names it, "so the registration's `compiler` fixes ℓ before sampling" [read: `pipeline/advice_windows.py:268-284`]; set by `--cap` [read: `pipeline/advice.py:56`, `:627`] | A constant of the code: the width of the count and of the declared charge c_w. It is a static of `ArithCountStep_v1{K, BIN, CW}` and `ArithCountFinish_v1{CW}`, and every caller binds 20 [read: `arith_encode.py:747`, `:917-923`] |
+| Fixed at | The default `1 << 23`: `adapters/vllm/verity_vllm/pipeline/advice_code/codec.py:299` (`Registered.cap_bits`), `pipeline/advice_windows.py:265`, `program/predict/steps.py:146` [read] | `verity/protocols/certifier/verifier/arith_encode.py:157`, `CW = 20`; in Lean `security/Definitions/NetworkCertifier/AdviceV1.lean:68` and `verity/protocols/certifier/device/program/lean/NetworkCertifier/AdviceV1.lean:35` [read] |
+| Enforced at | `codec.py:553-554` (`_parse`), `:701-702` (`decode_bits`) and `steps.py:320-322` (`_within_cap`, "before any of it is read", `:337-341`) [read]. No file under `verity/` or `security/` reads `cap_bits` [run: `rg`] | In the circuit: each counting step, the finish and the tail's sum set ok to 0 on a carry out of bit 20 [read: `arith_encode.py:680-681`, `:699-701`; `window_charge.py:513-514`] |
+
+- **A window** is T buckets of τ_b: `Registered.T = 600` (`codec.py:297`), `WardenParams.window = 600` and
+  `bucket_ms = 100` (`warden.py:206`, `:202`) [read], so 60 s [derived]. **A phase** is 600 s by the serving path's
+  default (`boundary_windows.py:129`) and the reference deployment's (`block_record.py:297`, 12,500 machines) [read],
+  so a phase's string is W = 10 windows [derived].
+- **ℓ is not a period's total or a registration's.** A period of m phases may carry m·ℓ [derived from the Lean
+  above]. And nothing in the adapter cuts a record at a phase: W is the record's last bucket // T + 1
+  (`codec.py:275-277`) [read], so one string covers whatever one record covers.
+- **The two do not imply each other**: ten windows at 2^20 − 1 bits are 10,485,750 bits, over ℓ = 8,388,608
+  [derived]. Where the string is never formed (the composition charges Σ c_w), nothing on `main` compares that sum
+  with ℓ [run: the `rg` above].
+
+**1.2 The sizes.** The workload card (`benchmarks/spot_figures/cards/workload.glm-5.3.json`) holds no rate: it holds
+the request, 256 prompt tokens and 32 generated [read]. The rates on `main` are the serving-rate card's and the
+serve-tax card's step, so the table has three rows, each for one engine on eight H200s:
+
+| Rate | Output tokens a second | A 60 s window | A 600 s phase | A week | A month (30.44 d) | A year |
+|---|---|---|---|---|---|---|
+| A. The serving-rate card's 279.47 computed tokens a GPU-second, as if every computed token were an output: a ceiling for that card [read: `serving_rate.glm-5.3.json`; the product derived] | 2,235.76 | 134,146 | 1,341,456 | 1.35e9 | 5.88e9 | 7.05e10 |
+| B. The serve-tax card's chat step, 143 rows a step at 147 ms a step, no draft [read: `serve_tax.glm-5.3.json`; the quotient derived] | 972.79 | 58,367 | 583,673 | 5.88e8 | 2.56e9 | 3.07e10 |
+| C. Rate A at the workload card's request, 32 outputs in 288 computed tokens [derived] | 248.42 | 14,905 | 149,051 | 1.50e8 | 6.53e8 | 7.83e9 |
+
+- **vllm's two figures are right** [derived]: 2^23 / 0.30 = 27.96 million tokens and 2^20 / 0.30 = 3.495 million.
+- **A window against CW**: 3.495 million is 26.1 times rate A's window and 59.9 times rate B's [derived].
+- **A phase's string against ℓ**: 27.96 million is 20.8 times rate A's phase and 47.9 times rate B's [derived].
+- **At ten times the greedy rate**, 3 bits a token, which is the plain form's worst: still 2.6 times under CW and 2.1
+  times under ℓ at rate A [derived].
+- **With a draft, at most six tokens a row**: rate B's rows at six tokens each would be 5,837 tokens a second, which
+  needs every draft kept and a step no slower. Even there the greedy rate is 10 times under CW and 8 times under ℓ
+  [derived].
+- **One string for longer than a phase is where ℓ is reached**: at 0.30 bits a token after 12,507 s (3.47 hours) at
+  rate A and 28,744 s (7.98 hours) at rate B. A week in one string is 21 times ℓ at rate B and 48 times at rate A
+  [derived].
+- **The pooled charge, which no cap bounds**: at rate B and 0.30 bits a token, 1.77e8 bits a week, 7.68e8 a month and
+  9.20e9 a year a machine, and 2.21e12, 9.59e12 and 1.15e14 for the reference deployment's 12,500 machines. Scaled
+  from two uncertified greedy serves of one machine; the sampled passes' 0.03 to 0.10 would give a tenth to a third
+  of it [relayed rates, derived products]. The world's is not computed.
+
+**1.3 What happens when one is reached, and the smallest change.**
+
+- **ℓ**: decode raises `AdviceCodeError` ("… bits, over the cap ℓ = …") and the compiler `Unexpressible` ("the advice
+  is … bits, over the registered cap ℓ = … bits"), before any bit is read [read]. `encode` under `check` decodes its
+  own string (`codec.py:665-680`), so the server learns it at encode [read]. The phase's advice does not compile and
+  its audit fails: "the audit refuses advice over the cap" (PROTOCOL.md:1216-1217) [read]. Nothing is truncated and
+  nothing is left uncharged [derived].
+- **CW**: the window's proof block has ok = 0, "a charge, the segment's and the tail's, of 2^20 bits or more"
+  (`protocol/charge-chain.md:177`), and the Python reference and the Lean refuse the same [read]. The count never
+  wraps: the carry out of bit 20 is the refusal [read].
+- **The smallest change: none is needed.** If one were, for ℓ it is a larger registered `cap_bits` and no code
+  [read]; for CW a shorter registered window T, or else the constant in three places, new pins for every Definition
+  that binds it, and the Lean difftests' vectors, whose edge case is at 2^CW [read: the certifier program's
+  `lean-audit.json`, `runs`].
+- **What vllm has to hold to**: one string a phase. A serve of record that runs hours as one record needs either
+  that cut or a larger registered ℓ [derived].
+
+**1.4 Soundness, or only a refusal: only a refusal of an honest run** [derived].
+
+- What the bound counts is the realized charge, each window's c_w, a public output the block holds its count to
+  (PROTOCOL.md:1478-1482, :1503) [read]. A prover gains nothing at a cap: past it he is refused.
+- ℓ's size is a term of one form of the bound and of nothing else. With a registered cap c the advice strings number
+  at most 2^(c+1) − 1, so the capped form charges c + 1 bits whatever was sent (PROTOCOL.md:1117, :1150-1152);
+  without one "the realized charge is sound only in the indexed form" (A7, :1218-1219) [read]. So raising ℓ costs the
+  capped form bit for bit and the realized form nothing. At 2^23 the capped form is 13,981 bits a second a machine,
+  against 292 realized at rate B [derived].
+- Two conditions on the new code are soundness, and both are met by building it as the tail is built [derived from
+  `charge-chain.md:179-205` and `window_code.py:27-47`]. (a) The second segment's count is added with the same
+  refusal on the carry out: a sum that wrapped past 2^20 would undercharge. (b) What its decoder reads beside the
+  string is public and fixed before it: K registered, the output lengths certified. Then the window's code stays
+  prefix-free and the count of 2^c values (`hAs`) holds as it does with the tail.
+
+### 2. The charge circuit
+
+**2.1 What `ChargeCount_v2` counts** [read: `verity/protocols/certifier/prover/window_charge.py`, whole]. It runs the
+counting encoder over one window in `window_code.code_window`'s order: n_arrived and each decision at
+`BookKT_v1{3}`'s estimate for min(run, 2); n_hits and the hits; n_resumes, 0; n_order and the entries; n_lag, 0; one
+`ArithCountFinish_v1{20}`; then it adds the length terms' tail, bitlen(max_tokens) + 1 bits a term (`:1-27`,
+`:233-283`, `:463-519`). Its carry is 149 bits in a 160-bit row (`:97`, `:288`). The caller holds its `bits` to c_w:
+`CompileSlice_v7`, with `ChargeLink_v2{D, 0, 0, K}`, where K is the arrival slots and not the draft's K
+(`compile_slice_v7.py:1-33`). **Their worker's reading is right: nothing in it counts a field after the tail.**
+
+**2.2 What a circuit must count for the coded second segment** [derived from VLLM-392's 17:10Z text and from
+`kept_encode` on `main`, `benchmarks/network_e2e/encodings/replay.py:811-831`, which I read]:
+
+1. A second count from a fresh tally, after the tail.
+2. For each request whose body lands in the window, in release order, and for each of its emitting rows in order:
+   the bits "c > j" for j = 0, 1, … up to the first 0 or to m = min(K, output_len − done − 1). Each bit goes through
+   `BookKT_v1{C}` at the context (prev, j), then through `ArithCountStep_v1{18, 1, 20}` on its (f0, f1). There are
+   C = K(K + 2) contexts: prev is "the request's first row" or 0 to K, and j is 0 to K − 1. Then done grows by 1 + c
+   and prev becomes c; a request's counts end where done is its output length.
+3. A second `ArithCountFinish_v1{20}`, 2 bits when the segment coded anything, and the sum of the three parts with
+   the refusal at 2^20.
+4. The carry. The kept contexts' counts go from window to window as the decisions' do, 30 bits a context: 1,050 bits
+   at K = 5 beside today's 149 [derived]. If vllm's code restarted them at the book's priors in each window the carry
+   would not change; what that costs in bits is not measured [guess].
+5. Computed in the circuit and never witness: the context, the bound m, where a request's counts end, and which slots
+   are enabled. "A context or a frequency the prover supplied would pick the code per value" (`arith_encode.py:39-43`);
+   a slot arrangement or a disabled value of the prover's passes bits uncharged (`charge-chain.md:225-231`) [read].
+   The output lengths are `cert`'s, as the length slots' are. It refuses c > m, counts that do not end at the
+   request's output length, and a context past C.
+6. Decisions number at most the output tokens: a row that kept c takes at most c + 1 decisions and emits c + 1
+   tokens [derived]. On the try's pass 1 my own row counts give 20,255 decisions over 5,143 rows, 3.94 a row and 0.87
+   a token, which agrees with their "about 3.9 a row and 20,000 a greedy pass" [derived from the counts I read at
+   15:38Z; theirs relayed].
+
+**2.3 Its size in gates.**
+
+- `ArithCountStep_v1{18, 1, 20}` is 2,243 and `ArithCountFinish_v1{20}` is 41 [read: `arith_encode.py:123-125`].
+- `BookKT_v1{C}` is 148 + (61 + bitlen(C − 1))·C for C ≥ 2 [derived from `_select` and `_build_book_kt`,
+  `arith_encode.py:704-735`: a one-hot over the contexts, then two 15-bit counts selected and written back for each].
+  The same count gives the two pinned sizes, 210 at C = 1 and 337 at C = 3 [read: `:125`]. At C = 35 it is 2,493.
+- **A window: D·(2,243 + 148 + (61 + bitlen(C − 1))·C + ρ) + 41 + σ, with C = K(K + 2)** [derived]. D is the class's
+  kept-decision slots a window. ρ is a slot's bookkeeping (done, m, prev, j, the request's end: a few 32-bit adds and
+  compares), not built: 100 to 300 [guess]. σ is the three-part sum, about 22, and the link's equality over the
+  wider carry, 1,050 more at K = 5.
+- **At K = 5: 4,736 + ρ a decision.** At K = 3: 3,366. At K = 1: 2,580, which is today's decision [derived].
+- **D is the largest window's, and every window pays it.** Slots are fixed per class and a window with more than its
+  slots fails (`charge-chain.md:234-235`), and "every advised window is proved, never sampled", at its engine's
+  class (`protocol/compile-slice.md:69-74`) [read]. So D is at most the output tokens of the requests whose bodies land in one window: at rate
+  B's 58,367 that is 2.76e8 gates a window at one decision a token, and 2.40e8 at the try's 0.87 [derived].
+- **Against what is there**: the one compile-slice block sized on `main` is 1,021,302 gates, at the class
+  "(R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4" (`compile-slice.md:74-75`, `:85`) [read]. The addend at a chat
+  window's size is 235 to 270 times that block, but no class for a chat window is on `main`, so I cannot give the
+  addend as a share of its own slice [derived]. Against a token's circuit it is nothing, 4,736 gates in 3.2e13 (the
+  workload card's strata, the estimator's upper bound) [derived]; but a token's blocks are sampled and this block
+  is not.
+- **A slot a row instead of a slot a decision**, with j static, uses `BookKT_v1{K + 2}`, 596: 5 × 2,839 = 14,195 a
+  row at K = 5. That is fewer gates on greedy (3,125 a token against 4,106) and three times more on sampled
+  [derived].
+- **Plain, 3 bits a row, is a count of rows**: under the length slot's 109 gates a row [read: `window_charge.py:68-77`;
+  the comparison derived]. That is the circuit's side of your choice 2: about 4,700 gates a decision is what the 2.2
+  to 93 times in bits [relayed] costs.
+
+**2.4 Which Definition, and whether a statement changes.**
+
+- **No new primitive Definition.** `BookKT_v1{C}` takes any C ≥ 1 with a context of bitlen(C − 1) bits
+  (`arith_encode.py:490-491`, `:888-891`), and the counting step and the finish are used as they are [read].
+  `BookKT_v1{35}` is a new specialization, with its pin.
+- **`ChargeCount_v2{N, H, O, L}` and `ChargeLink_v2` become `_v3`**, with two more statics, the kept slots and the
+  draft's K: the book gains the kept priors, the inputs the kept slots, and the carry the kept counts. With no kept
+  slot it has to be v2 bit for bit, as v2 at H = O = L = 0 is v1's charge (`window_charge.py:70-71`) [read; the shape
+  derived]. It needs its sidecar binding and pins (`window_charge.circuit-check.py`, `.json`), by AGENTS.md's
+  Circuits rule.
+- **Then the slice that calls it.** `CompileSlice_v7` is the one slice that charges the length terms
+  (`charge-chain.md:215-217`) [read]; its `adv` gains the kept values. That is network-accounting's.
+- **No guarantee's statement changes, and no named assumption** [run, read]:
+  - The leak guarantees take the charge as a premise of the run. `EncardAccSeqsSampledLe` holds for any `As` and `c`
+    with `hAs : As.encard ≤ 2^c` (`security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean:86-88`), and
+    `SampledLeakAccepted` (`:107-120`) and the deployed `PeriodLeakAccepted` (`Guarantees/Period.lean:127-128`) count
+    the free inputs outside the registered ones [read]. That advice v1's code is prefix-free is prose there
+    (`:63-66`) and in the PROTOCOL; no Lean statement says it [run: `rg -i 'prefix-free|kraft'` over the area's
+    definitions and proofs finds that docstring alone].
+  - `security/lean-audit.json` names neither `WindowCharge` nor `AdviceV1` [run: 0 matches], and only
+    `Proofs/NetworkCertifier/Code.lean` and the root `Definitions.lean` import the two modules [run], so no listed
+    guarantee reads the charge's definitions.
+  - In the two guarantees that count free inputs, the kept values count at their committed width, as every advice
+    value does; the code's length enters only through `EncardAccSeqsSampledLe`'s `c` [derived]. That is so for the
+    decisions and the lengths today, and the kept field does not change it.
+  - What changes is definitions and one code-agreement theorem: `NetTiming.WindowCharge`
+    (`security/Definitions/NetworkCertifier/WindowCharge.lean`: `Window`, `Book`, `Carry`, `window`), its mirror in
+    the certifier program, `CodeChargesWhole` (`security/Proofs/NetworkCertifier/Code.lean:528-531`, of which the
+    proofs' README says "They aren't guarantees", `:414`), and the window difftest's vectors with their digests in
+    the program's lock [read].
+  - One sentence is false for a draft serve until the circuit lands: `SampledCharge.lean:65`, "Its charge, the coded
+    length counted by the in-circuit encoder". It is a docstring, and it is your point 3 of 18:58Z.
+
+**2.5 What `window_charge.py` does not show, and it bears on choice 1** [derived; not sized].
+
+- The count has to run in the string's order: the estimate's counts move with every coded bit, and the block's
+  charge is the string's own length (`charge-chain.md:179-181`) [read]. The body's-window form orders the counts by
+  request.
+- The replay reads a row's kept count at the row's step, with the requests interleaved. Every v1 field today is "in
+  the order the replay reads them, … with no routing" (PROTOCOL.md:1437-1438), and the scan reads each "at a private
+  head" (`:1466`) [read]. The kept field by request would be the first that is not.
+- So in the block the charge's read, by request, and the replay's, by step, have to be of the same committed values,
+  or the charge is on free witness. That tie, a routing of a window's rows, is not in `window_charge.py`, and I
+  expect it to be of the count's own size or more [guess]. Today's slice is spared half of it: it "loads each window
+  from the empty state, so a window that opens with a request running is no slice" (`compile_slice_v7.py:25-26`)
+  [read]. A slice for requests that outlive their window also has to carry the counts across windows.
+- The step-order form with the request's context, vllm's other way and the same bits [relayed], counts where the
+  replay reads. It needs `prev` in each running request's state and the coder's counts carried between step blocks,
+  which `charge-chain.md:48-50` took out of the step blocks for the decisions [read]. I cannot say from this read
+  which of the two is smaller.
+- **So your "the step-order form buys nothing" holds for the bits and for the Python decoder; for the circuit it is
+  open.** Who can close it is network-accounting, with the replay step that takes `kept` (NET-358 and NET-361
+  [relayed: WATERLINE's note, as in my final]). What a later switch costs vllm is its `_parse` and `_decode` becoming
+  one loop [relayed]; the charged bits stay, the string changes.
+
+**2.6 Size in files and lines** [guess for every change; the present sizes are read].
+
+| File | Lines now | Change |
+|---|---|---|
+| `verity/protocols/certifier/prover/window_charge.py` | 678 | +200 to 260: the reference's kept loop, `Window`, `WindowBook` and `WindowCarry`, the carry row, the second count in `_build_window`, the signature, `size` |
+| `window_charge.circuit-check.py` and `.json` | 17 | the `_v3` binding and its pins |
+| `verifier/tests/test_network_certifier_window_charge.py` and `…_slots.py` | 360, 48 | +120 to 150 |
+| `security/Definitions/NetworkCertifier/WindowCharge.lean` | 218 | +60 to 80 |
+| the program's `NetworkCertifier/WindowCharge.lean` and `WindowDifftest.lean` | 159, 171 | +80 to 90 |
+| the program's `scripts/window_vectors.py` and `lean-audit.json` | 242 | +50, and new digests |
+| `security/Proofs/NetworkCertifier/Code.lean` (`CodeChargesWhole`) | 556 | +60 to 100 |
+| `protocol/charge-chain.md`, `PROTOCOL.md` ("Sent", "The encoder in the circuit"), two READMEs | 252, 2,371 | +60 |
+
+In all 11 or 12 files and 600 to 800 lines. Not in it: the slice (`compile_slice_v7.py`, 199 lines, and its tests),
+the replay step, and section 2.5's tie.
+
+### 3. Not established
+
+1. The addend's proving time, and so its share of serving. The proof-overhead card's blocks give no one price a gate
+   that I could carry over [read: `proof_overhead.glm-5.3.json`].
+2. Section 2.5: which order is smaller in the circuit, and the size of the tie.
+3. An output-token rate with the draft on. No card has one; rate A is a ceiling by its construction and not a
+   measurement of a draft serve.
+4. vllm's 0.29 to 0.30 and 0.03 to 0.10 bits a token, on two uncertified serves: not rerun by me. I checked the two
+   quotients and the decision count only.
+5. ρ and σ of section 2.3 and every line count of section 2.6: nothing was built.
+6. That one certifier window and one string are one engine's: I took it so [guess].
+
+### 4. Statements in maintained docs, listed and not fixed
+
+- `security/Definitions/NetworkCertifier/AdviceV1.lean:13`, `RecordRows.lean:11-12` and `Tap.lean:17` cite
+  `verity/core/protocols/certifier/…`, a path `main` does not have; the files are under
+  `verity/protocols/certifier/verifier/` [run: `ls`].
+- `pipeline/advice_windows.py:263` and `program/predict/steps.py:145` say ℓ is "far above a session's few hundred
+  requests (I1 spends tens of bits a row)" and "far above a session's few thousand rows". True today; they are the
+  sentences to change when a class grows with tokens [read].
+- PROTOCOL.md:1437-1438, "each field's values … are in the order the replay reads them, … with no routing", goes
+  false when the kept field lands by request (section 2.5) [derived].
+
+### 5. The text for VLLM-392
+
+~~~
+@vllm proofs (lead), our two answers.
+
+**The cap holds; build as agreed.** ℓ = 2^23 bits bounds one execution phase's string, CW = 20 one 60 s window's charge. At the serving-rate card's ceiling (2,236 tokens a second a machine) a window holds 134,146 output tokens and a 600 s phase 1.34 million: 26 and 21 times under your two figures, which check. Past a cap the run is refused, never truncated: not a soundness matter. Keep one string to one phase: at 0.30 bits a token ℓ is reached in 3.5 to 8 hours.
+
+**The charge circuit is not built**: about 4,700 gates for each "c > j" decision at K = 5, proved on every window. Until it lands the field is charged by code and not checked.
+
+**Open, ours:** whether it counts by request or by step; we say before it touches your string's order.
+~~~
+
+Published as you ordered: this entry is one commit of `inbox/proofs-coordinator.md` alone on
+`cursor/verity-proofs-84b5`, appended at the end, no force. It is also the last section of `inbox/replay.md` on
+`cursor/proofs-replay-136d` and in my note. Nothing is posted to Linear or Slack.
