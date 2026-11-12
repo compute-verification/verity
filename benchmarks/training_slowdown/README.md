@@ -129,8 +129,9 @@ reads operand shapes and which weights have left θ, never a value, so it is the
 wherever that step is one fixed graph: the step is traced too, and an entry whose trace the capture refuses, or
 whose step reads a value back, is refused. It prints, an entry:
 
-- `updated`: the uses of an updated weight, each by its MACs a token and the updated MACs upstream of it, which must
-  be the record's; this list is the entry's update structure;
+- `updated`: the uses of an updated weight, each by its MACs a token, the updated MACs upstream of it and the bits
+  it reads its weight at, which must be the record's (a route casts to bf16 on a CPU as on CUDA); this list is the
+  entry's update structure;
 - `log`: the step's products, each by phase, kind, op, operand shapes, count and MACs, which must be the record's;
 - `attention`, for a record that holds attention's fused kernel as one row: the counter writes the kernel as the
   ops the math kernel computes attention by, so the record's rows are rewritten the same way before they are
@@ -142,9 +143,8 @@ whose step reads a value back, is refused. It prints, an entry:
 - the start and the steps, which must be the record's, and E: its plan's kinds, each of which must be one of the
   record's format's (`E_KINDS`), with its size after the two steps beside the record's last checkpoint's;
 - `expected`: a difference named by the rule that covers it, with the MACs on each side. A rule fires on its exact
-  case alone. The device's: weights read at 32 bits where the record's are read at 16 (`width`), and the norm as
-  elementwise ops where CUDA's fused kernel is counted at an updated gain alone, and not at all in a step that
-  trains no gain (`norm`). The program's own
+  case alone. The device's: the norm as elementwise ops where CUDA's fused kernel is counted at an updated gain
+  alone, and not at all in a step that trains no gain (`norm`). The program's own
   arrangement of a computation the route takes too: the loss (`loss`), where the record's program means each row
   and divides the rows' sum by the rows kept and a route means over the tokens, one value and one gradient where
   the run drops no row, which the rule checks in the record's program's arguments; and the average of the weights
