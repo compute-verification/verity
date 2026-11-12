@@ -48,10 +48,10 @@ untraced = [
 # certifier/v0 cases from period_case (the period check's Python mirror, with verity_difftest's decoders, and its pinned
 # slot entry's fixture), which also re-decides them.
 # demo_stub's endpoint records are read as the warden path's endpoint step reads them: `verity-vllm advice` (with the
-# step trace and the records it imports, the engine handle the step trace finds a scheduler through, and its CLI, which
-# served_session's endpoint step runs it through) and network-e2e's chain. certifier_piece is the network certifier's
-# piece of one_stage's served_verdicts, whose pieces and record test_certifier_piece runs it through into the block
-# record.
+# step trace and the records it imports, the engine handle the step trace finds a scheduler through, the registry it
+# wraps the scheduler through with the ranks its parts run by, and its CLI, which served_session's endpoint step runs it
+# through) and network-e2e's chain. certifier_piece is the network certifier's piece of one_stage's served_verdicts,
+# whose pieces and record test_certifier_piece runs it through into the block record.
 # leak_bounds counts K over the census's reference datacenter and the world, one link a machine: the world is rho's
 # world fleet and its machine's GPUs, and the weights are the workload card's parameters. A scope's requests are by
 # default the sampling plan's: the break-even planner's case, which it builds from Figure 1's lines (figure1.py,
@@ -70,6 +70,7 @@ inputs = ["benchmarks/census/deployments.json", "benchmarks/census/adversary.jso
           "adapters/vllm/verity_vllm/config.py", "adapters/vllm/verity_vllm/settings.py",
           "adapters/vllm/verity_vllm/engine/__init__.py", "adapters/vllm/verity_vllm/engine/handle.py",
           "adapters/vllm/verity_vllm/engine/hooks.py", "adapters/vllm/verity_vllm/engine/step_trace.py",
+          "adapters/vllm/verity_vllm/engine/scheduler_step.py", "adapters/vllm/verity_vllm/engine/runner_step.py",
           "adapters/vllm/verity_vllm/records/__init__.py", "adapters/vllm/verity_vllm/records/fields.py",
           "adapters/vllm/verity_vllm/records/workload.py", "benchmarks/network_e2e/chain.py",
           "verity/composite/device/live_challenger", "benchmarks/one_stage/a5_coins.py", "benchmarks/one_stage/a0.py",
