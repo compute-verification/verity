@@ -426,9 +426,9 @@ def test_start_with_shards_launches_the_after_landing_run_of_every_step_a_shard_
 @pytest.mark.parametrize("drops", [False, True])
 def test_a_candidate_is_sent_only_the_steps_its_own_ci_toml_declares_as_jobs(world, monkeypatch, tmp_path, shards, drops):
     """check.py refuses a `--deferred` naming a job the candidate's own ci.toml doesn't declare (`declared_steps`): a candidate
-    whose ci.toml drops a step's job (lean-changed, or ratchet-gate beside its check) is sent every other step, beside its
+    whose ci.toml drops a step's job (lean-suites, or ratchet-gate beside its check) is sent every other step, beside its
     check, whole, as each shard or to its auto plan, with one line naming the step; one declaring every step is sent them all."""
-    dropped = "lean-changed" if shards else "ratchet-gate"
+    dropped = "lean-suites" if shards else "ratchet-gate"
     jobs = CI_TOML.replace(f'[[job]]\nname = "{dropped}"\nowner = "ci"\ngroup = 1\n', "")
     assert jobs != CI_TOML
     h, base, sha, _ = _harness(world, monkeypatch, agreement=True,
