@@ -106797,3 +106797,57 @@ Not established:
 - Nothing above has compiled yet. Steps, Coins, Proved and Top are in tries 4 to 7.
 - `SeqAccepts` and `CheckReadsDraw` are open premises until `Honest.lean` and REDRAW land.
 - A replayed earlier period's genuine signature counts as a forgery under `Break`: the break branch of `runCoinsFromDevice` reads it the same way, so the error is ⊤ there until the key pins.
+
+## ACCOUNTS, Thu 12 Nov 22:51Z: (a) is done: the Site v2 branch holds network's commit and compute-research's three, pushed at `a88978bf950f`; none of the thirteen statements says a valid Site has no certifier's link without a capacity; the difftest's try is in line, not yet read
+
+**For the lead to post, the line that names the heads:** "proofs' heads for compute-research's run: the three additions' Lean is at `88363a30fc` (the auditor's host), `160ab7b9a3` (the time base) and `e0167418c1` (the drift on the host), as you read them. `cursor/proofs-site-v2-1dc6` is now at `a88978bf950f` and holds your `dda15f7225` (three merges, one an addition) and network's `2bccc17865`. From `dda15f7225` to that head, what the two difftests' executables import (`CoreProtocol/Site.lean`, `Registration.lean`, `RegistrationMain.lean`, `Spot/SiteDifftest.lean`) differs only in three docstrings of `Site.lean`. Whether `Spot/SiteDifftest.lean` builds at that head: its try is in line on vy-nebius-cpu-12, and proofs says when it is read."
+
+Every "[run]" below is a command on my VM unless it names a run; every sha is of `cursor/proofs-site-v2-1dc6` unless said.
+
+**1. (a) is done: four merges, none a rebase, nothing forced.** [run: `git merge --no-ff`, `git push`, `git ls-remote` at 22:45Z]
+
+| Merge | Takes | Files |
+|---|---|---|
+| `c135d9f019` | network's `2bccc178659e` | `NetworkCheck/Registered.lean`, `registered.py`, its test |
+| `792e08ce00` | compute-research's `40c254ee10` | the kind `auditor-host` |
+| `1c7132b2f7` | compute-research's `05bb9b3b2d` | a location's `timebase`, the auditor's `timebases` |
+| `ad0e75eab0` | compute-research's `dda15f7225d8` | the drift on the host |
+
+- Each merged clean. On the files each lane changed, the joined tree at `ad0e75eab0` equals that lane's tree [run: `git diff --stat` against `2bccc178659e` and `dda15f7225d8`, empty on their files].
+- The head is `a88978bf950f`: three commits of mine after the merges (items 2 to 4). Both lanes' heads are its ancestors [run: `git merge-base --is-ancestor`].
+
+**2. Your item 3: none of the thirteen listed statements says a valid Site has no certifier's link without a capacity, so nothing goes to Daniel for it, and I added no second refusal.**
+
+- [read: `security/Properties/Core/Site.lean` at `a88978bf950f`] The thirteen read a link only through the two maps (lines 127 and 157), which carry `β` and `unmediated` across as they are. No statement names either field.
+- [read: `security/Definitions/Core/Site.lean`, `Kinds` and `Covered`] The spec asks of a link what the code asks: a stated capacity is not 0, and a link with none carries a reason; onsite, a boundary link is certified or carries a reason. So a certifier's link with a reason and no capacity passes both, and network's reading is the one place that refuses it, as you ruled.
+- **Sentences that were not true of that, mended in `232de82adc`:** the spec's header and its `Link` docstring, the code's `Link` docstring, and one sentence of `Account.lean`. Each now says the checks hold a reason to nothing else: a link that carries one may be any link, a certifier's own among them, at a capacity or at none.
+- **One like sentence is left, in a file that is compute-research's:** `verity/hardware/site/__init__.py` line 683 says `unmediated` is "None on every other link". Its check does not hold that, as mine does not [read: the same file's `kind` check]. I did not edit it. It mirrors the docstring I changed, so it is theirs to mirror again.
+- I searched every added line of the branch for the sentence and its like [run: `git diff 0e8d16c3b8 HEAD` filtered for "no certifier splits", "states no capacity", "states none", "only where"]. The rest say "a link states no capacity only where it says why", which the check holds.
+
+**3. Two defects of mine, found on the way and mended.**
+
+- **The ratchet gate's one failure was mine, as compute-research said.** `Account.lean` added 12 places the retired-terms lint counts: a structure named `Period` (8) and the phrase "row of record" (4). The structure is now `Monitored`, and the phrase is "a row that takes no premise" (`d83da471d9`). [run: the two lints' own functions on every file the branch changes: none is over its allowance.] The gate itself is not rerun.
+- **`CoreProtocol/SiteV2Guards.lean` was imported by nothing**, so no build ran its guards, and the interface's Lean check fails a file no root imports. The root imports it now (`a88978bf95`). Whether it builds there is the first try below.
+
+**4. Eight of my lines over 120 characters are folded** (`a88978bf95`). Three more are rows of the table in the spec's header, left as `main`'s rows are.
+
+**5. Runs.** All at `a88978bf950f` but the last two.
+
+| Run | What | Where | State at 22:50Z |
+|---|---|---|---|
+| `r20261112-223929-49fc` | try of the interface's root (every interface module, the guards among them) | vy-nebius-cpu-12 | in line since 22:39Z |
+| `r20261112-223929-6685` | try of `Spot/SiteDifftest.lean` | vy-nebius-cpu-12 | in line since 22:39Z |
+| `r20261112-223929-53ec` | try of `NetworkCheck/Registered.lean` | vy-nebius-cpu-12 | in line since 22:39Z |
+| `r20261112-224804-ae12` | the records run (`lean_changed.py --records security --update`, 90 GiB, in a clone) | vy-nebius-cpu-12 | launched 22:48Z |
+| `r20261112-224804-2b10` | 16 suites, `--quick` | vy-nebius-cpu-8 | launched 22:48Z |
+| `r20261112-213155-38e4` | the two lists' records run, at `57fb7f037f6b` | vy-nebius-cpu-8 | running since 21:57Z |
+| `r20261112-213155-e409` | the two lists' suites, at `57fb7f037f6b` | vy-nebius-cpu-10 | in line since 21:31Z |
+
+- **The 16 suites** are the ones that read what the branch changes: `verity/hardware`, `verity/hardware/site`, the certifier verifier's two, `verity-core-sampled-proofs` (the Site's difftest against the Lean), `verity-core-composition` (the registration difftest against the Lean), `verity/protocols/spot/verifier`, `benchmarks/certifier_term`, `benchmarks/compute`, `verity-datacenter`, `demos/lifecycle`, `verity-cli`, `verity-graph`, `verity-difftest`, `verity/protocols/tests` and the root's.
+- **Not in it:** the other 54 suites the change touches [run: `suites.py --changed 0e8d16c3b8 --list` names 70]. They are touched because the `verity` distribution or the interface's Lean package is an input of theirs; none imports a module the branch changes [run: `rg` for the importers of `verity.hardware.site`, `.registration`, `.nodes` and of the certifier's `registered`]. Say if you want all 70 in one run.
+- **Both difftests run against the Lean in my suites run, at the joined head.** compute-research's run at `dda15f7225` would show the same two at its own head. Whether both are wanted is yours.
+- ETA: the tries about 2 minutes each once they have a slot; the records run about 50 minutes of slot; the suites not known. Lines tonight are 20 to 85 minutes by your word.
+
+**6. Not established.** Whether `Spot/SiteDifftest.lean`, the interface's root and `NetworkCheck/Registered.lean` build at the joined head (the three tries). Which lock records the branch moves, and that the rest of `security/` builds over the new spec (the records run). Either difftest against the Lean. The root suite on the joined tree. The two lists' records and suites.
+
+**7. Next, in this turn or the one you resume:** one entry when the difftest's try is read, with yes or no in its first line. The pull request, one and unmarked, opens after the records run is read, with the notice first.
