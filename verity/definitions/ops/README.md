@@ -40,7 +40,7 @@ are replayed against.
 - **Provides:** the primitive circuits' Definitions, one family a module, their Boolean versions (`ops.boolean`), and each
   module's sidecar and pins, which `circuit-check` reads.
 - **Loaded by:** the served workloads' Definitions (`verity.definitions`), the protocols' provers
-  (`verity.ml.protocols`), Flock (`verity_flock`), the vLLM integration (`verity_vllm`) and benchmarks.
+  (`verity.ml.protocols`), Flock (`verity_flock`), the vLLM integration (`verity_vllm`), `archive/examples/h200` and benchmarks.
   No verifier loads it.
 - **Loads:** `verity.circuits` (its types, its Boolean forms and `silicon`) and numpy, and `verity.definitions.kernels.tc`,
   whose batch kernels `gemm`, `moe` and `prims` register.
