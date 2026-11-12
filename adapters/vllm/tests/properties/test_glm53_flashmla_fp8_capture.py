@@ -184,6 +184,47 @@ arch = sm_90a
     assert not X.SASS_INSTANCE.search("flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateIL9ModelType0ELi128EEE")
 
 
+def test_the_listing_is_made_image_by_image(tmp_path, monkeypatch) -> None:
+    """Each sm_90a image is disassembled alone, so an image the disassembler cannot read (another architecture's) stops
+    nothing; the images that hold a kept function stay beside the listings, and one that fails to list fails the stage."""
+    import gzip
+    import subprocess
+
+    instance = "_ZN4sm906decode10sparse_fp839flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateIL9ModelType0ELi64EEEEEvv"
+    planner = "_ZN4smxx6decode23get_mla_metadata_kernelE24GetDecodeSchedMetaParams"
+    body = "        /*0000*/                   FMUL R0, R0, R2 ;             /* 0x0000000200007220 */\n"
+    listings = {"lib.1.sm_90a.cubin": f"\t\tFunction : {planner}\n{body}\t\tFunction : _Z5otherv\n{body}",
+                "lib.3.sm_90a.cubin": f"\t\tFunction : _Z5otherv\n{body}",
+                "lib.10.sm_90a.cubin": f"\t\tFunction : {instance}\n{body}{body}"}
+    failing: set[str] = set()
+
+    def run(cmd, **kw):
+        if cmd[1:3] == ["-xelf", "all"]:
+            for name in (*listings, "lib.2.sm_100.cubin"):
+                (kw["cwd"] / name).write_bytes(name.encode())
+            return subprocess.CompletedProcess(cmd, 0, "", "")
+        if cmd[1] == "-sass":
+            name = cmd[2].rsplit("/", 1)[-1]
+            return subprocess.CompletedProcess(cmd, int(name in failing), listings[name], "")
+        return subprocess.CompletedProcess(cmd, 0, "demangled\n", "")
+
+    monkeypatch.setattr(X, "flashmla_library", lambda: "lib.so")
+    monkeypatch.setattr(X.C, "_archs", lambda so: {"so": so, "sha256": "0" * 64, "sass_archs": ["100", "90a"]})
+    monkeypatch.setattr(X.C, "_run", run)
+    rec = X.sass(str(tmp_path))
+    assert rec["ok"] and rec["instance"] == ["001.sm_90a.sass.gz"]
+    assert [(e["image"], e["function"], e["instructions"]) for e in rec["kept"]] == [("lib.1.sm_90a.cubin", planner, 1),
+                                                                                  ("lib.10.sm_90a.cubin", instance, 2)]
+    assert [(i["file"], i["functions"], i["kept"]) for i in rec["images"]] == [("lib.1.sm_90a.cubin", 2, 1), ("lib.3.sm_90a.cubin", 1, 0),
+                                                                              ("lib.10.sm_90a.cubin", 1, 1)]
+    assert sorted(p.name for p in (tmp_path / "sass" / "elf").iterdir()) == ["lib.1.sm_90a.cubin", "lib.10.sm_90a.cubin"]
+    with gzip.open(tmp_path / "sass" / "001.sm_90a.sass.gz", "rt") as f:
+        assert f.read() == f"\t\tFunction : {instance}\n{body}{body}"
+    assert json.loads((tmp_path / "sass" / "index.json").read_text()) == rec
+    failing.add("lib.3.sm_90a.cubin")
+    assert not X.sass(str(tmp_path / "again"))["ok"]
+
+
 def test_the_comparison_takes_the_kernel_words(made) -> None:
     d = made / "capture"
     job = {"dir": str(d), "case": "d3", "tokens": [0, 3]}

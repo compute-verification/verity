@@ -8,10 +8,10 @@ scales, 64 bf16 words), softmax_scale 256^-0.5, no sink and no lengths.
 Three stages, each a process of its own, so a GPU is held for the launches alone and the comparison can be run again from the
 saved words without one:
 
-  sass     no GPU.  `cuobjdump -sass` of vLLM's `_flashmla_C` library: under `<out>/sass/`, the listing of every function of the
-           sparse FP8 decode, the combine and the planner, gzipped, and `index.json`: the library's sha256 and architectures, every
-           function it carries by architecture, and per kept function its sha256, instruction count and floating-point opcodes.
-           `instance` names the functions of the V32, 64-head kernel.
+  sass     no GPU.  `cuobjdump -sass` of each sm_90a image of vLLM's `_flashmla_C` library: under `<out>/sass/`, the listing of
+           every function of the sparse FP8 decode, the combine and the planner, gzipped, the images that hold them (`elf/`), and
+           `index.json`: the library's sha256 and architectures, every sm_90a function it carries, and per kept function its
+           image, sha256, instruction count and floating-point opcodes.  `instance` names the functions of the V32, 64-head kernel.
   launch   one GPU process.  The device gate (`fa2_target_capture_gpu.gate`: driver, cc 9.0, 132 SMs) runs first and nothing
            else runs when it fails (exit 3).  The cache: every request's rows through its block table, written by vLLM's own
            write (`deepseek_v32.common.kernels.fused_norm_rope` under `fp8_ds_mla`, on random inputs: zero rows, rows far below
@@ -61,7 +61,6 @@ import multiprocessing
 import os
 import re
 import shutil
-import subprocess
 import sys
 import types
 from concurrent.futures import ProcessPoolExecutor
@@ -100,6 +99,8 @@ PLANT_ROWS = PLANT_BLOCKS * PBS
 JOB_TOKENS = 4
 #: the cases whose every token is held to the Definition's own evaluator, whatever ``--definition`` (above 0) says: the planted rows
 DEFINITION_WHOLE = ("edge",)
+#: the architecture an H200 loads from the library's fat binary
+SASS_ARCH = "sm_90a"
 SASS_KEEP = re.compile(r"fp8_sparse|sparse_fp8|mla_combine_kernel|get_mla_metadata_kernel")
 #: the V32, 64-head instance's template arguments as the Itanium ABI mangles them (`ModelType::V32` is 0; `ModelType` is
 #: declared outside any namespace, `L9ModelType0E`, and the nested form is taken too)
@@ -351,37 +352,52 @@ def split_sass(lines) -> Any:
 
 
 def sass(out: str) -> dict[str, Any]:
+    """The library's CUDA images for `SASS_ARCH`, each disassembled alone, since a toolkit's disassembler stops at the first
+    image of an architecture it does not know and the library holds sm_100's too.  Kept under ``<out>/sass``: the listing of
+    each function `SASS_KEEP` names, and under ``elf/`` each image that holds one."""
     outdir = Path(out) / "sass"
-    outdir.mkdir(parents=True, exist_ok=True)
-    so = flashmla_library()
-    rec: dict[str, Any] = {"library": C._archs(so), "functions": {}, "kept": [], "instance": []}
+    elf = outdir / "elf"
+    elf.mkdir(parents=True, exist_ok=True)
+    so, tool = flashmla_library(), C._cuda_tool("cuobjdump")
+    rec: dict[str, Any] = {"library": C._archs(so), "arch": SASS_ARCH, "images": [], "functions": {SASS_ARCH: {}}, "kept": [],
+                           "instance": []}
+    x = C._run([tool, "-xelf", "all", so], cwd=elf)
+    rec["xelf_rc"] = x.returncode
+    cubins = sorted(elf.glob(f"*.{SASS_ARCH}.cubin"), key=lambda p: int(p.name.split(".")[-3]))
+    for other in set(elf.glob("*.cubin")) - set(cubins):
+        other.unlink()
     filt = shutil.which("c++filt")
-    with open(outdir / "cuobjdump.stderr", "w") as err:
-        p = subprocess.Popen([C._cuda_tool("cuobjdump"), "-sass", so], stdout=subprocess.PIPE, stderr=err, text=True)
-    assert p.stdout is not None
-    for arch, name, buf in split_sass(p.stdout):
-        text = "".join(buf)
-        n_ins = len(re.findall(r"/\*[0-9a-f]{4,}\*/\s+\S", text))
-        rec["functions"].setdefault(arch, {})[name] = n_ins
-        if not SASS_KEEP.search(name):
-            continue
-        k = len(rec["kept"])
-        path = outdir / f"{k:03d}.{arch}.sass.gz"
-        with gzip.open(path, "wt") as f:
-            f.write(text)
-        ent = {"file": path.name, "arch": arch, "function": name, "instructions": n_ins,
-               "sha256": hashlib.sha256(text.encode()).hexdigest(), "fp_ops": M.sass_census(text)}
-        if filt:
-            ent["demangled"] = C._run([filt, name]).stdout.strip()[:2000]
-        rec["kept"].append(ent)
-        if SASS_INSTANCE.search(name):
-            rec["instance"].append(ent["file"])
-    rec["cuobjdump_rc"] = p.wait()
-    rec["cuobjdump_err"] = (outdir / "cuobjdump.stderr").read_text()[-300:]
-    rec["ok"] = bool(rec["cuobjdump_rc"] == 0 and rec["instance"])
+    for cubin in cubins:
+        p = C._run([tool, "-sass", str(cubin)])
+        img: dict[str, Any] = {"file": cubin.name, "sha256": C._sha256_file(str(cubin)), "rc": p.returncode, "functions": 0, "kept": 0}
+        if p.returncode:
+            img["error"] = (p.stdout + p.stderr)[-300:]
+        for _, name, buf in split_sass(p.stdout.splitlines(keepends=True)):
+            text = "".join(buf)
+            n_ins = len(re.findall(r"/\*[0-9a-f]{4,}\*/\s+\S", text))
+            rec["functions"][SASS_ARCH][name] = n_ins
+            img["functions"] += 1
+            if not SASS_KEEP.search(name):
+                continue
+            path = outdir / f"{len(rec['kept']):03d}.{SASS_ARCH}.sass.gz"
+            with gzip.open(path, "wt") as f:
+                f.write(text)
+            ent = {"file": path.name, "arch": SASS_ARCH, "image": cubin.name, "function": name, "instructions": n_ins,
+                   "sha256": hashlib.sha256(text.encode()).hexdigest(), "fp_ops": M.sass_census(text)}
+            if filt:
+                ent["demangled"] = C._run([filt, name]).stdout.strip()[:2000]
+            rec["kept"].append(ent)
+            img["kept"] += 1
+            if SASS_INSTANCE.search(name):
+                rec["instance"].append(ent["file"])
+        if not img["kept"]:
+            cubin.unlink()
+        rec["images"].append(img)
+    rec["ok"] = bool(cubins and all(i["rc"] == 0 for i in rec["images"]) and rec["instance"])
     (outdir / "index.json").write_text(json.dumps(rec, indent=1) + "\n")
     print(f"[glm53-flashmla-fp8] sass library={rec['library'].get('sha256')} archs={rec['library'].get('sass_archs')} "
-          f"functions={ {a: len(v) for a, v in rec['functions'].items()} } kept={len(rec['kept'])} instance={rec['instance']}",
+          f"images={len(cubins)} failing={[i['file'] for i in rec['images'] if i['rc']]} "
+          f"functions={len(rec['functions'][SASS_ARCH])} kept={len(rec['kept'])} instance={rec['instance']}",
           flush=True)
     for e in rec["kept"]:
         print(f"[glm53-flashmla-fp8] sass {e['file']} ins={e['instructions']} {e['function'][:150]} fp={json.dumps(e['fp_ops'])}",
@@ -806,7 +822,8 @@ def compare(out: str, workers: int, definition: int = 0) -> dict[str, Any]:
     try:
         s = json.loads((root / "sass" / "index.json").read_text())
         doc["sass"] = {"ok": s["ok"], "instance": s["instance"], "library": s["library"],
-                       "kept": [{k: e[k] for k in ("file", "arch", "function", "instructions", "sha256", "fp_ops")} for e in s["kept"]]}
+                       "kept": [{k: e.get(k) for k in ("file", "arch", "image", "function", "instructions", "sha256", "fp_ops")}
+                                for e in s["kept"]]}
     except Exception as e:  # noqa: BLE001
         doc["sass"] = {"ok": False, "error": D._error(e)}
     done = [x["case"] for x in doc["launches"]]
