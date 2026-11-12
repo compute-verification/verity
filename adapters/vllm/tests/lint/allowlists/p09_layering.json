@@ -15,7 +15,7 @@
     {"file": "verity_vllm/commit/committer/native_hidden.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_hidden -> acquire.sources.hidden_source"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> acquire.committer_api"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> acquire.fa2_plane_classes"},
-    {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> acquire.sources.hidden_source"},
+    {"file": "verity_vllm/commit/committer/staging_bounds.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.staging_bounds -> acquire.sources.hidden_source"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> acquire.sources.moe_source"},
     {"file": "verity_vllm/commit/committer/native_host.py", "kind": "layer", "symbol": "<module>", "detail": "commit.committer.native_host -> pipeline.spans"},
     {"file": "verity_vllm/program/frontend/emit.py", "kind": "layer", "symbol": "<module>", "detail": "program.frontend.emit -> correspondence.runtime"},
