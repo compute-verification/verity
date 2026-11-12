@@ -356,7 +356,7 @@ class _Runner:
     def __init__(self) -> None:
         self.committer: NC.NativeCollectCommitter | None = None
         self.tensors: list[tuple[str, object]] = []
-        self.input_batch = None
+        self.input_batch: SimpleNamespace | None = None
 
     def execute_model(self, scheduler_output, *a, **kw):
         com = self.committer

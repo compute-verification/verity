@@ -55,6 +55,9 @@ class Runner(PC._Runner):
     """The model runner with vLLM's ``sample``: ``execute_model`` acquires the step's module tensors, as the wrapped forwards do,
     and ``sample`` returns the sampler's output on the device with vLLM's two counts."""
 
+    #: vLLM's method the committer wraps itself; this runner has none until a test gives it one
+    gather_batch_req_state: Any
+
     def __init__(self) -> None:
         super().__init__()
         self.states = SamplingStates()
