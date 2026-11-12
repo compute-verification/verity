@@ -21,6 +21,7 @@ Each part keeps its suites.py logs in its run's `out/logs`, whose `integrations_
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
@@ -233,7 +234,6 @@ def main(argv: list[str] | None = None) -> int:
                     help="SECONDS from suites.py reports of a full run, or of every part of one")
     a = ap.parse_args(argv)
     if a.seconds:
-        import json
         passed = {k: v for r in a.seconds for k, v in json.loads(r.read_text()).get("passed", {}).items()}
         for m, s in table({"passed": passed}).items():
             print(f'    "{m}": {s},')

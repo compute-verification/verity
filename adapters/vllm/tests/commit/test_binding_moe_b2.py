@@ -16,7 +16,8 @@ from __future__ import annotations
 import hashlib
 import random
 
-from verity_vllm.commit import binding as B, step_rows
+from verity_vllm.commit import binding as B
+from verity_vllm.commit import step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
 CHUNK = step_rows.ROW_BYTES

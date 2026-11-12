@@ -41,14 +41,19 @@ import hashlib
 import json
 from collections.abc import Sequence
 
-from verity.errors import InvalidArtifact
 from verity.commitments import hm96
 from verity.commitments.hm96 import batch as hm96_batch
 from verity.commitments.identity import identity_digest_sha512
 from verity.commitments.indexed import RangeIndexedDomain
 from verity.commitments.merkle import CommitmentDomain, merkle_depth, tree_levels
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2, row_leaf, sha512_row_v2_digest, sha512_row_v2_prefix
+from verity.commitments.rowleaf import (
+    SCHEMA_HM96_SHA512_ROW_V2,
+    row_leaf,
+    sha512_row_v2_digest,
+    sha512_row_v2_prefix,
+)
 from verity.commitments.scheme import DIGEST_BYTES
+from verity.errors import InvalidArtifact
 
 __all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
            "domain", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "names_digest", "path", "program_field", "range_shape",

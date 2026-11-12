@@ -11,9 +11,8 @@ import sys
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import self_check
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import self_check
 from verity.definitions.numerics import dense_rows as DR
 from verity.definitions.numerics import derived_rows as D
 from verity.definitions.numerics import rows

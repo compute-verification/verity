@@ -9,7 +9,13 @@ import numpy as np
 import pytest
 
 from verity_vllm.commit import served_record as SR
-from verity_vllm.commit.served_record import IDS_NAMES, SAMPLED, SAMPLER_INPUTS, BlockValues, Row
+from verity_vllm.commit.served_record import (
+    IDS_NAMES,
+    SAMPLED,
+    SAMPLER_INPUTS,
+    BlockValues,
+    Row,
+)
 
 IDS = IDS_NAMES[1]
 SEED = 11

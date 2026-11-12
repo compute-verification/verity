@@ -146,7 +146,9 @@ def attention_head(q, K, V, T, D, sl2, BN, limit, nb, softcap_bits=0, left=0):
 
 def make_inputs(M, T, D, seed, spread):
     rng = np.random.default_rng(seed)
-    bf16 = lambda a: [int(w) for w in (np.asarray(a, np.float32).view(np.uint32) >> 16)]  # truncation: fine for inputs
+    def bf16(a):  # truncation: fine for inputs
+        return [int(w) for w in (np.asarray(a, np.float32).view(np.uint32) >> 16)]
+
     return ([bf16(rng.normal(0, spread, D)) for _ in range(M)], [bf16(rng.normal(0, spread, D)) for _ in range(T)],
             [bf16(rng.normal(0, 1.0, D)) for _ in range(T)])
 

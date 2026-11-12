@@ -12,7 +12,7 @@
 Nothing here is copied from the other owners' modules; the real modules replace these stubs at merge."""
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Iterator
 
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind

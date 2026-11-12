@@ -22,10 +22,9 @@ from fractions import Fraction
 
 import numpy as np
 import pytest
-
+from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
-from verity.circuits import boolean as BL
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
@@ -35,8 +34,17 @@ from verity.definitions.numerics import derived_rows as R
 from verity.definitions.registry import boolean_deepgemm as BDG
 from verity.definitions.registry import deepgemm as DG
 from verity.definitions.registry import prims as P
+
 from tests.program.test_boolean_fp8 import _flat, _inputs
-from tests.program.test_dsa import _ceil_ftz, _e4m3, _ex2_integer, _ftz, _is_nan, _val, log2f
+from tests.program.test_dsa import (
+    _ceil_ftz,
+    _e4m3,
+    _ex2_integer,
+    _ftz,
+    _is_nan,
+    _val,
+    log2f,
+)
 from tests.program.test_fp8_moe import _q, _rn
 
 SIGN, INF = 1 << 31, 0x7F800000
@@ -49,19 +57,37 @@ def _bf16_rows(rng, n: int, K: int, scale: float = 1.0) -> np.ndarray:
 
 def _guard_rows(rng, K: int) -> list[np.ndarray]:
     """Rows of K bf16 words, each 128-word group reaching one guard of the quantisers."""
-    sub = lambda: (rng.integers(1, 0x80, 128) | (rng.integers(0, 2, 128) << 15)).astype(np.uint16)   # nonzero subnormals
+    def sub():   # nonzero subnormals
+        return (rng.integers(1, 0x80, 128) | (rng.integers(0, 2, 128) << 15)).astype(np.uint16)
+
     groups = []
-    g = sub(); groups.append(g)                                        # all subnormal, lane 0 nonzero: scale +inf, words 0x7F
-    g = sub(); g[[0, 1, 64, 65]] = 0; groups.append(g)                 # lane 0 zero, the rest subnormal: amax 0, scale 1
+    g = sub()  # all subnormal, lane 0 nonzero: scale +inf, words 0x7F
+    groups.append(g)
+    g = sub()  # lane 0 zero, the rest subnormal: amax 0, scale 1
+    g[[0, 1, 64, 65]] = 0
+    groups.append(g)
     groups.append(np.zeros(128, np.uint16))                            # all +0
     groups.append(np.full(128, 0x8000, np.uint16))                     # all -0
-    g = _bf16_rows(rng, 1, 128)[0]; g[7] = 0x7F80; groups.append(g)    # +inf: amax inf, stored scale inf
-    g = _bf16_rows(rng, 1, 128)[0]; g[70] = 0x7FC1; groups.append(g)   # NaN: dropped from the amax, its word 0x7F
-    g = _bf16_rows(rng, 1, 128)[0]; g[3] = 0xFF80; g[90] = 0xFFC0; groups.append(g)
-    g = _bf16_rows(rng, 1, 128, 1e-38)[0]; groups.append(g)            # normals and subnormals mixed
-    g = _bf16_rows(rng, 1, 128, 3e38)[0]; groups.append(g)             # near the largest finite, some +-inf
-    g = np.full(128, 0x0080, np.uint16); g[5] = 0x0081; groups.append(g)   # the smallest normals
-    g = _bf16_rows(rng, 1, 128)[0]; g[2] = 0x43E0; groups.append(g)    # 448: amax / 448 = 1
+    g = _bf16_rows(rng, 1, 128)[0]  # +inf: amax inf, stored scale inf
+    g[7] = 0x7F80
+    groups.append(g)
+    g = _bf16_rows(rng, 1, 128)[0]  # NaN: dropped from the amax, its word 0x7F
+    g[70] = 0x7FC1
+    groups.append(g)
+    g = _bf16_rows(rng, 1, 128)[0]
+    g[3] = 0xFF80
+    g[90] = 0xFFC0
+    groups.append(g)
+    g = _bf16_rows(rng, 1, 128, 1e-38)[0]  # normals and subnormals mixed
+    groups.append(g)
+    g = _bf16_rows(rng, 1, 128, 3e38)[0]  # near the largest finite, some +-inf
+    groups.append(g)
+    g = np.full(128, 0x0080, np.uint16)  # the smallest normals
+    g[5] = 0x0081
+    groups.append(g)
+    g = _bf16_rows(rng, 1, 128)[0]  # 448: amax / 448 = 1
+    g[2] = 0x43E0
+    groups.append(g)
     flat = np.concatenate(groups)
     return [np.resize(np.roll(flat, -128 * i), K) for i in range(len(groups))]
 
@@ -228,7 +254,9 @@ def test_linears_match_their_twins(N: int) -> None:
     K = 256
     ws = T.upcast_e8m0(rng.integers(112, 124, (-(-N // 128), K // 128)))
     w = _weights(rng, N, K)
-    finite = lambda ws, nf: [v for v, f in zip(ws, nf) if not f]
+    def finite(ws, nf):
+        return [v for v, f in zip(ws, nf) if not f]
+
     guards = _guard_rows(rng, K)
     # (row, every DeepGEMM lane nonfinite, every FlashInfer lane nonfinite): an +inf or a NaN in a group makes every lane NaN (the
     # twin flags it), and so does FlashInfer's all-subnormal group (scale +inf, words 0x7F) where DeepGEMM's eps keeps it finite

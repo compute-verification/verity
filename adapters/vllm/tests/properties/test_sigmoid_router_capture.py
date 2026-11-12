@@ -134,7 +134,7 @@ def test_check_finds_a_changed_output(tmp_path):
     for launch in S.LAUNCHES:
         got[f"{launch}_w"], got[f"{launch}_ids"] = S.twin(R["x"], S.row_bias(R), launch)
     got["block_w"][1, 0] ^= 1
-    np.savez_compressed(tmp_path / S.ROWS_FILE, **R, **got)
+    np.savez_compressed(tmp_path / S.ROWS_FILE, allow_pickle=False, **R, **got)
     rec = S.check(str(tmp_path), workers=1, limit=2)
     assert rec["block"] == {"mismatch": 1, "first": [1]} and rec["warp"] == {"mismatch": 0, "first": []} and rec["ok"] is False
     assert json.loads((tmp_path / S.CHECK_FILE).read_text())["rows"] == 2

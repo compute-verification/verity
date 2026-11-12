@@ -67,3 +67,23 @@ def test_install_without_the_split_pipeline_binds_nothing(monkeypatch):
     monkeypatch.setitem(sys.modules, NC.TOPP_SPLIT_MODULE, types.ModuleType(NC.TOPP_SPLIT_MODULE))
     assert NC.install_split_kernel_proxies([]) == {}
     NC.uninstall_split_kernel_proxies({})                                  # no-op
+
+
+def test_a_grid_the_proxy_cannot_read_is_recorded_as_none_and_still_launched(fake_vllm_module):
+    def meta_grid(_meta):
+        return (4,)
+
+    sink: list = []
+    patches = NC.install_split_kernel_proxies(sink)
+    kernel = fake_vllm_module._topp_sb_stats_kernel
+    for grid in (meta_grid, (), ("x",), "x", 8, [6, 2]):
+        assert kernel[grid](S=2) == "_topp_sb_stats_kernel-ran"
+    assert [g for _n, g, _s in sink] == [None, None, None, None, 8, 6]
+    NC.uninstall_split_kernel_proxies(patches)
+
+
+def test_install_without_the_module_is_an_import_error(monkeypatch):
+    """A vLLM without the top-p module has no launch to read a split count from, and the caller hears it."""
+    monkeypatch.setattr(NC, "TOPP_SPLIT_MODULE", "verity_vllm_no_such_package.topk_topp_triton")
+    with pytest.raises(ImportError):
+        NC.install_split_kernel_proxies([])

@@ -19,20 +19,19 @@ import zlib
 
 import numpy as np
 import pytest
-
-from verity.circuits import evaluation as E
-from verity.circuits.evaluation import bits as BS
-from verity.circuits.evaluation.reference import standalone_call
 from verity.circuits import boolean as BL
 from verity.circuits import codec
-from verity.circuits.cut import separable
-from verity.circuits.defs import REGISTRY, bind
+from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.boolean.forms import Circuit
+from verity.circuits.cut import separable
+from verity.circuits.defs import REGISTRY, bind
+from verity.circuits.evaluation import bits as BS
+from verity.circuits.evaluation.reference import standalone_call
+from verity.definitions import word as W
 from verity.definitions.registry import gumbel_boolean as GB
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import sampling_boolean as SB
-from verity.definitions import word as W
 
 F32 = GB.F32
 

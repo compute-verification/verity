@@ -9,7 +9,6 @@ __models__ = ("unsloth/Llama-3.2-1B",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate
 from verity.definitions.numerics import inductor_rows as TW
@@ -116,7 +115,9 @@ def test_the_qk_norm_rope_is_a_norm_then_a_rotation() -> None:
     rng = np.random.default_rng(8)
     D, R = 128, 64
     x, w, cs = _bf16(rng, (16, 4, D)), _bf16(rng, D), _bf16(rng, (16, D))
-    val = lambda a: (a.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+    def val(a):
+        return (a.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+
     xf = val(x)
     y = xf / np.sqrt((xf * xf).mean(axis=-1, keepdims=True) + 1e-6) * val(w)
     c, s = val(cs)[:, None, :R], val(cs)[:, None, R:]
@@ -210,7 +211,9 @@ def test_the_llama_decode_split_is_attention() -> None:
     rng = np.random.default_rng(9)
     T, NH, KVH, D, BN = 1000, 32, 8, 64, 192
     q, kc, vc = _bf16(rng, (NH, D)), _bf16(rng, (T, KVH, D)), _bf16(rng, (T, KVH, D))
-    val = lambda a: (a.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+    def val(a):
+        return (a.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+
     kf, vf = (np.transpose(val(a), (1, 0, 2))[np.arange(NH) // (NH // KVH)] for a in (kc, vc))
     s = np.einsum("hd,htd->ht", val(q), kf) * D ** -0.5
     p = np.exp(s - s.max(axis=1, keepdims=True))

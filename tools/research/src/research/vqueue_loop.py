@@ -149,9 +149,9 @@ every candidate's check at once, with no records run before it: stale records fa
 snapshot and the actions and writes nothing: no ref on origin, no log, no enqueue, no label, no message, no run.  The loop
 never writes drive's state, its priority file, `next`, `checked` or a label, but an eject's without `--shadow`.
 
-On the control pod it runs beside drive, from a pinned checkout of this tree, in drive's clone (or its own clone of origin):
-`research queue vqueue --shadow --log /data/vqueue/decisions.jsonl` (`--batch`, `--depth` and `--lean` default to 16, 3 and
-3), with `--once` for one tick and `--dry-run` to see one.
+On a node it runs as vy-vqueue (tools/research/src/research/pods/nebius/vqueue/loop.sh): one `--once` tick a pass, from ci's
+pinned tree in the loop's own clone, with its args file's flags and the node's log, state, lock, priority and freeze files, and
+`--dry-run` or `--shadow` as its mode says, neither when live.  `--batch`, `--depth` and `--lean` default to 16, 3 and 3.
 """
 from __future__ import annotations
 
@@ -2328,9 +2328,9 @@ class Loop:
         (`vqueue_records.commit` makes no commit), else on the records commit of what it regenerated on top of ``c``, pushed
         (one pushed before, with no line in the log, is adopted: `World.recommitted`) and checked in ``c``'s place, a candidate
         on ``c``'s base with ``c``'s members, which it `repairs`: the next tick drops ``c`` for it (`vqueue.decide`), so a tick
-        cut off after the push still finds ``c`` and adopts it.  The bookkeeping its records run repaired is told as drive
-        tells it (`_bookkeeping`).  A records commit that can't be made, or that the merge gate won't vouch for, is held:
-        logged, and rung to `CI` once, and ``c`` is dropped once it is held `pending_s` (`vqueue.decide`)."""
+        cut off after the push still finds ``c`` and adopts it.  The bookkeeping its records run repaired is told to `lean`
+        and each owner a warning names (`_bookkeeping`).  A records commit that can't be made, or that the merge gate won't
+        vouch for, is held: logged, and rung to `CI` once, and ``c`` is dropped once it is held `pending_s` (`vqueue.decide`)."""
         w = self.world
         rid = ((t.records.get(c.sha) or {}).get("verdict") or {}).get("run")
         got = self.records.commit(w.slim_driver(), c.sha, rid, c.members) if self.records is not None and rid else \
@@ -2356,7 +2356,7 @@ class Loop:
                               "repairs": c.sha, "files": files, **({"adopted": True} if adopted else {})})
 
     def _bookkeeping(self, t: Tick, c: Candidate, tip: str, told: tuple[str, tuple[str, ...]] | None) -> list[dict]:
-        """Tell what drive tells of the bookkeeping ``c``'s records run repaired in its records commit ``tip`` (``told``:
+        """Tell the bookkeeping ``c``'s records run repaired in its records commit ``tip`` (``told``:
         `vqueue_records.bookkeeping_told`'s text and handles), once a records commit: logged, and only logged with --shadow."""
         if told is None or any(r.get("posting") == "bookkeeping" and r.get("sha") == tip for r in t.past.of("posting")):
             return []
@@ -2386,8 +2386,8 @@ class Loop:
                           **({"start_error": error} if error else {}))
 
     def _advance(self, c: Candidate, t: Tick) -> dict:
-        """Push `main` to ``c`` (with --shadow, the shadow's own `main`).  Logged as soon as it is pushed, before what drive does
-        once its members are on `main` (`_on_main`), a step of its own the tick runs next."""
+        """Push `main` to ``c`` (with --shadow, the shadow's own `main`).  Logged as soon as it is pushed, before what follows
+        its members reaching `main` (`_on_main`), a step of its own the tick runs next."""
         w = self.world
         if self.shadow:
             w.set_shadow_main(c.sha)
@@ -2399,7 +2399,7 @@ class Loop:
                            **({} if self.shadow else {"on_main": True}))
 
     def _on_main(self, t: Tick, adv: dict, told: list[str]) -> dict:
-        """What drive does once advance ``adv``'s members are on `main` (`World.on_main`), logged as its own step: one that fails
+        """What follows advance ``adv``'s members reaching `main` (`World.on_main`), logged as its own step: one that fails
         is logged with its error, and the next tick runs it again while no record of it is done (`Past.moved`), ``told`` the
         stacked PRs' owners its tries told."""
         w, told = self.world, list(told)

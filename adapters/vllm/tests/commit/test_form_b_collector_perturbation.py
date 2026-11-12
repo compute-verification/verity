@@ -19,13 +19,14 @@ built by the same function) passes complete.
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 
-from verity_vllm.commit import binding as B
+from tests.check.test_oracle_compare import ROWS, H, make_match, reader
 from verity_vllm.check import oracle_compare as OC
-from tests.check.test_oracle_compare import H, ROWS, U0, U1, make_match, reader
+from verity_vllm.commit import binding as B
 
 PD = "p" * 64
 # the collector's committed members of step 0 (packed over the engine's row order: U1's 3 rows first, then U0's 5), names as the hook table emits them
@@ -135,9 +136,9 @@ def test_perturbation_is_collector_side_only(tmp_path):
     layouts, committed = _collector_layouts(vals)
     oracle = OC.MatchOracle(d)
     files = sorted(os.path.join(dp, f) for dp, _dn, fs in os.walk(d) for f in fs)
-    before = {f: hashlib.sha256(open(f, "rb").read()).hexdigest() for f in files}
+    before = {f: hashlib.sha256(Path(f).read_bytes()).hexdigest() for f in files}
     ok = OC.oracle_compare(oracle, _map(layouts, HONEST_ROWS), reader(committed))
     bad = OC.oracle_compare(oracle, _map(layouts, {0: [("r0", 0, 3), ("r1", 3, 8)]}), reader(committed))
-    after = {f: hashlib.sha256(open(f, "rb").read()).hexdigest() for f in files}
+    after = {f: hashlib.sha256(Path(f).read_bytes()).hexdigest() for f in files}
     assert before == after and ok["oracle"] == bad["oracle"]
     assert ok["result"] is True and bad["result"] is False

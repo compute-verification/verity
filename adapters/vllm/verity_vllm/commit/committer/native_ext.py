@@ -6,19 +6,10 @@ from __future__ import annotations
 import os
 import sys
 
-import torch
-
 from verity_vllm import settings
 
 _EXT = None
 HERE = os.path.dirname(os.path.abspath(__file__))
-
-
-def build_source_digest() -> str:
-    """The source-set digest of THIS tree's collector (native_jit.source_set_digest with the toolchain versions) -- the key of its JIT dir."""
-    from verity_vllm.commit.committer import native_jit
-
-    return native_jit.source_set_digest(torch_version=str(torch.__version__), cuda_version=str(torch.version.cuda))
 
 
 def ext(build_dir: str | None = None, verbose: bool = False):

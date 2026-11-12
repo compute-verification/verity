@@ -8,7 +8,6 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
@@ -178,7 +177,7 @@ def test_the_twin_is_the_kernel_on_edge_rows(st):
 ], ids=["bs-3", "bs-0", "bs-2^31", "nb-0", "nb-past-int32", "topk-0", "v2-bs-6", "v2-topk-0"])
 def test_bad_statics_are_refused_by_name(fn, kw, name):
     with pytest.raises(ValueError, match=name):
-        bind(fn, **kw).body
+        _ = bind(fn, **kw).body
 
 
 # --- the Boolean Definitions ---------------------------------------------------------------------------------------------------------

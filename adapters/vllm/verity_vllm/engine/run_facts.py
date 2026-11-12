@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 import torch
 
+from verity_vllm.engine import handle
 from verity_vllm.engine.build import (Engine, compilation_facts, observed_flash_attn_version, resolved_async_scheduling,
                                       vllm_has_flashinfer)
 from verity_vllm.engine.code_identity import generated_kernels_of_this_process
@@ -154,7 +155,7 @@ def moe_gate_ll_bf16_gemm_of(model) -> bool:
 
 
 def model_config_subset(engine: Engine) -> dict:
-    hf = engine.llm.llm_engine.vllm_config.model_config.hf_config
+    hf = handle.engine_of(engine.llm).vllm_config.model_config.hf_config
     keys = ("hidden_size", "num_hidden_layers", "num_attention_heads", "num_key_value_heads", "head_dim", "intermediate_size",
             "vocab_size", "rms_norm_eps", "tie_word_embeddings", "rope_theta", "max_position_embeddings", "torch_dtype",
             "model_type", "architectures", "attention_bias", "mlp_bias", "rope_parameters", "rope_scaling",

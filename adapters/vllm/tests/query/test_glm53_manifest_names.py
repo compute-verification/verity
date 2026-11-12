@@ -53,7 +53,7 @@ class _Build:
         return cid
 
     def parts(self, own: list[R], elems: int) -> list[R]:
-        k, self.coll = self.coll, self.coll + 1
+        self.coll += 1
         received = []
         for j in range(WORLD - 1):
             iid = -3 - len(self.peers)

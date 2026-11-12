@@ -125,9 +125,11 @@ def test_thread_leaf_openings_and_negatives(src):
         off = hs.thread_word_offset(src, "P", mi, ni)
         assert struct.unpack_from("<I", msg, 4 * off)[0] == int(s[L.word_index("P", slab, row, col=col)])
     # negatives: altered word, swapped words, wrong position (header mismatch), wrong tag, substituted leaf, foreign path
-    m2 = bytearray(msg); m2[64 + 3] ^= 0x80
+    m2 = bytearray(msg)
+    m2[64 + 3] ^= 0x80
     assert not hs.verify_thread_opening(c.root, g, tag, src, 1, slab, mb, nb, tidx, hs.ThreadOpening(op.index, bytes(m2), op.path))
-    m3 = bytearray(msg); m3[64:68], m3[68:72] = msg[68:72], msg[64:68]
+    m3 = bytearray(msg)
+    m3[64:68], m3[68:72] = msg[68:72], msg[64:68]
     if msg[64:68] != msg[68:72]:
         assert not hs.verify_thread_opening(c.root, g, tag, src, 1, slab, mb, nb, tidx, hs.ThreadOpening(op.index, bytes(m3), op.path))
     assert not hs.verify_thread_opening(c.root, g, tag, src, 1, slab, mb, nb, (tidx + 1) % 128, op)
@@ -138,13 +140,16 @@ def test_thread_leaf_openings_and_negatives(src):
     assert not hs.verify_thread_opening(c.root, g, tag, src, 1, slab, mb, nb, tidx, oo)
     assert not hs.verify_thread_opening(c.root, g, tag, src, 1, slab, mb, nb, tidx, hs.ThreadOpening(op.index, msg, oo.path))
     # a stream altered in one bound word changes the digests -> different root
-    s2 = s.copy(); s2[L.word_index("P" if src & 2 else "RP", slab, row, col=col)] ^= 1
+    s2 = s.copy()
+    s2[L.word_index("P" if src & 2 else "RP", slab, row, col=col)] ^= 1
     c2 = hs.ThreadLeafCommitment.from_digests(_kernel_digests(s2, L, g, src, tag), g, tag, src)
     assert c2.root != c.root
 
 
 def test_thread_message_header_matches_kernel_convention():
-    L = _layout(); s = _stream(L); g = _geo(L)
+    L = _layout()
+    s = _stream(L)
+    g = _geo(L)
     msg = hs.thread_message(s, L, g, 31, 5, 0, 0, 0, 1, 37)
     hdr = struct.unpack("<16I", msg[:64])
     assert hdr[0] == hs.TAG and hdr[1] == (7 << 16) | 31 and hdr[3:7] == (0, 0, 1, 37) and hdr[7:10] == (50, 150, 5)

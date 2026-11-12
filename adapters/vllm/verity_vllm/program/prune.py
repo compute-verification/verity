@@ -33,7 +33,16 @@ from itertools import accumulate, chain
 from typing import Any
 
 from verity.circuits.defs import Body, Node, bind
-from verity.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, concat
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    Explicit,
+    PartLog,
+    Refs,
+    Strided,
+    concat,
+)
 from verity.circuits.types import Array
 
 

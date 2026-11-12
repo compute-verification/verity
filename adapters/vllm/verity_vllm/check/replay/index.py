@@ -8,16 +8,20 @@ from __future__ import annotations
 
 import bisect
 import re
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 import numpy as np
-
-from verity_vllm.check.replay import cached_prefix as CP
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.query.manifest.format import moe_plane_kind
-from verity_vllm.program.compact import expanded_file_args, p_item_indices, runs_from_file_items
 from verity.definitions.numerics.rows import SAMPLED_MEMBER
 
+from verity_vllm.check.replay import cached_prefix as CP
+from verity_vllm.program.compact import (
+    expanded_file_args,
+    p_item_indices,
+    runs_from_file_items,
+)
+from verity_vllm.query.manifest import format as RM
+from verity_vllm.query.manifest.format import moe_plane_kind
 
 SAMPLER_OP = "runner.sampler"
 IDS_MEMBER = "in"
@@ -120,7 +124,7 @@ def index_key(*, prefix: str | None = None, attention_paths: list[str] | None = 
     return (prefix, tuple(attention_paths or ()), t and (t["rank"], t["world"]), program_dir, query or DEFAULT_QUERY, bool(norm_scales))
 
 
-def index_of(inst: dict[str, Any], reuse: Iterable["ProgramIndex"] = (), **kw: Any) -> "ProgramIndex":
+def index_of(inst: dict[str, Any], reuse: Iterable[ProgramIndex] = (), **kw: Any) -> ProgramIndex:
     """``ProgramIndex(inst, **kw)``: the one of ``reuse`` built from this very document (no reader modifies one,
     `instances_file.read_instances`) with these same arguments (`index_key`), else a new one -- one index of a GLM-5.3 TP8 rank
     Program takes minutes."""
@@ -154,8 +158,8 @@ class ProgramIndex:
         self._v2_module: dict[int, str] = {}
         self._v2_fault: dict[int, str] = {}
         from verity_vllm.correspondence.reader_for_query import Correspondence
-        from verity_vllm.query.program_view import from_instances
         from verity_vllm.query import norm_scales as NS
+        from verity_vllm.query.program_view import from_instances
         from verity_vllm.query.required import population
         # a manifest built under the norm-scale policy spells an ATen norm's rsqrt as `<norm module>/norm_scale`, not a Call boundary
         population = NS.population if norm_scales else population

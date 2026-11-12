@@ -12,8 +12,7 @@ A manifest (`verity-sweep/required-manifest/v1`) is one identity row per require
 * manifest rows      -- the lifted dtypes of the padded construction, the promoted-row observation rule (`promoted_observation`: a pre-flip
                         v1 manifest's `promoted: true` rows); the binder and the layout-level `coverage_check` over these rows are
                         `verity_vllm.query.manifest.bind`
-* Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape),
-                        `RegistryUnavailable` (the environment fault a manifest build refuses under)
+* Build inputs       -- `load_program`, `program_dirs_for` / `programs_for` (one request Program per declared (prompt_len, cap-1) shape)
 
 Which Values are required is the query's: `verity_vllm.query` (`required.QUERY_OF_RECORD`, Q_word v1 since the re-baseline; TP rank Programs
 too, with its rank policy).  Dependency-free (json/hashlib) but for `load_program`, which reads through `program.instances_file`.
@@ -157,28 +156,6 @@ def promoted_annotations(d: dict[str, Any]) -> dict[str, Any]:
     """The additive manifest-row fields of a promoted identity (a pre-flip v1 manifest's `promoted: true` row)."""
     return {"rows": d["rows"], "width": d["width"], "dtype": d["dtype"], "spec": d["spec"], "promoted": True, "boundary_class": INTERIOR_CROSSING,
             "consumers": list(d["consumers"])}
-
-#: the fail class `row_pod.sh` / the harness classify a RegistryUnavailable under (precheck vocabulary: an environment fault, not a Commit verdict)
-REGISTRY_UNAVAILABLE_FAIL_CLASS = "PRECHECK_FAIL_REGISTRY_UNAVAILABLE"
-
-REGISTRY_UNAVAILABLE_EXIT = 3                                                    # row_pod.sh's PRECHECK_FAIL_* exit status
-
-
-class RegistryUnavailable(ImportError):
-    """The core `verity` package (verity.circuits.defs REGISTRY) is not importable where the manifest is being built.  An ENVIRONMENT fault
-    (infra / precondition: PYTHONPATH, the shipped tree's root, an incomplete venv), never a semantic result: without the
-    registry no Definition's signature can be derived, so a manifest built here would misreport every promoted family as `unmodelled`
-    (complete: false).  Raised instead of
-    building; the CLI exits REGISTRY_UNAVAILABLE_EXIT naming REGISTRY_UNAVAILABLE_FAIL_CLASS."""
-
-    fail_class = REGISTRY_UNAVAILABLE_FAIL_CLASS
-    kind = "infra/precondition"
-
-    def __init__(self, cause: BaseException):
-        super().__init__(f"{REGISTRY_UNAVAILABLE_FAIL_CLASS}: the core verity package is not importable here (verity.circuits.defs: "
-                         f"{type(cause).__name__}: {cause}); the required-value manifest cannot be built without the registry "
-                         f"(sys.path lacks the tree's root? an incomplete venv?) -- an environment fault, not a manifest result")
-        self.cause = cause
 
 #: the bytes per element of a promoted member's manifest dtype (PROMOTED_DTYPES)
 PROMOTED_DTYPE_BYTES = {"bf16": 2, "f32": 4}
@@ -365,16 +342,6 @@ def fa2_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int, w
     return HB, M, NB, BN, (base if (BN, D) == (128, 64) else f"{base}x{BN}x{D}")
 
 
-def fa3_geometry(T_max: int, rows: int, NH: int, KVH: int, D: int, n_seq: int) -> tuple[int, int, int, int, str]:
-    g = NH // max(1, KVH)
-    seqlen_q = rows // max(1, n_seq)
-    one_wg = seqlen_q * g <= 64
-    BN = (192 if one_wg else 128) if D == 64 else 128
-    NB = -(-T_max // BN)
-    HB, M = n_seq * KVH, seqlen_q * g
-    return HB, M, NB, BN, f"g{HB}x{M}x{NB}x{BN}x{D}"
-
-
 def mat_total_words(HB: int, M: int, NB: int, BN: int, D: int, ms: bool = False) -> int:
     N = NB * BN
     return HB * M * N * 2 + HB * M * (N // 2) + HB * M * NB * 8 + HB * M * NB * D + HB * M * 4 + (HB * M * NB if ms else 0)
@@ -497,12 +464,6 @@ def load_program(program_dir: str, *, expand: bool = True) -> dict[str, Any]:
 #: every one of them samples ONE id per sequence per step (`sampled_token_ids`); the chain's interior values are the sampler's, not module outputs.
 TOKEN_SELECT_FAMILIES = ("TokenSelect", "GumbelTokenSelect", "ArgmaxTokenSelect", "GumbelTopPTokenSelect")
 
-#: the stochastic selectors (`Gumbel*TokenSelect_v1`: temperature -> top-p mask -> Gumbel noise from Philox(seed, pos) ->
-#: argmax) consume ONE registered runtime input the greedy chain has not: the per-request SEED.  It is a required value of the sampling
-#: event (identity `runner.sampler/seed`, one i64 per sequence per step, family `sampler_seed`): without it the committed sampled id is not
-#: reproducible from the committed logits, so the population REQUIRES it and a collector that does not bind it fails coverage (named).
-STOCHASTIC_SELECT_PREFIXES = ("Gumbel",)
-
 #: the runtime inputs a stochastic selector may read: the seed alone.  Its top-p split count S is the registered constant
 #: (`topp_geometry.registered_splits`), a `Const32[S]` of the Program; a selector reading S from a Program input (one a live batch
 #: could set) is refused by name.
@@ -532,10 +493,6 @@ def is_token_select(family: str) -> bool:
     GumbelTopPTokenSelect_v1, ArgmaxTokenSelect_v1, ...): every one samples one id per sequence and closes the engine step."""
     base = family.split("_v", 1)[0]
     return base.endswith("TokenSelect") or family.startswith(TOKEN_SELECT_FAMILIES)
-
-
-def is_stochastic_select(family: str) -> bool:
-    return is_token_select(family) and family.startswith(STOCHASTIC_SELECT_PREFIXES)
 
 
 def segment_steps(rows: list[dict], checks: dict | None = None) -> list[tuple[int, int]]:

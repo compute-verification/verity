@@ -3,18 +3,18 @@ unit of the replay population, and each dense row's words are the IR reference's
 from __future__ import annotations
 
 import numpy as np
+from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
+from verity.definitions.call_scope import specialization
+from verity.definitions.numerics import ir_rows
+from verity.definitions.numerics.rows import EVALUATORS, ROWS
+from verity.definitions.registry import dense
 
 from tests.acquire.call_boundary_programs import DENSE, LP, PF, build_dir, dense_program
-from verity.circuits.evaluation import evaluate
-from verity.circuits.defs import bind
 from verity_vllm.check.replay import coverage as COV
 from verity_vllm.check.replay.driver import manifest_query
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.population import population
-from verity.definitions.numerics import ir_rows
-from verity.definitions.numerics.rows import EVALUATORS, ROWS
-from verity.definitions.registry import dense
-from verity.definitions.call_scope import specialization
 from verity_vllm.query.manifest import format as RM
 from verity_vllm.query.manifest.format import spec_family
 from verity_vllm.query.program_view import spec_statics
@@ -61,15 +61,15 @@ def test_each_dense_row_is_the_ir_reference():
 
 def test_gelu_tanh_mul_at_gemma_width_and_its_declines():
     rng = np.random.default_rng(6)
-    I = 9216
-    gu = (np.asarray(rng.standard_normal(2 * I) * 3, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
+    width = 9216
+    gu = (np.asarray(rng.standard_normal(2 * width) * 3, dtype=np.float32).view(np.uint32) >> 16).astype(np.uint16)
     gu[:6] = [0x7FC0, 0xFF80, 0x7F80, 0x8000, 0x0001, 0x7F7F]
-    got = ROWS["GeluTanhMul_v1"].fn({"I": I}, [gu])
+    got = ROWS["GeluTanhMul_v1"].fn({"I": width}, [gu])
     assert list(got) == ["0", "out"] and got["out"].dtype == np.uint16
-    assert got["out"].tolist() == list(evaluate(bind(dense.GeluTanhMul, I=I), gu.tolist()))
+    assert got["out"].tolist() == list(evaluate(bind(dense.GeluTanhMul, I=width), gu.tolist()))
     import pytest
     with pytest.raises(ir_rows.Declined, match="arg words"):
-        ROWS["GeluTanhMul_v1"].fn({"I": I}, [gu[:-1]])
+        ROWS["GeluTanhMul_v1"].fn({"I": width}, [gu[:-1]])
     with pytest.raises(ir_rows.Declined, match="past"):
         ROWS["GeluTanhMul_v1"].fn({"I": ir_rows.MAX_WORDS}, [np.zeros(2 * ir_rows.MAX_WORDS, dtype=np.uint16)])
 
@@ -104,6 +104,7 @@ def test_a_one_output_row_is_compared_under_its_one_member_however_the_module_sp
     """The ATen norm's rsqrt is `<norm module>/norm_scale` and its residual narrow `<norm module>/1`: the relation's one output is compared
     under that member, equal and unequal alike; a row requiring two members of a one-output relation is not evaluated, by name."""
     from types import SimpleNamespace
+
     from verity_vllm.check.replay import evaluate as E
 
     words = np.arange(4, dtype=np.uint32)

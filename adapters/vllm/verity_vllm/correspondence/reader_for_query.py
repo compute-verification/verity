@@ -55,9 +55,8 @@ from verity_vllm.correspondence.runtime import SCHEMA, CallCorrespondence, Runti
 from verity_vllm.query.program_view import ProgramView, param_reads
 
 __all__ = ["CallName", "parse_call_name", "row_place", "call_place", "runtime_rows", "recorded_names", "Correspondence", "implementation_prefix",
-           "held_module_paths", "SOURCES"]
+           "held_module_paths"]
 
-SOURCES = ("correspondence", "v1_annotations")
 _ROW_RE = re.compile(r"\[([^\[\]]*)\]$")
 
 

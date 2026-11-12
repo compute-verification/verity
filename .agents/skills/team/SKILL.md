@@ -46,7 +46,7 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 
 `main` holds only fully checked commits. ci's verified queue (`research queue vqueue`: `research.vqueue_loop`'s docstring
 has the rules, `tools/verity/check/drive.toml` the settings) merges the PRs ready to land onto `main` as a candidate, checks
-it, and fast-forwards `main` only to a candidate whose check passed every step on the merge gate:
+it, and fast-forwards `main` only to a candidate with no new failure, each gating task passed or failing on its base too:
 
 - The worker that made a branch opens its PR, `research queue open --head BRANCH --sha SHA --title T --body-file F
   --issue KEY --by LANE` with `Lane LANE` in the body; `--issue` is required, its Linear issue (written as `Refs KEY` and
@@ -74,13 +74,15 @@ it, and fast-forwards `main` only to a candidate whose check passed every step o
   Lake files) or to Lean that runs as code (a `.lean` outside `security/`) first runs `lean-audit` alone (its records
   run), commits the records it regenerated as `Lock records regenerated for #N...`, and is checked on that commit, so
   `main` moves only to regenerated records; a records run that fails is a failure like any other.
-- A candidate's check is `check.py --record` of every step, in shards on the queue's machines, judged on the merge gate,
-  where an unexpired allowance of policy.toml covers a failure. On a pass `main` moves to it, and the owner of each
+- A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate run beside them on the queue's
+  machines (under `--gate check`, `check.py --record` of every step, in shards), judged on the merge gate, where an
+  unexpired allowance of policy.toml at the candidate's base covers a failure. On a pass `main` moves to it, and the owner of each
   unmarked PR stacked on its PRs is told to merge `main`. A failure its base shares blames no PR and holds nothing: @ci
   and the owners of what fails are rung once. Otherwise the PRs whose change touches what the failure names are its
   suspects (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks
   and their logs, several are bisected, and the candidates above are dropped and built again. A failure of the machines
-  is retried and rung to @infra. A red off the gate (circuit-check, ratchet-gate) rings its owners and holds nothing.
+  is retried and rung to @infra. A red off the gate (circuit-check, ratchet-gate) holds nothing; under `--gate check`, one
+  its base's run doesn't share is rung to who acts on it, and under graph2 to no one.
   Only the loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
 - `check.py --record --on auto --pool research`, from a checkout, records `check` as an Attempt of the clean commit in the
   research pool `research run --on auto` would spill to (`--on M --pool NAME`: M's NAME pool).

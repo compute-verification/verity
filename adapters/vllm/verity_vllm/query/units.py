@@ -34,7 +34,7 @@ from dataclasses import dataclass, field
 from typing import NamedTuple, Protocol, runtime_checkable
 
 __all__ = ["ValueRef", "Call", "CallGraph", "VerificationUnit", "Query", "Partition", "partition_by", "unit_boundary",
-           "boundary_values", "Policy", "RequiredValues", "required_values", "admissibility", "PartitionError"]
+           "boundary_values", "Policy", "RequiredValues", "required_values", "PartitionError"]
 
 
 class ValueRef(NamedTuple):
@@ -240,10 +240,6 @@ class Policy:
     prescribed_inputs: frozenset[ValueRef] = field(default_factory=frozenset)
     protocol_required: frozenset[ValueRef] = field(default_factory=frozenset)
 
-    @staticmethod
-    def none() -> "Policy":
-        return Policy()
-
 
 @dataclass(frozen=True)
 class RequiredValues:
@@ -279,16 +275,3 @@ def required_values(P: CallGraph, Q: Partition, policy: Policy) -> RequiredValue
         if v.call in by_id and v.port not in by_id[v.call].ports:
             raise ValueError(f"policy requires {v}, but Call {v.call} has ports {tuple(by_id[v.call].ports)}")
     return RequiredValues(boundary_values(P, Q), frozenset(policy.prescribed_inputs), frozenset(policy.protocol_required))
-
-
-def admissibility(required: Iterable[ValueRef], acquisition_support: Mapping[ValueRef, bool] | Callable[[ValueRef], bool] | Iterable[ValueRef]) -> list[ValueRef]:
-    """The required Values the acquisition cannot support, sorted.  ``acquisition_support`` is a table (a set of the supported
-    Values, a mapping Value -> bool, or a predicate) -- an *input*: this module has no collector.  Empty result = admissible."""
-    if isinstance(acquisition_support, Mapping):
-        ok = lambda v: bool(acquisition_support.get(v, False))  # noqa: E731
-    elif callable(acquisition_support):
-        ok = acquisition_support
-    else:
-        s = frozenset(acquisition_support)
-        ok = s.__contains__
-    return sorted(v for v in set(required) if not ok(v))

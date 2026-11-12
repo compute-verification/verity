@@ -224,14 +224,19 @@ unchanged.
 A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
 only fully checked commits: the verified queue's loop (`research queue vqueue`, ci's) merges the marked PRs that have a land
-verdict, or are low-risk, onto `main` as a candidate, checks it with `check.py --record` in shards, and fast-forwards `main`
-only to a candidate that passed every step on the merge gate. A failure the candidate's base shares blames none of its PRs;
+verdict, or are low-risk, onto `main` as a candidate, checks it (by default graph2's tasks, with lean-agreement and
+ratchet-gate run beside them; under `--gate check`, every job in shards), and fast-forwards `main` only to a candidate with
+no new failure: each gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or
+fails on its base too. A failure the candidate's base shares blames none of its PRs;
 any other's suspects are the PRs whose change touches what it names (its files, the files declaring a Lean declaration it
 names), every PR when none does: a lone suspect is ejected, several are bisected, and the candidate is rebuilt without
 them. A candidate holding a Lean, lock or spec change runs lean-audit alone first (its records run) and is checked on the
 commit of the lock records it regenerated, so `main` moves only to regenerated records. What drive.toml lets warn (its
-`warn_gates` and `warn_steps`), a step off the gate and a lock's bookkeeping hold nothing: the owner is told, and fixes it in
-their next PR. How a PR lands, from its ready mark to `main`, and the loop's rule for each case: the team skill's Landing.
+`warn_gates` and `warn_steps`), a step off the gate and a lock's bookkeeping hold nothing, and the owner fixes it in their
+next PR: a warn gate's failure is printed at the ready mark, a red off the gate that its base's run doesn't share is rung to
+who acts on it under the loop's `--gate check` (to no one under graph2), and a lock's bookkeeping is told to `lean` and each
+owner a warning names. How a PR lands, from its ready mark to `main`, and the loop's rule for each case: the team skill's
+Landing.
 
 ## Lean
 
@@ -272,7 +277,8 @@ their next PR. How a PR lands, from its ready mark to `main`, and the loop's rul
   (`trust.extra`, each with its reason), only on the premises its `trust_gap` entry lists, which `--update` never adds
   to; the check prints each one's gap, the number Daniel drives to zero.
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
-  statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
+  statement, the definitions it reads and the premises it takes, so a changed statement is a changed record, which a PR's
+  own check regenerates rather than fails on and a candidate's records commit carries (`vqueue_records`).
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
   in a candidate's records run. A PR's own check still fails on it. The records run repairs it in its records commit and
   warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee

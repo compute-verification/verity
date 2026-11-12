@@ -10,7 +10,9 @@ from types import SimpleNamespace
 
 import pytest
 
-torch = pytest.importorskip("torch")
+pytest.importorskip("torch")
+
+import torch
 
 from verity_vllm.observe.capture import Capture, ObserverConfig
 from verity_vllm.pipeline.tp.rank_worker import register_post_load_tensors

@@ -330,7 +330,7 @@ def seal(out: str | os.PathLike, pair: int, context: dict[str, Any], binding_map
     rels = sorted(x.relative_to(p).as_posix() for x in p.rglob("*") if x.is_file())
     with ThreadPoolExecutor(8) as pool:
         sums = dict(zip(rels, pool.map(lambda r: (hashed or {}).get(r) or _sha256(p / r), rels)))
-    files = {r: {"sha256": sums[r], "bytes": (p / r).stat().st_size} for r in rels}
+    files: dict[str, dict[str, Any]] = {r: {"sha256": sums[r], "bytes": (p / r).stat().st_size} for r in rels}
     man = {"schema": SCHEMA, "files": files, "bytes": sum(v["bytes"] for v in files.values()),
            "sealed_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            **({NOT_RETAINED: context[NOT_RETAINED]} if context.get(NOT_RETAINED) else {})}

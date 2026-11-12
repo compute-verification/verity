@@ -205,7 +205,10 @@ def test_main_end_to_end_on_stubbed_launches(tmp_path, monkeypatch, capsys, wher
         doc["launches"] += [{"case": n, "mode": m, "ok": True, "deterministic": True, "plan": plan(s, int(m == "pinned"))}
                             for n, m, s in (("a", "pinned", [83, 3]), ("b", "served", [83, 3]), ("c", "served", [300, 3]))]
         doc["launches"].append(BACKEND | {"case": "b"})
-        flip = (lambda q, k, v, out: out.__setitem__((7, 0, 0), out[7, 0, 0] ^ 1))
+
+        def flip(q, k, v, out):
+            out[7, 0, 0] = out[7, 0, 0] ^ 1
+
         return (_launch(work, "a", [83, 3], 3, "pinned") + _launch(work, "b", [83, 3], 3, "served")
                 + _launch(work, "c", [300, 3], 4, "served", plant=flip if where else None))
 

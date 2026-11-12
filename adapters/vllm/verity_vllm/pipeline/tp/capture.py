@@ -41,12 +41,13 @@ from typing import Any
 
 from verity_vllm.config import option, workload_arg
 from verity_vllm.engine import engine_profile as prof, env as engine_env, handle
-
-prof.apply_env()
-
 from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 from verity_vllm.pipeline.tp import target as TT
+
+# The engine's pins, in the environment before `main` imports vLLM.  The imports above bring in torch first; the one pin
+# Inductor reads at its own import is checked before the engine is built (`engine_env.require_inductor`).
+prof.apply_env()
 
 
 def parse_engine_args(items: list[str]) -> dict[str, Any]:

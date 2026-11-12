@@ -23,12 +23,12 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.ops.prims import HopperE4m3QgmmaDot32 as DOT
 from verity.definitions.registry import dsa as D
 from verity.definitions.registry import prims as P
+
 from tests.program.test_fp8_moe import _ffma, _fmul, _q, _rn
 
 SIGN, INF, M32 = 1 << 31, 0x7F800000, 0xFFFFFFFF

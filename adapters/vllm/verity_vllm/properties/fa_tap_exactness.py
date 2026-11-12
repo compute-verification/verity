@@ -46,7 +46,8 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import numpy as np
 
@@ -193,7 +194,7 @@ def expected_written(layout: StreamLayout, src: int, rows: Iterator[tuple[int, i
     w = np.zeros(layout.padded_words(), dtype=bool)
     S, P = w[o["S"]:o["P"]].reshape(HB, M, N), w[o["P"]:o["RP"]].reshape(HB, M, N)
     RP, ROW = w[o["RP"]:o["ROW"]].reshape(HB, M, N // 2), w[o["ROW"]:o["O"]].reshape(HB, M, NB, 8)
-    O, FIN = w[o["O"]:o["FIN"]].reshape(HB, M, NB, D), w[o["FIN"]:o["FIN"] + HB * M * 4].reshape(HB, M, 4)
+    OUT, FIN = w[o["O"]:o["FIN"]].reshape(HB, M, NB, D), w[o["FIN"]:o["FIN"] + HB * M * 4].reshape(HB, M, 4)
     MS = w[o["MS"]:o["total"]].reshape(HB, M, NB) if layout.ms and src & SRC_BITS["MS"] else None
     for slab, r, nbm in rows:
         cols = nbm * layout.BN
@@ -206,7 +207,7 @@ def expected_written(layout: StreamLayout, src: int, rows: Iterator[tuple[int, i
         if src & SRC_BITS["ROW"]:
             ROW[slab, r, :nbm, [0, 1, 2, 4, 5, 6, 7] + ([ROW_GUARD_FIELD] if row3 else [])] = True
         if src & SRC_BITS["O"]:
-            O[slab, r, :nbm, :] = True
+            OUT[slab, r, :nbm, :] = True
         if src & SRC_BITS["FIN"]:
             FIN[slab, r, :] = True
         if MS is not None:

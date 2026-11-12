@@ -114,10 +114,12 @@ def test_wrong_positions_two_draws_in_a_step_over_cap_and_a_short_stop_without_e
     shifted = draw_accounting(_draws("a", 10, 4, 0, pos_of=lambda k: 10 + k), wl, b, lag_attested=(1, "t"))   # pos = L + k: another row's counter
     assert any("outside the executed set" in p for p in shifted["problems"]) and any("did not draw" in p for p in shifted["problems"])
     assert shifted["requests"]["a"]["drawn_not_expected"] == [13] and shifted["requests"]["a"]["expected_not_drawn"] == [9]
-    d = _draws("b", 3, 3, 0); d["b"].append({"step": 2, "row": 1, "pos": 5, "served": 7})                       # two rows at step 2
+    d = _draws("b", 3, 3, 0)
+    d["b"].append({"step": 2, "row": 1, "pos": 5, "served": 7})                                                  # two rows at step 2
     dup = draw_accounting(d, wl, b, lag_attested=(1, "t"))
     assert any("two sampled rows in one engine step" in p for p in dup["problems"]) and dup["requests"]["b"]["expected_not_drawn"] == [6]
-    d2 = _draws("b", 3, 3, 0); d2["b"].append({"step": 2, "row": 1, "pos": 3, "served": 7})                     # the same pos sampled twice
+    d2 = _draws("b", 3, 3, 0)
+    d2["b"].append({"step": 2, "row": 1, "pos": 3, "served": 7})                                                 # the same pos sampled twice
     assert any("repeated or out of order" in p for p in draw_accounting(d2, wl, b, lag_attested=(1, "t"))["problems"])
     over = draw_accounting(_draws("c", 3, 4, 0), wl, b, lag_attested=(1, "t"))                                    # 4 samples, cap 2, no EOS
     assert any("past the length bound without an EOS" in p for p in over["problems"]) and over["requests"]["c"]["drawn_not_expected"] == [4, 5]
@@ -162,8 +164,8 @@ def test_the_rule_is_pads_recurrence_and_the_slot_to_position_map_is_the_records
     position whose logits are sampled; qwen B8 L=1024 -> first_pos 1023, device_facts_match on every row), slot t at prompt_len - 2 + t.
     An earlier `expected_draw_positions` mapped slot t to prompt_len + t - 1, one more than the record; the two maps now agree and
     the ledger's positions ARE `expected_draw_positions(...)["positions"]` (one mechanism, no map of its own)."""
-    from verity_vllm.program.lifting import continuation as CT
     from verity_vllm.check.replay.stoch_recompute import expected_executed_slots as E
+    from verity_vllm.program.lifting import continuation as CT
     exp, info = E([7, 7, 99], 8, 1, {99})
     assert exp == [1, 2, 3, 4] and info["t_eos"] == 3 and info["rule"].startswith("verity_vllm.program.lifting.continuation.recurrence")
     ours = [10 - 1 + (t - 1) for t in exp]                       # L = 10: 9, 10, 11, 12 (the lag slot 4 at pos 12)

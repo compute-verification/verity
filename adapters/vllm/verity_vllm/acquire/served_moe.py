@@ -86,7 +86,9 @@ def _calls(p: int, x: dict[str, Any], out: str, f: dict[str, Any], dims: tuple[i
     E, TOPK, H, I = dims
     lg, rw, ri, up, ac, down = (f"c{p:02d}.moe/{n}" for n in PLANES)
     widths = {lg: E, rw: TOPK, ri: TOPK, up: TOPK * 2 * I, ac: TOPK * I, down: TOPK * H}
-    v = lambda name: {"value": name, "width": widths[name]}
+    def v(name: str) -> dict[str, Any]:
+        return {"value": name, "width": widths[name]}
+
     w = {k: {"weight": f[k]["weight"], "shape": list(f[k]["shape"])} for k in ("gate", "w13", "w2")}
     router = M.MoeRouterTopKNorm if f["renormalize"] else M.MoeRouterTopK
     calls = [{"op": "mm", "gemm": [H, E], "reads": [x, {**w["gate"], "t": True}], "writes": [lg]},

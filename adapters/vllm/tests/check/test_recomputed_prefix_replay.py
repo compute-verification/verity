@@ -11,7 +11,9 @@ import copy
 import numpy as np
 import pytest
 
-from verity_vllm.check.replay import driver as SR, index as IX, recomputed_prefix as RP
+from verity_vllm.check.replay import driver as SR
+from verity_vllm.check.replay import index as IX
+from verity_vllm.check.replay import recomputed_prefix as RP
 from verity_vllm.check.replay.opening import CommittedStore
 
 C = 1

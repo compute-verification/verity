@@ -15,6 +15,7 @@ __models__ = ("zai-org/GLM-5.3", "deepseek-ai/DeepSeek-V4-Pro")
 import copy
 import json
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 import pytest
@@ -34,7 +35,7 @@ CMAP = Path(__file__).parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-e
 
 
 def _random_tree(rng):
-    nodes = list(range(X.WORLD))
+    nodes: list[Any] = list(range(X.WORLD))
     while len(nodes) > 1:
         i, j = sorted(rng.choice(len(nodes), 2, replace=False))
         b, a = nodes.pop(j), nodes.pop(i)
@@ -207,9 +208,10 @@ def test_the_served_setting_follows_the_workload(tmp_path) -> None:
     """``disable_custom_all_reduce`` false or unstated (vLLM's default), or no workload file: vLLM's defaults; true: the custom
     all-reduce off; anything else refused.  The workload in the tree, when there is one, serves vLLM's defaults."""
     p = tmp_path / "w.json"
-    for args, setting, source in [({"disable_custom_all_reduce": False}, "defaults", "w.json"),
-                                  ({"disable_custom_all_reduce": True}, "custom-off", "w.json"),
-                                  ({"max_model_len": 288}, "defaults", "vLLM's default: w.json states none")]:
+    stated: list[tuple[dict[str, Any], str, str]] = [({"disable_custom_all_reduce": False}, "defaults", "w.json"),
+                                                     ({"disable_custom_all_reduce": True}, "custom-off", "w.json"),
+                                                     ({"max_model_len": 288}, "defaults", "vLLM's default: w.json states none")]
+    for args, setting, source in stated:
         p.write_text(json.dumps({"engine": {"args": args}}))
         assert X.workload_setting(p) == {"setting": setting, "disable_custom_all_reduce": args.get("disable_custom_all_reduce"),
                                          "source": source}
@@ -1052,7 +1054,7 @@ def test_the_node_records_are_the_two_h200_nodes() -> None:
     assert [(r["setting"], r["N"], r["route"], r["lo"], r["hi"], tuple(r["run_records"])) for r in old["routes"]] == [
         ("custom-off", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[:2]), ("defaults", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[2:]),
         ("defaults", 7168, "symm_mem_comm", 37, 2048, T.CAPTURE_RUNS[2:])]
-    assert T.UNSTATED_NODE == (TN.node_key(old)[0], *TN.node_key(old)[2:])
+    assert (TN.node_key(old)[0], *TN.node_key(old)[2:]) == T.UNSTATED_NODE
     nvls = T.covered("defaults", 6144, "pynccl_comm", 5462, device=H200, trees=new["multimem"]["trees"], ftz=False)
     assert nvls.statics == {"TREES": TN.node_key(new)[2], "FTZ": False} and T.offset_free(nvls, X.WORLD)
 
@@ -1072,6 +1074,7 @@ def test_covered_takes_the_stated_node_tree() -> None:
     for M in (5462, 8192):
         assert at("pynccl_comm", M, trees=new_t, ftz=False).definition == "AllReduceMultimem_v1"
     assert at("pynccl_comm", 8193, trees=new_t, ftz=False) is None
+    stated: dict[str, Any]
     for stated in ({"trees": old_t, "ftz": False}, {}):
         assert at("symm_mem_comm", 2048, **stated).statics["TREES"] == TN.multimem_trees(old_t, X.WORLD)
         assert at("symm_mem_comm", 2049, **stated) is None and at("pynccl_comm", 5462, **stated) is None

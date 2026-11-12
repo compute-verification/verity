@@ -1,9 +1,9 @@
 """`research queue`: the merge queue.  The verified queue's loop (`research queue vqueue`, `research.vqueue_loop`) merges the
 PRs ready to land (marked ready at their heads, with a reviewer's land verdict or under the low-risk rule, drive.toml's
-`lowrisk_lane`) onto `main` as candidates, and moves `main` only to a candidate whose check, the full check, passed every step
-on the merge gate (not circuit-check, policy.toml's `off_gate`), or failed it only where an unexpired allowance of that policy
-covers: `main` holds only tested commits.  A failure the candidate's base doesn't share ejects its lone suspect, or bisects
-several, and the candidate is built again without them.
+`lowrisk_lane`) onto `main` as candidates, and moves `main` only to a candidate with no new failure (`research.vqueue`): each
+gating task passed, failed only where an unexpired allowance of policy.toml at its base covers, or fails on its base too, so
+`main`'s reds only shrink.  A failure the candidate's base doesn't share ejects its lone suspect, or bisects several, and the
+candidate is built again without them.
 
     research queue status [--json]                 each open PR as the verified queue admits it onto `main` (no `next`): what
                                                    it waits for, why it was refused, or that its head is on `main`;
@@ -12,7 +12,8 @@ several, and the candidate is built again without them.
                                                    every open PR whose body names no Linear issue (`named_issue`: a key
                                                    after a Linear magic word, a bare key of a team main's Slack registry
                                                    lists, or an `Issue: none: REASON` line); --json gives each its `issue`
-    research queue sync [--dry-run]                admit and drop PRs, merge them onto `next`, push it
+    research queue sync [--dry-run]                rebuild `next` (Merges, below), refused unless `merge.on_drive` holds or with
+                                                   --dry-run: the verified queue builds on `main`, never on `next`
     research queue eject PR --reason TEXT [--by HANDLE]
                                                    keep the PR's current head out of the verified queue's candidates, and a new
                                                    head whose own change is the same (`StoreLabels`); a ready mark re-admits it;
@@ -111,11 +112,11 @@ several, and the candidate is built again without them.
                                                    deployment that wants credit's line to be the checked train heads rather than
                                                    the raw `git rev-list --first-parent origin/main`, the default
     research queue shadow-report [--tips N]
-                                                   with drive.toml's `executor = "shadow"`: the newest N `checked` tips whose
-                                                   after-landing run drive compared with the executor's verdicts, each one's
+                                                   the newest N `checked` tips whose after-landing run drive compared with the
+                                                   executor's verdicts under drive.toml's `executor = "shadow"`, each one's
                                                    agreement and every disagreement (parts missing in the executor and tasks
                                                    only it ran among them), and whether the newest 3 agree fully, none
-                                                   incomplete: the gate for `executor = "on"` (`research.executor`)
+                                                   incomplete (`research.executor`)
     research queue map-moves N@HEAD... [--jobs N] [--tip REF] [--out FILE]
                                                    the own change of each old head HEAD of PR N with a land verdict of its
                                                    own (the store's: `StoreLabels.lands`; any other is refused, its tree run
@@ -160,27 +161,26 @@ whose own change, once it has crossed the moves `main` landed since as `tools/mo
 and one that changes anything besides takes none.  Mapping a head runs a move's script on its tree, which runs the tree's own
 code, so the loop maps only a head a reviewer passed (`StoreLabels.lands`), and a mark alone carries across no move.
 
-Preflight.  What breaks or cancels a train is cheap to catch at mark time: a conflict with a PR already on `next`, a stale Lake
-pin, a module string naming a module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that reads
-a row another queued PR refits away (an error at collection), one lane's unlanded branch carried in two PRs, a merge of `next`
-that carries a PR's head the PR no longer lands (closed, rebuilt without it, or withdrawn: `stale_carried`, after `old_next` for
-one closed unlanded; the sync leaves such a head off `next` too), and a failure of
-`tests/test_repository.py` (a report-genre name), which the preflight runs too, as it runs the landing gates the sync would (on
-the head; the sync, on its merge onto `next`); a warn gate's failure (a Markdown file over its cap) it prints as a warning.  A
-Lean change can pass its own Lean check and break a module
-another PR on `next` owns (a changed signature, dropped premises, a dropped import), which its candidate's records run finds,
+Preflight.  What breaks a candidate is cheap to catch at mark time, on the head merged onto `main`'s tip as the loop merges it
+(`Preflight._fetch`, under drive.toml's `land_into = "main"`): a conflict with `main`, a stale Lake pin, a module string naming a
+module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry, a test that errors at collection, an open PR
+it carries that isn't admitted, a merge of an old `next` that carries a PR's head the PR no longer lands (closed, rebuilt
+without it, or withdrawn: `stale_carried`, after `old_next` for one closed unlanded), and a failure of
+`tests/test_repository.py` (a report-genre name), which the preflight runs too, as it runs the landing gates on the head; a
+warn gate's failure (a Markdown file over its cap) it prints as a warning.  A Lean change can pass its own Lean check and break
+a module that imports it (a changed signature, dropped premises, a dropped import), which its candidate's records run finds,
 blaming it; the preflight builds those modules (`LakeBuild`), from a machine without a warm Lean tree on the first node of
-`PREFLIGHT_LEAN_ON` that starts the build, whatever the tier, and refuses a head whose modules no node can build.  A head whose lock, merged onto `next` by
-`tools/verity/lean/merge.py`, drops a `shape.inline` premise or a `shape.frozen` key that `next`'s unchanged statements still need
-(a lock regenerated on an older tree) fails that lock run too; the preflight names each such entry (`lock_drops`), and the sync
-leaves such a head off `next` with the same refusal.  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and the fix, a
-failure `next` has too refuses nothing, and what keeps a check from running is said under "checks skipped" and refuses nothing
-(its candidate's check checks it).  A conflict only in pins, or in Lean one side deletes that the other only ported, is merged
-as the sync merges it (`merged_tree`), the merged tree's
-Lean is ported as the sync ports it (`ported`), and the checks run on that tree.  The merge runs the merge drivers of the commit it
-merges onto, as the sync's clone defines them (`base_drivers`): a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from before `--caps` reports a conflict in
-`tests/test_lean_packages.py` the sync never sees.  `--no-preflight` skips it.  The verified queue reads none of it:
-the mark admits the PR, and its candidate's check is the next check of it.
+`PREFLIGHT_LEAN_ON` that starts the build, whatever the tier, and refuses a head whose modules no node can build.  A head whose
+lock, merged onto `main` by `tools/verity/lean/merge.py`, drops a `shape.inline` premise or a `shape.frozen` key that `main`'s
+unchanged statements still need (a lock regenerated on an older tree) fails that records run too; the preflight names each such
+entry (`lock_drops`).  So `ready` runs `Preflight` before the mark and before any quick tier: a refusal names what it found and
+the fix, a failure `main` has too refuses nothing, and what keeps a check from running is said under "checks skipped" and
+refuses nothing (its candidate's check checks it).  A conflict only in pins, or in Lean one side deletes that the other only
+ported, is merged as a candidate's merge takes it (`merged_tree`), the merged tree's Lean is ported as that merge ports it
+(`ported`), and the checks run on that tree.  The merge runs the merge drivers of the commit it merges onto, as the queue's
+clone defines them (`base_drivers`): a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from
+before `--caps` reports a conflict in `tests/test_lean_packages.py` a candidate's merge never sees.  `--no-preflight` skips it.
+The verified queue reads none of it: the mark admits the PR, and its candidate's check is the next check of it.
 
 Records gate.  A candidate's records run regenerates the records of the locks its PRs changed, and what it can't regenerate
 fails it, ejecting its Lean PRs; so the gate refuses nothing.  `ready` (and `judge`) warn, naming each package and the run that
@@ -191,113 +191,62 @@ files of the package and of the packages it reads, their toolchains and the chec
 merged the landing branch or only changed other packages' locks (`RecordsGate`), and go on.  It reads the store's remote and warns
 when it can't.
 
-`next`.  Its first-parent chain above `checked` (`Queue.base`) is the queue, and each merge commit's trailers name its PR, head and owner: git holds
-the queue's state.  A sync keeps the longest prefix of that chain which still matches the admitted PRs (same PR, same head, same
-order) and merges the rest on top, each by `git merge-tree` and `git commit-tree` (`Queue._merge`: no worktree, so a candidate
-that conflicts costs one call).  A merge is recorded under what it reads (`Queue._merge_key`): the parent's tree, not its
-commit, the head and their merge bases, with the merge's code, git and drivers; the same head merged again onto the same tree,
-above a moved or dropped member or on a `checked` moved to the same tree, takes its record's tree, conflict, porting, rebuilt
-pins and lock drops (the state's `merges`), and only `git commit-tree` runs; drive's low-risk lane merges onto `checked` through
-the same records (`Queue._recorded`).  A merge whose only conflicts are in pins (`tools/verity/check/pins.py`'s `PINS`, generated
-sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from the merged tree (`repinned`): two PRs that each
-change a pinned input both change its pin.  Two that each change what a JSON pin holds besides its digests (each adds vectors)
-conflict in it, since keeping either side's text drops the other's.
-So a new push moves its PR to the tip, a dropped PR takes the commits after it
-along (they're merged again), and a `checked` that drive moved outside the sync (a landing, a revert, a merge of `main`) rebuilds
-`next` on it; one drive didn't write holds drive's tick, which syncs nothing on it until `checked` is reset to the last tip
-drive wrote or it is accepted (`Driver._unwritten`, `accept-checked`).  Only drive syncs (`Queue._drive_only`): `eject` only
-withdraws the mark, for drive's next tick, and a hand `sync` on the control pod syncs as drive's tick does.  A
-PR whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
-`Queue.entries`; never by PR number, never for commits the two merely share, and never for commits admitted members below it on
-`next` already bring), goes
-in after it and waits while that one waits, unless it carries that one's change: the same owner, or that one's owner withdrew its
-mark (`Queue._carried`); drive tells the owner of the one it waits for (unmarked, ejected, held or waiting itself) and those of
-every marked PR left out for it in one post, with the fix (`Driver.tell_out`).  Drive's priority list (`--priority-file`,
-read again at each sync: `Queue.priority`) is the landing order: its ready PRs go at the bottom of `next`, in its order, first
-to land first, each after the PRs it contains, so an edit of the file reorders `next` from the first PR whose place it
-changed.  Members on `next` never move for what a sync adds, merged again or not: those above a moved or dropped
-member are merged again in their order, and only a PR of the priority list placed again, or a `next` rebuilt on a `main` that
-moved off it, sorts what is above it.  Nor do they
-move but for drive's lift (`Queue.lift`, `Driver._lift`): each sync, the members with a land verdict go below those waiting
-for one (drive.toml's `verdict_first`), each after the PRs it contains, and land at once; and for drive's park (`Queue.park`,
-`Driver._park`): each sync, a
-member held by a verdict at its head goes to the top of `next` with every PR that contains it, above what the sync adds, so
-one hold holds only itself and what contains it and the members that were above it land; it stays there until a land verdict
-(then it lands in its place) or a new head.  A PR that doesn't merge cleanly is left out of that sync, and its owner is told
-which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
-above everything else, whatever the priority list would say, so a sync with nothing new keeps `next`.  So is a PR
-a landing gate refuses (drive.toml's `landing_gates` at
-`main`, `gate_refusal`) on its merge onto `next`,
-with the gate's fix, and a PR whose lock merge drops an entry `next`'s statements still need (`lock_drops`), naming each:
-each PR the sync merges is judged, a new one or one merged again above a
-dropped or moved member, never one in the prefix it keeps, so a refusal never rebuilds what `next` keeps; a merge
-with the message, tree and parent tree of one judged under the same `main` takes that verdict (`Queue._gated`).  The warn
-gates (drive.toml's `warn_gates`: `tools/verity/check/gates/markdown_caps.py`, a Markdown file a merge puts over its cap) judge
-the same merge and keep nothing out: what one says is kept (the state's `warned`, by PR and head) and drive tells the PR's
-owner once a head (`Driver.tell_warned`), who fixes it in their next PR.  A PR whose
-merge a gate can't judge (it exits neither 0 nor 1, as the unread gate does while no facts of the Lean it reads are published) isn't
-left out: it waits, recorded (the state's `waiting`) with its mark kept, as the PRs that contain it do, and each sync tries it
-again; a gate that refuses it as well leaves it out.  A ready mark
-admits a PR: the sync runs no preflight and waits on none, and its merge onto `next` (with the gates and lock drops above, and
-the codemod and the move below) is the only check before the PR joins it; what a merge breaks past that, drive's landing
-compile gate (`Driver._compiles`) and the after-landing run find.  The PRs of drive's priority list (`Queue.priority`), with
-those they contain, go first of what a sync merges anew.  A PR
-that contains one left out waits, recorded (the state's `waiting`) and named in that one's notice; `status` shows it waiting and
-names the PR it contains and why that one is out, judging each PR after those it contains (else it shows
-'admitted' for hours while one it contains conflicts with `main`).
+Merges.  A candidate is its base with one merge commit per member on top, each made by `git merge-tree` and `git commit-tree`
+(`Queue._merge`: no worktree, so a member that conflicts costs one call), whose trailers name its PR, head and owner.  A merge
+is recorded under what it reads (`Queue._merge_key`): the parent's tree, not its commit, the head and their merge bases, with
+the merge's code, git and drivers; the same head merged again onto the same tree takes its record's tree, conflict, porting,
+rebuilt pins and lock drops, and only `git commit-tree` runs (`Queue._recorded`).  A merge whose only conflicts are in pins
+(`tools/verity/check/pins.py`'s `PINS`, generated sha256 listings of Lean inputs) is kept, each conflicted pin regenerated from
+the merged tree (`repinned`): two PRs that each change a pinned input both change its pin.  Two that each change what a JSON
+pin holds besides its digests (each adds vectors) conflict in it, since keeping either side's text drops the other's.  A PR
+whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
+`Queue.entries`; never by PR number, and never for commits the two merely share), goes in after it and waits while that one
+waits, unless it carries that one's change: the same owner, or that one's owner withdrew its mark (`Queue._carried`).  The loop
+takes the ready PRs in its priority file's order (`--priority-file`, read each tick), then by when each was marked, each after
+the PRs it contains (`World.ready`).  `research queue sync` builds `next` above `checked` from the same merges, only where
+`merge.on_drive` holds (`Queue._drive_only`).
 
 Once the merged tree is on Lean's module system (it holds the codemod, `MODULES`, and its `PORTED_ROOTS` are modules:
-`on_modules`, since the codemod may land before the port), the sync runs that codemod over the whole merged tree, in a
+`on_modules`, since the codemod may land before the port), the merge runs that codemod over the whole merged tree, in a
 worktree of it, and what it ports goes into the merge commit, with each pin recording it (`ported`): git runs the `.lean`
-merge driver only on a file both sides changed, so a `.lean` file either side added before the port (the PR, or `checked`
-since the port's base) would stay unported, and a module importing it wouldn't build.  A codemod that fails leaves the PR
-out with why.
+merge driver only on a file both sides changed, so a `.lean` file either side added before the port (the PR, or the branch it
+merges onto since the port's base) would stay unported, and a module importing it wouldn't build.  A codemod that fails leaves
+the PR out with why.
 
-Moves.  A layout move lands from `next` with no pause in landing.  A PR whose body has a `Move: tools/move/NAME.toml` line
-(`PR.move`) is a move PR: its marked head is only the request.  Where the sync puts it, it is regenerated on the commit below it
-(`checked`'s tip once the members below it land): `tools/move/rename.py --map NAME.toml` at the root of a worktree of it, one
-commit on it with the PR's trailers and `Move: NAME.toml` (`_regenerate`), which `tools/verity/check/move_check.py` must
-certify, else the PR is left out with why (a map the tip lacks too).  Both scripts, and `restack.py` below, are the landing
-branch's, as its landing gates are (`move_scripts`), so a member below the move can't change what judges it; a member below
-it that changes `tools/move/`'s scripts holds the move back until it lands, since the restack runs the move's base's.  It needs a ready
-mark and a land verdict like any PR, and is a Lean change when it moves Lean, so a lock run follows its landing; it lands as
-that one commit, under the after-landing run.  Each PR merged above a move, on `next` or among `checked`'s last
-`LANDED_WINDOW` first-parent commits, whose head lacks it is merged across it (`_merge_through`): restacked onto it by
-`tools/move/restack.py` when its change names a word of the move's map or its plain merge conflicts, so only its own
-conflicts refuse it.  A restack runs in the background, one `restack.py` a head and at most drive.toml's `restack_jobs` at
-once (`_restack`, the state's `restacking`), and its PR waits off `next` meanwhile (`RESTACKING`), a wait that refuses nothing
-and rings no one; a later sync reads its result (the state's `restacks`) and merges the PR, drops the result once the PR's head
-changed, and runs a job that ended with none (it died, or ran past `RESTACK_WAIT_S`) once more before that failure refuses the
-PR, and one something else interrupted (SIGINT, SIGTERM, a restart of the pod) again without counting it.  A move or a restacked PR lands at a commit that isn't its head: the trailers keep it off `next` once
-landed (`queue_log`), and drive closes it once `main` reaches it (`Driver._close_carried`).  The low-risk lane stops at a
-move on `next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
+Moves.  A PR whose body has a `Move: tools/move/NAME.toml` line (`PR.move`) is a move PR.  The verified queue builds it by its
+merge like any other PR and takes it only on a land verdict, never on the low-risk rule (`World.ready`).  A ready PR whose head
+doesn't merge onto `main`, as after a move it lacks, goes into no candidate, and its owner is told the files it conflicts in,
+to rebase it onto `main` and to mark the new head, once a head (`Loop._conflicts`); `tools/move/restack.py` carries a branch
+across a move, and a land verdict carries to the restacked head when its own change, mapped across the move, is the same
+(Admission).  `research queue sync`'s regeneration of a move on `next` (`_regenerate`, which
+`tools/verity/check/move_check.py` must certify) and its restacks across one (`_merge_through`, `_restack`) build only
+`next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
 
 Landing.  The verified queue's loop (`research queue vqueue`, `research.vqueue_loop`) is the one landing path: it builds each
 candidate from `main` and the PRs ready to land, commits the lock records the candidate's records run regenerates
-(`research.vqueue_records`), and fast-forwards `main` only to a candidate whose check passed every step on the merge gate; it
-tells each owner what it refuses.  What reaches `main` and changes what a guarantee says sends the spec-change DM of what
+(`research.vqueue_records`), and fast-forwards `main` only to a candidate with no new failure; it tells each owner what it
+refuses.  What reaches `main` and changes what a guarantee says sends the spec-change DM of what
 changed (`spec_alert`, after each move of `main`: `Landing._on_main`).
 
-Signed verdicts.  A label's `by` is whatever its writer said.  With drive.toml's `signed_verdicts` on at `main`, drive counts a
+Signed verdicts.  A label's `by` is whatever its writer said.  With drive.toml's `signed_verdicts` on at `main`, the loop counts a
 ready mark or land verdict only beside a `label_auth` label that authenticates it (`research.labelauth`, `StoreLabels`): a
 Cursor identity token over the label's SHA-512 nonce, minted when the label was written by the agent that holds its `by` in
 `main`'s registry, or by a worker that holder delegated to (`research queue delegate`); `ready = false` (an ejection) and holds
 count unsigned.  `ready`, `judge` and `review` sign each ready mark and land verdict they write whenever this agent can mint a
 token, and with the flag on refuse to write one they can't sign, or one an agent that neither holds the handle nor has its
 delegation would sign; the
-`review` listing names each land verdict that doesn't count and why.  Drive refuses a tick when it can't read the registry or
-the issuer's keys (the last set fetched, kept beside the queue's clone, covers an outage of the issuer), since judging every
-mark absent would take every PR off `next`, and the flag is refused unless the low-risk lane can't land a change to the registry
-or the code that judges a label (`SIGNED_GUARDS`).
+`review` listing names each land verdict that doesn't count and why.  A tick of the loop that can't read the registry or the
+issuer's keys (the last set fetched, kept in the loop's cache, covers an outage of the issuer) stops before it decides
+anything (`label_verifier`), since judging every mark absent would take every PR out of the queue, and the flag is refused
+unless the low-risk lane can't land a change to the registry or the code that judges a label (`SIGNED_GUARDS`).
 
-Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to `CI` and the owner's handle, once per PR head:
-drive tells each conflict its sync finds, and `eject` posts as its ejector.  Nothing is written to the notes: a handoff note
-there reached its owner only when the VM that ran the sync pushed its notes, inside that lane's commit.  What a sync leaves out
-is told once per root cause instead, the PR that didn't merge or isn't admitted, naming every PR it takes out and tagging each
-owner once, and again only when its head, those PRs or its reason changes (`Driver.tell_out`).
+Notices.  A refusal (a conflict, an ejection) is posted in the merge thread to the owner's handle, else `CI`: the verified
+queue tells each conflict with `main` once a head (`Loop._conflicts`) and each PR it ejects, and `eject` posts as its ejector to
+`CI` and the owner.  Nothing is written to the notes.
 
-`--shadow` builds `queue-shadow` instead of `next`, never pushes `main` and sends no notices, so the queue can run beside the trains
-with no effect on them; its `sync`, `land` and `drive` still run only on drive (`--dry-run` shows the same off it).
+`--shadow` makes `sync` build `queue-shadow` instead of `next` and `eject` only log its notice: it never pushes `main` and
+sends no notices.  `sync` still runs only where `merge.on_drive` holds (`--dry-run` shows the same off it); the loop's own
+`--shadow` is `research.vqueue_loop`'s.
 
 Files.  The queue works only in its own clone (`--workdir`, default ~/.research/queue/NAME for `--repo OWNER/NAME`, else
 ~/.research/queue/verity) of its remote (`--remote`, default https://github.com/OWNER/NAME.git for `--repo`, else the caller's

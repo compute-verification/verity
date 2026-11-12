@@ -29,10 +29,8 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
 from verity.commitments import row_table as RT
 from verity.commitments.merkle import CommitmentDomain
-
 from verity.commitments.windows import rows as CS
 
 __all__ = ["COLUMNS", "StepRoots", "Table", "check_order", "find", "layer", "of_dir", "of_registration", "opening", "row_table",

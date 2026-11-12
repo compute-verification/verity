@@ -20,8 +20,8 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 COMPONENTS = ("acquisition", "movement", "hashing", "root_finalisation", "opening_generation", "wait")
 

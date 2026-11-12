@@ -105,11 +105,12 @@ def test_weakref_death_is_a_direct_free_and_reuse_bumps_generation():
     ev = st.events_pending()
     assert ev == [StorageFree(va.alloc, False)]
     # allocate the same size until the allocator hands the pointer back (usually immediately)
+    b = None
     for _ in range(50):
         b = torch.ones(n)
         if b.untyped_storage().data_ptr() == ptr:
             break
-        del b
+        b = None
         st.events_pending()
     else:
         pytest.skip("allocator did not reuse the pointer")

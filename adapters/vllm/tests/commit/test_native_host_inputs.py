@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from verity.circuits.program import REGISTRATION, RUN
+
 from verity_vllm.commit.committer.input_classes import weights_inputs
 
 

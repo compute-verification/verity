@@ -26,7 +26,9 @@ def _program() -> tuple[ProgramView, dict[str, int]]:
                               tuple(Port(p, 0, n, n, w) for p, n, w in ports), tuple(reads)))
         return len(calls) - 1
 
-    w = lambda path: R(-1, path)
+    def w(path: str) -> R:
+        return R(-1, path)
+
     mhc = (("0", N, 16), ("1", 1, 32))
     ids = {"pre_attn": call("MhcPostPreTf32_v1", f"{L0}/mhc_post_pre/post_pre[0]", [R(-2, "x"), w(f"{L0}.hc_attn_fn")], mhc)}
     ids["kv_score"] = call(f"CublasSplitKGemmF32Out_v1{{K={K},N={N}}}", f"{ATTN}/mm[0]",

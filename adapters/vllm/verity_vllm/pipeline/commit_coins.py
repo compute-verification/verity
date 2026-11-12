@@ -106,7 +106,7 @@ class ChallengePhase:
     def __init__(self, gate: ChallengerGate, reserved: Mapping[str, Any], runs: int, address: Callable[[int], str] | None = None) -> None:
         self.gate, self.reserved, self.runs = gate, dict(reserved), int(runs)
         self._address = address or (lambda port: f"127.0.0.1:{port}")
-        self.given: dict[str, Any] | None = None
+        self.given: dict[str, Any] = {}
         self.client: Any = None
         self.index = 0
 
@@ -122,7 +122,7 @@ class ChallengePhase:
         if answer.get("commitment") is None:
             answer["commitment"] = self.gate.call("status", self.reserved["session"]).get("commitment")
         try:
-            self.given = PHC.session_of({k: v for k, v in answer.items() if k in (*PHC.SESSION_FIELDS, *PHC.REPLY_FIELDS)})
+            self.given = PHC.session_of({k: v for k, v in answer.items() if k in (*PHC.SESSION_FIELDS, *PHC.REPLY_FIELDS)}) or {}
         except ValueError as e:
             raise CoinError(f"the challenger gate's open answer: {e}") from e
         self.client = PHW.connect(self._address(int(answer["port"])), self.given)
@@ -168,7 +168,7 @@ def of_options(args: Any, runs: int, gate_run: Run | None = None) -> ChallengePh
     if bool(gate) != bool(peer):
         raise SystemExit("--challenger-gate and --challenger-peer go together: the gate's command and this machine's name in "
                          "the auditor host's peers, where its challenger reaches the Commit")
-    if not gate:
+    if not gate or not peer:
         return None
     if getattr(args, "replay_challenge", None):
         raise SystemExit("--challenger-gate and --replay-challenge are two sources of the C2 replay's challenge: give one")

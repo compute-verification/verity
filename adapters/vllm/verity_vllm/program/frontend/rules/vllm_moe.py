@@ -111,10 +111,6 @@ def _moe_C_op(name: str) -> set:
         return set()
 
 
-def _val_matches(v, node) -> bool:
-    return isinstance(v, torch.fx.Node) and v is node
-
-
 # -- the declared construction: which family owns the block ------------------------------------------------------------------
 
 INDEXED_READ, INDEXED_READ_ORDERED = "indexed-read", "indexed-read-ordered"   # MOE-01 with the router in selection order

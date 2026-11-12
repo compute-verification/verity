@@ -8,14 +8,14 @@ from __future__ import annotations
 import hashlib
 
 import pytest
+from verity.commitments.identity import identity_digest_sha512
+from verity.commitments.scheme import CommitmentScheme
+from verity.errors import InvalidArtifact
 
 from verity_vllm.commitments import vllm_v1 as ref
-from verity.commitments.identity import identity_digest_sha512
 from verity_vllm.commitments.leaves import LIFT_TAG, NODE_TAG, H
-from verity.commitments.scheme import CommitmentScheme
 from verity_vllm.commitments.vllm_v1 import vectors as V
 from verity_vllm.commitments.vllm_v1 import vectors_sha512 as V512
-from verity.errors import InvalidArtifact
 
 VECTORS = V.load()
 VECTORS_SHA512 = V512.load()
@@ -228,13 +228,13 @@ def test_sha512_root_vectors() -> None:
     for case in VECTORS_SHA512["roots"]:
         i = case["inputs"]
         args = {
-            "semantic": lambda: (_b(i["program_digest"]), _b(i["query_id"]), _b(i["template_digest"]), _b(i["ctx_digest"]), i["epoch"], i["n"],
+            "semantic": lambda i=i: (_b(i["program_digest"]), _b(i["query_id"]), _b(i["template_digest"]), _b(i["ctx_digest"]), i["epoch"], i["n"],
                                  _b(i["tree_root"])),
-            "step": lambda: (_b(i["program_digest"]), _b(i["ctx_digest"]), _b(i["geo_digest"]), _b(i["layout_digest"]), i["n"], _b(i["tree_root"])),
-            "run": lambda: (_b(i["program_digest"]), _b(i["geo_digest"]), [_b(s) for s in i["step_roots"]]),
-            "weights": lambda: (_b(i["geo_digest"]), _b(i["names_digest"]), [_b(t) for t in i["tensor_roots"]]),
-            "stream": lambda: (_b(i["layout_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
-            "thread": lambda: (_b(i["geo_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
+            "step": lambda i=i: (_b(i["program_digest"]), _b(i["ctx_digest"]), _b(i["geo_digest"]), _b(i["layout_digest"]), i["n"], _b(i["tree_root"])),
+            "run": lambda i=i: (_b(i["program_digest"]), _b(i["geo_digest"]), [_b(s) for s in i["step_roots"]]),
+            "weights": lambda i=i: (_b(i["geo_digest"]), _b(i["names_digest"]), [_b(t) for t in i["tensor_roots"]]),
+            "stream": lambda i=i: (_b(i["layout_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
+            "thread": lambda i=i: (_b(i["geo_digest"]), _b(i["ctx_digest"]), _b(i["tree_root"])),
         }[case["kind"]]()
         assert fns[case["kind"]](*args, hash="sha512").hex() == case["root"]
         if case["kind"] == "stream":

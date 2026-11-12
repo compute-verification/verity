@@ -2,9 +2,9 @@
 
 import numpy as np
 import pytest
-
-from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.commitments import hm96
+from verity.protocols.spot.verifier.one_stage import registered as G
+
 from verity_vllm.commit import registered_rows as RR
 
 PROGRAM = "ab" * 64

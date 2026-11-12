@@ -33,11 +33,8 @@ from verity_vllm.commit import scheme
 
 TAG = scheme.FA2H_TAG
 VERSION = scheme.FA2H_VERSION
-KIND_CHUNK = scheme.FA2H_KIND_CHUNK
-KIND_THREAD = 2             # per-thread per-block leaf computed inside the kernel (H1)
 KBLOCK_N = 128
 KBLOCK_M = 64
-CLASSES = ("S", "P", "RP", "ROW", "O", "FIN")
 #: MS (64): the seventh class, appended after FIN only by the guarded-max tap builds (`VERITY_MAT_SRC & 64`, `hidden_source.TAP_ROW3`): one f32
 #: per (slab, row, key block), the `max * scale` that block's exp2 FMAs read.  Without it the layout, digest and bytes are the six classes'.
 SRC_BITS = {"S": 1, "P": 2, "RP": 4, "ROW": 8, "O": 16, "FIN": 32, "MS": 64}
@@ -126,24 +123,39 @@ class StreamLayout:
         if word >= o["total"] or word < 0:
             raise ValueError("word outside the layout")
         if word < o["P"]:
-            i = word - o["S"]; sr, col = divmod(i, self.N); slab, row = divmod(sr, self.M)
+            i = word - o["S"]
+            sr, col = divmod(i, self.N)
+            slab, row = divmod(sr, self.M)
             return {"cls": "S", "slab": slab, "row": row, "col": col}
         if word < o["RP"]:
-            i = word - o["P"]; sr, col = divmod(i, self.N); slab, row = divmod(sr, self.M)
+            i = word - o["P"]
+            sr, col = divmod(i, self.N)
+            slab, row = divmod(sr, self.M)
             return {"cls": "P", "slab": slab, "row": row, "col": col}
         if word < o["ROW"]:
-            i = word - o["RP"]; sr, cw = divmod(i, self.N // 2); slab, row = divmod(sr, self.M)
+            i = word - o["RP"]
+            sr, cw = divmod(i, self.N // 2)
+            slab, row = divmod(sr, self.M)
             return {"cls": "RP", "slab": slab, "row": row, "col": 2 * cw}
         if word < o["O"]:
-            i = word - o["ROW"]; srb, f = divmod(i, 8); sr, block = divmod(srb, self.NB); slab, row = divmod(sr, self.M)
+            i = word - o["ROW"]
+            srb, f = divmod(i, 8)
+            sr, block = divmod(srb, self.NB)
+            slab, row = divmod(sr, self.M)
             return {"cls": "ROW", "slab": slab, "row": row, "block": block, "field": f}
         if word < o["FIN"]:
-            i = word - o["O"]; srb, d = divmod(i, self.D); sr, block = divmod(srb, self.NB); slab, row = divmod(sr, self.M)
+            i = word - o["O"]
+            srb, d = divmod(i, self.D)
+            sr, block = divmod(srb, self.NB)
+            slab, row = divmod(sr, self.M)
             return {"cls": "O", "slab": slab, "row": row, "block": block, "d": d}
         if self.ms and word >= o["MS"]:
-            sr, block = divmod(word - o["MS"], self.NB); slab, row = divmod(sr, self.M)
+            sr, block = divmod(word - o["MS"], self.NB)
+            slab, row = divmod(sr, self.M)
             return {"cls": "MS", "slab": slab, "row": row, "block": block}
-        i = word - o["FIN"]; sr, f = divmod(i, 4); slab, row = divmod(sr, self.M)
+        i = word - o["FIN"]
+        sr, f = divmod(i, 4)
+        slab, row = divmod(sr, self.M)
         return {"cls": "FIN", "slab": slab, "row": row, "field": f}
 
     def digest(self) -> bytes:
@@ -157,7 +169,7 @@ class StreamLayout:
 
 # ------------------------------------------------------------------ leaf framing (shared with the kernel's H1 leaf)
 def pack_words(words: list[int]) -> bytes:
-    return struct.pack("<%dI" % len(words), *[w & 0xFFFFFFFF for w in words])
+    return struct.pack(f"<{len(words)}I", *[w & 0xFFFFFFFF for w in words])
 
 
 def thread_of(row: int, col_or_d: int) -> tuple[int, int, int]:

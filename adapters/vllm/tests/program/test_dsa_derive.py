@@ -8,7 +8,8 @@
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
 * past TOPK keys, at the row's class (its keys rounded up to a multiple of TOPK), `DsaTopKMask_v1` marks the row's top-TOPK set
   from its logits, `DsaButterflySettings_v1` computes the concentrator's settings for it, and sparse MLA reads the rows
-  `DsaButterflyRows_v1` routes at them (`DsaButterflyRowsPad_v1` below the class), in ascending index order;
+  `DsaButterflyRows_v1` routes at them (`DsaButterflyRowsPad_v1` below the class), in ascending index order; in the batched form
+  under table reads, `DsaTopKIndex_v1` of the mask and `DsaHistoryReads_v1` at it instead;
 * a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
   exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and `rules/vllm_dsa_dense.py` derives per row
   `Attention_v4{T=i+1,...,MASKED_FROM}` over the call's own k and v, opening the history the decode step after it reads;
@@ -37,6 +38,7 @@ from verity.circuits.defs import bind, composite
 from verity.circuits.refs import Affine, Coll, concat, runs
 from verity.circuits.types import Array, Value
 from verity.circuits.evaluation import evaluate
+from verity_vllm.program import dsa_table
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
@@ -632,6 +634,38 @@ def test_the_batched_forms_rows_past_topk_select_each_among_its_own_keys_in_bloc
     nodes = rep.program.fn.body.nodes
     counted = [n for n in nodes if n.fn.id.startswith("DsaTopKMaskCounted_v1{")]
     assert [nodes[runs(n.args[1].refs)[0][1]].fn.id for n in counted] == [f"Const32[0x{n:08x}]_v1" for n in (3, 4, 5)]
+    orders = {p: sorted(dsa_topk.topk_set(lg, 2)) for p, lg in _index_logits(model, xs).items() if p >= 2}
+    assert _run(rep, model, xs) == _reference(model, xs, orders=orders)
+
+
+@pytest.mark.parametrize("block", [256, 2])
+def test_the_batched_forms_rows_past_topk_read_their_history_by_table(served, monkeypatch, block):
+    """The call above with table reads (`observe_batched_form`'s ``table_reads``, the Build's `--dsa-table-reads`): the indexer
+    layer's block computes `DsaTopKIndex_v1` of each row's counted mask in place of the settings, and each layer reads the row's
+    TOPK history rows at those positions from the block's N_b, `DsaHistoryReads_v1{V=N_b}` without a pad, the IndexShare layer at
+    the indexer layer's index.  The outputs are the reference's, as in the rows network's form."""
+    monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
+    monkeypatch.setitem(PROFILES, BATCHED.name, BATCHED)
+    VB.observe_batched_form(True, table_reads=True)
+    model = _model(topk=2, steps=((0, 2), (2, 3)))
+    xs = _inputs(model)
+    rep = _derive(model, xs, profile=BATCHED.name)
+    assert rep.program is not None, rep.unsupported
+    blocks = {256: [(5, [0, 1, 2])], 2: [(4, [0, 1]), (5, [2])]}[block]
+    attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
+    select, routed = [], []
+    for Nb, rs in blocks:
+        N = vllm_dsa.long_row_keys(Nb, 2)
+        select += [bind(dsa.DsaMqaLogitsV3, N=Nb, H=H, D=D).id] * len(rs) + [bind(dsa_topk_mask.DsaTopKMaskCounted, N=N, TOPK=2).id] * len(rs)
+        select += [bind(dsa_table.DsaTopKIndex, N=N, TOPK=2).id] * len(rs)
+        routed += [bind(dsa_table.DsaHistoryReads, V=Nb, TOPK=2, H=L + R).id] * len(rs)
+    kept = set(select) | set(routed) | {attn2}
+    assert [i for i in _ids(rep) if i in kept] == [attn2, attn2] + select + routed + [attn2] * 3 + routed + [attn2] * 3
+    nodes = rep.program.fn.body.nodes
+    assert not [n for n in nodes if n.fn.id.startswith(("DsaButterfly", "Const16[0x0000]"))], "no rows network and no zero pad"
+    index = [k for k, n in enumerate(nodes) if n.fn.id.startswith("DsaTopKIndex_v1{")]
+    reads = [n for n in nodes if n.fn.id.startswith("DsaHistoryReads_v1{")]
+    assert [sorted({x[1] for x in runs(n.args[0].refs) if x[0] == "n"}) for n in reads] == [[k] for k in index] * 2
     orders = {p: sorted(dsa_topk.topk_set(lg, 2)) for p, lg in _index_logits(model, xs).items() if p >= 2}
     assert _run(rep, model, xs) == _reference(model, xs, orders=orders)
 

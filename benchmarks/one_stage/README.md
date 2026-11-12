@@ -28,8 +28,9 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   Match, then a deferred config-run Commit under rows-sha512 whose `--serving-rows` window
   (`llama32_1b_rope_d64_l0.json`: layer 0's RoPE d64 heads at steps 1-7) its C2 site commits before the bundle is sealed,
   a `served` window under the 64-byte run root. Then the Commit's CPU replay, and `a5.sh` with `WINDOW=served` on the bundle
-  and that window, whose private bodies stay on the node with the row dir: the run's record holds no file of the row's
-  `commit/`, whose records, bundle and slim keep hold values.
+  and that window, whose private bodies stay on the node with the row dir: of the row's files the run's record holds only
+  the ones `demos/vllm/published.sh` lists, each with the reason it holds nothing of a request, and no file of the row's
+  `commit/` or `match/`, whose records, bundle, slim keep and request spec hold values.
 - `a5_tp.sh`: A5 over a TP Commit's windows, one `served` window per rank (`a5.py --tp-commit`), taken as served only under a
   SHA-512 TP run root (`tp.run_root`'s v2, over the ranks' rows-sha512 roots; an old record's SHA-256 v1 root is refused before
   the sample): GLM-5.3's TP8 Commit with
@@ -184,7 +185,14 @@ input. What the guarantee rests on: `verity/protocols/spot/verifier/README.md`.
   window, timed by each session's filing by its verifier, since a prover reports a session only once it collects its
   verdict, `verify_ahead` sessions later. It also gives the device's busy share (nvidia-smi's utilization over that window) and memory
   peak, each prover's and verifier's peak RSS, the provers' CPU seconds a statement, the median phase times (the front is
-  `e2e_s − prove_total_s`), and the cgroup's throttling and load. With `--lean`, the last sessions at
+  `e2e_s − prove_total_s`), and the cgroup's throttling and load. A row also says what prices it: `gpus` (the devices its
+  provers held, so a statement costs `gpus / statements_per_s` GPU-seconds), `stage.blocks` and `stage.full` (the proved
+  statement's proof blocks, and the most a statement of its circuit holds), `verify_s` (the verifier's mean seconds a
+  statement over the window), `flat`: whether each prover's statement cache had stopped filling, its hit rate over the
+  last quarter of its timed sessions within 0.01 of the third's, with the quarters and the rule in `cache`; and `cores`: the
+  CPUs its processes could run on (the script's own affinity, which every process of the row runs within: unplaced, each
+  inherits it; with `FC_VERIFIER_CPUS`, the verifiers run on `verifier_cpus` and the provers on the rest), as their
+  `count`, their `list` and the `numa_nodes` that hold them. With `--lean`, the last sessions at
   K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. A proof block's
   verdict is the `NO_PROGRAM` refusal, as in `served_units`. A row with a refused session, a server process that exited
   nonzero, or a prover out of device memory is void: no rate, its reasons in `void`, a `VOID` line, and the run exits 1.

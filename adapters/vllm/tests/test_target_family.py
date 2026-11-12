@@ -8,7 +8,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-
+from tests.pipeline.test_row import _row, _tp_row
 from verity_vllm import target_family as tf
 
 TREE = Path(__file__).resolve().parents[1]
@@ -101,7 +101,6 @@ def test_the_match_s_cpu_phase_reads_no_device_and_every_gpu_stage_still_refuses
 def test_the_row_hands_its_match_phase_to_the_preflight_so_its_cpu_half_needs_no_gpu(tmp_path):
     """`--match-phase cpu` on a workload's run reaches `target-family`, which then passes on a host with no GPU; the same
     workload's GPU stages (`--match-phase all`) are refused there."""
-    from tests.pipeline.test_row import _tp_row
     env = {**os.environ, "PYTHONPATH": os.pathsep.join([str(TREE), os.environ.get("PYTHONPATH", "")]), "PATH": str(tmp_path),
            "CUDA_VISIBLE_DEVICES": ""}
     for phase, rc, head in (("cpu", 0, "TARGET-FAMILY-OK"), ("all", 3, "PRECHECK_FAIL_TARGET_FAMILY: no GPU visible for a GPU stage")):
@@ -165,7 +164,6 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
 
 def test_the_row_match_argv_carries_the_explicit_snapshot_cap_only_when_set(tmp_path):
     """--snapshot-max-bytes N (MATCH_SNAP_MAX_BYTES) arms the Match's cap; unset -> the argv without it."""
-    from tests.pipeline.test_row import _row
 
     def argv(*flags, environ=None):
         r = _row(tmp_path, *flags, environ=environ)

@@ -283,7 +283,7 @@ def _split(seq_lens, query_lens, workspace, max_logits_bytes):
 
 def test_the_sizes_are_the_constants_at_seq_and_reach_131072() -> None:
     s = X.sizes()
-    assert s == (X.SEQ, X.NB, X.MAX_MODEL_LEN, X.FULL_ROWS, X.DECODE_LENS) and s.full_rows[-1] == X.SEQ - 1
+    assert s.full_rows[-1] == X.SEQ - 1 and s == (X.SEQ, X.NB, X.MAX_MODEL_LEN, X.FULL_ROWS, X.DECODE_LENS)
     s = X.sizes(131_072)
     assert (s.seq, s.nb, s.max_model_len) == (131_072, 2048 + X.NB - X.SEQ // X.BLOCK, 131_072)
     assert {2047, 65_535, 131_071} <= set(s.full_rows) and set(X.FULL_ROWS) <= set(s.full_rows) and s.full_rows[-1] == 131_071
@@ -383,7 +383,7 @@ def test_the_topk_checks() -> None:
 # ------------------------------------------------------------------------------------------------------------ slots, ptx
 def test_the_slot_layout_reads_the_block_rows_then_the_scales() -> None:
     nb = 2
-    cache = np.zeros((nb, X.BLOCK, X.STRIDE), dtype=np.uint8)
+    cache: np.ndarray = np.zeros((nb, X.BLOCK, X.STRIDE), dtype=np.uint8)
     flat = cache.reshape(-1)
     for slot in (0, 70, 127):
         blk, off = divmod(slot, X.BLOCK)
@@ -505,8 +505,8 @@ def _stub_main(tmp_path, monkeypatch) -> tuple[list[dict], dict, list[dict]]:
     import types
 
     vc = types.ModuleType("vllm.config")
-    vc.CompilationConfig = vc.VllmConfig = lambda **kw: kw
-    vc.set_current_vllm_config = lambda cfg: contextlib.nullcontext()
+    vars(vc).update(CompilationConfig=lambda **kw: kw, VllmConfig=lambda **kw: kw,
+                    set_current_vllm_config=lambda cfg: contextlib.nullcontext())
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.config", vc)
     for k in SERVED_DEFAULTS:
@@ -516,7 +516,12 @@ def _stub_main(tmp_path, monkeypatch) -> tuple[list[dict], dict, list[dict]]:
     monkeypatch.setenv("PATH", X.os.environ.get("PATH", ""))
     monkeypatch.delenv("CUDA_HOME", raising=False)
     seen: list[dict] = []
-    monkeypatch.setattr(X, "served", lambda: (seen.append({k: X.os.environ.get(k) for k in SERVED_DEFAULTS}), {"ok": True})[1])
+
+    def served() -> dict:
+        seen.append({k: X.os.environ.get(k) for k in SERVED_DEFAULTS})
+        return {"ok": True}
+
+    monkeypatch.setattr(X, "served", served)
     monkeypatch.setattr(X.C, "gate", lambda *a: {"ok": True})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     monkeypatch.setattr(X, "ptx", lambda cache, outdir: {"kernels": {}, "ok": True})

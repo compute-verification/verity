@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.evaluation import bits as BS

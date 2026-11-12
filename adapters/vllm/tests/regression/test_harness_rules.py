@@ -17,14 +17,14 @@ import shutil
 
 import pytest
 
+from tests.regression import checks, resolver, store_io
 from tests.regression import decisions as D
-from tests.regression import resolver
 from tests.regression import test_regression as TR
 from tests.regression.checks import commit_summary as CS
 from tests.regression.checks import manifest_digest as MD
 
 
-class _Fake:
+class _Fake(resolver.Row):
     def __init__(self, docs: dict):
         self.docs = docs
 
@@ -78,7 +78,6 @@ def test_the_rebuilds_skip_unless_asked_for_or_a_candidate_states_the_manifest(m
 def test_the_post_train_job_selects_exactly_the_checks_that_skip_in_check():
     """post_train.py runs `-m "regression and rebuild"`: every `REBUILD` check carries the mark and nothing else does, so what
     `check` skips is what the job runs."""
-    from tests.regression import checks
     marked = {p.id.split("-")[1] for p in TR._params() if any(m.name == "rebuild" for m in p.marks)}
     assert marked == {c.NAME for c in checks.all_checks() if getattr(c, "REBUILD", False)} >= {"manifest_digest", "step_segmentation"}
     assert any(m.name == "rebuild" for m in TR.test_negative_57_refusal_reproduces.pytestmark)
@@ -183,7 +182,6 @@ def test_a_merged_programs_view_outlives_the_trees_it_links_from(tmp_path, monke
 def test_a_store_tree_evicted_under_the_suite_is_fetched_again(tmp_path, monkeypatch):
     """An eviction of trees/ between a check's `applies` and its `actual` must not lose the row's inputs: a row's fetched tree is
     fetched again once it is gone."""
-    from tests.regression import store_io
     fetches = []
 
     def fetch(art):
@@ -193,9 +191,11 @@ def test_a_store_tree_evicted_under_the_suite_is_fetched_again(tmp_path, monkeyp
         return tmp_path / art
     monkeypatch.setattr(store_io, "fetch", fetch)
     row = resolver.Row("k", {"row": 9, "artifacts": {"record": "art:t"}}, fixtures={})
-    assert (row._store_root("record") / "match" / "tokens.json").is_file()
+    first = row._store_root("record")
+    assert first is not None and (first / "match" / "tokens.json").is_file()
     shutil.rmtree(tmp_path / "art:t")
-    assert (row._store_root("record") / "match" / "tokens.json").is_file() and fetches == ["art:t", "art:t"]
+    again = row._store_root("record")
+    assert again is not None and (again / "match" / "tokens.json").is_file() and fetches == ["art:t", "art:t"]
     assert row._store_root("record") and fetches == ["art:t", "art:t"], "a tree still there is not fetched again"
 
 

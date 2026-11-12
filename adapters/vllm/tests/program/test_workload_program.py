@@ -170,7 +170,9 @@ def test_record_weights_lower_to_several_input_batches_shared_as_one_group():
         return coll_concat(Array(1, Value(16)), [B.call(_ADD, x, weights.field("wa")[0])])
 
     d = REGISTRY["ToyRecReq_v1"] if "ToyRecReq_v1" in REGISTRY else CompositeDefinition("ToyRecReq", 1, ("LP",), sig, body)
-    wp = lambda LP: [("prompt", f"Array<{LP},Value<16>>"), ("weights", "{wa: Array<2,Value<16>>, wb: Array<3,Value<32>>}")]
+    def wp(LP):
+        return [("prompt", f"Array<{LP},Value<16>>"), ("weights", "{wa: Array<2,Value<16>>, wb: Array<3,Value<32>>}")]
+
     ca = W.request_component(encode_program(Program(d.bind(LP=2))), REGISTRY, wp(2))
     cb = W.request_component(encode_program(Program(d.bind(LP=4))), REGISTRY, wp(4))
     assert ca.groups == ("prompt", "weights", "weights") and [n for n, _ in ca.params] == ["prompt", "weights[0]", "weights[1]"]

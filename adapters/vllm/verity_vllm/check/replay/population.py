@@ -6,18 +6,25 @@ from __future__ import annotations
 import hashlib
 import re
 from collections import Counter
-from typing import Any, Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any
 
-from verity_vllm.query.manifest import format as RM
-from verity_vllm.check.replay import replay_codes as RC
-from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity.definitions.numerics.rows import EVALUATORS
-from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
-from verity_vllm.check.replay.delegate import DELEGATES
-from verity_vllm.check.replay.index import _MOE_LAYER_RE, SAMPLER_OP, ProgramIndex, const_word, node_runs
-from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH
 
+from verity_vllm.check.replay import replay_codes as RC
+from verity_vllm.check.replay.delegate import DELEGATES
+from verity_vllm.check.replay.evaluate import INTERIOR_DEPTH
+from verity_vllm.check.replay.index import (
+    _MOE_LAYER_RE,
+    SAMPLER_OP,
+    ProgramIndex,
+    const_word,
+    node_runs,
+)
+from verity_vllm.check.replay.opening import CommittedStore
+from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
+from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
+from verity_vllm.query.manifest import format as RM
 
 #: the attention families whose ROW the replay evaluates; their block interiors are Q_fine_v1 units
 ATTENTION_ROW_FAMILIES = ("Attention_v3", "Attention_v2", "Attention_v4", "Attention_v5", "Attention_v18", "AttentionSoftcap_v2")
@@ -413,11 +420,9 @@ def _stratum_spec(fam: str, spec: str, statics: dict[str, Any]) -> str:
     per_stratum / 128 where the spec-as-stratum key had made it certain.  The phase axis keeps prefill / first-decode / mid / last:
     `Attention_v2{NB=9,last=partial,NH=..,...}` x request x phase x module x lifetime; <= +1 stratum per formerly mixed stratum.  Every
     other family's spec is its own key (Gemm{K,N}, RMSNorm{N}, ... carry no per-row length)."""
-    if fam not in ATTENTION_ROW_FAMILIES or "T" not in statics or "BN" not in statics:
-        return spec
-    try:
-        t, bn = int(statics["T"]), max(1, int(statics["BN"]))
-    except (TypeError, ValueError):
-        return spec
+    t, bn = statics.get("T"), statics.get("BN")
+    if fam not in ATTENTION_ROW_FAMILIES or not isinstance(t, int) or not isinstance(bn, int):
+        return spec                                                              # `spec_statics` keeps a static that is no integer as its text
+    bn = max(1, bn)
     nb = -(-t // bn)
     return _T_STATIC.sub(f"NB={nb},last={'full' if t % bn == 0 else 'partial'},", spec, count=1)

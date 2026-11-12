@@ -9,19 +9,19 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from verity.circuits import boolean as BL
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import bits as BS
 from verity.circuits.evaluation import evaluate
+from verity.definitions import boolean as SW
 from verity.definitions.ops.boolean import gemm as BG
 from verity.definitions.ops.prims import BlackwellE4m3QmmaDot32 as BW
 from verity.definitions.ops.prims import HopperE4m3MmaV2Dot32 as MV
-from verity.definitions import boolean as SW
 from verity.definitions.registry import boolean_fp8_moe as BM
 from verity.definitions.registry import fp8_moe_experts as X
+
 from tests.program.test_boolean_fp8 import _flat, _inputs
 
 

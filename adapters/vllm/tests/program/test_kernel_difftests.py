@@ -8,16 +8,16 @@ import random
 
 import numpy as np
 import pytest
-
-from verity.circuits.evaluation import evaluate
 from verity.circuits.defs import bind
+from verity.circuits.evaluation import evaluate
 from verity.definitions.registry import b1
+from verity.definitions.registry.moe import MoeExpertGemm, MoeExpertGemmW, MoeSum
+
 from verity_vllm.program import moe_difftest as MD
+from verity_vllm.properties import admission as A
+from verity_vllm.properties.difftests import collectives_difftest as TD
 from verity_vllm.properties.difftests import rope_difftest as RD
 from verity_vllm.properties.difftests import rope_gptj_difftest as RG
-from verity_vllm.properties.difftests import collectives_difftest as TD
-from verity.definitions.registry.moe import MoeExpertGemm, MoeExpertGemmW, MoeSum
-from verity_vllm.properties import admission as A
 
 
 def _words(c: dict, seed: int) -> list[np.ndarray]:
@@ -50,7 +50,9 @@ def test_rope_spec_is_the_neox_rotation_of_query_and_key():
         q, k, cs = _words(c, i)
         D = c["statics"]["D"]
         got = np.asarray(A.evaluate_spec(RD.spec(c["statics"]), [q, k, cs]), dtype=np.uint16)
-        f = lambda w: (w.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+        def f(w):
+            return (w.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+
         cos, sin = f(cs[: D // 2]), f(cs[D // 2:])
         want = []
         for x in (q, k):
@@ -67,7 +69,9 @@ def test_rope_gptj_spec_is_the_interleaved_rotation_of_query_and_key():
         q, k, cs = _words(c, i)
         D = c["statics"]["D"]
         got = np.asarray(A.evaluate_spec(RG.spec(c["statics"]), [q, k, cs]), dtype=np.uint16)
-        f = lambda w: (w.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+        def f(w):
+            return (w.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+
         cos, sin = f(cs[: D // 2]), f(cs[D // 2:])
         want = []
         for x in (q, k):
@@ -96,7 +100,9 @@ def test_moe_spec_reads_each_pairs_expert_and_weight():
             u = list(evaluate(bind(MoeExpertGemm, E=E, K=H, N=2 * I), x[t * H:(t + 1) * H].tolist(), [int(ids[p])], w13.tolist()))
             a = list(evaluate(bind(b1.SiluMul, I=I), u))
             d = list(evaluate(bind(MoeExpertGemmW, E=E, K=I, N=H), a, [int(ids[p])], [int(wts[p])], w2.tolist()))
-            up += u; act += a; dt += d
+            up += u
+            act += a
+            dt += d
         down += dt
         out += list(evaluate(bind(MoeSum, TOPK=TOPK, H=H), dt))
     assert got == up + act + down + out
@@ -116,7 +122,9 @@ def test_moe_cases_route_distinct_experts_and_take_both_block_schedules():
 
 
 def test_two_rank_collectives_are_a_bf16_add_and_a_concatenation_in_rank_order():
-    f = lambda w: (w.astype(np.uint32) << 16).view(np.float32)
+    def f(w):
+        return (w.astype(np.uint32) << 16).view(np.float32)
+
     for i in range(10):
         c = TD.cases(random.Random(i), i)
         c["inputs"] = [dict(s, kind="random") for s in c["inputs"]]

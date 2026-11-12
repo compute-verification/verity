@@ -184,7 +184,7 @@ def _triton_sum(r, r0, nw, chunk, acc_mode):
 _SILU_KERNEL = None
 
 
-def _silu_mul_triton(x: "torch.Tensor"):
+def _silu_mul_triton(x: torch.Tensor):
     """The generated `triton_poi_fused_mul_silu_slice_t_1` body, transcribed statement for statement (S1: the relation is the source):
     tmp0/tmp8 = the two halves of a row in f32; tmp3 = libdevice.exp(-tmp1); tmp6 = tmp1 / (tmp3 + 1); out = (tmp6 * tmp8) stored bf16.
     None when Triton is unavailable or x is not on CUDA (the torch variant stands alone; the report names the variant that matched)."""

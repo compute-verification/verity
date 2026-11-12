@@ -48,8 +48,8 @@ PROTOCOL SUMMARY (Commit phase: the execution extent check (`executed_prefix`) -
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any, Iterable
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 from verity_vllm.records.commit_binding import CommitBinding
 
@@ -214,10 +214,7 @@ def facts_accepted_by(fn, facts: dict[str, dict[str, Any]]) -> dict[str, dict[st
     """The facts a consumer's signature accepts (keyword-only parameters): a tree whose `executed_prefix_of_record` predates `served=` /
     `eos_ids=` still receives the arithmetic's facts; a newer one receives the served list too.  Never a TypeError."""
     import inspect
-    try:
-        params = inspect.signature(fn).parameters
-    except (TypeError, ValueError):
-        return facts
+    params = inspect.signature(fn).parameters
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
         return facts
     keep = set(params)
@@ -441,7 +438,7 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
     expected = expected_cells_from_population(manifest_identities, population) if manifest_identities is not None else None
     pop_kind = population.get("kind_by_family") or {}                                      # the population names each family's kind
     pop_batch = population.get("batch_level") or {}                                        # batch_level[fam].cells_not_executed
-    fams = set((cc.get("by_family") or {})) | set(totals)
+    fams = set(cc.get("by_family") or {}) | set(totals)
     for fam in sorted(fams):
         mine = int((cc.get("by_family") or {}).get(fam, 0))
         theirs = totals.get(fam) or {}

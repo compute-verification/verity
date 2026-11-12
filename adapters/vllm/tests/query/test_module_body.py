@@ -72,7 +72,7 @@ def test_implementation_prefix_is_the_common_suffix_map():
 
 def test_module_bodies_and_boundary():
     P = program()
-    corr = Correspondence(P, implementation_paths=[f"model.layers.0.self_attn.qkv_proj"])
+    corr = Correspondence(P, implementation_paths=["model.layers.0.self_attn.qkv_proj"])
     assert corr.prefix == "model."
     assert corr.implementation_path(f"{W}.embed") == "model.embed"
     B = boundary(P, Q_module_body_v1(P, corr))
@@ -129,7 +129,7 @@ def test_shared_instances_by_shared_parameter_and_signature():
 
 def test_request_manifest_rows():
     P = program()
-    corr = Correspondence(P, implementation_paths=[f"model.layers.0.self_attn.qkv_proj"])
+    corr = Correspondence(P, implementation_paths=["model.layers.0.self_attn.qkv_proj"])
     res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {}, "target": {"declared": {"compute_capability": [8, 9]}}}
     r = request_manifest(P, corr, res, request_id="r0", query=Q_MODULE_BODY_ID)
     man = r.manifest
@@ -171,7 +171,7 @@ def test_the_query_of_record_commits_every_call_boundary_and_names_the_partition
     """Under Q_word, h1 (Mul -> Add inside `model`'s own body) crosses Calls: required, spelt under its fx node (`call_boundaries`); every
     module-body row stays as it was.  The header names the query and, given the Program's SHA-512, its verity/partition/v1 object."""
     P = program()
-    corr = Correspondence(P, implementation_paths=[f"model.layers.0.self_attn.qkv_proj"])
+    corr = Correspondence(P, implementation_paths=["model.layers.0.self_attn.qkv_proj"])
     res = {"program": {"digest": "d0", "function": "f"}, "attention_impls_observed": {}, "target": {"declared": {"compute_capability": [8, 9]}}}
     sha = "ab" * 64
     man = request_manifest(P, corr, res, request_id="r0", program_digest=sha).manifest

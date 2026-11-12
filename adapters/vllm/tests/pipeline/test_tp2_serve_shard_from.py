@@ -118,12 +118,14 @@ def test_ranged_swap_keeps_the_prefill_rows_and_exchanges_only_decode_labels():
     from verity_vllm.pipeline.tp.rank_worker import parse_swap_spec, swap_label
     r = parse_swap_spec(["r3", "r4", 1, 37])
     step_rows = {0: [("r3", 0, 305), ("r4", 305, 313)], 1: [("r3", 0, 1), ("r4", 1, 2)], 40: [("r3", 0, 1)]}
-    seen = {s: [(swap_label(l, r, s), lo, hi) for l, lo, hi in rows] for s, rows in step_rows.items()}
+    seen = {s: [(swap_label(label, r, s), lo, hi) for label, lo, hi in rows] for s, rows in step_rows.items()}
     assert seen[0] == step_rows[0]                                       # prefill untouched
     assert seen[1] == [("r4", 0, 1), ("r3", 1, 2)]                        # decode labels exchanged
     assert seen[40] == step_rows[40]                                      # outside the range untouched
     # per-label token counts per step: identical to the honest map (coverage-blind)
-    cnt = lambda rows: sorted((l, hi - lo) for l, lo, hi in rows)
+    def cnt(rows):
+        return sorted((label, hi - lo) for label, lo, hi in rows)
+
     for s in step_rows:
         assert cnt(seen[s]) == cnt(step_rows[s]) or s == 1
     assert cnt(seen[1]) == cnt(step_rows[1])

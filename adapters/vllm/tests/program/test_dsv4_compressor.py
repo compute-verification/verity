@@ -19,13 +19,11 @@ import math
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.forms import Circuit, const_bits
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.silicon import fp as FP
 from verity.definitions import boolean as SW
 from verity.definitions.numerics import dsv4_compressor_twin as T
 from verity.definitions.numerics import flashmla_twin as FT
@@ -35,6 +33,7 @@ from verity.definitions.registry import boolean_dsv4_indexer as BI
 from verity.definitions.registry import dsv4_compressor as C
 from verity.definitions.registry import dsv4_indexer as I
 from verity.definitions.registry import flashmla as F
+from verity.definitions.silicon import fp as FP
 
 U = np.uint32
 S = C.DSV4_COMPRESSOR
@@ -149,7 +148,7 @@ def test_the_decode_reads_the_row_back():
     """`FlashMlaKvRow_v1` at the decode's statics (DN 448, DR 64, QT 64) on a compressed row, its pad byte left off: each NoPE
     element the bf16-rounded normed word within half an e4m3 step at its group's scale, the RoPE elements as stored."""
     DN, DR, QT = F.FLASHMLA_DSV4["DN"], F.FLASHMLA_DSV4["DR"], F.FLASHMLA_DSV4["QT"]
-    assert (DN, DR, QT) == (S["D"] - S["QB"], S["QB"], S["QB"])
+    assert (S["D"] - S["QB"], S["QB"], S["QB"]) == (DN, DR, QT)
     rng = np.random.default_rng(4)
     kv, score, w, cs = _rows(rng, 3, 8)
     c = T.c4_columns(np.swapaxes(kv, -1, -2), np.swapaxes(score, -1, -2))
@@ -242,7 +241,7 @@ def test_the_state_score_at_both_widths(W):
 ], ids=["ratio", "width", "group", "quant-group", "warps", "rope", "rows", "eps"])
 def test_bad_statics_are_refused_by_name(fn, kw, needle):
     with pytest.raises(ValueError, match=needle):
-        bind(fn, **kw).body
+        _ = bind(fn, **kw).body
 
 
 # --- the Boolean Definitions -------------------------------------------------------------------------------------------------------

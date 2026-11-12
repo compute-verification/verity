@@ -4,7 +4,7 @@ On a request Program read as the audit reads its Build (`write_build`, `from_ins
 produces that `units.required_values` requires under the query of record (each Call its own proof block) and serving's policy
 (`required.population`) are exactly the Call outputs CallPartition commits: a port is committed when its Call's derived committed set
 holds its returned computing gates, all of them or none. Prescribed inputs (Values of negative id) are the input unit's, in no proof
-block, and aren't compared. The bare boundary (`Policy.none()`) is that set less the Call outputs no Call reads (a fused norm's
+block, and aren't compared. The bare boundary (`Policy()`) is that set less the Call outputs no Call reads (a fused norm's
 residual nobody consumes, the last sampled token): CallPartition commits every returned computing gate, and serving's policy requires
 them as returned tensors and sampling-event outputs.
 
@@ -104,7 +104,7 @@ def check(phi: Phi, out: Path, *, partition: bool) -> None:
     if partition:
         assert committed_outputs(b.program, P, by_partition(b.program)) == committed
     assert produced(required.values) == committed, difference(P, produced(required.values), committed)
-    bare = produced(required_values(P, Q, Policy.none()).values)
+    bare = produced(required_values(P, Q, Policy()).values)
     read = {r for c in P.calls for r in c.reads}
     assert bare <= committed and not (committed - bare) & read, difference(P, bare, committed)
 

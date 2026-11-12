@@ -781,6 +781,21 @@ def test_a_single_and_a_tp_rows_commit_carry_the_serving_rows_request(tmp_path):
     assert "--replay-deferred" in tp.commit_cmd([]) and "--serving-rows" not in _tp_row(tmp_path, TP_DENSE).commit_cmd([])
 
 
+def test_a_row_given_a_run_dir_writes_nothing_into_the_runners(tmp_path):
+    """`--research-run-dir` is where the row's result, its record copies and its Commit's window go, whatever run dir the
+    runner's environment names: a script whose run dir is published keeps them out of it."""
+    kept, published = tmp_path / "kept", tmp_path / "published"
+    kept.mkdir(), published.mkdir()
+    r = _row(tmp_path / "sweep", "--research-run-dir", str(kept), environ={"RESEARCH_RUN_DIR": str(published), "SERVING_ROWS": "p.json"})
+    r.child_env["RESEARCH_RUN_DIR"] = str(published)
+    r.hidden_so, r.B = "/x/verity_fa2_matReqG.so", 1
+    Path(r.d, "stages.txt").write_text("build PASS 2026-01-01T00:00:00Z digest=00\n")
+    cmd = r.commit_cmd([])
+    assert Path(cmd[cmd.index("--serving-rows") + 1]).parent == kept / "serving-rows" / r.row
+    r.research_result()
+    assert (kept / "result.json").is_file() and (kept / "evidence" / "stages.txt").is_file(), Path(r.d, "row.log").read_text()
+    assert list(published.iterdir()) == []
+
 GLM53 = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 
 

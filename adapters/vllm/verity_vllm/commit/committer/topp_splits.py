@@ -2,7 +2,9 @@
 holds it to the registered one, `topp_geometry.registered_splits`)."""
 from __future__ import annotations
 
+import importlib
 import sys
+from numbers import Integral
 from typing import Any
 
 from verity_vllm.engine import hooks
@@ -11,6 +13,13 @@ from verity_vllm.engine import hooks
 #: looked up from the module's globals at every launch, each taking the split count as the constexpr kwarg `S` over grid (batch_size * S,).
 TOPP_SPLIT_MODULE = "vllm.v1.sample.ops.topk_topp_triton"
 TOPP_SPLIT_KERNELS = ("_topp_sb_stats_kernel", "_topp_sb_step_kernel", "_topp_sb_mask_kernel")
+
+
+def _grid_rows(grid: Any) -> int | None:
+    """The first dimension of a launch grid given as an integer or as a tuple or list led by one; None for any other grid (vLLM
+    launches on a literal tuple; a callable grid is left unread)."""
+    head = grid[0] if isinstance(grid, (tuple, list)) and grid else grid
+    return int(head) if isinstance(head, Integral) else None
 
 
 class _SplitKernelProxy:
@@ -26,12 +35,8 @@ class _SplitKernelProxy:
         name, sink = self._name, self._sink
 
         def run(*args: Any, **kw: Any):
-            try:                                              # vLLM launches on a literal tuple grid; a callable (meta) grid is left unread
-                g0 = None if callable(grid) else (int(grid[0]) if isinstance(grid, (tuple, list)) else int(grid))
-            except (TypeError, ValueError, IndexError):
-                g0 = None
             s = kw.get("S")
-            sink.append((name, g0, int(s) if isinstance(s, int) else None))
+            sink.append((name, _grid_rows(grid), int(s) if isinstance(s, int) else None))
             return launch(*args, **kw)
         return run
 
@@ -41,11 +46,9 @@ class _SplitKernelProxy:
 
 def install_split_kernel_proxies(sink: list) -> dict[str, hooks.Patch]:
     """Replace the three split kernels in vLLM's module namespace with recording proxies; returns {name: patch} for uninstall (empty
-    when the module / kernels are absent: an older vLLM without the split pipeline records no launch)."""
-    try:
-        mod = sys.modules.get(TOPP_SPLIT_MODULE) or __import__(TOPP_SPLIT_MODULE, fromlist=["_"])
-    except Exception:  # noqa: BLE001
-        return {}
+    when the module has none of them: a vLLM whose top-p has no split kernels records no launch).  A vLLM without the module is an
+    ImportError: there is no launch to read a split count from."""
+    mod = sys.modules.get(TOPP_SPLIT_MODULE) or importlib.import_module(TOPP_SPLIT_MODULE)
     patches: dict[str, hooks.Patch] = {}
     for nm in TOPP_SPLIT_KERNELS:
         k = getattr(mod, nm, None)

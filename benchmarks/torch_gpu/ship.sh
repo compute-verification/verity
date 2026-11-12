@@ -9,8 +9,11 @@ ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 # some follow elapsed time, which a busy machine stretches. So a build that sources this runs itself once more, as a child
 # of this shell, with address randomization off (setarch -R), TMPDIR a fresh directory whose path has one length, and
 # ship_clock.c's clock inside cicc (LD_PRELOAD), all inherited by its compilers, and compiles its sources from a copy at a
-# path of one length (ship_stage); it refuses where the kernel won't turn randomization off. A rebuild at the same commit,
-# with the same toolkit at the same path and the same host compiler, then reproduces every cubin
+# path of one length (ship_stage) with SHIP_NVCC, nvcc with what cicc reads freed of each file's place in the tree; it
+# refuses where the kernel won't turn randomization off. A rebuild at the same commit, with the same toolkit at the same
+# path and the same host compiler, then reproduces every cubin; after a commit that only moves a source or a file it
+# includes, cicc is handed what it was handed before, and so does that rebuild (ship_nvcc.sh's header says what that
+# leaves out)
 if [ -z "${SHIP_FRAME:-}" ] || [ ! -e "$SHIP_FRAME/ship_clock.so" ] \
     || [ $(( 0x$(cat /proc/self/personality) & 0x40000 )) -eq 0 ]; then
   setarch "$(uname -m)" -R true 2> /dev/null || {
@@ -23,6 +26,10 @@ if [ -z "${SHIP_FRAME:-}" ] || [ ! -e "$SHIP_FRAME/ship_clock.so" ] \
     setarch "$(uname -m)" -R "$BASH" "$0" "$@" || exit $?
   exit 0
 fi
+
+# the nvcc every build here compiles with (ship_nvcc.sh: its header says what it fixes); it reads CUDA, which ship_cuda
+# exports
+SHIP_NVCC=$ROOT/benchmarks/torch_gpu/ship_nvcc.sh
 
 # whether the toolkit $1 has nvcc 12.8 or later
 ship_nvcc_ok() { [ -x "$1/bin/nvcc" ] && "$1/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\."; }
@@ -39,9 +46,10 @@ ship_find_cuda() {
 ship_cuda() {
   ship_find_cuda "$@"
   ship_nvcc_ok "$CUDA" || { echo "no nvcc >= 12.8 at ${CUDA:-any of $*}: set CUDA" >&2; exit 1; }
+  export CUDA
 }
 
-# FLAGS: nvcc's command line for a cubin of the arch $1 (sm_90a, sm_120a): no FTZ, fast-math, FMA contraction or
+# FLAGS: SHIP_NVCC's command line for a cubin of the arch $1 (sm_90a, sm_120a): no FTZ, fast-math, FMA contraction or
 # approximate division or square root, and no line info, so a cubin's bytes don't depend on the directory it's built in
 ship_cubin_flags() {
   FLAGS=(-O3 -std=c++17 -gencode "arch=compute_${1#sm_},code=$1" -fmad=false -Xptxas -v -cubin)

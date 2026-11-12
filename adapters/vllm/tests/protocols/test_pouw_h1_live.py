@@ -9,7 +9,6 @@ import json
 import numpy as np
 import pytest
 from verity.protocols.pouw.verifier import core_check as CC
-from verity.protocols.pouw.prover.circuit import live as L
 from verity.protocols.pouw.verifier import live_reads as LR
 from verity.protocols.spot.verifier.one_stage import registered as G
 from verity_vllm.protocols import pouw

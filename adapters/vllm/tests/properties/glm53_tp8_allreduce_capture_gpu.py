@@ -95,6 +95,7 @@ import socket
 import sys
 import tempfile
 import traceback
+from collections.abc import Sequence
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Any
@@ -1073,8 +1074,8 @@ def nccl_modelled(c: dict[str, Any]) -> bool:
     return c.get("comm") == "pynccl_comm" and c["M"] in NCCL_PROBE_M and c["spawn"] in ("served", "served_again")
 
 
-def jobs_of(cases_: list[dict[str, Any]], trees: list | None = None, ftz: bool | None = None,
-            pins: dict[str, tuple[list | None, bool | None]] | None = None,
+def jobs_of(cases_: list[dict[str, Any]], trees: Sequence[Any] | None = None, ftz: bool | None = None,
+            pins: dict[str, tuple[Sequence[Any] | None, bool | None]] | None = None,
             nccl: dict[str, dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     """A comparison job per launch: modelled when the launch runs a Definition's kernel (a fused call on the fused path, an
     all-reduce on FlashInfer's MNNVL, on multimem once the probes have pinned its trees and FTZ, or on the custom all-reduce) or
@@ -1128,7 +1129,7 @@ def bind_check(cases_: list[dict[str, Any]], trees: list | None, ftz: bool | Non
     return {"bindings": out, "ok": bool(out) and all(out.values())}
 
 
-def dispatch_check(spawn: dict[str, Any], comms: list[dict[str, Any] | None]) -> dict[str, Any]:
+def dispatch_check(spawn: dict[str, Any], comms: Sequence[dict[str, Any] | None]) -> dict[str, Any]:
     """Whether every rank's communicators (`communicators`) are its spawn's setting's: the custom all-reduce on or off and, on,
     fully connected at its cap (`CUSTOM_SYMM_MAX_BYTES` beside symmetric memory, else `CUSTOM_MAX_BYTES`, `expected_comm`); torch's
     symmetric memory on or off, at `SYMM_MEM_MAX_BYTES`; FlashInfer's all-reduce at `FI_MAX_BYTES`; no other all-reduce."""

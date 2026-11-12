@@ -105,9 +105,5 @@ def shape_key(s: tuple[int, ...]) -> str:
     return ",".join(str(int(x)) for x in shape(*s))
 
 
-def parse_shape_key(k: str) -> tuple[int, ...]:
-    return shape(*(int(x) for x in k.split(",")))
-
-
 def cached_rows(s: tuple[int, ...]) -> int:
     return int(s[2]) if len(s) > 2 else 0

@@ -63,7 +63,9 @@ def rank_table(s: np.ndarray, kv_heads: int, rank: int = 0, world: int = 1) -> n
 
 def entry(revision: str, repo: str, amax: np.ndarray, calibration: dict[str, Any]) -> dict[str, Any]:
     """The table entry of a calibration: its recipe, what it read, amax and s_k as float.hex of float32."""
-    hexes = lambda t: [[float(x).hex() for x in row] for row in np.asarray(t, dtype=np.float32)]
+    def hexes(t: np.ndarray) -> list[list[str]]:
+        return [[float(x).hex() for x in row] for row in np.asarray(t, dtype=np.float32)]
+
     return {"revision": revision, "repo": repo, "recipe": RECIPE, "calibration": calibration, "amax": hexes(amax),
             "scales": hexes(scales(amax))}
 

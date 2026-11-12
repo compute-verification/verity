@@ -27,10 +27,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-
+from verity.circuits.types import Array, RecordType, Value
 from verity.definitions.registry import b1
 from verity.definitions.registry.prims import BF16
-from verity.circuits.types import Array, RecordType, Value
 
 COS_SIN_MAX_ULP = 1     # gate I9 (frozen with gates.py; change only through an approved decision)
 
@@ -343,8 +342,8 @@ def mla_layer_weights_type(C: dict[str, Any], *, dense: bool) -> RecordType:
     the shared experts' fused gate/up and down projections, and the routed experts' `w13 [E][2I][H]` / `w2 [E][H][I]`.
     A block-FP8 checkpoint stores every linear except the router and the DSA indexer's replicated key/weight projection as e4m3 followed
     by its f32 block scales.  A bf16 checkpoint retains the original GLM-4.7 layout."""
-    from verity.definitions.registry.prims import F32
     from verity.definitions.registry.fp8 import E4M3, weight_blocks
+    from verity.definitions.registry.prims import F32
     H, NH, QL, L, DN, DR, DV = (int(C[k]) for k in ("H", "NH", "Q_LORA", "KV_LORA", "QK_NOPE", "QK_ROPE", "V_HEAD"))
     G = int(C.get("FP8_BLOCK") or 0)
 

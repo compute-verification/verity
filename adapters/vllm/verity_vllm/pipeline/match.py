@@ -55,7 +55,7 @@ from pathlib import Path
 from typing import Any
 
 from verity_vllm.check import gates as G
-from verity_vllm.config import RowEngine, UsageError, option, workload_arg
+from verity_vllm.config import RowEngine, UsageError, option, row_execution, workload_arg
 from verity_vllm.engine.served import ENFORCE_EAGER
 from verity_vllm.observe.fold.supplied import program_registered_values
 from verity_vllm.pipeline import experiment as EXP
@@ -532,7 +532,7 @@ class Options:
     config_id: str | None = option("--config-id", default=None)
     profile: str | None = option("--profile", default=None)
     workload: str | None = option("--workload", type=workload_arg, default=None)
-    case: str | None = option("--case", default=None, help="checkpoint role (B0, B1, QWEN05, ... any role in checkpoints.json with a profile module)")
+    case: str | None = option("--case", default=None, help="checkpoint role (B0, B1, ... any role in checkpoints.json with a profile module)")
     out: str | None = option("--out", default=None, help="RUN_DIR (driver) or fold_summary.json (--worker fold)")
     run_dir: str | None = option("--run-dir", default=None, help="an existing RUN_DIR: --out plus case/workload/profile/config-id/checkpoint-dir/steps from its run.json " "(the sealed verifier re-runs the CPU phase this way from a fresh checkout)")
     phase: str = option("--phase", choices=["gpu", "cpu", "all"], default="all")
@@ -828,7 +828,7 @@ def _workload_execution(path: str | None) -> str | None:
         if isinstance(v, str) and v:
             return v
     rid = sw.get("row_id") or doc.get("row_id")
-    return rid.rsplit("__", 1)[1] if isinstance(rid, str) and "__" in rid else None
+    return row_execution(rid) if isinstance(rid, str) else None
 
 
 def _workload_enforce_eager(path: str | None) -> bool:

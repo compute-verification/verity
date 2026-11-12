@@ -201,7 +201,8 @@ def traffic(encode: Any, n: int, *, seed: int, prompt_tokens: tuple[int, int], m
     head, tail = frame or ((CHAT_HEAD, CHAT_TAIL) if chat else ("", "\n\nAnswer: "))
     bos = encode("")
     tail_ids = encode(tail)[len(bos):]
-    filler, k = [], 1
+    filler: list[int] = []
+    k = 1
     while len(filler) < hi:
         filler, k = encode(VARIED_FILLER * k)[len(bos):], 2 * k
     heads = [encode(head + q) for q in QUESTIONS]

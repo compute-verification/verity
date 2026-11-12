@@ -21,26 +21,50 @@ import importlib
 
 import numpy as np
 import pytest
-
 from verity.circuits.defs import bind
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import resolve
 from verity.circuits.program import Program
-from verity_vllm.program import model as analytic
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
-from verity_vllm.observe.fold.profiles import profile_module_for_case
-from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import FUSED_MOE_PINS, MoEFusedExperts
-
-Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
-from verity_vllm.observe.fold.resolver import Compute, Group, StepContext, Transparent, Unsupported, resolve_step
-from verity_vllm.observe.fold.patterns.collectives import EmbeddingShardCuda, TpCollective
-from verity_vllm.observe.fold.patterns.gemm import GemmLaunch
-from verity_vllm.observe.fold.patterns.target import gemm_target_of, pinned_num_sms
-from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.definitions.registry import moe as MOE
 from verity.definitions.registry import prims as P
+
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.patterns import (
+    TokenSelectArgmax,
+    TokenSelectGumbelTwoStage,
+)
+from verity_vllm.observe.fold.patterns.collectives import (
+    EmbeddingShardCuda,
+    TpCollective,
+)
+from verity_vllm.observe.fold.patterns.gemm import GemmLaunch
+from verity_vllm.observe.fold.patterns.target import gemm_target_of, pinned_num_sms
+from verity_vllm.observe.fold.profiles import profile_module_for_case
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (
+    FUSED_MOE_PINS,
+    MoEFusedExperts,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Group,
+    StepContext,
+    Transparent,
+    Unsupported,
+    resolve_step,
+)
+from verity_vllm.observe.fold.tree import step_events
+from verity_vllm.program import model as analytic
+from verity_vllm.program.frontend.target_profile import TargetProfile
+
+Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 
 C = Q3.C
 H, I, E, TOPK, NL = C["H"], C["I"], C["NUM_EXPERTS"], C["TOPK"], C["NL"]

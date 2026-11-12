@@ -9,11 +9,6 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StorageAlloc, StorageFree, TritonLaunch, ViewDesc
-from verity_vllm.properties.quarantine_lint import lint
-from tests.engine.collectives import collective_link as CL
-from tests.engine.collectives.collective_record import COLLECTIVE_KINDS, MISSING_IN_RECORD, SCHEMA_LINK, SCHEMA_SHARD, validate_launch
 from verity.circuits.codec import decode_program, encode_program, program_digest
 from verity.circuits.defs import REGISTRY, bind
 from verity.circuits.evaluation.reference import evaluate_region
@@ -21,8 +16,28 @@ from verity.circuits.layout import resolve
 from verity.circuits.program import Program
 from verity.definitions.registry import b1_tp2
 from verity.definitions.registry import prims as P
+
+from tests.engine.collectives import collective_link as CL
+from tests.engine.collectives.collective_record import (
+    COLLECTIVE_KINDS,
+    MISSING_IN_RECORD,
+    SCHEMA_LINK,
+    SCHEMA_SHARD,
+    validate_launch,
+)
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StorageAlloc,
+    StorageFree,
+    TritonLaunch,
+    ViewDesc,
+)
 from verity_vllm.program.quarantine import collective as QC
 from verity_vllm.program.quarantine.collective import allreduce as A
+from verity_vllm.properties.quarantine_lint import lint
 
 REPO = Path(__file__).resolve().parents[3]
 FIX = Path(__file__).resolve().parent / "fixtures" / "tp2"
@@ -107,14 +122,14 @@ def test_allreduce_definition_shape_gates_and_identity(N, R):
 
 def test_allreduce_rejects_fewer_than_two_ranks():
     with pytest.raises(ValueError):
-        A.all_reduce_sum_bf16(4, 1).body
+        _ = A.all_reduce_sum_bf16(4, 1).body
 
 
 @pytest.mark.parametrize("R", [3, 4])
 def test_allreduce_refuses_more_than_two_ranks(R):
     """More than two ranks is `b1_tp2.all_reduce` (the hop order of `b1_tp2.allreduce_order`), never a chain of this family."""
     with pytest.raises(ValueError, match="allreduce_order"):
-        A.all_reduce_sum_bf16(4, R).body
+        _ = A.all_reduce_sum_bf16(4, R).body
     with pytest.raises(ValueError, match="allreduce_order"):
         A.all_reduce_sum_bf16_words([[0]] * R)
 
@@ -215,8 +230,9 @@ def test_quarantine_lint_passes_for_the_collective_package():
 
 
 def test_difftest_adapter_cases_and_spec_are_torch_free():
-    from verity_vllm.program.quarantine.collective import allreduce_difftest as D
     import random
+
+    from verity_vllm.program.quarantine.collective import allreduce_difftest as D
     kinds = set()
     for i in range(10):
         c = D.cases(random.Random(0), i)

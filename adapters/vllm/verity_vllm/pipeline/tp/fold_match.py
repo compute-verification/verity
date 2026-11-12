@@ -32,6 +32,7 @@ from typing import Any
 
 from verity_vllm.check.match import rank_match as RM
 from verity_vllm.config import UsageError, option, workload_arg
+from verity_vllm.pipeline.tp.links import read_tp_links
 
 SCHEMA = "verity/tp2/fold-match/v1"
 
@@ -55,19 +56,19 @@ def _run_unless(reuse: bool, out: Path, cmd: list[str], log: Path, timeout: int 
 
 
 def _load(p: Path) -> dict | None:
+    """The JSON document at ``p``; None when the file is missing or does not parse."""
     try:
         return json.loads(p.read_text())
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError):
         return None
 
 
 def _load_links(p: Path) -> dict | None:
     """a rank's tp_links.json through `read_tp_links` (v1 -> v2 in memory; every link carries `peers` and `module`, the
-    recorder-vocabulary module path from the derive's recorded model root)."""
+    recorder-vocabulary module path from the derive's recorded model root); None when the file is missing or is not one."""
     try:
-        from verity_vllm.pipeline.build import read_tp_links
         return read_tp_links(str(p))
-    except Exception:  # noqa: BLE001
+    except (OSError, ValueError, TypeError, AttributeError):
         return None
 
 
@@ -192,7 +193,7 @@ class Options:
     capture: str = option("--capture",
                           help="tp2_capture --record-collectives run dir: log.rank<r>.jsonl.gz, tokens.json, coll.rank<r>.jsonl")
     profile: str = option("--profile",
-                          help="rank profile module (verity_vllm.observe.fold.profiles.<name>), e.g. derived_LLAMA32_1B_tp2 (profiles.generic, world = W)")
+                          help="rank profile module (verity_vllm.observe.fold.profiles.<name>), e.g. derived_<ROLE>_tp<W> (profiles.generic, world = W)")
     build_rank0: str | None = option("--build-rank0", default=None)
     build_rank1: str | None = option("--build-rank1", default=None)
     derived_rank0: list[str] = option("--derived-rank0", action="append", default=[],

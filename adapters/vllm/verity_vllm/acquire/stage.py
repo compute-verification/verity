@@ -37,8 +37,7 @@ class StageDocs:
         return out
 
 
-def plan_at_stage(model: Any, runner: Any, manifest: str | Path | Mapping[str, Any] | None, out_dir: str | Path, *, source: str,
-                  refuse_incomplete: bool = True) -> StageDocs:
+def plan_at_stage(model: Any, runner: Any, manifest: str | Path | Mapping[str, Any] | None, out_dir: str | Path, *, source: str) -> StageDocs:
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     rt = runtime_tree_of(model, runner, source=source)
@@ -51,6 +50,6 @@ def plan_at_stage(model: Any, runner: Any, manifest: str | Path | Mapping[str, A
     plan.save(out / "acquisition_plan.json")
     docs.plan = plan
     docs.paths["acquisition_plan"] = str(out / "acquisition_plan.json")
-    if plan.unsupported and refuse_incomplete:
+    if plan.unsupported:
         raise IncompletePlan(f"{len(plan.unsupported)} unsupported Value(s): " + "; ".join(f"{v.value_id}: {v.why}" for v in plan.unsupported[:6]))
     return docs

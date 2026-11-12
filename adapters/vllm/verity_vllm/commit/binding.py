@@ -29,7 +29,8 @@ from __future__ import annotations
 import hashlib
 import json
 from collections import Counter
-from typing import Any, Collection, Iterable, Iterator
+from collections.abc import Collection, Iterable, Iterator
+from typing import Any
 
 from verity_vllm.commit import challenge as CH, json_chunks as JC
 from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, runtime_place, split_name
@@ -82,7 +83,7 @@ class LaunchIdentity(tuple):
     committed stream must carry there: `launch` = {"geometry": the row's launch geometry, "rows": {r<i>: token rows} of the step's declared
     composition} (`format.batch_launch_shortfall`).  It equals its identity tuple: the population's digest and record read the identity only."""
 
-    def __new__(cls, ident: tuple, launch: dict[str, Any] | None = None) -> "LaunchIdentity":
+    def __new__(cls, ident: tuple, launch: dict[str, Any] | None = None) -> LaunchIdentity:
         self = super().__new__(cls, ident)
         self.launch = launch or {}
         return self
@@ -324,7 +325,8 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     `request_steps` = {r<i>: engine steps the request EXECUTED (its executed prefix of record: arrival .. arrival +
     executed_prefix_len)}: an identity of a listed request at an engine step outside its prefix is programmed-but-unexecuted -- NOT required
     (counted in header `programmed_not_executed_n`).  The manifest itself stays the Program's (cap shape); only the requirement is placed."""
-    doc = json.loads(open(path).read())
+    with open(path) as f:
+        doc = json.loads(f.read())
     rows = doc.get("entries") or doc.get("rows") or doc.get("identities") or []
     hdr = {"path": path, "manifest_digest": doc.get("manifest_digest") or doc.get("digest"), "program_digest": doc.get("program_digest"),
            "complete": doc.get("complete", True), "unmodelled": doc.get("unmodelled") or {},   # incomplete manifest -> fail closed (commit_delta)
