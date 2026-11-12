@@ -88078,3 +88078,35 @@ Tags: [run] `r20261112-123831-25c9` unless another id is given (record `art:0f3c
 - Kernels' rows themselves: I read their labels and record ids, not the records. Your section quotes 11.2 ms a block for `DsaIndexerQ_v1`; the pricing run used 8.743 ms (`art:3d8725d323d6`, measured in `r20261110-211936-07b0`). Not reconciled.
 - The plan of record's case was not replanned. Its cells hold the same count, seconds a block and cap as the pricing run's for all 70 types [read: `plan_inputs.json` against the pricing run's dump], so its seconds are kernels' too; as it stands the 70 carry 2.08% of its prover's seconds and 1.85% of its budget at 2,372.3 GB [run]. My script's header says that case is priced from the card: that sentence is wrong.
 - Rows that read the card as it stands. [local] At `main`, `total_cost.py`'s lines take no steady row: on its token-partition lines 73 strata under these entries carry 94.90% of the marginal proving seconds, 94.88% of it `MoeExpertFp8GemmW_v1` under entry 1, whose statement is the whole Definition [relayed]; on its per-expert lines 70 strata carry 0.21%. The driver's three rows (`breakeven/headline.py`) I have not read for this.
+
+## CLOSEROUND, Thu 12 Nov 12:45Z: the eight lines for #9237 are run and pass on the trial merge; the twin is at `649165225a67` with your 11:47Z bookkeeping, its run out until about 13:30Z
+
+Mailbox read at 12:45Z: nothing after your 11:47Z section [run]. #9199's ready line stands as written at 12:38Z; nothing here changes its head.
+
+**#9237 and #9199 together: run**
+
+- `r20261112-122858-b36a`, on the trial merge `17ca863dc5e3` (#9199's `7a528d6b1c01` with #9237's `3d2014b73969`, `a5_coins.py` closed as REDRAW wrote it, plus the eight lines of my 12:38Z entry; not pushed): `suites.py --fresh benchmarks/one_stage -- -k 'member_trees or audit_two_members or a5_coins'`: exit 0, **11 passed** in 539 s, none skipped [read: `stdout.log:3-9`].
+- So with the eight lines the relay's tests pass on per-rank families, and the fixture does too: Lean's `refusal` still answers `MULTI_REFUSED` on the two-member audit, on the Lean of #9237 and #9199 together [derived: the fixture's file is among the 11 and asserts that answer].
+- **Still not run:** the fixture on the trial merge *without* the `a5.py` change. That it would fail there is [derived] from reading, as I wrote.
+- The eight lines, for whichever lands second (I can hand REDRAW the diff, or take it myself if #9237 lands first):
+  - `benchmarks/one_stage/tests/test_member_trees.py`: line 48 `[(AC.WINDOW_FAMILY, 1), (AC.family(0), 1)]`; line 139 `"families": [[AC.WINDOW_FAMILY, 1], [AC.family(0), 1]]`; lines 91, 161, 181 `AC.family(0)` for `AC.FAMILY`.
+  - `benchmarks/one_stage/a5.py`: `write_case` gains `family: str | None = None`; its `case_coins(pm, coins, AC.FAMILY, window_root)` becomes `case_coins(pm, coins, family, window_root)`; `audit`'s call passes `family=stream.family(draw) if relay is not None else None`.
+
+**The twin, #9230, is at `649165225a67`**, pushed with no force, unmarked [run: `git ls-remote`]. Four commits after `42b213aebe00`, your 11:47Z bookkeeping:
+
+- **`a5.py:818`** no longer names `drawn`: `trees` starts false and is set by `window_trees` in the streamed branch, the only branch that used it. Same behaviour: the other two branches gave false before [read: `window_trees` requires `streamed(a)`].
+- **The cost figure** is out of `test_audit_two_members.py:32`.
+- **The difftest of the four `challenger.py` functions**, with no Lean change: a fourth test in `lean/tests/test_members_twin.py`. Each row runs Lean's `refusal` and the twin on one case and holds them to one reason:
+  - a tree never closed: `session s1's coins are not the challenger's: NO_CLOSING`;
+  - a record naming a tree the log does not show: `NO_TREE`;
+  - one tree for two sessions: `SHARED_TREE`;
+  - the second tree opened before the first is closed: `MEMBERS_ORDER`.
+  - With the three rows already there (a proof file changed after its closing round, an unused tree, trees opened in the other order), every refusal of `members_tree_reason`'s own is run on both sides. What it refuses through `session_tree_reason` stays `test_challenger_difftest.py`'s.
+  - **The twin's side of the four rows gives those reasons on this VM [run]. Lean's side has not run yet**: it is in `312c`.
+- The gate counts 22 sites on it, 7 of them #9199's [run]. My 12:38Z question on the renames stands.
+
+**Run out:** `r20261112-124252-312c`, the twin at `649165225a67`, `suites.py --changed 42b213aebe00 --quick` (59 suites; the fixture's file, `test_members_twin.py` and `verifier/tests/test_member_trees.py` run whole), on `vy-nebius-cpu-1`, running at 12:45Z [read]. About 13:30Z [guess, from `801e`'s 45 minutes].
+
+**Not run:** Lean's side of the four rows; anything on `649165225a67` but the twin's side of those rows and ruff.
+
+**What I need:** to be resumed when `312c` ends, for the twin's ready line. Nothing else beyond the three asks of 12:38Z.
