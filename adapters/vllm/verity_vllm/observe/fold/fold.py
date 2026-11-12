@@ -314,9 +314,7 @@ class _Fold:
         self.requests: list[dict] = []
         self.req_index: dict[str, int] = {}
         self.params: tuple = ()
-        self.B: Builder | None = None
-        self.weights_type = None
-        self.weights_coll: Coll | None = None
+        self.weights_type: RecordType | None = None
         self.prompt_colls: list[Coll] = []
         self.seed_param: dict[int, int] = {}      # request index -> seed parameter index
         self.seed_colls: dict[int, Coll] = {}
@@ -500,8 +498,8 @@ class _Fold:
             # Unresolved (raised in strict mode).  Recorded as a note either way.
             self.notes.append(f"unbound root: Root {r.name!r} ({r.role}, {r.view!r}) has no weights field in profile {self.profile.id}")
             return
-        coll = self.weights_coll
         try:
+            coll = self.weights_coll
             for k in path:
                 coll = coll[k]
         except (KeyError, IndexError, TypeError, AttributeError) as e:
@@ -734,7 +732,7 @@ class _Fold:
         for tag, p, data in reads:
             emitted.append(self.weight_only.emit(p, data, self._compute_emit, root) if tag == "c" else None)
         for (tag, p, data), outs in zip(reads, emitted):
-            if tag == "c":
+            if outs is not None:
                 self._compute_writes(p, outs)
             elif tag == "m":
                 self._move_writes(p, data)
@@ -896,7 +894,7 @@ class _Fold:
             raise FoldError(f"{what}: unknown collective kind {op.kind!r}")
         if not op.site:
             raise FoldError(f"{what}: collective without an issuing module (site); refused (fail closed)")
-        rec = self._collective_call(op, M, N, min(c.consumed) if c.consumed else self.cur_event, what)
+        rec = self._collective_call(op, M, N, min(c.consumed) if c.consumed else self.cur_event, what, rank, world)
         step, k = rec["step"], rec["k"]
         by_req: dict[int, list[int]] = {}
         for i in range(M):
@@ -912,7 +910,7 @@ class _Fold:
         # one field per (request, PEER rank) in rank order: `s<step>_k<k>` at world 2 (the recorded field names), else
         # `s<step>_k<k>_r<peer>`; the request's field ordinal is k*(world-1)+j = the rank Program's `peers_<ordinal>` input (cb_a.compare)
         peer_ranks = self.tp_peer_ranks
-        row_map: dict[int, tuple[int, int, dict[int, int], int, str]] = {}   # row -> (peers param index, {peer rank: field offset}, row within the request, field name)
+        row_map: dict[int, tuple[int, dict[int, int], int, str]] = {}   # row -> (peers param index, {peer rank: field offset}, row within the request, field name)
         fields = []
         for ri, rws in by_req.items():
             pidx = self.peers_param[ri]
@@ -931,7 +929,7 @@ class _Fold:
         rec["fields"].extend(fields)
         return {"step": step, "k": k, "N": N, "M": M, "rank": rank, "world": world, "kind": op.kind, "site": op.site, "row_map": row_map}
 
-    def _collective_call(self, op: Collective, M: int, N: int, event: int, what: str) -> dict:
+    def _collective_call(self, op: Collective, M: int, N: int, event: int, what: str, rank: int, world: int) -> dict:
         """The record of the call `op` reduces rows of: a fresh (step, k) for a whole partial or a call's first rows, else the open
         call it continues (`Collective.call`: the next rows of the same call, at the same step and site)."""
         own, call = op.own, op.call or op.own
@@ -939,9 +937,10 @@ class _Fold:
         if call.alloc != own.alloc or call.rank != 2 or call.shape[1] != N or tuple(call.strides) != (N, 1) or rem or not 0 <= lo <= call.shape[0] - M:
             raise FoldError(f"{what}: own partial {own!r} is not a row slice of the call's partial {call!r}")
         held, self._open_call = self._open_call, None
+        rec: dict
         if lo == 0:
             rec = {"step": self.cur_step, "k": self.cur_coll_k, "kind": op.kind, "site": op.site, "rows": int(call.shape[0]), "N": N,
-                   "rank": self.tp["rank"], "world": self.tp["world"], "event": event, "own_view": call, "fields": [],
+                   "rank": rank, "world": world, "event": event, "own_view": call, "fields": [],
                    **({"flat": True} if op.flat else {})}
             self.cur_coll_k += 1
             self.collectives.append(rec)
