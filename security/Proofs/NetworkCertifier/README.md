@@ -179,8 +179,8 @@ WitnessToys.lean  what holds at those instances, which the count and period witn
 CountWitnesses.lean  the thirteen counts' pairs, seven egress and six ingress: the honest run is accepted at
                                          `fxRate` or at `sampProg`, or has every status complete, and each bound is
                                          false at the verifier that accepts everything (`acceptAll`)
-PeriodWitnesses.lean  PooledLeakAccepted's pair: its schedule premises at `fxQueue`'s schedule, and its bound
-                                         false at an audit that always accepts
+PeriodWitnesses.lean  two more instances of PooledLeakAccepted: its schedule premises at `fxQueue`'s, and its bound
+                                         false at one incorrect unit
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: five theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
