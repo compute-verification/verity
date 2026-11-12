@@ -59,7 +59,10 @@ ADVICE_TRACE=DIR [ADVICE_STOPS=ID,...] verity bench prod_repro ...
 
 The report goes to the job's `out/prod_repro.txt` and `out/prod_repro.json`. The job fails where an arm or the replay
 fails, where a replay was asked for and its tokens were not compared, and where a replayed token or step differs from
-the served one. A job that ends early still has its report, also one whose time ended (SIGTERM: the arm or the
+the served one. One kind of served step is no difference, and the report counts and prints it: a step after a
+request's end, which emitted no token, whose requests had all ended in an earlier step, and which the replay did not
+run (the scheduler had planned it before it learned of the end, and serving dropped what it computed; the replay ends
+with its last request). A job that ends early still has its report, also one whose time ended (SIGTERM: the arm or the
 replay stops, and the report is of what was served and replayed by then): it says which arm failed and on what,
 which stopped before a pass, whether the replay ended and how its log ends; and for a replay that differs, the first
 token that does and the first step.

@@ -201,6 +201,64 @@ def test_a_replay_that_stops_short_or_runs_another_schedule_fails_too(tmp_path: 
     assert "where the replay kept no steps to say what it ran" in run(out)[1]
 
 
+def end_step(out: Path, ended: bool) -> str:
+    """Add a third step to the record arm's served trace, one that emits nothing: the second request scheduled once
+    more, after both requests ``ended`` in the step before it or while that request still runs. The request."""
+    f, b = out / "record" / "server" / "step_trace.9.jsonl.gz", rid(f"{LOAD}1", 1)
+    with gzip.open(f, "rt") as lines:
+        recs = [json.loads(x) for x in lines]
+    recs[-1]["finished"] = {rid(f"{LOAD}1", 0): "length", b: "length"} if ended else {rid(f"{LOAD}1", 0): "length"}
+    recs.append({"kind": "step", "step": 2, "rows": [[b, 51, 6]], "cache_hit": {}, "emitted": {}, "finished": {}, "t": 0.3})
+    with gzip.open(f, "wt") as lines:
+        lines.write("".join(json.dumps(r) + "\n" for r in recs))
+    return b
+
+
+def test_a_step_after_a_requests_end_that_emitted_nothing_is_counted_and_is_no_difference(tmp_path: Path):
+    def served_twice(out: Path) -> list[dict]:
+        return [dict(s) for s in R.window(out / "record", LOAD, 1)["steps"][:2]]
+
+    # serving planned one more step for a request before it learned the request had ended, and dropped its output;
+    # the replay, which ends with its last request, ran no such step
+    out = job(tmp_path)
+    end_step(out, ended=True)
+    replayed(out, steps=served_twice(out))
+    rc, txt, r = run(out)
+    assert json.loads((out / "replay-compiled" / "replay.json").read_text()) | {
+        "bit_exact": False, "steps_differing": 1, "first_differing_step": 2} == json.loads(
+            (out / "replay-compiled" / "replay.json").read_text())
+    assert rc == 0 and r["tokens"]["reproduces"] is True and r["failed"] == []
+    assert r["tokens"] | {"steps_served": 3, "steps_differing": 0, "first_differing_step": None, "steps_after_end": [2],
+                          "first_step": None, "record_disagrees": False} == r["tokens"]
+    assert ("tokens: reproduced: 2 requests replayed, 4 served tokens compared with 4 replayed, 0 differ in 0 requests\n"
+            "  1 step after a request's end, no token, not replayed: step 2 of the window's 3 (serving had planned each "
+            "before it learned its requests had ended, and dropped what it computed: counted here, and no difference)\n"
+            "  3 engine steps, 0 with other rows than the served schedule; ") in txt
+    assert txt.endswith("prod_repro: 2 of 3 lines measured\n")
+    # a step the replay ran that serving did not still fails, beside the counted one
+    shutil.rmtree(out / "replay-compiled")
+    replayed(out, steps=[*served_twice(out), {"step": 3, "rows": [[rid(f"{LOAD}1", 0), 51, 6]]}])
+    rc, txt, r = run(out)
+    assert rc == 1 and r["tokens"]["steps_after_end"] == [2] and r["tokens"]["steps_differing"] == 1
+    assert "the first step that differs: step 3 of the window's 3: serving ran no such step where the replay ran" in txt
+    # the same no-token step of a request that had not ended is a missing step, and fails
+    out = job(tmp_path / "live")
+    b = end_step(out, ended=False)
+    replayed(out, steps=served_twice(out))
+    rc, txt, r = run(out)
+    assert rc == 1 and r["tokens"]["reproduces"] is False and r["tokens"]["steps_after_end"] == []
+    assert "tokens: FAILED: 2 requests replayed, 4 served tokens compared with 4 replayed, 0 differ in 0 requests\n" in txt
+    assert "1 of 3 steps' rows differ from the served schedule, the first step 2" in txt
+    assert f'the first step that differs: step 2 of the window\'s 3: serving ran [["{b}",51,6]] where the replay ran no such step' in txt
+    assert "after a request's end" not in txt
+    # and so is a replay that kept no steps to say which it ran: the record's count stands
+    out = tmp_path / "out"
+    shutil.rmtree(out / "replay-compiled")
+    replayed(out, steps=served_twice(out), keep_steps=False)
+    rc, txt, r = run(out)
+    assert rc == 1 and r["tokens"]["steps_differing"] == 1 and r["tokens"]["steps_after_end"] == []
+
+
 def test_the_kept_tokens_are_compared_not_the_replays_own_count(tmp_path: Path):
     out = job(tmp_path)
     d = replayed(out, tokens={rid(f"{LOAD}1", 1): [7, 9]})

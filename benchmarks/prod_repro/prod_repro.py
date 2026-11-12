@@ -22,7 +22,11 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
 - ``tokens``: the served window the replay re-ran (`replay.window`), how many of its requests and served tokens the
   replay's kept tokens were compared with (`replay.token_diff`) and how many differ, with the steps that differ and
   the requests of the window that began from a prefix-cache hit. Where they differ: the first token that does (its
-  request, position, served and replayed ids and the step that emitted it) and the first step whose rows do;
+  request, position, served and replayed ids and the step that emitted it) and the first step whose rows do. The
+  window is reproduced where every served token equals its replayed one and every served step is in the replay with
+  equal rows, but for the steps after a request's end (`after_end`), which are counted and printed and are no
+  difference; a replayed step serving did not run, a missing step that emitted a token or holds a request that had
+  not ended, and rows that differ all fail;
 - ``cost``: what serving with our changes (``--ours``) costs over stock (``--stock``) on the load, a share of stock's
   serving time with its 95% interval over the passes taken as independent, beside stock served a second time
   (``--again``), the noise floor: by vLLM's client the benchmark's paired ratio at the rung where stock is saturated
@@ -382,6 +386,21 @@ def replayed_steps(replay_dir: Path) -> dict[int, list] | None:
         return {s["step"]: s["rows"] for s in map(json.loads, filter(str.strip, lines))}
 
 
+def after_end(w: dict, kept: dict[int, list] | None) -> list[int]:
+    """The served steps of a window that are after a request's end: the replay ran no such step, the step emitted no
+    token, and each of its rows is of a request that finished in an earlier step. The scheduler had planned such a step
+    before it learned the request had ended, and serving dropped what it computed. None where the replay kept no steps
+    to say which it ran."""
+    done: set[str] = set()
+    out = []
+    for s in w["steps"]:
+        if kept is not None and s["step"] not in kept and not s.get("emitted") and s["rows"] and all(
+                r[0] in done for r in s["rows"]):
+            out.append(s["step"])
+        done |= set(s.get("finished") or ())
+    return out
+
+
 def first_step(w: dict, replay_dir: Path, step: int | None) -> dict | None:
     """The first step whose rows differ: the rows serving ran that the replay did not and the ones the replay ran
     instead, `ROWS_MAX` of each (a row is its request, first position and tokens)."""
@@ -451,12 +470,22 @@ def tokens(out: Path, ours: str, load: str, rep: int, replay_dir: Path, state: d
     if not n["tokens_served"]:
         return not_measured("the window holds no served token", **n)
     disagree = (rec["requests_tokens_differing"], rec["token_positions_differing"]) != (n["requests_differing"], n["tokens_differing"])
+    # the steps that differ are the record's (replay.compare), less the served ones after a request's end, which the
+    # kept steps name; a record that counts other steps than the kept ones show disagrees with them
+    kept, rows = replayed_steps(replay_dir), {s["step"]: s["rows"] for s in w["steps"]}
+    ended = after_end(w, kept)
+    differ = None if kept is None else [k for k in sorted(set(rows) | set(kept)) if rows.get(k) != kept.get(k)]
+    if differ is None:
+        steps, first = rec["steps_differing"], rec["first_differing_step"]
+    else:
+        disagree = disagree or (len(differ), differ[0] if differ else None) != (rec["steps_differing"], rec["first_differing_step"])
+        counted = [k for k in differ if k not in ended]
+        steps, first = len(counted), counted[0] if counted else None
     return {"measured": True, **n, "differing": diff[:R.DIFFERING_MAX],
-            "steps_served": rec["steps_served"], "steps_differing": rec["steps_differing"],
-            "first_differing_step": rec["first_differing_step"],
-            "first_step": first_step(w, replay_dir, rec["first_differing_step"]),
+            "steps_served": rec["steps_served"], "steps_differing": steps, "first_differing_step": first,
+            "steps_after_end": ended, "first_step": first_step(w, replay_dir, first),
             "record_disagrees": disagree,
-            "reproduces": not diff and not rec["steps_differing"] and not disagree,
+            "reproduces": not diff and not steps and not disagree,
             "cache_hits": {"requests": len(hits), "tokens": sum(hits.values()), "longest": max(hits.values(), default=0)},
             "sampling": [{"temperature": t, "top_p": p, "seeded": seeded, "requests": k}
                          for (t, p, seeded), k in sorted(sampling.items(), key=lambda x: -x[1])],
@@ -912,6 +941,10 @@ def text(r: dict) -> str:
             f"{t['tokens_served']:,} served tokens compared with {t['tokens_replayed']:,} replayed, "
             f"{t['tokens_differing']:,} differ in {t['requests_differing']:,} requests",
             *(f"  {x}" for x in (*where(t), *failed(r))),
+            *([f"  {len(e):,} step{'s' * (len(e) > 1)} after a request's end, no token, not replayed: "
+               f"step{'s' * (len(e) > 1)} {', '.join(map(str, e[:ROWS_MAX]))}{' and more' * (len(e) > ROWS_MAX)} of the "
+               f"window's {t['steps_served']:,} (serving had planned each before it learned its requests had ended, and "
+               "dropped what it computed: counted here, and no difference)"] if (e := t["steps_after_end"]) else []),
             f"  {t['steps_served']:,} engine steps, {t['steps_differing']:,} with other rows than the served schedule; "
             + (f"{h['requests']:,} requests began from a prefix-cache hit, the longest {h['longest']:,} tokens"
                if h["requests"] else "no request of the window began from a prefix-cache hit"),
