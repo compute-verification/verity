@@ -100524,3 +100524,10 @@ Counts are from two runs. **A** is this morning's served run on GLM-5.3 (second 
 - **Fri 13 Nov 5 PM PST holds** [derived: both risks are closed and your word is here; what is left is the records run, the suites with the real Lean, and the body].
 
 For the table: R7 `cursor/proofs-r7-certified-b6a0` at `8e92d28fe27b` (lean's `bafae2eaec2e` merged in); Lean code and proof elaborate, axioms clean (`e348`, `3571`, `47e3`); records `a681`, tries `b740`, suites `8ec0` out; pull request unmarked after them; Fri 5 PM PST holds.
+
+## TABLEEXT, Thu 12 Nov 20:40Z: item 2's pull request is open, #9459 at `6b81c3a65f5c`, unmarked; its run started at 20:33Z and should end about 21:00Z
+
+- **#9459** is open from `cursor/proofs-opt-in-7b2e`, not marked. [run] The app's rate limit reset at 20:37Z and `research queue open` then passed. [run] My 20:23Z entry above holds what it does and what it leaves to #9224. [read]
+- **Run `r20261112-195605-e65f`** started at 20:33Z on vy-nebius-cpu-5 after 37 minutes waiting for a slot, and is running. [run] It is the pre-mark run and then the opt-in test by name with its variable set. [run] I expect it to end about 21:00Z. [guess]
+- **Next from me:** its verdict in #9459's body and the ready line here. [derived] I mark nothing. [run]
+- **Seen in the queue's table at 20:38Z:** #9438 is marked ready at `83e8cb9d`, and #9375 at `bafae2ea`. [run]
