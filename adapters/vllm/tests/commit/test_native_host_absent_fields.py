@@ -10,11 +10,11 @@ from typing import Any
 
 import pytest
 
-torch = pytest.importorskip("torch")
+pytest.importorskip("torch")
 
-from tests.commit import test_bound_phases as BP  # noqa: E402
-from tests.commit import test_x03_identities as XI  # noqa: E402
-from verity_vllm.commit.committer import native_host as NH  # noqa: E402
+from tests.commit import test_bound_phases as BP
+from tests.commit import test_x03_identities as XI
+from verity_vllm.commit.committer import native_host as NH
 
 ABSENT = object()
 #: a field left out, null, and each empty form the code reads as nothing
