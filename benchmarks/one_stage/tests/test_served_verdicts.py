@@ -53,6 +53,7 @@ from pathlib import Path
 
 import jsonschema
 import pytest
+from verity.protocols.poub.verifier import ledger
 from verity.protocols.pous.verifier import wipe_period as W
 from verity.protocols.spot.verifier.one_stage import registration as REG
 
@@ -615,11 +616,13 @@ def test_the_record_composes_the_wipe_only_when_it_accepted_on_the_records_serve
         assert line["missing"]["the wipe"] == "its piece refused to run: WIPE REFUSED: the card has a compute process"
 
 
-#: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate
+#: an accepted core answer of each piece's subprotocol, its public outputs the block record's leg certificate, the
+#: bandwidth audit's profile naming the term its error leaves out, as its piece writes it
 ACCEPTS = {
     "pouw": {"protocol": "verity/pouw/v1", "public": {"work": {"level": 3, "n": 4, "credited_tiles": 2, "credited": 8192}},
              "profile": {"delta": "1/1000000"}},
-    "bandwidth": {"protocol": "verity/remote-bandwidth/v0", "public": {"eps": "1/1000000", "q_bytes": 6963200}, "profile": {}},
+    "bandwidth": {"protocol": "verity/remote-bandwidth/v0", "public": {"eps": "1/1000000", "q_bytes": 6963200},
+                  "profile": {"named_terms": ledger.NAMED_TERMS}},
     "pous": {"protocol": "verity/pous/p2/v4/run", "public": {"certified": True, "eps": "1/1000000", "s_bits": 1 << 30},
              "profile": {}},
     "certifier": {"protocol": "verity/certifier/v0", "public": {"K": 15764, "eps": "1/100", "windows": 1}, "profile": {}},
@@ -629,7 +632,8 @@ COMPONENTS = ("pouw", "bandwidth", "pous", "certifier", "wipe")
 
 
 @pytest.mark.parametrize("case, piece", [("accept", None)] + [
-    (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS])
+    (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS] + [
+    ("unnamed", "bandwidth")])
 def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_that_does_not_accept(
         tmp_path, monkeypatch, capsys, case, piece):
     """Every piece's answer accepted on the record's node (each piece's `RAN`, which a `SERVED` naming no server leaves it
@@ -637,7 +641,8 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
     verdict is the Lean check's answer and none ran, with nothing missing, and its reason names each subprotocol's
     accept. One piece with no answer leaves it ``pending`` and names that piece missing with
     why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
-    no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
+    no block record, and so does a bandwidth answer whose profile names no term its error leaves out; one about another
+    server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S, "spot_row", lambda _audit_dir, _run=None: _accepted())
     pieces = tmp_path / "pieces"
@@ -650,6 +655,8 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
             a = {**a, "verdict": "reject", "reason": "a read came back late", "public": None, "profile": None}
         if comp == piece and case == "malformed":
             a = {**a, "public": {"unrelated": 1}}
+        if comp == piece and case == "unnamed":
+            a = {**a, "profile": {}}
         (d / "answer.json").write_text(json.dumps(a))
         server = "vy-dc-h200-2" if comp == piece and case == "elsewhere" else "vy-dc-h200"
         if comp == "wipe" or server != "vy-dc-h200":
@@ -665,13 +672,15 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
     line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
     leg, runner = piece, {v[1]: k for k, v in S.PIECES.items()} | {"wipe": "wipe"}
     name = S.NAMES[runner[piece]] if piece else None
-    if case in ("reject", "malformed"):
+    if case in ("reject", "malformed", "unnamed"):
         assert rc == 1 and (line["composed"], line["by"], line["block_record"]) == ("reject", [name], None)
         assert line["verdicts"][name] == ("reject" if case == "reject" else "error")
         assert not (tmp_path / "record" / "block-record.json").exists()
         report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
         row = next(r for k, r in report["protocols"].items() if S.NAMES[k] == name)
-        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {leg} leg: KeyError")
+        why = {"malformed": "KeyError", "unnamed": "ValueError: bandwidth: its answer's profile names no term its error "
+                                                   "leaves out (named_terms)"}
+        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {leg} leg: {why[case]}")
         return
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
