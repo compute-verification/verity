@@ -1,1 +1,2 @@
 2026-11-12T13:37Z ACCEPT started 13:32Z: read CIR-264, CIR-246's two newest comments, contract, skills, calendar, registry modules; next: the pin's source and the kernels' PTX without a card
+2026-11-12T13:54Z 13:56Z item 1 done with no card: run r20261112-135317-f990 (vy-nebius-cpu-11 slot r3, waited 5 s, held 9 s) keeps TTIR, TTGIR, LLVM IR, PTX, cubin and SASS of the four kernels rejection_sample launches at d9105ea80 for V = 154,880, K = 5 (Triton 3.7.1, bundled ptxas 12.8.93, target sm_90). Next: read the PTX and SASS.
