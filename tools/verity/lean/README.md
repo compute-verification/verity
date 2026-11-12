@@ -102,14 +102,16 @@ of `check.py` unless it says otherwise, or the lock's section below.
   first build, and everything is sealed and checked after each package (`tampered`, `Seals`).
 
 Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), after taking
-one of the node's Lean audit slots (`lean_slot`). A run is refused where it reserved less than the largest floor among
-the steps it takes of every package it audits, or nothing while one has a floor (a research run that says no
-reservation, or a reservation that is no number), with the command to run at its ask, in GB, and the ask in GiB under
-it (`memory_refusal`, `reserved`; `--ask` prints the ask). A heavy build runs as
-many jobs as what its run reserved holds (`build_threads`), a heavy replay one thread per 4 GiB of it, up to every
-core (`replay_threads`). The numbers
-are `reserve.py`'s, which no audit's key reads, and a step whose peak passes 95% of its need warns, naming the line
-there to raise (`peaked`). Packages are
+one of the node's Lean audit slots (`lean_slot`). What a run reserved is the least of what it declares (a slot's
+`mem=`, `research run --mem-gb`) and what the machine lets it hold, its cgroup's cap else its memory; a run that declares
+nothing plans by the latter, and says which (`reserved`, `memory`). A run is refused where that is less than the largest
+floor among the steps it takes of every package it audits, or where a reservation is no number, with the command to run
+at its ask, in GB, and the ask in GiB under it (`memory_refusal`; `--ask` prints the ask). A heavy build runs as many jobs
+as what its run reserved holds (`build_threads`), a heavy replay one thread per `REPLAY_PER_THREAD_GIB` of it, up to
+every core (`replay_threads`). The rules are `reserve.py`'s, in every audit's key; the figures are `reserve.json`'s, in
+none, so a changed figure audits nothing again. A figure is its step's largest peak with `MARGIN` above it, to the
+nearest GiB: a step whose peak would give a larger one prints a warning naming the line of `reserve.json` to raise,
+which no report keeps (`peaked`). Packages are
 audited side by side, each build after those of the packages it requires by path (`setup`, `writing`, `Seals`). `--all`
 first runs the controls, which test the auditor on fixtures that must pass clean and fail once per violation
 (`controls`; `--no-controls` skips them).

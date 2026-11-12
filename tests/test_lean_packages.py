@@ -186,8 +186,10 @@ def test_every_fetching_package_has_a_pinned_bundle():
     assert not missing, f"Lake packages whose dependencies {audit.PIN} pins no bundle for: {missing}"
 
 
-#: a fresh pin of PKG's bundle: an audit of this tree bundles the dependencies its build left, then `--pin` pins that run's
-REPIN = ("research run --on auto --mem-gb 32 --project verity --source . --cwd clone -- bash -c 'python3 "
+#: a fresh pin of PKG's bundle: an audit of this tree bundles the dependencies its build left, then `--pin` pins that run's;
+#: the run asks what PKG's audit asks
+REPIN = ("research run --on auto --mem-gb \"$(python3 tools/verity/lean/check.py --ask --build PKG)\" --project verity "
+         "--source . --cwd clone -- bash -c 'python3 "
          "tools/verity/lean/lean_audit.py --out \"$OUT/audit\" --export \"$OUT/lean-deps\" --package PKG', then "
          "`python3 tools/verity/lean/lean_audit.py --pin RUN` where the store's remote is configured")
 
