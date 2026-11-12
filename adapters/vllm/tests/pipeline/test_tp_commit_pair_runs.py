@@ -96,7 +96,12 @@ def test_an_install_that_did_not_reach_every_rank_is_refused(pair):
 
 def test_a_checkpoint_dir_is_pinned_once_and_handed_to_every_rank_with_its_program_dir(commit, tmp_path, monkeypatch):
     pin, taken = {"shards": {"model-00001.safetensors": "5" * 64}}, []
-    monkeypatch.setattr(WR, "record_shard_pin", lambda d, **kw: taken.append((d, kw)) or pin)
+
+    def record_shard_pin(d, **kw):
+        taken.append((d, kw))
+        return pin
+
+    monkeypatch.setattr(WR, "record_shard_pin", record_shard_pin)
     ckpt, builds = str(tmp_path / "ckpt"), {str(r): TO._build(tmp_path, r, str(r) * 64) for r in (0, 1)}
     llm, out = commit("--checkpoint-dir", ckpt, "--checkpoints-manifest", "checkpoints.json", "--checkpoint-model", "org/model", "--build-rank0", builds["0"],
                       "--build-rank1", builds["1"], "--serve-shard-from", "0:w:1")

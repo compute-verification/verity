@@ -211,8 +211,8 @@ def test_under_a_manifest_ranks_that_replayed_and_pinned_nothing_fail_by_each_na
 def test_a_manifest_with_no_sampled_replay_decides_on_the_pin_alone_and_writes_no_replay_record(pair, tmp_path, capsys, pinned, code):
     """`--no-weights-pin` records that the Commit asked for no pin (`versions.json`); under a manifest a rank with none still fails."""
     if pinned:
-        for r in (0, 1):
-            pair.alter("tp2_commit_finalize", r, _records(replay=None))
+        for rank in (0, 1):
+            pair.alter("tp2_commit_finalize", rank, _records(replay=None))
     assert pair.run(*_of_record(tmp_path), "--no-sampled-replay", "--no-weights-pin") == code
     c = pair.rows()[1]["commit"]
     for r in "01":

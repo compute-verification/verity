@@ -240,7 +240,7 @@ def test_the_rank_keeps_the_commits_state_for_the_calls_that_follow():
 
 def test_the_state_holds_its_own_copy_of_what_the_driver_declared(tmp_path):
     order, tokens, replay = ["x", "y"], {"x": [5, 6]}, {"programs": {"1": "p"}, "seed": 9}
-    tables = {table: {"x": at, "y": 3} for at, table in enumerate(TABLES)}
+    tables: dict[str, Any] = {table: {"x": at, "y": 3} for at, table in enumerate(TABLES)}
     _, st, _ = _made(n_requests=2, request_order=order, match_tokens=tokens, replay=replay, match_capture_dir=tmp_path / "capture",
                      program_digest="d" * 128, **tables)
     assert (st["n_requests"], st["program_digest"], st["match_capture_dir"]) == (2, "d" * 128, str(tmp_path / "capture"))

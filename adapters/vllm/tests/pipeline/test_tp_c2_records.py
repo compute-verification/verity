@@ -221,7 +221,7 @@ def test_two_ranks_replays_add_their_populations_by_family_and_join_their_strata
 @pytest.mark.parametrize("size, refusal", [("x", ValueError), (["x"], TypeError)], ids=["a word", "a list"])
 def test_a_size_that_is_no_number_is_what_the_fold_refuses_whatever_a_later_ranks_population_is(size, refusal):
     """The fold reads every rank's size before any rank's families, so the first rank's size is refused, not the second's population."""
-    first = dict(REPLAY, population=dict(REPLAY["population"], vus=size))
+    first = dict(REPLAY, population={"vus": size, "strata_n": 3, "by_family": {"Gemm_v1": 7}})
     rows = [_run({"0": {"sampled_replay": first, "boundary_linkage": LINKAGE},
                   "1": {"sampled_replay": dict(REPLAY, rank=1, population="no table"), "boundary_linkage": LINKAGE}})]
     with pytest.raises(refusal, match=r"int\(\)"):
