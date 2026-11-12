@@ -996,6 +996,33 @@ def test_a_lanes_pushes_of_its_own_branch_still_pass(clones, form):
         assert clones(form, clone) == {"permission": "allow"}, (form, clone)
 
 
+@pytest.mark.parametrize("form", [
+    'git worktree remove "$p"', 'for p in /tmp/wt-a /tmp/wt-b; do git worktree remove --force "$p"; done',
+    "for p in $(git worktree list --porcelain | awk '/^worktree/{print $2}'); do git worktree remove \"$p\"; done",
+    'git worktree prune --expire "$WHEN"', "git worktree prune -v $DRY", "git worktree list $FLAGS",
+    'git -C "$R" worktree list --porcelain', 'git worktree move "$a" "$b"', 'git worktree lock "$p"',
+    'git worktree repair "$p"', "bash -c 'git worktree remove \"$p\"'",
+])
+def test_a_worktree_command_that_adds_none_passes_over_a_variable(clones, form):
+    """The rule on words the shell has yet to expand is about a branch the guard can't name: of `git worktree`, only `add`
+    creates or checks one out. The rule refused every `git worktree` with a `$` in it, so worktrees were removed one literal
+    command at a time."""
+    for clone in ("verity", "notes"):
+        assert clones(form, clone) == {"permission": "allow"}, (form, clone)
+
+
+@pytest.mark.parametrize("form", [
+    "git worktree add ../wt -b $B", 'git worktree add "$D" lane/mine', "git worktree add -b x ../wt $REV",
+    "git worktree add ../wt $(cat branch.txt)", "git worktree $SUB ../wt -b x", 'git -C "$R" worktree add ../wt lane/mine',
+    'for b in a b; do git worktree add "../wt-$b" -b "$b"; done',
+])
+def test_a_worktree_add_over_a_variable_is_still_refused(clones, form):
+    for clone in ("verity", "notes"):
+        out = clones(form, clone)
+        assert out["permission"] == "deny" and "expands only after the guard has read it" in out["agent_message"], (form, out)
+        assert "Name it literally (`git worktree add ../wt-<name> -b <branch>`)" in out["agent_message"], (form, out)
+
+
 def test_a_push_that_would_update_main_or_next_and_a_config_that_prints_tokens_are_refused_for_any_agent(tmp_path):
     """Only drive moves `main` and `next`, so an agent's push to either is refused; and git config values can hold a GitHub
     installation token, so printing them is refused."""

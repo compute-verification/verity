@@ -411,17 +411,22 @@ UNEXPANDED = ("$", "`")
 
 def unexpanded_reason(commands: list[list[str]], indexed: list[Git], pushes: dict[int, Push]) -> str | None:
     """Whatever agent runs it: a push, branch switch or worktree add whose words the shell has yet to expand. The hook sees
-    `refs/heads/$B`, not the branch it becomes, so it can't hold that branch to its owner or to `main`, `checked` and `next`."""
+    `refs/heads/$B`, not the branch it becomes, so it can't hold that branch to its owner or to `main`, `checked` and `next`.
+    Of `git worktree` only `add` creates or checks out a branch (and a subcommand the shell names only later may be it): a
+    `remove`, `prune`, `list`, `move`, `lock` or `repair` over a variable passes."""
     for i, _, args, _, _ in indexed:
         sub = args[0]
         if sub not in ("push", "checkout", "switch", "worktree") or (sub == "checkout" and "--" in args):
+            continue
+        if sub == "worktree" and args[1:2] != ["add"] and not any(c in w for w in args[1:2] for c in UNEXPANDED):
             continue
         remote = pushes[i].repository or "" if sub == "push" else ""
         if sub == "push" and not any(c in remote for c in UNEXPANDED) and judged(pushes[i]) is None:
             continue
         if words := [w for w in commands[i][1:] if any(c in w for c in UNEXPANDED)]:
+            literal = "git worktree add ../wt-<name> -b <branch>" if sub == "worktree" else "git push origin HEAD:refs/heads/<your-branch>"
             return (f"this `git {sub}` names `{words[0]}`, which the shell expands only after the guard has read it, so the guard "
-                    f"can't check which branch or checkout it is. Name it literally (`git push origin HEAD:refs/heads/<your-branch>`).")
+                    f"can't check which branch or checkout it is. Name it literally (`{literal}`).")
     return None
 
 
