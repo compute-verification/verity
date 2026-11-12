@@ -1643,7 +1643,6 @@ OPT_IN = {
     "verity/protocols/remote/verifier/composition": ("VERITY_SLOW", (
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
-        "tests/test_composition_difftest.py::test_product_over_remotes_subprotocols_is_remote",
         "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")),
 }
 #: where a cold check's opt-in runs write each suite's outcome and log, apart from its steps' own (`suites.json`, `suites/`)
