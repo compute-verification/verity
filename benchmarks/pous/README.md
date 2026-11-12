@@ -162,7 +162,8 @@ bash benchmarks/pous/streamed_wipe/run.sh   # on an RTX PRO 6000 node, from the 
 window is served on, before its engine loads, with the memory challenger on vy-auditor-2. It writes the core answer
 (verity/wipe/v0) to `DIR/answer.json`, with demo.sh's outputs and `served.json` beside it.
 `benchmarks/one_stage/served_verdicts.sh` runs it as
-`WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. It refuses a card that isn't idle or a gate
+`WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'`. Outside the serve's lease it takes a card
+of its own by the node's `gpu-lease`, else by the tree's `gpu_lease.sh`. It refuses a card that isn't idle or a gate
 key that isn't on the node, and kills nothing. Its verdict trusts the one challenger key `WIPE_KEY_SHA512` pins (the
 SHA-512 of the wipe party's public key, by default vy-auditor-2's): a session signed under another is rejected, and
 with none pinned, the setting empty, the piece refuses before it asks for a card. Its header lists the challenger's

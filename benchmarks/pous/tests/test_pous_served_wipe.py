@@ -1,12 +1,13 @@
-"""`streamed_wipe/served_wipe.sh`, the wipe's piece of a served window (served_verdicts.sh's WIPE_CMD), on a
-CPU: its demo.sh is `served_wipe_demo.py` (one 32 MiB segment in host memory, `wipe_store.HostMemory`, against
-`wipe_side.py`, the challenger's stand-in on a host of its own), and `nvidia-smi` and `gpu-lease` are stand-ins on PATH.
-DIR/answer.json is the leg's core answer (verity/wipe/v0) in the form `Answer.toJson` writes (what served_verdicts.py's
-`piece_row` reads through `pouw.core_check.answer_of`), the answer `wipe.case.json` decides, with served.json and the
-summary beside it; the wipe runs on the serve's leased card, or under a lease of its own. A card that isn't idle and a
-gate key that isn't on the node are refused before demo.sh runs, and nothing is killed. The verifier trusts the one
-challenger key WIPE_KEY_SHA512 pins, by default vy-auditor-2's wipe party's: a session signed under another is
-rejected, and with none pinned the piece refuses before it asks for a card."""
+"""`streamed_wipe/served_wipe.sh`, the wipe's piece of a served window (served_verdicts.sh's WIPE_CMD), on a CPU: its
+demo.sh is `served_wipe_demo.py` (one 32 MiB segment in host memory, `wipe_store.HostMemory`, against `wipe_side.py`,
+the challenger's stand-in on a host of its own), and `nvidia-smi` and `gpu-lease` are stand-ins on PATH.
+DIR/answer.json is the leg's core answer (verity/wipe/v0) in the form `Answer.toJson` writes (what
+served_verdicts.py's `piece_row` reads through `pouw.core_check.answer_of`), the answer `wipe.case.json` decides, with
+served.json and the summary beside it; the wipe runs on the serve's leased card, or under a lease of its own, by the
+node's `gpu-lease` or, where none is installed, the tree's own. A card that isn't idle and a gate key that isn't on
+the node are refused before demo.sh runs, and nothing is killed. The verifier trusts the one challenger key
+WIPE_KEY_SHA512 pins, by default vy-auditor-2's wipe party's: a session signed under another is rejected, and with
+none pinned the piece refuses before it asks for a card."""
 
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import os
 import re
 import runpy
 import shlex
+import shutil
 import socket
 import stat
 import subprocess
@@ -42,6 +44,8 @@ PINNED = runpy.run_path(str(Path(__file__).resolve().parents[3] / "verity" / "pr
 AUDITOR_PIN = ("c5f12219aa878038c8e947b0b7c8b4cd90530168603e3eb94f99a1eec793cb41"
                "98fe0cb364d3709ecf8055dc89d86a729d58a046e8871cc21da6cbc9009a7252")
 UNTRUSTED = "the session is signed by a key that is not a trusted memory challenger's"
+#: the tree's own lease script, which the wrapper takes where the node has no `gpu-lease`
+TREE_LEASE = "tools/research/src/research/pods/sh/gpu_lease.sh"
 
 SMI = """#!/usr/bin/env bash
 echo "$*" >> "$FAKE_SMI_LOG"
@@ -194,6 +198,35 @@ def test_outside_a_lease_it_takes_a_card_of_its_own(node, tmp_path) -> None:
     demo = json.loads((d / "demo-argv.json").read_text())
     assert demo["lease"] == "GPU-own0" and demo["argv"][-2:] == ["--wipe-protocol", str(judge)]
     assert not (d / "lake-build.log").exists()
+    assert _stamps(d) == ["start", "asked for the card", "leased the card", "the wipe exit 0", "exit 0"]
+
+
+def test_a_node_with_no_gpu_lease_gets_the_trees_own(node, tmp_path) -> None:
+    """Where no `gpu-lease` is installed the wipe takes its card by the tree's own lease script, with the same request
+    as memory-accounting, and wipes the card that hands out: it no longer refuses. The wrapper is a copy in a tree
+    whose lease script is a stand-in; the tree's own is where the wrapper looks for it. Its demo.sh here only records
+    the card it was given."""
+    tree, d = tmp_path / "tree", tmp_path / "wipe"
+    wrapper = tree / "benchmarks" / "pous" / "streamed_wipe" / "served_wipe.sh"
+    wrapper.parent.mkdir(parents=True)
+    wrapper.write_text(WRAPPER.read_text())
+    (tree / TREE_LEASE).parent.mkdir(parents=True)
+    (tree / TREE_LEASE).write_text(LEASE.replace("GPU-own0", "GPU-tree0"))
+    assert (Path(__file__).resolve().parents[3] / TREE_LEASE).is_file()
+    bin_ = tmp_path / "bin-no-lease"
+    bin_.mkdir()
+    _exe(bin_ / "nvidia-smi", SMI)
+    demo = _exe(tmp_path / "demo-card.sh", '#!/usr/bin/env bash\necho "$GPU_LEASE_UUID" > "$OUT/card.txt"\n')
+    path = ":".join(p for p in node["PATH"].split(":") if not (Path(p) / "gpu-lease").exists())
+    assert shutil.which("gpu-lease", path=f"{bin_}:{path}") is None
+    env = node | {"PATH": path, "FAKE_BIN": str(bin_), "WIPE_DEMO": str(demo)}
+    r = subprocess.run(["bash", "-c", LAUNCH, "_", str(wrapper), str(tmp_path / "serve-run"), "3", str(d), "--no-lean"],
+                       env=env, capture_output=True, text=True, cwd=tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
+    lease = (tmp_path / "lease.log").read_text().splitlines()
+    assert len(lease) == 1 and lease[0].startswith(f"memory-accounting 1 --wait --max-min 30 -- bash {wrapper} ")
+    assert (d / "card.txt").read_text() == "GPU-tree0\n" and not (d / "refused.txt").exists()
+    assert json.loads((d / "served.json").read_text())["card"] == "GPU-tree0"
     assert _stamps(d) == ["start", "asked for the card", "leased the card", "the wipe exit 0", "exit 0"]
 
 

@@ -6,9 +6,10 @@
 #   WIPE_CMD='bash benchmarks/pous/streamed_wipe/served_wipe.sh "$1" "$2" "$3"'   # bash -c "$WIPE_CMD" _ SERVE_DIR WINDOW DIR
 #
 # Inside the serve's gpu-lease (GPU_LEASE_UUID set) it wipes that card, the one the engine then loads on; outside one it
-# takes a card of its own (`gpu-lease 1 --wait`) and gives it back after. It refuses (exit 3, no answer, the reason in
-# DIR/refused.txt) a card that isn't idle, any process on it or more than WIPE_IDLE_MIB (1024) of its memory in use, a
-# challenger command whose ssh key (-i) isn't on this node, and a run with no challenger key pinned; it kills nothing.
+# takes a card of its own (`gpu-lease 1 --wait`, the node's, else the tree's own gpu_lease.sh) and gives it back after.
+# It refuses (exit 3, no answer, the reason in DIR/refused.txt) a card that isn't idle, any process on it or more than
+# WIPE_IDLE_MIB (1024) of its memory in use, a challenger command whose ssh key (-i) isn't on this node, and a run with
+# no challenger key pinned; it kills nothing.
 # The memory challenger is vy-auditor-2's, through infra's wipe gate, as in Demo B:
 #   WIPE_CHALLENGER  its host (vy-auditor-2)
 #   WIPE_ADDRESS     where the prover connects to it (10.96.0.36:47611)
@@ -74,10 +75,11 @@ if [ -z "${WIPE_OWN_LEASE:-}" ]; then  # once, before any lease: the pinned key,
     stamp "built wipe-protocol"
   fi
   if [ -z "${GPU_LEASE_UUID:-}" ]; then
-    command -v gpu-lease >/dev/null 2>&1 || refuse "no gpu-lease on $NODE to hold the card by"
+    LEASE=(gpu-lease)
+    command -v gpu-lease >/dev/null 2>&1 || LEASE=(bash "$ROOT/tools/research/src/research/pods/sh/gpu_lease.sh")
     rc=0
     stamp "asked for the card"
-    WIPE_OWN_LEASE=1 GPU_LEASE_WHO=memory-accounting gpu-lease 1 --wait --max-min 30 -- \
+    WIPE_OWN_LEASE=1 GPU_LEASE_WHO=memory-accounting "${LEASE[@]}" 1 --wait --max-min 30 -- \
       bash "$SELF" "$SERVE_DIR" "$WINDOW" "$DIR" "$@" || rc=$?
     exit "$rc"
   fi
