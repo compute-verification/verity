@@ -100531,3 +100531,17 @@ For the table: R7 `cursor/proofs-r7-certified-b6a0` at `8e92d28fe27b` (lean's `b
 - **Run `r20261112-195605-e65f`** started at 20:33Z on vy-nebius-cpu-5 after 37 minutes waiting for a slot, and is running. [run] It is the pre-mark run and then the opt-in test by name with its variable set. [run] I expect it to end about 21:00Z. [guess]
 - **Next from me:** its verdict in #9459's body and the ready line here. [derived] I mark nothing. [run]
 - **Seen in the queue's table at 20:38Z:** #9438 is marked ready at `83e8cb9d`, and #9375 at `bafae2ea`. [run]
+
+## WIDELEAF, Thu 12 Nov 20:40Z: after my 20:19Z entry: `zk_worker_inner` fails the same on `main`; the Lean build at `f31e7d81d46e` passed; #9339's body is on the PR
+
+**Answer.** Three things my 20:19Z entry left pending are settled [run]. The head is still `f31e7d81d46e`, unmarked, nothing merged in.
+
+- **`zk_worker_inner` is `main`'s failure, not #9339's.** The control ran that one case at `4a90174415b7`, `main` without this change: `r20261112-203052-4e46`, `verdict=ran-FAIL` [run]. Its honest session and each of its five doctored sessions give the same result object as the run at `e82bcc797a49`, field for field [run: compared the two `NEG` lines]. So this change neither causes nor alters it, and does not fix it. It wants an owner: on `main` the case's four doctored inner rounds end in Rust's own refusal ("the proof's exposed value 0 is not the one the firewall passed") where the case requires none, and its `final-c` session sends the verifier 202 of the 207 requests the case requires. In every session the verifier does not accept and no proof leaves, so what is wrong may be the case's expectations rather than the loop [guess]; I have not looked into which.
+- The control was launched twice, as I said I would: `r20261112-200935-fe59` waited 21 minutes in the research line, I cancelled it by id at 20:30Z ("its check never started") and launched `r20261112-203052-4e46` with `--on vy-nebius-cpu-12 --pool proofs --mem-gb 16`; its job was running by 20:34Z [run]. A note for whoever uses the recipe: `--max-min` is refused with `--on NODE`; it takes `--timeout S`.
+- **Lean build at the head: passed.** `r20261112-195554-4fbb`, 27 files in five packages, each exits 0, `"failed": {}, "skipped": {}` [run]. It built `Flock.KnownTrees` and `FlockVerify` over it for the first time [run]. Its warnings in files this change touches are four deprecated `String.trim` in `Session.lean`, on lines the base already has [run].
+- **#9339's body is on the PR** since 20:39Z, 16453 bytes, at head `f31e7d81d46e`, no label [run]. Its section "The condition the rule rests on" states the condition; it holds the runs above and the `zk_worker_inner` result.
+
+**Out, and what I end my turn on** [run at 20:39Z]:
+
+- Records `r20261112-192648-5007`, at `93e3682cad88`: running. It has reached `security`, found its records differ and is updating them, as expected of this change [run: its stdout]. Guess: by 21:30Z [guess].
+- Quick tier `r20261112-201719-1258`, at `f31e7d81d46e`, proofs pool: running, 21 suites passed so far and none failed [run]. Guess: by 21:10Z [guess].
