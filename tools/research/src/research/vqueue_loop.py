@@ -217,9 +217,9 @@ EXPORT = ("sh", "-c", "set -a; . /root/.config/verity/r2.env; set +a; "
 EXPORT_S = 600
 #: how `research data export` starts each error's line on stdout (`store.cli.cmd_export`)
 EXPORT_ERROR = "ERROR  "
-#: the lock infra/control/fixtures_export.sh holds over its checkout and store, which `EXPORT` shares (its `flock -n` skips a
-#: pass while the loop holds it), and how long an export waits for it before it counts as failed
-EXPORT_LOCK, EXPORT_LOCK_S = "/root/fixtures-export.lock", 300
+#: the lock infra's export holds exclusively for each pass of infra/control/fixtures_export.sh over the checkout and store
+#: `EXPORT` shares, and how long an export waits for it before it counts as failed
+EXPORT_LOCK, EXPORT_LOCK_S = "/root/fixtures-export-pass.lock", 300
 LOCK, LOG, STATE = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decisions.jsonl"), Path("/data/vqueue/state.json")
 #: drive's priority list (its `--priority-file`)
 PRIORITY = Path("/data/drive/priority")
