@@ -14,6 +14,7 @@ verity bench certifier_term --scope world --period year  only those rows (each f
 verity bench certifier_term --requests census            the census's request in place of the sampling plan's
 verity bench certifier_term --out DIR                    also DIR/result.json: the amounts of the term of record's row
 verity bench certifier_term --out DIR --registration F   with its capacity and verified, read from the registration log F
+verity bench certifier_term --response-ids 1024 --scan-delta D --out DIR   the result of record (The result, below)
 verity bench certifier_term --help                       every parameter and its default
 ```
 
@@ -37,7 +38,8 @@ the term of record is read from, the `scan` row at D_j = 2, at each scope and mo
 What it prints doesn't change. Every measurement is the model's and its name says so; none is computed from a run's K.
 
 - `certifier_term/modeled/metric`: the term of record, the document's `value`, in GB, against the document's target.
-  Its verdict, `within target` or `over target`, is the document's multiple of the target in words.
+  Its verdict, `within target` or `over target`, is the document's multiple of the target in words. Its row is the
+  scan's over the world's year, whichever rows the command prints.
 - `certifier_term/modeled/<scope>/<period>/free`: the term K, in bits. The check bounds the free amount from above,
   so this is the network's amount of record. It stands against the same target, in bits.
 - `certifier_term/modeled/<scope>/<period>/capacity`: the bits the scope's certified boundary links carry out over
@@ -49,14 +51,36 @@ What it prints doesn't change. Every measurement is the model's and its name say
   registered like that one, which is the model's statement and no registration's. With no `--registration` the
   capacity has no value and its `inputs` say why: it is read from a registered link or not at all, never copied
   from a data sheet, a schedule or the datacenter model.
-- `certifier_term/modeled/<scope>/<period>/verified`: capacity less free, in bits, where the capacity has a value.
-  It isn't clamped, so it is negative where the term is more than the links carry.
-- `certifier_term/modeled/<scope>/<period>/eps`: the row's ε, a probability. It is a union bound over the period's
-  execution phases, so at 1 or more it bounds nothing.
+- `certifier_term/modeled/<scope>/<period>/verified`: capacity less free, in bits, where both have a value. It
+  isn't clamped, so it is negative where the term is more than the links carry.
+- `certifier_term/modeled/<scope>/<period>/error`: the row's ε, a probability, which the calculator's document holds
+  as `eps`. It is a union bound over the period's execution phases, their number × the scan's δ (`--scan-delta`).
+
+A row whose error is 1 or more has no bound at its period, since a union bound of 1 bounds nothing. Its `free` and
+`verified` are written with no value and the reason, `no bound at this period`, in their `inputs`, and so is `metric`
+where the row is the term of record's. Its `error` is written with its value, and its `capacity`, which no error
+enters. What the command prints is the calculator's still, those rows' terms among it.
 
 A measurement's `inputs` name what it was computed from: its row, the document's inputs with their values, marks and
 sources, the registration read, and the measurements it is a difference of. Every one names the class the term is at,
-the most ids a response holds, as the document states it: terms at two classes don't compare.
+the most ids a response holds, and the scan's δ its error is at, as the document states them: terms at two classes
+don't compare, and neither do errors at two δ. A δ the command gives is named as given and assumed, since no scan
+has run at it.
+
+The result of record names its class and its scan's δ on the command line, whatever the calculator's defaults are:
+at most 1,024 ids a response, and the δ at which the world's year has an error of 2^-20, so that every row is
+bounded. That δ, `D`, is 2^-20 divided by the world year's execution phases, which the command's own document counts
+(the `scan` row's `phases`). It is computed from them each time and never copied, and `--scan-delta` takes a fraction,
+so it holds `D` exactly. No term depends on the scan's δ: only the errors move with it.
+
+```text
+verity bench certifier_term --json --response-ids 1024 --scope world --period year |
+    python3 -c '
+import fractions, json, sys
+phases = next(r["phases"] for r in json.load(sys.stdin)["rows"] if r["row"] == "scan")
+print(fractions.Fraction(1, 2 ** 20) / fractions.Fraction(phases))'
+verity bench certifier_term --response-ids 1024 --scan-delta D --out DIR
+```
 
 The suite beside the runner (`tests/`) holds the result to the calculator's document and to the kit's schema. What
 the command prints without `--out`, and the calculator's numbers, are held where the calculator's tests are,
