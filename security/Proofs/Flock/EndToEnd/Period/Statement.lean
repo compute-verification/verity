@@ -216,7 +216,10 @@ cover at least a fraction `q > 0` of their units (`q ≤ kd_t/n_t`), with each s
 `K₀,t ≥ ln(1/δ)/q`, the probability that some sampling block is accepted with at least its `K₀` units wrong is at most
 $$\sum_t (\delta + \varepsilon_{ks,t} + \delta_{link,t}),$$
 each sampling block's sampling term `C(n − K₀, kd)/C(n, kd) ≤ (1 − q)^{K₀}` being at most `δ`. Its named assumptions are
-`IntegrityPeriod`'s. -/
+`IntegrityPeriod`'s.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.samplingBlock_rate`), while under a fixed count the largest `q` that
+holds falls as the prover pads a window's population. -/
 def IntegrityPeriodLog : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
@@ -236,7 +239,10 @@ def IntegrityPeriodLog : Prop :=
 block's sample covering at least a fraction `q > 0` of its units (`q ≤ kd_t/n_t`), the probability that every sampling
 block is accepted and the incorrect proof blocks total at least `ln(1/δ)/q` is at most
 $$\delta + \sum_t (\varepsilon_{ks,t} + \delta_{link,t}).$$
-Its named assumptions are `IntegrityPeriod`'s. -/
+Its named assumptions are `IntegrityPeriod`'s.
+The share `q` is a hypothesis: the count a `rate:NUM/DEN` rule names meets it at `q = NUM/DEN` over whatever
+population a window registers (`Flock.Bridge.pooledIntegrity_rate` is this statement at that rate), while
+under a fixed count the largest `q` that holds falls as the prover pads a window's population. -/
 def IntegrityHorizon : Prop :=
   ∀ (W : ℕ → SamplingBlock) (T : ℕ) (q δ : ℝ), 0 < q → 0 < δ →
     (∀ t < T, q ≤ ((W t).kd : ℝ) / (W t).n) →
