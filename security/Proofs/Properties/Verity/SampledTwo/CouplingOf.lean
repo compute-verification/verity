@@ -33,7 +33,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 session of record and committed files. -/
 theorem coupling_of (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (θ : ByteArray)
     (F : Array ByteArray) : CouplingOf V k A θ F := by
-  intro x Fr X bound bind hScope hProj hMaj hX hdelta c σ hI
+  intro x Fr tr bound bind hScope hProj hMaj hX hdelta c σ hI
   refine ⟨x c σ, TapeOf V θ F c σ, inferInstance, inferInstance, (Fr c σ).P, hScope c σ, ?_, hdelta c σ⟩
   have hacc : Claims.Pr (fun s : TapeOf V θ F c σ × Coins A (x c σ) =>
         (Claims.run FlockDeploy.sha512 (Fr c σ).P A.L.V (x c σ) s.1 s.2).out = .acc) ≤

@@ -3,6 +3,9 @@ module
 public import Proofs.Properties.Verity.SampledTwo.Projection
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.KS
+import Proofs.Core.Game.InterleaveBridge
+import Proofs.Properties.Verity.Sampled.CoinMap
+import Proofs.Properties.Verity.Sampled.RecordDraw
 
 /-!
 # The two-stage leg's projection, assembled
@@ -10,8 +13,8 @@ import Proofs.Flock.Claims.Sampling.KS
 `projection_of` proves `ProjectionOf`: the projection's named pieces give its bound. The argument is probability
 bookkeeping over the pieces' `Prop`s, and reads nothing of the form's check but what they state.
 
-1. The sampled verdict accepts only where the form's check does (`Acc`, the composite's wiring's), so a sampled accept
-   is an accepted play whose log the check read is the device's (`Good`), or a sampled accept with `¬ Good`, which
+1. On a play of the game after `θ`, which is at the parameters `θ` (`play_params`), the sampled verdict accepts only
+   where the form's check does (`Acc`, the composite's wiring's), so a sampled accept is an accepted play whose log the check read is the device's (`Good`), or a sampled accept with `¬ Good`, which
    the cut bounds by `terms` (`CutBound`).
 2. The first is moved to the frame's plays, at a uniform tape and uniform run coins, by the coin map's law's first
    clause, at the cost `hide`.
@@ -38,6 +41,14 @@ open scoped ENNReal
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
+/-- **A play of the game after `θ`, `F` and `c` is at the parameters `θ`.** -/
+theorem play_params (V : Vocab d α) {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
+    {σ : Verity.Game.Strategy (V.game θ F c)} {o : Verity.Exchange}
+    (h : Verity.Game.PlayReaches (V.game θ F c) σ o) : o.params = θ := by
+  obtain ⟨log, s, h⟩ := Verity.Game.PlayReaches.of_bind (f := finish (V.signer θ) θ F c σ.1)
+    (releases (frames (V.families θ)) (V.families θ) []) σ.2 h
+  exact (Verity.Sampled.reaches_finish ⟨s, h⟩).1
+
 /-- **The projection's bound from the coins of accepted plays**: the wiring, the coin map's law's first clause, the
 messages, the cut, the accept and the statement read give the projection's bound at `hide + miss + terms`, where on
 every frame play the check accepts and whose log it read is the device's, each coin it reads at a read round agrees
@@ -45,7 +56,7 @@ with the run's coin there. -/
 theorem projection_core (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
     (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (hide miss terms : ℝ≥0∞)
-    (hAcc : ∀ o, V.Verdict k .sampled o → Acc o)
+    (hAcc : ∀ o, o.params = θ → V.Verdict k .sampled o → Acc o)
     (hLaw : ∀ E : Verity.Exchange → Prop, Verity.Game.prob E (V.game θ F c) σ ≤
       ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x => E (Fr.out s.1 s.2)) + hide)
     (hCoins : ∀ (ω : TapeOf V θ F c σ) (r : Coins A x), Acc (Fr.out ω r) → Good (Fr.out ω r) →
@@ -57,13 +68,13 @@ theorem projection_core (V : Vocab d α) (k : Verity.Registration.Composite) (A 
   have hsplit : Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ ≤
       Verity.Game.prob (fun o => Acc o ∧ Good o) (V.game θ F c) σ +
         Verity.Game.prob (fun o => V.Verdict k .sampled o ∧ ¬ Good o) (V.game θ F c) σ := by
-    refine (Verity.Game.prob_mono (p := fun o => V.Verdict k .sampled o)
-      (q := fun o => (Acc o ∧ Good o) ∨ (V.Verdict k .sampled o ∧ ¬ Good o)) (fun o ho => ?_)
-      (V.game θ F c) σ).trans
+    refine (Verity.Game.prob_mono_reaches (p := fun o => V.Verdict k .sampled o)
+      (q := fun o => (Acc o ∧ Good o) ∨ (V.Verdict k .sampled o ∧ ¬ Good o)) (V.game θ F c) σ
+      (fun o hr ho => ?_)).trans
       (Verity.Game.prob_or_le (fun o => Acc o ∧ Good o) (fun o => V.Verdict k .sampled o ∧ ¬ Good o)
         (V.game θ F c) σ)
     by_cases hg : Good o
-    · exact Or.inl ⟨hAcc o ho, hg⟩
+    · exact Or.inl ⟨hAcc o (play_params V hr) ho, hg⟩
     · exact Or.inr ⟨ho, hg⟩
   have hgood : Claims.Pr (fun s : TapeOf V θ F c σ × Coins A x => Acc (Fr.out s.1 s.2) ∧ Good (Fr.out s.1 s.2)) ≤
       Claims.Pr (fun s : TapeOf V θ F c σ × Coins A x =>
