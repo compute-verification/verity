@@ -16,7 +16,7 @@ import pytest
 import research.queue as Q
 from research.queue import path_rows
 from research.vqueue import PASS, Advance, Build, Drop, Ready, Snapshot, _moves_last, decide
-from test_vqueue import MAIN, SEEDS, World, cand, pr, snap, ticks
+from test_vqueue import MAIN, SEEDS, World, cand, lean, pr, snap, ticks, waiting
 from research.executor import Executor
 from test_vqueue_loop import Env, Fake, _acts, _git, _main_to, _move, env, policy  # noqa: F401 -- env is a fixture
 
@@ -69,6 +69,25 @@ def test_nothing_is_built_in_the_tick_that_advances_main_to_a_move():
     assert Advance("q1") in acts and not [a for a in acts if isinstance(a, Build)], acts
     s = snap(cand("q1", MAIN, 1, state=PASS), ready=[pr(1), pr(2)], depth=3)
     assert [a.members for a in decide(s) if isinstance(a, Build)] == [(2,)]
+
+
+def test_a_move_dropped_for_a_leaver_below_it_is_built_again_last_and_nothing_on_it():
+    left = ((1, "h1", "its ready mark was withdrawn by lane-1"),)
+    for top, above in ((mv(3), []), (pr(3), [Build((4,), "q2", 1)])):
+        s = snap(cand("q1", MAIN, 1, 2), cand("q2", "q1", 3), ready=[pr(2), top, pr(4)], left=left, pulled=frozenset({1}),
+                 depth=3)
+        assert [a for a in decide(s) if isinstance(a, Build)] == [Build((2,), MAIN, 3, replaces="q1"),
+                                                                  Build((3,), "q1", 2, replaces="q2"), *above]
+
+
+def test_a_staged_batch_dropped_in_the_tick_that_advances_main_to_a_move_is_not_built_again_in_it():
+    left = ((5, "h5", "its ready mark was withdrawn by lane-1"),)
+    for one, again in ((mv(1), []), (pr(1), [Build((2,), "q1", 3, records=True, replaces="s1")])):
+        s = snap(cand("q1", MAIN, 1, state=PASS), waiting("s1", MAIN, 2, 5), ready=[one, lean(2)], left=left,
+                 pulled=frozenset({5}), depth=3, records=True)
+        acts = decide(s)
+        assert Advance("q1") in acts and Drop("s1", "#5 isn't taken now: its ready mark was withdrawn by lane-1") in acts
+        assert [a for a in acts if isinstance(a, Build)] == again, acts
 
 
 # ---- the simulated queue ------------------------------------------------------------------------------------------------------

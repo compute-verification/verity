@@ -73,15 +73,21 @@ it, and fast-forwards `main` only to a candidate with no new failure:
   `main` (across a move, `tools/move/restack.py`) and mark the new head. A candidate holding a change to a
   `lean-audit.json` lock, to the spec (Lean under `security/Definitions/`, `security/Definitions.lean` and `security/`'s
   Lake files) or to Lean that runs as code (a `.lean` outside `security/`) first runs `lean-audit` alone (its records
-  run), commits the records it regenerated as `Lock records regenerated for #N...`, and is checked on that commit, so
-  `main` moves only to regenerated records; a records run that fails is a failure like any other.
+  run) off the chain, while batches of PRs touching no Lean input (Lean and Lake files, locks, `security/`, the
+  Lean check's and check's code, any file of a Lake package) are built and checked beside it; it then goes onto
+  the chain's top, the records it regenerated committed as `Lock records regenerated for #N...` (regenerated again if that
+  top changed a Lean input), and is checked on that commit, so `main` moves only to regenerated records; a records run that
+  fails is a failure like any other.
 - A candidate's check is graph2's tasks by default, with lean-agreement and ratchet-gate run beside them on the queue's
   machines (under `--gate check`, `check.py --record` of every step, in shards), judged on the merge gate, where an
   unexpired allowance of policy.toml at the candidate's base covers a failure. On a pass `main` moves to it, and the owner of each
   unmarked PR stacked on its PRs is told to merge `main`. A failure its base shares blames no PR and holds nothing: @ci
   and the owners of what fails are rung once. Otherwise the PRs whose change touches what the failure names are its
   suspects (every PR when none does): a lone suspect is ejected, its mark withdrawn and its owner sent the failed tasks'
-  logs, several are bisected, and the candidates above are dropped and built again. A failure of the machines
+  logs, several are bisected, and in the same tick the candidate and those above it are built again in order without the
+  suspects; a PR a reviewer holds or someone else ejects or unmarks leaves the same way, taking no other PR out. A failure
+  above the lowest candidate waits for its base's check unless only its own PRs meet it, where `main`'s word decides it. A
+  failure of the machines
   is retried and rung to @infra. A red off the gate (circuit-check, ratchet-gate) holds nothing; under `--gate check`, one
   its base's run doesn't share is rung to who acts on it, and under graph2 to no one.
   Only the loop moves `main`: GitHub's rulesets let only its App push it. Citations and tables read only `main`'s commits.
