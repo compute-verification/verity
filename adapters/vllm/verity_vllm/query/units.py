@@ -147,9 +147,9 @@ def _check_partition(P: CallGraph, units: Sequence[VerificationUnit]) -> dict[in
     return owner
 
 
-def unit_boundary(P: CallGraph, unit: VerificationUnit, owner: Mapping[int, str] | None = None) -> tuple[frozenset[ValueRef], frozenset[ValueRef]]:
-    """``(in(V), out(V))`` of one unit.  ``owner`` (Call id -> unit id, from the partition) lets the outputs be decided; without
-    it, every read from outside the unit's own Calls counts as outside (correct for a partition, computed per call)."""
+def unit_boundary(P: CallGraph, unit: VerificationUnit) -> tuple[frozenset[ValueRef], frozenset[ValueRef]]:
+    """``(in(V), out(V))`` of one unit: every read from outside the unit's own Calls counts as outside (correct for a
+    partition, computed per call)."""
     by_id, _inputs = _index(P)
     inside = unit.calls
     ins: set[ValueRef] = set()

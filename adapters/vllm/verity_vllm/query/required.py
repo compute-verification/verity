@@ -273,7 +273,7 @@ class Population:
                  query: str = QUERY_OF_RECORD) -> None:
         if query not in QUERIES:
             raise ValueError(f"unknown query {query!r}: one of {QUERIES}")
-        self.P, self.corr, self.return_slots, self.query = P, corr, return_slots, query
+        self.P, self.corr, self.query = P, corr, query
         self.events = [c.id for c in P.calls if c.family in SAMPLING_EVENTS]
         if not self.events:
             raise ValueError("Program has no sampling event: no step boundary")
@@ -316,7 +316,7 @@ class Population:
         self.literals = literals = literal_calls(P)
         # a check is an output, not a required Value: nothing commits it, and the replay evaluates it from the Values that are required
         returned = replace(P, outputs=tuple(v for v in P.outputs if v not in frozenset(P.checks))) if P.checks else P
-        self.B_module = B_module = boundary_without_literals(returned, module_body_partition(P, corr), literals)
+        B_module = boundary_without_literals(returned, module_body_partition(P, corr), literals)
         if query == Q_WORD_ID:
             self.Q = partition_by(lambda c: c.id)
             self.B = B = boundary_without_literals(returned, self.Q, literals)
