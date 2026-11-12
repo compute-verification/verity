@@ -11,12 +11,13 @@
                                           the record"""
 from __future__ import annotations
 
+import argparse
 import json
 
 from verity_machine_model import headline as H
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     hl = sub.add_parser("headline")
     hl.add_argument("--reading", choices=("sheet", "measured"),
                     help="one reading (default both: sheet, the DS vectors at q* = ½; measured, q* = 1.22 on the "
@@ -24,7 +25,7 @@ def add(sub) -> None:
     hl.add_argument("--json", action="store_true")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     readings = (args.reading,) if args.reading else H.READINGS
     if args.json:
         print(json.dumps(H.record(readings), ensure_ascii=False, indent=1))

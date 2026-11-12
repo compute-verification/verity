@@ -2,12 +2,12 @@
 imports, and, with a real toolchain, that a module redeclaring a name another built module of its package declares fails
 the try naming both, as the package's root fails a records run an hour in. Its stub loads no build that is not of its
 source as it is, by the hash Lake's trace states, in the package or in one it requires by path, and none without a
-source: with a real toolchain, a try passes over the products a tree keeps from before names moved between modules, and
-still fails a clash that is in the sources. A first refusal that names a sibling has Lake rebuild it, once, before
+source: with a real toolchain, a try passes over the products a tree keeps from before names moved between modules,
+and still fails a clash that is in the sources. A first refusal that names a sibling has Lake rebuild it, once, before
 the stub's word is the verdict: with a real toolchain, a theorem Lean makes in two modules, one of them left built
 against an older build of an import, is refused in the stub and in a root alike until Lake rebuilds that module, and a
-name two sources declare is refused after the rebuild too. And the package's Lean options every try takes from it:
-with a real toolchain, an auto-bound name fails a try where the package sets `autoImplicit = false`."""
+name two sources declare is refused after the rebuild too. And the package's Lean options every try takes from it: with
+a real toolchain, an auto-bound name fails a try where the package sets `autoImplicit = false`."""
 from __future__ import annotations
 
 import importlib.util
@@ -251,7 +251,7 @@ def test_modules_sit_under_src_dir_and_a_plain_sibling_makes_the_stub_plain(tmp_
 
 
 def moved(ws: Path) -> tuple[Path, Path, Path]:
-    """A tree of three packages (`ident`, `commit`, `proofs`): everything was built, and then a sync brought a move of
+    """A tree built before names moved, (`ident`, `commit`, `proofs`): everything was built, and then a sync brought a move of
     `Identity.Domains`' names into the new `Identity.Domains.Pouw`. It rewrote `Identity/Domains.lean` and what imports
     the new module from then on, `PouwCommit/Bindings.lean` and `Proofs/New.lean`, and wrote `Identity/Domains/Pouw.lean`
     and FILE. Since then Lake built only what a target imported, `Identity.Domains.Pouw` and `Proofs.New`: the products
@@ -568,7 +568,7 @@ def test_try_with_siblings_fails_a_module_that_redeclares_a_name_another_built_m
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_try_with_siblings_passes_over_products_built_before_names_moved_and_fails_a_clash_in_the_sources(tmp_path, capsys):
-    """Built with Lake. `proofs` requires `commit`, which requires `ident`, and all three are built. Then
+    """Built with Lake: `proofs` requires `commit`, which requires `ident`, and all three are built. Then
     `Identity.tag` moves from `Identity.Domains` into the new `Identity.Domains.Pouw`, which `PouwCommit.Bindings` imports
     from then on, and of all that Lake builds only what FILE imports, as a try does on a slot tree synced across the move.
     The products of `Identity.Domains` (which still declares `Identity.tag`), of `PouwCommit.Bindings` and of `Proofs.Old`,
