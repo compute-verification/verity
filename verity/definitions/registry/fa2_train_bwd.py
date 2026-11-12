@@ -6,18 +6,19 @@ one Definition per head.
                                             log2 units
     Fa2TrainBwdRow_v1{D,BN,NVIS}            a query row against one key block, NVIS of its keys visible: P and dS (bf16) and the
                                             row's dQ part
-    Fa2TrainBwdClear_v1{D,BN}               a key block's accumulators before the loop: +0
-    Fa2TrainBwdKey_v1{D,BM}                 a key against one query block: its dV and dK accumulators through the block
-    Fa2TrainBwdTile_v1{D,BM,BN,OFF}         the loop body of `compute_dq_dk_dv_1colblock`: a query block against a key block
+    Fa2TrainBwdKeyFirst_v1{D,BM}            a key against the first query block its thread block visits: its dV and dK
+                                            accumulators through the block, from +0
+    Fa2TrainBwdKey_v1{D,BM}                 a key against a later query block: its accumulators through the block
     Fa2TrainBwdDkDv_v1{D}                   a key after the loop: dK (bf16) and dV (bf16)
     Fa2TrainBwdDq_v1{D,NP,NS}               a query row's dQ (bf16) from its NP key blocks' parts in NS buffers
                                             (`flash_bwd_convert_dq_kernel`)
-    Fa2TrainBwdHead_v1{T,D,BM,BN,NS}        a head of T rows
+    Fa2TrainBwdHead_v1{T,D,BM,BN,NS}        a head of T rows: the loop of `compute_dq_dk_dv_1colblock` over its key blocks
 
 The kernel computes the gradients from its own inputs (dO, q, k, v, the forward's O and LSE) in five matrix products, each of
 tensor-core k16 steps (`HopperBF16WgmmaDot16`) on bf16 operands into f32 accumulators, the scores among them, computed again.  A
 thread block takes one key block of BN keys and walks the query blocks of BM rows from the last down to the key block's first
-(BN a multiple of BM: only the blocks at or below the diagonal).  In a tile, for query row i and key j:
+(BN a multiple of BM: only the blocks at or below the diagonal).  In a tile, a query block against a key block, for query row
+i and key j:
 
     S    = `DotBf16_v2{D}`(q_i, k_j), -inf at a masked key (j > i)
     P    = ex2(S * L - ms_i)                  FMUL, FADD, `Ex2Approx`; L = D^-0.5 * log2 e, ms_i = guard(LSE_i) * log2 e (FMUL)
@@ -75,7 +76,7 @@ CONFORMANCE = ("exact-model-tested: every word of dQ, dK and dV of torch's flash
 
 
 def _refuse(b: dict) -> str | None:
-    D, BM, BN, NVIS, OFF, NP, NS = (b.get(n) for n in ("D", "BM", "BN", "NVIS", "OFF", "NP", "NS"))
+    D, BM, BN, NVIS, NP, NS = (b.get(n) for n in ("D", "BM", "BN", "NVIS", "NP", "NS"))
     if D is not None and (D < 32 or D % 32):
         return f"D = {D}: a row's threads hold 8 head dims of each page of 32 or 64 (D a positive multiple of 32)"
     for name, n in (("BM", BM), ("BN", BN)):
@@ -85,8 +86,6 @@ def _refuse(b: dict) -> str | None:
         return f"BN = {BN}: a key block starts at a query block (BN a multiple of BM = {BM})"
     if NVIS is not None and BN is not None and not 1 <= NVIS <= BN:
         return f"NVIS = {NVIS}: a row of a visited tile sees 1 to BN = {BN} of its keys"
-    if OFF is not None and BM is not None and BN is not None and (OFF % BM or not 0 <= OFF <= BN):
-        return f"OFF = {OFF}: a tile's first row is 0, BM, .. below its key block's first key, BN = {BN} where all are visible"
     for name, n in (("NP", NP), ("NS", NS)):
         if n is not None and n < 1:
             return f"{name} = {n}: a row has at least one part, in at least one buffer"
@@ -102,11 +101,6 @@ def _refuse_head(b: dict) -> str | None:
 
 def _c(B, bits: int):
     return B.call(const(32, bits))
-
-
-def _sub(B, a, b):
-    """a - b: FADD of a and b negated."""
-    return B.call(P.F32AddV2, a, B.call(SC.F32Neg, b))
 
 
 def _scale(D: int) -> int:
@@ -165,61 +159,49 @@ def Fa2TrainBwdRow(B, S, q, k, v, do, dpsum, ms):
     D, BN, NVIS = S.D, S.BN, S.NVIS
     L = _c(B, scale_log2_bits(D))
     dot = bind(DotBf16V2, K=D, DOT=HopperBF16WgmmaDot16)
+    minus_ms, minus_dpsum = B.call(SC.F32Neg, ms), B.call(SC.F32Neg, dpsum)
     if NVIS < BN:
-        masked = B.call(Ex2Approx, _sub(B, B.call(NEG_INF32), ms))
+        masked = B.call(Ex2Approx, B.call(P.F32AddV2, B.call(NEG_INF32), minus_ms))
         masked16 = B.call(P.F2fpBf16, masked)
     pb, dsb = [], []
     for c in range(BN):
-        p = B.call(Ex2Approx, _sub(B, B.call(P.F32MulV2, B.call(dot, q, k[c]), L), ms)) if c < NVIS else masked
+        if c < NVIS:
+            p = B.call(Ex2Approx, B.call(P.F32AddV2, B.call(P.F32MulV2, B.call(dot, q, k[c]), L), minus_ms))
         pb.append(B.call(P.F2fpBf16, p) if c < NVIS else masked16)
-        dsb.append(B.call(P.F2fpBf16, B.call(P.F32MulV2, p, _sub(B, B.call(dot, do, v[c]), dpsum))))
+        dp = B.call(P.F32AddV2, B.call(dot, do, v[c]), minus_dpsum)
+        dsb.append(B.call(P.F2fpBf16, B.call(P.F32MulV2, p if c < NVIS else masked, dp)))
     ds16 = array_of(dsb)
     return tuple_of(array_of(pb), ds16, _steps(B, _zeros(B, D), ds16, k, D))
 
 
-@composite("Fa2TrainBwdClear", 1, ["D", "BN"], lambda S: ((), _rows(S, S.BN, F32)), conformance=CONFORMANCE, refuse=_refuse)
-def Fa2TrainBwdClear(B, S):
-    """A key block's dV or dK accumulators as the kernel clears them before its loop: +0."""
-    return _Coll(_rows(S, S.BN, F32), _zeros(B, S.BN * S.D).refs)
+def _key_type(S, first: bool):
+    col, acc = Array(S.BM, BF16), Tuple(Array(S.D, F32), Array(S.D, F32))
+    params = (("p", col), ("ds", col), ("do", _rows(S, S.BM)), ("q", _rows(S, S.BM)))
+    return params if first else params + (("acc", acc),), acc
 
 
-@composite("Fa2TrainBwdKey", 1, ["D", "BM"],
-           lambda S: ((("p", Array(S.BM, BF16)), ("ds", Array(S.BM, BF16)), ("do", _rows(S, S.BM)), ("q", _rows(S, S.BM)),
-                       ("dv", Array(S.D, F32)), ("dk", Array(S.D, F32))), Tuple(Array(S.D, F32), Array(S.D, F32))),
-           conformance=CONFORMANCE, refuse=_refuse)
-def Fa2TrainBwdKey(B, S, p, ds, do, q, dv, dk):
-    """A key through one query block: dV += sum_i p_i dO_i and dK += sum_i ds_i q_i, BM / 16 k16 steps each over the block's
-    rows in turn."""
-    return tuple_of(_steps(B, dv, p, do, S.D), _steps(B, dk, ds, q, S.D))
+@composite("Fa2TrainBwdKeyFirst", 1, ["D", "BM"], lambda S: _key_type(S, True), conformance=CONFORMANCE, refuse=_refuse)
+def Fa2TrainBwdKeyFirst(B, S, p, ds, do, q):
+    """A key through the first query block its thread block visits, column p of the block's P and ds of its dS: (dV, dK) =
+    (sum_i p_i dO_i, sum_i ds_i q_i), BM / 16 k16 steps each over the block's rows in turn, from +0."""
+    zeros = _zeros(B, S.D)
+    return tuple_of(_steps(B, zeros, p, do, S.D), _steps(B, zeros, ds, q, S.D))
 
 
-@composite("Fa2TrainBwdTile", 1, ["D", "BM", "BN", "OFF"],
-           lambda S: ((("q", _rows(S, S.BM)), ("k", _rows(S, S.BN)), ("v", _rows(S, S.BN)), ("do", _rows(S, S.BM)),
-                       ("pre", Array(S.BM, Tuple(F32, F32))), ("dv", _rows(S, S.BN, F32)), ("dk", _rows(S, S.BN, F32))),
-                      Tuple(_rows(S, S.BN, F32), _rows(S, S.BN, F32), _rows(S, S.BM, F32))),
-           conformance=CONFORMANCE, refuse=_refuse)
-def Fa2TrainBwdTile(B, S, q, k, v, do, pre, dv, dk):
-    """A query block against a key block whose first key is OFF rows above the query block's first row: row r is
-    `Fa2TrainBwdRow_v1{NVIS = min(BN, OFF + r + 1)}` with its `Fa2TrainBwdPre_v1` pair, then key c is `Fa2TrainBwdKey_v1` on
-    column c of the rows' P and dS and its accumulators.  Returns the keys' dV and dK accumulators and the rows' dQ parts."""
-    D, BM, BN = S.D, S.BM, S.BN
-    rows = [B.call(bind(Fa2TrainBwdRow, D=D, BN=BN, NVIS=min(BN, S.OFF + r + 1)), q[r], k, v, do[r], pre[r][0], pre[r][1])
-            for r in range(BM)]
-    key = bind(Fa2TrainBwdKey, D=D, BM=BM)
-    keys = []
-    for c in range(BN):
-        col = [_Coll(Array(BM, BF16), concat([rows[r][f][c].refs for r in range(BM)])) for f in (0, 1)]
-        keys.append(B.call(key, *col, do, q, dv[c], dk[c]))
-    return tuple_of(array_of([y[0] for y in keys]), array_of([y[1] for y in keys]), array_of([y[2] for y in rows]))
+@composite("Fa2TrainBwdKey", 1, ["D", "BM"], lambda S: _key_type(S, False), conformance=CONFORMANCE, refuse=_refuse)
+def Fa2TrainBwdKey(B, S, p, ds, do, q, acc):
+    """A key through a later query block: `Fa2TrainBwdKeyFirst_v1`'s steps from the accumulators (dV, dK) the block above
+    left."""
+    return tuple_of(_steps(B, acc[0], p, do, S.D), _steps(B, acc[1], ds, q, S.D))
 
 
 @composite("Fa2TrainBwdDkDv", 1, ["D"],
-           lambda S: ((("dv", Array(S.D, F32)), ("dk", Array(S.D, F32))), Tuple(_vec(S), _vec(S))),
+           lambda S: ((("acc", Tuple(Array(S.D, F32), Array(S.D, F32))),), Tuple(_vec(S), _vec(S))),
            conformance=CONFORMANCE, refuse=_refuse)
-def Fa2TrainBwdDkDv(B, S, dv, dk):
-    """A key's accumulators after its last query block -> (dK, dV): dK = bf16(dk * D^-0.5), dV = bf16(dv)."""
-    scaled = B.batch(P.F32MulV2, dk, _c(B, _scale(S.D)), axes=(0, None))
-    return tuple_of(B.batch(P.F2fpBf16, scaled, axes=(0,)), B.batch(P.F2fpBf16, dv, axes=(0,)))
+def Fa2TrainBwdDkDv(B, S, acc):
+    """A key's accumulators (dV, dK) after its last query block -> (dK, dV): dK = bf16(dK * D^-0.5), dV = bf16(dV)."""
+    scaled = B.batch(P.F32MulV2, acc[1], _c(B, _scale(S.D)), axes=(0, None))
+    return tuple_of(B.batch(P.F2fpBf16, scaled, axes=(0,)), B.batch(P.F2fpBf16, acc[0], axes=(0,)))
 
 
 @composite("Fa2TrainBwdDq", 1, ["D", "NP", "NS"], lambda S: ((("parts", _rows(S, S.NP, F32)),), _vec(S)),
@@ -247,27 +229,35 @@ def _head_type(S):
 @composite("Fa2TrainBwdHead", 1, ["T", "D", "BM", "BN", "NS"], _head_type, conformance=CONFORMANCE, refuse=_refuse_head)
 def Fa2TrainBwdHead(B, S, do, q, k, v, o, lse):
     """The causal backward of a head's T rows, the operator's arguments in its order (the upstream gradient, q, k, v, the
-    forward's O and LSE): `Fa2TrainBwdPre_v1` on every row; key block n's tiles over query blocks T / BM - 1 down to n BN / BM,
-    from `Fa2TrainBwdClear_v1`'s accumulators, each with OFF = min(BN, the query block's first row less the key block's first
-    key); `Fa2TrainBwdDkDv_v1` on every key; `Fa2TrainBwdDq_v1{NP}` on every row of a query block that NP key blocks visit.
-    Returns (dQ, dK, dV)."""
+    forward's O and LSE): `Fa2TrainBwdPre_v1` on every row; for key block n, the query blocks T / BM - 1 down to n BN / BM, in
+    each its rows by `Fa2TrainBwdRow_v1{NVIS = min(BN, the row less the key block's first key, plus 1)}` and then its keys by
+    `Fa2TrainBwdKeyFirst_v1` in the first block and `Fa2TrainBwdKey_v1` after it, on the columns of the rows' P and dS;
+    `Fa2TrainBwdDkDv_v1` on every key; `Fa2TrainBwdDq_v1{NP}` on every row, NP the key blocks at or above it.  Returns
+    (dQ, dK, dV)."""
     T, D, BM, BN = S.T, S.D, S.BM, S.BN
     pre = B.batch(bind(Fa2TrainBwdPre, D=D), do, o, lse, axes=(0, 0, 0))
-    clear = B.call(bind(Fa2TrainBwdClear, D=D, BN=BN))
-    parts: list[list] = [[] for _ in range(T // BM)]
+    columns = Array(BN, Array(BM, BF16))
+    parts: list[list] = [[] for _ in range(T)]
     dk, dv = [], []
     for n in range(T // BN):
         keys = slice(n * BN, (n + 1) * BN)
-        st = (clear, clear)
+        acc = None
         for m in range(T // BM - 1, n * BN // BM - 1, -1):
-            rows = slice(m * BM, (m + 1) * BM)
-            tile = bind(Fa2TrainBwdTile, D=D, BM=BM, BN=BN, OFF=min(BN, m * BM - n * BN))
-            st = B.call(tile, q[rows], k[keys], v[keys], do[rows], pre[rows], st[0], st[1])
-            parts[m].append(st[2])
-        out = B.batch(bind(Fa2TrainBwdDkDv, D=D), st[0], st[1], axes=(0, 0))
+            block = slice(m * BM, (m + 1) * BM)
+            rows = []
+            for r in range(m * BM, (m + 1) * BM):
+                row = bind(Fa2TrainBwdRow, D=D, BN=BN, NVIS=min(BN, r - n * BN + 1))
+                rows.append(B.call(row, q[r], k[keys], v[keys], do[r], pre[r][0], pre[r][1]))
+                parts[r].append(rows[-1][2])
+            p, ds = (_Coll(columns, concat([y[f][c].refs for c in range(BN) for y in rows])) for f in (0, 1))
+            if acc is None:
+                acc = B.batch(bind(Fa2TrainBwdKeyFirst, D=D, BM=BM), p, ds, do[block], q[block], axes=(0, 0, None, None))
+            else:
+                acc = B.batch(bind(Fa2TrainBwdKey, D=D, BM=BM), p, ds, do[block], q[block], acc, axes=(0, 0, None, None, 0))
+        out = B.batch(bind(Fa2TrainBwdDkDv, D=D), acc, axes=(0,))
         dk.append(strided_view(out, 0, D, 2 * D, 1, BN * D))
         dv.append(strided_view(out, D, D, 2 * D, 1, BN * D))
-    dq = [B.batch(bind(Fa2TrainBwdDq, D=D, NP=len(ps), NS=S.NS), array_of(ps), axes=(1,)).refs for ps in parts]
+    dq = [B.call(bind(Fa2TrainBwdDq, D=D, NP=len(ps), NS=S.NS), array_of(ps)).refs for ps in parts]
     rows_t = _rows(S, T)
     return tuple_of(_Coll(rows_t, concat(dq)), _Coll(rows_t, concat(dk)), _Coll(rows_t, concat(dv)))
 
@@ -282,5 +272,5 @@ def train_sdpa_backward(B: int, H: int, T: int, D: int):
     return bind(Fa2TrainBwdHead, T=T, D=D, BM=blocks[0], BN=blocks[1], NS=-(-SMS // (B * H)))
 
 
-__all__ = ["CONFORMANCE", "Fa2TrainBwdClear", "Fa2TrainBwdDkDv", "Fa2TrainBwdDq", "Fa2TrainBwdHead", "Fa2TrainBwdKey",
-           "Fa2TrainBwdPre", "Fa2TrainBwdRow", "Fa2TrainBwdTile", "LOG2E", "SMS", "TRAIN_SDPA_BWD", "train_sdpa_backward"]
+__all__ = ["CONFORMANCE", "Fa2TrainBwdDkDv", "Fa2TrainBwdDq", "Fa2TrainBwdHead", "Fa2TrainBwdKey", "Fa2TrainBwdKeyFirst",
+           "Fa2TrainBwdPre", "Fa2TrainBwdRow", "LOG2E", "SMS", "TRAIN_SDPA_BWD", "train_sdpa_backward"]
