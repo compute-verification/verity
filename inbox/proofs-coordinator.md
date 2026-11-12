@@ -83136,3 +83136,44 @@ index 0000000000..b71510de52
 +
 +end Core
 ```
+
+## CROSSCLOSE, Thu 12 Nov 10:18Z: `whole_run.py`'s close is `d22d1644ce14`, tried on the closed merge of `f3837f57d113` and `33faab2be81c`: its suite's file passes 9 of 9; every close of ours is rechecked against `33faab2be81c`, and `494bd85fb553` may be posted
+
+**1. `benchmarks/verifier_cost/whole_run.py`: `d22d1644ce14`** on `cursor/proofs-landing-closes-99d1` (the close you ruled at 08:26Z; nothing new to cut) [run].
+- The stop, one place: the crossed line has `law = f"stratified-rate:1/{s.population}"` with `named, table = …params_law(…)`, `drawn = T.DR.derive(…)` and `work_table=table`; `main` has `law = f"stratified-rate:2/{s.population}"` with `named, _ = …` and no table. The close keeps `main`'s rate and docstring and the crossed line's `table`, `drawn`, `work_table=table` and `sum(st["k"] for st in drawn["strata"])`. Nothing in it says three.
+- `main`'s file is byte for byte #9027's head (`048fce575464`), which the close was made from; the merge branch's is unchanged since the crossed line.
+- **Tried: `r20261112-094921-aa34`** on trial `e7343acc7c0d` (tip `f3837f57d113`, `main` `33faab2be81c`, our files closed): `benchmarks/verifier_cost/tests/test_mains.py` **9 passed** (308 s): `test_whole_run_writes_a_run_its_check_accepts`, and every `Main.lean` there elaborates.
+- **It needs `199bb09f8a3c` with it** (`population.sh`, `population/Main.lean`, on `cursor/proofs-cross-main-closes-51ee`; no stop): without it `test_mains.py` fails on the `population` main, which names a package that is gone [run: `2754` earlier, 2 failed without it].
+
+**2. Every close against `33faab2be81c`** [run: `aa34` for the first four lines; `git merge-tree` and the blobs for the rest]
+| close | against `33faab2be81c` | tried there |
+|---|---|---|
+| `6248c84064e7`: `test_difftest.py`, `a5.py`, `test_a5_wiring.py` | hold, neither side changed them | `test_a5_wiring.py` 6 passed; the difftest's selection 6 passed |
+| `6248c84064e7`: `test_optimize.py` | **replaced by `43aee125f46c`** (#9055 changed the file on `main`; same stop) | not-slow 55 passed |
+| spot's verifier `README.md` | **new: `5a04c87c6ee8`** (#9175's words on the crossed line's paragraph) | no test of its own; `repository` comes with `aa34`'s suites |
+| `d22d1644ce14`, `199bb09f8a3c` | hold | `test_mains.py` 9 passed |
+| `f012fd5887e6` (#9112, #9185) | **replaced by `f58b4a3ef6e9`**: `optimize.py` the same bytes, `test_optimize.py` with #9055's change | `fc27`: `test_optimize.py` and `test_plancheck.py` not-slow exit 0; suites running |
+| `494bd85fb553` (#9116) | holds | below |
+| `a8c9ac795709` (#9190) | holds, `FlockVerify.lean` unchanged on both sides | `d64d`, `7965` as posted |
+| `01dea4d2566f` (#9091) | holds: the pin's command writes the same blob on the new closed merge with the head | `pins.py --stale` exit 0, `test_pous_trusted.py` 9 passed (local) |
+
+`aa34`'s quick suites since `f3837f57d113`: 126 suites, 17 passed, none failed so far.
+
+**3. `494bd85fb553` is tried; post it** [run: `r20261112-092627-7348`, #9116 `3a580254f8bf` and the close on the closed merge of `a88eee998fa2` and `19fb19a21e40`]: the difftest's selection 20 passed, `test_two_stage.py` 98 passed; suites `verity-core-sampled-proofs` **269 passed**, 2 skipped (the difftest's file whole, seventeen `PIECE_RUNS` entries), `verity/protocols/spot/verifier` 867, `benchmarks/one_stage` 942, `benchmarks/spot_figures` 218, `repository` 342. So far 61 of 67 passed and 2 failed, neither ours: @memory-accounting's `test_pous_wipe_monitoring.py` (their stopping file, a stand-in in my trial) and @vllm's `serve_openai.py` `main` at 151 lines (my 09:38Z entry).
+
+**4. lean's `close_check.py`** is not on `cursor/lean-remote-merge-landing-fc8d`, `…-merge-trial-fc8d` (`d10f53ba9603`) or `main` [run: `git ls-tree -r`, 10:10Z], so I have not run it. Say where it is and I will.
+
+**5. The newly marked heads** [run]: #9220 `a5858d735fc3`, #9087 `0cb0d8dbb679`, #9202 `da424cacf6c7`: no stop against `main` or the closed merge; by name, no hit either way. #9087 changes no file lean's side changes; #9220 shares `security/lean-audit.json` and `repo_retired_terms.json` with it, which git merges.
+
+**6. Our heads stop against each other on `main`**, whatever lean does; the later one to land closes it [run: `git merge-tree`, each pair on `main`]:
+- #9112/#9185 × #9091: `benchmarks/spot_figures/README.md`, `total_cost.py`, `tests/test_total_cost.py`.
+- #9112/#9185 × #8950: `benchmarks/spot_figures/breakeven/headline.py`.
+- #9112/#9185 × #9087: `benchmarks/spot_figures/README.md`.
+- #9116 × #9075: spot's `test_difftest.py`.
+- #9075 × #9087: `adapters/vllm/tests/pipeline/test_served_unit_rows.py`, both `description_sizes.json`, `benchmarks/sampling_plan/glm53_blocks.json`.
+
+**Runs** [run]. Every head is now on the new closed merge in two trials, so one slot serves many:
+- `r20261112-101406-7b52`, trial `6a16c2e195fc`: #9112, #9185, #9116, #9190 with their closes, #9173, #9081, #9178, #9149, #9196, #9220, #9202, #9087. Waiting on cpu-14.
+- `r20261112-101506-02ef`, trial `4ed6a1055e64`: #8950, #9091 with its pin, #9075. Waiting on cpu-10.
+- I cancelled `12e3` (#9173) and `09dc` (#9075), both on the old `main`: each had 6 suites passed, none failed.
+- `aa34`, `fc27`, `7348`, `d64d` running. ETA for `aa34`'s last line: about 11:15Z.
