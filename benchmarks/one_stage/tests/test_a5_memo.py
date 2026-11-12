@@ -3,10 +3,13 @@ on the challenger's coins, each its own `service.Stream` on the honest draw's by
 same record, reuse the registration's checks and draw, and each outcome is the one it has without the memo, refused at
 the Lean run's select (`coins`); a changed registration or copy (a root, a root's domain, the ports bound to another run,
 a program of one proof block fewer) is checked again and refused as before; a verdict the Lean refused is never kept, and
-a hit is a copy. A toy window of two templates."""
+a hit is a copy. A check with one input altered never reads the honest check's entry: every argument of every kept
+check is in its key, and a5's negatives that re-decide the registration or the audit record with one input altered
+are each asked of the Lean again and refused. A toy window of two templates."""
 
 from __future__ import annotations
 
+import inspect
 import sys
 from collections import Counter
 from pathlib import Path
@@ -19,6 +22,7 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P, regis
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
+import a0  # noqa: E402
 import a5_coins as AC  # noqa: E402
 import a5_memo as AM  # noqa: E402
 
@@ -159,3 +163,64 @@ def test_the_memo_keeps_no_verdict_the_lean_refused(monkeypatch):
         assert _check().codes == (V.DISAGREE,)
         assert _check().ok and asked["registration"] == 2
         assert _check().ok and asked["registration"] == 2
+
+
+def _argument(name: str, altered: bool = False):
+    """An argument for the parameter ``name`` of a kept check, a new object each call: a Program where it takes one,
+    else a nested value; ``altered``, the same with one thing inside it changed (the Program, one proof block fewer)."""
+    if name == "program":
+        triple = P.template_id(TRIPLE)
+        return _program({**COUNTS, triple: COUNTS[triple] - 1} if altered else COUNTS)
+    return {"of": name, "rows": [{"root": "ab" * 64, "words": [1, 2, 3 if altered else 4]}], "body": b"\x00" * 8}
+
+
+def test_every_argument_of_every_kept_check_is_in_its_key():
+    """What makes the memo safe under the negatives: a kept check's key is its input's content, all of it. For each of
+    `PURE`'s checks, on the verifier's own signature: the same arguments as new objects are the same key, and each
+    parameter altered alone (one thing inside it; a Program of one proof block fewer) is a key of its own, another than
+    the honest one, so a check a negative altered in any one input is never answered from the honest check's entry."""
+    for name in AM.PURE:
+        params, m = list(inspect.signature(getattr(V, name)).parameters), AM.Memo()
+
+        def key(altered: str | None = None) -> bytes:
+            got = m.key(name, getattr(V, name), (), {p: _argument(p, p == altered) for p in params})
+            assert got is not None, m.unkeyed
+            return got
+        honest = key()
+        assert key() == honest
+        keys = {p: key(p) for p in params}
+        assert honest not in keys.values() and len(set(keys.values())) == len(params), name
+    assert {name: len(inspect.signature(getattr(V, name)).parameters) for name in AM.PURE} == {
+        "check": 21, "check_public": 6, "select": 7, "audit_record": 12}
+
+
+def test_under_the_memo_a_negative_that_alters_one_input_is_asked_again_and_refused(monkeypatch):
+    """a5's negatives that re-decide with one input altered, under the memo, after the honest check was kept. The
+    registration's R4, a leaf layer that isn't the registered one, is asked of the Lean again and refused, where the
+    honest leaf layer again is reused. The audit record's (`a0.audit_negatives`: the verifier of record not run or
+    absent, a session root that isn't the registered one, a served share that isn't the sample) are each asked of the
+    Lean again and refused, and the honest record again, as new objects, is the kept one: accepted."""
+    asked = _asked(monkeypatch)
+    rec, ports = _record(), _ports()
+    law, layer = {"law": "subset", "k": 2}, "ab" * 64
+    rec = R.record(_program(), QUERY, law, S.SCHEME, rec["roots"], {"kind": "served", "run": RUN, "row": 0}, leaf_layer=layer)
+    session_roots = {r["port"]: r["root"] for r in rec["roots"]}
+    lean = {"accepted": True, "of_record": True, "digest": "dd" * 64}
+
+    def honest() -> dict:
+        draw = {"law": "subset", "population": rec["population"], "k": 2, "units": [1, 4]}
+        return V.audit_record(dict(rec), R.receipt(rec, "a5 memo test"), draw, dict(law), [1, 4], 2, {}, {"lean": dict(lean)}, 0.5,
+                              served=[1, 4], session_roots=dict(session_roots))
+
+    with AM.memo() as m:
+        assert V.check(rec, _program(), QUERY, law, S.SCHEME, ports, leaf_layer=layer).ok and asked["registration"] == 1
+        assert V.check(dict(rec), _program(), QUERY, dict(law), S.SCHEME, _ports(), leaf_layer=layer).ok and asked["registration"] == 1
+        r4 = V.check(rec, _program(), QUERY, law, S.SCHEME, ports, leaf_layer="cd" * 64)
+        assert not r4.ok and "R4-leaf-layer" in r4.codes and asked["registration"] == 2
+        result = honest()
+        assert result["accepted"] and result["verifiers"]["agree"] and asked["record"] == 1
+        neg = a0.audit_negatives(result, law, 0.5, session_roots, served=[1, 4])
+        assert len(neg) == 4 and all(n["refused"] and n["agree"] for n in neg.values()), neg
+        assert asked["record"] == 1 + len(neg)
+        assert honest() == result and asked["record"] == 1 + len(neg)
+        assert m.counts()["asked"]["audit_record"] == 1 + len(neg) and m.counts()["reused"] == {"check": 1, "audit_record": 1}

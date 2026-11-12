@@ -68,6 +68,9 @@ prover's development verifier (`PEARL_CREDIT`).
 
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
+a5's part runs under its memo (`a5_memo.memo`), as `a5.main` does: a check the verifier answered is asked once per
+input, keyed by every argument's content, so a negative's stream on the honest registration and draw reuses their
+checks and one that alters an input is checked again; the summary's ``verifier_checks`` counts those asked and reused.
 
 An ``--out`` that already holds an audit record (``window/audit.json``) is one audit's: ``audit`` refuses to start on it
 (`held_record`) and changes nothing under it. Nothing resamples, and an attempt that wrote no record of its own would
@@ -893,9 +896,10 @@ def audit(a: argparse.Namespace) -> int:
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
                                           peer=a.peer, key_record=a.challenger_key, trees=True)
     try:
-        s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
-                         {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
-                         more, rank=0, registered=reads or None, ports=a.ports)
+        with A5.AM.memo():
+            s, ok = A5.audit(a, sets, out / "window", mine, wdir, lambda x: source(x, held), a.port,
+                             {"verifier_window_s": window_s, "circuit": held["circuit"], **({"compile": compiled} if compiled else {})},
+                             more, rank=0, registered=reads or None, ports=a.ports)
     finally:
         a.coins.skip(0)
         finisher.join()
@@ -905,7 +909,7 @@ def audit(a: argparse.Namespace) -> int:
            "compiler": held["compiler"], "advice": held["advice"], "compile": compiled, "law": law,
            **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
                                     "audit", "draw", "draw_counts", "negatives", "negatives_skipped", "coins",
-                                    "timing", "outputs")},
+                                    "timing", "outputs", "verifier_checks")},
            **({"checks": s["checks"]} if "checks" in s else {})}
     bits = int((held["advice"] or {}).get("bits", 0))
     counted = pin_roots(pins)

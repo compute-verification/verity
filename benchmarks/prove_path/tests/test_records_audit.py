@@ -22,6 +22,7 @@
   the coins;
 * the gate's coins (``--challenger gate:USER@HOST``) reach the challenger's session with the peer and the key record;
 * an ``--out`` that holds an audit record is one audit's: a second attempt refuses to start on it and changes nothing;
+* a5's part of the audit runs under a5's memo, and the summary counts the verifier's checks asked and reused;
 * ``warm`` fills a5's compose cache from the verifier's window, its composers keyed by what they compose from, and the
   audit takes that cache;
 * none of it imports `verity_vllm`, and the served compiler's command (``prove_path.py circuit``) refuses advice it can't
@@ -1147,6 +1148,36 @@ def test_an_out_whose_attempt_wrote_no_audit_record_takes_a_second_attempt_whose
     exits, ran, out, kept = _two_attempts(written, tmp_path, monkeypatch, "before the draw")
     assert exits == [1, 1] and ran == ["before the draw", "after the draw"] and set(kept) == {"summary.json"}
     assert SI.answer(out, written.rec)["reason"] == "after the draw: wiring (wiring)"
+
+
+def test_a5s_part_of_the_audit_runs_under_its_memo_and_the_summary_counts_the_checks(written, tmp_path, monkeypatch):
+    """`a5.audit` runs inside `a5_memo.memo`: while it runs, the verifier's kept checks (`a5_memo.PURE`) are the memo's
+    and its counts are live, and the verifier's own are back once the audit returns. The audit's summary carries a5's
+    ``verifier_checks``, the checks asked and reused."""
+    import a5 as A5
+    import a5_coins as AC
+
+    from verity.core.protocols.sampled_proofs.one_stage import verifier as V
+
+    own, seen = {name: getattr(V, name) for name in A5.AM.PURE}, {}
+    counts = {"asked": {"check": 2}, "reused": {"check": 5}, "unkeyed": {}}
+
+    def audit(*a, **kw):
+        seen.update(counts=A5.AM.counts(), wrapped=[name for name in A5.AM.PURE if getattr(V, name) is not own[name]])
+        return {"checks_before_draw": {"registration": False}, "verifier_checks": counts}, False
+
+    session = SimpleNamespace(skip=lambda r: None, join=lambda: None, evidence=lambda: {}, shutdown=lambda: None)
+    monkeypatch.setattr(RA, "free_ports", lambda span: 20000)
+    monkeypatch.setattr(A5, "audit", audit)
+    monkeypatch.setattr(AC, "start", lambda *a, **kw: (session, session, session))
+    out = tmp_path / "out"
+    assert A5.AM.counts() is None
+    assert RA.main(["audit", "--window", str(written.dir), "--law", LAW, "--circuit", written.rec["window"]["circuit"],
+                    "--run", RUN, "--m0-pythonpath", "", "--bin", "b", "--lean", "l", "--firewall", "f", "--out", str(out),
+                    "--skip-negatives", "--challenger", "local", "--main", "m.txt"]) == 1
+    assert seen == {"counts": {"asked": {}, "reused": {}, "unkeyed": {}}, "wrapped": list(A5.AM.PURE)}
+    assert A5.AM.counts() is None and {name: getattr(V, name) for name in A5.AM.PURE} == own
+    assert json.loads((out / "summary.json").read_text())["verifier_checks"] == counts
 
 
 def test_the_audit_reserves_a_port_for_every_session_its_draw_can_open(tmp_path, monkeypatch):
