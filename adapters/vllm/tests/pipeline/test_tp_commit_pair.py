@@ -89,12 +89,16 @@ def _rank(rank: int) -> TP2CaptureWorkerExtension:
 class _Pair:
     """Two ranks under `tp-commit`'s stand-in LLM.  ``run(*flags)`` runs the Commit with `PAIR` and ``flags`` to its end -> its exit
     code; ``sent`` is each rank call the driver made, with its kwargs; ``alter(method, rank, change)`` changes what that rank
-    answers to that call before the driver reads it."""
+    answers to that call before the driver reads it, and ``lose(method, rank)`` leaves that rank's answer out.  A call that is not
+    one of `RANK_CALLS` is answered by the stand-in LLM, one dict a rank, altered and lost the same way; ``asked`` is each of
+    those, with its kwargs."""
 
     def __init__(self, llm: Any, out: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         self.out, self.ranks = out, [_rank(0), _rank(1)]
         self.sent: list[tuple[str, dict[str, Any]]] = []
+        self.asked: list[tuple[Any, dict[str, Any]]] = []
         self._changes: dict[tuple[str, int], Callable[[dict[str, Any]], None]] = {}
+        self._lost: set[tuple[str, int]] = set()
         self._stand_in = llm.collective_rpc
         llm.to_the_end = True
         monkeypatch.setattr(llm, "collective_rpc", self._rpc)
@@ -102,17 +106,22 @@ class _Pair:
     def _rpc(self, method: Any, timeout: float | None = None, args: tuple = (), kwargs: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         if method is WU.warming:
             return [method(w, *args) for w in self.ranks]
-        if method not in RANK_CALLS:
-            return self._stand_in(method, timeout=timeout, args=args, kwargs=kwargs)
-        self.sent.append((method, dict(kwargs or {})))
-        answers = [getattr(w, method)(*args, **(kwargs or {})) for w in self.ranks]
+        if method in RANK_CALLS:
+            self.sent.append((method, dict(kwargs or {})))
+            answers = [getattr(w, method)(*args, **(kwargs or {})) for w in self.ranks]
+        else:
+            self.asked.append((method, dict(kwargs or {})))
+            answers = self._stand_in(method, timeout=timeout, args=args, kwargs=kwargs)
         for r, answer in enumerate(answers):
             if (method, r) in self._changes:
                 self._changes[method, r](answer)
-        return answers
+        return [answer for r, answer in enumerate(answers) if (method, r) not in self._lost]
 
     def alter(self, method: str, rank: int, change: Callable[[dict[str, Any]], None]) -> None:
         self._changes[method, rank] = change
+
+    def lose(self, method: str, rank: int) -> None:
+        self._lost.add((method, rank))
 
     def run(self, *flags: str) -> int:
         return TPCM.main(TO._options(self.out, PAIR + flags))
