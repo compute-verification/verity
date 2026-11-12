@@ -59,8 +59,9 @@ phases are not public, and a reason is part of an answer.
    signature verifies in the certifier session.
 2. The marks are in order: w_s ≤ w_e, the execution phases their certificates name.
 3. The span's tail is `tail` execution phases. The network certifier holds a connection's response before it releases
-   it, D buckets from its admission and then r cells a bucket, at most `egress_cells` of them, so the bytes it holds at
-   the end mark have left within D + ⌈egress_cells / r⌉ buckets of it. The start needs no tail.
+   it: its cell i leaves D + ⌊i / r⌋ buckets after its admission, and it has at most `egress_cells` cells, so the bytes
+   the network certifier holds at the end mark have left D + ⌊(egress_cells − 1) / r⌋ buckets after the end mark's
+   execution phase at the latest. The start needs no tail.
 4. The evidence shows each execution phase from w_s to w_e + tail once, in order: one outside them, one shown twice
    and a missing one each reject.
 5. Each execution phase's two certificates are egress certificates on their link names at that execution phase and
@@ -246,11 +247,13 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   keyed j ["phases"] "the object"
   (← Flock.J.arr j "phases" "the object").mapM phaseOf
 
-/-- The span's tail in execution phases, ⌈(D + ⌈egress_cells / r⌉) / T⌉: a connection's response starts D buckets
-after its admission and is released r cells a bucket, at most `egress_cells` of them, so what the network certifier
-holds at the end mark has left within D + ⌈egress_cells / r⌉ buckets, T buckets an execution phase. -/
+/-- The span's tail in execution phases, ⌈(D + ⌊(egress_cells − 1) / r⌋) / T⌉. A connection's egress cell i leaves in
+bucket s + D + ⌊i / r⌋, s its admission's bucket, and it has at most `egress_cells` cells, so its last cell leaves at
+most D + ⌊(egress_cells − 1) / r⌋ buckets after s. A connection the network certifier holds bytes of at the end mark was
+admitted in the end mark's execution phase at the latest, so its cells have left that many buckets after that
+execution phase's last, T buckets an execution phase. A schedule's `egress_cells` is at least 1 (`scheduleOf`). -/
 def tail (s : Schedule) : Nat :=
-  (s.delay + (s.egressCells + s.slots - 1) / s.slots + s.window - 1) / s.window
+  (s.delay + (s.egressCells - 1) / s.slots + s.window - 1) / s.window
 
 /-- The bits that can leave on the link in one execution phase: every cell of its two egress records, the responses'
 (T buckets of lanes · r cells) and the fails' (T buckets of lanes cells), B bytes a cell. -/
@@ -395,11 +398,16 @@ def guardSchedule : Schedule :=
 -- `mark_digest(bytes(64), bytes(range(64)))`
 #guard Flock.hexOf (markDigest ⟨Array.replicate 64 0⟩ ⟨(Array.range 64).map (·.toUInt8)⟩) ==
   "c5108f51c851520366babd954de0feea44aadce8c56000925897737e494d0e61285f4fd5a7bee0fb20fc3788d5a2ecb351e55205475fefd444aa7850f2462050"
--- ⌈(8 + ⌈17 / 2⌉) / 16⌉ = 2; one cell more a bucket and a shorter response fit one execution phase: ⌈(8 + 8) / 16⌉
-#guard tail guardSchedule == 2 && tail { guardSchedule with egressCells := 16 } == 1
--- the least schedule's tail is 2: a response's one cell leaves a bucket after its delay
-#guard tail { guardSchedule with delay := 1, egressCells := 1, slots := 1, window := 1 } == 2
--- the default schedule's: ⌈(10 + 4096 / 4) / 600⌉ execution phases, and 600 buckets of 64 + 16 cells of 256 bytes
+-- ⌈(8 + ⌊16 / 2⌋) / 16⌉ = 1: a response's last cell, its 17th, leaves 16 buckets after its admission, within one
+-- execution phase of it. Two cells more and it leaves a bucket later, in a second: ⌈(8 + ⌊18 / 2⌋) / 16⌉ = 2
+#guard tail guardSchedule == 1 && tail { guardSchedule with egressCells := 18 } == 1 &&
+  tail { guardSchedule with egressCells := 19 } == 2
+-- the least schedule's tail is 1: a response's one cell leaves a bucket after its admission; a delay of one execution
+-- phase is still one, and a bucket more is two
+#guard tail { guardSchedule with delay := 1, egressCells := 1, slots := 1, window := 1 } == 1 &&
+  tail { guardSchedule with delay := 16, egressCells := 1 } == 1 &&
+  tail { guardSchedule with delay := 17, egressCells := 1 } == 2
+-- the default schedule's: ⌈(10 + ⌊4095 / 4⌋) / 600⌉ execution phases, and 600 buckets of 64 + 16 cells of 256 bytes
 #guard tail { guardSchedule with delay := 10, egressCells := 4096, slots := 4, window := 600 } == 2
 #guard capacityBits { guardSchedule with slots := 4, window := 600 } == 98304000
 #guard marksLink "eth0" == "eth0-marks" && records "eth0" == #[("egress", "eth0"), ("fails", "eth0-fails")]
@@ -425,11 +433,11 @@ def guardMark (phase fill : UInt8) : ByteArray :=
     ⟨Array.replicate 64 (fill + 1)⟩ ++ ⟨Array.replicate 64 (fill + 2)⟩
 
 -- what a tie reads off a case, as `span.named` has it of the same parameters and marks
--- (`test_network_span_protocol.py`): 7 + 2 − 5 + 1 execution phases of 16 · (32 + 16) cells of 256 bytes
+-- (`test_network_span_protocol.py`): 7 + 1 − 5 + 1 execution phases of 16 · (32 + 16) cells of 256 bytes
 #guard (namedOf guardParams (guardMark 5 1 ++ guardMark 7 4)).map
     (fun n => (Flock.hexOf n.startMark, n.startMessage, n.endMessage, n.egressBits)) ==
   some ("37ccc33e0f5191d268bc91c122be57358555be87a54a8b0fa8384ca157a82be17d31e4d6bae5b7c54bc387c9e7d6f8d000111046dd3372fafaef4af0455cfe69",
-    ⟨Array.replicate 64 3⟩, ⟨Array.replicate 64 6⟩, some (5 * 1572864))
+    ⟨Array.replicate 64 3⟩, ⟨Array.replicate 64 6⟩, some (4 * 1572864))
 #guard (namedOf guardParams (guardMark 7 1 ++ guardMark 5 4)).map (·.egressBits) == some none
 #guard (namedOf guardParams (guardMark 5 1)).isNone && (namedOf "{}" (guardMark 5 1 ++ guardMark 7 4)).isNone
 -- a certificate's bytes are read exactly: one byte more or one fewer in their length is refused

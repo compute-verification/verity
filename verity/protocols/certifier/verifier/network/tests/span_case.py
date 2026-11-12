@@ -16,7 +16,8 @@ phases) and a small LMS key, in a sampled certifier session. An `Issuer` on that
 and the end's at most two later, and signs each execution phase of the span and its tail: its two egress certificates,
 the responses' record's and the fails record's, each over a sampled digest (the count opens no record), and its egress
 cells' head (`WR.Cells.commit` and `WR.registration`). `far` puts the span at the last execution phases a
-certificate can name.
+certificate can name, and `edge` puts it under the schedule `EDGE`, whose tail is one execution phase and no bucket
+less.
 
 This is test-side Python (it imports `verity_difftest`, which the certifier's package may not), so it lives beside
 the count's difftest (`test_network_span_protocol.py`)."""
@@ -43,6 +44,11 @@ Schedule = span.Schedule
 EGRESS, INGRESS = Direction.EGRESS, Direction.INGRESS
 #: the longest tail of a generated schedule, in execution phases
 TAIL = 3
+#: A schedule at the edge of its tail: D = 8, r = 2, T = 16 and 17 egress cells a response, as the Lean's `#guard`s'.
+#: A response's last cell leaves 8 + ⌊16 / 2⌋ = 16 buckets after its admission, so in the execution phase after the
+#: end mark's and never in the one after that: a tail of one execution phase, where a cell more a response makes two.
+EDGE = Schedule(cell_bytes=11, slots=2, bucket_ms=100, delay=8, lanes=1, queue=4, window=16, ingress_cells=4,
+                ingress_buckets=4, egress_cells=17, every=1)
 #: the last execution phase a certificate names: its message holds a u64
 LAST = (1 << 64) - 1
 #: link names: ASCII, with a space, one byte, long, and outside ASCII in two, three and four UTF-8 bytes a character,
@@ -50,16 +56,16 @@ LAST = (1 << 64) - 1
 LINKS = ("eth0", "rack/out", "a b", "l", "x" * 40, "r\u00e9seau/0", "\u7ebf\u8def-1", "\U0001f517", "a\tb\x7f")
 
 EXPECT = {
-    "honest": ACCEPT, "far": ACCEPT,
+    "honest": ACCEPT, "far": ACCEPT, "edge": ACCEPT,
     # a mark: on another link name, an ingress certificate, under another key, under the key's identifier with other
     # one-time keys, in another session, not opened by its salt and message, its signature or its execution phase
     # changed; and the two marks out of order
     "mark-link": REJECT, "mark-ingress": REJECT, "mark-key": REJECT, "mark-leaves": REJECT, "mark-session": REJECT,
     "mark-opening": REJECT, "mark-forged": REJECT, "mark-moved": REJECT, "order": REJECT,
     # the span's execution phases: one missing, the tail cut short or left out, one twice, one outside, two out of
-    # order, and a tail past the last execution phase a certificate can name
+    # order, a tail past the last execution phase a certificate can name, and under `EDGE` a tail of two
     "missing": REJECT, "tail-short": REJECT, "no-tail": REJECT, "twice": REJECT, "outside": REJECT,
-    "disorder": REJECT, "past-u64": REJECT,
+    "disorder": REJECT, "past-u64": REJECT, "edge-tail": REJECT,
     # an execution phase's certificates: none (as the network certifier leaves one it faulted or refused a connection
     # in), one or three, one on another link name, at another execution phase, an ingress one, in another session,
     # under another key, forged
@@ -85,6 +91,7 @@ REASONS: dict[str, tuple[str, str]] = {m: (why, why) for m, why in ({
     "order": "the marks are out of order: the end mark's execution phase is before the start mark's",
     "missing": span.MISSING, "tail-short": span.MISSING, "no-tail": span.MISSING,
     "twice": "an execution phase is shown twice", "outside": "an execution phase shown is outside the span and its tail",
+    "edge-tail": "an execution phase shown is outside the span and its tail",
     "past-u64": f"{_UNSIGNED}: {span.NONE_CERTIFIED}",
     "faulted": f"not two certificates, its egress record's and its fails record's: {span.NONE_CERTIFIED}",
     "cert-count": "not two certificates, its egress record's and its fails record's",
@@ -163,7 +170,7 @@ def build(m: str, seed: int) -> dict:
     key = _key(i)
     session, link = r.randbytes(lms.SESSION_BYTES), r.choice(LINKS)
     elsewhere = r.choice([x for x in LINKS if x != link])
-    sched = _schedule(r)
+    sched = EDGE if m in ("edge", "edge-tail") else _schedule(r)
     t, length = span.tail(sched), r.randint(0, 2)
     if m == "far":
         start = LAST - t - length - r.randint(0, 2)
@@ -245,6 +252,8 @@ def build(m: str, seed: int) -> dict:
         del phases[len(phases) - t:]
     elif m == "twice":
         phases.insert(k, phases[k])
+    elif m == "edge-tail":
+        phases.append(phase(last + 1))
     elif m == "outside":
         if start and r.random() < 0.5:
             phases.insert(0, phase(start - 1))

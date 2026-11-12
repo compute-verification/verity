@@ -21,7 +21,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from period_case import _key, schedule_json
-from span_case import ACCEPT, EXPECT, MUTATIONS, REASONS, REJECT, _Leaves, build, reference
+from span_case import ACCEPT, EDGE, EXPECT, MUTATIONS, REASONS, REJECT, _Leaves, build, reference
 from verity.protocols.certifier.verifier import span
 from verity.protocols.certifier.verifier.certificate import Certificate, CertifiedMark, Direction, Issuer
 
@@ -32,7 +32,7 @@ TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
 
 #: The changes sampled more often than the rest: the honest spans, the only accepted ones.
-WEIGHTS = {"honest": 6, "far": 2}
+WEIGHTS = {"honest": 6, "far": 2, "edge": 2}
 
 #: The schedule of the Lean's `#guard`s (`guardSchedule`): D = 8, r = 2, T = 16 and 17 egress cells a response.
 GUARD = span.Schedule(cell_bytes=256, slots=2, bucket_ms=100, delay=8, lanes=16, queue=64, window=16,
@@ -92,11 +92,12 @@ def test_the_count_agrees_with_its_mirror(server):
 def test_each_rejection_has_its_own_reason(server):
     """Lean and the mirror each reject a span for the reason its change is aimed at: a mark on another link name, an
     ingress one, one under another key or in another session, one its salt and message do not open; marks out of
-    order; an execution phase missing, in the span or in its tail, shown twice or outside; an execution phase with no
-    certificates, as the network certifier leaves one it faulted or refused a connection in; an egress or a fails
-    certificate on another link name, at another execution phase, an ingress one or one that does not verify; and an
-    egress cells' head that names another schedule, or is another execution phase's, link's, session's or key's.
-    Neither reason holds a number: none names an execution phase."""
+    order; an execution phase missing, in the span or in its tail, shown twice or outside, a second execution phase
+    of tail under the edge schedule among them; an execution phase with no certificates, as the network certifier
+    leaves one it faulted or refused a connection in; an egress or a fails certificate on another link name, at
+    another execution phase, an ingress one or one that does not verify; and an egress cells' head that names another
+    schedule, or is another execution phase's, link's, session's or key's. Neither reason holds a number: none names
+    an execution phase."""
     whats, both = Counter(), ("cert-link", "cert-phase")
     for m, (lean_why, mirror_why) in REASONS.items():
         for n in range(3 if m in both else 2):
@@ -124,6 +125,28 @@ def test_a_mirror_without_the_tail_is_caught(server, monkeypatch):
         assert "is missing" in json.loads(x.value.lean[1])["reason"], x.value
 
 
+@lean
+def test_the_tail_at_its_edge_is_one_execution_phase(server, monkeypatch):
+    """Under the edge schedule, where a response's last cell leaves exactly one execution phase after its admission,
+    Lean's tail is 1 and it counts the span's execution phases and one more; and a mirror whose tail is
+    ⌈(D + ⌈egress_cells / r⌉) / T⌉, a bucket longer, accepts a span that shows a second execution phase of tail, which
+    Lean rejects."""
+    for n in range(2):
+        case = build("edge", n)
+        verdict, out = D.replay(PORT, case, server)
+        answer, c = json.loads(out), span.commitment(bytes.fromhex(case["commitment"]))
+        phases = c.marks[1].window - c.marks[0].window + 2
+        public = {"egress_bits": phases * span.capacity_bits(EDGE), "phases": phases, "tail": 1}
+        assert verdict == ACCEPT and answer["public"] == public, answer
+    built = [build("edge-tail", n) for n in range(2)]
+    monkeypatch.setattr(span, "tail", lambda s: -(-(s.delay + -(-s.egress_cells // s.slots)) // s.window))
+    for case in built:
+        with pytest.raises(D.Mismatch) as x:
+            D.replay(PORT, case, server)
+        assert (x.value.lean[0], x.value.python[0]) == (REJECT, ACCEPT), x.value
+        assert "outside the span and its tail" in json.loads(x.value.lean[1])["reason"], x.value
+
+
 def test_every_change_reaches_its_verdict_in_the_mirror():
     """The mirror accepts the honest spans, rejects every other change, and rejects each for its reason, which holds
     no number: a reason names no execution phase."""
@@ -136,19 +159,21 @@ def test_every_change_reaches_its_verdict_in_the_mirror():
 
 
 def test_the_tail_is_the_execution_phases_a_held_response_leaves_in():
-    """⌈(D + ⌈egress_cells / r⌉) / T⌉ at the `#guard`s' schedules, and on sampled schedules the least n with
-    n · T ≥ D + b, b the least with b · r ≥ egress_cells."""
+    """⌈(D + ⌊(egress_cells − 1) / r⌋) / T⌉ at the `#guard`s' schedules and at the edge schedule; and on sampled
+    schedules the last execution phase, counted from the end mark's, that a cell leaves in: cell i of a connection
+    admitted in bucket a leaves in bucket a + D + ⌊i / r⌋, over every bucket a of the end mark's execution phase and
+    every cell of a response."""
     def held(**fields: int) -> int:
         return span.tail(span.Schedule(**{k: getattr(GUARD, k) for k in schedule_json(GUARD)} | fields))
-    assert held() == 2 and held(egress_cells=16) == 1
-    assert held(delay=1, egress_cells=1, slots=1, window=1) == 2
+    assert held() == span.tail(EDGE) == 1 and held(egress_cells=18) == 1 and held(egress_cells=19) == 2
+    assert held(delay=1, egress_cells=1, slots=1, window=1) == 1
+    assert held(delay=16, egress_cells=1) == 1 and held(delay=17, egress_cells=1) == 2
     assert held(delay=10, egress_cells=4096, slots=4, window=600) == 2
-    assert held(delay=1, egress_cells=1, slots=1, window=2) == 1 and held(delay=16, egress_cells=1, slots=1) == 2
     r = random.Random(0)
     for _ in range(300):
         s = dict(delay=r.randint(1, 40), slots=r.randint(1, 5), window=r.randint(1, 12), egress_cells=r.randint(1, 60))
-        buckets = s["delay"] + next(b for b in range(s["egress_cells"] + 1) if b * s["slots"] >= s["egress_cells"])
-        assert held(**s) == next(n for n in range(buckets + 1) if n * s["window"] >= buckets), s
+        D_, r_, T, E = s["delay"], s["slots"], s["window"], s["egress_cells"]
+        assert held(**s) == max((a + D_ + i // r_) // T for a in range(T) for i in range(E)), s
 
 
 def test_an_execution_phase_counts_every_cell_of_both_egress_records():
@@ -189,7 +214,7 @@ def test_what_a_tie_reads_off_a_case():
     start, end = guard_mark(5, 1), guard_mark(7, 4)
     n = span.named(p, span.commitment(span.mark_bytes(start) + span.mark_bytes(end)))
     assert n == {"start_mark": bytes.fromhex(GUARD_START), "start_message": bytes([3]) * 64,
-                 "end_message": bytes([6]) * 64, "egress_bits": 5 * 1572864}
+                 "end_message": bytes([6]) * 64, "egress_bits": 4 * 1572864}
     assert n["start_mark"] == hashlib.sha512(start.certificate.encode()).digest()
     late = span.commitment(span.mark_bytes(guard_mark(7, 1)) + span.mark_bytes(guard_mark(5, 4)))
     assert span.named(p, late)["egress_bits"] is None

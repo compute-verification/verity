@@ -241,10 +241,12 @@ def evidence(j: Any) -> list[Phase]:
 
 
 def tail(s: Schedule) -> int:
-    """The span's tail in execution phases, ⌈(D + ⌈egress_cells / r⌉) / T⌉: a connection's response starts D buckets
-    after its admission and is released r cells a bucket, at most egress_cells of them, so what the network certifier
-    holds at the end mark has left within D + ⌈egress_cells / r⌉ buckets, T buckets an execution phase."""
-    buckets = s.delay + -(-s.egress_cells // s.slots)
+    """The span's tail in execution phases, ⌈(D + ⌊(egress_cells − 1) / r⌋) / T⌉. A connection's egress cell i leaves in
+    bucket s + D + ⌊i / r⌋, s its admission's bucket, and it has at most egress_cells cells, so its last cell leaves at
+    most D + ⌊(egress_cells − 1) / r⌋ buckets after s. A connection the network certifier holds bytes of at the end mark
+    was admitted in the end mark's execution phase at the latest, so its cells have left that many buckets after that
+    execution phase's last, T buckets an execution phase."""
+    buckets = s.delay + (s.egress_cells - 1) // s.slots
     return -(-buckets // s.window)
 
 
