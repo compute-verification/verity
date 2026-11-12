@@ -17,7 +17,7 @@ from verity_vllm.pipeline import compiled_merge as cm
 
 ABSENT = "<absent>"
 #: what stands in a block's place where a record has none: the block left out, null, and each empty or zero value
-NOTHING = [ABSENT, None, {}, [], "", 0, False]
+NOTHING: list[Any] = [ABSENT, None, {}, [], "", 0, False]
 NOT_IDENTIFIED = "served path: generated kernels not identified in both arms (inductor_kernels.json)"
 #: what the summary lists for each treatment run, and what it lists for the run of `process("served", "aa")`
 PER_RUN: dict[str, Any] = {"openings_verified": True, "coverage": True, "value_correspondence": True, "compiled_source": {"pieces": 3},
