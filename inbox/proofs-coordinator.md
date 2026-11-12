@@ -104293,3 +104293,28 @@ LD_LIBRARY_PATH=$CUDA_TK/lib64 python benchmarks/one_stage/two_stage.py second \
 - What it would say that 2,560 does not: [relayed: #9075's body] the served chunk block is 2^24 and the combine 2^25. The combine at 2,560 is already `k_log` 24 and took 0.71 s of the prover's own timer [read]; if those are the same measure, the size no card has seen is the 2^25 combine, and whether it fits a card's memory [guess: it does; only the run says]. I launch neither without your word.
 
 **5. Job A.** #9458's two runs at `44cd4a62c7c9` are still running at 21:55Z: the quick suites `r20261112-203350-5be0` (since 20:35Z, bound 90 minutes) and the records `r20261112-203018-c8f1` (since 20:52Z) [run]. Your 21:50Z is read: when both pass I add the approval line to the body with no issue named, and write the ready line; I do not mark.
+
+## RUNSAS, Thu 21:59Z: for RUNCOINS: your `RoundTwo` cannot be proved as written; my `roundTwo_of_check` is its form with two premises added and one clause more, at `af0b647abb`, not compiled
+
+**In plain words.** RUNCOINS's branch states the hand-off it takes from me (`RoundTwo`, in `RunsAs/Statement.lean`). Three things in it need changing, and I wrote a theorem of the corrected shape so RUNCOINS can use it as is. Nothing here is compiled yet; my run waits for a slot.
+
+- **`OwnAt` is false of the running `Own` since the base moved.** [read `Spot/Run.lean` at the base `056097eb27`: the run's `Own` now sets `reads := it.reads`; `SpotFlock/Code.lean` `ownOf` leaves `reads` at `#[]`] So `OwnAt` must also reset `reads := #[]`. Mine (`OwnAgrees`, via `core`) does; it is otherwise your `OwnAt` with the arguments in another order. [read] `stmtCodes` reads none of the six reset fields but `verified`; `Own.reads` is read only by `inputsFailure`, outside the per-statement checks.
+- **"A statement at every position `t < h.ms.length`" needs the templates' names distinct.** [derived] Round 2 finds a statement's part by its template's name (`ps.find?`) and refuses a second statement of one template (`second-template`); `second-cover` asks only that each part's template is some statement's. With two parts of one name it passes a run with fewer statements than parts, and then position `t` has none. So I take `NamesDistinct h` as a premise. [read] Nothing I found proves `Held.names` distinct.
+- **The model's `readsOk` now reads `namesOk` too** (#9229's clause, in the base). I add it as a conjunct.
+
+[derived, in `RunsAs/Round2.lean` at `af0b647abb`; compiled by no run yet]
+```
+theorem roundTwo_of_check {h : Held} (hN : NamesDistinct h) {own : Spot.SecondStage.Own} {ss : Array Json}
+    {st : Roots} {rec draw : Json} {c₀ : FlockDeploy.Coin} (hA : OwnAgrees h own st rec draw c₀)
+    (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
+    Spot.SecondStage.interiorOrderOk (ownOf h st rec draw c₀) = true ∧
+      Spot.SecondStage.namesOk (ownOf h st rec draw c₀) = true ∧
+      ∀ t < h.ms.length, ∃ S, Spot.SecondStage.Stmt.ofJson? (ss.getD t .null) = some S ∧
+        S.template = h.names.getD t "" ∧ codesOk h (ownOf h st rec draw c₀) t S = true
+```
+`OwnAgrees h own st rec draw c₀` is `core own = ownOf h st rec draw c₀`. The whole-`stmtOk` form of my 21:55Z entry (`stmtOk_of_check`) is there too, if you would rather take that.
+
+- [run] `r20261112-215748-c493` on vy-nebius-cpu-8, `verity lean try security/Proofs/Flock/SpotFlock/RunsAs/Round2.lean` at `af0b647abb`, waiting in the proofs line since 21:58Z. It replaces `r20261112-215359-0940` (cancelled before it started; one head older).
+- [run: git] Per the coordinator's 21:54Z message, the root `Proofs.Flock.SpotFlock.RunsAs.Round2` is on a line of its own in `security/Proofs/lakefile.toml`; this drops my 21:55Z NEEDS for `Proofs/Flock.lean`.
+
+**Not established.** That any of it elaborates. Whether RUNCOINS takes this form.
