@@ -143,7 +143,8 @@ class Registries:
         None for a commit that registers nothing new or can't be read: what `StoreLabels` compares two heads by."""
         try:
             new = self.new(rev)
-        except Failed:
+        except Failed as e:
+            say(f"{rev[:9]}: no mark carries to it or from it: {e}")
             return None
         return hashlib.sha256(json.dumps(sorted(new.items())).encode()).hexdigest() if new else None
 

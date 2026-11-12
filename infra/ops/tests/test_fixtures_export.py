@@ -140,8 +140,12 @@ class Pod:
         assert labels_sync.push_targets(self.lane, [target])["failed"] == []
 
     def run(self, *args: str) -> subprocess.CompletedProcess:
-        env = {**os.environ, "PATH": f"{self.bin}:{os.environ['PATH']}", "TMPDIR": str(self.tmp / "t"), "HOME": str(self.tmp / "home")}
+        env = {**os.environ, "PATH": self.path(), "TMPDIR": str(self.tmp / "t"), "HOME": str(self.tmp / "home")}
         return subprocess.run([str(self.script), *args], env=env, capture_output=True, text=True)
+
+    def path(self) -> str:
+        """This machine's search path behind the made-up pod's commands."""
+        return os.pathsep.join([str(self.bin), *os.get_exec_path()])
 
     def calls(self) -> list[dict]:
         return [json.loads(line) for line in self.calls_file.read_text().splitlines()] if self.calls_file.exists() else []
@@ -257,6 +261,18 @@ def test_a_mark_carries_to_a_later_head_that_registers_the_same_new_ids_and_so_d
     assert p.returncode == 0 and len(pod.heads_calls()) == 1 and "not marked ready: not exported" in p.stdout, p.stdout + p.stderr
 
 
+def test_no_mark_carries_from_a_head_whose_registry_cannot_be_read(pod):
+    """A marked head whose registry isn't JSON says nothing of what it registered, so the later head that mends the
+    registry is not exported on that mark, and the pass says which head it couldn't read."""
+    pod.commit("main", {REGISTRY: A})
+    marked = pod.pr(7, {REGISTRY: "<<<<<<< ours\n{}\n"})
+    pod.mark(7, marked)
+    pod.pr(7, {REGISTRY: A | C})
+    p = pod.run("once")
+    assert p.returncode == 0 and pod.heads_calls() == [], p.stdout + p.stderr
+    assert f"{marked[:9]}: no mark carries to it or from it: " in p.stdout and "not marked ready: not exported" in p.stdout, p.stdout
+
+
 def test_a_head_whose_registry_cannot_be_read_stops_no_other_head(pod):
     """A head with a registry that isn't JSON (a conflict left in it) is named and passed over; the marked head beside it
     is still exported and the pass succeeds."""
@@ -312,7 +328,7 @@ def test_the_interloper_does_move_what_a_checkout_of_the_last_fetch_reads(pod):
     pod.shim("git", INTERLOPER.format(git=GIT))
     git("clone", "-q", f"file://{pod.origin}", str(pod.clone), cwd=pod.tmp)
     subprocess.run(["sh", "-c", 'git -C "$1" fetch -q origin main && git -C "$1" checkout -q -f --detach FETCH_HEAD', "sh", str(pod.clone)],
-                   env={**os.environ, "PATH": f"{pod.bin}:{os.environ['PATH']}"}, check=True)
+                   env={**os.environ, "PATH": pod.path()}, check=True)
     assert git("rev-parse", "HEAD", cwd=pod.clone) == other != pod.main
 
 
