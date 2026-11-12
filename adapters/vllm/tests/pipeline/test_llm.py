@@ -18,12 +18,13 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 import verity_vllm
+from tests import fake_vllm
 from verity_vllm import config
 from verity_vllm import llm as L
 from verity_vllm.config import EnginePin
@@ -461,11 +462,9 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
             self.llm_engine = SimpleNamespace(vllm_config=vc, engine_core=SimpleNamespace(engine_core=SimpleNamespace(
                 scheduler=_Scheduler(), model_executor=SimpleNamespace())))
 
-    vllm, envs = ModuleType("vllm"), ModuleType("vllm.envs")
-    vllm.__dict__.update(LLM=_VllmLLM, envs=envs)
-    envs.__dict__["VLLM_BATCH_INVARIANT"] = False
-    monkeypatch.setitem(sys.modules, "vllm", vllm)
-    monkeypatch.setitem(sys.modules, "vllm.envs", envs)
+    fake = fake_vllm.install(monkeypatch)
+    fake.set("vllm:LLM", _VllmLLM)
+    fake["vllm.envs"].VLLM_BATCH_INVARIANT = False
     monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
     cps = tmp_path / "checkpoints.json"
     cps.write_text(json.dumps({"checkpoints": [{"repo": "r/m", "role": "M", "downloaded": True, "local_path": str(tmp_path)}]}))
