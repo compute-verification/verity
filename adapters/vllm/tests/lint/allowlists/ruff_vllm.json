@@ -379,7 +379,6 @@
     {"file": "verity_vllm/engine/run_facts.py", "kind": "ISC002", "symbol": "profile_manifest", "detail": "Implicitly concatenated string literals over multiple lines", "count": 2},
     {"file": "verity_vllm/engine/vllm_adapter.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/glue.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
-    {"file": "verity_vllm/observe/capture.py", "kind": "ISC002", "symbol": "make_header", "detail": "Implicitly concatenated string literals over multiple lines", "count": 2},
     {"file": "verity_vllm/observe/fold/patterns/attention.py", "kind": "SIM102", "symbol": "AttentionScope.match", "detail": "Use a single `if` statement instead of nested `if` statements"},
     {"file": "verity_vllm/observe/fold/patterns/dsa.py", "kind": "SIM300", "symbol": "DsaSparseMla.match", "detail": "Yoda condition detected"},
     {"file": "verity_vllm/observe/fold/patterns/sampling.py", "kind": "SIM300", "symbol": "TokenSelectGumbelTopP._stage1", "detail": "Yoda condition detected"},
