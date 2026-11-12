@@ -7,6 +7,9 @@ from __future__ import annotations
 
 import math
 
+#: what `bench.py` and the tests read
+__all__ = ["arm_row", "baseline_rows", "reuse_under"]
+
 #: the families an arm's headline divides by, by its precision: the fastest of them at the shape
 HEADLINE_FAMILIES = {"fp8-e4m3": ("fp8-e4m3", "fp8-e4m3-rowwise"), "nvfp4": ("nvfp4",)}
 METHODS = ("graph", "burst")

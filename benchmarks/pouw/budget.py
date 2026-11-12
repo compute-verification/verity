@@ -43,6 +43,13 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+#: what `grind_price.py` and the tests read
+__all__ = [
+    "ALLOCATED", "CONDITIONAL", "Config", "DEFICIT", "FAMILIES", "FILL_DATA", "FILL_GRID", "FILL_MIXES", "LN_INV_DELTA",
+    "P_PASS", "REGIMES", "SAMPLING_DATA", "SPEND_GRID", "TODAY_SAMPLES", "allocation", "curve", "hash_leaves", "levers",
+    "main", "optimum", "point", "sample", "spend_for", "today", "unconditional",
+]
+
 LN_INV_DELTA = 41 * math.log(2)   # ℓ_s at δ_s = 2⁻⁴¹, the machine model's luck budget (deficit 0.002368 at p = ¾)
 ROUNDS = 48_000                   # S: one week of 12.6 s rounds (Theorem S; SPEC)
 P_PASS = 0.75                     # a deficient unit's pass probability at 1-bit coins (Theorem S)
@@ -61,7 +68,7 @@ ALLOCATED = ("plain", "sessions/256")
 #: the sweep's spends B_s, a fraction of an RTX PRO 6000's week, 8 a decade
 SPEND_GRID = tuple(round(10 ** (e / 8), 6) for e in range(-28, 21))
 #: today's samples: 2 a round over a week
-TODAY_DRAWS = 2 * ROUNDS
+TODAY_SAMPLES = 2 * ROUNDS
 #: a sampled proof block's proof grows with the filler it recomputes (p = 0 needs the check to recompute it): its ANDs by
 #: (1 + y/16) at y extra lane instructions a word, as if the receipt arm were a quarter of the proof at fx1's 4 a word
 #: (assumed); it scales the part of a sample's cost that grows with the unit's ANDs (`unit_share`)
@@ -347,7 +354,7 @@ def fixed_b(f: Family, c: Config, leaf: int = 128) -> float:
 
 def today(f: Family, **kw) -> Point:
     """Today's protocol priced by cost-model/v1: the design's own filler, P·V's served output free, today's samples."""
-    return point(f, Config("int", 0.0, False), f.prover * spend_for(TODAY_DRAWS), **kw)
+    return point(f, Config("int", 0.0, False), f.prover * spend_for(TODAY_SAMPLES), **kw)
 
 
 def optimum(f: Family, budget: float, mixes: list[str] | None = None, regime: str = "plain", **kw) -> Point:
@@ -415,13 +422,13 @@ def levers(f: Family, **kw) -> list[dict]:
     ys = [p[0] for p in f.fill[c.mix]]
     step(point(f, Config(c.mix, ys[1], c.served), t.B_sample, **kw), f"verified filler, y = 0 → {ys[1]:g} a word",
          "the machine model's sweep (honest time modeled past the measured kernel); FILL-OPT (decision 94)")
-    step(point(f, c, f.prover * spend_for(2 * TODAY_DRAWS), **kw), "draws 2 → 4 a round",
+    step(point(f, c, f.prover * spend_for(2 * TODAY_SAMPLES), **kw), "draws 2 → 4 a round",
          "cost-model/v1's sessions (A6's two, fitted: the session's fixed cost is the uncertain part, σ 0.5)")
     for regime, rests in (("sessions/256", "multi-round sessions amortizing a session 256-fold (OPT2's estimate); S "
                                            "holds when a session covers its rounds"),
                           ("prefix, sessions/256", "also the running sums committed anyway (COMMIT's prefix mode), so "
                                                    "chunks of 32 pay")):
-        step(point(f, Config(c.mix, c.y, c.served, regime), f.prover * spend_for(TODAY_DRAWS, regime), **kw),
+        step(point(f, Config(c.mix, c.y, c.served, regime), f.prover * spend_for(TODAY_SAMPLES, regime), **kw),
              f"today's draws in regime {regime}", rests)
     step(point(f, c, t.B_sample, leaf=256, **{k: v for k, v in kw.items() if k != "leaf"}),
          "SHA-512 leaves R = 128 → 256", "COMMIT-GPU's two points extrapolated (modeled)")

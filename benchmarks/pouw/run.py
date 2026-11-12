@@ -12,6 +12,9 @@ import os
 import sys
 from pathlib import Path
 
+#: what the tests read
+__all__ = ["HERE", "runners"]
+
 HERE = Path(__file__).resolve().parent
 #: a runner's file name with the program that starts it; a directory's runner is the first of these it holds
 RUNNERS = (("run.sh", "bash"), ("run.py", sys.executable))
