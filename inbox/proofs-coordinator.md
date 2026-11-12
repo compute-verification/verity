@@ -90130,3 +90130,55 @@ The records run should end between 14:05Z and 14:25Z, and the suites by about 14
 **#9229**: `r20261112-124211-450a` done, rc 0, outcome `regenerated` (12:42:35Z to 13:29:11Z); its review names `SpotFlock.readsOk` changed and `Spot.SecondStage.namesOk` new, each read by `SpotKSTwo` and `SpotExfilTwo` [run]. Head `ffaeab2592d3af861f27edf3814cc73a45c710d6` = `ca7a325fc068` plus exactly that record [run: pushed 13:46Z]. It takes #9176's final head next, once, and its records run then builds #9043's modules over the new `readsOk`.
 
 **I wait on** the six runs above. The 15:00Z answer is next while they run.
+
+## REPLAY, Thu 12 Nov 13:48Z: second revision to my final: the FP8 reading corrected on one point and counted on the try's own record: on these cards only a whole prompt of at most 2,048 tokens reads its own keys unquantized; 4 rows in 8,937 steps did, and none of the 4 is in the pass the try replayed
+
+**Why** [read; run]. I held section 5 against the try's record in the store: its server log and its step trace, 370 KB
+fetched with `research data fetch --path`; nothing ran on a GPU. One statement of section 5 does not apply to an H200
+and is withdrawn, the backend is now read and not derived, and the reading is now a count. The run is
+`r20261112-074230-88d0`; its files are `out/prod-record/server/server.log` and
+`out/prod-record/server/step_trace.369984.jsonl.gz`, the recorded arm's whole server lifetime.
+
+1. **Withdrawn: section 5 item 7's table for masked MHA** [read, at P]. Masked MHA is for another device class and
+   never with a quantized cache (`sparse_mla_attention.py:89-90`, `:112`; set at `:553`). On an H200 the MHA path is
+   dense MHA alone: a step whose prefill rows' sequences are all at most `index_topk`, 2,048 tokens
+   (`sparse_mla_attention.py:290-292`, `:307-310`).
+2. **So, at the published line's flags on these cards** [derived]. The two values exist only for a prefill row that
+   ends within its sequence's first 2,048 positions, in a step with no longer prefill row. In every other step every
+   row reads every key from the cache as stored. The FP8 read enters a request at its first row, unless that row is
+   such a prefill row with no hit; then at its next row.
+3. **The backend, read** [read: the server log, lines 62 to 64]. "Using FLASHMLA_SPARSE attention backend out of
+   potential backends: ['FLASHMLA_SPARSE', 'FLASHINFER_MLA_SPARSE_SM90']"; "Using fp8_ds_mla KV cache format for
+   FLASHMLA_SPARSE backend"; "Using FLASH_ATTN MLA prefill backend". Section 5 item 2 is confirmed, and the first
+   part of "Not established" item 12 is closed.
+4. **Counted on the step trace** [run: a count over the trace's 8,937 steps and 136 requests; its rows are in the
+   runner's order].
+   - Every decode row carried 6 tokens: 21,356 rows, none cut short. So section 5 item 3's cut decode row, which the
+     attention would treat as a prefill row, did not occur in this serve; that part of the reading is from the code
+     alone.
+   - 302 prefill chunks in 280 steps: 226 longer than 2,048 tokens, 4 of at most 256, 267 with a context.
+   - **4 of the 302 took dense MHA**: whole prompts of 448 or 640 tokens with no hit, in steps 0, 4,501, 4,503 and
+     6,801. 2,176 positions were read unquantized, once each, by their own row. Every other row of the lifetime read
+     stored bytes.
+   - **None of the 4 is in the replayed pass.** The trace's first pass after the warm-up is steps 205 to 2,244: 2,040
+     steps, 32 requests, 23,363 tokens, the figures vllm gave for the replay. The four rows are in the warm-up and in
+     the third and fourth passes. **So the try's replay did not exercise the two values.** By the reading it repeats
+     them, since it repeats the schedule; no run shows it. A replay of the third or fourth pass, or one that covers
+     the warm-up's first request, would.
+   - The header: `kv_cache_dtype` fp8, `long_prefill_token_threshold` 0, steps of 8,192 tokens,
+     `rejection_sample_method` standard, `draft_sample_method` greedy, adaptive verification off. The standard rule is
+     the one I read; the block rule and the synthetic rule are not what this serve ran, so the last clause of "Not
+     established" item 8 does not bear on it.
+5. **What it changes** [derived]. Nothing in the route or the kept drafts' row. For vllm: the fourth cause is real,
+   rare on this load (a short prompt that arrives alone and hits nothing) and untested by the try's replay. For
+   circuits: one more read to model, a whole prompt of at most 2,048 tokens that reads its own rows as computed. vLLM
+   has a setting that sends every row through the cache's read (`sparse_mla_force_mqa`, read at
+   `mla_attention.py:1134-1136` and `sparse_mla_attention.py:307-310`); it is not among the published line's flags,
+   and I do not propose it. For row 16: its three conditions in section 5 item 9 stand.
+6. **For you to post, if you see fit** [derived]: "vllm: at the pin, on these cards with the FP8 cache, a row reads
+   its own step's keys unquantized only when it is a prefill row within its sequence's first 2,048 positions and its
+   step has no longer prefill row (dense MHA; masked MHA is off on an H200). In the try's recorded lifetime that is 4
+   rows, steps 0, 4,501, 4,503 and 6,801, none in the replayed pass (steps 205 to 2,244). A replay over one of them
+   would test your fourth cause."
+
+The kept drafts' row and the message for Daniel of my 13:31Z revision stand unchanged.
