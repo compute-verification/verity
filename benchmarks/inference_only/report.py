@@ -221,10 +221,10 @@ def tied_lines(d: dict[str, Any], file: str) -> list[str]:
         f"those words as fresh input a block reads k + {un['word_bits']} × {_n(round(u['words_a_block']))} = "
         f"{_n(round(u['k_with_words']))} bits",
         "",
-        "  One block (min_cut.bound), each cut number with its limit at s, 1 / (s + 1 / cut number) (min_cut.capped): a "
+        "  One block (min_cut.bound), each number with its limit at s, 1 / (s + 1 / number) (min_cut.capped): a "
         "developer gets the uncredited share whole",
-        f"    every word tied, k = {k:,}: cut number {block['cut_number']:,.1f}, limit at s {block['limit']:,.1f}",
-        f"    {T.IN_K}, k = {_n(round(words['k']))}: cut number {words['cut_number']:,.1f}, limit at s "
+        f"    every word tied, k = {k:,}: number {block['number']:,.1f}, limit at s {block['limit']:,.1f}",
+        f"    {T.IN_K}, k = {_n(round(words['k']))}: number {words['number']:,.1f}, limit at s "
         f"{words['limit']:,.1f}",
         "",
         "  Over a monitoring period, all of a fleet's compute in the policy's blocks at capacity (min_cut.bound_charged; "
@@ -237,14 +237,14 @@ def tied_lines(d: dict[str, Any], file: str) -> list[str]:
     out += ["", f"  Each figure under its reading's name, which holds its threshold, with its limit at s = {_g(100 * s)}% "
             "and the pooled total in gates (the gates c counts): the training the period's blocks hold at most, at the "
             "limit"]
-    out += _table(("where", "period", "reading", "blocks charged at most", "cut number", "limit at s",
+    out += _table(("where", "period", "reading", "blocks charged at most", "number", "limit at s",
                    "training's gates at most", "of the blocks' gates"),
-                  [(r["where"], r["period"], r["reading"], _g(r["charged"]), f"{r['cut_number']:,.1f}",
+                  [(r["where"], r["period"], r["reading"], _g(r["charged"]), f"{r['number']:,.1f}",
                     f"{r['limit']:,.1f}", _g(r["gates"]["training_at_the_limit"]), _g(100 * r["share"]) + "%")
                    for r in d["periods"]], 3, "    ")
     charged, rows = (STANDING[lean.status(x)] for x in (min_cut.HE_CHARGED, min_cut.HE_ROWS))
     out += [
-        f"  proved    {min_cut.HE} ({STANDING[lean.status(min_cut.HE)]}), the count one block's cut number is solved "
+        f"  proved    {min_cut.HE} ({STANDING[lean.status(min_cut.HE)]}), the count one block's number is solved "
         f"from. A period's count is {min_cut.HE_CHARGED} ({charged}), and with a β_x a block {min_cut.HE_ROWS} ({rows}). "
         "No limit is proved: it is arithmetic on the typed share",
         f"  premise   the share s, typed; that PoUW ties every word it credits, which no verdict of a run from this tree "

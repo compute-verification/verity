@@ -2,8 +2,8 @@
 policy (`min_cut.bound_charged`), each figure beside the share of a block's work that no PoUW check credits.
 
 Under the tie a block reads as fresh input only its scan state row and the execution phase's salt, so the count gives a
-figure far above the served policy's 1. Two things stand between that figure and a claim, and `priced` prints neither
-figure without them:
+number far above the served policy's 1. Two things stand between that number and a claim, and `priced` gives it with
+both:
 
 * **the untied words** (`policy.Tied`): outputs of the linears that PoUW's sample accepted without tying, at most a
   node's bound for each block of one of its execution phases. A fleet's period holds `Tied.untied` of them, fed by at
@@ -60,7 +60,7 @@ def priced(t: P.Tied, sh: P.Shape, s: float) -> dict[str, Any]:
                 "untied": untied, "untied_a_block": untied / r["blocks"], "untied_macs": got.untied_macs,
                 "reading": f"{got.reading}, {IN_K}" if in_k else got.reading, "uncredited_words_in_k": in_k,
                 "k": got.k, "w": None if got.w == float("inf") else got.w, "charged": got.charged,
-                "cut_number": got.slowdown, "limit": limit,
+                "number": got.slowdown, "limit": limit,
                 "gates": {"blocks": gates, "training_by_the_count": got.gates, "training_at_the_limit": gates / limit},
                 "share": 1 / limit, "statement": got.statement, "premises": list(got.premises),
                 "rests_on": got.rests_on})
@@ -72,8 +72,8 @@ def priced(t: P.Tied, sh: P.Shape, s: float) -> dict[str, Any]:
                    "macs_a_word": t.macs_a_word, "word_bits": t.word_bits, "most_a_block": most},
         "uncredited": {"share": s, "from": "the command line", "pouw_verdict": None, "macs_a_block": s * N,
                        "words_a_block": words, "least_fan_in": fan_in, "k_with_words": k_words},
-        "block": {"cut_number": one.slowdown, "limit": min_cut.capped(one.slowdown, s), "rests_on": one.rests_on,
-                  "with_words": {"k": k_words, "cut_number": with_words.slowdown,
+        "block": {"number": one.slowdown, "limit": min_cut.capped(one.slowdown, s), "rests_on": one.rests_on,
+                  "with_words": {"k": k_words, "number": with_words.slowdown,
                                  "limit": min_cut.capped(with_words.slowdown, s), "rests_on": with_words.rests_on}},
         "periods": rows,
     }

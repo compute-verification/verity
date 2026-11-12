@@ -234,17 +234,17 @@ def test_the_tied_file_is_the_served_class_reading_its_scan_state_row_and_a_salt
 
 def test_with_no_share_no_figure_of_the_tied_policy_prints(capsys) -> None:
     """`--uncredited-share` has no default: without it the command prints the served policy as before and says why the
-    tied policy's figures are absent, and its cut number is nowhere in the print or the JSON."""
+    tied policy's figures are absent, and its number is nowhere in the print or the JSON."""
     doc = report.main(["--stated-only"], commit=lambda: None)
     out = capsys.readouterr().out
     assert doc["tied"] is None and doc["value"] == 1 and out.splitlines()[2] == "AS SERVED: 1"
     assert "no figure printed" in out and "--uncredited-share S" in out and "has no default" in out
-    assert report.TIED_LABEL not in out and "cut number" not in out and "37,653" not in out
+    assert report.TIED_LABEL not in out and "limit at s" not in out and "37,653" not in out
     assert P.WORK_IS in out and doc["work_is"] == P.WORK_IS and "embedding table outside the registered weights" in out
 
 
 def test_the_tied_policy_is_never_priced_as_a_stated_policy(capsys) -> None:
-    """`--policy tied.toml` would print the tied policy's cut number as a headline with no share beside it: refused,
+    """`--policy tied.toml` would print the tied policy's number as a headline with no share beside it: refused,
     with what to type instead."""
     with pytest.raises(SystemExit) as e:
         report.main(["--policy", str(P.TIED), "--stated-only"], commit=lambda: None)
@@ -265,7 +265,7 @@ def test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_l
     opens with its label, says the share was typed and which work the figures are for, and prints each of the
     calculator's fleets and periods under four readings, each row the function's own figure at the inputs the file
     states (`min_cut.bound_charged`, recomputed here), its limit at the share (`min_cut.capped`) and the pooled total
-    in gates at that limit. No cut number is printed without its limit. The fourth reading counts the uncredited words
+    in gates at that limit. No number of the tied policy is printed without its limit. The fourth reading counts the uncredited words
     as fresh input, so it is never above the first."""
     s = 0.002315
     doc = report.main(["--stated-only", "--uncredited-share", "0.2315%"], commit=lambda: None)
@@ -284,9 +284,9 @@ def test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_l
     work = {"N": N, "O": N * sh.outputs * 16 / sh.macs, "size": p.c}
     # one block: the count with every word tied, beside its limit, on one line
     one = min_cut.bound(p.c, p.k, **work).slowdown
-    assert tied["block"]["cut_number"] == one == pytest.approx(37_653.4, abs=0.05)
+    assert tied["block"]["number"] == one == pytest.approx(37_653.4, abs=0.05)
     assert tied["block"]["limit"] == min_cut.capped(one, tied["uncredited"]["share"]) == pytest.approx(427.1, abs=0.05)
-    assert "every word tied, k = 146,080: cut number 37,653.4, limit at s 427.1" in out
+    assert "every word tied, k = 146,080: number 37,653.4, limit at s 427.1" in out
     alone = [line for line in lines[:-1] if "37,653" in line]
     assert len(alone) == 1 and "limit at s" in alone[0]
     # the uncredited words: at most the share's MACs over the least fan-in, 32 fresh bits each
@@ -294,7 +294,7 @@ def test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_l
     assert words == pytest.approx(s * N / 2_048) and tied["uncredited"]["least_fan_in"] == 2_048
     k_words = tied["block"]["with_words"]["k"]
     assert k_words == pytest.approx(146_080 + 32 * words)
-    assert tied["block"]["with_words"]["cut_number"] == min_cut.bound(p.c, k_words, **work).slowdown < one
+    assert tied["block"]["with_words"]["number"] == min_cut.bound(p.c, k_words, **work).slowdown < one
     rows = tied["periods"]
     assert len(rows) == 2 * 3 * 4 and {r["where"] for r in rows} == {"one datacenter", "the world"}
     for i in range(0, len(rows), 4):
@@ -310,22 +310,22 @@ def test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_l
                 min_cut.bound_charged(p.c, p.k, rows=True, **terms),
                 min_cut.bound_charged(p.c, k_words, w=min_cut.best_w(p.c, k_words, **terms), **terms))
         for r, got, pinned in zip((best, top, each, in_k), want, (*FLEET[best["period"]], None)):
-            assert (r["cut_number"], r["charged"], r["statement"], r["rests_on"]) == (
+            assert (r["number"], r["charged"], r["statement"], r["rests_on"]) == (
                 got.slowdown, got.charged, got.statement, got.rests_on)
-            assert pinned is None or r["cut_number"] == pytest.approx(pinned, abs=0.05)
+            assert pinned is None or r["number"] == pytest.approx(pinned, abs=0.05)
             assert r["limit"] == min_cut.capped(got.slowdown, tied["uncredited"]["share"]) < 1 / s
             assert r["gates"]["blocks"] == blocks * p.c and r["gates"]["training_by_the_count"] == got.gates
             assert r["gates"]["training_at_the_limit"] == pytest.approx(blocks * p.c / r["limit"])
             assert r["share"] == pytest.approx(1 / r["limit"]) and r["share"] >= s
             row = next(line for line in lines if line.split()[:1] == r["where"].split()[:1] and r["reading"] + "  " in line
                        and f"  {r['period']} " in line)
-            assert f"{r['cut_number']:,.1f}" in row and f"{r['limit']:,.1f}" in row
+            assert f"{r['number']:,.1f}" in row and f"{r['limit']:,.1f}" in row
             assert report._g(r["gates"]["training_at_the_limit"]) in row
         assert (best["reading"], best["w"]) == (f"one β_x, with the threshold w = {w:.6g}", w)
         assert (top["reading"], top["w"]) == ("one β_x at the top budget, no block charged", None)
         assert (each["reading"], each["statement"]) == ("a β_x a block, no threshold", min_cut.HE_ROWS)
         assert in_k["reading"].endswith(f", {T.IN_K}") and in_k["uncredited_words_in_k"] and in_k["k"] == k_words
-        assert in_k["cut_number"] < best["cut_number"] and in_k["limit"] < best["limit"]
+        assert in_k["number"] < best["number"] and in_k["limit"] < best["limit"]
         assert best["statement"] == top["statement"] == in_k["statement"] == min_cut.HE_CHARGED
     # each statement prints with the standing the locks give it, and no limit is called proved
     standing = {x: report.STANDING[lean.status(x)] for x in (min_cut.HE, min_cut.HE_CHARGED, min_cut.HE_ROWS)}

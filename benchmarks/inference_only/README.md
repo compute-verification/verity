@@ -73,7 +73,7 @@ no figure covers such a work, and the print says so beside each policy's bound a
 
 `tied.toml` is the served class with every tied value right: PoUW binds each output of the layers' linears to the
 linear's operands, so a block reads as fresh input only its scan state row and the execution phase's salt. Nothing
-serves it and this tree builds no circuit of it. Its cut number with every word tied is far above the served policy's
+serves it and this tree builds no circuit of it. Its number with every word tied is far above the served policy's
 1, and is never printed alone. Two things stand between it and a claim, and the section prints each figure with both
 (`tied.py`):
 
@@ -82,19 +82,19 @@ serves it and this tree builds no circuit of it. Its cut number with every word 
   many a block of a phase, over the phases the period has. They enter the count over the period
   (`min_cut.bound_charged`) under three readings, each printed under its name (`Charged.reading`): one `β_x` with the
   threshold at which the figure is largest, one `β_x` at the top budget with no block charged, and a `β_x` a block.
-- **The uncredited share** `s`: a developer gets that share of a block's work whole, so each cut number `ρ` is printed
+- **The uncredited share** `s`: a developer gets that share of a block's work whole, so each number `ρ` is printed
   with its limit at `s`, `1 / (s + 1/ρ)` (`min_cut.capped`), and the pooled total in gates is at that limit. The
   words that work computes are tied by nothing either: a fourth reading counts them as fresh input, `k + 32 u` with
   `u` the most words the share's MACs feed (a word of a linear's output is fed by at least the least fan-in of the
   model's linears).
 
 It prints one block, then one week, one month and one year on one datacenter and on the world's compute: the blocks,
-their gates and the untied words; then under each reading the blocks charged at most, the cut number, its limit at
+their gates and the untied words; then under each reading the blocks charged at most, the number, its limit at
 `s`, and the training the period's blocks hold at most at that limit, in gates (the gates `c` counts) and as a share
 of the blocks' gates. Three lines say what is proved (each count's statement with the standing the locks give it,
 `rho.lean.status`; a `β_x` a block is no Lean statement, and no limit is proved, being arithmetic on the typed share),
 what is a premise (the share, the tie, the bound on the untied words, (H) and (E)), and what is scaled (every row).
-`--policy tied.toml` is refused: it would print the cut number alone.
+`--policy tied.toml` is refused: it would print the number alone.
 
 ## What it does not mean
 
