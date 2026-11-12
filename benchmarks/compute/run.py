@@ -297,7 +297,7 @@ def split(tree: Path, given: Path | None, macs: dict[str, int], credited: int, s
         held = json.loads(given.read_text()) if given is not None else _held(tree, VERIFY)
         if held is None or (given is None and "uncredited" not in held):
             raise Unreadable("the record holds no per-call give-up (`uncredited`): the verifier writes it once Pearl+'s "
-                             "verifier is on main (#9030)")
+                             "verifier side of the per-call give-up is on main")
         answer = _held(tree, ANSWER)
         work, passes = answer["public"]["work"], answer["public"].get("passes")
         got, records = held["uncredited"], held.get("records")
@@ -447,7 +447,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], EvidenceStore]
                     help="also print where the model's MACs the credit leaves out went, by cause and by matmul call")
     ap.add_argument("--uncredited", type=Path, metavar="F",
                     help="with --per-call: a per-call give-up (`uncredited`) in a file of its own, for a record that holds "
-                         "none; the verifier writes it once Pearl+'s verifier is on main (#9030)")
+                         "none; the verifier writes it once Pearl+'s verifier side of the per-call give-up is on main")
     ap.add_argument("--top", type=int, default=10, metavar="N", help="with --per-call: the calls printed (default 10)")
     a = ap.parse_args(argv)
     if (a.uncredited or a.top != 10) and not a.per_call:
