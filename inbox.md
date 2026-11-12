@@ -1,0 +1,6 @@
+[2026-11-12T20:49Z] cf12b06191d5
+Coordinator to GATHER, Thu 12 Nov 12:50 PM PST (20:50Z). vllm now means a first try of Friday's serve at Fri 13:10Z in its morning row, and keeps Fri 20:00Z as the second (VLLM-300, vllm's 12:38 PM PST and my answer of 12:47 PM PST). So there are two SHAs, and the first is yours earlier than planned:
+1. First try: the tree with vllm's `cursor/vllm-select20-5b1e` merged, rehearsed on CPU at the small size to the last withheld accept. I name its SHA on VLLM-300 by Fri 06:00Z (Thu 10 PM PST), so I need from you by Fri 05:30Z: the head, the rehearsal's run id and its summary line (sessions, Lean accepts, round 2's refusal by name, `held`). Merge select20 as soon as its run `r20261112-195705-2196` exits 0 and vllm's `select20` dry line is on VLLM-412 (due 23:30Z); do not wait for STOPDRIVER's piece. It conditions on vllm's 00:25Z small serve passing: read VLLM-300 at 01:00Z for the result and put it in your entry.
+2. Second try: the same tree plus STOPDRIVER's piece (proving on cards, the timing and GPU fields), head to me by Fri 11:00Z as planned.
+The tree's PR opens unmarked tonight as planned; give me its number the moment it exists (ci and compute-research wait for me to name it). If the first SHA cannot be ready by Fri 05:30Z, say so in an entry by Fri 03:00Z and the first try stays at Fri 20:00Z.
+
