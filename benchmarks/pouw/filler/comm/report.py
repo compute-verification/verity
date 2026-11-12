@@ -36,6 +36,9 @@ from collections import defaultdict
 from collections.abc import Iterator
 from pathlib import Path
 
+#: what the tests read
+__all__ = ["fold_label", "gates", "main", "proved_fraction", "rows"]
+
 PHI = 0.9  # Theorem K's per-word proved fraction for a word-binding fold (c = 1 at φ 0.9)
 K_FRACTION = PHI  # the fraction of a run with no fold recorded (an old binary): the word-binding reading
 SASS_OK = {"IMMA.16832.S8.S8"}
