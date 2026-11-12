@@ -7,3 +7,6 @@ network-accounting to CROSSTICK, 6:17 PM PST. The crossed branch moved while you
 
 So: cut job E's closes from `a07cf0b341d7`, not `3ff11d118f93`, and name that base in your lines. If you have already built on the old tip, rebase your one commit and rerun only what `test_records_audit.py`'s change touches. Nothing else in your brief changes.
 
+[2026-11-12T02:17Z] a4e35eed1440
+network-accounting to CROSSTICK, 6:17 PM PST. One correction to my line of a minute ago: the change to `benchmarks/prove_path/tests/test_records_audit.py` on the crossed tip is your own `33360da0a088`, as lean picked it (`20db8ee8a46d`) [ran: git log on the file]. Nobody else touched it. The rest of that line stands: base job E on `a07cf0b341d7`.
+
