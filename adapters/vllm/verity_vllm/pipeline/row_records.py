@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import glob
 import gzip
+import hashlib
 import json
 import os
 import time
@@ -15,9 +16,9 @@ from typing import Any
 
 from verity_vllm.commit.partition import word_check_refusal
 from verity_vllm.config import RowConfig, checkpoint_dir
-from verity_vllm.pipeline.row_json import load_json, read_json, write_json
+from verity_vllm.pipeline import row_json
+from verity_vllm.pipeline.row_json import field_of, load_json, read_json, write_json
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.query.manifest.format import components_fold_digest
 from verity_vllm.target_family import declared_profile
 
 __all__ = ["COMPOSE_PEAK_RATIO", "FOLD_PART_MIN_S", "applicable_taps", "build_jobs_auto", "compose_bytes", "composed_ok", "declared_target", "decomp_rc",
@@ -48,11 +49,11 @@ def row_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
     w = read_json(wl)
     s = w["sweep"]
     lp, t = max(s["input_lengths"]), max(s["output_caps"]) - 1
-    sp = s.get("sampling_params") or {}
+    sp = s.get("sampling_params")
     snap = "0,1"
-    if float(sp.get("temperature", 0) or 0) > 0 and w.get("requests"):
+    if sp and float(sp.get("temperature", 0) or 0) > 0 and w.get("requests"):
         r0 = w["requests"][0]
-        lp = int(r0.get("prompt_len") or len(r0.get("prompt_token_ids") or []))
+        lp = int(r0.get("prompt_len") or len(row_json.listed_of(r0, "prompt_token_ids")))
         t = int(r0["max_tokens"]) - 1
         snap = "all"
     ck = checkpoint_dir(w["model"], RowConfig.of(w).engine.revision, hf_home, checkpoints)
@@ -242,12 +243,12 @@ def build_jobs_auto(shapes: list[tuple[int, int]] | None = None, layers: int | N
 def census_digest(result: dict[str, Any]) -> str | None:
     """A request Build's census/v1 digest, a function of its Program alone (``result.json``'s ``census``: the census the Build
     cached beside its descriptor, `pipeline.memory_map.cache`); None for a Build without one."""
-    return (result.get("census") or {}).get("census")
+    return field_of(result.get("census"), "census")
 
 
 def _ir(r: dict) -> dict:
     """``{"ir": ...}`` for a Build whose Program isn't the word IR (its word root and digest, ``boolean.derived``'s provenance), else ``{}``."""
-    return {"ir": i} if (i := (r.get("program") or {}).get("ir")) else {}
+    return {"ir": i} if (i := field_of(r.get("program"), "ir")) else {}
 
 
 def build_summary(d: str) -> str:
@@ -259,14 +260,14 @@ def build_summary(d: str) -> str:
         art = f"{d}/build_{w}/artifact.json"
         a = read_json(art) if os.path.exists(art) else {}
         out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "exception": r.get("exception"), "message": (r.get("message") or "")[:300],
-                  "program_digest": (r.get("program") or {}).get("digest") or a.get("program_digest"), "census_digest": census_digest(r),
+                  "program_digest": field_of(r.get("program"), "digest") or a.get("program_digest"), "census_digest": census_digest(r),
                   "identity": a.get("identity"),
-                  "correspondence_digest": (r.get("program") or {}).get("correspondence_digest") or a.get("correspondence_digest"),
-                  "target": (a.get("target_profile") or {}), "applicability": a.get("applicability"), **_ir(r)}
+                  "correspondence_digest": field_of(r.get("program"), "correspondence_digest") or a.get("correspondence_digest"),
+                  "target": target if (target := a.get("target_profile")) else {}, "applicability": a.get("applicability"), **_ir(r)}
     for p in sorted(glob.glob(f"{d}/build_request_LP*_T*/result.json")):
         r, w = read_json(p), os.path.basename(os.path.dirname(p))
-        out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "message": (r.get("message") or "")[:300], "program_digest": (r.get("program") or {}).get("digest"),
-                  "census_digest": census_digest(r), "correspondence_digest": (r.get("program") or {}).get("correspondence_digest"), **_ir(r)}
+        out[w] = {"ok": bool(r.get("ok")), "unsupported": r.get("unsupported"), "message": (r.get("message") or "")[:300], "program_digest": field_of(r.get("program"), "digest"),
+                  "census_digest": census_digest(r), "correspondence_digest": field_of(r.get("program"), "correspondence_digest"), **_ir(r)}
     write_json(out, f"{d}/build_summary.json")
     return "PASS" if all(v["ok"] for v in out.values()) else "FAIL"
 
@@ -338,8 +339,8 @@ def fold_steps(d: str, default: int) -> int:
 def is_stochastic(wl: str) -> bool:
     """The workload's sampling variant has temperature > 0."""
     w = read_json(wl)
-    v = str((w.get("sampling") or {}).get("variant", "greedy"))
-    p = (w.get("variants") or {}).get(v) or {"temperature": 0.0}
+    v = str(sm.get("variant", "greedy") if (sm := w.get("sampling")) else "greedy")
+    p = field_of(w.get("variants"), v) or {"temperature": 0.0}
     return float(p.get("temperature", 0.0)) > 0.0
 
 
@@ -351,31 +352,31 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
     the record was produced by this attempt (or is an explicit complete ``resumed`` CPU-phase record), and a stochastic
     row's sampler value check passes (``rcs`` -1 = a greedy row)."""
     cmp = read_json(f"{d}/match_compare.json") if os.path.exists(f"{d}/match_compare.json") else {}
-    c = cmp.get("compare") or {}
-    tot = c.get("totals") or {}
-    steps_a, steps_b = (c.get("a") or {}).get("steps"), (c.get("b") or {}).get("steps")
-    canon = (c.get("canonical_sha256") or {}).get("equal")
+    c = cmp.get("compare")
+    tot = totals if (totals := field_of(c, "totals")) else {}
+    steps_a, steps_b = field_of(field_of(c, "a"), "steps"), field_of(field_of(c, "b"), "steps")
+    canon = field_of(field_of(c, "canonical_sha256"), "equal")
     # PASS = canonical instance sequences equal (spec sequence + operand wiring per step), same step count, no differing operands
     verdict = None
     decomp = read_json(f"{d}/match_decomp.json") if os.path.exists(f"{d}/match_decomp.json") else None
     if decomp is not None:
         # B>1: the batch decomposition is the verdict -- every request canonical-equal to its own (LP_r, T_r) Program, every instance
         # attributed, no cross-request reads, no missing derivation
-        reqs = decomp.get("requests") or []
+        reqs = row_json.listed_of(decomp, "requests")
         canon = all(r.get("canonical_equal") is True for r in reqs) and bool(reqs)
-        tot = {"requests": len(reqs), "operands_equal": sum(int((r.get("totals") or {}).get("operands_equal", 0) or 0) for r in reqs),
-               "operands_different": sum(int((r.get("totals") or {}).get("operands_different", 0) or 0) for r in reqs),
-               "unattributed": (decomp.get("attribution") or {}).get("unattributed"), "xreq": decomp.get("xreq_total"),
+        tot = {"requests": len(reqs), "operands_equal": sum(int(field_of(r.get("totals"), "operands_equal") or 0) for r in reqs),
+               "operands_different": sum(int(field_of(r.get("totals"), "operands_different") or 0) for r in reqs),
+               "unattributed": field_of(decomp.get("attribution"), "unattributed"), "xreq": decomp.get("xreq_total"),
                "shapes": sorted({f"LP{r.get('LP')}_T{r.get('T')}" for r in reqs}),
                # the operand counts are X-09's POSITIONAL (sequence) comparison; under the dag criterion a request step that is a
                # dependency-safe permutation of its component's counts its displaced operands here while its DAG multiset is equal
                "within_step_criterion": decomp.get("within_step_criterion"),
                "operands_note": "positional comparison counts (sequence); verdict per within_step_criterion, see match_decomp.json per request"}
         steps_a = steps_b = sum(int(r.get("steps") or 0) for r in reqs)
-        verdict = "PASS" if decomp.get("verdict") == "PASS" else f"FAIL batch_decomp {decomp.get('verdict')}: {'; '.join(decomp.get('reasons') or [])[:300]}"
+        verdict = "PASS" if decomp.get("verdict") == "PASS" else f"FAIL batch_decomp {decomp.get('verdict')}: {'; '.join(row_json.listed_of(decomp, 'reasons'))[:300]}"
     elif cmp:
         verdict = "PASS" if (canon is True and steps_a == steps_b and int(tot.get("operands_different", 0) or 0) == 0) else \
-                  f"FAIL canonical_equal={canon} steps={steps_a}/{steps_b} operands_different={tot.get('operands_different')} hist_diff={len(cmp.get('histogram_diff_T_normalised') or {})}"
+                  f"FAIL canonical_equal={canon} steps={steps_a}/{steps_b} operands_different={tot.get('operands_different')} hist_diff={len(row_json.listed_of(cmp, 'histogram_diff_T_normalised'))}"
     stages = {}
     sp = f"{d}/match/stages.json"
     if os.path.exists(sp):
@@ -394,14 +395,14 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
     # the capture/control stage records must say rc 0; when the stage record was set aside after an interrupted save a resume has none
     # for the GPU stages -- accepted on the completion markers above, labelled stage_record_absent
     rec_stage_absent = resumed and not any(k in stages for k in ("capture", "control"))
-    rec_stage_ok = all((stages.get(k) or {}).get("rc") == 0 for k in ("capture", "control")) or (rec_stage_absent and rec_complete)
+    rec_stage_ok = all(field_of(stages.get(k), "rc") == 0 for k in ("capture", "control")) or (rec_stage_absent and rec_complete)
     record = {"fresh": bool(rec_fresh and rec_stage_ok), "log_mtime_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(rec_mtime)) if rec_mtime else None,
               "stage_start_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(t0)),
               "resumed": resumed, "resumed_record_complete": rec_complete if resumed else None, "stage_record_absent": rec_stage_absent,
-              "capture_rc": (stages.get("capture") or {}).get("rc"), "control_rc": (stages.get("control") or {}).get("rc"),
+              "capture_rc": field_of(stages.get("capture"), "rc"), "control_rc": field_of(stages.get("control"), "rc"),
               "reason": None if (rec_fresh and rec_stage_ok) else
                         ("record predates this match stage (stale record from a previous attempt)" if not rec_fresh else
-                         f"capture/control stage failed: capture rc={(stages.get('capture') or {}).get('rc')} control rc={(stages.get('control') or {}).get('rc')}")}
+                         f"capture/control stage failed: capture rc={field_of(stages.get('capture'), 'rc')} control rc={field_of(stages.get('control'), 'rc')}")}
     tok_eq = None
     try:
         ct, it = read_json(f"{d}/match/control/tokens.json"), read_json(f"{d}/match/capture/tokens.json")
@@ -424,27 +425,27 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
     if not G:
         gm_verdict = {97: "NOT RUN", 98: "NO WORKLOAD PROGRAM", 99: "NO FOLD", 124: "TIMEOUT"}.get(rcg, f"rc={rcg}")
     gm = {"comparator": G.get("comparator"), "rules_version": G.get("rules_version"), "rc": rcg, "verdict": gm_verdict, "failed_checks": G.get("failed_checks"),
-          "checks": {c.get("id"): c.get("status") for c in (G.get("checks") or [])}, "within_step_criterion": G.get("within_step_criterion"),
-          "workload_digest": (G.get("global_program") or {}).get("workload_digest"), "achieved_concurrency": G.get("achieved_concurrency"),
-          "generated_lengths": {e.get("request_id"): e.get("generated_length") for e in (G.get("requests") or [])},
+          "checks": {c.get("id"): c.get("status") for c in row_json.listed_of(G, "checks")}, "within_step_criterion": G.get("within_step_criterion"),
+          "workload_digest": field_of(G.get("global_program"), "workload_digest"), "achieved_concurrency": G.get("achieved_concurrency"),
+          "generated_lengths": {e.get("request_id"): e.get("generated_length") for e in row_json.listed_of(G, "requests")},
           "eos_truncated_requests": G.get("eos_truncated_requests"),
-          "eos_verified": {e["request_id"]: e.get("eos_verified") for e in (G.get("requests") or []) if "eos_verified" in e} or None,
+          "eos_verified": {e["request_id"]: e.get("eos_verified") for e in row_json.listed_of(G, "requests") if "eos_verified" in e} or None,
           # the two lengths kept distinct per request + the Program's declared LAG vs the record's attestation (GM-01 res.lag)
-          "served_output_lens": {e.get("request_id"): e.get("served_output_len") for e in (G.get("requests") or []) if "served_output_len" in e} or None,
-          "executed_prefix_lens": {e.get("request_id"): e.get("executed_prefix_len") for e in (G.get("requests") or []) if "executed_prefix_len" in e} or None,
+          "served_output_lens": {e.get("request_id"): e.get("served_output_len") for e in row_json.listed_of(G, "requests") if "served_output_len" in e} or None,
+          "executed_prefix_lens": {e.get("request_id"): e.get("executed_prefix_len") for e in row_json.listed_of(G, "requests") if "executed_prefix_len" in e} or None,
           "lag": G.get("lag"), "alerts": G.get("alerts"),
           # the declared stop rule (set + source) beside every verdict with an early stop: outside the digest; the chronology
           # check is the one global-match check that records it
-          "stop_rule": (next((c.get("stop_rule") for c in (G.get("checks") or []) if "stop_rule" in c), None)
+          "stop_rule": (next((c.get("stop_rule") for c in row_json.listed_of(G, "checks") if "stop_rule" in c), None)
                         if G.get("eos_truncated_requests") else None),
           "seconds": G.get("seconds"), "artifact": "global_match.json"}
     # the sampler value check (stochastic rows only; rcs == -1 -> a greedy row, not applicable)
     stoch = None
     if rcs != -1:
         sr = read_json(f"{d}/match_stoch.json") if os.path.exists(f"{d}/match_stoch.json") else {}
-        ss = sr.get("summary") or {}
-        stoch = {"rc": rcs, "verdict": ss.get("verdict", "NOT-RUN"), "rows": ss.get("rows"), "device_facts_all_match": ss.get("device_facts_all_match"),
-                 "masked_rows_all_equal": ss.get("masked_rows_all_equal"), "reasons": (sr.get("reasons") or [])[:6], "variant": sr.get("variant")}
+        ss, why = sr.get("summary"), sr.get("reasons")
+        stoch = {"rc": rcs, "verdict": ss.get("verdict", "NOT-RUN") if ss else "NOT-RUN", "rows": field_of(ss, "rows"), "device_facts_all_match": field_of(ss, "device_facts_all_match"),
+                 "masked_rows_all_equal": field_of(ss, "masked_rows_all_equal"), "reasons": why[:6] if why else [], "variant": sr.get("variant")}
         if verdict == "PASS" and (rcs != 0 or stoch["verdict"] != "PASS"):
             verdict = f"FAIL stoch value check {stoch['verdict']}: {'; '.join(stoch['reasons'])[:400]}"
     ok = (verdict == "PASS") and fold_ok and (tok_eq is not False) and gm_ok and record["fresh"] and (rcs in (-1, 0))   # the sampler value check must pass on a stochastic row
@@ -464,9 +465,9 @@ def match_summary(d: str, rcm: int, rcc: int, rcg: int, t0: int, rcs: int, resum
 def match_line(d: str) -> str:
     """The Match stage's stages.txt detail, from ``match_summary.json``."""
     s = read_json(f"{d}/match_summary.json")
-    g = s.get("global_match") or {}
-    return " ".join(map(str, ("verdict", s["compare_verdict"], "global", g.get("verdict"), g.get("failed_checks") or "", g.get("within_step_criterion") or "",
-                              "concurrency", (g.get("achieved_concurrency") or {}).get("observed_max"), "tokens_equal",
+    g = s.get("global_match")
+    return " ".join(map(str, ("verdict", s["compare_verdict"], "global", field_of(g, "verdict"), field_of(g, "failed_checks") or "", field_of(g, "within_step_criterion") or "",
+                              "concurrency", field_of(field_of(g, "achieved_concurrency"), "observed_max"), "tokens_equal",
                               s["control_vs_instrumented_tokens_equal"], "fold", s["fold_ok"])))
 
 
@@ -535,7 +536,7 @@ def applicable_taps(path: str, ck: Any) -> list[str]:
     """The taps the row runs that apply to it: on, and the manifest names at least one identity of the tap's family (a dense model has
     no router, a TP1 row no vocabulary range).  The row passes a tap's Commit source for these only."""
     try:
-        fams = {r.get("family") for r in read_json(path).get("identities") or []}
+        fams = {r.get("family") for r in row_json.listed_of(read_json(path), "identities")}
     except (OSError, ValueError, AttributeError):
         fams = set()
     return [field for field, _flag, key in TAP_POLICIES if getattr(ck, field, "0") == "1" and key in fams]
@@ -560,19 +561,19 @@ def program_digest_of_record(d: str, batch: int) -> str:
     (cap-shape) request Program's digest; B>=2 GP-01's workload digest, else the fold of the per-shape request digests."""
     b, wd = read_json(f"{d}/build_summary.json"), ""
     if batch <= 1:
-        return (b.get("request") or {}).get("program_digest") or ""
+        return field_of(b.get("request"), "program_digest") or ""
     wp = f"{d}/build_workload/workload_program.json"
     if os.path.exists(wp):
         w = read_json(wp)
         wd = w.get("workload_digest") or w.get("program_digest") or w.get("digest") or ""
     comps = sorted(v["program_digest"] for k, v in b.items() if k.startswith("build_request_LP") and isinstance(v, dict) and v.get("program_digest"))
-    return wd or (components_fold_digest(comps) if comps else "")
+    return wd or (hashlib.sha256(("workload-components/" + ",".join(comps)).encode()).hexdigest() if comps else "")
 
 
 def snapshot_steps_of_record(d: str) -> str:
     """The Match record's snapshot steps (``match/run.json``), comma-joined; "" when unreadable."""
     try:
-        s = read_json(f"{d}/match/run.json").get("snapshot_steps") or []
+        s = read_json(f"{d}/match/run.json").get("snapshot_steps")
     except (OSError, ValueError, AttributeError):
         return ""
     return ",".join(map(str, s)) if s else ""
@@ -584,7 +585,7 @@ def wor_component(d: str) -> str:
     to the of-record set (workload digest + manifest component digests), so it must come from a component; the weights
     struct is model-level, so any component gives the same fields and root."""
     m = read_json(os.path.join(d, "manifest.json"))
-    comps = m.get("components") or {}
+    comps = row_json.listed_of(m, "components")
     for rid in sorted(comps, key=lambda r: (len(r), r)):
         c = comps[rid] or {}
         lp, t = c.get("LP"), c.get("T")
@@ -612,7 +613,7 @@ def wor_stale(record: str, result: str, schema: str) -> str:
     res = read_json(result) if os.path.exists(result) else {}
     # the component Program digest as a real result.json carries it (artifact.program_digest / program.digest; a top-level key on the
     # synthetic ones), else the instances.json.gz digest the derivation itself falls back to -- an empty value here would skip the check
-    rd = str(res.get("program_digest") or (res.get("artifact") or {}).get("program_digest") or (res.get("program") or {}).get("digest") or "")
+    rd = str(res.get("program_digest") or field_of(res.get("artifact"), "program_digest") or field_of(res.get("program"), "digest") or "")
     if not rd:
         ig = os.path.join(os.path.dirname(result), "instances.json.gz")
         if os.path.exists(ig):
@@ -625,11 +626,11 @@ def wor_stale(record: str, result: str, schema: str) -> str:
     if rd and pd != rd:
         return f"built for Program {pd[:16] or '?'}, this component is {rd[:16]} (stale)"
     if not isinstance(rec.get("engine_assumptions"), dict):
-        return f"predates MAN-09c (no engine_assumptions; {len(rec.get('unpinned') or [])} engine constant(s) unpinned by name)"
+        return f"predates MAN-09c (no engine_assumptions; {len(row_json.listed_of(rec, 'unpinned'))} engine constant(s) unpinned by name)"
     if schema and str(rec.get("schema") or "") != schema:
         return f"schema {rec.get('schema') or '?'}, this tree derives {schema} (root formula differs: the analytic entry is keyed by its inputs, not the host)"
     if rec.get("complete") is not True:
-        return f"incomplete ({len(rec.get('unresolved') or [])} unresolved field(s))"
+        return f"incomplete ({len(row_json.listed_of(rec, 'unresolved'))} unresolved field(s))"
     return ""
 
 
@@ -639,9 +640,9 @@ def commit_line(d: str) -> str:
         v = read_json(f"{d}/verdict.json")
     except (OSError, ValueError):
         return ""
-    r = v.get("runs") or {}
-    checks = " ".join(f"{c['name']}={c['outcome']}" for c in v.get("checks") or [] if c.get("rule") is None)
-    return f"runs {r.get('instrumented')} failed {r.get('failed')} checks {checks}"
+    r = v.get("runs")
+    checks = " ".join(f"{c['name']}={c['outcome']}" for c in row_json.listed_of(v, "checks") if c.get("rule") is None)
+    return f"runs {field_of(r, 'instrumented')} failed {field_of(r, 'failed')} checks {checks}"
 
 
 def manifest_verify_ok(d: str) -> str:
@@ -688,7 +689,7 @@ def tp_shape(wl: str, checkpoints: str, hf_home: str) -> dict[str, Any]:
 def tp_world(wl: str) -> int:
     """The manifest's ``sweep.tp`` (2 when it names none or does not read)."""
     try:
-        return int((read_json(wl).get("sweep") or {}).get("tp") or 2)
+        return int(field_of(read_json(wl).get("sweep"), "tp") or 2)
     except _READ:
         return 2
 
@@ -704,7 +705,7 @@ def tp_build_summary(b: str, world: int) -> str:
         for p in [f"{rd}/build_step"] + sorted(p for p in glob.glob(f"{rd}/build_request_LP*_T*") if os.path.isdir(p)):   # not the .log/.rc beside each dir
             res: dict[str, Any] = read_json(f"{p}/result.json") if os.path.exists(f"{p}/result.json") else {"ok": False, "message": "no result.json"}
             rk[os.path.basename(p)] = {"ok": bool(res.get("ok")), "unsupported": res.get("unsupported"), "message": (res.get("message") or "")[:300],
-                                       "program_digest": (res.get("program") or {}).get("digest"), "census_digest": census_digest(res),
+                                       "program_digest": field_of(res.get("program"), "digest"), "census_digest": census_digest(res),
                                        "construction": "aot" if res.get("aot") else "trace"}
             ok &= bool(res.get("ok"))
         wp = f"{rd}/build_workload/workload_program.json"
@@ -712,7 +713,7 @@ def tp_build_summary(b: str, world: int) -> str:
         rk["workload"] = {"ok": bool(W.get("workload_digest")), "workload_digest": W.get("workload_digest"), "reason": W.get("reason"), "message": W.get("message"), "mechanism": "GP-01 cb_a.global_program"}
         ok &= bool(W.get("workload_digest"))
         out["ranks"][f"rank{r}"] = rk
-    out["step"] = {"program_digest": (out["ranks"]["rank0"].get("build_step") or {}).get("program_digest")}    # research_result reads step.program_digest
+    out["step"] = {"program_digest": field_of(out["ranks"]["rank0"].get("build_step"), "program_digest")}    # research_result reads step.program_digest
     write_json(out, f"{os.path.dirname(b)}/build_summary.json")
     return "PASS" if ok else "FAIL"
 
@@ -725,13 +726,13 @@ def tp_build_digests(d: str) -> tuple[str, str]:
     """(rank 0 step digest[:16], ranks 1.. step digests[:16] joined by /) from ``build_summary.json``."""
     p = f"{d}/build_summary.json"
     return (_field(p, lambda s: (s["step"]["program_digest"] or "")[:16]),
-            _field(p, lambda s: "/".join(((s["ranks"][f"rank{r}"].get("build_step") or {}).get("program_digest") or "")[:16] for r in range(1, s["tp"]["world"]))))
+            _field(p, lambda s: "/".join((field_of(s["ranks"][f"rank{r}"].get("build_step"), "program_digest") or "")[:16] for r in range(1, s["tp"]["world"]))))
 
 
 def tp_manifest_line(d: str) -> str:
     return _field(f"{d}/manifest.json", lambda m: " ".join(str(x) for x in [
-        "complete", m.get("complete"), "identities", (m.get("populations") or {}).get("identities"), "tp_peer_binding_n_unbound",
-        (m.get("tp_peer_binding") or {}).get("n_unbound"), "unmodelled", json.dumps(m.get("unmodelled"))[:300], "digest", (m.get("manifest_digest") or "")[:16]]))
+        "complete", m.get("complete"), "identities", field_of(m.get("populations"), "identities"), "tp_peer_binding_n_unbound",
+        field_of(m.get("tp_peer_binding"), "n_unbound"), "unmodelled", json.dumps(m.get("unmodelled"))[:300], "digest", (m.get("manifest_digest") or "")[:16]]))
 
 
 def tp_manifest_complete(d: str) -> bool:
@@ -790,9 +791,9 @@ def tp_match_summary(m: str, rc_cap: int, rc_ctl: int, rc_chk: int, rc_fold: int
 def tp_commit_line(d: str) -> str:
     return _field(f"{d}/commit/summary.json", lambda s: " ".join(str(x) for x in [
         "pass", s.get("pass"), "pairs", s.get("pairs"), "delta", s.get("delta_wall_mean"), "roots", json.dumps(s.get("tp_run_roots"))[:80], "tokens",
-        s.get("tokens_equal"), "replay", (s.get("sampled_replay") or {}).get("result"), "linkage", (s.get("boundary_linkage") or {}).get("result"), "xrank",
-        (s.get("cross_rank_collectives") or {}).get("result"), "fold_binding", (s.get("fold_match_binding") or {}).get("result"), "weights_pin",
-        (s.get("weights_pin") or {}).get("result")]))
+        s.get("tokens_equal"), "replay", field_of(s.get("sampled_replay"), "result"), "linkage", field_of(s.get("boundary_linkage"), "result"), "xrank",
+        field_of(s.get("cross_rank_collectives"), "result"), "fold_binding", field_of(s.get("fold_match_binding"), "result"), "weights_pin",
+        field_of(s.get("weights_pin"), "result")]))
 
 
 def tp_commit_passed(d: str) -> bool:
