@@ -34,9 +34,9 @@ Every number says how it was obtained (``method``):
   affine in T, and built at T = BN + 16 and 2 BN + 16 (:data:`BLOCK_CHECKS`), whose excess over that fit must be one and
   two times one block's; a stratum of NB blocks is then the fit plus NB − 1 blocks' excess, evaluated at the stratum's
   mean T. The builds are at 16-aligned T: PV runs in 16-key steps, so a T between pads its last step.
-- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_law`); the counts' recurrence is read off builds at every
+- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_counts`); the counts' recurrence is read off builds at every
   V in :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
-- ``model`` (attention whose excess past the first key block is not affine in the block count, :func:`block_law`): that
+- ``model`` (attention whose excess past the first key block is not affine in the block count, :func:`block_excess`): that
   excess is fitted with a curvature through the three points, unchecked; or, when those builds are over ``--exact-nnz``,
   the first block's fit alone. Not exact.
 
@@ -98,7 +98,7 @@ AFFINE: dict[str, tuple[str, Callable[[Mapping[str, Any]], tuple[int, ...]]]] = 
     "moe-sum": ("H", lambda p: (16, 32, 48, 64)),
     "gumbel-top-p-token-select": ("V", lambda p: (64, 128, 192, 256)),
 }
-#: token-select's V − 1 ArgmaxStep scan: its counts' recurrence (:func:`argmax_scan_law`) is read off builds at every V in
+#: token-select's V − 1 ArgmaxStep scan: its counts' recurrence (:func:`argmax_scan_counts`) is read off builds at every V in
 #: SCAN_POINTS and checked against an exact build at SCAN_CHECK
 SCAN_POINTS = tuple(range(2, 140))
 SCAN_CHECK = 1030
@@ -397,7 +397,7 @@ def _pow2(x: int) -> bool:
     return x > 0 and x & (x - 1) == 0
 
 
-def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], dict[str, int]]:
+def argmax_scan_counts(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], dict[str, int]]:
     """token-select's counts at any V, from builds at consecutive V. Its step counter i is a constant, so a step's select of
     i costs one AND per bit of i that is not constant zero, and the running (best, best_i) are linear forms that grow by one
     term a step, never re-committed: with b = bit_length(V − 2), going from V − 1 to V adds ``alpha + b`` ANDs, the nonzeros'
@@ -451,7 +451,7 @@ def _log_comb(n: int, k: int) -> float:
     return math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)
 
 
-def draw_count(N: int, n: int, K: int, tail: float = float(DELTA)) -> tuple[float, int]:
+def sample_count(N: int, n: int, K: int, tail: float = float(DELTA)) -> tuple[float, int]:
     """A type's units in a uniform K-subset of N units, n of them the type's: ``(mean, q)``, q the least k with P(X > k) <= tail
     (hypergeometric, the upper tail summed term by term from the largest possible count down)."""
     if not 0 <= n <= N or not 0 <= K <= N:
@@ -609,7 +609,7 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
                 r.update(method="missing", reason=err)
                 continue
             try:
-                scan = argmax_scan_law({v: res[v] for v in SCAN_POINTS})
+                scan = argmax_scan_counts({v: res[v] for v in SCAN_POINTS})
             except ValueError as e:
                 r.update(method="missing", reason=str(e))
                 continue
@@ -683,7 +683,7 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
             r.setdefault("notes", []).append(f"a build past the first key block failed: {[c.get('error') for _, c in by_j.values()]}")
             continue
         r["block_checks"] = {T: {"built": _plain(c)} for T, c in by_j.values()}
-        block_law(r)
+        block_excess(r)
     log("second pass: done")
     for key, job in exact_jobs.items():
         r, c = out[key], big[job]
@@ -701,7 +701,7 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
     return out
 
 
-def block_law(r: dict[str, Any]) -> None:
+def block_excess(r: dict[str, Any]) -> None:
     """An attention head's cost past its first key block, from ``r["block_checks"]`` (builds at T = j BN + 16, j in
     :data:`BLOCK_CHECKS`): each metric's excess over the first block's fit is ``lin j + curv j (j − 1) / 2``. A metric with
     ``curv`` 0 is affine in the block count, checked on j = 0, 1, 2; when every metric is, the head is ``affine``. Otherwise
@@ -735,7 +735,7 @@ def reuse(path: str) -> dict[tuple, dict[str, Any]]:
             s["method"] = "model"
             s["_fit"] = {m: (Fraction(a), Fraction(b)) for m, (a, b) in s["fit"].items()}
             if s.get("block_checks"):
-                block_law(s)
+                block_excess(s)
         subs[_key(s["template"], s["params"])] = s
     return subs
 
@@ -817,7 +817,7 @@ def inventory(workloads: Sequence[Mapping[str, Any]], exact_nnz: float = 0, n_jo
                                          "committed": (V - 1) * step["rows"]}
             wk = work(t.template, t.params, t.T["mean"] if t.T else None)
             for gran, n, N, mult in (("vu", t.vus, N_vu, t.per_vu), ("subcircuit", t.vus * t.per_vu, N_sub, 1)):
-                mean, q = draw_count(N, n, K)
+                mean, q = sample_count(N, n, K)
                 g: dict[str, Any] = {"units": n, "population": N, "share": n / N, "sampled_mean": mean, "sampled_q": q,
                                      "ops": None if wk["ops_per_input"] is None else wk["ops_per_input"] * mult,
                                      "bytes": None if wk["bytes_per_input"] is None else wk["bytes_per_input"] * mult}
