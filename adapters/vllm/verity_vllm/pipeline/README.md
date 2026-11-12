@@ -34,7 +34,8 @@ command line), `registration_log` (`lower`, `record`, `word_bits`), `report` (th
 ## The Build and the Match
 
 The Build derives a row's Programs and the Match checks them against a live serve. `build` derives one request
-wrapper's Program from the pinned vLLM model class and writes it with its instance sequence (`build_instances`).
+wrapper's Program from the pinned vLLM model class under the row's sampling policy (`build_sampling`) and writes it
+with its instance sequence (`build_instances`).
 `global_program` composes the derived request Programs into a workload's Program. `manifest` builds the
 required-value manifest under the query of record, and `manifest_verify` rebuilds one and compares digests. `match`
 takes one configuration through every Match stage into one run directory: `match_stage` runs one stage's command,
@@ -50,7 +51,8 @@ fixture (`topp_pin_check`, `topp_split_probe`).
 What code outside these modules takes from one of them is what its `__all__` lists. For a command that is its options
 (`Options`, or `COMMANDS`) and `main`, which the command line reads, and beside them: `build` (`read_tp_links`,
 `same_module_path`, `sampler_geometry`, `sampling_policy`, `write_instances`), `build_instances` (`write_instances`,
-which `benchmarks/prove_path` imports too), `circuit_db` (`STAGED`, `checkpoint`, `data`), `global_program`
+which `benchmarks/prove_path` imports too), `build_sampling` (`SAMPLERS_BOUND`, `sampler_geometry`,
+`sampling_policy`), `circuit_db` (`STAGED`, `checkpoint`, `data`), `global_program`
 (`MODELLED_ENGINE`, `compilation_facts`, `request_id_of`, `stop_rule`, `workload_target`), `manifest` (`build`,
 `build_global`, `cpus`, `incomplete_rc`, `taps_of`), `match_fold` (`INSTANCES_FORM_ENV`, `INSTANCES_SCHEMA`,
 `INSTANCES_SCHEMA_V2`, `PROGRAM_SCHEMA`, `fold_summary_result`, `instances_form`, `persist_program`,
