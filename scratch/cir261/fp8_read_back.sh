@@ -59,7 +59,9 @@ GPU_LEASE_WHO=circuits-fp8readback bash "$LEASE" 1 --on "$CARD" --max-min "$MAX_
   taskset -c "$CORES" "$PY" "$T" --phase capture --out "$OUT"
 rc1=$?
 echo "$me: capture exit $rc1 at $(date -u +%FT%TZ); card $CARD now holds $(nvidia-smi -i "$CARD" --query-gpu=memory.used --format=csv,noheader,nounits 2> /dev/null) MiB"
-WHEEL_SO=6acb4075572bf71c19db6b07c654ed8f488be835f85461baae7ae2f80fa1ac42
+# The library of the pin's cu129 wheel, which pod_bootstrap.sh installs (wheel sha256 7aa52ac7...bbb3). The kernel's sm_90
+# SASS was read in it and in the pin's default wheel's library (6acb4075...ac42): the same 336 instructions.
+WHEEL_SO=683d3249f3a3e244105fcb9d966bc3979a3c20e1ad045b745bbee05650b37471
 taskset -c "$CORES" "$PY" "$T" --phase compare --out "$OUT" --library-sha256 "${LIBRARY_SHA256:-$WHEEL_SO}"
 rc2=$?
 echo "$me: compare exit $rc2 at $(date -u +%FT%TZ)"
