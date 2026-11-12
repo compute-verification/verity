@@ -5,6 +5,7 @@ public import Proofs.Flock.SamplingGeneric.Session
 public import Proofs.Flock.Soundness.Assumptions
 public import Proofs.Core.Game.Basic
 public import Proofs.Flock.Claims.Sampling.Reg
+public import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # The two-stage sampled verifier at its round order (`SampledKSTwo`)
@@ -29,11 +30,22 @@ At this code, four of `ksTwo_code`'s hypotheses are facts of the order and the b
   sessions and reveals are `c`'s.
 * `sessionsTwo_atOrder`: the two-stage contract at those premises (`sessionsTwo_code`).
 
+A second stage may read more bytes than one coin holds. `StageOrder k R` is a round order whose second stage reads
+the coins of the `R` rounds up to `second`, each after the first stage's coin, and `codeTwoStage` is `codeTwo` at it,
+the second stage's bytes read off those coins (`bytesStage`) by a byte map `b₂ x` on `R x` coins. `Order` is the case
+`R = 1` (`Order.stage`, `codeTwoAt_eq_stage`). The same four facts hold there: the first stage's two are
+`firstFixed_atOrder` and `bytesUniform_atOrder` as they stand, and
+
+* `bytesFixedTwo_stage`: none of the second stage's rounds is a session's;
+* `secondUniform_stage`: `SecondUniform` from `UniformRandomBytes` at the stage's call on its `R x` coins
+  (`StageUniform`), the coins of distinct rounds being independent (`Claims.Sampling.Pr_comp_inj`);
+* `ksTwo_stage`, `sessionsTwo_stage`: `ksTwo_atOrder` and `sessionsTwo_atOrder` at a stage order.
+
 `Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo` (`Proofs.Flock.SamplingGeneric.Guarantees`)
-states it, with the sessions' runs both ways (`SessionRuns`, which gives `SessionRunsTo`). Its witnesses:
+states `ksTwo_stage`, with the sessions' runs both ways (`SessionRuns`, which gives `SessionRunsTo`). Its witnesses:
 
 * `Flock.SecurityProofs.SampledKSTwo_honest`: every premise at a toy code (`toyCode`) that parses no statement, accepts
-  none, opens no session and reads no bytes;
+  none, opens no session and reads no bytes, its second stage one round;
 * `compilerKSTwo_nontrivial`: the conclusion's `CompiledTwo.KS` fails at a verifier that accepts with an empty relation.
 -/
 
@@ -144,6 +156,121 @@ theorem sessionsTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (cap : 
     (bytesUniform_atOrder c L₁ j b₁ hA₁) (firstFixed_atOrder c L₁ j b₁) (secondUniform_atOrder c L₂ j b₂ hA₂)
     (bytesFixedTwo_atOrder c L₁ L₂ j b₁ b₂) hr hcap hi hruns hnum hopens
 
+/-! ## A second stage of several rounds -/
+
+namespace StageOrder
+
+variable {k R : ℕ} (o : StageOrder k R)
+
+theorem round_injective : Function.Injective o.round := by
+  intro a b h
+  have h' : o.second.val - (R - 1 - a.val) = o.second.val - (R - 1 - b.val) := congrArg Fin.val h
+  have hf := o.fits
+  have ha := a.isLt
+  have hb := b.isLt
+  exact Fin.ext (by omega)
+
+theorem first_lt_round (i : Fin R) : o.first < o.round i := by
+  have hf := o.fits
+  have hi := i.isLt
+  show o.first.val < o.second.val - (R - 1 - i.val)
+  omega
+
+theorem round_le_second (i : Fin R) : o.round i ≤ o.second := by
+  show o.second.val - (R - 1 - i.val) ≤ o.second.val
+  omega
+
+end StageOrder
+
+/-- **A stage's bytes are uniform** (`UniformRandomBytes`, A3): at every statement `x`, the bytes `b x` returns on the
+`R x` uniform coins of the stage's rounds. -/
+def StageUniform (R L : Msg → ℕ) (b : (x : Msg) → (Fin (R x) → FlockDeploy.Coin) → Fin (L x) → Fin 256) : Prop :=
+  ∀ x, FlockSoundness.Assumptions.UniformRandomBytes (fun _ : Fin 1 => L x) fun cs _ => b x cs
+
+/-- **One coin's uniform call is a stage's of one round.** -/
+theorem stageUniform_one {L : Msg → ℕ} {b : (x : Msg) → FlockDeploy.Coin → Fin (L x) → Fin 256}
+    (h : CallsUniform L b) : StageUniform (fun _ => 1) L fun x cs => b x (cs 0) := fun x E =>
+  (FlockSoundness.ZK.prCoin_congr_equiv (Equiv.funUnique (Fin 1) FlockDeploy.Coin) fun a => E fun _ => b x a).trans
+    (h x E)
+
+section Stage
+
+variable (R : Msg → ℕ) (s : (x : Msg) → StageOrder (c.V.k x) (R x))
+  (bs : (x : Msg) → (Fin (R x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256)
+
+/-- **The code at its round order is the code at a stage order of one round.** -/
+theorem codeTwoAt_eq_stage :
+    codeTwoAt c reg L₁ L₂ j b₁ b₂ =
+      codeTwoStage c reg L₁ L₂ b₁ (fun _ => 1) (fun x => (j x).stage) fun x cs => b₂ x (cs 0) := rfl
+
+theorem bytesFixedTwo_stage :
+    BytesFixedTwo (c.atOrder (orderOf s)) L₁ L₂ (bytesFirst c L₁ (orderOf s) b₁) (bytesStage c L₂ R s bs) := by
+  intro x u
+  have hlt := (s x).lt
+  have h₁ : (s x).first ∉ ((c.rounds x u).filter fun t => (s x).second < t) :=
+    fun h => absurd (mem_filter.1 h).2 (not_lt.2 hlt.le)
+  have h₂ : ∀ i, (s x).round i ∉ ((c.rounds x u).filter fun t => (s x).second < t) :=
+    fun i h => absurd (mem_filter.1 h).2 (not_lt.2 ((s x).round_le_second i))
+  refine ⟨fun t ht => mem_filter.2 ⟨mem_univ _, hlt.trans (mem_filter.1 ht).2⟩, fun r d => ⟨?_, ?_⟩⟩
+  · change b₁ x (if (s x).first ∈ ((c.rounds x u).filter fun t => (s x).second < t) then d (s x).first
+      else r (s x).first) = b₁ x (r (s x).first)
+    simp only [h₁, ↓reduceIte]
+  · change bs x (fun i => if (s x).round i ∈ ((c.rounds x u).filter fun t => (s x).second < t) then d ((s x).round i)
+      else r ((s x).round i)) = bs x fun i => r ((s x).round i)
+    simp only [h₂, ↓reduceIte]
+
+theorem secondUniform_stage (h : StageUniform R L₂ bs) :
+    SecondUniform (c.atOrder (orderOf s)) L₂ (bytesStage c L₂ R s bs) := by
+  intro x r q
+  have hin : ∀ i, (s x).round i ∈ (univ.filter fun t => (s x).first < t : Finset (Fin (c.V.k x))) :=
+    fun i => mem_filter.2 ⟨mem_univ _, (s x).first_lt_round i⟩
+  change Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin =>
+    q (bs x fun i => if (s x).round i ∈ (univ.filter fun t => (s x).first < t : Finset (Fin (c.V.k x))) then
+      e ((s x).round i) else r ((s x).round i))) = Pr q
+  simp only [hin, ↓reduceIte]
+  exact (Claims.Sampling.Pr_comp_inj (s x).round (s x).round_injective fun cs => q (bs x cs)).trans
+    (pr_call (h x) q)
+
+/-- **The two-stage compiler at the deployed record, at a stage order**: `ksTwo_atOrder` with a second stage of
+several rounds, `SecondUniform` from the stage's A3 (`StageUniform`) and `BytesFixedTwo` from the stage order. -/
+theorem ksTwo_stage (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hA₁ : CallsUniform L₁ b₁)
+    (hA₂ : StageUniform R L₂ bs) (hreg : RegMatchesTwo (c.atOrder (orderOf s)) reg two)
+    (hr : (c.atOrder (orderOf s)).RefusesTwo FlockDeploy.sha512 two)
+    (hcap : (c.atOrder (orderOf s)).ReplayCap FlockDeploy.sha512 two
+      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) cap)
+    (hi : (c.atOrder (orderOf s)).InteriorFixed FlockDeploy.sha512 iroots)
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
+      (deploy _root_.Flock.Readable.relation (codeTwoStage c reg L₁ L₂ b₁ R s bs)))
+    (hnum : SessionsIn (codeTwoStage c reg L₁ L₂ b₁ R s bs))
+    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+      (deploy _root_.Flock.Readable.relation (codeTwoStage c reg L₁ L₂ b₁ R s bs)) two iroots) :
+    (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwoStage c reg L₁ L₂ b₁ R s bs) iroots two
+      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) cap).KS FlockDeploy.sha512 :=
+  ksTwo_code (c.atOrder (orderOf s)) reg two L₁ L₂ (bytesFirst c L₁ (orderOf s) b₁) (bytesStage c L₂ R s bs) iroots
+    cap hreg (bytesUniform_atOrder c L₁ (orderOf s) b₁ hA₁) (firstFixed_atOrder c L₁ (orderOf s) b₁)
+    (secondUniform_stage c L₂ R s bs hA₂) (bytesFixedTwo_stage c L₁ L₂ b₁ R s bs) hr hcap hi hruns hnum hopens
+
+/-- **The two-stage contract at a stage order**: `sessionsTwo_code` with `ksTwo_stage`'s facts of the stage order and
+the byte maps. -/
+theorem sessionsTwo_stage (iroots : Msg → Seen → ℕ → List Msg) (cap : Msg → ℕ) (hA₁ : CallsUniform L₁ b₁)
+    (hA₂ : StageUniform R L₂ bs) (hreg : RegMatchesTwo (c.atOrder (orderOf s)) reg two)
+    (hr : (c.atOrder (orderOf s)).RefusesTwo FlockDeploy.sha512 two)
+    (hcap : (c.atOrder (orderOf s)).ReplayCap FlockDeploy.sha512 two
+      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) cap)
+    (hi : (c.atOrder (orderOf s)).InteriorFixed FlockDeploy.sha512 iroots)
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
+      (deploy _root_.Flock.Readable.relation (codeTwoStage c reg L₁ L₂ b₁ R s bs)))
+    (hnum : SessionsIn (codeTwoStage c reg L₁ L₂ b₁ R s bs))
+    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+      (deploy _root_.Flock.Readable.relation (codeTwoStage c reg L₁ L₂ b₁ R s bs)) two iroots) :
+    (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwoStage c reg L₁ L₂ b₁ R s bs) iroots two
+      (replayTwo (c.atOrder (orderOf s)) reg L₁ (bytesFirst c L₁ (orderOf s) b₁)) cap).Sessions FlockDeploy.sha512 :=
+  sessionsTwo_code (c.atOrder (orderOf s)) reg two L₁ L₂ (bytesFirst c L₁ (orderOf s) b₁) (bytesStage c L₂ R s bs)
+    iroots cap hreg (bytesUniform_atOrder c L₁ (orderOf s) b₁ hA₁) (firstFixed_atOrder c L₁ (orderOf s) b₁)
+    (secondUniform_stage c L₂ R s bs hA₂) (bytesFixedTwo_stage c L₁ L₂ b₁ R s bs) hr hcap hi hruns hnum hopens
+
+end Stage
+
 end SamplingDeploy
 
 /-! ## Witnesses -/
@@ -218,23 +345,35 @@ theorem callsUniform_toy : CallsUniform (fun _ => 0) toyBytes := fun _ =>
   haveI : Subsingleton ((i : Fin 1) → Fin 0 → Fin 256) := ⟨fun _ _ => funext fun _ => funext fun t => t.elim0⟩
   uniformRandomBytes_of_subsingleton _
 
-/-- **`SampledKSTwo`'s premises hold at the toy code**, at its round order: both calls' A3 (they read no bytes), and
+/-- The toy's stage order: round `0`, then the one round `1`. -/
+def toyStage (x : Msg) : StageOrder (toyCode.V.k x) 1 := (toyOrder x).stage
+
+/-- The toy's stage byte map, which reads no bytes. -/
+def toyStageBytes (x : Msg) : (Fin 1 → FlockDeploy.Coin) → Fin ((fun _ : Msg => 0) x) → Fin 256 := fun _ i => i.elim0
+
+theorem stageUniform_toy : StageUniform (fun _ => 1) (fun _ => 0) toyStageBytes := fun _ =>
+  haveI : Subsingleton ((i : Fin 1) → Fin 0 → Fin 256) := ⟨fun _ _ => funext fun _ => funext fun t => t.elim0⟩
+  uniformRandomBytes_of_subsingleton _
+
+/-- **`SampledKSTwo`'s premises hold at the toy code**, at its stage order: both calls' A3 (they read no bytes), and
 the code's facts, since it parses no statement, accepts no run and opens no session. -/
 theorem _root_.Flock.SecurityProofs.SampledKSTwo_honest :
-    CallsUniform (fun _ => 0) toyBytes ∧ CallsUniform (fun _ => 0) toyBytes ∧
-      RegMatchesTwo (toyCode.atOrder toyOrder) (fun _ => none) (fun _ => none) ∧
-      (toyCode.atOrder toyOrder).RefusesTwo FlockDeploy.sha512 (fun _ => none) ∧
-      (toyCode.atOrder toyOrder).ReplayCap FlockDeploy.sha512 (fun _ => none)
-        (replayTwo (toyCode.atOrder toyOrder) (fun _ => none) (fun _ => 0) (bytesFirst toyCode (fun _ => 0) toyOrder
-          toyBytes)) (fun _ => 0) ∧
-      (toyCode.atOrder toyOrder).InteriorFixed FlockDeploy.sha512 (fun _ _ _ => []) ∧
+    CallsUniform (fun _ => 0) toyBytes ∧ StageUniform (fun _ => 1) (fun _ => 0) toyStageBytes ∧
+      RegMatchesTwo (toyCode.atOrder (orderOf toyStage)) (fun _ => none) (fun _ => none) ∧
+      (toyCode.atOrder (orderOf toyStage)).RefusesTwo FlockDeploy.sha512 (fun _ => none) ∧
+      (toyCode.atOrder (orderOf toyStage)).ReplayCap FlockDeploy.sha512 (fun _ => none)
+        (replayTwo (toyCode.atOrder (orderOf toyStage)) (fun _ => none) (fun _ => 0)
+          (bytesFirst toyCode (fun _ => 0) (orderOf toyStage) toyBytes)) (fun _ => 0) ∧
+      (toyCode.atOrder (orderOf toyStage)).InteriorFixed FlockDeploy.sha512 (fun _ _ _ => []) ∧
       SessionRuns FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation
-        (codeTwoAt toyCode (fun _ => none) (fun _ => 0) (fun _ => 0) toyOrder toyBytes toyBytes)) ∧
-      SessionsIn (codeTwoAt toyCode (fun _ => none) (fun _ => 0) (fun _ => 0) toyOrder toyBytes toyBytes) ∧
+        (codeTwoStage toyCode (fun _ => none) (fun _ => 0) (fun _ => 0) toyBytes (fun _ => 1) toyStage
+          toyStageBytes)) ∧
+      SessionsIn (codeTwoStage toyCode (fun _ => none) (fun _ => 0) (fun _ => 0) toyBytes (fun _ => 1) toyStage
+        toyStageBytes) ∧
       Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation
-        (codeTwoAt toyCode (fun _ => none) (fun _ => 0) (fun _ => 0) toyOrder toyBytes toyBytes))
-        (fun _ => none) (fun _ _ _ => []) := by
-  refine ⟨callsUniform_toy, callsUniform_toy, ?_, ?_, ?_, fun _ _ _ _ _ _ _ => rfl, ?_, ?_, ?_⟩
+        (codeTwoStage toyCode (fun _ => none) (fun _ => 0) (fun _ => 0) toyBytes (fun _ => 1) toyStage
+          toyStageBytes)) (fun _ => none) (fun _ _ _ => []) := by
+  refine ⟨callsUniform_toy, stageUniform_toy, ?_, ?_, ?_, fun _ _ _ _ _ _ _ => rfl, ?_, ?_, ?_⟩
   · intro x s _ _ hx
     change (none : Option AuditStatement) = some s at hx
     simp at hx
