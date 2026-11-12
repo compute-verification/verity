@@ -40,7 +40,8 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
     S("VERITY_BENCH_STEADY_BIN", str, None, WHERE, "the prover the spec's setup built on the node, which a steady-state "
       "point's provers and verifiers run; its SHA-256 is in the point's record"),
     S("VERITY_BENCH_STEADY_SCRATCH", str, "/dev/shm", WHERE, "where a steady-state point stages its statement and keeps "
-      "the provers' session files, in a directory of its own that it removes at its end"),
+      "the provers' session files, in a directory of its own that it removes at its end; a spec's setup exports a "
+      "directory on the node's disk where a row's statement is fetched from the store"),
     S("CUDA_VISIBLE_DEVICES", str, None, WHERE, "the card gpu-lease gave a steady-state point's timed step"),
     # ---- research run's (the point's run directory and record)
     S("RESEARCH_RUN_DIR", str, ".", WHERE, "the run directory a point writes result.json in"),
@@ -48,6 +49,9 @@ REGISTRY = Registry(__file__, ("VERITY_BENCH_",),
     S("RESEARCH_RUN_ID", str, "local", WHERE, "the research run a point is, which its result names"),
     S("RESEARCH_SOURCE_SHA", str, None, VALUE, "the commit research run shipped, which a point's identity hashes; unset, the "
       "checkout's HEAD"),
+    # ---- gpu-lease's (the kit's host stamp)
+    S("GPU_LEASE_UUID", str, None, WHERE, "the UUIDs of the GPUs gpu-lease leased the job (it sets them), which the host stamp "
+      "reads the clocks of; unset, every GPU of the host"),
     elsewhere=(
         "VERITY_BENCH_FULL",       # benchmarks/numerical/tests/bench/test_instances.py's opt-in
         "VERITY_BENCH_CUBIN",      # `verity bench overhead run --cubin`'s file, which overhead_node sets and a scheme's arm loads

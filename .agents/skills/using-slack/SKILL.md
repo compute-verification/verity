@@ -29,7 +29,7 @@ msg owners PATH...` names each path's owner (longest prefix).
 - **Each handle has an inbox thread** (its route, `routes.d` in the notes), where a post rings each name it addresses
   with a doorbell (`from AUTHOR, thread T: ...`; a person's leads with them and how long they've waited, `from douglas
   (a person, waiting 18 min), #chat-douglas thread T: ...`); the holder's own posts never ring it. The route names the holder:
-  `names open --as HANDLE --succeeds` takes a handle over, `names open --as HANDLE` on a new branch adds its suffix, and
+  `names open --as HANDLE --succeeds` takes a handle over and opens the registry's holder change for you to mark, `names open --as HANDLE` on a new branch adds its suffix, and
   `--poster BC_ID` lets another agent post as it, subscribed to the inbox itself: its post naming the handle rings the
   holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too.
   `names revoke --as HANDLE --poster BC_ID` takes one off again and leaves the inbox open; `names close` closes the whole
@@ -96,9 +96,9 @@ delivers wakes (`subscribe_slack_*`), Verity's bot posts and reads, so a subscri
 never fires. `research msg subscriptions --as <your handle>` prints the subscribe calls to make (exit 2 while a channel
 id is missing).
 
-- **Subscribe to your inbox thread**, never to `#agent-coordination`'s top level, and to your Linear team's issue events
-  (`subscribe_linear_issue`, creations and state changes), never its comments: every handle writes through one bot and
-  one Linear app, so other subscriptions wake you for your own writes.
+- **Subscribe to your inbox thread**, never to `#agent-coordination`'s top level, and to no Linear events: every handle
+  writes through one bot and one Linear app, so they wake you for your own writes. Another handle's ask rings your inbox,
+  and a person's new issue that nobody answers rings you through the sweep's audit (`unheard`).
 - **Subscribe to a thread only where a human may answer** (your `#ask-daniel` card, a thread a named human posted
   in), and unsubscribe when it's done; your inbox already carries every reply addressed to you. `@infra`
   also subscribes to `#agent-alerts` and `#ask-daniel`, `topLevelOnly: true`.

@@ -7,6 +7,7 @@ boundary s = 1..k/L (meta.json's L: 32 for dgemm.cu, 32 lm for pgemm.cu) and in 
 the s32 running sum T_s[i, tn bn + j] at key position (j / 16) % 16. Duo is floored_gemm's (ref.py's key_mul(0, t),
 key_xor(0, t), rot_of(False, 0, t)).
 """
+from __future__ import annotations
 
 import json
 import sys
@@ -17,7 +18,7 @@ import numpy as np
 NPOS = 16
 
 
-def mix32(x):
+def mix32(x: np.ndarray | np.uint32 | int) -> np.ndarray | np.uint32:
     x = np.asarray(x, dtype=np.uint32)
     with np.errstate(over="ignore"):
         x = x ^ (x >> np.uint32(16))
@@ -27,7 +28,7 @@ def mix32(x):
         return x ^ (x >> np.uint32(16))
 
 
-def rotl(x, r):
+def rotl(x: np.ndarray, r: int) -> np.ndarray:
     return (x << np.uint32(r)) | (x >> np.uint32(32 - r))
 
 
@@ -36,7 +37,7 @@ KEY_XOR = [mix32(0xB0000000 + 2 * t + 1) for t in range(NPOS)]
 ROT = [((t * 7 + 5) % 31) + 1 for t in range(NPOS)]
 
 
-def receipts(X, W, seed, bn, L=32, nch=16):
+def receipts(X: np.ndarray, W: np.ndarray, seed: int, bn: int, L: int = 32, nch: int = 16) -> tuple[np.ndarray, np.ndarray]:
     """C (m x n, s32) and R (m x tiles_n x nch, u32)."""
     m, k = X.shape
     n = W.shape[0]

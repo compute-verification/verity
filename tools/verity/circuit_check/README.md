@@ -12,9 +12,9 @@ modifies a circuit puts its report in the PR, and `check` runs `circuit-check --
   that stage or lower a catalog target (`benchmarks/one_stage`, `benchmarks/proof_throughput`, `benchmarks/served_units`,
   `benchmarks/unit_lowering`); Flock's pod catalog (`verity/protocols/flock/pod/catalog.py`); and a migration tool under
   `adapters/vllm/tools`.
-- **Loads:** every Definition module's sidecar and pins, `verity.circuits`, `verity.definitions` and Flock
-  (`verity_flock`), and the vLLM integration (`verity_vllm`), imported only inside the functions that read its frontend
-  vocabularies, a request Program or its batch templates.
+- **Loads:** every Definition module's sidecar and pins, and the module each belongs to, `verity.circuits`,
+  `verity.definitions` and Flock (`verity_flock`). It imports no integration by name: a package under `adapters/`
+  registers itself by a sidecar (below), and its modules that have one are then loaded like `verity`'s.
 
 ## Commands and modules
 
@@ -47,11 +47,11 @@ from the result cache (`--no-cache` checks it now). It needs about 24 GB a proce
 | `ranges.py` | a family a sidecar registers over a range of statics (`RANGES`), checked at its spots (`--ranges`), and the report's `ranges` |
 | `vectors.py` | the edge and seeded random input vectors |
 | `structural.py`, `structural_slots.py`, `ambient.py`, `by_calls.py` | `--structural` on a template and on a split (`verity_flock.struct_slots`), `--ambient`, and a Program root checked by its calls alone |
-| `cache.py`, `units.py` | the result cache, and the catalog bindings' records, each reused while what it read is unchanged |
+| `cache.py`, `units.py` | the result cache, and the catalog bindings' records, each reused while what it read is unchanged; a checker version no run has used for 72 hours is removed by the next run that uses the cache |
 | `entries.py` | the shared lists' layout, one file per entry (`pins/`) |
 | `cli.py` | the command line and the report (`verity-circuit-check/v1`) |
 
-`heavy.json` holds the peak memory, in GiB, of each target that grows past 3 GiB: the `--all` scheduler reads it to
+`heavy.json` holds the peak memory, in GiB, of each target that grows past 4 GiB: the `--all` scheduler reads it to
 decide which targets run side by side, never what a check computes. A new Definition gets a binding in its
 module's sidecar: the suite fails any registered Definition family the catalog doesn't reach.
 

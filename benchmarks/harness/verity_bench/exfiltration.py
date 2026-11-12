@@ -5,10 +5,12 @@ store, with no GPU and no node.
 
 * **The compute audit's part** is the break-even planner's bound, read from its rows of record. A record is named in
   the store, never in code (`served_table`'s rule): the runs that carry `run_of_record=RECORD` and no `superseded_by`,
-  each holding the planner's rows as `ROWS_FILE` in its run files, one JSON object a line. A row prices one case of
-  the plan (`row`, `step`, `world`) over one scope at one pinned audit budget β (`b10`): its share of total compute
-  (`total`, with its parts `PARTS`) and its bound in bits (`bound_bits`). The command takes one case (`ROW`, `STEP`,
-  `WORLD`), and for each scope reads off the budget at which the total is the share (`at_share`): the total is linear
+  each holding the planner's rows in one or more of `ROWS_FILES` in its run files, one JSON object a line, a case's rows
+  over a scope from the first file that holds them (a later file holding them otherwise leaves the run out). A row
+  prices one case of the plan (`row`, `step`, `world`) over one scope at one pinned audit budget β (`b10`): its share
+  of total compute (`total`, with its parts `PARTS`) and its bound in bits (`bound_bits`). The command takes one case
+  (`ROW`, the plan of record's row, `STEP`, `WORLD`), and for each scope reads off the budget at which the total is the
+  share (`at_share`): the total is linear
   in β, a least-squares line over the pinned budgets, and ln(bound) is linear in ln β between the two that bracket
   it. The row plans for the weights / λ (`weights_bits / target_bits`), and the part is λ times its bound. The requests
   a row is priced over are its sampled replays over the probability a request is sampled (`replay_sample / q`); its
@@ -21,18 +23,41 @@ store, with no GPU and no node.
   itself (`PLAN_FILE`, the sampling plan the row is priced over at one audit budget, with each cell's share), which is
   held to the rows it is read with: the same requests, and the rows' bound at its budget. With neither the command
   says so and marks no proving measured.
+* **What prices that part's proving** is read from the row's own plan too (`_sources`): the share each source prices
+  (`SOURCES`: a block type's own steady-state row, its Definition's family row, the planner's price), as the row's
+  `split.sources` records it, else by its `split.basis`, and the share at the planner's assumed default
+  (`DEFAULT_BASIS`). A row whose plan records neither is printed as "not recorded".
+* **Row `ASSUMED_ROW`** prices its proving at the planner's assumed prices. Beside another row it is read at the
+  world's year and printed only under `ASSUMED_LABEL`, never as the figure, and the document holds it as its own field
+  (`at_assumed_prices`); as the row read, its figure carries the label.
 * **The network certifier's part** is `verity bench certifier_term`'s (`benchmarks/network_traces/leak_bounds.py`:
-  `inputs`, `document`): the schedules, the fail cells and the jitter of each of its rows, at the same scopes.
+  `inputs`, `document`, whose document is `TERM_SCHEMA`): the schedules, the fail cells and the jitter of each of its
+  rows, at the same scopes, for a class of at most `RESPONSE_IDS` ids a response. Its figure of record is the term
+  at the calculator's jitter bound of record (`OF_RECORD`, two release schedules). A figure at its other jitter
+  bound, and every figure of a row that carries the calculator's label (the row's `with_set_time_card`), is printed
+  only under that label, which the command reads from the document and never spells itself.
+* **Every figure carries the error summed over everything it covers**, and a figure whose error is 1 or more is
+  printed as `NO_BOUND`, with that error and no amount. The compute audit's part fails with at most its rows' δ over
+  the monitoring period. The network certifier's fails with at most the ε of its row (`eps`): its scans' δ summed over
+  every link of the scope and every execution phase of the monitoring period, one ε a scope and monitoring period.
+  The two together fail with at most the sum of both. The scans' δ is an input of the calculator, and the command
+  gives it one: `--scan-delta`, or by default the δ at which the row printed that sums the most execution phases, the
+  world's year, carries `PERIOD_ERROR`, so that every row printed carries that or less. The network certifier's
+  result of record takes its δ so (`benchmarks/certifier_term/README.md`). No term depends on the scans' δ; only the
+  errors move with it. The δ the command prints is the one the document states among its inputs (`scan_delta`).
 
-Both count over the same requests: the planner's (`PLAN`, read from the planner in the tree,
-`benchmarks/spot_figures/breakeven/`), handed to the network certifier's calculator as the world's requests a year in
-place of the census's it would count. The two parts must cover the same GPU-seconds, the same requests (the count the
-rows of record are priced over) and the same weights, or the command refuses.
+Both count the same requests: the sampling plan's, which the network certifier's calculator counts by default (its
+`request_count`, read from the break-even planner in the tree). The command holds no count of its own. The two parts
+must cover the same GPU-seconds, the same requests (the count the rows of record are priced over) and the same
+weights, or the command refuses.
 
 A link's execution phase carries K = schedules + cells + jitter + min(entries, advice + the wrong blocks' output
 bits at δ). The first three are the network certifier's part, the last term's second branch is the compute audit's
-part, and the command sums them per scope and monitoring period under each of the network certifier's rows
-(`together`). It prices no advice.
+part, and the command sums them per scope and monitoring period under each of the network certifier's rows of
+`TOGETHER` (`together`): at the jitter bound of record, and under the label at the other. It prices no advice. The
+sums under the rows whose schedules are 0, the lengths held by a stop block, take a response's output count at 0.
+Until a served audit has sampled a stop block the server chooses that count, which the network certifier's row
+`OUTPUT_COUNT` charges as its schedules: the command prints it beside those sums, marked assumed.
 
 The command refuses a record nothing carries and a scope two unsuperseded runs both hold, and says how to label it.
 A run of record that is superseded, or holds no rows of the case, is left out and listed under "Refused".
@@ -46,17 +71,35 @@ import json
 import math
 import sys
 from collections.abc import Mapping, Sequence
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
 from verity_bench import jobs
 from verity_bench.served_table import RUN_OF_RECORD, SUPERSEDED_BY, record_runs, records
 
-SCHEMA = "exfiltration/v1"
+SCHEMA = "exfiltration/v3"
+#: the network certifier's document the command reads: its `value` the term of record, its rows' `term` by jitter
+#: bound and their ε (`eps`), its inputs, and the label of what rests on a set-time card, at its top and on each row
+#: that carries it
+TERM_SCHEMA = "certifier-term/v2"
+#: the network certifier's scopes the command prints
+SCOPES = ("datacenter", "world")
+#: the error a monitoring period's figure is to carry at most. Given no δ for the network certifier's scans, the
+#: command takes the one at which the row it prints that sums the most execution phases carries this
+PERIOD_ERROR = Fraction(1, 2 ** 20)
+#: what a figure is printed as where its error, summed over everything it covers, is 1 or more: it carries no amount
+NO_BOUND = "no bound at this period"
+#: a network certifier's row's amounts, which a row with no bound doesn't carry
+AMOUNTS = ("schedules", "cells", "jitter", "term", "entries")
+#: a sum's two figures, the network certifier's term and the two parts together, each with the key of its error in
+#: its scope's monitoring period
+ERRORS = {"certifier_GB": "eps", "GB": "error"}
 MODEL = "GLM-5.3"
-#: the record whose runs hold the planner's rows, and the rows' file in a run's files
+#: the record whose runs hold the planner's rows, and the rows' files in a run's files: the driver's default command's
+#: and its rows over the world's year alone
 RECORD = "exfiltration-glm53-compute-audit"
-ROWS_FILE = "out/rows.jsonl"
+ROWS_FILES = ("out/rows.jsonl", "out/three/rows.jsonl")
 #: a row's plan in a run's files: the sampling plan the row is priced over at one audit budget (`beta`), with each
 #: cell's block and its share of the plan's proving time (`cells`, and `left_out` for the cells it lists apart)
 PLAN_FILE = "out/mix.json"
@@ -64,32 +107,51 @@ PLAN_FILE = "out/mix.json"
 PLAN_TOLERANCE = 1e-3
 #: the field in which the planner's driver names a row's variant, where it writes several of one row
 VARIANT = "h8"
+#: what makes rows one case of the plan over one scope, which one file of a run holds
+CASE_KEYS = ("world", "row", "step", "scope", VARIANT)
 #: how a block family is priced where the rows don't say
 UNSTATED = "in no stated way"
+#: what prices a plan's proving, by the planner's driver's names (`split.sources`): a block type's own steady-state
+#: row, its Definition's at the same static K, and the planner's price
+SOURCES = ("own row", "family row", "planner's price")
+#: the source of each `split.basis` key, by its text before any colon; every other key is the planner's price, but
+#: its copy stratum's model (`COPY_BASIS`), which is a source of its own
+BASIS_SOURCES = {"steady": "own row", "family": "family row"}
+COPY_BASIS = "headline.copy_stratum"
+#: the planner's assumed default price, a key of `split.basis`
+DEFAULT_BASIS = "reprice.DEFAULT"
+#: printed where a row's plan records no source
+NOT_RECORDED = "not recorded"
 #: the share of total compute the figure is read at
 SHARE = 0.10
 #: the network check's own proving as a share of total compute, which the planner's rows don't count: no run measures it
 NETWORK_CHECK_SHARE = 0.003
-#: the case of the plan the figure is: the planner's world (rho's world fleet), its row for the registered and served
-#: cut with every modeled lever at its measured value, and the step of that row that prices the verifier as measured
-#: (a prefix of the step's name)
-WORLD, ROW, STEP = "ours", "(i) honest", "+ the verifier as measured"
-#: the planner's case whose line carries the request the rows of record are priced over, and so its requests
-PLAN = "P5+poolwin600"
+#: the case of the plan the figure is: the planner's world (rho's world fleet), the plan of record's row, with every
+#: modeled lever at its measured value, and the step of that row that prices the verifier as measured (a prefix of the
+#: step's name)
+WORLD, ROW, STEP = "ours", "(ii) honest", "+ the verifier as measured"
+#: the row the planner prices at its assumed prices, and what every figure of it is printed under
+ASSUMED_ROW = "(i) honest"
+ASSUMED_LABEL = "at the planner's assumed prices"
+#: the most ids a response holds in the network certifier's class the figure is read at: its class that holds the
+#: longest output the plan of record serves (assumed, as every class is: no run has certified one)
+RESPONSE_IDS = 1024
 #: a row's parts of total compute; `wait` is a part of `serve`
 PARTS = ("serve", "wait", "prove", "replay", "pool", "edge", "compile")
 #: the network certifier's rows the two parts are summed under, and what each is called beside the compute audit's
 TOGETHER = {"scan": "as the scan's check charges it today", "N2": "as N2 charges it today",
-            "all three": "with the lengths held, the timing taken once and the entries charged through the compute audit",
-            "design": "by the design no run has behind it"}
+            "all three": "with the lengths held by a stop block, the timing taken once and the entries charged through "
+                         "the compute audit",
+            "design, no stop block": "by the design no run has behind it, before a served audit has sampled a stop block",
+            "design": "by the design no run has behind it, once a served audit has sampled a stop block"}
+#: the network certifier's row whose schedules are what a response's output count is charged while the server chooses
+#: it: the design before a served audit has sampled a stop block
+OUTPUT_COUNT = "design, no stop block"
 GB = 8e9
 MARKS = ("measured", "modeled", "assumed")
-#: a card's status for a figure, as its mark
-_MARK = {"measured": "measured", "modeled": "modeled", "derived": "modeled", "datasheet": "assumed", "assumed": "assumed",
-         "ruled": "assumed"}
 #: the inputs both parts read: the fleet and what a request of the plan is, which give the requests, and the weights
 SHARED = ("world_machines", "datacenter_machines", "machine_gpus", "mfu_serve", "peak_flops", "request_tokens",
-          "token_macs", "world_requests", "weights")
+          "token_macs", "world_requests", "request_count", "weights")
 
 
 def _load(root: Path, directory: str, module: str) -> Any:
@@ -109,7 +171,9 @@ def _label(key: str = RUN_OF_RECORD, value: str = RECORD) -> str:
 
 
 def read_run(store: Any, run: str) -> tuple[list[dict], dict | None, str | None]:
-    """The planner's rows and the plan in a run's files, either of which it may lack, or why the run holds neither."""
+    """The planner's rows and the plan in a run's files, either of which it may lack, or why the run holds neither or
+    is not read. The rows are its rows files' (`ROWS_FILES`), a case's over a scope the first file's that holds them; a
+    later file that holds other rows of that case and scope leaves the run unread."""
 
     attempt = store.get_attempt(run)
     if attempt is None:
@@ -118,11 +182,26 @@ def read_run(store: Any, run: str) -> tuple[list[dict], dict | None, str | None]
     files = out.get("run_files") or out.get("run_record")
     if not files:
         return [], None, "kept no run files"
-    held = [name for name in (ROWS_FILE, PLAN_FILE) if store.listing(files, [name])]
+    held = [name for name in (*ROWS_FILES, PLAN_FILE) if store.listing(files, [name])]
     if not held:
-        return [], None, f"holds no planner rows (`{ROWS_FILE}`) and no plan (`{PLAN_FILE}`)"
+        return [], None, f"holds no planner rows ({', '.join(f'`{n}`' for n in ROWS_FILES)}) and no plan (`{PLAN_FILE}`)"
     at = Path(store.fetch(files, paths=held))
-    rows = [json.loads(line) for line in (at / ROWS_FILE).read_text().splitlines() if line.strip()] if ROWS_FILE in held else []
+    rows: list[dict] = []
+    first: dict[tuple, tuple[str, list[str]]] = {}
+    for name in (n for n in ROWS_FILES if n in held):
+        cases: dict[tuple, list[dict]] = {}
+        for line in (at / name).read_text().splitlines():
+            if line.strip():
+                r = json.loads(line)
+                cases.setdefault(tuple(str(r.get(k)) for k in CASE_KEYS), []).append(r)
+        for case, its in cases.items():
+            text = sorted(json.dumps(r, sort_keys=True) for r in its)
+            if case not in first:
+                first[case] = (name, text)
+                rows += its
+            elif first[case][1] != text:
+                return [], None, (f"holds row `{case[1]}` over the {case[3]} in `{first[case][0]}` and in `{name}`, and the "
+                                  "two differ")
     return rows, json.loads((at / PLAN_FILE).read_text()) if PLAN_FILE in held else None, None
 
 
@@ -229,21 +308,39 @@ def _priced(shares: Mapping[str, float], said: Mapping) -> dict[str, dict]:
     return out
 
 
+def _sources(split: Mapping) -> dict | None:
+    """The share of a plan's proving each source prices, as its row's `split` records it: its `sources`, else its
+    `basis` by `BASIS_SOURCES`, each of `SOURCES` at 0 where it prices none (`by`); and the share at the planner's
+    assumed default (`default`, None where the split holds no `basis`). None where it records neither."""
+
+    basis = split.get("basis") or {}
+    by = dict(split.get("sources") or {})
+    if not by:
+        for key, share in basis.items():
+            source = BASIS_SOURCES.get(key.split(":")[0]) or (key if key == COPY_BASIS else SOURCES[-1])
+            by[source] = by.get(source, 0.0) + share
+    if not by:
+        return None
+    return {"by": {s: by.get(s, 0.0) for s in SOURCES} | {s: v for s, v in by.items() if s not in SOURCES},
+            "default": basis.get(DEFAULT_BASIS, 0.0) if basis else None}
+
+
 def _own(run: str, row: Mapping) -> dict | None:
     """A row's own plan, where its `split` is one: it says the `q` and the sampled replays it is the plan of, and they
-    are the row's. How its proving is priced (`_priced`), or None for a `split` that is not the row's plan."""
+    are the row's. How its proving is priced (`_priced`) and what prices it (`_sources`), or None for a `split` that is
+    not the row's plan."""
 
     split = row.get("split") or {}
     if not all(split.get(k) and row.get(k) and _same(split[k], row[k]) for k in ("q", "replay_sample")):
         return None
     families = split.get("families") or {}
     return {"of": "rows", "run": run, "beta": row["b10"],
-            "ways": _priced({family: f["share"] for family, f in families.items()}, families)}
+            "ways": _priced({family: f["share"] for family, f in families.items()}, families), "sources": _sources(split)}
 
 
 def _held(scope: str, run: str, rows: Sequence[Mapping], requests: float, of: str, plan: Mapping) -> dict:
     """``of``'s plan of a scope as these rows' plan: how its proving is priced (`_priced`), once it counts the rows'
-    requests and bounds what they do at its budget."""
+    requests and bounds what they do at its budget. A plan records no source of its prices."""
 
     count, theirs = _requests(plan), _between(rows, "bound_bits", plan["beta"], log=True)
     if count is None or not _same(count, requests):
@@ -258,7 +355,7 @@ def _held(scope: str, run: str, rows: Sequence[Mapping], requests: float, of: st
         shares[family] = shares.get(family, 0.0) + cell["share"]
     near = min(rows, key=lambda r: abs(r["b10"] - plan["beta"]))
     return {"of": "plan", "run": of, "beta": plan["beta"],
-            "ways": _priced(shares, (near.get("split") or {}).get("families") or {})}
+            "ways": _priced(shares, (near.get("split") or {}).get("families") or {}), "sources": None}
 
 
 def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
@@ -304,36 +401,49 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
             else _own(run, min(rows, key=lambda r: abs(r["b10"] - beta)))}
 
 
-# ---- the requests both parts count over, and the network certifier's part ---------------------------------------------
+# ---- the network certifier's part, and the requests both parts count over --------------------------------------------
 
 
-def plan(root: Path) -> dict:
-    """The request the rows of record are priced over, from the planner in the tree: each scope's requests and
-    GPU-seconds, and what a request is."""
+def certifier(root: Path, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None) -> dict:
+    """The network certifier's term at the datacenter's and the world's load (`leak_bounds.document`) for a class of
+    at most ``response_ids`` ids a response, over the requests its calculator counts by default, the sampling plan's,
+    with each execution phase's scan at ``scan_delta``. With None the δ is the one at which the row of the document
+    that sums the most execution phases carries `PERIOD_ERROR`: that error over the row's execution phases, which the
+    calculator's own document counts, no term depending on the scans' δ. The document's `scan_delta` input keeps the
+    calculator's value and mark, and its source says who gave the δ and how it was chosen.
 
-    sweep = _load(root, "spot_figures", "breakeven.sweep")
-    line = sweep.build(sweep.cases()[PLAN])
-    tokens, more = line[1]["tokens_per_request"], line[7]
-    where = f"benchmarks/spot_figures/breakeven sweep.cases()['{PLAN}']"
-    return {"scopes": {name: {"requests": s.requests, "gpu_seconds": s.gpu_seconds} for name, s in more["scopes"].items()},
-            "request_tokens": {"value": tokens.value, "unit": tokens.unit, "mark": _MARK[tokens.status],
-                               "source": f"{where}: {tokens.source}"},
-            "token_macs": {"value": more["served_macs"], "unit": "MAC", "mark": "modeled",
-                           "source": f"{where}: the workload card's served MACs a token with the indexer's blocks scaled "
-                                     "to the keys the plan reads (reprice.workload at reprice.C343)"},
-            "source": f"{where}: the world fleet's GPU-seconds x mfu_serve x peak_flops / (request_tokens x 2 x "
-                      "token_macs), the requests the rows of record are priced over (their `replay_sample / q`, held "
-                      "equal to these)"}
-
-
-def certifier(root: Path, requests: float, source: str) -> dict:
-    """The network certifier's term at the datacenter's and the world's load (`leak_bounds.document`), counted over
-    ``requests`` a world year, which are marked modeled with ``source``."""
+    Beside the document: the jitter bound of its term of record and the one its labelled term is at, each as the
+    rows' `term` names it (`of_record`, `set_time`), and the term of record at the class the calculator assumes by
+    default with its ε, at the same δ (`default_class`), which is `verity bench certifier_term`'s own figure."""
 
     lb = _load(root, "network_traces", "leak_bounds")
-    inp = lb.inputs(world_requests=requests)
-    inp["world_requests"] = inp["world_requests"]._replace(mark="modeled", source=source)
-    return lb.document(inp, only=("datacenter", "world"))
+
+    def read(inp: Mapping, **rows: Any) -> dict:
+        doc = lb.document(inp, **rows)
+        if (schema := doc["schema"]) != TERM_SCHEMA:
+            raise ValueError(f"the network certifier's document is `{schema}` and this command reads `{TERM_SCHEMA}`: its "
+                             "term of record, its rows' terms by jitter bound, their ε and their labels may mean "
+                             "something else (read the new document in benchmarks/harness/verity_bench/exfiltration.py "
+                             "and name its schema there)")
+        return doc
+
+    how = "given (--scan-delta)"
+    if scan_delta is None:
+        most = max(read(lb.inputs(response_ids=response_ids), only=SCOPES)["rows"], key=lambda r: r["phases"])
+        scan_delta = PERIOD_ERROR / Fraction(most["phases"])
+        how = (f"this command's, in place of the calculator's default: {_p(float(PERIOD_ERROR))}, the error a monitoring "
+               f"period's figure is to carry at most, over the {_n(most['phases'])} execution phases of the "
+               f"{most['scope']}'s {most['period']}, the row printed that sums the most, so that every row printed "
+               "carries that error or less. The network certifier's result of record takes its δ so "
+               "(benchmarks/certifier_term/README.md), and no term depends on it")
+    term = read(lb.inputs(response_ids=response_ids, scan_delta=scan_delta), only=SCOPES)
+    default = read(lb.inputs(scan_delta=scan_delta), only=("world",), periods=("year",))
+    head = next(r for r in default["rows"] if r["row"] == "scan")
+    set_time, = (str(dj) for dj in lb.JITTERS if dj != lb.OF_RECORD)
+    given = term["inputs"]["scan_delta"] | {"source": f"each execution phase's scan's δ, {how}"}
+    return term | {"inputs": term["inputs"] | {"scan_delta": given}, "of_record": str(lb.OF_RECORD), "set_time": set_time,
+                   "default_class": {"response_ids": default["inputs"]["response_ids"]["value"], "eps": head["eps"],
+                                     "value": default["value"] if head["eps"] < 1 else None, "unit": default["unit"]}}
 
 
 # ---- the document ----------------------------------------------------------------------------------------------------
@@ -343,11 +453,11 @@ def _same(a: float, b: float) -> bool:
     return math.isclose(a, b, rel_tol=1e-9)
 
 
-def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, planned: Mapping, share: float,
+def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, count: Mapping, share: float,
             network_check: float, row: str) -> list[dict]:
     """Every input with its mark and source: the compute audit's from its rows of record, the network certifier's
-    as its calculator marks them, and those both read. A request's tokens and MACs are the plan's, in place of the
-    census's the calculator would count the requests from."""
+    as its calculator marks them, and those both read, among them the request the calculator counts and what it is.
+    ``count`` is the world year's output count (`build`'s `output_count`), which the sums it names take at 0."""
 
     head = points["world year"]
     budgets = sorted({b for p in points.values() for b in p["pinned"]})
@@ -378,21 +488,63 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, plan
             "no run: the network check's own proving as a share of total compute, which the planner's rows don't "
             "count (--network-check-share)"),
         one(audit, "advice", 0, "bit", "assumed", "not counted: no input here prices the advice"),
+        one(net, "output_count", 0, "bit/request", "assumed",
+            f"not counted in the sums under {_names(count['at_zero_in'])}: until a served audit has sampled a stop block "
+            f"the server chooses a response's output count, which the network certifier's row `{OUTPUT_COUNT}` "
+            f"charges {'' if count['GB'] is None else _n(count['bits_a_request']) + ' bits a request '}as its schedules"),
     ]
     for name, i in term["inputs"].items():
-        i = planned.get(name, i)
         out.append(one(both if name in SHARED else net, name, i["value"], i["unit"], i["mark"], i["source"]))
     if off := sorted(i["input"] for i in out if i["mark"] not in MARKS or not i["source"]):
         raise ValueError(f"an input is marked one of {', '.join(MARKS)}, with its source: {', '.join(off)}")
     return out
 
 
+def at_assumed_prices(store: Any, head: Mapping, share: float, step: str, variant: str | None) -> dict:
+    """Row `ASSUMED_ROW` over the world's year at ``share``, beside the figure ``head`` and under `ASSUMED_LABEL`: its
+    run, budget, δ and amount, and what prices its proving (`_sources`); or, with no amount, why it is not read: no run
+    of record holds it, or its rows cover other compute or weights than the figure's."""
+
+    out = {"row": ASSUMED_ROW, "label": ASSUMED_LABEL, "GB": None, "why": None}
+    try:
+        scopes, plans, _, _ = rows_of_record(store, row=ASSUMED_ROW, step=step, variant=variant)
+        if "world year" not in scopes:
+            return out | {"why": f"no run of record holds its world year's rows (they hold {', '.join(sorted(scopes))})"}
+        p = at_share("world year", *scopes["world year"], share, plans.get("world year"))
+    except ValueError as e:
+        return out | {"why": str(e)}
+    if moved := [k for k in ("gpu_seconds", "requests", "weights_bits") if not _same(p[k], head[k])]:
+        return out | {"why": f"its rows differ from the figure's in {', '.join(moved)}"}
+    return out | {k: p[k] for k in ("run", "beta", "inside", "delta", "bits", "GB")} | {
+        "sources": p["priced"] and p["priced"]["sources"]}
+
+
 def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, row: str = ROW, step: str = STEP,
-          variant: str | None = None, store: Any = None, root: Path | None = None, local_only: bool = False) -> dict:
+          variant: str | None = None, response_ids: int = RESPONSE_IDS, scan_delta: Fraction | None = None,
+          store: Any = None, root: Path | None = None, local_only: bool = False) -> dict:
     """The two parts from the store's rows of record and the tree: the inputs with their marks, the compute audit's
-    part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year,
-    and the two side by side for each scope and monitoring period, summed under each of `TOGETHER`. It refuses rows
-    of record priced over other requests than the network certifier's part counts."""
+    part at ``share`` of total compute for each scope of record, the network certifier's rows at the world's year
+    for a class of at most ``response_ids`` ids a response with each execution phase's scan at ``scan_delta`` (None:
+    the δ `certifier` takes from `PERIOD_ERROR`), and the two side by side for each scope and monitoring period,
+    summed under each of `TOGETHER`. It refuses rows of record priced over other requests than the network
+    certifier's part counts.
+
+    Every figure carries the error summed over everything it covers, and one whose error is 1 or more carries no
+    amount (`NO_BOUND`). A scope's monitoring period holds the network certifier's ε (`eps`), the one its rows over
+    that scope and period carry, their scans' δ summed over every link's execution phases; the compute audit's δ
+    over the period (its `compute_audit`'s `delta`); and the sum of the two (`error`), what the two together fail
+    with at most, None for a scope no run of record holds. Where `eps` is 1 or more the network certifier's figures
+    of that scope and period, the output count among them, are None, and where `error` is, the sums are. A row of the
+    network certifier's own over the world's year whose ε is 1 or more is held without its `AMOUNTS`.
+
+    A sum is at the network certifier's jitter bound of record. Its `label` is its row's own (None on most): where
+    set, every figure of the row is printed under it. Its `with_set_time_card` is the same sum at the other jitter
+    bound, with the label the network certifier's document gives a figure there. A scope's `output_count` is what a
+    response's output count is charged while the server chooses it, the schedules of the row `OUTPUT_COUNT`, with
+    the rows whose sums take it at 0 (`at_zero_in`: those whose schedules are 0).
+
+    Beside a ``row`` other than `ASSUMED_ROW`, `at_assumed_prices` holds that row's world year at ``share``
+    (`at_assumed_prices()`), which is never the figure; as ``row`` itself, the figure's `label` is `ASSUMED_LABEL`."""
 
     if not (0 < share < 1 and 0 <= network_check < share):
         raise ValueError(f"the share of total compute is in (0, 1) and the network check's own below it, not {share!r} "
@@ -409,9 +561,10 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
                          f"{', '.join(sorted(points))}): label the run that does ({_label()})")
     head = points["world year"]
     less = at_share("world year", *scopes["world year"], share - network_check)
+    assumed = None if row == ASSUMED_ROW else at_assumed_prices(completion.store, head, share, step, variant)
 
-    planned = plan(root)
-    term = certifier(root, planned["scopes"]["world year"]["requests"], planned["source"])
+    term = certifier(root, response_ids, scan_delta)
+    of, set_time, card = term["of_record"], term["set_time"], term["with_set_time_card"]["label"]
     weights = term["inputs"]["weights"]["value"]
     if not _same(head["weights_bits"], weights):
         raise ValueError(f"the two parts are shares of different weights: the rows of record hold {head['weights_bits']:,} "
@@ -421,39 +574,62 @@ def build(*, share: float = SHARE, network_check: float = NETWORK_CHECK_SHARE, r
     periods = []
     for (compute, period), at in seen.items():
         scope = f"{compute} {period}"
-        point, its = points.get(scope), planned["scopes"][scope]
+        point = points.get(scope)
         for name, mine, theirs in (("GPU-seconds", point and point["gpu_seconds"], at["gpu_seconds"]),
-                                   ("requests", point and point["requests"], at["requests"]),
-                                   ("GPU-seconds", its["gpu_seconds"], at["gpu_seconds"]),
-                                   ("requests", its["requests"], at["requests"])):
+                                   ("requests", point and point["requests"], at["requests"])):
             if mine is not None and not _same(mine, theirs):
                 raise ValueError(f"the two parts cover different compute over the {scope}: {mine:.6g} {name} on the compute "
                                  f"audit's side and {theirs:.6g} on the network certifier's")
         rows = {r["row"]: r for r in term["rows"] if (r["scope"], r["period"]) == (compute, period)}
+        if len(several := sorted({r["eps"] for r in rows.values()})) != 1:
+            raise ValueError(f"the network certifier's rows over the {scope} carry {len(several)} different ε "
+                             f"({', '.join(map(_n, several))}), and this command prints one a scope and monitoring "
+                             "period, its scans' δ summed over every link's execution phases (read each row's own in "
+                             "benchmarks/harness/verity_bench/exfiltration.py)")
+        eps = at["eps"]
         audit = point and {"GB": point["GB"], "bits": point["bits"], "beta": point["beta"], "inside": point["inside"],
                            "of_weights": point["bits"] / weights, "bits_a_request": point["bits"] / at["requests"],
-                           "run": point["run"]}
+                           "delta": point["delta"], "run": point["run"]}
+        error = None if audit is None else eps + audit["delta"]
         together = {}
         for name in TOGETHER:
             r = rows[name]
             entries = r["entries"] and r["entries"]["bits"]
             mine = None if audit is None else audit["bits"] if entries is None else min(entries, audit["bits"])
-            together[name] = {"certifier_GB": r["term"]["1"]["GB"],
-                              "GB": None if mine is None else (r["term"]["1"]["bits"] + mine) / GB}
+
+            def summed(dj: str) -> dict:
+                return {"certifier_GB": r["term"][dj]["GB"] if eps < 1 else None,
+                        "GB": (r["term"][dj]["bits"] + mine) / GB if mine is not None and error < 1 else None}
+
+            together[name] = {**summed(of), "label": r["with_set_time_card"],
+                              "with_set_time_card": {**summed(set_time), "label": card}}
+        count = rows[OUTPUT_COUNT]["schedules"] if eps < 1 else {"GB": None, "bits": None}
         periods.append({"compute": compute, "period": period, "gpu_seconds": at["gpu_seconds"], "requests": at["requests"],
-                        "eps": at["eps"], "compute_audit": audit, "together": together})
+                        "phases": at["phases"], "eps": eps, "error": error, "compute_audit": audit,
+                        "output_count": {"row": OUTPUT_COUNT, "GB": count["GB"], "bits": count["bits"],
+                                         "bits_a_request": count["bits"] / at["requests"]
+                                         if eps < 1 and at["requests"] else None,
+                                         "mark": "assumed",
+                                         "at_zero_in": [name for name in TOGETHER if not rows[name]["schedules"]["bits"]]},
+                        "together": together})
+    year = next(p for p in periods if (p["compute"], p["period"]) == ("world", "year"))
 
     return {"schema": SCHEMA, "model": MODEL,
             "name": f"{MODEL}'s exfiltration capacity over the world's year at {_pct(share)} of total compute: the "
                     "compute audit's part",
             "value": head["GB"], "unit": "GB", "status": "modeled", "share": share, "row": row, "variant": variant,
-            "record": RECORD,
+            "label": ASSUMED_LABEL if row == ASSUMED_ROW else None, "at_assumed_prices": assumed, "record": RECORD,
             "runs": runs, "refused": refused, "weights": {"bits": weights, "GB": weights / GB, "label": term["weights"]["label"]},
-            "inputs": _inputs(points, runs, term, planned, share, network_check, row),
+            "inputs": _inputs(points, runs, term, year["output_count"], share, network_check, row),
             "compute_audit": sorted(points.values(), key=lambda p: (p["scope"] not in order, order.get(p["scope"], 0))),
             "network_check": {"share": network_check, "beta": less["beta"], "inside": less["inside"], "GB": less["GB"]},
-            "certifier": {"legend": term["legend"], "entries_rule": term["entries_rule"], "phase": term["phase"],
-                          "rows": [r for r in term["rows"] if (r["scope"], r["period"]) == ("world", "year")]},
+            "certifier": {"schema": term["schema"], "request_count": term["request_count"],
+                          "response_ids": term["inputs"]["response_ids"]["value"],
+                          "scan_delta": term["inputs"]["scan_delta"], "of_record": of, "set_time": set_time,
+                          "with_set_time_card": {"label": card}, "default_class": term["default_class"],
+                          "legend": term["legend"], "entries_rule": term["entries_rule"], "phase": term["phase"],
+                          "rows": [r if r["eps"] < 1 else {k: v for k, v in r.items() if k not in AMOUNTS}
+                                   for r in term["rows"] if (r["scope"], r["period"]) == ("world", "year")]},
             "periods": periods}
 
 
@@ -472,6 +648,19 @@ def _n(x: Any, none: str = "none") -> str:
     if abs(x) >= 1e9 or abs(x) < 1e-3:
         return f"{x:.3e}"
     return f"{x:,.0f}" if abs(x) >= 1000 else f"{x:.4g}"
+
+
+def _p(x: float) -> str:
+    """A probability, with its power of two where it is under 1."""
+
+    return f"{_n(x)} (2^{math.log2(x):.4g})" if 0 < x < 1 else _n(x)
+
+
+def _amount(x: Any, error: float | None) -> str:
+    """A figure's amount as a table prints it: `NO_BOUND` where its error, summed over everything it covers, is 1 or
+    more."""
+
+    return NO_BOUND if error is not None and error >= 1 else _n(x)
 
 
 def _pct(x: float | None) -> str:
@@ -511,39 +700,126 @@ def _how(priced: Mapping | None) -> str:
             + ": the largest families are " + ", ".join(f"{family} ({_pct(s)}, {way})" for s, family, way in largest))
 
 
+def _by_source(sources: Mapping | None) -> str:
+    """The share of a row's proving each source prices and the share at the planner's assumed default (`_sources`),
+    each `NOT_RECORDED` where the row's plan doesn't say."""
+
+    default = None if sources is None else sources["default"]
+    by = sources["by"] if sources else dict.fromkeys(SOURCES)
+    return (", ".join(f"{s} {NOT_RECORDED if v is None else _pct(v)}" for s, v in by.items())
+            + f"; at the planner's assumed default (`{DEFAULT_BASIS}`) {NOT_RECORDED if default is None else _pct(default)}")
+
+
+def _names(names: Sequence[str]) -> str:
+    """Rows' names in a sentence."""
+
+    quoted = [f"`{name}`" for name in names]
+    return " and ".join(quoted) if len(quoted) < 3 else ", ".join(quoted[:-1]) + f" and {quoted[-1]}"
+
+
+def _labelled(year: Mapping, key: str, set_time: str) -> list[str]:
+    """The world year's figures (``key`` of each of its sums) that are printed only under a label, one clause a
+    label: every row that carries its own, and every other row at the jitter bound ``set_time``."""
+
+    own: dict[str, list[str]] = {}
+    other: dict[str, list[str]] = {}
+    for name, what in TOGETHER.items():
+        t = year["together"][name]
+        if t["label"]:
+            own.setdefault(t["label"], []).append(f"{_n(t[key])} GB {what}")
+        else:
+            other.setdefault(t["with_set_time_card"]["label"], []).append(f"{_n(t['with_set_time_card'][key])} GB {what}")
+    return [f"{label}: " + "; and ".join(filter(None, (
+                "; ".join(own.get(label, ())),
+                label in other and f"at D_j = {set_time}, " + "; ".join(other[label]))))
+            for label in dict.fromkeys((*own, *other))]
+
+
 def render(doc: Mapping[str, Any]) -> str:
     """``doc`` (`build`) as text: the figure and what it is, the inputs with their marks, each part, and the two side
-    by side for every scope and monitoring period."""
+    by side for every scope and monitoring period. The network certifier's figures of record come first; a figure
+    that is under a label is printed in a line, a row or a column that carries that label, as the document gives
+    it. Every line of the network certifier's and of the two together carries its errors and the δ of the scans they
+    sum, and a figure whose error is 1 or more is printed as `NO_BOUND`, with no amount."""
 
-    share, net, w = doc["share"], doc["network_check"], doc["weights"]
+    share, net, w, cert = doc["share"], doc["network_check"], doc["weights"], doc["certifier"]
     head = next(p for p in doc["compute_audit"] if p["scope"] == "world year")
     planned = [p for p in doc["compute_audit"] if p["priced"]]
     year = next(p for p in doc["periods"] if (p["compute"], p["period"]) == ("world", "year"))
-    scan = next(r for r in doc["certifier"]["rows"] if r["row"] == "scan")
+    of, set_time, card, default = cert["of_record"], cert["set_time"], cert["with_set_time_card"]["label"], cert["default_class"]
+    count, sums, delta, eps, error = year["output_count"], year["together"], cert["scan_delta"], year["eps"], year["error"]
+    record = [name for name in TOGETHER if not sums[name]["label"]]
+    labels = {name: sums[name]["label"] for name in TOGETHER if sums[name]["label"]}
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in MARKS}
     outside = "" if head["inside"] else ", outside the pinned budgets: extrapolated"
-    what = ", the registered and served cut with every modeled lever at its measured value" if doc["row"] == ROW else ""
+    what = ", the plan of record's row, with every modeled lever at its measured value" if doc["row"] == ROW else ""
     what += f", in its variant `{doc['variant']}`" if doc["variant"] else ""
+    label = f", {doc['label']}" if doc["label"] else ""
+    sources = head["priced"] and head["priced"]["sources"]
+    plan = f" (its own plan at β = {_part(head['priced']['beta'])}, {head['priced']['run']})" if sources else ""
+    a = doc["at_assumed_prices"]
+    assumed = [] if a is None else [
+        f"- row `{a['row']}`, {a['label']}: "
+        + (f"not read: {a['why']}." if a["GB"] is None else
+           f"{_n(a['GB'])} GB, at β = {_part(a['beta'])}{'' if a['inside'] else ', extrapolated'} ({a['run']}), failing "
+           f"with at most δ = {_n(a['delta'])} over the monitoring period. It is not the figure. What prices its "
+           f"proving time: {_by_source(a['sources'])}.")]
+    on = f"modeled, on an assumed class of at most {_n(cert['response_ids'])} ids a response"
+    if eps < 1:
+        scan = next(r for r in cert["rows"] if r["row"] == "scan")
+        certifier = [
+            f"- **the network certifier's part: {_n(sums['scan']['certifier_GB'])} GB** ({on}) {TOGETHER['scan']}, "
+            f"{_n(scan['term'][of]['bits_a_request'])} bits a request, and "
+            + ", ".join(f"{_n(sums[name]['certifier_GB'])} GB {TOGETHER[name]}" for name in record if name != "scan")
+            + f", each at D_j = {of}, its term of record, and each failing with at most ε = {_p(eps)} over the world's "
+            f"year, at a scan's δ of {_p(delta['value'])}."
+            + ("" if default["response_ids"] == cert["response_ids"] else
+               f" On the class of at most {_n(default['response_ids'])} ids a response that `verity bench certifier_term` "
+               "assumes by default, the scan's is "
+               + (f"{_n(default['value'])} {default['unit']}." if default["eps"] < 1 else
+                  f"{NO_BOUND}, at an ε of {_n(default['eps'])}.")),
+            *(f"- the network certifier's part {clause}; ε = {_p(eps)}."
+              for clause in _labelled(year, "certifier_GB", set_time))]
+    else:
+        certifier = [f"- **the network certifier's part: {NO_BOUND}** ({on}). Its ε over the world's year is {_n(eps)}, "
+                     "and at 1 or more it bounds nothing, so no amount is printed under any of its rows."]
+    if error < 1:
+        together = [
+            "- **together**, a link's execution phase carrying K = schedules + cells + jitter + min(entries, advice + "
+            f"the compute audit's part), at D_j = {of}, with no advice priced and with a response's output count taken "
+            f"at 0 under {_names(count['at_zero_in'])}: "
+            + "; ".join(f"{_n(sums[name]['GB'])} GB {TOGETHER[name]}" for name in record)
+            + f"; each failing with at most {_n(error)}, the two parts' errors summed.",
+            *(f"- together, {clause}; error {_n(error)}." for clause in _labelled(year, "GB", set_time))]
+    else:
+        together = [f"- **together: {NO_BOUND}**. The two parts' errors over the world's year sum to {_n(error)}, and at "
+                    "1 or more the sum bounds nothing, so no amount is printed for the two together."]
     lines = [
         f"# verity bench exfiltration: {doc['model']}'s exfiltration capacity over a monitoring period, at "
         f"{_pct(share)} of total compute", "",
         f"Over the world's year, at {_pct(share)} of total compute, in two parts:", "",
-        f"- **the compute audit's part: {_n(head['GB'])} GB** (modeled), {_n(head['GB'] / w['GB'])} copies of the weights "
+        f"- **the compute audit's part{label}: {_n(head['GB'])} GB** (modeled), {_n(head['GB'] / w['GB'])} copies of the weights "
         f"({w['label']}, {_n(w['GB'])} GB) and {_n(year['compute_audit']['bits_a_request'])} bits a request. It is the "
         f"planner's row `{doc['row']}`{what}, read at the audit budget where its total is {_pct(share)} of the compute, "
         f"β = {_part(head['beta'])}{outside}: its bound, "
         f"{_n(head['bound']['GB'])} GB, times λ = {_n(head['lambda'])}. The row is priced over "
         f"{_n(head['requests'])} requests, the count the network certifier's part is over.",
         f"- {_how(head['priced'])}.",
-        f"- **the network certifier's part: {_n(scan['term']['1']['GB'])} GB** (modeled, on an assumed class) "
-        f"{TOGETHER['scan']}, {_n(scan['term']['1']['bits_a_request'])} bits a request, and "
-        + ", ".join(f"{_n(year['together'][name]['certifier_GB'])} GB {what}" for name, what in TOGETHER.items()
-                    if name != "scan") + ", each at D_j = 1.",
-        "- **together**, a link's execution phase carrying K = schedules + cells + jitter + min(entries, advice + the "
-        "compute audit's part), with no advice priced: "
-        + "; ".join(f"{_n(year['together'][name]['GB'])} GB {what}" for name, what in TOGETHER.items()) + ".",
-        f"- the compute audit's part fails with at most δ = {_n(head['delta'])} over the monitoring period. The scan's ε "
-        f"over the world's year, its execution phases' δ summed, is {_n(year['eps'])}: at 1 or more it bounds nothing.",
+        f"- what prices the row's proving time, as its rows record it{plan}: {_by_source(sources)}.",
+        *assumed,
+        *certifier,
+        *together,
+        "- the output count: "
+        + (f"{_n(count['GB'])} GB ({count['mark']}), {_n(count['bits_a_request'])} bits a request" if eps < 1 else
+           f"{NO_BOUND} ({count['mark']}), under the network certifier's ε")
+        + ". Until a served audit has sampled a stop block the server chooses a response's output count, and the network "
+        f"certifier's row `{count['row']}` charges it as its schedules. The sums under {_names(count['at_zero_in'])} "
+        "take it at 0, as they price no advice.",
+        f"- the compute audit's part fails with at most δ = {_n(head['delta'])} over the monitoring period. The network "
+        f"certifier's ε over the world's year is each execution phase's scan's δ ({delta['mark']}), "
+        f"{_p(delta['value'])}, summed over every link's execution phases, {_n(year['phases'])} of them: {_p(eps)}. "
+        f"The two together fail with at most the sum of both, {_n(error)}. A figure whose error, summed over "
+        f"everything it covers, is 1 or more is printed as \"{NO_BOUND}\", with that error and no amount.",
         f"- with the network check's own proving at {_pct(net['share'])} of total compute, which the planner's rows "
         f"don't count (assumed, no run), the audit budget is β = {_part(net['beta'])} and the compute audit's part "
         f"{_n(net['GB'])} GB.",
@@ -555,7 +831,8 @@ def render(doc: Mapping[str, Any]) -> str:
         f"{len(doc['compute_audit'])} scopes"
         + "".join(f", and the {p['scope']}'s plan ({p['priced']['run']})" for p in planned if p["priced"]["of"] == "plan"),
         "- the network certifier's part and the requests both parts count over (modeled or assumed, read from the tree, "
-        "not records): `verity bench certifier_term`'s inputs and the planner's plan, in the table below", "",
+        "not records): `verity bench certifier_term`'s inputs, among them the request it counts and what that request "
+        "is, in the table below", "",
         "## Inputs", "",
         *_table(("part", "input", "value", "unit", "mark", "source"),
                 [(i["part"], i["input"], _n(i["value"]), i["unit"], i["mark"], i["source"]) for i in doc["inputs"]]), "",
@@ -575,25 +852,60 @@ def render(doc: Mapping[str, Any]) -> str:
                       ", ".join(f"{family} {_part(s)}" for family, s in list(x["families"].items())[:3]))
                      for p in planned for way, x in p["priced"]["ways"].items()]), "")),
         "## The network certifier's part over the world's year", "",
-        "`verity bench certifier_term`'s rows, at the planner's requests. The term is the schedules, the fail cells and "
-        "the jitter; the entries are the compute side's.", "",
-        *(f"- {name} ({k['standing']}): {k['counts']}" for name, k in doc["certifier"]["legend"].items()), "",
-        *_table(("row", "schedules, GB", "cells, GB", "term at D_j = 1, GB", "x weights", "term at D_j = 2, GB",
-                 "entries, GB"),
-                [(r["row"], _n(r["schedules"]["GB"]), _n(r["cells"]["GB"]), _n(r["term"]["1"]["GB"]),
-                  _n(r["term"]["1"]["of_weights"]), _n(r["term"]["2"]["GB"]),
-                  _n(r["entries"] and r["entries"]["GB"], "the compute side's")) for r in doc["certifier"]["rows"]]), "",
-        f"The entries as the scan's check charges them: {doc['certifier']['entries_rule']}.", "",
+        f"`verity bench certifier_term`'s rows (`{cert['schema']}`) at its request count `{cert['request_count']}`, for a "
+        f"class of at most {_n(cert['response_ids'])} ids a response. The term is the schedules, the fail cells and the "
+        f"jitter, and the term of record is the one at D_j = {of}. The term at D_j = {set_time}, and every figure of a "
+        f"row whose name carries it, is printed only under the network certifier's label, \"{card}\". The entries are "
+        "the compute side's. Each row carries the δ of its scans and its ε over the world's year, their sum over every "
+        "link's execution phases; a row whose ε is 1 or more has no amount.", "",
+        *(f"- {name} ({k['standing']}): {k['counts']}" for name, k in cert["legend"].items()), "",
+        *_table(("row", "schedules, GB", "cells, GB", f"term at D_j = {of}, GB", "x weights",
+                 f"term at D_j = {set_time} {card}, GB", "entries, GB", "scan's δ", "ε"),
+                [(r["row"] + (f", {r['with_set_time_card']}" if r["with_set_time_card"] else ""),
+                  *((NO_BOUND,) * 6 if r["eps"] >= 1 else
+                    (_n(r["schedules"]["GB"]), _n(r["cells"]["GB"]), _n(r["term"][of]["GB"]),
+                     _n(r["term"][of]["of_weights"]), _n(r["term"][set_time]["GB"]),
+                     _n(r["entries"] and r["entries"]["GB"], "the compute side's"))),
+                  _n(delta["value"]), _n(r["eps"])) for r in cert["rows"]]), "",
+        f"The entries as the scan's check charges them: {cert['entries_rule']}.", "",
         "## Each monitoring period over all compute: the two parts side by side, in GB", "",
-        "The network certifier's term is at D_j = 1, and `together` adds the compute audit's part to it, or the entries "
-        "where the row charges them and they are fewer.", "",
-        *_table(("compute", "period", "GPU-seconds", "requests", "compute audit", "bits a request",
-                 *(f"certifier, {name}" for name in TOGETHER), *(f"together, {name}" for name in TOGETHER)),
+        f"The network certifier's term is the one of record, at D_j = {of}, and `together` adds the compute audit's part "
+        "to it, or the entries where the row charges them and they are fewer. The output count is the schedules of "
+        f"the row `{count['row']}`, what a response's output count is charged while the server chooses it "
+        f"({count['mark']}): the sum under {_names([name for name in count['at_zero_in'] if name in record])} takes it "
+        "at 0.", "",
+        "Each part's amounts are followed by its error over the line's scope and monitoring period: the compute "
+        "audit's δ; the network certifier's ε, its scans' δ summed over every link of the scope and every execution "
+        "phase of the period; and `together`'s, the sum of the two. A figure whose error is 1 or more is printed as "
+        f"\"{NO_BOUND}\".", "",
+        *_table(("compute", "period", "GPU-seconds", "requests", "compute audit", "bits a request", "compute audit's δ",
+                 *(f"certifier, {name}" for name in record), "scan's δ", "certifier's ε",
+                 *(f"together, {name}" for name in record), "together's error", f"output count ({count['mark']})"),
                 [(p["compute"], p["period"], _n(p["gpu_seconds"]), _n(p["requests"]),
                   _n(p["compute_audit"] and p["compute_audit"]["GB"], "no rows of record"),
                   _n(p["compute_audit"] and p["compute_audit"]["bits_a_request"]),
-                  *(_n(p["together"][name]["certifier_GB"]) for name in TOGETHER),
-                  *(_n(p["together"][name]["GB"]) for name in TOGETHER)) for p in doc["periods"]]),
+                  _n(p["compute_audit"] and p["compute_audit"]["delta"]),
+                  *(_amount(p["together"][name]["certifier_GB"], p["eps"]) for name in record),
+                  _n(delta["value"]), _n(p["eps"]),
+                  *(_amount(p["together"][name]["GB"], p["error"]) for name in record), _n(p["error"]),
+                  _amount(p["output_count"]["GB"], p["eps"]))
+                 for p in doc["periods"]]), "",
+        f"## Each monitoring period over all compute, {card}: in GB", "",
+        f"No amount of this table is of record. Each is under the network certifier's label, \"{card}\", which its "
+        f"column carries: every amount of a row that carries the label, and every other row's at D_j = {set_time}."
+        + (f" The sum under {_names([name for name in count['at_zero_in'] if name in labels])} takes the output count "
+           "at 0 too." if any(name in labels for name in count["at_zero_in"]) else "")
+        + " A line's errors are those of the table above.", "",
+        *_table(("compute", "period",
+                 *(f"{part}, {name}, {label}" for name, label in labels.items() for part in ("certifier", "together")),
+                 *(f"{part}, {name}, D_j = {set_time} {card}" for part in ("certifier", "together") for name in record),
+                 "scan's δ", "certifier's ε", "together's error"),
+                [(p["compute"], p["period"],
+                  *(_amount(p["together"][name][key], p[e]) for name in labels for key, e in ERRORS.items()),
+                  *(_amount(p["together"][name]["with_set_time_card"][key], p[e]) for key, e in ERRORS.items()
+                    for name in record),
+                  _n(delta["value"]), _n(p["eps"]), _n(p["error"]))
+                 for p in doc["periods"]]),
     ]
     if doc["refused"]:
         lines += ["", "Refused (not read):", "", *(f"- {x['target']} (`{x['record']}`): {x['why']}" for x in doc["refused"])]
@@ -608,22 +920,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=f"{MODEL}'s exfiltration capacity in GB over a week, a month and a year of the world's and a "
                     "datacenter's compute, at a share of total compute: the compute audit's part, from the break-even "
                     "planner's rows of record in the evidence store, beside the network certifier's part, with every "
-                    "input labelled measured, modeled or assumed.")
+                    "input labelled measured, modeled or assumed. Every figure carries the error summed over "
+                    f"everything it covers, and one whose error is 1 or more is printed as \"{NO_BOUND}\", with no "
+                    "amount.")
     ap.add_argument("--json", action="store_true", help="print the document (value, unit, inputs, parts, periods)")
     ap.add_argument("--share", type=float, default=SHARE, metavar="S",
                     help=f"the share of total compute the figure is read at (default {SHARE})")
     ap.add_argument("--network-check-share", type=float, default=NETWORK_CHECK_SHARE, metavar="S",
                     help="the network check's own proving as a share of total compute, which the planner's rows don't "
                          f"count (default {NETWORK_CHECK_SHARE}, assumed)")
-    ap.add_argument("--row", default=ROW, help=f"the planner's row (default `{ROW}`)")
+    ap.add_argument("--row", default=ROW, help=f"the planner's row (default `{ROW}`, the plan of record's; `{ASSUMED_ROW}` "
+                                               f"is printed only {ASSUMED_LABEL})")
     ap.add_argument("--step", default=STEP, help=f"the row's step, or the beginning of its name (default `{STEP}`)")
     ap.add_argument("--variant", help=f"the row's variant, as the planner's driver names it (`{VARIANT}`), where a run "
                                       "holds several (default: a run holds one)")
+    ap.add_argument("--response-ids", type=int, default=RESPONSE_IDS, metavar="N",
+                    help="the most ids a response holds in the network certifier's class (default "
+                         f"{RESPONSE_IDS}, assumed: the class that holds the plan of record's longest output)")
+    ap.add_argument("--scan-delta", type=Fraction, metavar="D",
+                    help="the δ of each execution phase's scan of the network certifier, which its rows' ε sum (default: "
+                         "the δ at which the row printed that sums the most execution phases, the world's year, carries "
+                         f"an ε of {PERIOD_ERROR}, assumed; no term depends on it)")
     ap.add_argument("--local-only", action="store_true", help="read this machine's catalog alone, not the store's remote")
     a = ap.parse_args(argv)
     try:
         doc = build(share=a.share, network_check=a.network_check_share, row=a.row, step=a.step, variant=a.variant,
-                    local_only=a.local_only)
+                    response_ids=a.response_ids, scan_delta=a.scan_delta, local_only=a.local_only)
     except (ValueError, RuntimeError) as e:
         print(f"verity bench exfiltration: {e}", file=sys.stderr)
         return 2
