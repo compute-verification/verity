@@ -19,6 +19,7 @@ it prints from the store's records of record."""
 from __future__ import annotations
 
 import json
+import math
 import runpy
 import shutil
 import sys
@@ -29,6 +30,7 @@ import pytest
 
 from verity_bench import prove as P
 from verity_bench import prove_records as R
+from verity_bench import steady as S
 from verity_bench.cli import main
 
 REPO = Path(__file__).resolve().parents[3]
@@ -679,17 +681,103 @@ def test_a_priced_plans_totals_where_the_table_has_no_price_a_higher_one_or_the_
 
 
 REFUSALS = json.loads((FIXTURES / "refusals" / "rate" / "rate.json").read_text())
-#: each row of the refusals fixture that names a staged Definition, and why it isn't a steady-state measurement
+#: each row of the refusals fixture that names a staged Definition, and why it isn't a steady-state measurement: the
+#: check of the steady-state rules it didn't pass, the check's answer and its reason, then what it lacks to be priced
 ROW_WHYS = {
     "good": None,
-    "unaccepted": "8 of its 9 sessions accepted",
-    "refused": "1 sessions refused",
-    "void": "void: out of device memory: prover-gpu0",
-    "exited": "exited nonzero: prover-gpu0 rc -9",
-    "unflat": "its statement cache's hit rate wasn't flat",
+    "unaccepted": "`accepted` (fail): 8 of its 9 sessions accepted",
+    "refused": "`accepted` (fail): 1 sessions refused",
+    "void": "`not_void` (fail): void: out of device memory: prover-gpu0",
+    "exited": "`exits` (fail): exited nonzero: prover-gpu0 rc -9",
+    "unflat": "`flat` (fail): its statement cache's hit rate wasn't flat",
     "ungpued": "its row lacks `gpus`",
-    "bare": "its row lacks `flat`, `gpus`, `stage.blocks`, `stage.full`",
+    "bare": "`flat` (cannot tell): its row lacks `flat`; its row lacks `gpus`, `stage.blocks`, `stage.full`",
 }
+#: a field a made-up row is left without
+DROP = object()
+#: made-up rows the steady-state rules don't pass and a reader of the fields alone would: what is changed in the good
+#: row, and what the rules' check then says
+STRICT = [
+    ({"unfiled": DROP}, "`accepted` (cannot tell): its row lacks `unfiled`"),
+    ({"unfiled": 1}, "`accepted` (fail): 1 sessions never filed by their verifier"),
+    ({"warm": True}, "`accepted` (cannot tell): `warm` (True) of its row isn't a count"),
+    ({"sessions": "8"}, "`accepted` (cannot tell): `sessions` ('8') of its row isn't a count"),
+    ({"refused_n": -1}, "`accepted` (cannot tell): `refused_n` (-1) of its row isn't a count"),
+    ({"exits": {}}, "`exits` (cannot tell): its row's `exits` ({}) names no process"),
+    ({"exits": []}, "`exits` (cannot tell): its row's `exits` ({}) names no process"),
+    ({"exits": {"prover-gpu0": 0.0}}, "`exits` (fail): exited nonzero: prover-gpu0 rc 0.0"),
+    ({"exits": [0, False]}, "`exits` (fail): exited nonzero: 1 rc False"),
+    ({"exits": 0}, "`exits` (cannot tell): its row's `exits` (0) names no process"),
+    ({"error": "RuntimeError: its last verifier died"}, "`not_void` (fail): failed: RuntimeError: its last verifier died"),
+    ({"skipped": "past the deadline"}, "`not_void` (fail): skipped: past the deadline"),
+    ({"statements_per_s": math.inf}, "`not_void` (fail): no rate: its `statements_per_s` is inf"),
+    ({"statements_per_s": math.nan}, "`not_void` (fail): no rate: its `statements_per_s` is nan"),
+    ({"statements_per_s": True}, "`not_void` (fail): no rate: its `statements_per_s` is True"),
+    ({"statements_per_s": None}, "`not_void` (fail): no rate: its `statements_per_s` is None"),
+    ({"flat": None}, "`flat` (fail): its statement cache's hit rate wasn't flat"),
+    ({"flat": DROP}, "`flat` (cannot tell): its row lacks `flat`"),
+    ({"throttled": {"nr_throttled": 3, "throttled_usec": 250000}},
+     "`no_throttling` (fail): its CPUs were throttled 3 times while it ran, for 0.25 s"),
+    ({"throttled": DROP}, "`no_throttling` (cannot tell): its row lacks `throttled.nr_throttled`"),
+    ({"warm_per_prover": {"prover-gpu0": 0}},
+     "`every_prover_warmed` (fail): 0 of its 1 provers finished a warm session before the timed ones"),
+    ({"warm_per_prover": DROP}, "`every_prover_warmed` (cannot tell): its row lacks `warm_per_prover`"),
+    ({"idle_provers": 1}, "`every_prover_warmed` (fail): 1 of its 1 provers filed no session in the window"),
+    ({"idle_provers": DROP}, "`every_prover_warmed` (cannot tell): its row lacks `idle_provers`"),
+]
+#: the checks of the steady-state rules the reader holds a row to, by the rules' names, and those it doesn't: three read
+#: a run's other files, and a labelled row may lack what `one_numa_node` reads
+GATES = ("accepted", "exits", "not_void", "flat", "no_throttling", "every_prover_warmed")
+NO_GATES = ("one_lease_own_card", "card_clear_start_end", "level", "one_numa_node")
+
+
+def changed(row: dict, change: dict) -> dict:
+    return {k: v for k, v in (row | change).items() if v is not DROP}
+
+
+def test_a_row_is_judged_by_the_steady_state_rules_own_checks_and_by_no_rule_of_the_readers():
+    """The reader's answer on a row is `verity_bench.steady`'s on `GATES` (`accepted`, `exits`, `not_void`, `flat`,
+    `no_throttling` and `every_prover_warmed`), check for check and word for word: on the fixture's rows, on rows those
+    checks are strict about (`STRICT`: a session never filed, a row that names no exit code, a rate that isn't finite,
+    a row that also holds an `error`, a count that isn't one, throttled CPUs, a prover that never warmed or sat idle)
+    and on a row several of them fail, which names each. Only a row that passed all six is a measurement, so "cannot
+    tell" prices nothing. `one_numa_node` is no condition here: a row that fails it, or can't show it, is still
+    priced."""
+
+    assert R.CHECKS == tuple(getattr(S, name) for name in GATES)
+    assert S.CHECKS == tuple(sorted(GATES + NO_GATES, key=S.CHECKS.index)) and S.one_numa_node not in R.CHECKS
+    good = {row["type"]: row for row in REFUSALS}["good"]
+    rows = [row for row in REFUSALS if "stage" in row] + [changed(good, change) for change, _ in STRICT]
+    for row in rows:
+        got = R.judged(row)
+        assert got.checks == tuple(getattr(S, name)(row) for name in GATES)
+        assert R.steady_row(row, "r1").measured == (got.passed and R.unpriced(row) is None)
+        assert (R.row_why(row) is None) == R.steady_row(row, "r1").measured
+    for change, why in STRICT:
+        row = changed(good, change)
+        read = R.steady_row(row, "r1")
+        assert (R.row_why(row), read.refused, read.measured, read.gpu_seconds) == (why, why, False, None), change
+        assert R.judged(row).status == (S.CANNOT_TELL if "(cannot tell)" in why else S.FAIL)
+    # a row that fails several checks names each, in the rules' order
+    killed = good | {"exits": {"verifier-good": 0, "prover-gpu0": -15}, "flat": False, "statements_per_s": None,
+                     "void": ["exited nonzero: prover-gpu0 rc -15"]}
+    assert R.row_why(killed) == ("`exits` (fail): exited nonzero: prover-gpu0 rc -15; `not_void` (fail): void: exited "
+                                 "nonzero: prover-gpu0 rc -15; `flat` (fail): its statement cache's hit rate wasn't flat")
+    assert R.row_why(good | {"exits": [0, 1], "refused_n": 2}) == ("`accepted` (fail): 2 sessions refused; `exits` (fail): "
+                                                                   "exited nonzero: 1 rc 1")
+    # a check the row fails outranks one its fields can't show, as in the rules
+    assert R.judged(changed(killed, {"unfiled": DROP})).status == S.FAIL
+    # throttled CPUs and a prover that never warmed are gates: a row that fails both names both and prices nothing
+    cold = good | {"throttled": {"nr_throttled": 3, "throttled_usec": 250000}, "warm_per_prover": {"prover-gpu0": 0}}
+    assert R.row_why(cold) == ("`no_throttling` (fail): its CPUs were throttled 3 times while it ran, for 0.25 s; "
+                               "`every_prover_warmed` (fail): 0 of its 1 provers finished a warm session before the "
+                               "timed ones")
+    assert not R.steady_row(cold, "r1").measured
+    # `one_numa_node` is none: a row whose cores span two NUMA nodes, and one that doesn't say, are priced as the good row
+    for cores, status in (({"count": 10, "list": "8-17", "numa_nodes": [0, 1]}, S.FAIL), ({"count": 10}, S.CANNOT_TELL)):
+        row = good | {"cores": cores}
+        assert S.one_numa_node(row).status == status
+        assert R.row_why(row) is None and R.steady_row(row, "r1").gpu_seconds == R.steady_row(good, "r1").gpu_seconds
 
 
 def test_a_row_is_a_steady_state_measurement_only_when_every_session_was_accepted_and_its_cache_flat():
@@ -706,16 +794,19 @@ def test_a_row_is_a_steady_state_measurement_only_when_every_session_was_accepte
     good = read["good"]
     assert (good.type, good.definition, good.k_log, good.blocks, good.full, good.provers) == ("good", "Good_v1{N=1}", 20, 8, 8, 1)
     assert (good.gpu_seconds, good.verifier_seconds, good.report) == (1 / 0.125, 4.0, "out/rate/rate.json")
-    assert R.steady_row(rows["good"] | {"gpus": 2, "provers": 4, "accepted": 12}, "r1").gpu_seconds == 2 / 0.125
+    four = {"gpus": 2, "provers": 4, "accepted": 12, "warm_per_prover": {f"prover-gpu{i}": 1 for i in range(4)}}
+    assert R.steady_row(rows["good"] | four, "r1").gpu_seconds == 2 / 0.125
     cost = P.Flock((good,)).table(P.Census((P.Block("Good_v1{N=1}", "Good_v1", 1.0, 20),), 1.0, 1.0)).rows[0].cost
     assert (cost.source, 1e3 * cost.seconds, cost.verifier_seconds, cost.provers) == (P.STEADY, 1000.0, 0.5, 1)
     # the verifier's seconds are optional, and a row whose rate isn't one is refused
     assert R.steady_row({k: v for k, v in rows["good"].items() if k != "verify_s"}, "r1").verifier_seconds is None
     assert R.row_why(rows["good"] | {"verify_s": {"mean": 4.0}}) == "its `verify_s` isn't a statement's seconds"
-    assert R.row_why(rows["good"] | {"statements_per_s": None}) == "no rate to price: `statements_per_s` is None on `gpus` 1"
+    assert R.row_why(rows["good"] | {"gpus": 0}) == "no rate to price: `statements_per_s` is 0.125 on `gpus` 0"
     assert R.row_why(rows["good"] | {"stage": rows["good"]["stage"] | {"blocks": 16}}).startswith(
         "its `provers` (1), `stage.blocks` (16) and `stage.full` (8) aren't")
-    assert R.row_why(rows["good"] | {"sessions": "8"}) == "its `warm`, `sessions`, `accepted` and `refused_n` aren't counts of sessions"
+    # a row no session of which ran has no prover count to price at
+    none = rows["good"] | {"provers": 0, "accepted": 8, "warm_per_prover": {}}
+    assert R.row_why(none).startswith("its `provers` (0), `stage.blocks` (8) and")
     # a row that names no staged Definition goes on no block type's row: it is its reason
     assert R.steady_row(rows["failed"], "r1") == "its row `failed` at 2 provers: failed: RuntimeError: the server didn't start"
     assert R.steady_row(rows["late"], "r1") == "its row `late` at 4 provers: skipped: past the deadline"
@@ -904,8 +995,9 @@ def test_the_hand_computation_is_reproduced_from_the_records_it_read(tmp_path):
     top = doc["rows"][0]
     assert top["block"] == "FlashInferFp8Linear_v1{K=2048,N=1}" and top["source"] == P.SINGLE and top["record"] == arts[R.SINGLE]
     assert top["time_share"] == pytest.approx(0.4016, abs=5e-5) and 1e3 * top["seconds"] == pytest.approx(56.611, abs=5e-4)
-    assert top["note"] == (f"steady state tried as `fi-linear-k2048` at 1 prover in {RUNS[1]} (out/rate/rate.json): void: "
-                           "exited nonzero: prover-gpu0 rc -15")
+    assert top["note"] == (f"steady state tried as `fi-linear-k2048` at 1 prover in {RUNS[1]} (out/rate/rate.json): "
+                           "`exits` (fail): exited nonzero: prover-gpu0 rc -15; `not_void` (fail): void: exited nonzero: "
+                           "prover-gpu0 rc -15; `flat` (fail): its statement cache's hit rate wasn't flat")
     assert {r["provers"] for r in steady_rows} == {1} and top["provers"] is None and doc["provers"] == 1
     # the runs state no cores, in a row or for their host: every row is read as timed at 24, above the default host's
     # 10, so the same rows price the same types and the totals say how much of the proving time rests on them
@@ -1125,8 +1217,8 @@ def test_a_steady_state_run_that_cant_be_read_is_left_out_and_listed(tmp_path):
     text = R.render(doc, rows=0)
     assert text.count("\n- r20261109-000000-0004: `") == 8 and text.index("Refused (not read):") < text.index("Unread (")
     assert "- r20261109-000000-0004: `good` at 1 prover, `Good_v1{N=1}`: measured at steady state, 1,000 ms per block\n" in text
-    assert ("- r20261109-000000-0004: `bare` at 1 prover, `Bare_v1{N=1}`: not a steady-state measurement: its row lacks "
-            "`flat`, `gpus`, `stage.blocks`, `stage.full`\n") in text
+    assert ("- r20261109-000000-0004: `bare` at 1 prover, `Bare_v1{N=1}`: not a steady-state measurement: `flat` (cannot "
+            "tell): its row lacks `flat`; its row lacks `gpus`, `stage.blocks`, `stage.full`\n") in text
 
     # an art that names its runs stands for them
     s2 = Store(tmp_path / "second")
