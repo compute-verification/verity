@@ -13,7 +13,7 @@ pool's start.  Beside each wall time, ``cpu_s`` is this process's CPU time, whic
 ``workers`` > 1 only the parent's share: the pool's processes are its children, so read their wall time).  Apart: the salts alone and the row digests alone, one thread; and the floor, one SHA-512 pass over every row's
 bytes on each worker count's threads of a pool that outlives the calls (hashlib releases the GIL on rows this long), what any
 SHA-512 commitment of these rows costs at least on this CPU.  Validation: the root equals
-``verity.ml.commitments.row_table.commit_step``'s over the same rows and salts (the pure-Python reference).
+``verity.commitments.row_table.commit_step``'s over the same rows and salts (the pure-Python reference).
 """
 
 from __future__ import annotations
@@ -32,10 +32,10 @@ from typing import Any
 
 import numpy as np
 
-from verity.ml.commitments import row_table as RT
-from verity.ml.commitments.rowleaf import sha512_row_seg_digest
+from verity.commitments import row_table as RT
+from verity.commitments.rowleaf import sha512_row_seg_digest
 from verity_vllm.commit import row_tables as RTB
-from verity.ml.windows import rows as SR
+from verity.commitments.windows import rows as SR
 
 RESULT_SCHEMA = "research/result/v0.1"
 #: Llama-3.1-8B's int8 linears and their K
@@ -144,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
                                      "workers": ns.workers, "reps": ns.reps, "cpu": platform.processor() or platform.machine(),
                                      "nproc": os.cpu_count(), "python": sys.version.split()[0]},
             "validation": {"status": "passed" if ok else "failed",
-                           "checker": "the step root equals verity.ml.commitments.row_table.commit_step's over the same rows and salts",
+                           "checker": "the step root equals verity.commitments.row_table.commit_step's over the same rows and salts",
                            "detail": "ok" if ok else f"reference root {ref.hex()[:16]}", "evidence": []},
             "measurements": [{"name": f"step_roots.w{w}.seconds", "value": v["seconds"], "unit": "s"} for w, v in by_workers.items()]
             + [{"name": f"step_roots.w{w}.cold_seconds", "value": v["cold_s"], "unit": "s"} for w, v in by_workers.items()]

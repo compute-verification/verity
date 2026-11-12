@@ -1,4 +1,4 @@
-/* The sealed pair link's AEAD (`verity.ml.crypto.aead`) in C over OpenSSL's SHA-512: the fast path `mockdc.py seal`
+/* The sealed pair link's AEAD (`verity.commitments.crypto.aead`) in C over OpenSSL's SHA-512: the fast path `mockdc.py seal`
  * measures beside the Python. Its units are the Python's, byte for byte: it prints the SHA-512 of its first M units,
  * which `mockdc.fast_path` compares with the Python's before it reports a rate.
  *

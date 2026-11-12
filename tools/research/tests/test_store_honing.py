@@ -113,7 +113,7 @@ def test_evict_keeps_every_blob_a_registry_artifact_holds(store, fs_remote, tmp_
     plan = EV.plan_store(store, min_bytes=1000, keep=frozenset({fixture}))
     assert [c[0] for c in plan["candidates"]] == [2000] and plan["kept_bytes"] == 3000
     reg = tmp_path / "artifacts.json"
-    reg.write_text(json.dumps({fixture: "verity/ml/flock/tests/fixtures/rec-coins", "previous": {}}))
+    reg.write_text(json.dumps({fixture: "verity/protocols/flock/prover/tests/fixtures/rec-coins", "previous": {}}))
     assert main(["evict", "--target-free-gb", "99999", "--min-mb", "0.001", "--keep-registry", str(reg), "--json"]) == 1
     rep = json.loads(capsys.readouterr().out)["store"]
     assert [b["artifacts"] for b in rep["evicted_blobs"]] == [[loose]] and rep["kept_bytes"] == 3000

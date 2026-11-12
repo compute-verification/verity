@@ -23,9 +23,9 @@ import torch
 from conftest import CC, LF, STEP, STRUCTURE, dot_alone, k16_steps, route_factor
 
 import grader as G
-from verity.ml.circuits.census import census
-from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.program import REGISTRATION, input_prim
+from verity.definitions.circuits.census import census
+from verity.circuits.codec import canonical_json
+from verity.circuits.program import REGISTRATION, input_prim
 from verity_vllm.program.frontend.train_step import primitives
 
 aten = torch.ops.aten
@@ -42,6 +42,7 @@ AGREE = ("count", "N", "O", "widths", "token_dims")
 STEPS = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}
 
 
+@pytest.mark.slow
 def test_a_handover_reads_back(steps) -> None:
     s = steps()
     doc = json.loads(s.path.read_text())

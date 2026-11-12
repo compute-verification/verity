@@ -5,7 +5,7 @@ opposite-sign accumulator at the alignment window's edge); the pinned model is `
 
 Written from the read-only autoproof sources ``fp4-ref/src/native.rs`` (the model), ``fp4-ref/src/bitref.rs`` (the independent
 bit-level datapath) and ``spec/SEMANTICS.lock.v1.json`` (the adopted parameters: W1=42, W2=36, RZ, hot-group clip at 2^-19).
-No code is shared with ``verity.ml.circuits.silicon`` or with autoproof; everything below is re-derived from the description.
+No code is shared with ``verity.definitions.silicon`` or with autoproof; everything below is re-derived from the description.
 
 The model, per instruction (K = 64, four groups of 16):
   1. four EXACT integer group dots  gd_g = sum_{k in group g} num(a_k) * num(b_k)   (E2M1 numerators in units of 2^-1)

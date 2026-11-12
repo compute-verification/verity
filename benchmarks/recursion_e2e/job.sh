@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The recursion bench's job (README.md): verity/ml/flock/pod/85-rec-reprice.sh's steps in order, as one recorded run, each
+# The recursion bench's job (README.md): verity/protocols/flock/pod/85-rec-reprice.sh's steps in order, as one recorded run, each
 # invocation under its own RESEARCH_RUN_DIR ($OUT/steps/<step>/r<i>, so every record 85 writes is kept) and /usr/bin/time -v,
 # every CPU step REPEAT times and every GPU step once with its runs; then the result (run.py result) in
 # $OUT/recursion_e2e.json and $OUT/table.md. Run from the verity tree; `verity bench recursion_e2e run` prints and launches
@@ -27,7 +27,8 @@
 #      OS, rec_live --tree-test-os, a test's coins)
 #      RELEASE=0 (1: the recursive session through the ZK server's release side, 85's RELEASE: the inner session opens it,
 #      oprove proves its parts in order through the Lean session loop and holds each to its release window; one inner
-#      session, so WARM=0 RUNS=1, and each CPU step once, REPEAT=1, unless set)  RELEASE_WINDOWS_S= RELEASE_BUDGET= (85's)
+#      session, so WARM=0 RUNS=1, and each CPU step once, REPEAT=1, unless set)  RELEASE_WINDOWS_S= (85's)
+#      RELEASE_BUDGET= (85's: the stream's failure budget, at least 1, which RELEASE=1 needs)
 #      and any of 85's own (LEVELS, GPU, PCPUS, GPU_PREEMPTIBLE, ...), passed through
 #      CUDA_TK, WARM_FROM: as 85 takes them (default: the rec-reprice unpack and cargo tree where present, read only)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -60,9 +61,9 @@ RR=/workspace/jobs/rec-reprice
 [ -z "${CUDA_TK:-}" ] && [ -x $RR/cuda-13.3.1/bin/nvcc ] && export CUDA_TK=$RR/cuda-13.3.1
 [ -z "${WARM_FROM:-}" ] && [ -d $RR/flock-gpu-link/flock ] && export WARM_FROM=$RR/flock-gpu-link
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
-REC=verity/ml/flock/pod/85-rec-reprice.sh
+REC=verity/protocols/flock/pod/85-rec-reprice.sh
 L=$FLOCK_WORK/cache
-LSHA=$(cd verity/core/service/flock && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+LSHA=$(python3 verity/protocols/flock/pod/lake_closure.py key verity/protocols/flock/verifier)
 { echo "commit=${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)} K=$K N=$N TAG=$TAG WARM=$WARM RUNS=$RUNS REPEAT=$REPEAT settings=$SETTINGS"
   echo "OPROVE_WARM=${OPROVE_WARM:-0} OPROVE_RUNS=${OPROVE_RUNS:-1} GPU_MAX_MIN=$GPU_MAX_MIN GPU=${GPU:-1} OPROVE_GPU=$OPROVE_GPU OPROVE_JOBS=$OPROVE_JOBS" \
     $(for v in $(compgen -v REPEAT_); do echo "$v=${!v}"; done)

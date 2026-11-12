@@ -3,12 +3,12 @@
 Recursive witness zero knowledge proves an inner statement with Flock's circuit prover, ZK off, against the inner phase's ZK server. It then
 proves V*, the inner verifier written as Flock statements, with `--zk`, and the auditor's Lean verifier checks V*'s
 releases only. This is the one runner for that pipeline. It drives the steps of the pod script,
-`verity/ml/flock/pod/85-rec-reprice.sh`, as one recorded run, times each step on the smallest real input (K = 4096,
+`verity/protocols/flock/pod/85-rec-reprice.sh`, as one recorded run, times each step on the smallest real input (K = 4096,
 N = 2), repeats what is cheap to repeat, and says whether the run was whole (every step of one recursive proof) and whether it was accepted. Speed work measures each cut
 before and after with it.
 
 This pipeline hides the inner witness over a public circuit. The run that also hides the circuit, recursion with
-`InnerFold.lean --hide` over a hidden RoPE proof block, is `verity/ml/flock/pod/88-rec-c3-inner.sh`; this runner doesn't
+`InnerFold.lean --hide` over a hidden RoPE proof block, is `verity/protocols/flock/pod/88-rec-c3-inner.sh`; this runner doesn't
 time it yet.
 
 ~~~text
@@ -60,7 +60,9 @@ POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes firewall --oprove-runs 1 -
   `RELEASE=1`), one pass. The inner step fixes the session's parts (V*'s statements at the inner statement's shape, in
   `rec-statements`' order) and its release schedule (`RELEASE_WINDOWS_S`: a window per part by its class, and a lead before
   the first; `rec_inner.py release-parts`) before its one inner session, which opens the recursive session on the ZK
-  server's state (`rec_live --firewall`). oprove then proves each part once, in order, through
+  server's state (`rec_live --firewall`) on a stream whose failure budget is `RELEASE_BUDGET` (1 unless `--env
+  RELEASE_BUDGET=b`: the ZK server opens no recursive session on a stream without one). oprove then proves each part once,
+  in order, through
   `flock-circuit prove --zk --firewall-state DIR --session ID --part NAME`: the Lean session loop (`flock-firewall`) behind
   the release side's own Lean loop (`core-firewall session`), which holds each verdict to its release time and stops the
   session at a part that is late or refused. `rec_inner.py release-report` reads the ZK server's record against the

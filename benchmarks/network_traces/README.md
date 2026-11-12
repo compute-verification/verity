@@ -1,6 +1,6 @@
 # network_traces
 
-The network certifier (`verity/core/protocols/certifier/`) on real served traffic: per-token timing traces for its
+The network certifier (`verity/protocols/certifier/`) on real served traffic: per-token timing traces for its
 calibration, the certifier in front of a served endpoint (as a proxy, `active.Proxy`, or as a relay of the egress
 record's one form, `warden`), the zero-knowledge proofs of their proof blocks, and the network chain's run of record end
 to end. Each driver's docstring says what it runs, what it publishes and what its verifier receives.
@@ -26,7 +26,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
   of a served OpenAI endpoint (`rehearse`) and checks what it published offline. The endpoints it rehearses against
   besides vLLM: `demo_endpoint.py` and `demo_stub.py`. `compact_render.py` is the client's shim for compact egress
   framing.
-- **The certifier as a relay.** `warden_serve.py` runs `verity.core.protocols.certifier.warden`, the network certifier
+- **The certifier as a relay.** `warden_serve.py` runs `verity.protocols.certifier.verifier.warden`, the network certifier
   as a relay in front of any TCP server and checks what it published offline: `serve` releases only the egress
   record's id form by default, and `rehearse` names its traffic's (`--egress`: id with `--ids`, else bytes);
   `warden_chain.py` is the chain's reads of a relay run, and `warden_zk.py` reads the relay's bucket rows in the proof
@@ -49,7 +49,7 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 ## The demo's load
 
 The H200 demo serves plain INT8 weights generated from the public seed `verity/cmp92/h200/weights/v1`
-(`e2e_h200.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
+(`benchmarks.torch_gpu.p2_stage.served_weights`). They are relayed to the H200 once per serving run and committed as they cross, through
 two gate verbs on the auditor's machine:
 
 - `vy-challenger-gate weights-write [--shape h200|tiny]` writes the shape's weights stream onto the auditor's store disk
@@ -84,7 +84,7 @@ the gate's scan rehearsal (`warden-rehearse --scan --prompts`) against the endpo
 the H200 peer's `serve-openai` on :18782, inside the scan's class: prompts of 256 ids from a fresh secret seed (prompts
 of the class's 1,024 reach the relay late), each answered greedily with at most 64 ids, ending at the base model's EOS
 id 128001. It runs at a given UTC time when asked. The endpoint is started by hand (serve-openai directly with
-`examples/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
+`demos/vllm/serve.sh`'s serve-openai line, not serve.sh), sealed without the attention interiors, with bounded
 staging at its default, which that exclusion needs. Its `requests.jsonl` and `advice_trace.jsonl` hold request values
 (prompt and streamed ids; prompt lengths, sampling, rows and emitted ids) and stay on the served node, so the chain's
 endpoint step runs there: `io` writes the kept network certifier run's certified I/O to a 0600 file in the kept fetch's
@@ -201,14 +201,18 @@ request with outputs still to keep and no next Commit period, is refused.
 ## The leak bound
 
 `leak_bounds.py` is the one calculator of K, the bits a covert sender's secrets can number over a monitoring period.
-`per_link` gives K for one link: one network certifier on one uplink, certifying a request rate of one scan class (an
-`ingress_scan.Class`, or a window class's `scan`). `datacenter` sums K over a datacenter's links, and `world` over the
-world's. Each comes in two forms, beside its share of one copy of the weights and its ε. The terms are those of
-`NetTiming.Guarantees.PeriodLeakAccepted` (`Security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
-`Security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
-failures `NetTiming.periodLeak_le_sum` sums by a union bound (`Security/Proofs/NetworkCertifier/PeriodSum.lean`); the
+It scales K in two ways. By requests, `verity bench certifier_term` prints the network certifier's own terms at the
+load of a node, a datacenter and the world, all a scope serves counted by each check's own rule (`leak_bounds.table`;
+its rows, columns and inputs are in `benchmarks/certifier_term/README.md`). By links, the rest of this section: `per_link` gives K for
+one link, one network certifier on one uplink, certifying a request rate of one scan class (an `ingress_scan.Class`,
+or a window class's `scan`); `datacenter` sums K over a datacenter's links; and `at_link_rate` sums as many links at
+one link's rate as a scope has machines. Each comes in two forms, beside its share of one copy of the weights and its
+ε. The terms are those of
+`NetTiming.Guarantees.PeriodLeakAccepted` (`security/Definitions/NetworkCertifier/Guarantees/Period.lean`, proved in
+`security/Proofs/NetworkCertifier.lean`) as `NetworkCheck.Period`'s rows form counts them, whose execution phases'
+failures `NetTiming.periodLeak_le_sum` sums by a union bound (`security/Proofs/NetworkCertifier/PeriodSum.lean`); the
 pooled form is `NetTiming.Guarantees.PooledLeakAccepted`
-(`Security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
+(`security/Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`). Both are about one device on one uplink. The sum
 over links is our composition, which no Lean statement covers. It holds except where some link's statement fails, so a
 datacenter at δ takes each link at δ / links, and each link pays its own incorrect proof blocks (`datacenter`'s
 docstring says why pooling them by weight copy would be unsound).
@@ -262,15 +266,17 @@ The two forms:
   (`NetworkCheck.Period`'s `eps`), each scan at its δ (`leak_bounds.SCAN_DELTA`, `scan_zk --delta`'s default).
 
 The scale:
-- A week, a month and a year of one link, of the census's reference datacenter (`benchmarks/census/deployments.json`,
-  one link a machine, `leak_bounds.datacenter_links`) and of the world: the adversary resource model's compute
-  (`benchmarks/census/adversary.json`) in machines of the reference datacenter's GPUs, one link each
+- A week, a month and a year of one link, and of as many links as the census's reference datacenter
+  (`benchmarks/census/deployments.json`, one link a machine, `leak_bounds.datacenter_links`) and the world have
+  machines: the world is rho's world fleet (`verity/protocols/inference_only/rho/data/reference.toml`, `fleet.world-h200`), the census's
+  inference (`benchmarks/census/adversary.json`) at the fleet's serving MFU, one link a machine
   (`leak_bounds.world_links`).
-- Every link has one network certifier in front of all its machine's compute, serving at the run's rate. A
-  datacenter's and the world's links are each pooled at δ / links. The world's requests past its links' rate are
-  uncertified, and no row counts them.
-- The weights are one copy of Llama-3.2-1B in BF16 (`leak_bounds.WEIGHTS`), whatever the links. The served checkpoint
-  is int8, so every share names the copy it is of.
+- Every link has one network certifier in front of all its machine's compute, serving at the run's rate
+  (`leak_bounds.at_link_rate`, the scaling by links). A datacenter's and the world's links are each pooled at
+  δ / links. A scope's requests past its links' rate are uncertified, and no row counts them, so these rows are not
+  the scope's K: `verity bench certifier_term` counts the network certifier's terms over every request a scope serves.
+- The weights are one copy of GLM-5.3 in FP4, its workload card's parameters at 4 bits each (`leak_bounds.WEIGHTS`),
+  whatever the links and whatever checkpoint the run served, so every share names the copy it is of.
 
 FILE has both readings of the free inputs. `prog` as registered is the record's K. `prog` only at its anchored entries
 is what the generator-form lowering would give if it registers `prog` everywhere but its anchors, and is not the

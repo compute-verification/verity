@@ -5,6 +5,8 @@ why not, and a held one that fits fails as stale, as does one the whole catalog 
 (``CUTS``, `checks.cut_of`) is held to the range by each unit of its cut instead."""
 from __future__ import annotations
 
+import json
+import subprocess
 import sys
 
 from circuit_check import checks as CK
@@ -13,9 +15,9 @@ OPTS = CK.Options()
 
 
 def _toy():
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array, Value
-    from verity.ml.definitions.registry import prims as P
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array, Value
+    from verity.definitions.registry import prims as P
 
     return bind(CompositeDefinition("CircuitCheckBlock", 1, (), lambda S: ((("x", Array(2, Value(32))),), Value(32)),
                                     lambda B, S, x: B.call(P.F32Add, x[0], x[1]), register=False))
@@ -34,7 +36,7 @@ def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
     monkeypatch.setattr(FC, "K_MAX", b["k_log"] - 1)
     (f,) = [f for f in CK.check_definition(fn, OPTS, as_call=False)["failures"] if f["check"] == "block"]
     assert f["name"].startswith(f"block/past-range CircuitCheckBlock_v1 the unit needs a block of 2^{b['k_log']} bits")
-    assert f["name"].endswith("split the unit (e.g. PoUW's lanes form, verity/core/protocols/pouw/leaf_lanes.py), or extend "
+    assert f["name"].endswith("split the unit (e.g. PoUW's lanes form, verity/protocols/pouw/verifier/leaf_lanes.py), or extend "
                               "the proved range (proofs)")
     assert (f["ands"], f["k_log"], f["sha512x3"]) == (b["ands"], b["k_log"], b["sha512x3"])
     F = CK.Findings()
@@ -42,8 +44,8 @@ def test_a_unit_past_c_flocks_range_is_a_block_failure(monkeypatch):
 
 
 def _rows():
-    from verity.ml.circuits.defs import CompositeDefinition, bind
-    from verity.ml.circuits.types import Array, Value
+    from verity.circuits.defs import CompositeDefinition, bind
+    from verity.circuits.types import Array, Value
 
     return bind(CompositeDefinition("CircuitCheckBlockRows", 1, (), lambda S: ((("x", Array(1 << 17, Value(16))),), Array(1 << 17, Value(16))),
                                     lambda B, S, x: x, register=False))
@@ -68,10 +70,14 @@ def test_rows_that_push_a_fitting_slot_past_the_block_fail():
 
 
 def test_the_held_list_only_shrinks():
-    """`block_held.HELD` is at most `block_held.MAX` long, and each entry says why."""
+    """`block_held.HELD` is at most `block_held.MAX` long, and each entry says why, as itself: no PR or Linear id."""
+    import re
+
     from circuit_check import block_held as BH
 
     assert len(BH.HELD) <= BH.MAX and all(why.strip() for why in BH.HELD.values())
+    ids = {i: why for why in set(BH.HELD.values()) for i in re.findall(r"#\d+|\b[A-Z]{2,4}-\d+\b(?!\.)", why)}
+    assert not ids, f"block_held.py: state each reason as itself (what serving stages instead), not by PR or issue: {ids}"
 
 
 def test_a_held_definition_is_reported_held_and_a_held_one_that_fits_is_stale(monkeypatch):
@@ -150,11 +156,52 @@ def test_a_held_id_the_catalog_no_longer_checks_fails(monkeypatch):
 def test_sparse_mla_is_held_to_the_block_by_its_head_chain():
     """GLM-5.3's `SparseMla_v1` at its circuit-check binding (T = 65, the served heads and widths) is past the block whole
     (2^30 bits) and cut by `sparse_mla.CUTS` into each head's blocks and end, whose largest, a full block, fits."""
-    from verity.ml.circuits.defs import bind
-    from verity.ml.definitions.registry import sparse_mla as M
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import sparse_mla as M
 
     F = CK.Findings()
     b = CK.block_range(bind(M.SparseMla, T=65, **M.SPARSE_MLA_GLM53), F)
     assert not F.failures and b["whole"]["k_log"] == 30 and b["k_log"] == 27
     assert [(u["unit"].partition("{")[0], u["count"]) for u in b["cut"]] == [
         ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadEnd_v1", 8)]
+
+
+#: the block of GLM-5.3's greedy `TokenSelect_v1` and its cut's, in a process of its own
+GREEDY_SERVED = """
+import json
+from circuit_check import checks as CK
+from verity.circuits.defs import bind
+from verity.definitions.registry import b1
+
+F = CK.Findings()
+b = CK.block_range(bind(b1.TokenSelect, V=154880), F)
+print(json.dumps({"failures": [f["code"] for f in F.failures], "whole": b["whole"]["k_log"], "k_log": b["k_log"],
+                  "cut": [[u["unit"].partition("{")[0], u["count"], u["k_log"]] for u in b["cut"]]}))
+"""
+
+
+def test_glm53_greedy_select_is_held_to_the_block_by_its_chunks():
+    """GLM-5.3's greedy `TokenSelect_v1` at its served vocabulary (V = 154,880) is past the block whole (2^28 bits) and cut by
+    `b1.CUTS` into nine chunks of 16,384 lanes and the combine, which reads the last 7,424, each a quarter of the block.  Checked
+    in a process of its own: a chunk registers a constant for each of its lanes, and every later test of this session that goes
+    through the registry's primitives (`test_declared_tables`) would go through those 16,384."""
+    r = subprocess.run([sys.executable, "-c", GREEDY_SERVED], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr[-3000:]
+    assert json.loads(r.stdout.strip().splitlines()[-1]) == {
+        "failures": [], "whole": 28, "k_log": 25,
+        "cut": [["GreedyChunk_v1", 1, 25], ["GreedyChunk_v1", 8, 25], ["GreedyCombine_v1", 1, 25]]}
+
+
+def test_sparse_mla_split_is_held_to_the_block_by_its_split_chain():
+    """GLM-5.3's `SparseMlaSplit_v1` at T = 130 in two splits (split 0 of two blocks) is past the block whole and cut by
+    `sparse_mla_split.CUTS` into each split's blocks, its ends in column blocks and each column block's combine, whose
+    largest, a full block, fits."""
+    from verity.circuits.defs import bind
+    from verity.definitions.registry import sparse_mla as M, sparse_mla_split as W
+
+    F = CK.Findings()
+    b = CK.block_range(bind(W.SparseMlaSplit, T=130, NS=2, **M.SPARSE_MLA_GLM53), F)
+    assert not F.failures and b["whole"]["k_log"] > 27 and b["k_log"] == 27
+    assert [(u["unit"].partition("{")[0], u["count"]) for u in b["cut"]] == [
+        ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadBlock_v1", 8), ("SparseMlaHeadBlock_v1", 8),
+        *[("SparseMlaSplitEndCols_v1", 16)] * 8, ("SparseMlaCombine_v1", 64)]

@@ -18,13 +18,13 @@ from typing import ClassVar
 import numpy as np
 import pytest
 
-from verity.core.protocols.pouw import core_check as CC
+from verity.protocols.pouw.verifier import core_check as CC
 
 torch = pytest.importorskip("torch")
 
-from verity.ml.commitments import MerkleTree
-from verity.ml.commitments.merkle import tree_levels
-from verity.core.protocols.pouw.audit import (
+from verity.commitments import MerkleTree
+from verity.commitments.merkle import tree_levels
+from verity.protocols.pouw.verifier.audit import (
     HM96,
     HM96_TRANSCRIPT,
     HM96_WEIGHTS,
@@ -43,20 +43,20 @@ from verity.core.protocols.pouw.audit import (
     weight_binding,
     weights_root,
 )
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.coins import Challenger, CoinCommitment
-from verity.core.protocols.pouw.credit import passes_distinct
-from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.ml.protocols.pouw.schemes import pearl_c as C
-from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
-from verity.ml.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.serving import SchemeId
-from verity.core.protocols.spot import challenger as Ch
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.coins import Challenger, CoinCommitment
+from verity.protocols.pouw.verifier.credit import passes_distinct
+from verity.protocols.pouw.verifier.protocol import Context, DomainError, Matmul, Shape
+from verity.protocols.pouw.prover.schemes import pearl_c as C
+from verity.protocols.pouw.prover.schemes import pearl_c_work as PW
+from verity.protocols.pouw.prover.schemes import pearl_kw as P
+from verity.protocols.pouw.verifier.serving import SchemeId
+from verity.protocols.spot.device import challenger as Ch
 from verity_vllm.protocols.pouw import pearl_c as PPD
 
-# the work sampling design and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "clear"))
+# the work sampling design and the clear audit are a reference tool's (verity/protocols/pouw/clear), imported by name
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "pouw" / "clear"))
 import clear_work as CW  # noqa: E402
 from clear_audit import Prover, Verifier  # noqa: E402
 
@@ -505,10 +505,12 @@ def test_end_pass_commits_each_engine_step_as_the_per_step_reach_in_did(monkeypa
         assert len({p["activation_roots"] for p in b if p["units"]}) == 5
 
 
+@pytest.mark.slow
 def test_a_long_served_run_ending_a_pass_each_engine_step_never_overflows(monkeypatch):
     """A pass holds 32 tiles and 512 screened rows, and each step takes 24 tiles and 400 rows: with `end_pass` at each step's
     end, 256 steps (6,144 tiles) each commit in a pass of their own; without it, the install's one pass overflows at the
-    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows)."""
+    second step, as served Pearl-C did within a few prefill steps (the default buffers hold 8M tiles and 4M rows). Its
+    length is the point: a few steps would not show a buffer that grows across passes."""
     rng = np.random.default_rng(17)
     weights = {w: torch.from_numpy(bf16_words(rng, n, 1024).view(np.float32).copy()).to(torch.bfloat16)
                for w, n in ((0, 256), (1, 128))}
@@ -740,7 +742,7 @@ class TwinDev(RecordingDev):
                 a.p[j] = v
             for j, v in enumerate(i):
                 a.i[j] = v
-            getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem)
+            assert getattr(TWIN.build(), f"run_{name}")(ctypes.byref(a), grid, block, smem) == 0, name
         if name.startswith("pd_") or name == "s512_heads":
             a = R.Args()
             for j, v in enumerate(p):
@@ -1320,7 +1322,7 @@ def test_fresh_trials_draw_exactly_by_work_from_a_source_fixed_in_the_command(tm
     """Lean's conditions on the fresh-trial ε: sample d is `key.uniform(W, d)` over the input's cumulative credited cells
     (exactly proportional to `TR.Wref` within the input), under a domain naming the table and a context naming the input,
     and the source is given in the command, never taken inside the run."""
-    from verity.ml.randomness import derive
+    from verity.commitments.randomness import derive
 
     src, job, row = bytes(range(32)), {"sha256": "ab" * 32}, {"matmul": 7, "area": {40: 64 * 64, 41: 64 * 64, 42: 32 * 64}}
     got = SD.fresh_trials(job, row, 50, src)
@@ -2289,9 +2291,9 @@ def test_the_deferred_schedule_commits_what_the_serial_one_commits(device_run, t
 # ---- the hashing format, from the one table --------------------------------------------------------------------------
 
 def test_the_device_path_commits_with_its_schemes_hashing_format(device_run):
-    """Every tree's hash is the scheme's format's (`verity.core.protocols.pouw.serving.HASH_FORMATS`), not a
+    """Every tree's hash is the scheme's format's (`verity.protocols.pouw.verifier.serving.HASH_FORMATS`), not a
     literal: -h3's hm96-sha512, keyed by the prover's salt key; and the path runs only its own schemes."""
-    from verity.core.protocols.pouw.serving import HASH_FORMATS, SchemeId, hash_format
+    from verity.protocols.pouw.verifier.serving import HASH_FORMATS, SchemeId, hash_format
 
     make, *_ = device_run
     run = make()
@@ -2354,7 +2356,7 @@ def test_a_schedule_this_path_the_kernel_or_the_format_cannot_run_is_refused(dev
     """-h3's row seeds come from A's rows, not its root, so its format lets A's tree leave the main lane; this path moves the
     tile hashing, which reads C~ and U, and A's tree where the kernel's pipeline splits A's commitment (sm_90a's and
     sm_120's), each with the buffers it touches rotated.  The screen stays on the caller."""
-    from verity.core.protocols.pouw.serving import Schedule
+    from verity.protocols.pouw.verifier.serving import Schedule
     make, kernel, *_ = device_run
     s = PPD.scheme_of(SCHEME)
     assert PPD.schedule_of("deferred-a", s).name == "deferred-a" and PPD.splits(kernel)

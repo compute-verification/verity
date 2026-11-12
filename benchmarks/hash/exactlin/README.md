@@ -6,7 +6,7 @@ epilogue is `int8_exact.dequantize`. Each is gated bit for bit against `int8_exa
 evaluators, then timed against stock vLLM int8, at kernel level and served. The kernels run on an RTX PRO 6000 (sm_120),
 an H200 (sm_90) and a B200 (sm_100).
 
-The served CUDA bodies of both ops are `integrations/vllm/verity_vllm/engine/int8_fused.py`, with their config table in
+The served CUDA bodies of both ops are `adapters/vllm/verity_vllm/engine/int8_fused.py`, with their config table in
 `engine.profiles.int8_gemm_configs`. `exactlin.py` holds the same kernels and table for the benches here, and `install`
 serves the ops from them. Nothing a verifier runs reads this directory.
 

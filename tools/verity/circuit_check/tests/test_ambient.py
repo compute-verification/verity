@@ -12,7 +12,7 @@ from circuit_check import ambient as A
 from circuit_check import cli
 from verity_flock import ir_lower as IL
 
-from verity.ml.circuits.defs import REGISTRY
+from verity.circuits.defs import REGISTRY
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

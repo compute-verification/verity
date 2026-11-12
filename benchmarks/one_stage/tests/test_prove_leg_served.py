@@ -58,7 +58,7 @@ ROWS = ("4c4c22b639378c9002541c62fb178fa6e87380cc45f35ddb9041ace9b879b201"
 
 @pytest.mark.parametrize("shape,want", SERVED)
 def test_a_served_shape_binds_a_served_template_with_values_for_every_parameter(shape, want):
-    from verity.ml.circuits.codec import descriptor_id
+    from verity.circuits.codec import descriptor_id
     from verity_vllm.pipeline import serving_rows as SRW
 
     fn, gen = L.served(shape)
@@ -106,8 +106,8 @@ def test_an_embedding_read_is_the_windows_unit_with_a_token_inside_the_vocabular
     """``embedding-read`` is the window's `EmbeddingRead_v1{V, H}` (no serving row commits its one-bit leaves): its words are
     its arguments' bits, little-endian, the token's below V. (Each stand-in row opens at its token: the generator holds
     `embedding.reference` to it, and the bit-sliced evaluator gives ok = 1 on these words, too slow for a test.)"""
-    from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.windows import interface as IF
+    from verity.circuits.codec import descriptor_id
+    from verity.commitments.windows import interface as IF
 
     fn, gen = L.served("embedding-read:1b:300")
     assert descriptor_id(fn) == descriptor_id(IF.resolve("EmbeddingRead_v1{V=300,H=2048}")) == "EmbeddingRead_v1{V=300,H=2048}"
@@ -161,3 +161,36 @@ def test_a_served_members_reads_reach_its_stager(monkeypatch, tmp_path, reads):
     with pytest.raises(Built):
         L.stage(m, 0, {"partition": "p", "program": "q"}, tmp_path, b"k" * 32, {})
     assert seen["reads"] == reads
+
+
+def test_a_structural_leg_stages_struct_lowers_template_else_flat_saying_why(monkeypatch, tmp_path):
+    """With a layout (``Tools.structural``), a member's stager is `struct_lower`'s template at it; where struct_lower
+    refuses the Definition, or the member's reads are in lookup slots, it is the flat statement at the member's reads, and
+    the reason is the member's. Without ``tmpl_unit``, which places a templated unit for its prover, no layout is taken."""
+    from verity_flock import class_statement as CS
+
+    calls, refuse = [], {"on": False}
+
+    def stager(*_a, **kw):
+        calls.append(kw)
+        if kw.get("structural") and refuse["on"]:
+            raise NotImplementedError("an assertion is not laid out")
+        return kw
+
+    monkeypatch.setattr(CS, "UnitStager", stager)
+    bound = {"partition": "p", "program": "q"}
+    inline, _ = L.served_member("rope:1b:8", 0, reads="inline")
+    slots, _ = L.served_member("rope:1b:8", 0, reads="slots")
+    for member, on, n, why in ((inline, False, 1, None), (inline, True, 2, "struct_lower: an assertion is not laid out"),
+                               (slots, False, 1, "its reads are in slots, and a templated statement's are inline")):
+        calls.clear()
+        refuse["on"] = on
+        st, got = L._stager(member, tmp_path, bound, "iv/hybrid/4")
+        assert (len(calls), got, st) == (n, why, calls[-1]) and st["bind"] == bound
+        assert (st.get("layout"), st.get("structural"), st.get("reads")) == \
+            (("iv/hybrid/4", True, None) if why is None else (None, None, member.reads))
+    calls.clear()
+    st, got = L._stager(inline, tmp_path, bound, None)
+    assert (len(calls), got, st.get("layout"), st["reads"]) == (1, None, None, "inline")
+    with pytest.raises(ValueError, match="come together"):
+        L.Tools("flock-circuit", "flock-verify", structural="iv/hybrid/4")

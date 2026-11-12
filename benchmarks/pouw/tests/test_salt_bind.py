@@ -20,20 +20,21 @@ import sys
 from pathlib import Path
 
 import numpy as np
-from verity.ml.crypto import lms
-from verity.core.protocols.certifier import active
-from verity.core.protocols.certifier.active import Proxy
-from verity.core.protocols.certifier.certificate import LmsKey, LmsSigner
-from verity.core.protocols.certifier.grid import GridParams
-from verity.core.protocols.certifier.schedule import ClockSync, SyncSet
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
-from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.ml.protocols.pouw.schemes import pearl_c as C
-from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
-from verity.core.protocols.spot import challenger as Ch
+import pytest
+from verity.commitments.crypto import lms
+from verity.protocols.certifier.verifier import active
+from verity.protocols.certifier.verifier.active import Proxy
+from verity.protocols.certifier.verifier.certificate import LmsKey, LmsSigner
+from verity.protocols.certifier.verifier.grid import GridParams
+from verity.protocols.certifier.verifier.schedule import ClockSync, SyncSet
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import salt as PS
+from verity.protocols.pouw.verifier import window as Wd
+from verity.protocols.pouw.verifier.audit import Epoch, Workload, weights_root
+from verity.protocols.pouw.verifier.protocol import Context, Matmul, Shape
+from verity.protocols.pouw.prover.schemes import pearl_c as C
+from verity.protocols.pouw.prover.schemes.pearl_c_device import DEVICES
+from verity.protocols.spot.device import challenger as Ch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
 import served_commit as SC  # noqa: E402
@@ -158,7 +159,7 @@ def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
 def _pub(priv, advice, t: int) -> bytes:
     """The sampled proof block's proof's public file as `verity_flock.circuit.write` lays it out: the header over the circuit the
     verifier pins, then the unit's A row's and B row's b ‖ c."""
-    from verity.ml.protocols.pouw.circuit import leaves as L
+    from verity.protocols.pouw.prover.circuit import leaves as L
     e, i, j = Wd.tile_at(SC.entries_of(advice), t)
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}
@@ -166,13 +167,15 @@ def _pub(priv, advice, t: int) -> bytes:
     return json.dumps(head).encode() + b"\n" + priv[e]["a"]["bcs"][i] + priv[e]["b"]["bcs"][j] + bytes(128)
 
 
+@pytest.mark.slow
 def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(tmp_path, monkeypatch, reveals):
     """The served path. The witness: lift `unit_reason` and the prover's rows, formed once under a salt
     that is neither window's and committed in PoUW windows 0 and 1, pass the certifier's record and reveal (through its
     client, `CertifierClient`), `pass_epoch` of record, the registration ledger and the live sample. They now stop at the
     opening of record: the window is certified and `Pc8TileSide` reads no salt, so every sampled proof block is refused, through
     `Challenger.check` (under the certified salt its pass was checked against, `certified_salt`) and through
-    `core_check.opening` under that salt and under none."""
+    `core_check.opening` under that salt and under none. Only this test takes the certified served path to the opening at
+    every sampled unit; the next one holds the opening alone."""
     monkeypatch.setattr(PS, "unit_reason", lambda unit: None)
     key, sign = _prover(b"the prover")
     prover, sid = PS.prover_id(key.public), _sid()

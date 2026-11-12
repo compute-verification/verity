@@ -16,7 +16,7 @@ proves them (`audit.py`).
   (`Member.wired_trees`): a reader's row is its writer's output value, a leaf of the writer's tree under that row's salt,
   so the interior commits each value once (`Binding.held`). Each span is replayed from its ingress, the boundary record's
   row at S[i]. Every member is a shared-row member and every port of it a registered read
-  (`verity.ml.windows.links.Port`), so Lean opens every row a session proves: a link port (b_in's input, b_out's output)
+  (`verity.commitments.windows.links.Port`), so Lean opens every row a session proves: a link port (b_in's input, b_out's output)
   at the boundary record, its rows committed under the boundary's salts at S[i] so an honest replay's ``b || c`` are the
   boundary's, its header naming the boundary port, the leaves S and each one's path to the boundary root; a wired port at
   its writer's port of the interior record, its table the writer's output rows (table row r at leaf r, as the header
@@ -41,14 +41,14 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.spot import service as S
-from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R
-from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.program import Program
-from verity.ml.circuits.types import Array
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
-from verity.ml.windows import links as LK, rows as CS
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import partition as P, registered as REG, registration as R
+from verity.circuits import boolean as BL
+from verity.circuits.defs import CompositeDefinition, bind
+from verity.circuits.program import Program
+from verity.circuits.types import Array
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity.commitments.windows import links as LK, rows as CS
 
 #: a row's hm96 hash compresses a block before its last only from 112 bytes on, and Flock's unit statement needs one such row
 H = 1024

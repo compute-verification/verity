@@ -18,12 +18,12 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from verity.ml.circuits import evaluation as E
-from verity.ml.circuits.defs import bind
-from verity.core.protocols.certifier import warden_rows as WR
-from verity.core.protocols.spot.one_stage import draw as D, verifier as V
-from verity.ml.definitions.registry.b1_tp2 import AllReduce2
-from verity.ml.windows import rows as SR
+from verity.circuits import evaluation as E
+from verity.circuits.defs import bind
+from verity.protocols.certifier.verifier import warden_rows as WR
+from verity.protocols.spot.verifier.one_stage import draw as D, verifier as V
+from verity.definitions.registry.b1_tp2 import AllReduce2
+from verity.commitments.windows import rows as SR
 
 HERE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(HERE))

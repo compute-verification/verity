@@ -1,0 +1,88 @@
+{
+ "content_digest": "be419b898894b89c2d0ca67e7f87ccce1137326b404fd39da365e1d089cfe8c4",
+ "content_digest_rule": "sha256 of the canonical JSON of {schema, set, relation, n, ports, files without index.json}",
+ "files": {
+  "in0.u16": {
+   "bytes": 4096,
+   "sha256": "6e29bbf358d4e923814f890bf90905b241be3562d9a3c2d7f2393be1393cc1b2"
+  },
+  "in1.u16": {
+   "bytes": 4096,
+   "sha256": "90a2d7b4cd04162a74845d82347ea07ac3f2a79bd44b637df5b8332aa5849dad"
+  },
+  "index.json": {
+   "bytes": 230,
+   "sha256": "d03e9c2cf3fff1c2a9dd07ec1a12846ae52395495e1a5f445e27fcf878ea09b8"
+  },
+  "out.out.u16": {
+   "bytes": 4096,
+   "sha256": "788cfe668d9da35960bfa413cd4d31df64c0e7e713482ada217a50581ef36a5b"
+  }
+ },
+ "n": 1,
+ "ports": {
+  "in0": {
+   "dtype": "u16",
+   "file": "in0.u16",
+   "words": 2048
+  },
+  "in1": {
+   "dtype": "u16",
+   "file": "in1.u16",
+   "words": 2048
+  },
+  "out.out": {
+   "dtype": "u16",
+   "file": "out.out.u16",
+   "words": 2048
+  }
+ },
+ "provenance": {
+  "manifest_digest": null,
+  "model": null,
+  "pair": null,
+  "program_digests": {
+   "RMSNormTriton_v1{N=2048,EPS=1e-05}": "6d0e0aaa83918dde83420a54a9cf05323ca535e0e77a95fc2c415e543f35ae8f6694f26389761ae6027b0a82977c14334763b6a6af1215c7c0d6fafeef7b2242"
+  },
+  "recipe": {
+   "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
+   "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
+   "draws": 1,
+   "generator": "verity_flock.synthetic",
+   "key": "verity.commitments.randomness.derive(b'verity input-set synthetic', 'verity/input-sets/synthetic/v1', {'subcircuit': 'rmsnorm-triton/n2048-eps1e-05/bf16', 'seed': 20260926})",
+   "n": 1,
+   "parameters": {
+    "EPS": 1e-05,
+    "N": 2048
+   },
+   "rejected": 0,
+   "rejected_draws": [],
+   "samplers": {
+    "in0 (x)": "bf16 window: exponent field 127 +- h, h in [4, 12] per draw; 1/32 edge words [0, 32768, 1, 32769, 16256, 49024]",
+    "in1 (w)": "bf16 window: exponent field 127 +- h, h in [2] per draw; 1/32 edge words [0, 32768, 1, 32769, 16256, 49024]"
+   },
+   "seed": 20260926,
+   "subcircuit": "rmsnorm-triton/n2048-eps1e-05/bf16",
+   "template": "rmsnorm-triton"
+  },
+  "research_run": null,
+  "revision": null,
+  "row": null,
+  "row_key": null,
+  "run_root": null,
+  "selection": "the first n admitted draws, in draw order",
+  "source": "synthetic",
+  "versions": null
+ },
+ "relation": {
+  "definition": "RMSNormTriton_v1",
+  "rule": "the registered row kernel of RMSNormTriton_v1 (verity_vllm.program.kernels.rows)",
+  "statics": {
+   "EPS": "{\"f64\":\"0x1.4f8b588e368f1p-17\"}",
+   "N": 2048
+  },
+  "subcircuit": "RMSNormTriton_v1"
+ },
+ "schema": "input-set/v1",
+ "set": "rmsnormtriton-v1-n2048-00e4e4aa"
+}

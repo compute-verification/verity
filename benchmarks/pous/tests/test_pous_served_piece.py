@@ -29,15 +29,15 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.deploy.stream import Side
-from verity.core.devices.memory_challenger import challenger_party as CP
-from verity.core.protocols.pous import challenger_session as CS
-from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import period
-from verity.core.protocols.pous.schemes.p2 import POINT, P2Params
-from verity.core.protocols.remote_bandwidth import p2_case, p2_lean
-from verity.ml.commitments import advice
-from verity.ml.commitments.identity import canonical_json_bytes
+from verity.configuration.deploy.stream import Side
+from verity.protocols.pous.device import challenger_party as CP
+from verity.protocols.pous.device import challenger_session as CS
+from verity.protocols.pous.device import memory_challenger as mc
+from verity.protocols.pous.verifier import period
+from verity.protocols.pous.verifier.schemes.p2 import POINT, P2Params
+from verity.protocols.poub.verifier import p2_case, p2_lean
+from verity.commitments import advice
+from verity.commitments.identity import canonical_json_bytes
 
 torch = pytest.importorskip("torch")
 ROOT = Path(__file__).resolve().parents[3]
@@ -49,6 +49,7 @@ REGISTERED = P2Params(POINT[0], POINT[1], 4)
 SOURCE = hashlib.sha512(b"the served piece's salt source").digest()
 ENCODED: dict[tuple[bytes, int, bytes], tuple[bytes, dict]] = {}
 TEST_PROTOCOL = mc.TEST_PREFIX + period.PROTOCOL
+RUN_EXE = "pous-run-protocol"
 HIDDEN, FFN, LAYERS = 16, 32, 2
 SHAPES = {"self_attn.q_proj": (HIDDEN, HIDDEN), "self_attn.k_proj": (8, HIDDEN), "self_attn.v_proj": (8, HIDDEN),
           "self_attn.o_proj": (HIDDEN, HIDDEN), "mlp.gate_proj": (FFN, HIDDEN), "mlp.up_proj": (FFN, HIDDEN),
@@ -66,9 +67,9 @@ def _load(name: str, path: Path):
 
 SP = _load("pous_served_piece", ROOT / "benchmarks" / "pous" / "served_piece.py")
 SV = _load("served_verdicts", ROOT / "benchmarks" / "one_stage" / "served_verdicts.py")
-fakes = _load("pous_fakes", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_fakes.py")
-ts = _load("pous_test_signer", ROOT / "verity" / "core" / "protocols" / "pous" / "tests" / "pous_test_signer.py")
-BR = _load("pous_served_block_record", ROOT / "examples" / "h200" / "interfaces" / "verity_e2e_demo" / "block_record.py")
+fakes = _load("pous_fakes", ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_fakes.py")
+ts = _load("pous_test_signer", ROOT / "verity" / "protocols" / "pous" / "verifier" / "tests" / "pous_test_signer.py")
+BR = _load("pous_served_block_record", ROOT / "benchmarks" / "one_stage" / "interfaces" / "verity_e2e_demo" / "block_record.py")
 pous = SP.pous
 
 
@@ -239,7 +240,9 @@ def test_an_honest_store_is_accepted_in_the_answer_the_composed_run_reads(served
 
     doc = json.loads((served.out / "pous.json").read_text())
     assert doc["key_pinned"] and not {"latency", "rounds_answered", "warmups", "reported_host"} & set(doc)
+    assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and "lean_s" not in doc
     run = json.loads((served.private / "run.json").read_text())
+    assert doc["key_sha512"] == hashlib.sha512(bytes.fromhex(run["public_key"])).hexdigest()
     assert run["point"]["k"] == 320 and run["rounds_answered"] == 320 and run["latency"]["late"] == 0
     assert run["warmups"] == CS.WARMUPS and run["host"] == AUDITOR
 
@@ -416,17 +419,86 @@ def test_a_serve_dir_without_serve_json_makes_no_answer(served, tmp_path, capsys
     assert not (served.out / "answer.json").exists() and "no serve.json" in capsys.readouterr().err
 
 
-@pytest.fixture(scope="module")
-def case_exe() -> Path:
-    """`remote-audit-p2-protocol`, built in the remote audit's package under the difftest's build lock."""
+def _built(package: Path, exe: str) -> Path:
+    """The Lean executable ``exe``, built in its ``package`` under the difftest's build lock."""
     if shutil.which("lake") is None:
         pytest.skip("no Lean toolchain")
     p2_lean.BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(p2_lean.BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        p = subprocess.run(["lake", "build", p2_case.EXE], cwd=p2_lean.PACKAGE, capture_output=True, text=True)
+        p = subprocess.run(["lake", "build", exe], cwd=package, capture_output=True, text=True)
     assert p.returncode == 0, p.stdout[-4000:] + p.stderr[-4000:]
-    return p2_lean.PACKAGE / ".lake" / "build" / "bin" / p2_case.EXE
+    return package / ".lake" / "build" / "bin" / exe
+
+
+@pytest.fixture(scope="module")
+def case_exe() -> Path:
+    """`remote-audit-p2-protocol`, built in the remote audit's package."""
+    return _built(p2_lean.PACKAGE, p2_case.EXE)
+
+
+def _script(directory: Path, name: str, body: str) -> Path:
+    exe = directory / name
+    exe.write_text("#!/bin/sh\n" + body)
+    exe.chmod(0o755)
+    return exe
+
+
+@pytest.fixture(scope="module")
+def run_exe(tmp_path_factory) -> Path:
+    """`pous-run-protocol`, built in the run protocol's package, behind a script of its name that runs it under
+    ``--test``: the protocol of the test signers' schemes, which the deployed one refuses."""
+    real = _built(ROOT / "verity" / "protocols" / "pous" / "verifier" / "check", RUN_EXE)
+    return _script(tmp_path_factory.mktemp("lean"), RUN_EXE, f'exec {real} --test "$@"\n')
+
+
+@pytest.mark.slow
+def test_with_its_lean_the_answer_is_the_leans_and_the_summary_names_it(served, tmp_path, monkeypatch, run_exe):
+    """With ``--case-exe``, `pous-run-protocol` answers the case the piece holds, and its answer, the Python's but for
+    the reason, is the one written: the summary names the program and this host under ``decided_by``, with the Lean's
+    seconds, and the private answer is what the Lean says of the private case."""
+    answer, _ = _run(served, tmp_path, monkeypatch, case_exe=str(run_exe))
+    assert answer["verdict"] == "accept", answer["reason"]
+    doc = json.loads((served.out / "pous.json").read_text())
+    assert doc["decided_by"] == {"program": RUN_EXE, "host": socket.gethostname()}
+    assert doc["lean_s"] >= 0 and "lean_peak_rss_kib" in doc and doc["key_pinned"]
+    case = json.loads((served.private / "case.json").read_text())
+    own = json.loads((served.private / "answer.json").read_text())
+    assert period.serve(run_exe, [case]) == [own] == [json.loads((served.private / "run.json").read_text())["answer"]]
+    assert own == SP.SC.pous_answer(case, schemes=ts.SCHEMES, protocol=TEST_PROTOCOL)
+    assert answer == own | {"commitment": answer["commitment"], "profile": answer["profile"]}
+    row = SV.piece_row("space", served.out.parent)
+    assert row["verdict"] == "accept" and row["protocol"] == TEST_PROTOCOL
+
+
+def _fails(exe, cases, *args):
+    raise subprocess.CalledProcessError(3, [str(exe), *args, "serve"])
+
+
+REFUSAL = {"commitment": None, "profile": None, "protocol": "p", "public": None, "reason": "no", "verdict": "reject"}
+
+
+@pytest.mark.parametrize("lean, reason", [
+    (_fails, "doesn't answer the case: CalledProcessError"),
+    (lambda exe, cases, *args: [], "doesn't answer the case: IndexError"),
+    (lambda exe, cases, *args: [REFUSAL], "answers the case reject (no), its Python accept (None)")])
+def test_a_lean_that_does_not_answer_as_the_python_leaves_the_window_undecided(served, tmp_path, monkeypatch, lean,
+                                                                               reason):
+    """A `pous-run-protocol` that fails, answers nothing, or answers the case otherwise than the Python (`period.serve`
+    stood in for, so no program starts): no verdict is taken from either. The window is undecided, naming the failure
+    or both answers, under the hiding commitment; no case is written for the composite; and the summary names the
+    Python, whose answer this is."""
+    exe = tmp_path / RUN_EXE
+    monkeypatch.setattr(period, "serve", lean)
+    answer, _ = _run(served, tmp_path, monkeypatch, case_exe=str(exe))
+    assert answer["verdict"] == "undecided" and answer["reason"].startswith(f"{exe} {reason}")
+    assert answer["public"] is None and answer["profile"] is None and len(bytes.fromhex(answer["commitment"])) == 64
+    assert SV.check_answer(answer) and SV.piece_row("space", served.out.parent)["verdict"] == "undecided"
+    assert not (served.private / "case.json").exists() and not (served.private / "answer.json").exists()
+    doc = json.loads((served.out / "pous.json").read_text())
+    assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and doc["lean_s"] >= 0
+    run = json.loads((served.private / "run.json").read_text())
+    assert run["answer"]["verdict"] == "undecided" and run["answer"]["reason"] == answer["reason"]
 
 
 @pytest.fixture
@@ -451,7 +523,7 @@ def _bandwidth(tmp_path, record=lambda request: request, **kw):
     """`served_piece.run`'s bandwidth session: the party in the gate's shape (`p2_party --listen` from the tree with no
     site packages), its registration the challenger's record in ``parties/pous``, which the in-process challenger keeps
     as ``record`` has it, and a short session, which a toy party's flags hold it to."""
-    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.core.protocols.remote_bandwidth.p2_party "
+    party = (f"cd {ROOT} && exec {sys.executable} -S -E -m verity.protocols.poub.verifier.p2_party "
              f"--device {tmp_path / 'parties' / 'bw'} --listen 127.0.0.1:0 --pous-record {tmp_path / 'parties' / 'pous'} "
              f"--windows 2 --passes 2 --samples 4 --window-ns 1000000 --deadline-ns 1000000")
     auditor = Auditor(tmp_path, keep=tmp_path / "parties" / "pous", record=record, draw=lambda n: SOURCE[:n])
@@ -551,3 +623,70 @@ def test_no_pous_session_leaves_the_bandwidth_piece_undecided_naming_why(served,
     assert bw["verdict"] == "undecided" and bw["reason"].startswith("no PoUS session bound a store: the memory challenger")
     assert SV.piece_row("bandwidth", served.out.parent)["verdict"] == "undecided"
     assert not (served.serve / "private" / "bandwidth").exists()
+    doc = json.loads((served.out.parent / "bandwidth" / "bandwidth.json").read_text())
+    assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()}
+
+
+def _bandwidth_files(s: Served) -> tuple[Path, dict, dict]:
+    public = s.out.parent / "bandwidth"
+    return (s.serve / "private" / "bandwidth", json.loads((public / "answer.json").read_text()),
+            json.loads((public / "bandwidth.json").read_text()))
+
+
+@pytest.mark.slow
+def test_with_its_lean_the_bandwidth_answer_is_the_leans_and_the_summary_names_it(registered, tmp_path, monkeypatch,
+                                                                                  case_exe):
+    """With ``--bw-case-exe``, `remote-audit-p2-protocol` answers the case of the session over the held store, and its
+    answer is the one written, privately and under the hiding commitment publicly, whatever the session's own party
+    said of it: the summary names the program and this host under ``decided_by``, with the Lean's seconds, where a run
+    without it names the Python. PoUS's answer is its own."""
+    s = registered
+    answer, _ = _run(s, tmp_path, monkeypatch, **_bandwidth(tmp_path, bw_case_exe=str(case_exe)))
+    assert answer["verdict"] == "accept", answer["reason"]
+    private, bw, doc = _bandwidth_files(s)
+    case = json.loads((private / p2_case.CASE).read_text())
+    lean, = p2_case.serve(case_exe, [case])
+    assert json.loads((private / p2_case.ANSWER).read_text()) == lean
+    assert (bw["verdict"], bw["protocol"], bw["public"] is None) == (lean["verdict"], lean["protocol"],
+                                                                    lean["public"] is None)
+    assert doc["decided_by"] == {"program": p2_case.EXE, "host": socket.gethostname()} and doc["lean_s"] >= 0
+    assert doc["verdict"] == lean["verdict"] and SV.piece_row("bandwidth", s.out.parent)["verdict"] == lean["verdict"]
+    opening = json.loads((private / "opening.json").read_text())
+    assert opening["row"] == lean["commitment"] and opening["root"] == bw["commitment"]
+
+
+@pytest.mark.slow
+def test_a_bandwidth_lean_that_does_not_answer_leaves_the_bandwidth_undecided(registered, tmp_path, monkeypatch):
+    """A `remote-audit-p2-protocol` that fails on the case (`p2_case.serve` stood in for): the session's own answer is
+    not taken in its place. The bandwidth answer is undecided naming the failure, no case is written, the summary names
+    the Python, whose answer this is, and PoUS's answer stands."""
+    exe = tmp_path / p2_case.EXE
+    monkeypatch.setattr(p2_case, "serve", _fails)
+    answer, _ = _run(registered, tmp_path, monkeypatch, **_bandwidth(tmp_path, bw_case_exe=str(exe)))
+    assert answer["verdict"] == "accept", answer["reason"]
+    private, bw, doc = _bandwidth_files(registered)
+    assert bw["verdict"] == "undecided" and bw["reason"].startswith(f"{exe} doesn't answer the case: CalledProcessError")
+    assert bw["public"] is None and bw["commitment"] is None and SV.check_answer(bw)
+    assert not (private / p2_case.CASE).exists() and not (private / p2_case.ANSWER).exists()
+    assert doc["decided_by"] == {"program": "python", "host": socket.gethostname()} and "lean_s" not in doc
+    assert SV.piece_row("bandwidth", registered.out.parent)["verdict"] == "undecided"
+    assert json.loads((registered.out / "pous.json").read_text())["bandwidth"]["verdict"] == "undecided"
+
+
+@pytest.mark.slow
+def test_a_bandwidth_lean_that_refuses_the_case_undecoded_is_the_answer(registered, tmp_path, monkeypatch):
+    """A `remote-audit-p2-protocol` that decodes no commitment of the case refuses it with none, as `Protocol.answer`
+    does (`p2_case.serve` stood in for): that refusal is the bandwidth answer, with no commitment to hide, and the
+    summary names the Lean."""
+    refusal = {"commitment": None, "profile": None, "protocol": p2_case.PROTOCOL, "public": None,
+               "reason": "params: not the request's", "verdict": "reject"}
+    exe = tmp_path / p2_case.EXE
+    monkeypatch.setattr(p2_case, "serve", lambda exe, cases: [refusal])
+    answer, _ = _run(registered, tmp_path, monkeypatch, **_bandwidth(tmp_path, bw_case_exe=str(exe)))
+    assert answer["verdict"] == "accept", answer["reason"]
+    private, bw, doc = _bandwidth_files(registered)
+    assert bw["verdict"] == "reject" and bw["reason"].startswith("params: not the request's; ")
+    assert bw["commitment"] is None and SV.check_answer(bw)
+    assert json.loads((private / p2_case.ANSWER).read_text()) == refusal and not (private / "opening.json").exists()
+    assert doc["decided_by"] == {"program": p2_case.EXE, "host": socket.gethostname()}
+    assert SV.piece_row("bandwidth", registered.out.parent)["verdict"] == "reject"

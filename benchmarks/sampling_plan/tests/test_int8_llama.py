@@ -8,7 +8,7 @@ import pytest
 
 import int8_llama as L
 from inputs import I, MODELS
-from verity.core.protocols.spot.optimize import ReplayGrain, replay_cost
+from verity.protocols.spot.optimize import ReplayGrain, replay_cost
 
 V = {k: i.value for k, i in I.items()}
 M = MODELS["llama-3.1-8b"]

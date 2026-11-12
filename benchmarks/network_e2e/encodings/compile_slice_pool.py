@@ -31,9 +31,9 @@ import cache_pool_vectors as CPV  # noqa: E402
 import replay as RP  # noqa: E402
 import replay_vectors as RV  # noqa: E402
 
-from verity.core.protocols.certifier import compile_slice as CS
-from verity.ml.protocols.certifier import cache_step_v3 as V3S, compile_slice_v2 as V2, compile_slice_v4 as V4
-from verity.core.protocols.certifier import replay_step as RS
+from verity.protocols.certifier.verifier import compile_slice as CS
+from verity.protocols.certifier.prover import cache_step_v3 as V3S, compile_slice_v2 as V2, compile_slice_v4 as V4
+from verity.protocols.certifier.verifier import replay_step as RS
 
 
 def trace_of(path: Path) -> tuple[RP.Trace, dict[int, tuple[int, ...]]]:

@@ -17,19 +17,19 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/core/protocols/pouw/lean/check/tests"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "verity/protocols/pouw/verifier/lean/check/tests"))
 import composite as C
 import pouw_check_cases
 import pouw_period_cases
 import pouw_piece as P
-from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw import period_check as PC
-from verity.core.protocols.pouw import verifier as V
-from verity.core.protocols.spot.one_stage import proofs as PF
+from verity.protocols.pouw.verifier import core_check as CC
+from verity.protocols.pouw.verifier import credit as Cr
+from verity.protocols.pouw.verifier import period_check as PC
+from verity.protocols.pouw.verifier import verifier as V
+from verity.protocols.spot.verifier.one_stage import proofs as PF
 
 SERVED = Path(__file__).resolve().parent / "fixtures" / "served-h1-window"
-STATEMENTS = Path(__file__).resolve().parents[3] / "verity/core/protocols/pouw/tests/test_pouw_credit_statements.py"
+STATEMENTS = Path(__file__).resolve().parents[3] / "verity/protocols/pouw/verifier/tests/test_pouw_credit_statements.py"
 
 
 @pytest.fixture

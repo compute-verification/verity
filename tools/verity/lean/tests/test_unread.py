@@ -63,14 +63,14 @@ def test_the_longest_chain_and_the_imports_once_modules_go():
 
 
 def test_a_cited_path_names_the_modules_it_ends_written_out_or_built_from_literals():
-    files = {"Proofs.Core.Prims.Vectors": "Security/Proofs/Core/Prims/Vectors.lean",
-             "Proofs.Core.TC.Vectors": "Security/Proofs/Core/TC/Vectors.lean", "Root": "Root.lean"}
+    files = {"Proofs.Core.Prims.Vectors": "security/Proofs/Core/Prims/Vectors.lean",
+             "Proofs.Core.TC.Vectors": "security/Proofs/Core/TC/Vectors.lean", "Root": "Root.lean"}
     modules = {k: m for m, f in files.items() for k in (m, f, m.replace(".", "/") + ".lean")}
     named = U.path_namer(modules)
-    text = ('FILES = (LEAN / "Prims" / "Vectors.lean", Path(ROOT, "Security", "Proofs/Core/TC", "Vectors.lean"))\n'
+    text = ('FILES = (LEAN / "Prims" / "Vectors.lean", Path(ROOT, "security", "Proofs/Core/TC", "Vectors.lean"))\n'
             'ANY = here / "Vectors.lean"\nTOP = "../Root.lean"\n')
     paths = U.lean_paths(text)
-    assert {"Prims/Vectors.lean", "Security/Proofs/Core/TC/Vectors.lean"} <= set(paths)
+    assert {"Prims/Vectors.lean", "security/Proofs/Core/TC/Vectors.lean"} <= set(paths)
     assert set().union(*map(named, paths)) == {"Proofs.Core.Prims.Vectors", "Proofs.Core.TC.Vectors", "Root"}
     assert named("Vectors.lean") == set() and named("/abs/x/Security/Proofs/Core/TC/Vectors.lean") == {"Proofs.Core.TC.Vectors"}
     assert all((U.ROOT / f).is_file() for f in U.NOT_READERS), "NOT_READERS names this tool's files where they are"
@@ -118,9 +118,12 @@ def check_report(rep: dict) -> None:
     got = {m: {n: k for n, k, _ in r["unread_declarations"]} for m, r in mods.items() if r["unread_declarations"]}
     assert got == UNREAD
     core = mods["Definitions.Core"]
-    assert core["kept_only_by"] == {"defeq": 1, "coercion": 1, "lock module": 0, "lock text": 0, "lock doc": 0, "cited": 1}
+    assert core["kept_only_by"] == {"defeq": 1, "coercion": 1, "lock module": 0, "lock text": 0, "lock doc": 0, "cited": 1,
+                                    "SecurityProofs": 0}
     assert rep["seeds"]["coercion"] == 1
     assert mods["Proofs.Flock.Main"]["kept_only_by"]["defeq"] == 1
+    assert mods["Proofs.Flock.Main"]["kept_only_by"]["SecurityProofs"] == 3, "the proof no lock names, and its two lemmas"
+    assert rep["areas"]["Proofs/Flock"]["kept_only_by"]["SecurityProofs"] == 3 == rep["totals"]["kept_only_by"]["SecurityProofs"]
     assert core["unread_cited_in_docs"] == ["Core.unusedHelper"]
     assert mods["Definitions.Checks"]["kept_only_by"]["cited"] == 1
     assert rep["cited_by_code"]["Definitions.Checks"] == ["tools/checks.py"]
@@ -146,7 +149,9 @@ def test_the_fixture_s_closure_keeps_what_is_read_and_finds_the_rest():
     """The fixture's kept facts: the guarantee's proof and what it reads, the properties, the code, a notation, a
     name a tool reads, a module of checks a tool names by path, the `@[defeq]` theorems and a coercion instance, which no
     term names, are kept; a matcher another declaration shares, a name in `reads` or in a README, and an instance
-    nothing uses keep nothing; a module that gives another's theorem `simp` stays."""
+    nothing uses keep nothing; a module that gives another's theorem `simp` stays. The guarantee's proof, which no lock
+    names, and the lemmas only it reads are kept by the `SecurityProofs` seed alone, which the report counts per module,
+    per area and in all; once a lock names the proof, the seed alone keeps nothing and no other count moves."""
     tree = U.Tree(FIXTURE, U.tracked(FIXTURE))
     facts = U.Facts(FACTS)
     coe = facts.index["Core.instCoeWrapNat"]
@@ -155,6 +160,13 @@ def test_the_fixture_s_closure_keeps_what_is_read_and_finds_the_rest():
     rep = U.analyse(tree, facts)
     check_report(rep)
     assert "Proofs.Flock" in U.markdown(rep, None)
+    assert "names in files outside Lean 2, constants with a `SecurityProofs` component 3." in U.markdown(rep, None)
+    tree.locks["security/Proofs"]["guarantees"] = {"Core.SecurityProofs.Spec": {"owner": "@proofs"}}
+    named = U.analyse(tree, facts)
+    assert named["totals"]["kept_only_by"] == rep["totals"]["kept_only_by"] | {"SecurityProofs": 0}
+    assert {k: v for k, v in named["totals"].items() if k != "kept_only_by"} == \
+        {k: v for k, v in rep["totals"].items() if k != "kept_only_by"}
+    assert U.counts(named) == U.counts(rep)
 
 
 def test_facts_files_join_by_name_gzipped_or_not(tmp_path):
@@ -182,14 +194,14 @@ def test_a_lock_s_texts_and_the_document_they_name_seed_and_a_module_of_checks_o
     read."""
     root = tmp_path / "unread"
     shutil.copytree(FIXTURE, root, ignore=shutil.ignore_patterns(".lake"))
-    (root / "Security" / "PROTOCOL.md").write_text("The helper is `Core.unusedHelper`.\n")
-    files = [f for f in U.tracked(FIXTURE) if f != "tools/checks.py"] + ["Security/PROTOCOL.md"]
+    (root / "security" / "PROTOCOL.md").write_text("The helper is `Core.unusedHelper`.\n")
+    files = [f for f in U.tracked(FIXTURE) if f != "tools/checks.py"] + ["security/PROTOCOL.md"]
     tree = U.Tree(root, files)
-    tree.locks["Security"]["guarantees"]["Core.Guarantees.Spec"]["why"] = (
+    tree.locks["security"]["guarantees"]["Core.Guarantees.Spec"]["why"] = (
         "its witness is 'Dead.lonely', Proofs.Flock.Spare states the rest, and PROTOCOL.md says why")
     rep = U.analyse(tree, U.Facts(FACTS), full=False)
     mods = rep["modules"]
-    assert rep["lock_docs"] == {"Security/PROTOCOL.md": ["Security/lean-audit.json"]}
+    assert rep["lock_docs"] == {"security/PROTOCOL.md": ["security/lean-audit.json"]}
     assert {m: mods[m]["status"] for m in ("Definitions.Dead", "Proofs.Flock.Spare", "Definitions.Checks")} == {
         "Definitions.Dead": "read", "Proofs.Flock.Spare": "read", "Definitions.Checks": "checks"}
     assert [n for n, _, _ in mods["Definitions.Dead"]["unread_declarations"]] == ["Dead.lonely_pos"]
@@ -229,7 +241,7 @@ def test_the_ratchet_fails_when_an_area_s_wholly_unread_modules_rise_and_its_cap
     (tmp_path / "new.json").write_text(U.caps_text(tight))
     assert U.main([*cli, "--update-caps"]) == 1 and U.load_caps(tmp_path / "new.json") == tight
     with pytest.raises(ValueError, match="not a lean-unread-caps/v1 file"):
-        U.load_caps(FACTS.parent / "unread" / "Security" / "lean-audit.json")
+        U.load_caps(FACTS.parent / "unread" / "security" / "lean-audit.json")
 
 
 def test_the_kept_caps_are_a_caps_file_as_update_caps_writes_it():
@@ -238,17 +250,47 @@ def test_the_kept_caps_are_a_caps_file_as_update_caps_writes_it():
     assert U.CAPS.read_text() == U.caps_text(caps), "write it with `unread.py --caps ... --update-caps`"
 
 
+def test_build_builds_what_the_lean_check_builds_of_each_analysis_package(monkeypatch):
+    """`--build` builds, in ENV, each analysis package's default targets and then the modules its lock lists under
+    `roots`, as the Lean check builds a package: a root no default target imports would otherwise be `unbuilt`, and what
+    it alone reads would count as unread on the tool's own build and as read on a check's facts."""
+    tree = U.Tree(FIXTURE, U.tracked(FIXTURE))
+    ran = []
+    monkeypatch.setattr(U.subprocess, "run", lambda argv, cwd, check: ran.append((argv, cwd, check)))
+    U.build(tree, "security/Proofs", setup=False)
+    assert all(cwd == FIXTURE / "security" / "Proofs" and check for _, cwd, check in ran)
+    assert [argv for argv, _, _ in ran] == [
+        ["lake", "build"], ["lake", "build", "+Proofs.Flock", "+Proofs.Properties.Code"],
+        ["lake", "build", "@security"], ["lake", "build", "@security/+Definitions"],
+        ["lake", "build", "@security_properties"], ["lake", "build", "@security_properties/+Properties.Code"]]
+    del tree.locks["security"]
+    ran.clear()
+    U.build(tree, "security/Proofs", setup=False)
+    assert [argv[2:] for argv, _, _ in ran] == [[], ["+Proofs.Flock", "+Proofs.Properties.Code"], ["@security"],
+                                                ["@security_properties"], ["@security_properties/+Properties.Code"]]
+
+
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_kept_facts_are_what_unread_lean_writes_on_the_fixture(tmp_path):
     """The only test that runs `Unread.lean` (it builds the fixture's four packages and compiles the program): the
-    synthetic and kept facts above can't catch a change in what Lean puts in an `.olean`."""
+    synthetic and kept facts above can't catch a change in what Lean puts in an `.olean`. And the only one that runs
+    `build`'s commands: Lake takes them, and a module that no default target imports is built once the lock lists it
+    under `roots`, not before."""
     root = tmp_path / "unread"
     shutil.copytree(FIXTURE, root, ignore=shutil.ignore_patterns(".lake"))
     tree = U.Tree(root, U.tracked(root))
-    U.build(tree, "Security/Proofs", setup=False)
+    U.build(tree, "security/Proofs", setup=False)
     out = tmp_path / "out"
     out.mkdir()
-    fresh = U.write_facts(tree, "Security/Proofs", out)
+    fresh = U.write_facts(tree, "security/Proofs", out)
     check_report(U.analyse(tree, U.Facts(fresh)))
     assert fresh.read_text() == FACTS.read_text(), f"the kept facts are stale: {REGENERATE}"
+    (root / "security" / "Proofs" / "Flock" / "Lone.lean").write_text("theorem Proofs.Flock.lone : True := trivial\n")
+    U.build(U.Tree(root, U.tracked(root)), "security/Proofs", setup=False)
+    assert not list(root.rglob("Lone.olean")), "no default target imports it"
+    lock = root / "security" / "Proofs" / "lean-audit.json"
+    rec = json.loads(lock.read_text())
+    lock.write_text(json.dumps(rec | {"roots": [*rec["roots"], "Proofs.Flock.Lone"]}))
+    U.build(U.Tree(root, U.tracked(root)), "security/Proofs", setup=False)
+    assert list(root.rglob("Lone.olean")), "a root of the lock is built though no default target imports it"
