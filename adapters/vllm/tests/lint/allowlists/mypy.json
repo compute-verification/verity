@@ -189,7 +189,6 @@
     {"file": "tests/program/test_bf16_gemm.py", "kind": "misc", "symbol": "test_words_at_the_gates_statics_agree_with_the_models", "detail": "", "count": 3},
     {"file": "tests/program/test_bf16_gemm.py", "kind": "var-annotated", "symbol": "_f32_words", "detail": ""},
     {"file": "tests/program/test_bf16_gemm.py", "kind": "var-annotated", "symbol": "test_cublas_gemv_agrees_with_its_twin_and_contracts", "detail": "", "count": 2},
-    {"file": "tests/program/test_compiled_relations_warm_vml.py", "kind": "func-returns-value", "symbol": "test_commit_replay_warms_before_it_replays", "detail": ""},
     {"file": "tests/program/test_composition.py", "kind": "arg-type", "symbol": "_hp_config", "detail": ""},
     {"file": "tests/program/test_composition.py", "kind": "union-attr", "symbol": "_hp_config", "detail": "", "count": 2},
     {"file": "tests/program/test_composition.py", "kind": "var-annotated", "symbol": "<module>", "detail": ""},
