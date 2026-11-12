@@ -2239,16 +2239,16 @@ def test_any_class_of_classes_that_does_not_count_fails_the_run(tmp_path, classe
 def test_under_h1_tie_step_3_writes_v3cs_record_reading_h1s_tables_after_the_classes_and_gates_nothing_on_it(tmp_path, tied):
     """Under H1_TIE the commit V3c holds is the tie's, whose circuit reads H1's W's tables, so after the classes CLASSES
     gates on, step 3 writes the verifier's record at V3C_CLASS reading them too (window-circuit --window-registration W,
-    the window's H1 registration; its tag's suffix -tie), the record V3c holds that commit to. It gates nothing."""
-    rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "4,32,4+tie": tied, "record": "count"},
-                                  H1_TIE="1", V3C_CLASS="4,32,4")
+    the window's H1 registration; its tag's suffix -tie), the record V3c holds that commit to. It gates nothing, and
+    the class of record, which CLASSES doesn't name, is not counted after it."""
+    rc, lines, limits = _circuits(tmp_path, "4,32,4", {"4,32,4": "count", "4,32,4+tie": tied}, H1_TIE="1", V3C_CLASS="4,32,4")
     d = tmp_path / "serve"
     argv = [json.loads(x) for x in (tmp_path / "tree" / "argv.jsonl").read_text().splitlines()]
-    assert rc == 0 and limits == ["30m", "30m", "45m"], (rc, lines)
+    assert rc == 0 and limits == ["30m", "30m"], (rc, lines)
     assert [x[x.index("--out") + 1] for x in argv] == [str(d / f"window-circuit-w0-{t}.json")
-                                                       for t in ("4-32-4", "4-32-4-tie", "record")]
+                                                       for t in ("4-32-4", "4-32-4-tie")]
     assert [x[x.index("--window-registration") + 1] if "--window-registration" in x else None for x in argv] == [
-        None, str(d / "h1" / "w0" / "registration.json"), None]
+        None, str(d / "h1" / "w0" / "registration.json")]
     head = "WINDOW-CIRCUIT class 4,32,4 reading H1's tables"
     assert lines[1].startswith(f"{head}: registered 7 bits" if tied == "count" else f"{head} refused (exit 2): "), lines
 
@@ -2711,7 +2711,7 @@ DAYS = ("--day", "--day-log", "--day-params")
 
 def _day_tree(tmp_path: Path) -> str:
     """A toy tree with serve-openai's --day (`serve_day`), and its records_audit.py, which takes --day."""
-    p = tmp_path / "tree" / "integrations" / "vllm" / "verity_vllm" / "pipeline" / "serve_day.py"
+    p = tmp_path / "tree" / "adapters" / "vllm" / "verity_vllm" / "pipeline" / "serve_day.py"
     p.parent.mkdir(parents=True)
     p.write_text("")
     return FAKE_RECORDS_AUDIT + '# "--day"\n'
@@ -4465,6 +4465,8 @@ sys.exit(H.gate(["--ssh", " ".join(sys.argv[1:]), "--key", "vllm"], host, sink=s
                 now=datetime(2026, 11, 4, 12, tzinfo=timezone.utc), token="ab12"))
 '''
 GATE_PIN = "c0" * 20
+#: the compose gate's directory (its `host.py`), which the driver imports from
+LIVE_VERIFIER = HERE.parents[2] / "verity" / "protocols" / "poub" / "device" / "live_verifier"
 
 
 def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
@@ -4498,14 +4500,14 @@ def _gate_composed(tmp_path: Path, edit: Mapping[str, str | None] | None = None,
     cases.update({f"{sp}/{name}": None if body is None else json.loads(body) for name, body in (edit or {}).items()})
     run = _handed(tmp_path, files=cases, cmd=("gate-compose", str(out / "pieces"), str(out / "record" / "inference-only.json")),
                   pouw={"verdict": "accept", "reason": None, "commitment": "ef" * 64, **ACCEPTS["pouw"]},
-                  COMPOSITE="", COMPOSE_GATE=f"{sys.executable} {driver}", LIVE_VERIFIER=str(HERE.parents[1] / "live_verifier"),
+                  COMPOSITE="", COMPOSE_GATE=f"{sys.executable} {driver}", LIVE_VERIFIER=str(LIVE_VERIFIER),
                   GATE_ROOT=str(gate), PIN=GATE_PIN, GATE_ENV=json.dumps(gate_env), GATE_ARGV=str(tmp_path / "gate.argv"),
                   **extra)
     return run, out
 
 
 def _live_host():
-    spec = importlib.util.spec_from_file_location("live_host", HERE.parents[1] / "live_verifier" / "host.py")
+    spec = importlib.util.spec_from_file_location("live_host", LIVE_VERIFIER / "host.py")
     mod = sys.modules.setdefault(spec.name, importlib.util.module_from_spec(spec))
     spec.loader.exec_module(mod)
     return mod
