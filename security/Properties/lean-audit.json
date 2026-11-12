@@ -45,6 +45,7 @@
   "Properties.Spot.Wires",
   "Properties.Spot.Tables",
   "Properties.Spot.HistoryTable",
+  "Properties.Spot.Rate",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.Wipe",
@@ -1189,6 +1190,10 @@
   "Properties.Spot.SecurityProofs.tablesRegistered": {
    "honest": ["Properties.Spot.SecurityProofs.tablesRegistered_honest"],
    "nontrivial": "Properties.Spot.SecurityProofs.tablesRegistered_nontrivial"
+  },
+  "Properties.Spot.SecurityProofs.ruleAtRate": {
+   "honest": ["Properties.Spot.SecurityProofs.ruleAtRate_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.ruleAtRate_nontrivial"
   },
   "Properties.NetworkPeriod.rowsCapPublished": {
    "honest": ["Properties.NetworkPeriod.rowsCapPublished_honest"],
@@ -8692,6 +8697,15 @@
    },
    "type_hash": "e78a406fd43371a0b9b40868521e379c60220b3a9f3b5cf5ab3a9a9f93974e86"
   },
+  "Properties.Spot.SecurityProofs.ruleAtRate": {
+   "owner": "@proofs"
+  },
+  "Properties.Spot.SecurityProofs.ruleAtRate_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.Spot.SecurityProofs.ruleAtRate_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.Spot.SecurityProofs.tablesRegistered": {
    "owner": "@soundness",
    "signature": ["Properties.Spot.SecurityProofs.tablesRegistered : Properties.Spot.TablesRegistered"],
@@ -11245,6 +11259,22 @@
      {
       "function": "Spot.OneStageZk.checkBlobsAt",
       "outcome": "accept"
+     }
+    ]
+   },
+   "Properties.Spot.SecurityProofs.ruleAtRate": {
+    "conjuncts": [
+     {
+      "function": ["Spot.Select.Rule.ofJson", "Spot.Select.Rule.over"],
+      "outcome": "accept"
+     },
+     {
+      "function": "Spot.Select.Rule.tableOver",
+      "outcome": "accept"
+     },
+     {
+      "function": "Spot.Select.Rule.ofJson",
+      "outcome": "none"
      }
     ]
    },
