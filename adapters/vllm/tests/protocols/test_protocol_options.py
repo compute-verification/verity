@@ -17,6 +17,7 @@ from typing import Any
 import pytest
 
 from verity_vllm import config
+from verity_vllm import llm as L
 from verity_vllm import protocols as PO
 from verity_vllm.config import RowConfig
 from verity_vllm.engine import hooks
@@ -219,6 +220,17 @@ def test_an_unknown_protocol_has_no_adapter():
     with pytest.raises(PO.Refused) as e:
         PO.adapter("zk")
     assert e.value.reasons == (reason,) and str(e.value) == f"protocol options refused: {reason}"
+
+
+def test_the_door_refuses_a_set_in_the_packages_words():
+    """`verity_vllm.llm.protocol_context` refuses a set the package refuses as the package does, before any engine
+    exists: `Refused` with every reason, reading "protocol options refused: " and then the reasons."""
+    opts = {"protocols": ALL[2], "protocols_config": None, "tensor_parallel_size": 1, "enforce_eager": True}
+    with pytest.raises(PO.Refused) as e:
+        L.protocol_context(opts)
+    assert e.value.reasons == PO.refusals(_serve(ALL[2], enforce_eager=True))
+    assert len(e.value.reasons) == 1 and e.value.reasons[0].startswith(f"{ALL[2]}: SPOT runs in the Commit stage")
+    assert str(e.value) == "protocol options refused: " + e.value.reasons[0]
 
 
 def test_an_option_live_outside_the_composition_refuses_the_install(monkeypatch):

@@ -149,7 +149,7 @@ def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = Non
                        "Build; use the pinned engine profile")
     bad.extend(PO.refusals(ctx))
     if bad:
-        raise PO.Refused(bad)
+        raise PO.refused(bad)
     return ctx
 
 
