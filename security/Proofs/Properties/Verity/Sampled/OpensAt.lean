@@ -15,18 +15,23 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
 * `Live.placeAt`: **the place the session registers for a claims position**, `placeFrom` (`Sampled/Place.lean`) at
   the session's commitment (`Live.Cd`'s layout). `Live.placeOfRead_eq`: wherever v2 reads a session's files, the
   committed files' place of a gate (`placeOfRead`) is the session's `placeAt` of its claims position.
-* `Live.OpensReady`: what the session's files must give: every port a `sha512/row/v2` or `sha512/row-seg/v1` row,
-  formats `Hash.RowLeaf` takes from the code's schemas (`Flock.Bridge.Spec.formatOf`); the files pass `verify --zk`'s
-  ports and roots check (`Flock.PortRoots.checkOf`), which v2 runs on every session it accepts (`Accepted.ports`);
-  the ports' roots distinct, so the port the deployed path check finds by its root is the row's own, of the row's
-  format; and every row shorter than `2^64` bits, `RowLeaf.accepts`'s `u64` length. An accepted opening's salt is
-  `saltLen` bytes at every depth: the deployed commitment refuses data shorter than the salt
-  (`Flock.Bridge.saltOf_length`).
-* `Live.OpensReady.domain`: **every port's frame-v3 domain is 64 bytes**, the width of `Hash.Tree.Domain.id`, at files
-  that pass the ports and roots check: the domain is the one the public file publishes (`Flock.Bridge.domOf`), and the
-  check refuses a file whose published domain is not 64 bytes (`Flock.Bridge.idsSized_of_checksStmt`).
-* `rowMsg_digest`: a `sha512/row/v2` or `sha512/row-seg/v1` port's row message (`Flock.Bridge.rowMsg`) hashes to its
-  registered schema's `Hash.RowLeaf` digest (`Flock.Bridge.Spec.formatOf`).
+* `Live.OpensReady`: what the session's files must give: they pass `verify --zk`'s ports and roots check
+  (`Flock.PortRoots.checkOf`), which v2 runs on every session it accepts (`Accepted.ports`). What `opens_rowLeaf` reads
+  of the files is a property of that check:
+  * `Live.OpensReady.domain`: **every port's frame-v3 domain is 64 bytes**, the width of `Hash.Tree.Domain.id`: the
+    domain is the one the public file publishes (`Flock.Bridge.domOf`), and the check refuses a file whose published
+    domain is not 64 bytes (`Flock.Bridge.idsSized_of_checksStmt`).
+  * `Live.OpensReady.roots`: **the ports' roots are pairwise distinct**, so the port the deployed path check finds by
+    its root is the row's own, of the row's format: the check refuses two ports' published roots that are one root
+    under different published domains, and the session's published domains are pairwise distinct (`Live.hdup`).
+  * `Live.OpensReady.words`: **every row is shorter than `2^64` bits**, `RowLeaf.accepts`'s `u64` length: the check
+    refuses a port of `2^64` bits or more (`Flock.PortRoots.wordsOk`).
+  Every port's row is one `Hash.RowLeaf` has a format for, whichever of Flock's three schemas it is under
+  (`rowMsg_digest`, `portSchema_cases`), and its bits are whole 16-bit words (`Live.placeOf_words`), as the
+  `sha512/row/v1` format takes. An accepted opening's salt is `saltLen` bytes at every depth: the deployed commitment
+  refuses data shorter than the salt (`Flock.Bridge.saltOf_length`).
+* `rowMsg_digest`: a port's row message (`Flock.Bridge.rowMsg`), `sha512/row-seg/v1`'s, `sha512/row/v2`'s or
+  `sha512/row/v1`'s, hashes to its registered schema's `Hash.RowLeaf` digest (`Flock.Bridge.Spec.formatOf`).
 * `Live.opens_rowLeaf`: **an opening the deployed commitment accepts is a `Hash.RowLeaf` opening at `placeAt`** under
   SHA-512, whose row holds the opened bit at the place's offset.
 * `Instance.opensAt_of`: **`OpensAt`**, wherever each session v2 sets up is `OpensReady` and the base places each
@@ -34,7 +39,7 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
   (`Circuit.ofAudit`), so the opened bit is the gate's whole value. `Instance.opensAt_of_ready`: the same, for a base
   whose place is `placeOfRead` at its reading of the files, at sessions `OpensReady` alone; `Instance.opensAt_of_sessions`
   at every instance, whose base's place is `placeOfRead` by construction (`Instance.place`).
-* `Instance.SessionsReady`: every session v2 sets up is `OpensReady`.
+* `Instance.SessionsReady`: every session v2 sets up is `OpensReady`: its files pass the ports and roots check.
 * `remote_soundness_deployedReady_honest`, `remote_soundness_deployedReady_nontrivial`: its premises hold at the idle
   deployment's instance that runs no session, and its conclusion fails for a verifier that accepts everything.
 * `remote_soundness_deployedReady`: **`remote_soundness_deployedAt` with `OpensAt` discharged** at `SessionsReady`,
@@ -59,28 +64,57 @@ theorem sha512_hashOf : Flock.Bridge.Spec.HashOf Verity.sha512 := fun x => by
 theorem sha512Msg_length (m : Claims.Msg) : (Claims.Sampling.sha512Msg m).length = 64 := by
   rw [Claims.Sampling.sha512Msg, bs_length, Flock.Sha512.hash_size]
 
-/-- **A `sha512/row/v2` or `sha512/row-seg/v1` port's row message hashes to its registered schema's `Hash.RowLeaf`
-digest** under SHA-512. -/
-theorem rowMsg_digest {p : Flock.Port} (hp : (p.v2 || p.segs.isSome) = true) (bits : List Bool) :
+/-- **A port's row message hashes to its registered schema's `Hash.RowLeaf` digest** under SHA-512, whichever of
+Flock's formats the port's rows are in: `sha512/row-seg/v1`, `sha512/row/v2` or `sha512/row/v1`. -/
+theorem rowMsg_digest (p : Flock.Port) (bits : List Bool) :
     Verity.sha512 (Flock.Bridge.rowMsg p bits) =
       (Flock.Bridge.Spec.formatOf (Flock.Registered.portSchema p)).digest Verity.sha512 bits := by
   unfold Flock.Bridge.rowMsg Flock.Registered.portSchema
   by_cases hs : p.segs.isSome = true
   · rw [ite_eq_left hs, ite_eq_left hs, Flock.Bridge.Spec.formatOf_seg, Hash.RowLeaf.Format.digest,
       Hash.RowSeg.digest, Flock.Bridge.Spec.segEnc_eq sha512_hashOf]
-  · have hv : p.v2 = true := by simpa [hs] using hp
-    rw [ite_eq_right hs, ite_eq_right hs, ite_eq_left hv, ite_eq_left hv, Flock.Bridge.Spec.formatOf_v2,
-      Hash.RowLeaf.Format.digest, Hash.RowV2.digest, Flock.Bridge.Spec.enc_eq]
+  · by_cases hv : p.v2 = true
+    · rw [ite_eq_right hs, ite_eq_right hs, ite_eq_left hv, ite_eq_left hv, Flock.Bridge.Spec.formatOf_v2,
+        Hash.RowLeaf.Format.digest, Hash.RowV2.digest, Flock.Bridge.Spec.enc_eq]
+    · rw [ite_eq_right hs, ite_eq_right hs, ite_eq_right hv, ite_eq_right hv, Flock.Bridge.Spec.formatOf_v1,
+        Hash.RowLeaf.Format.digest, Hash.RowV1.digest, Flock.Bridge.Spec.encV1_eq]
 
-/-- **A `sha512/row/v2` or `sha512/row-seg/v1` port's schema is one `Hash.RowLeaf` has.** -/
-theorem portSchema_bits {p : Flock.Port} (hp : (p.v2 || p.segs.isSome) = true) :
+/-- **A port's schema is one of Flock's three**, each one `Hash.RowLeaf` has a format for. -/
+theorem portSchema_cases (p : Flock.Port) :
     Flock.Registered.portSchema p = Flock.HmRow.ROW_SCHEMA_SEG ∨
-      Flock.Registered.portSchema p = Flock.HmRow.ROW_SCHEMA_V2 := by
+      Flock.Registered.portSchema p = Flock.HmRow.ROW_SCHEMA_V2 ∨
+      Flock.Registered.portSchema p = Flock.HmRow.ROW_SCHEMA := by
   unfold Flock.Registered.portSchema
   by_cases hs : p.segs.isSome = true
   · exact Or.inl (ite_eq_left hs)
-  · have hv : p.v2 = true := by simpa [hs] using hp
-    exact Or.inr ((ite_eq_right hs).trans (ite_eq_left hv))
+  · by_cases hv : p.v2 = true
+    · exact Or.inr (Or.inl ((ite_eq_right hs).trans (ite_eq_left hv)))
+    · exact Or.inr (Or.inr ((ite_eq_right hs).trans (ite_eq_right hv)))
+
+/-- **`verify --zk`'s files check at the statement circuit refuses colliding roots and rows of `2^64` bits**, flat or
+templated: at a descriptor `Flock.Desc.parseStmt` reads under hidden outputs, when `Flock.PortRoots.checkOf` passes at
+the circuit `Flock.ProvedScope.circuitOf` reads, equal roots of the statement circuit `D.unroll` at the public file's
+leaf map have one published domain (`Flock.Bridge.RootFixesDomainL`, from `Flock.PortRoots.collidesPub`) and each of
+its ports is under `2^64` bits (`Flock.PortRoots.wordsOk`), as at the committed circuit
+(`Flock.Bridge.v5Files_of_checks`), whose ports and public file the statement circuit has. -/
+theorem fixes_words_of_checksStmt {tags : Flock.Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)}
+    {D : Flock.Desc} {pi : Flock.HmIn.Ports} {pub : Flock.Public} {n : ℕ} (hty : tags.typed = false)
+    (hh : tags.hiddenOutputs = true) (hD : Flock.Desc.parseStmt tags cf tables = .ok D)
+    (hpub : Flock.HmIn.loadPublic tags D.unroll pi pf = .ok pub) (hn : pub.n = n)
+    (hck : Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf tags cf tables) tags pf = .ok ()) :
+    Flock.Bridge.RootFixesDomainL D.unroll (Flock.Bridge.LeafMap.ofPublic D.unroll pub n) ∧
+      Flock.PortRoots.wordsOk D.unroll = true := by
+  obtain ⟨cs, hcs, he⟩ := FlockSoundness.commit_of_parseStmt hty (Flock.Desc.parseStmt_stmt hD)
+  have hC := FlockSoundness.Discharge.Hidden.committed_of_commit hcs
+  rw [Flock.ProvedScope.circuitOf_hidden hh, hcs] at hck
+  rw [he, FlockSoundness.Discharge.Hidden.loadPublicIn_commit hty hC] at hpub
+  obtain ⟨pubO, hO⟩ := Flock.PortRoots.checkOf_load hck
+  have hw : Flock.PortRoots.wordsOk cs = true :=
+    (Flock.PortRoots.loadedWhy_none (Flock.PortRoots.checkOf_loaded hck hO).2.2).2.1
+  have hf := (Flock.Bridge.v5Files_of_checks hpub hn hck).2
+  obtain ⟨nets, hu⟩ := hC.unrolled_eq hty
+  rw [he, hu]
+  exact ⟨hf, hw⟩
 
 theorem w_ofAudit {K : Verity.Circuit} {C : Verity.Boolean.Circuit} (h : K = Verity.Circuit.ofAudit C)
     (g : Fin K.N) : K.w g = 1 := by
@@ -107,18 +141,15 @@ theorem placeOfRead_eq {r : Verity.FileRead} (hr : r = A.fileRead) (hN : r.circu
   rw [A.hn, dite_eq_left (show g.val < A.Cc.N from hN ▸ g.isLt)]
   rfl
 
-/-- **What the session's files must give for its openings to be `Hash.RowLeaf`'s**: `sha512/row/v2` or
-`sha512/row-seg/v1` rows, files that pass `verify --zk`'s ports and roots check (`Flock.PortRoots.checkOf` at the
-circuit `Flock.ProvedScope.circuitOf` reads, which refuses a published frame-v3 domain that is not 64 bytes:
-`OpensReady.domain`), distinct roots (the deployed path check opens a row at the first port of the row's root, which is
-then the row's own), and rows shorter than `2^64` bits. -/
+/-- **What the session's files must give for its openings to be `Hash.RowLeaf`'s**: they pass `verify --zk`'s ports
+and roots check (`Flock.PortRoots.checkOf` at the circuit `Flock.ProvedScope.circuitOf` reads). The check refuses a
+published frame-v3 domain that is not 64 bytes (`OpensReady.domain`), two ports' published roots that are one root
+under different domains (`OpensReady.roots`: the deployed path check opens a row at the first port of the row's root,
+which is then the row's own) and a row of `2^64` bits or more (`OpensReady.words`). -/
 structure OpensReady : Prop where
-  rows : A.D.unroll.ports.all (fun p => p.v2 || p.segs.isSome) = true
   ports : Flock.PortRoots.checkOf
     (Flock.ProvedScope.circuitOf (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.circuitFile A.I.tables)
     (FlockSoundness.Discharge.ZkExec.zkTags A.I) A.I.publicFile = .ok ()
-  roots : ∀ q q', q' < q → q < A.D.unroll.ports.size → A.roots.getD q' [] ≠ A.roots.getD q []
-  width : ∀ i, (Flock.Bridge.placeOf A.Cc A.rows i).1 < 2 ^ 64
 
 /-- **Every port's frame-v3 domain is 64 bytes at files that pass the ports and roots check**: the domain is the one
 the public file publishes for the port (`Flock.Bridge.domOf`), `Flock.PortRoots.checkOf` refuses a public file with a
@@ -129,6 +160,40 @@ theorem OpensReady.domain {A : Live} (hA : A.OpensReady) :
   Flock.Bridge.idsSized_of_checksStmt ((FlockSoundness.Discharge.ZkExec.zkTags_typed A.I).trans A.ht)
     ((FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs A.I).trans A.hTags.1) (Flock.Desc.parseStmt_of_parse A.hD)
     A.hpub hA.ports
+
+/-- **What the ports and roots check refuses of the session's statement circuit**: `fixes_words_of_checksStmt` at the
+session's files. -/
+theorem OpensReady.fixes_words {A : Live} (hA : A.OpensReady) :
+    Flock.Bridge.RootFixesDomainL A.D.unroll (Flock.Bridge.LeafMap.ofPublic A.D.unroll A.pub A.n) ∧
+      Flock.PortRoots.wordsOk A.D.unroll = true :=
+  fixes_words_of_checksStmt ((FlockSoundness.Discharge.ZkExec.zkTags_typed A.I).trans A.ht)
+    ((FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs A.I).trans A.hTags.1) (Flock.Desc.parseStmt_of_parse A.hD)
+    A.hpub A.hn hA.ports
+
+/-- **The ports' roots are pairwise distinct at files that pass the ports and roots check**: the check refuses two
+ports' published roots that are one root under different published domains (`Flock.PortRoots.collidesPub`), and the
+session's published domains are pairwise distinct (`Live.hdup`), so no two ports have one root
+(`Flock.Bridge.rootsDistinctL_of_fixes`). -/
+theorem OpensReady.roots {A : Live} (hA : A.OpensReady) :
+    ∀ q q', q' < q → q < A.D.unroll.ports.size → A.roots.getD q' [] ≠ A.roots.getD q [] :=
+  Flock.Bridge.rootsDistinctL_of_fixes (L := Flock.Bridge.LeafMap.ofPublic A.D.unroll A.pub A.n)
+    (Flock.Bridge.LeafMap.ofPublic_dom _ _ _) A.hdup hA.fixes_words.1
+
+/-- **Every port is under `2^64` bits at files that pass the ports and roots check** (`Flock.PortRoots.wordsOk`). -/
+theorem OpensReady.words {A : Live} (hA : A.OpensReady) : Flock.PortRoots.wordsOk A.D.unroll = true :=
+  hA.fixes_words.2
+
+/-- **A position's row is its port's whole 16-bit words**: where claims position `i` has a row, the width the session
+registers for it (`Flock.Bridge.placeOf`'s) is `16 · words` of a port of the statement circuit, by the session's row
+map's construction (`Live.rows`, at `Layout.portRowW`). -/
+theorem placeOf_words {i : ℕ} {r : Flock.Bridge.RowAt} (hr : Flock.Bridge.rowOfPos A.Cc A.rows i = some r) :
+    ∃ (q : ℕ) (hq : q < A.D.unroll.ports.size),
+      (Flock.Bridge.placeOf A.Cc A.rows i).1 = 16 * A.D.unroll.ports[q].words := by
+  obtain ⟨g, -, hg⟩ := Option.bind_eq_some_iff.mp
+    (show (Flock.Bridge.wireOf A.Cc i).bind A.rows = some r from hr)
+  simp only [Live.rows, Option.map_eq_some_iff] at hg
+  obtain ⟨w, -, rfl⟩ := hg
+  exact ⟨w.2.1.val, w.2.1.isLt, congrArg Sigma.fst (Flock.Bridge.placeOf_eq hr w.2.2.isLt)⟩
 
 /-- **An opening the deployed commitment accepts is a `Hash.RowLeaf` opening at the registered place**: under
 SHA-512, at `placeAt`'s verifier, root and rank, its row holding the opened bit at the place's offset. -/
@@ -168,8 +233,6 @@ theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : C
       · exact heq
       · exact absurd he.symm (hA.roots q r.port hgt hq)
     subst hqr
-    have hpr : (A.D.unroll.ports[r.port].v2 || A.D.unroll.ports[r.port].segs.isSome) = true :=
-      (Array.all_eq_true.mp hA.rows) r.port hq
     have hschema : reg.schema = Flock.Registered.portSchema A.D.unroll.ports[r.port] := by
       rw [← hreg]; simp [Flock.Bridge.schemaOf, hq]
     have hrow : Flock.Bridge.rowDep A.Cc A.rows A.D.unroll (Flock.Bridge.placeOf A.Cc A.rows)
@@ -190,13 +253,21 @@ theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : C
       rw [Claims.Sampling.size_bytes] at hl
       exact Flock.Bridge.saltOf_length (d := Flock.log2ceil (A.Lm.cnt (Flock.Bridge.portIdxOf A.Cc A.rows i))) hl
     have hacc := Flock.Bridge.Spec.opensLeaf_accepts sha512_hashOf hdom hop
-    rw [Claims.Sampling.bs_bytes, Flock.Bridge.Spec.sha512Msg_hm96Outer sha512_hashOf, hrow, rowMsg_digest hpr,
+    rw [Claims.Sampling.bs_bytes, Flock.Bridge.Spec.sha512Msg_hm96Outer sha512_hashOf, hrow, rowMsg_digest,
       ← hschema] at hacc
     have hfs : (Flock.Bridge.Spec.formatOf reg.schema).schema = reg.schema :=
-      Flock.Bridge.Spec.formatOf_schema (by rw [hschema]; exact portSchema_bits hpr)
-    have hfit : ∀ ℓ, ℓ < 2 ^ 64 → (Flock.Bridge.Spec.formatOf reg.schema).Fits ℓ := fun ℓ h => by
-      unfold Flock.Bridge.Spec.formatOf
-      split <;> exact h
+      Flock.Bridge.Spec.formatOf_schema (by rw [hschema]; exact portSchema_cases _)
+    have hfit : (Flock.Bridge.Spec.formatOf reg.schema).Fits
+        (SamplingDeploy.rowBits (Flock.Bridge.placeOf A.Cc A.rows) (Flock.Bridge.bitsOf A.Lm.d) ⟨i, b, m⟩).length := by
+      obtain ⟨qw, hqw, hwid⟩ := A.placeOf_words hr
+      have h1 : (Flock.Bridge.placeOf A.Cc A.rows i).1 < 2 ^ 64 := by
+        rw [hwid]
+        exact Flock.PortRoots.words_lt_of_wordsOk hA.words hqw
+      have h2 : (Flock.Bridge.placeOf A.Cc A.rows i).1 % 16 = 0 := by
+        rw [hwid]
+        exact Nat.mul_mod_right 16 _
+      have h3 := Flock.Bridge.Spec.formatOf_fits reg.schema h1 h2
+      simpa only [SamplingDeploy.rowBits, List.length_ofFn] using h3
     generalize hf : Flock.Bridge.Spec.formatOf reg.schema = f at hacc hfs hfit
     rw [← hfs] at hacc
     refine ⟨{ verifier := { domain := Flock.Bridge.Spec.domainOf reg, key := bs Flock.Hm96.Default512.key,
@@ -204,18 +275,16 @@ theorem opens_rowLeaf {A : Live} (hA : A.OpensReady) {i : ℕ} {b : Bool} {m : C
               root := Flock.Bridge.Spec.dig reg.root, rank := ri.2,
               offset := (Flock.Bridge.placeOf A.Cc A.rows i).2.val }, ?_,
       ⟨SamplingDeploy.rowBits (Flock.Bridge.placeOf A.Cc A.rows) (Flock.Bridge.bitsOf A.Lm.d) ⟨i, b, m⟩,
-        Flock.Bridge.saltOf ⟨i, b, m⟩, _⟩, ⟨?_, hsalt, hacc⟩, ?_⟩
+        Flock.Bridge.saltOf ⟨i, b, m⟩, _⟩, ⟨hfit, hsalt, hacc⟩, ?_⟩
     · simp [placeAt, placeFrom, hat, hfind, hf]
-    · refine hfit _ ?_
-      simp only [SamplingDeploy.rowBits, List.length_ofFn]
-      exact hA.width i
     · simp [SamplingDeploy.rowBits]
 
 end Live
 
 namespace Instance
 
-/-- **Every session v2 sets up is `OpensReady`**: the deployment's files give what `Live.opens_rowLeaf` reads. -/
+/-- **Every session v2 sets up is `OpensReady`**: its files pass `verify --zk`'s ports and roots check, which gives
+what `Live.opens_rowLeaf` reads of them. -/
 def SessionsReady (I : Instance d α) : Prop :=
   ∀ θ F A, I.session θ = some A → SetsUp I.base θ F A → A.OpensReady
 
