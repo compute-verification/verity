@@ -7,6 +7,8 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
+# a test file that starts a program the read guard can't trace (bash, around run.sh): keyed on the suite's whole tree
+untraced = ["tests/test_serve_tax.py"]
 # `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace and release order, and
 # the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings;
 # an arm names another benchmark's vLLM plugin by its file in this tree, which the driver's test checks is there; the
