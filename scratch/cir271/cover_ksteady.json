@@ -1,0 +1,362 @@
+[
+ {
+  "run": "r20261112-103104-c329",
+  "archive": "art:23248ce055c4bcf03bfb0a66953821d818eb017174c4da36cec9f04d86455d35",
+  "word": "BatchedGemm_v1{B=1,K=192,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+  "definition": "BatchedGemm_v2{B=1,K=192,N=1,DOT=HopperBF16WgmmaDot16_v2}",
+  "k_log": 22,
+  "blocks": 16384,
+  "full": 8192,
+  "accepted": true,
+  "verdicts": [
+   true,
+   true,
+   true
+  ],
+  "lean_peak_gib": 0.512,
+  "label": "accepted on the provisional unit cover, units as stated, the Program not held to the circuit",
+  "lean_commit": "33faab2be81c5940213f544c22995ebe6ac700ea",
+  "lean_node": "computeinstance-e05phvwandc1mtagwh",
+  "lean_cpu": "AMD EPYC-Genoa Processor",
+  "bound_program": "a582c65ab56071ac",
+  "handed_program": "5311b25995df7c86",
+  "program_held": false,
+  "partition_handed": false,
+  "unit_draw": {
+   "k": 16384,
+   "population": 16384,
+   "law": "subset"
+  },
+  "stage": {
+   "rc": 0,
+   "peak_gib": 2.11,
+   "wall": "0:54.47",
+   "definition": "BatchedGemm_v2{B=1,K=192,N=1,DOT=HopperBF16WgmmaDot16_v2}",
+   "word": "BatchedGemm_v1{B=1,K=192,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+   "census": "BatchedGemm_v2{B=1,K=192,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
+   "n": 16384
+  },
+  "prove": {
+   "rc": 0,
+   "peak_gib": 117.52,
+   "wall": "3:18.76",
+   "device": "cpu"
+  },
+  "config": "device=cpu units=census:BatchedGemm_v2{B=1,K=192,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}@full ns=16 64 warm=1 runs=1"
+ },
+ {
+  "run": "r20261112-102108-d89e",
+  "archive": "art:d721bdcad26270f998f121f85c49cebed0f0e7453a90261c2a8f8f324ccdc07f",
+  "word": "ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}",
+  "definition": "ScaledMmFp8BlockSharedScale_v2{K=2048,N=4,G=128}",
+  "k_log": 24,
+  "blocks": 2048,
+  "full": 2048,
+  "accepted": true,
+  "verdicts": [
+   true,
+   true,
+   true
+  ],
+  "lean_peak_gib": 2.572,
+  "label": "accepted on the provisional unit cover, units as stated, the Program not held to the circuit",
+  "lean_commit": "33faab2be81c5940213f544c22995ebe6ac700ea",
+  "lean_node": "computeinstance-e05m8fsfqd6p24xpft",
+  "lean_cpu": "AMD EPYC-Genoa Processor",
+  "bound_program": "b743c68f21060aeb",
+  "handed_program": "0dece706162f1f1a",
+  "program_held": false,
+  "partition_handed": false,
+  "unit_draw": {
+   "k": 2048,
+   "population": 2048,
+   "law": "subset"
+  },
+  "stage": {
+   "rc": 0,
+   "peak_gib": 4.96,
+   "wall": "1:53.93",
+   "definition": "ScaledMmFp8BlockSharedScale_v2{K=2048,N=4,G=128}",
+   "word": "ScaledMmFp8BlockSharedScale_v1{K=2048,N=4,G=128}",
+   "census": "ScaledMmFp8BlockSharedScale_v2{K=2048,N=4,G=128}",
+   "n": 2048
+  },
+  "prove": {
+   "rc": 0,
+   "peak_gib": 120.69,
+   "wall": "2:36.43",
+   "device": "cpu"
+  },
+  "config": "device=cpu units=census:ScaledMmFp8BlockSharedScale_v2{K=2048,N=4,G=128}@full ns=16 64 warm=1 runs=1"
+ },
+ {
+  "run": "r20261112-110042-9d06",
+  "archive": "art:7b505eea94e9c4c3e834bc35fb317af12c1abcd4690b67f851d623a8605d59ab",
+  "word": "CublasSplitKGemm_v1{K=6144,N=1,SPLIT_K=4,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+  "definition": "CublasSplitKGemm_v2{K=6144,N=1,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v2}",
+  "k_log": 25,
+  "blocks": 1024,
+  "full": 1024,
+  "accepted": true,
+  "verdicts": [
+   true,
+   true,
+   true
+  ],
+  "lean_peak_gib": 3.514,
+  "label": "accepted on the provisional unit cover, units as stated, the Program not held to the circuit",
+  "lean_commit": "33faab2be81c5940213f544c22995ebe6ac700ea",
+  "lean_node": "computeinstance-e05ckx5wj15xzjhcma",
+  "lean_cpu": "AMD EPYC-Genoa Processor",
+  "bound_program": "ce824b32adbc6aa3",
+  "handed_program": "07db5ec6f473dda0",
+  "program_held": false,
+  "partition_handed": false,
+  "unit_draw": {
+   "k": 1024,
+   "population": 1024,
+   "law": "subset"
+  },
+  "stage": {
+   "rc": 0,
+   "peak_gib": 15.24,
+   "wall": "3:53.94",
+   "definition": "CublasSplitKGemm_v2{K=6144,N=1,SPLIT_K=4,DOT=HopperBF16WgmmaDot16_v2}",
+   "word": "CublasSplitKGemm_v1{K=6144,N=1,SPLIT_K=4,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+   "census": "CublasSplitKGemm_v2{K=6144,N=1,SPLIT_K=4,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
+   "n": 1024
+  },
+  "prove": {
+   "rc": 0,
+   "peak_gib": 130.59,
+   "wall": "3:26.98",
+   "device": "cpu"
+  },
+  "config": "device=cpu units=census:CublasSplitKGemm_v2{K=6144,N=1,SPLIT_K=4,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}@full ns=16 64 warm=1 runs=1"
+ },
+ {
+  "run": "r20261112-110112-30f3",
+  "archive": "art:83f6bf9fbec5213befffd9d5a83fbcb1642f35a68a8f9dad4c4eb964ecb2eecf",
+  "word": "BatchedGemm_v1{B=1,K=512,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+  "definition": "BatchedGemm_v2{B=1,K=512,N=1,DOT=HopperBF16WgmmaDot16_v2}",
+  "k_log": 22,
+  "blocks": 8192,
+  "full": 8192,
+  "accepted": true,
+  "verdicts": [
+   true,
+   true,
+   true
+  ],
+  "lean_peak_gib": 0.545,
+  "label": "accepted on the provisional unit cover, units as stated, the Program not held to the circuit",
+  "lean_commit": "33faab2be81c5940213f544c22995ebe6ac700ea",
+  "lean_node": "computeinstance-e03nth5jqd47azxrz2",
+  "lean_cpu": "AMD EPYC-Genoa Processor",
+  "bound_program": "6716bc5cf0faeca1",
+  "handed_program": "c849940c3d719834",
+  "program_held": false,
+  "partition_handed": false,
+  "unit_draw": {
+   "k": 8192,
+   "population": 8192,
+   "law": "subset"
+  },
+  "stage": {
+   "rc": 0,
+   "peak_gib": 2.89,
+   "wall": "1:17.01",
+   "definition": "BatchedGemm_v2{B=1,K=512,N=1,DOT=HopperBF16WgmmaDot16_v2}",
+   "word": "BatchedGemm_v1{B=1,K=512,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+   "census": "BatchedGemm_v2{B=1,K=512,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
+   "n": 8192
+  },
+  "prove": {
+   "rc": 0,
+   "peak_gib": 117.7,
+   "wall": "3:24.69",
+   "device": "cpu"
+  },
+  "config": "device=cpu units=census:BatchedGemm_v2{B=1,K=512,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}@full ns=16 64 warm=1 runs=1"
+ },
+ {
+  "run": "r20261112-110527-bb9d",
+  "archive": "art:cb47e6c8fd5fe50426f76b8232a8479a32a65adfa5eaae837c720ed781684c19",
+  "word": "ScaledMmFp8BlockSharedScale_v1{K=256,N=4,G=128}",
+  "definition": "ScaledMmFp8BlockSharedScale_v2{K=256,N=4,G=128}",
+  "k_log": 22,
+  "blocks": 8192,
+  "full": 8192,
+  "accepted": true,
+  "verdicts": [
+   true,
+   true,
+   true
+  ],
+  "lean_peak_gib": 0.569,
+  "label": "accepted on the provisional unit cover, units as stated, the Program not held to the circuit",
+  "lean_commit": "33faab2be81c5940213f544c22995ebe6ac700ea",
+  "lean_node": "computeinstance-e07bmyy2g9g0f67ymw",
+  "lean_cpu": "AMD EPYC-Genoa Processor",
+  "bound_program": "686788d9d351a4d7",
+  "handed_program": "ad8813a631ea9c61",
+  "program_held": false,
+  "partition_handed": false,
+  "unit_draw": {
+   "k": 8192,
+   "population": 8192,
+   "law": "subset"
+  },
+  "stage": {
+   "rc": 0,
+   "peak_gib": 2.44,
+   "wall": "0:42.95",
+   "definition": "ScaledMmFp8BlockSharedScale_v2{K=256,N=4,G=128}",
+   "word": "ScaledMmFp8BlockSharedScale_v1{K=256,N=4,G=128}",
+   "census": "ScaledMmFp8BlockSharedScale_v2{K=256,N=4,G=128}",
+   "n": 8192
+  },
+  "prove": {
+   "rc": 0,
+   "peak_gib": 115.17,
+   "wall": "2:53.78",
+   "device": "cpu"
+  },
+  "config": "device=cpu units=census:ScaledMmFp8BlockSharedScale_v2{K=256,N=4,G=128}@full ns=16 64 warm=1 runs=1"
+ },
+ {
+  "run": "r20261112-111233-d7bb",
+  "archive": "art:688cf224affab5aa6d0a89f99cb3140a0936906b27f974e0be42dd9394c1a698",
+  "word": "Gemm_v2{K=6144,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+  "definition": "Gemm_v3{K=6144,N=1,DOT=HopperBF16WgmmaDot16_v2}",
+  "k_log": 25,
+  "blocks": 1024,
+  "full": 1024,
+  "accepted": true,
+  "verdicts": [
+   true,
+   true,
+   true
+  ],
+  "lean_peak_gib": 3.549,
+  "label": "accepted on the provisional unit cover, units as stated, the Program not held to the circuit",
+  "lean_commit": "33faab2be81c5940213f544c22995ebe6ac700ea",
+  "lean_node": "computeinstance-e05phvwandc1mtagwh",
+  "lean_cpu": "AMD EPYC-Genoa Processor",
+  "bound_program": "3d5382ccd5f9b482",
+  "handed_program": "57b39b8b97796e58",
+  "program_held": false,
+  "partition_handed": false,
+  "unit_draw": {
+   "k": 1024,
+   "population": 1024,
+   "law": "subset"
+  },
+  "stage": {
+   "rc": 0,
+   "peak_gib": 5.32,
+   "wall": "1:57.38",
+   "definition": "Gemm_v3{K=6144,N=1,DOT=HopperBF16WgmmaDot16_v2}",
+   "word": "Gemm_v2{K=6144,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+   "census": "Gemm_v3{K=6144,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}",
+   "n": 1024
+  },
+  "prove": {
+   "rc": 0,
+   "peak_gib": 127.88,
+   "wall": "2:36.07",
+   "device": "cpu"
+  },
+  "config": "device=cpu units=census:Gemm_v3{K=6144,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"}}@full ns=16 64 warm=1 runs=1"
+ },
+ {
+  "run": "r20261112-111836-42d5",
+  "archive": "art:89030d2474b25cd0f4fdc5e60ed96db0bd338e00b44a29794ad0c55bc33e4d1e",
+  "word": "LlBf16DotprodGemm_v1{N=1,K=6144,BS=128,VEC=8,FMA=1}",
+  "definition": "LlBf16DotprodGemm_v2{N=1,K=6144,BS=128,VEC=8,FMA=1}",
+  "k_log": 26,
+  "blocks": 512,
+  "full": 512,
+  "accepted": true,
+  "verdicts": [
+   true,
+   true,
+   true
+  ],
+  "lean_peak_gib": 13.333,
+  "label": "accepted on the provisional unit cover, units as stated, the Program not held to the circuit",
+  "lean_commit": "33faab2be81c5940213f544c22995ebe6ac700ea",
+  "lean_node": "computeinstance-e05gtzae2kdf8g47ss",
+  "lean_cpu": "AMD EPYC-Genoa Processor",
+  "bound_program": "79bfc5d09caac592",
+  "handed_program": "9a12a81ae360b686",
+  "program_held": false,
+  "partition_handed": false,
+  "unit_draw": {
+   "k": 512,
+   "population": 512,
+   "law": "subset"
+  },
+  "stage": {
+   "rc": 0,
+   "peak_gib": 53.77,
+   "wall": "13:21.77",
+   "definition": "LlBf16DotprodGemm_v2{N=1,K=6144,BS=128,VEC=8,FMA=1}",
+   "word": "LlBf16DotprodGemm_v1{N=1,K=6144,BS=128,VEC=8,FMA=1}",
+   "census": "LlBf16DotprodGemm_v2{N=1,K=6144,BS=128,VEC=8,FMA=1}",
+   "n": 512
+  },
+  "prove": {
+   "rc": 0,
+   "peak_gib": 132.76,
+   "wall": "2:16.56",
+   "device": "cpu"
+  },
+  "config": "device=cpu units=census:LlBf16DotprodGemm_v2{N=1,K=6144,BS=128,VEC=8,FMA=1}@full ns=16 64 warm=1 runs=1"
+ },
+ {
+  "run": "r20261112-111902-3aea",
+  "archive": "art:1fd4763bf20af5112f7502b2ca15a39695020a343c866f7384fac964ca2e0faa",
+  "word": "ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}",
+  "definition": "ScaledMmFp8BlockSharedScale_v2{K=6144,N=4,G=128}",
+  "k_log": 25,
+  "blocks": 1024,
+  "full": 1024,
+  "accepted": true,
+  "verdicts": [
+   true,
+   true,
+   true
+  ],
+  "lean_peak_gib": 7.342,
+  "label": "accepted on the provisional unit cover, units as stated, the Program not held to the circuit",
+  "lean_commit": "33faab2be81c5940213f544c22995ebe6ac700ea",
+  "lean_node": "computeinstance-e05gtzae2kdf8g47ss",
+  "lean_cpu": "AMD EPYC-Genoa Processor",
+  "bound_program": "00a29ff6924b6520",
+  "handed_program": "4ae1ebba306d0514",
+  "program_held": false,
+  "partition_handed": false,
+  "unit_draw": {
+   "k": 1024,
+   "population": 1024,
+   "law": "subset"
+  },
+  "stage": {
+   "rc": 0,
+   "peak_gib": 10.74,
+   "wall": "4:12.85",
+   "definition": "ScaledMmFp8BlockSharedScale_v2{K=6144,N=4,G=128}",
+   "word": "ScaledMmFp8BlockSharedScale_v1{K=6144,N=4,G=128}",
+   "census": "ScaledMmFp8BlockSharedScale_v2{K=6144,N=4,G=128}",
+   "n": 1024
+  },
+  "prove": {
+   "rc": 0,
+   "peak_gib": 129.23,
+   "wall": "15:30.13",
+   "device": "cpu"
+  },
+  "config": "device=cpu units=census:ScaledMmFp8BlockSharedScale_v2{K=6144,N=4,G=128}@full ns=16 64 warm=1 runs=1"
+ }
+]
