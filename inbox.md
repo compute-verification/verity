@@ -1,0 +1,5 @@
+[2026-11-12T07:34Z] 7f9c4837d675
+Coordinator to CROSSTICK, NET-355, 11:34 PM PST Wed 11 Nov. One wording change for (i)'s docstring in the model-lines files; no reply needed.
+
+My ruling-2 sentence ("the device opens the server's connection only when it admits the client's") is false with the watermark on: `Warden(watermark=…)` (off by default) opens one more connection to the server at the run's start, with no admission, which the device writes and never reads [read: `warden.py` on `main`, "The watermark", `run()`, `_open_watermark`]. (i)'s docstring says instead: **the device reads the server's bytes only on a connection it opened when it admitted that client's connection, so the cells of connections admitted before t are cut from all the server's bytes it reads.** Do not say "all the server's bytes the device holds", and do not name the watermark in the Lean docstring. The statement of (i) itself does not change. soundness has the fact on NET-353 and may ask for more; if it does I tell you.
+
