@@ -17,7 +17,8 @@
 # taken without waiting: a card whose lock is held, or with a compute process or more than a GiB in use on it, ends
 # the run (exit 75) with nothing started there. No step starts after NOT_AFTER (`date -d` syntax), so a run stays
 # inside its booked hours. out/STEP.node.txt lists the compute processes on every card of the machine as the step
-# starts and as it ends: whether anything shared the node with a timed row.
+# starts and as it ends: whether anything shared the node with a timed row. With them, each card's link, and this
+# cgroup's CPU counters, its pressure and the machine's load: whether the cgroup was throttled between the two.
 #
 #   rows      rows.py: at each of ROWS in turn on one store of GIB GiB across CARDS, the device's gates, the store's
 #             openings and the calibration (CAL chained passes each, over the plain read); out/rows.json. CTAS_AT
@@ -103,6 +104,7 @@ B=$(mktemp -d /tmp/rows64.XXXXXX); trap 'rm -rf "$B"' EXIT
 export B
 { id -un; hostname; git -C "$TREE" rev-parse HEAD; echo "cores ${CORES:-not pinned} ($(nproc)) cards $CARDS arch $ARCH"
   "$NVCC" --version | tail -n 2; cat /sys/fs/cgroup/cpu.max; nvidia-smi -L; command -v lake cuobjdump nvdisasm
+  nvidia-smi topo -m
 } > "$O/machine.txt" 2>&1
 
 FLAGS=(-O3 -gencode "arch=compute_$ARCH,code=sm_$ARCH" -std=c++17 -Xcompiler -fPIC -shared -Xptxas -v)
@@ -163,9 +165,11 @@ LEASE=$TREE/tools/research/src/research/pods/sh/gpu_lease.sh
 command -v gpu-lease > /dev/null && LEASE=$(command -v gpu-lease)
 
 others() {  # into out/$1.node.txt: the compute processes on every card of the machine, at the step's $2
-  { echo "$(date -u +%H:%M:%SZ) $2: card, memory used; then each compute process (card's uuid, pid, memory, name)"
-    nvidia-smi --query-gpu=index,uuid,memory.used --format=csv,noheader
+  { echo "$(date -u +%H:%M:%SZ) $2: card, memory used, its link's generation and width; then each compute process" \
+      "(card's uuid, pid, memory, name); then the cgroup's cpu.stat and cpu.pressure, and the load"
+    nvidia-smi --query-gpu=index,uuid,memory.used,pcie.link.gen.current,pcie.link.width.current --format=csv,noheader
     nvidia-smi --query-compute-apps=gpu_uuid,pid,used_memory,process_name --format=csv,noheader
+    cat /sys/fs/cgroup/cpu.stat /sys/fs/cgroup/cpu.pressure /proc/loadavg
   } >> "$O/$1.node.txt" 2>&1
 }
 
