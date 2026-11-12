@@ -140,7 +140,7 @@
         "adapters/vllm/verity_vllm/protocols/spot.py",
         "security/Definitions/Hash/",
         "security/Proofs/Hash/",
-        "verity/hardware/world/",
+        "verity/protocols/certifier/device/world/",
         "verity/hardware/record.py",
         "verity/hardware/registration.py",
         "verity/hardware/site/",

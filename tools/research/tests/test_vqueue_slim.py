@@ -1056,7 +1056,7 @@ def test_a_step_the_check_judges_failed_while_a_shard_runs_circuit_check_fails_i
 
 
 def test_lean_audit_s_failures_are_what_it_prints_under_each_failed_package_but_its_run_s_counts():
-    log = ("lean-audit: verity/hardware/world: PASS reused\n" + AUDIT.format(n=1)
+    log = ("lean-audit: verity/protocols/certifier/device/world: PASS reused\n" + AUDIT.format(n=1)
            + "  tamper: /w/lean-audit-scratch-1-x/security/Proofs/A.olean changed\n"
            "AUDIT /w/lean-audit-scratch-1-x/security: PASS  12 declarations\n  note: fine\n"
            "AUDIT /w/lean-audit-scratch-1-x/Flock: FAIL\nAUDIT: FAIL (security/Proofs, Flock); reports in /out\n"

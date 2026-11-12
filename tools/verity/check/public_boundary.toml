@@ -349,7 +349,7 @@ via = ["lean import"]
 
 [[needed]]
 why = "the world a device runs in (`Core.World`: its clock, coins, links and signer's state), which the network certifier's device's driver reads"
-paths = ["verity/hardware/world"]
+paths = ["verity/protocols/certifier/device/world"]
 from = ["certifier"]
 
 [[needed]]

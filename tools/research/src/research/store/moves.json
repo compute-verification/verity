@@ -2204,6 +2204,11 @@
         "verity/protocols/remote/": "verity/configurations/remote/",
         "verity/protocols/onsite/": "verity/configurations/onsite/"
       }
+    },
+    {
+      "paths": {
+        "verity/hardware/world/": "verity/protocols/certifier/device/world/"
+      }
     }
   ]
 }

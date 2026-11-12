@@ -20,7 +20,7 @@ path = "../../verifier/lean"
 
 [[require]]
 name = "core_world"
-path = "../../../../hardware/world"
+path = "../world"
 
 [[require]]
 name = "lms"

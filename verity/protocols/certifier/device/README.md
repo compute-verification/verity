@@ -20,7 +20,7 @@ file: it has no Python package and no console script.
   difftests, as `program/lean/lean-audit.json` says. No code outside this directory imports the scripts; their tests
   are in `../verifier/tests`, which load them by path and hold what they write to those files' pins.
 - **Documents**: none but those instance and result files, which the difftest executables read.
-- **Loads from**: `lean/`, the packages at `program/lean`, `../verifier/lean`, `verity/hardware/world` and
+- **Loads from**: `lean/`, the packages at `program/lean`, `../verifier/lean`, `verity/protocols/certifier/device/world` and
   `../../../commitments/lms/lean`; `program/lean/`, no package. The scripts, `verity.protocols.certifier.verifier`;
   `issuer_vectors.py` also `verity.commitments.crypto`, and `program/lean/scripts/window_vectors.py` the prover side,
   `verity.protocols.certifier.prover`.
@@ -45,7 +45,7 @@ This package models the proxy. The relay form, `verity/protocols/certifier/verif
 ## What is in it
 
 The package requires `certifier_program` (`verity/protocols/certifier/device/program/lean`), `network_check`
-(`verity/protocols/certifier/verifier/lean`), `core_world` (`verity/hardware/world`) and `lms`
+(`verity/protocols/certifier/verifier/lean`), `core_world` (`verity/protocols/certifier/device/world`) and `lms`
 (`verity/commitments/lms/lean`). It requires no Mathlib and nothing of `security/`.
 
 | module | what it is | its Python reference (in `verity/protocols/certifier/`) |

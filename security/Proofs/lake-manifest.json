@@ -301,7 +301,7 @@
    "manifestFile": "lake-manifest.json",
    "inherited": true,
    "dir":
-   "../Properties/../../verity/protocols/certifier/device/lean/../../../../hardware/world",
+   "../../verity/protocols/certifier/device/world",
    "configFile": "lakefile.toml"},
   {"url": "https://github.com/leanprover-community/plausible",
    "type": "git",
