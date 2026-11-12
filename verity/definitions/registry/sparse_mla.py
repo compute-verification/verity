@@ -29,6 +29,10 @@ Registered functions (all `Name_v1`):
   SparseMlaHeadValues{NVIS,FIRST,BN,DOT,G}        (pb: NVIS bf16, kv: NVIS x G bf16, rescale, o[G]) -> o[G]; a head block's
                                                   P V steps on G columns of O, kv those columns of its keys' kv_c (FIRST
                                                   takes pb and kv only)
+  SparseMlaHeadScoresCols{DR,DV,NVIS,FIRST,BN,DOT,SCALE,G}  (q_nope, q_rope, kv0 .. kv<(DV+DR)/G - 1>: NVIS x G, m, l[4]) ->
+                                                  SparseMlaHeadScores' returns, its key rows given in column blocks of G
+  SparseMlaHeadKeysWire{NVIS,W}                   (kv: NVIS x W bf16) -> NVIS x W bf16; its input, the one writer of a
+                                                  column block of a key block's rows
   SparseMlaHeadEnd{DV,INV}                        (l[4], o[DV]) -> DV bf16; the head's epilogue, the chain's last unit
   SparseMla{T,NH,DR,DV,BN,DOT,INV,SCALE}          (q_nope: NH x DV, q_rope: NH x DR, kv: T x (DV+DR)) -> NH x DV bf16
 
@@ -41,6 +45,9 @@ rescale, and each column of O then depends only on those two, its own column of 
 `SparseMlaHeadValues` on each of the DV / G blocks of G columns, given those columns of the keys and of the O before, returns
 the block's O (`scores`, `values`: the block's body is the two).  It reads no other word of a key, and is the same Definition
 for every block of columns.
+A chain cut at P reads each key block's rows from one committed row per column block: `SparseMlaHeadKeysWire` returns a
+column block of G columns of the block's key rows, once a row, and every head's `SparseMlaHeadScoresCols` (`SparseMlaHeadScores`
+on its blocks side by side) and `SparseMlaHeadValues` of G columns read its output (`block_units`).
 """
 from __future__ import annotations
 
@@ -311,6 +318,56 @@ def SparseMlaHeadValues(B, S, pb, kv, rescale=None, o_prev=None):
     return head_values(word_steps(B), S, S.DOT, pb, kv, rescale, o_prev)
 
 
+def key_blocks(DR: int, DV: int, G: int) -> int:
+    """How many column blocks of G columns a key row [kv_c | k_pe] of DV + DR columns is, refused unless G divides both parts."""
+    if G < 1 or DV % G or DR % G:
+        raise ValueError(f"key rows of DV + DR = {DV} + {DR} columns are not whole column blocks of G={G}")
+    return (DV + DR) // G
+
+
+def key_rows(S, blocks, bf16=BF16):
+    """A block's NVIS key rows [kv_c | k_pe] from their column blocks of G columns, in order, side by side."""
+    return Coll(Array(S.NVIS, Array(S.DR + S.DV, bf16)), concat([b[k].refs for k in range(S.NVIS) for b in blocks]))
+
+
+def _head_scores_cols_type(S, bf16=BF16, f32=F32):
+    params, ret = _head_scores_type(S, bf16, f32)
+    blocks = tuple((f"kv{c}", Array(S.NVIS, Array(S.G, bf16))) for c in range(key_blocks(S.DR, S.DV, S.G)))
+    return params[:2] + blocks + params[3:], ret
+
+
+@composite("SparseMlaHeadScoresCols", 1, ["DR", "DV", "NVIS", "FIRST", "BN", "DOT", "SCALE", "G"], _head_scores_cols_type,
+           conformance=_CONF)
+def SparseMlaHeadScoresCols(B, S, q_nope, q_rope, *rest):
+    """`SparseMlaHeadScores_v1` with the block's key rows given in column blocks of G columns, a port each (``kv<c>``, columns
+    [c G, (c + 1) G) of [kv_c | k_pe], the rows a `SparseMlaHeadKeysWire_v1{W = G}` returns and, for c < DV / G, the columns a
+    `SparseMlaHeadValues_v1{G}` of column block c reads): each key row is its blocks side by side, so it is
+    `SparseMlaHeadScores_v1` on their concatenation, word for word."""
+    check_block_statics(S.DR, S.DV, S.NVIS, S.BN)
+    n = key_blocks(S.DR, S.DV, S.G)
+    return head_scores(word_steps(B), S, bind(DotBf16V2, K=S.DR + S.DV, DOT=S.DOT), q_nope, q_rope, key_rows(S, rest[:n]),
+                       *rest[n:])
+
+
+def _head_keys_type(S, bf16=BF16):
+    return ((("kv", Array(S.NVIS, Array(S.W, bf16))),), Array(S.NVIS, Array(S.W, bf16)))
+
+
+@composite("SparseMlaHeadKeysWire", 1, ["NVIS", "W"], _head_keys_type,
+           conformance="reference-defined: each word widened (Bf16ToF32_v1) and its high half taken (U32Hi16_v1), the identity on a "
+                       "BF16 word; its output is its input")
+def SparseMlaHeadKeysWire(B, S, kv):
+    """One column block of W columns of a key block's NVIS key rows, returned as given: each word widened to FP32 exactly
+    (`Bf16ToF32_v1`, the encoding << 16) and its high half taken (`U32Hi16_v1`), so its gates are its 2 NVIS W primitive
+    calls at no AND and its output is its input, word for word.  The one writer of that column block of the row's key
+    block: every unit of the row's heads that reads those columns (a `SparseMlaHeadScoresCols_v1`'s ``kv<c>``, a
+    `SparseMlaHeadValues_v1`'s ``kv``) reads its output row."""
+    from verity.definitions.ops.scalar import U32Hi16
+
+    wide = B.batch(P.Bf16ToF32, Coll(Array(S.NVIS * S.W, BF16), kv.refs), axes=(0,))
+    return B.batch(U32Hi16, wide, axes=(0,)).reshape(Array(S.NVIS, Array(S.W, BF16)))
+
+
 def _head_end_type(S, bf16=BF16, f32=F32):
     return ((("l", Array(4, f32)), ("o", Array(S.DV, f32))), Array(S.DV, bf16))
 
@@ -377,7 +434,7 @@ def SparseMla(B, S, q_nope, q_rope, kv):
 
 
 SPARSE_MLA_COMPOSITES = [SparseMlaBlock, SparseMlaHead, SparseMlaHeadBlock, SparseMlaHeadScores, SparseMlaHeadValues,
-                         SparseMlaHeadEnd, SparseMla]
+                         SparseMlaHeadScoresCols, SparseMlaHeadKeysWire, SparseMlaHeadEnd, SparseMla]
 #: each family serving stages as its cut, never whole, with the cut at a binding's statics (circuit-check's ``block`` holds
 #: each unit to the Flock block in the Call's place)
 CUTS = {"SparseMla_v1": head_chain}
