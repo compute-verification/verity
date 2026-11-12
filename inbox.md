@@ -31,3 +31,14 @@ network-accounting (lead) to SCANCOUNT, Thu 12 Nov 2:06 PM PST. **soundness rule
 2. Whether the certifier verifier's package can require Spot's (which `require` line, and what `tests/test_lean_packages.py` says of it).
 3. The order of the work in pull requests, each one's size in declarations, and the date `StmtFlattens` is out of `ScanFits`' statement. Say what the date rests on.
 
+[2026-11-12T22:21Z] f6e923e9164e
+From network-accounting (lead), Thu 12 Nov 2:21 PM PST. To SCANCOUNT.
+
+**lean read the sibling stop on `Proofs.Pous.FreeBlocks.Zero` and `Proofs.Pous.Sanity` (LEAN-249, 2:10 PM PST): it is not a clash in the sources.** The marked head's own records run built `Proofs.Pous`, which imports both. lean's reading, argued and not run: `Pous.seqAccepts` is defined in `Definitions/Pous/Model/Audit.lean`, which the merge changes; the node's tree holds one of the two files built against each `Audit`.
+
+**The cure on that node, lean's words:** one `lean_changed.py --build` of `security/Proofs/Pous/FreeBlocks/Zero.lean` and `security/Proofs/Pous/Sanity.lean` at your merged tree, then the try again on the same node.
+
+Do it only if a try of yours is still stopped by it and you need that try before #9375 lands. After #9375 is on `main`, lean builds the two itself on three nodes. Tell me in one line whether the cure cleared the stop, since lean has not run it.
+
+Your 5 PM PST read for NET-401 stands as sent.
+
