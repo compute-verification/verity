@@ -175,7 +175,7 @@ import os
 import shutil
 import sys
 import time
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from fractions import Fraction
@@ -466,8 +466,7 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     """The verifier's wiring check (`HmLinks`, `wiring.check_drawn`) on altered wires, each with the units it alters sampled: the first
     wire's unit 0 reading another unit's row, neither its writer's nor its own, of its words where one is (``words``: same,
     else other; rotating the writers is the honest wire at one unit a member or on a fan-out), two wires of one output swapped (a split's partial read into another combine slot), and a wired row's string
-    flipped in its reader's public body (a partial that is not the one its writer committed; for a port held in its writer's
-    tree, the row of its table unit 0's reference names), its unit 0 sampled."""
+    flipped in its reader's public body (a partial that is not the one its writer committed), its unit 0 sampled."""
     neg: dict[str, dict] = {}
     k = next((k for k, m in enumerate(members) if m.wired), None)
     if k is None:
@@ -502,30 +501,26 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
             "refused": bool(WI.check_drawn(rewired(j, tuple(w)), publics, units(j)))}
     m = members[k]
     names = [q for q, _ in m.all_rows]
-    body, j = bytearray(publics[m.key]), names.index(p)
-    at = j * WI.BC_BYTES
+    body = bytearray(publics[m.key])
+    j = names.index(p)
     if m.tables:
+        # a shared-row member's body is its ports' tables, then each unit's refs (`wiring.strings`): unit 0's string of
+        # port p is the row of p's table its ref names, not the body's j-th string
         counts = [dict(m.tables).get(q, m.n) for q in names]
-        ref = WI.BC_BYTES * sum(counts) + 4 * j
-        at = WI.BC_BYTES * (sum(counts[:j]) + int.from_bytes(body[ref:ref + 4], "little"))
-    body[at] ^= 1
+        refs = WI.BC_BYTES * sum(counts) + 4 * j
+        j = sum(counts[:j]) + int.from_bytes(body[refs:refs + 4], "little")
+    body[j * WI.BC_BYTES] ^= 1
     neg["wired-row-not-its-writer-s-output (§16.13)"] = {
         "refused": bool(WI.check_drawn(members, {**publics, m.key: bytes(body)}, [m.base]))}
     return neg
 
 
-def many_rows(reads: Mapping[str, Mapping[str, Any]], mm: dict) -> bool:
-    """Whether a sampled member's registered reads name a value of more than one row (`registered_negatives`' next-row case)."""
-    return any(int(e["leaves"]) > 1 for e in reads[mm["m"].key]["ports"].values())
-
-
 def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
-    """A sampled chunk's honest session, a chunk that reads a row table or an outside registered value, or holds a wired
-    port in its writer's tree, re-verified by Lean against registered reads it must refuse: none (its header names
-    registered reads the verifier holds no root for), its first port's value's root replaced, and (its first value of more
-    than one row) every unit reading that value's next row, each with its other ports' reads as registered; and its last
-    port committed afresh, left out of both its header's registered rows and the verifier's reads
-    (`Flock.Registered.checkComplete`)."""
+    """A sampled chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
+    registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
+    value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
+    ports' reads as registered; and its last port committed afresh, left out of both its header's registered rows and the
+    verifier's reads (`Flock.Registered.checkComplete`)."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
     port, last = next(iter(honest["ports"])), next(reversed(honest["ports"]))
@@ -536,12 +531,9 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
 
     cases = {"chunk-without-registered-reads": (None, "holds no registered roots", None),
              "registered-read-against-another-root": (changed({"root": "00" * 64}), "does not open", None)}
-    many = next((q for q, e in honest["ports"].items() if e["leaves"] > 1), None)
-    if many is not None:
-        e = honest["ports"][many]
-        cases["registered-reads-another-row"] = (
-            {**honest["ports"], many: {**e, "reads": [(r + 1) % e["leaves"] for r in e["reads"]]}},
-            "the verifier's program reads", None)
+    if p["leaves"] > 1:
+        cases["registered-reads-another-row"] = (changed({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}),
+                                                 "the verifier's program reads", None)
     if last != port:
         d = sdir / "port-committed-afresh"
         shutil.copytree(st["dir"], d, copy_function=os.link, dirs_exist_ok=True)
@@ -804,11 +796,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         return summary, False
     # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration;
     # a member reading an outside registered value, against the root its owner signed; and either's other ports, against the
-    # registration's own roots, since Lean takes registered reads only when they name every port; a member holding a wired
-    # port in its writer's tree (no tree of its own) reads it at its writer's root, its other ports at their own
-    held = {m.key: {"format": REG.READS_V1, "ports": {}} for m in mine.members if m.wired and not m.wired_trees}
-    reads = CS.own_reads({**held, **(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}),
-                          **(registered or {})}, mine, roots, registered=REG)
+    # registration's own roots, since Lean takes registered reads only when they name every port
+    reads = CS.own_reads({**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})},
+                         mine, roots, registered=REG)
     for mm in members:
         if mm["m"].key in reads:
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
@@ -980,8 +970,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         verdicts.update(got["verdicts"])
         if mm["m"].key in reads:
             row_verdicts[mm["m"].key] = got["lean_verify"]
-            if linked is None or (not many_rows(reads, linked[0]) and many_rows(reads, mm)):
-                linked = (mm, got["sdir"])
+            linked = linked or (mm, got["sdir"])
         statement[mm["m"].key] = got["statement"]
         sessions += got["sessions"]
         if got["challenger"] is not None:
@@ -1120,6 +1109,12 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
     return neg
 
 
+def own_replay():
+    """The `replay.py` beside this file, loaded by its path and never by its name: a process with `network_traces` on
+    its path, as the audit over a network certifier's run has, holds that directory's `replay` under the name."""
+    return AC._module("one_stage_replay", HERE / "replay.py")
+
+
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
@@ -1136,7 +1131,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     (`case_members`) in ``out/case-v2-members.json``, or why there is none in ``out/case-v2-members-error.txt``: v2
     parses that form and refuses it, so the file is no audit's input and nothing here reads it as a case."""
     try:
-        import replay as RP
+        RP = own_replay()
 
         d = str(Fraction(delta).limit_denominator(10**12))
         p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table, partition=partition, **(tied or {}))
@@ -1180,7 +1175,7 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
     it staged the file: before the sample it takes itself, and after one its caller handed it. `v2_case.py`'s is that
     digest as the kept window's own v2 case names it, or, for a window that keeps none, the kept file's own, taken
     after the audit."""
-    import replay as RP
+    RP = own_replay()
     from verity.protocols.spot.verifier.one_stage import proofs as PF
 
     pr, blobs = PF.evidence_v2(proof, sessions)
@@ -1199,7 +1194,7 @@ def case_members(case: dict, *, members: Sequence, tables: Sequence[Path]) -> di
     ``blobs``, the paths of the statements' files and of the pinned lookup ``tables`` their circuits look up. The
     statements' sessions must be v1's ``sessions`` in order, as v2 reads them. v2 parses this form and refuses it
     (`OneStageZk.MULTI_REFUSED`); `proofs.members_parsed` is what its parsers read of the case."""
-    import replay as RP
+    RP = own_replay()
     from verity.protocols.spot.verifier.one_stage import proofs as PF
 
     names = {m.name: [PF.file_sha512(s / "session.json") for s in m.proof.sessions] for m in members}
@@ -1222,7 +1217,7 @@ def case_with_form(case: dict, form: str = "one-stage") -> dict:
     """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as sampled proofs' (`SAMPLED_PROOFS`): its params and
     its evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
     rest."""
-    import replay as RP
+    RP = own_replay()
 
     evidence = json.loads(bytes.fromhex(case["evidence"]))
     if not isinstance(evidence, dict) or "form" in evidence or "form" in case["params"]:

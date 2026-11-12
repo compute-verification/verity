@@ -3,7 +3,7 @@ the matrix W acts as W + (`alpha`/`rank`)·B·A on its input, as two thin produc
 
 - `targets`: comma-separated patterns over the start's parameter names (fnmatch), naming matrices
   (`blocks.*.wq.weight,blocks.*.wv.weight`; the default is every matrix of every block);
-- `rank`: A is rank × in, drawn at the start's own scale, and B out × rank, zero, so the first step's model is θ;
+- `rank`: A is rank × in, random at the start's own scale, and B out × rank, zero, so the first step's model is θ;
 - `alpha`: the adapter's scale is `alpha`/`rank`;
 - `lr`, `weight_decay`, `warmup`, `decay`, `clip`, `micro_batches`: `subset`'s, the optimizer AdamW (betas 0.9,
   0.95) over the adapters.
