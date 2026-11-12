@@ -26,22 +26,35 @@ import json
 from pathlib import Path
 
 import pytest
+from verity.circuits.defs import bind
+from verity.definitions.registry import moe as MOE
 
 from tests.engine.moe_scope_cut import cut, write
 from tests.engine.test_gen_shared_moe_fp8 import _fits
-from verity.circuits.defs import bind
 from verity_vllm.engine.profiles import family_facts as FF
-from verity_vllm.observe.fold.profiles import generic
-from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern
-from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import K_FUSED, TRITON_EXPERTS
-from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import MoEFusedSharedExpertsFp8
 from verity_vllm.observe.events import Note, Root, RunHeader
 from verity_vllm.observe.fold.patterns import triton_name
+from verity_vllm.observe.fold.profiles import generic
+from verity_vllm.observe.fold.profiles.gen_ln_patterns import ResidualAddPattern
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (
+    K_FUSED,
+    TRITON_EXPERTS,
+)
+from verity_vllm.observe.fold.profiles.gen_shared_moe_patterns import (
+    MoEFusedSharedExpertsFp8,
+)
 from verity_vllm.observe.fold.resolve_log import collect_roots, make_context
-from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, Transparent, resolve_step
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    Group,
+    PerRow,
+    Shared,
+    Transparent,
+    resolve_step,
+)
 from verity_vllm.observe.fold.tree import step_events
 from verity_vllm.observe.log import read_log, split_steps
-from verity.definitions.registry import moe as MOE
 
 FIXTURE = Path(__file__).parent / "fixtures" / "glm53_tp8_moe_l3.rank0.jsonl.gz"
 CONFIG = Path(__file__).parents[1] / "check" / "fixtures" / "glm_moe_dsa" / "config.json"
@@ -62,7 +75,7 @@ WEIGHTS = {"gate": f"{PRE}.gate.weight", "bias": f"{PRE}.gate.e_score_correction
 Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def config() -> tuple[dict, int]:
     """The scope's config and block G for one TP8 rank."""
     cfg = json.loads(CONFIG.read_text())
@@ -81,10 +94,11 @@ def profile():
     return dataclasses.replace(Q3.PROFILE, config=C, patterns=[MoEFusedSharedExpertsFp8(C, group=G), ResidualAddPattern()])
 
 
-@functools.lru_cache(maxsize=None)
+@functools.cache
 def _resolved():
     """step -> (StepEvents, resolutions) under the recorded header."""
-    header, roots, out = None, {}, {}
+    roots: dict[int, list[Root]] = {}
+    header, out = None, {}
     for pre, step in split_steps(read_log(FIXTURE)):
         header = next((e for e in pre if isinstance(e, RunHeader)), header)
         collect_roots(pre, roots)

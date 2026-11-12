@@ -27,7 +27,16 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc, views_in
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+    views_in,
+)
 from verity_vllm.observe.log import read_log
 
 COLLECTIVE_OPS = ("vllm.all_reduce", "vllm.all_gather", "vllm.reduce_scatter", "c10d.", "_c10d_functional.", "_C.vocab_parallel_embedding",
@@ -263,7 +272,7 @@ def bf16_to_f32(u16: np.ndarray) -> np.ndarray:
 
 
 def f32_to_bf16_rne(f: np.ndarray) -> np.ndarray:
-    u = f.astype(np.float32).view(np.uint32).astype(np.uint64)
+    u: np.ndarray = f.astype(np.float32).view(np.uint32).astype(np.uint64)
     nan = np.isnan(f)
     bias = ((u >> 16) & 1) + 0x7FFF
     out = ((u + bias) >> 16).astype(np.uint16)

@@ -16,14 +16,37 @@ import math
 
 import pytest
 
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+)
 from verity_vllm.observe.fold.profiles import generic
-from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (FUSED_MOE_PINS, MOE_FP8_CONSTRUCTION_PATTERNS, TRITON_EXPERTS, MoEFusedExperts,
-                                                             MoEFusedExpertsFp8, MoEFusedExpertsFp8Ordered)
-from verity_vllm.observe.events import DispatchEnter, DispatchExit, Root, RunHeader, StepStart, TritonLaunch, ViewDesc
-from verity_vllm.observe.fold.resolver import Compute, Gather, Group, PerRow, Shared, StepContext, Unsupported, resolve_step
+from verity_vllm.observe.fold.profiles.gen_ov_moe_patterns import (
+    FUSED_MOE_PINS,
+    MOE_FP8_CONSTRUCTION_PATTERNS,
+    TRITON_EXPERTS,
+    MoEFusedExperts,
+    MoEFusedExpertsFp8,
+    MoEFusedExpertsFp8Ordered,
+)
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    Group,
+    PerRow,
+    Shared,
+    StepContext,
+    Unsupported,
+    resolve_step,
+)
 from verity_vllm.observe.fold.tree import step_events
-from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity_vllm.program.frontend import targets as T
+from verity_vllm.program.frontend.target_profile import TargetProfile
 
 Q3 = importlib.import_module("verity_vllm.observe.fold.profiles.derived_QWEN3_30B_A3B_tp2")
 C = Q3.C
@@ -284,7 +307,7 @@ def test_the_bf16_scope_does_not_claim_a_block_fp8_scope():
 
 
 def test_the_block_fp8_constructions_are_the_pairwise_ones():
-    assert MOE_FP8_CONSTRUCTION_PATTERNS == {"indexed-read": MoEFusedExpertsFp8, "indexed-read-ordered": MoEFusedExpertsFp8Ordered}
+    assert {"indexed-read": MoEFusedExpertsFp8, "indexed-read-ordered": MoEFusedExpertsFp8Ordered} == MOE_FP8_CONSTRUCTION_PATTERNS
     res, _ = _resolve(2, naive=True, ctx_kw={"profile": fp8_profile(MoEFusedExpertsFp8)})
     assert isinstance(res[0], Group) and [p.spec.name for p in res[0].parts if isinstance(p, Compute)][0] == "MoeRouterTopKNorm"
 

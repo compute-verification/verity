@@ -282,7 +282,7 @@ class MoEMarlinSharedExperts:
                 hint: str) -> list[tuple[int, Any]] | Unsupported:
         """The align's schedule, w13, the clamped activation, w2 and moe_sum over the (token, slot) pairs."""
         C = self.config
-        E, TOPK, H, I, M = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"], hidden.shape[0]
+        E, TOPK, H, INTER, M = C["NUM_EXPERTS"], C["TOPK"], C["H"], C["I"], hidden.shape[0]
         P, tp = M * TOPK, target_of(ctx)[0]
         aa = bound_args(sc.align)
         bufs = tuple(aa.get(k) for k in ("sorted_token_ids", "experts_ids", "num_tokens_post_pad"))
@@ -306,10 +306,10 @@ class MoEMarlinSharedExperts:
             (at, Compute(blocks, 1, (Shared(ids_flat), Shared(rank), Shared(start)), (Shared(blk), Shared(par)), (at,),
                          hint=f"{hint}/moe_align_block_size", kernels=K_ALIGN_KERNELS, pattern=self.name))]
         prev = hidden
-        for launch, K, N, routed in ((sc.up, H, 2 * I, False), (sc.down, I, H, True)):
+        for launch, K, N, routed in ((sc.up, H, 2 * INTER, False), (sc.down, INTER, H, True)):
             if routed:
                 act = SiluAndMulWithClamp().match(sc.rsilu, ctx)
-                want = {"I": I, "LIMIT": float(C["SWIGLU_LIMIT"])}
+                want = {"I": INTER, "LIMIT": float(C["SWIGLU_LIMIT"])}
                 if not isinstance(act, Compute) or act.rows != P or any(act.spec.bindings.get(k) != v for k, v in want.items()):
                     return unsupported(node, f"the routed {K_CLAMP} did not resolve as SiluMulClamp{want} on the pair rows", child_id=sc.rsilu.id,
                                        child_reason=getattr(act, "reason", None))

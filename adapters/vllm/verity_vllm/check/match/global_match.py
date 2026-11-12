@@ -98,6 +98,7 @@ from verity_vllm.check.match.declaration import (
     GP_SCHEMA,
     from_gprog,
     mock_global_program,
+    relocated_components,
     requests_declared,
     sha256_file,
 )
@@ -112,6 +113,8 @@ from verity_vllm.check.match.record import (
 from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.log import init_logger
 from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
+
+__all__ = ["Options", "main"]
 
 logger = init_logger(__name__)
 
@@ -194,16 +197,18 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
             tokens = json.load(f)
     rec = read_record(log_path)
     mark("read_record")
+    declared = gp.get("requests")       # a document that is not this checker's declaration (refused below by its schema) may hold none
+    built = gp.get("gprog_artifact")    # what `from_gprog` records of the Build artifact it read; a declaration not read from one has none
     res: dict[str, Any]
     res = {"schema": GM_SCHEMA, "comparator": COMPARATOR, "rules_version": RULES_VERSION,
            "utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "oracle_dir": oracle_dir, "log": log_path,
            "global_program": {"schema": gp.get("schema"), "builder": gp.get("builder"), "workload": gp.get("workload"),
-                              "workload_digest": gp.get("workload_digest"), "n_requests": len(gp.get("requests") or []),
+                              "workload_digest": gp.get("workload_digest"), "n_requests": len(declared) if declared else 0,
                               # whether this checker recomputed the Build artifact's digest from its descriptor (from_gprog)
-                              "digest_verification": (gp.get("gprog_artifact") or {}).get("digest_verification"),
+                              "digest_verification": built.get("digest_verification") if built else None,
                               # component dirs the Build recorded on another host, resolved beside its artifact (relocate_components); G4
                               # cross-checks every loaded component's digest against the Build's claim, so this is traceability, not trust
-                              "relocated_components": (gp.get("gprog_artifact") or {}).get("relocated_components") or {}},
+                              "relocated_components": relocated_components(gp)},
            "chronology_unit": "engine_step", "request_id_convention": "r<k> (k = manifest position; record UUIDs mapped via workload_request_id)",
            "within_step_criterion": within_step,
            "within_step_note": ("sequence: X-09 instance sequence per request step (r14-v1 verdict)" if within_step == "sequence" else
@@ -218,7 +223,7 @@ def _check(gp: dict, oracle_dir: str, log_path: str | None, tokens_path: str | N
     G = {r["request_id"]: r for r in gp["requests"]}
 
     # ---------------------------------------------------------------- the fold (meta channel of the record) + canonical request ids
-    comp_dirs = [g["component"]["dir"] for g in gp["requests"] if (g.get("component") or {}).get("dir")]
+    comp_dirs = [g["component"]["dir"] for g in gp["requests"] if g.get("component") and g["component"].get("dir")]
     comp_dirs += [d for d in _loaded.get(X09_EXTRA_DERIVED) or () if d not in comp_dirs]   # shapes derived at Match time (--derived)
     B = _loaded.get("oracle")
     if B is None:
@@ -333,7 +338,7 @@ def impl_banner(mod, gp: dict | None = None) -> str:
         parts.append(f"compact_args={settings.get(GMF.COMPACT_ENV)}")
     else:
         parts.append("single process, no memo (the audit checker; hours and tens of GB on a batched row -- MATCH_IMPL=fast is the Match of record)")
-    reloc = ((gp or {}).get("gprog_artifact") or {}).get("relocated_components") or {}
+    reloc = relocated_components(gp)
     if reloc:
         parts.append(f"relocated_components={len(reloc)} (Build recorded {next(iter(reloc.values()))['from']!r} ...)")
     return " ".join(parts)
