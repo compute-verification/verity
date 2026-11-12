@@ -3,24 +3,32 @@
 (`flock-verify verify --zk --registered`), and the stop stream's outcome with its audit record.
 
     python benchmarks/one_stage/stop_audit.py --stage1 F --boundary DIR --stop JSON --design rate:NUM/DEN \\
-      --bin flock-circuit --lean flock-verify --out DIR [--boundary-outcome F] [--firewall flock-firewall] [--forge I,J]
+      --words F --certifier F --words-opening F --bin flock-circuit --lean flock-verify --out DIR \\
+      [--boundary-outcome F] [--firewall flock-firewall] [--forge I,J] [--engine-words]
 
 * **The statement** (`member`, `bound`, `circuit`, from public items: the stop block and the stop population's
   partition, which the verifier takes from its own layout and holds the prover's circuit file to). One
-  flat statement over the class's N stop blocks, unit i span i's, whose three ports are all registered reads: ``request``
-  and ``ids`` are rows of the class's boundary record's `b.request` and `b.egress`, and the output row ``o0`` is the stop
-  record's `b.stop` row, each at span i's position under the root its record registers. A stop block's rows are short:
+  flat statement over the class's N stop blocks, unit i span i's, whose three ports are all registered reads: ``words``
+  is a row of the class's certified words table, the network certifier's, ``ids`` a row of the class's boundary
+  record's `b.egress`, and the output row ``o0`` the stop record's `b.stop` row, each at span i's position under the
+  root its record registers. A stop block's rows are short:
   Flock's circuit file takes the statement only where a row has a compression before its last block, an ``ids`` row of
   112 bytes or more, which is a class of 32 outputs or more.
-* **The prover's half** (`opened`, `staged`: the only code here that reads the class's private files). It opens the
-  serve's own trees again from the spans and the salts (`boundary_rows.reopen`) and stages every stop block on the
-  serve's rows, salts and frame-v3 paths, so each row's ``b || c`` is the one the serve committed. ``--forge`` is a
-  negative's prover: those spans' `b.stop` word is committed with bit 0 flipped, a length that is not the rule's, and
-  proved with the prover's self-check skipped.
+* **The prover's half** (`opened`, `staged`: the only code here that reads the class's private files and the
+  certifier's opening of the words table, ``--words-opening``). It opens the serve's own trees again from the spans
+  and the salts (`boundary_rows.reopen`) and stages every stop block on the serve's rows, salts and frame-v3 paths,
+  and on the certifier's rows, salts and paths for ``words``, so each row's ``b || c`` is the one its owner committed.
+  Two negatives' provers, each proved with the prover's self-check skipped: ``--forge``, those spans' `b.stop` word
+  committed with bit 0 flipped, a length that is not the rule's; and ``--engine-words``, every block staged on the
+  engine's own ``max_tokens`` and count of prompt ids under the certifier's salts and paths, as a prover does that
+  proves the length it served where the certifier released another request.
 * **The verifier's half** (`resume`, `reads`, `circuit`, `decide`), from ``stage1.json``, the verifier's own check template, stop
-  rule and sampling design, and the session's public files; it opens no file of the class's directory.
+  rule and sampling design, its read of the certifier's signed head (``--words`` under ``--certifier``:
+  `stop_words.read`) and the session's public files; it opens no file of the class's directory and never the
+  certifier's opening.
   The boundary record is the one the class's boundary stream registers again (`two_stage.resume`), never one rebuilt
-  from ``commit.json``. The stop stream is built again on it, registers the stop record (R1 to R7) and samples it
+  from ``commit.json``. The stop stream is built again on it, registers the stop record (R1 to R8, the words table a
+  certified value under the root the verifier's read gives) and samples it
   again on the bytes its sample read; each is held to ``stage1.json``. The ``--registered`` file is the verifier's
   own: the two parameters' ports as `boundary_stop.stop_registration` gives them, and ``o0`` at the stop record's
   root.
@@ -41,7 +49,12 @@
                            its reason, when that audit record accepted and is not complete (it accepted with
                            entries that did not run, and is no audit of those); accepted when it accepted and
                            is complete
-      request-row          null: nothing holds `b.request`'s words to the certified request
+      certified-words      the statement's read of the class's certified words table, as the Lean verifier's
+                           registered reads make it of the ``words`` port (`boundary_stop.read_refusal`): every table
+                           row opens the root the certifier signed at its position, and block r reads row r, its
+                           release's. Refused under the read's own key (``stop-read-none``, ``stop-read-root``,
+                           ``stop-read-row``), with the fix in its reason. Its premise: the head and the certifier's
+                           key are the driver's parameters
       stop-rule            null: nothing holds ``--stop`` to the pinned checkpoint
 
   ``case`` is Lean's, of the whole read: 1 when the log and the order hold and the boundary stream's audit record
@@ -79,6 +92,7 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 import prove_leg as PL  # noqa: E402
+import stop_words as SW  # noqa: E402
 import two_stage as TS  # noqa: E402
 import verity.definitions.registry.boolean_stop_rule  # noqa: E402, F401  (the stop rule's words on gates: Flock's pieces for them)
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
@@ -97,14 +111,15 @@ TOOL = "benchmarks/one_stage/stop_audit.py"
 MEMBER, OUT = "stop", "o0"
 
 LEAN, M0, READS = f"lean-verify/{MEMBER}", f"m0-verifier/{MEMBER}", "registered-reads"
-ORDER, BOUNDARY_AUDIT, REQUEST_ROW, STOP_RULE = TS.ORDER_REFUSED, "boundary-audit", "request-row", "stop-rule"
+ORDER, BOUNDARY_AUDIT, WORDS, STOP_RULE = TS.ORDER_REFUSED, "boundary-audit", "certified-words", "stop-rule"
 #: the tool of an entry that is the Lean verifier's piece ``across``'s verdict
 ACROSS = f"{V.EXE} across"
 #: of every entry that reads the boundary stream's audit record: ``boundary-audit``, and ``cross-stream-order``'s ``case``
 BOUNDARY_PREMISE = ("boundary stream's audit: read from the audit record the audit driver hands; Lean checks its format "
                     "and registration and reads its `accepted` and `complete`; nothing holds it to the record the "
                     "boundary stream's verifier wrote")
-REQUEST_PREMISE = "request row: the engine's words, not held to the certified request"
+WORDS_PREMISE = ("certified words: the network certifier's signed head and the verifier's copy of its key are the "
+                 "driver's parameters, not held to a registered certifier")
 NOT_COMPLETE = "the boundary stream's audit record accepted with entries that did not run: it is not complete"
 STOP_RULE_PREMISE = "stop rule: the driver's parameter, not held to the pinned checkpoint"
 
@@ -124,10 +139,11 @@ def sha512(obj: Any) -> str:
 # --- public: the statement --------------------------------------------------------------------------------------------
 
 def member(layout: BR.Layout, values: Mapping[str, np.ndarray] | None = None, **more: Any) -> PL.Member:
-    """The stop population as the proof leg's one member: the verifier's stop block, its two parameters' rows (each of
-    its boundary value's words) and its one output row, all bit rows of the class's schema. ``values``: the prover's
-    rows, by parameter."""
-    rows = [(r, BR.SCHEMA, 16 * layout.words(port), [r]) for r, port in BS.STOP_READS.items()]
+    """The stop population as the proof leg's one member: the verifier's stop block, its two parameters' rows (the
+    certified words' two u32, and its boundary value's words) and its one output row, all bit rows of the class's
+    schema. ``values``: the prover's rows, by parameter."""
+    rows = [(BS.WORDS, BR.SCHEMA, 32 * len(BS.COLUMNS), [BS.WORDS]),
+            *((r, BR.SCHEMA, 16 * layout.words(port), [r]) for r, port in BS.STOP_READS.items())]
     return PL.Member(MEMBER, layout.stop.template, rows, [(BR.SCHEMA, (0,))], dict(values or {}), **more)
 
 
@@ -155,14 +171,18 @@ def circuit(layout: BR.Layout, out: Path) -> dict[str, str]:
 
 # --- the prover's half ------------------------------------------------------------------------------------------------
 
-def opened(c: BR.Committed, forge: Sequence[int] = ()) -> dict[str, Any]:
+def opened(c: BR.Committed, forge: Sequence[int] = (), table: Any = None, engine: bool = False) -> dict[str, Any]:
     """The class's committed rows as its stop blocks read them, from the prover's own files (``c``,
     `boundary_rows.reopen`'s): by circuit port, the rows, each row's salt and its frame-v3 path in the serve's tree,
     whose root is ``c``'s. ``forge``: spans whose `b.stop` word has bit 0 flipped, as a prover that committed another
-    length than the rule's holds it; the tree is then the one over those words."""
+    length than the rule's holds it; the tree is then the one over those words. ``table``: the network certifier's
+    opening of the class's words table (`stop_words.opened`), whose rows, salts and paths are the ``words`` port's;
+    ``engine``: a negative's prover's, the engine's own two words a span in their place (`stop_words.staged`)."""
     L = c.layout
     if not L.stopped:
         raise ValueError("the class is no stop class: it has no stop blocks")
+    if table is not None and len(table.rows) != L.spans:
+        raise ValueError(f"the certifier's opening holds {len(table.rows)} rows, and the class {L.spans} stop blocks")
     words = BR.port_rows(c.spans, L)
     for i in forge:
         words[BR.STOP][int(i), 0] ^= 1
@@ -181,20 +201,25 @@ def opened(c: BR.Committed, forge: Sequence[int] = ()) -> dict[str, Any]:
         got["salts"][p] = [c.salts[v][i * CS.SALT_BYTES:(i + 1) * CS.SALT_BYTES] for i in range(L.spans)]
         got["paths"][p] = [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in range(L.spans)]
         got["roots"][v] = roots[v].hex()
+    if table is not None:
+        mine = SW.staged(table, SW.parsed(c.spans) if engine else None)
+        for k in ("rows", "salts", "paths"):
+            got[k][BS.WORDS] = mine[k]
+        got["roots"][mine["value"]], got["words"] = mine["root"], mine["value"]
     return got
 
 
-def staged(c: BR.Committed, out: Path, forge: Sequence[int] = ()) -> dict[str, Any]:
+def staged(c: BR.Committed, table: Any, out: Path, forge: Sequence[int] = (), engine: bool = False) -> dict[str, Any]:
     """The prover's statement of the class's stop blocks under ``out`` (`prove_leg.stage`: a0's statement dict, with
-    ``roots``, the trees' roots it opens its rows under): every block on the serve's own rows, salts and paths
-    (`opened`), each port a registered read, so no row is committed a second time. ``forge``: `opened`'s, staged as
-    `prove_leg`'s forged member is. ValueError (`prove_leg.OutsideShape`) for a population whose statement is outside
-    Flock's shape."""
+    ``roots``, the trees' roots it opens its rows under): every block on the serve's own rows, salts and paths and on
+    the certifier's opening ``table`` of its words (`opened`), each port a registered read, so no row is committed a
+    second time. ``forge``: `opened`'s, staged as `prove_leg`'s forged member is; ``engine``: `opened`'s. ValueError
+    (`prove_leg.OutsideShape`) for a population whose statement is outside Flock's shape."""
     L = c.layout
-    mine = opened(c, forge)
+    mine = opened(c, forge, table, engine)
     n = L.spans
-    values = {p: mine["rows"][p] for p in BS.STOP_READS}
-    names = {**{p: p for p in BS.STOP_READS}, OUT: CS.own_value(BR.STOP)}
+    values = {p: mine["rows"][p] for p in (BS.WORDS, *BS.STOP_READS)}
+    names = {BS.WORDS: mine["words"], **{p: p for p in BS.STOP_READS}, OUT: CS.own_value(BR.STOP)}
     kw = {"tables": values, "refs": {p: np.arange(n) for p in values}, "salts": mine["salts"],
           "registered": {p: {"value": v, "positions": list(range(n)), "paths": mine["paths"][p]} for p, v in names.items()}}
     st = PL.stage(member(L, values, forge=tuple(int(i) for i in forge), stage_kw=kw), 0, bound(L), out, os.urandom(32),
@@ -202,12 +227,23 @@ def staged(c: BR.Committed, out: Path, forge: Sequence[int] = ()) -> dict[str, A
     return {**st, "roots": mine["roots"]}
 
 
+def statement_read(st: Mapping[str, Any]) -> dict[str, Any]:
+    """Statement ``st``'s read of the ``words`` port as its public file states it (`staged`'s, `prove_leg.public_bcs`):
+    the header's registered entry of the port (None where it has none), its table rows' ``b || c``, the table row each
+    instance reads and the stop block each instance is. What `boundary_stop.read_refusal` takes."""
+    bcs, refs = PL.public_bcs(Path(st["dir"]) / f"pub-{st['n']}.bin", st["ports"])
+    header = st["header"]
+    return {"entry": (header.get("registered") or {}).get(BS.WORDS), "bcs": [x.hex() for x in bcs.get(BS.WORDS, ())],
+            "refs": [int(x) for x in refs.get(BS.WORDS, ())], "units": [int(u) for u in header["units"]["indices"]]}
+
+
 def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str, lean: str, firewall: str | None = None,
             forged: bool = False, timeout: float = 3600) -> dict[str, Any]:
     """One `--zk` session over statement ``st`` (`staged`'s, with the verifier's ``registered_file``) serving exactly
     the sampled ``units`` (`a0.session`, behind the ZK server when ``firewall`` names Lean's frame), then Lean's
     verdict of record on it (`a0.lean_verify`). ``forged``: the prover's self-check is skipped. -> what `decide` takes:
-    the session's records' SHA-512, the units it served and proved, its instances, the verdicts and its timing."""
+    the session's records' SHA-512, the units it served and proved, its instances, the statement's read of the
+    certified words (`statement_read`), the verdicts and its timing."""
     out.mkdir(parents=True, exist_ok=True)
     n, local = st["n"], sorted(int(u) for u in units)
     (out / "draw.json").write_text(json.dumps({"law": "subset", "population": n, "k": len(local), "units": local},
@@ -224,7 +260,7 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
           "why": ((record or {}).get("verdict") or {}).get("why") or (live or {}).get("why"), "draw_check": v.to_json()}
     return {"sessions": [a0.sha512_file(f) for f in sorted((out / "sessions").glob("*/session.json"))],
             "served": [int(u) for u in draw.get("units", [])], "proved_units": a0.proved_units(st["header"], live or {}),
-            "instances": (live or {}).get("instances", 0),
+            "instances": (live or {}).get("instances", 0), "words": statement_read(st),
             "verdicts": {LEAN: {**lv, "tool": "flock-verify verify --zk --archive --partition --program --registered"},
                          M0: m0},
             "statement": {MEMBER: {"session_s": seconds, "lean_verify_s": lv.get("verify_s"),
@@ -238,13 +274,15 @@ def session(st: Mapping[str, Any], units: Sequence[int], out: Path, *, bin_: str
 class Resumed:
     """A stop class's two streams again at the end of its first stage: the boundary stream's (`two_stage.resume`), and
     the stop stream on the record of its log the stop record names, with the stop record's registration, the copies it
-    was held to and its sample."""
+    was held to, the verifier's read of the class's certified words table and its sample."""
 
     first: TS.First
     stream: S.Stream
     held: Any
     registration: S.WindowCommitmentRecord
     sample: S.Draw
+    #: the verifier's own port of the class's certified words table and the table's domain (`stop_words.read`)
+    words: tuple[Mapping[str, Any], Any]
     #: the boundary record's index in the boundary stream's log
     received: int = 0
 
@@ -258,15 +296,18 @@ class Resumed:
         return self.registration.record["previous"]
 
 
-def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, design: str, *, delta: float = 0.5,
+def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Stop, design: str,
+           words: tuple[Mapping[str, Any], Any] | None, *, delta: float = 0.5,
            proof_deadline: float = TS.PROOF_DEADLINE_S) -> Resumed:
     """The class's stop stream again from its ``stage1.json``, under the verifier's own check template, stop rule and
-    sampling design: the boundary stream's record registered again (`two_stage.resume`), the stop stream built on the
-    record of that stream's log (`Stream.log`) whose digest is the stop record's ``previous``, the stop record
-    registered (R1 to R7) and sampled again on the bytes its sample read. `Unlogged` when that log holds no such
-    record; ValueError when the first stage sampled no stop block, or
-    the Spec, the record, its registration or the sample isn't ``stage1.json``'s; `service.Refused` as the streams
-    refuse."""
+    sampling design and its read of the class's certified words table (``words``, `stop_words.read`'s port and
+    domain; None where the class has none): the boundary stream's record registered again (`two_stage.resume`), the
+    stop stream built on the record of that stream's log (`Stream.log`) whose digest is the stop record's
+    ``previous``, the stop record registered (R1 to R8) and sampled again on the bytes its sample read. `Unlogged`
+    when that log holds no such record; `boundary_stop.StopRefused` when the class has no certified words or the
+    table isn't the class's; `service.Refused` as the streams refuse, ``R7-certified`` for a stop record that
+    registers the table under another root than the verifier's read gives; ValueError when the first stage sampled no
+    stop block, or the Spec, the record, its registration or the sample isn't ``stage1.json``'s."""
     s = stage1.get("stop")
     if not isinstance(s, Mapping) or "units" not in s:
         raise ValueError(f"the class's first stage registered or sampled no stop block: {(s or {}).get('error') or stage1.get('error')}")
@@ -277,29 +318,32 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, stop: BS.Sto
         raise Unlogged(f"the stop record's previous, {str(s['record'].get('previous'))[:16]}, is no record of the class's "
                        f"boundary stream's log, which holds {', '.join(d[:16] for d in logged)}", first)
     received, boundary = logged[s["record"]["previous"]]
-    stream = S.Stream(TS.stop_spec(layout, design, proof_deadline), layout.stop.template, budget=1, delta=delta,
-                      challenger=TS.CHALLENGER, coins=TS.Staged(bytes.fromhex(s["read"])), log=[boundary])
+    port = None if words is None else words[0]
+    held = BS.stop_registration(stage1["commit"], check, stop, boundary, port)
+    stream = S.Stream(TS.stop_spec(layout, design, held.table, proof_deadline), layout.stop.template, budget=1,
+                      delta=delta, challenger=TS.CHALLENGER, coins=TS.Staged(bytes.fromhex(s["read"])), log=[boundary])
     if stream.spec.digest() != s["spec"]:
         raise ValueError("the stop population's Spec isn't the one its first stage ran under")
-    held = BS.stop_registration(stage1["commit"], check, stop, boundary)
-    want = BS.stop_record(stage1["commit"], check, stop, S.selection_law(stream.spec.selection, layout.spans), boundary)
+    reg = stream.register(s["record"], layout.stop_ports(), **held.copies(),
+                          **({} if root is None else {"window_root": root}))
+    want = BS.stop_record(stage1["commit"], check, stop, S.selection_law(stream.spec.selection, layout.spans), boundary,
+                          port)
     if R.digest(want) != R.digest(s["record"]):
         raise ValueError("the stop record isn't the one the class's commitment and its boundary record give")
-    reg = stream.register(s["record"], layout.stop_ports(), registered=held.values, outputs=held.outputs,
-                          schemas=held.schemas, **({} if root is None else {"window_root": root}))
     if reg.digest != s["registration"]:
         raise ValueError("the stop record registers to another digest than its first stage's")
     sample = stream.select(reg)
     if list(sample.units) != list(s["units"]) or sample.draw != s["sample"]:
         raise ValueError("the stop stream samples other stop blocks read again than its first stage did")
-    return Resumed(first, stream, held, reg, sample, received)
+    return Resumed(first, stream, held, reg, sample, words, received)
 
 
 def reads(r: Resumed) -> dict[str, Any]:
     """The verifier's own ``--registered`` file for the stop blocks' statement: each parameter's port as the stop
-    registration gives it (`boundary_stop.stop_registration`: the boundary record's value, root and domain, unit i at
-    row i), and the output row's, the stop record's `b.stop` at its registered root, leaves and domain, unit i at row
-    i, read as `rows.own_value` names a record's own port. Lean refuses a statement that leaves a port out."""
+    registration gives it (`boundary_stop.stop_registration`: ``ids`` the boundary record's value, root and domain,
+    ``words`` the certified table's under the root the certifier signed, unit i at row i), and the output row's, the
+    stop record's `b.stop` at its registered root, leaves and domain, unit i at row i, read as `rows.own_value` names
+    a record's own port. Lean refuses a statement that leaves a port out."""
     L = r.layout
     stop = next(e for e in r.registration.record["roots"] if e["port"] == BR.STOP)
     mine = L.stop_ports()[BR.STOP]
@@ -411,6 +455,24 @@ def reads_entry(file: Mapping[str, Any], lean: Mapping[str, Any]) -> dict[str, A
             "reads": got["chunks"][MEMBER]["reads"]}
 
 
+def words_entry(r: Resumed, read: Mapping[str, Any] | None) -> dict[str, Any]:
+    """The ``certified-words`` entry: the statement's read of the class's certified words table (``read``,
+    `statement_read`'s) against the verifier's own port of it and the table's domain (`boundary_stop.read_refusal`):
+    accepted when every table row opens the root the certifier signed at its position and each stop block reads its
+    own release's row; else refused under the read's key, with the fix in its reason. A session that states no read
+    of the port reads no row. The entry names the table, its root and its count, and its premise (`WORDS_PREMISE`)."""
+    port, dom = r.words
+    entry = {"of_record": False, "tool": TOOL, "premise": WORDS_PREMISE, "value": port["value"], "root": port["root"],
+             "rows": port["leaves"]}
+    read = read or {}
+    try:
+        refused = BS.read_refusal(port, dom, read.get("entry"), [bytes.fromhex(x) for x in read.get("bcs", ())],
+                                  read.get("refs"), read.get("units"))
+    except (KeyError, TypeError, ValueError) as e:
+        return {**entry, "accepted": False, "why": f"the statement's read of the words port doesn't read: {e}"}
+    return {**entry, "accepted": refused is None, **({} if refused is None else {"key": refused.key, "why": str(refused)})}
+
+
 def verdicts_of(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], proved: Mapping[str, Any],
                 outcome: Mapping[str, Any] | None = None) -> dict[str, dict[str, Any]]:
     """The audit record's verdicts (module docstring): the session's, Lean's of record naming the sessions delivered,
@@ -422,7 +484,7 @@ def verdicts_of(r: Resumed, stage1: Mapping[str, Any], file: Mapping[str, Any], 
     refused = {"accepted": False, "why": f"Lean refused the read: {lean.get('refused')}"}
     got[BOUNDARY_AUDIT] = boundary_entry(r.boundary, outcome, refused if "refused" in lean else lean.get("audit") or {})
     got[ORDER] = order_entry(r, lean, got[BOUNDARY_AUDIT]["audit"])
-    got[REQUEST_ROW] = {"accepted": None, "of_record": False, "premise": REQUEST_PREMISE}
+    got[WORDS] = words_entry(r, proved.get("words"))
     got[STOP_RULE] = {"accepted": None, "of_record": False, "premise": STOP_RULE_PREMISE}
     return got
 
@@ -487,6 +549,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                                        "runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--forge", default="", help="a negative's prover: these spans' b.stop word committed with bit 0 "
                                                 "flipped, the class's commitment holding that tree's root")
+    ap.add_argument("--words", help=SW.WORDS_HELP)
+    ap.add_argument("--certifier", help=SW.CERTIFIER_HELP)
+    ap.add_argument("--words-opening", help=SW.OPENING_HELP)
+    ap.add_argument("--engine-words", action="store_true",
+                    help="a negative's prover: every stop block staged on the engine's own max_tokens and count of prompt "
+                         "ids, under the certifier's salts and paths")
     ap.add_argument("--delta", type=float, default=0.5)
     ap.add_argument("--proof-deadline", type=float, default=TS.PROOF_DEADLINE_S)
     ap.add_argument("--session-timeout", type=float, default=3600)
@@ -509,21 +577,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         if stop is None:
             raise ValueError("a stop population is audited under the verifier's own stop rule: --stop")
         # the verifier's half, from stage1.json and its own copies
-        r = resume(stage1, check, stop, a.design, delta=a.delta, proof_deadline=a.proof_deadline)
+        r = resume(stage1, check, stop, a.design, SW.read_files(a.words, a.certifier), delta=a.delta,
+                   proof_deadline=a.proof_deadline)
         file = reads(r)
         (out / "registered.json").write_bytes(canonical_json(file))
         mine = {**files(r.layout, out / "verifier"), "registered_file": out / "registered.json"}
         own = circuit(r.layout, out / "verifier")
-        # the prover's half: the one place the class's private files are read
-        st = staged(BR.reopen(Path(a.boundary), check, stop=stop), out / "prover", forge)
+        # the prover's half: the one place the class's private files and the certifier's opening are read
+        if a.words_opening is None:
+            raise ValueError("the prover stages its stop blocks' words on the certifier's opening: --words-opening")
+        table = SW.opened(json.loads(Path(a.words_opening).read_text()))
+        st = staged(BR.reopen(Path(a.boundary), check, stop=stop), table, out / "prover", forge, a.engine_words)
         if (st["pin"], a0.sha512_file(st["dir"] / "circuit.txt")) != (own["pin"], own["circuit_sha512"]):
             raise ValueError("the prover's circuit file is not the one the verifier's own stop block lowers to")
         if st["roots"][BR.STOP] != file["ports"][OUT]["root"]:
             raise ValueError("the prover's b.stop tree is not the one the stop record registers"
                              + ("" if forge else ": a class forged at registration is proved with --forge"))
         proved = session({**st, **mine}, r.sample.units, out / "session", bin_=a.bin, lean=a.lean, firewall=a.firewall,
-                         forged=bool(forge), timeout=a.session_timeout)
+                         forged=bool(forge) or a.engine_words, timeout=a.session_timeout)
         got = decide(r, stage1, file, proved, outcome)
+    except BS.StopRefused as e:
+        return done(1, {"format": FORMAT, "accepted": False, "complete": False, "length_held": False,
+                        "refused": [e.key], "error": str(e)})
     except Unlogged as e:
         lean = across(stage1, e.first, outcome)
         return done(1, {"format": FORMAT, "accepted": False, "complete": False, "length_held": False,
