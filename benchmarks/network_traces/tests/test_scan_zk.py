@@ -237,6 +237,40 @@ def test_every_port_of_every_member_is_registered_a_ports_own_rows_at_its_frame_
     assert u.outputs == [0] and u.refused is None
 
 
+def test_every_rounds_own_o0_rows_meet_one_set_of_frame_domains_its_templates_and_counts(tmp_path):
+    """A scan member's statement's input set is its template's (`scan_zk.set_of`), naming no round and no
+    link-window, so the frame domain of a port it registers as its own rows (`scan_zk.Frame`) is a function of its
+    template, its unit count and the port: the o0 domains computed once from a group's templates and counts are the
+    ones every round's registered o0 names, a link-window's member's those of the next's, and the unread round's one
+    unit's the last ingress unit's, whose o1's is its own in both its rounds. A block member's set is its run's
+    (`block_set`), so its domains are no other run's."""
+    G, T = 2, sz.TEST.params.window
+    h = sz.host(tmp_path / "a", setup=sz.TEST, group=G)
+    once = {(tp, n): sz.ADV.domain(sz.frame_binding(sz.set_of(tp), n, "o0"), n).domain_id.hex()
+            for tp, n in (("first", 1), ("ingress", T - 1), ("ingress", 1), ("egress", T))}
+    assert len(set(once.values())) == len(once)
+    met = {}
+    for name in ("honest", "chain", "tampered", "unread"):
+        for m in h.rounds[name]:
+            assert m.set_name == sz.set_of(m.template) and "o0" in m.framed, (name, m.name)
+            assert m.ports["o0"]["domain"] == once[m.template, m.n], (name, m.name)
+            met.setdefault((m.template, m.n), []).append((name, m.name))
+    assert {k: sorted(v) for k, v in met.items()} == {
+        ("first", 1): [("chain", "first"), ("honest", "first")],
+        ("ingress", T - 1): [(r, f"ingress-{w}") for r in ("chain", "honest") for w in range(G)],
+        ("ingress", 1): [("chain", "last"), ("honest", "last"), ("unread", "ingress-0")],
+        ("egress", T): [(r, f"egress-{w}") for r in ("chain", "honest", "tampered") for w in range(G)]}
+    lasts = [m for name in ("honest", "chain") for m in h.rounds[name] if m.name == "last"]
+    assert [m.framed for m in lasts] == [["o0", "o1"]] * 2
+    assert {m.ports["o1"]["domain"] for m in lasts} == {
+        sz.ADV.domain(sz.frame_binding(sz.set_of("ingress"), 1, "o1"), 1).domain_id.hex()}
+    other = sz.host(tmp_path / "b", setup=sz.TEST, group=G)
+    assert [m.set_name for m in h.rounds["block"]] == h.at.block_sets and len(set(h.at.block_sets)) == sz.TEST.cls.NR
+    assert not set(h.at.block_sets) & set(other.at.block_sets)
+    assert not {m.ports["x"]["domain"] for m in h.rounds["block"]} & {
+        m.ports["x"]["domain"] for m in other.rounds["block"]}
+
+
 XOR8 = PrimitiveDefinition("ScanZkTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
                            register=False)
 
