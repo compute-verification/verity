@@ -87,11 +87,7 @@ from verity_vllm.check.replay.linkage import (
     boundary_linkage,
     linkage_horizon,
 )
-from verity_vllm.check.replay.opening import (
-    CommittedStore,
-    bound_identity,
-    model_weights_provider,
-)
+from verity_vllm.check.replay.opening import CommittedStore, model_weights_provider
 from verity_vllm.check.replay.population import (
     executed_prefix_of_record,
     moe_plane_alias_check,
@@ -646,8 +642,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     t_start = time.perf_counter()
     store = CommittedStore.of_record(bmap, committed, manifest)                 # reads through the manifest's alias table
     arrivals = arrivals or {}
-    entries = bmap.get("entries")                                               # as the store reads them: a map that states none binds nothing
-    ranks = sorted({int(bound_identity(e).get("rank", 0) or 0) for e in (entries if entries else [])}) or [0]
+    ranks = sorted({int((e.get("identity") or {}).get("rank", 0) or 0) for e in (bmap.get("entries") or [])}) or [0]
     all_vus, not_ev, not_ev_fam, indices, codes, addresses, anchors, addr_rec = populate(
         programs, ranks, arrivals, executed_prefix, ring_slots, attention_paths=attention_paths, tp=tp, program_dirs=program_dirs, manifest=manifest, memo=memo,
         cached_prefixes=cached_prefixes)

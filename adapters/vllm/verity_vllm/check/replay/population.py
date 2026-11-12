@@ -23,7 +23,7 @@ from verity_vllm.check.replay.index import (
     node_runs,
     plane_copies,
 )
-from verity_vllm.check.replay.opening import CommittedStore, bound_identity
+from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.check.replay.replay_codes import NOT_YET, why_class
 from verity_vllm.program.lifting.continuation import executed_prefix_by_rule
 from verity_vllm.query.manifest import format as RM
@@ -106,7 +106,7 @@ def moe_plane_alias_check(store: CommittedStore) -> dict[str, Any]:
             continue
         rng = None
         for e in es:                                                            # the bound request-local range (every invocation under the key)
-            r = bound_identity(e).get("element_range") or [0, None]
+            r = (e.get("identity") or {}).get("element_range") or [0, None]
             if r[1] is not None:
                 rng = (int(r[0]), int(r[1])) if rng is None else (min(rng[0], int(r[0])), max(rng[1], int(r[1])))
         if rng is not None:

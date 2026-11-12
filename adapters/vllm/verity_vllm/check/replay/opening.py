@@ -35,10 +35,7 @@ def alias_table(manifest: RequiredManifest | dict[str, Any] | None) -> dict[str,
     (`CommittedStore.words`) resolve through THIS table and no other -- the two never disagree on which identity a Program path names."""
     if isinstance(manifest, RequiredManifest):
         return {str(k): (str(v[0]), int(v[1])) for k, v in (manifest.op_path_aliases or {}).items()}
-    if manifest is None:
-        return {}
-    aliases = (manifest or {}).get("op_path_aliases")                            # a manifest that states none: every path names itself
-    return {str(k): (str(v[0]), int(v[1])) for k, v in (aliases if aliases else {}).items()}
+    return {str(k): (str(v[0]), int(v[1])) for k, v in ((manifest or {}).get("op_path_aliases") or {}).items()} if manifest is not None else {}
 
 
 def resolve_op_path(aliases: dict[str, tuple[str, int]], op_path: str) -> tuple[str, int]:
@@ -47,15 +44,8 @@ def resolve_op_path(aliases: dict[str, tuple[str, int]], op_path: str) -> tuple[
     return aliases.get(op_path, (op_path, 0))
 
 
-def bound_identity(e: dict) -> dict:
-    """The identity a binding-map entry binds (request, engine step, op_path, member, invocation, rank, element range); an entry that
-    states none binds nothing, and each reader has its own answer for a field such an identity leaves out."""
-    ident = e.get("identity")
-    return ident if ident else {}
-
-
 def _invocation(e: dict) -> int:
-    return int(bound_identity(e).get("invocation", 0) or 0)
+    return int((e.get("identity") or {}).get("invocation", 0) or 0)
 
 
 class WordStore(Protocol):
@@ -86,9 +76,8 @@ class CommittedStore:
         # accepts the manifest's raw form (alias -> [canonical, invocation]) or the parsed table (alias -> (canonical, invocation))
         self.aliases: dict[str, tuple[str, int]] = {str(k): (str(v[0]), int(v[1])) for k, v in (aliases or {}).items()}
         self.idx: dict[tuple, list[dict]] = {}
-        entries = bmap.get("entries")                                            # a map that states no entries binds nothing
-        for e in entries if entries else []:
-            ident = bound_identity(e)
+        for e in bmap.get("entries") or []:
+            ident = e.get("identity") or {}
             if "step" not in ident:
                 continue
             key = (str(ident.get("request_id", "r0")), int(ident["step"]), str(ident.get("op_path")), str(ident.get("output_member")))
@@ -126,7 +115,7 @@ class CommittedStore:
             return None, f"no committed identity for ({rid}, step {step}, {op_path}/{member}){via}{have}"
 
         def _covers(x: dict) -> bool:
-            r = bound_identity(x).get("element_range") or [0, None]
+            r = (x.get("identity") or {}).get("element_range") or [0, None]
             return r[1] is not None and int(r[0]) <= elo and ehi <= int(r[1])
 
         cov = [x for x in es if _covers(x)]
@@ -135,12 +124,11 @@ class CommittedStore:
             return None, (f"ambiguous binding: {len(cov)} entries for ({rid}, step {step}, {op_path}/{member}) [invocation {inv_min}] cover "
                           f"[{elo}, {ehi}) -- {where}; C1 requires one unambiguous binding per required identity")
         e = cov[0] if cov else es[0]
-        ident = bound_identity(e)
+        ident = e.get("identity") or {}
         rng = ident.get("element_range") or [0, None]
         if not cov:
             return None, f"element slice [{elo}, {ehi}) outside the bound identity range {rng} of ({rid}, step {step}, {op_path}/{member})"
-        encoding = e.get("encoding")                                             # an entry that states none has no dtype the store knows
-        dtype = str((encoding if encoding else {}).get("dtype") or "")
+        dtype = str((e.get("encoding") or {}).get("dtype") or "")
         isz = _ITEMSIZE.get(dtype)
         if isz is None:
             return None, f"unknown dtype {dtype!r} of ({rid}, step {step}, {op_path}/{member})"
