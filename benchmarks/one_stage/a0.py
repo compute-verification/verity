@@ -35,6 +35,7 @@ from verity.circuits.program import Program
 from verity_flock.input_sets import InputSet
 from verity.protocols.spot.device import challenger as Ch, coins as CC
 from verity.protocols.spot.verifier.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.protocols.spot.verifier.one_stage.proofs import verifier_env
 
 import r2_population as R2
 
@@ -497,7 +498,8 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
     (a templated one's ``verity/flock-circuit/tmpl``), else `STATEMENT_ID`. The verdict keeps what `verify` names of the
     public file's header, the registered reads, the sample and the tables it checked the session against
     (``public_header_sha512``, ``registered_sha512``, ``unit_draw``, ``session_tables``), which the second stage's audit
-    holds each statement to."""
+    holds each statement to. `verify` runs in `verifier_env`: under the verifier's allocator setting unless this process's
+    environment sets its own."""
     sessions = sorted((out / "sessions").glob("*/session.json"))
     if not sessions:
         return {"accepted": False, "of_record": True, "why": "no session recorded"}
@@ -511,7 +513,7 @@ def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: s
             *(["--zk"] if zk else []), *flags, "--session", str(sessions[-1].parent)]
     t = time.time()
     if members is None:
-        p = run([lean, "verify", *args], out / f"{log}.log")
+        p = run([lean, "verify", *args], out / f"{log}.log", env=verifier_env())
         stdout, none = p.stdout, f"no verdict (rc {p.returncode}): {p.stderr[-400:]}"
     else:
         stdout, none = members.verify(args, out / f"{log}.log")
