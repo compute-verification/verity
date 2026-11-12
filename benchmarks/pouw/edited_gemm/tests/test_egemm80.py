@@ -1,8 +1,10 @@
 """egemm80.py's SASS gate on made-up disassembly: a k-stage loop that holds each arm's MMAs, loads and fold passes, and
-each thing the gate refuses is refused by its own reason."""
+each thing the gate refuses is refused by its own reason. Its summary of a made-up run dir: an arm's cycles a MMA from the
+bench and the hold, and a line cut off in a write named rather than dropped."""
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -76,3 +78,35 @@ def test_each_refusal_names_its_reason(tmp_path, change, why):
 def test_a_missing_arm_fails_the_gate(tmp_path):
     g = run_gate(tmp_path, {arm: loop_ops(arm) for arm in E.SHAPE if arm != "e64"})
     assert not g["ok"] and g["missing"] == ["e64"] and all(v["refused"] == [] for v in g["arms"].values())
+
+
+def run_dir(tmp_path: Path, hold_tail: str = "") -> Path:
+    """A run's files for e32 at 256 x 256 x 256 (KT = 2, 1,024 MMAs of first stage and peel): 2 ms a call at 1,000 MHz
+    on 10 SMs, in the bench and in the hold."""
+    g = run_gate(tmp_path, {arm: loop_ops(arm) for arm in E.SHAPE})
+    (tmp_path / "gate-sass.json").write_text(json.dumps(g))
+    (tmp_path / "meta.json").write_text(json.dumps({"run_id": "a-run", "M": 256, "N": 256, "K": 256}))
+    (tmp_path / "ref.jsonl").write_text('reading the gate\n{"ok": true}\n')
+    item = {"gk": "item", "arm": "e32", "ms": 4.0, "calls": 2, "sm_mhz": {"during": 1000, "after": 900}, "throttle": "0x0"}
+    (tmp_path / "bench.jsonl").write_text(json.dumps({"arm": "e32", "mmas": 2024, "sms": 10}) + "\n" + json.dumps(item) + "\n")
+    hold = {"ms_per_call": 2.0, "sm_mhz": 1000, "mmas": 2024, "sms": 10, "throttle": "0x0"}
+    (tmp_path / "hold-e32.jsonl").write_text((json.dumps(hold) + "\n") * 2 + hold_tail)
+    return tmp_path
+
+
+def test_the_summary_of_a_run(tmp_path):
+    s = E.summary(run_dir(tmp_path))
+    assert (s["run"], s["M"], s["sass_gate"], s["ref"], s["poison_gate"]) == ("a-run", 256, True, {"ok": True}, [])
+    assert "skipped_lines" not in s
+    e32 = s["arms"]["e32"]
+    assert e32["bench"] == {"ms": 2.0, "nvml_mhz": 1000, "cycles_per_mma": round(8e7 / 2024, 4), "throttle": ["0x0"],
+                            "cycles_per_main_mma": 80000.0}
+    assert e32["hold"] == {"seconds": 2, "ms": 2.0, "nvml_mhz_steady": 1000, "nvml_mhz_min": 1000, "nvml_mhz_max": 1000,
+                           "cycles_per_main_mma": 80000.0, "throttle": ["0x0"]}
+    assert e32["per_mma"]["IMMA16832"] == 0.5 and e32["per_mma"]["LDSM_X4"] == 0.25
+    assert set(s["arms"]["e64"]) == {"refused", "per_mma"}
+
+
+def test_a_line_cut_off_in_a_write_is_named(tmp_path):
+    s = E.summary(run_dir(tmp_path, hold_tail='{"ms_per_call": 2.0, "sm_m'))
+    assert s["skipped_lines"] == ["hold-e32.jsonl:3"] and s["arms"]["e32"]["hold"]["seconds"] == 2
