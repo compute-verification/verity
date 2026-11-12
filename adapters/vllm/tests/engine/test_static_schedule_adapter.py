@@ -22,7 +22,7 @@ def _va():
 @pytest.fixture
 def fake_vllm(monkeypatch):
     mod = types.ModuleType("vllm")
-    mod.SamplingParams = lambda **kw: SimpleNamespace(**kw)
+    mod.__dict__.update(SamplingParams=lambda **kw: SimpleNamespace(**kw))
     monkeypatch.setitem(sys.modules, "vllm", mod)
 
 

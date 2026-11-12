@@ -65,7 +65,6 @@
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "l40"},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "l40s"},
     {"file": "verity_vllm/config.py", "kind": "gpu", "symbol": "<module>", "detail": "rtx4090"},
-    {"file": "verity_vllm/engine/run_facts.py", "kind": "gpu", "symbol": "<module>", "detail": "rtx4090"},
     {"file": "verity_vllm/observe/fold/patterns/dsv4.py", "kind": "model", "symbol": "<module>", "detail": "deepseek"},
     {"file": "verity_vllm/observe/fold/patterns/fp8.py", "kind": "sm-arch", "symbol": "CutlassScaledMmFp8Block.match", "detail": "sm_90"},
     {"file": "verity_vllm/observe/runtime_tree.py", "kind": "layer-class", "symbol": "meta_runtime_tree", "detail": "Sampler"},

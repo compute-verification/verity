@@ -54,8 +54,8 @@ import json
 import os
 import shutil
 import struct
-import sys
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -64,6 +64,9 @@ import numpy as np
 
 from verity_vllm import config as C
 from verity_vllm.config import UsageError, option
+from verity_vllm.log import init_logger
+
+logger = init_logger(__name__)
 
 RECIPE = "verity-fp8-block128/v1"
 BLOCK = 128
@@ -154,9 +157,9 @@ class Recipe:
     #: the 2-D shapes copied as they are, not made (a MoE's routers, set by `make`)
     kept: tuple[tuple[int, int], ...] = ()
     lm_head: bool = False
-    plan: Callable[[dict[str, Any], "Recipe"], Any] | None = None
-    shard: Callable[[Path, Path, Any, "Recipe"], tuple[dict[str, Any], dict[str, str], int, int]] | None = None
-    config: Callable[[bytes, "Recipe", dict[str, tuple[str, list[int]]]], bytes] | None = None
+    plan: Callable[[dict[str, Any], Recipe], Any] | None = None
+    shard: Callable[[Path, Path, Any, Recipe], tuple[dict[str, Any], dict[str, str], int, int]] | None = None
+    config: Callable[[bytes, Recipe, dict[str, tuple[str, list[int]]]], bytes] | None = None
 
 
 FP8 = Recipe(id=RECIPE, weight_dtype="F8_E4M3", scale_suffix="weight_scale_inv", rows_per_scale=BLOCK,
@@ -338,7 +341,6 @@ def map_shards(fn: Callable[..., Any], args: list[tuple[Any, ...]], jobs: int = 
     sha256 release the GIL)."""
     if jobs <= 1 or len(args) <= 1:
         return [fn(*a) for a in args]
-    from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(min(jobs, len(args))) as pool:
         return list(pool.map(lambda a: fn(*a), args))
 
@@ -382,14 +384,14 @@ def make(base_dir: Path, out_dir: Path, shards: list[str], *, base_repo: str, ba
                           indent=2, sort_keys=True) + "\n").encode()
         (out_dir / INDEX).write_bytes(idx)
         files[INDEX] = {"sha256": hashlib.sha256(idx).hexdigest(), "size": len(idx), "digest_source": "recipe"}
-    made = {n: d["sha256"] for n, d in files.items()}
+    sha256s = {n: d["sha256"] for n, d in files.items()}
     for p in sorted(base_dir.rglob("*")):
         rel = p.relative_to(base_dir).as_posix()
         if p.is_file() and rel not in files and rel != INDEX and any(fnmatch.fnmatch(rel, pat) for pat in COPY_PATTERNS):
             (out_dir / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(p, out_dir / rel)
             files[rel] = {"sha256": _sha256(out_dir / rel), "size": (out_dir / rel).stat().st_size, "digest_source": "base"}
-    return {"revision": pin_revision(base_repo, base_revision, made, recipe), "files": dict(sorted(files.items())),
+    return {"revision": pin_revision(base_repo, base_revision, sha256s, recipe), "files": dict(sorted(files.items())),
             "config_sha256": files[CONFIG]["sha256"], "safetensors_sha256": {fn: files[fn]["sha256"] for fn in shards}}
 
 
@@ -409,9 +411,10 @@ def snapshot_dir(hf_home: str, repo: str, revision: str) -> Path:
 
 def base_entry(entry: dict[str, Any], entries: list[dict[str, Any]], recipe: Recipe = FP8) -> dict[str, Any]:
     """The BF16 pin a recipe entry was made from (its `recipe.base_repo` at `recipe.base_revision`, with shard sha256s)."""
-    r = entry.get("recipe") or {}
-    if r.get("id") != recipe.id:
-        raise UsageError(f"{entry.get('role')}: recipe {r.get('id')!r} is not {recipe.id!r}")
+    r = entry.get("recipe")
+    rid = None if r is None else r.get("id")
+    if r is None or rid != recipe.id:
+        raise UsageError(f"{entry.get('role')}: recipe {rid!r} is not {recipe.id!r}")
     hits = [c for c in entries if c.get("repo") == r.get("base_repo") and c.get("revision") == r.get("base_revision")
             and c.get("safetensors_sha256")]
     if not hits:
@@ -518,5 +521,5 @@ def run(a: Any, recipe: Recipe, command: str) -> int:
              "resolved_at": a.at, "resolved_by": a.by, "revision": pin["revision"], "role": a.role,
              "safetensors_sha256": pin["safetensors_sha256"]}
     print(json.dumps(entry, indent=1))
-    print(f"made {pin['local_path']}", file=sys.stderr)
+    logger.info("made %s", pin["local_path"])
     return 0
