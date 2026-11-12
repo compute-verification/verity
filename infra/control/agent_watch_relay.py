@@ -40,7 +40,12 @@ issue in its name. A dropped message's sentence says only what its record holds 
 that the agent's conversation ended on a message it wrote nothing after, or that the API gave no conversation and this is
 unchecked. Several workers of one parent that
 stopped together come as one `workers_failed`, posted and rung once to the lane's handle
-with each worker named, one in ERROR said so, and the wake-up it says it set. A handle renamed in the registry ("renamed from @OLD") is rung by its new
+with each worker named, one in ERROR said so, and the wake-up it says it set. A hand-in that has waited two hours on
+a swarm's integrator (`handin_waiting`: a comment on the issue it takes hand-ins on, with none signed by the integrator
+after it) leads with the integrator's lane's handle and rings it, once per such comment, linking the issue and saying who
+signed the comment, how many wait with it, and the command that signs a comment as the integrator's own, without which its
+answers don't count. A handle
+renamed in the registry ("renamed from @OLD") is rung by its new
 name. The pod frees held runs whether or not this runs; this relay stops with the pod, and resumes from the offset it last
 posted.
 
@@ -113,10 +118,12 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
        "held_unread": "did nothing itself for {minutes} min since {since} while a worker it waits on streamed, so its "
                       "follow-ups sat unread ({reason}); the watch {action}",
        "unplaced": "is under no lane: no Task call the watch saw, workers.d entry or brief gives it a launcher that a "
-                   "handle owns, however many workers up, and no workers.d entry or note gives it a lane"}
+                   "handle owns, however many workers up, and no workers.d entry or note gives it a lane",
+       "handin_waiting": "has a hand-in on {issue} waiting since {since} ({minutes} min): a comment signed {by} with no "
+                         "comment signed LANE/{signs} after it"}
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
-HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived"}       # rung to the record's handle
+HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived", "handin_waiting"}     # rung to the record's handle
 FAIL = {"held", "stalled", "crashed", "dropped", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
 #: a silent coordinator's sentence (the record's `role`): its `active_minutes` count the turn it is in, and its `minutes` its
 #: assistant text too; with `unread_minutes`, its conversation went unread that long, so its text is unchecked
@@ -331,6 +338,16 @@ def text(rec: dict) -> str:
             parent = f"lane {rec.get('lane') or '?'}"
         return (f"{lead}*Agent watch:* {len(members)} workers of {parent} {line}: "
                 + "; ".join(member(m) for m in members) + f". Resume each that didn't report back with Task.{unknown(rec)}")
+    if rec.get("kind") == "handin_waiting":
+        lane = f" of lane {x}" if (x := rec.get("lane") or lane_of(rec)) else ""
+        where = f"<{rec['url']}|{rec['issue']}>" if rec.get("url") else rec["issue"]
+        n = int(rec.get("waiting") or 1) - 1
+        more = ((f", and {n} later comment{'s' if n != 1 else ''} with it" if n else "")
+                + ("; the watch read no further back, so older ones may wait too" if rec.get("older") else ""))
+        return (f"{lead}*Agent watch:* integrator {name} ({link}){lane} {SAY['handin_waiting'].format(**{**rec, 'issue': where})}"
+                f"{more}. If it stopped, resume it with Task, which only the agent that launched it can, or relaunch it; if "
+                f"it answered, its answers count only signed as its own (`research msg linear comment {rec['issue']} "
+                f"--worker {rec['signs']}`).{unknown(rec)}")
     if rec.get("kind") in WORKER or rec.get("role") == "worker":
         lane = f" of lane {x}" if (x := rec.get("lane") or lane_of(rec)) else ""
         new = f" New agent {rec['new_agent']}." if rec.get("new_agent") else ""

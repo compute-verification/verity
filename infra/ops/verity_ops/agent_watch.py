@@ -96,7 +96,8 @@ any run on an agent waiting on background work, so otherwise every such wake is 
 A cloud worker (a coordinator's Task subagent) is not in `GET /v1/agents`, lists no runs, and can't be started (POST runs:
 400 legacy workflow), so only its coordinator can resume it, and a lane's workers can all stop mid-step unnoticed for hours. The watch finds workers in the `origin:` of the notes (`--notes`, a research-notes clone)
 under `lanes/` modified in the last `WORKER_NOTES_S`, and in `workers.d/*.json` beside `--log` (`{agent_id, lane,
-launched_by}`, for a coordinator, or a worker, that registers the workers it launches; one with `placed_by` the watch wrote
+launched_by}`, for a coordinator, or a worker, that registers the workers it launches; one with `integrates` is a swarm's
+integrator's, below; one with `placed_by` the watch wrote
 itself, for a sender it placed by its name, below), and in the `task` tool calls of every run it follows (the
 call's `args.agentId` is the worker launched or resumed, so a worker named nowhere else is still watched), minus the coordinators and every agent the list has
 with a run (one it has with none, which the sweep can't judge, is read as a worker).
@@ -131,6 +132,19 @@ after the first: one alone as itself, several as one **workers_failed** naming t
 says it set (`subscribe_timer`, "a wake-up in 15 minutes") in its last messages, `GET /v0/agents/{id}/conversation`. That
 endpoint is the only conversation the API has, and it carries only user and assistant text: a tool call left without its
 result, the shape of those stops, is not visible to the watch, so a worker that stops is judged by its IDLE alone.
+
+A swarm's seats hand in by commenting on the issue their integrator takes them from, and an integrator that stopped
+answers none. Its lead names that issue in the integrator's workers.d entry (`{agent_id, lane, launched_by, integrates:
+"TEAM-7"}`, with `signs: "NAME"` when the integrator isn't named `TEAM-7 NAME: ...`), and the watch records
+**handin_waiting**, once per comment, when the issue's oldest comment with none of the integrator's after it is `HANDIN_S`
+(2 h) old (`watch_handins`), for the handle `placed` gives the integrator. The team's agents all post through one Linear
+app, so a comment's author doesn't say whose it is and its signature does (`research msg linear comment` signs HANDLE
+with `--as HANDLE`, and LANE/NAME with `--worker NAME`): the integrator's comments are those signed LANE/NAME with its
+NAME, and every other, its lead's included, is a hand-in. The watch reads the issue from Linear itself (`Linear`: the
+app's client-credentials grant from the `LINEAR_CLIENT_ID=` and `LINEAR_CLIENT_SECRET=` lines of `--gh-env`, its token kept
+in `linear-token.json` beside `--log`; only each comment's id, time and signature, never its text), when a hand-in may
+first be due and not at every sweep. A read that fails records nothing and is made again at the next sweep, at most once a
+sweep per issue; with no credential nothing is read or recorded, and the log says so once.
 
 An agent that works but says nothing is **silent**: a worker ACTIVE for `SILENT_S` (90 min), or a coordinator in one turn for
 `COORD_SILENT_S` (60 min, its record's `owner` top, whom the relay rings), with no note of
@@ -179,7 +193,7 @@ worker is named after its issue) when its Linear team is exactly one lane's, els
 `-`, `:`, `/` or a space (`lane-topic: ...`), else by its issue keys further in (`NAME: TEAM-7 step 2`) when they are all
 one team's. A lane here is a registry handle with a Linear team (`linear`) that a cloud agent holds (`placing`); a key whose
 team several lanes share places only when the name also names exactly one of them as a whole word (which of them such an
-issue is under is a Linear label, and the watch holds no Linear credential to read it). The watch takes the name the agent list
+issue is under is a Linear label, which the watch doesn't read). The watch takes the name the agent list
 or an earlier sweep gave it, else reads it once (`GET /v1/agents/{id}`, the first time it meets the sender), writes the sender
 to workers.d as that lane's worker (`{agent_id, lane, role, name, placed_by: "name", issue}` or `placed_by: "handle"`, an entry
 any other source overrides) and records the run for that handle as a worker's, with `placed_by`, so the relay rings the lane
@@ -284,6 +298,17 @@ IN_TURN = ("CREATING", "RUNNING")   # `GET /v0/agents/{id}`'s status of an agent
 STOP_S = 5 * 60             # a worker's v0 status the watch can't take as its stop's (in a turn, unread, or read within
 #                             `DROPPED_S` of its change) is read again this often
 STOPS_SWEEP = 20            # v0 statuses read a sweep: a fresh deploy reads one for each worker it watches
+HANDIN_S = 2 * 3600         # a comment on an integrator's issue with none of the integrator's after it, this old: its lead is rung
+HANDIN_RETRY_S = 10 * 60    # an issue Linear answers for with an error (no such issue) is read again this often
+HANDIN_PAGE, HANDIN_PAGES = 100, 3  # an issue's comments are read newest first, back to the integrator's last, this far at most
+LINEAR_API = "https://api.linear.app/graphql"
+LINEAR_TOKEN_URL = "https://api.linear.app/oauth/token"
+LINEAR_SCOPES = "read,write"    # the one scope set every client of the app asks for: a grant with another revokes its live tokens
+LINEAR_EARLY_S = 3600           # a cached token is replaced this long before it expires
+LINEAR_TIMEOUT_S = 20           # a call to Linear; a sweep makes no other once one fails
+ISSUE_QUERY = ("query($id: String!, $n: Int!, $after: String) { issue(id: $id) { url state { type } "
+               "labels { nodes { name } } comments(first: $n, after: $after) { pageInfo { hasNextPage endCursor } "
+               "nodes { id createdAt botActor { userDisplayName } user { name } } } } }")
 DROPPED_S = 5 * 60          # an agent out of a turn that changed this long after its latest run ended, with none newer, and
                             # has sat unchanged as long since, is dropped if its conversation ends on a message it never answered
 DROPPED_RETRY_S = 10 * 60   # ... a conversation the API won't read is read again this often,
@@ -357,7 +382,7 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "dropped", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
                 "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step",
-                "outage", "archived", "unplaced")
+                "outage", "archived", "unplaced", "handin_waiting")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
@@ -385,7 +410,7 @@ WORKER_IDLE_S = 12 * 3600       # a worker IDLE this long is read again only whe
 #: how far before a worker's IDLE read its parent's Task call may complete and still be its report back
 TASK_DONE_SLACK_S = 120
 WORKER_LONG_S = 6 * 3600        # ACTIVE this long is recorded once (--worker-long-h)
-WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, and in no recent note, is forgotten
+WORKER_KEEP_S = 2 * 86400       # a worker idle or gone this long, in no recent note and no integrator, is forgotten
 WORKERS_NEW = 20                # workers read for the first time per sweep: a fresh notes clone names hundreds
 SILENT_S = 90 * 60              # ACTIVE with no note of its and no push to its branches this long: rung, again a window later
 COORD_SILENT_S = 60 * 60        # ... a coordinator's window, in one turn and with no assistant text either, rung to top
@@ -570,7 +595,9 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
     coordinator), if known; `by` the `launched_by` alone, which `Watch.placed` follows when it is a worker and so gives no
     handle here (a note's coordinator is never followed: its lane comes first). A workers.d entry with `placed_by` is the
     watch's own, for a sender it placed by its name (`place_by_name`): it is read last, so a lane or a handle that an entry
-    a coordinator wrote, or a note, gives always wins over it."""
+    a coordinator wrote, or a note, gives always wins over it. An entry with `integrates` (an issue key) is a swarm's
+    integrator's: its worker carries that and `signs`, how its comments on the issue are signed ("" when the entry
+    doesn't say), for `Watch.watch_handins`."""
     names = {str(h.get("handle")) for h in read_json(registry).get("handles") or []}
     out: dict[str, dict] = {}
     placed: list[tuple] = []
@@ -592,6 +619,8 @@ def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: 
                 placed.append(row)
             else:
                 add(*row)
+                if ISSUE_KEY_RE.fullmatch(key := str(d.get("integrates") or "")):
+                    out[m[0]].update(integrates=key, signs=str(d.get("signs") or ""))
     for p, heard, fm in recent_notes(notes, t):
         ids, lane = AGENT_RE.findall(fm.get("origin", "")), fm.get("lane") or note_lane(notes, p)
         launcher = next((i for i in ids if i in coords), None)
@@ -829,6 +858,103 @@ def node_runs(cfg: dict, notes: Path | None, node: str, since: float,
     return rows, ""
 
 
+class NoCredential(ValueError):
+    """The file the watch is handed holds no Linear app credential."""
+
+
+def post_json(url: str, data: bytes, headers: dict[str, str]) -> dict:
+    """POST `data` to `url`, one of this file's two literal https URLs of Linear, and return its JSON answer."""
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")  # noqa: S310 (a literal https URL)
+    with urllib.request.urlopen(req, timeout=LINEAR_TIMEOUT_S) as r:  # noqa: S310 (a literal https URL)
+        return json.loads(r.read())
+
+
+class Linear:
+    """An issue's state, labels and comments from Linear, read as the team's client reads them (`research.linear`, which
+    this file, run alone on the pod, can't import): the app's client-credentials grant (`LINEAR_CLIENT_ID=` and
+    `LINEAR_CLIENT_SECRET=` lines of `env_file`, read at each call so a rotated secret needs no restart) gives a token,
+    always for `LINEAR_SCOPES`, kept in `cache` (0600) until `LINEAR_EARLY_S` before it expires and fetched again once
+    when Linear refuses it (401); the token goes as a Bearer header to the GraphQL endpoint. A comment's text is never
+    asked for: only its id, its time and who signed it. `NoCredential` when the file is missing or holds none; a `ValueError`
+    for an answer that isn't the issue (Linear says it can't find it; another shape); any other failure is the
+    transport's (`OSError`)."""
+
+    def __init__(self, env_file: Path, cache: Path, clock: Callable[[], float] = time.time,
+                 http: Callable[[str, bytes, dict[str, str]], dict] | None = None):
+        self.env_file, self.cache, self.clock, self.http = env_file, cache, clock, http or post_json
+
+    def credential(self) -> tuple[str, str]:
+        lines = self.env_file.read_text().splitlines() if self.env_file.is_file() else []
+        got = {k.strip().removeprefix("export ").strip(): v.strip().strip("\"'") for k, _, v in (ln.partition("=") for ln in lines)}
+        if not (got.get("LINEAR_CLIENT_ID") and got.get("LINEAR_CLIENT_SECRET")):
+            raise NoCredential(f"no LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET in {self.env_file}")
+        return got["LINEAR_CLIENT_ID"], got["LINEAR_CLIENT_SECRET"]
+
+    def token(self, fresh: bool) -> str:
+        client, secret = self.credential()
+        tag = hashlib.sha256(client.encode()).hexdigest()[:16]
+        c = {} if fresh else read_json(self.cache)
+        if (c.get("client") == tag and c.get("scope") == LINEAR_SCOPES and isinstance(c.get("access_token"), str)
+                and isinstance(c.get("expires_at"), int | float) and c["expires_at"] - LINEAR_EARLY_S > self.clock()):
+            return c["access_token"]
+        basic = base64.b64encode(f"{client}:{secret}".encode()).decode()
+        form = urllib.parse.urlencode({"grant_type": "client_credentials", "scope": LINEAR_SCOPES}).encode()
+        r = self.http(LINEAR_TOKEN_URL, form, {"Authorization": f"Basic {basic}",
+                                               "Content-Type": "application/x-www-form-urlencoded"})
+        token = r.get("access_token") if isinstance(r, dict) else None
+        if not isinstance(token, str) or not token:
+            raise OSError("Linear's client-credentials grant returned no access_token")
+        self.cache.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.cache, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"client": tag, "scope": LINEAR_SCOPES, "access_token": token,
+                       "expires_at": self.clock() + float(r.get("expires_in") or 0)}, f)
+        return token
+
+    def issue(self, key: str, after: str | None = None) -> dict:
+        """Issue `key` (`TEAM-7`) as `{url, state, labels, comments, after}`: its state's type (`started`, `completed`,
+        ...), its labels' names, and `HANDIN_PAGE` of its comments, newest first, from the newest or from the cursor
+        `after`, each `{id, t, by}` (its time and who signed it, `signed`); `after` is the cursor of the next page, None
+        when this is the last. One call (a second when the cached token was refused)."""
+        body = json.dumps({"query": ISSUE_QUERY, "variables": {"id": key, "n": HANDIN_PAGE, "after": after}}).encode()
+        for fresh in (False, True):
+            token = self.token(fresh)
+            try:
+                r = self.http(LINEAR_API, body, {"Authorization": f"Bearer {token}", "Content-Type": "application/json"})
+                break
+            except urllib.error.HTTPError as e:
+                if e.code != 401 or fresh:              # a cached token Linear no longer takes is fetched again, once
+                    raise
+        got = (r.get("data") or {}).get("issue") if isinstance(r, dict) else None
+        if not isinstance(got, dict) or r.get("errors"):
+            said = [str(x.get("message", "?")) for x in (r.get("errors") if isinstance(r, dict) else None) or [] if isinstance(x, dict)]
+            raise ValueError("Linear: " + ("; ".join(said) or f"no issue {key}"))
+        try:
+            page = got["comments"]
+            comments = [{"id": str(c["id"]), "t": epoch(c["createdAt"]), "by": signed(c)} for c in page["nodes"]]
+            if any(c["t"] is None for c in comments):
+                raise TypeError("a comment with no time")
+            return {"url": str(got.get("url") or ""), "state": str(got["state"]["type"]),
+                    "labels": [str(x["name"]) for x in got["labels"]["nodes"]], "comments": comments,
+                    "after": str(page["pageInfo"]["endCursor"]) if page["pageInfo"]["hasNextPage"] else None}
+        except (KeyError, TypeError, AttributeError) as e:
+            raise ValueError(f"Linear: {key} came in another shape ({type(e).__name__}: {e})") from None
+
+
+def signed(c: dict) -> str:
+    """Who signed a Linear comment: the name the team's app posted it under (`research msg linear comment`: a lane's
+    HANDLE with `--as`, `LANE/NAME` with `--worker NAME`), else the person who wrote it."""
+    return str((c.get("botActor") or {}).get("userDisplayName") or (c.get("user") or {}).get("name") or "")
+
+
+def signer(name: str) -> str:
+    """How a worker named after its issue (`TEAM-7 NAME: ...`) signs its comments when its entry doesn't say: NAME, the
+    word after the key; "" for a name of another shape."""
+    m = re.match(r"[A-Z]+-[0-9]+[\s:]+([A-Za-z0-9][A-Za-z0-9._-]{0,39})", name)
+    return m[1] if m else ""
+
+
 def github_prs(remote: str, env_file: Path, pages: int = 10) -> Callable[[], list[dict]]:
     """A reader of `remote`'s open PRs on GitHub (`{"branch", "body"}` each, newest first, up to `pages` of 100), with the token
     `env_file`'s `GH_TOKEN=` line holds, read at each call so a rotated token needs no restart."""
@@ -1054,9 +1180,14 @@ class Watch:
                  nodes: Path | None = None, sh: Callable[[list[str], str | None, float], tuple[int, str, str]] = run_cmd,
                  launcher: Path | None = None, launch: Callable[[list[str], dict[str, str]], tuple[int, str, str]] = run_env,
                  launch_api: Callable[[str], object] = lambda key: Api(key),
-                 open_prs: Callable[[], list[dict]] | None = None):
+                 open_prs: Callable[[], list[dict]] | None = None, linear: Linear | None = None):
         self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
         self.open_prs, self.prs_read = open_prs, -float("inf")
+        self.linear, self.linear_said = linear, False       # the Linear reader, and whether its missing credential was said
+        self.linear_off = ""                                # why no issue is read for the rest of this sweep, if so
+        self.linear_refused: set[str] = set()               # issues Linear wouldn't give at this sweep
+        self.integrators: dict[str, dict] = {}              # worker whose entry has `integrates` -> issue, signs, lane, heard
+        self.handin_next: dict[str, float] = {}             # issue -> when a hand-in on it may next be due (not saved)
         self.pr_branches: dict[str, set[str]] = {}  # agent id (full or short) an open PR's body names -> that PR's branches
         self.pr_lanes: dict[str, set[str]] = {}     # lane an open PR's `Lane NAME` line names -> that PR's branches
         self.notes, self.worker_long_s = notes, worker_long_s
@@ -1726,7 +1857,10 @@ class Watch:
         records at the first sweep that meets the agent names who follows it up. Returns the Task calls' workers."""
         before = json.dumps([self.workers, self.owners], sort_keys=True)
         names = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
-        for agent, d in workers(self.notes, self.log.with_name("workers.d"), self.registry, coords, t).items():
+        found = workers(self.notes, self.log.with_name("workers.d"), self.registry, coords, t)
+        self.integrators = {agent: {"issue": d["integrates"], "signs": d["signs"], "lane": d["lane"], "heard": d["heard"]}
+                            for agent, d in found.items() if d.get("integrates")}
+        for agent, d in found.items():
             if agent in listed and d["handle"]:                 # an agent a coordinator launched through the API: it owns it
                 self.owners[agent] = d["handle"]
             if d["handle"] and stray(self.children.get(agent)):
@@ -1862,12 +1996,107 @@ class Watch:
             if (status == "IDLE" and not w.get("no_runs") and w.get("idle_at") != updated
                     and (latest := info.get("latestRunId"))):
                 self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, role="worker", **detail)
+        # an integrator is kept while its entry stands: its name says which comments on its issue are its own
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
-                      and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S]:
+                      and t - max(w.get("updated", t), w["heard"]) >= WORKER_KEEP_S and a not in self.integrators]:
             self.workers.pop(agent)
         self.owners = {a: h for a, h in self.owners.items() if a in listed}
         if json.dumps([self.workers, self.owners], sort_keys=True) != before:
             self.save()
+
+    def read_issue(self, key: str, t: float, after: str | None = None) -> dict | None:
+        """Issue `key` from Linear (`Linear.issue`), or None when it went unread, which `linear_off` and `linear_refused`
+        tell apart for the rest of the sweep. With no credential (said once for the process's life) or a read that failed
+        on the way (said, at most once an hour), no issue is read again this sweep (`linear_off`). When Linear answers
+        that it can't (no such issue; said, at most once an hour for the issue), that issue isn't (`linear_refused`)."""
+        if self.linear_off or key in self.linear_refused:
+            return None
+        try:
+            if self.linear is None:
+                raise NoCredential("the watch was started without --gh-env")
+            return self.linear.issue(key, after)
+        except NoCredential as e:
+            self.linear_off = "credential"
+            if not self.linear_said:
+                self.linear_said = True
+                print(f"{iso(t)} no Linear credential ({e}): no hand-in waiting on an integrator is recorded",
+                      file=sys.stderr, flush=True)
+        except ValueError as e:
+            self.linear_refused.add(key)
+            self.say(f"linear:{key}", f"issue {key} unread: {e}", t)
+        except Exception as e:  # noqa: BLE001 (a read of Linear that fails, however it does, never stops a sweep)
+            self.linear_off = "unread"
+            self.say("linear", f"Linear unread ({type(e).__name__}: {e}): nothing is recorded from it, and it is read again "
+                     "at the next sweep", t)
+        return None
+
+    def watch_handins(self, coords: dict[str, str], t: float) -> None:
+        """Record **handin_waiting**, once per comment, when the oldest comment on an integrator's issue with no later
+        comment of the integrator's is `HANDIN_S` old: a swarm's seats hand in by commenting on the issue their integrator
+        takes them from (its workers.d entry's `integrates`), and one that stopped answers none. The integrator's comments
+        are those signed with its name: the team's agents all post through one Linear app, which signs a comment with the
+        name it was posted under (`signed`), a lane's HANDLE or, for a worker, `LANE/NAME`; the entry's `signs` is that
+        NAME, else the word after the issue key in the agent's own name (`signer`), and a comment is the integrator's
+        when it is signed `LANE/NAME` with that NAME, whatever its case and whichever the lane. Every other comment is a
+        hand-in, its lead's own included. The record is for the handle `placed` gives the integrator. A closed issue
+        takes none. An issue is read when a hand-in on it may first be due (`HANDIN_S` after its oldest waiting comment,
+        or after a read that found none waiting, or one recorded already): one call, more only to page back,
+        `HANDIN_PAGES` pages at most, to the integrator's last comment. A read that fails records nothing: the issue is
+        read again at the next sweep, and no other is read at this one; an issue Linear won't give is read again
+        `HANDIN_RETRY_S` later."""
+        swarms: dict[str, list[str]] = {}
+        for agent, x in sorted(self.integrators.items(), key=lambda kv: kv[1]["heard"]):
+            swarms.setdefault(x["issue"], []).append(agent)
+        self.handin_next = {k: v for k, v in self.handin_next.items() if k in swarms}
+        for key, agents in sorted(swarms.items()):
+            if t < self.handin_next.get(key, 0.0):
+                continue
+            names = {a: self.names.get(a) or str((self.workers.get(a) or {}).get("name") or "") for a in agents}
+            signs = {a: self.integrators[a]["signs"] or signer(names[a]) for a in agents}
+            if unsigned := [a for a in agents if not signs[a]]:
+                self.say(f"signs:{key}", f"{key}'s integrator ({', '.join(unsigned)}) has no name read that starts `TEAM-7 NAME` "
+                         "and its workers.d entry has no `signs`: nothing says which comments are its own, so no hand-in on "
+                         "it is recorded", t)
+                continue
+
+            its = {x.lower() for x in signs.values()}
+
+            def own(c: dict) -> bool:
+                _, worker, name = c["by"].rpartition("/")
+                return bool(worker) and name.lower() in its
+
+            comments, issue, after = [], None, None
+            for _ in range(HANDIN_PAGES):
+                if (issue := self.read_issue(key, t, after)) is None:
+                    break
+                comments, after = comments + issue["comments"], issue["after"]
+                if not after or any(own(c) for c in comments):
+                    break
+            if issue is None:
+                if self.linear_off:
+                    return
+                self.handin_next[key] = t + HANDIN_RETRY_S
+                continue
+            comments.sort(key=lambda c: c["t"])
+            last = max((i for i, c in enumerate(comments) if own(c)), default=-1)
+            waiting, older = comments[last + 1:], bool(last < 0 and after)  # older: more wait than the pages read hold
+            self.handin_next[key] = t + HANDIN_S
+            if issue["state"] in ("completed", "canceled") or not waiting:
+                continue
+            oldest = waiting[0]
+            done = f"handin:{key}:{'older' if older else oldest['id']}"
+            if done in self.done:
+                self.done[done] = t                 # kept for as long as it waits: once per comment, however long
+            elif t - oldest["t"] < HANDIN_S:
+                self.handin_next[key] = oldest["t"] + HANDIN_S
+            elif self.once(done, t):
+                agent = agents[-1]                  # the entry written last: a relaunched integrator's
+                handle = self.placed(agent, coords)
+                self.record("handin_waiting", Run(agent, "", names[agent]), judged=False, role="worker", issue=key,
+                            url=issue["url"], comment=oldest["id"], by=oldest["by"] or "?", since=iso(oldest["t"]),
+                            minutes=int((t - oldest["t"]) // 60), waiting=len(waiting), signs=signs[agent],
+                            lane=self.integrators[agent]["lane"], **({"handle": handle} if handle else {}),
+                            **({"older": True} if older else {}))
 
     def read_prs(self, t: float) -> None:
         """Every `HEADS_EVERY_S`, the open PRs (`open_prs`, `{"branch", "body"}` each): a push to a PR's branch is the activity of
@@ -2514,6 +2743,7 @@ class Watch:
         """One pass: find each live agent's current run and follow it, record runs stuck in CREATING, restart an ERROR one,
         start refused continue runs, then judge every followed run."""
         t = self.clock()
+        self.linear_off, self.linear_refused = "", set()
         live, agents = {}, list(self.api.agents())
         # the key sees every agent on the account (its owner's own too);
         # only Verity's are followed, restarted or woken, and only they are status rows
@@ -2656,6 +2886,7 @@ class Watch:
             write_atomic(self.log.with_name("status.json"), body := status_bytes(snapshot(self, judged, t)))
         if self.publish:
             self.publish(body, t)
+        self.watch_handins(coords, t)       # last: a slow Linear holds up nothing else of the sweep
 
 
 def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
@@ -2825,7 +3056,9 @@ def main(argv: list[str] | None = None) -> int:
     lp.add_argument("--nodes", type=Path, default=Path("/data/agent-watch/nodes.json"),
                     help="the nodes whose ended runs ring their sender's handle (no file: none)")
     lp.add_argument("--gh-env", type=Path, default=None,
-                    help="a file with a GH_TOKEN= line: --git-remote's open PRs, whose bodies name the agents their pushes count for")
+                    help="a file with a GH_TOKEN= line (--git-remote's open PRs, whose bodies name the agents their pushes count "
+                         "for) and the Linear app's LINEAR_CLIENT_ID= and LINEAR_CLIENT_SECRET= lines (the comments of the "
+                         "issues integrators take hand-ins on)")
     lp.add_argument("--launcher", type=Path, default=None,
                     help="launch_coordinator.py, for a coordinator's relaunch (default: the --registry checkout's "
                          "infra/cursor/launch_coordinator.py); relaunching also needs launch.env beside --log")
@@ -2857,7 +3090,8 @@ def main(argv: list[str] | None = None) -> int:
     launcher = ns.launcher or (ns.registry.resolve().parents[3] / "infra/cursor/launch_coordinator.py" if ns.registry else None)
     watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, timers=ns.timers, wake=ns.wake, publish=publish, notes=ns.notes,
                   worker_long_s=ns.worker_long_h * 3600, git_remote=ns.git_remote, nodes=ns.nodes, launcher=launcher,
-                  open_prs=github_prs(ns.git_remote, ns.gh_env) if ns.gh_env and ns.git_remote else None)
+                  open_prs=github_prs(ns.git_remote, ns.gh_env) if ns.gh_env and ns.git_remote else None,
+                  linear=Linear(ns.gh_env, ns.log.with_name("linear-token.json")) if ns.gh_env else None)
     if ns.dry_run:
         watch.launch = lambda argv, env: (print(f"dry-run: {shlex.join(argv)}", file=sys.stderr, flush=True), (1, "", "dry-run"))[1]
         watch.launch_api = lambda key: api
