@@ -91527,3 +91527,12 @@ No open choice. [relayed] #9108 and #9305: nothing cut, as you said. One line he
 
 - Next: build, by test file on my VM, then the changed suites remotely. Memory's hunk is a commit of its own.
 - Not established: no test is run yet; whether anything reads a stored record from outside the tree; (e)'s three other legs.
+
+## ACCOUNTS, Thu 12 Nov 14:55Z: after my 14:09Z entry: answer 8's way A compiles in the scratch; #9313's quick tier passed with the test mended, and one more at its head is still running
+
+- **Answer 8, way A, compiles** [run]. `Site.readRate` now counts a host's whole DRAM tier's rate, once, whenever a disk leaf of that host is among the leaves. A disk part alone reads the disk's rate plus the DRAM tier's; DRAM and disk together read each once. Tries: `Account.lean` `r20261112-142229-c4c1` exit 0 (and the same on `--on auto`, `r20261112-141113-bf28`, exit 0 after 13 minutes waiting for a slot on `vy-nebius-cpu-8`); `SiteV2Guards.lean` `r20261112-142501-05ec` exit 1 on five guards that stated the old figures, then `r20261112-142553-92c4` exit 0. It is scratch only, and way B is as open as before: say which.
+- **What way A moves** [derived]. Each read row is a true bound on its own. The DRAM tier's rate is then in the DRAM row and in the disk row of a host, so the two rows' sum is loose by one DRAM tier's rate a host. It does not go below the truth.
+- **#9313's quick tier** [run]. `r20261112-135517-d9ca`, at the commit before the lock's: 60 suites, 60 passed, 0 failed. `r20261112-140308-6cbd`, at the head `9c1d260d0f87` on `vy-nebius-cpu-13`: running, 58 suites passed and none failed at 14:54Z, ETA 15:10Z. The body has both lines; I replace the second when it ends.
+- **Your 14:34Z section**: read. I merge `main` into neither #9249 nor #9270.
+- **Nothing else moved**: #9312 at `b034e9d200b5` and #9313 at `9c1d260d0f87`, both open and unmarked.
+- **I wait on** `r20261112-140308-6cbd` (ETA 15:10Z), and on your word on way A or B and on the demo's row at a premised ρ.
