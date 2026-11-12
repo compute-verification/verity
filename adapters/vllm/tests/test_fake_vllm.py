@@ -41,8 +41,11 @@ def test_every_import_of_the_surface_works_under_the_stand_in(monkeypatch):
             assert isinstance(bound, fake_vllm.Unset) and repr(bound) == f"<{key}, not set>", key
 
 
-def test_a_module_is_one_object_however_it_is_reached(monkeypatch):
+def test_a_module_is_one_object_however_it_is_reached(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Its first assignment is also what the mypy lint reads: a test sets a module's attribute, which mypy refuses on a plain
+    `types.ModuleType` (it comes before the asserts, whose ``is`` would narrow the module to vLLM's untyped one)."""
     fake = fake_vllm.install(monkeypatch)
+    fake["vllm.envs"].VLLM_BATCH_INVARIANT = True
     import vllm
     import vllm.distributed.parallel_state as by_path
     from vllm import envs
@@ -50,7 +53,6 @@ def test_a_module_is_one_object_however_it_is_reached(monkeypatch):
 
     assert envs is vllm.envs is fake["vllm.envs"]
     assert parallel_state is by_path is vllm.distributed.parallel_state is fake["vllm.distributed.parallel_state"]
-    fake["vllm.envs"].VLLM_BATCH_INVARIANT = True
     assert vllm.envs.VLLM_BATCH_INVARIANT is True
 
 
@@ -61,6 +63,17 @@ def test_vllm_is_as_it_was_once_the_test_is_over():
         fake = fake_vllm.install(mp)
         assert _vllm_modules() == fake.modules
     assert _vllm_modules() == before
+
+
+def test_an_install_inside_a_context_starts_over_and_gives_way_to_the_outer_one(monkeypatch):
+    outer = fake_vllm.install(monkeypatch)
+    outer["vllm.envs"].VLLM_BATCH_INVARIANT = False
+    with monkeypatch.context() as mp:
+        inner = fake_vllm.install(mp)
+        assert _vllm_modules() == inner.modules and not hasattr(inner["vllm.envs"], "VLLM_BATCH_INVARIANT")
+    from vllm import envs
+
+    assert _vllm_modules() == outer.modules and envs is outer["vllm.envs"] and envs.VLLM_BATCH_INVARIANT is False
 
 
 def test_an_import_the_surface_lacks_fails_as_where_vllm_is_absent(monkeypatch):

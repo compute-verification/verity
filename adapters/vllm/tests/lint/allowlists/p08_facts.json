@@ -84,7 +84,6 @@
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "model", "symbol": "<module>", "detail": "gpt2", "count": 5},
     {"file": "verity_vllm/program/frontend/rules/family.py", "kind": "layer-class", "symbol": "<module>", "detail": "DeriveOracleDecoderLayer"},
     {"file": "verity_vllm/program/frontend/rules/patterns.py", "kind": "layer-class", "symbol": "EagerAttentionPatternRule", "detail": "EagerAttention"},
-    {"file": "verity_vllm/program/frontend/rules/patterns.py", "kind": "layer-class", "symbol": "HFRMSNormPatternRule.applies", "detail": "RMSNorm"},
     {"file": "verity_vllm/program/frontend/rules/profile.py", "kind": "layer-class", "symbol": "RotaryEmbeddingRule", "detail": "RotaryEmbedding"},
     {"file": "verity_vllm/program/frontend/rules/profile.py", "kind": "layer-class", "symbol": "SiluAndMulRule", "detail": "SiluAndMul"},
     {"file": "verity_vllm/program/frontend/rules/profile.py", "kind": "layer-class", "symbol": "UnifiedAttentionRule", "detail": "UnifiedAttention"},
