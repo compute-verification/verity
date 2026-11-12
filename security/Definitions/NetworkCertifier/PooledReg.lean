@@ -23,9 +23,10 @@ registered openings fix before the phase's sample.
   constant one. The secret `z` and the coins `ω` fix phase `i`'s statement `x z ω i`, its prover's strategy `Pv z ω i`
   and its registered openings `ops z ω i`, each reading only the phases before `i` (`PhasesAdaptive`). `phaseAcc` is the
   phase's verdict and `WregR` its incorrect set.
-* The premises a guarantee over these takes by name: the design's rate (`RateAt`), the bound on each phase's error
-  (`PhaseErrors`), what an accepted phase's statement is registered as (`PhasesRegistered`) and what its record holds
-  (`RecordsComplete`).
+* The premises a guarantee over these takes by name: the design's rate (`RateAt`) and the bound on each phase's error
+  (`PhaseErrors`).
+* What a guarantee over these says of a phase besides its verdict, in its event and not among its premises: the
+  phase's statement is registered as the period's (`PhaseRegistered`) and its record is complete (`RecordComplete`).
 -/
 
 @[expose] public section
@@ -136,28 +137,24 @@ def PhaseErrors [Fintype Tp] [Nonempty Tp] (H : Msg → Msg) (D : Msg → Compil
   ∀ z ∈ Zs, ∀ ω i, (D (x z ω i)).εregX H (x z ω i) (Pv z ω i) +
     (BopsX H (D (x z ω i)) (ops z ω i) Tp (Pv z ω i) (x z ω i)).Pr H ≤ e i
 
-/-- **Every accepted execution phase is registered as the period's**: where phase `i`'s run accepts, its statement is
-registered as `sw i` (`SameRegistration`) with the partition `Pw i`, and the phase's registered openings hold `ρ i` at
-every registered input. -/
-def PhasesRegistered {Lk S : ℕ} (H : Msg → Msg) (D : Msg → Compiled Coin A)
-    (lay : AuditStatement → BoundaryGates Lk S) (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ)
-    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (Zs : Set Sec)
-    (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
-    (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x)
-    (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool)) : Prop :=
-  ∀ z ∈ Zs, ∀ ω i s, (D (x z ω i)).parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
-    SameRegistration (D (x z ω i)) lay k reg (sw i) s ∧ (D (x z ω i)).partition s = some (Pw i) ∧
-      ∀ g ∈ reg s, certifierVal (ops z ω i s) g = ρ i g
+/-- **Execution phase `i` is registered as the period's**, at the secret `z` and the period's coins `ω`: its
+statement parses to one registered as `sw i` (`SameRegistration`) with the partition `Pw i`, and the phase's registered
+openings hold `ρ i` at every registered input. -/
+def PhaseRegistered {Lk S : ℕ} (D : Msg → Compiled Coin A) (lay : AuditStatement → BoundaryGates Lk S)
+    (k : AuditStatement → ℕ) (reg : AuditStatement → Finset ℕ) (sw : Fin m → AuditStatement)
+    (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
+    (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool)) (z : Sec)
+    (ω : Fin m → Tp × (Fin kV → Coin)) (i : Fin m) : Prop :=
+  ∃ s, (D (x z ω i)).parse (x z ω i) = some s ∧ SameRegistration (D (x z ω i)) lay k reg (sw i) s ∧
+    (D (x z ω i)).partition s = some (Pw i) ∧ ∀ g ∈ reg s, certifierVal (ops z ω i s) g = ρ i g
 
-/-- **Every accepted execution phase's record is complete**: where phase `i`'s run accepts, the phase's observations
-in the network certifier's record have every status complete over the statement's steps (`Covered`), one observation
-a step, and jitter below `Dj`. -/
-def RecordsComplete {Lk K S : ℕ} (H : Msg → Msg) (D : Msg → Compiled Coin A) (k : AuditStatement → ℕ) (Dj : ℕ)
-    (Zs : Set Sec) (x : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Msg)
-    (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x)
-    (obs : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → List (Obs Lk K S)) : Prop :=
-  ∀ z ∈ Zs, ∀ ω i s, (D (x z ω i)).parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
-    Covered (k s) (obs z ω i) ∧ (obs z ω i).length = k s ∧ ∀ y ∈ obs z ω i, y.jitter < Dj
+/-- **Execution phase `i`'s record is complete**, at the secret `z` and the period's coins `ω`: the phase's
+observations in the network certifier's record have every status complete over the registered statement's steps
+(`Covered`), one observation a step, and jitter below `Dj`. -/
+def RecordComplete {Lk K S : ℕ} (k : AuditStatement → ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement)
+    (obs : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → List (Obs Lk K S)) (z : Sec)
+    (ω : Fin m → Tp × (Fin kV → Coin)) (i : Fin m) : Prop :=
+  Covered (k (sw i)) (obs z ω i) ∧ (obs z ω i).length = k (sw i) ∧ ∀ y ∈ obs z ω i, y.jitter < Dj
 
 end Phases
 

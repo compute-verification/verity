@@ -20,8 +20,9 @@ that carries the network certifier's record.
 * `leakAt_regR`: the trace read at the statement with the registered openings (`regValR`), filled at the network
   certifier's values, is such a trace where the network certifier registers the observations among the registered
   openings, so the observations meet the leak relation at `FregR`.
-* `phaseLeaks_regR`: over a monitoring period, an execution phase is accepted while its record fails the leak
-  relation at its `WregR` with probability `0`, the form `NetTiming.pr_pooled_le` takes each phase's leak relation in.
+* `phaseLeaks_regR`: over a monitoring period, an execution phase is accepted, with whatever else `R` says of it,
+  while its record fails the leak relation at its `WregR` with probability `0`, the form `NetTiming.pr_pooled_le` takes
+  each phase's leak relation in.
 -/
 
 @[expose] public section
@@ -138,11 +139,11 @@ section Phases
 variable {m kV : ℕ} {Tp Sec : Type}
 
 /-- **Each accepted execution phase's record meets its leak relation at `WregR`**: over a monitoring period whose
-every accepted phase's statement is registered as `sw i` with the partition `Pw i`, with a layout that fits, and at
-which the network certifier registers its record among the phase's registered openings `ops z ω i`, which open every
-registered input at the registered value `ρ i`, a phase is accepted while its record fails the leak relation at its
-incorrect set with probability at most `0`. Its conclusion is the form `NetTiming.pr_pooled_le` takes each phase's
-leak relation in. -/
+every accepted phase that `R` holds of has its statement registered as `sw i` with the partition `Pw i`, with a layout
+that fits, and at which the network certifier registers its record among the phase's registered openings `ops z ω i`,
+which open every registered input at the registered value `ρ i`, a phase is accepted with `R` while its record fails
+the leak relation at its incorrect set with probability at most `0`. `R` is whatever else the caller's event says of a
+phase. Its conclusion is the form `NetTiming.pr_pooled_le` takes each phase's leak relation in. -/
 theorem phaseLeaks_regR [Fintype Tp] {H : Msg → Msg} {D : Msg → Compiled Coin A} (hS : ∀ y, (D y).Sessions H)
     {Lk K S : ℕ} (lay : AuditStatement → BoundaryGates Lk S) (k : AuditStatement → ℕ)
     (reg : AuditStatement → Finset ℕ) (Dj : ℕ) (sw : Fin m → AuditStatement) (Pw : Fin m → Partition)
@@ -151,7 +152,9 @@ theorem phaseLeaks_regR [Fintype Tp] {H : Msg → Msg} {D : Msg → Compiled Coi
     (Pv : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prover Tp) (hk : PhaseRounds D kV x)
     (ops : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → AuditStatement → List (Opening Bool))
     (obs : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → List (Obs Lk K S))
+    (R : Sec → (Fin m → Tp × (Fin kV → Coin)) → Fin m → Prop)
     (hyp : ∀ z ∈ Zs, ∀ ω i s, (D (x z ω i)).parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
+      R z ω i →
       SameRegistration (D (x z ω i)) lay k reg (sw i) s ∧ (D (x z ω i)).partition s = some (Pw i) ∧
         (lay s).Fits s.prog (k s) ∧
         CertifierRegisters H (D (x z ω i)).commit (lay s) (k s) (op i (runsBefore (obs z ω) i)) s (ops z ω i s)
@@ -159,21 +162,21 @@ theorem phaseLeaks_regR [Fintype Tp] {H : Msg → Msg} {D : Msg → Compiled Coi
         Covered (k s) (obs z ω i) ∧ (obs z ω i).length = k s ∧ (∀ y ∈ obs z ω i, y.jitter < Dj) ∧
         ∀ g ∈ reg s, (∃ o ∈ ops z ω i s, o.pos = g) ∧ certifierVal (ops z ω i s) g = ρ i g) :
     ∀ z ∈ Zs, ∀ i, Pr (fun ω => phaseAcc H D x Pv hk z i ω (ω i) ∧
-      ¬LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (obs z ω) i)) (WregR H D x Pv ops z ω i)
-        (obs z ω i)) ≤ 0 := by
+      ¬(R z ω i → LeakAt lay k reg Dj (sw i) (Pw i) (ρ i) (op i (runsBefore (obs z ω) i)) (WregR H D x Pv ops z ω i)
+        (obs z ω i))) ≤ 0 := by
   intro z hz i
   refine (Claims.Pr_mono (q := fun _ => False) fun ω hω => ?_).trans_eq Claims.Pr_false
   obtain ⟨hacc, hnot⟩ := hω
+  refine hnot fun hR => ?_
   have hacc' : (run H (Pv z ω i) (D (x z ω i)).V (x z ω i) (ω i).1
       (fun j => (ω i).2 (Fin.castLE (hk z ω i) j))).out = .acc := hacc
   obtain ⟨s, Pt, hs, hPt, hin⟩ := (hS (x z ω i)).refuses _ _ _ _ _ hacc'
-  obtain ⟨hsame, hPw, hfit, hcert, hcov, hlen, hj, hreg⟩ := hyp z hz ω i s hs hacc
+  obtain ⟨hsame, hPw, hfit, hcert, hcov, hlen, hj, hreg⟩ := hyp z hz ω i s hs hacc hR
   have hPtw : Pt = Pw i := Option.some.inj (hPt.symm.trans hPw)
   subst hPtw
   have hl := leakAt_regR lay k reg Dj hs hPt hin hfit (Pv z ω i) (ops z ω i) _ _ hcert hcov hlen hj
     (fun g hg => (hreg g hg).1)
-  exact hnot (leakAt_congr lay k reg Dj hsame.1 hsame.2.2.1 hsame.2.2.2.1 hsame.2.2.2.2.1
-    (fun g hg => (hreg g hg).2) hl)
+  exact leakAt_congr lay k reg Dj hsame.1 hsame.2.2.1 hsame.2.2.2.1 hsame.2.2.2.2.1 (fun g hg => (hreg g hg).2) hl
 
 end Phases
 

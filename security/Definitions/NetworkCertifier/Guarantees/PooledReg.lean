@@ -19,8 +19,10 @@ openings fix before the phase's sample.
 * The second holds there with no error: where the network certifier registers an accepted phase's record among the
   registered openings (`CertifierRegisters`), the record meets the leak relation at that set, with no probability.
 
-So every phase is accepted outside the period's good event (`PooledGood` at `WregR`) with probability at most
-`(1 - q)^Fmax + Σ_i e_i`.
+So the probability that every phase is accepted, at a statement registered as the period's (`PhaseRegistered`) and
+with a complete record (`RecordComplete`), outside the period's good event (`PooledGood` at `WregR`) is at most
+`(1 - q)^Fmax + Σ_i e_i`. That an accepted phase is so registered and its record complete is in the event, not among
+the premises: the statement says nothing of a phase accepted otherwise.
 
 What it takes. The sampled proof system's premises (`Arg.KS`, and `CommitmentScheme.Binds` and `Compiled.Sessions`
 at every statement's verifier). The verifier is a function of the statement, `D y` the compiled verifier that judges
@@ -29,9 +31,9 @@ the phases' verifiers have at most `kV` rounds at their statements (`PhaseRounds
 first of its `kV` coins. A rate `q` that every execution phase's sample met (`RateAt`), a hypothesis here: nothing in
 this statement derives it from what the verifier accepts. That each phase reads only the phases before it
 (`PhasesAdaptive`), a property of the period the statement is read at, which it proves of no check. That the registered
-openings pass under each statement's roots and open every registered input (`RegOpens`), and that at each accepted
-phase the network certifier registers its record among them (`CertifierRegisters`), the record is complete
-(`RecordsComplete`) and the statement is registered as the period's (`PhasesRegistered`).
+openings pass under each statement's roots and open every registered input (`RegOpens`), that the layouts fit the
+registered statements (`BoundaryGates.Fits`), and that at each accepted phase the network certifier registers its
+record among the registered openings (`CertifierRegisters`).
 
 What it does not say. It counts no secrets: `PooledLeakAccepted`'s second conclusion does, at any incorrect sets. It
 fixes no sample's form and states no error's size.
@@ -60,13 +62,14 @@ are the phase's observations in the network certifier's record. Given
 * `q`, the rate every execution phase's sample met (`hrate`), a hypothesis here, with `0 ≤ q ≤ 1`;
 * `e i` at least phase `i`'s error at the trace read at the statement plus the registered openings' binding term
   (`he`);
-* layouts that fit the registered statements (`hfit`); and at each accepted phase, the network certifier registering
-  the phase's record among the registered openings (`hcert`), the statement registered as `sw i` with the partition
-  `Pw i` and the openings holding `ρ i` at the registered inputs (`hreg`), and a complete record (`hrec`);
+* layouts that fit the registered statements (`hfit`), and at each accepted phase, the network certifier registering
+  the phase's record among the registered openings (`hcert`);
 
-for every secret, every phase is accepted while the period's good event fails (`PooledGood` at the incorrect sets
-`WregR`: they hold under `Fmax` proof blocks in total, and every phase's record meets its leak relation at its own)
-with probability at most `(1 - q)^Fmax + Σ_i e i`. -/
+for every secret, the probability that every phase is accepted, its statement registered as `sw i` with the partition
+`Pw i` and the openings holding `ρ i` at the registered inputs (`PhaseRegistered`) and its record complete
+(`RecordComplete`), while the period's good event fails (`PooledGood` at the incorrect sets `WregR`: they hold under
+`Fmax` proof blocks in total, and every phase's record meets its leak relation at its own) is at most
+`(1 - q)^Fmax + Σ_i e i`. -/
 def PooledLeakRegistered : Prop :=
   ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin} (H : Claims.Msg → Claims.Msg)
     (D : Claims.Msg → Compiled Coin A) (hA : A.KS H) (hb : ∀ y, (D y).commit.Binds H) (hS : ∀ y, (D y).Sessions H)
@@ -87,9 +90,9 @@ def PooledLeakRegistered : Prop :=
     (hcert : ∀ z ∈ Zs, ∀ ω i s, (D (x z ω i)).parse (x z ω i) = some s → phaseAcc H D x Pv hk z i ω (ω i) →
       CertifierRegisters H (D (x z ω i)).commit (lay s) (k s) (op i (runsBefore (obs z ω) i)) s (ops z ω i s)
         (obs z ω i))
-    (hreg : PhasesRegistered H D lay k reg sw Pw ρ Zs x Pv hk ops) (hrec : RecordsComplete H D k Dj Zs x Pv hk obs)
     (Fmax : ℕ),
-    ∀ z ∈ Zs, Pr (fun ω => (∀ i, phaseAcc H D x Pv hk z i ω (ω i)) ∧
+    ∀ z ∈ Zs, Pr (fun ω => (∀ i, phaseAcc H D x Pv hk z i ω (ω i) ∧
+          PhaseRegistered D lay k reg sw Pw ρ x ops z ω i ∧ RecordComplete k Dj sw obs z ω i) ∧
         ¬PooledGood lay k reg Dj sw Pw ρ op Fmax (WregR H D x Pv ops z ω) (obs z ω)) ≤
       (1 - q) ^ Fmax + ∑ i, e i
 
