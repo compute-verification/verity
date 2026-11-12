@@ -28,6 +28,8 @@ Facts of the members' programs, each a `Prop` here:
 * `RowsArePorts`: a commitment position's row is the name of a port of its member's circuit, so the address map's
   port is that port, the first of its name (`portNamed_spec`).
 * `PortsMember`: a checked unit's session's first table has its template's member circuit's ports.
+* `OwnReads`: a registered read at a port no link or wire names reads a port of the interior record; `refReadsOwn`
+  is the condition on the reference reads that gives it through round 2's `second-values`, decided.
 * `Inside`: a gate a checked unit needs, sent by the wiring to a gate the boundary record doesn't hold that is no
   input, is sent to a gate of the unit's replay block that the connected program doesn't commit as that block sees
   it. A wire's writer unit is in its reader's replay block, and so is every unit that reads a gate through a wire.
@@ -177,6 +179,29 @@ theorem portNamed_spec {t : ℕ} {name : String}
 circuit to its template's reference statement's, whose statement circuit is the member's. -/
 def PortsMember : Prop :=
   ∀ r : CheckedRun h.stage, r.Ok h → r.sts[0]!.c.ports = (memberCircuit h (templateOf h.ms r.u)).ports
+
+/-- **A registered read at a port no link or wire names reads a port of the interior record**: at every accepted
+run's checked unit, each registered read of its session at such a port has the name of a port of round 1's record as
+its value. Round 2 then holds the value to the template's own port there (`SecondStage.readOk`, its last arm); the
+other read it passes at such a port, of a value a registration registers, is under the statement's roots. -/
+def OwnReads : Prop :=
+  ∀ r : CheckedRun h.stage, r.Ok h → ∀ own reg, r.ins.registered = some own → reg ∈ own →
+    heldLink h (h.names.getD (templateOf h.ms r.u) "") reg.name = none →
+    heldWire h (h.names.getD (templateOf h.ms r.u) "") reg.name = none →
+    ∀ rec, jsonMsg r.m₁ = some rec → ((Spot.Record.byPort rec).find? (·.1 == reg.value)).isSome = true
+
+/-- **Each reference read at a port no link or wire names reads a port of the interior registration**, decided: for
+each template, each port of its reference registered reads (`Held.refReads`) that no link or wire names has a string
+value that is one of the interior registration's ports (`Held.interiorNames`). Round 2 holds a session's registered
+reads to its template's reference reads but for the run's fields (`SecondStage.valuesOk`), and a run's interior
+record to the registration's ports (`recordsOk`); so it is what `OwnReads` asks, on what the verifier holds. -/
+def refReadsOwn : Bool :=
+  (List.range h.ms.length).all fun t =>
+    (Spot.entries (Spot.getD (h.refReads t) "ports")).all fun pe =>
+      (heldLink h (h.names.getD t "") pe.1).isSome || (heldWire h (h.names.getD t "") pe.1).isSome ||
+        match Spot.getD pe.2 "value" with
+        | .str v => h.interiorNames.ports.contains v
+        | _ => false
 
 /-- **A needed gate the wiring sends inside its replay block stays inside**: at every accepted run's checked unit,
 a gate its proof block needs side by side that the wiring map sends to a gate the boundary record doesn't hold, no
