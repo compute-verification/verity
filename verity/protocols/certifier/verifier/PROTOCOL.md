@@ -2132,8 +2132,10 @@ Which execution phases have a head is the form's:
 
     The link stays open after the cell. The network certifier reads what the client still sends and drops it,
     none of it reaching a server, and closes the link at the client's end of stream, when the client resets it,
-    which it counts, or at the run's end. A link closed with its client's request unread is reset, and a reset
-    client may lose the cell it has not read; a refusal's link, closed at the arrival, still can be.
+    which it counts, or at the run's end. It reads at most a byte past the cells a request may hold
+    (`ingress_cells`): a link that sends more is read no further, as an admitted connection's ingress past its
+    bound is not, and is closed at the run's end. A link closed with its client's request unread is reset, and a
+    reset client may lose the cell it has not read; a refusal's link, closed at the arrival, still can be.
   - **The word** is one certificate over SHA-512 of the link, the execution phase and the parameters' digest under a
     tag of its own (`connection_rows.no_head_digest`), for the session and under the key every certificate is. A
     reader tells the three cases apart from public values: a certificate over that digest is the word, a certificate

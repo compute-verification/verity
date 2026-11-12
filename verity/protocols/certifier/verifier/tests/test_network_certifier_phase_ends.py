@@ -305,29 +305,33 @@ class Ticking:
 def test_a_turned_away_link_stays_open_to_its_clients_end_of_stream_and_what_it_sends_is_dropped():
     """The tick that releases a turn-away's cell ends the device's stream on the link and leaves the link open. The
     device reads what the client still sends and drops it, closes the link at the client's end of stream, or when
-    the client resets it, which it counts, and closes at the run's end one whose client never ends its stream. None
-    of those bytes reaches a server, takes an ordinal or is in a record, and the execution phase is published
-    complete and handed."""
+    the client resets it, which it counts, and closes at the run's end one whose client never ends its stream. It
+    reads one byte past the cells a request may hold and no more: the last client's link, which sent a cell more
+    than that, keeps the rest unread, its end of stream with them, and is closed at the run's end. None of those
+    bytes reaches a server, takes an ordinal or is in a record, and the execution phase is published complete and
+    handed."""
     async def main():
         server = Server([])
         run = Ticking(server)
         device, first = run.device, T - SPAN
         await run.tick(*range(first))
-        clients = [Client(device, (cells(id_req(j, 3), B), False)) for j in (1, 2, 3)]
+        clients = [Client(device, (cells(id_req(j, 3), B), False)) for j in (1, 2, 3, 4)]
 
         def links() -> list:
             return [(list(c.writes), c.ended, c.closed, len(c.reader._buffer)) for c in clients]
 
-        await device.until(lambda w: w.turned_away + w.ordinals + w.refused == 3)
+        await device.until(lambda w: w.turned_away + w.ordinals + w.refused == 4)
         seen = [links()]
         await run.tick(first)
         seen.append(links())
-        for c in clients:
-            c.reader.feed_data(bytes(5 * B))
+        for c in clients[:3]:
+            c.reader.feed_data(bytes((TWO.ingress_cells - 1) * B))
+        clients[3].reader.feed_data(bytes(TWO.ingress_cells * B))
         await run.tick(first + 1)
         seen.append(links())
         clients[0].reader.feed_eof()
         clients[2].reader.set_exception(ConnectionResetError("reset by its client"))
+        clients[3].reader.feed_eof()
         await run.tick(first + 2)
         closed = [[c.closed for c in clients]]
         await run.tick(*range(first + 3, T))
@@ -337,10 +341,10 @@ def test_a_turned_away_link_stays_open_to_its_clients_end_of_stream_and_what_it_
 
     device, server, clients, seen, closed = asyncio.run(main())
     held = ([(T - SPAN, AWAY)], T - SPAN, False, 0)
-    assert seen == [[([], None, False, B)] * 3, [held] * 3, [held] * 3]
-    assert closed == [[True, False, True], [True, True, True]] and device.turned_away_reset == 1
+    assert seen == [[([], None, False, B)] * 4, [held] * 4, [held] * 3 + [(*held[:3], B - 1)]]
+    assert closed == [[True, False, True, False], [True] * 4] and device.turned_away_reset == 1
     assert all(c.writes == [(T - SPAN, AWAY)] for c in clients)
-    assert (device.turned_away, device.ordinals, device.refused, len(server.conns)) == (3, 0, 0, 0)
+    assert (device.turned_away, device.ordinals, device.refused, len(server.conns)) == (4, 0, 0, 0)
     assert device.withheld == [] and all(r.status.complete for link in records(device) for r in link)
     assert ends(device) == [(0, True)] and handed(device) == CR.of_records(TWO, *records(device)[:2])
     assert not any(frame is not None for link in records(device) for r in link for row in r.grid for frame in row)
@@ -386,10 +390,11 @@ def test_a_turned_away_client_on_a_socket_reads_its_cell_and_the_streams_end_and
     read yet. The turned-away client here has written its whole request, of two cells, and the device has read
     none of it at its tick. With the loop writing and with the pacer, the device's end of the link has sent its
     stream's end at the bucket's release and is still open; the client reads the one cell and then the stream's
-    end, never a reset, and none either when it sends more after."""
-    assert len(cells(id_req(1, 40), B)) == 2 * B
+    end, never a reset, and none either when it sends more after, within the cells a request may hold or past
+    them."""
+    assert len(cells(id_req(1, 40), B)) == 2 * B and TWO.ingress_cells == 4
     for paced in (None, 0.05):
-        for more in (b"", bytes(3 * B)):
+        for more in (b"", bytes(B), bytes(3 * B)):
             device, state, got = asyncio.run(on_loopback(paced, more))
             assert state in ENDED_AND_OPEN and got == AWAY
             assert (device.turned_away, device.ordinals, device.refused) == (1, 0, 0)
