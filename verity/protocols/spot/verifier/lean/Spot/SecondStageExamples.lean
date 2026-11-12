@@ -260,11 +260,14 @@ private def exReadW (leaves : Nat) : Json :=
 #guard !readOk (exRegisteringW (2 ^ 64 + 1)) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW (2 ^ 64 + 1))
 #guard !readOk (exRegisteringW 6) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW 7)
 
-/-- `exOwn`, the interior registration registering values `w1` and `w2`, six leaves each at its own root and domain. -/
+/-- `exOwn`, the interior registration registering values `w1` and `w2`, six leaves each at its own root and domain,
+each one the verifier fills from its own bytes. -/
 private def exRegistering : Own :=
-  { exOwn with interior := exInterior.setObjVal! "registered" (Json.arr #[
+  { exOwn with
+    interior := exInterior.setObjVal! "registered" (Json.arr #[
       Json.mkObj [("value", "w1"), ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson (6 : Nat))],
-      Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]) }
+      Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]),
+    supplied := #[("w1", #[#[("bytes", "07")]]), ("w2", #[#[("bytes", "09")]])] }
 
 /-- Round 2's codes for statement `j` alone, its session checked by the verifier, the params giving its
 template's reference statement the registered reads of statement `r`. -/
@@ -319,16 +322,23 @@ private def exReadField (k : String) (v : Json) (j : Json) : Json :=
   #["second-read"]
 #guard (exCheck true (exReported "w3" 9 exRegistering) #[exReading "w3" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
   #["second-read"]
+-- a value the interior registers that the verifier does not hold is no input of a replay block (`second-inputs`),
+-- whatever reads it
+#guard (exCheck true { exReported "w2" 9 exRegistering with supplied := #[] }
+  #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes == #["second-inputs"]
 
 /-- `exRegistering` with the boundary registering the interior's values too. -/
 private def exBothRegistering : Own :=
   { exRegistering with boundary := exOwn.boundary.setObjVal! "registered" (getD exRegistering.interior "registered") }
 
-/-- `exOwn`, the interior registration registering a value of the boundary's port `bx`'s name beside `w2`. -/
+/-- `exOwn`, the interior registration registering a value of the boundary's port `bx`'s name beside `w2`, each one
+the verifier fills from its own bytes. -/
 private def exRegisteringBx : Own :=
-  { exOwn with interior := exInterior.setObjVal! "registered" (Json.arr #[
+  { exOwn with
+    interior := exInterior.setObjVal! "registered" (Json.arr #[
       Json.mkObj [("value", "bx"), ("root", exRoot 5), ("domain", exRoot 6), ("leaves", Lean.toJson (4 : Nat))],
-      Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]) }
+      Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]),
+    supplied := #[("bx", #[#[("bytes", "05")]]), ("w2", #[#[("bytes", "09")]])] }
 
 -- the reads that rest on the interior's own values, which the attached record names (`interiorReads`, `attach`): a
 -- value only the interior registers; not an own port's, a linked port's, or a value the boundary registers too
@@ -712,8 +722,8 @@ private def exWiredBinding (own : Own) : Option String := do
 
 /-- `own` with its interior registration registering values `vs`. -/
 private def exHolding (vs : Array String) (own : Own := exOwn) : Own :=
-  { own with interior := own.interior.setObjVal! "registered"
-      (Json.arr (vs.map fun v => Json.mkObj [("value", Json.str v)])) }
+  let registered := Json.arr (vs.map fun v => Json.mkObj [("value", Json.str v)])
+  { own with interior := own.interior.setObjVal! "registered" registered }
 
 /-- A read's template, as round 2 knows one by its id. -/
 private def exRead : String := "EmbeddingRead_v1{V=8,H=2}"
@@ -727,13 +737,29 @@ private def exFilled : Array (String × Array (Array (String × String))) :=
   #[("root", #[#[("history", "t/root")]]), ("domain", #[#[("history", "t/domain")]]),
     ("tok", #[#[("bytes", "00000002")]]), ("one", #[VERDICT_ONE, VERDICT_ONE])]
 
+/-- `exFilled` with the second row of the verdict's value a 0. -/
+private def exFilledZero : Array (String × Array (Array (String × String))) :=
+  exFilled.map fun (v, rows) => (v, if v == "one" then #[VERDICT_ONE, #[("bytes", "00000000")]] else rows)
+
+/-- Template `t`'s reference statement's registered reads: its port `p` reads value `v`. -/
+private def exRefRead (t p v : String) : String × Json :=
+  (t, Json.mkObj [("ports", Json.mkObj [(p, Json.mkObj [("value", Json.str v)])])])
+
 /-- An interior registration registering the read's parameters and the verdict's value, the read's reference
 statement reading its verdict port at that value. -/
-private def exReading : Own :=
+private def exOpening : Own :=
   { exHolding #["tok", "root", "domain", "row", "salt", "path", "one"] with
-    links := some exReadLinks
-    supplied := exFilled
-    refReads := #[(exRead, Json.mkObj [("ports", Json.mkObj [("o1", Json.mkObj [("value", "one")])])])] }
+    links := some exReadLinks,
+    supplied := exFilled,
+    refReads := #[exRefRead exRead "o1" "one"] }
+
+/-- `exOpening` with the read's key wired from another template's output, and no value of it registered. -/
+private def exOpeningWired : Own :=
+  { exOpening with
+    links := some (exReadLinks.filter (·.port != "tok")),
+    wires := some #[⟨exRead, "tok", "Pair_v0", "o0"⟩],
+    supplied := exFilled.filter (·.1 != "tok"),
+    interior := (exHolding #["root", "domain", "row", "salt", "path", "one"]).interior }
 
 -- a value the interior registration registers is one the verifier holds without the prover: pinned or held to an
 -- earlier record, or filled from its own bytes, never from a root of the interior record
@@ -743,24 +769,18 @@ private def exReading : Own :=
 #guard inputsFailure { exHolding #["i"] with supplied := #[("i", #[#[("bytes", "00000003")]])] } == none
 #guard inputsFailure { exHolding #["p"] with supplied := #[("p", #[#[("port", "x")]])] } == some "p"
 -- or the opened row of a read whose root, domain and key the verifier holds and whose verdict it holds to 1
-#guard inputsFailure exReading == none
-#guard inputsFailure { exReading with supplied := exFilled.filter (·.1 != "tok") } == some "tok"
-#guard inputsFailure { exReading with supplied := exFilled.filter (·.1 != "root") } == some "root"
-#guard inputsFailure { exReading with supplied := exFilled.filter (·.1 != "one") } == some "row"
-#guard inputsFailure { exReading with supplied := exFilled.map fun (v, rows) =>
-  (v, if v == "one" then #[VERDICT_ONE, #[("bytes", "00000000")]] else rows) } == some "row"
-#guard inputsFailure { exReading with refReads := #[] } == some "row"
-#guard inputsFailure { exReading with links := some (exReadLinks.push ⟨"Other_v1", "x", "row"⟩) } == some "row"
+#guard inputsFailure exOpening == none
+#guard inputsFailure { exOpening with supplied := exFilled.filter (·.1 != "tok") } == some "tok"
+#guard inputsFailure { exOpening with supplied := exFilled.filter (·.1 != "root") } == some "root"
+#guard inputsFailure { exOpening with supplied := exFilled.filter (·.1 != "one") } == some "row"
+#guard inputsFailure { exOpening with supplied := exFilledZero } == some "row"
+#guard inputsFailure { exOpening with refReads := #[] } == some "row"
+#guard inputsFailure { exOpening with links := some (exReadLinks.push ⟨"Other_v1", "x", "row"⟩) } == some "row"
+#guard inputsFailure exOpeningWired == none
 -- nor may a port no link names read the row: a reference statement's read of it there is refused
-#guard inputsFailure { exReading with refReads := exReading.refReads.push
-  ("Other_v1", Json.mkObj [("ports", Json.mkObj [("x", Json.mkObj [("value", "salt")])])]) } == some "salt"
-#guard inputsFailure { exReading with refReads := exReading.refReads.push
-  (exRead, Json.mkObj [("ports", Json.mkObj [("row", Json.mkObj [("value", "row")])])]) } == none
-#guard inputsFailure { exReading with
-  links := some (exReadLinks.filter (·.port != "tok"))
-  wires := some #[⟨exRead, "tok", "Pair_v0", "o0"⟩]
-  supplied := exFilled.filter (·.1 != "tok")
-  interior := (exHolding #["root", "domain", "row", "salt", "path", "one"]).interior } == none
+#guard inputsFailure { exOpening with refReads := exOpening.refReads.push (exRefRead "Other_v1" "x" "salt") } ==
+  some "salt"
+#guard inputsFailure { exOpening with refReads := exOpening.refReads.push (exRefRead exRead "row" "row") } == none
 -- the code is reported beside the others, whatever else fails or passes
 #guard (check true (exHolding #["logits"]) none).codes == #["second-inputs", "second-statements"]
 #guard (exCheck true (exHolding #["logits"]) #[exHonest]).codes == #["second-inputs"]
