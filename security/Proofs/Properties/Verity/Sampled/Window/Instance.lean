@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.Window.Read
+public import Proofs.Properties.Verity.Sampled.Window.UnboundLaid
 public import Proofs.Properties.Verity.Sampled.Instance
 
 /-!
@@ -23,17 +24,23 @@ of the named `Prop`s below.
   finders under `ecr/sha-512`, and at a window `K`'s two-continuation finders under `cr/sha-512`), the window's
   premises at the projected strategy (`JointFinderCR`), no loss, and the window's δ (`Window.delta`) at the
   deployment's window, `⊤` where it runs none.
+* **The claim's transfer** (`ClaimTransfers`, `claimTransfers`): the units the extracted transcript doesn't bind are
+  at most as many as the window's incorrect proof blocks (`Window.unboundWrong`,
+  `JointAuditV5.UnboundWrong.card_le`), wherever the claim reads the window (`ClaimReads`): the window's members are
+  laid out in order (`Window.Laid`, which holds at every cost and widening, `Window.Laid.joint`,
+  `Window.Laid.extend`), the published share and the committed files' units are the window's, and the committed files
+  are read at the claim, each member at its own gates (`JointAuditV5.ReadsAt`).
 * **`WindowDeployed`** (`deployed`): the finder, the forger, the loss, the per-finder premises and the published δ by
   construction (`Window.delta_extend`: the window's δ doesn't read the widening), and the claim's transfer from
-  `ClaimTransfers`.
+  `ClaimReads`.
 * **`WindowCovers`** (`covers`): where the deployment runs no window the published δ is `⊤`; where it runs one the
   verifier doesn't set up on the committed files, no play is accepted (`RegisteredFiles`, `WindowAt`).
 * **The leg and remote's soundness** (`spotSound`, `remote_soundness_window`): `windowSpotSound_sessions` at the
   constructions `constructionsAt` assembles at the deployed device's history, the sessions' readings and decoders at
   the window's table, the family the parameters name (`labelAt`) and the window's bytes as `MAX_COINS` frames' coins.
-* **What stays open**: the claim's transfer (`ClaimTransfers`), the verifier's window at the registered files
-  (`WindowAt`), and what the verifier's acceptance gives of a play (`WindowReads`, `WindowRead`), each of the windows
-  the deployment runs.
+* **What stays open**: what the claim reads of the window (`ClaimReads`), the verifier's window at the registered
+  files (`WindowAt`), and what the verifier's acceptance gives of a play (`WindowReads`, `WindowRead`), each of the
+  windows the deployment runs.
 -/
 
 @[expose] public section
@@ -54,6 +61,58 @@ theorem Window.delta_extend (W : Window) (S : Widening) (t : ℕ) (cr : ℝ) : (
   unfold Window.delta
   rw [W.sessionDelta_extend S t]
   rfl
+
+/-- **A list's mapped entries, by place**: what holds of `f` at each entry of `l` with its place holds of each entry
+of `l.map f` with its place. -/
+theorem get_map_of {α β : Type*} (f : α → β) (P : ℕ → β → Prop) :
+    ∀ (l : List α), (∀ j : Fin l.length, P j.1 (f (l.get j))) → ∀ k : Fin (l.map f).length, P k.1 ((l.map f).get k)
+  | [], _, k => absurd k.2 (Nat.not_lt_zero _)
+  | _ :: _, h, ⟨0, _⟩ => h ⟨0, Nat.succ_pos _⟩
+  | _ :: l, h, ⟨k + 1, hk⟩ =>
+    get_map_of f (fun j => P (j + 1)) l (fun j => h ⟨j.1 + 1, Nat.succ_lt_succ j.2⟩) ⟨k, Nat.lt_of_succ_lt_succ hk⟩
+
+/-- Flock's members' counts are the members', at any budget. -/
+theorem Member.map_n_toV5 {nJ : ℕ} (t : ℕ) : ∀ l : List (Member nJ),
+    ((l.map fun m => m.toV5 t).map fun m' => m'.n) = l.map fun m => m.n
+  | [] => rfl
+  | m :: l => congrArg (m.n :: ·) (Member.map_n_toV5 t l)
+
+/-- **A list's entries, by place, from its mapped entries'**: `get_map_of`'s converse. -/
+theorem get_of_map {α β : Type*} (f : α → β) (P : ℕ → β → Prop) :
+    ∀ (l : List α), (∀ k : Fin (l.map f).length, P k.1 ((l.map f).get k)) → ∀ j : Fin l.length, P j.1 (f (l.get j))
+  | [], _, j => absurd j.2 (Nat.not_lt_zero _)
+  | _ :: _, h, ⟨0, _⟩ => h ⟨0, Nat.succ_pos _⟩
+  | _ :: l, h, ⟨j + 1, hj⟩ =>
+    get_of_map f (fun j => P (j + 1)) l (fun k => h ⟨k.1 + 1, Nat.succ_lt_succ k.2⟩) ⟨j, Nat.lt_of_succ_lt_succ hj⟩
+
+/-- Flock's window's counts are the members', at any budget. -/
+theorem Window.counts_joint (W : Window) (t : ℕ) : (W.joint t).counts = W.ms.map fun m => m.n :=
+  Member.map_n_toV5 t W.ms
+
+/-- **A window laid out in order (`Window.Laid`) is Flock's window laid out in order at every budget**
+(`JointAuditV5.Laid`): the layout reads the members' counts and places alone, which the registration fixes, and no
+budget, coin or sample. -/
+theorem Window.Laid.joint {W : Window} (h : W.Laid) (t : ℕ) : (W.joint t).Laid where
+  total := by
+    rw [W.counts_joint t, ← W.counts_joint 0]
+    exact h.total
+  emb k v := by
+    have hb : ∀ (s : ℕ) (j : Fin (W.joint s).ms.length),
+        (W.joint s).base j = MemberLayout.base (W.ms.map fun m => m.n) j.1 := fun s j =>
+      congrArg (fun cnt => MemberLayout.base cnt j.1) (W.counts_joint s)
+    have h0 : ∀ (j : Fin W.ms.length) (u : Fin (W.ms.get j).n),
+        ((W.ms.get j).emb u).val = MemberLayout.base (W.ms.map fun m => m.n) j.1 + u.val :=
+      get_of_map (fun m : Member W.nJ => m.toV5 0)
+        (fun j m' => ∀ u : Fin m'.n, (m'.emb u).val = MemberLayout.base (W.ms.map fun m => m.n) j + u.val) W.ms
+        fun j u => (h.emb j u).trans (congrArg (· + u.val) (hb 0 j))
+    rw [hb t k]
+    exact get_map_of (fun m : Member W.nJ => m.toV5 t)
+      (fun j m' => ∀ u : Fin m'.n, (m'.emb u).val = MemberLayout.base (W.ms.map fun m => m.n) j + u.val)
+      W.ms h0 k v
+
+/-- **A window laid out in order stays so with the sample's coins widened**: the members are the window's. -/
+theorem Window.Laid.extend {W : Window} (h : W.Laid) (S : Widening) : (W.extend S).Laid :=
+  ⟨h.total, h.emb⟩
 
 /-- **The deployment over windows, before SPOT's names**: the other subprotocols' vocabulary over the deployed device
 (`base`), whose signer is the deployed device's (`deployment`, `signer`) and whose declared calls cover the deployed
@@ -332,17 +391,57 @@ def ClaimTransfers : Prop :=
       (K.live W θ F c σ).ε * (K.live W θ F c σ).nJ <
         ((((K.live W θ F c σ).joint (I.base.cost θ F c σ)).wrongSet (K.project W θ F c σ)).card : ℝ)
 
-/-- **`WindowDeployed` at the deployed vocabulary**, from the claim's transfer, at constructions whose read finder
-and forger are the binding's (`WindowConstructions.withBinding`): the leg's per-finder premises are `error`'s
-condition at this strategy (`strictSpecs`, `premisesOf`), and the published δ is the window's, which doesn't read the
-widening (`Window.delta_extend`). -/
+/-- **What the claim reads at the deployment's windows**, at the constructions `K`. At each window the verifier
+sets up on the committed files: the window's members are laid out in order (`laid`, `Window.Laid`); the published
+share is the window's (`share`) and the committed files' units are the window's population (`units`); and at every
+strategy the committed files are read at the claim at the projected strategy (`reads`, `JointAuditV5.ReadsAt`): the
+vocabulary's read is the members' files in order, each member's files pass the verifier's files check
+(`MemberV5.Checked`), the commitment's openings hold wherever a member's deployed commitment opens and at its files'
+constants, and the extracted transcript is, at each member's gates, that member's transcript at the trace its session
+fixes at the joint registration (`JointAuditV5.memberX`). It is asked of every member, with a proof block in the
+sample or not. -/
+structure ClaimReads : Prop where
+  laid : ∀ θ F W, I.windows θ F = some W → W.Laid
+  share : ∀ θ F W, I.windows θ F = some W → (I.base.certOf θ).ε = W.ε
+  units : ∀ θ F W, I.windows θ F = some W → I.base.units θ F = W.nJ
+  reads : ∀ θ F W, I.windows θ F = some W → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
+    ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).ReadsAt (I.base.read θ F) (I.base.Opens θ F c)
+      (I.base.extract θ F c σ) (K.project W θ F c σ)
+
+/-- **The claim's transfer holds wherever the claim reads the window** (`ClaimTransfers`, from `ClaimReads`): the
+units the extracted transcript doesn't bind are at most as many as the window's incorrect proof blocks at the
+projected strategy (`Window.unboundWrong`, `JointAuditV5.UnboundWrong.card_le`, at the window widened by the
+projection's coins, laid out as the window is, `Window.Laid.extend`, `Window.Laid.joint`), and a claim that fails at
+the published share has more than that share of the committed files' units unbound, which are the window's share and
+population. -/
+theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
+  intro θ F W hW c σ hI
+  have hcard : (Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ)).card ≤
+      (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).wrongSet (K.project W θ F c σ)).card :=
+    Flock.Guarantees.JointAuditV5.UnboundWrong.card_le
+      (Window.unboundWrong (K.live W θ F c σ) (I.base.cost θ F c σ))
+      (((h.laid θ F W hW).extend (K.coins W θ F c σ)).joint (I.base.cost θ F c σ))
+      (I.base.read θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ) (K.project W θ F c σ) (h.reads θ F W hW c σ)
+  have hlt : (I.base.certOf θ).ε * ((I.base.units θ F : ℕ) : ℝ) <
+      ((Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ)).card : ℝ) :=
+    not_le.1 hI
+  have he : (K.live W θ F c σ).ε * ((K.live W θ F c σ).nJ : ℝ) =
+      (I.base.certOf θ).ε * ((I.base.units θ F : ℕ) : ℝ) :=
+    congrArg₂ (fun (e : ℝ) (n : ℕ) => e * (n : ℝ)) (h.share θ F W hW).symm (h.units θ F W hW).symm
+  exact he.trans_lt (lt_of_lt_of_le hlt (Nat.cast_le.2 hcard))
+
+/-- **`WindowDeployed` at the deployed vocabulary**, from what the claim reads of the window (`ClaimReads`,
+`claimTransfers`), at constructions whose read finder and forger are the binding's
+(`WindowConstructions.withBinding`): the leg's per-finder premises are `error`'s condition at this strategy
+(`strictSpecs`, `premisesOf`), and the published δ is the window's, which doesn't read the widening
+(`Window.delta_extend`). -/
 theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFinder I.base I.dev θ F c σ)
-    (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hC : I.ClaimTransfers K) :
+    (hKf : ∀ θ F c σ, K.forger θ F c σ = Binding.forger I.base I.dev θ F c σ) (hC : I.ClaimReads K) :
     WindowDeployed (I.vocab K) (I.liftOf K K) I.windows where
   finder θ F c σ := (hKr θ F c σ).symm
   forger θ F c σ := (hKf θ F c σ).symm
   loss _ _ := rfl
-  claim θ F W h c σ := hC θ F W h c σ
+  claim θ F W h c σ := I.claimTransfers K hC θ F W h c σ
   finderCR θ F W h c σ hcr hpr := by
     obtain ⟨hm, hr, hb⟩ := I.strictCR K h hcr
     exact ⟨hpr W h, hm, hr, hb⟩
@@ -428,15 +527,15 @@ def WindowReads (k : Verity.Registration.Composite) (ev : ℕ → Exchange → O
 constructions `constructionsAt` assembles): `WindowDeployed` and `WindowCovers` are `deployed`'s and `covers`'s, the
 deployed device printed each play's log and signed what its signatures are on (`Device.printsLog_dev`,
 `Device.signsPlay_dev`, at the base's signer, `WindowInstance.signer`), and each window the verifier sets up reads
-`MAX_COINS` frames' bytes and has members of its one table (`lb`, `members`). What is left is the claim's transfer
-(`ClaimTransfers`), the registered files' file check (`RegisteredFiles`), the verifier's window at the registered
-files (`WindowAt`) and what the verifier's acceptance gives of each play (`WindowReads`). -/
+`MAX_COINS` frames' bytes and has members of its one table (`lb`, `members`). What is left is what the claim reads of
+the window (`ClaimReads`), the registered files' file check (`RegisteredFiles`), the verifier's window at the
+registered files (`WindowAt`) and what the verifier's acceptance gives of each play (`WindowReads`). -/
 theorem spotSound (K₀ : WindowConstructions I.base) (k : Verity.Registration.Composite)
     (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)
     (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hC : I.ClaimTransfers (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
+    (hC : I.ClaimReads (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest))
     (hRg : I.RegisteredFiles) (hWa : I.WindowAt k) (hWR : I.WindowReads k ev filesDec) :
     (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)).SpotSound k :=
   windowSpotSound_sessions (I.vocab (I.constructionsAt K₀ k reg ev filesDec record₀ recordDigest)) k
@@ -457,20 +556,20 @@ end WindowInstance
 /-- **Soundness at remote's verifier at the deployed vocabulary over windows of several members**: remote's compiled
 verifier accepts files that passed the commit phase's check while one of its three claims fails with probability at
 most their errors summed, at the vocabulary `WindowInstance.vocab` builds from the deployment and the constructions
-`WindowInstance.constructionsAt` assembles, wherever the claim's transfer (`ClaimTransfers`), the registered files'
-file check (`RegisteredFiles`), the verifier's window at the registered files (`WindowAt`), what the verifier's
-acceptance gives of each play (`WindowReads`), and the base's PoUW and inference-only targets hold. The sampled
-leg's error at a window is `Window.delta`: the sample's own miss and the members' knowledge and binding terms summed
-(`JointShareV5`), a two-continuation term per round opened after a digest in every member's session, its closing
-round among them, one for the record and one for the bound digests, the coin trees' hiding term, and the read
-finder's bound. The premises at the finders the constructions build from a strategy are `error`'s condition at that
-strategy. -/
+`WindowInstance.constructionsAt` assembles, wherever what the claim reads of the window (`ClaimReads`), the
+registered files' file check (`RegisteredFiles`), the verifier's window at the registered files (`WindowAt`), what
+the verifier's acceptance gives of each play (`WindowReads`), and the base's PoUW and inference-only targets hold.
+The sampled leg's error at a window is `Window.delta`: the sample's own miss and the members' knowledge and binding
+terms summed (`JointShareV5`), a two-continuation term per round opened after a digest in every member's session,
+its closing round among them, one for the record and one for the bound digests, the coin trees' hiding term, and the
+read finder's bound. The premises at the finders the constructions build from a strategy are `error`'s condition at
+that strategy. -/
 theorem remote_soundness_window (I : WindowInstance d α) (K₀ : WindowConstructions I.base)
     (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)
     (record₀ : Window → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Window → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
-    (hC : I.ClaimTransfers (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
+    (hC : I.ClaimReads (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest))
     (hRg : I.RegisteredFiles) (hWa : I.WindowAt .remote) (hWR : I.WindowReads .remote ev filesDec)
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg ev filesDec record₀ recordDigest)).SoundnessAt .remote :=

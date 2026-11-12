@@ -1,6 +1,7 @@
 module
 
-public import Proofs.Properties.Verity.Sampled.Window.Instance
+public import Proofs.Properties.Verity.Sampled.Window.Read
+public import Proofs.Properties.Verity.Sampled.Instance
 public import Proofs.Properties.Verity.WindowFiles
 public import Proofs.Flock.EndToEnd.Joint.V5.Layout
 
