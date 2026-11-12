@@ -14,8 +14,9 @@ the float encodings.  Every evaluator is total on encodings.
 from __future__ import annotations
 
 import struct
+from collections.abc import Sequence
 
-from verity.circuits.defs import primitive
+from verity.circuits.defs import PrimitiveDefinition, primitive
 from verity.circuits.types import Array, Value
 from verity.definitions.ops import prims as _prims
 from verity.definitions.ops.sqrt import PouwF32SqrtRn  # noqa: F401  (Pearl-C4's root, registered in ops)
@@ -261,7 +262,7 @@ def PouwSqGe(x: int, th: int) -> int:
 WINDOW, MASKS, MASKED = 128, 15, Value(480)
 
 
-def masked_words(atom, ab) -> list[int]:
+def masked_words(atom: PrimitiveDefinition, ab: Sequence[int]) -> list[int]:
     """The masked words of the window ``ab`` (its A codes, then its B codes) under the atom primitive ``atom``, by mask."""
     a, b = ab[:WINDOW], ab[WINDOW:]
     words = {0: 0}
@@ -305,7 +306,7 @@ def PouwWindowWord(x: int, m: int) -> int:
 F_ENDS = (0x43, 0xC3)
 
 
-def ends_agree(atom, acc: int, cb: int) -> int:
+def ends_agree(atom: PrimitiveDefinition, acc: int, cb: int) -> int:
     """1 iff the codes of the support's two ends under the atom primitive ``atom``, e4m3(atom(acc, [cb]^32, [±0x43]^32)),
     have one value: they are equal, or both are zeros (`SaltDead`'s `EndsAgree`, compared as its `codeVal_eq_iff` says)."""
     c = [_prims.F32ToE4m3Sat.evaluate(atom.evaluate(acc, *[cb] * 32, *[f] * 32)) for f in F_ENDS]
