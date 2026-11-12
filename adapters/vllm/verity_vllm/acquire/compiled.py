@@ -18,6 +18,7 @@ from verity_vllm.config import option
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.program.compiled_relations import OUTPUT_ROLES, pointer_arity, roles_of
 from verity_vllm.query.manifest.format import manifest_digest as _manifest_digest
+from verity_vllm.records.schema_ids import MANIFEST_VERIFY_SCHEMA
 
 IDENTITY_KEY = ("program_digest", "request_id", "step", "invocation", "op_path", "output_member", "element_range", "rank")
 _RUN = re.compile(r"^\s*(\w+)\.run\((.*),\s*stream=\w+\)\s*$")
@@ -368,13 +369,18 @@ COMMANDS = {"verify": VerifyOptions}
 
 
 def main(a: VerifyOptions) -> int:
-    used, rebuilt = json.load(open(a.manifest)), json.load(open(a.rebuilt))
-    rows_digest = _manifest_digest(used.get("identities") or [])
-    rec = {"schema": "verity-sweep/manifest-verify/v1", "manifest": a.manifest, "used_digest": used.get("manifest_digest"), "used_rows_digest": rows_digest,
+    used, rebuilt = (json.loads(Path(p).read_text()) for p in (a.manifest, a.rebuilt))
+    # a Build may leave out its rows, its populations and its compile artifact, or hold each empty: then it has none
+    rows = used.get("identities")
+    rows = rows if rows else []
+    rows_digest = _manifest_digest(rows)
+    counted, used_artifact, rebuilt_artifact = rebuilt.get("populations"), used.get("artifact"), rebuilt.get("artifact")
+    rec = {"schema": MANIFEST_VERIFY_SCHEMA, "manifest": a.manifest, "used_digest": used.get("manifest_digest"), "used_rows_digest": rows_digest,
            "rebuilt_digest": rebuilt.get("manifest_digest"), "used_program_digest": used.get("program_digest"), "rebuilt_program_digest": rebuilt.get("program_digest"),
-           "used_identities": len(used.get("identities") or []), "rebuilt_identities": (rebuilt.get("populations") or {}).get("identities"),
+           "used_identities": len(rows), "rebuilt_identities": counted.get("identities") if counted else None,
            "rebuilt_complete": rebuilt.get("complete"), "rebuilt_from": a.rebuilt,
-           "used_artifact": (used.get("artifact") or {}).get("digest"), "rebuilt_artifact": (rebuilt.get("artifact") or {}).get("digest"),
+           "used_artifact": used_artifact.get("digest") if used_artifact else None,
+           "rebuilt_artifact": rebuilt_artifact.get("digest") if rebuilt_artifact else None,
            "method": "served-compiled rows: no derive_step Program dir exists; the rebuild is the served Build the TREATMENT process "
                      "rederived from its own compile artifact x the workload schedule (pipeline.served_match) -- equal program_digest = the "
                      "treatment executed the Program of record, equal manifest_digest = the same required-value population, equal compile "

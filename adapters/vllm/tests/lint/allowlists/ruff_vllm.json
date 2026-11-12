@@ -250,7 +250,6 @@
     {"file": "tools/ratchet_gate.py", "kind": "ISC004", "symbol": "judge", "detail": "Unparenthesized implicit string concatenation in collection", "count": 2},
     {"file": "tools/ratchet_gate.py", "kind": "ISC004", "symbol": "render", "detail": "Unparenthesized implicit string concatenation in collection"},
     {"file": "tools/ratchet_gate.py", "kind": "UP033", "symbol": "<module>", "detail": "Use `@functools.cache` instead of `@functools.lru_cache(maxsize=None)`", "count": 3},
-    {"file": "verity_vllm/acquire/compiled.py", "kind": "SIM115", "symbol": "main", "detail": "Use a context manager for opening files", "count": 2},
     {"file": "verity_vllm/acquire/compiled.py", "kind": "T201", "symbol": "main", "detail": "`print` found"},
     {"file": "verity_vllm/acquire/fa2_tap_src/apply_v8.py", "kind": "SIM115", "symbol": "<module>", "detail": "Use a context manager for opening files", "count": 10},
     {"file": "verity_vllm/acquire/fa2_tap_src/apply_v8.py", "kind": "T201", "symbol": "<module>", "detail": "`print` found", "count": 7},

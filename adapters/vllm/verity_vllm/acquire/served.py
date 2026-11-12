@@ -408,8 +408,8 @@ def _merge(env: dict[str, Any], local: dict[str, Any]) -> dict[str, Any]:
 
 def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str) -> dict[str, Any]:
     """The piece programs through the split graph: global calls over named values, the attention ops, the backbone's output."""
-    att_of_out = {(a["out"]["piece"], a["out"]["ret"]): a for a in graph["attention"]
-                  if (a.get("out") or {}).get("kind") == "piece_ret"}
+    # an attention op's record leaves out an operand its signature does not name (`compiled.split_graph_wiring`)
+    att_of_out = {(to["piece"], to["ret"]): a for a in graph["attention"] if (to := a.get("out")) and to.get("kind") == "piece_ret"}
     if len(att_of_out) != len(graph["attention"]):
         raise Unmodelled("an attention op's output buffer is not a piece's return")
     values: dict[str, dict[str, Any]] = {IDS: {"width": 1, "piece": 0}, POSITIONS: {"width": 1, "piece": 0}}
@@ -468,12 +468,13 @@ def wire(programs: list[dict[str, Any]], graph: dict[str, Any], *, backbone: str
                 producer[w] = gc
         rets.append([g(r) for r in prog["returns"]])
         for a in graph["attention"]:
-            if (a.get("q") or {}).get("piece") != p:
+            q = a.get("q")
+            if not q or q.get("piece") != p:
                 continue
             ops = {}
             for k in ("q", "k", "v"):
-                s = a.get(k) or {}
-                if s.get("kind") != "piece_ret":
+                s = a.get(k)
+                if not s or s.get("kind") != "piece_ret":
                     raise Unmodelled(f"attention {a['layer']}: its {k} is not a piece's return")
                 ops[k] = rets[s["piece"]][s["ret"]]
                 if "value" not in ops[k]:
@@ -614,7 +615,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
     return assemble(wired, moe_plans, _final_value(split_graph, graph, wired), kernels, SA.winners(inductor_dir),
                     source={"inductor_dir": inductor_dir, "split_graph": split_graph,
                             "piece_wrappers": [os.path.relpath(w["path"], inductor_dir) for w in chosen]},
-                    schedule=schedule, steps=steps, routes=routes.get("routes") or {}, capture_sizes=capture_sizes,
+                    schedule=schedule, steps=steps, routes=probed if (probed := routes.get("routes")) else {}, capture_sizes=capture_sizes,
                     max_num_seqs=max_num_seqs, device=device, split_cap=split_cap, lm_head=lm_head, rank=rank)
 
 
