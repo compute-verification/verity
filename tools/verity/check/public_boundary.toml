@@ -246,8 +246,6 @@ records = [
 # `vllm-poc/bundles`, a host's archive), so the public tree could only skip them: each `*_of_record.py` beside the public test it
 # shares helpers with, or the whole file where none of it runs without them
 pod_records = [
-    "adapters/vllm/tests/acquire/test_compiled_manifest.py",
-    "adapters/vllm/tests/pipeline/test_compiled_merge_identity.py",
     "adapters/vllm/tests/check/test_stoch_draw_ledger_of_record.py",
     "adapters/vllm/tests/engine/test_gen_{dense2,ov_moe,ov_sampling}_of_record.py",
     "adapters/vllm/tests/pipeline/test_{admission_telemetry,coverage_workloads,run_config_dry_run}_of_record.py",
