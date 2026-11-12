@@ -4,7 +4,8 @@
 # `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
 # which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
-defaultTargets = ["CoreOnsite", "onsite", "CoreComposites", "product"]
+defaultTargets = ["CoreOnsite", "onsite", "CoreRemoteNetwork", "remote-network", "CoreComposites",
+  "product"]
 
 [leanOptions]
 autoImplicit = false
@@ -77,6 +78,16 @@ name = "CoreOnsite"
 [[lean_exe]]
 name = "onsite"
 root = "OnsiteMain"
+
+# Remote with the network certifier (`verity/remote-network/v0`), development: remote's H1 subprotocols and the network
+# certifier's period, under remote's ties and its own (CoreRemoteNetwork.lean). `product` doesn't name it; its
+# executable is the core CLI (`remote-network id | check | serve`).
+[[lean_lib]]
+name = "CoreRemoteNetwork"
+
+[[lean_exe]]
+name = "remote-network"
+root = "RemoteNetworkMain"
 
 # The composite a configuration's subprotocols make, onsite or remote, and no other: `product IDS id | check | serve`
 # (CoreComposites.lean).
