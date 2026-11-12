@@ -33,7 +33,6 @@
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_probe", "detail": "os.environ.get", "count": 2},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "gpu_info", "detail": "RUNPOD_POD_ID"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "environ", "symbol": "main", "detail": "os.environ.get"},
-    {"file": "verity_vllm/engine/build.py", "kind": "environ", "symbol": "compilation_facts", "detail": "VLLM_DISABLE_COMPILE_CACHE"},
     {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "seed-default", "symbol": "compare", "detail": "seed"},
     {"file": "verity_vllm/program/frontend/__init__.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "seed-default", "symbol": "StochasticServe.__init__", "detail": "literal_seed"},
