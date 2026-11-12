@@ -961,7 +961,8 @@ def test_the_tests_get_what_circuit_check_leaves_of_the_slot(tmp_path, monkeypat
         return pt[1][pt[1].index("--mem-gb") + 1]
 
     assert mem(None) == mem(["circuit-check", "pytest"]) == "175", "halved: lean-suites runs beside pytest with the same share"
-    assert mem(["pytest"]) == "280"
+    assert mem(["pytest", "lean-build"]) == "280", "halved beside a Lean step"
+    assert mem(["pytest"]) == "560", "a shard of pytest alone (the 5-pod plan's 4/5) halved the slot for a lean-suites it lacks"
     monkeypatch.delenv(CHECK.SLOT.SLOT_MEM_ENV)
     [pt] = [s for g in CHECK.groups(tmp_path, 16) for s in g if s[0] == "pytest"]
     assert "--mem-gb" not in pt[1]
