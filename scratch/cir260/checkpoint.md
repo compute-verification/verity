@@ -5,3 +5,4 @@
 - 2026-11-12T17:35Z FP8WRITE: capture r20261112-172953-93dc on node A card 2 (H200): GO, 12,512 cache rows compared, 0 differ; norm and RoPE 0 differ; lease 12 s; quotable comment posted on CIR-260; suites: 49 of 57 passed before the first run's timeout, the 8 left rerunning as r20261112-173053-7c83.
 - 2026-11-12T18:25Z FP8WRITE: suites rerun r20261112-173053-7c83: flock prover suite at 63%, 7 more after it; capture done (GO, 0 rows differ); nothing else open.
 - 2026-11-12T19:26Z FP8WRITE: suites rerun r20261112-173053-7c83: verity-flock, research, verity/definitions/ops passed; circuit-check's suite running; 4 after it.
+- 2026-11-12T20:33Z FP8WRITE: suites rerun r20261112-173053-7c83 rc 0, all 8 passed (57 of 57 across both runs); repository alone queued as r20261112-203126-e313 for its suites.json; launcher now passes --cores to gpu-lease (my 17:30Z lease, 12 s on card 2, declared none; the job was pinned to 24-33 with taskset); I hold no lease.
