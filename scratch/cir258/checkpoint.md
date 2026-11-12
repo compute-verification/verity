@@ -1,1 +1,1 @@
-12:55Z GEMMCALL: branch cursor/circuits-cir258-fp8-gemm-call-6f04 at 5652daebfcd9 (CALLEE_CALLS entry + FP8 RANGES); pins update pass r20261112-125302-2646 running on vy-nebius-cpu-2.
+13:04Z GEMMCALL: head c00bf07b2258 pushed (items 1-5); confirming pass r20261112-125806-3bee 0 failures no pins diff; comment A posted on CIR-258; walks+negative r20261112-130257-171f running on vy-nebius-cpu-9.
