@@ -19,7 +19,7 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
 - where the job served arms beside the three (``--beside``, the runner's ``--arms``: arms that differ from stock
   or from ours in one thing), which are in what ran and in no line of the three: each pass of the load every arm
   served, a line a pass in the order served, by the counters the benchmark read off its server before and after it
-  (`passes`): its engine steps, its drafts and the share of their tokens accepted, its output tokens and its
+  (`passes`): its engine steps, its drafts and how many of their tokens were accepted, its output tokens and its
   seconds; then how each arm's requests were sampled and whether its client sent their seeds, and for each
   directory whether its server was on the canonical top-k and what the top-k's processes counted there. These
   lines are in no verdict; the report's JSON holds them for every job;
@@ -1155,8 +1155,8 @@ def _passes(v: dict) -> list[str]:
             counted = "its record holds no counters of the engine's"
         else:
             counted = f"{x['steps']:,.0f} engine steps" + (
-                f", {x['drafts']:,.0f} drafts, {x['accepted_tokens'] / x['draft_tokens']:.2%} of their tokens accepted"
-                if x["drafts"] and x["draft_tokens"] else ", no drafts")
+                f", {x['drafts']:,.0f} drafts, {x['accepted_tokens']:,.0f} of their {x['draft_tokens']:,.0f} tokens accepted "
+                f"({x['accepted_tokens'] / x['draft_tokens']:.2%})" if x["drafts"] and x["draft_tokens"] else ", no drafts")
         lines.append(f"  {x['dir']} {x['pass']} rep {x['rep']}{', left out' if x['left_out'] else ''}: {counted}; "
                      f"{x['output_tokens']:,.0f} output tokens in {x['seconds']:.1f} s")
     how = {"greedy": [a for a, x in v["sampling"].items() if not x["sampled"]],

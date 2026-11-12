@@ -947,12 +947,12 @@ def test_arms_served_beside_are_in_what_ran_and_every_pass_has_its_engines_count
         return (out / "prod_repro.txt").read_text(), json.loads((out / "prod_repro.json").read_text())
 
     block = ("each pass, by the engine's counters read before and after it (in no verdict):\n"
-             "  prod chat@16 rep 1: 2,089 engine steps, 4,992 drafts, 2.78% of their tokens accepted; 30,000 output tokens in 100.0 s\n"
-             "  prod-seeded chat@16 rep 1: 2,100 engine steps, 5,000 drafts, 2.60% of their tokens accepted; 30,000 output tokens "
+             "  prod chat@16 rep 1: 2,089 engine steps, 4,992 drafts, 693 of their 24,960 tokens accepted (2.78%); 30,000 output tokens in 100.0 s\n"
+             "  prod-seeded chat@16 rep 1: 2,100 engine steps, 5,000 drafts, 650 of their 25,000 tokens accepted (2.60%); 30,000 output tokens "
              "in 100.0 s\n"
-             "  prod-record chat@16 rep 1: 2,204 engine steps, 5,569 drafts, 0.42% of their tokens accepted; 30,000 output tokens "
+             "  prod-record chat@16 rep 1: 2,204 engine steps, 5,569 drafts, 117 of their 27,845 tokens accepted (0.42%); 30,000 output tokens "
              "in 100.0 s\n"
-             "  prod-trace chat@16 rep 1: 2,110 engine steps, 5,010 drafts, 2.55% of their tokens accepted; 30,000 output tokens "
+             "  prod-trace chat@16 rep 1: 2,110 engine steps, 5,010 drafts, 640 of their 25,050 tokens accepted (2.55%); 30,000 output tokens "
              "in 100.0 s\n"
              "  the requests: sampled with no seed sent (prod); sampled, each under a seed its client sent (prod-record, "
              "prod-seeded and prod-trace)\n"

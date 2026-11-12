@@ -111,7 +111,7 @@ replay that differs, the first token that does and the first step.
   exits), and a replay in which no process kept any shows nothing of the top-k having run there.
 - **each pass**, where the job served arms beside the three (`--arms`): every pass of the load every arm served, a
   line a pass in the order served, by the counters the benchmark read off its server before and after it (the pass's
-  own `meta.json`): its engine steps, its drafts and the share of their tokens the model accepted, and beside them
+  own `meta.json`): its engine steps, its drafts and how many of their tokens the model accepted, and beside them
   its output tokens and its seconds as the cost counts them; `left out` marks a lifetime's warm-up. Then how each
   arm's requests were sampled, and whether its client sent their seeds; and for each directory whether its server
   was started on the canonical top-k (its record's environment) and what the top-k's processes counted there.
