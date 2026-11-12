@@ -157,11 +157,11 @@ before they carried it, gate runs 8 and 9's among them."""
 
 
 def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, reads_bytes: int, tiers: dict,
-                 pass_ns: int) -> dict:
+                 pass_ns: int, node: ledger.Node) -> dict:
     """The ledger's timing term, `1 − reads/(R·span)`, split per pass into parts that sum to it exactly, each a share
     of R·span.  `tiers` is the calibration's bare read of each tier (`read_tiers`: its bytes and milliseconds, the
     prover's own measurement), and `pass_ns` the median spacing of the session's root arrivals (the verifier's clock).
-    With s the span a pass, G every GPU's stated read and H the host's:
+    With s the span a pass, G every GPU's stated read and H the host's (`node.tiers`, the ledger's node):
 
     - `above_stated_tiers`: R beyond G + H (at spec R, the hardware's gap);
     - `host_dram_idle`: H·s less the host tier's bytes;
@@ -174,7 +174,8 @@ def timing_parts(*, capacity_bytes_per_s: float, span_ns: int, passes: int, read
     `receipts_beyond_read`."""
     s = span_ns / passes / 1e9
     whole = capacity_bytes_per_s * s
-    gpus, host = timing.GPUS * timing.GPU_READ_BYTES_PER_S, timing.HOST_READ_BYTES_PER_S
+    hbm, dram = node.tiers["hbm"], node.tiers["dram"]
+    gpus, host = hbm.devices * hbm.read_bytes_per_s, dram.devices * dram.read_bytes_per_s
     hbm_bytes, host_bytes = tiers["hbm"]["bytes"], tiers.get("host", {}).get("bytes", 0)
     hbm_s, pass_s = tiers["hbm"]["ms"] / 1e3, pass_ns / 1e9
     return {"above_stated_tiers": (capacity_bytes_per_s - gpus - host) / capacity_bytes_per_s,
@@ -1381,13 +1382,13 @@ class Verifier:
             out["ledger"] = self.ledgers(record, [list(w.arrived_ns) for w in record.windows],
                                          [w.plans for w in session.windows])
             if pace is not None:
-                rebuild = audit.Rebuild(record.codec, timing.SQUARINGS_PER_S[record.codec.field.name])
+                inputs = out["ledger"]["inputs"]
                 try:
                     out["ledger"]["paced"] = paced_line(
                         out["ledger"]["memory"], out["windows_seen"], groups=pace["groups"],
                         wrong=audit.pooled(record)[0], blocks=reg.blocks,
-                        rebuild_per_ns=line.number(rebuild.squarings_per_s) / record.codec.encode_squarings / line.NS,
-                        chip_bytes=timing.CHIP_BYTES, block_bytes=record.block_bytes,
+                        rebuild_per_ns=line.number(inputs["squarings_per_s"]) / record.codec.encode_squarings / line.NS,
+                        chip_bytes=inputs["chip_bytes"], block_bytes=record.block_bytes,
                         node_bytes=self.hbm_bytes + self.host_bytes,
                         burst_bytes=ingress_bursts(self.ingress_bytes_per_s),
                         ingress_per_ns=line.number(self.ingress_bytes_per_s) / record.block_bytes / line.NS)
@@ -1448,10 +1449,11 @@ class Verifier:
                                     link_burst_bytes=self.link_burst_bytes)
         spec, measured = stated.spec_bytes_per_s, stated.read_bytes_per_s
         rebuild = stated.rebuild(record.codec)
-        node = {"gpus": timing.GPUS, "gpu_spec_bytes_per_s": timing.GPU_SPEC_BYTES_PER_S,
-                "gpu_read_bytes_per_s": timing.GPU_READ_BYTES_PER_S, "host_spec_bytes_per_s": timing.HOST_SPEC_BYTES_PER_S,
-                "host_read_bytes_per_s": timing.HOST_READ_BYTES_PER_S, "gpu_chip_bytes": timing.GPU_CHIP_BYTES,
-                "host_chip_bytes": timing.HOST_CHIP_BYTES}
+        hbm, dram = stated.tiers["hbm"], stated.tiers["dram"]
+        node = {"gpus": hbm.devices, "gpu_spec_bytes_per_s": hbm.spec_bytes_per_s,
+                "gpu_read_bytes_per_s": hbm.read_bytes_per_s, "host_spec_bytes_per_s": dram.spec_bytes_per_s,
+                "host_read_bytes_per_s": dram.read_bytes_per_s, "gpu_chip_bytes": hbm.chip_bytes,
+                "host_chip_bytes": dram.chip_bytes}
         out = {"inputs": {"spec_bytes_per_s": spec, "measured_read_bytes_per_s": measured,
                           "reported_read_bytes_per_s": reported, "node": node,
                           "disk_bytes_per_s": stated.disk_bytes_per_s, "link_bytes_per_s": stated.link_bytes_per_s,
@@ -1487,7 +1489,7 @@ class Verifier:
             out[name] = {"capacity_bytes_per_s": r, **g.ledger.to_json(), "certified_bytes": (1 - g.gamma) * whole,
                          "certified_bytes_horizon": (1 - g.gamma_horizon) * whole}
             if parts:
-                out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, **parts)
+                out[name]["timing_parts"] = timing_parts(capacity_bytes_per_s=r, node=stated, **parts)
         out["delta"] = ledger.delta_parts(record, stated)
         out["declared"] = (ledger.Declared(len(record.windows), readings["spec"], readings["measured"],
                                            ledger.memory(record, stated)).to_json()
@@ -1500,7 +1502,7 @@ class Verifier:
                                                                            blocks=record.blocks, outside=outside))}
         if plans is not None:
             out["memory"] = memory(record, plans, self.regions, hbm_bytes=self.hbm_bytes, rebuild=rebuild,
-                                   chip_bytes=timing.CHIP_BYTES)
+                                   chip_bytes=stated.chip_bytes)
             if (error := memory_error(out)) is not None:
                 out["memory"]["error"] = error
             if self.host_bytes:
