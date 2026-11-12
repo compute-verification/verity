@@ -71,8 +71,8 @@ def fold(y: np.ndarray | int, word: Sequence[int], a0: int, a1: int, n: int, r1:
     return y
 
 
-def g3_ok(word: Sequence[int], other: Sequence[int], n: int) -> bool:
-    """(G₃) at width n: XOR limbs d0, d2 keep or complement their low three bits; add limbs d1, d3 keep bit 0."""
+def g3_ok(word: Sequence[int], other: Sequence[int]) -> bool:
+    """(G₃): XOR limbs d0, d2 keep or complement their low three bits; add limbs d1, d3 keep bit 0."""
     return all(((word[i] ^ other[i]) & 7) in (0, 7) for i in (0, 2)) and all(((word[i] ^ other[i]) & 1) == 0 for i in (1, 3))
 
 
@@ -172,7 +172,7 @@ def main() -> int:
             same = all(bool((fold(states, word32, a0, a1, 32, 13, 19, R) == fold(states, w2, a0, a1, 32, 13, 19, R)).all())
                        for R in range(1, 6))
             checks.check(f"32-bit (13,19), key {a0:#x},{a1:#x}: {name} leaves the R-fold fixed, R = 1..5 (2^14 states)",
-                         same, f"changed limbs {[i for i in range(4) if w2[i] != word32[i]]}; (G3) kept: {g3_ok(word32, w2, 32)}")
+                         same, f"changed limbs {[i for i in range(4) if w2[i] != word32[i]]}; (G3) kept: {g3_ok(word32, w2)}")
 
     with tempfile.TemporaryDirectory() as tmp:
         exe = build(Path(tmp))
@@ -229,10 +229,10 @@ def main() -> int:
                         if e:
                             extra[r] += len(e)
                             extra_keys[r].append((k, key_ok_r11(*k, n), kj19_bad(k[0], n) or kj19_bad(k[1], n)))
-                        g3bad[r] += sum(not g3_ok(word, w2, n) for w2 in res[k][r])
+                        g3bad[r] += sum(not g3_ok(word, w2) for w2 in res[k][r])
                 r11keys = [k for k in ks if key_ok_r11(*k, n)]
                 size1_r11 = collections.Counter(len(res[k][1]) + 1 for k in r11keys)
-                g3bad_r11 = sum(not g3_ok(word, w2, n) for k in r11keys for r in range(1, rmax + 1) for w2 in res[k][r])
+                g3bad_r11 = sum(not g3_ok(word, w2) for k in r11keys for r in range(1, rmax + 1) for w2 in res[k][r])
                 checks.check(f"n{n} {label} ({len(ks)} keys, {r11} key_ok_r11): |K_1| = 16 (the P/X/N group, 3S-2 = 4 "
                              "involutions) at every key_ok_r11 key", set(size1_r11) <= {16},
                              f"|K_1| histogram, key_ok_r11 keys {dict(size1_r11)}, all keys {dict(size1)}")

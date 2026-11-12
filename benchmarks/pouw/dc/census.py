@@ -92,7 +92,7 @@ def run_id(d: Path) -> str:
     raise SystemExit(f"{d}: no run id (rYYYYMMDD-HHMMSS-xxxx) on its path; fetch it with `research fetch RUN --all`")
 
 
-def tensor_kind(family: str, name: str, form: dict) -> tuple[str, float, int] | None:
+def tensor_kind(name: str, form: dict) -> tuple[str, float, int] | None:
     """(kind, slots a warp instruction, depth) of a tensor probe's form; None for a zero-data twin or an emulated form."""
     if form.get("zero_data"):
         return None
@@ -148,7 +148,7 @@ class Device:
         self.kinds: dict[str, dict] = {}
         for run, a in zip(self.runs, self.analyses):
             for name, f in a["forms"].items():
-                tk = tensor_kind(family, name, f)
+                tk = tensor_kind(name, f)
                 lk = ld_kind(name) if family == "sm100" else None
                 if tk:
                     kind, per, depth = tk
@@ -197,7 +197,7 @@ class Device:
         pts = [(0.0, self.issue_max() / SMSPS, "scalar issue")]
         for run, a in zip(self.runs, self.analyses):
             for name, f in a["forms"].items():
-                tk = tensor_kind(self.family, name, f)
+                tk = tensor_kind(name, f)
                 if tk and tk[0] == HONEST[self.family] and f["issue"]:
                     r = f["slots"] / tk[1]
                     pts.append((r / SMSPS, (sum(f["issue"]) - r) / SMSPS, f"{name}@{run}"))

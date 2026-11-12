@@ -24,7 +24,7 @@ def test_fold_kernel_matches_meet_in_the_middle(tmp_path):
     assert len(res[1]) == 15
     assert res[3] == res[1]
     assert fk.mitm_k1(word, 37, 21, 6, 2, 4) == res[1]
-    assert all(fk.g3_ok(word, w2, 6) for w2 in res[1])
+    assert all(fk.g3_ok(word, w2) for w2 in res[1])
 
 
 @pytest.mark.slow
