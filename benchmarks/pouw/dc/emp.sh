@@ -10,8 +10,10 @@
 #       unpacks the build's bins.tgz (from $RESEARCH_RUN_DIR/inputs/), records the clocks (A1: nvidia-smi -q -d CLOCK
 #       before and after, clocks sampled every 200 ms under the lease) and runs probe.py run on every binary (gate, the
 #       poisoned sink and its control, then the interleaved timing) into $OUT/<binary>/. With EMP_ONLY=REGEX it times
-#       only the probes whose name matches (probe.py run --only).
-# Exit: 0 done, 1 nothing built or a gate verdict not the declared one, 2 no nvcc or no inputs.
+#       only the probes whose name matches (probe.py run --only). With EMP_GPU=INDEX (and EMP_CORES=CPUS) it takes
+#       only that card (gpu-lease --on, --cores), once and without waiting, and first exits 3, touching no card, if
+#       that card holds a compute process; $OUT/env/node-{before,after}.txt hold every card's leases and processes.
+# Exit: 0 done, 1 nothing built or a gate verdict not the declared one, 2 no nvcc or no inputs, 3 the card in use.
 set -uo pipefail
 MODE=${1:?usage: emp.sh build SRC... | time [REPS]}
 shift
@@ -54,10 +56,22 @@ time)
     tar -C "$WORK" -xzf "$IN/bins.tgz"
     mkdir -p "$OUT/env"
     lease=()
-    command -v gpu-lease >/dev/null && lease=(gpu-lease 1 --wait --max-min 25 --)
+    if [ -n "${EMP_GPU:-}" ]; then
+      command -v gpu-lease >/dev/null || { echo "emp.sh: EMP_GPU needs gpu-lease" >&2; exit 2; }
+      node_state() { gpu-lease status; nvidia-smi --query-compute-apps=gpu_uuid,pid,used_memory --format=csv; }
+      node_state >"$OUT/env/node-before.txt" 2>&1
+      busy=$(nvidia-smi -i "$EMP_GPU" --query-compute-apps=pid --format=csv,noheader 2>&1)
+      [ -z "$busy" ] || { echo "emp.sh: GPU $EMP_GPU holds a compute process ($busy); nothing started" >&2; exit 3; }
+      lease=(gpu-lease 1 --on "$EMP_GPU" ${EMP_CORES:+--cores "$EMP_CORES"} --max-min 25 --)
+    elif command -v gpu-lease >/dev/null; then
+      lease=(gpu-lease 1 --wait --max-min 25 --)
+    fi
     [ ${#lease[@]} -eq 0 ] && echo "emp.sh: no gpu-lease on this node; running on its GPU directly" >&2
-    "${lease[@]}" env EMP_LEASED=1 WORK="$WORK" REPS="$REPS" bash "${BASH_SOURCE[0]}" time "$REPS"
-    exit $?
+    rc=0
+    "${lease[@]}" env EMP_LEASED=1 WORK="$WORK" REPS="$REPS" bash "${BASH_SOURCE[0]}" time "$REPS" || rc=$?
+    [ -n "${EMP_GPU:-}" ] && node_state >"$OUT/env/node-after.txt" 2>&1
+    [ $rc -ne 75 ] || { echo "emp.sh: GPU $EMP_GPU's lease is held; nothing started" >&2; exit 3; }
+    exit $rc
   fi
   dev=()
   [ -n "${GPU_LEASE_UUID:-}" ] && dev=(-i "$GPU_LEASE_UUID")
