@@ -209,7 +209,7 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
 def test_a_scan_whose_ok_bits_are_not_the_schedules_constants_is_refused(server, monkeypatch):
     """A scan proof block's public word is its ok bit, and a member's ok rows are committed under public salts, so the
     rows form computes each member's root from the schedule's T and refuses, in Lean and in the mirror and by name,
-    each way a link-window's scan's registration can name another (`PC.UNOKS`): a member's `<member>/o0` at another
+    each way an execution phase's scan's registration can name another (`PC.UNOKS`): a member's `<member>/o0` at another
     root (a tree with a row that is not the ok row, or under other salts), domain or leaf count, with no entry or
     under another port, named a second time at another root, beside a port ending `/o0` that is no member's, every
     member at another schedule's constants, a root or domain that is no string, and the entries by value under
@@ -229,7 +229,7 @@ def test_a_scan_whose_ok_bits_are_not_the_schedules_constants_is_refused(server,
 
 
 def ok_entries(case: dict) -> list[dict[str, tuple]]:
-    """Each link-window's scan's registration's ok entries, by port: (domain, root, leaves)."""
+    """Each execution phase's scan's registration's ok entries, by port: (domain, root, leaves)."""
     return [{e["port"]: (e.get("domain"), e.get("root"), e.get("leaves")) for e in reg.get("roots", [])
              if scan_ok.ok_port(e.get("port"))}
             for reg in json.loads(bytes.fromhex(case["commitment"]))["windows"]]

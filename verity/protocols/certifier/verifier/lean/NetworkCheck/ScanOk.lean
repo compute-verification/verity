@@ -17,7 +17,7 @@ tree, so the tree of a member whose every proof block is ok is one anyone comput
 names no run, round or execution phase. One execution phase's scan has the members `members` gives, a function of the
 schedule's `T` alone, so the roots are constants of `T` (`consts`).
 
-The period check (`NetworkCheck.Period`'s rows form) computes them once a period, from `T`, and holds every execution
+The period check (its rows form, `okChecks`) computes them once a period, from `T`, and holds every execution
 phase's scan's registration to them by comparison alone (`held`): its `roots` name each member's `<member>/o0` at the
 constant's root, leaves and domain, and no other port ending `/o0`. A member's statement reads its `o0` rows at the
 root its registration names, so a proof block's ok word opens a row `OK_ROW` or SHA-512 collides: the bit is the

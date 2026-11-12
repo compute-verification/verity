@@ -32,7 +32,7 @@ at its smallest circuit-check row, or `select_entry`, `SelectEntry_v1` at its sm
 slots' `ScanSlots_v2`, each a pinned Definition with one member a slot) in its own audit's registration and Program
 (`_prog_tied`, `_wired`), and its
 state (`STATE`) at the root and domain of that audit's `SCAN_STATE` (`_state_tied`), and each member's ok bits
-(`<member>/o0`) at the schedule's constant (`_ok_entries`; `ok-unheld`: one link-window's broken, `UNOKS`; `ok-equal`:
+(`<member>/o0`) at the schedule's constant (`_ok_entries`; `ok-unheld`: one execution phase's broken, `UNOKS`; `ok-equal`:
 a schedule of three ticks, where two members' are at one domain and root), answered by one-stage with a
 stratified or subset sample at the period's δ; the scan's Program is its generator form, stand-ins of its three templates
 at small widths in the Boolean profile's types, as the scan's Definitions have them (`scan_descriptor`), and a Program in
@@ -1515,7 +1515,7 @@ UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
 #: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
 #: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second
 UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra")
-#: How `rows-ok-unheld` breaks its link-window's scan's ok bits while every other check holds: one member's
+#: How `rows-ok-unheld` breaks its execution phase's scan's ok bits while every other check holds: one member's
 #: `<member>/o0` entry at another root (a tree with a row that is not the ok row, or under other salts), domain or
 #: leaf count; no entry for it, or for any member; its entry under another port; a second entry for it at another
 #: root, or an entry at a port ending `/o0` that is no member's; every member's at another schedule's constants; its

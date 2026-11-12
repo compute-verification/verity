@@ -1,12 +1,12 @@
-"""The cost of the period check's ok rule (`NetworkCheck.Period.okChecks`, the mirror's `scan_ok` calls): the
-schedule's constants are hashed once a period, the same number of SHA-512 calls whatever the period's length, and
-holding an execution phase's registration to them hashes nothing.
+"""The cost of the period check's ok rule (Lean's `okChecks`, the mirror's `scan_ok` calls): the schedule's constants
+are hashed once a period, the same number of SHA-512 calls whatever the period's length, and holding an execution
+phase's registration to them hashes nothing.
 
 The mirror is counted as it runs: every SHA-512 call, through the commitments' registry and through hashlib, the two
 names the verifier's Python hashes by, over accepted periods of one, two and three execution phases under schedules of
-one T. Lean is read: `Period.lean` applies `ScanOk.consts` once, outside the function it maps over the execution
-phases, and neither that function nor `ScanOk.held` names a definition that hashes (`ScanOk.calls` and its guards
-count what `ScanOk.consts` hashes)."""
+one T. Lean is read: the period check's module applies `ScanOk.consts` once, outside the function it maps over the
+execution phases, and neither that function nor `ScanOk.held` names a definition that hashes (`ScanOk.calls` and its
+guards count what `ScanOk.consts` hashes)."""
 
 from __future__ import annotations
 
@@ -33,9 +33,14 @@ IDENTIFIER = re.compile(r"[A-Za-z_][\w.']*")
 HASHES = re.compile(r"(?i)sha|hash|digest|fv3|hm96|registered|known")
 
 
-def code(name: str) -> str:
-    """A module's code that runs: comments and strings blanked, its guards cut."""
-    return GUARD.sub("", SILENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), (LEAN / name).read_text()))
+def code(defines: str) -> str:
+    """The code that runs of the check's module that defines `defines`: comments and strings blanked, its guards
+    cut."""
+    found = [text for text in (GUARD.sub("", SILENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group()), f.read_text()))
+                              for f in sorted(LEAN.glob("*.lean")))
+             if re.search(rf"^def {re.escape(defines)}\b", text, re.M)]
+    assert len(found) == 1, (defines, len(found))
+    return found[0]
 
 
 def definition(text: str, name: str) -> str:
@@ -120,10 +125,10 @@ def test_a_refused_period_costs_the_same(spans):
 
 
 def test_lean_applies_the_constants_once_outside_the_execution_phases():
-    """`Period.lean` names `ScanOk.consts` once, in `okChecks`, as the argument of `okChecksAt`, and `okChecks` maps
-    over nothing itself; `check` reads `okChecks` once. Lean evaluates an argument before the call, so the constants
-    are computed once a `check`, whatever the registrations."""
-    period = code("Period.lean")
+    """The period check's module names `ScanOk.consts` once, in `okChecks`, as the argument of `okChecksAt`, and
+    `okChecks` maps over nothing itself; `check` reads `okChecks` once. Lean evaluates an argument before the call, so
+    the constants are computed once a `check`, whatever the registrations."""
+    period = code("okChecks")
     assert len(re.findall(r"\bScanOk\.consts\b", period)) == 1
     ok_checks = definition(period, "okChecks")
     assert re.search(r"=> okChecksAt \(ScanOk\.consts s\.window\) p\.first c\.windows\n", ok_checks), ok_checks
@@ -136,7 +141,7 @@ def test_lean_holds_an_execution_phase_by_comparison_alone():
     """What runs once an execution phase names nothing that hashes: `okChecksAt` and `okCheck` read the constants as a
     value and call `ScanOk.held`, which reads its own lets, `okPort` and `PORT`, and no definition of `ScanOk` that
     hashes (`salt`, `known`, `domain`, `root`, `consts`)."""
-    period, ok = code("Period.lean"), code("ScanOk.lean")
+    period, ok = code("okChecks"), code("held")
     own = set(re.findall(r"^def ([\w']+)", ok, re.M))
     assert {"salt", "known", "domain", "root", "consts", "held", "okPort", "members"} <= own
     for name in ("held", "okPort"):

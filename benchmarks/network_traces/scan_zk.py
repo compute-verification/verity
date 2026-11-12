@@ -104,7 +104,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   count's in every round. A public o0's rows are committed under the verifier's public salts (`ok_salts`,
   `scan_ok.salt`), so the o0 frame root of a member whose every proof block is ok is a constant of its template and
   count, which a period check computes from the schedule's T and holds the registration's ``<member>/o0`` to
-  (`scan_ok.constants`, `NetworkCheck.Period`'s `okChecks`); it is opened as before, under that salt, which the
+  (`scan_ok.constants`, the period check's `okChecks`); it is opened as before, under that salt, which the
   prover sends.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same
