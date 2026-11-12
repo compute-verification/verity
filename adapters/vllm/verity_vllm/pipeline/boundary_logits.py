@@ -136,7 +136,7 @@ class SamplerHook:
             try:
                 keep = SC.emitting(input_batch, lambda _r: True)
                 rows = SC.kept_rows(logits, input_batch, keep) if keep else None
-            except Exception as e:  # noqa: BLE001 - the builder refuses every class after it, and says why
+            except (TypeError, ValueError, AttributeError, IndexError, RuntimeError) as e:
                 self.logits.fail(f"{type(e).__name__}: {e}")
                 keep = []
         out = self.inner(logits, input_batch, *a, **kw)
