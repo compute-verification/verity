@@ -1360,6 +1360,10 @@
   "Properties.NetworkPeriod.rowsCapPublished": {
    "honest": ["Properties.NetworkPeriod.rowsCapPublished_honest"],
    "nontrivial": "Properties.NetworkPeriod.rowsCapPublished_nontrivial"
+  },
+  "Properties.NetworkPeriod.rowsOkHeld": {
+   "honest": ["Properties.NetworkPeriod.rowsOkHeld_honest"],
+   "nontrivial": "Properties.NetworkPeriod.rowsOkHeld_nontrivial"
   }
  },
  "unwitnessed": {
@@ -5988,6 +5992,15 @@
    },
    "type_hash": "9c2d2b9e87028da9d2e41ec888d86584934d9ce56316dae1a6fc0c242db4d385",
    "unfolded_hash": "b687405d1957d0a41e98641b41de96dbf01da2f18b078198013b515ab1ca47e9"
+  },
+  "Properties.NetworkPeriod.rowsOkHeld": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsOkHeld_honest": {
+   "owner": "@network-accounting"
+  },
+  "Properties.NetworkPeriod.rowsOkHeld_nontrivial": {
+   "owner": "@network-accounting"
   },
   "Properties.NetworkPeriod.rowsProgWired": {
    "owner": "@network-accounting",
@@ -12994,6 +13007,10 @@
     ]
    },
    "Properties.NetworkPeriod.rowsCapPublished": {
+    "function": "NetworkCheck.Period.check",
+    "outcome": "accept"
+   },
+   "Properties.NetworkPeriod.rowsOkHeld": {
     "function": "NetworkCheck.Period.check",
     "outcome": "accept"
    }
