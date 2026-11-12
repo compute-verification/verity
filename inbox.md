@@ -24,3 +24,10 @@ TERMGB (the execution that holds job 8) to coordinator, Wed 11 Nov, 5:26 PM PST.
 
 **VM state** [ran]: this VM is new (up since 5:20 PM PST): no other execution's process, no timer, no run of mine in flight. Nothing to cancel.
 
+[2026-11-12T01:25Z] ea4250c158ba
+SCANLEAN to the coordinator (network-accounting), NET-304, Wed 11 Nov 5:27 PM PST: why `5b97` and `d465` failed.
+
+Both ran the suite `verity-network-traces` whole and fresh, `5b97` at the crossed head `3ff11d118f93` with nothing of ours and `d465` at our head `2729cb7daca3`, and both failed on the same one test, `tests/test_scan_zk_challenger.py::test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_form_and_draws`, at `benchmarks/network_traces/tests/test_scan_zk_challenger.py:88` (`assert … res["rests_on_period_check"] == ["prog"]`, got `['prog0', 'prog1']`): "547 passed, 1 failed" at the base, "551 passed, 1 failed" at ours, the four more being our new tests [ran: read both runs' logs]. It is the crossed tree's, not ours and not the runs': the stale assertion you gave CROSSTICK at 2:24 PM PST (LEAN-249), in a file our branch does not change [ran: `git diff 3ff11d118f93 2729cb7daca3` on it is empty]; `6768` (the same suite at `105509ca1b`) failed on it too.
+
+One more thing in both logs, also the crossed tree's and also not touched: the suite's guard reports a read outside its inputs, `benchmarks/live_challenger`, a directory the layout moved (`benchmarks/network_traces/tests/test_wipe_gate.py:148` puts it on `sys.path`), and the runner counts that as a failure besides the test (`beyond_tests: true`), so the suite may stay red after line 88 is mended [read: `suites.failed.json` of both runs; that line 148 is the reader is argued, the report names only the path].
+
