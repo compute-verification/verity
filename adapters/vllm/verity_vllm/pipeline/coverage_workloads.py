@@ -38,6 +38,8 @@ from verity_vllm.config import CHECKPOINTS, VLLM, WORKLOAD_SCHEMA, WORKLOADS, op
 from verity_vllm.engine.profiles.coverage_roles import ROLE_REPOS
 from verity_vllm.log import init_logger
 
+__all__ = ["Options", "main"]
+
 logger = init_logger(__name__)
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"

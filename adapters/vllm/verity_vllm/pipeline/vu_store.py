@@ -46,6 +46,8 @@ from verity_vllm.check.replay.population import (
 )
 from verity_vllm.pipeline import vu_export as VX
 
+__all__ = ["after_replay"]
+
 STORE_SCHEMA = "vllm-vu-store/v1"
 SR.keep_population(True)            # the Commit imports this module before its replay: the export reuses that replay's population
 WEIGHT_SAMPLE_RULE = ("GEMM weight rows: selection_key(run_root).subset(k, N, ('row', request, i, evaluation)) with k = "

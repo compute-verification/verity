@@ -39,6 +39,8 @@ from verity_vllm.config import UsageError, option, workload_arg
 from verity_vllm.engine import env as engine_env
 from verity_vllm.query.manifest.format import SERVED_IDS
 
+__all__ = ["Options", "ServedCommit", "main"]
+
 
 @dataclass(frozen=True, kw_only=True)
 class Options:

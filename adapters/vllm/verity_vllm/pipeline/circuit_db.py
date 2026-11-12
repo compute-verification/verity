@@ -67,6 +67,8 @@ from verity_vllm.config import RowId, UsageError, option
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline.store_data import data, fetch, listing, selected_from
 
+__all__ = ["COMMANDS", "STAGED", "checkpoint", "data", "main"]
+
 INDEX = CR.INDEX
 ART = re.compile(r"art:[0-9a-f]{64}")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")

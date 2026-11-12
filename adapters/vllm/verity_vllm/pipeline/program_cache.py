@@ -23,6 +23,8 @@ from typing import Any
 
 from verity_vllm.config import workload_file
 
+__all__ = ["key", "lookup", "publish", "restore"]
+
 SCHEMA = "verity-vllm/program-cache-entry/v1"
 #: the workload's `sweep` fields a derive reads
 DERIVE_INPUTS = ("sampling", "sampling_params", "batch", "sampling_seeds")

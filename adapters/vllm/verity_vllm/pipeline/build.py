@@ -36,6 +36,7 @@ from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_
                                                  _write_instances, _write_instances_file, write_instances)
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
 
+__all__ = ["Options", "main", "read_tp_links", "same_module_path", "sampler_geometry", "sampling_policy", "write_instances"]
 logger = init_logger(__name__)
 
 

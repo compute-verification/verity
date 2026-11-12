@@ -23,6 +23,8 @@ from verity_vllm.program.instances_file import (
     write_instances_file as _write_instances_file,
 )
 
+__all__ = ["write_instances"]
+
 
 def _instance_rows(program):
     """`instance_rows(program)`, and a Boolean Program's rows through its word link (`_word_rows`)."""

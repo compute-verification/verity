@@ -51,8 +51,7 @@ from verity_vllm.query.required import (
     request_manifest,
 )
 
-__all__ = ["TAPS", "DEFAULT_TAPS", "taps_of", "word_record", "cpus", "prefetch_word_rules", "build_components", "build", "build_global",
-           "build_global_ranks", "cross_call_check", "main"]
+__all__ = ["COMMANDS", "build", "build_global", "cpus", "incomplete_rc", "main", "taps_of"]
 
 #: `--jobs`'s variable
 JOBS_ENV = "VERITY_MANIFEST_JOBS"

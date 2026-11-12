@@ -60,6 +60,8 @@ from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program import workload as W
 from verity_vllm.records.workload import Workload, WorkloadSampling
 
+__all__ = ["MODELLED_ENGINE", "Options", "compilation_facts", "main", "request_id_of", "stop_rule", "workload_target"]
+
 # the request descriptors decode through the registry the Match reads (`catalog.load`): every registry module loaded
 for _e in _load_registry()[1]:
     print(f"[global_program] registry module unavailable ({_e}): components naming its Definitions will not decode", file=sys.stderr)

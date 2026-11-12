@@ -30,3 +30,28 @@ the TP row's summaries and lines (`tp_build_digests`, `tp_build_summary`, `tp_ch
 `tp_match_summary`, `tp_passed`, `tp_rank_workload_digest`, `tp_served_shapes`, `tp_shape`). `row_driver` is imported
 for `Row`, `Stop` and `stage_on`, and `row`, `research_outputs` and `research_result` only by the command line, for
 their commands. One private name is imported from another module, `experiment._digest_doc`.
+
+## The Build and the Match
+
+The Build derives a row's Programs and the Match checks them against a live serve. `build` derives one request
+wrapper's Program from the pinned vLLM model class and writes it with its instance sequence (`build_instances`).
+`global_program` composes the derived request Programs into a workload's Program. `manifest` builds the
+required-value manifest under the query of record, and `manifest_verify` rebuilds one and compares digests. `match`
+takes one configuration through every Match stage into one run directory, and `served_match` is the Match of a
+served-compiled row on live data. Beside them are the workload generators (`workload`, `coverage_workloads`) and
+`workload_file`, which makes a workload file present and checked; `program_cache`, a Build's derives reused on one
+host; `circuit_db`, the circuit database behind `verity-vllm records`; `neutrality`, which rebuilds the rows of
+record's Programs and fails if a Program digest moved; `program_graph`, a row's Program as a graph; the store and
+the export of a row's sampled proof blocks (`vu_store`, `vu_export`); and the top-p split's GPU check and its
+fixture (`topp_pin_check`, `topp_split_probe`).
+
+What other code takes from a module is what its `__all__` lists. For a module that is a command that is its options
+(`Options`, or `COMMANDS`) and `main`, which the command line reads, and beside them: `build` (`read_tp_links`,
+`same_module_path`, `sampler_geometry`, `sampling_policy`, `write_instances`), `build_instances` (`write_instances`,
+which `benchmarks/prove_path` imports too), `circuit_db` (`STAGED`, `checkpoint`, `data`), `global_program`
+(`MODELLED_ENGINE`, `compilation_facts`, `request_id_of`, `stop_rule`, `workload_target`), `manifest` (`build`,
+`build_global`, `cpus`, `incomplete_rc`, `taps_of`), `program_cache` (`key`, `lookup`, `publish`, `restore`),
+`served_match` (`ServedCommit`), `vu_store` (`after_replay`) and `workload_file` (`workload_file`, which the
+benchmarks import). Three modules state no `__all__`: `match`, from which the TP row's fold Match imports
+`fold_construction_args` beside the command; `topp_pin_check`, a command and nothing else; and `vu_export`, which
+only `program_graph` and `vu_store` read.

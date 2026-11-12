@@ -60,6 +60,8 @@ from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.engine.profiles.transport import row_custom_all_reduce_off, row_p2p_env
 from verity_vllm.log import init_logger
 
+__all__ = ["Options", "main"]
+
 logger = init_logger(__name__)
 
 CORPUS = resources.files("verity_vllm") / "engine" / "profiles" / "corpus_coverage.json"

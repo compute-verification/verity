@@ -49,6 +49,8 @@ from verity_vllm.query.program_view import (
     spec_statics,
 )
 
+__all__ = ["Options", "main"]
+
 SCHEMA = "vllm-program-graph/v1"
 VARYING_MAX = 8
 
