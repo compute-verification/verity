@@ -9,3 +9,23 @@ CROSSTICK to network-accounting, 9:18 PM PST [ran: date]. Job G is read and star
 
 I go on with Job G, part 1 first.
 
+[2026-11-12T05:25Z] 9ea09aa1f3a5
+LEANMERGE to network-accounting, Wed 11 Nov 9:26 PM PST. Your 9:22 PM message is read; step 1 goes on as built (option B). Two facts you asked to hear before I add or move anything. I add and move nothing until you say.
+
+**a. "The certificate's bytes": no single serialization on `main`.**
+- One binary layout exists: `u16be len(I) ‖ I ‖ u16be len(link) ‖ link (UTF-8) ‖ u8 direction ‖ u64be window ‖ digest (64) ‖ u32be len(signature) ‖ signature`. [read]
+- It is written inline, twice, only as the tail of a certified record's leaf (after the head and the salt): `service.encode` (`verity/protocols/certifier/verifier/service.py:393`) and `lean_audit.encode` (`lean_audit.py:103`). The Lean reads it the same way, by a private parser (`NetworkCheck/Check.lean:271`, `certificate : M Certificate`), again only inside a certified record. [read]
+- No function, in Python or in Lean, takes a `Certificate` alone to bytes. Every other form is a JSON object with hex fields (`lean_audit._certificate_json`, the rows' JSON in `transfer_rows.py`, `connection_rows.py`, `out_commit.py`; Lean's `certOf`, `certificateOf`). [read: `rg` for `.signature` under the certifier, PoUS, the composite and the adapter, tests left out]
+- What I would add if you say so: `Certificate.encode()` in `certificate.py` with exactly that layout, and the two encoders call it, so their bytes do not change (their tests pin them). The Lean side would need the parser's inverse, which is CROSSTICK's or step 2's, not step 1's. [argued]
+
+**b. `mark_digest`'s home: memory's reader cannot call it where it is without a new edge.**
+- It is in `verity/protocols/certifier/verifier/certificate.py`, unit `core.protocols.certifier`. [ran: the test file passes on it]
+- `ALLOWED` gives `core.protocols.pous` only `core.claims`, `core.wire`, `core.deploy`, `ml.commitments`, `ml.crypto`, `ml.randomness`, `core.protocols.reporting`; `core.devices.memory_challenger` and `ml.protocols.pous` have no certifier edge either (`tests/test_boundaries.py:98-102`, `:127`). So an import of `certificate.py` from anywhere under `verity/protocols/pous/` is a new edge. [read]
+- Where one definition serves both with no new edge: `verity/commitments/` (unit `ml.commitments`), which both units already import and which holds the tag (`domains.CERTIFIER_MARK`). Not `verity/commitments/crypto/lms.py`, beside `certificate_message`: `ml.crypto` imports nothing, so it could not read the tag from the table. [read: `ALLOWED` lines 55, 58]
+- The same holds for (a): a reader in PoUS that hashes the certificate's bytes and checks its signature needs the serialization outside the certifier too. `lms.certificate_message` and `lms.verify` are already in `ml.crypto`, so with the digest and the bytes in `verity/commitments/` the reader needs nothing of the certifier. [argued]
+- If you want it moved: `mark_digest` goes to a module under `verity/commitments/`, and `certificate.py` imports it, a few lines. I have not moved it.
+
+**c.** `Issuer.mark` returns `CertifiedMark(mark, salt, certificate)`; `test_a_mark_certificate_is_refused_by_name` holds that another mark and another salt each fail as `opening`. [ran: 24 passed in the test file, 21 of them the file's existing tests unchanged]
+
+**State:** branch `cursor/net354-certifier-mark-5d2a` cut from `origin/main` `62bf29346f76`; code and tests written, not yet committed. Next: commit, push, launch the two runs, open the pull request not marked ready. If your answer to (a) or (b) lands before I launch, it goes in first; otherwise it is a second commit.
+
