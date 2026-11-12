@@ -62,7 +62,8 @@ def test_the_chunk_step_is_argmax_step() -> None:
     """`TokenSelectChunkStep_v1` is `ArgmaxStep_v1` word for word: every pair of edge words as (x, best), at indices past the
     best's and before it, and random words."""
     rng = np.random.default_rng(3)
-    x, best = (a.ravel() for a in np.meshgrid(EDGES, EDGES))
+    mesh: tuple[np.ndarray, ...] = np.meshgrid(EDGES, EDGES)
+    x, best = (a.ravel() for a in mesh)
     x, best = np.concatenate([x, rng.integers(0, 1 << 16, 512)]), np.concatenate([best, rng.integers(0, 1 << 16, 512)])
     n = len(x)
     carry = np.stack([best, rng.integers(0, 1 << 31, n), rng.integers(0, 1 << 31, n)], 1)

@@ -79,7 +79,7 @@ def fake_dsv4(monkeypatch) -> types.SimpleNamespace:
 
     monkeypatch.setattr(v.ops, "moe_wna16_marlin_gemm", moe_wna16_marlin_gemm, raising=False)
     rt = types.ModuleType(MS.TOPK_BIAS_MODULE)
-    rt.fused_topk_bias, rt.can_use_dsv4_topk = fused_topk_bias, can_use_dsv4_topk
+    rt.__dict__.update(fused_topk_bias=fused_topk_bias, can_use_dsv4_topk=can_use_dsv4_topk)
     monkeypatch.setitem(sys.modules, MS.TOPK_BIAS_MODULE, rt)
     v.rt = rt
     return v

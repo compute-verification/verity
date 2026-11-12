@@ -65,9 +65,9 @@ def test_on_finite_rows_every_construction_is_v2():
     rng = np.random.default_rng(3)
     D, BN = 16, 16
     q, k, v = _bf16(rng, D).tolist(), _bf16(rng, BN * D).tolist(), _bf16(rng, BN * D).tolist()
-    m, l, o = 0x3F000000, [0x3F800000] * 4, _bf16(rng, D).astype(np.uint32).tolist()
-    v2 = evaluate(bind(b1.AttnBlockV2, D=D, NVIS=BN, FIRST=False, BN=BN, DOT=hopper.HopperBF16WgmmaDot16), q, k, v, m, l, o)
-    assert evaluate(_block(True), q, k, v, m, l, o) == evaluate(_block(False), q, k, v, m, l, o) == v2
+    m, ell, o = 0x3F000000, [0x3F800000] * 4, _bf16(rng, D).astype(np.uint32).tolist()
+    v2 = evaluate(bind(b1.AttnBlockV2, D=D, NVIS=BN, FIRST=False, BN=BN, DOT=hopper.HopperBF16WgmmaDot16), q, k, v, m, ell, o)
+    assert evaluate(_block(True), q, k, v, m, ell, o) == evaluate(_block(False), q, k, v, m, ell, o) == v2
 
 
 def test_the_first_block_must_run_check_inf():
