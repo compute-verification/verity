@@ -28,6 +28,8 @@ from pathlib import Path
 from verity_machine_model.eps import Design, design, eps, machine, setup, threshold, uniform_issue_charged
 from verity_machine_model.model import DATA, device, model
 
+__all__ = ["CREDIT", "OPERANDS", "READINGS", "Row", "TERMS", "record", "row", "rows", "skip_at", "spec", "text"]
+
 TERMS = {"skip": "ε_skip", "mand": "ε_mand", "machine": "ε_machine", "luck": "ε_luck", "core": "ε", "gamma": "γ",
          "threshold": "q*₀"}
 READINGS = ("sheet", "measured")
@@ -139,8 +141,8 @@ def text(readings: tuple[str, ...] = READINGS, data: Path = DATA) -> str:
         rs = rows(r, data)
         out += [f"## {rd['title']} (`{r}`): q* = {rd['q']:g}, operands {OPERANDS}, credit ♭", "",
                 *(f"- {c}" for c in (t["scope"], t["capacity"], *rd["conditions"])), "",
-                f"| GPU | design | Π | {T['skip']} | {T['mand']} | {T['machine']} | {T['luck']} | "
-                f"{T['core']} = their sum | {T['gamma']} | {T['threshold']} | cheater binds |",
+                (f"| GPU | design | Π | {T['skip']} | {T['mand']} | {T['machine']} | {T['luck']} | "
+                 f"{T['core']} = their sum | {T['gamma']} | {T['threshold']} | cheater binds |"),
                 "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|"]
         for x in rs:
             thr = "none ≤ 64" if x.threshold is None else f"{x.threshold:.3f}"

@@ -5,9 +5,9 @@
 
 A family's data-sheet instance (`Accounting.TS.Headline.SmNN`, read by `Accounting.Guarantees.TS.SmNNSheetHeadline`):
 its device's data sheet (`DS-NN`) as `Accounting.TS.Sheet` data, its headline design as a TS model on it, the floor
-program ♭ with ε_skip's skippable work, and π*, the certificate the machine model's LP finds at q* = ½. Every number is
-exact: a census value or a TOML value read as its decimal, and eps_budget's ε_skip as the decimal Python prints.
-`FAMILIES` lists them: sm_120 (H1 + fx1). sm_80 has none: FOLD-OPT is false at its ALU-pipe certificate.
+program ♭ with the work the proofs could miss (ε_skip), and π*, the certificate the machine model's LP finds at q* = ½.
+Every number is exact: a census value or a TOML value read as its decimal, and eps_budget's ε_skip as the decimal Python
+prints. `FAMILIES` lists them: sm_120 (H1 + fx1). sm_80 has none: FOLD-OPT is false at its ALU-pipe certificate.
 
 `instance()` derives one and checks it against Python's own numbers: the sheet reproduces every DS coefficient, ♭ is
 `setup`'s floor program at ω's words, π* is one facet, and the bound the Lean proof reads off the identity is at most
@@ -22,11 +22,11 @@ vector words with IMAD.WIDE meets A6 then. Each of the five costs what IMAD does
 sm_120's measured instance (`Accounting.TS.Headline.Sm120Measured`, read by
 `Accounting.Guarantees.TS.Sm120MeasuredHeadline`): the same design and ♭ on the measured vector (`VECTOR`, VF3s-16, its
 rows sparse), the writer kinds at forms.toml's per-word count (`ω = m·n·k_dense/(L·split)`, rounded up), the scalar
-routes at `q = q_T = 9/8`, ♭'s skippable work at the vector's ε_skip, and π* at q* = 9/8. `measured()` checks it the
-same way, against 0.591%, at the sharper ln(8/7) ≥ 2/15 (`LN_P_M`, the first term of `Real.hasSum_log_one_add_inv` at
-7). The vector is VF3s-16, facet_break's refit of VF3r-16's joint issue rows, and not model.toml's `current` (VF3r-16):
-measured, bit-exact programs load VF3r-16's π*, JI3s_0, at up to 1.0383 (1.0107 in honest's IMMA16832),
-and no census program loads a VF3s-16 row above 1 (`benchmarks/pouw/tests/test_lean_headline.py`).
+routes at `q = q_T = 9/8`, the work of ♭ the proofs could miss at the vector's ε_skip, and π* at q* = 9/8. `measured()`
+checks it the same way, against 0.591%, at the sharper ln(8/7) ≥ 2/15 (`LN_P_M`, the first term of
+`Real.hasSum_log_one_add_inv` at 7). The vector is VF3s-16, facet_break's refit of VF3r-16's joint issue rows, and not
+model.toml's `current` (VF3r-16): measured, bit-exact programs load VF3r-16's π*, JI3s_0, at up to 1.0383 (1.0107 in
+honest's IMMA16832), and no census program loads a VF3s-16 row above 1 (`benchmarks/pouw/tests/test_lean_headline.py`).
 """
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ class Family:
     fmax_src: str
     uniform: dict[str, int]              # the uniform writer kinds and ω, their destination's 32-bit words
     bytes: str                           # the table level's byte class, priced 0 at b_T = 0
-    skip: str                            # the class ♭'s skippable work is counted in, priced on π*'s facet
+    skip: str                            # the class of ♭'s work the proofs could miss, priced on π*'s facet
     eps: Fraction                        # the headline
     honest: str                          # a unit of honest work, in prose
     fold: str                            # the fold routes, in prose
@@ -464,18 +464,18 @@ def render(i: Instance) -> str:
         f"{len(i.classes)}` indexes them." + (
             f" `{CATCH_ALL[f.key]}` is A2's catch-all: every warp instruction no other class names counts there, "
             f"at its issue slot alone." if f.key in CATCH_ALL else ""),
-        f"`{f.device.replace('-', '').lower()}`, `sheet`: the {f.gpu}'s data sheet ({f.device}): f_max {f.fmax} MHz "
-        f"({f.fmax_src}); each tensor class's dense MACs a warp instruction (`m·n·k`, a 2:4 sparse form's dense "
-        f"equivalent) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
-        f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()} with their Programming Guide widths; 128 B "
-        f"for every shared-memory class. Its machine reproduces every {f.device} coefficient.",
-        f"`{f.dvar}`, `model`: {f.title} (`{f.design}`) as a TS model on the sheet's machine: writer kinds {menu}; "
-        f"the vector classes CUDA's lane classes and the 64-bit ones ({', '.join(k for k in i.vec if k in VEC_64)}); "
-        f"{f.fold}; A6's floors `q = q_T = ½`, `b_T = 0`; {i.Nw} committed "
-        f"words a unit of honest work ({f.honest}).",
-        f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no "
-        f"filler, and ε_skip's skippable work at {f.skip}'s price, {float(i.eps_skip):.6%} of ♭'s bound "
-        f"(`eps_budget.design_skip` on {f.device}).",
+        (f"`{f.device.replace('-', '').lower()}`, `sheet`: the {f.gpu}'s data sheet ({f.device}): f_max {f.fmax} MHz "
+         f"({f.fmax_src}); each tensor class's dense MACs a warp instruction (`m·n·k`, a 2:4 sparse form's dense "
+         f"equivalent) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
+         f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()} with their Programming Guide widths; 128 B "
+         f"for every shared-memory class. Its machine reproduces every {f.device} coefficient."),
+        (f"`{f.dvar}`, `model`: {f.title} (`{f.design}`) as a TS model on the sheet's machine: writer kinds {menu}; "
+         f"the vector classes CUDA's lane classes and the 64-bit ones ({', '.join(k for k in i.vec if k in VEC_64)}); "
+         f"{f.fold}; A6's floors `q = q_T = ½`, `b_T = 0`; {i.Nw} committed "
+         f"words a unit of honest work ({f.honest})."),
+        (f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold, no "
+         f"filler, and ε_skip's skippable work at {f.skip}'s price, {float(i.eps_skip):.6%} of ♭'s bound "
+         f"(`eps_budget.design_skip` on {f.device})."),
         f"`piStar`: π*, the facet ({i.pistar}) the machine model's LP certificate sits on at q* = ½" + (
             f", with {', '.join(f'{i.cert[r].numerator}/{i.cert[r].denominator} moved onto {r}' for r in moved)}: the "
             f"least weight there at which each bulk-reduction floor (the exporter's `BULK_FLOORS`, A5b) costs at least "
