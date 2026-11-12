@@ -11,6 +11,9 @@ workload of record.  Fixtures: a `_Store` of committed words by identity (the st
 """
 from __future__ import annotations
 
+from pathlib import Path
+from types import SimpleNamespace
+
 import numpy as np
 from verity.definitions.numerics import rows as RK
 
@@ -34,7 +37,7 @@ class _Store:
         return np.asarray(b).reshape(-1)[elo:ehi].copy(), {4: "u32", 8: "i64"}[np.asarray(b).dtype.itemsize]
 
 
-def _world(reqs: dict[str, tuple[int, int, int]], *, seed_word=None):
+def _world(reqs: dict[str, tuple[int, int, int | None]], *, seed_word=None):
     """reqs: rid -> (arrive, n_steps, declared seed).  An honest committed world: prompt ids at arrival, chained ids, one seed word per
     live (step, request) == the declared seed.  `seed_word`: overrides {(rid, step): word} to forge a committed word (the served run
     consumed something else than declared)."""
@@ -271,7 +274,6 @@ def test_padrev_m0517_the_lag_is_read_through_gp01s_one_reader_of_the_attested_f
     assert eos_lag_rows_declared({"async_scheduling": True}) == 1 and eos_lag_rows_declared({"async_scheduling": False}) == 0
     assert eos_lag_rows_declared({"async_scheduling": "true"}) == 1
     assert eos_lag_rows_declared({"async_scheduling": None}) is None and eos_lag_rows_declared({}) is None and eos_lag_rows_declared(None) is None
-    from pathlib import Path
     src = "".join((Path(__file__).resolve().parents[2] / "verity_vllm" / "pipeline" / f"{m}.py").read_text() for m in ("commit", "c2_replay"))      # torch-free: the wiring read as text
     assert 'eos_lag_rows_declared({"async_scheduling": (versions.get("engine_kwargs") or {}).get("async_scheduling")})' in src
     assert "eos_lag_rows=_lag" in src
@@ -301,8 +303,6 @@ def test_arrivals_of_record_follow_the_observed_schedule_only_when_the_populatio
     assert LK.arrivals_of_record(decl, None) == (decl, False) and LK.arrivals_of_record(decl, {}) == (decl, False)
     assert LK.arrivals_of_record(decl, dict(obs_sched, observed_arrive_steps={"r0": 0, "r1": 3, "r9": 5})) == ({"r0": 0, "r1": 3}, True)   # unknown ids ignored
     # the commit_delta wiring: the replay/linkage (and serving rows') _arr goes through this one rule, fed the binding record's schedule
-    from pathlib import Path
-    from types import SimpleNamespace
 
     from verity_vllm.pipeline import c2_replay as C2
     reqs = [{"request_id": "a", "index": 0, "arrive_step": 0}, {"request_id": "b", "index": 1, "arrive_step": 7}]

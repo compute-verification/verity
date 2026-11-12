@@ -12,6 +12,12 @@ otherwise `Unset`, which the import binds and any use refuses, naming the entry:
 A stand-in can't drift from the surface: it holds no module the surface lacks, and `FakeVllm.set` and
 ``FakeVllm.__getitem__`` refuse a name or a module it doesn't list.  A test of a script outside the library (a GPU probe,
 whose imports the surface doesn't hold) names them itself, in the surface's form, as ``extra``.
+
+Every module of the surface is in ``sys.modules`` from `install` on, so library code that asks whether a vLLM module is
+imported is told that it is.  A library module that acts on that as it is itself imported (a serving switch that arms
+itself: it patches its site now when the site is imported, and hooks the site's import otherwise) then reads a module on
+which nothing is set, and its import fails with what `Module` says.  A test that may be the first in its process to import
+such a module imports it before `install`, where the hand-written stub it replaces never held the site.
 """
 from __future__ import annotations
 
@@ -62,10 +68,20 @@ class Unset:
 
 class Module(types.ModuleType):
     """A module of the stand-in.  A test sets on it what the library reads from the module; declaring ``__setattr__`` is what
-    lets a typed test write ``fake["vllm.envs"].NAME = value``, which mypy refuses on a plain `types.ModuleType`."""
+    lets a typed test write ``fake["vllm.envs"].NAME = value``, which mypy refuses on a plain `types.ModuleType`.  Reading
+    what no test set is the `AttributeError` any module gives, so ``hasattr`` and a ``getattr`` with a default answer as
+    they do on vLLM's own; its message says what to do."""
 
     def __setattr__(self, name: str, value: Any) -> None:
         super().__setattr__(name, value)
+
+    def __getattr__(self, name: str) -> Any:
+        module = self.__name__
+        if name.startswith("__") and name.endswith("__"):
+            raise AttributeError(f"module {module!r} has no attribute {name!r}")
+        raise AttributeError(f"{module}.{name} was read, and this test did not set it: fake[{module!r}].{name} = value. "
+                             "Read by a library module as that module was itself imported? Then it acts on a vLLM module "
+                             "that is already imported: import it before fake_vllm.install (tests/fake_vllm.py's docstring).")
 
 
 def split(key: str) -> tuple[str, str]:

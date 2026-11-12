@@ -53,7 +53,7 @@ def _once(walls):
     return run
 
 
-def test_torch_profiles_a_control_and_an_instrumented_run_that_is_finalized_for_its_roots_only(tmp_path):
+def test_torch_profiles_a_control_and_an_instrumented_run_that_is_finalized_for_its_roots_only(tmp_path, capsys):
     llm = _LLM([_Rank(0), _Rank(1)])
     rows = TRACE.run(llm, _once([[0.5, 0.1], [0.7, 0.2]]), tmp_path / "trace", [0], 60.0)
     assert [(r["arm"], r["step_wall_s"]) for r in rows] == [("control", [0.5, 0.1]), ("instrumented", [0.7, 0.2])]
@@ -63,6 +63,8 @@ def test_torch_profiles_a_control_and_an_instrumented_run_that_is_finalized_for_
     traced = [json.loads(ln) for ln in (tmp_path / "trace" / "traced.jsonl").read_text().splitlines()]
     assert [(t["arm"], t["wall_s"]) for t in traced] == [("control", 0.6), ("instrumented", pytest.approx(0.9))]
     assert (tmp_path / "trace" / "torch.control").is_dir() and (tmp_path / "trace" / "torch.instrumented").is_dir()
+    assert capsys.readouterr().out.splitlines() == [f"[tp2commit] traced torch control: 0.600s steps 2 -> {tmp_path / 'trace' / 'torch.control'}",
+                               f"[tp2commit] traced torch instrumented: 0.900s steps 2 -> {tmp_path / 'trace' / 'torch.instrumented'}"]
 
 
 def test_thread_cpu_reads_this_process_threads_by_python_name_and_the_delta_keeps_what_ran():

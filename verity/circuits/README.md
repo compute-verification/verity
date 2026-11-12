@@ -204,8 +204,7 @@ Pure functions of a Program, read by the resource audits:
 
 - `census`: `verity/census/v1`, what a Program computes, counted by class, and the values its root's calls pass.
 - `liveness`: dead gates (`dead_gates(program)`), those no output depends on.
-- `requirement` and `requirement_units`: a registered circuit's memory requirement from its wiring and schedule, and its
-  two proof blocks (the plan, and the memory map).
+- `requirement`: a registered circuit's memory requirement from its wiring and schedule.
 - `stacking`: the stacking property over a Program and its census.
 - `population`: the population Programs a window registers under a template query.
 
