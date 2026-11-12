@@ -220,7 +220,7 @@ def main() -> int:
                 row["slow"] = slow(backend.calibration_trace)
                 try:
                     row["every"] = every(backend.calibration_trace, backend.calibration_parts)
-                except Exception as e:  # the record of every pass is beside the row's figures, never in their way
+                except (KeyError, IndexError, TypeError, ValueError) as e:  # beside the row's figures, never in their way
                     row["every_failed"] = repr(e)
             except RuntimeError as e:
                 row["failed"], ok = str(e), False
