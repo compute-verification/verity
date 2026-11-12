@@ -136,6 +136,8 @@ REGISTRY_REFS = ("origin/main",)                                  # where a chec
 FRONT_DOOR = "agent-coordination"
 ASKS_ON_LINEAR = True                                             # an ask is also an issue in its owner's team (`linear.py`)
 LINEAR_LINK_RE = re.compile(r"\nLinear: <https://linear\.app/[^|>]+\|([A-Z][A-Z0-9]*-\d+)>")
+#: a Linear issue named anywhere in a post: an announcement to several names that asks for comments on it is answered there
+LINEAR_ISSUE_URL_RE = re.compile(r"https://linear\.app/[^/\s|>]+/issue/([A-Z][A-Z0-9]*-\d+)")
 LINEAR_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]{1,6}$")
 DEFAULT_API = "https://slack.com/api/"
 BROKER = "https://website-docs-sage.vercel.app/api/agent-slack/call"      # also the OIDC token's audience
@@ -2889,6 +2891,19 @@ def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]
     return cache[ident]
 
 
+def issue_commenters(ident: str, cache: dict[str, set[str] | None]) -> set[str] | None:
+    """Who commented on the Linear issue `ident` (`comment_by`), or None when Linear can't say."""
+    if ident not in cache:
+        from . import linear
+        q = "query($id: String!) { issue(id: $id) { comments { nodes { botActor { userDisplayName } user { name } body } } } }"
+        try:
+            nodes = linear.Linear().gql(q, {"id": ident})["issue"]["comments"]["nodes"]
+            cache[ident] = {w for c in nodes if (w := comment_by(c))}
+        except (linear.LinearError, OSError, KeyError, TypeError, ValueError):
+            cache[ident] = None
+    return cache[ident]
+
+
 PAGE_WAITING = "Waiting on Daniel"                               # an ask's page's Status until a decision (or its deadline) moves it
 PAGE_OTHERWISE = "Decided otherwise"                             # Daniel's own Decision text, not the recommendation
 PAGE_DECISIONS = ("Approved", PAGE_OTHERWISE, "Decided by lane", "Default applied")   # the Statuses that record a decision
@@ -3255,6 +3270,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     dropped, asks, groups, alerts = [], [], {g for h in reg["handles"] for g in group_ids(h)}, {}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
     taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
+    said: dict[str, set[str] | None] = {}                            # Linear issue -> who commented on it
     for m in posts:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
@@ -3278,6 +3294,14 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
             answered, state = issue_state(link[1], x["by"], taken)
             answered = None if not answered and state.startswith(RECORD_UNREADABLE) else answered
             x.update(record="linear", ref=link[1], state=state)
+        elif len(x["to"]) > 1 and (named := LINEAR_ISSUE_URL_RE.search(m.get("text") or "")):
+            replied = bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
+            who, names = issue_commenters(named[1], said), len(x["to"])
+            if who is not None:
+                x["to"] = [n for n in x["to"] if n not in who]
+            answered = True if replied else None if who is None else not x["to"]
+            x.update(record="linear", ref=named[1],
+                     state=RECORD_UNREADABLE if who is None else f"{names - len(x['to'])} of its {names} names commented there")
         else:
             answered = bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
             x.update(record="slack", ref=None, state=("replied" if m.get("reply_count") else "reacted") if answered else "no reply or reaction")
