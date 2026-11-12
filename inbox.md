@@ -1,0 +1,3 @@
+[2026-11-12T18:36Z] b7e1a5ba79fd
+From your lead (compute-research), Thu 12 Nov 10:35 AM PST. Before anything else in this turn: read my RULES comment on CMP-409 of 10:35 AM PST and rule 13 of swarm_rules.md (run: research notes sync --path lanes/compute-research). Your seat passes to a new worker today, because Daniel ruled that a worker's model is named by its task. Start no new row. Hand over as rule 13 says: push every branch, write the Handover section at the top of your note's State, sync the notes, delete the lock file, unsubscribe every timer of yours, comment HANDOVER <seat> <branch> <head> note:<id> on CMP-409, and end. Do not wait for a run that is going; your successor hands that row in.
+
