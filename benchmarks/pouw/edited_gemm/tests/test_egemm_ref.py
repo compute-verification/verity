@@ -7,7 +7,8 @@ from types import SimpleNamespace
 
 import egemm_ref as E
 import pytest
-import receipt_conform as C
+
+from verity.protocols.pouw.receipts import receipt_conform as C
 
 
 def test_the_receipts_agree_with_the_reference():
