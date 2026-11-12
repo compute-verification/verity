@@ -62,7 +62,7 @@ receipt's cone reads.
 
 The scheme takes the Boolean s8 kinds (`KINDS`) on whole-lane grid tiles: a full r × c grid with 4 | r and 8 | c, 32 | K
 and KS = K / 32 >= 2; any other dot or tile is `CompileError("scheme")`. `scheme(tile, name)` builds it at another tile;
-`SCHEME` is registered at a warp, 32 × 32, and `PouwH1Tile` as a Definition, when `segment` is on the tree;
+`SCHEME` is registered at a warp, 32 × 32, and `PouwH1Tile` as a Definition;
 `SCHEME_V3` (`scheme_v3`) and `PouwH1Tile3` the same. `PouwH1Tile4` is a Definition only: the compile pass has no admit
 input to give it. `reference` is the unit on words (``stream=True``: v3's; with ``gated``, the admit bits: v4's).
 """
@@ -73,6 +73,7 @@ from fractions import Fraction
 from typing import Any, Sequence
 
 from verity.circuits import boolean as BL
+from verity.circuits import ports as _ports
 from verity.circuits.boolean.forms import NOT, ONE, OR, add, and_reduce, compress_columns, const_bits, or_reduce
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, primitive
@@ -82,17 +83,8 @@ from verity.commitments.scheme import DIGEST_BYTES
 
 from . import compile as C
 from . import seeds as SD
+from . import segment as SG
 from .boolean import PouwXor32
-
-try:
-    from . import segment as SG
-except ImportError:  # H1's receipts and their checks (`circuit.segment`) are not on this tree
-    SG = None
-
-try:
-    from verity.circuits import ports as _ports
-except ImportError:  # port types (circuits PROTOCOL.md §12) are not on this tree
-    _ports = None
 
 SCHEME = "eps1-sm120-h1fx1"
 #: the one-stream unit's scheme (`PouwH1Tile3`)
@@ -820,40 +812,35 @@ def _unit_ports(S: Any) -> Any:
 
 PouwH1Tile = CompositeDefinition(
     "PouwH1Tile", 1, ("EXACT", "R", "C", "PAIRS"), _signature, _body, conformance="protocol-defined",
-    register=SG is not None,
     doc="One r × c tile of H1 + fx1 under CP-W (`circuit.h1tile`): A's R rows and B's C rows, the salt, the unit's position "
         "and its seed group's roots, to {z: EXACT on each cell of PAIRS, receipt: per set the lanes' XOR of y, then of z}.",
-    **({"ports": _unit_ports} if _ports is not None else {}))
+    ports=_unit_ports)
 
 PouwH1Tile3 = CompositeDefinition(
     "PouwH1Tile", 3, ("EXACT", "R", "C", "PAIRS"), _signature, _body_v3, conformance="protocol-defined",
-    register=SG is not None,
     doc="The one-stream H1 + fx1 tile (`circuit.h1tile`): v1's noise, sets and receipt, and z on each cell of PAIRS its "
         "lane's O' - sum_d 128^d D_d plus its wrap correction 256 X (wb⁺ - wb⁻)ᵀ, less its dither peel "
         "X cᵀ + (b - 256 xa) Bᵀ, mod 2^32: the served product A Bᵀ for every int8 A and B (EXACT's type, never called).",
-    **({"ports": _unit_ports} if _ports is not None else {}))
+    ports=_unit_ports)
 
 PouwH1Tile4 = CompositeDefinition(
     "PouwH1Tile", 4, ("EXACT", "R", "C", "PAIRS"), _signature_v4, _body_v4, conformance="protocol-defined",
-    register=SG is not None,
     doc="v3's one-stream H1 + fx1 tile (`circuit.h1tile`) with its R rows' admit bits: a dead tile, every admit bit 0, has "
         "the zero receipt (each word AND the OR of the bits); z and a live tile's receipt are v3's.",
-    **({"ports": _unit_ports} if _ports is not None else {}))
+    ports=_unit_ports)
 
 PouwH1Tile5 = CompositeDefinition(
     "PouwH1Tile", 5, ("EXACT", "R", "C", "PAIRS"), _signature_j10r, _body_v5, conformance="protocol-defined",
-    register=SG is not None,
     doc="v1's H1 + fx1 tile (`circuit.h1tile`) under J10-R's noise: seed_c = `seeds.call_seed` at its call's first "
         "position `call`, row i's noise from block blocks[0] + i RB of seed_c's stream and column j's from blocks[1] + j CB "
         "(`j10r_blocks`, the call-scale stream's), the fold keys σ_R's at the unit's own position; z EXACT on each cell.",
-    **({"ports": _unit_ports} if _ports is not None else {}))
+    ports=_unit_ports)
 
 PouwH1Tile6 = CompositeDefinition(
     "PouwH1Tile", 6, ("EXACT", "R", "C", "PAIRS"), _signature_j10r, _body_v6, conformance="protocol-defined",
-    register=SG is not None,
     doc="v3's one-stream H1 + fx1 tile (`circuit.h1tile`) under v5's J10-R noise: z each cell's O' - sum_d 128^d D_d with "
         "its wrap correction and dither peel, A Bᵀ for every int8 A and B.",
-    **({"ports": _unit_ports} if _ports is not None else {}))
+    ports=_unit_ports)
 
 
 @dataclass(frozen=True)
@@ -892,9 +879,8 @@ def scheme_v3(tile: tuple[int, int] = (32, 32), name: str = SCHEME_V3) -> C.Sche
     return C.Scheme(name, tile, {kind: f for kind in KINDS}, stream=STREAM)
 
 
-if SG is not None:
-    C.register(scheme())
-    C.register(scheme_v3())
+C.register(scheme())
+C.register(scheme_v3())
 
 __all__ = ["FOLD", "H1_ROWS", "KINDS", "Layout", "PouwH1Tile", "PouwH1Tile5", "PouwH1Tile6", "PouwU129", "PouwU129Word",
            "SALT_BYTES", "SCHEME", "fold", "fold_keys", "j10r_blocks", "j10r_compressions", "j10r_noise", "j10r_reference",

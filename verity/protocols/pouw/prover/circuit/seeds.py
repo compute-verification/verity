@@ -36,8 +36,7 @@ counter that base plus a constant of the body (`PouwAdd64`). The gate-level cut 
 not for the noise, which the call's units share on purpose.
 
 Each Definition has a word form (`_v1`, over `Value<32>` halves, with `hashes.Sha512Compress`) and a Boolean twin (`_v2`, over
-32-bit elements, with `commitments.gates.sha512.compress_gadget`) whose word view it is. The salt port is `In(kind="coin")`
-where port types (`ml.circuits.ports`) are on the tree.
+32-bit elements, with `commitments.gates.sha512.compress_gadget`) whose word view it is. The salt port is `In(kind="coin")`.
 """
 from __future__ import annotations
 
@@ -45,6 +44,7 @@ import hashlib
 from typing import Sequence
 
 from verity.circuits import boolean as BL
+from verity.circuits import ports as _ports
 from verity.circuits.boolean.forms import add, const_bits
 from verity.circuits.boolean.trace import definition
 from verity.circuits.defs import CompositeDefinition, bind
@@ -56,11 +56,6 @@ from verity.commitments.scheme import DIGEST_BYTES
 
 from . import hashes as H
 from . import words as W
-
-try:
-    from verity.circuits import ports as _ports
-except ImportError:  # port types (circuits PROTOCOL.md §12) are not on this tree
-    _ports = None
 
 SEED_TAG = domains.POUW_SEED.encode().ljust(24, b"\0")
 RECEIPT_TAG = domains.POUW_RECEIPT.encode().ljust(24, b"\0")
@@ -201,8 +196,8 @@ def _coin_salt(S):
 
 
 def _word_def(name: str, params, body, doc: str, ports=None, ret=DIGEST) -> CompositeDefinition:
-    kw = {"ports": ports} if _ports is not None and ports is not None else {}
-    return CompositeDefinition(name, 1, (), lambda S: (params, ret), body, doc=doc, conformance="protocol-defined", **kw)
+    return CompositeDefinition(name, 1, (), lambda S: (params, ret), body, doc=doc, conformance="protocol-defined",
+                               ports=ports)
 
 
 _SEED_PARAMS = (("salt", DIGEST), ("position", POS), ("roots", Array(2, DIGEST)))
@@ -304,10 +299,9 @@ PouwCallSeedsBits = definition("PouwCallSeeds", 2, _call_seeds_bits, tuple((n, B
 PouwAdd64Bits = definition("PouwAdd64", 2, _add64_bits, tuple((n, BL.bit_type(t)) for n, t in _ADD64_PARAMS), POS_BITS,
                            word=bind(PouwAdd64), conformance="protocol-defined",
                            doc="a + b mod 2^64 on bits, one ripple carry: PouwAdd64_v1")
-if _ports is not None:
-    PouwSeedBits.ports = _coin_salt
-    PouwUnitSeedsBits.ports = _coin_salt
-    PouwCallSeedsBits.ports = _coin_salt
+PouwSeedBits.ports = _coin_salt
+PouwUnitSeedsBits.ports = _coin_salt
+PouwCallSeedsBits.ports = _coin_salt
 
 SEEDS = (PouwSeed, PouwSeedBits, PouwUnitSeeds, PouwUnitSeedsBits, PouwCallSeeds, PouwCallSeedsBits)
 
