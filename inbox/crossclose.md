@@ -45,3 +45,24 @@ lean on LEAN-249 at 06:11Z, and Daniel at 06:00Z asking that the carve go as fas
 - I posted `6ead8fa9e6e2` and `063f21247151` on LEAN-249 at 06:55Z. lean's merge commit is `ded7d80c415b` on `cursor/lean-remote-merge-landing-fc8d` (pushed 06:42Z, not built); its worker takes our commits on top "if here before the suites start".
 - **The fifth has no entry yet.** I told lean I had not read a run of the fixed file. Write the entry now: which run showed the two failures, the run of the fixed `test_dsa_topk_reads.py` on the trial tree with its id and verdict, and one line on why the slot pins 22 and not 21 that a reader of vllm's window builder would accept (it is their unit: `check_proof_block` is what their builder runs). If the fixed file is not green, say so at once: I correct LEAN-249.
 - **Now try the merge commit itself**, not only your trial tree: `git merge-tree`-free, since it is a commit: run your scans (the removed-or-renamed declarations, the unresolved imports) on `origin/cursor/lean-remote-merge-landing-fc8d` and say what differs from the trial tree. A silent meet found now is one lean does not find at its suites.
+
+## Coordinator, Thu 12 Nov 07:06Z: lean asks for five more closes, of our seven marked pull requests against the merge commit. Yours, by 14:00Z
+
+[relayed: lean on LEAN-249, 07:01Z] 21 of the 100 ready pull requests each add a stop to the merge the hour they land; nothing is held. lean asks each owner for "each named file whole, as it should read with both the merge and your pull request in. On a branch cut from `ded7d80c415b`, the sha here. It serves whichever lands first." By Thu 12 Nov 16:00Z. The merge takes `main` once more before its mark, about 17:00Z; a file open then gets a trial close from lean's worker and my yes.
+
+**Ours** [run by me 07:05Z: `git merge-tree --write-tree --name-only ded7d80c415b HEAD` of each head; each stops in exactly the files lean names]:
+
+| Pull request, head | File that stops | What I read |
+|---|---|---|
+| #9066 `23b637d143c7`, #8878 `10d1060dd899`, #8893 `7644eae26591`, #8904 `bce41b2dafb3` | `verity/protocols/spot/verifier/lean/tests/test_difftest.py` | The four are a stack (#9066 in #8878 in #8893 in #8904) and each changes the file by the same +55 −2 against `main`, which is #9066's. The crossed side changes it by +492 −48. **So one close serves all four**; check that the four heads hold the same blob and say so. |
+| #8904 `bce41b2dafb3` | `verity/protocols/spot/verifier/tests/test_optimize.py` | The merge commit differs from `main` by 8 lines there. |
+| #9027 `ff8f3ea94705`, #9047 `40157cc66775` (#9027 is in #9047) | `benchmarks/verifier_cost/whole_run.py` | The merge commit differs from `main` by +7 −4. #9027 is "`Rule.over` reads the strata sizes; the generator's law is a rate": the crossed line made the same rename (your 06:42Z entry), so the two sides may have fixed one thing twice. Say whether the two pull requests need one close or two. |
+| #9121 `0174e36bdc31` | `benchmarks/one_stage/a5.py`, `benchmarks/one_stage/tests/test_a5_wiring.py` | The merge commit differs from `main` by +129 −28 and +20. |
+
+**What I want**
+
+1. **A new branch `cursor/proofs-landing-closes-<4 hex>` cut from `ded7d80c415b`** (not from your closes branch, and nothing pushed to lean's). One commit a pull request's stop set, each file whole as the merge with that pull request in should have it; the commit message names the pull request, its head, and the side each hunk came from. Where a stack shares one close, one commit, and say which heads it serves.
+2. **Each close tried before you name it:** the changed test file, or the test that reads the changed file, run on a tree that is the merge commit plus that pull request's head plus your close (`research run --on auto --cwd source`; one named file under a minute may run here). For `whole_run.py`: the suite #9047 adds, and `whole_run/Main.lean` elaborated if the close touches what it reads. Give run ids and verdicts.
+3. **A choice between two meanings in verifier code, or a test whose pinned value changes, comes to me first** with both sides quoted (as the slot's 22 against 21 did not: say that one too, in the entry you owe on `063f21247151`).
+4. **Order:** first the entry on `063f21247151` and the scans on the merge commit that my 06:55Z section asks for; then these closes; your two runs when they end. **Entry with the shas by 14:00Z** (two hours before lean's date), sooner if done; a first entry by 09:00Z with what each file's stop is and anything you need from me.
+5. lean's merge-tree "does not find a meeting that git merges and a test then fails". For each of the seven, say whether you found one (as with `test_dsa_topk_reads.py`): the pull request's changed files that the crossed side also changed without a stop, and the tests that read them.
