@@ -85391,3 +85391,49 @@ Tags as before. Mailbox read 11:24Z: 33 sections, nothing new. A read only; noth
 - [read: `art:f1e47088b8f9277cde13364f877c2ce92742f7cbbe4d5bbecea79a23e32c552b`, kernels' summary for HASH-112, source `5dd43196d6c7`] **Correction to section 5.** I wrote that the 12 `nowalk.sh` and `levelwalk.sh` attempts without `N` are builds and stagings. Three of them ran on a card: `levelwalk.sh` on node A card 1, cores 12-21 (`r20261111-095744-4704`, `r20261111-100835-fccf`, `r20261111-101302-d466`). They time the head block's level walk alone over 256 units (`FIRST=false`, pin `4b31e7caba011398`): 0.1757 s a statement with one kernel, 0.0780 s with one launch a level, 0 bits differing from the builder's. No session and no rate file. It belongs in section 4, a part timed apart at 256 blocks; it is no timing at another block count. The other nine are seven jobs on CPU nodes and two build-and-stage jobs on node A [read: each attempt's command and environment].
 - [read] **Labels, all 208,344: 83 match** (58 check results, 16 `reviewed`, 4 `label`, 3 `note`, 2 `source`); none holds a timing.
 - [derived] Still not searched, and I see no way to search it: a run that names the type only inside a file it was sent.
+
+## OLDFOUR, Thu 12 Nov 11:29Z: #9255 is open for LEAN-290's first case, unmarked, and the six suites it touches pass at its head; #9208 owes no mend of its own, its fixture is public, and its ready line waits only for `9c81`
+
+**The pull request.** [#9255](https://github.com/compute-verification/verity/pull/9255), branch `cursor/proofs-siblings-exempt-e2de`, head `643e3b98b61df39f65c23b479ef62da150bfd949`, cut from `main` at `33faab2be81c`. Not marked. [run]
+
+- [run] Two commits: `3971474ddd6d` the change, `643e3b98b61d` a mend (below). Three files, +144 −4: `tools/verity/lean/siblings.py`, `tools/verity/lean/tests/test_siblings.py`, `tools/verity/lean/README.md`. Nothing else, and nothing in `lean_changed.py` or `verdict`.
+- [run] Opened with `research queue open --issue LEAN-290 --by proofs`; the body starts `Lane proofs`; the tool linked it to LEAN-290.
+- [read] **The goal line is `Goal proofs/spot-two-stage-sound`.** Our Lean tools' pull requests carry different ones: #8129 (the executables' roots, the same check) carries that one, #7284 carries `proofs/sampling-generic`, #6781 none. I took #8129's, which is also #9208's, the pull request whose try this stops. LEAN-290's only label is `from:proofs`, so `open` warned twice (no label of the issue names a live goal; the body's goal is one no label of it names). Yours to change with `research queue edit` or a label on the issue.
+
+**What holds each of lean's four conditions** (lines at the head):
+
+1. [run] **Prefixes, as the audit matches them:** `siblings.py:345`, `aside = (executables(pkg) | {m for m in mods if _audit().under(prefixes, m)}) - {mod}`. It calls the audit's own function: `_audit` (`siblings.py:96`) loads `check.py` by path the first time a plan reads a lock, and `under` is `check.py:512`, the one the orphan check uses on `exempt`. No second copy of the rule. The audit doesn't load `siblings.py` back, so it stays in `lean_audit.NOT_READ` (`lean_audit.py:261`) and in no audit's key. Test: `test_the_stub_leaves_out_the_modules_under_an_exempt_prefix_of_the_lock` (`test_siblings.py:135`): a prefix holding two scripts, a script listed by its own name, and two near-misses (`P.Runner`, `P.Probes`) that stay siblings.
+2. [run] **FILE's own module stays in:** the same line's `- {mod}`. The same test's last two asserts: either script as FILE has the library's modules for siblings and not the other script. On the real package, `verity lean try security/Proofs/Pouw/Bulk.lean --siblings` at the head: `r20261112-110701-4f4a`, exit 0, Lean exit 0, 1,548 imported and 2,335 unchecked.
+3. [run] **Never fails on the lock:** `exempt`, `siblings.py:175-188`. No lock file gives no prefix (`:180`). A lock that can't be read or parsed gives no prefix and prints one line on stderr (`:184-186`). A lock that parses and holds no names under `exempt` gives none. Test: `test_a_plan_never_fails_on_the_lock` (`test_siblings.py:157`): no lock, a directory in its place, nine texts that parse, four that don't.
+4. [run] **The two tests, with a real toolchain,** beside `test_the_stub_leaves_out_the_other_executables_roots`: `test_try_with_siblings_passes_beside_two_scripts_that_declare_main_under_exempt_prefixes` (`:206`), exit 0 and `2 imported`; and the control `test_try_with_siblings_refuses_two_scripts_that_declare_main_under_no_exempt_prefix` (`:218`), exit 1 on `import P.Run.Bulk failed, environment already contains 'main' from P.Probe`, the check's line naming both.
+
+- [run] **The docs state the rule:** `siblings.py`'s docstring (lines 10-15) and the README's entry for `siblings.py` (`README.md:284-287`). No issue, run or pull request id in the added lines of code, tests or docs (a grep of the diff finds none).
+- [read] Not changed, since you scoped it to those files: the CLI's help for `--siblings` (`tools/verity/cli/verity_cli/__init__.py`), which names neither exception and never named the executables' one.
+
+**One thing I got wrong first, and mended.** [run] The first commit's handler returned no prefixes for an unreadable lock and left no trace. The `repository` suite failed on it: `tests/lint/test_repo_silent_excepts.py`, 345 of 346, in `r20261112-105200-557f`. That lint is why condition 3 now prints a line on stderr instead of staying silent. I had launched that suite on my own account beside the one you asked for; without it the queue's candidate would have found this.
+
+**What I ran,** all at `643e3b98b61d` unless said:
+
+- [run] The suite that holds the tests, `verity-lean-audit`, with `verity-cli`: `r20261112-110549-3429` on cpu-5, exit 0, `suites.py --changed 33faab2be81c --quick` on those two with `test_siblings.py` whole. 710 passed and 108 passed, none cached, none skipped.
+- [run] The other four suites the change touches: `r20261112-110615-bfbb` on cpu-9, exit 0. `repository` 346 passed, `verity-check` 898, `verity-graph` 208, `research` 4,465 passed and 3 skipped. So all six pass at the head.
+- [run] On my VM with Lean 4.34.0: `test_siblings.py` 20 passed, the 16 from before and the 4 new. Seven ways of breaking the rule by hand each fail at least one of the four new tests.
+- [run] `git merge-tree` of the head at 11:24Z: with `main` at `33866d93e66e`, exit 0. With lean's remote merge at `f3837f57d113` it names 23 files, the same 23 `main` itself stops on against that branch. Less `main`'s own stops: none.
+- [run] At the first commit: `verity-lean-audit` 710 and `verity-cli` 108 passed (`r20261112-105115-986a`, exit 0), and the real try exit 0 (`r20261112-105416-2b97`).
+- [run] `--on auto` placed every run this time; I named no machine.
+
+**What I did not run:**
+
+- [derived] A try in `security/Proofs` on a tree where both scripts are known to be built. The real try shows the real lock is read on a node and that the other script is in neither list: 1,548 + 2,335 = 3,883, the package's 3,885 modules less the two scripts. It does not show a clash avoided there. The two toolchain tests show that on a package Lake built.
+- [run] The whole `check`, and anything of LEAN-292: no list of names, nothing in `verdict`.
+
+**#9208** (`34148509870b`, unchanged, not marked):
+
+- [derived] **It owes no mend of its own.** What its extra try found (`5c70`) is the sibling check stopping on the two scripts' `main`, on `main`'s own files. The mend is the tool's, #9255. Its Lean passes on the merge with or without it (`b8f2`). I pushed nothing to its branch.
+- [run] **The fixture is public.** At the head, `research data fetch-fixtures --no-private benchmarks/two_stage` into an empty store, 11:01Z: `1 entry: 1 fetched; 1 blob(s), 5.1 MB`, from the public export, exit 0. `guard.tar.xz` is 5,113,016 bytes, the size infra gave. The id is `art:f164ac2c74b1dfdcc4835c72b8d6dfaa9a051c9621af7a13239c0a8b52058742`, with `art:24eb213c31a7…` under `previous`.
+- [run] **Both merge-trees at the head, 11:24Z:** with `main` at `33866d93e66e`, exit 0. With `origin/cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`, exit 0, no file: no stop against lean's merge, so nothing to subtract.
+- [run] **`r20261112-092213-9c81` has not ended.** At 11:29Z it is running: 12 of its 14 suites passed, `benchmarks/two_stage` (9 passed, 6 skipped) and `repository` (340) among them. `research` and `verity-numerical` are out. Its slot ends by 12:22Z at the latest. [guess] About 11:45Z: `research` took 17 minutes on two workers in my other run and runs on one here.
+- [derived] **`main` has moved under those runs.** `b8f2` and `9c81` are on a merge with `main` at `19fb19a21e40`. Since then `main` changed 361 files, 10 of them Lean. One is new under `SpotFlock/`: `OffClassAt.lean`, which imports `RevealsLe`, an importer of `Code.lean`. I did not compile it against #9208: you ruled that the queue's candidate does. #9208 removes or renames no declaration; it adds nine and adds a conjunct to the check `Code.lean` defines. A try of `OffClassAt.lean` on `main`'s tip merged into the head is one run if you want it before the mark.
+- [derived] **The ready line, the moment `9c81` reads exit 0:** #9208 at `34148509870b`: merge-tree with `main` `33866d93e66e` exit 0 and with lean's `f3837f57d113` exit 0; fixture `art:f164ac2c74b1…` public and fetched without the private remote; on the merge with `main` `19fb19a21e40`, Lean exit 0 with 30 theorems on the three axioms (`b8f2`) and the quick suites (`9c81`). Until then it is not a ready line.
+- [run] Its body carries all of this (`research queue edit`, 11:27Z).
+
+Nothing marked, nothing closed, no push to #8139's branch or any branch but `cursor/proofs-siblings-exempt-e2de`. [run]
