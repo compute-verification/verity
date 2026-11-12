@@ -324,16 +324,20 @@ def read_reason(commitment: LiveCommitment, segment: Any, after: bytes, read: by
     return None
 
 
-COINS_FORM = ("a draw's coin evidence is {key, ledger, main, pins, segment, session}: the verifier's challenger key, the "
-              "auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the draw's "
-              "coins (Segment.to_json) and the challenger session's files")
+COINS_FORM = ("a draw's coin evidence is {ledger, pins, segment, session}: the auditor's ledger, the host's pins log, "
+              "the draw's coins (Segment.to_json) and the challenger session's files; the challenger's key and main's "
+              "first-parent history are the verifier's own, and the evidence names neither")
 
 
-def coins_reason(coins: Any, window: str, label: str, after: bytes, read: bytes, verify: Verify) -> str | None:
-    """`read_reason` on the evidence of a sample's coins, `{key, ledger, main, pins, segment, session}`: the commitment
+def coins_reason(key: ChallengerKey, main: Any, coins: Any, window: str, label: str, after: bytes, read: bytes,
+                 verify: Verify) -> str | None:
+    """`read_reason` on the evidence of a sample's coins, `{ledger, pins, segment, session}`: the commitment
     and the family's roots are those of the one session the auditor's ledger opens under the verifier's challenger key
-    for the window whose open root is `window`, run from a commit the host's pins log `pins` records on the verifier's
-    copy of main's first-parent line `main` (`trusted_session_of`, through `pinned_session`). `window` is the root the
+    `key` for the window whose open root is `window`, run from a commit the host's pins log `pins` records on the
+    verifier's copy of main's first-parent line `main` (`trusted_session_of`, through `pinned_session`). `key` and `main`
+    are the caller's own, as `draw_coins`'s key is: the evidence names neither, and evidence that carries a key or a
+    history is refused in form, so whoever wrote the evidence, the session is one signed under the key the verifier
+    holds. `window` is the root the
     verifier reads from the challenger's signed open of the registration's window (`registration.check`'s
     `window_root`), never the record's or the evidence's. So a prover picks no window: coins another window's session
     released after the same commitment are refused, and a prover with sessions in several windows gets one sample, not
@@ -342,11 +346,11 @@ def coins_reason(coins: Any, window: str, label: str, after: bytes, read: bytes,
     a withheld one (`withheld_on`), as `draw_coins`'s. `service.Stream.outcome`
     hands the evidence to the Lean verifier, whose run refuses a sample from the challenger without evidence that holds
     (`Run.run`'s `select`, code `coins`, or `family` where the reason is `FAMILY_ROOT`)."""
-    if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "main", "pins", "segment", "session"]:
+    if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "pins", "segment", "session"]:
         return COINS_FORM
     try:
-        commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, ChallengerKey.from_json(coins["key"]),
-                                               coins["pins"], coins["main"], coins["session"], verify)
+        commitment, roots = trusted_session_of(coins["ledger"], {"root": window}, key, coins["pins"], main,
+                                               coins["session"], verify)
     except CoinError as e:
         return str(e)
     if not withheld_on(coins["ledger"], window):
@@ -365,8 +369,8 @@ DRAW_FORM = ("a draw's coin evidence is {ledger, main, pins, segment, session}: 
 def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins: Any, verify: Verify) -> bytes:
     """Lean `Challenger.drawCoins`: the coins of family `label` that the session the auditor's ledger opens on `window` (its
     open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
-    Unlike `coins_reason`'s evidence, this carries no key: the key, the window and the family are the verifier's, so a
-    prover can't sign a ledger of its own. The session must be a withheld one (`withheld_on`): its challenger released
+    The key, the window and the family are the verifier's, as `coins_reason`'s are, so a prover can't sign a ledger of
+    its own; its evidence still carries the copy of main's history that `coins_reason` takes from its caller. The session must be a withheld one (`withheld_on`): its challenger released
     no root, salt or path before it closed. One-stage's check reads its sample's coins through it (`OneStage.coinsOf`).
     Raises `CoinError`."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segment", "session"]:

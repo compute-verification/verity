@@ -1400,7 +1400,8 @@ def run(j):
     any p (`service.bernoulli`: `bernoulli`), a program whose units read stratum by stratum are not its N in order
     (`partition.in_order`: `population-order`), and the receipt; `select`: a closure map refused (`closure`), then the
     sample from the source's bytes (`select`), the challenger's coins with their evidence when it read any, held to
-    the run's `family` (`_coins_code`: code `coins`, or `family`; a `coin_source` other than the challenger is refused
+    the run's `family`, its challenger key (`key`) and its copy of main's history (`main`) (`_coins_code`: code `coins`,
+    or `family`; a `coin_source` other than the challenger is refused
     up front: the verifier samples no coins of its own); `deliver`: one or more sessions, each matching
     `service._DIGEST`; `outcome`: `check_verdicts`, then the audit record (`record`) over the sample's proved units unless
     given, its acceptance the symbol and the first verdict of record's public outputs shown on an accept. A step that refuses gives `{"step",
@@ -1431,6 +1432,11 @@ def run(j):
     for of, what in ((j, "the run's"), (j.get("interior"), "an interior's")):
         if isinstance(of, dict) and not (of.get("family") is None or isinstance(of["family"], str)):
             raise D.Reject(f"{what} family is not a string")
+    if j.get("key") is not None:
+        try:
+            ChallengerKey.from_json(j["key"])
+        except CoinError as e:
+            raise D.Reject(str(e)) from None
     if not isinstance(j.get("source"), str):
         raise D.Reject("source is not hex")
     PR.unhex(j["source"])
@@ -1469,7 +1475,7 @@ def run(j):
         return {"codes": ["closure"], "step": "select"}
     drawn = select({"closure": closure, "program": j["params"]["program"], "query": j["params"]["query"], "rule": j["rule"],
                     "source": j["source"], "work_table": p["work_table"]})
-    code = _coins_code(j, rec, PR.unhex(j["source"])[:drawn["read"]])
+    code = _coins_code(j, rec, PR.unhex(j["source"])[:drawn["read"]], j.get("key"), j.get("main"))
     if code is not None:
         return {"codes": [code], "step": "select"}
     codes = DR.check_draw(drawn["draw"], rec, derived).codes
@@ -1609,23 +1615,25 @@ def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
         draw2 = service.select_second(sample, ns, ks, coins)
     except ValueError as e:
         raise D.Reject(str(e)) from None
-    code = _coins_code(it, rec, src[:at])
+    code = _coins_code(it, rec, src[:at], j.get("key"), j.get("main"))
     if code is not None:
         return {"codes": [code], "step": "second"}
     return {"draw": draw2, "law": service.second_law(sample, ns, ks), "read": at, "receipt": receipt}
 
 
-def _coins_code(j: dict, rec: dict, read: bytes) -> str | None:
+def _coins_code(j: dict, rec: dict, read: bytes, key, main) -> str | None:
     """`Run.coinsCode`: a sample that read no coins carries no evidence; one that read coins read the challenger's and
-    carries evidence that holds (`coins_reason`) for the verifier's window root, of the run's family, after the
-    registration's digest. The code it is refused under, or None: `family` for a family whose log shows another root
-    (`FAMILY_ROOT`), else `coins`."""
+    carries evidence that holds (`coins_reason`) under the run's challenger key `key` and its copy of main's
+    history `main`, a second stage's under the same two, for the verifier's window root, of the run's family, after the registration's digest. The code it
+    is refused under, or None: `family` for a family whose log shows another root (`FAMILY_ROOT`), else `coins`, a
+    verifier that holds no key among them."""
     if not read:
         return None if j.get("coins") is None else "coins"
     window, family = j["params"].get("window_root"), j.get("family")
-    if window is None or family is None:
+    if window is None or family is None or key is None:
         return "coins"
-    why = coins_reason(j.get("coins"), window, family, bytes.fromhex(R.digest(rec)), read, lms_verify)
+    why = coins_reason(ChallengerKey.from_json(key), main, j.get("coins"), window, family, bytes.fromhex(R.digest(rec)),
+                       read, lms_verify)
     return None if why is None else "family" if why == FAMILY_ROOT else "coins"
 
 
@@ -3796,7 +3804,8 @@ def _run_case(a: dict, source: str, sessions: int, outputs: list) -> dict:
 def _from_challenger(c: dict, rng: random.Random, **shape: bool) -> tuple[Drawn, dict]:
     """Run `c` sampling from the auditor's challenger, as a `Stream` over a window runs it: its coins a ledger session's
     challenger opened after the registration's digest and read by the selection rule's sample (`Drawn`), the source the
-    bytes read, the evidence the session's, the family the session's `draw` and the window root the ledger's open's.
+    bytes read, the evidence the session's, the family the session's `draw`, the window root the ledger's open's, and
+    the key and main's history the session's own (`Drawn.held`).
     `shape`: `Drawn`'s `before` or `later`, a session whose family holds another root."""
     rec, p, rule = c["record"], _params_of(c), _rule(c["rule"])
     law = DR.derive(p["program"], p["query"],
@@ -3814,7 +3823,7 @@ def _from_challenger(c: dict, rng: random.Random, **shape: bool) -> tuple[Drawn,
         return bytes(got)
     d = Drawn(rng, after=bytes.fromhex(R.digest(rec)), reads=reads, **shape)
     return d, {**c, "params": {**c["params"], "window_root": d.ledger.window["root"]}, "source": d.read.hex(),
-               "coins": d.evidence(d.segment.to_json()), "family": "draw"}
+               "coins": d.evidence(d.segment.to_json()), "family": "draw", **d.held()}
 
 
 def _public_change(change):
@@ -4000,7 +4009,8 @@ def _two_stage_text(seed: int, again: int | None = None, elsewhere: bool = False
     block, which the verifier names as it checked it (`_checked_names`), and the auditor's
     params naming its template's circuit file, reference header (`_second_reference`) and the registered reads its
     reference statement reads, the statement's, which round 2 compares but for the run's fields
-    (`second_stage.blank_reads`). Each stage's coins are its own session's `draw` family's alone; `again`: the stage
+    (`second_stage.blank_reads`). Each stage's coins are its own session's `draw` family's alone, both sessions under
+    one key, the run's, and main's history one that holds both sessions' pins; `again`: the stage
     (0 or 1) whose family holds a root before its registration's (`Drawn`'s `before`)."""
     rng = random.Random(f"two-stage/{seed}")
     rule, b, i = _rule(TWO_STAGE_RULE), BOUNDARY, INTERIOR
@@ -4033,7 +4043,8 @@ def _two_stage_text(seed: int, again: int | None = None, elsewhere: bool = False
     def second_stage(source):
         second["draw"] = service.select_second(sample, ns, ks, source)
     d2 = Drawn(rng, before=again == 1, after=bytes.fromhex(R.digest(irec)), reads=reads(second_stage),
-               window=None if elsewhere else {"root": SS.interior_root(R.digest(rec), sample)})
+               window=None if elsewhere else {"root": SS.interior_root(R.digest(rec), sample)},
+               params=[(d1.s.w, d1.s.h)])
     n = sum(ns)
     linked = {p: {"value": v, "root": BOUNDARY_ROOTS[v], **b.ports[v], "reads_from": 0,
                   "reads": [b.ports[v]["leaves"] // b.population * sample[u // n] + u % n for u in range(m)]}
@@ -4053,7 +4064,7 @@ def _two_stage_text(seed: int, again: int | None = None, elsewhere: bool = False
                 "upstream": {"accepted": True, "of_record": False}}
     return D.canonical({
         "challenger": "verifier-test", "closure": None, "coins": d1.evidence(d1.segment.to_json()), "delta": "1/4",
-        "family": "draw",
+        "family": "draw", "key": d1.s.key.to_json(), "main": [*d1.main, *d2.main],
         "instances": None, "outputs": ["credited"], "params": params(b, first_law, [], d1), "proved_units": None,
         "public": public, "received": RECEIVED, "record": rec, "rule": TWO_STAGE_RULE, "served": None,
         "session_roots": dict(BOUNDARY_ROOTS), "sessions": RUN_SESSIONS, "source": d1.read.hex(),
@@ -6265,8 +6276,10 @@ def test_the_run_reaches_every_step(pieces):
     verdicts' public outputs. The same runs refused at each step (a declared item missing, a record R1-R7 refuses, no
     session, a verdict of record about other sessions) and rejected (a verdict that ran and did not accept), which the
     sampled runs reach only probably. A run that read coins is refused at its select step without their evidence, with
-    empty evidence, without the family the stream read them from or under another (`coins`): the provenance check is
-    never skipped. Evidence that holds but for a root other than the registration's digest in the family, before the
+    empty evidence, without the family the stream read them from or under another, without the challenger's key or
+    under another than the session is signed under, on a history of main without the session's pin, and on evidence
+    that names a key and a history of its own (`coins`): the provenance check is never skipped, and it is under the
+    key the verifier holds. Evidence that holds but for a root other than the registration's digest in the family, before the
     sample's coins or after them, is refused for that (`family`): a family's coins follow one registration. A run asked
     to sample from the verifier's own coins is refused before it starts: the verifier samples no coins of its own."""
     v2 = _v2_audit(REGISTERED_SETUPS[0], REGISTERED_SETUPS[0].values[1])
@@ -6282,11 +6295,15 @@ def test_the_run_reaches_every_step(pieces):
                         {**case, "verdicts": {**case["verdicts"], "upstream": {"accepted": False, "of_record": False}}},
                         {k: v for k, v in case.items() if k != "coins"}, {**case, "coins": {}},
                         {**case, "coins": {"segment": None}}, {k: v for k, v in case.items() if k != "family"},
-                        {**case, "family": "other"}):
+                        {**case, "family": "other"}, {k: v for k, v in case.items() if k != "key"},
+                        {**case, "key": {**case["key"], "public": _flip(case["key"]["public"], -1)}},
+                        {**case, "main": []},
+                        {**case, "coins": {**case["coins"], "key": case["key"], "main": case["main"]}}):
             out = run(copy.deepcopy(changed))
             assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out)), (a["params"]["law"], out)
             seen.append(out.get("step") or out["symbol"])
-            if (changed.get("coins"), changed.get("family")) != (case["coins"], case["family"]):
+            held = ("coins", "family", "key", "main")
+            if [changed.get(k) for k in held] != [case[k] for k in held]:
                 assert out["codes"] == ["coins"], out
         for shape in ("before", "later"):
             _, again = _from_challenger(_run_case(a, "", 2, ["credited"]), random.Random(f"run/{i}/{shape}"),
@@ -6302,7 +6319,7 @@ def test_the_run_reaches_every_step(pieces):
         for own in ("verifier", "os", ""):
             kind, why = D.replay(RUN, {**case, "coin_source": own}, pieces)
             assert kind == "reject" and "the verifier draws no coins of its own" in why, (own, kind, why)
-    assert seen == ["accept", "register", "register", "deliver", "outcome", "reject", *["select"] * 5] * 7
+    assert seen == ["accept", "register", "register", "deliver", "outcome", "reject", *["select"] * 9] * 7
 
 
 def test_a_two_stage_run_reaches_every_step(pieces):
@@ -6384,7 +6401,12 @@ def test_a_two_stage_run_reaches_every_step(pieces):
         (_inner_params(window_root=case["params"]["window_root"])(case, 0), ("second", ["coins"])),
         (_inner(lambda it, x: {**it, "family": None})(case, 0), ("second", ["coins"])),
         (_inner(lambda it, x: {**it, "family": "other"})(case, 0), ("second", ["coins"])),
+        (_inner(lambda it, x: {**it, "coins": {**it["coins"], "key": case["key"], "main": case["main"]}})(case, 0),
+         ("second", ["coins"])),
         ({**case, "family": "other"}, ("select", ["coins"])),
+        ({**case, "key": None}, ("select", ["coins"])),
+        ({**case, "key": {**case["key"], "public": _flip(case["key"]["public"], -1)}}, ("select", ["coins"])),
+        ({**case, "main": []}, ("select", ["coins"])),
         (_two_stage_case(again=0), ("select", ["family"])),
         (_two_stage_case(again=1), ("second", ["family"])),
     ]
@@ -7057,7 +7079,7 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
     def case_of(d: Drawn, segment: dict, read: bytes, **change) -> dict:
         c = _run_case(a, read.hex(), 2, ["credited"])
         c["params"] = {**c["params"], "window_root": d.ledger.window["root"]}
-        return {**c, "coins": d.evidence(segment), "family": "draw", **change}
+        return {**c, "coins": d.evidence(segment), "family": "draw", **d.held(), **change}
 
     def ran(c: dict) -> dict:
         out = run(copy.deepcopy(c))
@@ -7095,7 +7117,10 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
                     case_of(bare, bare.segment.to_json(), bare.read),
                     {**honest, "params": {**honest["params"], "window_root": d.other_window(rng)}},
                     {**honest, "coins": None}, {**honest, "coins": {}}, {**honest, "family": None},
-                    {**honest, "family": "other"}]
+                    {**honest, "family": "other"}, {**honest, "key": None},
+                    {**honest, "key": {**honest["key"], "public": _flip(honest["key"]["public"], -1)}},
+                    {**honest, "main": [c for c in honest["main"] if c != d.ledger.opened["pinned"]]},
+                    {**honest, "coins": {**honest["coins"], **d.held()}}]
         for c in selects:
             out = ran(c)
             assert (out.get("step"), out.get("codes")) == ("select", ["coins"]), out
