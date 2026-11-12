@@ -5,6 +5,7 @@ report with both runners' gates, and a failure in either runner's gates voids th
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -142,3 +143,21 @@ def test_a_point_with_both_a_fused_step_and_a_phase_filler_is_refused():
     arm.fused = lambda ph, b, l: step if ph == "decode" else None
     with pytest.raises(A.ArmError, match="both a fused step and a phase filler"):
         F.drivers(arm, S.points())
+
+
+# ---- the directory's runner ---------------------------------------------------------------------------------------------
+
+
+def test_run_sh_names_every_job_of_the_directory_and_the_readme_lists_them():
+    """`run.sh` starts a job by its name: `JOBS` holds each job script beside it and no other, `score` and `tpcomm` name
+    files that exist, and the README's table has a row a job. This file is keyed on the whole directory, so a new
+    script reruns it."""
+    filler = Path(__file__).resolve().parents[1]
+    text = (filler / "run.sh").read_text()
+    jobs = re.search(r'^JOBS="([\w|]+)"$', text, re.M)
+    assert jobs and set(jobs.group(1).split("|")) == {p.stem for p in filler.glob("*.sh")} - {"run"}
+    assert {p.name for p in (filler / "comm").glob("*.sh")} == {"tpcomm.sh"}
+    assert '"$HERE/score.py"' in text and '"$HERE/comm/tpcomm.sh"' in text and (filler / "score.py").is_file()
+    readme = (filler / "README.md").read_text()
+    rows = {m for m in re.findall(r"^\| `([\w/.]+\.(?:sh|py))[ `]", readme, re.M)}
+    assert rows == {f"{j}.sh" for j in jobs.group(1).split("|")} | {"score.py", "comm/tpcomm.sh"}
