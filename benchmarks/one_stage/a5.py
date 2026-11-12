@@ -1450,19 +1450,20 @@ def devices(a: argparse.Namespace) -> list[int] | None:
     return list(getattr(a, "devices", None) or ()) or None
 
 
-def card_clocks(cards: Sequence[int] | None, run: Callable[[list[str]], str] | None = None) -> dict[str, dict[str, int]] | None:
+def card_clocks(cards: Sequence[int] | None, run: Callable[[list[str]], str] | None = None) -> dict[str, Any] | None:
     """Each of ``cards``' clock event counters as ``nvidia-smi -q -d PERFORMANCE`` prints them: the microseconds its
     clocks were held back, by reason (a thermal slowdown, a power cap), under the card's index; a card whose driver
     prints none has none. Read before and after an audit's sessions, their difference says whether a card was slowed
-    while it proved. None without cards, or where nvidia-smi doesn't answer (``run``: the command's output)."""
+    while it proved. None without cards. Where nvidia-smi doesn't answer (``run``: the command's output) the audit
+    goes on and the record says so: ``{"unread": why}`` in the counters' place."""
     if not cards:
         return None
     run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True).stdout)
     try:
         return {str(card): {m[1]: int(m[2]) for m in CLOCK_COUNTER.finditer(
             run(["nvidia-smi", "-q", "-d", "PERFORMANCE", "-i", str(card)]).partition(CLOCK_COUNTERS)[2])} for card in cards}
-    except (OSError, subprocess.SubprocessError):
-        return None
+    except (OSError, subprocess.SubprocessError) as e:
+        return {"unread": f"{type(e).__name__}: {e}"[:300]}
 
 
 #: nvidia-smi's heading over a card's clock event counters, and one of its lines (``SW Thermal Slowdown : 1038546 us``)

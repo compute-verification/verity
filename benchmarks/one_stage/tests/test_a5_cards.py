@@ -114,8 +114,9 @@ def test_a_cards_clock_counters_are_read_by_its_index_as_nvidia_smi_prints_them(
     assert a5.card_clocks([0], lambda cmd: PERFORMANCE.partition("    Clocks Event Reasons Counters")[0]) == {"0": {}}
 
 
-def test_no_cards_or_no_nvidia_smi_is_no_clock_record():
+def test_no_cards_is_no_clock_record_and_no_nvidia_smi_is_recorded_as_unread():
     def gone(cmd: list[str]) -> str:
         raise FileNotFoundError(cmd[0])
 
-    assert a5.card_clocks(None) is None and a5.card_clocks([]) is None and a5.card_clocks([0], gone) is None
+    assert a5.card_clocks(None) is None and a5.card_clocks([]) is None
+    assert a5.card_clocks([0], gone) == {"unread": "FileNotFoundError: nvidia-smi"}
