@@ -1,8 +1,71 @@
 # dc: the epsilon program's measurements on Hopper and datacenter Blackwell
 
-The tensor measurements M3 (sm_90a: H100, H200) and M4 (sm_100a: B200) as gated opcode probes, the scalar pipes that
-bound the fold, and the honest Dither GEMM with its duo fold on wgmma and on tcgen05. Everything here builds with CUDA
-13.0 on any machine and passes the SASS gate there; the rates and the GEMM's exactness need the GPU (`run.sh`).
+What one H200 (sm_90a) and one B200 (sm_100a) do a SM a clock, as gated opcode probes: the tensor measurements M3
+(wgmma) and M4 (tcgen05), the scalar pipes that bound the fold, the uniform datapath, and the honest Dither GEMM with
+its duo fold on wgmma and on tcgen05, checked word for word. The ACCEL model's census lines for both cards
+(`../../machine_model/data/devices/sm_90/`, `sm_100/`) are written from these runs. Everything here builds with CUDA 13.0
+on any machine and passes the SASS gate there; the rates and the GEMM's exactness need the GPU.
+
+## Running
+
+Each job is the command of a `research run` from a pushed commit, on a node with the card, CUDA 13.0
+(`/usr/local/cuda-13.0`) and driver ≥ 580. `run.sh` is the runner, the job for one family:
+
+~~~text
+research run --on H200 --project verity --source /workspace --cwd source --custody-ttl 12h \
+  --timeout 60m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90
+research run --on B200 ... -- bash benchmarks/pouw/dc/run.sh sm100
+research run --on H200 ... -- bash benchmarks/pouw/dc/run.sh sm90jb   # the stress of the H200's rows: probes only
+~~~
+
+H200 and B200 name a node with that card, and CPU_NODE below a CPU node. A run builds and SASS-gates everything before
+it touches the GPU (103 gates on sm_90a, 68 on sm_100a; `gate-build.txt`), then under one lease: the GEMM gate at three
+shapes, each dump rechecked by `dgemm_ref.py` (`dgemm/gate-<shape>/`), the bench only if all three are exact
+(`dgemm/bench.jsonl`), fp8acc (sm100, `fp8acc/`), the probes with nvidia-smi sampled every 200 ms (`probes/`, `scalar/`:
+`rows.jsonl`, `gate.json`, `times.jsonl`; `env/smi.csv`), and `analyze.py` (`analysis.json`, `verdict.json`), all under
+the run's `out/`. A run is about 6 minutes on the GPU. `DC_BUILD_ONLY=1` builds and gates without a GPU. `sm90jb`
+builds and gates `probes/sm90_jbreak.cu` in place of `sm90_wgmma.cu` and times only its `jb` probes (`DC_ONLY`, `^jb`
+unless set), with no GEMM gate, no bench and no `analyze.py`: `gate-build.txt`, `sass/`, `env/` and `probes/`.
+
+The other five jobs are each a script of their own, started the same way; a script's header gives its outputs and exit
+codes:
+
+~~~text
+research run --on B200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
+research run --on B200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
+research run --on B200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/pouw/dc/uni.sh sm100  # LDTM.x128's price
+research run --on B200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
+research run --on B200 ... --env UNI_TABLES=a2u ... -- bash benchmarks/pouw/dc/uni.sh sm100     # A2u with every SMSP's issue saturated
+research run --on B200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
+research run --on H200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
+research run --on H200 ... -- bash benchmarks/pouw/dc/s8_mma.sh sm90     # sm100 on a B200: the integer step
+research run --on CPU_NODE ... -- bash benchmarks/pouw/dc/s8_mma.sh build sm90   # CUDA 13.0 there (through slot.py); then on the card (--send):
+research run --on H200 ... --send BIN --send BIN.nvcc --env S8_MMA_BIN=inputs/s8_mma_90a -- bash benchmarks/pouw/dc/s8_mma.sh sm90 wg64 wg128 wg256
+research run --on CPU_NODE ... -- bash benchmarks/pouw/dc/emp.sh build SRC...   # sm_90a probes built and gated; then on the card (--send):
+research run --on H200 ... --send bins.tgz ... -- bash benchmarks/pouw/dc/emp.sh time [REPS]
+~~~
+
+| Job | Measures | Writes under `out/` |
+|---|---|---|
+| `uni.sh` | The uniform datapath and the IMAD forms, the tables `UNI_TABLES` picks | `gate-build.txt`, `probes/`, `env/smi.csv`, and `uniform.json` (`ldtm.json`, `a2u.json` for those tables) with its `.txt` |
+| `pipe.sh` | The pipelined Dither GEMM on the B200: its gates, then its rate in each arm | `gate-build.txt`, `sass/pgemm.sass`, `gate/<shape>/`, `rate.jsonl`, `pipe.json`, `pipe.txt` |
+| `ffill.sh` | The FFMA filler on the H200: conformance bit for bit, and its cost beside the LI-CP-W GEMM | `sass/ffill-check.txt`, `gate-build.txt`, `conformance/`, `probes/` |
+| `s8_mma.sh` | The integer step's words on each card against `verity.definitions.silicon.integer` | `check-<family>.json` and `.txt`, `structured-<family>.json`, `meta-<family>.json`, `sass.txt`, `inputs.sha256`, `status.txt` |
+| `emp.sh` | The combined routes on the H200, each beside a saturated wgmma | `build`: `bins.tgz`, `sass/`, `gate-build.txt`, `gate-build.json`; `time`: a directory a binary, `env/` |
+
+The analyses read a finished run's `out/`:
+
+~~~text
+python3 benchmarks/pouw/dc/analyze.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
+python3 benchmarks/pouw/dc/pipe.py analyze ~/.research/runs/RUN/out --census SM100_RUN_OUT...
+python3 benchmarks/pouw/dc/pipe.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
+python3 benchmarks/pouw/dc/census.py sm90 ~/.research/runs/RUN/out... --write benchmarks/machine_model/data/devices/sm_90
+python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/SAT_RUN/out... --write
+uv run python benchmarks/pouw/dc/emp.py TIME_RUN_OUT BUILD_RUN_OUT/sass [--json OUT]
+~~~
+
+## Files
+
 
 | File | What |
 |---|---|
@@ -11,6 +74,8 @@ bound the fold, and the honest Dither GEMM with its duo fold on wgmma and on tcg
 | `probes/sm100_tcgen05.cu` | M4: tcgen05.mma kind::i8 M 64/128 × N 32–256, f8f6f4 E4M3 N 128/256, f16 BF16 (one thread issues, 4 a loop, into TMEM); tcgen05.ld 32x32b.x{1,4,16,32,64,128}, 16x64b.x16, 16x128b.x8, 16x256b.x4 alone; tcgen05.ld, mma.sync and lanes (mix, IMAD, LOP3, duo, redux, reduce) beside the saturated MMA, block-timed and exact (`ldU_`, `mmaU_`, `syncU_`, `tclaneU_`: one role fixed, the other until it ends); `tcliU_` the honest LI loop (TMEM load then LI fold a segment) with no checkpoint, with LI-CP-W's redux reduction, and with its 5-shuffle fallback, so the ratio is what the checkpoint costs the latency-bound loop; `tcliU_floor` the floor program of `dither-2s-licpw-redux-ldtm0-l32` (LI-CP-W redux on words already in registers, ♭'s 544 : 512 : 24 a UTCIMMA, 12 lane warps), so its issue is the most the floor's own mix gets beside the tensor |
 | `probes/scalar.cu` | Every family: IADD3, LOP3, IMAD, FFMA, SHF, LEA.HI, SHFL, mix, duo, redux (one `redux.sync.xor.b32`) and reduce (the same by 5 butterfly shuffles + 5 XORs) alone, and the pairs that assign them to pipes (M3's INT32-pipe question, M4d). redux/reduce are LI-CP-W's per-segment checkpoint reduction |
 | `probes/lanes.cuh` | The lane ops all three share |
+| `probes/wg_common.cuh` | The sm_90a probes' shared pieces (`sm90_wgmma.cu`, `sm90_jbreak.cu`): one shared-memory operand tile, the wgmma forms as types, and the commit group |
+| `probes/sm90_jbreak.cu`, `probes/sm90_jbreak.inc`, `gen_jbreak.py` | The stress of the rows the H200 design reads (JI90_0–2, JPA90_0/1, JPI90_0/1, issue, M): facet_break's sm_120 break (few accumulators, one-read lanes by an immediate, 2 warps a SMSP) moved beside wgmma (`jb_`: each warpgroup 4 wgmma a commit group into one of NS accumulator sets, then R lane ops), its exact points (`jbU_`: lane warps run until the wgmma warpgroups end), the lanes alone (`jba_`), and the wgmma kinds the design's menu clause reads (f16, tf32, s8 RS) in honest's shape (`jbk_`, exact `jbkU_`). `sm90_jbreak.inc` is the probe list, one line a probe with its loop's declared opcode counts, which `gen_jbreak.py` writes; `run.sh sm90jb` times it |
 | `dc.cuh` | The K-major no-swizzle operand layout and its descriptors (wgmma and tcgen05), the instruction descriptor, mbarrier and tcgen05 wrappers, and duo (floored_gemm's) |
 | `gen_wgmma.py`, `wgmma.cuh` | The wgmma wrappers (up to 128 accumulator registers an operand list), generated |
 | `dgemm.cu` | The honest Dither GEMM, s8 C = X Wᵀ with every 32-step s32 prefix word folded by duo (3 ops a word): `dg90` (wgmma m64n128k32, accumulators in registers) and `dg100` (tcgen05.mma 128×256×32 into TMEM, tcgen05.ld to registers). Modes `cpuref`, `gate` (0xA5 poisoning, no-write control, a mismatch rerun with LBO/SBO exchanged) and `bench` (fold, no fold, cuBLASLt int8) |
@@ -32,43 +97,29 @@ bound the fold, and the honest Dither GEMM with its duo fold on wgmma and on tcg
 
 The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
 dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
-pipe.py's SASS profile and q*, uniform.py's tables, fit and writer, emp.py's facet pricing and event clock) and `../tests/test_ffill.py` (ffill's reference
-against the integer FP32 pipe, its coins, chains and pinned receipts, its dump checks, the header's host build, the
-design that prices it). A probe's rate is
-opcode_probe's: warp instructions a SM a clock, timed only after its SASS gate, its poisoned sink and its no-write
-control pass (`../opcode_probe/README.md`).
+pipe.py's SASS profile and q*, uniform.py's tables, fit and writer, emp.py's facet pricing and event clock),
+`../tests/test_dc_jbreak.py` (sm90_jbreak.inc current),
+`../tests/test_dc_pipe.py` (the build gate's register limit, ε_tensor at L = 32 under the balance and under the round
+trip), `../tests/test_dc_uniform.py` (the table writer),
+`../tests/test_dc_s8_mma.py` (the SASS reader, and the word check on the sm_120 step's own words),
+`../tests/test_dc_device_gate.py` (each job's check of the card it runs on, with stand-ins for nvidia-smi and nvcc) and
+`../tests/test_ffill.py` (ffill's reference against the integer FP32 pipe, its coins, chains and pinned receipts, its
+dump checks, the header's host build, the design that prices it). A probe's rate is opcode_probe's: warp instructions a
+SM a clock, timed only after its SASS gate, its poisoned sink and its no-write control pass
+(`../opcode_probe/README.md`).
 
-## Running
+The directory is scripts run by their paths, and no package: nothing outside `benchmarks/pouw/` imports it. Two
+modules are loaded by file by another, `analyze.py` by `census.py` and `census.py` by `pipe.py`; each one's `__all__`
+lists what its readers and the tests take, and every other name is the script's own. No Python here starts a process
+or touches a GPU: the `.sh` jobs do, and the Python reads what a run wrote and writes only where its command says
+(`--json`, `--write`, a probe table's header).
 
-~~~text
-research run --on H200 --project verity --source /workspace --cwd source --custody-ttl 12h \
-  --timeout 60m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90
-research run --on B200 ... -- bash benchmarks/pouw/dc/run.sh sm100
-research run --on B200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
-python3 benchmarks/pouw/dc/analyze.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
-python3 benchmarks/pouw/dc/pipe.py analyze ~/.research/runs/RUN/out --census SM100_RUN_OUT...
-python3 benchmarks/pouw/dc/pipe.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
-python3 benchmarks/pouw/dc/census.py sm90 ~/.research/runs/RUN/out... --write benchmarks/machine_model/data/devices/sm_90
-research run --on B200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
-research run --on B200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
-research run --on B200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/pouw/dc/uni.sh sm100  # LDTM.x128's price
-research run --on B200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
-research run --on B200 ... --env UNI_TABLES=a2u ... -- bash benchmarks/pouw/dc/uni.sh sm100     # A2u with every SMSP's issue saturated
-python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/SAT_RUN/out... --write
-research run --on H200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
-research run --on H200 ... -- bash benchmarks/pouw/dc/s8_mma.sh sm90     # sm100 on a B200: the integer step
-research run --on CPU_NODE ... -- bash benchmarks/pouw/dc/s8_mma.sh build sm90   # CUDA 13.0 there (through slot.py); then on the card (--send):
-research run --on H200 ... --send BIN --send BIN.nvcc --env S8_MMA_BIN=inputs/s8_mma_90a -- bash benchmarks/pouw/dc/s8_mma.sh sm90 wg64 wg128 wg256
-~~~
+## Measured results
 
-H200 and B200 name a node with that card, and CPU_NODE a CPU node.
+No run that measured these is one `research status RUN` finds (the device directories' `rows.csv` name the runs), so
+the results stay here until a rerun's are in the evidence store.
 
-The node needs CUDA 13.0 (`/usr/local/cuda-13.0`, driver ≥ 580). Each run builds and SASS-gates everything before it
-touches the GPU (103 gates on sm_90a, 68 on sm_100a), then under one lease: the GEMM gate at three shapes (each dump
-rechecked by `dgemm_ref.py`), the bench only if all three are exact, fp8acc (sm100), the probes with nvidia-smi sampled
-every 200 ms, and `analyze.py` (`verdict.json`). A run is about 6 minutes on the GPU.
-
-## Results (1× H200, 1× B200; driver 580.173.02, CUDA 13.0.88)
+### Results (1× H200, 1× B200; driver 580.173.02, CUDA 13.0.88)
 
 The census is `../../machine_model/data/devices/sm_90/` and `sm_100/`; every repeat agrees with its twin within 2% (worst
 1.0008). f_max at default clocks: H200 1980 MHz, B200 1965 MHz.
@@ -91,7 +142,7 @@ The census is `../../machine_model/data/devices/sm_90/` and `sm_100/`; every rep
   tcgen05.ld.x32 that bring the words to registers; ptxas emits no instruction for tcgen05.wait::ld), against sm_120's
   2.03. The fold binds at L = 32 on both (duo 31.3 and 31.5 words/SM/clk alone: L_bal 131 and 260).
 
-## The pipelined honest GEMM on sm_100 (`pgemm.cu`, 1× B200)
+### The pipelined honest GEMM on sm_100 (`pgemm.cu`, 1× B200)
 
 A run and its repeat (152 rate points, all within 2%, worst 1.0064). All 32 gates are exact in both: (NB, LW) in (2,
 1), (2, 2), (4, 1), (4, 2), one MMA warp or one a tile, at L = 32 and 64, on 128 × 512 × 256 and 256 × 1024 × 1024, each dump rechecked by `dgemm_ref.py`. Rates are slots/SM/clk (each
@@ -110,7 +161,7 @@ point's best configuration; committed words = slots / lm), clock64 a CTA on 148 
   a lane-word. q* is 0.0011 (MMA only) and 0.032 (with the loads) at L = 32, and 0.0021 and 0.033 at L = 64.
 - **At L = 32 the TMEM round trip binds the tensor.** Each running sum must leave TMEM before the next k-step lands on
   it, so no more than TMEM's 65,536 words are in flight. The tile's round trip (MMA, commit, loaders, hand-back) is at
-  least 437 clocks in these kernels, which caps the tensor at 0.585 of ρ_T5 even with no reads (self-wait). One MMA warp
+  least 437 clocks in these kernels, which limits the tensor to 0.585 of ρ_T5 even with no reads (self-wait). One MMA warp
   issuing for every tile serializes the commits (at most 0.36 at L = 32), so a tile needs its own issuer. Four tiles of
   128 columns take as long a round trip as two of 256.
 - **ε_tensor at L = 32**, honest's TMEM stage at 0.489 of ρ_T5: T1 gives 51.1%. The tensor table's two-stage LP (mma.sync fills
@@ -126,7 +177,7 @@ general), lanes beside wgmma with more than one lane warp a SMSP (`wgU_` reaches
 block-timed points the sm_90 facets rest on), operand streaming (TMA) in `pgemm.cu`, and a pipelined sm_90 GEMM. On sm_90 CUDA 13.0 has no native FP8 or s4 mma.sync: e4m3 m16n8k32 is 2 HMMA.16816.F32 + 4 FADD (timed as
 that), s4 m16n8k64 a CALL (not timed).
 
-## The uniform datapath and the IMAD forms (`uni.sh`, 1× H200, 1× B200)
+### The uniform datapath and the IMAD forms (`uni.sh`, 1× H200, 1× B200)
 
 Five runs on each of the H200 and the B200, 115 gates each, all passing:
 every uniform chain stays uniform alone and beside the honest step, FFMA, LOP3, the MMA-heavy stream and every
@@ -181,7 +232,7 @@ issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
   joint ALU row bounding duo: a row fitted to the block-timed tclane_lop3_r128 would, but the exact tclaneU_lop3 keeps
   the tensor at 0.999 and LOP3 at 0.991 beside each other, so census.py writes no such row.)
 
-## Combined routes beside wgmma (`emp.sh`, 1× H200)
+### Combined routes beside wgmma (`emp.sh`, 1× H200)
 
 `probes/sm90_emp.cu` runs the routes the ACCEL model's red team named beside
 a saturated wgmma, and `emp.py` prices each timed loop's whole SASS on DS-90's facets. Three rounds, 69 loops, none
@@ -195,7 +246,7 @@ above a facet:
 - **2:4 sparse wgmma reaches A3's sparse line only with A in registers.** `wgsprs_s8` (m64n256k64.sp) runs at its dense
   twin's instruction rate, 4095.6 physical (8191 logical) MACs a SM-clock. With A in shared memory (`wgsp_s8`, `_e4m3`,
   `_f16`) it runs at 0.889 of it: 18 KB of operands an instruction at the dense rate is 144 B a SM-clock against the
-  128 B shared port. B is always in shared memory, so the port caps a 2:4 form at 4096/b physical MACs a SM-clock for
+  128 B shared port. B is always in shared memory, so the port limits a 2:4 form to 4096/b physical MACs a SM-clock for
   b-byte operands, each type's dense peak.
 - **SS wgmma's operand reads share the shared-memory port with LDS.** `emp_smem`: wgmma n128 SS reads 94.3 B a SM-clock
   and LDS.128 beside it 28.7, 123.0 of 128; LDS.128 alone 127.96.
@@ -208,7 +259,7 @@ above a facet:
 - **b1**: BGMMA.64x256x256 runs at s8 n256's instruction rate (0.03125 a SM-clock, 8× its MACs: k 256 against 32) and BMMA.168256 at
   0.656, as IMMA.16832; DS-90 prices b1 on issue alone.
 
-## B300 (sm_103a)
+### B300 (sm_103a)
 
 sm_103 has no tcgen05 kind::i8: ptxas refuses it (`Feature '.kind::i8' not supported on .target 'sm_103a'`; CUDA
 13.0), so `dg100` and the i8 probes don't build there (`scalar.cu` does). The honest kernel needs an exact route through
