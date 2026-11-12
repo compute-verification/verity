@@ -256,7 +256,6 @@
     {"file": "tests/pipeline/test_serve_seal.py", "kind": "name-defined", "symbol": "test_a_steps_stream_starts_with_its_input_ids_then_positions_padded_to_the_token_budget.Model", "detail": ""},
     {"file": "tests/pipeline/test_serving_rows_experts.py", "kind": "var-annotated", "symbol": "build", "detail": "", "count": 2},
     {"file": "tests/pipeline/test_serving_rows_splits.py", "kind": "var-annotated", "symbol": "test_the_parts_read_the_twin_s_partials_and_lse_whose_combine_is_the_served_row", "detail": ""},
-    {"file": "tests/pipeline/test_source_identity.py", "kind": "arg-type", "symbol": "_from_harness_tool", "detail": ""},
     {"file": "tests/pipeline/test_tp_phases_one_rank.py", "kind": "attr-defined", "symbol": "test_the_target_check_at_one_rank_reads_that_ranks_engine_and_names_it_when_it_differs", "detail": "", "count": 4},
     {"file": "tests/pipeline/test_tp_phases_one_rank.py", "kind": "func-returns-value", "symbol": "test_the_target_check_at_one_rank_reads_that_ranks_engine_and_names_it_when_it_differs", "detail": ""},
     {"file": "tests/pipeline/test_tp_phases_one_rank.py", "kind": "var-annotated", "symbol": "_InProcess.__init__", "detail": ""},
