@@ -57,6 +57,7 @@ from verity_vllm.program.frontend.train_step import (
     in_bits_beyond_theta,
     step_program,
     step_report,
+    structure_program,
 )
 
 aten = torch.ops.aten
@@ -814,8 +815,9 @@ def test_tiny_bf16_step() -> None:
 CC = CB.TRAIN_CC
 
 
-@pytest.mark.parametrize("kw", [{}, {"cc": CC}, {"cc": CC, "tf32": True}, {"cc": CC, "deterministic": True}],
-                         ids=["cpu", "cc", "cc-tf32", "cc-deterministic"])
+@pytest.mark.parametrize("kw", [{}, {"cc": CC}, {"cc": CC, "tf32": True}, {"cc": CC, "deterministic": True},
+                                {"cc": CC, "structure": True}],
+                         ids=["cpu", "cc", "cc-tf32", "cc-deterministic", "cc-structure"])
 def test_training_rules_build_on_the_torch_only_list(kw: dict) -> None:
     """`verity_vllm.program.frontend.rules.training.training_rules` holds every rule of `rules.TORCH_RULES`, in that list's order,
     and none of `rules.VLLM_RULES`: a training step's rule set names no op of vLLM's."""
@@ -933,6 +935,48 @@ def test_tiny_bf16_step_on_sm120(monkeypatch) -> None:
     attention = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]
     assert attention == [(FT.train_sdpa(*TINY_SDPA).id, heads)] * 2 + [(FTB.train_sdpa_backward(*TINY_SDPA).id, heads)] * 2
     assert not [nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.startswith(("LinearRef_v1", "SoftmaxRef_v1"))]
+
+
+def _occurrences(prog) -> list[tuple]:
+    return [(o["node"], o["op"], [i["node"] for i in o["inputs"]]) for o in prog.annotations["correspondence"]["occurrences"]]
+
+
+def test_tiny_bf16_steps_structure_on_sm120(monkeypatch) -> None:
+    """The tiny bf16 step on sm_120 as a structure Program (`structure_program`) at 3 rows of 33 tokens: the occurrences of the
+    step's own derivation at the cc, op for op and input for input, lowered with no capture read (no stand-in routes or attention
+    shape, not under deterministic algorithms): its linears `LinearRef_v1`, each layer's flash attention forward and backward one
+    batch over its 3 x 2 heads of the stand-in heads, and the mark that it is no step's Program, which the step's lacks."""
+    model, batch = meta_step("tiny", 3, ctx=32, vocab=64, matmul_dtype=torch.bfloat16)
+    prog = structure_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
+    assert not isinstance(prog, Unsupported), prog
+    assert prog.annotations["train_step"]["structure"] is True
+    ids = [nd.fn.id for nd in prog.root.body.nodes]
+    assert any(i.startswith("LinearRef_v1") for i in ids)
+    assert not [i for i in ids if i.split("{")[0] in ("Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1")]
+    forward, backward = (bind(FT.Fa2TrainHead, T=32, D=32, BN=16), bind(FTB.Fa2TrainBwdHead, T=32, D=32, BM=16, BN=16, NS=1))
+    attention = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes if nd.fn.id.startswith("Fa2Train")]
+    assert attention == [(forward.id, 6)] * 2 + [(backward.id, 6)] * 2
+    _tiny_stand_ins(monkeypatch)
+    model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=torch.bfloat16)
+    with _deterministic_algorithms():
+        step = step_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
+    assert not isinstance(step, Unsupported), step
+    assert "structure" not in step.annotations["train_step"]
+    assert _occurrences(step) == _occurrences(prog)
+
+
+def test_a_structure_the_stand_in_heads_dont_bind_at_is_refused() -> None:
+    """A structure whose attention T is no whole number of the stand-in heads' blocks of 16 is refused at its flash attention,
+    naming the fix; a structure derivation is of a step at a cc, has no survey, and reads neither setting of the kernels."""
+    model, batch = meta_step("tiny", 3, ctx=4, vocab=64, matmul_dtype=torch.bfloat16)
+    got = structure_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
+    assert isinstance(got, Unsupported)
+    assert "the structure's stand-in head" in got.hint and "derive the structure at another T" in got.hint, got
+    with pytest.raises(ValueError, match="a structure derivation is of a step at a cc"):
+        step_report(model, square_loss, AdamW(**ADAMW), batch, structure=True)
+    for kw in ({}, {"cc": CC, "deterministic": True}, {"cc": CC, "tf32": True}):
+        with pytest.raises(ValueError, match="a structure derivation is of a step at a cc, and reads no setting"):
+            training_rules(structure=True, **kw)
 
 
 def test_gpu_lowers_smollm2s_grid_z_dw_to_its_route() -> None:
