@@ -21,6 +21,12 @@ what `interior_rows.interior` takes as ``links`` and ``tables``, and the challen
   root from them; and an index, row r of a sampled span the I32 the parameter holds there, which the verifier fills
   from its own bytes. Every read must open its span's table at its key (`gates.embedding.reference`) and every unit's
   supplied row must be the value's at its place before anything is committed; `table_reads` makes such reads.
+* `Input`, `inputs`: a parameter round 1's record commits as a port (a token select's ``logits``, where the serve
+  commits each token's row before the first stage's sample). It is no `Operand`, and `links` leaves it out: the
+  interior registers no value under its name, so no input of the block is one the prover gives after the sample.
+  Round 2 reads the template's port only at round 1's port of the link's name, so the interior commits the port's rows
+  under the serve's salts at the rows each unit reads and its header opens them at round 1's root
+  (`interior_rows.interior`'s ``inputs``).
 * `Return`, `returns`: the block's return a template's output port writes, the other end of a replay block. The
   interior registers no value for it: where round 1's record commits the return as a port, round 2 reads the
   template's output only at that port, so the interior commits those output rows under the serve's salts at the rows
@@ -127,6 +133,32 @@ Link = Supply | Operand
 
 
 @dataclass(frozen=True)
+class Input:
+    """A replay-block parameter round 1's record commits as a port, and the port that reads it: template ``template``'s
+    parameter ``port`` reads the port ``value`` of round 1's record, the block parameter under the name round 2 gives
+    its link (`second_stage.replay_links`). The port holds ``per`` rows a replay block, each of ``words`` u16 words, and
+    unit j of a block's n_t reads its row ``at[j]``: row ``sample[i]·per + at[j]`` of the port for the i-th sampled
+    block, where round 2 holds a link's read of a port of round 1's record (`second_stage`'s linked row). The serve
+    committed those rows before the first stage's sample, so the interior registers no value for it."""
+    template: str
+    port: str
+    value: str
+    per: int
+    at: tuple[int, ...]
+    words: int
+
+    def __post_init__(self) -> None:
+        _places(self.value, self.per, self.at)
+        if self.words < 1:
+            raise ValueError(f"{self.value}: rows of {self.words} words")
+
+    def rows(self, sample: Sequence[int]) -> list[int]:
+        """The row of the port each of the template's Q·n_t units reads, in slot order, for the replay sample
+        ``sample`` (the spans' slots in round 1's population)."""
+        return [int(s) * self.per + a for s in sample for a in self.at]
+
+
+@dataclass(frozen=True)
 class Return:
     """A return of the replay block, and the output port that writes it: template ``template``'s output ``port`` is the
     block's return ``value``, under the name round 2 gives its link (`second_stage.replay_links`). The return holds
@@ -222,20 +254,27 @@ def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n
     units reads as round 2 derives them (`second_stage.replay_rows`). ``members`` and ``n_rho``: the window's templates
     and their units a span, as `interior_rows.interior_window` takes them. ``supplied``: the block's parameters the
     verifier supplies, by name, each its indices a row or None for a table read's root or domain (a `Supply`); every
-    other is the replay's (an `Operand` of its port's words). A return link names an output port and is none of them.
-    ValueError where the Definition makes no links, or a link names a template the window has none of or a unit no run
-    places."""
+    other is the replay's (an `Operand` of its port's words). A return link names an output port and is none of them,
+    and neither is a parameter ``record`` commits as a port (`inputs`): the interior registers no value for it.
+    ValueError where the Definition makes no links, a link names a template the window has none of or a unit no run
+    places, or the verifier is to supply a parameter ``record`` commits."""
     by = {m.template: (m, n) for m, n in zip(*cells(members, n_rho), strict=True)}
     bare, named = SS.links_of(definitions(program), key), SS.replay_links(program, key, record)
     if bare is None or named is None:
         raise ValueError(f"replay block {key} makes no links round 2 derives (`second_stage.replay_links`)")
     rows = {(r.template, r.port): r for r in SS.replay_rows(program, key)}
+    held = _committed(record)
     out: list[Link] = []
     for b, x in zip(bare, named, strict=True):
         if x.template not in by:
             raise ValueError(f"{x.value} is read by {x.template}, a template the window has none of: {list(by)}")
         m, n = by[x.template]
         if x.port not in dict(m.rows):
+            continue
+        if x.value in held:
+            if b.value in (supplied or {}):
+                raise ValueError(f"{x.value}: round 1's record commits it as a port, so the verifier supplies no value "
+                                 f"of that name for {x.template}'s {x.port!r}")
             continue
         r = rows[(x.template, x.port)]
         at = tuple(SS.row_at(r.runs, j) for j in range(n))
@@ -245,6 +284,39 @@ def links(program: Any, key: str, record: Mapping[str, Any], members: Members, n
             out.append(Supply(x.template, x.port, x.value, r.per, at, supplied[b.value]))
         else:
             out.append(Operand(x.template, x.port, x.value, r.per, at, dict(m.rows)[x.port]))
+    return tuple(out)
+
+
+def _committed(record: Mapping[str, Any]) -> set[Any]:
+    """The names of the ports round 1's record ``record`` commits."""
+    return {r.get("port") for r in record.get("roots", ())}
+
+
+def inputs(program: Any, key: str, record: Mapping[str, Any], members: Members, n_rho: Cells) -> tuple[Input, ...]:
+    """The parameters of the replay block ``program`` defines under descriptor id ``key`` that round 1's record
+    ``record`` commits as ports: each link round 2 derives (`second_stage.replay_links`, named as ``record`` names its
+    ports) at a template's parameter whose value is one of ``record``'s ports, with its rows a block and the row each of
+    the template's n_t units reads (`second_stage.replay_rows`). ``members`` and ``n_rho``: as `links` takes them,
+    which gives every other parameter's link. ValueError where the Definition makes no links, or such a link names a
+    template the window has none of or a unit no run places."""
+    by = {m.template: (m, n) for m, n in zip(*cells(members, n_rho), strict=True)}
+    named = SS.replay_links(program, key, record)
+    if named is None:
+        raise ValueError(f"replay block {key} makes no links round 2 derives (`second_stage.replay_links`)")
+    rows = {(r.template, r.port): r for r in SS.replay_rows(program, key)}
+    held = _committed(record)
+    out: list[Input] = []
+    for x in named:
+        if x.template not in by:
+            raise ValueError(f"{x.value} is read by {x.template}, a template the window has none of: {list(by)}")
+        m, n = by[x.template]
+        if x.port not in dict(m.rows) or x.value not in held:
+            continue
+        r = rows[(x.template, x.port)]
+        at = tuple(SS.row_at(r.runs, j) for j in range(n))
+        if any(a is None for a in at):
+            raise ValueError(f"{x.template}: its {x.port!r} rows place other than its {n} units a span")
+        out.append(Input(x.template, x.port, x.value, r.per, at, dict(m.rows)[x.port]))
     return tuple(out)
 
 
@@ -260,7 +332,7 @@ def returns(program: Any, key: str, record: Mapping[str, Any], members: Members,
     if named is None:
         raise ValueError(f"replay block {key} makes no links round 2 derives (`second_stage.replay_links`)")
     rows = {(r.template, r.port): r for r in SS.replay_rows(program, key)}
-    held = {r.get("port") for r in record.get("roots", ())}
+    held = _committed(record)
     out: list[Return] = []
     for x in named:
         if x.template not in by:
