@@ -35,8 +35,9 @@ local macro "slot_row " hr:ident : tactic => `(tactic| (
     | some x =>
       simp only [hx, Option.bind_some] at hrd
       have hk : u - f < rs.size := by
-        by_contra hc
-        simp [Nat.le_of_not_lt hc] at hx
+        rcases Nat.lt_or_ge (u - f) rs.size with hc | hc
+        · exact hc
+        · simp [hc] at hx
       have hgx : rs.getD (u - f) Json.null = x := by
         first
           | simp [Array.getD_eq_getD_getElem?, hx]
