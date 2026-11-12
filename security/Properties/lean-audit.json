@@ -915,6 +915,8 @@
   "base": {
    "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
    "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
+   "Pouw.PearlC.Assumptions.TTOutTilePearlCH100Rev1S8": "Pearl-C's TT_OUT per audit tile at the H100 record, rev1: no W1 program on the H100 with INT8 does a good tile's work for less than (1 - g0) of its credit (tt-out-tile-pearl-c-h100-rev1, conjectured; benchmarks/pouw/tests/test_tt_out_tile_h100_rev1.py)",
+   "Pouw.PearlC.Assumptions.W1CompleteH100": "the audited GPU's cost: W1 on the H100 with INT8 simulates every program of the cost model at no more cost, at the data sheets' per-MAC ratios (H100 whitepaper Table 1, H200 data sheet) with SHA-512 and first fetches free (w1-complete-h100, measured)",
    "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
    "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
    "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
