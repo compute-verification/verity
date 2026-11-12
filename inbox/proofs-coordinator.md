@@ -70612,3 +70612,118 @@ Read on `origin/main` at `62bf29346f76`. The note is draft 3 as my notes store h
 - [run] **I did none of it.** No sweep, no mark, no post, no write to your store or to any mailbox. I only read: run `r20261111-194208-433d` ended exit 0, and the queue lists #8454 at `3f583195` as ready, so that timer's item was already done.
 - [guess] They are old firings, so they may be copies of wakes you also got. If your sweeps of those half-hours never fired for you, this is where they went.
 - [read] I will not write again about further ones of the same kind; I end such turns without an entry.
+
+## REDRAW, Thu 12 Nov 04:40Z: holds with these conditions: (1) the prover's process is the client of the withheld challenger session the sample's coins come from, (2) the sample's family holds more coins than one sample reads, (3) the verifier is handed the last registration's evidence alone, with no party the auditor runs having taken the registration before the family's first coin
+
+**This is the entry with A to H.** It stands on its own; the 04:10Z entry has the longer table for B.
+
+**What I read.** `main` at `be9a3d5669056da64d41c3ba7b8b3d9c4ba9f26c`, then the diff to `62bf29346f76bf1c423ea33285aace36e8d2ffc2` over every path cited: only size constants changed there (`MAX_COINS` 2^20 to 2^24, `MAX_PATH` 20 to 24, `MAX_TREE_LINES` 2^20 to 2^23). [run: `git diff be9a3d5669 origin/main -- <paths>`] Line numbers are `origin/main` at `62bf29346f76`; paths are under `verity/protocols/spot/` unless they start elsewhere. I reached the verdict from the code and the run, then compared with the note (last section).
+
+**The verdict in one paragraph.** A prover that is the session's client can register, read the sample, register again under another digest for fresh coins of the same family, and hand over the last registration alone. The Lean run and its Python mirror accept that evidence. [run: the test below] One-stage v2's two further reads of the session's log pass too. [run: their Python twins, in the second run; read: the Lean] The device's signed log lists every digest tried, and no verifier reads it for them. [read; run] Where the deployment layer's own verifier party takes the registration first and samples itself, the party refuses a second registration, so the sequence does not arise there. [read: `verifier/parties.py:460-461, 616`]
+
+### F. The demonstration (first, since the rest leans on it)
+
+- Branch `cursor/proofs-redraw-cc71`, two commits, `6e9fc25e3a` then `354d6b6848`, one test in `verifier/tests/test_challenger_coins.py`, pushed, no pull request. [run: `git push`, `git ls-remote`]
+- Run `r20261112-040111-5db3` at `6e9fc25e3a`, exit code 0: "passed verity/protocols/spot/verifier 2 passed in 54 s" for `-k 'earlier_ones_sample or several_frames'`. [run: `research fetch --all`, its `stdout.log`]
+- Run `r20261112-042147-3462` at `354d6b6848`: exit code 0: "passed verity/protocols/spot/verifier 1 passed in 52 s" for `-k 'earlier_ones_sample'`. [run: `research fetch --all`, its `stdout.log`]
+- What the test does: one withheld session, one family of 64 coins. It registers up to 16 records in a row, each on a new `service.Stream` with an empty log and under roots of other bytes, so under a new digest, and reads each sample. It stops at the first sample that leaves out the first sample's first unit. It hands the verifier that last registration alone: its record, its segment, the session's signed files. [read: the test]
+- What passed: `coins_reason` gives no reason; `Stream.outcome` accepts with its `run` check passing, which is the compiled Lean `Run.run` on that evidence (`verifier/one_stage/verifier.py:410-465`). The signed log lists every digest tried, in order, and the accepted segment starts past the earlier samples' coins. [run]
+- The second commit adds v2's reads by their Python twins, which the difftest holds to the Lean: `draw_coins` at the parameters' family (`OneStage.coinsOf`'s read) returns the bytes each sample read, and `sample_link_first` (v2's `orderHeld`) passes for a coin tree, its link and a round opened after the last registration. [read: the test; run: run 2]
+- What it does not run: v2's `OneStageZk.checkOneAt` whole, with real proofs. The proofs' verdicts are stubbed. For `treesHeld`, `popHeld` and `publicHeld` I have the read only.
+
+### A. The sequence
+
+One registration in one execution phase, as `benchmarks/one_stage/a5.py --challenger gate:` runs it:
+1. The prover's lane key reserves and opens the session at the auditor's gate. The ledger gets a signed `reserve` with the families and counts asked for, then one `open` for the window's root R; the device signs its record over its coin commitment before the stream opens. [read: `verity/composite/device/live_challenger/auditor.py:28-36, 46-58, 1078-1085`; `device/remote.py:206`; `device/challenger.py:1271`]
+2. The prover's process connects as the client and says `hello`; a withheld session answers its layout only. [read: `device/remote.py:3-4, 511`; `benchmarks/one_stage/a5_coins.py:198-215`]
+3. a5 opens one coin after R itself, before any rank registers. [read: `a5_coins.py:214-215`]
+4. The prover makes the registration record; `service.Stream.register` checks R1 to R8 and writes a receipt; the digest is the record's. a5 runs that `Stream` in the same process that is the session's client. [read: `verifier/service.py:1873`; `benchmarks/one_stage/a5.py:304, 358`]
+5. `ChallengerCoins.commit(digest)` starts a segment at the family's next index, and `Stream.select` reads bytes, each read an `open {label, index, after: digest}` frame. [read: `device/coins.py:180-192`; `a5.py:360-361`]
+6. The device opens the family's next coin after whatever 64 bytes it is sent. `_release` checks the label, that `index` is the family's next, and the form of `after`, and nothing else; it logs a `root` line and a `release` line; a withheld session answers the raw coin at once. So the client holds the sample as soon as it has read it. [read: `device/remote.py:268-289, 419-422`; `device/challenger.py:1926-1945`]
+7. The prover proves the sampled proof blocks (v2: one proof session whose coin tree is sampled and opened in the same challenger session), then closes. The device releases its commitment and the openings, signs the log and writes the close; the ledger gets `end`. [read: `device/remote.py:254`]
+8. The verifier is handed the record, the sample, the proofs and `{key, ledger, main, pins, segment, session}`. The check of record reads the coins through `OneStage.coinsOf`, `Challenger.drawCoins` at the parameters' family, `trustedSessionOf`, `withheldOn`, `challengerStream`, then holds the sample to them (`OneStage.coinsReason`). The stream's run takes the same `challengerStream` with the family from the segment. [read: `verifier/lean/Spot/OneStage.lean:475-481, 497-507`; `ChallengerDraw.lean:36-44`; `ChallengerCoins.lean:56-73, 105-118`; `Run.lean:161-165, 259`]
+
+With a second registration: after step 6 the prover computes sample 1 from the raw coins and proves nothing. It makes record 2 and repeats steps 4 to 6 on the same family. It proves sample 2, closes, and hands over record 2 with segment 2. The signed log then holds, in the family: R once, sample 1's coins under digest 1, sample 2's under digest 2. [read; run: the test asserts that log]
+
+### B. What the verifier of record accepts, given the second registration's evidence only
+
+It accepts. Every check that reads the family, R, the digest, the log or a coin's place passes; the 04:10Z entry lists each with its line. The one that decides it: `challengerStream` keeps the family's positions whose root equals the digest and requires those to be consecutive from the segment's start and all read; every other root is passed over, and nothing bounds the start. [read: `ChallengerCoins.lean:69-72`; `device/coins.py:279-283`; run]
+
+- **First root after R, only digest of its rank, a bound on the roots between?** None is required. A test already on `main` asserts the Lean run accepts a sample whose segment starts at coin 722 of its family, after 722 coins released after another root. [read: `verifier/tests/test_challenger_coins.py:291-328`; run: it passed in run 1]
+- **Does anything read the signed log for other digests?** No. v2's order check reads only coins whose root is this digest, and its tree checks read only coin trees. [read: `ChallengerTrees.lean:313-335`; `OneStageZk.lean:674-711, 739-742`]
+- **Does R, a registration record or log, `previous`, or the audit record commit the prover to one registration before a coin?** No.
+  - R is `window_open_root(weights' root, round-0 request table's root, session)`, fixed at the gate's open, before the phase is served. It reaches the verifier as the session's key and as a label in registered values' domains. [read: `auditor.py:49-53`; `Registration.lean:19-24, 276`]
+  - R6 holds `previous` and the window to the verifier's `log`, a parameter it is handed. Record 2 names the same `previous` as record 1 would, and the log handed over holds no record 1. [read: `Registration.lean:573-577`; run]
+  - `service.Stream` refuses a second sample for one registration, and the client's `commit` refuses the same digest twice. Both are code the session's client runs, and a new `Stream` takes record 2. [read: `device/coins.py:183-189`; run]
+- **Is the digest free to vary?** Yes, two ways, both free. The record's port roots are hiding commitments, any hex of the right form (the test varies these). And `window` need only be an object whose `kind` is `served` or `stand-in`: its other fields are provenance, bar the stream, prover, seed salt and pool marks. [read: `Registration.lean:535-536, 578-582`; `verifier/one_stage/registration.py:45`; run for the roots]
+- **What holds m?** The family's count. The prover asks for it at the reserve (`--families`, labels distinct, counts at least 1). The gate checks the form, and the layout's total is at most `MAX_COINS`, 2^24 on current `main`. No verifier check compares a family's count with what its samples read. [read: `auditor.py:1078-1085`; `device/challenger.py:223, 385-398`]
+
+### C. The composites
+
+- **As code, the composite does not make the prover commit before the first coin.** Its commitment is the binding of the subprotocols' digests, and its check recomputes that binding from the cases it is handed and compares. The command reads parameters, commitment and evidence together, after the fact. The device is never sent the commitment. [read: `verity/protocols/remote/verifier/composition/CoreComposition/Product.lean:14-15, 78-98`; `verity/protocols/interface/CoreProtocol/Cli.lean:83`]
+- **In the served runner the prover's side drives the sample too.** `benchmarks/one_stage/served_verdicts.sh` runs the sampled-proofs audit with `--challenger local`, a development session on the same machine, whose key is not the deployed one, so v2 refuses its case anyway. The verifier's onsite check runs after, over the record. [read: `served_verdicts.sh:86-93`; `demos/onsite_served/served_table.py:7-14`; `OneStageZk.lean:132, 254`]
+- **`Digest.lean:9-15` is neither a named hypothesis nor a property proved of code.** It is the order of play of the game: "the prover sends the parameters θ, the committed files F and the commitment c first, before any coin, so every statement is ∀ θ F c". [read: `security/Properties/Verity/Game.lean:41-42, 508-509`; `security/Proofs/Properties/Verity/Sampled/Digest.lean:9-15`]
+- **What the lock holds.** `security/Properties/lean-audit.json` lists `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` under `deployed`. Its open premises, which are also its `trust_gap` entry, are `Verity.Vocab.SpotSound`, `PouwSound` and `InferenceOnlySound`. `SpotSound` is open under LEAN-186, due 30 Nov, owner `@proofs`. `Digest.lean` is part of the proof toward `SpotSound`; neither it nor `SampledDigest` is a lock entry. [run: a Python read of the three lock files at `origin/main`]
+- **The code that would discharge it does not exist.** Nothing on the auditor's side receives the commitment or a registration's digest before the family's first coin in a form the verifier then checks. The game's own text names what the deployed device signs before any coin: the ledger's reserve and open. [read: `Game.lean:495-497`; `auditor.py:46-58`]
+- **One thing the code does have:** the device logs each digest in a signed line before the coin it releases after it. What is missing is a check that there is one. [read: `device/challenger.py:1932-1938`]
+
+### D. The statements
+
+- **The one-stage guarantee.** `security/lean-audit.json` lists `Flock.SecurityProofs.SampledKSLiveV3` and `SampledKSLiveV5` under `deployed`. Both quantify over a strategy of `auditLive`, defined as `.send Reg fun R => .coin L.Ω fun ω => ...`: one registration, then one flip, then the live session. [run: the lock; read: `security/Proofs/Flock/Bridge/V5/Statement.lean:324-402`; `security/Proofs/Flock/Soundness/Discharge/Exec/Event.lean:87-89`]
+- **No named hypothesis excludes the sequence; the game's shape does.** The model's adversary registers once and the code admits any number of registrations before the one it is shown: that is the gap between the statement and the verifier. [read]
+- **`Verity.SecurityProofs.SampleAfterRecorded`** (in the lock, not deployed) bounds the miss at one coin index `i` fixed before the run, under `VerifierReadsLog`: the verifier's coins are the log's coins, all of them, in order. The code reads the slice of the log after its digest, at a place the prover picks after seeing the earlier coins. A union over m places gives m times the bound, the same figure as H. All three of its premises are in `trust.base` and open under LEAN-186. [run: the lock; read: `security/Definitions/Core/Guarantees/Challenger.lean:31-33`; `security/Definitions/Core/Assumptions/Challenger.lean:44`]
+- **The composite's game** lets the prover send any number of frames in any order, so it models the extra coins. It does not model a digest chosen after them, because `c` comes first. [read: `Game.lean:41-49, 418-425`]
+
+### E. Two-stage
+
+- **The same sequence applies to the interior registration once the form is on.** The interior record passes the same `Registration.check` and its coins the same `coinsHold`, so a prover that has read the second stage's sample can register the interior again under another digest for fresh coins. [read: `verifier/lean/Spot/Run.lean:197-201`]
+- Today `SecondStage.FORM` is false and every two-stage run is refused last. [read: `SecondStage.lean:142`]
+- **#9117 does not change the answer.** It holds the interior registration's window root to the boundary's or to the verifier's own `interiorRoot`, which bounds which sessions round 2's coins come from. It counts no digest inside a family. #9116 refuses an interior registration that registers what a replay block returns, and #8940 is in the model only (`security/Proofs/Flock/SpotFlock/`). [read: `gh pr view` of each, body and file list, not every diff line]
+- As in one stage, the deployment layer's verifier party refuses a second interior registration for a block in its own state. [read: `verifier/parties.py:591-596`]
+
+### G. Closing it
+
+Three refusals, smallest first. I built none.
+
+**1. The note's rule, sharpened: a sample's family holds one root.** In `challengerStream`, with the log's roots given, require every root of the family to be the digest, in place of skipping the others.
+- Where: Lean `ChallengerCoins.lean:69-72` and the Python mirror `device/coins.py:279-283`. No device change.
+- It needs the family to be the verifier's before the coins on both paths. The check of record already takes it from the parameters (`OneStage.lean:475-478`; `ChallengerDraw.lean:42-43`). The stream's `Run.run` takes it from the segment (`ChallengerCoins.lean:114-117`) and must take it from its parameters, or a prover reserves several families and picks one after reading.
+- Honest evidence it refuses today: a5's, whose one family holds the coin after R and every rank's digest (`a5_coins.py:117-120, 214-215`); and the shape of the test at `test_challenger_coins.py:291`. The honest side changes to one family a registration (a rank, and under two stages a round), with the coin after R in a family of its own.
+- Cost: one pass over the family's roots, which the function makes already.
+- Statements and lock: no guarantee's statement changes. `Spot.Challenger.challengerStream` is recorded under `reads` in `security/lean-audit.json` and `security/Properties/lean-audit.json`, so those records regenerate. [run: the locks]
+- Why it is the right one: the seed salt already has this rule, for this reason: one coin, the family's first, "and a server that saw others could pick none of them" (`ChallengerDraw.lean:47-61`). Coin trees have it too: "a tree no session records is a second sample" (`ChallengerTrees.lean:65`). It also makes `VerifierReadsLog` true of the code, a family at a time. [read; the last sentence is a guess]
+- What it leans on: windows staying counted (one session a root, each window in its period's close), which they are. [read: `auditor.py:46-58`]
+
+**2. A rule over a window's runs together.** Keep one family; every root in it is R or the digest of a registration the window's audit holds, and a digest with no accepted run is a failed audit.
+- Where: a check above one run (the period's or the composite's), fed each run's family roots. Refuses no honest a5 evidence by shape.
+- Cost: the family's roots plus the window's runs. It changes what a run's check hands up, so a guarantee's statement and its record change. More plumbing than 1 for the same effect.
+
+**3. The auditor records the commitment before the coins.** The gate writes a signed ledger entry binding the registration's digest, or the composite's commitment, to the session before the family's first coin, and the verifier holds the digest to it.
+- Where: the gate, the ledger's format, and the verifier. It refuses every piece of evidence made before it. Cost: the ledger's lines, already walked, and one signed leaf an entry.
+- This is the code the game's order of play describes. It is not needed to close the redraw if 1 lands, since the device's log already records each digest before its coins.
+
+A device rule alone (the device binds a sample's family to its first root, as it binds a salt family to the window's root at `verity/composite/device/live_challenger/serve.py:154-158`) refuses early but changes nothing the verifier checks, so it is a complement to 1, not a closure. [read]
+
+### H. The size of it
+
+**A set of wrong proof blocks that one sample misses with probability p passes with probability 1 − (1 − p)^m, at most m·p, where m is at most the family's coin count over the coins one sample reads, so up to about 370,000 for a 128-unit sample if the prover asks for the whole 2^24-coin layout; at p = 2^-20 that is a 30% chance of passing in place of one in a million.** [run: arithmetic; read: `device/coins.py:73-74` for the coins a sample reads]
+
+- Put as the audit's bound: "at most B wrong blocks except with probability δ" holds only at δ/m, so B grows by about 1 + ln m / ln(1/δ): about 1.9 times at δ = 2^-20, about 19 times at δ = 1/2. [run: arithmetic] These two δ are defaults in the tree (`benchmarks/one_stage/a7.py:874`, `a5.py:1521`), not the settings of record, which I did not look up in the store.
+- **Could an accepted run on record have used it?** Not through a5 as written: its client lets a rank commit once. [read: `a5_coins.py:246-248`] One tells from a run's evidence: in the session's signed release log, the sample's family should show R once and then only digests of registrations the run audits. A redraw shows a root that is neither, and a segment whose start is past the coins of R and the earlier ranks. I checked no run on record.
+
+### Against the note's six points
+
+1. **Agree.** [read: `device/remote.py:3-4, 268-289`; `ChallengerCoins.lean:69-72`; `device/coins.py:279-283`; `Run.lean:259`] I add that the check of record reads through `OneStage.coinsOf` and `drawCoins`, which end in the same function.
+2. **Agree, with two corrections.** The sequence is accepted. [run] The cap is 2^24 coins on current `main`, not 2^20, and it counts coins, so m is that over the coins a sample reads. The exact escape is 1 − (1 − p)^m, of which mδ is the bound.
+3. **Agree on what is counted; disagree on "SPOT[Flock] on its own has none" as said.** Windows and coin trees are counted, digests are not. [read: `ChallengerSession.lean:35-36`; `ChallengerTrees.lean:65`] The composite's code has no commitment before the coins either (C). And SPOT[Flock] as a deployment does hold the registration first, in its verifier party's state, when that party samples itself (`verifier/parties.py:460-461, 616`); that is a party's memory, not something the evidence shows.
+4. **Agree.** [read: `SecondStage.lean:142`; run: a one-stage run is accepted]
+5. **Agree it closes it; three corrections.** The check of record takes the family from the parameters, and only the stream's run from the segment; the rule must fix the family before the coins on both. It also refuses the test at `test_challenger_coins.py:291`. And the family a registration extends to the interior registration.
+6. **Now established.** The sequence, run. No check ties a registration to R: R is fixed at the open from the weights' root, the request table's root and the session. The deployed composite sends no commitment before the first coin.
+
+### What I could not establish
+
+- v2's `checkOneAt` accepting redrawn evidence end to end with real proofs. Its coin and order reads pass by their Python twins; `treesHeld`, `popHeld` and `publicHeld` by read only.
+- Whether any run on record shows more digests than registrations. I did not open the store.
+- The sampling rate and δ of record.
+- Whether the gate's operator sizes a family by hand in practice. The code does not.
+- PoUW's H1 sample, which I did not read. Its period guarantee names `Properties.Pouw.Period.RegisteredBeforeDraw` in its `trust_gap`, where the one-stage guarantee names nothing of the kind. [run: the lock]
