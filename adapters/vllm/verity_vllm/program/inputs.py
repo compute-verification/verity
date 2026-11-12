@@ -30,7 +30,7 @@ from typing import Any
 KINDS = ("block", "certified", "registered", "advice", "witness")
 
 #: the window charge's terms that count a Program input's bits: none yet (`ChargeCount_v2` counts advice v1's decisions, its
-#: hits past the pool bound and its order entries), so no Program input is advice until a term counts it
+#: order entries and its length terms), so no Program input is advice until a term counts it
 CHARGED: frozenset[str] = frozenset()
 
 #: each relation whose check bit a served Program returns: its Definition's base id -> the evidence that it holds for one value
@@ -96,10 +96,6 @@ RUN: dict[str, Kind] = {}
 
 #: what is free today, a Program parameter's name or a `run` declaration (``run.<declared>``) -> its reason, its bound and its fix
 ALLOWED: dict[str, str] = {
-    "splits":
-        "a derived top-p split count, SplitsFor_v1 of the batch's live rows, per sampling event, at most log2 6 bits an event; "
-        "`predict.batch.check_compiled` refuses it (R3) in every compiled session, and serving pins `registered_splits`. Fix: "
-        "delete the derived form",
     "run.survey_hole":
         "a survey's stand-in for a node every rule refuses (`frontend.rules.training_survey.Hole`): `check_identity` refuses "
         "every Program with one, so no registered Program reads it",

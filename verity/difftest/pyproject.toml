@@ -19,19 +19,18 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_example_port.py", "tests/test_protocol_port.py"]
-# Test-only: `lake` builds lean/ (in this directory) and, through its path require, these files of Flock's verifier
-# (`Flock.Canon` and what it imports, and the package's configuration); the protocol-mode tests build the core protocol
-# interface's example (`core-protocol-example`), which reads the same files and the interface package. The annotation
-# port's test builds `annot-difftest`, which reads `Flock.Annot`, `Flock.AnnotExpand` and what they import
-# (`verity_difftest.annot.INPUTS`), and holds it to `verity.circuits.query_ast`.
+# Test-only: `lake` builds lean/ (in this directory) and, through its path requires, the base packages (`Base.Canon`
+# and what it imports; `Base.JsonParse`, the JSON parser's port). The annotation port's test builds `annot-difftest`,
+# which reads `Circuits.Annot`, `Circuits.AnnotExpand` and what they import (`verity_difftest.annot.INPUTS`), and holds
+# it to `verity.circuits.query_ast`. The protocol-mode tests build the core protocol interface's example
+# (`core-protocol-example`), which reads the interface package and, of Flock's verifier, which it requires by path, the
+# package's configuration, the names it imports the base modules by (`Flock.Bytes`, `Flock.Canon`, `Flock.Hash`) and
+# the packages that one requires.
 inputs = ["verity/protocols/interface", "verity/protocols/flock/verifier/lakefile.toml", "verity/protocols/flock/verifier/lake-manifest.json",
-          "verity/protocols/flock/verifier/lean-toolchain", "verity/protocols/flock/verifier/Flock/Field.lean",
-          "verity/protocols/flock/verifier/Flock/Bytes.lean", "verity/protocols/flock/verifier/Flock/Canon.lean",
-          "verity/protocols/flock/verifier/Flock/JsonParse.lean",  # the JSON parser's port
-          "verity/protocols/flock/verifier/Flock/Annot.lean", "verity/protocols/flock/verifier/Flock/AnnotExpand.lean",
-          "verity/protocols/flock/verifier/Flock/Hash.lean", "verity/protocols/flock/verifier/Flock/Program.lean",
-          "verity/protocols/flock/verifier/Flock/Sizes.lean", "verity/protocols/flock/verifier/Flock/Steps.lean",
-          "verity/__init__.py", "verity/ml/__init__.py", "verity/circuits",
+          "verity/protocols/flock/verifier/lean-toolchain", "verity/protocols/flock/verifier/Flock/Bytes.lean",
+          "verity/protocols/flock/verifier/Flock/Canon.lean", "verity/protocols/flock/verifier/Flock/Hash.lean",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
+          "verity/__init__.py", "verity/circuits",
           # the JSON parser's port reads the recorded public files' headers (`RECORDED_FIXTURES`), fetched fixtures
           "verity/protocols/flock/prover/tests/fixtures/forged-proofs", "verity/protocols/flock/prover/tests/fixtures/public-inputs",
           "verity/protocols/flock/prover/tests/fixtures/public-inputs-blocks", "verity/protocols/flock/prover/tests/fixtures/rec-coins",

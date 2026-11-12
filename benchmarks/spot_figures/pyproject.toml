@@ -11,12 +11,33 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # partition's size classes); the monitoring periods are core's reporting grid's (`reporting.PERIODS`); the world (the
 # census and rho's world fleet, its locations' GPUs), the datacenter (the census), the H200's peak (the census), the
 # output cap and the references (rho's reference), a MAC's AND gates (the FP8 MoE coordinate's circuit-check pin).
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/protocols/__init__.py",
+# The figure of record's driver (breakeven/headline.py) counts GLM-5.3's sparse-MLA heads from the registry
+# (`sparse_mla.SPARSE_MLA_GLM53`): that module and what its import opens.
+inputs = ["verity/__init__.py", "verity/errors.py", 
           "verity/hardware/record.py", "verity/protocols/spot/verifier/profile.py", "verity/protocols/reporting.py",
-          "verity/protocols/spot", "verity/claims", "verity/ml/__init__.py", "verity/circuits",
+          "verity/protocols/spot", "verity/claims", "verity/circuits",
           "verity/definitions/kernels", "verity/commitments", "verity/commitments/crypto", "verity/commitments/randomness",
           "benchmarks/census/adversary.json", "benchmarks/census/deployments.json", "benchmarks/census/hardware.json",
           "verity/protocols/inference_only/rho/data/reference.toml", "verity/protocols/inference_only/rho/data/hardware.toml",
           "verity/definitions/registry/boolean_fp8_moe.circuit-check.json",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py",
-          "verity/definitions/__init__.py", "verity/definitions/registry/__init__.py"]
+          "verity/definitions/__init__.py", "verity/definitions/registry/__init__.py",
+          "verity/definitions/registry/sparse_mla.py", "verity/definitions/registry/b1.py",
+          "verity/definitions/registry/dead_free.py", "verity/definitions/registry/dense.py",
+          "verity/definitions/registry/fa2_check_inf.py", "verity/definitions/registry/fa2_softcap.py",
+          "verity/definitions/registry/fa3_check_inf.py", "verity/definitions/registry/hopper.py",
+          "verity/definitions/registry/prims.py", "verity/definitions/registry/ref_prims.py",
+          "verity/definitions/registry/sampling.py", "verity/definitions/registry/topp_geometry.py",
+          "verity/definitions/registry/topp_keep_builder.py", "verity/definitions/registry/topp_word_gates.py",
+          "verity/definitions/registry/topp_words.py", "verity/definitions/evidence.py", "verity/definitions/evidence.json",
+          "verity/definitions/circuits/__init__.py", "verity/definitions/circuits/census.py",
+          "verity/definitions/circuits/library.py", "verity/definitions/ops/__init__.py", "verity/definitions/ops/fp32.py",
+          "verity/definitions/ops/gemm.py", "verity/definitions/ops/mufu.py", "verity/definitions/ops/prims.py",
+          "verity/definitions/ops/prims_evidence.json", "verity/definitions/ops/scalar.py",
+          "verity/definitions/silicon/__init__.py", "verity/definitions/silicon/cast.py",
+          "verity/definitions/silicon/errors.py", "verity/definitions/silicon/instructions.py",
+          "verity/definitions/silicon/instructions_evidence.json", "verity/definitions/silicon/integer.py",
+          "verity/definitions/silicon/integer_evidence.json", "verity/definitions/silicon/models.py",
+          "verity/definitions/silicon/models_evidence.json", "verity/definitions/silicon/term.py",
+          "verity/definitions/silicon/total.py", "verity/definitions/silicon/total_fp8.py",
+          "verity/definitions/silicon/total_fp8_evidence.json"]

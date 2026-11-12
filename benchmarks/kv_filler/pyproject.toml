@@ -1,5 +1,5 @@
-# The KV filler's benchmark and its tests. Not a package: `topup.cu`, `bench.py` and `serve.py` run on a GPU node
-# (`run.sh`); the conversion-lag replay (`lag.py`) and the filler plan (`plan.py`) run here as a suite.
+# The KV filler's benchmark and its tests. Not a package: `topup.cu`, `bench.py` and `serve.py` run on a GPU node;
+# the conversion-lag replay (`lag.py`) runs here as a suite.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 
@@ -7,7 +7,6 @@ testpaths = ["tests"]
 # bench.py puts benchmarks/word_codec on the path for kv.py, which takes the remote bandwidth audit's codec (on the
 # commitments, which import blake3), and for cuda_lib.py, which opens the kernels
 inputs = ["benchmarks/word_codec/kv.py", "benchmarks/word_codec/cuda_lib.py", "verity/__init__.py", "verity/errors.py",
-          "verity/core/__init__.py", "verity/core/protocols/__init__.py",
           "verity/protocols/poub/verifier/__init__.py", "verity/protocols/poub/verifier/codec.py",
-          "verity/ml/__init__.py", "verity/commitments", "verity/commitments/crypto",
+          "verity/commitments", "verity/commitments/crypto",
           "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py"]

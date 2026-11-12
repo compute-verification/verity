@@ -39,9 +39,9 @@ parts = 3
 # the memory challenger's tests' deployed key (`mc_cases.py`, which reads the PoUS tests' test signer by path); with
 # them what they import of `verity.ml` and `verity.errors`. The configuration's composites (`verity.configuration.deploy.config`)
 # and sampled proofs' parties' subprotocol ids, which `product IDS id` is held to.
-inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__init__.py", "verity/claims",
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/claims",
           "verity/hardware/record.py",
-          "verity/difftest", "verity/core/protocols/__init__.py", "verity/protocols/spot/verifier/profile.py",
+          "verity/difftest", "verity/protocols/spot/verifier/profile.py",
           "verity/hardware/registration.py", "verity/hardware/site", "verity/configuration/wire",
           "verity/protocols/onsite/verifier", "verity/protocols/remote/verifier", "verity/protocols/interface",
           "verity/protocols/pouw/verifier", "verity/protocols/spot",
@@ -49,6 +49,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/protocols/pous", "verity/protocols/poub/verifier",
           "verity/protocols/pous/device/lean", "verity/commitments/attest/lean",
           "verity/protocols/spot/verifier/lean", "verity/protocols/recursion/verifier/recursive", "verity/protocols/flock/verifier",
+          "verity/circuits/base", "verity/circuits/lean", "verity/commitments/lean",
           "verity/commitments/lms/lean",
           "verity/commitments/identity", "verity/commitments/randomness",
           # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through

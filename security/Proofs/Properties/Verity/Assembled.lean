@@ -1,14 +1,14 @@
 module
 
 public import Proofs.Properties.Verity.Soundness
-public import Proofs.Properties.Verity.Sampled.Leg
+public import Proofs.Properties.Verity.Sampled.Target
 
 /-!
 # Soundness at remote's verifier, from the targets still open
 
 `Verity.SoundnessAt .remote` for a vocabulary whose sampled fields are the deployment's sessions (`Sampled.Deployed`,
 `Sampled.Covers`), from the union bound over remote's three subprotocols (`remote_soundness_of_subprotocols`) with each
-target discharged by its own leg: SPOT's by `Sampled.spotSound_of_targets` (the coupling at each
+target discharged by its own subprotocol's theorem: SPOT's by `Sampled.spotSound_of_targets` (the coupling at each
 session), PoUW's (`Vocab.PouwSound .remote`) and the inference-only policy's (`Vocab.InferenceOnlySound .remote`). Each
 hypothesis is a target its goal proves; once each is a theorem, the conclusion holds by applying this one to them.
 -/

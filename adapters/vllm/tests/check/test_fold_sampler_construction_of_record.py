@@ -11,6 +11,7 @@ import sys
 import pytest
 
 from tests.check.test_fold_sampler_construction import PLAIN, VLLM_DIR, _as_compared, _fold_select, _profile
+from verity_vllm.config import row_file
 from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTopP, with_sampler_construction
 from verity_vllm.program import sampling_event as SE
 
@@ -88,4 +89,4 @@ def test_101s_records_fold_canonical_equal_under_the_programs_construction(tmp_p
 
 def _profile_of_101() -> str:
     from verity_vllm.observe.fold.profiles import profile_module_for_case
-    return profile_module_for_case(json.load(open(VLLM_DIR / "workloads" / f"{ROW_101}.json"))["case"])
+    return profile_module_for_case(json.load(open(row_file(ROW_101)))["case"])

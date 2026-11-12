@@ -5,6 +5,7 @@ from a card file, and the log's encoding."""
 
 from __future__ import annotations
 
+import sys
 from dataclasses import replace
 from fractions import Fraction
 
@@ -236,7 +237,7 @@ CARD_FILE = {"sku": "sim-file", "sm": {"count": _entry(2)}, "clock": {"sm": _ent
              "rate": {"tensor": _entry(1024)}, "memory": {"bandwidth": _entry(1.23456e12)},
              "store": {"reg": _entry(65536), "reg_extra": _entry(0), "smem": _entry(262144), "l2": _entry(1 << 20),
                        "dram": _entry(16 << 30)}}
-"""A card file's table as `verity.hardware.load(sku)` returns it, with the entries `Sheet.of_file` reads."""
+"""A card file's table as `verity.hardware.cards.load(sku)` returns it, with the entries `Sheet.of_file` reads."""
 
 
 def test_a_sheet_from_its_card_file() -> None:
@@ -308,3 +309,44 @@ def _sheet_json(**f: object) -> Sheet:
 def test_what_no_site_holds_is_malformed(make, what: str) -> None:
     with pytest.raises(Malformed, match=what):
         make()
+
+
+LONG = "1" + "0" * 4299 + "1"
+"""A natural number of 4,301 decimal digits, coprime to 3: one more than Python's `int` and `str` convert at the
+interpreter's default limit on integer strings."""
+
+
+@pytest.fixture
+def lowest_limit():
+    """The test runs at the lowest limit on integer strings the interpreter takes, whatever its environment set: the
+    Site reads and writes a rational under every setting of it."""
+    before = sys.get_int_max_str_digits()
+    sys.set_int_max_str_digits(640)
+    yield
+    sys.set_int_max_str_digits(before)
+
+
+def test_a_rational_of_any_length_is_read_and_written(lowest_limit) -> None:
+    """A numerator and a denominator of 4,301 digits, which Python's own `int` refuses, are read as the numbers they
+    write and written back as they came, so a sheet stating them has its digest."""
+    n = 10 ** 4300 + 1
+    with pytest.raises(ValueError, match="integer string conversion"):
+        int(LONG)
+    for clock, q in ((LONG, Fraction(n)), (f"1/{LONG}", Fraction(1, n)), (f"{LONG}/3", Fraction(n, 3)),
+                     (f"{LONG[:-1]}2/{LONG}", Fraction(n + 1, n))):
+        sheet = _sheet_json(clock=clock)
+        assert sheet.figures.clock == q and sheet.to_json()["figures"]["clock"] == clock
+        assert Sheet.of_json(sheet.to_json()) == sheet and len(sheet.digest()) == 128
+    auditor = Auditor.of_json({**AUDITOR["remote"].to_json(), "tolerance": f"1/{LONG}"})
+    assert auditor.tolerance == Fraction(1, n) and Auditor.of_json(auditor.to_json()) == auditor
+
+
+def test_a_rational_in_another_spelling_is_malformed_at_any_length(lowest_limit) -> None:
+    """Lean reads one spelling of a rational and refuses the rest, however long: a fraction not in lowest terms, a
+    leading zero, a denominator of 1 or 0, zero over a denominator, a sign, a space, a line end, an underscore, a second
+    slash, a missing side, and a digit that is not ASCII's."""
+    for clock in (f"{LONG[:-1]}2/4", f"{LONG}/{LONG}", f"3/{'3' * 4301}", "0" + LONG, "1/0" + LONG, LONG + "/1",
+                  LONG + "/0", "0/" + LONG, "-" + LONG, "+1/2", " 1/2", "1/2\n", "1_0/3", "1/2/3", "0/5", "1/0", "", "/2",
+                  "1/", "\u0663"):
+        with pytest.raises(Malformed, match="lowest terms"):
+            _sheet_json(clock=clock)

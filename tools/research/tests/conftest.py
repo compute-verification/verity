@@ -57,6 +57,9 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("VY_DISPATCH_ROOT", str(tmp_path_factory.mktemp("dispatch") / "absent"))
     # ... nor the agent's Cursor identity: without SLACK_BOT_TOKEN, research msg asks this socket for an OIDC token for its broker
     monkeypatch.setenv("CURSOR_AGENT_SOCKET", str(tmp_path_factory.mktemp("cursor") / "absent.sock"))
+    # ... nor what the notes' GitHub broker answered an earlier test, which notes_sync keeps for the process
+    monkeypatch.setattr("research.notes_sync._BROKER_REFUSED", [])
+    monkeypatch.setattr("research.notes_sync._SET_ASIDE", [])
     # ... nor does a routed post fetch origin/main to read its registry
     monkeypatch.setenv("RESEARCH_SLACK_FRESH_CHECK", "0")
     # ... nor does anything that folds in the inbox routes (holders: research msg, drive's PR owners) read the published ones

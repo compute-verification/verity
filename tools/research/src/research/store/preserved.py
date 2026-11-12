@@ -18,6 +18,13 @@ an `art:` id.  Three legs, each reported by name (`legs`: `manifest`, `artifacts
              Not checkable offline: `recorded` mode reports it as not checked and does not count it, like the attempt manifest.
 Nothing is uploaded here: `research data push` is the repair (it pushes the labels leg too).
 
+Withdrawn files: before checking an artifact against the remote its labels are pulled (`labels_sync.read_through`), and a blob
+absent on the remote that a `withdrawn` label covers (`research data withdraw`, withdraw.py: every file, or those under its
+`(only ...)` prefixes) is reported in the artifact's `withdrawn` with the label's reason, by and ref, never as absent.  Each
+artifact, target and the report carry a `verdict`: PRESERVED; WITHDRAWN when every blob missing from the remote was withdrawn and
+nothing else fails (`preserved` stays False: those files' local copies are to be deleted, never kept, pushed or put again);
+else NOT_PRESERVED.  `not_preserved` lists withdrawn items too, their `errors` saying withdrawn.
+
 Without a usable remote (no store.toml, or credentials not in this environment) nothing is preserved, and the report says why.
 """
 from __future__ import annotations
@@ -28,6 +35,7 @@ from typing import Any, Callable
 
 from . import ids
 from . import labels_sync as LS
+from . import withdraw as W
 from .local import (
     VERIFY_HEAD,
     VERIFY_MULTIPART,
@@ -44,6 +52,9 @@ from .remote_s3 import PART_SIZE, choose_part_size_for, hash_parts, is_md5_etag,
 MODES = ("head", "readback", "recorded")
 #: in a head-mode verdict: the attempt key is write-once on the remote, so no push makes this run preserved (store.reconcile)
 DIFFERS = "the remote holds a DIFFERENT attempt document"
+PRESERVED, WITHDRAWN, NOT_PRESERVED = "PRESERVED", "WITHDRAWN", "NOT_PRESERVED"
+#: what to do with a withdrawn file's local copies
+DELETE_COPIES = "delete their local copies; never keep, push or put them again"
 
 
 def attempt_artifacts(doc: dict[str, Any]) -> dict[str, str]:
@@ -67,7 +78,8 @@ def _local_multipart_etag_matches(path, size: int, etag: str, part_size: int) ->
 
 
 def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool = True) -> dict[str, Any]:
-    rep: dict[str, Any] = {"id": art_id, "kind": None, "preserved": False, "checked": 0, "errors": [], "verified": None}
+    rep: dict[str, Any] = {"id": art_id, "kind": None, "preserved": False, "verdict": NOT_PRESERVED, "checked": 0, "errors": [],
+                           "withdrawn": [], "verified": None}
     try:
         m = st.get_manifest(art_id)
     except Exception as e:  # noqa: BLE001  an unreadable / absent manifest is "not preserved", with the reason
@@ -78,7 +90,8 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
     if mode == "recorded":
         rec = st.index.replicas(art_id).get("remote") or {}
         if rec.get("verified_utc"):
-            rep.update(preserved=True, verified=rec.get("verified"), verified_utc=rec["verified_utc"], checked=len(m.blobs()) + 1)
+            rep.update(preserved=True, verdict=PRESERVED, verified=rec.get("verified"), verified_utc=rec["verified_utc"],
+                       checked=len(m.blobs()) + 1)
             return rep
         if st.remote is None or not head_fallback:
             rep["errors"].append("no verified remote replica recorded in the local catalog"
@@ -89,6 +102,9 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
     if r is None:
         rep["errors"].append(f"remote unusable: {st.remote_error}" if getattr(st, "remote_error", None) else "no remote configured")
         return rep
+    LS.read_through(st, [art_id], lambda s: rep.setdefault("notes", []).append(s))
+    ws = W.withdrawals(st, art_id)
+    paths = W.file_paths(m) if ws else {}
     methods: set[str] = set()
     # the manifest: always read back (small; its sha256 IS the id)
     mkey = manifest_key(hex_)
@@ -107,7 +123,13 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
         key = object_key(h)
         head = r.head(key)
         if head is None:
-            rep["errors"].append(f"{key}: absent")
+            held = paths.get(h, [])
+            if w := next((c for p in held if (c := W.covering(ws, p))), None):
+                if key not in {x["key"] for x in rep["withdrawn"]}:
+                    rep["withdrawn"].append({"key": key, "paths": held, "under": w["paths"], "reason": w["reason"], "by": w["by"],
+                                             "ref": w["ref"]})
+            else:
+                rep["errors"].append(f"{key}: absent")
             continue
         if head["bytes"] != size:
             rep["errors"].append(f"{key}: remote size {head['bytes']} != {size}")
@@ -133,8 +155,10 @@ def _check_artifact(st: LocalStore, art_id: str, mode: str, head_fallback: bool 
         else:
             rep["checked"] += 1
             methods.add(VERIFY_READBACK)
-    if not rep["errors"]:
-        rep["preserved"] = True
+    if rep["withdrawn"] and not rep["errors"]:
+        rep["verdict"] = WITHDRAWN
+    elif not rep["errors"]:
+        rep["preserved"], rep["verdict"] = True, PRESERVED
         rep["verified"] = ",".join(sorted(methods)) or VERIFY_READBACK
         rep["verified_utc"] = utc_now()
         st.index.set_replica(art_id, "remote", rep["verified_utc"], r.describe(), verified=rep["verified"])
@@ -146,7 +170,8 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
           on_target: Callable[[dict[str, Any]], None] | None = None) -> dict[str, Any]:
     """The gate over several targets (`head_fallback=False`: `recorded` stays offline, a caller that bounds what it reads back).  `preserved` is True iff every target is: for a run id, its attempt manifest is on the remote
     and every artifact it names is preserved (an attempt naming no artifact is preserved once its manifest is); for an art id, the
-    artifact is.  `not_preserved` lists what is not, with reasons.  `jobs` targets are checked at once (an artifact two targets name
+    artifact is.  `not_preserved` lists what is not, with reasons; `withdrawn` every blob absent because it was withdrawn, and
+    `verdict` is PRESERVED, WITHDRAWN or NOT_PRESERVED (module docstring).  `jobs` targets are checked at once (an artifact two targets name
     is checked once); `on_target(target report)` is called, on this thread, as each one finishes.  The report is in `targets` order
     whatever the completion order, and an exception while checking one target is that target's `error`, not the others'."""
     if mode not in MODES:
@@ -203,10 +228,11 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
             a = art(t)
             tr: dict[str, Any] = {"target": t, "kind": "artifact", "preserved": a["preserved"], "artifacts": {t: a}}
             if not a["preserved"]:
-                bad.append({"id": t, "kind": a["kind"], "errors": a["errors"]})
+                bad.append(_bad(a))
             lab_ok, tr["labels"] = labels_leg(t, [t], bad)
             tr["legs"] = {"artifacts": a["preserved"], "labels": lab_ok}
             tr["preserved"] = a["preserved"] and lab_ok is not False
+            tr["verdict"] = _verdict([a["verdict"]], lab_ok is not False)
         elif ids.is_run_id(t):
             tr = {"target": t, "kind": "attempt", "preserved": False, "attempt_manifest": None, "artifacts": {}, "missing_names": []}
             doc = None
@@ -244,11 +270,12 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
                     tr["artifacts"][a] = {**ar, "name": name}
                     if not ar["preserved"]:
                         tr["missing_names"].append(name)
-                        bad.append({"id": a, "kind": ar["kind"], "name": f"{t}:{name}", "errors": ar["errors"]})
+                        bad.append(_bad(ar, name=f"{t}:{name}"))
                 arts_ok = all(x["preserved"] for x in tr["artifacts"].values())
                 lab_ok, tr["labels"] = labels_leg(t, LS.attempt_targets(doc), bad)
                 tr["legs"] = {"manifest": man_ok, "artifacts": arts_ok, "labels": lab_ok}
                 tr["preserved"] = man_ok and arts_ok and lab_ok is not False
+                tr["verdict"] = _verdict([x["verdict"] for x in tr["artifacts"].values()], man_ok and lab_ok is not False)
                 tr["n_artifacts"] = len(named)
         else:
             tr = {"target": t, "kind": "?", "preserved": False, "error": f"not an artifact or run id: {t!r}"}
@@ -277,7 +304,33 @@ def check(st: LocalStore, targets: list[str], mode: str = "head", head_fallback:
         rep["not_preserved"] += bad
     rep["artifacts"] = {a: seen[a] for tr in rep["targets"] for a in tr.get("artifacts", {})}
     rep["preserved"] = bool(targets) and all(t["preserved"] for t in rep["targets"])
+    rep["verdict"] = _verdict([t.get("verdict", NOT_PRESERVED) for t in rep["targets"]], bool(targets))
+    rep["withdrawn"] = [{"id": a, **x} for a, ar in rep["artifacts"].items() for x in ar["withdrawn"]]
     return rep
+
+
+def _verdict(verdicts: list[str], rest_ok: bool) -> str:
+    """PRESERVED when every part is; WITHDRAWN when the only parts missing were withdrawn on purpose; else NOT_PRESERVED."""
+    if not rest_ok or NOT_PRESERVED in verdicts:
+        return NOT_PRESERVED
+    return WITHDRAWN if WITHDRAWN in verdicts else PRESERVED
+
+
+def _withdrawal_lines(items: list[dict[str, Any]]) -> list[str]:
+    """One line per `withdrawn` label behind `items` (an artifact's withdrawn blobs): how many files, under what, why, by whom."""
+    groups: dict[tuple, int] = {}
+    for x in items:
+        k = (x["reason"], x["by"], x["ref"], tuple(x["under"] or ()))
+        groups[k] = groups.get(k, 0) + 1
+    return [f"{n} file(s) WITHDRAWN{' under ' + ', '.join(under) if under else ''} ({reason!r}, by {by}{', ref ' + ref if ref else ''})"
+            for (reason, by, ref, under), n in groups.items()]
+
+
+def _bad(a: dict[str, Any], **extra: Any) -> dict[str, Any]:
+    """An artifact's `not_preserved` entry: its durability errors, then its withdrawals (so a caller quoting the first error of a
+    withdrawn-only artifact quotes why it was withdrawn)."""
+    return {"id": a["id"], "kind": a["kind"], **extra, "verdict": a["verdict"], "withdrawn": a["withdrawn"],
+            "errors": a["errors"] + [f"{s}: {DELETE_COPIES}" for s in _withdrawal_lines(a["withdrawn"])]}
 
 
 def _labels_line(t: dict[str, Any]) -> str:
@@ -315,26 +368,41 @@ def format_target(t: dict[str, Any]) -> list[str]:
         lines = [f"{t['target']}  attempt manifest  " + ("on remote" if man else "not checked (recorded mode)" if man is None else
                  "DIFFERS from the remote's copy (research data reconcile-attempts)" if t.get("attempt_manifest_differs") else "ABSENT on remote")]
         for a, ar in t["artifacts"].items():
-            lines.append(f"  {ar['name']:<22} {a}  {str(ar['kind']):<22} "
-                         + (f"PRESERVED ({ar.get('verified')})" if ar["preserved"] else "NOT preserved: " + "; ".join(ar["errors"] or ["?"])))
+            lines.append(f"  {ar['name']:<22} {a}  {str(ar['kind']):<22} {_art_status(ar)}")
         if not t["artifacts"]:
             lines.append("  (no output artifacts named by this attempt)")
         return [*lines, _labels_line(t)]
     if t["kind"] == "artifact":
         ar = t["artifacts"][t["target"]]
-        return [f"{t['target']}  {str(ar['kind']):<22} " + (f"PRESERVED ({ar.get('verified')})" if ar["preserved"] else "NOT preserved: " + "; ".join(ar["errors"] or ["?"])),
-                _labels_line(t)]
+        return [f"{t['target']}  {str(ar['kind']):<22} {_art_status(ar)}", _labels_line(t)]
     return [f"{t['target']}  NOT preserved: {t.get('error')}"]
+
+
+def _art_status(ar: dict[str, Any]) -> str:
+    if ar["preserved"]:
+        return f"PRESERVED ({ar.get('verified')})"
+    w = "; ".join(_withdrawal_lines(ar.get("withdrawn") or []))
+    if ar.get("verdict") == WITHDRAWN:
+        return f"WITHDRAWN: {w}; the rest PRESERVED"
+    return "NOT preserved: " + "; ".join(ar["errors"] or ["?"]) + (f"; {w}" if w else "")
 
 
 def format_summary(rep: dict[str, Any]) -> list[str]:
     lines: list[str] = []
-    n_bad = len(rep["not_preserved"])
+    n_bad = sum(1 for x in rep["not_preserved"] if x.get("verdict") != WITHDRAWN)
+    n_wd = len(rep.get("withdrawn") or [])
+    on = f" on {rep['remote']}" if rep.get("remote") else ""
     if rep.get("reason") and not rep["preserved"]:
         lines.append(f"remote: {rep['reason']}")
     legs = _failing_legs(rep)
-    lines.append("PRESERVED" + (f" on {rep['remote']}" if rep.get("remote") else "") if rep["preserved"]
-                 else f"NOT PRESERVED: {n_bad} item(s) not verifiably on the remote" + (f"  (legs failing: {', '.join(legs)})" if legs else ""))
+    if rep["preserved"]:
+        lines.append(f"PRESERVED{on}")
+    elif rep.get("verdict") == WITHDRAWN:
+        lines.append(f"WITHDRAWN: everything else is PRESERVED{on}, but {n_wd} file(s) were withdrawn from the shared store on purpose "
+                     f"(`research data withdraw`, the reasons above): {DELETE_COPIES}")
+    else:
+        lines.append(f"NOT PRESERVED: {n_bad} item(s) not verifiably on the remote" + (f"  (legs failing: {', '.join(legs)})" if legs else "")
+                     + (f"; and {n_wd} file(s) were withdrawn on purpose: {DELETE_COPIES}" if n_wd else ""))
     return lines
 
 
@@ -342,4 +410,5 @@ def format_report(rep: dict[str, Any]) -> list[str]:
     return [line for t in rep["targets"] for line in format_target(t)] + format_summary(rep)
 
 
-__all__ = ["MODES", "attempt_artifacts", "check", "format_report", "format_summary", "format_target"]
+__all__ = ["DELETE_COPIES", "MODES", "NOT_PRESERVED", "PRESERVED", "WITHDRAWN", "attempt_artifacts", "check", "format_report", "format_summary",
+           "format_target"]

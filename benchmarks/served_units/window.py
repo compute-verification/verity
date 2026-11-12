@@ -70,6 +70,8 @@ def _settings():
 env = _settings().get
 REPO = Path.cwd()
 PT = REPO / "benchmarks/served_units/prove_time.sh"
+#: what the staging tree's digest covers, the Python under each: prove_time.sh's KEY_PATHS, the same list
+KEY_PATHS = "benchmarks/served_units/stage.py verity/circuits verity/definitions verity/commitments verity/protocols adapters/vllm/verity_vllm tools/verity/circuit_check/src"
 OUT = Path(env("RESEARCH_RUN_DIR")) / "out"
 GB = 1e9
 RAM = "/dev/shm/"  # a FLOCK_WORK here is host memory, counted with the processes' RSS against WIN_MEM_GB
@@ -119,10 +121,16 @@ def name(unit: str, n: str) -> str:
 
 
 def key() -> str:
-    """prove_time.sh's KEY: the staging tree's digest that names each statement's directory."""
-    return subprocess.run(["bash", "-c", "find benchmarks/served_units/stage.py verity/ml adapters/vllm/verity_vllm "
-                           "tools/verity/circuit_check/src -name '*.py' -type f | LC_ALL=C sort | xargs sha256sum | sha256sum "
-                           "| cut -c1-16"], cwd=REPO, capture_output=True, text=True, check=True).stdout.strip()
+    """prove_time.sh's KEY: the staging tree's digest that names each statement's directory. Like prove_time.sh, it refuses
+    a tree without one of KEY_PATHS, whose digest would lack what was under that path, and raises where a step of the
+    digest's pipeline fails, whose message it lets through."""
+    for p in KEY_PATHS.split():
+        if not (REPO / p).exists():
+            raise SystemExit(f"window.py: no {p} in {REPO}, a path of the staging key: correct KEY_PATHS in "
+                             "benchmarks/served_units/prove_time.sh and window.py together")
+    return subprocess.run(["bash", "-o", "pipefail", "-c", f"find {KEY_PATHS} -name '*.py' -type f | LC_ALL=C sort "
+                           "| xargs sha256sum | sha256sum | cut -c1-16"], cwd=REPO, stdout=subprocess.PIPE, text=True,
+                          check=True).stdout.strip()
 
 
 def procs() -> dict[int, tuple[int, int]]:

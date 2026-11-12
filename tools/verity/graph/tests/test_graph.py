@@ -2,12 +2,13 @@
 commit alone."""
 from __future__ import annotations
 
+import json
 import subprocess
 
 import pytest
 from conftest import LISTERS, SPEC, git, toy, toy_tree
 
-from verity_graph import contract, graph
+from verity_graph import cli, contract, families, graph
 
 
 def test_the_listing_completes_digests_and_keys(tree):
@@ -139,6 +140,54 @@ def test_a_run_takes_a_listing_or_its_part_where_the_files_its_key_reads_are_its
     (tree / "uv.lock").write_text("version = 2\n")
     with pytest.raises(graph.GraphError, match="uv.lock differs here"):
         graph.given(tree, f, "toy-b:b")
+
+
+def _with(doc: dict, tid: str, **fields) -> dict:
+    return {**doc, "tasks": [{**t, **fields} if t["id"] == tid else t for t in doc["tasks"]]}
+
+
+def test_a_packed_listing_is_runs_of_indices_and_unpacks_to_the_listing_s_bytes(tree, tmp_path, monkeypatch, capsysbinary):
+    """Packed, an input is an index into `files`' paths and a read one into `tasks`, in runs of consecutive ones, so a task
+    that reads every file is one run; unpacked, it is the listing again, byte for byte, as `verity graph --json --packed`
+    and `verity graph unpack` print them, and a run takes it as it takes graph/v2."""
+    every = {**LISTERS, "other": lambda root, files: [{"id": "other:x", "inputs": [f for f in files if f != "README"],
+                                                       "vars": {"flavor": "plain"}}]}
+    doc = graph.listing(tree, listers=every)
+    packed = graph.pack(doc)
+    assert packed == {**doc, "schema": contract.SCHEMA_PACKED, "tasks": packed["tasks"]}
+    by = {t["id"]: t for t in packed["tasks"]}
+    assert [t["id"] for t in doc["tasks"]] == ["other:x", "toy-b:b", "toy:a"] and len(doc["files"]) == 11
+    assert by["other:x"]["inputs"] == [0, 11] and by["other:x"]["reads"] == {}
+    assert by["toy:a"]["inputs"] == [3, 1, 2, 1, 1, 1], "src/a.txt, the runners' __init__.py and toy.py: 3, 6 and 8 of 11"
+    assert by["toy-b:b"]["reads"] == {"o": [2, 1]}, "toy:a's o: toy:a is the third task"
+    assert graph.unpack(packed) == doc
+    assert contract.canonical(graph.unpack(json.loads(contract.canonical(packed)))) == contract.canonical(doc)
+
+    monkeypatch.setattr(families, "listers", lambda: every)
+    assert cli.main(["--json", "--root", str(tree)]) == 0
+    plain = capsysbinary.readouterr().out
+    assert cli.main(["--json", "--packed", "--root", str(tree)]) == 0
+    (f := tmp_path / "packed.json").write_bytes(capsysbinary.readouterr().out)
+    assert json.loads(f.read_bytes()) == packed
+    assert cli.main(["unpack", str(f)]) == 0
+    assert capsysbinary.readouterr().out == plain == contract.canonical(doc) + b"\n"
+    assert graph.given(tree, f, "toy-b:b") == doc
+    with pytest.raises(SystemExit):
+        cli.main(["--packed", "--root", str(tree)])
+
+    for bad, error in (({**packed, "schema": contract.SCHEMA_GRAPH}, "schema 'verity-graph/v2'"),
+                       (_with(packed, "toy-b:b", reads={"o": [3, 1]}), "IndexError"),
+                       (_with(packed, "toy:a", inputs=[3, 1, -1, 1]), "a run starts -1 past the last"),
+                       (_with(packed, "toy:a", inputs=[3, 0]), "and is 0 long"),
+                       (_with(packed, "toy:a", inputs=[3]), "aren't pairs of integers"),
+                       (_with(packed, "toy-b:b", reads=[{"task": "toy:a", "output": "o"}]), "AttributeError")):
+        with pytest.raises(graph.GraphError, match=error):
+            graph.unpack(bad)
+    a = next(t for t in doc["tasks"] if t["id"] == "toy:a")
+    for bad in (_with(doc, "toy:a", inputs=a["inputs"][::-1]), _with(doc, "toy:a", inputs=[*a["inputs"], a["inputs"][0]]),
+                _with(doc, "toy-b:b", reads=[{"task": "toy:a", "output": "o"}] * 2)):
+        with pytest.raises(graph.GraphError, match="aren't graph/v2's, sorted and each once"):
+            graph.pack(bad)
 
 
 def test_covered_files_follow_the_table(tree):

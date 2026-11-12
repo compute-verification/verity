@@ -1,6 +1,7 @@
 """drive.toml parses strictly with this tree's research: a key it doesn't read (a typo, or a key landed before the code that
-reads it) fails here, since clients ignore such keys and only drive itself would refuse them.  A key whose code was deleted
-(`DELETED_KEYS`), which even drive ignores so that it runs on an older `main`, fails here too."""
+reads it) fails here, since its readers (the verified queue's loop and the clients) ignore such keys and nothing else would
+refuse them.  A key whose code was deleted (`DELETED_KEYS`), which even the strict parse ignores so that code deployed ahead of
+`main` runs on it, fails here too."""
 from __future__ import annotations
 
 import tomllib

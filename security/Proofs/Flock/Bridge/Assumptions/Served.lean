@@ -22,7 +22,7 @@ namespace Flock.Bridge.Assumptions
 open Flock
 
 /-- **The deployed session's files parse.** There are a circuit file and a public file with the SHA-512 digests of the
-honest case of the one-stage audit's `--zk` fixture `verity/ml/flock/tests/fixtures/forged-proofs`
+honest case of the one-stage audit's `--zk` fixture `verity/protocols/flock/prover/tests/fixtures/forged-proofs`
 (`benchmarks/one_stage/forged_proofs.sh`'s files with their sessions regenerated at the 2^9 coin schedule: one A8
 unit, `LlBf16DotprodDot_v1` at K = 128, staged by `UnitStager` bound to a template query's partition, four instances,
 every unit sampled): `stage/circuit.txt`, 97,364,260 bytes, and `honest/pub-4.bin`, 3,194 bytes, a per-instance public file
@@ -35,9 +35,9 @@ no shared-row tables, and no two of `D`'s ports' published domains are one (`Por
 Assumption record. It assumes a computation's result: each conjunct evaluated with these functions, built from the
 source this module is checked at, on that fixture's two files (the public file publishes a 64-byte domain for each of
 the circuit's two ports, no two equal), beside `flock-verify verify --zk` on its honest session, which accepts it
-(`verity/ml/flock/tests/test_lean_forged_proofs.py`). A shared-row public file (the served registered
-fixtures) is `SampledKSLiveV5`'s. It asks nothing of a hash or of the prover; a change to any of these functions or to
-the files makes it a new premise, to be checked by a new run. -/
+(`verity/protocols/flock/prover/tests/test_lean_forged_proofs.py`). A shared-row public file (the served
+registered fixtures) is `SampledKSLiveV5`'s. It asks nothing of a hash or of the prover; a change to any of these
+functions or to the files makes it a new premise, to be checked by a new run. -/
 def ServedFilesParse : Prop :=
   ∃ cf pf : ByteArray,
     hexOf (Sha512.hash cf) =

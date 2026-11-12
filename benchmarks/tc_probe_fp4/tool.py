@@ -12,10 +12,9 @@ Key params follow probe.py's argparse; `--out` and `--procs` never enter the der
         --locked-mhz 2100
 
 `tc_rates_fp4` is F1 (f1_rates.py): its CPU steps (``build``, ``collect``) run as recorded runs, its timed families as fill jobs
-(``benchmarks.tc_probe_fp4.tool:TC_RATES_FP4``; paths, ``--jobs`` and guards are not part of the answer).  `tc_lut_fp4` is F3
-(f3_lut.py), run the same way with one width per fill chunk, and `tc_strassen_fp4` is F2 (f2_strassen.py), one level per chunk.
-`tc_recheck_fp4` (recheck.py) and `tc_sparse_e4m3` (sp_e4m3.py, the 2:4 sparse E4M3 row against two dense k32 atoms) capture in
-fill chunks and verify on the CPU (``benchmarks.tc_probe_fp4.tool:TC_SPARSE_E4M3``).
+(``benchmarks.tc_probe_fp4.tool:TC_RATES_FP4``; paths, ``--jobs`` and guards are not part of the answer).
+`tc_sparse_e4m3` (sp_e4m3.py, the 2:4 sparse E4M3 row against two dense k32 atoms) captures in fill chunks and verifies on
+the CPU (``benchmarks.tc_probe_fp4.tool:TC_SPARSE_E4M3``).
 """
 from __future__ import annotations
 
@@ -142,119 +141,13 @@ def parse_f1(argv: list[str]) -> dict:
 TC_RATES_FP4 = Tool(
     name="tc_rates_fp4", version="1",
     command=["python", "benchmarks/tc_probe_fp4/f1_rates.py"],
-    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits", "silicon/**")],
+    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.definitions", "silicon/**")],
     key_params=["cmd", "forms", "family", "libs", "reps", "target_ms", "sustain_s", "seed", "locked_mhz", "corrupt_word", "fake_silicon",
                 "tolerance"],
     key_conditions=["hw.family"],
     caches=["nvcc"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse_f1,
-)
-
-
-def parse_f3(argv: list[str]) -> dict:
-    idx = next((i for i, t in enumerate(argv) if Path(t).name == "f3_lut.py"), 0)
-    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    ap.add_argument("cmd", nargs="?", default=None)
-    for flag in ("--out", "--build", "--runs", "--expect-uuid", "--width"):
-        ap.add_argument(flag, default=None)
-    ap.add_argument("--reps", type=int, default=5)
-    ap.add_argument("--target-ms", type=float, default=100.0)
-    ap.add_argument("--sustain-s", type=float, default=2.0)
-    ap.add_argument("--seed", type=int, default=20260930)
-    ap.add_argument("--sample", type=int, default=2048)
-    ap.add_argument("--locked-mhz", type=float, default=None)
-    ap.add_argument("--corrupt-word", action="store_true")
-    ap.add_argument("--fake-silicon", action="store_true")
-    ap.add_argument("--tolerance", type=float, default=0.02)
-    ns, unknown = ap.parse_known_args(argv[idx + 1:])
-    out = vars(ns)
-    for k in ("out", "build", "runs", "expect_uuid"):  # paths and guards, not the answer
-        out.pop(k)
-    if unknown:
-        out["_unknown"] = unknown
-    return out
-
-
-TC_LUT_FP4 = Tool(
-    name="tc_lut_fp4", version="1",
-    command=["python", "benchmarks/tc_probe_fp4/f3_lut.py"],
-    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits", "silicon/**")],
-    key_params=["cmd", "width", "reps", "target_ms", "sustain_s", "seed", "sample", "locked_mhz", "corrupt_word", "fake_silicon",
-                "tolerance"],
-    key_conditions=["hw.family"],
-    caches=["nvcc"],
-    produces=["bench-result/v1", "run-files/v1"],
-    parse=parse_f3,
-)
-
-
-def parse_f2(argv: list[str]) -> dict:
-    idx = next((i for i, t in enumerate(argv) if Path(t).name == "f2_strassen.py"), 0)
-    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    ap.add_argument("cmd", nargs="?", default=None)
-    for flag in ("--out", "--build", "--runs", "--expect-uuid", "--level"):
-        ap.add_argument(flag, default=None)
-    ap.add_argument("--reps", type=int, default=5)
-    ap.add_argument("--target-ms", type=float, default=100.0)
-    ap.add_argument("--sustain-s", type=float, default=2.0)
-    ap.add_argument("--seed", type=int, default=20260930)
-    ap.add_argument("--sample", type=int, default=2048)
-    ap.add_argument("--locked-mhz", type=float, default=None)
-    ap.add_argument("--corrupt-word", action="store_true")
-    ap.add_argument("--fake-silicon", action="store_true")
-    ap.add_argument("--tolerance", type=float, default=0.02)
-    ns, unknown = ap.parse_known_args(argv[idx + 1:])
-    out = vars(ns)
-    for k in ("out", "build", "runs", "expect_uuid"):  # paths and guards, not the answer
-        out.pop(k)
-    if unknown:
-        out["_unknown"] = unknown
-    return out
-
-
-TC_STRASSEN_FP4 = Tool(
-    name="tc_strassen_fp4", version="1",
-    command=["python", "benchmarks/tc_probe_fp4/f2_strassen.py"],
-    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits", "silicon/**")],
-    key_params=["cmd", "level", "reps", "target_ms", "sustain_s", "seed", "sample", "locked_mhz", "corrupt_word", "fake_silicon",
-                "tolerance"],
-    key_conditions=["hw.family"],
-    caches=["nvcc"],
-    produces=["bench-result/v1", "run-files/v1"],
-    parse=parse_f2,
-)
-
-
-def parse_recheck(argv: list[str]) -> dict:
-    idx = next((i for i, t in enumerate(argv) if Path(t).name == "recheck.py"), 0)
-    ap = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
-    ap.add_argument("cmd", nargs="?", default=None)
-    for flag in ("--out", "--capture", "--prebuilt", "--expect-uuid", "--instruction", "--seeds", "--expect-model", "--fake-silicon"):
-        ap.add_argument(flag, default=None)
-    ap.add_argument("--seed", type=int, default=None)
-    ap.add_argument("--n-random", type=int, default=None)
-    ap.add_argument("--fixed-mult", type=int, default=1)
-    ap.add_argument("--procs", type=int, default=None)
-    ap.add_argument("--budget-s", type=float, default=None)
-    ns, unknown = ap.parse_known_args(argv[idx + 1:])
-    out = vars(ns)
-    for k in ("out", "capture", "prebuilt", "expect_uuid", "procs", "budget_s"):  # paths and guards, not the answer
-        out.pop(k)
-    if unknown:
-        out["_unknown"] = unknown
-    return out
-
-
-TC_RECHECK_FP4 = Tool(
-    name="tc_recheck_fp4", version="1",
-    command=["python", "benchmarks/tc_probe_fp4/recheck.py"],
-    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits", "silicon/**")],
-    key_params=["cmd", "instruction", "seed", "seeds", "n_random", "fixed_mult", "expect_model", "fake_silicon"],
-    key_conditions=["hw.family"],
-    caches=["nvcc"],
-    produces=["tc-evidence/v1", "run-files/v1"],
-    parse=parse_recheck,
 )
 
 
@@ -282,7 +175,7 @@ def parse_sparse_e4m3(argv: list[str]) -> dict:
 TC_SPARSE_E4M3 = Tool(
     name="tc_sparse_e4m3", version="1",
     command=["python", "benchmarks/tc_probe_fp4/sp_e4m3.py"],
-    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits", "silicon/**")],
+    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.definitions", "silicon/**")],
     key_params=["cmd", "arch", "seed", "seeds", "n_random", "fixed_mult", "fake_silicon"],
     key_conditions=["hw.family"],
     caches=["nvcc"],
@@ -294,7 +187,7 @@ TC_SPARSE_E4M3 = Tool(
 TC_PRICE_FP4 = Tool(
     name="tc_price_fp4", version="2",
     command=["python", "benchmarks/tc_probe_fp4/w1_price.py"],
-    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits", "silicon/**")],
+    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.definitions", "silicon/**")],
     key_params=["rows", "ops", "reps", "target_ms", "sustain_s", "warps_per_sm", "op_warps_per_sm", "latency_iters", "no_scale_update",
                 "seed", "locked_mhz", "corrupt_word", "fake_silicon", "sass_only"],
     key_conditions=["hw.family"],
@@ -307,7 +200,7 @@ TC_PRICE_FP4 = Tool(
 TC_PROBE_FP4 = Tool(
     name="tc_probe_fp4", version="1",
     command=["python", "benchmarks/tc_probe_fp4/probe.py"],
-    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.circuits", "silicon/**")],
+    closure=["benchmarks/tc_probe_fp4/**", *package_paths(TREE, "verity.definitions", "silicon/**")],
     key_params=["instruction", "arch", "families", "seed", "n", "group", "sweep", "golden_per_family", "replay_autoproof", "sass_check",
                 "chain2", "smem_strides", "chain", "expect_model", "corrupt_word", "fake_silicon", "sass_only", "vectors",
                 "vector_list", "vector_ids", "chain_ids", "special_ids", "collect"],
