@@ -114,7 +114,9 @@ def fold_references() -> dict[str, tuple[CompositeDefinition, str]]:
                 ns.update(_imported(module, n))
         ns.update(vars(importlib.import_module(module)))
         for n in ast.walk(tree):
-            c = _chain(n) if isinstance(n, (ast.Name, ast.Attribute)) else None
+            if not isinstance(n, (ast.Name, ast.Attribute)):
+                continue
+            c = _chain(n)
             if not c or c[0] not in ns:
                 continue
             obj = ns[c[0]]

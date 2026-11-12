@@ -258,6 +258,7 @@ def p_rms_triton(node, ctx):
     if not node.is_triton or not node.op.endswith("_rms_norm_kernel"):
         return None
     a = node.enter.args
+    operands: tuple
     spec, operands = bind(b1.RMSNormTriton, N=C["H"], EPS=C["EPS"]), (PerRow(a["input_ptr"]), Shared(a["weight_ptr"]))
     if ctx.profile.registered_values:
         spec, operands = bind(VI.RMSNormTritonV3, N=C["H"]), operands + (eps_input(C["EPS"]),)
@@ -308,6 +309,7 @@ def p_attention(node, ctx):
     ch = node.children[0]
     q3, kc, vc, out = ch.args[:4]
     parts = []
+    operands: tuple
     for i, (req, p) in enumerate(ctx.start.rows):
         T = p + 1
         slots = tuple(_slot(ctx, req, j) for j in range(T))
@@ -324,6 +326,7 @@ def p_fused_norm(node, ctx):
     if node.op != "_C.fused_add_rms_norm.default":
         return None
     x, res, w, eps = node.args
+    operands: tuple
     spec, operands = bind(b1.RMSNormFusedCuda, N=C["H"], EPS=eps), (PerRow(x), PerRow(res), Shared(w))
     if ctx.profile.registered_values:
         spec, operands = bind(VI.RMSNormFusedCudaV4, N=C["H"]), operands + (eps_input(eps),)
@@ -386,7 +389,7 @@ def _elements(v: ViewDesc):
 
 
 def _compact(refs):
-    parts = []
+    parts: list[Affine] = []
     for r in refs:
         if parts and parts[-1].space == r[0] and parts[-1].idx == r[1] and parts[-1].base + parts[-1].count == r[2]:
             parts[-1] = Affine(r[0], r[1], parts[-1].base, parts[-1].count + 1)

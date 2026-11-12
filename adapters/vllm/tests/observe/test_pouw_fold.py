@@ -94,6 +94,7 @@ def observed(linears):
     """The model's forward under the real observer, with PoUW installed as a Match capture installs it."""
     model, x = Model(), (torch.randn(M, K, generator=torch.Generator().manual_seed(11)) * 0.8).to(BF)
     comp = _install(model, "capture")
+    events: list
     events, storage = [], StorageAdapter()
     rec = Recorder(storage, events.append)
     rec.active, rec.step, rec.phase = True, 0, "forward"

@@ -131,7 +131,7 @@ GREEDY = {"greedy": True, "temperature": 0.0, "top_p": 1.0, "top_k": 0, "logprob
 
 
 def header(sampling: dict | None = GREEDY) -> RunHeader:
-    workload = {"requests": [{"request_id": "r0", "prompt_token_ids": list(range(32)), "max_tokens": 16}]}
+    workload: dict = {"requests": [{"request_id": "r0", "prompt_token_ids": list(range(32)), "max_tokens": 16}]}
     if sampling is not None:
         workload["sampling"] = sampling
     return RunHeader("verity-capture/log/v1", "2026-09-16T00:00:00Z", "88e1b098d719", {"vllm": "d9105ea80"},
