@@ -1,16 +1,24 @@
 #!/usr/bin/env python3
 """Cursor's `preToolUse` hook for the Task tool (`.cursor/hooks.json`, matchers `Task` and `CallDynamicTool`, the wrapper a
-session that offers Task as a dynamic tool calls it through): a coordinator never waits on a local worker in the foreground.
+session that offers Task as a dynamic tool calls it through): every launch names its worker's model, and a coordinator never
+waits on a local worker in the foreground.
+
+A Task call with no `model`, or with `inherit`, gives the worker its launcher's model, and every coordinator runs the
+strongest at its highest effort, so it refuses, for every agent, a launch (a call with no `resume`) whose `model` is missing,
+empty or `inherit`; the refusal names the two models and what each is for (the team skill). A resume passes without one: the
+worker keeps the model it has. The read-only lookups in `LOOKUPS` are held to it too, since a coordinator's lookup would
+otherwise run at its own model and effort. Only the types in `AUTO_RESUME` are left out: a call to one continues that
+type's earlier agent, as a resume does, so its model isn't the call's to set.
 
 Slack, Linear and timer events reach an agent only while its turn is free, and a foreground subagent holds its parent's turn
 until it ends; one in the background doesn't. Local workers also share the coordinator's VM, where one OOM kills them all (so:
 cloud workers where the Task tool offers them, background always). So for an agent that holds a handle (its id is in a `holder`
 of the Slack registry, `.agents/skills/using-slack/registry.json`) it refuses a local Task call in the foreground, unless it is
-one of the short read-only lookups in `LOOKUPS`. Cloud and background calls pass, and so does every other agent's. Reads
-Cursor's hook JSON on stdin and prints its verdict as JSON on stdout; an input it can't read passes, and so does another
+one of the short read-only lookups in `LOOKUPS`. Cloud and background calls pass that rule, and so does every other agent's.
+Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout; an input it can't read passes, and so does another
 step's event, unlogged. Each verdict is appended to
-$AGENT_GUARD_TASK_LOG (default /tmp/agent-guard-task.jsonl) with the call's environment, subagent type and background flag,
-never its prompt.
+$AGENT_GUARD_TASK_LOG (default /tmp/agent-guard-task.jsonl) with the call's environment, subagent type, background flag,
+model and whether it resumes, never its prompt.
 
 It also refuses a cloud agent's (a `bc-` conversation's) write through Linear's MCP connector, which acts as the workspace
 owner, so the write would show as theirs: every Linear tool but the reads in `LINEAR_READS`, called through `CallDynamicTool`
@@ -31,6 +39,7 @@ REGISTRY = Path(os.environ.get("AGENT_GUARD_REGISTRY",
                                Path(__file__).resolve().parents[2] / ".agents/skills/using-slack/registry.json"))
 LOG = Path(os.environ.get("AGENT_GUARD_TASK_LOG", "/tmp/agent-guard-task.jsonl"))
 LOOKUPS = {"explore", "cursor-guide", "ci-investigator", "videoReview"}
+AUTO_RESUME = {"debug", "computerUse"}
 AGENT_ID = re.compile(r"bc-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 LINEAR_READS = ("get_", "list_", "search_", "extract_")
 #: the Linear connector's tools that write, as a direct MCP call names them (`MCP:<tool>`)
@@ -64,9 +73,15 @@ def task_input(event: dict):
 
 
 def reason(event: dict) -> str | None:
-    handle = holders().get(str(event.get("conversation_id") or ""))
     args = task_input(event)
-    if handle is None or not isinstance(args, dict):
+    if not isinstance(args, dict):
+        return None
+    return "\n\n".join(why for why in (foreground(event, args), unnamed_model(args)) if why) or None
+
+
+def foreground(event: dict, args: dict) -> str | None:
+    handle = holders().get(str(event.get("conversation_id") or ""))
+    if handle is None:
         return None
     if args.get("environment") == "cloud" or args.get("run_in_background") or args.get("subagent_type") in LOOKUPS:
         return None
@@ -75,6 +90,24 @@ def reason(event: dict) -> str | None:
             "environment: \"cloud\"; its own VM, so an OOM there can't take yours) where your Task tool offers it, else with "
             "run_in_background: true, or as a detached `research run`; then end your turn. Short read-only lookups run in the "
             f"foreground: {', '.join(sorted(LOOKUPS))}.")
+
+
+def unnamed_model(args: dict) -> str | None:
+    """Why a launch that names no model is refused, else None."""
+    if args.get("resume") or args.get("subagent_type") in AUTO_RESUME:
+        return None
+    if str(args.get("model") or "").strip().lower() not in ("", "inherit"):
+        return None
+    return ("Refused by tools/agent-guard/task_hook.py: this Task launch names no model (`model` missing, empty or `inherit`), "
+            "so the worker would run on yours. Name it in `model`:\n"
+            "- `claude-opus-5-5-high`, the default: moving files, reading code, a count or a sweep, a specified change with "
+            "its tests, a merge, a review, a swarm seat, a proof of a fixed statement.\n"
+            "- `claude-fable-5-2-xhigh` only to plan, design or decide where no check catches an error: what a guarantee "
+            "says, a protocol or an attack, an open root cause, a ruling, review of a verifier, a lock or a statement, a "
+            "claim to Daniel.\n"
+            "Daniel's words of Thu 12 Nov (Opus for moving things around and reading code, Fable for planning, organizing "
+            "and coordinating) are the standing explicit request your Task tool asks for before a model other than "
+            "`inherit`, for every agent here. A resume (`resume`) needs none: the worker keeps its model.")
 
 
 def linear_write(event: dict) -> str | None:
@@ -121,7 +154,8 @@ def main() -> int:
         with open(LOG, "a") as f:
             f.write(json.dumps({"conversation_id": event.get("conversation_id"), "tool_name": event.get("tool_name"),
                                 "deny": bool(why), "input_keys": sorted(args),
-                                **{k: args.get(k) for k in ("environment", "subagent_type", "run_in_background")}}) + "\n")
+                                **{k: args.get(k) for k in ("environment", "subagent_type", "run_in_background", "model")},
+                                "resume": bool(args.get("resume"))}) + "\n")
     except OSError:
         pass
     print(json.dumps({"permission": "deny", "agent_message": why, "user_message": why} if why else {"permission": "allow"}))

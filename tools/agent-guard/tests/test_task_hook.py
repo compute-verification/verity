@@ -1,6 +1,7 @@
-"""`.cursor/hooks.json`'s Task hook keeps a coordinator from waiting on a local worker in the foreground, which holds its turn
-(and so every Slack, Linear and timer event) until the worker ends, and keeps a cloud agent from
-writing Linear through its MCP connector, which acts as the person who connected it."""
+"""`.cursor/hooks.json`'s Task hook refuses a Task launch that names no model, which would give the worker its launcher's,
+keeps a coordinator from waiting on a local worker in the foreground, which holds its turn (and so every Slack, Linear and
+timer event) until the worker ends, and keeps a cloud agent from writing Linear through its MCP connector, which acts as the
+person who connected it."""
 import json
 import os
 import subprocess
@@ -13,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[3]
 HOOK = ROOT / "tools/agent-guard/task_hook.py"
 HOLDER = "bc-8f4b652b-17bc-5055-a120-b56940b7c7a9"
 WORKER = "bc-00000000-0000-0000-0000-000000000000"
+OPUS = "claude-opus-5-5-high"
 
 
 def answer(tmp_path, conversation_id, tool_input, tool_name="Task") -> dict:
@@ -35,7 +37,7 @@ def test_a_task_call_through_the_dynamic_tool_wrapper_is_judged_like_a_direct_on
     fg = {"subagent_type": "generalPurpose", "prompt": "x"}
     assert answer(tmp_path, HOLDER, {"namespace": "cursor", "toolName": "Task", "arguments": fg},
                   "CallDynamicTool")["permission"] == "deny"
-    bg = {**fg, "environment": "cloud", "run_in_background": True}
+    bg = {**fg, "environment": "cloud", "run_in_background": True, "model": OPUS}
     assert answer(tmp_path, HOLDER, {"namespace": "cursor", "toolName": "Task", "arguments": bg},
                   "CallDynamicTool") == {"permission": "allow"}
     recs = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
@@ -97,23 +99,77 @@ def test_a_coordinators_local_worker_in_the_foreground_is_refused_with_the_way_t
 
 
 @pytest.mark.parametrize("conversation_id,tool_input", [
-    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud"}),
-    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "run_in_background": True}),
-    (HOLDER, {"subagent_type": "explore", "prompt": "x"}),
-    (HOLDER, {"subagent_type": "cursor-guide", "prompt": "x", "run_in_background": False}),
-    (WORKER, {"subagent_type": "generalPurpose", "prompt": "x"}),
-    (None, {"subagent_type": "generalPurpose", "prompt": "x"}),
+    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud", "model": OPUS}),
+    (HOLDER, {"subagent_type": "generalPurpose", "prompt": "x", "run_in_background": True, "model": OPUS}),
+    (HOLDER, {"subagent_type": "explore", "prompt": "x", "model": OPUS}),
+    (HOLDER, {"subagent_type": "cursor-guide", "prompt": "x", "run_in_background": False, "model": OPUS}),
+    (WORKER, {"subagent_type": "generalPurpose", "prompt": "x", "model": OPUS}),
+    (None, {"subagent_type": "generalPurpose", "prompt": "x", "model": OPUS}),
     (HOLDER, "not an object"),
 ])
 def test_cloud_workers_foreground_lookups_and_other_agents_pass(tmp_path, conversation_id, tool_input):
     assert answer(tmp_path, conversation_id, tool_input) == {"permission": "allow"}
 
 
-def test_each_verdict_is_logged_without_the_prompt(tmp_path):
+def test_each_verdict_is_logged_with_its_model_and_without_the_prompt(tmp_path):
     answer(tmp_path, HOLDER, {"subagent_type": "generalPurpose", "prompt": "a secret plan", "run_in_background": False})
-    (rec,) = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
-    assert rec == {"conversation_id": HOLDER, "tool_name": "Task", "deny": True, "input_keys": ["prompt", "run_in_background", "subagent_type"],
-                   "environment": None, "subagent_type": "generalPurpose", "run_in_background": False}
+    answer(tmp_path, WORKER, {"subagent_type": "generalPurpose", "prompt": "a secret plan", "model": OPUS})
+    answer(tmp_path, WORKER, {"prompt": "go on", "resume": WORKER})
+    recs = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
+    assert recs[0] == {"conversation_id": HOLDER, "tool_name": "Task", "deny": True,
+                       "input_keys": ["prompt", "run_in_background", "subagent_type"], "environment": None,
+                       "subagent_type": "generalPurpose", "run_in_background": False, "model": None, "resume": False}
+    assert [(r["deny"], r["model"], r["resume"]) for r in recs[1:]] == [(False, OPUS, False), (False, None, True)]
+    assert "a secret plan" not in (tmp_path / "task.jsonl").read_text()
+
+
+CLOUD_BG = {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud", "run_in_background": True}
+
+
+@pytest.mark.parametrize("conversation_id", [HOLDER, WORKER, None])
+@pytest.mark.parametrize("model", [None, "", "inherit", " Inherit "])
+def test_a_launch_that_names_no_model_is_refused_for_every_agent_with_the_two_models(tmp_path, conversation_id, model):
+    a = answer(tmp_path, conversation_id, CLOUD_BG if model is None else {**CLOUD_BG, "model": model})
+    assert a["permission"] == "deny" and a["agent_message"].startswith("Refused by tools/agent-guard/task_hook.py: ")
+    assert "`claude-opus-5-5-high`, the default" in a["agent_message"] and "`claude-fable-5-2-xhigh` only to plan" in a["agent_message"]
+    assert "Daniel's words of Thu 12 Nov" in a["agent_message"] and "standing explicit request" in a["agent_message"]
+    assert "@proofs" not in a["agent_message"]
+
+
+@pytest.mark.parametrize("tool_input", [
+    {**CLOUD_BG, "model": OPUS},
+    {**CLOUD_BG, "model": "claude-fable-5-2-xhigh"},
+    {"prompt": "go on", "resume": WORKER},
+    {"prompt": "go on", "resume": WORKER, "model": "inherit"},
+    {"subagent_type": "debug", "prompt": "x", "run_in_background": True},
+    {"subagent_type": "computerUse", "prompt": "x", "environment": "cloud"},
+])
+def test_a_named_model_a_resume_and_the_types_that_resume_themselves_pass(tmp_path, tool_input):
+    assert answer(tmp_path, WORKER, tool_input) == {"permission": "allow"}
+
+
+def test_a_lookup_names_its_model_too(tmp_path):
+    """A coordinator's foreground lookup would otherwise run at the coordinator's own model and effort."""
+    a = answer(tmp_path, HOLDER, {"subagent_type": "explore", "prompt": "x"})
+    assert a["permission"] == "deny" and "names no model" in a["agent_message"] and "@proofs" not in a["agent_message"]
+
+
+def test_a_dynamic_task_launch_is_held_to_its_model_like_a_direct_one(tmp_path):
+    def dynamic(args):
+        return answer(tmp_path, WORKER, {"namespace": "cursor", "toolName": "Task", "arguments": args}, "CallDynamicTool")
+    assert dynamic(CLOUD_BG)["permission"] == "deny" and dynamic({**CLOUD_BG, "model": "inherit"})["permission"] == "deny"
+    assert dynamic({**CLOUD_BG, "model": OPUS}) == {"permission": "allow"}
+    assert dynamic({"prompt": "go on", "resume": WORKER}) == {"permission": "allow"}
+    recs = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
+    assert [(r["tool_name"], r["deny"], r["model"]) for r in recs] == [
+        ("CallDynamicTool", True, None), ("CallDynamicTool", True, "inherit"), ("CallDynamicTool", False, OPUS),
+        ("CallDynamicTool", False, None)]
+
+
+def test_a_coordinators_foreground_launch_with_no_model_gives_both_reasons(tmp_path):
+    a = answer(tmp_path, HOLDER, {"subagent_type": "generalPurpose", "prompt": "x"})
+    assert a["agent_message"].count("Refused by tools/agent-guard/task_hook.py: ") == 2
+    assert "@proofs" in a["agent_message"] and "names no model" in a["agent_message"]
 
 
 @pytest.mark.parametrize("tool", ["save_issue", "save_comment", "save_status_update", "create_attachment"])
