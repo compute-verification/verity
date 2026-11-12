@@ -361,6 +361,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     import numpy as np
     import torch
 
+    from tests.properties import specdec_replay_gpu as loop
     from verity_vllm.engine import env, handle, served_seed
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace, load
@@ -386,37 +387,17 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         raise SystemExit(f"fp8-cache-replay: the serve's top-k was {'' if served['canonical_topk'] else 'not '}canonical "
                          f"and this process's is {'' if canonical else 'not '}: replay under the serve's environment")
     reqs = {r["id"]: r for r in plan(served_seed.DEFAULT_SEED, long=canonical)}
-    if served is None:
-        due = [{"id": r["id"], "iteration": r["iteration"]} for r in reqs.values()]
-    else:
-        due = [{"id": r["request"], "before_step": r["before_step"], "after_empty": r.get("after_empty", 0)}
-               for r in recs if r["kind"] == "arrive"]
+    due = [{"id": r["id"], "iteration": r["iteration"]} for r in reqs.values()] if served is None else loop.arrivals(recs)
     redrawn = rescale(runner) if a.weights == "scaled" else None
     trace = StepTrace(out / "trace.jsonl" if a.phase == "serve" else None).install(eng)
     said, hook = ours(runner, trace.records[0]["config"])
     rows = Rows(runner)
-    tokens: dict[str, list[int]] = {}
-    empty: dict[int, int] = {}
 
     def add(rid: str) -> None:
         r = reqs[rid]
         got = eng.add_request(rid, {"prompt_token_ids": r["prompt_ids"]}, params(r["sampling"], r["max_tokens"]))
         if got not in (None, rid):
             raise SystemExit(f"fp8-cache-replay: the engine named {rid} {got}")
-
-    def schedule(orig: Any) -> Any:
-        def wrapped(*args: Any, **kw: Any) -> Any:
-            # a request goes back before the schedule it arrived before: the first at its step, or the one after as many
-            # schedules that scheduled nothing as its arrival says
-            while (a.phase == "replay" and due and due[0]["before_step"] == trace.scheduled
-                   and due[0]["after_empty"] == getattr(trace, "empty", 0)):
-                add(due.pop(0)["id"])
-            before = trace.scheduled
-            so = orig(*args, **kw)
-            if trace.scheduled == before:
-                empty[before] = empty.get(before, 0) + 1
-            return so
-        return wrapped
 
     def execute_model(orig: Any) -> Any:
         def wrapped(scheduler_output: Any, *args: Any, **kw: Any) -> Any:
@@ -432,37 +413,22 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
 
     hooks = Hooks(tag="fp8-cache-replay")
     routes = Routes(hooks, runner.model)
-    hooks.wrap(trace.sched, "schedule", schedule)
     hooks.wrap(runner, "execute_model", execute_model)
-    iteration = 0
-    while due or eng.has_unfinished_requests():
-        if a.phase == "serve":
-            idle = not eng.has_unfinished_requests()
-            while due and (due[0]["iteration"] <= iteration or idle):
-                add(due.pop(0)["id"])
-                idle = False
-        elif due and (due[0]["before_step"] < trace.scheduled or not eng.has_unfinished_requests()):
-            if due[0]["before_step"] != trace.scheduled:
-                raise SystemExit(f"fp8-cache-replay: at step {trace.scheduled} with {due[0]['id']} due before step "
-                                 f"{due[0]['before_step']}")
-            add(due.pop(0)["id"])
-        for o in eng.step():
-            if o.finished:
-                tokens[o.request_id] = [int(t) for t in o.outputs[0].token_ids]
-        iteration += 1
+    # the speculative-decoding stand-in's loop: the serve's arrivals by engine iteration, the replay's where the trace says
+    drove = loop.drive(eng, trace, a.phase, due, add)
     hooks.uninstall()
     trace.uninstall()
     digests, raw = rows.digest()
     if a.rows:
         np.savez(a.rows, **raw)
-    steps = [r for r in trace.records if r["kind"] == "step"]
+    steps, tokens = drove["steps"], drove["tokens"]
     doc = {"phase": a.phase, "arm": a.arm, "weights": a.weights, "compiled": a.compiled, "cache": a.cache,
            "config": trace.records[0]["config"], "engine_given": {k: cfg.get(k) for k in ("kv_cache_dtype", "block_size")},
            "chosen": chosen(eng, runner), "ours": {**said, **({"tables_rows": tables_rows(hook, rows)} if hook is not None else {})},
            "device": {"name": torch.cuda.get_device_name(0), "capability": list(torch.cuda.get_device_capability(0))},
            "vllm": __import__("vllm").__version__, "redrawn": redrawn, "steps": steps, "tokens": tokens, "rows": digests,
            "rows_skipped": rows.skipped, "sampling": {rid: r["sampling"] for rid, r in reqs.items()},
-           "empty_schedules": sum(empty.values()), "routes": routes.count, "canonical_topk": canonical,
+           "empty_schedules": drove["empty_schedules"], "routes": routes.count, "canonical_topk": canonical,
            "topk": canon.record() if canonical else None}
     (out / f"{a.phase}{'-named' if a.cache == 'named' else ''}.json").write_text(json.dumps(doc, separators=(",", ":")) + "\n")
     return doc
