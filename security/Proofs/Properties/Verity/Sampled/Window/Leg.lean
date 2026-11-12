@@ -81,9 +81,9 @@ traces end at and the position a member's session starts at. At each window of `
 from where the one before it ended writes a transcript flock-verify `--zk` accepts at the member's `own`, wherever a
 tape through the trace's end plays a play v2's sampled verdict accepts that misses nowhere and `P` and `Q` hold of; a
 member with none has no session, and the next member's starts from the same position. The bound is
-`spotSound_of_window`'s: the sample's own miss and the members' terms summed (`Window.sessionDelta`,
-`JointShareV5`'s), a two-continuation term per round of every member's session, the record's, the bound digests',
-the hiding term, the read finder's and the forger's. -/
+`spotSound_of_window`'s: the sample's own miss, the members' terms summed and their roots terms
+(`Window.sessionDelta`, `JointShareV5`'s under the roots guard), a two-continuation term per round of every member's
+session, the record's, the bound digests', the hiding term, the read finder's and the forger's. -/
 theorem windowSpotSound_of_members (rd : WindowReadings) (K : WindowConstructions V)
     (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       WindowDecoders V θ F c W σ)
@@ -137,9 +137,9 @@ the one-stage form, meets SPOT's target at composite `k` wherever, at each windo
 The stops' term takes no premise: over every member's stops the openings' gaps and empty classes at their counts are
 within the hiding term at every strategy (`windowErr_sampleMap_le_at`). The member's transcript carries the proof
 files its decoders give at the position its trace ends at (`PosDecoders.files`). The bound is
-`spotSound_of_window`'s: the sample's own miss and the members' terms summed (`Window.sessionDelta`), a
-two-continuation term per round of every member's session, the record's, the bound digests', the hiding term, the
-read finder's and the forger's. -/
+`spotSound_of_window`'s: the sample's own miss, the members' terms summed and their roots terms
+(`Window.sessionDelta`), a two-continuation term per round of every member's session, the record's, the bound
+digests', the hiding term, the read finder's and the forger's. -/
 theorem windowSpotSound_of_sample (e : 𝔽 ≃ (Fin 128 → Bool)) (rd : WindowReadings) (K : WindowConstructions V)
     (D : (W : Window) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → (σ : Strategy (V.game θ F c)) →
       WindowDecoders V θ F c W σ)

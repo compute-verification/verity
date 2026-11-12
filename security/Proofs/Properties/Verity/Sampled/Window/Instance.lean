@@ -28,8 +28,10 @@ of the named `Prop`s below.
   at most as many as the window's incorrect proof blocks (`Window.unboundWrong`,
   `JointAuditV5.UnboundWrong.card_le`), wherever the claim reads the window (`ClaimReads`): the window's members are
   laid out in order (`Window.Laid`, which holds at every cost and widening, `Window.Laid.joint`,
-  `Window.Laid.extend`), the published share and the committed files' units are the window's, and the committed files
-  are read at the claim, each member at its own gates (`JointAuditV5.ReadsAt`).
+  `Window.Laid.extend`), the published share and the committed files' units are the window's, and, where every
+  member's roots fix their domains (`Window.RootsFix`, which the window's δ pays for at each member's roots term,
+  `Window.rootsErr`), the committed files are read at the claim, each member at its own gates
+  (`JointAuditV5.ReadsAt`).
 * **`WindowDeployed`** (`deployed`): the finder, the forger, the loss, the per-finder premises and the published δ by
   construction (`Window.delta_extend`: the window's δ doesn't read the widening), and the claim's transfer from
   `ClaimReads`.
@@ -380,12 +382,12 @@ theorem strictCR {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {W : Win
   · rw [hs]
     exact List.mem_append_right _ (by simp)
 
-/-- **The claim's transfer at the deployment's windows** (`WindowDeployed.claim`, at the constructions `K`): at a
-strategy whose extracted transcript fails the claim on the committed files at the published share, more than the
-window's `ε` share of its population's proof blocks is incorrect at the projected strategy
-(`JointAuditV5.wrongSet`). -/
+/-- **The claim's transfer at the deployment's windows** (`WindowDeployed.claim`, at the constructions `K`): where
+every member's roots fix their domains (`Window.RootsFix`), at a strategy whose extracted transcript fails the claim
+on the committed files at the published share, more than the window's `ε` share of its population's proof blocks is
+incorrect at the projected strategy (`JointAuditV5.wrongSet`). -/
 def ClaimTransfers : Prop :=
-  ∀ θ F W, I.windows θ F = some W → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
+  ∀ θ F W, I.windows θ F = some W → W.RootsFix → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
     ¬ Accounting.IntegrityHolds (I.base.partsOf θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ)
         (I.base.certOf θ).ε →
       (K.live W θ F c σ).ε * (K.live W θ F c σ).nJ <
@@ -393,18 +395,20 @@ def ClaimTransfers : Prop :=
 
 /-- **What the claim reads at the deployment's windows**, at the constructions `K`. At each window the verifier
 sets up on the committed files: the window's members are laid out in order (`laid`, `Window.Laid`); the published
-share is the window's (`share`) and the committed files' units are the window's population (`units`); and at every
-strategy the committed files are read at the claim at the projected strategy (`reads`, `JointAuditV5.ReadsAt`): the
-vocabulary's read is the members' files in order, each member's files pass the verifier's files check
-(`MemberV5.Checked`), the commitment's openings hold wherever a member's deployed commitment opens and at its files'
-constants, and the extracted transcript is, at each member's gates, that member's transcript at the trace its session
-fixes at the joint registration (`JointAuditV5.memberX`). It is asked of every member, with a proof block in the
-sample or not. -/
+share is the window's (`share`) and the committed files' units are the window's population (`units`); and, where
+every member's roots fix their domains (`Window.RootsFix`: the files check's one clause that isn't a decision of
+the public files alone, which the window's δ pays for), at every strategy the committed files are read at the claim
+at the projected strategy (`reads`, `JointAuditV5.ReadsAt`): the vocabulary's read is the members' files in order,
+each member's files pass the verifier's files check (`MemberV5.Checked`), the commitment's openings hold wherever a
+member's deployed commitment opens and at its files' constants, and the extracted transcript is, at each member's
+gates, that member's transcript at the trace its session fixes at the joint registration
+(`JointAuditV5.memberX`). It is asked of every member, with a proof block in the sample or not. -/
 structure ClaimReads : Prop where
   laid : ∀ θ F W, I.windows θ F = some W → W.Laid
   share : ∀ θ F W, I.windows θ F = some W → (I.base.certOf θ).ε = W.ε
   units : ∀ θ F W, I.windows θ F = some W → I.base.units θ F = W.nJ
-  reads : ∀ θ F W, I.windows θ F = some W → ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
+  reads : ∀ θ F W, I.windows θ F = some W → W.RootsFix →
+    ∀ (c : ByteArray) (σ : Verity.Game.Strategy (I.base.game θ F c)),
     ((K.live W θ F c σ).joint (I.base.cost θ F c σ)).ReadsAt (I.base.read θ F) (I.base.Opens θ F c)
       (I.base.extract θ F c σ) (K.project W θ F c σ)
 
@@ -415,13 +419,13 @@ projection's coins, laid out as the window is, `Window.Laid.extend`, `Window.Lai
 the published share has more than that share of the committed files' units unbound, which are the window's share and
 population. -/
 theorem claimTransfers (h : I.ClaimReads K) : I.ClaimTransfers K := by
-  intro θ F W hW c σ hI
+  intro θ F W hW hR c σ hI
   have hcard : (Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ)).card ≤
       (((K.live W θ F c σ).joint (I.base.cost θ F c σ)).wrongSet (K.project W θ F c σ)).card :=
     Flock.Guarantees.JointAuditV5.UnboundWrong.card_le
       (Window.unboundWrong (K.live W θ F c σ) (I.base.cost θ F c σ))
       (((h.laid θ F W hW).extend (K.coins W θ F c σ)).joint (I.base.cost θ F c σ))
-      (I.base.read θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ) (K.project W θ F c σ) (h.reads θ F W hW c σ)
+      (I.base.read θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ) (K.project W θ F c σ) (h.reads θ F W hW hR c σ)
   have hlt : (I.base.certOf θ).ε * ((I.base.units θ F : ℕ) : ℝ) <
       ((Accounting.unbound (I.base.partsOf θ F) (I.base.Opens θ F c) (I.base.extract θ F c σ)).card : ℝ) :=
     not_le.1 hI
@@ -441,7 +445,7 @@ theorem deployed (hKr : ∀ θ F c σ, K.readFinder θ F c σ = Binding.readFind
   finder θ F c σ := (hKr θ F c σ).symm
   forger θ F c σ := (hKf θ F c σ).symm
   loss _ _ := rfl
-  claim θ F W h c σ := I.claimTransfers K hC θ F W h c σ
+  claim θ F W h hR c σ := I.claimTransfers K hC θ F W h hR c σ
   finderCR θ F W h c σ hcr hpr := by
     obtain ⟨hm, hr, hb⟩ := I.strictCR K h hcr
     exact ⟨hpr W h, hm, hr, hb⟩
@@ -560,10 +564,10 @@ most their errors summed, at the vocabulary `WindowInstance.vocab` builds from t
 registered files' file check (`RegisteredFiles`), the verifier's window at the registered files (`WindowAt`), what
 the verifier's acceptance gives of each play (`WindowReads`), and the base's PoUW and inference-only targets hold.
 The sampled leg's error at a window is `Window.delta`: the sample's own miss and the members' knowledge and binding
-terms summed (`JointShareV5`), a two-continuation term per round opened after a digest in every member's session,
-its closing round among them, one for the record and one for the bound digests, the coin trees' hiding term, and the
-read finder's bound. The premises at the finders the constructions build from a strategy are `error`'s condition at
-that strategy. -/
+terms summed (`JointShareV5`), each member's registration's roots term (`Window.rootsErr`), a two-continuation term
+per round opened after a digest in every member's session, its closing round among them, one for the record and one
+for the bound digests, the coin trees' hiding term, and the read finder's bound. The premises at the finders the
+constructions build from a strategy are `error`'s condition at that strategy. -/
 theorem remote_soundness_window (I : WindowInstance d α) (K₀ : WindowConstructions I.base)
     (reg : Option Claims.Msg → ByteArray) (ev : ℕ → Exchange → Option Claims.Msg)
     (filesDec : Claims.Msg → Array ByteArray)

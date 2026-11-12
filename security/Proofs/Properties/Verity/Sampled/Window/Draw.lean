@@ -197,7 +197,7 @@ theorem Window.eps_extend (W : Window) (S : Widening) (t : ℕ) : ((W.extend S).
 theorem Window.sessionDelta_extend (W : Window) (S : Widening) (t : ℕ) :
     (W.extend S).sessionDelta t = W.sessionDelta t := by
   unfold Window.sessionDelta
-  rw [W.drawMiss_extend S, W.eps_extend S t]
+  rw [W.drawMiss_extend S, W.eps_extend S t, W.rootsErr_extend S]
 
 /-! ## The coin map's premise within a term, over the members' sessions -/
 
