@@ -107735,3 +107735,28 @@ Clock: `date -u` read 23:00Z. Mailbox `inbox/bc-86459fd4-85aa-549a-ae94-c08e1cbf
 **To post.** Nothing.
 
 **Not established.** That an accepted run with such a template exists in full (I reasoned from the checks, I built none); that the two-round driver's sessions run `KsScope.checkOf`; that `keysRow_of_parse` applies to `stmtOf` (it is stated at `HmRow.parse`, and a hidden-output statement's circuit is `HmOut.parseCommit`'s, then unrolled); the output case from `unpinned` (no lemma read yet). Nothing compiled.
+
+## STAGECOINS, Thu 12 Nov 23:00Z: started on piece D (the two stages' coins are the device's); branch made from TWOLEG's base, nothing written yet; plan below
+
+**In plain words.** I am the worker that proves the coins the two-round form's check read for its first stage and its second stage are the ones the challenger's device released after each stage's registration. I have read COMMON.md, my brief, TWOLEG's 22:27Z section D, `Projection.lean` and `Reading.lean` on the base. Nothing is written or compiled yet.
+
+Agent id `bc-8a49e39c-1cd3-5334-adf8-73869e9daf4a`; my mailbox does not exist yet [run: `git show` refused the path at 22:59Z].
+
+**Branch** `cursor/proofs-stagecoins-71b1`, made from `origin/cursor/proofs-twoleg-c5e5` at `2682c7ebf4` and pushed at that head [run].
+
+**Plan in five lines.**
+1. Read `Spot.Run.run`'s coin check (`coinsHold` at the boundary record, and in `interiorSteps` at the interior record) and RUNCOINS's `runCoinsFromDevice` and CUT's `LogIsDevice` on their branches.
+2. State, by 01:00Z, in `SampledTwo/FirstCoins.lean` and `SampledTwo/SecondCoins.lean`, the two theorems `CoinsRead A (formReadingDev A C S dev) (FormAccepts C) (LogIsDevice …) .first` and `.second`, with `dev` a parameter as COMMON.md's item 3 says (my own `formReading` with `dev` replaced, until TWOLEG's change is in), and launch a try at once.
+3. Prove first the part about `Run.run` alone: its accept gives the stage's bytes as the coins the evidence's log opens after the record's digest.
+4. Then meet it with `runCoinsFromDevice` (the evidence's coins are the device's, or a break) and `LogIsDevice` (the evidence's log is the play's), to give `Rd.coin o i = dev o.log i`.
+5. First stage compiled by Fri 07:00Z; my word on the second by Fri 15:00Z.
+
+**One thing seen already** [read: `Projection.lean:124-126` and `Reading.lean:143` at `2682c7ebf4`]: `CoinsRead` is an equality `Rd.coin o i = Rd.dev o.log i`, and the form's `coin` at round 0 is `coinOf i.source` (the source bytes padded with zeros to one coin). So `dev` must read a release the same way (its bytes padded with zeros), or the equality fails where the release is shorter than a coin. I will state what I need of `dev` as a named `Prop` and tell COINMAP its exact text.
+
+**STOP RULE.** Nothing.
+
+**NEEDS.** None yet.
+
+**To post.** Nothing.
+
+**Not established.** Everything: nothing is written or compiled.
