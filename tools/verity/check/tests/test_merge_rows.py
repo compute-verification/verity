@@ -1,5 +1,5 @@
 """`tools/verity/check/merge_rows.py`: a Markdown table's rows merged under their first cells, as a function and as git's
-merge driver with the attributes and the command the tree registers."""
+merge driver under the command the tree registers (`research.clone.RECORD_DRIVER`)."""
 from __future__ import annotations
 
 import importlib.util
@@ -102,7 +102,7 @@ def test_git_merges_two_branches_that_each_add_a_row_with_the_registered_driver(
     repo = tmp_path / "repo"
     (repo / "tools" / "verity" / "check").mkdir(parents=True)
     (repo / "tools" / "verity" / "check" / "merge_rows.py").write_text((ROOT / "tools/verity/check/merge_rows.py").read_text())
-    (repo / ".gitattributes").write_text((ROOT / ".gitattributes").read_text())
+    (repo / ".gitattributes").write_text("*.md merge=markdown-rows\n")
     m = repo / "benchmarks" / "README.md"
     m.parent.mkdir()
     _git(repo, "init", "-q", "-b", "main")
