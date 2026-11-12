@@ -688,14 +688,14 @@ class PearlKW:
             if dead > EPS_IDLE * len(side.clean) * k:
                 return False
         for side in (ops.a, ops.b):
-            if any(dev.delta * bf16_to_f32(a) * bf16_to_f32(l) < SIGMA_MIN for a, l in zip(side.alpha, side.l2)):
+            if any(dev.delta * bf16_to_f32(a) * bf16_to_f32(l2) < SIGMA_MIN for a, l2 in zip(side.alpha, side.l2)):
                 return False
         try:
             self._replay(ops)
         except Reject:
             return False
-        lam_a = [[lam(dev, a, x, l) for x in row] for row, a, l in zip(ops.a.clean, ops.a.alpha, ops.a.l2)]
-        lam_b = [[lam(dev, a, x, l) for x in row] for row, a, l in zip(ops.b.clean, ops.b.alpha, ops.b.l2)]
+        lam_a = [[lam(dev, a, x, l2) for x in row] for row, a, l2 in zip(ops.a.clean, ops.a.alpha, ops.a.l2)]
+        lam_b = [[lam(dev, a, x, l2) for x in row] for row, a, l2 in zip(ops.b.clean, ops.b.alpha, ops.b.l2)]
         skippable = 0
         for i, la in enumerate(lam_a):
             for j, lb in enumerate(lam_b):

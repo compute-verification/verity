@@ -65,11 +65,11 @@ from typing import Any
 from verity.circuits.codec import program_digest
 from verity.circuits.defs import SpecializedDefinition, bind
 from verity.circuits.program import Program
-from verity.definitions.ops import s8 as OS8
-from verity.definitions.ops import prims as P
 from verity.commitments import domains
-
+from verity.definitions.ops import prims as P
+from verity.definitions.ops import s8 as OS8
 from verity.protocols.pouw.verifier.protocol import DomainError
+
 from . import segment as SG
 
 #: the scheme's id and the kind `circuit.SCHEMES` records for it (its silicon target)

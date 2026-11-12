@@ -602,6 +602,7 @@ def e2e_definitions(sg: ModuleType, v: dict | None = None) -> int:
     """E2E's Boolean Definitions themselves (PouwDuoAbsorb_v2, PouwXinAbsorb_v2 and their finals, `segment.FOLDS`),
     evaluated on bits over the served-duo and e2e-xin vectors."""
     import numpy as np
+
     from verity.circuits.defs import bind
     from verity.circuits.evaluation.bits import evaluate_bits
 

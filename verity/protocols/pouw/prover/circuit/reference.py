@@ -7,15 +7,15 @@ against it, not against itself); y is the dequantization primitives' evaluators 
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Sequence
 
 from verity.circuits.defs import REGISTRY
 
 from ..schemes.ncp import assemble, checked_route_u
 from . import ncp2
-from .ncp2 import D, Shape
 from . import words as W
+from .ncp2 import D, Shape
 from .words import M32, i32_to_f32_rn, sx
 
 M64 = (1 << 64) - 1

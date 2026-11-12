@@ -169,8 +169,8 @@ def assemble(a: list[list[int]], b: list[list[int]], e1: list[list[int]], f1: li
     y = []
     for bj, f in zip(b, f1):
         f2 = [0] * k
-        for l in range(k):
-            f2[pi[l]] = -sigma[l] * f[l]
+        for t in range(k):
+            f2[pi[t]] = -sigma[t] * f[t]
         y.append([p + q for p, q in zip(bj, f)] + [p + q for p, q in zip(bj, f2)] + [p + q + r for p, q, r in zip(bj, f, f2)])
     return Ops(x, y)
 

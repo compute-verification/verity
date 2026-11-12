@@ -40,14 +40,15 @@ import hashlib
 import json
 import re
 import secrets
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any
 
 from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
 from verity.commitments import domains
 from verity.commitments.randomness import Key, derive
-
 from verity.protocols.pouw.verifier.protocol import Context, DomainError, PoUWScheme
+
 from .ncp2 import Shape
 from .plan import DRAW_DOMAIN
 
@@ -199,7 +200,7 @@ class TileAnchors:
 
     @classmethod
     def of(cls, scheme: PoUWScheme, ctx: Context, shape: Any, rows: Sequence[int] | None = None,
-           cols: Sequence[int] | None = None) -> "TileAnchors":
+           cols: Sequence[int] | None = None) -> TileAnchors:
         """The anchors of ``ctx``'s block under ``scheme`` (rows and columns 0.. by default)."""
         noise = scheme.noise(ctx)
         rows = tuple(range(shape.m)) if rows is None else tuple(rows)
@@ -401,7 +402,7 @@ class Ledger:
         return self._key
 
     @classmethod
-    def open(cls, receipt: Receipt) -> "Ledger":
+    def open(cls, receipt: Receipt) -> Ledger:
         """The execution phase's ledger: its key derived from a fresh source (`_fresh_source`) under `plan.DRAW_DOMAIN` with
         ``{"receipt": receipt.digest()}`` as its context, and only the receipt's calls admitted. No source is taken
         from the caller, so an execution phase's secret is fresh and used once (C2)."""
