@@ -59,6 +59,8 @@ def test_a_rows_execution_is_its_files_label_then_its_sweep_blocks_then_its_ids_
     assert r.execution() == label
     os.remove(r.wl)
     assert r.execution() is None
+    Path(r.wl).write_text("{")                                                  # nor has a file that does not parse
+    assert r.execution() is None
 
 
 def test_a_row_whose_shape_is_not_read_yet_names_no_target_to_its_derives(tmp_path):
@@ -247,6 +249,23 @@ def test_a_batchs_request_program_is_built_under_its_launch_context_and_a_contex
 
 
 # ---------------------------------------------------------------------------------------------------------------- the source identity
+
+def test_a_rows_shipped_commit_is_the_one_its_trees_export_file_states(tmp_path):
+    """A shipped tree's ``EXPORT.json`` states the commit it was cut from.  A tree with no such file, or with one that cannot be
+    read, does not parse, is no document or states no commit, has none."""
+    r = _row(tmp_path)
+    r.tree = str(tmp_path)
+    export = tmp_path / "EXPORT.json"
+    assert r.export_commit() == ""
+    for text in ("{", "[]", '"c0ffee"', "{}", '{"commit": null}', '{"commit": ""}', '{"sha": "c0ffee"}'):
+        export.write_text(text)
+        assert r.export_commit() == "", text
+    export.write_text(json.dumps({"commit": "c0ffee" * 6 + "abcd", "dirty": False}))
+    assert r.export_commit() == "c0ffee" * 6 + "abcd"
+    export.unlink()
+    export.mkdir()
+    assert r.export_commit() == ""
+
 
 def test_a_passed_source_identity_goes_into_the_runs_job_record_which_is_left_alone_when_it_does_not_read(tmp_path, monkeypatch):
     """The precheck copies the stage interpreter's identity to ``source_identity.json`` and, inside a run, into ``job.json``
