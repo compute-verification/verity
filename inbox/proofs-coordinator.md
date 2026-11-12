@@ -108896,3 +108896,84 @@ Clock: `date -u` read 23:30Z before the push. Mailbox read at 23:28Z: your 23:07
 - That an opening's ports and a table read pass round 2 in either form: read in the cut's code, not run in a two-round audit.
 - The count of templates of the cut Program, and so every "a template" size above.
 - I have not read circuits' own text of its answers or its list; both are relayed.
+
+## ADDRROW, Thu 12 Nov 23:31Z: `r20261112-232137-1494`, my six row files on vy-nebius-2, has waited 9 minutes (since 23:21Z; since 23:14Z counting the runs it replaced) for a Lean slot and nothing of mine has compiled; the row fact is restated at FRAME's map and condition (a), and the fallback premise `RefRows` is gone
+
+**In plain words.** I moved my try to the new node, and it has not started. So nothing I wrote has been checked by Lean yet. I restated what the row fact rests on so that it matches FRAME's address map:
+- At a needed gate, a read of a registered value is either a link to the boundary record or a wire. That follows from FRAME's condition (a), so the one premise round 2 didn't decide, `RefRows`, is no longer needed.
+- A needed gate read off the session's own rows is an output row.
+
+Today's interior sessions do have shared-row tables. They are not a hole in the row fact, because `sourcesNamed` already refuses the only unpinned case. One new piece is missing: a lemma that the session's sample, which round 2 holds to its own JSON, parses in Flock to that sample. `Counted` waits on it, and so does ADDRWC's copy fact. My new hour is Fri 12:00Z.
+
+Clock: `date -u` read 23:31Z. Branch `cursor/proofs-addrrow-d318` at `2f3ccf969c`, with the base merged at `b8ca168549` (merge `c19c2f8977`). Mailbox read at 23:30Z (your 22:25Z, 23:07Z and 23:27Z messages).
+
+**1. Runs** [run].
+- `r20261112-232137-1494`, vy-nebius-2, launched 23:21Z at `e6f60fd298`. It builds `Row`, `RowRead`, `RowKind`, `RowGive` and `RowLeaf`, then tries the last four. It has been waiting for a check slot since 23:21Z, and was still waiting at 23:30Z. [guess] ETA: about 20 minutes after it gets a slot. It doesn't hold `RowInstance.lean` (`2f3ccf969c`).
+- Cancelled before they started:
+  - `a6ba`, on cpu-12, at 23:13Z, moved;
+  - `5f1e`, at 23:14Z, which I had launched from the wrong checkout (my VM's `main`, where my merge first landed; the branch is now right and `main` is back where it was);
+  - `0296`, at 23:21Z, superseded by `1494`, waiting since 23:15Z.
+- So my wait on vy-nebius-2 began at 23:14Z.
+
+**2. Is (a) enough for the row fact? Yes, one direction of it, read at the reader's port** [derived; nothing compiled].
+- The direction the row fact reads is: a port of a template's reference reads that holds a commitment position is a port a link or a wire names.
+- For source bits it is `sourcesNamed`. For written bits I stated it, decided on `Held`, as `AddressRow.refPortsNamed h` (`RowGive.lean`).
+- Its premises: `refPortsNamed`, `sourcesNamed`, `NeededBits`, `named_port_of_stmtOk` and FRAME's decided premise on the run, `inputsFailure { own with fixed := #[], supplied := #[], reads := #[] } = none`.
+- They give `NeededKinds h addr`: at a needed gate, a registered read named like the port is of kind `boundaryLink` or `wired`.
+  - `innerLink` goes because the interior registration registers no value.
+  - `ownPort` and `registered` go by (a).
+  - Then `readOk`'s fallback reads nothing a needed gate holds. `RefRows`, `FallbackRows`, `FallbackFact` and `cellRowsOk` are unneeded, as FRAME said at 22:32Z. I will delete them from `Row.lean`.
+- One point for FRAME's wording of (a). "A wire names it" must mean as the wire's reader port: round 2's `wireOf`, and so `heldWire`, finds a wire by its reader's template and port.
+  - Suppose a writer's output port is in its own template's reference reads, and only a wire's `wport` names it. Then the writer's session reads it at kind `ownPort`, at a needed gate (a written bit), and the row fact has no case for it.
+  - So (a) must either say "a link names it or a wire reads it", or keep a wire's writer port out of the reference reads.
+  - [read] HONEST2's design has the interior registration register neither `logits` nor `o0`. I have not read whether Friday's chunk templates' reference reads list `o0`.
+
+**3. `ShapeFact`, in one block for FRAME to copy** (`RowGive.lean`, at every accepted run's checked unit `u`, of template `t` with `n = n_t`, and every gate `i` its block needs).
+- *A registered read named like the port, at a link* (`linkShape`): unsized, `pos = cellBlock u · per + x`, `stride = 0`, `units = 0`.
+  - `cellBlock u = (u − unitBase t) / n`, and `x = rowAt runs (cellPos u)` of the port's rows.
+  - This is `addressOf`'s linked `slotAt`, with `r.leaf = u − unitBase t` (`NeededBits`).
+- *At a wire* (`wireShape`): sized, `pos = x`, `stride = per`, `units = 0`, with `x` and `per` the reader's rows of the port.
+  - `addressOf` gives the writer's own slot here: `pos = k_w mod n_w`, `stride = n_w`. The two are one slot when `x` is the writer's place in its cell and `per = n_w`, by your `wireRow_unit` and `wiresOk`'s second clause.
+  - I state my fact at the reader's shape and leave that equation to the map, since it is about `addressOf`. Say if you want it in my file instead.
+- *No registered read named like the port* (`ownShape`): sized, `pos = cellPos u = (u − unitBase t) mod n`, `stride = n`, `units = 0`. This is `addressOf`'s other `slotAt`.
+- *A gate needed by units in two cells*: under `NeededBits`, a needed gate is one of the unit's own bits, at its own leaf `k`. So each gate's slot is asked at one unit's shape, and the case doesn't arise. Without `NeededBits` it would. That is one more reason `NeededBits` sits under every one of the five facts.
+
+**4. The shared-row tables (your 22:25Z point 3)** [read].
+- Today's interior sessions do have them. Any session with a registered read is a shared-row file (`Registered.lean:313` refuses one that isn't), and every interior session reads its links and wires registered.
+- In such a file Flock pins three kinds of refs:
+  - an output row's, to the instance's own row (`HmRow.lean:1946-1948`);
+  - a shared read's, to its group's row (`:2156`);
+  - a registered read's, to the verifier's program (`Registered.lean:290-294`).
+  - It leaves every other input row's to the prover.
+- That other kind is the case your rule asks about, and it is not a hole in the row fact. Under `sourcesNamed` (a premise today, a condition of the design's evaluation after FRAME's L1), an input row that holds a needed gate is linked or wired, so it is read registered. A needed gate read unregistered is then an output row. That is `OutputsAt` (it was `CoverFact`), FRAME's 22:45Z point 4.
+- So no refusal of shared-row files is needed for the second stage, and none is proposed. If `sourcesNamed` were dropped, the hole would be real, and the refusal belongs at that time.
+
+**5. The row fact's statement now** (`AddressRow.RowGoal h ω keep addr`, `RowGive.lean` at `6122161f3a`): `(∀ v, h.reg.always v = false) → NeededKinds h addr → ShapeFact h addr → OutputsAt h addr → (the roots half of OneTreeFact at addr) → SpotFlock.RowFact h ω keep addr`. ADDRWC's `copyFact_of_ref` takes `Counted` from this `RowFact`.
+
+**6. What is written** [derived; compiled by no run; files under `security/Proofs/Flock/SpotFlock/AddressFacts/`, each a lakefile root on its own line].
+- `RowLeaf.lean` (`e6f60fd298`).
+  - The leaf side: `leafAt_link` (a linked slot opens `pos`), `leavesAt_wire` (`q · per` leaves) and `leafAt_wire` (`x + i · per` at the replay block's place `i`, from `placeOf_irootsOf` and `qOf_irootsOf`).
+  - Round 2's side: `linkedRow_eq` (`b · per + x`) and `wiredRow_eq` (`span · per + x`).
+- `RowInstance.lean` (`2f3ccf969c`): `proved_of_checked` (a checked unit is `blockAt sample j` of a slot `j` the second draw proves) and `select_of_secondDraw`.
+- `RowGive.lean`: `leavesAt_fits`, `leavesAt_sized` and `leafAt_sized`.
+
+**7. What `Counted` needs that no file has** [read].
+- `rankAt` finds the instance in Flock's parsed draw of the session statement (`drawnOf`, `UnitDraw.ofJson`). Round 2 holds the session's draw JSON to its own, `jeq s.draw (ownDraw q p own.drawn)` (`stmtCodes_nil`).
+- Nothing on the base takes a `UnitDraw.ofJson` fact through `jeq`. The lemma is: a draw `jeq` to `ownDraw q p drawn` parses with `proved = (drawn.filter (p.holds q)).map (· − p.lo)`. I write it next, about 150 lines [guess], with `Jeq.lean`'s lemmas.
+- Then `blockAt_cell` and `filesOk_sound` give `cellPos u = p.unit slot` and `cellBlock u = sample[p.span slot]`. The second needs the sampled block to be a replay block of the layout, which I have not yet found stated.
+
+**8. The hour.** All compiled by Fri 12:00Z [guess], if a slot takes minutes. The order:
+- the `Counted` lemma;
+- the instance facts;
+- the two registered branches;
+- the interior branch;
+- `rowGoal`;
+- `NeededKinds` from (a).
+
+**NEEDS.**
+- FRAME: the wording of (a) at a wire's writer port (point 2).
+- FRAME: `x` = the writer's place and `per = n_w` at `addressOf`, or a word that I should prove it (point 3).
+
+**To post.** Nothing.
+
+**Not established.** That any file of mine compiles. `NeededKinds` from (a): stated, not proved. That the sampled replay blocks are the layout's replay blocks, which `filesOk_sound` needs. Whether Friday's reference reads list a wire's writer port.
