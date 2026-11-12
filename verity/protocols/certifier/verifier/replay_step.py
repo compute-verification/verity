@@ -79,7 +79,8 @@ leaving requests leave it; and the next state.
 the derived encoding's canonical source and hit rules carry it and supply h, the evictable count and the returns, which
 this circuit bounds but doesn't derive: `compile_slice_v3` derives them, in vLLM's order on CacheStep_v2's pool, through
 `_build`'s ``derive`` hooks. Also priority scheduling, speculative decoding, LoRA, structured output, encoder inputs
-and KV connectors.
+and KV connectors. `statics` refuses an engine whose keys show one (a policy other than FCFS, a draft), and any key it
+does not read.
 
 **Composition** (the compile slice's proof block, all inside one ZK proof under the advice's hiding root; the
 certifier's PROTOCOL.md, "Advice v1"):
@@ -812,10 +813,64 @@ ReplayStep = _part(
     "counts can't express (`replay_step.reference`)")
 
 
+#: The engine's keys the binding reads, by vLLM's names.
+ENGINE_READ = ("max_num_seqs", "max_num_batched_tokens", "max_model_len", "num_gpu_blocks", "block_size",
+               "long_prefill_token_threshold", "enable_chunked_prefill", "watermark", "scheduler_reserve_full_isl",
+               "enable_prefix_caching", "async_scheduling")
+#: What turns draft tokens (speculative decoding) on, as vLLM's configuration, its scheduler and a step trace's header
+#: name it. The step models no draft, so each binds only unset: absent, None, 0, false or empty.
+ENGINE_DRAFT = ("num_speculative_tokens", "speculative", "num_lookahead_tokens", "num_prefill_lookahead",
+                "use_eagle_block_drop", "draft_slots")
+#: The keys the step models at these values alone. A ``scheduler`` also has to agree with ``async_scheduling``.
+ENGINE_HELD = {"policy": ("fcfs",), "scheduler": ("Scheduler", "AsyncScheduler")}
+#: The keys that leave the scheduler's steps as they are, each with why. They bind at any value.
+ENGINE_INERT = {"max_num_partial_prefills": "the scheduler the step models does not read it",
+                "kv_cache_dtype": "the binding reads the pool's size in blocks (num_gpu_blocks) directly",
+                "max_model_len_auto": "the scheduler's steps read the limit vLLM fitted (max_model_len), which the binding "
+                                      "reads; this says only that the launch left the limit to vLLM"}
+
+
+def _refuse_unmodeled(e: dict) -> None:
+    """Raise a `ValueError` for an engine the step does not model (`statics`' docstring), naming the key and its value."""
+    for k in ENGINE_DRAFT:
+        if e.get(k):
+            raise ValueError(f"engine {k}={e[k]!r}: the replay step models no draft tokens (speculative decoding): its "
+                             "decode row is one token and nothing in it reads how many drafts a row kept. Serve with the "
+                             "draft off to bind this step")
+    for k, modeled in ENGINE_HELD.items():
+        if k in e and e[k] not in modeled:
+            raise ValueError(f"engine {k}={e[k]!r}: the replay step models {k} {' or '.join(map(repr, modeled))} only. "
+                             "Serve with that to bind this step")
+    if "scheduler" in e and (e["scheduler"] == "AsyncScheduler") != bool(e.get("async_scheduling")):
+        raise ValueError(f"engine scheduler={e['scheduler']!r} with async_scheduling={e.get('async_scheduling')!r}: the two "
+                         "disagree, and the binding reads async_scheduling. Hand it the engine's resolved async_scheduling")
+    known = {*ENGINE_READ, *ENGINE_DRAFT, *ENGINE_HELD, *ENGINE_INERT}
+    if unread := sorted(k for k in e if k not in known):
+        raise ValueError(f"engine {', '.join(f'{k}={e[k]!r}' for k in unread)}: the replay step's binding does not read "
+                         f"{'it' if len(unread) == 1 else 'them'}, so an engine that differs there would bind the same "
+                         "step. A key that cannot change the scheduler's steps goes in replay_step.ENGINE_INERT with why; "
+                         "any other the step has to model (ENGINE_READ, a static) before this engine binds")
+
+
 def statics(R: int, W: int, A: int, engine: dict, IW: int, EW: int = 0) -> dict:
-    """The binding for size class (R, W, A) of an engine configuration (`replay.Engine`'s fields), with EW the walk
-    entries' width when the scan carries `CacheStep_v1`'s table (0 for none)."""
+    """The binding for size class (R, W, A) of an engine configuration, with EW the walk entries' width when the scan
+    carries `CacheStep_v1`'s table (0 for none). ``engine`` is the scheduler's configuration by vLLM's names: the fields
+    of the replay's engine, or the keys a serving integration records of its scheduler.
+
+    It binds only an engine the step models, and refuses every other with a `ValueError` that names the key and its value:
+
+    - an engine with a draft (speculative decoding): a key of `ENGINE_DRAFT` that is set, such as
+      ``num_speculative_tokens`` above 0 or a ``speculative`` entry;
+    - a ``policy`` other than ``fcfs``, and a ``scheduler`` other than vLLM's `Scheduler` with async scheduling off or
+      its `AsyncScheduler` with it on (`ENGINE_HELD`);
+    - any other key it does not read (`ENGINE_READ`), unless `ENGINE_INERT` lists it as leaving the scheduler's steps
+      as they are: an engine that differed in an ignored key would bind the same step.
+
+    It cannot refuse a setting its caller does not hand it: of `ENGINE_READ`, the four sizes are required, and each
+    other key that is absent takes the default written here; and an engine with a Mamba or hybrid KV cache group, or
+    a KV connector, which the step does not model and no key here names, binds as one without."""
     e = engine
+    _refuse_unmodeled(e)
     return {"R": R, "W": W, "A": A, "M": int(e["max_num_seqs"]), "T": int(e["max_num_batched_tokens"]),
             "L": int(e["max_model_len"]), "B": int(e.get("block_size", 16)),
             "H": int(e.get("long_prefill_token_threshold") or 0), "CH": int(bool(e.get("enable_chunked_prefill", True))),
@@ -951,5 +1006,6 @@ def size(**st_) -> dict[str, int]:
     return out
 
 
-__all__ = ["Inputs", "Out", "ReplayStep", "Req", "STATICS", "State", "arguments", "decode", "empty", "evaluate", "from_json",
-           "reference", "size", "statics", "to_json", "unit", "widths"]
+__all__ = ["ENGINE_DRAFT", "ENGINE_HELD", "ENGINE_INERT", "ENGINE_READ", "Inputs", "Out", "ReplayStep", "Req", "STATICS",
+           "State", "arguments", "decode", "empty", "evaluate", "from_json", "reference", "size", "statics", "to_json", "unit",
+           "widths"]
