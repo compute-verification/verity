@@ -11,8 +11,8 @@ from __future__ import annotations
 SURFACE = {
     # the engine and its requests
     "vllm": "the package, for its version, which records and facts carry beside config.VLLM",
-    "vllm._version:__commit_id__": "the installed build's commit, which engine.stock names it by: a tagged build's version "
-                                   "carries none",
+    "vllm._version:__commit_id__": "the installed build's commit, which engine.stock names it by and config.vllm_revision "
+                                   "puts after a tagged build's version, which carries none",
     "vllm:LLM": "the engine engine.build builds, as the tensor-parallel capture, commit and match drivers do",
     "vllm:EngineArgs": "the arguments engine.stock builds a stock in-process LLMEngine from",
     "vllm:SamplingParams": "a request's sampling parameters, which the adapter, the servers and served_match pass",

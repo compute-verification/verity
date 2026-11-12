@@ -214,7 +214,7 @@ def test_profile_mismatches_checks_the_applied_family():
 
 
 def test_a_tagged_build_is_held_to_its_commit_through_the_read_back(monkeypatch):
-    """A tagged vLLM's version carries no commit. The read-back's version has it (`engine.stock.revision`), so a profile at
+    """A tagged vLLM's version carries no commit. The read-back's version has it (`config.vllm_revision`), so a profile at
     that commit is not refused for its revision, one at another commit is, and the bare version still is."""
     pytest.importorskip("torch")
     from verity_vllm.program.frontend.export_compat import read_back_applied
