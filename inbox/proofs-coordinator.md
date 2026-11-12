@@ -89838,3 +89838,21 @@ def RuleAtRate : Prop :=
 - Next for PRF-590, after #9237's ready line: the records commit, then the lemma at `Flock.Bridge.LawOn`.
 
 **What I need:** nothing. I go on until the runs end and write the ready line then.
+
+## FINDER, Thu 12 Nov 13:37Z: READY LINE #9286 at `f7902b5a9958` (the one-stage bound as one lemma at a table; NET-329 ask 1); #9149's merge of `main` is running
+
+In plain words: the lemma is built, its pull request is open and not marked, and every run it needs has ended with exit 0. No lock record moves, said from the records run. Your 13:18Z section is read: `main` is merged into #9149 locally at `1f136cf79060` (not pushed yet), its records run and the named test are on nodes, and its line follows when they end.
+
+**READY: https://github.com/compute-verification/verity/pull/9286 head `f7902b5a99584a594859a8d0c26710234cdfcb5c`, branch `cursor/proofs-finder-trace-bf67`, `Lane proofs`, not marked.**
+
+- [run] The records fast path of `security/Proofs` with `--update` at that head, `r20261112-124453-f07a`: rc 0; outcome `pass` for `security/Proofs`, `security` and `security/Properties`; nothing regenerated. So **no lock record moves**, and no file under `security/Definitions/` is in the diff. It built the package root: 4,978 of 5,063 modules from the cache, 85 compiled (`Reg` and the 84 that read it; `RegTrace`, `RegX`, `RegCanon`, `TwoOffClassAt` and `Proofs.Flock.SamplingGeneric` are in its build log as built).
+- [run] `suites.py --changed c330688b9582 --quick` at that head, `r20261112-124707-5d62`: rc 0; 4 suites passed, 0 failed, 0 from the cache (`verity-graph` 210 passed, `verity/protocols/pouw/verifier` 1,875, `repository` 346, `verity/definitions/ops` 949 and 2 skipped).
+- [run] Five `verity lean try` runs before those, each rc 0 on the first attempt (`r20261112-122911-d282`, `-123314-d37e`, `-123444-a2b0`, and with `--siblings` `-123801-298a`, `-123911-028e`): no theorem of the changed files uses an axiom beyond the three.
+- [run] `git merge-tree --write-tree` with `main` at `3498d4ad6546`: exit 0. With #9149's head `328c0e6fb2ca`: exit 0. Not run: with #9149's merged head (not pushed yet). Neither merged tree is compiled.
+- [run] `python3 tools/verity/lean/unread_gate.py origin/main HEAD`: exit 0, `0 seed file(s) changed, 0 area(s) above the cap`; it leaves the count to the Lean check.
+- [read] **The count of declarations no guarantee reads is not measured.** The records fast path does not run that ratchet: its log has no `lean-audit: unread:` line, and `check.py` writes the facts the ratchet reads only in an audit that replays. So `unread-caps.json` is not edited here, on a prediction: the new file's lemma is read by the three theorems that are now its instances, and `eventX_le_cls_at` is one more declaration in `TwoOffClassAt.lean`. If the candidate's check finds the count over its limit, that is a warning its records commit repairs, and I fix it in the next change.
+- [read] What the three copies became: `ksReg_of_sessionKS` and `compilerKSReg_of` moved from `Reg.lean` to the new `RegTrace.lean` with statements and names unchanged (the lemma sits above `Reg.lean`'s pieces, so the per-tape theorem can be its instance only from there); `ksRegX_of_sessionKS` (`RegX.lean`) and `pr_regHit_le_canon_on` (`RegCanon.lean`) fold in place. All three folded; none is left.
+- [read] The new theorem: `Compiled.eventX_le_cls_at` in `TwoOffClassAt.lean`, 8 lines of proof: an accepted run samples a proof block of `FregX` with probability at most `κ_s + √(k·γ_s·Pr[B]) + (2·runCost + 2·firstHitCost)/2^256`, under `pr_offRegX_le_cls_at`'s premises.
+- [read] Two things my 11:44Z entry said are not so, and the pull request's text says so: the tree is 138 lines larger, not smaller (the three proofs went from 137 lines to 146 with the lemma's), and a new file does not rebuild less (`Reg.lean` loses two public theorems, so the 84 modules above it compile once).
+- Not run: the kernel replay; the merged trees' build; the unread count.
+- Network's fourth instance needs from them only: its table (`fun ω s i => …` with the network certifier's registered openings), a bound `b_I` on one run's extractions disagreeing, and a bound `b_O` on an accepted run opening a gate away from that table.
