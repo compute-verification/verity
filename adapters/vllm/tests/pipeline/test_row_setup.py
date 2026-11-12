@@ -187,8 +187,11 @@ def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_p
     for step in ("precheck_identity", "shape", "admission", "build", "match"):
         monkeypatch.setattr(r, step, lambda step=step: seen.append(step))
     monkeypatch.setattr(r, "release_line", lambda fallback: (f"UNRELEASED|commit=unknown tree={r.tree}{fallback}", "-"))
-    monkeypatch.setattr(r, "target_family", lambda *a, out: seen.append(("target_family", r.stages, a)) or
-                        (3, "PRECHECK_FAIL_TARGET_FAMILY: Build target 9.0 != row family 8.9"))
+
+    def target_family(*a, out):
+        seen.append(("target_family", r.stages, a))
+        return 3, "PRECHECK_FAIL_TARGET_FAMILY: Build target 9.0 != row family 8.9"
+    monkeypatch.setattr(r, "target_family", target_family)
     assert r.run() == 3
     assert seen == ["precheck_identity", "shape", ("target_family", "build,match", ())]
     assert "precheck-target FAIL" in (tmp_path / r.row / "stages.txt").read_text()

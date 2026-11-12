@@ -4,8 +4,9 @@
 the workload's (`is_stochastic`, `tp_world`), a
 manifest build that fails (`verity_vllm.pipeline.row_build.required_manifest`), the launch contexts a workload's shapes are built
 under (`verity_vllm.pipeline.launch_context`: `main`, `batch_dispatch_of`, `bad_chunks`), the card's line for a stage that is not ok
-(`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the timeline report's window and its command, which report a file's last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`) and the
-experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`).
+(`verity_vllm.pipeline.report.summarize_md`) and its reading of a log's first record (`log_header`), the timeline report's window and its command, which report a file's last attempt (`verity_vllm.pipeline.timeline`: `report`, `main`), the
+experiment index's entries for the captured values and the query-use document (`verity_vllm.pipeline.experiment`) and the command
+a stage's end declares its outputs with (`verity_vllm.pipeline.research_outputs.main`).
 
 Each reads the document a stage wrote and gives a word, a line or a default; a document that is absent or does not parse gives the
 default its docstring names, never an error.
@@ -24,6 +25,7 @@ import pytest
 import verity_vllm.pipeline.experiment as EXP
 import verity_vllm.pipeline.launch_context as LC
 import verity_vllm.pipeline.report as CARD
+import verity_vllm.pipeline.research_outputs as RO
 import verity_vllm.pipeline.row_build as RB
 import verity_vllm.pipeline.row_records as R
 import verity_vllm.pipeline.timeline as TL
@@ -313,3 +315,32 @@ def test_the_card_has_no_run_header_for_a_packed_log_that_does_not_unpack(tmp_pa
         assert CARD.log_header(packed) is None
     packed.write_bytes(whole)
     assert CARD.log_header(packed) == {"$e": "RunHeader", "pad": "x" * 4000}
+
+
+def test_the_outputs_command_prints_the_digest_of_record_and_declares_a_stages_outputs(tmp_path, capsys):
+    """`research-outputs digest` prints the Build's Program digest of record, an empty line where there is no Build; `write` declares
+    the stage's outputs in the run dir's outputs.json and writes nothing without a run dir.  A Commit that reported PASS without its
+    decision document is refused by name and leaves no outputs.json, and the command still returns 0: the stage's own status stands."""
+    row = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+    d, run = tmp_path / row, tmp_path / "run"
+    _put(d / "build_summary.json", {"request": {"program_digest": "a" * 64}, "step": {"program_digest": "b" * 64}})
+    _put(d / "stages.txt", "build PASS 2026-09-23T00:00:00Z rc=0\n")
+    assert RO.main(RO.DigestOptions(evidence_dir=str(d), row=row)) == 0
+    assert capsys.readouterr().out == "a" * 64 + "\n"
+    assert RO.main(RO.DigestOptions(evidence_dir=str(tmp_path / "absent"), row=row)) == 0
+    assert capsys.readouterr().out == "\n"
+    assert RO.main(RO.WriteOptions(evidence_dir=str(d), row=row, stage="build")) == 0
+    assert "RESEARCH_RUN_DIR not set" in capsys.readouterr().err and not run.exists()
+    _put(run / "job.json", {"store": {"inputs": {"match": "art:" + "1" * 64, "weights": "/a/path"}}})
+    given = ["build=art:" + "2" * 64, "plan=art:short", "=art:" + "3" * 64]
+    assert RO.main(RO.WriteOptions(evidence_dir=str(d), row=row, stage="build", run_dir=str(run), input=given)) == 0
+    doc = json.loads((run / "outputs.json").read_text())
+    assert doc["inputs"] == {"build": "art:" + "2" * 64, "match": "art:" + "1" * 64}
+    assert [(e["name"], e["kind"]) for e in doc["outputs"]] == [("build", "vllm-build/v1"), ("evidence", "execution-evidence/v1")]
+    assert (run / "outputs" / "build" / "build_summary.json").is_file() and not (run / "outputs.json.tmp").exists()
+    assert "build=vllm-build/v1(1 files), evidence=execution-evidence/v1(1 files)" in capsys.readouterr().out
+    (run / "outputs.json").unlink()
+    _put(d / "stages.txt", "commit PASS 2026-09-23T00:00:00Z rc=0\n")
+    assert RO.main(RO.WriteOptions(evidence_dir=str(d), row=row, stage="commit", run_dir=str(run))) == 0
+    assert "FAILED to write outputs.json: ValueError: commit stage PASS but its decision document verdict.json" in capsys.readouterr().err
+    assert not (run / "outputs.json").exists()
