@@ -116,7 +116,10 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   time, and each ends with its tree's closing round, asked once its files are written. The session's release log then
   holds the sample, each session's rounds and its closing round, in the sessions' order, which ``challenger/m<k>``
   holds the records to (`member_trees.trees_reason`) and v2's per-member form reads (`case_members`, with the
-  challenger's key, the window's root and the coins' evidence, `case_coins`).
+  challenger's key, the window's root and the coins' evidence, `case_coins`). The summary's ``coin_trees`` names which
+  an audit that reached its sessions ran them on: ``window``, that challenger's session, or ``own``, each verifier's
+  own source (a challenger of its own where the summary has ``challengers``, else the tree it samples itself); a TP
+  rank's row carries the word.
 * **The sample from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
   system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the sample and planned the coins its sample reads (`a5_coins.need`), and only under a reserve that covers
@@ -878,6 +881,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         mm["st"]["archived"] = archived
 
     relay = MT.Relay(a.coins, MT.listener()) if trees else None
+    summary["coin_trees"] = "window" if trees else "own"
     server = proof_server(a, out, [mm["st"] for mm, _ in drawn], relay)
 
     def staged(mm: dict, local: list[int]) -> dict:
@@ -1579,7 +1583,8 @@ def tp_rank(a: argparse.Namespace, sets: dict, out: Path, world: int, r: int) ->
             a.coins.skip(r)
     return {"ok": ok, "seconds": round(time.time() - t0, 1),
             **{x: s.get(x) for x in ("run_root", "population", "members", "registration", "source", "refused", "checks_before_draw",
-                                     "audit", "draw", "draw_counts", "negatives", "verifier_window_s", "staging", "coins", "binding")},
+                                     "audit", "draw", "draw_counts", "negatives", "verifier_window_s", "staging", "coins", "binding",
+                                     "coin_trees")},
             **({"plain": s["plain"]} if "plain" in s else {})}
 
 

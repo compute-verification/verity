@@ -157,6 +157,13 @@ def _kept_verifier(out: Path) -> list[tuple[int, bool]]:
     return [(e["index"], e["exit"] == 0) for e in ends]
 
 
+def _coin_trees(out: Path) -> tuple[str, bool]:
+    """Where the audit's own summary says its sessions' coin trees came from (`a5.audit`'s ``coin_trees``), and whether
+    it holds a challenger's audit of them (``challengers``)."""
+    summary = json.loads((out / "window" / "summary.json").read_text())
+    return summary["coin_trees"], "challengers" in summary
+
+
 def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_path, binaries):
     """Both members are sampled, each one's session is accepted by the prover's own verifier and by Lean's, the audit
     record accepts with every negative refused, and the record holds the files the later steps read. The stream's rule is
@@ -198,6 +205,8 @@ def test_two_sampled_members_pass_the_audit_on_the_real_prover_and_verifier(tmp_
         session, = sorted((out / "window" / f"session-m{k}" / "sessions").glob("*/session.json"))
         assert json.loads(session.read_text())["verdict"]["accepted"] is True
     assert _kept_verifier(out) == [(0, True), (1, True)]
+    # with no FLOCK_CHALLENGER each verifier samples its session's coin tree itself, and the summary says whose it is
+    assert _coin_trees(out) == ("own", False)
     missing = [f for f in RECORD if not (out / f).is_file()]
     assert not missing, missing
     # v2's case is one table's session, so an audit of two members writes why it has none, which SPOT's row reads
@@ -209,9 +218,10 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     """Under FLOCK_CHALLENGER=1 the audit's two sessions take their coin trees from the session the sample's coins came
     from, and each is closed there after its evidence: the audit accepts with each member's ``challenger`` verdict, the
     release log holds the sample, then each session's tree, its rounds and its closing round, in the sessions' order,
-    and the per-member case names the challenger and carries its coins. On that case Lean's check passes everything
-    before the per-member form's refusal and answers `MULTI_REFUSED`, with exit 1; with one proof file of the first
-    session changed after its closing round, it refuses the session's coins as the driver's check of the log does."""
+    and the per-member case names the challenger and carries its coins; the audit's summary says the trees were the
+    window's session's. On that case Lean's check passes everything before the per-member form's refusal and answers
+    `MULTI_REFUSED`, with exit 1; with one proof file of the first session changed after its closing round, it refuses
+    the session's coins as the driver's check of the log does."""
     window = _window(tmp_path / "window")
     rc, row, out, said = _audit(tmp_path, window, binaries, "--deployed-key", more={"FLOCK_CHALLENGER": "1"})
     assert rc == 0 and row.get("ok") is True, said
@@ -220,6 +230,7 @@ def test_two_members_sessions_close_on_the_windows_challenger_session_and_v2_ref
     # on the window's challenger session too the members are the kept prover's and the kept verifier's
     assert _kept_prover(out) == ["session-m0", "session-m1"]
     assert _kept_verifier(out) == [(0, True), (1, True)]
+    assert _coin_trees(out) == ("window", True)
     assert row["coins_session"]["error"] is None, row["coins_session"]
     case = json.loads((out / "window" / "case-v2-members.json").read_text())
     params, evidence = case["params"], json.loads(bytes.fromhex(case["evidence"]))
