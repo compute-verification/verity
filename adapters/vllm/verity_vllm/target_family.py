@@ -120,12 +120,14 @@ def device_cc() -> tuple[tuple[int, int] | None, str]:
 
 
 def built_target(build_summary: dict) -> tuple[int, int] | None:
-    step = build_summary.get("step") or {}
-    t = step.get("target") or {}
-    cc = _cc(t.get("compute_capability"))
+    step = build_summary.get("step")
+    if not step:
+        return None
+    target = step.get("target")
+    cc = _cc(target.get("compute_capability")) if target else None
     if cc is None:
-        app = step.get("applicability") or {}
-        fam = (app.get("tensor_core_family") or app.get("gemm_target") or "").lower()
+        app = step.get("applicability")
+        fam = (app.get("tensor_core_family") or app.get("gemm_target") or "").lower() if app else ""
         if fam == "hopper":
             return (9, 0)
     return cc
