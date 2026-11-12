@@ -24,12 +24,19 @@ fetch.
 
 **The noise.** W1 makes no oracle call. D-SK (`Fp4Sem.SaltKeyedB`, in `pearlCDomainFp4`) states `B̃`'s lines as the
 ones SHA-512 gives from `seed_B` of the salt's bytes (`NoiseSha512Fp4`), which a W1 program computes with `sha`
-instructions. These assumptions speak at `sha512Fp4Sem base salt rootA rootB`, the deployment's noise
-(`pearl_c4.py`'s lines op for op), which meets D-SK.
+instructions. These assumptions speak at `sha512Fp4Sem base salt rootA rootB`, the registered scheme's noise
+(`pearl-c-nvfp4-v0`, h0; `pearl_c4.py`'s lines op for op), which meets D-SK.
+
+`rootA salt u act` stands for h0's root of unit `u`'s rows, committed after the salt under the salt and the unit's
+index: a plain SHA-256 tree over TurboSHAKE128 digests (`verity/protocols/pouw/verifier/serving.py`,
+`audit.commit_rows` with `public`). The spec has neither hash, so it is a parameter, and `sha512Fp4Sem` is the registered
+scheme's noise only at that `rootA`. At a `rootA` that doesn't read `act`, `seed_A` is fixed before the rows are and
+Pearl-C's adaptive-A attack runs (measured on FP8, not run on FP4): these assumptions are not believed there, and the
+statements that take them hold there only vacuously.
 
 **One salt.** As for the FP8 forms (`TTOutW1`), each form here takes the cost model's `salt` and the semantics
-separately. It speaks at the deployment when `sem := sha512Fp4Sem base salt rootA rootB` with the `salt` its cost model
-reads.
+separately. It speaks at the registered scheme when `sem := sha512Fp4Sem base salt rootA rootB` with the `salt` its cost
+model reads.
 
 **The program's text is bounded** (`W1.Prog.bounded`), so a W1 program can't hold the reference at `sha512Fp4Sem` as a
 table of one leaf per salt in its code (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`, which is about W1 programs alone,

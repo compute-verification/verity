@@ -30,9 +30,10 @@ The rules, op for op, are `verity/protocols/pouw/prover/schemes/pearl_c4.py` at 
 **What is a parameter.**
 - The salt's bytes, `salt : S → List ℕ`: the 32-byte epoch salt is `NoiseSha512.Salt32`, uniform when the game samples
   it uniformly.
-- `rootB w`, the 64-byte root of weight `w`'s hiding commitment, fixed with the weights before the salt; and `rootA u act`,
-  the 64-byte root of unit `u`'s committed activations `act`. Each commitment's opening (its leaves' salts) is the
-  committer's randomness, so the noise does not determine either root from the codes.
+- `rootB w`, the 64-byte root of weight `w`'s hiding commitment, fixed with the weights before the salt. Its opening
+  (the leaves' salts) is the committer's randomness, so the noise does not determine it from the weight codes.
+- `rootA`, the root of unit `u`'s activation rows that `seedA` reads, committed after the salt under the salt and the
+  unit's index (h0's plain tree, whose hashes the spec does not have; `sha512Fp4Sem` says what it stands for).
 - `alpha` and `beta` are the base `Fp4Sem`'s: only the lines are pinned here.
 
 `pearl_c4.py`'s `-h3` hashing, which seeds each `E_A` line from its own row (`row_seed`), is not registered, and is not

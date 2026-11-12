@@ -74,8 +74,8 @@ and §5): `TTOutFp4` at `devFp4Sm120`.
 - **D-SK is a domain rule.** `pearlCDomainFp4 sem` requires `Fp4Sem.SaltKeyedB`: `B̃`'s lines are the ones SHA-512
   gives from `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` at an injective encoding of the salt
   (`NoiseSha512Fp4.seedB` and `drawB`, `pearl_c4.seed_b` and `line` op for op), so `B̃` is a function of the salt
-  and root_B, and the ticket, U and the debit compare against the `B̃` the verifier forms itself. The deployed noise,
-  `sha512Fp4Sem`, meets it. A variant that fixes `B̃` before A's salt is outside D₄ and needs the per-salt split debit.
+  and root_B, and the ticket, U and the debit compare against the `B̃` the verifier forms itself. The registered
+  scheme's noise (`pearl-c-nvfp4-v0`, h0), `sha512Fp4Sem`, meets it. A variant that fixes `B̃` before A's salt is outside D₄ and needs the per-salt split debit.
 - **The shared definitions it reads.** The ticket is `Fp4.cTilde` at `Fp4.sm120Nvf4`, U is `Fp4Dev.peelFp4` (the FP4
   chains feeding `PeelExact`'s BF16 peel), the forming is `Fp4Dev.formRow`, and the salt-dead predicate is
   `Fp4Dev.saltDead4`.

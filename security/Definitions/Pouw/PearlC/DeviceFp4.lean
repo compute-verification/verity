@@ -35,8 +35,8 @@ same fields and no promotion (`G = 0`):
 * **D-SK, B̃ keyed by A's salt** (`Fp4Sem.SaltKeyedB`, theory §1): `B̃ = form(B, E_B, F_B)` with `E_B`, `F_B` the lines
   SHA-512 gives from `seed_B = H_"pearl-c4/v1/seed-B"(salt ‖ root_B)` (`NoiseSha512Fp4.seedB` and `drawB`, op for op
   `pearl_c4.seed_b` and `line`), at an injective encoding of the salt. The verifier forms `B̃` itself on every sampled
-  tile and rejects when the checked values differ. It is a condition of the domain, and the deployed noise
-  (`sha512Fp4Sem`) meets it.
+  tile and rejects when the checked values differ. It is a condition of the domain, and the registered scheme's noise
+  (`pearl-c-nvfp4-v0`, h0; `sha512Fp4Sem`) meets it.
 * **The debit** (`Fp4Sem.tileDebit`, §2 with §6's base-split fix, replayed over a tile's credited words, in FP4
   units). Its executable reference is `pearl_c4.tile_debit` (`9363e5012`), and each term carries the
   reference's name for it:
@@ -730,7 +730,7 @@ epoch beacon and `root_B` as committed, and `B̃ = form(B, E_B, F_B)` with `E_B`
   with theirs. So the verifier forms `B̃` itself on every sampled tile, and a transcript whose checked values differ from
   this `B̃`'s is rejected.
 
-The deployed noise meets it: `sha512Fp4Sem` at any injective salt encoding. A variant that fixes `B̃` before A's salt is
+The registered scheme's noise (`pearl-c-nvfp4-v0`, h0) meets it: `sha512Fp4Sem` at any injective salt encoding. A variant that fixes `B̃` before A's salt is
 outside D₄: it needs the per-salt split debit instead. -/
 def Fp4Sem.SaltKeyedB (sem : Fp4Sem Q R S) : Prop :=
   ∃ (salt : S → List ℕ) (rootB : ℕ → List ℕ), Function.Injective salt ∧
@@ -738,16 +738,22 @@ def Fp4Sem.SaltKeyedB (sem : Fp4Sem Q R S) : Prop :=
       ((sem.lines H s U u act).EB, (sem.lines H s U u act).FB) =
         NoiseSha512Fp4.drawB (U.layout.shape u) (NoiseSha512Fp4.seedB (salt s) (rootB (U.layout.fixedId u)))
 
-/-- **Pearl-C4's semantics with SHA-512's noise** (`pearl_c4.py`'s h0): `base` with its lines replaced by
-`NoiseSha512Fp4`'s at the salt's bytes `salt s`, the root `rootA u act` of unit `u`'s committed activations and the root
-`rootB (fixedId u)` of its weight: `E_A` from the unit's `seed_A`, and `F_A`, `E_B`, `F_B` from the weight's `seed_B`.
-The oracle is unused. -/
-def sha512Fp4Sem (base : Fp4Sem Q R S) (salt : S → List ℕ) (rootA : ℕ → Codes → List ℕ) (rootB : ℕ → List ℕ) :
-    Fp4Sem Q R S :=
+/-- **Pearl-C4's semantics with SHA-512's noise**, the registered scheme's noise (`pearl-c-nvfp4-v0`, h0) at the right
+`rootA`: `base` with its lines replaced by `NoiseSha512Fp4`'s at the salt's bytes `salt s`, the root
+`rootA (salt s) u act` of unit `u`'s activation rows and the root `rootB (fixedId u)` of its weight: `E_A` from the
+unit's `seed_A`, and `F_A`, `E_B`, `F_B` from the weight's `seed_B`. The oracle is unused.
+
+`rootA` stands for h0's root of the unit's rows, committed after the salt under the salt and the unit's index: a plain
+SHA-256 tree over TurboSHAKE128 digests (`verity/protocols/pouw/verifier/serving.py`, `audit.commit_rows` with `public`).
+The spec has neither hash, so it is a parameter, and the term is the registered scheme's noise only at that `rootA`. At a
+`rootA` that doesn't read `act`, `seed_A` is fixed before the rows are, and Pearl-C's adaptive-A attack runs (measured on
+FP8, not run on FP4): TT_OUT-FP4 is not believed there, and what takes it holds there only vacuously. -/
+def sha512Fp4Sem (base : Fp4Sem Q R S) (salt : S → List ℕ) (rootA : List ℕ → ℕ → Codes → List ℕ)
+    (rootB : ℕ → List ℕ) : Fp4Sem Q R S :=
   { base with
     lines := fun _ s U u act =>
       let sB := NoiseSha512Fp4.seedB (salt s) (rootB (U.layout.fixedId u))
-      let sA := NoiseSha512Fp4.seedA (salt s) (rootA u act) (rootB (U.layout.fixedId u)) u
+      let sA := NoiseSha512Fp4.seedA (salt s) (rootA (salt s) u act) (rootB (U.layout.fixedId u)) u
       ⟨(NoiseSha512Fp4.drawA (U.layout.shape u) sA sB).1, (NoiseSha512Fp4.drawA (U.layout.shape u) sA sB).2,
         (NoiseSha512Fp4.drawB (U.layout.shape u) sB).1, (NoiseSha512Fp4.drawB (U.layout.shape u) sB).2⟩ }
 
