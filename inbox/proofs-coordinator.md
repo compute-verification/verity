@@ -106672,3 +106672,33 @@ To the Spot verifier's owner: "`Spot.Run.run` reads `SecondStage.FORM` inside `i
 - That `stageWidth` is how `selectSecond`'s bytes split by coin. I read it from `stageByte`'s `finProdFinEquiv` layout, coin `j` at bytes `[j·L, (j+1)·L)`, not from a lemma.
 - The Python twin and difftest: not started.
 - `Refused.lean` and `HeldOf.lean`: not started.
+
+## RUNSAS, Thu 22:56Z: GAP: the model's new `readsOk` clause `inputsFailure … isNone` refuses every value round 1's record registers, which the running round 2 accepts, so a passing round 2 does not give it; my try is relaunched as `r20261112-224811-04fc`
+
+**In plain words.** My last try never ran: inside a run the node has no `verity` command. It is relaunched with the command the others use. The base's newest move added two clauses to the model's per-template check. One of them, that the links and wires are derived, follows from a passing round 2 with no premise. The other does not: on what the model holds of the run (no values of its own, no reads) it refuses any value round 1's record registers, while the running round 2 accepts a value the verifier pinned, fills itself, or opens as a read's row. So where the served run's interior registers any value, the model refuses a run the code accepts. Either the model holds the verifier's own values and reads, or my statement takes "round 1's record registers no value" as a premise. I write the premise and ask FRAME which. Separately, RUNCOINS's `RoundTwo` cannot be proved as it stands; the four changes it needs are below.
+
+Agent `bc-6b562a40-d85b-538d-9805-f87f05365e9b`; branch `cursor/proofs-runsas-7e3a` at `e6dd153634` (the base `3aeb727bea12` merged in), pushed.
+
+**Runs.**
+- [run] `r20261112-215748-c493` exited 127 at 22:08:56Z, `nice: 'verity': No such file or directory`; nothing was tried.
+- [run] `r20261112-224811-04fc` on vy-nebius-cpu-8, at `e6dd153634`: `lean_changed.py --build …/RunsAs/Statements.lean`, then `lean_changed.py --try …/RunsAs/Round2.lean --siblings`. Waiting for a slot since 22:48Z. [derived] At this head `readsOk_of_check` fails, because it predates the two new clauses; the other twenty theorems are tried. The next head fixes it.
+- [run: git] I cancelled `r20261112-224627-e86e` before it started: the checkout had been reset to `main` while I was idle, so it was launched from a tree without my files. My branch is restored from its remote head, and nothing went to `main`.
+
+**GAP: `inputsFailure`.** [read `Spot/SecondStage.lean` `inputsFailure`, `openedRow`, `readSize`; `SpotFlock/Code.lean` `ownOf`, `readsOk`]
+- At `ownOf`, `fixed`, `supplied` and `reads` are empty. So `ownValues` is empty, and `openedRow` is false (`readSize` is none). Every `.str` value under round 1's record's `registered` is then `inputsFailure`'s answer. [derived] So `(inputsFailure (ownOf …)).isNone` holds exactly when round 1's record registers no value.
+- The running verifier's `Own` has `fixed`, `supplied` and `reads` from the run (`Run.lean`). Its `second-inputs` passes those values.
+- [guess] The served two-stage run's interior registers values (a read's opened row at least), so the premise would be false of it.
+- My statement will take it as the named premise `RegistersNone rec` (no entry of round 1's `registered` has a string `value`), with a lemma `inputsFailure_none`.
+- **NEEDS, owner FRAME:** either `Held` carries the verifier's `fixed`, `supplied` and `reads` and `ownOf` sets them, so the clause is round 2's `second-inputs` and follows, or the premise stands and is a GAP of the two-round form.
+
+**`designOk`** follows: `linksOk` and `wiresOk` read `links`, `wires`, `rows` and the parts, none of which `core` resets, and `check_ok` gives both. One lemma, `designOk_of_check`.
+
+**RUNCOINS's `RoundTwo` (its branch at `afc1d6abd2`) cannot be proved as written** [read its `RunsAs/Statement.lean`; derived]. The changes it needs:
+1. `OwnAgrees` must also reset `reads := #[]`. The running `Own` sets `reads := it.reads` since the base's move, so as written it is false of the run.
+2. `stmtOk` reads `recordsOk h x m₁`, which round 2 doesn't make. `RegHolds` should carry it (`RegHolds h x m₁`). It is not a `Prop` on `h` alone.
+3. It needs `NamesDistinct h` (I take it as `(hN : NamesDistinct h)`). Your `StmtsAre` gives `xs.length = h.ms.length`, but `readsOk` at `t` needs statement `t` of `ss` to exist. Round 2 gives `ss.size = h.ms.length` only where the names are distinct (`count_of_check`).
+4. The `inputsFailure` premise above, which is on round 1's record.
+
+**Names.** [read] Your `Statement.lean` and my `Statements.lean` both declare `SpotFlock.RunsAs.OwnAgrees` and `StmtsAre`; one build that imports both refuses the second. I move mine to the namespace `SpotFlock.RunsAs.Round2` (so `SpotFlock.RunsAs.Round2.roundTwo_of_check`). Once your `RoundTwo` has the four changes, I add `SpotFlock.RunsAs.stmtOk_of_check (h : Held) (hN : Round2.NamesDistinct h) : RoundTwo h` in a file of its own that imports both. Say if you want the changes made some other way.
+
+**Not established.** That anything of mine elaborates. Whether the served run's interior registers values (my guess says it does). FRAME's choice on the GAP. My mailbox was read at 22:50Z.
