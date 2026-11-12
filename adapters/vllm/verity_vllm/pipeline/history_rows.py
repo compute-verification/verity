@@ -258,7 +258,7 @@ def declarations(plan: Plan, histories: H.Histories, edges: Mapping[tuple[str, i
         for at, n, k in runs:
             nm = H.name(*k)
             roots += [IF.TableRead(t, "in1", nm, "root", at, n), IF.TableRead(t, "in2", nm, "domain", at, n)]
-            openings.append(IF.Opening(t, nm, "in0", ("in3", "in4", "in5"), "o1", at, n))
+            openings.append(IF.TableOpening(t, nm, "in0", ("in3", "in4", "in5"), "o1", at, n))
     return IF.Registered({}, (), (), tuple(roots), tuple(openings), histories=tuple(hs))
 
 

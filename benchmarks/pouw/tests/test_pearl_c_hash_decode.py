@@ -148,6 +148,18 @@ def test_run_py_launches_the_cubins_variants_with_hash_decode_cuhs_constants():
     assert R.pd_variant(R.PD_MAX_ROWS + 1, 128, 1024) is None and R.pd_variant(32, 128, 2 * R.PD_MAX_K) is None
 
 
+def test_a_pd_launchs_dynamic_shared_memory_size_is_read_only_as_a_floor():
+    """The kernels read a launch's dynamic shared memory size (``%dynamic_smem_size``) only in pd_dyn_bytes, and that only
+    where a kernel traps below its floor, while the host twin's pd_dyn holds PD_PAIR_SMEM: a launch given more (PD_WHOLE's
+    all, or sm_90a's ``Pipeline.pd_shared`` half an SM) runs the twin's code over the twin's words, so writes its bytes."""
+    lines = [x.strip() for x in SRC.splitlines() if "pd_dyn_bytes()" in x]
+    defs = ["DEV uint32_t pd_dyn_bytes() {", "inline uint32_t pd_dyn_bytes() { return PD_PAIR_SMEM; }"]
+    floor = re.compile(r"if \(.* pd_dyn_bytes\(\) < (\(uint32_t\)PD_PAIR_SMEM|8u \* PD_PAIR_WORDS)\)+ __trap\(\);")
+    assert SRC.count("%%dynamic_smem_size") == 1 and "static uint64_t m[2 * PD_PAIR_WORDS];" in SRC
+    assert [x for x in lines if x in defs] == defs and all(floor.fullmatch(x) for x in lines if x not in defs)
+    assert len(lines) > len(defs)
+
+
 def levels(dom, values: list[bytes], schema, salt_key: bytes, nonce: int) -> bytes:
     """An `audit.HM96` tree's levels as the kernels lay them out, each value salted by `audit.hm96_salt`."""
     salted = [v + audit.hm96_salt(salt_key, nonce, i) for i, v in enumerate(values)]

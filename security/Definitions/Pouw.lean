@@ -13,6 +13,8 @@ public import Definitions.Pouw.Eps1.M3
 public import Definitions.Pouw.Dimension.Causal
 public import Definitions.Pouw.Dimension.Defs
 public import Definitions.Pouw.Dimension.Lift
+public import Definitions.Pouw.Dimension.Pointwise
+public import Definitions.Pouw.Dimension.Ssn
 public import Definitions.Pouw.Fp8Atom.Atom
 public import Definitions.Pouw.Fp8Atom.E4M3
 public import Definitions.Pouw.Fp8Atom.Fp32
@@ -33,6 +35,11 @@ public import Definitions.Pouw.Game.Deadline
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.Game.Params
 public import Definitions.Pouw.H1Zy
+public import Definitions.Pouw.Lead.Deployed
+public import Definitions.Pouw.Lead.Forward
+public import Definitions.Pouw.Lead.Gap
+public import Definitions.Pouw.Lead.Layout
+public import Definitions.Pouw.Lead.Model
 public import Definitions.Pouw.KeyedLeaf
 public import Definitions.Pouw.M1
 public import Definitions.Pouw.MerkleExtract
@@ -93,6 +100,7 @@ public import Definitions.Pouw.PearlC.TileCheck8
 public import Definitions.Pouw.PearlC.TileCheck4
 public import Definitions.Pouw.PearlC.TileCircuit
 public import Definitions.Pouw.PearlC.TileDraw
+public import Definitions.Pouw.PearlC.Unscale
 public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.W1Stop
 public import Definitions.Pouw.PearlC.WholeCircuit

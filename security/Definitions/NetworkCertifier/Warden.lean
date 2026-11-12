@@ -17,8 +17,7 @@ late: the network certifier fails the connection closed there, with one fail cel
 lane to its scheduled end with padding. The end of the data counts as a cell too: the server's end of stream must reach
 the network certifier by the bucket of the cell after the data's last, or the connection fails there.
 
-NCI's transfer gates `T` are these cells' bits (`transfers`, `Definitions.Nci`): their number per
-window is the schedule's, so it is public.
+The transfer gates are these cells' bits: their number per window is the schedule's, so it is public.
 
 **What is abstract.** A cell's `B` bytes are a value of `Cell`. Whatever the server does (its accept time, its send
 timing, its ACKs and flow control) reaches the network certifier only as its connections' `Arrivals`: the data, in

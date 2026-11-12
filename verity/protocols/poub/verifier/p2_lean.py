@@ -1,7 +1,8 @@
 """The Lean verifier of a P2 session, the process `remote-audit-verifier` (`RemoteAudit.Verifier`'s `p2_*`
-requests, `RemoteAudit.P2Session`, in `lean/`), as `p2_party.py` runs it beside `p2.Session`: one request a JSON line on
-its stdin, a line's or a file's bytes right after it, each answered by one line on its stdout, `{"answer": JSON}` or
-`{"error": why}`. The standard library only, so the party runs as the auditor's gate starts it (`python3 -S -E`)."""
+requests, `RemoteAudit.P2Session`, in `lean/`), as `p2_party.py` runs it beside `audit.AuditRun` over the P2 codec:
+one request a JSON line on its stdin, a line's or a file's bytes right after it, each answered by one line on its
+stdout, `{"answer": JSON}` or `{"error": why}`. The standard library only, so the party runs as the auditor's gate
+starts it (`python3 -S -E`)."""
 
 from __future__ import annotations
 

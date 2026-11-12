@@ -142,9 +142,9 @@ def familyCertificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
   else none
 
 /-- `p2.WIDE_CLAIMS`: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks
-(`P2RingRoundSecureWide`, `RingDeviceAt`, `CoinCommitHides (coinViewAt N)`). -/
+(`P2RingRoundSecureWide`, `RingDeviceAt`). -/
 def WIDE_CLAIMS : List String :=
-  Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding"]
+  Certificate.P2_CLAIMS ++ ["p2-ring-round-secure-wide", "pous-ring-device-at"]
 
 /-- `p2.wide_certificate`: `Pous.Period.SecurityProofs.periodHeldAt` for a store at the registered width and prime of
 any block count from `2^19` to `2^27` (`p2.CERT_WIDE_BLOCKS`), in any number of segments: an accepted period with no
@@ -158,6 +158,10 @@ def wideCertificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
 /-- `p2.CERT_K_WIDE320`: the reads of `Pous.SecurityProofs.ObligationWide320`'s window. -/
 def CERT_K_WIDE320 : Nat := 320
 
+/-- `p2.WIDE320_CLAIMS`: `WIDE_CLAIMS`, and `prf/sha-512` (`Hash.Assumptions.Sha512Prf`) for the memory challenger's
+indices, which `ObligationWide320` reads as uniform. -/
+def WIDE320_CLAIMS : List String := WIDE_CLAIMS ++ ["prf/sha-512"]
+
 /-- `p2.wide320_certificate`: `Pous.SecurityProofs.ObligationWide320` for a store at the registered width and prime of
 any block count from `2^19` to `2^27`, in any number of segments: a window of 320 reads at the store's snapshot, the
 state at most `⌊ρ·N·16448⌋` bits at each challenge, passes with probability at most `2^-20`, `δ = 2^-20 − 2^-128`
@@ -165,8 +169,8 @@ beside `2^eps_log2 = 2^-128`. `certificate` doesn't take it. -/
 def wide320Certificate (w c0 blocks : Nat) : Option Certificate.CapacityBound :=
   if w == Certificate.POINT.1 && c0 == Certificate.POINT.2.1 && 2 ^ 19 ≤ blocks && blocks ≤ 2 ^ 27 then
     some { k := CERT_K_WIDE320, rounds := 0, work := 2 ^ 20, callNs := Certificate.ROOT_CALL_NS,
-           theoremName := "Pous.SecurityProofs.ObligationWide320", delta := (2 ^ 108 - 1, 2 ^ 128), segments := none,
-           claims := WIDE_CLAIMS }
+           theoremName := "Pous.SecurityProofs.ObligationWide320", delta := (1, 2 ^ 20), epsLog2 := -127,
+           segments := none, claims := WIDE320_CLAIMS }
   else none
 
 /-- `period.certificate`: P2's registered certificate (`Certificate.p2`) when the store is its point, segment count and

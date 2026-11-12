@@ -1,8 +1,10 @@
 # core_protocol: the interface every core protocol implements
 
 This is a Lake package (`CoreProtocol`, namespace `Core`). It requires the base package (`core_base`) by path for
-canonical JSON, bytes and hashes, and nothing else: no Mathlib and nothing of Flock's verifier. A protocol's port is its own package. It requires this one by path,
-defines one `Core.Protocol` value, and makes its executable `def main (args) := myProtocol.main args`.
+canonical JSON, bytes and hashes, the commitments' package (`core_commitments`) for the sampling designs a profile
+records, and the difftest harness's Lean for its periods' port, and nothing else: no Mathlib and nothing of Flock's
+verifier. A protocol's port is its own package. It requires this one by path, defines one `Core.Protocol` value, and
+makes its executable `def main (args) := myProtocol.main args`.
 
 ## The interface (`CoreProtocol/Protocol.lean`)
 
@@ -115,14 +117,16 @@ format:
 Registration registers the site, θ, `B` and each day's registered circuit, not the circuit `B` builds. A subprotocol's
 Program and parameters, and the proof system, are that protocol's public verifier parameters, not entries of the log;
 each window's program is held to its day's registered one (the sampled-proofs registration record's R2, `day` and
-`declarations`).
+`declarations`). A window's day is the UTC day of its open's `started_utc`, which the auditor's challenger signs
+(`challenger.declared_day`): a window that opens before UTC midnight and closes after is a window of its open's day.
 
 An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, and the genesis is the Site's, so a log of site entries alone
 has the Site's head. `check` holds each entry to the log before it and refuses the first that fails by name: a site
 entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), an information entry by
 `previous` and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`, a second
 declaration of a day. A subprotocol reads its view of an accepted log by projection (`View`: the Site, θ's values, the
-registered compiler and the days' registered circuits, at the head). As a core protocol, `protocol` (`verity/registration/log/v1`, the
+registered compiler and the days' registered circuits, `View.declared?`, at the head). As a core protocol, `protocol`
+(`verity/registration/log/v1`, the
 `core-registration` executable) takes the auditor's parameters (`{"auditor", "composite"}`, the auditor the Site's
 `Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
 evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside
@@ -144,3 +148,15 @@ port, are what makes a verifier proven. All protocols share one Lake package for
 
 `CoreProtocol/Example.lean` is a toy protocol whose `#guard`s pin every path of `answer` and `case`, and the decoders'
 round trips and refusals; `core-protocol-example` runs it.
+
+## Periods (`CoreProtocol/Period.lean`)
+
+The code's copy of the spec's ticks, spans and monitoring period (`security/Definitions/Core/Period.lean`), so a
+verifier reads them without requiring `security/`. A `Core.TickSpan` is the ticks `[start, start + len)` on the one
+clock (`OneClock`). A `Core.MonitoringPeriod` is a span with the boundaries that cut it into its execution blocks'
+spans, and for each execution block the boundaries that cut its span into its sampling blocks' spans; `valid` holds
+when each is a cut. The codec reads and writes `{"len":n,"start":t}` and
+`{"execution":[t,...],"sampling":[[t,...],...],"span":{...}}`, refuses any other key, and refuses a monitoring period
+that isn't valid. `Properties.Core.Period` states that the copy is the spec's. `verity.periods` mirrors it in
+Python, and `core-periods-difftest` (`CoreProtocol/PeriodDifftest.lean`) holds the two together through the difftest
+harness, which builds it by name.

@@ -140,9 +140,10 @@ the reports; each failed row says whether it failed for anything besides its fai
 inputs, an unguarded worker, a timeout, a signal, a nondeterministic test, no guard report), which an allowance of tests alone
 never covers.
 
-`--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`: a suite
-still running then has its process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check
-an hour, not its slot until the run's own timeout.
+`--timeouts` (`check` passes it) bounds each suite's run by its `[tool.verity.tests] timeout_s`, else `SUITE_TIMEOUT_S`, stretched
+for a suite that declares the `timeout_workers` it was measured on and gets fewer (`bound`): a suite still running then has its
+process group killed and fails as timed out (`timed_out` in --json), so a hung test costs the check an hour, not its slot until
+the run's own timeout.
 
 `--mem-gb GB` (`check` passes its slot's share) is the whole run's: the one-process suites hold `TEST_PROCESS_GB` each, at most
 half of it beside parallel suites (`serial_slots`), and the parallel suites' lanes split the rest (`wide_gb`, `wide_lanes`), each
@@ -209,11 +210,12 @@ CUSTODY_ENV, STORE_REQUIRED_ENV, REGRESSION_ENV = "CHECK_STORE_CUSTODY", "VERITY
 #: step). A suite that builds or runs a Lake package lists its lakefile under `inputs` (what `lake` reads, which no tracer
 #: sees), and tests/test_after_lean.py holds every suite that is a Lake package or declares one's lakefile or `.lake` here.
 AFTER_LEAN = ("verity-flock", "verity-lean-audit", "verity-difftest", "pous-check", "core-identity", "verity-core-composition",
-              "verity-core-evaluate", "verity-core-firewall",
+              "verity-core-periods", "verity-core-evaluate", "verity-core-firewall",
               "verity/protocols/recursion/verifier/vstar_cli", "verity/protocols/flock/sigma", "verity-core-sampled-proofs",
               "verity/protocols/poub/verifier/lean",
               "verity/protocols/certifier/verifier/network", "verity-pouw-window-difftest",
-              "verity-pouw-check-difftest", "verity/protocols/pouw/verifier/lean/commit", "memory-challenger-lean", "benchmarks/pous",
+              "verity-pouw-check-difftest", "verity/protocols/pouw/verifier/lean/commit", "benchmarks/pouw/pearlplus_lean",
+              "memory-challenger-lean", "benchmarks/pous",
               "verity/protocols/spot/verifier", "verity/protocols/certifier/verifier", "verity-pouw-benchmarks",
               "verity/definitions/requirement", "benchmarks/remote_session", "benchmarks/one_stage", "benchmarks/two_stage",
               "verity-network-e2e",
@@ -321,6 +323,7 @@ class Suite:
     worker_gb: float = 0.0       # [tool.verity.tests] worker_gb: one xdist worker's peak, which `--mem-gb` divides (0: unbounded)
     nested: tuple[str, ...] = ()  # the suites under its directory, which its own directory leaves out (`dropped`)
     parts: int = 0               # [tool.verity.tests] parts: the parts by test id check runs it in (`id_part_of`; 0: whole)
+    timeout_workers: int = 0     # [tool.verity.tests] timeout_workers: the xdist workers its timeout_s holds for (`bound`; 0: any)
 
 
 def _pyproject(path: str) -> dict:
@@ -471,9 +474,13 @@ def discover() -> list[Suite]:
         if "parts" in tests and (type(parts) is not int or parts < 2):
             raise ValueError(f"{path}/pyproject.toml: [tool.verity.tests] parts = {parts!r}: the number of parts by test id check "
                              "runs the suite in is an integer of at least 2; leave it out to run the suite whole")
+        held = tests.get("timeout_workers", 0)
+        if "timeout_workers" in tests and (type(held) is not int or held < 1 or "timeout_s" not in tests):
+            raise ValueError(f"{path}/pyproject.toml: [tool.verity.tests] timeout_workers = {held!r}: the xdist workers its timeout_s "
+                             "was measured on is an integer of at least 1, beside timeout_s")
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
                             tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True,
-                            float(tests.get("worker_gb", 0)), parts=parts))
+                            float(tests.get("worker_gb", 0)), parts=parts, timeout_workers=held))
     # the repository's own suite keeps every path: its tests (test_repository, test_boundaries, test_doc_paths) read the whole tree
     return [replace(s, nested=tuple(sorted(t.path for t in suites if t.path != s.path and _under(t.path, [s.path]))))
             if s.path != "." else s for s in suites]
@@ -1924,6 +1931,14 @@ DIST = ["--dist", "worksteal"]
 #: (verity-circuit-check, which declares its own); a suite that hangs holds its check slot until the run's own timeout (a test
 #: blocked on a FIFO nobody writes holds it until it is killed by hand).
 SUITE_TIMEOUT_S = 3600.0
+
+
+def bound(s: Suite, workers: int) -> float:
+    """What `--timeouts` lets ``s`` run on ``workers`` xdist workers: its `timeout_s`, else `SUITE_TIMEOUT_S`, stretched by how
+    many fewer workers it got than the `timeout_workers` that bound was measured on, so a slot too small for those still lets
+    the suite finish at the rate it was measured to run; never less. Still a bound on a hang, not a schedule."""
+    t = s.timeout_s or SUITE_TIMEOUT_S
+    return t * max(1.0, s.timeout_workers / max(1, workers))
 #: what `run` arms the bound with (a test injects one that fires at once)
 Timer = threading.Timer
 #: each suite's pytest `--basetemp` is `b` in `<tmp>/<BASETEMP>-<suites.py's pid>m*`, which holds its `OWNER` marker beside it
@@ -2637,7 +2652,7 @@ def main(argv: list[str] | None = None) -> int:
             if stopping.is_set():                  # interrupted: start no suite
                 return Result(s, "failed", reported=False)
             return run(s, paths + meta + list(RUNNER), args_of[s], logs, n, [m for m in meta if not covered(m, paths, cuts[s])],
-                       reuse.get(s, []), (s.timeout_s or SUITE_TIMEOUT_S) if a.timeouts else 0.0, threads_per_process(jobs),
+                       reuse.get(s, []), bound(s, n) if a.timeouts else 0.0, threads_per_process(jobs),
                        parts.get(s))
 
     def finish(fut) -> None:
@@ -2666,7 +2681,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"        ran because: {'; '.join(forced[s]['why'][:3])}" + (" ..." if len(forced[s]["why"]) > 3 else ""))
         if r.timed_out:
             print(f"        TIMED OUT: still running after {r.timed_out:g} s, so its process group was killed; a suite that needs "
-                  f"longer declares [tool.verity.tests] timeout_s in {s.path}/pyproject.toml")
+                  f"longer declares [tool.verity.tests] timeout_s, and the timeout_workers it holds for, in {s.path}/pyproject.toml")
         elif r.signal:
             mem = memory_gb()
             print(f"        {'OOM-KILLED' if r.oom else 'killed by ' + r.signal}: pytest died by {r.signal} at a peak RSS of "

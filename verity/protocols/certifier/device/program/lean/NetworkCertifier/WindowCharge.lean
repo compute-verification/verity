@@ -92,7 +92,7 @@ structure Carry where
 
 /-- One window's advice: its decisions, its hits' values, its order entries `(p, r)` and its length terms
 `(max_tokens, output_len)`, each of the slots that hold one, in order. -/
-structure Window where
+structure Advice where
   ds : List Bool
   hits : List Nat
   order : List (Nat × Nat)
@@ -123,7 +123,7 @@ def entrySyms (bk : Book) : Nat → Nat → List (Nat × Nat) → Option (List S
     else none
 
 /-- The window's symbols in `window_code.code_window`'s order, and the carry after them. -/
-def syms (bk : Book) (N H O : Nat) (cy : Carry) (x : Window) : Option (List Sym × Carry) :=
+def syms (bk : Book) (N H O : Nat) (cy : Carry) (x : Advice) : Option (List Sym × Carry) :=
   (decSyms cy.dec x.ds).bind fun d =>
     (hitSyms bk x.hits).bind fun hs =>
       (entrySyms bk cy.pos cy.rank x.order).map fun e =>
@@ -137,7 +137,7 @@ def tailBits : List (Nat × Nat) → Option Nat
   | t :: ts => if t.1 ≤ MT_CAP ∧ t.2 < 2 ^ bitlen t.1 then (tailBits ts).map fun b => bitlen t.1 + 1 + b else none
 
 /-- One window's charge (`reference_window`, `ChargeCount_v2{N, H, O, L}`), and the next window's carry. -/
-def window (bk : Book) (N H O L : Nat) (cy : Carry) (x : Window) : Option (Nat × Carry) :=
+def window (bk : Book) (N H O L : Nat) (cy : Carry) (x : Advice) : Option (Nat × Carry) :=
   if x.ds.length ≤ N ∧ x.hits.length ≤ H ∧ x.order.length ≤ O ∧ x.lens.length ≤ L ∧ cy.dec.run < 3 ∧
       cy.rank ≤ INDEX_CAP + 1 then
     (syms bk N H O cy x).bind fun q => ((codeAll Tally.fresh q.1).bind finish).bind fun c =>
@@ -145,7 +145,7 @@ def window (bk : Book) (N H O L : Nat) (cy : Carry) (x : Window) : Option (Nat �
   else none
 
 /-- A run's charges: each window's, the carry passed along. -/
-def session (bk : Book) (N H O L : Nat) : Carry → List Window → Option (List Nat)
+def session (bk : Book) (N H O L : Nat) : Carry → List Advice → Option (List Nat)
   | _, [] => some []
   | cy, x :: ws => (window bk N H O L cy x).bind fun p => (session bk N H O L p.2 ws).map fun ls => p.1 :: ls
 
@@ -153,7 +153,7 @@ def session (bk : Book) (N H O L : Nat) : Carry → List Window → Option (List
 def Book.first (bk : Book) : Carry := ⟨⟨bk.priors, 0⟩, 0, 0⟩
 
 /-- The run's charges per window, from the session's first carry. -/
-def charges (bk : Book) (N H O L : Nat) (ws : List Window) : Option (List Nat) :=
+def charges (bk : Book) (N H O L : Nat) (ws : List Advice) : Option (List Nat) :=
   session bk N H O L bk.first ws
 
 end NetworkCertifier.WindowCharge
