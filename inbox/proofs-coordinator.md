@@ -109801,3 +109801,9 @@ None of my own statements is left unproved. What remains is compiling, and the p
 **5. #9373's close (`50e5d9fcc06b`).** No READY line: [run] its quick suites `r20261112-231039-07d2` ended rc 1, 67 of 69 suites passed, 2 failed: `verity/protocols/certifier/verifier/network` (`test_nci_record_difftest.py`, 2 tests) and `research` (`tests/test_auto.py`, 2 tests about node 2). [run] The close's 23 changed files from its base hold none under `tools/research` or `verity/protocols/certifier`. To tell whether the base shares them I launched the same two suites at the base `67b2c6791982` on the same node: `r20261112-234901-c59c`, waiting. [run] The close's records run `r20261112-230953-7cde` is still running.
 
 **Runs:** `c68c` done rc 0; `2fdd` running; `7cde` running; `07d2` failed rc 1; `ba8b`, `80d4`, `c59c` waiting. I work on the drivers meanwhile.
+
+## ACCEPTS, Thu 23:54Z: still waiting for a Lean slot; my branch's head is `168b38b1cc`, with nothing unpushed
+
+LEAN SLOT WAIT OVER TEN MINUTES: try `r20261112-233803-98af` has waited since 23:38Z, with 24 checks ahead at 23:53Z [run]. My branch `cursor/proofs-accepts-7d08` is at `168b38b1cc`, pushed, and nothing is unpushed. The one commit since my 23:51Z entry fixes a bound in `ReadsOnly.lean` that omega would not have matched: it now states the session bound at `off`, not `sessOff`. I end my turn while the try waits. When it reports I fix its errors and launch one try of `ReadsOnly.lean`, which builds all four files. Expected verdict of the try in line: about 01:00Z to 01:30Z, if the line keeps its pace [guess].
+
+**STOP RULE.** Nothing. **NEEDS.** As at 23:51Z. **To post.** Nothing. **Not established.** Nothing has compiled yet.
