@@ -263,6 +263,17 @@ def test_the_writer_refuses_what_isnt_a_measurement_of_this_run(tmp_path, no_gpu
         assert (other / kit.RESULT).read_text() == text
 
 
+def test_a_measurement_with_no_value_says_why_and_only_it_holds_a_why(tmp_path, no_gpu):
+    w = kit.writer(tmp_path)
+    absent = w.measurement("capacity", None, "MAC", why="the record holds no registered device")
+    assert (absent["value"], absent["why"]) == (None, "the record holds no registered device")
+    assert "why" not in w.measurement("verified", 5, "MAC") and "why" not in w.measurement("free", None, "MAC")
+    for value, why in ((1, "a value beside it"), (None, ""), (None, "  "), (None, 3)):
+        with pytest.raises(ValueError, match="why says in words why it has no value, beside a value of None"):
+            w.measurement("gate", value, "MAC", why=why)
+    assert [m.get("why") for m in _result(tmp_path)["measurements"]] == ["the record holds no registered device", None, None]
+
+
 def test_overhead_paired_is_the_kits_by_overheads_name_until_serving_cost_names_the_kit():
     from verity_bench import overhead
 
