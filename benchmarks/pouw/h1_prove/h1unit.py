@@ -85,10 +85,9 @@ from verity.protocols.spot.verifier.one_stage import registered as G
 if TYPE_CHECKING:
     from verity.circuits.partition_object import TemplatePartition
     from verity.circuits.program import Program
+    from verity.protocols.pouw.prover.circuit.h1tile import Layout
     from verity_flock.circuit import Port
     from verity_flock.class_statement import UnitStager
-
-    from verity.protocols.pouw.prover.circuit.h1tile import Layout
 
 HM96 = hm96.SHA512
 SALT_BYTES = 192
