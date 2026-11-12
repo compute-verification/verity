@@ -13,10 +13,13 @@ what the layout's design has and the tree does not.
 - `verity/`: the distribution `verity` (the root `pyproject.toml`; its module list is `verity/README.md`). Import from the
   owning module (`from verity.circuits import Program`); `verity` re-exports nothing.
   - `verity/protocols/`: one directory per protocol, the list flat: `flock`, `spot`, `recursion`, `pouw`, `pous`, `poub`,
-    `certifier`, `inference_only`, `remote` and `onsite`. Remote is what an auditor with no devices at the datacenter
-    runs, and onsite what an auditor with devices there runs. Inside a protocol, `verifier/` is trusted code (a Python
-    verifier until its Lean verifier, its `lean/`, replaces it), `prover/` is what its prover builds and its verifier
-    doesn't read, and `device/` is the auditor's device (the network certifier, the memory challenger, the challenger).
+    `certifier` and `inference_only`. Beside them, `remote` and `onsite` are configurations, not protocols: remote is
+    what an auditor with no devices at the datacenter runs, and onsite what an auditor with devices there runs. Target,
+    not yet: `compose/` (today's `remote/verifier/composition/`), a ninth protocol on top of the audits; `remote/` and
+    `onsite/` under `verity/configurations/`, which no protocol imports; and `experimental/NAME/` for a whole directory
+    no configuration lists. Inside a protocol, `verifier/` is trusted code (a Python verifier until its Lean verifier,
+    its `lean/`, replaces it), `prover/` is what its prover builds and its verifier doesn't read, and `device/` is the
+    auditor's device (the network certifier, the memory challenger, the challenger).
     `flock/` is the proof system: its Lean verifier and the ZK server (`flock/verifier/`, `Flock.Firewall`), its prover
     (`flock/prover/`: `verity_flock`, its own distribution) and the agreement with upstream's verifier
     (`flock/agreement/`). `spot/verifier/` is sampled proofs, with the integrity profile (`profile`). The inference-only
@@ -38,8 +41,8 @@ what the layout's design has and the tree does not.
   - `verity/hardware/`: the registered hardware: `cards/` (one TOML data sheet per GPU or host model), `site` (its
     types), `registration` (the registration log) and `record` (a record entry). Target, not yet: the data sheets in a
     top-level `hardware/` that holds data only, and the types in one file of `verity/`.
-  - `verity/configuration/`: `wire` (the wire every party speaks), `deploy` (parties, channels, the configuration and
-    the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: four files
+  - `verity/configuration/` (not `verity/configurations/`): `wire` (the wire every party speaks), `deploy` (parties,
+    channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: four files
     directly under `verity/` (what a party is, the registered hardware, what a protocol declares, the configuration)
     and `verity/runtime/`, which runs parties over channels.
   - `verity/claims/`: the security claims' ids. `verity/difftest/`: the Python held to each Lean (target, not yet: under
@@ -79,7 +82,7 @@ or loaded by file (`BENCHMARKS_IMPORTERS` names today's importers); a number a p
 file citing an `art:` id. Target, not yet enforced: the layout's own rules. The runtime imports no protocol, and no
 protocol or adapter imports it; `circuits/` imports nothing and `commitments/` only `circuits/`; no code imports
 `security/` or the hardware data; inside `verity/protocols/`, flock is at the bottom, spot and recursion on it, the
-audits on those, and remote and onsite on top.
+audits on those, and compose on top; no protocol imports a configuration.
 
 `verity` is the one command: `verity check [tests|lean|circuits]`, `verity bench|demo NAME`, `verity --help`.
 
