@@ -44,7 +44,6 @@ from pathlib import Path
 from verity_vllm.config import DTYPES
 from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 from verity_vllm.engine.served_seed import DEFAULT_SEED
-from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.predict.phi import Phi
 
 MANIFEST = "verity-vllm/served-window-programs/v1"
@@ -136,6 +135,8 @@ def carry_of(run: Path, window: int, data: bytes) -> dict:
     last non-empty one): K must open where that window closed (`window_advice.follows`). The requests K carries in and the ones it
     leaves with outputs to keep, by id, and the window it follows; a ValueError when K doesn't follow it, or carries a request in
     with no advice before it to carry it from."""
+    from verity_vllm.pipeline import window_advice as WA
+
     a = WA.decode(data)
     lines = (run / "windows.jsonl").read_text().splitlines() if (run / "windows.jsonl").exists() else []
     before = [int(d["window"]) for d in map(json.loads, filter(str.strip, lines)) if not d.get("empty") and int(d["window"]) < window]

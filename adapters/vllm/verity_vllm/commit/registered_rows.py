@@ -20,6 +20,8 @@ from verity.commitments.merkle import tree_levels
 from verity.commitments.rowleaf import ROLE_X, sha512_row_layout
 from verity.protocols.spot.verifier.one_stage import registered as G
 
+__all__ = ["commit"]
+
 #: the widest row `row_width` picks, in leaves
 MAX_WORDS = 4096
 #: rows hashed per numpy block, which bounds the copy a block makes

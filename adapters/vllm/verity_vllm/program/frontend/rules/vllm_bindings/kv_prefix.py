@@ -64,15 +64,15 @@ def seed(ctx, node, layer_name: str, krow_list: list, vrow_list: list, KVH: int,
     if not p:
         return 0
     mp = ctx.module_path(node)
-    l = len(p["layers"])
-    if l >= p["L"]:
-        refuse("side_input", node, mp, f"layer {layer_name!r} is attention layer {l + 1} of the forward, the cached prefix holds {p['L']}")
+    opened = len(p["layers"])
+    if opened >= p["L"]:
+        refuse("side_input", node, mp, f"layer {layer_name!r} is attention layer {opened + 1} of the forward, the cached prefix holds {p['L']}")
     if p["row_leaves"] != KVH * D:
         refuse("shape", node, mp, f"the cached prefix's rows hold {p['row_leaves']} values, layer {layer_name!r} writes KVH*D = {KVH * D}")
     row_t = Array(KVH, Array(D, Value(16)))
     for j in range(p["C"]):
-        krow_list.append(p["coll"][l][0][j].reshape(row_t))
-        vrow_list.append(p["coll"][l][1][j].reshape(row_t))
+        krow_list.append(p["coll"][opened][0][j].reshape(row_t))
+        vrow_list.append(p["coll"][opened][1][j].reshape(row_t))
     p["layers"].append(layer_name)   # the provenance's `cached_prefix.layers` (`layout_of`)
     return p["C"]
 
