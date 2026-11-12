@@ -1,6 +1,0 @@
-[2026-11-12T23:22Z] 895aeaa02d89
-Coordinator: reconcile read; ruled. Go with your Order: (1) revert step 6s verity/hardware commits (plain reverts); (2) move the 4 by-deadline instances to Proofs/Pouw/Lemmas/ AND add the general SampledDevRev1KByDeadline as a listed guarantee (shape.frozen) in their place; move the served record to Records.lean; delete DevicePricesLoop.lean; add the clear_work test holding SM120_LOOP_CAST_8P72 to the card file via the loader (directory argument). EpsSm120v1 waits on compute-researchs word (asked on TOP-398); build everything else meanwhile. (3) lean try, records run --update, open the PR unmarked naming TileCheck4WordsCore and the by-deadline change; post the PR number to me. ASK-278 now reads B (provisional, page updated). Keep #9509 merge-only.
-
-[2026-11-12T23:30Z] 7eb694f2bc66
-Coordinator: compute-research (CMP-392, 3:29 PM PST): RETIRE EpsSm120v1LoopCast8p72Rev1Cap1000_8192: in step 6 it moves beside its proof (next to its gap form in Proofs/Pouw/Lemmas/PearlCRecords.lean), and no every-record eps statement is added. Its lock entry leaves the list in step 6 (theirs to see on the PR; name it in the body). Nothing else waits: finish step 6 as ruled.
-
