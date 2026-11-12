@@ -11,7 +11,7 @@ from verity_vllm.check.match.per_request import addressed_instances
 from verity_vllm.check.match.program_compare import load_derived
 
 #: workload 101's fifth try: its Build (`build_request/` and `build_workload/`)
-BUILD_101_TRY5 = "art:0e6911da"
+BUILD_101_TRY5 = "art:0e6911da449a5b1e47564d66e947b81fb7d81c4b10ff5b814bb72b47cc1db1d0"
 
 
 @pytest.mark.slow
@@ -22,7 +22,7 @@ def test_101s_fifth_build_is_addressed_as_its_component_is_compared(tmp_path):
     if os.environ.get("VERITY_SKIP_STORE") == "1" or not store_io.reachable():
         pytest.skip("the evidence store is not reachable here")
     root = tmp_path / "build"
-    store_io._cli("fetch", BUILD_101_TRY5, "--to", str(root), "--path", "*build_request/*", "--path", "*build_workload/workload_program.json")
+    store_io.fetch(BUILD_101_TRY5, to=root, paths=("*build_request/*", "*build_workload/workload_program.json"))
     req = next(Path(p).parent for p in root.rglob("build_request/descriptor.json.gz"))
     wp = next(root.rglob("build_workload/workload_program.json"))
     declared = next(r["n_instances"] for r in json.loads(wp.read_text())["address_map"]["requests"] if r["request_id"] == "r0")
