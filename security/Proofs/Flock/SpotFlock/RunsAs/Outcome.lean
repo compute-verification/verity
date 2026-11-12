@@ -65,8 +65,9 @@ theorem check_true_of_codes {b : Bool} {own : Spot.SecondStage.Own} {stmts : Opt
 /-- `getD` of an object at `k` is its map's entry at `k`, `null` where it has none. -/
 theorem getD_obj (m : Std.TreeMap.Raw String Json compare) (k : String) :
     Spot.getD (.obj m) k = (m[k]?).getD .null := by
-  unfold Spot.getD Spot.field? Json.getObjVal?
-  rcases m[k]? with _ | v <;> rfl
+  cases hk : m[k]? <;>
+    simp [Spot.getD, Spot.field?, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?, hk, Except.toOption, pure,
+      Except.pure, throw, throwThe, MonadExceptOf.throw]
 
 /-- `setObjVal!` on an object is its map's `insert`. -/
 theorem setObjVal_obj (m : Std.TreeMap.Raw String Json compare) (k : String) (v : Json) :

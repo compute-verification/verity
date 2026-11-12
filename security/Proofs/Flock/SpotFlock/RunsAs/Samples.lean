@@ -38,11 +38,12 @@ theorem selectSecond_append {sample ns ks : Array ℕ} {ξ : ByteArray} (t : Byt
   unfold Spot.Select.selectSecond at h ⊢
   cases hq : Spot.Select.secondProblem sample ns ks with
   | some e =>
-    rw [hq] at h
+    try rw [hq] at h
     dsimp only at h
     exact absurd h (Properties.Spot.SecurityProofs.throw_bind_ne _ _ _)
   | none =>
-    rw [hq] at h ⊢
+    try rw [hq] at h
+    try rw [hq]
     dsimp only at h ⊢
     obtain ⟨dr, hd, h⟩ := Properties.Spot.SecurityProofs.bind_eq_ok.1 h
     rw [drawFirstRead_append t hd, Properties.Spot.SecurityProofs.bind_ok]
@@ -79,13 +80,13 @@ theorem select_append {rule : Spot.Select.Rule} {p : Spot.Program} {query : Json
 
 /-- **Part 1: the model's replay sample is the first stage's**: where the registration has no closure map and the
 first stage accepted on `ξ`, proving `proved`, the replay sample on `ξ ++ t` is `proved`. -/
-theorem sample_pad {g : RegTwo} {ξ : ByteArray} (t : ByteArray) {draw : Json} {proved : Array ℕ} {read : ℕ}
+theorem sample_pad {g : SamplingDeploy.RegTwo} {ξ : ByteArray} (t : ByteArray) {draw : Json} {proved : Array ℕ} {read : ℕ}
     (hc : g.first.closure = none)
     (h : Spot.Select.select g.first.rule g.first.program g.first.query g.first.table g.first.closure ξ =
       .ok (draw, proved, read)) :
     g.sample (ξ ++ t) = proved := by
   rw [hc] at h
-  simp only [RegTwo.sample, hc, select_append t h]
+  simp only [SamplingDeploy.RegTwo.sample, hc, select_append t h]
 
 /-- **Part 2: the model's second draw is the second stage's**: where the second stage accepted on `ξ` over the model's
 replay sample, and the second stage's coins are `ξ` followed by `t`, the model's second draw is the run's. -/
