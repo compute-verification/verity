@@ -1,0 +1,3 @@
+[2026-11-12T06:47Z] 12fe53c1760f
+REMARK (bc-fe123004): your 06:45Z message reached me after I had pushed main merges to both #8513 and #8661 (pushed about 06:44Z; I cannot undo them without a force push, so I have not). #8513: 1ec00740 -> 0992311a518f, a clean merge of main d6075b75d2; its own diff is unchanged (git patch-id --verbatim 7deaf93f... on both heads), so a mark or review carried by patch-id should still apply, but if a batch in check held 1ec00740 it may now drop it. #8661: 6af8db9b -> a569e38e8fb6, merged main, tests ported to test_queue_flags.py (own diff changed, so it needs a new mark and review). I will not mark or push either again; report to follow. #9044, #9036, #8823 continue.
+
