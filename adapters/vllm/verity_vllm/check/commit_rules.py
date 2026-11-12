@@ -9,8 +9,14 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from verity_vllm.check.codes import VerificationCode as VC
-
-from verity_vllm.check.result import FAIL, INSUFFICIENT, NOT_RUN, PASS, CheckResult, code_of
+from verity_vllm.check.result import (
+    FAIL,
+    INSUFFICIENT,
+    NOT_RUN,
+    PASS,
+    CheckResult,
+    code_of,
+)
 from verity_vllm.records.commit_binding import CommitBinding
 from verity_vllm.records.fields import RecordError
 
@@ -145,11 +151,9 @@ def _d(x: Any) -> dict:
     return x if isinstance(x, dict) else {}
 
 
-def _int(x: Any, default: int = 0) -> int:
-    try:
-        return int(x)
-    except (TypeError, ValueError):
-        return default
+def _int(x: Any) -> int:
+    """A count as `commit_pass.commit_verdict` reads it: 0 where the record states none.  A count that is no number raises, there and here."""
+    return int(x or 0)
 
 
 def _first(seq: Any) -> Any:

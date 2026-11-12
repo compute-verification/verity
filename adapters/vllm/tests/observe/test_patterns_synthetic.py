@@ -6,18 +6,45 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.observe.events import (DispatchEnter, DispatchExit, Root, RunHeader, SampleEnd, StepEnd, StepStart,
-                                   TritonLaunch, ViewDesc)
-from verity_vllm.observe.fold.patterns import (ComputeGroup, GeometryError, TransparentGroup, as_slot_rows, as_weight_view, members,
-                                     schema_param_names, split_heads)
-from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.events import (
+    DispatchEnter,
+    DispatchExit,
+    Root,
+    RunHeader,
+    SampleEnd,
+    StepEnd,
+    StepStart,
+    TritonLaunch,
+    ViewDesc,
+)
+from verity_vllm.observe.fold.patterns import (
+    ComputeGroup,
+    GeometryError,
+    TransparentGroup,
+    as_slot_rows,
+    as_weight_view,
+    members,
+    schema_param_names,
+    split_heads,
+)
 from verity_vllm.observe.fold.patterns.sampling import TokenSelectGumbelTwoStage
-from verity_vllm.observe.fold.resolver import (Compute, Gather, GatherMany, PerRow, ResolutionError, Shared, StepContext,
-                                     Transparent, Unsupported, resolve_step)
+from verity_vllm.observe.fold.profiles import vllm_d9105ea80_sm89_eager as PROF
+from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
+    GatherMany,
+    PerRow,
+    ResolutionError,
+    Shared,
+    StepContext,
+    Transparent,
+    Unsupported,
+    resolve_step,
+)
 from verity_vllm.observe.fold.tree import step_events
 
 C = PROF.C
-H, NH, KVH, D, I, V, QKV, GU = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["V"], C["QKV"], C["GU"]
+H, NH, KVH, D, INTER, V, QKV, GU = C["H"], C["NH"], C["KVH"], C["D"], C["I"], C["V"], C["QKV"], C["GU"]
 EPS = C["EPS"]
 BS = 16
 NUM_BLOCKS = 64
@@ -94,7 +121,7 @@ def weights_roots() -> list[Root]:
         Root(bf(A_O_W, (H, NH * D)), "weight", "model.layers.0.self_attn.o_proj.weight"),
         Root(bf(A_LN2, (H,)), "weight", "model.layers.0.post_attention_layernorm.weight"),
         Root(bf(A_GU_W, (GU, H)), "weight", "model.layers.0.mlp.gate_up_proj.weight"),
-        Root(bf(A_DOWN_W, (H, I)), "weight", "model.layers.0.mlp.down_proj.weight"),
+        Root(bf(A_DOWN_W, (H, INTER)), "weight", "model.layers.0.mlp.down_proj.weight"),
         Root(bf(A_NORM, (H,)), "weight", "model.norm.weight"),
         Root(bf(A_COS_SIN, (C["MAX_POS"], D)), "buffer", "model.layers.0.self_attn.rotary_emb.cos_sin_cache"),
     ]
@@ -104,7 +131,7 @@ GREEDY = {"greedy": True, "temperature": 0.0, "top_p": 1.0, "top_k": 0, "logprob
 
 
 def header(sampling: dict | None = GREEDY) -> RunHeader:
-    workload = {"requests": [{"request_id": "r0", "prompt_token_ids": list(range(32)), "max_tokens": 16}]}
+    workload: dict = {"requests": [{"request_id": "r0", "prompt_token_ids": list(range(32)), "max_tokens": 16}]}
     if sampling is not None:
         workload["sampling"] = sampling
     return RunHeader("verity-capture/log/v1", "2026-09-16T00:00:00Z", "88e1b098d719", {"vllm": "d9105ea80"},
@@ -258,11 +285,11 @@ def decode_step(step=1, position=32, token=42, prev_token=7, with_unknown=False,
     b.leaf("_C.fused_add_rms_norm.default", "_C::fused_add_rms_norm(Tensor! input, Tensor! residual, Tensor weight, float epsilon) -> ()",
            [o, h, bf(A_LN2, (H,)), EPS], module="model.layers.0.post_attention_layernorm")
     gu = gemm_launch(b, o, bf(A_GU_W, (GU, H)), 306, H, GU, M, num_sms=num_sms)
-    act = bf(307, (M, I))
+    act = bf(307, (M, INTER))
     b.leaf("aten.empty.memory_format", "aten::empty.memory_format(SymInt[] size, *, ScalarType? dtype=None, Layout? layout=None, Device? device=None, bool? pin_memory=None, MemoryFormat? memory_format=None) -> Tensor",
-           [[M, I]], {"dtype": {"$repr": "torch.bfloat16"}}, outs=act)
+           [[M, INTER]], {"dtype": {"$repr": "torch.bfloat16"}}, outs=act)
     b.leaf("_C.silu_and_mul.default", "_C::silu_and_mul(Tensor! result, Tensor input) -> ()", [act, gu], module="model.layers.0.mlp.act_fn")
-    d = gemm_launch(b, act, bf(A_DOWN_W, (H, I)), 308, I, H, M, num_sms=num_sms)
+    d = gemm_launch(b, act, bf(A_DOWN_W, (H, INTER)), 308, INTER, H, M, num_sms=num_sms)
     b.leaf("_C.fused_add_rms_norm.default", "_C::fused_add_rms_norm(Tensor! input, Tensor! residual, Tensor weight, float epsilon) -> ()",
            [d, h, bf(A_NORM, (H,)), EPS], module="model.norm")
     if with_unknown:
@@ -431,8 +458,8 @@ def test_gemm_target_profile_is_the_same_object_the_builder_pins():
     """[X-01 portability] One TargetProfile fact: the eager resolver's pin for a record captured on a 142-SM device equals
     `TargetProfile.from_gpu_document(header.gpu).num_sms`, which is what `TargetProfile.from_device()` yields on that host and what
     Bet A's `gemm_pins_for` pins (`NUM_SMS == active TargetProfile.num_sms`, see tests/program/test_vllm_bindings_pins.py)."""
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.observe.fold.patterns import target_of
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     events, start = decode_step(num_sms=142)
     se = step_events(events)
     ctx = _context_on_host(start, se.sample, 142)
@@ -469,8 +496,8 @@ def test_the_biased_linear_resolves_to_one_gemm_bias_at_the_add():
 def test_on_a_gemm_v2_host_the_biased_linear_resolves_as_the_frontend_binds_it(cc, sms):
     """The same pair on a `Gemm_v2` target (cc 12.0, cc 9.0): one `GemmBias_v2{K,N,DOT}` at the add, the record target's one-Call
     Definition (`frontend.targets.gemm_bias_spec`), the frontend's choice."""
-    from verity_vllm.program.frontend.target_profile import TargetProfile
     from verity_vllm.program.frontend import targets as TG
+    from verity_vllm.program.frontend.target_profile import TargetProfile
     events, start = decode_step(qkv_bias="add", num_sms=sms)
     se = step_events(events)
     specs = by_spec(resolve_step(se, _context_on_host(start, se.sample, sms, cc)))
@@ -515,10 +542,10 @@ def test_registered_values_bind_the_norms_and_attention_that_read_them_as_inputs
     import dataclasses
 
     import numpy as np
-
-    from verity_vllm.observe.fold.resolver import Supplied
     from verity.definitions.registry import b1
     from verity.definitions.registry import prims as P
+
+    from verity_vllm.observe.fold.resolver import Supplied
 
     events, start = decode_step()
     se = step_events(events)
@@ -540,8 +567,9 @@ def test_registered_values_on_the_rtx_pro_6000_bind_fa2s_check_inf_chain_with_th
     choice there (`targets.attention_spec(..., scale_input=True)`), with the scale its last `Supplied` operand; the norms as above."""
     import dataclasses
 
-    from verity_vllm.observe.fold.resolver import Supplied
     from verity.definitions.registry import b1
+
+    from verity_vllm.observe.fold.resolver import Supplied
 
     events, start = decode_step(num_sms=188)
     se = step_events(events)
@@ -662,7 +690,7 @@ def test_silu_embedding_tokenselect_gather():
     res = resolve_step(se, context(start, se.sample))
     specs = by_spec(res)
     s = specs["SiluMul_v2{I=1536}"][0]
-    assert s.operands == (PerRow(bf(306, (1, GU))),) and s.outputs == (PerRow(bf(307, (1, I))),)
+    assert s.operands == (PerRow(bf(306, (1, GU))),) and s.outputs == (PerRow(bf(307, (1, INTER))),)
     e = specs["Embedding_v1{V=49152,H=576}"][0]
     # the token operand is the step's input_ids view (int32), not the int64 copy vLLM made of it
     assert e.operands == (PerRow(ViewDesc(A_INPUT_IDS, 0, (1,), (1,), "int32", CUDA)), Shared(bf(A_EMBED, (V, H))))
@@ -689,7 +717,7 @@ def test_silu_is_the_builders_silu_mul_kind_under_the_record_targets_numerics_pr
     doc = {**ctx.header.profile, "target": TargetProfile(numerics_profile=numerics).to_json()}
     ctx = dataclasses.replace(ctx, header=dataclasses.replace(ctx.header, profile=doc))
     (s,) = [c for k, v in by_spec(resolve_step(se, ctx)).items() if k.startswith("SiluMul") for c in v]
-    assert s.spec is vocabulary_for("profile", numerics).kind("silu_mul", I=I)
+    assert s.spec is vocabulary_for("profile", numerics).kind("silu_mul", I=INTER)
     assert s.spec.base_id == {"b1-eager-v3": "SiluMul_v2", "b1-eager": "SiluMul_v1"}[numerics]
 
 

@@ -15,13 +15,13 @@ import types
 
 import numpy as np
 import pytest
-
-from tests.properties import dsv4_qnorm_insert_capture_gpu as X
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
 from verity.definitions.numerics import dsv4_qnorm_insert_twin as W
 from verity.definitions.registry import dsv4_qnorm_insert as R
-from verity_vllm.properties.record import REGISTRY, digest_of
+
+from tests.properties import dsv4_qnorm_insert_capture_gpu as X
+from verity_vllm.properties.record import REGISTRY, digest_of, seal
 
 M = X.M
 #: (token, head, word) of q_out: a pad head, and a real head of a DP-padded row (past the slots, normed and not inserted)
@@ -417,8 +417,6 @@ def test_main_end_to_end_on_stubbed_launches(padded, short, tmp_path, monkeypatc
 
 
 def test_the_record_is_a_registered_property() -> None:
-    from verity_vllm.properties.record import seal
-
     doc = seal(_doc(), X._verdict(_doc()))
     assert REGISTRY["dsv4_qnorm_insert_capture"].schema == X.SCHEMA and doc["ok"] and doc["digest"] == digest_of(doc)
     assert doc["sumsq_probe"]["served_statics"] is False and "insert/sumsq-probe" not in X.cases(doc)

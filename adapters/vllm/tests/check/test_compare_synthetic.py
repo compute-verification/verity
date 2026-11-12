@@ -9,16 +9,23 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-
 from verity.circuits.evaluation.reference import evaluate_region
 from verity.circuits.layout import FunctionCall, Region
 from verity.circuits.refs import runs
 
+from tests.observe.test_fold_synthetic import (
+    BN,
+    REQ,
+    SAMPLED,
+    C,
+    _real_memory_available,
+    install_stub_memory,
+    toy_log,
+    toy_profile,
+)
 from verity_vllm.check import fold_compare as cmp
 from verity_vllm.observe.events import ViewDesc
 from verity_vllm.observe.fold.fold import fold
-
-from tests.observe.test_fold_synthetic import BN, C, REQ, SAMPLED, _real_memory_available, install_stub_memory, toy_log, toy_profile
 
 _NP = {"bfloat16": np.uint16, "int32": np.uint32, "int64": np.uint64}
 

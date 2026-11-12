@@ -62,12 +62,13 @@
 # CPU quota: where the machine's CPU time is capped (a container's cpu.max: $GPU_LEASE_CPU_MAX, default /sys/fs/cgroup/cpu.max), runs
 # pinned to more CPUs than the cap allows are throttled together, and a timed run among them is void.  --cores CPUS (48-57,60)
 # declares the CPUs a run pins: CMD runs under `taskset -c CPUS`, and the lease records cores=CPUS.  The pin is the lease's word, not
-# a fence: a job can still widen its own affinity.  A list `taskset -c CPUS` can't pin to here (CPUs this machine hasn't, or outside
-# its cpuset) is refused (2) before any GPU is taken or any lease stopped for it, quota or none; a list only part of which is this
-# machine's is pinned to that part, as taskset does, and is recorded and counted whole.  Before it takes any GPU, such a request
-# counts its CPUS with every live lease's, each CPU once: a lease's cores=, or for a lease that declared none the CPUs its
-# processes are allowed on at that moment (Cpus_allowed_list of its pid's process tree under $GPU_LEASE_PROC, default /proc; every
-# CPU when none of them is left to read).
+# a fence: a job can still widen its own affinity.  Every CPU of the list must be one this request may run on here: `taskset -c
+# CPUS` is tried, and a list it can't pin to at all, or pins to only a part of (the rest are CPUs this machine hasn't, or outside
+# its cpuset; taskset drops them silently), is refused (2), naming the CPUs that are not, before any GPU is taken or any lease
+# stopped for it, quota or none.  What the trial was pinned to is Cpus_allowed_list in $GPU_LEASE_PROC/self/status, read under it.
+# Before it takes any GPU, a request with --cores counts its CPUS with every live lease's, each CPU once: a lease's cores=, or for
+# a lease that declared none the CPUs its processes are allowed on at that moment (Cpus_allowed_list of its pid's process tree
+# under $GPU_LEASE_PROC, default /proc; every CPU when none of them is left to read).
 # A count over the quota is refused (75, holding nothing), saying the count, the quota, each lease's CPUs and what to do; with
 # --wait the request waits instead, unqueued, until they fit.  A machine without a quota (no file, or `max`) refuses nothing.
 # The count covers leases only: a process that holds no lease is not in it, whatever it is pinned to.  And only the leases of this
@@ -483,6 +484,26 @@ foreign_gpus() {
   said_foreign=$note
 }
 
+cpus_outside() {
+  # the CPUs of the list $1 that the list $2 doesn't hold, as a list (48-55,60); nothing when it holds them all
+  local part c lo="" hi="" out=""
+  local -A held=()
+  for part in ${2//,/ }; do
+    for ((c = 10#${part%-*}; c <= 10#${part#*-}; c++)); do held[$c]=1; done
+  done
+  for part in ${1//,/ }; do
+    for ((c = 10#${part%-*}; c <= 10#${part#*-}; c++)); do [ -n "${held[$c]:-}" ] || echo "$c"; done
+  done | sort -nu | {
+    while read -r c; do
+      if [ -n "$lo" ] && [ "$c" -eq $((hi + 1)) ]; then hi=$c; continue; fi
+      [ -z "$lo" ] || out+="${out:+,}$lo$([ "$hi" -gt "$lo" ] && echo "-$hi")"
+      lo=$c hi=$c
+    done
+    [ -z "$lo" ] || out+="${out:+,}$lo$([ "$hi" -gt "$lo" ] && echo "-$hi")"
+    echo "$out"
+  }
+}
+
 cores_over() {
   # why this request's --cores can't be pinned beside the live leases (stdout; exit 75): together, each CPU counted once, they pass
   # the machine's CPU quota.  0 when they fit, or the machine has no quota.  A live lease is a held lock whose owner line isn't
@@ -782,9 +803,24 @@ if [ -n "$cores" ]; then
     command -v "$tool" > /dev/null 2>&1 || { echo "gpu-lease: --cores needs $tool, which isn't on PATH here" >&2; exit 2; }
   done
   # tried now: under the lease the pin would fail only at CMD's start, after the GPUs are taken and a lease may have been stopped
-  pin_err=$(taskset -c "$cores" true 2>&1) || {
+  pin_status=${GPU_LEASE_PROC:-/proc}/self/status
+  pinned_to=$(taskset -c "$cores" cat "$pin_status" 2>&1) || {
     echo "gpu-lease: --cores $cores can't be pinned on this machine, so nothing is leased:" \
-      "${pin_err:-taskset -c $cores true failed}" >&2
+      "${pinned_to:-taskset -c $cores cat $pin_status failed}" >&2
+    exit 2
+  }
+  # taskset pins to the CPUs of the list this request may run on and says nothing of the rest: a run that declared them would
+  # be counted on CPUs it never had, and timed on fewer than it asked for
+  pinned_to=$(sed -n 's/^Cpus_allowed_list:[[:space:]]*//p' <<< "$pinned_to")
+  [[ $pinned_to =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || {
+    echo "gpu-lease: --cores $cores: $pin_status doesn't say which CPUs taskset pinned to (no Cpus_allowed_list), so nothing" \
+      "is leased" >&2
+    exit 2
+  }
+  outside=$(cpus_outside "$cores" "$pinned_to")
+  [ -z "$outside" ] || {
+    echo "gpu-lease: --cores $cores names CPUs this request can't run on here ($outside), so nothing is leased: every CPU of" \
+      "the list must be one of this machine's that it may use" >&2
     exit 2
   }
 fi

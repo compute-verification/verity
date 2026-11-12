@@ -11,11 +11,18 @@ acquired under that name inside the call (`ExpertGemm.apply`), as `Int8ExpertsMe
 an expert no token routed to is a call of zero rows, acquired as its zero rows [0, K] and scales [0]."""
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from types import SimpleNamespace
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 from verity_vllm.acquire.sources.int8_source import Int8Source
-from verity_vllm.protocols.pouw.h1.commit import SCHEME, CommitTap, Sites, _EveryStep, site
+from verity_vllm.protocols.pouw.h1.commit import (
+    SCHEME,
+    CommitTap,
+    Sites,
+    _EveryStep,
+    site,
+)
 from verity_vllm.protocols.pouw.h1.ranks import RankExtension, RankRun, RankTap
 
 

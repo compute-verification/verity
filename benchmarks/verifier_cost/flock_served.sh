@@ -83,7 +83,9 @@ fi
 if [ -n "$stmtp" ]; then
   if [ -n "$base" ]; then
     mkdir -p "$S/base"
-    git archive "$base" verity/protocols/flock/verifier | tar -x -C "$S/base"
+    # the verifier's package at $base and, where $base has them, the base packages it requires by path
+    git archive "$base" verity/protocols/flock/verifier $(git ls-tree -d --name-only "$base" \
+      verity/circuits/base verity/circuits/lean verity/commitments/lean) | tar -x -C "$S/base"
     scratch flock-tmpl "$S/base/verity/protocols/flock/verifier" flock-tmpl-base
     stmt "$S/flock-tmpl-base/.lake/build/bin/flock-tmpl" -base
   fi

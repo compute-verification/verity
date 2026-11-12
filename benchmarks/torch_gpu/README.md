@@ -29,9 +29,14 @@ with the same toolkit at the same path and the same host compiler (a `research r
 nvcc with the three things its device compiler reads that follow a file's place in the tree fixed (the file names in the
 preprocessed text's line markers, the source's path, and its directory and environment): wherever a source or a header
 it includes sits, the device compiler is handed the same text and the same arguments, in the same directory, so a commit
-that only moves one leaves each cubin they compile with it as it was. Two things that leaves out: a file name the
-program's own text holds (`__FILE__` expands to the name as its `#include` spells it, and the program is compiled as
-written), and the row tables' cubins in `s8_linear`'s ship, which the adapter's own build compiles.
+that only moves one leaves each cubin they compile with it as it was. The program's own text is compiled as written,
+so `ship_nvcc.sh` refuses one that names a file (`__FILE__`, or an assert, which expands to it, gives the name as its
+`#include` spells it, which a move changes). Each build first holds its compiler to that (`ship_probe.sh`): a probe that
+nvcc itself compiles to two cubins at two places must be one cubin with `ship_nvcc.sh`, and a toolkit or a wrapper with
+which it isn't builds no ship. That leaves out the row tables' cubins in `s8_linear`'s ship, which the adapter's own
+build compiles. A library a job builds off the card outside a ship (`j10r_sm90/job.sh`'s, and
+`benchmarks/hash/dither/job.sh`'s) compiles with `job_nvcc.sh`, that wrapper without the frame and its probe: its cubin
+doesn't follow its place either, and nothing holds a rebuild to the same bytes from run to run.
 
 - `commit_slots/`: the serve-time commit call, a step's proof-block outputs as hm96-sha512 rows under hiding leaves in
   frame-v3-sha512 trees, one subtree per sequence slot. `gpu.sh` holds the GPU's roots to the CPU reference's.

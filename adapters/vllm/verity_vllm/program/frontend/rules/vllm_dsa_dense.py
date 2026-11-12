@@ -12,18 +12,45 @@
 
 from __future__ import annotations
 
-from verity.circuits.refs import Affine, Coll, Concat, PartLog, Strided, array_of, concat
+from verity.circuits.refs import (
+    Affine,
+    Coll,
+    Concat,
+    PartLog,
+    Strided,
+    array_of,
+    concat,
+)
 from verity.circuits.types import Array, Value
+from verity.definitions.registry import fa3_split
+
 from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import shape
-from verity_vllm.program.frontend.rules.vllm_bindings.observations import _OBSERVED, active_target_profile
-from verity_vllm.program.frontend.rules.vllm_dsa import (_DENSE, BF16, DECODE_THRESHOLD, DECODE_THRESHOLD_DEFAULT, E4M3, F32,
-                                                         _append_rows, _args, _decode_threshold, _f32, _missing,
-                                                         _observed_sparse_mla, _open_history, _positions, _rows, _static_float,
-                                                         _value)
+from verity_vllm.program.frontend.rules.common import known, shape
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+    _OBSERVED,
+    active_target_profile,
+)
+from verity_vllm.program.frontend.rules.vllm_dsa import (
+    _DENSE,
+    BF16,
+    DECODE_THRESHOLD,
+    DECODE_THRESHOLD_DEFAULT,
+    E4M3,
+    F32,
+    _append_rows,
+    _args,
+    _decode_threshold,
+    _f32,
+    _missing,
+    _observed_sparse_mla,
+    _open_history,
+    _positions,
+    _rows,
+    _static_float,
+    _value,
+)
 from verity_vllm.program.frontend.rules.vllm_iface import iface
-from verity.definitions.registry import fa3_split
 
 PREFILL_BACKEND = "vllm.v1.attention.backends.mla.prefill.flash_attn.FlashAttnPrefillBackend"
 
@@ -55,7 +82,7 @@ def takes_dense_mha(layer, T: int, rows: int, topk: int) -> bool:
     cfg = getattr(getattr(layer, "_vllm_config", None), "attention_config", None)
     if getattr(layer, "prefill_backend", None) is None or getattr(cfg, "sparse_mla_force_mqa", False):
         return False
-    return T > DECODE_THRESHOLD.get(int(layer.num_heads), DECODE_THRESHOLD_DEFAULT) and rows <= topk
+    return DECODE_THRESHOLD.get(int(layer.num_heads), DECODE_THRESHOLD_DEFAULT) < T and rows <= topk
 
 
 class DsaDenseMhaRule(StateRule):
@@ -72,19 +99,19 @@ class DsaDenseMhaRule(StateRule):
     call's cache rows open the layer's history as `DsaIndexerAttn[vllm-dsa]`'s do, for the decode steps after it."""
     modes = frozenset({"profile"})
     info = RuleInfo("DsaDenseMha[vllm-dsa]", 1, "state", applies_to="vllm_iface.dsa_dense_mha(...) (" + ", ".join(_DENSE) + ")",
-                    preconditions=("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
-                                   "its prefill backend FlashAttnPrefillBackend on FA3 with v unpadded at the call's scale; sparse_mla_force_mqa off",
+                    preconditions=(("the layer's OBSERVED implementation is FlashAttnMLASparseImpl on a bf16 cache, without context parallelism; "
+                                   "its prefill backend FlashAttnPrefillBackend on FA3 with v unpadded at the call's scale; sparse_mla_force_mqa off"),
                                    "the target is compute capability 9.0 under FA3's check-inf-per-iteration construction (Attention_v4)",
-                                   "the call is a prefill: T above the decode threshold at the observed query heads per rank (DECODE_THRESHOLD), "
-                                   "T <= TOPK, and it opens the layer's history (no chunked context)",
-                                   "q's and k's parts q_nope, k_nope [T, NH, P], q_pe [T, NH, R], k_pe [T, R], and v [T, NH, D] bf16 "
+                                   ("the call is a prefill: T above the decode threshold at the observed query heads per rank (DECODE_THRESHOLD), "
+                                   "T <= TOPK, and it opens the layer's history (no chunked context)"),
+                                   ("q's and k's parts q_nope, k_nope [T, NH, P], q_pe [T, NH, R], k_pe [T, R], and v [T, NH, D] bf16 "
                                    "at D = P + R (one head dim, D registered by targets.fa3_kblock_n); kv_c [T, L] bf16; "
-                                   "scale == f32(D^-0.5), the word Attention_v4 folds in",
-                                   "FA3's split count of the sequence (`fa3_model.split_plan` at the target's SMs, or batch invariance's "
+                                   "scale == f32(D^-0.5), the word Attention_v4 folds in"),
+                                   ("FA3's split count of the sequence (`fa3_model.split_plan` at the target's SMs, or batch invariance's "
                                    "num_splits = 1) under a launch bound of at most 32 splits, the FlashAttnFwdCombine instantiation "
-                                   "SparseMlaCombine_v1 states (kLogMaxSplits 5)",
-                                   "no declared launch context other than the call's own rows (a varlen launch's split plan reads every "
-                                   "sequence's length)",
+                                   "SparseMlaCombine_v1 states (kLogMaxSplits 5)"),
+                                   ("no declared launch context other than the call's own rows (a varlen launch's split plan reads every "
+                                   "sequence's length)"),
                                    "the index operands both given (index_k [T, Dk] e4m3, index_k_scale [T] f32) or both None",
                                    "layer_name static and written from one module; not under registered_values"),
                     evidence_domain="structural; numerics: Attention_v4 and AttentionSplit_v1 (glm53_fa3_prefill_capture)")
@@ -94,7 +121,9 @@ class DsaDenseMhaRule(StateRule):
 
     def applies(self, node, ctx):
         from verity_vllm.program.frontend import targets as TG
-        from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_launch_context
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import (
+            active_launch_context,
+        )
         a = _args(node, _DENSE)
         layer, topk, scale = a["layer_name"], a["topk"], a["scale"]
         if not isinstance(layer, str) or not isinstance(topk, int) or topk < 1 or not _static_float(scale):
@@ -116,9 +145,9 @@ class DsaDenseMhaRule(StateRule):
         limit = _decode_threshold(layer)
         if isinstance(limit, str):
             return limit
-        if T <= limit:
+        if limit >= T:
             return f"a call of {T} query rows is a decode (decode threshold {limit}), which takes the top-k MQA path"
-        if T > topk:
+        if topk < T:
             return f"a prefill of {T} rows reaches past TOPK {topk} keys, which vLLM serves by sparse MQA, not dense MHA"
         NH, P = (shape(ctx, a["q_nope"]) or (0, 0, 0))[1:3]
         R = (shape(ctx, a["k_pe"]) or (0, 0))[-1]
@@ -163,8 +192,8 @@ class DsaDenseMhaRule(StateRule):
         mp, h = ctx.module_path(node), ctx.hint_name(node)
         pos = ctx.static_index(a["positions"]).flat()
         T = len(pos)
-        _, NH, P = shape(ctx, a["q_nope"])
-        D = P + shape(ctx, a["k_pe"])[-1]
+        _, NH, P = known(shape(ctx, a["q_nope"]))
+        D = P + known(shape(ctx, a["k_pe"]))[-1]
         hist, P0 = _open_history(ctx, node, layer, pos, has)
         if P0:
             refuse("numerics_unregistered", node, mp, f"{layer!r}: a dense-MHA prefill of {T} rows after {P0} history rows runs over a "
@@ -178,7 +207,8 @@ class DsaDenseMhaRule(StateRule):
         v = _rows(ctx, a["v"], 16)
         head = Array(1, Array(D, Value(16)))
         klogs, vlogs = [PartLog() for _ in range(NH)], [PartLog() for _ in range(NH)]
-        outs, masked, pers = [], [], []
+        outs, masked = [], []
+        pers: list = []
         for i in range(T):
             masked.append(TG.fa3_masked_from(tp, i + 1, NH, NH, D, T, i))
             split = {} if ns == 1 else {"PER": fa3_split.split_per(T, i, BM, geom["BN"], ns)}

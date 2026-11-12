@@ -20,18 +20,31 @@ Under `correspondence` every module-site Value is CONFIRMED against the record (
 listed `unconfirmed` in the plan -- a finding, not a changed site: the manifest's op_path stands either way, so the plan's content is the
 same under both sources and the plan digest (which excludes the `correspondence` provenance block) says whether anything changed.
 
-The runtime side is `runtime_tree.RuntimeTree` (module-tree facts: which modules the runtime HAS; re-exported here for callers).
+The runtime side is `records.runtime_tree.RuntimeTree` (module-tree facts: which modules the runtime HAS; re-exported here for callers).
 """
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any
 
+from verity_vllm.correspondence.runtime import (
+    NAMESPACE,
+    SCHEMA,
+    RuntimeCorrespondence,
+    read_program_dir,
+)
 from verity_vllm.query.manifest.format import collector_path, split_name
-from verity_vllm.observe.runtime_tree import RUNNER_PATH, RUNTIME_TREE_SCHEMA, RuntimeTree, mro_names, runtime_tree_from_paths, runtime_tree_of
-from verity_vllm.correspondence.runtime import NAMESPACE, SCHEMA, RuntimeCorrespondence, read_program_dir
+from verity_vllm.records.runtime_tree import (
+    RUNNER_PATH,
+    RuntimeTree,
+    mro_names,
+    runtime_tree_from_paths,
+    runtime_tree_of,
+)
+from verity_vllm.records.runtime_tree import SCHEMA as RUNTIME_TREE_SCHEMA
 
 FALLBACK_READ = "the identity row's op_path: required_manifest.split_name(annotations.node_hints)[0] -> collector_path(wrapper_prefix) -> op_path_aliases"
 
@@ -122,7 +135,7 @@ class AcquireCorrespondence:
 
     @classmethod
     def from_programs(cls, runtime: RuntimeTree, programs: Iterable[str | Path], *, wrapper_prefix: str = "", aliases: Mapping[str, Any] | None = None,
-                      inplace_facts: Mapping[str, Mapping[str, Any]] | None = None) -> "AcquireCorrespondence":
+                      inplace_facts: Mapping[str, Mapping[str, Any]] | None = None) -> AcquireCorrespondence:
         """Read the record of every component Program dir.  `source` is `correspondence` only when EVERY program carries it; a Build with
         the record on some components and not others falls back as a whole (uniform decision), the components lacking it listed `absent`."""
         tables: dict[str, RuntimeCorrespondence] = {}
