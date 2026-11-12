@@ -253,6 +253,7 @@ structure State where
   items : List Item
   declared : List Declared := []
   head : String
+  first : Option String := none
   entries : Nat
 
 def State.empty (c : Composite) : State := { site := ⟨[], [], []⟩, items := [], head := genesis c, entries := 0 }
@@ -269,31 +270,37 @@ def Entry.refusal (A : Auditor) (c : Composite) (s : State) : Entry → Option R
     else if s.declared.any (·.day == d.day) then some .duplicateDeclaration else none
 
 def State.add (s : State) (e : Entry) : State :=
+  let s : State := { s with head := e.digest, first := s.first.orElse fun _ => some e.digest, entries := s.entries + 1 }
   match e with
-  | .site x => { s with site := s.site.add x.added, head := e.digest, entries := s.entries + 1 }
-  | .information _ items => { s with items := s.items ++ items, head := e.digest, entries := s.entries + 1 }
-  | .declaration _ d => { s with declared := s.declared ++ [d], head := e.digest, entries := s.entries + 1 }
+  | .site x => { s with site := s.site.add x.added }
+  | .information _ items => { s with items := s.items ++ items }
+  | .declaration _ d => { s with declared := s.declared ++ [d] }
 
 /-- **The check**: the log folded entry by entry, each held to the log before it; or the first entry that fails, by its
-index and the first check it fails. -/
-def check (A : Auditor) (c : Composite) (log : Log) : Except (Nat × Refusal) State :=
-  log.foldlM (fun s e => match e.refusal A c s with
+index and the first check it fails; or, where every entry passes and the Site the log folds to is not complete against
+the auditor's figures (`Site.Registration.Complete`), `inventory` at the log's length. -/
+def check (A : Auditor) (c : Composite) (log : Log) : Except (Nat × Refusal) State := do
+  let s ← log.foldlM (fun s e => match e.refusal A c s with
     | some r => .error (s.entries, r)
     | none => .ok (s.add e)) (State.empty c)
+  if Site.Registration.Complete Site.Registration.sha512 A s.site then pure s else .error (s.entries, .site .inventory)
 
 /-! ## Views: what a subprotocol reads of the log -/
 
 /-- What a subprotocol reads of an accepted log, at its head: the Site, θ's registered values in order, the registered
-compiler, and the days' registered circuits in order. -/
+compiler, the days' registered circuits in order, the head, and `first`, the head after the log's first entry: the
+log only appends, so every later head of this log has the same one, and a value bound to it is bound to this log
+whatever is registered after. None for an empty log. -/
 structure View where
   site : Site
   theta : List Theta
   builder : Option Builder
   declarations : List Declared := []
   head : String
+  first : Option String := none
 
 def State.view (s : State) : View :=
-  { site := s.site, head := s.head,
+  { site := s.site, head := s.head, first := s.first,
     theta := s.items.filterMap fun | .theta t => some t | _ => none,
     builder := s.items.findSome? fun | .builder b => some b | _ => none,
     declarations := s.declared }
@@ -307,7 +314,9 @@ def View.declared? (v : View) (day : Nat) : Option Declared := v.declarations.fi
 
 def View.toJson (v : View) : Json :=
   Json.mkObj [("builder", match v.builder with | some b => Item.toJson (.builder b) | none => .null),
-    ("declarations", .arr (v.declarations.map Declared.toJson).toArray), ("head", .str v.head), ("site", v.site.toJson), ("theta", .arr (v.theta.map (Item.toJson ∘ .theta)).toArray)]
+    ("declarations", .arr (v.declarations.map Declared.toJson).toArray),
+    ("first", match v.first with | some h => .str h | none => .null), ("head", .str v.head), ("site", v.site.toJson),
+    ("theta", .arr (v.theta.map (Item.toJson ∘ .theta)).toArray)]
 
 /-! ## The core protocol -/
 
@@ -386,7 +395,7 @@ def sheet : Sheet :=
                    | .uniformS8 => fig 1000000000000000 | .uniformS2 => fig 2000000000000000
                    | .uniformU2 => fig 2000000000000000 | .uniformU4 => fig 1500000000000000
                    | .zero => fig 4000000000000000 },
-    bw := 3200, chip := 1 <<< 25, mem := 64 <<< 30 }
+    bw := 3200000000000, chip := 1 <<< 25, mem := 64 <<< 30 }
 
 /-- `sheet` with its clock at `n` Hz. -/
 def clocked (n : Nat) : Sheet := { sheet with figures := { sheet.figures with clock := fig n } }
@@ -397,22 +406,28 @@ def rated (c : Site.OperandClass) (n : Nat) : Sheet :=
 
 def keys : List (String × String) := [("cert0", "k0"), ("chal0", "k1")]
 
+/-- The scheme the example's devices' keys are of. -/
+def lms : String := "lms-sha512/n64-w1-h20/v0"
+
 def auditor : Auditor :=
-  { sheet := fun sku => [sheet].find? (·.sku == sku), tolerance := fig 1 20, key := fun i => (keys.find? (·.1 == i)).map (·.2) }
+  { sheet := fun sku => [sheet].find? (·.sku == sku), tolerance := fig 1 20,
+    key := fun i => (keys.find? (·.1 == i)).map (·.2), scheme := fun i => (keys.find? (·.1 == i)).map fun _ => lms,
+    hosts := [("node0", { chip := 1 <<< 25 })] }
 
 def hex (c : Char) : String := String.ofList (List.replicate 128 c)
 
 def locs : List Loc :=
-  [{ id := "site0", kind := .site }, { id := "node0", kind := .host, parent := some "site0" },
+  [{ id := "site0", kind := .site, timeUnit := some (fig 1 1000000000) },
+   { id := "node0", kind := .host, parent := some "site0", chip := some (1 <<< 25) },
    { id := "gpu0", kind := .device, parent := some "node0", sheet := Site.Registration.sha512.sheet sheet },
    { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := 1 <<< 30 },
-   { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key := "k0" },
-   { id := "chal0", kind := .challenger, parent := some "site0", owner := .auditor, key := "k1" }]
+   { id := "cert0", kind := .certifier, parent := some "site0", owner := .auditor, key := "k0", scheme := lms },
+   { id := "chal0", kind := .challenger, parent := some "site0", owner := .auditor, key := "k1", scheme := lms }]
 
 def links : List Link :=
-  [{ id := "up0", ends := ("node0", "cert0"), β := 100, latency := 1 },
-   { id := "up1", ends := ("cert0", outside), β := 100, latency := 1 },
-   { id := "mc0", ends := ("chal0", "node0"), β := 10, latency := 1 }]
+  [{ id := "up0", ends := ("node0", "cert0"), β := some 100000000000, latency := 1 },
+   { id := "up1", ends := ("cert0", outside), β := some 100000000000, latency := 1 },
+   { id := "mc0", ends := ("chal0", "node0"), β := some 10000000000, latency := 1 }]
 
 def weights : Theta :=
   { value := "weights", root := hex 'a', leaves := 4, words := 64, domain := hex 'b', checkpoint := some (hex 'c') }
@@ -453,7 +468,7 @@ def at_ (n : Nat) (d : Nat := 1) : Auditor := { auditor with tolerance := fig n 
   some (0, .site .previous)
 -- onsite: an uplink no certifier splits; remote takes it
 private def bare : List (String → Entry) :=
-  [site ⟨[sheet], locs.take 4, [{ id := "up0", ends := ("node0", outside), β := 100, latency := 1 }]⟩]
+  [site ⟨[sheet], locs.take 4, [{ id := "up0", ends := ("node0", outside), β := some 100, latency := 1 }]⟩]
 #guard refusal .onsite bare == some (0, .site .uncertified)
 #guard refusal .remote bare == none
 -- onsite: memory no challenger reaches
@@ -479,6 +494,50 @@ private def fast : Sheet :=
 private def over : Loc := { id := "hbm0", kind := .memory, parent := some "gpu0", tier := some .hbm, bytes := (64 <<< 30) + 1 }
 #guard refusal .remote [site ⟨[sheet], locs.take 3 ++ [over], []⟩] == some (0, .site .capacity)
 #guard refusal .onsite entries { auditor with key := fun _ => some "k1" } == some (0, .site .owner)
+-- the auditor's inventory, held of the Site the log folds to: a card it lists for the host and the log leaves out, and
+-- a memory leaf it has figures for and the log leaves out, are refused at the log's end; a leaf a later entry adds
+-- under the registered host passes, and the log before that entry is then refused at its end; a host that states no
+-- on-chip state is refused at its entry
+private def listing (n : Nat) : Auditor :=
+  { auditor with hosts := [("node0", { chip := 1 <<< 25, cards := [(sheet.sku, n)] })] }
+#guard refusal .onsite entries (listing 1) == none
+#guard refusal .onsite entries (listing 2) == some (3, .site .inventory)
+private def withDram : Auditor := { auditor with memory := [("dram0", ⟨"node0", 6554, 1 <<< 31⟩)] }
+private def later : String → Entry :=
+  site ⟨[], [{ id := "dram0", kind := .memory, parent := some "node0", tier := some .dram, bytes := 1 <<< 31,
+               bw := some 6554 }], []⟩
+#guard refusal .onsite entries withDram == some (3, .site .inventory)
+#guard refusal .onsite (entries ++ [later]) withDram == none
+#guard refusal .onsite (entries ++ [later]) == some (3, .site .figures)
+-- the head after the first entry: none for an empty log, the first entry's digest after it, and the same after every
+-- later entry, where the head has moved
+private def viewOf (n : Nat) : Option View :=
+  (check auditor .onsite ((chain .onsite entries).take n)).toOption.map (·.view)
+#guard (viewOf 0).map (·.first) == some none
+#guard (viewOf 1).map (fun v => v.first == some v.head) == some true
+#guard (viewOf 3).map (·.first) == (viewOf 1).map (·.first)
+#guard (viewOf 3).map (fun v => v.first == some v.head) == some false
+-- a way out the auditor lists for the host: registered as a link under its id at the host, at the auditor's rate; a
+-- log that leaves it out, registers it at another rate, or under the id between two other ends, is refused at its end
+private def withWay (id : String) (β : Option Nat) : Auditor :=
+  { auditor with hosts := [("node0", { chip := 1 <<< 25, ways := [(id, β)] })] }
+#guard refusal .onsite entries (withWay "up0" (some 100000000000)) == none
+#guard refusal .onsite entries (withWay "up0" (some 400000000000)) == some (3, .site .inventory)
+#guard refusal .onsite entries (withWay "eth0" (some 100000000000)) == some (3, .site .inventory)
+#guard refusal .onsite entries (withWay "up1" (some 100000000000)) == some (3, .site .inventory)
+#guard refusal .remote [site ⟨[], locs.take 2, []⟩] (withWay "up0" (some 100000000000)) == some (1, .site .inventory)
+#guard refusal .remote [site ⟨[], locs.take 2, []⟩] == none
+-- a way out the auditor lists with no rate: registered as a link that states none and says no certifier splits it; a
+-- log that states a rate for it, or none where the auditor lists one, is refused at its end, and a link with no rate
+-- that does not say so is refused where it is registered
+private def eth0 (β : Option Nat) (why : Option String := some "no certifier splits it") : Link :=
+  { id := "eth0", ends := ("node0", outside), β, latency := 0, unmediated := why }
+#guard refusal .remote [site ⟨[], locs.take 2, [eth0 none]⟩] (withWay "eth0" none) == none
+#guard refusal .remote [site ⟨[], locs.take 2, [eth0 (some 1000)]⟩] (withWay "eth0" none) == some (1, .site .inventory)
+#guard refusal .remote [site ⟨[], locs.take 2, [eth0 none]⟩] (withWay "eth0" (some 1000)) == some (1, .site .inventory)
+#guard refusal .remote [site ⟨[], locs.take 2, [eth0 none none]⟩] == some (0, .site .kind)
+#guard refusal .remote [site ⟨[], locs.take 1 ++ [{ id := "node0", kind := .host, parent := some "site0" }], []⟩] ==
+  some (0, .site .figures)
 -- an id twice, a parent nobody registered, a host under a host
 #guard refusal .remote [site ⟨[sheet], locs.take 2, []⟩, site ⟨[], locs.drop 1 |>.take 1, []⟩] == some (1, .site .duplicateId)
 #guard refusal .remote [site ⟨[], [{ id := "node1", kind := .host, parent := some "site9" }], []⟩] ==
@@ -502,8 +561,13 @@ private def over : Loc := { id := "hbm0", kind := .memory, parent := some "gpu0"
 private def bytes (j : Json) : ByteArray := ((Flock.canon j).toOption.getD "").toUTF8
 
 private def params (c : Composite) : Json :=
-  Json.mkObj [("auditor", Json.mkObj [("keys", .arr #[Json.mkObj [("id", "cert0"), ("key", "k0")],
-      Json.mkObj [("id", "chal0"), ("key", "k1")]]), ("sheets", .arr #[sheet.toJson]), ("tolerance", "1/20")]),
+  Json.mkObj [("auditor", Json.mkObj [("drift", .arr #[]), ("hosts", .arr #[Json.mkObj [("cards", .arr #[]),
+      ("chip", (33554432 : Nat)), ("id", "node0"), ("shared", .arr #[]),
+      ("ways", .arr #[])]]),
+      ("keys", .arr #[Json.mkObj [("id", "cert0"), ("key", "k0"), ("scheme", .str lms)],
+        Json.mkObj [("id", "chal0"), ("key", "k1"), ("scheme", .str lms)]]),
+      ("memory", .arr #[]), ("sheets", .arr #[sheet.toJson]),
+      ("tolerance", "1/20")]),
     ("composite", .str c.name)]
 
 private def answer (c : Composite) (log : Committed) : Answer :=
