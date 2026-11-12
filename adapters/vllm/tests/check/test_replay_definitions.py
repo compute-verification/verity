@@ -305,18 +305,19 @@ def test_a_boolean_row_s_gates_are_its_bits_family_s_with_the_functions_its_buil
     assert DF.kernel_refusal([(gemm, bits('Outer_v1{F={\\"fn\\":\\"' + hopper + '0\\"}}'))]) == refused
 
 
-def test_a_specialisation_whose_gates_this_tree_does_not_build_is_refused_by_name(monkeypatch):
+@pytest.mark.parametrize("error", [ValueError, AttributeError])
+def test_a_specialisation_whose_gates_this_tree_does_not_build_is_refused_by_name(monkeypatch, error):
     """A Boolean Definition whose body is not built at one of the kernel's check specialisations (statics its lowering does
-    not take) is a refusal that names it, not an exception out of the replay."""
+    not take, whichever way its builder fails on them) is a refusal that names it, not an exception out of the replay."""
     from verity.circuits import evaluation as EV
 
     def unbuilt(b, *inputs):
-        raise ValueError("unsupported statics")
+        raise error("unsupported statics")
 
     monkeypatch.setattr(EV, "evaluate_words", unbuilt)
     _unchecked(monkeypatch)
     assert DF.kernel_refusal([(SILU, SILU_BITS)]) == ("SiluMul_v1: SiluMul_v1{I=8}: this tree does not build SiluMul_v3{I=8}'s gates, so "
-                                                      "no row is held to them (ValueError: unsupported statics)")
+                                                      f"no row is held to them ({error.__name__}: unsupported statics)")
 
 
 def test_a_replay_of_boolean_rows_says_what_its_pass_leaves_unshown(program, boolean):

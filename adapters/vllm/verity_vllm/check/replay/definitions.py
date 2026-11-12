@@ -56,6 +56,8 @@ _GATE_CHECKS: dict[tuple[str, str], tuple[list[str], set[str]]] = {}
 #: the family of each function-valued static in a descriptor id, at any depth (`codec.descriptor_id` nests a function's id as a
 #: JSON string, its quotes escaped)
 _FN = re.compile(r'"fn\\*":\\*"([^"\\{]+)')
+#: what building a Definition's body raises at statics its lowering does not take
+_UNBUILT = (AssertionError, AttributeError, LookupError, NotImplementedError, TypeError, ValueError)
 
 
 def evaluated_specs(rows: Iterable[dict[str, Any]]) -> list[tuple[str, str]]:
@@ -184,7 +186,7 @@ def _gates_differ(family: str, bits: str) -> tuple[list[str], set[str]]:
         rows = np.asarray(vals).reshape(SAMPLES, -1)[kept].astype(np.uint64)
         try:
             gates = np.asarray(evaluate_words(b, *(a[kept] for a in args))).reshape(kept.size, -1).astype(np.uint64)
-        except (LookupError, TypeError, ValueError) as e:
+        except _UNBUILT as e:
             out.append(f"{t.id}: this tree does not build {fid}'s gates, so no row is held to them ({type(e).__name__}: {e})")
             continue
         differ = kept[(rows != gates).any(axis=1)]
