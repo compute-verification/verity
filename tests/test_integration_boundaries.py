@@ -42,7 +42,6 @@ KNOWN = {
     # PoUB's memory-map/v1 builder (`Lines`), which records a session's appends and frees: `map_case` builds with it
     ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.memory_map"),
     ("verity/definitions/requirement/tests/test_census_and_memory_map.py", "verity_vllm.protocols.remote_bandwidth.registry"),
-    ("verity/definitions/requirement/tests/test_requirement_difftest.py", "verity.definitions.registry"),
     ("verity/protocols/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.boolean"),
     ("verity/protocols/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry"),
     ("verity/protocols/flock/sigma/tests/test_sigma_difftest.py", "verity.definitions.registry.catalog"),

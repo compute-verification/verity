@@ -4,17 +4,13 @@ size, and the table, its serving arithmetic and its markdown on synthetic atoms 
 from __future__ import annotations
 
 import json
-import sys
 from fractions import Fraction
 from pathlib import Path
 
+import frontier as F
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(HERE))
-
-import frontier as F  # noqa: E402
-
 SPEC = json.loads((HERE / "frontier_models.json").read_text())
 S, P = SPEC["workload"]["context"], SPEC["workload"]["prompt"]
 

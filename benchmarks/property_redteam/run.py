@@ -4,8 +4,8 @@
     uv run python benchmarks/property_redteam/run.py --json > benchmarks/property_redteam/cases.json
 
 A check is ``FUNCTION(program) -> {"refused": bool, "charged": {class: units}}`` over cases.py's `CLASSES` (``accept-all`` and
-``refuse-all`` name the two trivial ones); a ``reasons`` entry, when it returns one, is copied into the report. The check's module is imported before the cases, so a Definition it registers is
-the one the cases call. Each case's outcome:
+``refuse-all`` name the two trivial ones); a ``reasons`` entry, when it returns one, is copied into the report. Each case's
+outcome:
 
   ok           the case's verdict, charged at least the case's charge (an attack) or within its allowance (an honest case)
   sound        an attack refused where its verdict budgets it, or accepted at its full charge where its verdict refuses it
@@ -14,7 +14,6 @@ the one the cases call. Each case's outcome:
   over-strict  an honest case refused
   over-budget  an honest case charged past its allowance
   error        the check raised or returned no verdict, or an honest case did not build
-  skipped      the case binds a module this environment lacks (the s8 family)
 
 An attack the IR refuses to build counts as refused. The exit status is 0 when every graded case is ok or sound.
 """
@@ -25,11 +24,13 @@ import importlib
 import json
 import sys
 from collections import Counter
-from collections.abc import Mapping
-from typing import Any, Callable
+from collections.abc import Callable, Mapping
+from typing import Any
+
+import cases as C
 
 PASSING = ("ok", "sound")
-OUTCOMES = ("ok", "sound", "misclassed", "unsound", "over-strict", "over-budget", "error", "skipped")
+OUTCOMES = ("ok", "sound", "misclassed", "unsound", "over-strict", "over-budget", "error")
 
 
 def accept_all(program: Any) -> dict:
@@ -48,7 +49,7 @@ def resolve(spec: str) -> Callable[[Any], Any]:
         return BUILTIN[spec]
     module, sep, attr = spec.partition(":")
     if not sep or not module or not attr:
-        raise SystemExit(f"--check is MODULE:FUNCTION or one of {sorted(BUILTIN)}, not {spec!r}")
+        raise ValueError(f"--check is MODULE:FUNCTION or one of {sorted(BUILTIN)}, not {spec!r}")
     return getattr(importlib.import_module(module), attr)
 
 
@@ -89,16 +90,11 @@ def grade(case: Any, refused: bool, charged: Mapping[str, int]) -> str:
 
 def run(check: Callable[[Any], Any], ids: list[str] | None = None) -> dict:
     """Every case (or those `ids`) graded under `check`: ``{"rows": [...], "outcomes": {outcome: n}, "passed": bool}``."""
-    import cases as C
-
     chosen = [C.BY_ID[i] for i in ids] if ids else list(C.CASES)
     rows = []
     for case in chosen:
         row: dict[str, Any] = {"id": case.id, "kind": case.kind, "verdict": case.verdict, "charge": case.charge,
                                "allow": case.allow}
-        if not case.available:
-            rows.append(row | {"outcome": "skipped", "note": f"needs {', '.join(case.needs)}"})
-            continue
         try:
             program = case.program()
         except (TypeError, ValueError) as e:
@@ -115,12 +111,10 @@ def run(check: Callable[[Any], Any], ids: list[str] | None = None) -> dict:
         rows.append(row | ({"reasons": v["reasons"]} if "reasons" in v else {}))
     outcomes = Counter(r["outcome"] for r in rows)
     return {"rows": rows, "outcomes": {o: outcomes[o] for o in OUTCOMES if outcomes[o]},
-            "passed": all(r["outcome"] in PASSING or r["outcome"] == "skipped" for r in rows)}
+            "passed": all(r["outcome"] in PASSING for r in rows)}
 
 
 def metadata() -> list[dict]:
-    import cases as C
-
     return [c.to_json() for c in C.CASES]
 
 
@@ -149,7 +143,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not args.check:
         ap.error("--check is required (or --json)")
-    check = resolve(args.check)
+    try:
+        check = resolve(args.check)
+    except ValueError as e:
+        raise SystemExit(str(e)) from e
     report = run(check, args.case)
     print(_table(report))
     if args.out:

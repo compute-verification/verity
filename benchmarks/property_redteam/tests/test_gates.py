@@ -5,19 +5,14 @@ a study's construction moves a digest."""
 from __future__ import annotations
 
 import hashlib
-import sys
-from pathlib import Path
 
+import free_codec as FC
+import gates as G
 import pytest
+import renorm as R
+import squaring as S
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
-
-import free_codec as FC  # noqa: E402
-import gates as G  # noqa: E402
-import renorm as R  # noqa: E402
-import squaring as S  # noqa: E402
-from verity.circuits.evaluation.reference import evaluate  # noqa: E402
+from verity.circuits.evaluation.reference import evaluate
 
 PINS = {
     "gathers": "eb1a6b31264359d8",
@@ -85,7 +80,7 @@ def _square(name):
 
 def _free_codec():
     b, _out, _slots = FC.free_encode_word(8, 5, 2)
-    return b, [FC.draw_inputs(8, 5, [92, 7], 253, 18, 54, 195)]
+    return b, [FC.sample_inputs(8, 5, [92, 7], 253, 18, 54, 195)]
 
 
 CIRCUITS = {"gathers": _gathers, "free_bit": _free_bit, "mma_clamp_wrap": _mma_clamp_wrap,
@@ -108,7 +103,7 @@ def test_renorms_circuits_are_pinned_on_every_input(tag):
     _m, names = R.monomials(T.digits[:1])
     cn = None if tag == "honest" else R.Constraint([[-1, 0, 1]], [[-1, 0, 0, 0, 0, 0, 0, -3, 0]], [1], 32, "row+q-lll")
     bc = R.build(T, cn, names)
-    runs = [bc.C.evaluate({l: int(T.digits[a, l]) for l in range(F.L)}) for a in range(F.p)]
+    runs = [bc.C.evaluate({ell: int(T.digits[a, ell]) for ell in range(F.L)}) for a in range(F.p)]
     w = R.renormalization_witness(T, bc)
     assert (w["budgeted"], w["good"]) == ((3, 59) if cn is None else (2, 32))
     extra = (w["restricted"], w["budgeted"], w["good"], w["window_on_good"])

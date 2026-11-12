@@ -19,20 +19,24 @@ BRA = re.compile(r"BRA(?:\.U)?\s+(?:!?U?P\w+,\s*)?(0x[0-9a-f]+)")
 
 def parse(path):
     fns, cur = {}, None
-    for line in open(path):
-        m = FN.search(line)
-        if m:
-            cur = fns.setdefault(m.group(1), [])
-            continue
-        m = INS.match(line)
-        if m and cur is not None:
-            cur.append((int(m.group(1), 16), m.group(2), m.group(2) + (m.group(3) or ""), line))
+    with open(path) as listing:
+        for line in listing:
+            m = FN.search(line)
+            if m:
+                cur = fns.setdefault(m.group(1), [])
+                continue
+            m = INS.match(line)
+            if m and cur is not None:
+                cur.append((int(m.group(1), 16), m.group(2), m.group(2) + (m.group(3) or ""), line))
     return fns
 
 
 def mix(ins):
     base, full = collections.Counter(i[1] for i in ins), collections.Counter(i[2] for i in ins)
-    srt = lambda c: dict(sorted(c.items(), key=lambda kv: -kv[1]))
+
+    def srt(c):
+        return dict(sorted(c.items(), key=lambda kv: -kv[1]))
+
     return {"total": len(ins), "base": srt(base), "full": srt(full)}
 
 

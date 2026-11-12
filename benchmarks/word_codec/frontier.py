@@ -4,7 +4,7 @@ Every lane's points are artifacts of kind `codec-frontier-points/v0`: a JSON lis
 with the metadata `{"schema": "verity/codec-frontier-point/v0", "lane": LANE, "run": RUN_ID}`. This script selects them
 all from the store, or reads `--art` ids and
 `--file` paths, adds the tensor-core codec's runs as points (`--tensor`, its `codec-tensor.json`: `tensor_points`), and
-samples:
+plots:
 - x, the encode time of one pass's data in native passes, on a log scale, with μ_rebuild = (d − τ)/x on a secondary
   axis (at d = 1 and `--tau`, default the median τ of the points); μ_rebuild's numerator is d − τ, d the step's time in
   passes of E (the red team's F1: the adversary's spare compute is the whole step), so x* = (d − τ)/μ_budget is a
@@ -14,13 +14,13 @@ samples:
   the point's over `--boost`, the adversary's clock over the locked clock the points were timed at (1.16), unless the
   point's `x_boosted` says its x grants that already. x is the adversary's best encode at the point's width: the lowest
   x per round any point of that width reports, whichever lane's library it came from (`--own-x`: the point's own);
-  `--tau-cap` bounds τ by the cheapest tag the adversary knows;
+  `--tau-max` bounds τ by the cheapest tag the adversary knows;
 - y, fused decode-step time over native at `--model`'s linears (default Llama-3.1-70B; 8B's points are the reference),
   layer-weighted, as a stacked bar per point (base, decode, tag, commit) at batch 1 and batch 32 side by side, with a
   horizontal line at 2×; `--idle` defaults to the model's;
 - measured points filled, modelled points hollow, reference points (P2) as stars;
 - one bar per configuration, the lowest y_total of each (lane, b, k, batch, measured) over runs and kernel variants
-  (`--all` samples every point);
+  (`--all` plots every point);
 and prints the frontier, the lowest y_total at x ≥ x* at each batch (d = the point's y_total + idle unless `--d`
 fixes it). Never commit the image or the table.
 
@@ -67,6 +67,10 @@ REQUIRED = ("b", "k", "arithmetic", "batch", "y_total", "y_decode", "y_tag", "y_
 IDLE_8B = 0.37  # the step outside Llama-3.1-8B's linears, in passes of E (red team, F1)
 IDLE = {"llama-3.1-8b": IDLE_8B, "llama-3.1-70b": 0.10}  # a point without `model` is 8B's
 BOOST = 1.16    # the RTX PRO 6000's boost clock over the locked 2,092 MHz (red team)
+
+
+class NoPoints(ValueError):
+    """No point is at the batches a plot was asked for."""
 
 
 def model_of(p: dict) -> str:
@@ -169,10 +173,10 @@ def x_eff(p: dict, boost: float = BOOST) -> float:
     return p["x"] if p.get("x_boosted") else p["x"] / boost
 
 
-def adversary(points: list[dict], boost: float = BOOST, tau_cap: float | None = None) -> list[dict]:
+def adversary(points: list[dict], boost: float = BOOST, tau_max: float | None = None) -> list[dict]:
     """The points with x the adversary's best encode at b: the lowest x per round at its clock that any point of that
     width reports (whichever lane's library encodes fastest), times k (x_boosted; the point's own x kept as x_own),
-    and τ at most tau_cap (the cheapest tag the adversary knows)."""
+    and τ at most tau_max (the cheapest tag the adversary knows)."""
     per_k = {}
     for p in points:
         if not p.get("reference"):
@@ -182,8 +186,8 @@ def adversary(points: list[dict], boost: float = BOOST, tau_cap: float | None = 
         q = dict(p)
         if not p.get("reference"):
             q.update(x_own=p["x"], x=per_k[p["b"]] * p["k"], x_boosted=True)
-        if tau_cap is not None:
-            q["tau"] = min(p["tau"], tau_cap)
+        if tau_max is not None:
+            q["tau"] = min(p["tau"], tau_max)
         out.append(q)
     return out
 
@@ -218,8 +222,9 @@ def frontier(points: list[dict], budget: float, d: float | None = None, idle: fl
 
 def table(points: list[dict], budget: float, batches=(1, 32), d: float | None = None, idle: float = IDLE_8B,
           boost: float = BOOST) -> str:
-    lines = ["| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | y_total | decode | tag | commit | measured "
-             "| source |", "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    head = ("| batch | b | k | arithmetic | x (boosted) | x* | μ_rebuild | y_total | decode | tag | commit | measured "
+            "| source |")
+    lines = [head, "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     best = frontier(points, budget, d, idle, boost)
     for mb in batches:
         p = best.get(mb)
@@ -245,20 +250,20 @@ def best_per_config(points: list[dict]) -> list[dict]:
     return list(best.values())
 
 
-def draw(points: list[dict], out: Path, budget: float, tau_ref: float | None, batches=(1, 32),
+def plot(points: list[dict], out: Path, budget: float, tau_ref: float | None, batches=(1, 32),
          show_all: bool = False, idle: float = IDLE_8B, boost: float = BOOST, model: str = "llama-3.1-8b") -> None:
+    pts = [p for p in points if p["batch"] in batches]
+    if not show_all:
+        pts = best_per_config(pts)
+    if not pts:
+        raise NoPoints("no points at the plotted batches")
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import numpy as np
 
-    pts = [p for p in points if p["batch"] in batches]
-    if not show_all:
-        pts = best_per_config(pts)
     lanes = {p.get("lane") for p in pts if not p.get("reference")}
-    if not pts:
-        raise SystemExit("no points at the plotted batches")
     tau_ref = statistics.median(p["tau"] for p in pts) if tau_ref is None else tau_ref
     fig, ax = plt.subplots(figsize=(12, 6.5))
     colors = {"base": "#9e9e9e", "decode": "#1f77b4", "tag": "#ff7f0e", "commit": "#2ca02c"}
@@ -325,7 +330,7 @@ def main() -> int:
     ap.add_argument("--d", type=float, help="the step's time in passes of E for x* (default: each point's y_total + "
                     "--idle)")
     ap.add_argument("--model", choices=sorted(IDLE), default="llama-3.1-70b",
-                    help="draw this model's points (a point without `model` is 8B's)")
+                    help="plot this model's points (a point without `model` is 8B's)")
     ap.add_argument("--idle", type=float,
                     help="the step outside the linears, in passes of E (default by --model: "
                     + ", ".join(f"{m} {v}" for m, v in IDLE.items()) + ")")
@@ -333,14 +338,14 @@ def main() -> int:
                     help=f"the adversary's clock over the points' locked clock (default {BOOST})")
     ap.add_argument("--batches", default="1,32")
     ap.add_argument("--p2", help="X,Y,TAU: P2 as a modelled reference point")
-    ap.add_argument("--all", action="store_true", help="draw every point, not the best of each configuration")
+    ap.add_argument("--all", action="store_true", help="plot every point, not the best of each configuration")
     ap.add_argument("--own-x", action="store_true",
                     help="each point's own x, not the best encode any point of its width reports (`adversary`)")
-    ap.add_argument("--tau-cap", type=float, help="τ at most this: the cheapest tag the adversary knows")
+    ap.add_argument("--tau-max", type=float, help="τ at most this: the cheapest tag the adversary knows")
     ap.add_argument("--sketch", help="BATCH:Y,...: add each measured point's modelled twin with the sketch-then-hash "
                     "tag, Y its tag and commit at that batch (e.g. 1:0.073,32:0.150, the sketch tag's plain store)")
     ap.add_argument("--sketch-tau", type=float, default=0.0, help="the sketch twins' τ (default 0)")
-    ap.add_argument("--only-sketch", action="store_true", help="with --sketch: draw and rank only the twins")
+    ap.add_argument("--only-sketch", action="store_true", help="with --sketch: plot and rank only the twins")
     ap.add_argument("--tensor", action="append", default=[],
                     help="the tensor-core codec's codec-tensor.json, a path or its run's files art (`tensor_points`)")
     a = ap.parse_args()
@@ -364,15 +369,18 @@ def main() -> int:
         twins = sketch_twins(points, cost, a.sketch_tau)
         points = twins + [p for p in points if p.get("reference")] if a.only_sketch else points + twins
     if not a.own_x:
-        points = adversary(points, a.boost, a.tau_cap)
-    elif a.tau_cap is not None:
-        points = [{**p, "tau": min(p["tau"], a.tau_cap)} for p in points]
+        points = adversary(points, a.boost, a.tau_max)
+    elif a.tau_max is not None:
+        points = [{**p, "tau": min(p["tau"], a.tau_max)} for p in points]
     points = [p for p in points if p.get("reference") or model_of(p) == a.model]
     idle = IDLE[a.model] if a.idle is None else a.idle
     print(f"{a.model}, idle {idle:g}")
     print(table(points, a.budget, batches, a.d, idle, a.boost))
     if a.out:
-        draw(points, Path(a.out), a.budget, a.tau, batches, a.all, idle, a.boost, a.model)
+        try:
+            plot(points, Path(a.out), a.budget, a.tau, batches, a.all, idle, a.boost, a.model)
+        except NoPoints as e:
+            sys.exit(str(e))
         print(f"wrote {a.out}")
     return 0
 

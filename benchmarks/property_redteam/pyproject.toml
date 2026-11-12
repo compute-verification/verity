@@ -1,11 +1,11 @@
 # The property red team's refusal suite: Programs a stacking property (property/v1) must refuse or fully budget, the honest
 # steps.py shapes it must pass (`cases.py`), and a runner that grades any check, a function from a Program to a verdict
-# (`run.py`). Not a package: the tests put this directory on sys.path, like benchmarks/word_codec. `demo.py` is round 1's
+# (`run.py`). Not a package: its modules import each other by name, from the runner's directory or pytest's `pythonpath`. `demo.py` is round 1's
 # registry-evaluator demo. `gates.py` is Model.lean's gate model on the canonical circuit (a `Program` the circuits IR's
 # reference evaluator runs), which the studies build in, pinned by `tests/test_gates.py`. `renorm.py` searches toy fields
 # for circuits of the model that return a square's digits with few budgeted gates: the falsification test of the
 # re-normalization conjecture N_L. `tests/test_key_binding_order.py` checks KeyBinding's ideal step against the codec's
-# {x, p − x} symmetry; KB-1's regression test is remote_bandwidth's `test_append_order.py`. `squaring.py` builds squaring
+# {x, p − x} symmetry; KB-1's regression test is PoUB's `test_append_order.py`. `squaring.py` builds squaring
 # circuits at p1024 measured in the model's units (SquaringFloor's e a squaring); `free_codec.py` builds the whole codec
 # word from the one-word gather Model.lean once counted as free; `bitwise_codec.py` builds a block of words at 8 units a key
 # byte under the count before the repricing (bits kept bits by u8 mma ANDs and affine NOTs), which falsified
@@ -13,6 +13,7 @@
 # the attention row's QKᵀ and PV).
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]

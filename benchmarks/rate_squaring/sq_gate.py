@@ -3,6 +3,7 @@
 import json
 import sys
 
+
 def main() -> int:
     bad = total = 0
     for line in sys.stdin:

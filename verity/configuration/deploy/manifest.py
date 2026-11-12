@@ -1,16 +1,14 @@
 """A protocol's manifest, and the placement check.
 
-The manifest is a typed object in each protocol's package (`render` writes it as TOML, which is only a rendering). Its
-`Role`s and `Channel`s are also what a protocol declares to a deployment configuration (`config.Component`):
+The manifest is a typed object in each protocol's package. Its `Role`s and `Channel`s are also what a protocol declares
+to a deployment configuration (`config.Component`), which is where it says what it needs of the workload:
 
 - its parties (`Role`): each one's principal (`developer`, `auditor` or `anyone`), its cardinality (`per` server, link,
   site, or `one`), and what its machine must provide (`needs`: `clock` and `coins` are sources the runtime attaches, the
   rest capabilities such as `gpu` or `signing-key`);
 - its channels (`Channel`): who may send which messages to whom, under what latency bound, whether they carry coins,
   and the messages sent before them (`after`);
-- its messages: the wire schemas (`verity.configuration.wire.Schema`), each with its kind;
-- what it needs of the workload (`needs`: `windows`, `store`, ...), which a workload's `provides` must cover
-  (`workload`).
+- its messages: the wire schemas (`verity.configuration.wire.Schema`), each with its kind.
 
 `place` checks a binding of the parties to a site's machines: each party's principal owns its machine (`principal`), the
 machine provides what the party needs (`needs`), a coin-carrying channel passes no developer-owned machine (`coins-hop`),
@@ -22,7 +20,7 @@ machines with no link is refused in either mode.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -33,9 +31,6 @@ OWNERS = ("developer", "auditor")
 PER = ("server", "link", "site", "one")
 SOURCES = ("clock", "coins")
 """Needs the runtime meets with a source party on the same machine, on a channel of that name."""
-STRUCTURAL = ("unknown-party", "unknown-machine", "unbound", "cardinality", "no-link")
-PREMISES = ("principal", "needs", "coins-hop", "latency")
-"""What a `simulated` placement may leave unmet: the premises a run on a real site would rest on."""
 
 
 @dataclass(frozen=True)
@@ -75,7 +70,6 @@ class Manifest:
     parties: tuple[Role, ...]
     channels: tuple[Channel, ...]
     messages: tuple[Schema, ...]
-    needs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         names = [r.name for r in self.parties]
@@ -116,45 +110,6 @@ class Manifest:
     def peers(self, party: str) -> tuple[str, ...]:
         return tuple(sorted({c.receiver for c in self.channels if c.sender == party}
                             | {c.sender for c in self.channels if c.receiver == party}))
-
-
-def workload(manifest: Manifest, provides: Iterable[str]) -> None:
-    """Refuse a workload that doesn't provide what the protocol needs of it (`workload-needs`)."""
-    missing = sorted(set(manifest.needs) - set(provides))
-    if missing:
-        raise Refused("workload-needs", f"{manifest.protocol} needs {missing} of the workload, which doesn't provide them")
-
-
-def _toml(v: Any) -> str:
-    if isinstance(v, bool):
-        return "true" if v else "false"
-    if isinstance(v, int):
-        return str(v)
-    if isinstance(v, str):
-        return '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
-    return "[" + ", ".join(_toml(x) for x in v) + "]"
-
-
-def render(m: Manifest) -> str:
-    """The manifest as TOML, for reading: the typed object is the manifest."""
-    out = [f"protocol = {_toml(m.protocol)}", f"version = {m.version}", f"params = {_toml(m.params)}"]
-    if m.needs:
-        out.append(f"needs = {_toml(m.needs)}")
-    for r in m.parties:
-        out += ["", f"[party.{r.name}]", f"principal = {_toml(r.principal)}", f"per = {_toml(r.per)}",
-                f"needs = {_toml(r.needs)}"]
-    for c in m.channels:
-        out += ["", "[[channel]]", f"from = {_toml(c.sender)}", f"to = {_toml(c.receiver)}",
-                f"messages = {_toml(c.messages)}"]
-        if c.latency_ms is not None:
-            out.append(f"latency_ms = {c.latency_ms}")
-        if c.carries_coins:
-            out.append("carries_coins = true")
-        if c.after:
-            out.append(f"after = {_toml(c.after)}")
-    for s in m.messages:
-        out += ["", f"[message.{s.type}]", f"version = {s.version}", f"kind = {_toml(s.kind)}"]
-    return "\n".join(out) + "\n"
 
 
 # --- placement ----------------------------------------------------------------------------------------------------------
@@ -250,8 +205,9 @@ def place(manifest: Manifest, site: Topology, bindings: Mapping[str, str], *, si
                 if link is None:
                     raise Refused("no-link", f"{c.sender} on {s_machine} and {c.receiver} on {r_machine} have no link")
                 if c.latency_ms is not None and link.latency_ms > c.latency_ms:
-                    unmet.append(("latency", f"{c.sender} -> {c.receiver} is bounded by {c.latency_ms} ms, and its link "
-                                             f"takes {link.latency_ms} ms"))
+                    slow = (f"{c.sender} -> {c.receiver} is bounded by {c.latency_ms} ms, and its link takes "
+                            f"{link.latency_ms} ms")
+                    unmet.append(("latency", slow))
                 hops = [v for v in link.via if site.machine(v).owner == "developer"]
                 if c.carries_coins and hops:
                     unmet.append(("coins-hop", f"{c.sender} -> {c.receiver} carries coins through the developer's {hops}"))
@@ -268,5 +224,4 @@ def site_of(machines: Sequence[Mapping[str, Any]], links: Sequence[Mapping[str, 
                 tuple(Route(tuple(k["ends"]), k["latency_ms"], tuple(k.get("via", ()))) for k in links))
 
 
-__all__ = ["OWNERS", "PER", "PREMISES", "PRINCIPALS", "SOURCES", "STRUCTURAL", "Channel", "Host", "Manifest", "PlaceResult",
-           "Role", "Route", "Topology", "place", "render", "site_of", "workload"]
+__all__ = ["Channel", "Manifest", "PlaceResult", "Role", "Topology", "place", "site_of"]

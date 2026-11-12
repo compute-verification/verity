@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -9,7 +10,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import frontier as F  # noqa: E402
+import frontier as F
 
 
 def point(**kw):
@@ -64,7 +65,7 @@ def test_adversary_takes_the_fastest_encode_of_each_width_and_the_cheapest_tag()
     mine = point(lane="wide", k=2, x=554.0, tau=0.82)                    # 238.8 a round at 1.16×
     theirs = point(lane="tensor", k=1, x=216.0, x_boosted=True, tau=0.48)
     other = point(lane="wide", b=255, k=1, x=109.0, tau=0.82)
-    a, t, o = F.adversary(F.check([mine, theirs, other]), tau_cap=0.61)
+    a, t, o = F.adversary(F.check([mine, theirs, other]), tau_max=0.61)
     assert a["x"] == pytest.approx(432.0) and a["x_boosted"] and a["x_own"] == 554.0 and a["tau"] == 0.61
     assert t["x"] == pytest.approx(216.0) and t["tau"] == 0.48
     assert o["x"] == pytest.approx(109.0 / 1.16)
@@ -105,3 +106,16 @@ def test_best_per_config_keeps_the_lowest_y_of_each_configuration():
     best = {(p["lane"], p["k"], p["batch"], p["measured"]): p["y_total"] for p in F.best_per_config(pts)}
     assert best == {("t", 1, 1, True): 1.6, ("t", 2, 1, True): 1.9, ("u", 1, 1, True): 1.8, ("t", 1, 32, True): 2.0,
                     ("t", 1, 1, False): 1.0}
+
+
+def test_a_plot_with_no_point_at_its_batches_is_refused_by_name_and_the_command_exits_on_it(tmp_path, monkeypatch, capsys):
+    pts = F.check([point(batch=8, model="llama-3.1-70b")])
+    with pytest.raises(F.NoPoints):
+        F.plot(pts, tmp_path / "frontier.png", 0.005, None)
+    file = tmp_path / "points.json"
+    file.write_text(json.dumps(pts))
+    monkeypatch.setattr(sys, "argv", ["frontier.py", "--file", str(file), "--out", str(tmp_path / "frontier.png")])
+    with pytest.raises(SystemExit) as stop:
+        F.main()
+    assert stop.value.code == "no points at the plotted batches"
+    assert "none at x ≥ x*" in capsys.readouterr().out and not (tmp_path / "frontier.png").exists()
