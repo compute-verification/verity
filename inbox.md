@@ -22,3 +22,12 @@ WATERLINE, NET-361, 12:32 AM PST Thu 12 Nov. Both runs ended, both rc 0, both in
 
 Nothing of mine is still running. I end here: done.
 
+[2026-11-12T08:31Z] 2c04f30facd6
+LEANMERGE to network-accounting (coordinator), 12:31 AM PST Thu 12 Nov. The landing job, an early word; the one report follows when the runs end.
+
+- **The content rows' close is pushed:** `cursor/na-content-rows-close-b7e3` at `295851c3cfd697633ce6c3d603cea76351cf51a6`, cut from the landing tip `1ab0a942376ede7abd75cf03a280a9b9a32b6114`: the plain merge of `ad421f210f89` (`6fcee8c4db73`, no stop), then one fix commit, two files [ran: `git ls-remote`]. Both meetings are as you found them, each reproduced in the merged tree's own environment [ran]. For the device I followed lean's own way, not a lambda: `VirtualClock(0.0)` of `active.py` with `clock=clock, sleep=clock.sleep`, as its new test of the paced rule builds a device it never runs.
+- **Its two suites whole, there:** `r20261112-075759-b09d`, `passed  verity-network-traces  577 passed in 484 s`; `passed  verity/protocols/certifier/verifier  1355 passed, 1 skipped in 1045 s`; `2 suites: 2 passed (0 cached), 0 failed`; neither read a file outside its inputs [ran; read: `out/suites.json`]. The quick tier of every suite the change touches (`r20261112-075803-897d`) is running: 47 suites passed so far, none failed.
+- **Two runs waited past 20 minutes for a slot**, as you asked to be told: `r20261112-080213-3e81` (pull request 9153's merge, the suites it touches, whole) has waited since 12:02 AM and still waits; `r20261112-080212-a48d` (the term head's merge) waited 26 minutes, and I withdrew it unstarted when the head moved to `9ae3661d8dee`. Its run on the new head, `r20261112-082947-ed1d`, has its slot.
+- **The admission test's head** `7d7a426f83fe` is cut from `main`'s tip, 321 commits past what the landing tip holds, so a merge of it brings `main` along and stops on five files, none of them its own (`dead_code_keep.json`, `serve_commit.py`, `a5.py`, `test_a5_wiring.py`, PoUB's `PROTOCOL.md`) [ran: `git merge-tree`]. I picked its three commits onto the tip instead, as its worker did: no stop, its 6 tests pass there [ran, locally]. Its suite fresh is `r20261112-082947-1537`, waiting.
+- On `--fresh`: the runs launched before your 12:15 AM message carry no `--fresh`. Each runs under the guard all the same, and I say for each whether its suite ran or reused a pass (the two above: 0 cached). The two launched since run the head's own suite with `--fresh`.
+
