@@ -226,6 +226,13 @@ def _flip_checkpoint(d):
      "rank 1: rank1.weights[0] (model.embed_tokens.weight) is"),
     (lambda d: _retree(d, 0, lambda ns: next(n for n in ns if n[0] == "model.norm.weight").__setitem__(0, "model.final_norm.weight")),
      "rank 0: rank0.weights[13] is 'model.norm.weight', which the rank's committed weights tree does not register"),
+    # a field the record leaves out states nothing: no bundle, no request, no Program of record, no committed root
+    (lambda d: (d["out"] / "replay_deferred.json").write_text(json.dumps({"world": WORLD})), "rank 0: replay_deferred.json names no bundle of pair 0"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"].pop("requests")), "holds no Program of record for the rank (['1111111111111111'])"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"].pop("of_record")), "rank1'] holds no Program of record for the rank ([])"),
+    (lambda d: _ctx(d, 1, lambda c: c["replay"]["of_record"].pop("1")), "rank1'] holds no Program of record for the rank ([])"),
+    (lambda d: _runs(d, lambda c: c.pop("per_rank")), "is not the committed weights root None"),
+    (lambda d: _runs(d, lambda c: c["per_rank"].pop("1")), "is not the committed weights root None"),
 ])
 def test_a_commit_that_is_not_the_nodes_is_refused_by_name(commit, tamper, named, capsys):
     tamper(commit)
@@ -243,6 +250,27 @@ def test_a_descriptor_that_is_not_the_nodes_is_refused(commit, capsys):
     desc["annotations"]["theta"] = desc["annotations"]["theta"][1:]
     Path(commit["o"].program).write_bytes(gzip.compress(canonical_json(desc)))
     assert NR.main(commit["o"]) == 2 and "the descriptor's θ is" in capsys.readouterr().out
+    for stated in ({"annotations": {}}, {}):   # annotations that hold no θ, and a descriptor without annotations: no θ at all
+        Path(commit["o"].program).write_bytes(gzip.compress(canonical_json({**{k: v for k, v in NODE.desc.items() if k != "annotations"}, **stated})))
+        assert NR.main(commit["o"]) == 2 and "the descriptor's θ is 0 root nodes" in capsys.readouterr().out
+
+
+def test_a_descriptor_without_a_callee_table_names_its_root_nodes_definitions_by_id():
+    """A descriptor that states no `callees` names each root node's Definition by its id, and `root_inputs` reads the input
+    nodes off those ids as it reads them through the table of one that has it."""
+    nodes = [{"form": "batch", "fn": "RegisteredInput16_v1", "n": 4}, {"form": "call", "fn": "Add16_v1"}, {"form": "call", "fn": "Input32_v1"}]
+    assert NR.root_inputs({"root": "f", "definitions": {"f": {"body": {"nodes": nodes}}}}) == [(0, 16, 4), (2, 32, 1)]
+    by_index = {"root": "f", "callees": [n["fn"] for n in nodes], "definitions": {"f": {"body": {"nodes": [{**n, "fn": i} for i, n in enumerate(nodes)]}}}}
+    assert NR.root_inputs(by_index) == [(0, 16, 4), (2, 32, 1)]
+
+
+def test_a_builds_program_digest_is_its_program_blocks_else_the_one_at_the_results_top(tmp_path):
+    """`program_digest_of` reads a Build's `result.json`: the `program` block's `digest`, else `program_digest` at its top (a
+    result without the block), else none."""
+    for doc, digest in (({"program": {"digest": "aa"}, "program_digest": "bb"}, "aa"), ({"program_digest": "bb"}, "bb"),
+                        ({"program": {}, "program_digest": "bb"}, "bb"), ({}, "")):
+        (tmp_path / "result.json").write_text(json.dumps(doc))
+        assert NR.program_digest_of(str(tmp_path)) == digest
 
 
 def test_a_checkpoint_its_manifest_does_not_pin_is_refused(commit, capsys):
