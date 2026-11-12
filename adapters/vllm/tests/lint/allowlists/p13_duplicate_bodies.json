@@ -1,7 +1,4 @@
 {
   "rule": "P13 (no duplicate function bodies)",
-  "entries": [
-    {"file": "verity_vllm/commitments/vllm_v1/vectors.py", "kind": "duplicate-body", "symbol": "main", "detail": "verity"},
-    {"file": "verity_vllm/commitments/vllm_v1/vectors_sha512.py", "kind": "duplicate-body", "symbol": "main", "detail": "verity"}
-  ]
+  "entries": []
 }
