@@ -93427,3 +93427,82 @@ Read only, in a worktree at `ecbbaca17b693cdc5acbdc4527a4eec4e78f4b39`; no run, 
 - **Wrong**, `SpotKSTwo`: "The fact: an address for each gate a needed unit opens at the connected program (SpotFlock.AddressesConnected)". `AddressesWired` has no needed unit: it gives every gate one address, fixed before the run, which holds at each accepted run's checked unit at each gate its proof block needs. [read] It should say: "The fact: each gate's value has one address at the connected program, fixed before the run, which holds at every accepted run's checked unit whose proof block needs the gate (SpotFlock.AddressesConnected)". The clause is older than `9dd29dd281`, which kept it. [read]
 - **Not settled by reading**, same sentence: "it would follow from a fact about what V h accepts, that each needed gate's read is held to one entry, a linked gate's to the boundary record". No declaration states that implication. [read] An address holds (`CheckedRun.AddressHoldsWired`) where three things do: the unit's instance is one of its session's (`Counted`), the address's place is the row's (`RowAt`), and the port's read is a registered read or the interior record's. A search of `SpotFlock/` finds `Counted` and `RowAt` only as definitions and as hypotheses, never concluded at an accepted run. [run] So "a fact" names the third and may leave two out. [guess] It should say what is open, not what would follow: "nothing proves it at a registration: not that the checked unit's instance is one of its session's, not that the address's place is the row's, not that V h holds each needed gate's read to one entry, a linked gate's to the boundary record". `Guarantees.lean`'s module docstring has the same clause. [read]
 - **Holds, with what it leaves unsaid**, both reasons: "V h does not run the design's check of the links (SecondStage.linksOk)". `linksOk` asks that each held link names a part's template whose rows place its units. It does not ask that an output that leaves has a link. [read] Which outputs have links is the derivation's (`replayLinks`, its `returnLinks`), and `Held.links` is a field nothing in either statement holds to it. [read] So running `linksOk` would not bring "an output that leaves and that no held link names" inside the statement. [derived] If the sentence is to give the reason it should say: "the held links are the auditor's copy, which nothing here holds to the replay block program's own links (SecondStage.replayLinks), and V h does not run the design's check of them (SecondStage.linksOk)".
+
+## REDRAW, Thu 12 Nov 17:04Z: PRF-590: the property, its proof, three corollaries and the sentences are on `cursor/proofs-redraw-rate-5a71` at `7efe3fbeb65d`; `--siblings` passes after one merge of `main`; the first quick run failed four tests, all mine, mended; records at the head exit 0 (`a61a`), nothing regenerated; the quick suites at the head (`6113`) are still out; a correction to my sizing; PRF-596's three reads: neither, not traced, the gate gives a second coin and the Python takes one
+
+### PRF-590: what is on the branch
+
+- Head `7efe3fbeb65d`, twelve commits and one merge of `main` (`2eb974c8ea00`, merged at `22b787df3f62`); no pull request [run: `git log`].
+- **The property**: `Properties.Spot.RuleAtRate` (`security/Properties/Spot/Rate.lean:122-129`), against `Select.Rule.ofJson`, `Rule.over` and `Rule.tableOver`. For every rule object the verifier parses, every population `n` and every strata, the rule it becomes names a count of at least `NUM/DEN` of `n` (and of each stratum, under the stratified and work forms); and at every `K` the three fixed-count texts are refused with `FIXED` [read: the file].
+- **Proved with no premise**: the lock's entry for `Properties.Spot.SecurityProofs.ruleAtRate` has `assumptions`, `domain`, `open` and `reads` all empty [read: `security/Properties/lean-audit.json`]. Its honest witness is `ruleAtRate_honest` (`rate:1/2` parses, and over 4 units is `subset:2`); its negative is `ruleAtRate_nontrivial` (`subset:1` over 3 units is not at a rate) [read: the same]. Nothing went under `unwitnessed`: the `Nat.repr` lemmas prove the refusal at every `K` [run: `git diff` of the three locks has no `unwitnessed` line].
+- **`0039`** (`r20261112-142012-0039`, at `e98eb18967`): exit 0, outcome `regenerated`; the lock it made is commit `bf0f20f00bf6` [run: `research status`, its OUTCOME line].
+- **The lemma at `LawOn`**: `Flock.Bridge.rateOn_count` and `rateOn_share` (`security/Proofs/Flock/Bridge/Rate.lean:77`, `:110`): a design that samples `kd` of the units under `LawOn`, and is at the rate, has `NUM·n ≤ DEN·kd` [read].
+- **Three corollaries**, each its pooled statement with the share hypothesis replaced by "every window's design is at the rate" [read: the files]:
+  - `Flock.Bridge.pooledIntegrity_rate`: `IntegrityHorizon` at `q = NUM/DEN` (`Bridge/RatePeriod.lean:56`).
+  - `Flock.Bridge.pooledIntegrityCarried_rate`: `IntegrityHorizonCarried`, likewise (`:77`).
+  - `NetTiming.pooledIncorrectBlocks_rate`: `PooledIncorrectBlocksLe` with `NUM·n_i ≤ DEN·k_i` (`security/Proofs/NetworkCertifier/Pooled.lean:298`).
+- **The sentences**, each saying the share is a hypothesis, that a `rate:NUM/DEN` rule's count meets it over whatever a window registers, and that under a fixed count it falls as the prover pads [read: commit `f1a6b107e1bc`]: the seven Flock statements (`IntegrityPeriodLog`, `IntegrityHorizon`, `IntegrityBlock`, `IntegrityBlocks`, `IntegrityHorizonBlocks`, `IntegrityBlockCarried`, `IntegrityHorizonCarried`), `PooledIncorrectBlocksLe`, `PeriodEscapes`, `SampledPerWindow`, `FirstRate`, `FirstStageAt`. Two say the hypothesis reads no rule's rate: `SecondRate` (a two-stage rule's second-stage counts are fixed per cell) and `PlanCheck`'s statements (a Bernoulli design, which the audit refuses).
+- **The adaptive-N sentence** is in `RatePeriod.lean:30-32`, tagged as not proved: each statement fixes every window's population before the period [read].
+- I also fixed two docstrings in `Definitions/Nci` that named `HiddenWindow`, which no longer exists, as `SamplingBlock` [read: the same commit].
+
+### PRF-590: a correction to my sizing
+
+- I sized three corollaries "through `LawOn`" for every design. That was wrong [derived]. The seven Flock statements are about `SamplingBlock`, which samples a uniform subset, so only the `rate:` form discharges them (`RatePeriod.lean:12-28` says so).
+- A window under `stratified-rate:` or `work-rate:` is outside all seven. `rateOn_count` gives its share, and the stratified period statement `JointStratifiedHorizon` takes no share hypothesis, so I wrote no corollary of it [read: its statement].
+- I wrote twelve sentences and two "reads no rate" sentences, not five [run: the commit's diff].
+- The corollaries are not listed in the lock. Listing them is three `shape.frozen` entries and their witnesses: your call.
+
+### PRF-590: the `--siblings` verdict
+
+- `9430a77287c` was not an ancestor of the branch, so I merged `main` once (clean) [run: `git merge-base --is-ancestor`, `git merge`].
+- After it, `--siblings` passes for every file I tried: "no built module of its package … declares a name it does" [run: the six tries below].
+- Its reach is partial: it compared against 398 to 677 built modules and left 3,214 to 3,483 "unchecked, with no build of their source as it is" [run: the tries' own lines]. A clash with one of those would not show.
+
+### PRF-590: the quick run's four failures, all from my branch
+
+No quick run had been made on this branch before `r20261112-152302-4823` (at `f1a6b107e1bc`, exit 1: 7 suites passed, 3 failed) [run].
+
+1. `tests/test_boundaries.py::test_spot_never_imports_the_network_certifier_in_lean`. SPOT's proof file imported `Proofs/Properties/Verity/Sampled/Record/Reg.lean` for the `Nat.repr` lemmas, and that file reaches the certifier's Lean. It was so since the property's first commit [read: the failure]. Mended: the nine lemmas moved, unchanged, to `security/Proofs/Properties/Spot/DesignText.lean`, which `Reg.lean` now imports (commits `11c6480a0b6f`, `0f00c937b6ba`). This edits `Reg.lean`, another area's proof file: 3 lines added, 78 removed [run: `git show --stat`].
+2. `tests/test_pins.py::test_no_pin_is_stale`, `test_pous_trusted.py::test_trusted_hashes_are_current` and `test_consumers.py::test_the_two_stage_vectors_were_generated_from_this_tree`: two stale pins. `TRUSTED.sha256` hashes the proofs' lakefile, where I added a root; the two-stage vectors' fixture records the hash of `SamplingTwo.lean`, where I added a sentence [read: the failures]. Mended by `pins.py --regen` on a pod (`r20261112-160229-7fdd`, exit 0, "stale rc 0" after), committed as `7efe3fbeb65d`. The vectors are unchanged; only the `inputs` hash moved [run: `git diff`].
+3. All four pass locally at the head: `test_boundaries.py` and `test_pins.py` 62 passed, `test_pous_trusted.py` 9 passed, the vectors' test 2 passed [run].
+
+### PRF-590: runs (all `--as proofs`)
+
+| run | what | commit | verdict |
+|---|---|---|---|
+| `r20261112-152158-fe0d` | records, `security/Properties` | `f1a6b107e1bc` | exit 0, outcome `pass`, nothing regenerated |
+| `r20261112-155130-f8c4` | records, `security/Properties` | `22b787df3f62` | exit 0, outcome `pass`, nothing regenerated |
+| `r20261112-152302-4823` | quick suites | `f1a6b107e1bc` | exit 1, the four tests above |
+| `r20261112-160229-7fdd` | `pins.py --regen` | `22b787df3f62` | exit 0 |
+| `r20261112-154017-0752` | try `--siblings`, `RatePeriod.lean` | `22b787df3f62` | exit 0, 3 theorems |
+| `r20261112-154220-96e1` | try `--siblings`, `Flock/Bridge/Rate.lean` | `22b787df3f62` | exit 0, 7 |
+| `r20261112-154320-06d9` | try `--siblings`, `NetworkCertifier/Pooled.lean` | `22b787df3f62` | exit 0, 11 |
+| `r20261112-160546-b5ab` | try `--siblings`, `DesignText.lean` | `11c6480a0b6f` | exit 0, 9 |
+| `r20261112-160841-5b39` | try `--siblings`, `Proofs/Properties/Spot/Rate.lean` | `11c6480a0b6f` | exit 1: an import the moved lemmas had carried |
+| `r20261112-161401-fbbb` | the same file | `0f00c937b6ba` | exit 0, 18 |
+| `r20261112-161602-c4c5` | try `--siblings`, `Reg.lean` | `0f00c937b6ba` | exit 0, 21 |
+| `r20261112-161859-a61a` | records, `security/Properties` | `7efe3fbeb65d` | exit 0, outcome `pass` for `security/Properties`, `security/Proofs` and `security`, nothing regenerated |
+| `r20261112-161942-6113` | quick suites, `--changed 2eb974c8ea00` | `7efe3fbeb65d` | running at 17:04Z, on vy-nebius-cpu-9 |
+
+Every try's axioms are `propext`, `Classical.choice`, `Quot.sound` or fewer [run: the tries' probes]. A docstring edit regenerates no record (`fe0d`) [run].
+
+### PRF-590: what "proved" does not yet have
+
+- No full `check.py` with the kernel replay has run on this branch: the records runs are "a lean-fast/v1 result" by their own line [run].
+- No second agent has read the property's statement against `Select.lean` [derived].
+- The bookkeeping lint's count of Lean names with `law` is `154 > 133` at the head and on `main` `3d8530f5268a` alike, so this branch adds none [run: the lint, locally, on both].
+
+### PRF-596: the three reads
+
+**(1) Does the gate limit a lane's reserves by rate or count outside a period? No, by neither** [read: `main` `3d8530f5268a`, `verity/composite/device/live_challenger/auditor.py`]. `gate_reserve` (`:1165-1186`) refuses a request only through `parse_reserve` (`:1051-1096`, which bounds one reserve's minutes to 1 to 720, `:331`) and `cap_refusal` (`:1131-1137`), and `cap_refusal` looks only at the lane's open period that has a cap. `free_port` (`:1118-1124`) limits the sessions alive at once to the 89 ports of `:330`, not their number over time. The verifier's cap (`verity/protocols/spot/device/challenger.py:1225-1226`, Lean `Spot/ChallengerSession.lean:500-508`) is likewise only inside a period. What a window in no period loses is PoUW's credit (`circuit_reason` refuses it for `credited_session`); a sampled-proofs audit reads `trusted_session_of`, which needs no period [read].
+
+**(2) Is the record V3c audits H1's window's Commit record, in one served run's files? Not traced end to end** [run: `research data show` and `fetch` on the runs named]. The code says yes: under `H1_TIE`, `tied` holds the last `record` digest H1 logged for the window to `REG.digest` of the registration V3c then audits, V3c makes no commit of its own, and the audit runs on that same directory with `--tie` (`benchmarks/one_stage/served_verdicts.sh:313-331`, `:338-341`, `:397-425` on `main`) [read]. But no kept run in the store, that I found, ran a tied V3c audit. The last week's served run of record, `r20261109-084127-4ca1`, is the no-PoUW configuration with `H1_TIE` empty [read: its `verdicts.txt`; relayed: vllm's note of 10 Nov for `H1_TIE`]. The tied runs I found are of 3 and 4 Nov on old trees: `r20261104-065533-d804` failed ("H1 bound no record R at the window's close"), and `r20261104-105449-028b`, a development run, has the driver's own line "its registration the Commit record H1 bound before the sample coin (R 261b439dc7cf09db…)" and then "V3C-AUDIT: MAIN_FILE /dev/null … is missing or empty", so its audit never started; the store keeps its `verdicts.txt` only, neither `h1/log.jsonl` nor the registration [read: both files]. I searched the store by the notes' run ids, not by every run.
+
+**(3) On lean's tip `f3837f57d113`, under `verity/remote/v1` with Pearl+, does a second run commitment get a second coin? From the gate, yes; the Python that reads the record takes one; the compiled Lean reads no ledger** [read: the tip, by `git show`]. The gate gives one session a root (`open_refusal`, `auditor.py:1155-1156`), and a second run commitment is another root, so it can reserve, open and get its own coin `pouw/draw` 0; the gate's two files are the same at the tip as on `main` [run: `git diff --stat`, empty]. The reader, `pearlplus_live_draw` (`benchmarks/one_stage/served_verdicts.py:1625-1677`), takes a sample only if its session is the lane's first reserve after its Pearl-C period closed and the only session the ledger opens on that commitment: "a draw is taken once". The driver's `LiveDraw` (`benchmarks/pouw/pearl_c_vllm/bench_arm.py:125-179`) refuses before it reserves. So within one Pearl-C period the Python takes no second coin. The Lean of record does not hold this: `drawReason` holds a challenger sample "less the auditor's ledger, key and period, which the compose checks" (`PouwPearlPlus/Coins.lean:16-20`), and the compose's ties are the record and the window only (`verity/protocols/remote/verifier/CoreRemote.lean:449-483`), so nothing compiled reads the ledger [read]. And nothing I read holds a lane to one Pearl-C period: a second period would bring another first reserve after its close [derived, not traced].
+
+### Open, and what stops each
+
+- The quick suites at the head, `r20261112-161942-6113`: running at 17:04Z, 45 minutes in; the earlier quick run took 31 minutes [run: `research status`, `4823`'s `status.json`]. I expect it by about 17:20Z [guess]. It must show the four tests pass; they do locally.
+- Not written: a corollary for the stratified period statement. `JointStratifiedHorizon`'s budget is `Σ k_s·x_s/n_s ≤ ln(1/δ)`, so with every stratum at the rate the incorrect proof blocks should total at most `ln(1/δ)·DEN/NUM` [derived, not proved]. Say if you want it.
+- PRF-590's branch waits on you: whether to open a pull request, and whether to list the corollaries.
+- #9237 is untouched at `9d4aec0111fb`; its mark is yours [relayed: your 15:06Z section].
