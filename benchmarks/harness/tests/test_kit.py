@@ -1,6 +1,7 @@
 """The harness kit's four calls on CPU: the lease's argv, the host stamp with no GPU and over stand-in nvidia-smi answers,
-the paired ratio and its interval against values worked by hand, and the writer's result, which research's own check takes,
-with what it refuses. No test starts a program: the stamp's queries go through a stand-in."""
+the paired ratio and its interval against values worked by hand, and the writer's result, its measurements and its
+validation, which research's own check takes, with what it refuses. No test starts a program: the stamp's queries go
+through a stand-in."""
 
 from __future__ import annotations
 
@@ -213,6 +214,109 @@ def test_the_writer_appends_to_the_result_a_runs_validation_is_in(tmp_path, no_g
     kit.writer(tmp_path).measurement("gamma", 0.5, "ratio")
     doc = _result(tmp_path)
     assert {k: doc[k] for k in envelope} == envelope and [m["name"] for m in doc["measurements"]] == ["gamma"]
+
+
+def test_the_writer_writes_the_validation_block_a_benchmarks_own_result_holds(tmp_path, no_gpu):
+    """The block is, key for key, the one a benchmark that writes its run's whole result itself puts under `validation`
+    for the same gates: `passed` beside the evidence's path relative to the run's directory, and `failed` with none."""
+
+    from research import result as research_result
+
+    run_dir = tmp_path / "run"
+    (run_dir / "out").mkdir(parents=True)
+    (run_dir / "out" / "census.json").write_text("{}")
+    detail = "worst in-domain share 0.00120 (threshold 0.0025)"
+    block = kit.writer(run_dir).validation("passed", "pearlc-census", detail, ["out/census.json"])
+    assert block == {"status": "passed", "checker": "pearlc-census", "detail": detail, "evidence": ["out/census.json"]}
+    assert list(block) == ["status", "checker", "detail", "evidence"]
+    assert _result(run_dir) == {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [], "validation": block}
+    check = research_result.check(run_dir, RUN)
+    assert check.present and check.valid and check.errors == [] and check.validation_status == "passed"
+    assert sorted(run_dir.iterdir()) == [run_dir / "out", run_dir / kit.RESULT]
+    other = tmp_path / "other"
+    assert kit.writer(other).validation("failed", "pearlc-k256-gate", "2 of 4 parts hold", evidence=()) == {
+        "status": "failed", "checker": "pearlc-k256-gate", "detail": "2 of 4 parts hold", "evidence": []}
+    check = research_result.check(other, RUN)
+    assert check.valid and check.validation_status == "failed" and check.doc == _result(other)
+    # a detail that only holds one of a verdict of record's words inside another, and one that says nothing
+    for i, plain in enumerate(("", "acceptable drift at every point", "0 of 12 points over the threshold")):
+        assert kit.writer(tmp_path / str(i)).validation("passed", "", plain, ("a/b.json",))["detail"] == plain
+
+
+def test_a_validation_and_the_measurements_share_a_result_in_either_order(tmp_path, no_gpu):
+    from research import result as research_result
+
+    first, second = tmp_path / "validation-first", tmp_path / "measurements-first"
+    w = kit.writer(first)
+    block = w.validation("passed", "a benchmark", "4 of 4 gates hold", ["out/gates.json"])
+    gamma = w.measurement("gamma", 0.5, "ratio", target=1.0, verdict="within target")
+    reps = kit.writer(first).measurement("reps", 20, "")
+    assert _result(first) == {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [gamma, reps], "validation": block}
+    w = kit.writer(second)
+    w.measurement("gamma", 0.5, "ratio", target=1.0, verdict="within target")
+    kit.writer(second).validation("passed", "a benchmark", "4 of 4 gates hold", ["out/gates.json"])
+    w.measurement("reps", 20, "")
+    assert _result(second) == _result(first)
+    for out in (first, second):
+        check = research_result.check(out, RUN)
+        assert check.valid and check.errors == [] and check.validation_status == "passed"
+    # into a result the run wrote without one, beside what it already holds
+    envelope = {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "workload_fingerprint": {"door": "run"},
+                "measurements": [{"name": "wall", "value": 1.5, "unit": "s"}], "measurement_files": []}
+    third = tmp_path / "enveloped"
+    third.mkdir()
+    (third / kit.RESULT).write_text(json.dumps(envelope))
+    kit.writer(third).validation("failed", "a benchmark", "1 of 4 gates hold")
+    assert _result(third) == envelope | {"validation": {"status": "failed", "checker": "a benchmark",
+                                                       "detail": "1 of 4 gates hold", "evidence": []}}
+
+
+def test_the_writer_refuses_a_second_validation_and_one_that_isnt_a_runs_own_gates(tmp_path, no_gpu, monkeypatch):
+    blank = tmp_path / "blank"
+    w = kit.writer(blank)
+    ok = {"status": "passed", "checker": "a benchmark", "detail": "4 of 4 gates hold", "evidence": ["out/gates.json"]}
+    for status in ("not_run", "PASS", "Passed", "accepted", "sealed", "ok", "", True, None, 1):
+        with pytest.raises(ValueError, match="status is 'passed' or 'failed', whether the run's own gates held, not .* a "
+                                             "verdict of record or a seal is never a run's validation"):
+            w.validation(**ok | {"status": status})
+    for what in ("checker", "detail"):
+        for text in (None, 3, b"bytes", ["4 of 4 gates hold"]):
+            with pytest.raises(ValueError, match=f"a validation's {what} is a string"):
+                w.validation(**ok | {what: text})
+    for detail in ("all gates passed", "the verifier accepts every session", "FAIL: gate 3", "sealed", "1 failure",
+                   "every part passes", "failing: the k256 part", "worst accepted share 0.0012", "the proof's rejection"):
+        with pytest.raises(ValueError, match="reads as a verdict of record or a seal .* nothing under benchmarks/ writes: "
+                                             "say what the run's own gates found"):
+            w.validation(**ok | {"detail": detail})
+    for evidence in ("out/gates.json", b"out/gates.json", None, 5, {"out/gates.json"}, iter(["out/gates.json"])):
+        with pytest.raises(ValueError, match="evidence is a list of paths relative to"):
+            w.validation(**ok | {"evidence": evidence})
+    for rel in (3, None, "", "/abs/gates.json", "../gates.json", "out/../../gates.json", Path("out/gates.json")):
+        with pytest.raises(ValueError, match="evidence is a list of paths relative to .* and inside it, each a string"):
+            w.validation(**ok | {"evidence": ["out/gates.json", rel]})
+    assert not blank.exists()
+    # one validation a result, whoever wrote the first
+    w.validation(**ok)
+    w.measurement("gamma", 0.5, "ratio")
+    before = (blank / kit.RESULT).read_bytes()
+    for again in (w, kit.writer(blank)):
+        with pytest.raises(ValueError, match="already holds a validation: a result holds one, the run's own"):
+            again.validation("failed", "another checker", "1 of 4 gates hold")
+    assert (blank / kit.RESULT).read_bytes() == before and list(blank.iterdir()) == [blank / kit.RESULT]
+    for i, held in enumerate(({"status": "failed", "checker": "a benchmark", "detail": "", "evidence": []},
+                              {"status": "not_run", "checker": None, "detail": None, "evidence": []})):
+        enveloped = tmp_path / str(i)
+        enveloped.mkdir()
+        text = json.dumps({"schema": kit.RESULT_SCHEMA, "run_id": RUN, "validation": held})
+        (enveloped / kit.RESULT).write_text(text)
+        with pytest.raises(ValueError, match="already holds a validation"):
+            kit.writer(enveloped).validation(**ok)
+        assert (enveloped / kit.RESULT).read_text() == text
+    # and only into this run's result
+    monkeypatch.setenv("RESEARCH_RUN_ID", "run-2")
+    with pytest.raises(ValueError, match="holds run run-1's measurements, and this run is run-2"):
+        kit.writer(blank).validation(**ok)
+    assert (blank / kit.RESULT).read_bytes() == before
 
 
 def test_the_writer_refuses_a_verdict_of_record_and_a_seal(tmp_path, no_gpu):

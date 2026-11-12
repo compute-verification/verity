@@ -5,18 +5,22 @@
   and the commit. With no GPU it says so: `card` is ``"none"``, beside `why`.
 - `paired(arm, stock, confidence=0.95)`: an arm's ratio over stock from matched repetitions, its interval and `n`.
 - `writer(out).measurement(name, value, unit, ...)`: appends one measurement to `out/result.json`.
+  `writer(out).validation(status, checker, detail, evidence=())` writes the run's validation there, once.
 
-**A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id` and `measurements`. Each
+**A result** is `RESULT_SCHEMA`, the form `research` reads a run's `result.json` in: `run_id`, `measurements` and the run's
+`validation` (`status`, `checker`, `detail` and `evidence`, the files it stands on, as paths relative to `out`). Each
 measurement is the form a reader of numbers takes, `value`, `unit`, `commit` and `run`, with its `name`, its 95% interval
 (`ci95`, ``[low, high]``), its `target`, the `verdict` of its check against that target, the `inputs` it was computed from
 (other measurements' names, run or `art:` ids) and the `host` stamp it was written under. The writer appends: `out` may be
-a run's own directory, where a benchmark that writes the run's validation writes it first, or its `$OUT`. A result holds
-one run's measurements and one a name, so a rerun writes a fresh directory.
+a run's own directory, where it keeps what the run's result already holds, or its `$OUT`. A result holds one run's
+measurements, one a name, and one validation, so a rerun writes a fresh directory.
 
 **A measurement is a number, and its verdict is its target check.** Nothing under `benchmarks/` writes a verdict of record or
 a seal: a verdict of record is its protocol's verifier's, and a seal its Commit's. So the writer refuses a value that isn't
 a number, a verdict with no target, and a verdict in a verifier's or a seal's words (`OF_RECORD`); a target check says
-where the value stands against its target (``"within target"``).
+where the value stands against its target (``"within target"``). **A validation is the run's own gates**, never a
+protocol's security verdict: its `status` is the schema's ``"passed"`` or ``"failed"`` and nothing else, and its
+`detail` says what the gates found (``"3 of 4 gates hold"``), which the writer refuses in a verifier's or a seal's words.
 
 Standard library and `verity_bench.settings` only, so a kernel's runner imports it without vLLM or torch.
 """
@@ -52,6 +56,9 @@ QUERY_TIMEOUT_S = 60
 #: verdict takes (the verb's and its noun's), which no measurement's verdict uses
 OF_RECORD = frozenset("accept accepts accepted accepting acceptance reject rejects rejected rejecting rejection "
                       "pass passes passed passing fail fails failed failing failure seal seals sealed sealing".split())
+#: the statuses of a validation the writer writes: whether the run's own gates held (the schema's third, ``not_run``, is a
+#: result with no validation)
+VALIDATION_STATUSES = ("passed", "failed")
 
 
 # ---- the lease ---------------------------------------------------------------------------------------------------------------
@@ -191,6 +198,12 @@ def _number(what: str, x: Any) -> int | float:
     return int(x) if isinstance(x, numbers.Integral) else float(x)
 
 
+def _of_record(text: str) -> list[str]:
+    """The words of `text` that are a verdict of record's or a seal's (`OF_RECORD`)."""
+
+    return sorted(set(re.findall(r"[a-z]+", text.casefold())) & OF_RECORD)
+
+
 def _target_check(verdict: Any, target: Any) -> str | None:
     """A measurement's verdict, or ValueError where it isn't the check of its value against its target."""
 
@@ -198,7 +211,7 @@ def _target_check(verdict: Any, target: Any) -> str | None:
         return None
     if not isinstance(verdict, str) or not verdict.strip():
         raise ValueError(f"a measurement's verdict says in words where its value stands against its target, not {verdict!r}")
-    if words := sorted(set(re.findall(r"[a-z]+", verdict.casefold())) & OF_RECORD):
+    if words := _of_record(verdict):
         raise ValueError(f"the verdict {verdict!r} reads as a verdict of record or a seal ({', '.join(words)}), which "
                          "nothing under benchmarks/ writes: say where the value stands against its target (\"within "
                          "target\")")
@@ -256,18 +269,58 @@ class Writer:
                  "commit": self.stamp["commit"], "run": self.run, "ci95": interval,
                  "target": None if target is None else _number("target", target),
                  "verdict": _target_check(verdict, target), "inputs": inputs, "host": dict(self.stamp)}
-        self.out.mkdir(parents=True, exist_ok=True)
-        path = self.out / RESULT
-        with _locked(self.out):
-            doc = self._read(path)
+        with self._open() as (path, doc):
             if any(m.get("name") == name for m in doc["measurements"]):
                 raise ValueError(f"{path} already holds a measurement named {name}: a result holds one a name (a rerun writes "
                                  "a fresh directory)")
             doc["measurements"].append(entry)
+        return entry
+
+    def validation(self, status: str, checker: str, detail: str, evidence: Sequence[str] = ()) -> dict:
+        """Writes the run's validation into `out/result.json` and returns it: `status`, ``"passed"`` or ``"failed"``, whether
+        the run's own gates held; the `checker` that says so, by name; its `detail` in words; and the `evidence`, the files
+        it stands on, as paths relative to `out`, in a list. It refuses a second validation in one result, any other status,
+        a checker or a detail that isn't a string, evidence that isn't a list of relative paths inside `out`, a detail in a
+        verdict of record's or a seal's words, and a result of another run: a run's gates are its own, and a protocol's
+        security verdict is its verifier's to write."""
+
+        if not isinstance(status, str) or status not in VALIDATION_STATUSES:
+            raise ValueError(f"a validation's status is {' or '.join(map(repr, VALIDATION_STATUSES))}, whether the run's own "
+                             f"gates held, not {status!r}: a verdict of record or a seal is never a run's validation, and "
+                             "nothing under benchmarks/ writes one")
+        for what, text in (("checker", checker), ("detail", detail)):
+            if not isinstance(text, str):
+                raise ValueError(f"a validation's {what} is a string, not {text!r}")
+        if words := _of_record(detail):
+            raise ValueError(f"the detail {detail!r} reads as a verdict of record or a seal ({', '.join(words)}), which "
+                             "nothing under benchmarks/ writes: say what the run's own gates found (\"3 of 4 gates hold\")")
+        if not isinstance(evidence, (list, tuple)):
+            raise ValueError(f"a validation's evidence is a list of paths relative to {self.out}, not {evidence!r}")
+        for rel in evidence:
+            if not isinstance(rel, str) or not rel or Path(rel).is_absolute() or ".." in Path(rel).parts:
+                raise ValueError(f"a validation's evidence is a list of paths relative to {self.out} and inside it, each a "
+                                 f"string, not {rel!r}")
+        block = {"status": status, "checker": checker, "detail": detail, "evidence": list(evidence)}
+        with self._open() as (path, doc):
+            if doc.get("validation") is not None:
+                raise ValueError(f"{path} already holds a validation: a result holds one, the run's own (a rerun writes a "
+                                 "fresh directory)")
+            doc["validation"] = block
+        return block
+
+    @contextlib.contextmanager
+    def _open(self) -> Iterator[tuple[Path, dict]]:
+        """`out/result.json`'s path and this run's result to change, under `out`'s lock: what the caller leaves in the
+        result replaces the file whole, and a caller that raises leaves the file as it was."""
+
+        self.out.mkdir(parents=True, exist_ok=True)
+        path = self.out / RESULT
+        with _locked(self.out):
+            doc = self._read(path)
+            yield path, doc
             tmp = path.with_name(f"{RESULT}.tmp.{os.getpid()}")
             tmp.write_text(json.dumps(doc, indent=1, allow_nan=False) + "\n", encoding="utf-8")
             os.replace(tmp, path)
-        return entry
 
     def _read(self, path: Path) -> dict:
         """The result at `path` to append to: this run's, or a new one where there is none."""

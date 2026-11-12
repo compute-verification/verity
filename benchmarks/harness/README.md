@@ -349,11 +349,16 @@ standard library and `verity_bench.settings` alone, so a runner imports it witho
   measurement to `out/result.json`, a `research/result/v0.1` result: `value`, `unit`, `commit` and `run`, with its 95%
   interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was computed from,
   by name, and the `host` stamp. `out` is a job's `$OUT`, or the run's directory, where the measurements are the run's own.
+  **`kit.writer(out).validation(status, checker, detail, evidence=())`** writes the run's validation there, once: `status`
+  (`passed` or `failed`, whether the run's own gates held), the `checker`'s name, its `detail` in words, and the
+  `evidence`, a list of the files it stands on, as paths relative to `out`.
 
 A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
 verdict of record or a seal, so the writer refuses a value that isn't a number, a verdict with no target, and a verdict in
-a verifier's or a seal's words (accept, reject, pass, fail, seal, in any form: passing, failure, rejection). A result
-holds one run's measurements, one a name.
+a verifier's or a seal's words (accept, reject, pass, fail, seal, in any form: passing, failure, rejection). A validation
+is the run's own gates, never a protocol's security verdict: its status is `passed` or `failed` and nothing else, and its
+detail says what the gates found ("3 of 4 gates hold"), which the writer refuses in the same verifier's or seal's words. A
+result holds one run's measurements, one a name, and one validation.
 
 ## Out of scope here
 
