@@ -8,9 +8,10 @@ accepts, which Lean refuses for its form alone (`members.ALL_PASSED`), is a whol
 `benchmarks/one_stage` runs with the twin beside it.
 
 The twin decides the sessions' trees by `challenger.members_tree_reason` (with `member_tree_reason`, `closes` and
-`members_order`), and the rows hold it to Lean's `Challenger.membersTreeReason` on each of its refusals: a tree closed
-after other evidence or never closed, a tree the log does not show, one tree for two sessions, a tree no session
-records, and trees opened in another order or before the one before is closed.
+`members_order`), and the rows hold it to Lean's `Challenger.membersTreeReason` on each refusal of its own: a tree
+closed after other evidence or never closed, a tree the log does not show, one tree for two sessions, a tree no
+session records, and trees opened in another order or before the one before is closed. What it refuses of a session's
+tree as any session's (`session_tree_reason`) is `test_challenger_difftest.py`'s.
 
 Two rows are where the twin is not Lean's step for step (the module's docstring). One is here: a circuit file whose
 META names another ``vus_per_block`` than the parameters' and that does not parse, which Lean leaves to its session's
@@ -221,7 +222,7 @@ def test_the_twin_answers_leans_reason_on_each_refusal_of_the_sessions_trees(tmp
     whose tree is never closed (`NO_CLOSING`), a session whose record names a tree the log does not show (`NO_TREE`),
     two sessions on one tree (`SHARED_TREE`), and a log that opens the second tree before the first is closed
     (`MEMBERS_ORDER`). With the other rows' changed proof file, unused tree and trees opened in the other order, every
-    refusal of that check is run on both sides."""
+    refusal of its own is run on both sides."""
     def same(x: Audit, k: str, reason: str, **ask) -> None:
         why, (run, refused) = x.ask(tmp_path / k, **ask)
         assert run is None and why == M.run_reason(run, refused) == f"proofs: {reason}", (k, why, refused)
