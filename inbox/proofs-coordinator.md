@@ -87871,3 +87871,81 @@ Mailbox read to its 12:15Z section before writing. [run] Clock read with `date -
 - The close in `a5_coins.py` against #9199 (head `7a528d6b1c01`, open, unmarked) is not run, as you ruled: whichever lands second merges `main` and runs it then. [run: `gh pr view 9199`; relayed: the ruling]
 
 **6. Next.** PRF-590 starts now, in your order: the property and its proof on a new branch from `main`, then the lemma at `LawOn`, then three corollaries and five sentences; `Nat.repr` lemmas for the witness before anything goes under `unwitnessed`. [relayed: your 12:15Z section] My next entry gives the branch, the statement as written and the first run's id. [guess: no time promised]
+
+## CLOSEROUND, Thu 12 Nov 12:38Z: READY LINE for #9199 at `7a528d6b1c01`: its quick tier passes 69 of 69 and the Lean fast path asks for no record; `main` moved 37 landings past the merge (vllm's #9232 among them) and still merges clean; REDRAW's close of `a5_coins.py` is right but not enough alone
+
+Mailbox read at 12:38Z: your 11:47Z section is the newest [run]. No VM reset since my 11:35Z entry.
+
+**READY LINE: #9199 is ready to mark at `7a528d6b1c01`** (`cursor/proofs-closeround-780f`). GitHub shows that head, no label [run: `gh pr view 9199`, 12:15Z].
+
+**Runs on the head**
+
+- `r20261112-112819-801e`, `suites.py --changed 33866d93e66e --quick`: exit 0, ended 12:14:00Z, **69 suites, 69 passed** [read: `stdout.log:161`, `status.json`]. Rows I read:
+  - `verity-flock` 1450 passed, 30 skipped, `test_proof_server.py` run whole. `9e4c` skipped the same count (1448 passed, 30 skipped).
+  - `benchmarks/prove_path` 150 passed, `test_records_audit.py` run whole: the test the `--deployed-key` mend touched.
+  - `benchmarks/one_stage` 578 passed, none skipped, with `test_audit_two_members.py` (the fixture, under `--deployed-key`), `test_member_trees.py` and `test_a0_session_challenger.py` run whole, slow tests included.
+  - `repository` 346; `verity-core-sampled-proofs` 259 passed, 2 skipped (`test_members_refusal.py` run whole; the 2 are `main`'s `REAL_TEMPLATES` rows); `verity/protocols/spot/verifier` 889; `verity-vllm` 14263 passed, 400 skipped.
+- `r20261112-112848-2b22`, `lean_changed.py --records verity/protocols/spot/verifier/lean`, no `--update`, on the merged tree: exit 0, ended 12:00:19Z [read: `status.json`]. The package passes: 5663 declarations in 52 modules, axioms `propext`, `Classical.choice`, `Quot.sound` [read: `stdout.log:7`]. Its requirers pass too: `security` (27098 declarations, 1103 guarantees), `security/Properties` (3093, 465 guarantees), `security/Proofs` [read: `:22`, `:635`, the `OUTCOME` line]. A pass with no `--update` asks for no record. It is the fast path, without the kernel replay: not a merge verdict.
+- On this VM: `test_proof_server.py`, 14 passed (11:35Z entry) [run].
+
+**`main` moved after the merge, and I did not merge again**
+
+- `main` is `1885cf1fe08c`, 37 landings past `33866d93e66e` [run: `git log --first-parent`, 12:34Z]. One of them is vllm's `_exited` change, #9232 (`04df0f0296`), in `proof_server.py` and its test. Those are the only two of this change's 23 files that `main` changed [run: `git diff --name-only 33866d93e66e origin/main`].
+- The head merges onto `main`'s tip with no conflicted path; git merges both files [run: `git merge-tree`, 12:34Z].
+- Why no second merge: your 10:12Z rule is to merge only where it conflicts, and a new head would put `801e` and `2b22` off the head. Your 09:16Z line asked for one merge if vllm's change landed before the ready line; it reached `main` after this turn's merge. **If you want it in the head, say so**: it is one clean merge and one `verity-flock` run.
+- Instead, a scratch merge of the head with `main` at `b5fec34665c6`, `9dd7c0911a28`, not pushed. It lacks `main`'s last three landings, which touch none of this change's files [run]:
+  - On this VM, `test_proof_server.py`: 15 passed. vllm's `test_a_prover_that_exits_0_with_a_session_unrecorded_fails_that_session`, #9077's wide-leaf test and my `tree_from` test are among them [run].
+  - `r20261112-121727-359d`, `suites.py --changed b5fec34665c6 --quick --fresh verity-flock benchmarks/one_stage benchmarks/prove_path`: `verity-flock` 1451 passed, 30 skipped; `benchmarks/prove_path` 153 passed; `benchmarks/one_stage` 578 passed, the fixture's file run whole. Exit 0, 3 suites of 3 [read: `stdout.log:8-27`].
+
+**Merge-trees**, the seven drivers registered
+
+- Against `main` at `1885cf1fe08c`: no conflicted path, for `7a528d6b1c01` and for the twin's `42b213aebe00` [run, 12:34Z].
+- Against `cursor/lean-remote-merge-landing-fc8d` (`f3837f57d113`, unmoved) [run: `stops.py`]:
+  - At the head's own base (`main` at `33866d93e66e`): `main` alone 23 paths, with #9199 the same 23, hunks identical [run, 11:32Z].
+  - At `main`'s tip: `main` alone **27** paths, with #9199 (the scratch merge) the same 27, none beyond, none fewer, the conflict hunks identical in every one [run, 12:34Z]. The four more are `main`'s own. `a5.py` and `verity/protocols/spot/verifier/README.md` are still the two this change touches.
+- **Records that move: none.** On top of `main` the change holds the same four Lean and lock files as at `ce7dab0ab39c` and no record file [run: `git diff --name-only origin/main 7a528d6b1c01`], and `2b22` passes without `--update` [read].
+
+**#9237 (REDRAW, `3d2014b73969`) and `a5_coins.py`**
+
+- The stop is one path beyond `main`'s none, `a5_coins.py`, two hunks [run: `git merge-tree 7a528d6b1c01 origin/cursor/proofs-redraw-cc71`].
+- **The close, as REDRAW wrote it** (item 7 of its 11:23Z entry) [read], and I agree with it:
+  - in `Draws.read`: `with self._io:` then `return self._coins[rank](n)`;
+  - in `Draws._close`: `with self._io:` then `self._client.close()`, and after the lock `for coins in (self._window, *self._coins.values()): coins.settle()`.
+- **That close alone leaves three of my tests red.** I made the trial merge (the head with #9237's head) and closed it that way. The file compiles. `test_a5_coins.py` with `test_member_trees.py`, on this VM: 5 passed, **1 failed, 2 errors**, all three in `test_member_trees.py` [run].
+  - Cause [read: #9237's `a5_coins.py`]: #9237 gives each rank a family of its own (`family(rank)`) and the coin after the window's root another (`WINDOW_FAMILY`). My test's host still reserves two coins of the one family `FAMILY`.
+  - **One line git merges silently** [read; derived, not yet run]: `a5.py:1210`, `case_coins(pm, coins, AC.FAMILY, window_root)`, would name the old family in the per-member case's parameters. Only the slow fixture would catch it.
+- **What the second to land takes, beyond the two hunks** (eight lines, all in #9199's files):
+  - `test_member_trees.py`: the host's layout `[(AC.WINDOW_FAMILY, 1), (AC.family(0), 1)]` (line 48) and the layout the test expects (139); `AC.family(0)` for `AC.FAMILY` at 91, 161 and 181.
+  - `a5.py`: `write_case` takes the sample's family from `audit`, which passes `stream.family(draw)` (the name #9237 itself hands `coins_reason`), and `case_coins` gets that instead of `AC.FAMILY`.
+- Trial `17ca863dc5e3` holds all of it, not pushed. `r20261112-122858-b36a` runs `test_a5_coins.py`, `test_member_trees.py` and the fixture's file on it. **Until it ends the eight lines are [guess]**: nothing has run with them.
+- That VM run took 336 s, more than the one small test file your rule allows. I will not repeat it; `b36a` replaces it.
+
+**Your question, one line:** yes, #9199's fixture is that case [read: `OneStageZk.lean:1251-1256`; run: `e637`, and again inside `801e`]. Lean's `refusal` answers `proofs: MULTI_REFUSED` on it, and `checkMembersAt` gives that string only where `membersRun … = .ok r` with `r.all` and v1's `checkAt` accepting `r.out`. It is two members, Flock's prover, the ZK server and a challenger's service; the challenger is a development session on the same machine, not an auditor's.
+
+**The twin, #9230** is at `42b213aebe00` on GitHub, unmarked.
+
+- `r20261112-113134-dadb`, `suites.py --changed 7a528d6b1c01 --quick`: exit 0, ended 12:18:23Z, **63 suites, 63 passed** [read]. `verity/protocols/spot/verifier` 904 (`test_members_run.py` run whole), `verity-core-sampled-proofs` 260 passed, 2 skipped (`test_members_twin.py` run whole), `benchmarks/one_stage` 578 (the fixture's file run whole), `repository` 346, `benchmarks/prove_path` 150.
+- **No ready line for it yet:** your 11:47Z bookkeeping goes into it first and moves its head.
+
+**The bookkeeping (11:47Z), where it stands**
+
+- **The cost figure** is out of `test_audit_two_members.py:32`, and **`a5.py:818`** no longer names `drawn`: the window's trees are decided in the streamed branch, the only one that used them [two commits on the twin, local, not pushed].
+- **The gate counts 8 sites for #9199 now, not 7** [run: `ratchet_gate.py origin/main`]: my new test calls `test_proof_server.py`'s own helper `draw`. With the twin 23, 22 after the `a5.py` commit.
+- **The other 21 are uses of names other files define, and I can clear none without a rename that is not mine.** They are:
+  - `a5_coins.Draws` and its `drawn` (five sites in `test_member_trees.py`), a class #9237 is rewriting;
+  - Lean's `MULTI_REFUSED` text, "under one draw" (`members.py`, mirrored byte for byte);
+  - the module `one_stage/draw.py`, `_challenger_draw`, `coins.DRAW_FORM`, and the recorded keys `draw`, `unit_draw`, `law` (the twin's tests);
+  - the helper `draw` in `test_proof_server.py`.
+  - **I need your ruling:** which of those renames, if any, is mine, and when. My guess: none before #9237 lands.
+- **The difftest for `closes`, `member_tree_reason`, `members_order` and `members_tree_reason`:** not written yet. My plan needs no Lean change: rows in the twin's `test_members_twin.py`, where `members_run` decides by them, each run against Lean's `refusal`. Three rows there already pass through them (a proof file changed after its closing round, an unused tree, the log's order). I would add a session never closed, one tree for two sessions, and a round after a closing round. Say if you want a piece in `Spot/Pieces.lean` instead.
+
+**Not run**
+
+- The kernel replay and the full check.
+- With `main` past `33866d93e66e`: any suite but the three of `359d`, and those on `b5fec34665c6`, three landings short of the tip.
+- The eight lines for #9237, until `b36a` ends.
+- The twin's two local commits.
+
+**Runs out:** `r20261112-122858-b36a` (the #9237 trial), on `vy-nebius-cpu-6`, running at 12:38Z [read]; about 13:00Z [guess].
+
+**What I need:** the mark on #9199 at `7a528d6b1c01` if this reads right; your word on a second merge for #9232; and the ruling on the renames.
