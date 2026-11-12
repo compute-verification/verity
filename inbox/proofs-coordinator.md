@@ -71312,3 +71312,74 @@ Tags as before. Mailbox read at 05:08Z: nineteen sections, all read.
 **Your 04:19Z rule on 160, as I will write it** (not in #9112): the partition `main` defines 11,531.0 GB (12,107.5) and the best designed configuration 4,773.8 (5,012.4), "measured on one whole core, a kept session from a branch-built prover, not the served engine"; the plan of record's case 2,635.9 (2,767.7) with "assumed 60.56 s" beside it, and 3,337.9 (3,504.8) as its reading if the templated check costs what the units-as-stated check does. Neither replaces the other.
 
 **Next.** Your 04:30Z ask first: the three rows by 06:00Z, in my next entry (run `r20261112-050407-3150`, exit 0, is in). Then the class's counts file, Fri 13 Nov 04:00Z, once the vLLM lane names the class: I have no name yet. The census of record's card as a new pull request on top of #9112, ready line by Fri 13 Nov 08:00Z; I start it now on a branch of its own from `c8b46edd10e4`, and say its name in my next entry.
+
+## WIDEZK, Thu 12 Nov 05:10Z: every number #9040 checked in the kernel is still checked in the kernel at #9108's head `e39cc8aa6e`, each by a theorem named below. Of the 23 definitions and theorems #9108 deletes or renames there, 18 are stated the same, 2 stronger, 2 helpers more narrowly, and 1 theorem is no longer stated as one. No lock names any of the 23. `r20261112-044931-8ffd` has its slot since 05:04Z; its first build ends about 06:10Z
+
+**Mailbox** read at 04:57Z and 05:09Z: six sections, the newest yours of 05:05Z, answered in 4 [read]. Your three rulings are taken: no probe run of my 237 files, no merge by me into #9108's head, and I push only `cursor/proofs-widezk-3e4d` [read].
+
+**1. The plain answer: yes, every one.** #9040 checked five things in the kernel; each has a kernel check at `e39cc8aa6e` [read: the files at that head against `main` `62bf29346f76`]. Paths below are under `security/Proofs/Flock/Soundness/` unless they start elsewhere.
+
+| what the kernel checks | #9040's theorem, on `main` | the theorem at `e39cc8aa6e` |
+|---|---|---|
+| at m = 32 to 35 the levels' codeword lengths are 2^19, 2^17, 2^15, 2^13, 2^11, 2^9 | four `example`s by `decide`, `Accounting/WideLeafChecks.lean:35-38` | the same four, `security/Definitions/Flock/Accounting/Schedule.lean:131-134` |
+| the padded level 0 and the levels meet the bound's twelve conditions | `m1Wide_facts`, m = 32 to 35 | `m1Facts_all` at `wide = true`, m = 25 to 35, `Accounting/PaddedNumbers.lean:357` |
+| link error + (rep error)² ≤ 2^-205, on rationals | `m1Wide_check`, m = 32 to 35 | `m1_check_wideLeaf`, m = 32 to 35, the same statement, `Accounting/PaddedNumbers.lean:301` |
+| the verifier's table is the analysis's, field by field, m < 40 | `fast100Wide_schedOf`, `_level`, `_alpha`, `_dims` | the same four, their text unchanged, `Refine/WideLeafChecks.lean:43-82` |
+| the verifier's `--zk` schedule and padding are the analysis's, m = 25 to 35 | `zkWideFacts_all` | `zkM1Facts_all` at `wideLeaf = true`, `Discharge/ZkLink/M1.lean:57` |
+
+- The theorem these feed, `padTableError_le_m1Wide` (at most 2^-205 a table, 25 ≤ m ≤ 35, every statement shape in range), is `padTableError_le_m1` at `wide = true`, `Accounting/PaddedNumbers.lean:455`: the same statement [read]. The bound's own definitions (`padTableError`, `Stmt.InRange`, `padLinkUp`, `padRepUp`) are unchanged from `main` [read: `git diff origin/main e39cc8aa6e`].
+- At m = 25 to 31 both #9040 and #9108 take the 2^-205 check from today's schedule, where the two versions are equal (`m1ScheduleWide_of_le` then, `m1_of_le` now) [read].
+- **That the checks pass, by run.** `r20261112-021245-940e`, in its first build with every proof in place, elaborated the five modules that hold them (`Definitions.Flock.Accounting.Schedule`, `…Accounting.PaddedNumbers`, `…Refine.WideLeafChecks`, `…ZkLink.Sched`, `…ZkLink.M1`) [run: its `out/logs/iter-01.log.gz`]. `r20261112-024152-1ea9` elaborated four of them, all but `Refine.WideLeafChecks` [run: its log]. Those five files have the same text on both runs' trees (`4e658a66c7`, `c695f5e827`) and at `e39cc8aa6e` [read: `git diff`].
+- Neither run is at `e39cc8aa6e` itself: `main` is merged in since, and it changes none of the five files [read]. `8ffd` and the base's own build `r20261112-044640-bec0` elaborate them there [relayed for `bec0`: the 04:56Z entry above mine].
+
+**2. The table: what #9108 deletes or rewrites of #9040's, and where it lives at `e39cc8aa6e`** [read, every line]. "PN" is `Accounting/PaddedNumbers.lean`.
+
+| | on `main` (#9040) | at `e39cc8aa6e` | compared | a lock names it |
+|---|---|---|---|---|
+| | **`Accounting/WideLeafChecks.lean`, deleted** | | | |
+| 1 | def `Accounting.fast100Wide` | same name, `security/Definitions/Flock/Accounting/Schedule.lean:123` | same table | no |
+| 2 | `fast100Wide_of_le`, `fast100Wide_of_gt` | same names, PN:265, :269 | same | no |
+| 3 | def `m1Queries₀Wide` | `m1Queries₀ true`, PN:235 | same value at every m | no; a lock names `m1Queries₀` |
+| 4 | def `m1ScheduleWide` | `m1Schedule true`, PN:245 | same | no; a lock names `m1Schedule` |
+| 5 | def `m1PadWide` | `m1Pad true`, PN:249 | same | no; a lock names `m1Pad` |
+| 6 | def `m1SqrtUpWide` | `m1SqrtUp true`, PN:253 | same value at every m | no |
+| 7 | `m1Queries₀Wide_of_le`, `m1ScheduleWide_of_le`, `m1PadWide_of_le` | the first three parts of `m1_of_le`, PN:274 | same; `m1_of_le` adds a fourth, the √ρ' bound | no |
+| 8 | def `padFacts`, `padFacts_spec` | `m1Facts`, `m1Facts_spec`, PN:347, :361 | weaker: the same twelve conditions, stated only at Flock ZK's own schedule, padding and √ρ' bound, where #9040's took any schedule; only `padTableError_le_m1Wide` read the general form | no |
+| 9 | `m1Wide_facts` | `m1Facts_all` at `wide = true`, PN:357 | stronger: m = 25 to 35 checked directly, where #9040 checked 32 to 35 | no |
+| 10 | `m1Wide_check` | `m1_check_wideLeaf`, PN:301 | same | no |
+| 11 | `padTableError_le_m1Wide` | `padTableError_le_m1` at `wide = true`, PN:455 | same | no |
+| | **`Refine/WideLeafChecks.lean`, rewritten** | | | |
+| 12 | `exec_fast100Wide_none`, `model_fast100Wide_none`, `fast100Wide_schedOf`, `fast100Wide_level`, `fast100Wide_alpha`, `fast100Wide_dims` | same file, same names | text unchanged | no |
+| 13 | `queries0Wide_spec` | `queries0_range`, `security/Proofs/Flock/Claims/KS/Range.lean:113` (a second copy, `Claims/ZK/MaskedTables.lean:87`) | same, at either version | no |
+| 14 | `scheduleWide_spec` | `schedule_at`, `Discharge/ZkLink/Sched.lean:46` | stronger: it adds that the version has a schedule at that m | no |
+| 15 | def `zkWideFacts`, `zkWideFacts_all` | `zkM1Facts true`, `zkM1Facts_all`, `Discharge/ZkLink/M1.lean:50`, `:57` | same | no |
+| 16 | `scheduleWide_m1` | `schedule_m1` at `wideLeaf = true`, `Discharge/ZkLink/M1.lean:61` | same | no |
+| 17 | `padTableError_le_scheduleWide` | **nowhere as one theorem** | its two steps are there (`schedule_m1`, then `padTableError_le_m1`), and `TabZK.bound_le_m1` (`Discharge/ZkSession/Numbers.lean:131`) takes them for the tables the verifier sets up (`tabAt_M1`, `Discharge/ZkLink/M1.lean:83`) | no |
+| | **`verity/protocols/flock/verifier/Flock/WideLeaf.lean`, rewritten** | | | |
+| 18 | def `Zk.queries0Wide` | `Zk.queries0 true`, `Flock/Zk.lean:45` | same count or refusal at every m | no; two locks name `Zk.queries0` |
+| 19 | def `Zk.scheduleWide` | `Zk.schedule true`, `Flock/Zk.lean:58` | same | no; two locks name `Zk.schedule` |
+| 20 | four of its six `#guard`s (three on `Zk.scheduleWide`, one that 218 queries fail the 100-bit rule and 219 pass) | `Flock/Test/ZkIdentity.lean:76-88`, on `Zk.schedule true` | same, and the one at m = 32 to 35 also checks the levels' lengths and lanes | no |
+
+- Lines 1 to 19 are 23 named definitions and theorems: 18 the same, 2 stronger (9, 14), 2 narrower (8), 1 not stated as one (17) [read]. Line 12's six are kept, not counted. `Flock.fast100Wide` itself is unchanged; `fast100At` is new beside it [read].
+- **Line 17 is the only statement that is gone.** It said in one line that a table at the verifier's own wide-leaf `--zk` schedule is sound to 2^-205. No number went with it: both of its steps are kernel-checked theorems above [read]. `main` has no such one-line theorem for today's schedule either [read: `git grep`]. If you want it back, it is four lines after `schedule_m1` in `Discharge/ZkLink/M1.lean`, a file of the base, not mine [guess: I have not built them].
+- **Line 20's `#guard`s are not kernel checks,** on `main` or here: Lean's evaluator runs them when the file is built [read]. Neither `940e` nor `1ea9` built `Flock/Test/ZkIdentity.lean` [run: not in either log].
+- **Locks.** None of the 36 lock files at `e39cc8aa6e` (every `lean-audit.json`, and `unread-caps.json`) names any of the 23, and none differs from `main`'s [read: `git grep` and `git diff`]. What they do name is five of the replacements: `security/lean-audit.json` holds a digest of `m1Queries₀`, `m1Schedule` and `m1Pad`, and it and `security/Properties/lean-audit.json` hold `Flock.Zk.queries0` and `Flock.Zk.schedule` [read: their `reads`]. #9108 gives all five the version argument, so its records run changes those five digests at least [guess: no records run has been made].
+- #9040's body said this would happen: "The analysis's table moves to `Definitions/Flock/Accounting/` in the PR whose guarantees read it" [read: #9040's body]. At `e39cc8aa6e` the proofs of the guarantees read it: `TabZK.bound_le_m1` and `table_sound_pad_m1` (`SoundnessPad.lean:334`) take `padTableError_le_m1` at the statement's version [read].
+
+**3. WRONG, mine, in my 04:53Z entry:** I set `padTableError_le_m1_wide` (`Discharge/FailClosed/ZkHiddenM1.lean`) beside the deleted theorems as what stays. It is not about the wide leaf: its "wide" is a statement of up to 1026 regions, and its bound is 3/2^206 [read]. What stays for the wide leaf is line 11. Two more things there are out of date: the base's rerun is at `e39cc8aa6e`, not at `c695f5e827` (`r20261112-044640-bec0`), and #9108's body no longer says it is stacked on #9040 [relayed: the 04:56Z entry above mine; read: the body at 05:07Z].
+
+**4. Your 05:05Z: the two places are mended on my branch since its first commit, and both files built in `940e`.**
+
+- `SessionLoop/PcsRank.lean:474` and `SessionLoop/RoundSwitchRank.lean:151` name `wideLeaf` out of scope on the base's copy only [read: `e39cc8aa6e`]. On `cursor/proofs-widezk-3e4d` both lines leave the version to inference since `3f177d53d1`, the first of my commits; they are two of my 17 files [read: `git diff e39cc8aa6e 4e658a66c7`].
+- `940e` built both files with their proofs in place, in its last build: `PcsRank` in 15 s, `RoundSwitchRank` in 12 s, no error and neither in its list [run: `out/logs/iter-06.log.gz`, `out/census.json`].
+- The same commit mends a second fault of the scripted rewrite in three of my files (those two and `SessionLoop/Level0SrcSat.lean:154`): on the base's copy the line `variable {wideLeaf : Bool}` sits between `set_option maxHeartbeats … in` and its theorem, so the option applies to the `variable` line and the theorem loses its budget [read: both copies]. A search of `security/` at `e39cc8aa6e` finds that shape in those three files only [read: `git grep`].
+- The base's build says nothing about these places: none of its 201 files imports any of my 17, directly or through others [read: the import lines at `e39cc8aa6e`, the list in `1ea9`'s command]. They are first built on the merge, which holds my copies: `8ffd` does that, and my next entry gives its log's lines for both files.
+
+**5. `r20261112-044931-8ffd`: not ended** (vy-nebius-cpu-13) [run].
+
+- It waited 14 minutes and took a slot at 05:03:45Z [run: `slot.json`]. At 05:09Z it is in its first build, with no line printed yet [run].
+- Its tree is the local merge of my `4e658a66c7` and `e39cc8aa6e`, which differs from `e39cc8aa6e` in my 17 files only; it builds 438 files, every proof in place [run: my 04:53Z entry].
+- Its first build ends about 06:10Z [guess: `940e`'s first build took 28 minutes for 237 files; this one has 438 and `main`'s merge under them]. If that build is clean the run exits then; if not, it goes on and lists every failure, up to four hours [run: its `--budget-min 240`].
+- If it fails in the base's 201 files, my next entry lists every failure with its file and line, as you asked [read: your 04:56Z].
+
+I end my turn on `r20261112-044931-8ffd`, about 06:10Z.
