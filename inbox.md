@@ -131,3 +131,71 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 5:08 AM PST. **A corr
 
 Still running: suites r20261112-124729-7857. Nothing opened, marked or merged; no `--update`.
 
+[2026-11-12T13:08Z] 8279fc270920
+ONSITEMAIN, Thu 12 Nov 5:08 AM PST. **Order 5: rulings 1 to 4 are in and pushed; the read's answer is that the live gate gives one sample a root, ever, and a local session, the driver's default, gives a new sample at every audit; the hunks in proofs' files cannot stand on `main` as they are; the rehearsal waits for your word with the hour and its job now meets your terms of 4:53 AM PST; the head's suites are still in line.** Your two lines more are answered below. Marks: [ran], [read], [argued]. The whole is in the lane's note `20261112T1300Z-report-onsite-order5-lock-workers-and-the-streams-second-sample`.
+
+**Head.** `cursor/net-onsite-memory-reads-84f9` at `1aba053782b2e3d369f09298be2da03695c684dc`, pushed [ran: `git ls-remote`]. #9188's head is unmoved at `a8d956c8dd14` [ran]. Nothing merged, nothing marked.
+- `5cb4f055a64b`, ruling 2: every reject of an audit that did not finish starts "the audit did not finish"; the accepting record without a summary has its own reason; a finished reject never holds the phrase. One test holds both directions.
+- `a7bb1ff322dd`, ruling 4: a worker is killed by the kernel when the audit's process ends. Tested: an audit killed outright, then a byte its two workers wait for wakes neither. With the change off the test fails and does not hang.
+- `1aba053782b2`, rulings 3 and 1: an exclusive lock on the directory's `audit.lock` for the audit's whole life; a second start is refused, exit 1, and the directory's files are unchanged; the lock ends with its process whatever it forked. The docstring says the mark is the registration's receipt, written before the sample. `a5.py`'s write is unchanged.
+- Mutations [ran]: the lock off, 2 tests fail; forked copies of the lock kept, 1; no second read of the mark under the lock, 1.
+- Locally on the head [ran]: twelve test files, 1011 passed; ruff clean; the ratchet gate from the base passed.
+
+**Runs.**
+- `r20261112-122644-e193`, the changed suites on the head, launched once at 4:26 AM PST: **no verdict yet**. It has waited for a check slot since 4:27 AM PST, two checks ahead of it when it joined [read: its slot record].
+- `r20261112-115107-f004`, head `7ada237d60b8`: exit 0; 8 suites, 7 passed; the repository suite 176 passed and the base's 4 known failures.
+- `r20261112-113935-12ff`, head `019ad77d5a51`: exit 1; the 4 known failures and my retired-term one, fixed in `7ada237d60b8`.
+- The timed rehearsal: **not launched**; I launch only on your word, with the hour.
+
+**The rehearsal's job, to your terms of 4:53 AM PST** [ran: every path on a toy layout on the VM; nothing on a node].
+- With the warm, `WARM_JOBS=24`, once; the job's limit 4 h. The warm and the audit end within 3.5 h of its start, so it has time to remove its directory. **If the warm fails the job ends there, exit 80, and no audit starts.**
+- A local development session only. Its first line and `rehearsal.json` say it is a rehearsal and no audit of record. It writes no `v3c-audit` directory and no verdict line of a record.
+- **The honest arm's outcome is in `rehearsal.json` whichever way it goes**: the answer with its reason, whether its record accepted and why not, each check's verdict. A refused proof there comes to you first; I rerun nothing.
+- Told to stop, it now stops the audit at once and removes its directory. The earlier script would have waited for the audit to end.
+- The launch line, changed in three places (`--timeout 4h`, `WARM_JOBS=24`, `REHEARSAL=1`):
+```
+cd /home/ubuntu/wt-onsite-memreads && git rev-list --first-parent origin/main > /tmp/rehearsal/main.txt && \
+uv run -q research run --on NODE --pool network --mem-gb 650 --project verity \
+  --source /home/ubuntu/wt-onsite-memreads --cwd clone --timeout 4h \
+  --env KEPT=/workspace/incoming/netacct/r20261109-064213-20a2 --env WORK_PARENT=/workspace/incoming/netacct \
+  --env V3C_NEGATIVE_WORKERS=7 --env WARM_JOBS=24 --env REHEARSAL=1 \
+  --send /tmp/rehearsal/rehearse_audit.sh --send /tmp/rehearsal/rehearsal_read.py --send /tmp/rehearsal/main.txt \
+  -- bash -c 'exec bash "$RESEARCH_RUN_DIR/inputs/rehearse_audit.sh"'
+```
+- `research run` takes no label at launch. The run's label goes on in the evidence store once the run is there; that command is not run yet.
+
+**Your line: the disk the job needs.** **About 551 GB at most under its work directory** [read Wed 11 Nov from the kept run's figures; not read today]: 522 GB of composed circuits, which the audit takes from the warm's cache as links and not copies, and about 29 GB of the audit's own files. The job starts only with 600 GB free there and ends itself under 15 GB free. On Wed 11 Nov that disk had 487 to 601 GB free of 1,590 GB: **at the low end the job refuses to start, so the window needs the disk as well as the memory.** The run's clone and Lean build are on research's own root, a few GB, not measured.
+
+**The read** [read, at the head; nothing changed].
+1. **Inside one stream, no second sample.** A second select is refused, `drawn` (`sampled_proofs/service.py` 820 to 823). The same record registered again is refused by R6 (`one_stage/registration.py` 272 to 275). The coins refuse the same digest twice (`coins.py` 172 to 183).
+2. **The stream is not the challenger's memory.** `a5.stream_of` builds a new one in the auditing process at every audit (`a5.py` 336 to 373), holding nothing of an earlier audit. A registration's digest is the record's alone (`service.py` 1509 to 1512), so the same record comes to a new stream as its first, with the same digest. Across two audits only the coins' source refuses.
+3. **The live gate: one sample a run root, ever.** The session opens on the run root (`records_audit.py` 964). The gate refuses a second open of a root (`live_challenger/auditor.py` 969 to 970), and the verifier refuses a ledger with two (`challenger.py` 1141 to 1142). A second audit ends with its sample refused (`a5.py` 420 to 423).
+4. **A local session: a second sample, every time.** Each audit makes its own challenger, with a fresh key and an empty ledger (`a5_coins.py` 859, 664 to 676). `local` is the driver's default, for a served node and for a follow-on (`served_verdicts.sh` 595). The driver's COINS line says "not an auditor's" (1017 to 1020); `served_integrity.answer` does not read whose coins a sample is on. Under `local` only our mark and lock stand in the way, and another directory is outside them.
+5. **The same execution phase under fresh salts is another root, and is sampled again** [argued: fresh salts give another root; the rest read]. The gate's rule is by root alone, and nothing in the ledger's open says which execution phase a root commits (`challenger.py` 105 to 108). The driver reads the run root from the serve directory's own `windows.jsonl` (`served_verdicts.sh` 630 to 631).
+6. **What is left of the first.** Under the gate: its reserve, open and end in the signed ledger, the registration's digest in the session's signed release log, and its line in the period's close, with its root and whether its session completed; a period holds at most its cap of windows (`challenger.py` 1062 to 1072, 1198 to 1203). The ledger holds no audit's verdict. Under `local`: nothing an auditor holds.
+- Is it a finding? Points 4 and 5 are what I would take to proofs. Point 4 is said in the code's own words as a development session; point 5 is not said anywhere I read.
+
+**The hunks in proofs' files** [ran].
+- **`a0.py`: my fourteen commits change nothing.** The two hunks in `lean_verify` are on the onsite line under my base, in `f887ae7a589` (the Lean pool): its docstring, and its archive-put under `with archiving(held, ident)`; `archiving` is a new function beside them.
+- **`a5.py`, mine** (248 lines added, 36 removed): the docstring; six imports; `coins_outcome` 4 hunks; `wiring_negatives` 1; `registered_negatives` 3; `audit` 13; a new block after `session_need` (`process_memory`, `lean_server_memory`, `worker_need`, `audit_own`, `NegativeFailed`, `Negative`, `_checks_since`, `die_with`, `_work`, `NegativeWorkers`); `positive` 2; `lean_options` 1.
+- **`served_verdicts.sh`, mine**: two hunks of the header comment, one line in `v3c_audit`, and the preflight of `V3C_NEGATIVE_WORKERS`.
+- **As one pull request against `main` without the rest: not as they are.** `main`'s three files hold no Lean pool and no memory gate (`LeanPool`, `archiving`, `audit_memory`, `--lean-workers`, `--audit-mem-gb`: none), and my hunks sit on them: `git apply --check` on `main` fails in both files. The pull request would have to carry four commits of the onsite line under mine (`f887ae7a589`, `2d86134e4dc`, `4310afc5abd`, `0b6f1f95de8`, these three files' hunks alone). The first of them stops on `main` in five places: `lean_verify`'s docstring, `a5.audit` twice, the driver's header and `v3c_audit`. I resolved none, so what the other nine meet is not known.
+- **The fifth hunk, by your word, not built:** in `v3c_audit`, the follow-on passes the audit `--audit-mem-gb`.
+- Mine alone, three-way on `main`, stop in 14 places: 12 in `a5.py`, 2 in the driver.
+
+**Your line: can that pull request open before the rehearsal?** **Yes, once it is built; it is a port, not a pick, and it is not built.** Nothing in it waits on the rehearsal to pass its tests.
+- What it carries: the pool's four commits (30 lines added in `a0.py`, 149 in `a5.py`, 15 in the driver, and `test_a5_lean_pool.py`) and mine (248 in `a5.py`, 17 in the driver, and `test_a5_negative_workers.py`). `f887ae7a589` also changes `records_audit.py`, ours, to reach the pool.
+- **What the rehearsal could change in it:** the memory a worker is admitted on (`a5.worker_need`, `a5.audit_own`); the workers' gate in `NegativeWorkers`, if seven never run side by side; the timing keys `audit` writes; and the fifth hunk, which the rehearsal passes by hand.
+- **What it cannot change:** the two hunks in `a0.lean_verify`, `archiving`, the Lean pool and the memory gate. The kept run ran all four of those commits at scale [ran: each is an ancestor of the kept run's tree]. proofs' change to `lean_verify` sits on those.
+- I build the branch off `main` on your word; I have not started.
+
+**The one line: where today's commits land.** No pull request of the onsite port is open, and the plan I can read gives its groups, not their pull requests or dates, so I cannot name either. By group: `a5.py` and `served_integrity.py` are group 2 (proofs' files; the first by your addition's separate pull request), `records_audit.py` group 9, `kind_scan.py` group 5. **Meeting the second pull request: `0a927a66aef`, `019ad77d5a5` and `1aba053782b`**, which write directly above and at the top of `audit`, where `rule_of` stands on `main` (792 to 805); `e9e83b8e381` and `0e25f0083a9` touch `audit`'s body near the line that reads it (861). None of mine reads `rule_of` or changes `--law`: the meeting is of text, not of meaning [argued, no merge made].
+
+**Not looked at.** The Lean of the challenger's record and of the stream. `pouw/credit.py`, and whether any reader holds each window a period lists to an accepting audit. Whether `onsite_record.py` or `kind_scan.py` refuses a record sampled on a local session. The serve's commit code, for whether a run root is bound to an execution phase. What file system the serve directories are on (the lock is `flock`). The kept serve directory since Wed 11 Nov 5:58 AM PST. What lean's run on the kept run's node is.
+
+**Least sure of.** That fresh salts give another run root. And the size of the meeting with the second pull request.
+
+**Slips, mine, none pushed or posted.** A read of the driver printed a line naming the challenger's host into my transcript; a script printed the role suffixes of node names; `research status --balance` printed the provider's balance line; my rehearsal message is headed 4:45 AM PST and was sent at 4:40 AM PST; and since your 4:53 word, a search of my own store notes printed the role suffix of one node's name. The mask now covers that form and goes on the command itself.
+
+**I wait on two things:** your word, with the hour, on the rehearsal, and the suites' slot. I read the suites' verdict when the run ends and send it in one line.
+
