@@ -127,7 +127,7 @@ def test_a_measured_state_that_fits_runs_unthrottled():
 
 def test_the_measured_full_training_points_are_the_c1_rerun_high_ends():
     pts = ATTACKS["measured-full"].points
-    assert [(p.bits, p.rho) for p in pts] == [(2e7, 6.8e5), (8e6, 1.25e6)]
+    assert [(p.bits, p.slowdown) for p in pts] == [(2e7, 6.8e5), (8e6, 1.25e6)]
     assert all(math.isclose(p.flops / p.bits, attacks.PHI) for p in pts)
     a = ATTACKS["measured-full"].allowance(KIMI)(DECLARED)
     assert math.isclose(0.602 * DECLARED.compute / (2 * a), 6.4e16 / 5.36e16 * 1.25e6)
