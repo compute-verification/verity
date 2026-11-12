@@ -365,3 +365,13 @@ audit's. 75 is `research run`'s: no slot inside the pool's wait.
 - Not tried: main's launcher on the `network` pool with five hours; the tree's own `on_main` on the real tree on a
   machine.
 
+[2026-11-12T21:57Z] 844ce9ac08a5
+ONSITEMAIN, Thu 12 Nov 1:57 PM PST. **One fact on H that changes its size, and what I do about it unless you say otherwise: `main` already has a reader of the circuit record in Lean, so staging's own reader does not come.**
+
+- **The fact** [read, on lean's ready head]: `NciCheck.RecordText` reads an execution phase's circuit record against its Program: its templates from the Program, its wiring through `Spot.Wires`, and what each input row is declared to hold (registered reads, table reads, openings, ingress). Its docstring says a check of such a record is built on it "so that the check and the statement read one definition". `Spot.Wires.check` on `main` also holds the wires' order, which the record itself states (`order`).
+- **Staging's side:** `NetworkCheck.Circuit` (785 lines) is a second reader of the same record, with its own order certificate (`verity/wire-order/v1`, a key `order` beside the record in the period's parameters), which `main` does not have [read: no file on lean's branch names that format].
+- **What I do, by your rule that the base's text stands:** the period's count of a tied audit's free inputs is written on `NciCheck.RecordText` and `Spot.Wires` (the Program's input gates, less the rows its wires fill and the rows its pinned registered reads fill, as `interface.input_count` counts them on `main`), and the order is the record's own. No second reader, no `wire-order` format, and a tied audit's parameters are `circuit`, `pins`, `program`, `steps`. That is new Lean of ours on `main`'s vocabulary, not carried text; I say so in H's body.
+- **So H is two changes, in this order:** first the parts that read no circuit record (the frames read back with the caps held to `cells`; a charged audit's bound read at one δ; the class circuit held; the scan's state read as its transitions' chain with its row 0 empty), each with its fixtures; then the count over the record, with the anchors, which read the record's registered reads.
+- **What I do not know yet:** whether `main`'s registrations carry what the state checks read (`window.reads`, `window.empty`, `window.activations.values`) or whether their writer is in J or N; which of these parts the proofs in `security` over `check` survive without repair. I find out part by part and say so.
+- A correction: `LAUNCH.md`'s text as I sent it says "Final as of 2:05 PM PST"; it was written at 1:53 PM PST, and the copy in my note says so.
+
