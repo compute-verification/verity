@@ -51,7 +51,8 @@ theorem next_congr (h : SpotFlock.Held) (x : Msg) (as : List Msg) {cs cs' : List
   have hdrop : ∀ t < h.ms.length, ∀ j ≤ SpotFlock.k₀ h t,
       (cs.drop (SpotFlock.off h t)).take j = (cs'.drop (SpotFlock.off h t)).take j := by
     intro t ht j hj
-    have hle := Claims.Sampling.sessOff_add_le (h.stage + 2) (SpotFlock.k₀ h) ht
+    have hle : SpotFlock.off h t + SpotFlock.k₀ h t ≤ SpotFlock.off h h.ms.length :=
+      Claims.Sampling.sessOff_add_le (h.stage + 2) (SpotFlock.k₀ h) ht
     have h3 := SpotFlock.stage_le_off h t
     apply List.ext_getElem (by simp [hl, hl'])
     intro m h1 h2
