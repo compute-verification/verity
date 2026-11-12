@@ -8,6 +8,7 @@
 # Staging goes to this job's own scratch ($W, hidden_zk/job.sh's mktemp directory, removed per type) and its records to
 # $OUT/TAG; the job never sets FLOCK_WORK and never runs prove_time.sh, so it writes nothing under a
 # served-units-time-* directory.
+# A type whose Lean check may peak over the job's memory (6 x circuit.txt + 4 GB) is staged and recorded, its checks not run.
 # env: CB_MEM_GB (the job's --mem-gb), CB_PROVE_GB / CB_SERVE_GB (the session's two `ulimit -v`, default 85% and 50% of
 # it), CB_CACHE (builds; default $HOME/.cache/verity-a11)
 set -uo pipefail
@@ -67,6 +68,11 @@ while IFS=$'\t' read -r tag unit n words; do
 import json
 r = json.load(open('$T/B/stage.json'))
 print('STAGED $tag', json.dumps({k: r.get(k) for k in ('definition', 'word', 'n', 'ands', 'k_log', 'circuit_bytes', 'statement', 'seconds', 'maxrss_gb', 'lookups', 'slot_types')}))" | tee -a "$OUT/job.log"
+  need=$(( $(stat -c %s "$T/B/circuit.txt") * 6 / 1024 / 1024 / 1024 + 4 ))   # hidden_zk/job.sh's rule for a Lean check's peak
+  if [ "$need" -gt "$MEM_GB" ]; then
+    log "$tag: Lean not run: a check of its $(stat -c %s "$T/B/circuit.txt")-byte circuit.txt may peak at $need GB, over this job's $MEM_GB GB"
+    rc=1; rm -rf "${T:?}"; continue
+  fi
   others="other-def"; [[ " $words " == *" more "* ]] && others="other-def other-count larger"
   CB_OTHERS=$others "$PYM" "$IN/others.py" "$T/B/stage.json" "$T" "$unit" > "$OUT/$tag/others.json" 2> "$OUT/$tag/others.err" || { rc=1; log "$tag: others FAILED: $(tail -2 "$OUT/$tag/others.err")"; rm -rf "${T:?}"; continue; }
   log "$tag: other Programs: $(cut -c1-600 "$OUT/$tag/others.json")"

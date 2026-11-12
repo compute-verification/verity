@@ -1,5 +1,1 @@
-router-row	router-row	1	session
-router-slots	router-slots	1	session
-dsa-q-row	dsa-q-row	1	session
-rmsnorm-v8	rmsnorm-v8	1	session
 head64	census:SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={"fn":"HopperBF16WgmmaDot16_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}	1	
