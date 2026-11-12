@@ -790,3 +790,9 @@ card is asked is not a candidate but WHY storing 1.6% more bytes costs 5.2 point
 
 Return when the arms and one candidate pass on the CPU and their sha256 are posted, or at 09:00Z with
 where you are, whichever is first.
+- **Added 04:06Z: the sweep's table is owed earlier than Friday.** The 37 points are measured
+  (`r20261112-032334-df0f`) and no table of them is written. **Post it on HASH-113 by Thu 16:00Z**, as a
+  worker comment for my ring: the read's rate for each setting of the two host arguments, the best
+  setting, what each number rests on, and the row the failed arm lost. ROWS64 chooses its settings for
+  Thursday's 22:15Z leases from it, and the goal `kernels/poub-pass-measured` now says 8 AM PST. Do it
+  after the arms are building, not before; it is reading, not a lease.
