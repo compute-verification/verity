@@ -284,10 +284,13 @@ PLAN_WAIT_S = 2400
 AUTO_PLAN = "check-shard-plan.json"
 #: a sharded check's auto plan (`plan_shards`): a worktree of the tip ($2) in the queue's clone, under TRAIN_TREES as train.sh's
 #: are when set, `check.py --shard-plan` there with the rest of its arguments into `AUTO_PLAN` in the plan's directory ($1),
-#: the worktree removed after; its venv kept between plans
+#: the worktree removed after; its venv kept between plans.  The job exits as check.py did: on an NFS TMPDIR (the control
+#: pod's) `git worktree remove` can stop at a directory a silly-renamed file keeps from emptying and exit 255, so `rm -rf`
+#: takes what it left, as train.sh does, and a worktree that won't go fails no plan
 PLAN_JOB = ('set -e; d=$1 r=$PWD; t="${TRAIN_TREES:-${1%/*}}/plan-${1##*/}"; mkdir -p "${t%/*}"; '
             'export UV_PROJECT_ENVIRONMENT="${t%/*}/plan-venv"; git worktree add -q --detach "$t" "$2"; '
-            'trap \'cd "$r"; git worktree remove --force "$t"\' EXIT; cd "$t"; shift 2; '
+            'trap \'s=$?; set +e; cd "$r"; git worktree remove --force "$t" 2>/dev/null || rm -rf "$t" 2>/dev/null || '
+            'rm -rf "$t"; git worktree prune; exit $s\' EXIT; cd "$t"; shift 2; '
             'uv run -q python tools/verity/check/check.py --shard-plan --out "$d/' + AUTO_PLAN + '" "$@"')
 
 
