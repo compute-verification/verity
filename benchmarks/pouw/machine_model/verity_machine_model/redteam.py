@@ -76,7 +76,7 @@ class Margin:
 class LeastFill:
     device: str
     design: str
-    per_word: float | None        # least filler a word that holds the margin; None if `cap` did not
+    per_word: float | None        # least filler a word that holds the margin; None if none up to `limit` did
     mix: dict[str, float]
     core: float                   # the joint margin's worst core at `per_word`
     gamma: float                  # honest's γ at `per_word`
@@ -198,11 +198,11 @@ def margin_audit(design: str, data: Path, m: float = 0.02, near_thr: float = MAR
 
 
 def least_filler(design: str, data: Path, mix: dict[str, float] | None = None, target: float | None = None,
-                 m: float = 0.02, near_thr: float = MARGIN_NEAR, step: float = 0.005, cap: float = 0.30,
+                 m: float = 0.02, near_thr: float = MARGIN_NEAR, step: float = 0.005, limit: float = 0.30,
                  q: float = 1.22, operands: str = "free", credit: str = "floor", vector: str = "") -> LeastFill:
     """The least verified filler a word, in class mix `mix` (default the design's), that holds the margin:
     its joint worst core is ≤ `target` (default the design's base core, the floor it sits at). The filler replaces the
-    design's own and sweeps in `step` up to `cap`, checked as the design's filler is (its p and luck), or by a receipt
+    design's own and sweeps in `step` up to `limit`, checked as the design's filler is (its p and luck), or by a receipt
     the check recomputes (p = 0) when the design has none. Returns the per_word, the worst core there and honest's γ."""
     pi = E.machine(vector, data)
     d0 = E.design(design, data)
@@ -221,12 +221,12 @@ def least_filler(design: str, data: Path, mix: dict[str, float] | None = None, t
         return d, _joint_worst(core, pi, near, m), E.eps(d, pi, q, data, operands=operands, credit=credit).gamma
 
     x = step
-    while x < cap + 1e-9:
+    while x < limit + 1e-9:
         d, worst, gamma = at(x)
         if worst <= target + 1e-6:
             return LeastFill(pi.vector, d0.name, round(x, 4), mix, worst, gamma, base_worst)
         x += step
-    _, worst, gamma = at(cap)
+    _, worst, gamma = at(limit)
     return LeastFill(pi.vector, d0.name, None, mix, worst, gamma, base_worst)
 
 

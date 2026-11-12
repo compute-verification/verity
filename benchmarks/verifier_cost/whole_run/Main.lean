@@ -116,7 +116,7 @@ def inputCount (d : Flock.TemplateQuery.Desc) : Nat := Id.run do
   let some root := d.def? d.root | return 0
   return root.nodes.foldl (fun acc x =>
     let tid := d.callees.getD x.fn ""
-    if Flock.TemplateQuery.isInput tid then acc + x.members * d.gates tid else acc) 0
+    if d.isInputNode x then acc + x.members * d.gates tid else acc) 0
 
 def descSteps (j : Json) (unitGates ref popOk : Bool) : IO UInt32 := do
   let p ← IO.ofExcept (← timed "program.parse" (getD j "program")

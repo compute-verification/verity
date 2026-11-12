@@ -26,7 +26,7 @@ command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanp
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$REPO/.venv/bin/python
 
-STAMP=$(git rev-parse HEAD:verity/protocols/flock/prover HEAD:verity/protocols/flock/pod HEAD:verity/protocols/flock/agreement HEAD:verity/protocols/flock/tool.py HEAD:verity/protocols/flock/verifier 2>/dev/null | tr '\n' ' ')
+STAMP=$(git rev-parse HEAD:verity/protocols/flock/prover HEAD:verity/protocols/flock/pod HEAD:verity/protocols/flock/agreement HEAD:verity/protocols/flock/tool.py HEAD:verity/protocols/flock/verifier HEAD:verity/circuits/base HEAD:verity/circuits/lean HEAD:verity/commitments/lean 2>/dev/null | tr '\n' ' ')
 [ -n "${STAMP// }" ] || { echo "prove-bundle: no git trees to stamp binaries with"; exit 4; }
 BUNDLE_WINDOW=benchmarks/one_stage/tests/fixtures/bundle-window
 FX=$REPO/$BUNDLE_WINDOW
