@@ -132,7 +132,10 @@ def _lean_here(file: str, siblings: bool = False) -> int:
     its Lean options (`siblings.options`), on a copy of FILE with the axiom probe appended (`axiom_probe.py`), whose line is
     the last; lean's status on FILE's own lines.
     With ``siblings``, the copy's build then goes through the sibling check (`siblings.py`), whose status it takes; where
-    its stub is refused over a sibling, `lake build` of the siblings the refusal names comes first, once (`siblings.check`)."""
+    its stub is refused over a sibling, `lake build` of the siblings the refusal names comes first, once (`siblings.check`).
+    Before FILE is elaborated, and again after such a rebuild, Lake says which of the modules that could be siblings it
+    holds as their inputs are now (`lake` with `siblings.WORD`, which compiles nothing; the plan's `word` is a line, with
+    the seconds), which decides for a build Lake took rather than made (`siblings.plan`)."""
     path = (Path(file) if Path(file).is_file() else _tree(file) / file).resolve()
     pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
     if not path.is_file() or path.suffix != ".lean" or pkg is None:
@@ -145,10 +148,16 @@ def _lean_here(file: str, siblings: bool = False) -> int:
                          "toolchain and the package's dependencies, then `lake build` there builds its imports")
     rel, probe, sib = os.path.relpath(path, pkg), _probe(), _siblings()
     opts = sib.options(pkg)
-    plan = sib.plan(pkg, rel) if siblings else None
+
+    def ask(args: list[str]) -> tuple[int, str, float, int]:
+        return sib.run([lake, *args], pkg)
+
+    plan = sib.plan(pkg, rel, ask) if siblings else None
     if isinstance(plan, str):
         print(f"verity lean try: {rel}: no sibling check: {plan}", flush=True)
         plan = None
+    elif plan is not None and plan.word:
+        print(f"verity lean try: {rel}: {plan.word}", flush=True)
 
     def lean(copy: str, args: list[str], show) -> tuple[int, str]:
         p = subprocess.run([lake, "env", "lean", *args, copy], cwd=pkg, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -166,7 +175,8 @@ def _lean_here(file: str, siblings: bool = False) -> int:
         if rc == 0 and plan:
             rc, output, lines = sib.check(
                 plan, work, lambda a: sib.run([lake, "env", "lean", *a], pkg),
-                lambda refusal: sib.run([lake, "build", *(f"+{m}" for m in sib.named(plan, refusal))], pkg)[:3])
+                lambda refusal: sib.run([lake, "build", *(f"+{m}" for m in sib.named(plan, refusal))], pkg)[:3],
+                lambda: sib.plan(pkg, rel, ask))
             print(output, end="")
             for line in lines.splitlines():
                 print(f"verity lean try: {rel}: {line}", flush=True)

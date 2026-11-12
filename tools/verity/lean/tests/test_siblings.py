@@ -897,6 +897,10 @@ def test_a_build_lake_took_is_a_sibling_while_lake_holds_it_whatever_the_times_s
     assert S.plan(pkg, "P/C.lean") == S.Plan("P.C", True, [], mods), "no build Lake took counts without Lake's word"
     p = S.plan(pkg, "P/C.lean", ask)
     assert p[:4] == ("P.C", True, mods, []) and p.word.startswith("Lake holds 4 of the 4 modules that could be siblings"), p
+    assert _cli().main(["lean", "try", str(pkg / "P" / "C.lean"), "--siblings"]) == 0, capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "P/C.lean: Lake holds 4 of the 4 modules that could be siblings as their inputs are now (lake build" in out, out
+    assert "siblings: no built module of its package that doesn't import P.C declares a name it does (4 imported" in out, out
 
     source, trace = pkg / "P" / "A.lean", pkg / S.LIB / "P" / "A.trace"
     write(pkg, {"P/A.lean": files["P/A.lean"] + "\ndef P.more : Nat := 2\n"})
@@ -1005,11 +1009,18 @@ def test_the_local_try_rebuilds_what_the_stubs_refusal_names_once_and_elaborates
         tmp_path, monkeypatch, capsys):
     """Against a stand-in `lake` that refuses the stub over `P.B` and `P.A` until it has built them: the local try runs
     `lake build +P.B +P.A` in the package, once, then the stub once more, and prints the rebuild's line before the
-    verdict's, as `lean_changed.py --try` does on a node for such a refusal (`test_lean_changed.py`)."""
-    pkg, bin_, log = tmp_path / "p", tmp_path / "bin", tmp_path / "ran"
+    verdict's, as `lean_changed.py --try` does on a node for such a refusal (`test_lean_changed.py`). Before the first
+    stub the try asks Lake which builds it holds: `P.A`, which Lake took, is a sibling on the line that says so. The
+    rebuild changed the builds that plan read, so the try asks Lake again before the second stub, whose plan is the
+    verdict."""
+    pkg, bin_, log, word = tmp_path / "p", tmp_path / "bin", tmp_path / "ran", tmp_path / "word"
     write(pkg, {"lakefile.toml": 'name = "p"\n' + LIB.format("P"), "P/A.lean": "module\n", "P/B.lean": "module\n",
                 "P/C.lean": "module\n"})
     built(pkg, "P.A", "P.B")
+    lib, made = pkg / S.LIB / "P", tmp_path / "made"
+    shutil.copytree(lib, made)
+    (lib / "A.trace").write_text(TOOK["cache"])
+    word.write_text(lake_out(("✔", "Reused", "P.A"), ("✔", "Replayed", "P.B"))[1])
     write(bin_, {"lake": f"""#!/bin/sh
 echo "$@" >> "{log}"
 case "$1 $2 $3" in
@@ -1017,8 +1028,11 @@ case "$1 $2 $3" in
         [ -e "{tmp_path}/rebuilt" ] && exit 0
         echo "VeritySiblings.lean:1:0: error: import P.B failed, environment already contains 'P.step.eq_1' from P.A"
         exit 1;;
+    "build --no-build -v")
+        cat "{word}";;
     build\\ *)
         : > "{tmp_path}/rebuilt"
+        cp "{made}"/* "{lib}"/
         echo "[3/4] Built P.A (1.0s)";;
 esac
 exit 0
@@ -1026,9 +1040,16 @@ exit 0
     (bin_ / "lake").chmod(0o755)
     monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
     assert _cli().main(["lean", "try", str(pkg / "P" / "C.lean"), "--siblings"]) == 0
-    assert [" ".join(line.split()[:3]) for line in log.read_text().splitlines()] == [
-        "env lean -R", "env lean --setup", "build +P.B +P.A", "env lean --setup"]
-    first, last = [line for line in capsys.readouterr().out.splitlines() if "siblings:" in line]
+    ran = [" ".join(line.split()[:3]) for line in log.read_text().splitlines()]
+    assert ran == ["build --no-build -v", "env lean -R", "env lean --setup", "build +P.B +P.A", "build --no-build -v",
+                   "env lean --setup"], ran
+    assert log.read_text().splitlines()[0] == "build --no-build -v --no-ansi +P.A +P.B"
+    out = capsys.readouterr().out
+    held = [line for line in out.splitlines() if "Lake holds" in line]
+    assert len(held) == 2 and all(line.startswith(
+        "verity lean try: P/C.lean: Lake holds 2 of the 2 modules that could be siblings as their inputs are now (lake build "
+        "--no-build -v --no-ansi: exit 0 in ") for line in held), out
+    first, last = [line for line in out.splitlines() if "siblings:" in line]
     assert first.startswith("verity lean try: P/C.lean: siblings: P.B and P.A both declare 'P.step.eq_1' as they are built "
                             "here: Lake rebuilt P.A in ") and first.endswith(" s, and the stub is elaborated once more")
     assert last.startswith("verity lean try: P/C.lean: siblings: no built module of its package that doesn't import P.C "
