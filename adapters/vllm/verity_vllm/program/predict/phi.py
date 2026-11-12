@@ -47,20 +47,23 @@ class Phi:
     def from_json(cls, d: dict) -> Phi:
         if d.get("schema") != PHI_SCHEMA:
             raise ValueError(f"phi schema {d.get('schema')!r} != {PHI_SCHEMA!r}")
+        engine, workload = d.get("engine"), d.get("workload")   # a φ that leaves one out declares no engine argument, no request
         return cls(model=dict(d["model"]), target=dict(d["target"]), tp=dict(d.get("tp") or {"world": 1, "rank": 0}),
-                   sampling=dict(d.get("sampling") or {"kind": "greedy"}), engine=dict(d.get("engine") or {}),
-                   workload=dict(d.get("workload") or {}), execution=d.get("execution", "bi-eager"), profile=d.get("profile", "b1-eager-v3"))
+                   sampling=dict(d.get("sampling") or {"kind": "greedy"}), engine=dict(engine) if engine else {},
+                   workload=dict(workload) if workload else {}, execution=d.get("execution", "bi-eager"), profile=d.get("profile", "b1-eager-v3"))
 
     def digest(self) -> str:
         return hashlib.sha256(json.dumps(self.to_json(), sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
     @property
     def hf_config(self) -> dict:
-        return dict(self.model.get("hf_config") or {})
+        config = self.model.get("hf_config")   # a model block that carries no config.json has an empty one
+        return dict(config) if config else {}
 
     @property
     def requests(self) -> list[dict]:
-        return list(self.workload.get("requests") or [])
+        declared = self.workload.get("requests")   # a workload that states none has no request
+        return list(declared) if declared else []
 
     def target_profile(self):
         """The declared `TargetProfile`; where the target block does not declare `batch_invariant`, the one the execution label names
@@ -91,4 +94,5 @@ def _prompt_len(r: dict) -> int:
 
 
 def _cap(r: dict) -> int:
-    return int(r.get("max_tokens") or (r.get("sampling_params") or {}).get("max_tokens") or 0)
+    params = r.get("sampling_params")   # where a request may carry its cap instead; one that states it nowhere has 0
+    return int(r.get("max_tokens") or (params.get("max_tokens") if params else None) or 0)
