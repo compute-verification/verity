@@ -24,7 +24,7 @@ from verity.circuits.refs import coll_concat, tuple_of
 from verity.circuits.types import Array, Tuple
 from verity.definitions.registry import dead_free as DF
 from verity.commitments.windows import rows as CS
-from verity_vllm.pipeline import interior_rows as IR, serving_rows as SRW
+from verity_vllm.pipeline import chunk_rows as CR, interior_rows as IR, serving_rows as SRW
 
 W, T = bind(DF.TokenSelectCombineV2, V=128, C=64), bind(DF.TokenSelectCombineV2, V=64, C=64)
 X = bind(DF.TokenSelectChunkV2, C=64)
@@ -61,14 +61,14 @@ def _spans(seed: int) -> tuple[IR.Span, ...]:
     out, = evaluate(T, t_x0, t_best, [tok])
     got = []
     for fn, ins, o in ((W, [[x0], best, _u32(idx).reshape(-1).tolist()], tok), (T, [[t_x0], t_best, _u32([tok])[0].tolist()], out)):
-        m = IR.named(SRW.unit_member(P.template_id(fn), 1))
+        m = IR.named(CR.unit_member(SRW.template(P.template_id(fn)), 1))
         data = {"rows": {p: np.asarray([a], dtype=np.uint16) for (p, _w), a in zip(m.rows, ins, strict=True)},
                 "outs": {"o0": _u32([o])}}
         got.append(IR.Span(f"s{seed}", m, data, [[0, 1]], "p" * 64))
     xs = rng.integers(0, 1 << 16, (2, 64), dtype=np.uint16)
     bi = [evaluate(X, r.tolist()) for r in xs]
     data = {"rows": {"x": xs}, "outs": {"o0": np.asarray([[b] for b, _i in bi], np.uint16), "o1": _u32([i for _b, i in bi])}}
-    return (*got, IR.Span(f"s{seed}", IR.named(SRW.unit_member(P.template_id(X), 2)), data, [[0, 2]], "p" * 64))
+    return (*got, IR.Span(f"s{seed}", IR.named(CR.unit_member(SRW.template(P.template_id(X)), 2)), data, [[0, 2]], "p" * 64))
 
 
 def _boundary_window() -> CS.Binding:
