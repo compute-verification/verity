@@ -14,29 +14,30 @@ import bisect
 import collections
 import functools
 import math
+from collections.abc import Callable
 
 import numpy as np
 import pytest
 import torch
 from torch.fx.experimental.proxy_tensor import make_fx
 from torch.utils._python_dispatch import TorchDispatchMode
-
-from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.boundary import gate_width
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate_batch
-from verity.definitions.ops import scalar as SC
 from verity.circuits.parts import Part, n_members
 from verity.circuits.program import is_input
 from verity.circuits.query_ast import GateSet, evaluate, parse
 from verity.circuits.refs import runs as ref_runs
 from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.ops import scalar as SC
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import cublas_bf16 as CB
 from verity.definitions.registry import moe as MOE
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import ref_prims as R
+
+from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.errors import FrontendError
@@ -45,7 +46,14 @@ from verity_vllm.program.frontend.program_identity import check_identity
 from verity_vllm.program.frontend.report import DeriveReport
 from verity_vllm.program.frontend.rules.training import training_rules
 from verity_vllm.program.frontend.rules.training_survey import survey, with_holes
-from verity_vllm.program.frontend.train_step import AdamW, export_step, in_bits_beyond_theta, step_program, step_report
+from verity_vllm.program.frontend.train_step import (
+    AdamW,
+    _patched,
+    export_step,
+    in_bits_beyond_theta,
+    step_program,
+    step_report,
+)
 
 aten = torch.ops.aten
 
@@ -96,8 +104,8 @@ def _run(f, *xs, rules=None) -> tuple[torch.Tensor, torch.Tensor]:
 
 def _same_bits(got: torch.Tensor, want: torch.Tensor) -> None:
     bad = (got.view(torch.int32) != want.view(torch.int32)).nonzero().reshape(-1)
-    assert bad.numel() == 0, f"{bad.numel()} of {got.numel()} words differ, first at {bad[:4].tolist()}: " \
-                             f"{got[bad[:4]].tolist()} vs torch {want[bad[:4]].tolist()}"
+    assert bad.numel() == 0, (f"{bad.numel()} of {got.numel()} words differ, first at {bad[:4].tolist()}: "
+                              f"{got[bad[:4]].tolist()} vs torch {want[bad[:4]].tolist()}")
 
 
 def _data(*shape, positive=False, seed=0) -> torch.Tensor:
@@ -235,7 +243,7 @@ EXACT = {
 }
 
 
-def _f32(v: float) -> int:
+def _f32(v: float | np.floating) -> int:
     return int(np.float32(v).view(np.uint32))
 
 
@@ -520,7 +528,7 @@ def _recip(s: float) -> torch.Tensor:
 #: words are the GPU's (its NaN words are the `_v2` Definitions'): a number is its f32 word, which a bf16 add doesn't round first,
 #: and a division by a number is the product by its f32 reciprocal; an add with alpha is one fma, as on the CPU; addcdiv is
 #: fma(value, t1 / t2, self), as torch CPU's addcmul by a value of 1 computes it
-GPU = {
+GPU: dict[str, tuple[Callable[..., object], tuple[torch.Tensor, ...], Callable[..., torch.Tensor]]] = {
     "add_number_bf16": (lambda a: (a + 0.1,), (XB,), lambda a: (a.float() + _f32_of(0.1)).bfloat16()),
     "sub_tie_bf16": (lambda a: (a - TIE,), (X67B,), lambda a: (a.float() - _f32_of(TIE)).bfloat16()),
     "mul_number_bf16": (lambda a: (a * 3.4445,), (XB,), lambda a: (a.float() * _f32_of(3.4445)).bfloat16()),
@@ -712,8 +720,7 @@ def test_functional_adamw_is_torch_adamw() -> None:
     pp, mm, vv = p.clone(), m.clone(), v.clone()
     for step in (1, 2, 3):
         t.grad = grad * step
-        st = opt.state[t] if t in opt.state else None
-        if st is None:
+        if t not in opt.state:
             opt.state[t] = {"step": torch.tensor(0.0), "exp_avg": m.clone(), "exp_avg_sq": v.clone()}
         opt.step()
         s = {k: torch.tensor(x, dtype=torch.float32) for k, x in f.scalars(step).items()}
@@ -878,7 +885,7 @@ def test_tiny_bf16_step_on_sm120(monkeypatch) -> None:
     assert not isinstance(prog, Unsupported), prog
     got = collections.Counter(nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.split("{")[0] in (
         "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1", "LinearRef_v1"))
-    want = collections.Counter()
+    want: collections.Counter[str] = collections.Counter()
     for (K, N), linears in {(64, 64): 9, (64, 192): 4, (192, 64): 2}.items():
         for role in ("fwd", "dX", "dW"):
             want[word_of(CB.train_linear(role, 32, K, N)).id] += linears
@@ -940,6 +947,24 @@ def test_gpu_export_takes_the_steps_cuda_branches() -> None:
 
     assert dtypes(False) == {torch.float32} and dtypes(True) == {torch.bfloat16}
     assert not isinstance(torch.Tensor.__dict__.get("is_cuda"), property) and torch.zeros(1).is_cuda is False
+
+
+def test_a_patch_is_put_back_as_the_owner_held_it() -> None:
+    """The translator's own patch (`train_step._patched`, which the GPU trace puts on `Tensor.is_cuda`): inside the block the
+    owner answers with the value; afterwards an attribute of its own is that attribute again and one it inherited is inherited
+    again, also when the block raises."""
+    class Base:
+        inherited = "the base's"
+
+    class Owner(Base):
+        own = "the owner's"
+
+    with _patched(Owner, "own", "patched"), _patched(Owner, "inherited", "patched"):
+        assert (Owner.own, Owner.inherited) == ("patched", "patched")
+    assert vars(Owner)["own"] == "the owner's" and "inherited" not in vars(Owner) and Owner.inherited == "the base's"
+    with pytest.raises(RuntimeError, match="inside the block"), _patched(Owner, "inherited", "patched"):
+        raise RuntimeError("inside the block")
+    assert "inherited" not in vars(Owner) and Owner.inherited == "the base's"
 
 
 def test_gpu_export_reads_the_steps_tf32(monkeypatch) -> None:
@@ -1031,6 +1056,7 @@ def test_witness_block_in_bits_beyond_theta() -> None:
     assert in_bits_beyond_theta(prog, one) == _walk_in_bits(prog, one, structure)
 
 
+@pytest.mark.slow
 def test_s_step_reference_mode() -> None:
     """The brief's step: the lf model's s size (d 512, 6 layers, 8 heads, SwiGLU 1408, tied embeddings, vocabulary 50,304, context
     1024), batch 2, plain AdamW, in reference mode, with the z-loss (`_z_loss`). Every op of its forward and its cross-entropy

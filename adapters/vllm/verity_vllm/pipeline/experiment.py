@@ -35,6 +35,8 @@ from pathlib import Path
 from verity_vllm.config import RowEngine
 from verity_vllm.pipeline import research_tools
 
+__all__ = ["build_spec", "code_version", "write_experiment", "write_spec"]
+
 SPEC_SCHEMA = "verity-gen/spec/v1"
 EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
 SMALL_FILE_SHA_LIMIT = 64 << 20  # sha256 only for files up to 64 MiB (program.json, reports); bigger ones carry size only
@@ -188,7 +190,7 @@ def _transcript_values(run: Path) -> dict:
         entries = []
     if entries:
         skipped = [e for e in entries if isinstance(e, dict) and e.get("skipped")]
-        steps = sorted({int(e.get("step")) for e in entries if isinstance(e, dict) and e.get("step") is not None})
+        steps = sorted({int(s) for e in entries if isinstance(e, dict) and (s := e.get("step")) is not None})
         out.update({"tensors_captured": len(entries) - len(skipped), "tensors_skipped_oversize": len(skipped), "snapshot_steps": steps,
                     "skipped_examples": [{"path": e.get("path"), "shape": e.get("shape"), "reason": e.get("skipped")} for e in skipped[:5]]})
     ra = _load(run, "replay_a.json")
@@ -263,9 +265,9 @@ def vu_partition_index(qu: dict | None, gates: dict | None) -> dict:
     gate = {"status": g8.get("status"), "reason": g8.get("reason")} if isinstance(g8, dict) else None
     if not isinstance(qu, dict):
         return {"present": False, "gate": gate}
-    v = qu.get("verdict") if isinstance(qu.get("verdict"), dict) else {}
-    part = v.get("partition") if isinstance(v.get("partition"), dict) else {}
-    width = v.get("width") if isinstance(v.get("width"), dict) else {}
+    v = qu["verdict"] if isinstance(qu.get("verdict"), dict) else {}
+    part = v["partition"] if isinstance(v.get("partition"), dict) else {}
+    width = v["width"] if isinstance(v.get("width"), dict) else {}
     binding = (g8.get("detail") or {}).get("binding") if isinstance(g8, dict) else None
     return {"present": True, "schema": qu.get("schema"), "binding_id": qu.get("binding_id"), "use": qu.get("use"),
             "partition": {"status": part.get("status"), "codes": list(part.get("codes") or [])[:32]},

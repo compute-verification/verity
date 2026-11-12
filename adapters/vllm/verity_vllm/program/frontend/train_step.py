@@ -46,7 +46,6 @@ from verity.circuits.program import Program, is_input
 from verity.circuits.query_ast import GateSet
 from verity.definitions.circuits.census import census
 
-from verity_vllm.engine import hooks
 from verity_vllm.program.frontend.derive_graph import derive_graph
 from verity_vllm.program.frontend.outcomes import Unsupported
 from verity_vllm.program.frontend.report import DeriveReport
@@ -150,6 +149,22 @@ class _TF32Seen(TorchFunctionMode):
 
 
 @contextlib.contextmanager
+def _patched(owner, name: str, value):
+    """``owner.name = value`` for the block. Afterwards ``owner`` holds under ``name`` what it held itself before: that attribute
+    again, or none where it inherited the name, which it then inherits again."""
+    absent = object()
+    prior = vars(owner).get(name, absent)
+    setattr(owner, name, value)
+    try:
+        yield
+    finally:
+        if prior is absent:
+            delattr(owner, name)
+        else:
+            setattr(owner, name, prior)
+
+
+@contextlib.contextmanager
 def _gpu_branches():
     """The step as a GPU runs it, on meta tensors: a `Tensor.is_cuda` read from outside torch is True (torch's own reads keep the
     meta tensor's answer, so its dispatch is unchanged); yields the set of TF32 settings the step's calls ran under."""
@@ -158,7 +173,7 @@ def _gpu_branches():
     def is_cuda(t: torch.Tensor) -> bool:
         return True if not sys._getframe(1).f_code.co_filename.startswith(_TORCH_DIR) else base.__get__(t)
 
-    with hooks.patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as mode:
+    with _patched(torch.Tensor, "is_cuda", property(is_cuda)), _TF32Seen() as mode:
         yield mode.seen
 
 
