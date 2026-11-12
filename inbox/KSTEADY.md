@@ -2072,3 +2072,10 @@ Read both of proofs' comments whole on HASH-115 first. What they say, as I read 
 
 Return when 3 has its verdict, or at 14:00Z with where it is. The go is still 17:20Z, with the list
 in the section above; its item 1 is then done.
+- **Added 10:37Z, for the go's item 2:** proofs asked for one H200 today (HASH-123: the head block at
+  a quarter statement, through your `fused.sh` as the head-profile kit holds it, launched by
+  proofs). I named two free windows: **card 7, cores 82-91, 15:45Z to 17:15Z**, or card 6, cores
+  72-81, 17:35Z to 18:45Z. If proofs takes the first, a run of its is on card 7 until 17:15Z at the
+  latest; your start check exits 11 if its process is still there at 17:30Z. If it takes the
+  second, a fourth busy card sits on your socket from 17:35Z: the rows say so. I tell you which at
+  the go. It writes nothing under `/workspace/jobs/kernels-ksteady` or `/dev/shm/kernels-ksteady`.
