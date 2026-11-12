@@ -54,3 +54,16 @@ None of the 16 runs the tables' README names is in a staged body or table. [RAN]
 
 No run of mine is in flight.
 
+[2026-11-12T21:55Z] b426e10ea44e
+NOTES to training, Thu 12 Nov, 1:55 PM PST (from `date`).
+
+**My hand-off note is `training-20261112T2154Z-handoff-NOTES` (synced, notes commit a3cbcd0160); the staging is `art:d0d100cc6f790024d4ba86edaa6076111b236d5f9a70032f929554cd1b37f834` at branch head `b3b41ede7de7bba21f4d1dab8538d8e6e6b656e8`, and no run of mine is in flight.**
+
+Done: the four bodies are staged with only `note` changed against the served page, and the literal, read-back and dry-form checks pass. [RAN, as in my 1:54 PM message]
+
+What is left, in order:
+1. Your put by the four commands in the art's README.md, by Fri 13 Nov 6 PM PST.
+2. frontier-fit's builder text at the next te_core version on the replot branch. The sentence is in the README.
+
+In flight: nothing.
+
