@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import random
 import subprocess
 import sys
@@ -38,6 +39,8 @@ from pathlib import Path
 from typing import Any
 
 from verity_difftest import Server, build, canonical
+
+log = logging.getLogger(__name__)
 
 HERE = Path(__file__).resolve().parent
 ROOT = Path(__file__).resolve().parents[5]
@@ -288,6 +291,7 @@ def python_verdict(mc, inst: dict) -> str:
     try:
         return canonical(mc.verdict(inst["ready"], inst["leaves"], inst["audit"]))
     except Exception as e:
+        log.exception("the reference raised on %s; its output is the exception", inst.get("name"))
         return canonical({"exception": f"{type(e).__name__}: {e}"})
 
 

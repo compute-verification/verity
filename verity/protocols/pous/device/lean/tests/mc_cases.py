@@ -278,23 +278,23 @@ class Session:
 
 
 @st.composite
-def sessions(draw, signer: AtLeaf | None = None) -> Session:
+def sessions(sample, signer: AtLeaf | None = None) -> Session:
     """An honest run of `MemoryChallenger` (some rounds late, some answers tampered), signed by `signer` or a sampled test
     signer at a sampled leaf."""
     if signer is None:
-        height = draw(st.integers(1, 2))
-        signer = test_signer(draw(st.sampled_from(SECRETS)), height, draw(st.integers(0, 2 ** height - 1)))
-    blocks, k = draw(st.integers(1, 24)), draw(st.integers(1, 4))
-    block_bytes, limit = draw(st.integers(1, 40)), draw(st.integers(1, 10 ** 6))
-    seed = draw(st.integers(0, 3))
-    session_id = hashlib.sha512(b"session %d" % draw(st.integers(0, 3))).digest()[:32]
-    tree = mc.CoinTree.draw(b"source %d" % seed, session_id, blocks, k, key=draw(st.sampled_from(COIN_KEYS)),
+        height = sample(st.integers(1, 2))
+        signer = test_signer(sample(st.sampled_from(SECRETS)), height, sample(st.integers(0, 2 ** height - 1)))
+    blocks, k = sample(st.integers(1, 24)), sample(st.integers(1, 4))
+    block_bytes, limit = sample(st.integers(1, 40)), sample(st.integers(1, 10 ** 6))
+    seed = sample(st.integers(0, 3))
+    session_id = hashlib.sha512(b"session %d" % sample(st.integers(0, 3))).digest()[:32]
+    tree = mc.CoinTree.draw(b"source %d" % seed, session_id, blocks, k, key=sample(st.sampled_from(COIN_KEYS)),
                             salts=[hashlib.sha512(b"salt %d %d" % (seed, j)).digest() * 3 for j in range(k)])
-    spends = draw(st.lists(st.one_of(st.integers(0, limit), st.just(limit), st.just(limit + 1)), min_size=k, max_size=k))
-    tampered = draw(st.sets(st.integers(0, k - 1), max_size=1))
-    clock = Clock(draw(st.integers(0, 2 ** 40)))
+    spends = sample(st.lists(st.one_of(st.integers(0, limit), st.just(limit), st.just(limit + 1)), min_size=k, max_size=k))
+    tampered = sample(st.sets(st.integers(0, k - 1), max_size=1))
+    clock = Clock(sample(st.integers(0, 2 ** 40)))
     c = mc.MemoryChallenger(tree, signer, log=ts.session_log(), limit_ns=limit, block_bytes=block_bytes,
-                            binding=draw(st.sampled_from(SETUP_ROOTS)), clock=clock)
+                            binding=sample(st.sampled_from(SETUP_ROOTS)), clock=clock)
     while not c.done:
         j = len(c.rounds)
         i = c.challenge()
