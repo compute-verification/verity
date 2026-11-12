@@ -130,6 +130,7 @@ class Runner:
         if not so.total_num_scheduled_tokens:
             done.set_result(EMPTY_MODEL_RUNNER_OUTPUT)
             return done
+        sampled: list[list[int]]
         size, sampled = so.total_num_scheduled_tokens, []
         for rid, n in so.num_scheduled_tokens.items():
             view = self.view.get(rid)
@@ -298,8 +299,8 @@ def test_a_replay_from_the_trace_alone_repeats_vllms_scheduler_under_drafts(k, t
     before it ran is recorded ahead of its true position by what that row rejected, and nowhere else."""
     pytest.importorskip("vllm")
     reqs = _load()
-    seen = {"after_empty": 0, "early_differs": 0, "hits": 0, "empty": 0, "steps": 0, "first": {"true": 0, "ahead_by_rejected": 0, "other": 0},
-            "kept": {}}
+    seen: dict[str, Any] = {"after_empty": 0, "early_differs": 0, "hits": 0, "empty": 0, "steps": 0,
+                            "first": {"true": 0, "ahead_by_rejected": 0, "other": 0}, "kept": {}}
     for gap in range(1, 13):
         serve = _run({**SERVE, **_draft(k)}, tmp_path / "model", "serve", [{"id": rid, "iteration": i * gap} for i, rid in enumerate(reqs)], reqs)
         header = serve["records"][0]["config"]
@@ -338,7 +339,7 @@ def test_a_follow_up_is_put_back_after_the_step_that_finished_the_request_it_goe
     pytest.importorskip("vllm")
     rng = random.Random(11)
     prompt, more = ([rng.randrange(1000, 40000) for _ in range(n)] for n in (40, 24))
-    seen = {"after_empty": 0, "early_differs": [], "hits": {}}
+    seen: dict[str, Any] = {"after_empty": 0, "early_differs": [], "hits": {}}
     for limit in range(8, 40):
         serve = _run({**SERVE, **_draft(k)}, tmp_path / "model", "serve", [{"id": "first", "iteration": 0}, {"id": "next", "iteration": 10 ** 6}],
                      {"first": (prompt, limit), "next": (lambda tokens: prompt + tokens["first"] + more, 4)})
