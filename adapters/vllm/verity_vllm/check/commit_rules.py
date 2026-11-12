@@ -47,8 +47,9 @@ def hidden_classes_required(manifest: Mapping[str, Any] | None) -> bool | None:
     A Program whose attention is its own Calls (the exact-int8 profile's) names none, and its Commit attaches no hidden tap."""
     if manifest is None:
         return None
-    families = (manifest.get("populations") or {}).get("by_family") or {}
-    return any(int(families.get(f, 0) or 0) > 0 for f in HIDDEN_CLASS_BY_FA.values())
+    populations = manifest.get("populations")   # a manifest that counts no population by family names no hidden class
+    families = populations.get("by_family") if populations else None
+    return any(int(families.get(f, 0) or 0) > 0 for f in HIDDEN_CLASS_BY_FA.values()) if families else False
 
 
 def json_short(v: dict, n: int = 160) -> str:
@@ -59,8 +60,10 @@ def json_short(v: dict, n: int = 160) -> str:
 def class_coverage(declaration: dict | None) -> dict[str, dict]:
     """{class id: {"how", "tensors", "bytes"}} from a coverage declaration (see commit_integ.api.declaration)."""
     out: dict[str, dict] = {}
-    for c in (declaration or {}).get("classes") or []:
-        out[c.get("class")] = {"how": c.get("how"), "tensors": c.get("tensors"), "bytes": c.get("bytes")}
+    classes = declaration.get("classes") if declaration else None
+    if classes:   # no declaration, or one that lists no class, covers none
+        for c in classes:
+            out[c.get("class")] = {"how": c.get("how"), "tensors": c.get("tensors"), "bytes": c.get("bytes")}
     return out
 
 
@@ -108,7 +111,9 @@ def binding_check(bnd: CommitBinding | Mapping[str, Any], *, min_openings: int =
         miss = cov.missing[0] if cov.missing else {}
         return False, (f"identity coverage: {cov.missing_n} of {cov.expected_n} required identities have no binding "
                        f"(first: step {miss.get('step')} {miss.get('op_path')}/{miss.get('output_member')} inv {miss.get('invocation')} req {miss.get('request_id')} rank {miss.get('rank')})")
-    po = b.entry.get("openings_population") or {}
+    po = b.entry.get("openings_population")
+    if not po:
+        po = {}   # a binding that records no openings sampled from the population: none unbound, none opened
     if int(po.get("unbound_n") or 0) > 0:
         return False, f"{po['unbound_n']} population-drawn openings had no binding (first: {json_short((po.get('unbound') or [{}])[0])})"
     if not po.get("skipped"):
@@ -161,6 +166,13 @@ def _int(x: Any) -> int:
 
 def _first(seq: Any) -> Any:
     return (seq or [None])[0] if isinstance(seq, list) else None
+
+
+def deferred_positions(record: Mapping[str, Any], key: str = "deferred_positions") -> list[tuple]:
+    """The (step, leaf) positions `record` lists under `key`: none where it lists none, states null or leaves the key out.  Whether the
+    key is there at all is a fact of its own, which tells a committer that writes positions from an older one that wrote counts."""
+    listed = record.get(key)
+    return [tuple(p) for p in listed] if listed else []
 
 
 def _components(commit: dict) -> dict:
@@ -277,9 +289,10 @@ def rule_fa2_zero_rows(commit: dict, ctx: dict) -> CheckResult:
 
 def rule_collector_errors(commit: dict, ctx: dict) -> CheckResult:
     ex = _d(commit.get("extra"))
+    errors = ex.get("errors")   # what the collector recorded: its length is the count where the record states none
     errs_n = ex.get("errors_n")
     if errs_n is None:
-        errs_n = len(ex.get("errors") or []) if "errors" in ex else commit.get("errors_n")
+        errs_n = (len(errors) if errors else 0) if "errors" in ex else commit.get("errors_n")
     if errs_n is None:
         errs_n = 0
     failure = ex.get("collector_failure")
@@ -287,7 +300,7 @@ def rule_collector_errors(commit: dict, ctx: dict) -> CheckResult:
     if failure:
         out, diffs, reason = FAIL, [{"name": "collector_failure", "first": str(failure)[:200]}], f"collector failed: {str(failure)[:200]}"
     elif _int(errs_n) > 0:
-        first = _first(ex.get("errors")) or "?"
+        first = _first(errors) or "?"
         out, diffs, reason = FAIL, [{"name": "collector_errors", "n": _int(errs_n), "first": str(first)[:160]}], f"{errs_n} collector error(s): {str(first)[:160]}"
     else:
         out, diffs, reason = PASS, [], None
@@ -331,8 +344,9 @@ def rule_openings(commit: dict, ctx: dict, min_openings: int) -> CheckResult:
             return _mk("runtime_match/openings", "C3 openings", claim, compat, commit, ctx, outcome=FAIL, scope=scope,
                        differences=[{"name": "openings_too_few", "checked": n_open, "min": min_openings}], reason=f"openings checked {n_open} < {min_openings}")
         if n_ok != n_open:
+            failed = ops.get("failed")   # the openings that did not verify, where the record lists them
             return _mk("runtime_match/openings", "C3 openings", claim, compat, commit, ctx, outcome=FAIL, scope=scope,
-                       differences=[{"name": "openings_unverified", "checked": n_open, "verified": n_ok, "failed": (ops.get("failed") or [])[:8]}],
+                       differences=[{"name": "openings_unverified", "checked": n_open, "verified": n_ok, "failed": failed[:8] if failed else []}],
                        reason=f"openings verified {n_ok} != checked {n_open}")
     elif n_ok != n_open:
         return _mk("runtime_match/openings", "C3 openings", claim, compat, commit, ctx, outcome=FAIL, scope=scope,
@@ -381,9 +395,8 @@ def rule_openings_after_release(commit: dict, ctx: dict, min_openings: int) -> C
         return fail({"name": "raw_bytes_retained_on_device", "bytes": _int(oar.get("retained_device_after"))},
                     f"raw/level bytes still on the device after release: {oar.get('retained_device_after')}")
     if def_a or def_b:
-        pa = [tuple(p) for p in (ops.get("deferred_positions") or [])]
-        pb = [tuple(p) for p in (po.get("deferred_positions") or [])]
-        got = {tuple(p) for p in (oar.get("deferred_received_positions") or [])}
+        pa, pb = deferred_positions(ops), deferred_positions(po)
+        got = set(deferred_positions(oar, "deferred_received_positions"))
         positional_writer = any(k in d for d, k in ((ops, "deferred_positions"), (po, "deferred_positions"), (oar, "deferred_received_positions")))
         if pa or pb or got or positional_writer:
             if len(pa) != def_a or len(pb) != def_b:
@@ -570,7 +583,8 @@ def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckResult:
     name, rule = "required_value_coverage/manifest_coverage", "MAN-01"
     if not isinstance(cov, dict):
         return _mk(name, rule, claim, compat, commit, ctx, outcome=NOT_RUN)
-    scope = {"checked": cov.get("checked"), "checked_by_family": cov.get("checked_by_family"), "steps_committed_n": len(cov.get("steps_committed") or []),
+    steps = cov.get("steps_committed")   # a coverage that lists no committed step counts none
+    scope = {"checked": cov.get("checked"), "checked_by_family": cov.get("checked_by_family"), "steps_committed_n": len(steps) if steps else 0,
              "composition_mismatch_n": cov.get("composition_mismatch_n"), "committed_extras_n": cov.get("committed_extras_n"), "duplicate_names_n": cov.get("duplicate_names_n"),
              "engine_step_basis": cov.get("engine_step_basis")}
     inputs = {"manifest_digest": cov.get("manifest_digest")}
@@ -580,7 +594,9 @@ def rule_manifest_coverage(commit: dict, ctx: dict) -> CheckResult:
     # the manifest this grades against was built by required_manifest.members_for: a Program family with no vocabulary member is INTERIOR by name
     notes = [_leak("required_manifest.members_for", "a Program family is INTERIOR because the vocabulary names no member for it -- by name")]
     if not cov.get("ok", False):
-        fam = cov.get("families_missing_entirely") or []
+        fam = cov.get("families_missing_entirely")
+        if not fam:
+            fam = []   # no family of the manifest is missing whole
         first = _d(_first(cov.get("missing")))
         if cov.get("error") and not cov.get("missing_n"):
             return _mk(name, rule, claim, compat, commit, ctx, outcome=FAIL, scope=scope, inputs=inputs, notes=notes, differences=[{"name": "coverage_error", "error": str(cov["error"])[:400]}],
@@ -613,7 +629,8 @@ def rule_identity_layout(commit: dict, ctx: dict) -> CheckResult:
         return _mk(name, rule, claim, compat, commit, ctx, outcome=INSUFFICIENT, scope=scope, notes=notes,
                    differences=[{"name": "identity_check_skipped", "skipped": idc.get("skipped")}], reason=f"identity check: skipped ({idc.get('skipped')})")
     if not idc.get("ok"):
-        viols = [v for v in (idc.get("violations") or []) if isinstance(v, dict)]
+        listed = idc.get("violations")   # a check that failed and lists no violation names no step below
+        viols = [v for v in listed if isinstance(v, dict)] if listed else []
         diffs: list[dict[str, Any]] = []
         for key in ("fa2_layers_bad", "missing_modules", "unknown_modules", "moe_layers_bad", "tp_sites_bad", "multiplicity_vs_step0", "call_boundaries_bad",
                     "routes_bad"):

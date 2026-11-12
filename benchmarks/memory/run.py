@@ -32,15 +32,16 @@ a reference that can't be read prints its reason in place of a number. Under `re
 also `$RESEARCH_RUN_DIR/out/memory.json`; a run that ran `--loopback` keeps a loopback's document there whatever it
 prints afterwards, since that document is how `--from` knows the run's session for a loopback.
 
-Under `research run` an accepted session of a node run or of `--from` also writes `$RESEARCH_RUN_DIR/out/result.json`
-through the harness kit's writer (`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`),
-each from the verifier's record alone and named in its `inputs` by the record's key: `metric` (the printed number in
-its unit), `verified` (the bytes the verifier certified read over the session's span), `capacity at READING` and `free
-at READING` for each reading the ledger holds (`READINGS`: the node's read rate times the span, and γ of it), and
-`error` (the probability the verified amount doesn't hold). A reading's rate is the verifier's own figure for the node
-(`timing.py`), not the registered hardware's, and the capacity's unit says so. The references are other runs' numbers
-and are not in the result; a loopback writes none, since it certifies nothing, and a session that wasn't accepted
-writes none, as it prints no number.
+Under `research run` an accepted session of a node run or of `--from` also writes the run's result,
+`$RESEARCH_RUN_DIR/result.json`, the file `research` reads a run's result from, through the harness kit's writer
+(`verity_bench.kit`), in the fields every resource's benchmark reports (`amounts`), each from the verifier's record
+alone and named in its `inputs` by the record's key: `metric` (the printed number in its unit), `verified` (the bytes
+the verifier certified read over the session's span), `capacity at READING` and `free at READING` for each reading the
+ledger holds (`READINGS`: the node's read rate times the span, and γ of it), and `error` (the probability the verified
+amount doesn't hold). A reading's rate is the verifier's own figure for the node (`timing.py`), not the registered
+hardware's, and the capacity's unit says so. The references are other runs' numbers and are not in the result; a
+loopback writes none, since it certifies nothing, and a session that wasn't accepted writes none, as it prints no
+number.
 """
 from __future__ import annotations
 
@@ -424,13 +425,14 @@ def amounts(doc: dict, ledger: dict) -> list[dict]:
     return out
 
 
-def result(out: Path, measured: list[dict]) -> None:
-    """Appends `measured` to `out/result.json` through the harness kit's writer, which stamps each with this run, its
-    commit and this host. A result holds one measurement a name, so a run that prints a second session keeps its
-    first one's result, and says so."""
+def result(held: Path, measured: list[dict]) -> None:
+    """Appends `measured` to the result of the run whose directory is `held`, `held/result.json`, through the harness
+    kit's writer, which stamps each with this run, its commit and this host. The writer is given the run's directory
+    itself, not its `out/`: a run has one result, and that file is where `research` reads it. A result holds one
+    measurement a name, so a run that prints a second session keeps its first one's result, and says so."""
     names = ", ".join(m["name"] for m in measured)
     try:
-        writer = kit.writer(out)
+        writer = kit.writer(held)
         for m in measured:
             writer.measurement(**m)
     except ValueError as e:
@@ -506,7 +508,7 @@ def main(argv: list[str] | None = None, *, store_of: Callable[[], object] = Evid
         (Path(held) / "out").mkdir(parents=True, exist_ok=True)
         (Path(held) / "out" / "memory.json").write_text(line + "\n")
     if held and not doc["loopback"]:
-        result(Path(held) / "out", amounts(doc, ledger))
+        result(Path(held), amounts(doc, ledger))
     return 0
 
 
