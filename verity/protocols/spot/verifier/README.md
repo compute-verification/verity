@@ -8,9 +8,9 @@ probability δ, at most so many proof blocks are incorrect, a proof block being 
 applied to its committed inputs. The protocol is stated in Lean (see "Where things are"); this README outlines it,
 points to the code, and lists what the Lean does not state yet.
 
-SPOT (`verity/sampled-proofs/v1`) is a subprotocol of both composite protocols: remote (`verity/remote/v0`,
+SPOT (`verity/sampled-proofs/v1`) is a protocol of both configurations: remote (`verity/remote/v0`,
 `verity/protocols/remote/verifier/`) composes it with PoUW (`verity/pouw/period/v1`) and the inference-only
-policy, and onsite (`verity/protocols/onsite/verifier/`) with the other subprotocols. Each composite's verifier runs
+policy, and onsite (`verity/protocols/onsite/verifier/`) with the other protocols. Each configuration's verifier runs
 `VStar.Recursive.Sampled`'s Lean check: one-stage v2 (`verity/sampled-proofs/one-stage/v2`, the audit on the proofs).
 One-stage v1, whose verdicts are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or
 evidence name no `proofs`), and so is the recursive audit (`verity/sampled-proofs/recursive/v1`, `RECURSIVE_REFUSED` at
@@ -38,7 +38,7 @@ verifier draws the second stage on fresh coins (`Second`). The proof server then
 blocks, one session a template, and the verifier audits both stages.
 
 It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
-network certification, in the remote and onsite deployments) wrap SPOT[Flock] in the recursion layer and the ZK server
+network certification, in the remote and onsite configurations) wrap SPOT[Flock] in the recursion layer and the ZK server
 (`parties.PROTOCOL`). The network certifier is a layer of its own: it stamps each request's release order and bucket at
 ingress, and SPOT[Flock] reads that stamp as a certified input. Neither imports the other (`tests/test_boundaries.py`),
 and they compose only above both.
