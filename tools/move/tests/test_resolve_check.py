@@ -213,6 +213,24 @@ def test_a_lean_file_with_none_paired_to_it_at_the_other_commit_is_an_issue(tmp_
         "Sec/Pous.lean: a Lean file at the parent with none paired to it at the commit"]
 
 
+def test_a_move_that_renames_and_changes_more_files_than_git_s_rename_limit_pairs_each_one(tmp_path, capsys):
+    """Past its default limit git skips the inexact rename detection, and each file a move renamed and changed is then
+    one deleted and one added. The move renames 1,100 files and the word `periodRun` in each, and leaves the word in one
+    line of one of them: every file is paired, and that line is the one issue."""
+    def text(i: int, first: str, second: str) -> str:
+        return (f"import Game\n\n/-- File {i:04} of the run. Its own lines, {i * 7919} and {i * 104729}, are as the move\n"
+                f"found them, so the file is most like itself. -/\nnamespace Run{i:04}\nopen Game\n\n"
+                f"theorem first{i:04} : {first} {i} = {i} := rfl\n\ntheorem second{i:04} : {second} {i} = {i} := rfl\n\n"
+                f"end Run{i:04}\n")
+    renamed, left = range(1100), 707
+    before = {"Sec/Game.lean": GAME} | {f"Sec/Run{i:04}.lean": text(i, "periodRun", "periodRun") for i in renamed}
+    after = {"Sec/Game.lean": RENAMED} | {f"Sec/Run{i:04}.lean": None for i in renamed} | {
+        f"Sec/Span{i:04}.lean": text(i, "monitoringPeriodRun", "periodRun" if i == left else "monitoringPeriodRun")
+        for i in renamed}
+    assert issues(tmp_path, capsys, before, after) == [
+        "Sec/Span0707.lean:10: periodRun -> periodRun in Run0707: want Game.monitoringPeriodRun, got None"]
+
+
 def test_a_file_whose_imports_declarations_or_identifiers_differ_in_number_is_an_issue(tmp_path, capsys):
     two = "import Game\n\nopen Game\n\ntheorem two : periodRun 2 = 2 := rfl\n"
     before = {"Sec/Game.lean": GAME, "Sec/Two.lean": two, "Sec/Three.lean": "import Game\n"}

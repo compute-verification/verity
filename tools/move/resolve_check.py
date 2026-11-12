@@ -11,8 +11,9 @@ to look before the build, and the Lean build stays the authority. Exit 0 when it
 as JSON).
 
 What it reads, from git's objects alone (no checkout, no build, no Lean):
-- every tracked `.lean` file at PARENT and at COMMIT, a file paired with itself across git's rename detection, and each
-  `lakefile.toml`'s `srcDir`, from which a file's module name follows;
+- every tracked `.lean` file at PARENT and at COMMIT, a file paired with itself across git's rename detection, which
+  runs with no limit on the number of files (a file the move renamed and changed past git's similarity threshold is
+  unpaired, and so an issue), and each `lakefile.toml`'s `srcDir`, from which a file's module name follows;
 - in a file, outside comments and strings: its imports; where they start a line, its `namespace`, `section`, `mutual`,
   `end` and `open` commands and the name each `def`, `theorem`, `lemma`, `abbrev`, `structure`, `inductive`, `class`,
   `instance`, `opaque` or `axiom` declares; and every other identifier.
@@ -103,7 +104,8 @@ def changes(root: Path, base: str, head: str) -> tuple[dict[str, str], set[str]]
     """What ``head`` changed of ``base``: {a renamed file's old path: its new one}, and every changed file's path at ``head``."""
     renames: dict[str, str] = {}
     changed: set[str] = set()
-    fields = iter(git(root, "diff", "-M", "-z", "--name-status", base, head).split("\0"))
+    # -l0: past its default limit git skips the inexact detection, and a file renamed and changed is one deleted, one added
+    fields = iter(git(root, "diff", "-M", "-l0", "-z", "--name-status", base, head).split("\0"))
     for status in fields:
         if not status:
             continue
