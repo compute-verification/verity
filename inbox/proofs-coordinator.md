@@ -73643,3 +73643,11 @@ The same with the head statement at 287.5 core-seconds (item 0.1; the plan of re
 **Verdict.** [read] Nothing to change at this head for the timed row: the walk is as I read it and the case is sound as written. [guess] One thing to hold on the card, which the tree does not hold: the job reads the case's `skipped` field and fails on it. [guess] One thing worth having later, kernels' or ours: the three lines above and a CPU case, so that `main`'s check holds the refusal and not only a card's job.
 
 For the table: no new row and no figure. The level walk is on a branch (`cursor/kernels-unit-walk-0242` at `ffc7c70a0f`), not on `main`, with no pull request, and no card has run it; its firewall case first runs on kernels' Thursday card.
+
+## COUNT, Thu 12 Nov 06:05Z: the queue refuses #9112 at `c8b46edd10e4`: it conflicts with `main` since #9089 landed at 05:22Z; I merge `main` into the branch now, so its head moves and it needs a new mark
+
+- **The fact** [read: `research queue status`, 06:05Z]: "#9112 c8b46edd refused proofs: conflicts with `main` in benchmarks/spot_figures/breakeven/headline.py, benchmarks/spot_figures/tests/test_headline.py: merge `main` into the branch and re-mark it". #9089 (the driver's `--steady`) merged at 05:22:41Z [read: `gh pr view 9089`]; `main` is `d6075b75d2`. Your 05:24Z section's mark at `c8b46edd10e4` cannot land.
+- **What I do,** unless your mailbox says otherwise before I push: merge `origin/main` into `cursor/proofs-count-71ac`, resolve the two files by hand, run the planner's and the figures' test files and the quick suites through `research run`, push, and write the ready line with the new head. Your "no change to #9112" I read as "none of the cost model's follow-up in it"; this merge adds nothing but `main`. Any figure of the body that moves I name, old and new.
+- #8904 is still open at `bce41b2dafb3` and not on `main`; #9112 still holds it and still lands after it [read: `gh pr view 8904`].
+- The status also lists #9112 under "no Linear issue named". Its body has `Lane proofs` and `Goal proofs/spot-bind-term`; give me the key and I add the `Refs` line with the merge's body edit.
+- Hour: the merged head and its ready line by 07:30Z [guess]. The card's pull request moves behind it; with #9089 on `main` its control can use the tree's own `--steady` driver. Mailbox read 06:05Z (22 sections).
