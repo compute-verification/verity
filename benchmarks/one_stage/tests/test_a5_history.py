@@ -118,18 +118,18 @@ def _negatives(mine, doc: dict, rec: dict, publics: dict) -> tuple[bool, dict[st
     flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
     root = hist["registered"]["latent"]
     wrong = {**hist, "registered": {"latent": root[:-1] + format(int(root[-1], 16) ^ 1, "x")}}
-    n, law = rec["population"], rec["law"]
-    draw = {**law, "population": n, "units": [0, 1]}
+    n, design = rec["population"], rec["law"]
+    sample = {**design, "population": n, "units": [0, 1]}
     registered = {r["port"]: r["root"] for r in rec["roots"]}
-    record = V.audit_record(rec, R.receipt(rec, "verifier-test", received="0"), draw, law, draw["units"], 2,
+    record = V.audit_record(rec, R.receipt(rec, "verifier-test", received="0"), sample, design, sample["units"], 2,
                             {"statement": "stub"}, VERDICTS, 0.5, sessions=[SESSION], session_roots=registered)
     return record["accepted"], {
         "R3": a0.negative(check(ports=CS.expected_ports(replace(mine, run="00" * 64)))),
         "R4": a0.negative(check(leaf_layer=CS.leaf_layer(flipped))),
         "history-root": a0.history_negative(check(history=wrong)),
-        "draw": a0.negative(V.check_draw({**draw, "units": [0, n]}, rec, law)),
-        "proved": a0.negative(V.check_proved(draw, draw["units"][1:], 1)),
-        **a0.audit_negatives(record, law, 0.5, registered)}
+        "sample": a0.negative(V.check_draw({**sample, "units": [0, n]}, rec, design)),
+        "proved": a0.negative(V.check_proved(sample, sample["units"][1:], 1)),
+        **a0.audit_negatives(record, design, 0.5, registered)}
 
 
 def test_a_negative_is_refused_only_where_the_lean_answered(tmp_path, monkeypatch):
@@ -144,7 +144,7 @@ def test_a_negative_is_refused_only_where_the_lean_answered(tmp_path, monkeypatc
     assert accepted and len(rows) == 8 and all(r["refused"] for r in rows.values()), rows
     assert (rows["R3"]["codes"], rows["R4"]["codes"]) == (["R3-domain"], ["R4-leaf-layer"]), rows
     assert rows["history-root"] == {"refused": True, "codes": [R.HISTORY]}
-    assert all(V.DISAGREE not in rows[k]["codes"] for k in ("draw", "proved")), rows
+    assert all(V.DISAGREE not in rows[k]["codes"] for k in ("sample", "proved")), rows
     assert all(r["agree"] for r in rows.values() if "agree" in r), rows
 
     def cannot_run(fn, value):
@@ -153,7 +153,7 @@ def test_a_negative_is_refused_only_where_the_lean_answered(tmp_path, monkeypatc
     said = {"refused": "the Lean cannot run"}
     accepted, dead = _negatives(mine, doc, rec, publics)
     assert not accepted and dead.keys() == rows.keys() and not any(r["refused"] for r in dead.values()), dead
-    for k in ("R3", "R4", "draw", "proved"):
+    for k in ("R3", "R4", "sample", "proved"):
         assert dead[k] == {"refused": False, "codes": [V.DISAGREE], "lean": said}, dead[k]
     assert dead["history-root"]["codes"] == [R.HISTORY] and dead["history-root"]["reasons"]["lean"] == said["refused"]
     assert not any(r["agree"] for r in dead.values() if "agree" in r), dead
