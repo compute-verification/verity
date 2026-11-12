@@ -7150,11 +7150,18 @@ fn serve_loop<B: FnOnce() -> Server + Send>(log: Option<&RunLog>, make: impl Fn(
 /// thread once it is accepted; each session's record, proofs and verifier file under `out/<session>`, its line, with the
 /// fields `make` gave beside its build, in `out/index.jsonl` and on stdout (`out`: the directory those fields name as
 /// `out`, else the server's). With a run's record (`log`), each session's Hello answered with coins is logged there first.
+/// With `--known-trees FILE`, the verifier's list of the statement's known trees (`flock-verify known-trees`), its bytes
+/// follow the draw in each session's answer to `Register`: the ZK server's release side reads the list there and hands
+/// the prover the draw alone, and a prover that reaches this server itself reads the draw and no further.
 fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::path::Path, max: Option<usize>, concurrency: usize,
                                           listen: &str, log: Option<&RunLog>, make: impl Fn() -> Option<(B, Value)>) {
     use std::io::{BufReader, BufWriter, Write};
     std::fs::create_dir_all(out).unwrap();
     let index = Mutex::new(());
+    let known = match arg("--known-trees", "").as_str() {
+        "" => Vec::new(),
+        f => std::fs::read(f).unwrap_or_else(|e| refuse(format!("--known-trees {f}: {e}"))),
+    };
     let one = |i: usize, conn: std::net::TcpStream, mut s: Server, tag: Value| {
         conn.set_nodelay(true).unwrap();
         let mut r = BufReader::new(conn.try_clone().unwrap());
@@ -7162,13 +7169,15 @@ fn serve_on<B: FnOnce() -> Server + Send>(l: &std::net::TcpListener, out: &std::
         let id = format!("l{:04}-{}", i, std::process::id());
         loop {
             let Ok(b) = read_frame(&mut r) else { break };
-            let resp = match (Req::decode(&b), log) {
+            let req = Req::decode(&b);
+            let register = matches!(req, Ok(Req::Register));
+            let resp = match (req, log) {
                 (Ok(req), Some(log)) => log.handle(&mut s, &id, req),
                 (Ok(req), None) => s.handle(req),
                 (Err(e), _) => Resp::Refused(e),
             };
             let done = matches!(resp, Resp::Verdict(_));
-            if write_frame(&mut w, &resp.encode()).is_err() || done {
+            if write_frame(&mut w, &resp.frame_with_known(register, &known)).is_err() || done {
                 break;
             }
         }
