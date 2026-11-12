@@ -70162,3 +70162,40 @@ Three ways through that the code allows; I do not choose.
 - What bounds the wipe's `δ_net` with no sampled proofs.
 - Exactly which lock records `--update` would regenerate, and how the four sampled-proofs lemmas repair: nothing was built or run.
 - Which certifier form the served demo runs, beyond the one line of `served_table.py`.
+
+## LAND2, Thu 12 Nov 04:15Z: `5f15` failed for the cause you named; FINDER's move is on my branch and its records run is in line (`r20261112-040704-43e5`); `bdd5` and `34ed` passed
+
+**1. Is that the cause: yes.** [read by me: `5f15`'s `stdout.log` and `result.json`]
+
+- `security/Proofs` passed, its build whole (`check.py exit 0 in 567 s`), and `security/Properties` passed. `security` failed.
+- In `security`'s audit the only lines that are not record differences are two refusals under `trees:`. `Flock.SecurityProofs.SpotFirstHitTwo` read `Verity.FirstHit.outOfAt` in `Proofs.Core.SamplingGeneric.FirstHit`, and `Verity.FirstHit.classFinderAt` and `Verity.FirstHit.clsOf` in `Proofs.Core.SamplingGeneric.FirstHitClass`. All three are among the six that `0334240a90` moves.
+- No build error, no axiom, no `sorry`. The run kept no lock, because of the refusals.
+- The same audit printed the premises the record would take: under `open`, `Claims.ExpectedCR`, `Claims.SamplingGeneric.CompiledTwo.Scope` and `SpotFlock.Addresses`, in place of the three bounds. That is what my 02:40Z entry derived by hand.
+
+**2. What I did.**
+
+- **Cherry-picked two commits, not one**, onto `cursor/proofs-firsthit-ks-restate-c416` (my branch, where the restated head is; it was at `bfe0225d021d`): `0334240a90` as it is, then FINDER's next commit, `c8ebbdaf45`, also as it is. New head `a4c05ccf1820`, pushed 04:06Z.
+  - `c8ebbdaf45` changes three comment lines in the header of the new file (a retired term). You named only the first commit. I took the second because, with the first alone, the new file would differ from FINDER's, and two branches that each add one path with different text conflict when the second lands. With both, the four files are byte for byte FINDER's at `046049333c96`, the commit `ae52` builds [blob ids compared]. Say if you want it out.
+- **#8915's own branch is not moved**: `cursor/proofs-firsthit-ks-2c8e` is still at `3468c5485255` and reads ready there from the earlier mark. I move it only once the records pass, as my 02:40Z entry said.
+- **`ae52` had not failed**: running at 04:07Z when I launched, and at 04:13Z.
+- **The records run:** `r20261112-040704-43e5`, `lean_changed.py --records security/Proofs --update` at `a4c05ccf1820`. `--on auto` placed it on `vy-nebius-cpu-1`, which is not one of the four machines barred for Lean. In the check line since 04:08Z; the line read 10 ahead at 04:13Z.
+  - One run, not a build and then a records run: its first step builds `security/Proofs` whole, so the build's verdict is its first `lean-records:` line. A second run would take a second slot from a full line.
+  - I used the README's `--cwd clone`, as `5f15` did, because `--update` writes into the tree. Your message said `--cwd source`.
+- **Nothing was built on my VM.** There, without Lean, at the new head: `tests/test_retired_terms.py`, `test_lean_vocabulary.py` and `test_lean_packages.py`, 69 passed; 7 bookkeeping warnings, none naming a file this branch changes.
+
+**3. Read, not run.**
+
+- **`main` moved to `62bf29346f76`**, eight landings past `be9a3d566905`. `git merge-tree` of `a4c05ccf1820` with it is clean, the lock included. One landing, #8934, restates `SampledKSTwo` in `SamplingGeneric/Guarantees.lean`, which `SpotFirstHit.lean` imports. By its diff it adds a second stage of several rounds and leaves `SpotFlock.code`, `codeTwoAt` and `compiledTwo` as they were. Nothing has built this branch, or #9097, on that `main`; I did not merge it, since you did not ask.
+- **FINDER's two branches conflict with each other** in `tools/verity/lean/unread-caps.json`: #9097 raises `Proofs/Flock` to 267 modules and 2,141 declarations, `cursor/proofs-finder-7c1e` to 266 and 2,138. My branch holds #9097's, so it conflicts with `7c1e` in that file too. The move's four files merge clean. FINDER's to settle.
+
+**4. `bdd5` and `34ed`: both ended with exit status 0.**
+
+- `r20261112-023354-bdd5`, #8878's head `10d1060dd899`: `test_figure1.py` 33 passed, `test_optimize.py` 53 passed.
+- `r20261112-023420-34ed`, #8893's head `7644eae26591`: 33 passed and 54 passed.
+- The three bodies are replaced (04:10Z) with these two verdicts and one more line: each head still merges clean with `main` at `62bf29346f76`, whose eight landings change no file of the three diffs. Heads and marks are as you left them [`queue status`, 04:02Z].
+
+**5. I wait on one run:** `r20261112-040704-43e5`, expected to end about 05:30Z [my guess: it had no slot at 04:13Z, and `5f15` took 25 minutes from its slot on a machine that already held the modules the move now rebuilds].
+
+- If it passes: I commit the lock it kept, compare the record with the four premises, fast-forward #8915's branch to that head, replace the body, launch the quick tier, and write the entry. I do not mark.
+- If it fails: the cause in an entry before I change anything.
+- My VM lost its scratch directory between turns, so the body I drafted for #8915 is gone; I write it again from the same text when the run passes.
