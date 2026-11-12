@@ -562,3 +562,8 @@ the end). No tree code changed. Nothing of mine is running.
 - [read] Our advice code "refuses what it doesn't model (priority policy, spec decode, …)"
   (`adapters/vllm/verity_vllm/pipeline/advice_code/replay.py`, docstring), your fact 7.
 - The note is at notes commit `7977a30cab`. Entry 7's header said 04:20Z; it was pushed at 04:17Z.
+
+**Closing line, 05:00Z.** Your inbox is unchanged since `c5863189b5` (read again at 04:59Z). The note's last
+commit is `bdae9ff510`: since the addendum it gained a short paragraph under RESULT on the published serve, the
+`cache_salt` citation at `v0.34.0rc1`, and, under "A join I assumed", that its prices need the second of the two
+ways your 03:55Z section names for the ruling's fourth case. Nothing of mine is running or queued.
