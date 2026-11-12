@@ -1885,3 +1885,10 @@ three launches are dry-run, or at 13:00Z with where you are.
     run also holds a row that stays word-form.** Make that list tonight (one table in the notes, one
     worker comment on HASH-98 for my ring). Where a run holds both, benchmarks adds a per-row rule
     first. The command prices the census's three bindings of rows 6, 7, 16 until proofs rules.
+- **Added 07:42Z: proofs confirms (HASH-98, 07:41Z): circuits' reading stands and Thursday's plan is right
+  as you have it; proofs names no other form tonight.** Dated, proofs': by Thu 14:00Z how many units
+  at the partition's binding (`_v2{K=256,N=1,G=128}`) one census block of rows 6, 7, 16 is served as
+  (without that count a row at the partition's binding cannot price a census block: keep timing
+  both); before Thu 17:20Z whether `verify --zk` takes row 15's word form (if it refuses, row 15's
+  `_v2` is timed: keep it last on the list) and which form a partition would name for the seven
+  kinds in no file (rows 8 and 14 stay off unless proofs names one). I pass each at the go.
