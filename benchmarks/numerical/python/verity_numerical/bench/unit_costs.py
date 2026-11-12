@@ -406,7 +406,7 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
     consecutive V given (ValueError naming the first that breaks it); nonzeros are quadratic in V."""
     vs = sorted(builds)
     if len(vs) < 8 or vs != list(range(vs[0], vs[-1] + 1)) or vs[0] < 2:
-        raise ValueError(f"the scan law is read off at least 8 consecutive V >= 2, not {vs[:3]}..")
+        raise ValueError(f"the scan's recurrence is read off at least 8 consecutive V >= 2, not {vs[:3]}..")
     c = {v: builds[v] for v in vs}
     d = lambda v, m: c[v][m] - c[v - 1][m]  # noqa: E731
     v0 = vs[0] + 2
@@ -419,10 +419,10 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
         got = {"ands": d(v, "ands"), "d2nnz": d(v, "nnz_AB") - d(v - 1, "nnz_AB"), "output_copies": d(v, "output_copies"),
                "inputs": d(v, "inputs"), "lookups": d(v, "lookups")}
         if got != want or c[v]["committed"] != c[v]["inputs"] + c[v]["ands"] + c[v]["output_copies"]:
-            raise ValueError(f"the argmax scan law breaks at V = {v}: {got} != {want}")
+            raise ValueError(f"the argmax scan's recurrence breaks at V = {v}: {got} != {want}")
     top = vs[-1]
 
-    def law(V: int) -> dict[str, int]:
+    def counts(V: int) -> dict[str, int]:
         if V < vs[0]:
             raise ValueError(f"V = {V} is below the builds")
         if V <= top:
@@ -437,8 +437,8 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
             r["inputs"] += di
         r["committed"] = r["inputs"] + r["ands"] + r["output_copies"]
         return {m: r[m] for m in METRICS}
-    law.constants = {"alpha": alpha, "beta": beta, "inputs_per_V": di}  # type: ignore[attr-defined]
-    return law
+    counts.constants = {"alpha": alpha, "beta": beta, "inputs_per_V": di}  # type: ignore[attr-defined]
+    return counts
 
 
 # --- the sample --------------------------------------------------------------------------------------------------------------
@@ -609,19 +609,19 @@ def subcircuit_costs(types: Sequence[UnitType], exact_nnz: float, n_jobs: int, a
                 r.update(method="missing", reason=err)
                 continue
             try:
-                law = argmax_scan_law({v: res[v] for v in SCAN_POINTS})
+                scan = argmax_scan_law({v: res[v] for v in SCAN_POINTS})
             except ValueError as e:
                 r.update(method="missing", reason=str(e))
                 continue
-            check = law(SCAN_CHECK)
+            check = scan(SCAN_CHECK)
             agree = check == _plain(res[SCAN_CHECK])
             V = int(params["V"])
             r.update(method="exact" if V in res else "scan law", variable="V", points=[SCAN_POINTS[0], SCAN_POINTS[-1]],
-                     counts=law(V), law=law.constants, tables=res[SCAN_POINTS[-1]]["tables"],
+                     counts=scan(V), law=scan.constants, tables=res[SCAN_POINTS[-1]]["tables"],
                      definition=res[SCAN_POINTS[-1]]["definition"],
                      exact_check={"V": SCAN_CHECK, "result": "agrees" if agree else {m: [check[m], res[SCAN_CHECK][m]] for m in METRICS}})
             if not agree:
-                r.update(method="missing", reason=f"the scan law disagrees with the exact build at V = {SCAN_CHECK}")
+                r.update(method="missing", reason=f"the scan's recurrence disagrees with the exact build at V = {SCAN_CHECK}")
         elif template in EXACT_ONLY:
             probe = PROBE[template]
             if probe:
@@ -726,7 +726,8 @@ def block_law(r: dict[str, Any]) -> None:
 
 
 def reuse(path: str) -> dict[tuple, dict[str, Any]]:
-    """The subcircuit results of an earlier ``unit-costs.json`` (its builds), with the fits and block laws re-derived."""
+    """The subcircuit results of an earlier ``unit-costs.json`` (its builds), with the fits and each attention head's cost past
+    its first key block re-derived."""
     subs = {}
     for s in json.loads(open(path).read())["subcircuits"]:
         s = {k: v for k, v in s.items() if k not in ("per_extra_block", "block_curvature", "notes")}
