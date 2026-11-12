@@ -119,6 +119,17 @@ def _hold(path: Path) -> int:
     return fd
 
 
+def _proc(tmp_path: Path, lock: Path, pid: int, started: datetime, cmd: str) -> Path:
+    """A /proc in which ``pid``, a process started at ``started`` running ``cmd``, holds ``lock``."""
+    proc, st = tmp_path / "proc", lock.stat()
+    (proc / str(pid)).mkdir(parents=True, exist_ok=True)
+    (proc / "locks").write_text(f"1: FLOCK  ADVISORY  WRITE {pid} {os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino} 0 EOF\n")
+    (proc / "stat").write_text(f"cpu 0 0 0 0\nbtime {int(started.timestamp())}\n")
+    (proc / str(pid) / "stat").write_text(f"{pid} (python3) S " + " ".join(["0"] * 19) + "\n")       # started 0 ticks after boot
+    (proc / str(pid) / "cmdline").write_bytes(cmd.encode().replace(b" ", b"\0"))
+    return proc
+
+
 def test_the_first_free_slot_is_taken_and_a_held_one_skipped(tmp_path):
     slots = SLOT.parse("# name cpus\na 32-63\nb 64-95   # train b\nc 8-31\n")
     assert [(s["name"], s["cpus"]) for s in slots] == [("a", "32-63"), ("b", "64-95"), ("c", "8-31")]
@@ -611,7 +622,8 @@ def test_status_names_each_slots_holder_or_free(tmp_path, monkeypatch):
     held = _hold(tmp_path / "check-a.lock")
     a, b, d, dw = SLOT.status(slots, tmp_path, NOW)
     me = Path(f"/proc/{os.getpid()}/cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace").strip()[:200]
-    assert a.startswith(f"a  cores 32-63  held by pid {os.getpid()} since ") and a.endswith(f": {me}")
+    assert a.startswith(f"a  cores 32-63  held by pid {os.getpid()} for a time not recorded (its process started ")
+    assert a.endswith(f" min ago): {me}"), "a hand-held lock: nothing says since when"
     assert b == "b  cores 64-95  free"
     assert d.startswith("d  cores 0-47  free; blocked: window 2026-10-01T09:20Z")
     assert dw == "d  window 2026-10-01T09:20Z (30 min), starts in 20 min"
@@ -682,7 +694,7 @@ def test_status_names_who_asked_for_each_held_slot_and_each_live_waiter(tmp_path
     slots = SLOT.parse("a 0\nb 1\n")
     held = _hold(tmp_path / "check-a.lock")
     me = {"pid": os.getpid(), "run": "r20261002-040109-a7ed", "tree": "/workspace/research/src/6a1d0bf19", "by": "proofs"}
-    (tmp_path / "check-a.who").write_text(json.dumps(me))
+    (tmp_path / "check-a.who").write_text(json.dumps({**me, "joined": "2026-10-01T08:40:00Z", "took": "2026-10-01T08:50:00Z"}))
     (tmp_path / "check-b.who").write_text(json.dumps({**me, "run": "r-gone"}))     # b is free: its last holder isn't shown
     line = tmp_path / SLOT.LINE
     line.mkdir()
@@ -691,7 +703,8 @@ def test_status_names_who_asked_for_each_held_slot_and_each_live_waiter(tmp_path
     waiter.write_text(json.dumps({"pid": 4242, "run": "r-waiting", "tree": "/workspace/research/src/bc63d108f", "by": "lander"}))
     wfd = _hold(waiter)
     a, b, w = SLOT.status(slots, tmp_path, NOW)
-    assert f"held by pid {os.getpid()} since " in a and " (run r20261002-040109-a7ed, tree 6a1d0bf19, by proofs): " in a
+    assert (f"held by pid {os.getpid()} since 2026-10-01T08:50Z (10 min; waited 10 min) "
+            "(run r20261002-040109-a7ed, tree 6a1d0bf19, by proofs): ") in a
     assert b == "b  cores 1  free"
     assert w == "waiting since 2026-10-01T08:55Z (5 min) with priority: pid 4242 (run r-waiting, tree bc63d108f, by lander)"
     (tmp_path / "check-a.who").write_text(json.dumps({**me, "pid": 1}))              # left by an earlier holder: a hand-run flock now
@@ -699,6 +712,82 @@ def test_status_names_who_asked_for_each_held_slot_and_each_live_waiter(tmp_path
     os.close(held)
     os.close(wfd)
     assert SLOT.status(slots, tmp_path, NOW) == ["a  cores 0  free", "b  cores 1  free"]
+
+
+def test_a_held_slot_is_listed_since_it_was_taken_with_its_holders_wait_apart(tmp_path, monkeypatch):
+    """A check is one process from joining the line on, so its process's age counts its wait: one that waited 44 minutes and
+    has held its slot for 40 was listed as holding it for 84. The holder records when it joined the line and when it took the
+    slot, and the listing counts the hold from the taking and names the wait apart."""
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(SLOT.os, "sched_setaffinity", lambda pid, cpus: None)
+    monkeypatch.setattr(SLOT.os, "execvpe", lambda *a: (_ for _ in ()).throw(Exec()))
+    held, t = [_hold(tmp_path / "check-a.lock")], [NOW]
+
+    def sleep(_s):
+        t[0] += timedelta(minutes=44)
+        os.close(held.pop())
+
+    with pytest.raises(Exec):
+        SLOT.main(["--by", "infra", "--", "true"], now=lambda: t[0], sleep=sleep)
+    who = json.loads((tmp_path / "check-a.who").read_text())
+    assert (who["joined"], who["took"]) == ("2026-10-01T09:00:00Z", "2026-10-01T09:44:00Z")
+    slots, later = SLOT.parse("a 0\n"), NOW + timedelta(minutes=84)
+    proc = _proc(tmp_path, tmp_path / "check-a.lock", os.getpid(), started=NOW, cmd="true")   # it joined the line as it started
+    assert SLOT.status(slots, tmp_path, later, proc) == [
+        f"a  cores 0  held by pid {os.getpid()} since 2026-10-01T09:44Z (40 min; waited 44 min) "
+        f"(run r1, tree {tmp_path.name}, by infra): true"]
+    h = SLOT.slot_docs(slots, tmp_path, later, proc)[0]["holder"]
+    assert (h["took"], h["held_minutes"], h["joined"], h["waited_minutes"]) == ("2026-10-01T09:44Z", 40, "2026-10-01T09:00Z", 44)
+    assert (h["since"], h["minutes"]) == ("2026-10-01T09:00Z", 84), "the process's start and age, as before"
+
+
+def test_a_holder_whose_record_names_no_time_taken_is_listed_with_no_time_held(tmp_path, capsys):
+    """An older slot.py's record names no time taken, and a hand-run `flock` leaves no record at all: the holder's process
+    start is listed as that, never as since when it has held the slot. A record whose time taken is no time is named."""
+    slots, lock = SLOT.parse("a 0\n"), tmp_path / "check-a.lock"
+    lock.touch()
+    proc = _proc(tmp_path, lock, 4242, started=NOW - timedelta(minutes=84), cmd="uv run check.py")
+    (tmp_path / "check-a.who").write_text(json.dumps({"pid": 4242, "run": "r-old", "tree": "/src/6b3d704c8", "by": "lander"}))
+    assert SLOT.status(slots, tmp_path, NOW, proc) == [
+        "a  cores 0  held by pid 4242 for a time not recorded (its process started 2026-10-01T07:36Z, 84 min ago) "
+        "(run r-old, tree 6b3d704c8, by lander): uv run check.py"]
+    h = SLOT.slot_docs(slots, tmp_path, NOW, proc)[0]["holder"]
+    assert (h["since"], h["minutes"]) == ("2026-10-01T07:36Z", 84)
+    assert not {"took", "held_minutes", "joined", "waited_minutes"} & set(h) and not capsys.readouterr().err
+    (tmp_path / "check-a.who").write_text(json.dumps({"pid": 4242, "run": "r-old", "took": "soon"}))
+    assert SLOT.status(slots, tmp_path, NOW, proc) == [
+        "a  cores 0  held by pid 4242 for a time not recorded (its process started 2026-10-01T07:36Z, 84 min ago) "
+        "(run r-old): uv run check.py"]
+    assert capsys.readouterr().err.startswith(f"slot: {tmp_path / 'check-a.who'}'s `took` is no time ('soon': ")
+    (tmp_path / "check-a.who").unlink()                                                                 # a hand-run flock
+    assert SLOT.status(slots, tmp_path, NOW, proc) == [
+        "a  cores 0  held by pid 4242 for a time not recorded (its process started 2026-10-01T07:36Z, 84 min ago): uv run check.py"]
+    (proc / "4242" / "stat").unlink()                                                                   # and its process's start unread
+    assert SLOT.status(slots, tmp_path, NOW, proc) == ["a  cores 0  held by pid 4242: uv run check.py"]
+
+
+def test_status_json_keeps_a_holders_process_start_and_adds_the_time_it_has_held_its_slot(tmp_path, monkeypatch):
+    """`since` and `minutes` stay the holder's process start and age, which is when a check arrived, for the readers that take
+    them as that; when it took the slot, the minutes it has held it, when it joined the line and the minutes it waited there
+    are keys of their own, each there only when the holder's record gives it."""
+    (tmp_path / "slots").write_text("a 0\n")
+    monkeypatch.setattr(SLOT, "SLOTS", tmp_path / "slots")
+    lock = tmp_path / "check-a.lock"
+    lock.touch()
+    proc = _proc(tmp_path, lock, 4242, started=NOW - timedelta(minutes=84), cmd="uv run check.py")
+    (tmp_path / "check-a.who").write_text(json.dumps({"pid": 4242, "run": "r1", "by": "infra", "joined": "2026-10-01T07:36:05Z",
+                                                      "took": "2026-10-01T08:20:10Z"}))
+    assert SLOT.status_doc(NOW, proc)["slots"][0]["holder"] == {
+        "pid": 4242, "since": "2026-10-01T07:36Z", "minutes": 84, "cmd": "uv run check.py", "run": "r1", "by": "infra",
+        "took": "2026-10-01T08:20Z", "held_minutes": 40, "joined": "2026-10-01T07:36Z", "waited_minutes": 44}
+    (tmp_path / "check-a.who").write_text(json.dumps({"pid": 4242, "by": "lean", "took": "2026-10-01T08:20Z"}))
+    h = SLOT.status_doc(NOW, proc)["slots"][0]["holder"]
+    assert h == {"pid": 4242, "since": "2026-10-01T07:36Z", "minutes": 84, "cmd": "uv run check.py", "by": "lean",
+                 "took": "2026-10-01T08:20Z", "held_minutes": 40}, "a record of the taking alone: no wait is claimed"
+    assert SLOT.held_text(h) == "held by pid 4242 since 2026-10-01T08:20Z (40 min) (by lean): uv run check.py"
 
 
 def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypatch):
@@ -726,7 +815,8 @@ def test_the_check_that_takes_a_slot_records_who_asked_for_it(tmp_path, monkeypa
     assert e.value.args[0] == ["true"]
     me = {"pid": os.getpid(), "run": "r1", "tree": os.getcwd(), "commit": "6b3d704c8" * 4 + "abcd", "by": "lander"}
     who = tmp_path / "check-a.who"
-    assert tickets == [me] and json.loads(who.read_text()) == me and stat.S_IMODE(who.stat().st_mode) == 0o664
+    assert tickets == [me] and stat.S_IMODE(who.stat().st_mode) == 0o664
+    assert json.loads(who.read_text()) == {**me, "joined": "2026-10-01T09:00:00Z", "took": "2026-10-01T09:00:00Z"}
     assert sorted(p.name for p in tmp_path.iterdir()) == ["check-a.lock", "check-a.who", SLOT.LINE, "slots"]
     assert SLOT.asker()["by"] == "https://cursor.com/agents/bc-1"
 
