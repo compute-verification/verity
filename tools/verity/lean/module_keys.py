@@ -680,7 +680,7 @@ def pinned_as(root: Path, of: Path, here: Path) -> str | None:
 
 
 def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package],
-              owners: dict[tuple[str, str], str | None] | None = None) -> str | None:
+              owners: dict[tuple[str, str], str | None] | None = None, at: tuple[str, str] | None = None) -> str | None:
     """Why ``mod``'s build may not be indexed under its key, or None: Lake read its header as `keys` did. Its
     `<module>.setup.json` names it and the package `keys` found it in, and the workspace modules there (`importArts`, an
     `.olean` under the build of one of ``pkgs``, the workspace's packages) are modules its key reads (`loads`), each
@@ -700,7 +700,9 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package],
     module's package, the package whose build holds each directory an
     `.olean` is in, and of any other directory why it is refused (`REFUSED`): a module lists up to every module it
     imports transitively, Mathlib's included, thousands of paths in a few hundred directories. `put` calls this on
-    several threads over one ``owners``, so a directory's verdict is written there once, whole."""
+    several threads over one ``owners``, so a directory's verdict is written there once, whole. ``at``: (the path the
+    build read its tree at, the tree), for a build in a sandbox that bound its tree at a fixed path (`sandbox.sh --at`):
+    Lake wrote every path of the `setup.json` under the first, and each is read as the second's."""
     k = keyed[mod]
     try:
         setup = json.loads((k.package.build() / "ir" / path_of(mod, ".setup.json")).read_text())
@@ -722,9 +724,12 @@ def indexable(mod: str, keyed: dict[str, Key], pkgs: list[Package],
             return f"importArts gives {i} no .olean"
         d = (k.package.name, os.path.dirname(olean))
         if d not in owners:
-            here = Path(d[1]).resolve()
+            there = Path(d[1])
+            if at and there.is_relative_to(at[0]):
+                there = Path(at[1]) / there.relative_to(at[0])
+            here = there.resolve()
             owner = next((n for n, lib in libs.items() if here.is_relative_to(lib)), None)
-            if owner is None and (why := pinned_as(pkgs[0].dir, k.package.dir, Path(os.path.normpath(d[1])))):
+            if owner is None and (why := pinned_as(pkgs[0].dir, k.package.dir, Path(os.path.normpath(there)))):
                 owner = REFUSED + why
             owners[d] = owner
         if (owner := owners[d]) is not None and owner.startswith(REFUSED):

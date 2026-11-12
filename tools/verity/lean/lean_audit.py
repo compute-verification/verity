@@ -1115,6 +1115,8 @@ class LakeArtifacts:
         Of a build that names the modules Lake said it built (`"compiled"`: one that read Lake's own cache, where an
         archive of main's published build unpacks to outputs, fresh `.hash` files and the publisher's trace, which nothing
         in the build tells from a compile), only those go in.
+        A build that says where it read its tree (`"bound"`: the fixed path and the tree, check.py's `bound`) has the
+        paths Lake wrote under the first read as the second's (`module_keys.indexable`).
         Only a build that says it ran in the sandbox (`"sandbox": true`) goes in: outside it, compile-time
         code runs as the user and could leave any outputs, traces and `setup.json` it chose in the build, each then indexed
         as its module's. And only a build none of whose sources runs code while it compiles, outside a reviewed listing
@@ -1147,8 +1149,10 @@ class LakeArtifacts:
                 if isinstance(ws, str):
                     continue
                 keyed, owners = MK.keys(pkg, MK.policy_roots(pkg)), {}
+                at = tuple(b) if isinstance(b := rep.get("bound"), list) and len(b) == 2 and all(
+                    isinstance(s, str) for s in b) else None
                 with ThreadPoolExecutor(max_workers=8) as ex:
-                    built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners), keyed)))
+                    built = dict(zip(keyed, ex.map(lambda m: self._built(m, keyed, ws[0], since, owners, at), keyed)))
                 if isinstance(only := rep.get("compiled"), list):
                     built = {m: b if isinstance(b, str) and not isinstance(b, Unindexable) or m in only
                              else "not compiled by this run: Lake didn't say it built it" for m, b in built.items()}
@@ -1189,10 +1193,11 @@ class LakeArtifacts:
         return n
 
     @staticmethod
-    def _built(mod: str, keyed: dict, pkgs: list, since: float | None,
-               owners: dict | None = None) -> tuple[str, dict, dict[str, tuple[Path, str]]] | str:
+    def _built(mod: str, keyed: dict, pkgs: list, since: float | None, owners: dict | None = None,
+               at: tuple[str, str] | None = None) -> tuple[str, dict, dict[str, tuple[Path, str]]] | str:
         """(Lake's input hash, the outputs its trace names, {artifact: (its file, its digest)}) of ``mod`` as its build
-        compiled it, or why it isn't indexed: not compiled since ``since``, restored, not `indexable` (``owners``), or
+        compiled it, or why it isn't indexed: not compiled since ``since``, restored, not `indexable` (``owners``; ``at``:
+        the report's `bound`, the fixed path the build read its tree at and the tree), or
         not whole. Lake removes a module's outputs, runs `lean`, hashes each output into its `.hash`, and only then writes
         the trace naming those hashes (`Module.buildLean`, `buildAction`), and it leaves the previous trace and `.hash`
         files in place until then. So a compile that was stopped leaves a trace that isn't JSON, an output that is
@@ -1214,7 +1219,7 @@ class LakeArtifacts:
         out, h = d.get("outputs"), d.get("depHash")
         if not isinstance(out, dict) or not isinstance(h, str) or not MK.HASH.fullmatch(h):
             return "a trace without its outputs or input hash"
-        if why := MK.indexable(mod, keyed, pkgs, owners):
+        if why := MK.indexable(mod, keyed, pkgs, owners, at):
             return Unindexable(why)
         files = {}
         for name in sorted({s for s in _strings(out) if ARTIFACT.fullmatch(s)}):
