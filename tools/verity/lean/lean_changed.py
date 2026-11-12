@@ -21,8 +21,10 @@ status it takes: its stub imports no module whose build, or the build of anythin
 closure, is not of its source as it is, as a tree synced across a move of names holds them, and counts those it left
 out); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
-them against the outputs in place. It never runs check.py, so it reads and writes
-no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
+them against the outputs in place. Where the sibling check's stub is refused that way, the siblings the refusal names
+lose theirs the same way and `lake build` rebuilds them there and then, once, with a line that says so, before the stub
+is elaborated once more, whose result is the check's (`siblings.check`). It never
+runs check.py, so it reads and writes no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
 one `slot.py`'s PEERS lists, read over ssh: `pool_machines`), else how to list a machine's Lean pools. Dependencies the
 slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs
 unsandboxed, and fetches dependencies the node does not keep. In the sandbox the tree's fetched dependencies are mounted
@@ -675,11 +677,12 @@ def orphaned(lib: Path) -> dict[str, list[Path]]:
 CLASH = re.compile(r"import (\S+) failed, environment already contains '[^']*' from (\S+)")
 
 
-def clashed(tree: Path, pkgs: list[str], text: str) -> list[str]:
+def clashed(tree: Path, pkgs: list[str], text: str, but: str | None = None) -> list[str]:
     """The modules of ``tree``'s ``pkgs`` that an import clash in ``text`` names, each `forget`-ten so the next build
-    there rebuilds it against the outputs in place."""
+    there rebuilds it against the outputs in place; ``but``, the tried file's module where the clash is its scratch
+    build's, is left as it is."""
     out = []
-    for m in dict.fromkeys(n for pair in CLASH.findall(text) for n in pair):
+    for m in dict.fromkeys(n for pair in CLASH.findall(text) for n in pair if n != but):
         for p in pkgs:
             lib = tree / p / ".lake" / "build" / "lib" / "lean"
             if (t := lib.joinpath(*m.split(".")).with_suffix(".trace")).is_file():
@@ -1691,7 +1694,9 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
     the tree's dependencies can't be had, or Lake wanted to write in them (`refused_write`: its line names the path and the
     records run that builds them writable). Never check.py. What the build compiled in the sandbox goes into the node's
-    artifact cache (`put_built`); nothing is restored from it here, which only check.py does, with its sampled recompile."""
+    artifact cache (`put_built`); nothing is restored from it here, which only check.py does, with its sampled recompile.
+    Nor is what the sibling check has Lake rebuild stored (the siblings its stub's refusal names, `clashed` and then
+    `lake build` of them): by then `lean` has run the file's code."""
     file = file.removeprefix("./")
     if tree is not None and not kept_tree(tree):
         log(f"lean-try: {tree} is not under {(LA.COMMON.cache_dir() / RECORDS).resolve()}, where the trees `--records` and "
@@ -1782,10 +1787,17 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                         argv = [lake, "env", "lean", *a]
                         return SIBLINGS.run(in_sandbox(pkg, tree, argv) if sandbox else argv, tree / pkg)
 
-                    rc, output, line = SIBLINGS.check(plan, work, lean)
+                    def rebuild(refusal: str) -> tuple[int, str, float]:
+                        began = time.monotonic()
+                        clashed(tree, closure(pkg), refusal, but=plan.module)
+                        status, built = build(pkg, tree, lake, [f"+{m}" for m in SIBLINGS.named(plan, refusal)], sandbox)
+                        return status, built, time.monotonic() - began
+
+                    rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild)
                     if output:
                         log(output.rstrip("\n"))
-                    log(f"lean-try: {file}: {line}")
+                    for line in lines.splitlines():
+                        log(f"lean-try: {file}: {line}")
             if said:
                 log(f"lean-try: {file}: {said}")
             (tree / DIRTY).unlink(missing_ok=True)

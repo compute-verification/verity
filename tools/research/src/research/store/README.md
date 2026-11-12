@@ -527,33 +527,36 @@ PRESERVED (the id is still printed). `research/store/cli.py` exposes `COMMANDS: 
 At completion or failure, in the runner (local and machine side alike), `store.attempt.publish(run_dir, tool=...)`:
 
 1. `result.json`, if valid, becomes an artifact of kind `result.kind` (default `bench-result/v1`; `tc_probe` writes
-   `tc-evidence/v1`): `meta` = the result document minus `artifacts`/`measurement_files` paths, `refs.run_files` = the
-   run-files artifact. Paths listed in `result.artifacts` + `measurement_files` become ONE `run-files/v1` tree artifact.
+   `tc-evidence/v1`): `meta` is the result document less its `artifacts`/`measurement_files` paths, which become one
+   `run-files/v1` tree artifact, its `refs.run_files`.
 2. `events.jsonl` / `resources.jsonl` become `telemetry/v1` file artifacts when present.
 3. The attempt manifest (§4) is written to `attempts/<run id>.json` and indexed.
-4. With a remote configured: blobs and manifests are uploaded and verified; `execution.preserved` is recorded per output.
+4. With a remote, blobs and manifests are uploaded and verified, and `execution.preserved` is recorded per output.
 
-`publish` never raises into the runner: a failure is written to `<run dir>/store_publish_error.json` and reported on one line;
-the workload's exit status stands. It is idempotent (an attempt already in the store is a no-op) and refuses a run whose
-status.json is missing or not terminal (`--force` overrides, for the CLI only).
-`research fetch RUN --all` continues to work as before; `research data pull` complements it by moving store objects.
-Active run state stays in the run registry; the store only ever sees completed/failed attempts.
+`publish` never raises into the runner: a failure goes to `<run dir>/store_publish_error.json` and one printed line, and the
+workload's exit status stands. Publishing again is a no-op, and a run whose status.json is missing or not terminal is refused
+(`--force` overrides, CLI only). `research fetch RUN --all` copies a run's files, `research data pull` store objects.
+Active runs stay in the run registry: the store sees only completed or failed attempts.
 
 ### 10.1 Run custody on the remote — `research run --on M` (`--custody-r2`, the default; `custody.py`)
 
-With `--custody-r2` (the default with `--on`; `--no-custody-r2` opts out) the run's custody does not depend on the launcher's disk:
-the launcher mints an action-scoped temporary key
-(§7.1, local signing; `--custody-ttl`, default 6h, at most 24h, must outlast the run and its upload: `research run` refuses a `--timeout` longer than 6h without an explicit `--custody-ttl`, and takes one past 24h with `--custody-ttl 24h`, warning that a run outliving its key is repaired after with `research data custody RUN --publish`; a run over 4 GiB gets a `size_warning`, since uploads don't resume; no `DeleteObject`/`CopyObject`) and stages it with a
-secret-free store.toml under `<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's
-environment). Without the parent key on the launcher the launch is refused. After the workload exits, the runner publishes the
-attempt with one more output, `outputs.run_record`: a `run-record/v1` tree of the run dir's files, less those `custody.select` trims
-(listed in `meta.trimmed`, no bytes; .agents/skills/writing-runs/SKILL.md), pushes and verifies it (`preserved.check`, head; retried), deletes
-the key, and writes `<run dir>/.custody` (`research/run-custody/v0.1`: `verified_from`, the file list with sizes and sha256).
-The marker is written only when every file now in the run dir is in the record by content; from the record on, the runner's own
-output goes to `<root>/requests/<run id>/custody/publish.log`, not launcher.log, so nothing it prints can make the run dir differ
-from its record. A failure whose key had expired says so in the marker's `error`. With `--no-custody-r2` attempts are unchanged
-(no `run_record`).
+With `--custody-r2` a run's custody does not depend on the launcher's disk. The launcher mints an action-scoped temporary key
+(§7.1, local signing; no `DeleteObject`/`CopyObject`) and stages it with a secret-free store.toml under
+`<root>/requests/<run id>/custody/` (mode 600; never in request.json, remote.json or the workload's environment); without the
+parent key the launch is refused. `--custody-ttl` (default 6h, at most 24h) must outlast the run and its upload: a `--timeout`
+over 6h needs an explicit one, one past 24h goes with `--custody-ttl 24h` and a warning, and
+`research data custody RUN --publish` repairs a run that outlived its key. A run over 4 GiB gets a `size_warning`: uploads
+don't resume. After the workload exits, the runner publishes the attempt with one more output, `outputs.run_record`: a
+`run-record/v1` tree of the run dir's files, less those `custody.select` trims (listed in `meta.trimmed`, no bytes; the
+writing-runs skill). It pushes and verifies it (`preserved.check`, head; retried), deletes the key, and writes
+`<run dir>/.custody` (`research/run-custody/v0.1`: `verified_from`, the file list with sizes and sha256) only when every file
+now in the run dir is in the record by content. From the record on, the runner's output goes to `publish.log` beside the key,
+not launcher.log, so nothing it prints makes the run dir differ from its record. An expired key is named in the marker's
+`error`. `--no-custody-r2` leaves attempts with no `run_record`.
 
+- The workload's `research run-preserve PATH` has the runner put one file of `$OUT` before the run ends: a `run-file/v1`
+  artifact with the run id, verified the same way, whose art id it prints, or why not (`run_preserve.py`). The key stays the
+  runner's.
 - The pod guard accepts a valid `.custody` like a valid `.fetched`: every file listed, none changed at or after `verified_from`.
 - `research data custody RUN [--publish [--force [--runner-gone]]]` checks the same predicate from any machine (and rewrites the
   marker); `--publish` puts a local run dir on the remote first. `--triage [--verify] [--older-min N]` sorts runs roots by
@@ -577,6 +580,7 @@ proof/v1                 payload = proof bytes; meta {statement_digest, backend,
 fixture/v1               a repo-replicated input (golden records, instances); payload file/tree
 run-files/v1             the files a result.json pointed at, as one tree
 run-record/v1            every file of a run dir (logs included) as one tree; outputs.run_record of a --custody-r2 attempt (§10.1)
+run-file/v1              one file of a run's out/, put mid-run by its runner (`research run-preserve`, §10.1)
 telemetry/v1             events.jsonl or resources.jsonl of an attempt
 redteam-findings/v1      meta {findings: [...]}; refs.target
 ledger-row/v1            one frozen overhead-ledger row whose run is not an attempt here: meta = the ledger/v1 row; payload null;
