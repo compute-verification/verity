@@ -9,7 +9,7 @@ import os
 import signal
 import subprocess
 import sys
-from datetime import datetime, UTC
+from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -116,10 +116,33 @@ def test_a_waiter_names_each_holder_and_repeats_the_list_every_few_minutes(slots
                          f"every {LS.POLL_S} s ({LS.SLOTS})"] * 3                                # at once, then every 3 min
     assert heads[3] == f"lean-slot: Lean audit slot audit/1 of 2 ({LS.SLOTS})" and len(heads) == 4
     a0, a1 = lines[1:3]
-    assert a0.startswith(f"lean-slot:   audit/0  held by pid {me} since ")
-    assert "(run r-0, tree 740daff33, by zk-cz, slot taken 2026-10-03T16:40Z): " in a0 and "by pc-interp" in a1
+    assert a0.startswith(f"lean-slot:   audit/0  held by pid {me} since 2026-10-03T16:40Z (20 min) (run r-0, tree 740daff33, by zk-cz): ")
+    assert "by pc-interp" in a1
     who = json.loads((slots / "lean-audit-1.who").read_text())
-    assert who == {"pid": me, "run": "r-me", "tree": os.getcwd(), "by": None, "took": "2026-10-03T17:00Z"}
+    assert who == {"pid": me, "run": "r-me", "tree": os.getcwd(), "by": None, "joined": "2026-10-03T17:00:00Z",
+                   "took": "2026-10-03T17:00:00Z"}
+    os.close(held.pop())
+    os.close(got[2])
+
+
+def test_holders_a_minute_older_are_the_same_list_to_a_waiter(slots):
+    """A waiter repeats the list when it changes and every REPORT_EVERY polls, not each minute its holders' times grow: of a
+    holder whose record says when it took the slot and how long it waited, and of one with no record of the taking."""
+    me = os.getpid()
+    held = [_hold(slots / "lean-audit-0.lock", {"pid": me, "run": "r-0", "joined": "2026-10-03T16:30:00Z", "took": "2026-10-03T16:40:00Z"}),
+            _hold(slots / "lean-audit-1.lock", {"pid": me, "run": "r-1"})]
+    lines, t = [], [NOW]
+
+    def sleep(_s):
+        t[0] += timedelta(minutes=1)
+        if t[0] == NOW + timedelta(minutes=3):
+            os.close(held.pop())
+
+    got = LS.wait("audit", now=lambda: t[0], sleep=sleep, log=lines.append)
+    assert got[:2] == ("audit", 1) and len(lines) == 4, "listed once in three polls, each a minute on"
+    assert lines[1].startswith(f"lean-slot:   audit/0  held by pid {me} since 2026-10-03T16:40Z (20 min; waited 10 min) (run r-0): ")
+    assert lines[2].startswith(f"lean-slot:   audit/1  held by pid {me} for a time not recorded (its process started ")
+    assert json.loads((slots / "lean-audit-1.who").read_text())["took"] == "2026-10-03T17:03:00Z"
     os.close(held.pop())
     os.close(got[2])
 
@@ -237,10 +260,10 @@ def test_who_asked_is_the_lane_else_the_check_slot_s_holder(slots, monkeypatch, 
 
 
 def test_status_lists_each_pool_s_slots_and_waiters(slots, monkeypatch, capsys):
-    held = _hold(slots / "lean-check-1.lock", {"pid": os.getpid(), "run": "r-train", "by": "lander"})
+    held = _hold(slots / "lean-check-1.lock", {"pid": os.getpid(), "run": "r-train", "by": "lander", "took": "2026-10-03T16:40Z"})
     lines = LS.status(LS.parse(LS.SLOTS.read_text()), slots, NOW)
     assert lines[:3] == ["audit/0  free", "audit/1  free", "check/0  free"]
-    assert lines[3].startswith(f"check/1  held by pid {os.getpid()} since ") and "(run r-train, by lander): " in lines[3]
+    assert lines[3].startswith(f"check/1  held by pid {os.getpid()} since 2026-10-03T16:40Z (20 min) (run r-train, by lander): ")
     assert LS.main(["--status"], now=lambda: NOW) == 0 and "check/1  held by pid" in capsys.readouterr().out
     os.close(held)
 
@@ -263,6 +286,7 @@ def test_status_json_is_each_pool_s_slots_holders_and_waiters(slots, monkeypatch
     assert check["n"] == 2 and check["slots"][0] == {"index": 0, "past_n": False, "holder": None} and check["waiters"] == []
     h = check["slots"][1]["holder"]
     assert h["pid"] == os.getpid() and (h["run"], h["by"], h["took"]) == ("r-train", "lander", "2026-10-03T16:40Z")
+    assert h["held_minutes"] == 20 and "waited_minutes" not in h, "held since it took the slot; its record names no wait"
     for fd in (held, wfd, past):
         os.close(fd)
     monkeypatch.setattr(LS, "SLOTS", slots / "absent")
