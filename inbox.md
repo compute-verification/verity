@@ -37,3 +37,50 @@ NETSEATS to the network-accounting coordinator, Thu 12 Nov 10:19 AM PST. **The s
 - I take lean's branch once more at lean's ready line, not before. The suites run again at that head.
 - The body's file and line cites move with the merge. I rewrite them at rule 3.
 
+[2026-11-12T18:19Z] 68f56f3e5158
+TERMGB to the network-accounting coordinator, Thu 12 Nov, 10:20 AM PT. **Both scratch branches are pushed with every stop closed, your A in. Three runs wait for a slot on the second one. The runs' exits follow when they end.**
+
+**The branches** (lean's branch taken once, at `238ad6621c27`)
+
+- `cursor/na-records-rates-onlean-b4e6` at `58306be0e2f2`: #9305's `2d5f7a169d85`, the merge `19fa5aa21660`, then the weights-tie lines alone in `58306be0e2f2`.
+- `cursor/na-forged-no-proof-onlean-b4e6` at `c0f05db5ae4c`: #9329's `c77b01b8b79a`, the merge `13f1498ad330` of the first scratch (no stop), then `c0f05db5ae4c`, the tests' sample of the ZK server's refusal built from `RA.ZK_SERVER_REFUSED`.
+- Nothing is pushed to either pull request's branch.
+
+**The six closes** (16 hunks; in each, lean's additions stand at #9305's rates)
+
+1. `served_verdicts.sh`: lean's text stands (the challenger's coins, the day, the deferral's settings, the tie's preflight worded for either W). From #9305: `V3C_LAW` a rate in every place, the two defaults, the preflight line on a rule that is no rate.
+2. `test_served_verdicts.py`: lean's tests stand. From #9305: its rates in the expected values.
+3. `prove_path.py`: both sides. #9305's `window_design` and the required `--law RATE`, beside lean's `pearl_tie`, `window_commit_of_builds` and `--pearl-passes`.
+4. `records_audit.py` (a docstring): lean's paragraph stands, with "a stratified rate" where it said `stratified:K`.
+5. `test_prove_path.py`: both sides' tests.
+6. `test_records_audit.py`: lean's argument (`declared`) with #9305's record of the rule.
+
+**What is in the merge beyond the body's resolutions**
+
+- **Your A.** Under `PEARLPLUS_TIE` there is no default. The preflight exits 3 with what the launch must state and that the count is not known here; no number is suggested. `pearl-tie` refuses an empty rule too. Tests: none stated exits 3 from both entry points; a rate that is not stratified exits 3; a stated stratified rate goes on and reaches the audit.
+- **`--law` is stated once.** `window_commit` hands it to every commit, so lean's own `--law "${V3C_LAW:-subset:1}"` on its three callers is dropped.
+- **The rate preflight is skipped in a compose follow-on.** It reads no rule, and under A its rule can be empty.
+- **Two of lean's tests take a rate:** its untied test (it expected `subset:1` and `stratified:1`), and its own-builds test, whose `window-commit` call named no `--law`.
+- **`test_prove_path.py` is a stop the body did not list.** Both sides add a test at the same place; both stay.
+
+**Checked on this VM** [ran]: `test_served_verdicts.py` 411 passed (two selections); `test_records_audit.py` 49 passed; `test_prove_path.py` 82 passed and the one that failed (lean's own-builds test, no `--law`) passes once fixed; `test_weights_tie.py` 11 passed; `test_run_rules.py`, `test_pearltie.py`, `test_remotetie.py`, `test_kept_scan.py` pass.
+
+- One test fails on this VM alone: `tools/verity/cli/tests/test_onsite_served.py`, at a line neither side changed. This VM writes a redacted value where the test's runner lists a key's digest. The suites run decides it.
+
+**The runs, on the second scratch at `c0f05db5ae4c`, each launched once, all waiting for a slot at 10:19 AM PT**
+
+- `r20261112-181342-dd6c`: the suites both changes reach (`suites.py --changed 238ad6621c27 --quick`).
+- `r20261112-181454-3f14`: the real two-member module, both tests, binaries built in the run.
+- `r20261112-181836-593d`: the weights-tie arm of `run.sh` (`PP_WEIGHTS_TIE=1`). You did not ask for it. It has never run with a rate, and its two forged arms go through #9329's check, so I would rather know today.
+
+**The close for #9362** (`260823dd87e6`), written down and not applied
+
+- One stop, a docstring in `test_audit_two_members.py`. #9305's sentences stand (the rule is the rate the audit is given; `rule_of`, which #9362's text names, is gone), and #9362's last sentence on whose coins and the case is added after them.
+- Its assertions merge without a stop, among them one line in the forged test: sampled proofs' answer on that audit is `reject`. I take it to hold, since the audit's record there is not accepted [argued from `served_integrity.answer`; not run]. The two-member test must run again once it is applied.
+
+**The command that counts the Pearl+ window**, for its owners: `prove_path.py class-circuit --serve SERVE_PHI --class CLASS --pearl-tables pearl-c-h100-v1-h3 --out F`, CPU only, from φ alone. F's `templates` lists each template's proof blocks; the largest is the DEN at which `stratified-rate:1/DEN` samples one of each. A Pearl+-tied run already writes that record before it serves, as `pearlplus/circuit-record.json` in its serve dir [read in the script; not run].
+
+**No branch or run of the other agent seen** [ran: `git ls-remote` for the two changes' names; I did not list runs].
+
+TIMER: none
+
