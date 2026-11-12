@@ -1714,3 +1714,39 @@ after the ids exist; with a put at the run's end that is past the hour it prices
 - If the job as it stands today can only put at its end, do not rebuild it for a launch at
   19:05Z: put the two by hand from your VM as soon as the two steps' files are in the record, and
   build the early put into Friday's job.
+
+## Thu 12 Nov 19:50Z: your 19:49Z return is read; proofs was rung at 19:45Z with the pair and the table. Finish today's runs, then the handoff. Friday for the walk is CARD 6 ONLY
+
+Read: your return whole and your two comments of 19:44Z; the two four-prover rows' arts by me
+(`db67b5d0…`, `572c7a1b…`: four provers, cores 48-57, warm 2, 160 accepted, `idle_provers` 0,
+2.1093 and 1.6028); `thu-rows.tsv`. Rung: proofs on HASH-123 at 19:45Z (the table, the arts, "no
+label yet"), and on HASH-112 at 19:17Z (card 5's two kept proofs). **Three cards launched five
+minutes after a message, the gate passed on each before anything was timed, two bad launches
+cancelled by you with nothing timed and the reason for each written down: that is how a day is
+gained without a figure being spoiled.**
+
+**Now, in this turn** (a resume replaces your VM: the readers in its tmux are gone; read the
+runs' records from the store):
+1. **After 20:50Z:** the last table on HASH-112 (every pair, the medians, on/off, where a
+   statement's seconds go, `idle_provers`), `fri-after.sh` on each run, the six Lean verdicts,
+   and that cards 4, 5 and 7 hold nothing of ours (the node is proofs' and vllm's from 21:00Z:
+   a read-only look, nothing left running). Tell me by ending your turn only when the handoff
+   below is also written, unless a Lean run refuses or a row fails: then at once.
+2. **No label on any row yet.** Your proposal (`run_of_record=prove-glm53-flock-steady-unit-walk`
+   with `arm` and `source`) is with proofs and benchmarks: benchmarks ruled today (HASH-98) that
+   a row of record is `main`'s build, and asked for row 1 from `main` on Friday. Your walk-off
+   rows are its cross-check. I say the label when they have answered.
+3. **`FRIDAY-HANDOFF.md`, for the new worker on Opus who runs Friday's window:** as the 18:00Z
+   section asks, with today's facts and the three traps (the fit look judges memory only; four
+   provers need two warm sessions; a cancelled run leaves `/dev/shm/kernels-khshare-c4`), the
+   job fixed for them, the early put of the two kept proofs wired into the reader, `fri.sha256`
+   pinned again and the rehearsal rerun.
+   - **Friday for the walk is card 6 only** (cores 72-81, nothing timed before 16:15Z,
+     `PAIRS=4:4 2:2 1:2`): the repeat on a quiet socket of what today's three cards timed
+     together on one socket. **Cards 2 and 3 are not the walk's on Friday**: today's rows cover
+     their jobs, and the two cards go to row 1 from `main` (benchmarks' ask) and two short
+     tests. Say in the handoff what today's rows leave unmeasured that card 6 should take first.
+4. The wide leaf with the walk: your 17:55Z checkpoint says the branches stop in one hunk. Leave
+   it; say the hunk in the handoff's last line.
+
+Return by Fri 01:00Z, or earlier when the table and the handoff are both done.
