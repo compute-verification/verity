@@ -81,8 +81,12 @@ def small(**given) -> dict:
     return inp | {k: inp[k]._replace(value=v) for k, v in sizes.items()}
 
 
-def rows(inp: dict) -> dict:
-    return {(r.scope.name, r.period, r.name): r for r in LB.table(inp)}
+#: a stop class charged below its schedule, as verdict records that hold its four verdicts say it
+HELD = LB.Stop(True, ("each connection is charged below its schedule",), (), "a serve")
+
+
+def rows(inp: dict, stop: LB.Stop = LB.NO_RECORDS) -> dict:
+    return {(r.scope.name, r.period, r.name): r for r in LB.table(inp, stop)}
 
 
 def test_the_scans_terms_are_the_rows_forms_on_a_hand_worked_execution_phase():
@@ -171,7 +175,7 @@ def test_the_table_on_a_hand_worked_world():
 
 
 def test_each_change_zeroes_what_it_should_and_leaves_the_rest():
-    got = rows(small())
+    got = rows(small(), HELD)
     for scope in LB.SCOPES:
         for period in LB.PERIODS:
             scan, all_three = got[scope, period, "scan"].terms, got[scope, period, "all three"].terms
@@ -193,7 +197,7 @@ def test_each_change_zeroes_what_it_should_and_leaves_the_rest():
 
 
 def test_the_failed_connections_are_charged_pooled_only_where_the_lengths_are_held():
-    got, failing = rows(small()), rows(small(failure_rate=Fraction(1, 1_000)))
+    got, failing = rows(small(), HELD), rows(small(failure_rate=Fraction(1, 1_000)), HELD)
     for key, r in got.items():
         f = failing[key]
         assert (f.requests, f.phases) == (r.requests, r.phases)
@@ -227,7 +231,7 @@ def test_the_design_with_no_stop_block_is_charged_the_scans_schedules_and_is_the
     for inp in (small(), small(failure_rate=Fraction(1, 1_000)), LB.inputs(), LB.inputs(failure_rate=rate),
                 LB.inputs(world_requests=1.778e16, response_ids=1_024),
                 LB.inputs(world_requests=1.778e16, response_ids=1_024, failure_rate=rate)):
-        got = rows(inp)
+        got = rows(inp, HELD)
         for scope in LB.SCOPES:
             for period in LB.PERIODS:
                 scan, whole, row = (got[scope, period, name] for name in ("scan", "design", NO_STOP))
@@ -240,6 +244,82 @@ def test_the_design_with_no_stop_block_is_charged_the_scans_schedules_and_is_the
                     more = float(whole.terms[dj].certifier + scan.terms[dj].schedules)
                     assert float(t.certifier) == pytest.approx(more, rel=1e-12)
                     assert (t.cells > 0) == bool(inp["failure_rate"].value)
+
+
+def test_the_designs_stop_class_is_charged_its_whole_schedule_but_where_verdict_records_say_less():
+    """The design's row reads how its stop class is charged from a served run's verdict records, and from nothing
+    else: with none read it is the row before it, each connection charged its schedule, at every scope, monitoring
+    period and jitter bound; it is below its schedules only under a `Stop` that says so. No other row reads it, no
+    input holds it and the command has no option for it. The document carries what was read and the lines say it,
+    each verdict under the mark of a run that is no proof."""
+    assert [name for name, kind in LB.ROWS.items() if kind.verdicts] == ["design"]
+    assert not LB.Kind("on main", (), "a row").verdicts and LB.VERDICTS == (
+        "stop record", "response tie", "certified read", "compute audit")
+    assert LB.NO_RECORDS == LB.Stop(False, (
+        "no verdict record was read, so each connection is charged its whole schedule: the stop record, the response "
+        "tie, the certified read, the compute audit are each missing",), (), None)
+    refused = LB.Stop(False, ("each connection is charged its whole schedule: the response tie is missing",))
+    for inp in (small(), small(failure_rate=Fraction(1, 1_000), lanes=5), LB.inputs()):
+        none, held = rows(inp), rows(inp, HELD)
+        assert LB.table(inp) == LB.table(inp, LB.NO_RECORDS) == LB.table(inp, refused)
+        for (scope, period, name), r in none.items():
+            if name != "design":
+                assert r == held[scope, period, name]
+                continue
+            bare = none[scope, period, NO_STOP]
+            assert r == bare._replace(name="design")
+            for dj in LB.JITTERS:
+                assert r.terms[dj].schedules == none[scope, period, "scan"].terms[dj].schedules > 0
+                assert held[scope, period, name].terms[dj] == r.terms[dj]._replace(schedules=0)
+    assert not any("stop" in key or "verdict" in key for key in LB.inputs())
+    with pytest.raises(SystemExit):
+        LB.main(["--stop"])
+    doc = LB.document(small())
+    assert doc["stop"] == {"rows": ["design"], "below": False, "serve": None, "why": list(LB.NO_RECORDS.why),
+                           "verdicts": []}
+    by = {(r["scope"], r["period"], r["row"]): r for r in doc["rows"]}
+    assert by["world", "year", "design"]["schedules"] == by["world", "year", "scan"]["schedules"]
+    assert by["world", "year", "design"]["term"] == by["world", "year", NO_STOP]["term"]
+    text = LB.render(doc).splitlines()
+    at = text.index("The stop class of the row `design` is charged its whole schedule, as the verdict records say, of "
+                    "which none was read. No option of this command changes that charge.")
+    assert text[at + 1] == f"- {LB.NO_RECORDS.why[0]}" and text[at + 2].startswith("The target is ")
+    assert not any(line.startswith("With the lengths held by a stop block") for line in text)
+    whole = next(line for line in text if line.startswith("With its stop class charged its whole schedule, "))
+    assert ("for want of the verdicts that hold the lengths by a stop block, and the release times taken once by a "
+            "network certifier whose network card releases at a set time (simulated), the design's term over the "
+            "world's year is the failed connections' charge, the count and each connection's schedule. The count is "
+            ) in whole
+    # the hand-worked world's schedules and count are under the target, and the rate is what they leave room for
+    year = by["world", "year", "design"]
+    floor = year["schedules"]["bits"] + year["count"]["bits"]
+    assert doc["failure_rate_at_target"] == 1.0 and floor < 300 * LB.GB
+    assert "and with it and the schedules the world's year meets the target at a failure rate of at most 1." in whole
+    room = LB.document(small(), target_gb=(floor + 10 ** 6) / LB.GB)
+    left = room["failure_rate_at_target"]
+    assert 0 < left < 1 and LB.failed(7_391_250, 7_391_250 * left, 1_001) == pytest.approx(10 ** 6, rel=1e-6)
+    # a target under them: no rate, and the line says the schedules are beside the count
+    for under in (LB.document(small(), target_gb=floor / 2 / LB.GB), LB.document(LB.inputs())):
+        assert under["failure_rate_at_target"] is None
+        assert ("times the target, and with the schedules beside it the world's year meets the target at no failure "
+                "rate. Without that card the jitter alone, ") in LB.render(under)
+    # verdicts read are printed one a line under their mark, with the serve, whichever way they charge the class
+    verdict = {"kind": "response tie", "serve": "a serve", "link": "responses", "window": 3, "class": 0, "run": "r1",
+               "verifier": "a verifier", "verdict": "accept", "complete": True, "proved_by": None,
+               "mark": LB.RUN_NOT_PROVED}
+    read = LB.document(small(), stop=LB.Stop(True, ("a line", "another"), (verdict,), "a serve"))
+    assert read["stop"] == {"rows": ["design"], "below": True, "serve": "a serve", "why": ["a line", "another"],
+                            "verdicts": [verdict]}
+    json.dumps(read)
+    text = LB.render(read).splitlines()
+    at = text.index("The stop class of the row `design` is charged below its schedule, as the verdict records of the "
+                    "serve a serve say. No option of this command changes that charge.")
+    assert text[at + 1:at + 4] == [
+        "- a line", "- another",
+        "- response tie, run, not proved: accept, complete, by run r1 under the verifier a verifier, proved by nothing"]
+    partial = LB.render(LB.document(small(), stop=LB.Stop(False, ("a line",), (verdict | {"complete": None},))))
+    assert ("- response tie, run, not proved: accept, not complete, by run r1 under the verifier a verifier, proved "
+            "by nothing") in partial
 
 
 def test_only_the_lengths_change_reads_the_stop_block():
@@ -392,7 +472,7 @@ def test_the_count_is_charged_by_link_on_the_designs_rows_and_on_no_other():
                 assert t.count == (float(r.phases) * a_phase if name in (NO_STOP, "design") else 0)
                 assert float(t.certifier) == pytest.approx(float(t.schedules + t.cells + t.jitter) + t.count, rel=1e-12)
             assert r.terms[1].count == r.terms[2].count
-    once, twice = (rows(LB.inputs(world_requests=n * 10 ** 16, lanes=512)) for n in (1, 2))
+    once, twice = (rows(LB.inputs(world_requests=n * 10 ** 16, lanes=512), HELD) for n in (1, 2))
     assert all(twice[key].terms[dj].count == r.terms[dj].count for key, r in once.items() for dj in LB.JITTERS)
     world = once["world", "year", "design"]
     assert world.terms[1].count == float(world.phases) * (6 * math.log2(512 * 43 + 1)) == world.terms[1].certifier
@@ -409,11 +489,11 @@ def test_the_document_says_how_the_count_is_counted_and_the_lines_say_whether_it
     over the target no failure rate meets it, and the document's rate is None; where it is not, the rate is the
     largest at which the failed connections' charge and the count are within the target. The two rows that hold the
     lengths by a stop block and are not the design's say in their own lines why they are charged no count."""
-    doc = LB.document(small())
+    doc = LB.document(small(), stop=HELD)
     count, a_phase = doc["count"], 6 * math.log2(11)
     assert {k: v for k, v in count.items() if k not in ("world_year", "cost_runner")} == {
         "rows": [NO_STOP, "design"], "classes": 6, "lanes": 5, "lanes_given": False, "delay": 30, "ingress_buckets": 30,
-        "releases": 10, "bits_a_class": math.log2(11), "bits_a_phase": a_phase}
+        "releases": 10, "bits_a_class": math.log2(11), "bits_a_phase": a_phase, "head_time": LB.HEAD_TIME}
     assert count["world_year"] == {"bits": a_phase * 739_125, "GB": a_phase * 739_125 / LB.GB,
                                    "of_target": a_phase * 739_125 / (300 * LB.GB)}
     runner = {"classes": 6, "lanes": 16, "buckets": 600, "delay": 30, "ingress_buckets": 30, "releases": 336,
@@ -424,7 +504,10 @@ def test_the_document_says_how_the_count_is_counted_and_the_lines_say_whether_it
     text = LB.render(doc).splitlines()
     said = next(line for line in text if line.startswith("The count, on the rows "))
     theirs = (f"own schedule is not these rows': at its 16 lanes and its execution phase of 600 buckets, R = 336 and "
-              f"the count is {LB._n(6 * math.log2(337))} bits a link's execution phase.")
+              f"the count is {LB._n(6 * math.log2(337))} bits a link's execution phase. This line is the count "
+              "alone: the head's time is not held to a tick: nothing holds when the head of a link's execution "
+              "phase leaves, and what a head that leaves late carries is not counted here, at 0 or at any figure.")
+    assert not any("late" in key or "tick" in key for key in (*count, *count["world_year"], *count["cost_runner"]))
     assert said == (
         f"The count, on the rows `{NO_STOP}` and `design`: the head of a link's execution phase states how many of "
         "its releases each of 6 content classes holds, one of R + 1 values a class, so a link's execution phase is "
@@ -449,11 +532,12 @@ def test_the_document_says_how_the_count_is_counted_and_the_lines_say_whether_it
         f"count is {LB._n(count['world_year']['GB'])} GB, and with it the world's year meets the target at a failure "
         "rate of at most 1. Without that card the jitter alone, at D_j = 2, is ") in held
     # a target the count leaves room under: the rate is what the rest affords
-    room = LB.document(small(), target_gb=2 * count["world_year"]["GB"])
+    room = LB.document(small(), target_gb=2 * count["world_year"]["GB"], stop=HELD)
     left = room["failure_rate_at_target"]
     assert 0 < left < 1 and LB.failed(7_391_250, 7_391_250 * left, 1_001) == pytest.approx(count["world_year"]["bits"])
     # a target under the count: no rate
-    for under in (LB.document(small(), target_gb=count["world_year"]["GB"] / 2), LB.document(LB.inputs())):
+    for under in (LB.document(small(), target_gb=count["world_year"]["GB"] / 2, stop=HELD),
+                  LB.document(LB.inputs(), stop=HELD)):
         over = under["count"]["world_year"]
         assert under["failure_rate_at_target"] is None and over["of_target"] > 1
         held = next(line for line in LB.render(under).splitlines() if line.startswith("With the lengths held by a "))
@@ -583,7 +667,7 @@ def test_nothing_counted_by_capacity_scales_with_the_requests():
 
 
 def test_the_document_names_its_value_unit_commit_and_run(capsys):
-    doc = LB.document(small(), commit="c0ffee", run="r1")
+    doc = LB.document(small(), commit="c0ffee", run="r1", stop=HELD)
     assert (doc["unit"], doc["commit"], doc["run"], doc["model"]) == ("GB", "c0ffee", "r1", "GLM-5.3")
     assert doc["schema"] == "certifier-term/v2"
     assert doc["value"] == 171_477_000 / LB.GB and "world's year" in doc["name"]
@@ -655,7 +739,7 @@ def test_the_headline_is_the_scans_world_year_term_at_two_release_schedules_and_
                                                  "mark": "simulated"}
             assert "two release schedules (D_j = 2)" in doc["name"] and "D_j = 1" not in doc["name"]
     for inp in (small(), LB.inputs(), LB.inputs(requests="census")):
-        doc = LB.document(inp)
+        doc = LB.document(inp, stop=HELD)
         by = {(r["scope"], r["period"], r["row"]): r for r in doc["rows"]}
         scan = by["world", "year", "scan"]
         assert doc["value"] == scan["term"]["2"]["GB"] > scan["term"]["1"]["GB"] == doc["with_set_time_card"]["value"]
@@ -768,8 +852,11 @@ def test_the_command_prints_the_table_and_its_json(capsys, monkeypatch):
     assert doc["failure_rate_at_target"] is None and doc["count"]["world_year"]["of_target"] > 1
     assert LB.main(["--json", "--world-requests", "1e16", "--classes", "0"]) == 0
     uncounted = json.loads(capsys.readouterr().out)
-    rate = uncounted["failure_rate_at_target"]
     assert uncounted["count"]["world_year"] == {"bits": 0, "GB": 0, "of_target": 0}
+    # the command reads no verdict record, so its design is charged its schedules, which alone are over the target;
+    # under a stop class charged below them the rate is what the failed connections' charge affords
+    assert uncounted["failure_rate_at_target"] is None and not uncounted["stop"]["below"]
+    rate = LB.document(LB.inputs(world_requests=1e16, classes=0), stop=HELD)["failure_rate_at_target"]
     assert 1e-6 < rate < 1e-5 and LB.failed(1e16, 1e16 * rate, 4_097) == pytest.approx(300 * LB.GB)
     assert LB.main(["--scope", "world", "--period", "year", "--commit", "c0ffee", "--failure-rate", "1/1000",
                     "--response-ids", "875", "--target-gb", "150", "--phase-buckets", "32", "--bucket-s", "4",

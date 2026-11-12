@@ -121,8 +121,38 @@ and each row says where it stands:
   count to the ids the server picks it, so each connection is still charged its schedule, as the scan charges it.
   Its failed connections' charge, its jitter, its count and its entries are the design's.
 - `design` (no run behind it): head checks, a lengths unit on the network certifier's records, and a stop block
-  sampled on a served audit. The lengths are held, the stop block holding a response's output count to its ids, and
-  the entries are the compute audit's, so its term is the jitter, the failed connections' charge and the count.
+  sampled on a served audit. How its stop class is charged is read from a served run's verdict records and from
+  nothing else (The stop class's verdicts, below). Charged below its schedule, the lengths are held, the stop block
+  holding a response's output count to its ids, and its term is the jitter, the failed connections' charge and the
+  count. With no record read, or one verdict lacking, each connection is charged its schedule and the row is the
+  one before it. The entries are the compute audit's either way.
+
+### The stop class's verdicts
+
+The row `design` is charged below its schedules only as the network certifier's own rule says
+(`verity.protocols.certifier.verifier.class_charge.charge`), from the signed head of an execution phase and the
+verdict records on a class of it:
+
+- a class that holds a row owes four verdicts, the stop record, the response tie, the certified read of the request's
+  three words and the compute audit's second stage, each accepted, complete and from a run on the head's serve;
+- with one missing, refused, not complete or of another serve the class is charged its whole schedule on every row;
+  a record without `complete` reads as not complete;
+- a class with a count of 0 owes none.
+
+`benchmarks/network_traces/stop_verdicts.py` reads the records and hands the calculator the answer (`of_runs`, `stop`).
+The records are in the evidence store, in the run files of the runs that carry
+`run_of_record=exfiltration-glm53-stop-verdicts`: `stop-verdicts.jsonl`, one verdict record a line, and
+`stop-heads.jsonl`, one signed head a line, the serve it is of and its registration. The row is below its schedules
+only where every head read is of one serve, some class holds a row, and every class that holds one, in every head
+read, has its four verdicts. The calculator takes that answer as an argument (`document`'s and `table`'s `stop`). The
+command has no option for it and no input holds it, and it reads no store itself: run alone it reads no record,
+charges the row its whole schedules and says so. A caller that reaches the store names the runs and passes the
+answer.
+
+The lines print how the row is charged, one line for each class of each head read, and each verdict read under the
+mark `run, not proved`: a verifier judged it on a run, and no proof of that verifier is read here, whatever the
+record's `proved_by` says. A head is read as its registration lists it, held to the digest its certificate names; its
+signature is not checked here.
 
 Nothing a check counts by capacity is scaled by requests: twice the requests are twice the scan's schedules and fail
 cells, and nothing else. The count is by capacity too: with the lanes given it does not move with the requests, and
@@ -131,9 +161,10 @@ with none given it moves only as the least lanes that serve them do.
 ## The terms
 
 - **schedules**: for the scan, ⌈log2(cells + 1)⌉ bits a connection, where cells is the most cells a response takes,
-  one more than the most ids it holds; 0 where the lengths are held with a stop block (`lengths`, `all three`,
-  `design`), and the scan's where they are held without one (`design, no stop block`). For N2, ⌈log2 #Σ_sync^m⌉ over
-  a link's m execution phases (`--syncs`).
+  one more than the most ids it holds; 0 where the lengths are held with a stop block (`lengths`, `all three`, and
+  `design` where its verdict records charge its stop class below its schedule), and the scan's where they are held
+  without one (`design, no stop block`, and `design` otherwise). For N2, ⌈log2 #Σ_sync^m⌉ over a link's m execution
+  phases (`--syncs`).
 - **cells**: the fail cells, the same bits again a connection. Where the lengths are held, with a stop block or
   without, it is the failed connections' charge instead, pooled over the period: which connections failed and where
   each one's stream ended, at most F·(log2(e·N / F) + log2(cells + 1)) bits for F failures among N connections, and
@@ -160,6 +191,9 @@ with none given it moves only as the least lanes that serve them do.
     charge.
   - The rows `lengths` and `all three` are charged no count, and each says so in its own line: its tables are of
     the lengths rows' form 1, the schedule's rows whatever the load, so the head states none.
+  - The count's line is the count alone. The head's time is not held to a tick: nothing holds when the head of a
+    link's execution phase leaves, so the line says so, and prints no charge for a head that leaves late, of 0 or
+    of anything else.
 - **term**: the four summed, the network certifier's own term, at each D_j. The term of record is the one at
   D_j = 2. The one at D_j = 1 is printed beside it only as "with a simulated set-time card", never as the
   term.
