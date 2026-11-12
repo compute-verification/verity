@@ -9,8 +9,9 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 
 - `verity bench network_traces` runs `run.sh`: one chunk of per-token vLLM timing traces on a leased GPU
   (`record.py`), as a job whose resources are in the script's header.
-- Every other `.sh` here is a job on a node, its command and resources in its header. The proving jobs build Flock's
-  `flock-circuit`, the Lean `flock-verify` and the Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
+- Every other `.sh` here is a job on a node, its command and resources in its header (`capture_loopback.sh`, on a
+  machine where the job may capture). The proving jobs build Flock's `flock-circuit`, the Lean `flock-verify` and the
+  Lean ZK server with `benchmarks/pouw/hidden_zk/job.sh`.
 - Every run is published, with its report and outputs, as an Attempt in the evidence store
   (`tools/research/src/research/store/README.md`). Results are read from there, never from this README.
 - The tests: `uv run tools/verity/check/suites.py verity-network-traces` (`.agents/skills/testing/SKILL.md` says where).
@@ -47,6 +48,8 @@ to end. Each driver's docstring says what it runs, what it publishes and what it
 - **A cheating server:** `deviations.py` puts a deviating process between the relay and the server's id front, plants
   a random string, and tries six ways to send it out, each with a network certifier process of its own;
   `deviations.sh` is its tries as a job behind one ssh forward (below).
+- **A second count:** `capture_flows.py` sums a packet capture taken beside a relay run by flow and direction and holds
+  it against the relay's record of that run (below).
 - `tool.py`: the harness's store declarations.
 
 ## The demo's load
@@ -192,6 +195,62 @@ Then the table again, once the server's record of the tries' sampled ids is ther
   client; 1 when a class did otherwise, honest was refused, or a try wrote no check (it has no row, and the classes
   after it are still tried); and 2 when none of those and a row is shown neither way, as `tokens` and `length` are
   until the tie has the server's record.
+
+## A second count from a packet capture
+
+`capture_flows.py` reads a capture taken beside a run through the relay, at a point that is neither the server's
+process nor the network certifier's, and counts the bytes between the two a second time. Its docstring says which bytes
+are compared, why they must agree and what it refuses. It says "agrees" or the difference in bytes, and gives no
+protocol's verdict.
+
+**Taking the capture**, where every packet between the server and the network certifier passes:
+
+    tcpdump -i IFACE -U -s 130 -w run.pcap 'ip host SERVER'
+
+- The filter keeps the flows with the server's address on one side and nothing else, so a shared link's other traffic
+  never enters the file: one `or` clause for each further address (`ip6 host` for an IPv6 one), and `vlan and (…)` on
+  a link whose frames carry a VLAN tag. The reader refuses a file that still holds a flow between two addresses it
+  wasn't given; `--skip-foreign` counts and skips them.
+- `-s 130` keeps each packet's headers and none of its content: every length is read from the headers.
+- Start it before the run's first connection and stop it after its last has closed: a flow without its SYN or its FIN
+  is only a floor. `tcpdump` gets its packets a little after they pass, so stop it only once the file has stopped
+  growing (`-U` writes each packet as it comes), or its last packets are lost.
+- The file is pcap; `tcpdump -r IN -w OUT.pcap` rewrites a pcapng one. A capture point that writes each direction of a
+  fibre to its own file gives two files: name both.
+
+**On one machine**, `capture_loopback.sh` is the reader's own check, not a served run: the stand-in front, the network
+certifier and the load on one machine's loopback (`warden_serve.py rehearse --fake --watermark`), a capture of the
+loopback beside them, then the reader. The front and the relay share an address there, so the front's is given with
+its port, and the load's connections to the relay are among the other flows. It is a `research run` job where the job
+may capture, which a pool node's job may not. It holds the reader's count to the relay's on the same bytes; it puts no
+link between two machines under the capture.
+
+**Reading it:**
+
+    python benchmarks/network_traces/capture_flows.py --capture run.pcap --server SERVER[:PORT] \
+        --certifier CERTIFIER --run RUN --out capture_flows.json
+
+`RUN` is the relay's run directory (`warden_serve.py serve`); without it the capture is summed and listed only. The
+result file holds every flow's sums, and the table is:
+
+- The packets read and what was skipped, then the record's connections to the server and how many of its execution
+  phases' records, two a phase, are certified under its key.
+- A line for each direction between the server and the certifier: its flows, `packets` and `wire bytes` (every frame,
+  with its headers, ACKs and retransmissions), `payload bytes` (above the TCP header, a retransmitted segment each time
+  it was sent), `stream bytes` (each sequence number once, which the record's count is held against), `holes` (bytes
+  of sequence numbers the capture missed) and `record bytes`. Then what the direction says: `agrees`; `differs by N
+  bytes`, the capture's less the record's, where both counts are exact; `bound: …` with the range the difference lies
+  in, where a count is only a bound (a hole, a flow without its SYN or FIN, a connection that failed or whose release
+  was lost) and the range holds 0; `differs: …` where it doesn't.
+- The pairing. No record holds a port, so connections and flows are paired by their two counts, as multisets: how many
+  paired and how many of each stay unpaired. Two connections of equal counts aren't told apart, and "agree" is said of
+  the sums and the multisets, never of one connection.
+- Each connection whose counts are bounds, and the bytes the server answered on the watermark's connection, which are
+  in no record and in no sum.
+- Every other flow with a given address on one side, a line each: what the given side sent (`out`) and received
+  (`in`). Machines are named `server`, `certifier` and `other-N`, with their ports: no address is printed or written.
+
+It exits 0 when it read the capture and 2 when it refused it.
 
 ## The chain's run of record
 
