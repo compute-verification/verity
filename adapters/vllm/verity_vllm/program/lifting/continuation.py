@@ -465,8 +465,9 @@ def chain_bits(raw_words: Sequence[int], *, cap: int, lag: int, eos: Sequence[in
     eos_words = [L.enc_active(w, int(e)) for e in eos]
     L.check_lag(lag)
     out = [raw_words[0]]
-    run, ins = [True], [None]
-    gate = out[0]
+    run: list[bool] = [True]
+    ins: list[int | None] = [None]
+    gate: int | None = out[0]
     for s in range(1, cap):
         prev = out[s - 1]
         if s <= lag:

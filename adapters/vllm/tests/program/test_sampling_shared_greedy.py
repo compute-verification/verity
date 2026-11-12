@@ -11,6 +11,7 @@ import pytest
 from verity.circuits.cut import call_scope
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate
+from verity.circuits.layout import resolve
 from verity.definitions import word as W
 from verity.definitions.registry import sampling as SM
 from verity.definitions.registry import sampling_vocab
@@ -29,7 +30,6 @@ def _canon(fn, table: dict) -> tuple[int, ...]:
         g = c.gate(lo + j)
         ops = tuple(ids[o - lo] if lo <= o < lo + n else table.setdefault(("in", o), len(table)) for o in g.operands)
         ids[j] = table.setdefault((g.prim.id, ops), len(table))
-    from verity.circuits.layout import resolve
     return tuple(ids[resolve(call, r) - lo] for r in fn.body.ret)
 
 
