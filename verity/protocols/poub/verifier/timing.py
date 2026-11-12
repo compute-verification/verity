@@ -115,7 +115,7 @@ fill buffers; and the memory controllers', UPI's and PCIe's queues."""
 CHIP_BYTES = GPUS * GPU_CHIP_BYTES + HOST_CHIP_BYTES
 """S_chip, the node's: every GPU's on-chip storage and the host's caches."""
 LINK_WINDOW_BYTES = 6_291_456
-"""One link window, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
+"""One link burst, what the node's boundary link can land in its memory at once beyond the link's rate: its TCP
 receive buffer at most, `net.ipv4.tcp_rmem`'s max on the measured node (eth0's ring, 1,024 descriptors at a 1,500-byte MTU,
 holds less)."""
 GPU_SQUARINGS_PER_S = {"p1024": 1.67 * 1.499e10, "p512": 1.567 * 5.13e10}
