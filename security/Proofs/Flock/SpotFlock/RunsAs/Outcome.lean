@@ -64,32 +64,32 @@ theorem check_true_of_codes {b : Bool} {own : Spot.SecondStage.Own} {stmts : Opt
 
 /-- `getD` of an object at `k` is its map's entry at `k`, `null` where it has none. -/
 theorem getD_obj (m : Std.TreeMap.Raw String Json compare) (k : String) :
-    Spot.getD (.obj m) k = (m.get? k).getD .null := by
+    Spot.getD (.obj m) k = (m[k]?).getD .null := by
   unfold Spot.getD Spot.field? Json.getObjVal?
-  cases m.get? k <;> first | rfl | simp [Except.toOption]
+  rcases m[k]? with _ | v <;> rfl
 
 /-- `setObjVal!` on an object is its map's `insert`. -/
 theorem setObjVal_obj (m : Std.TreeMap.Raw String Json compare) (k : String) (v : Json) :
-    (Json.obj m).setObjVal! k v = .obj (m.insert k v) := rfl
+    (Json.obj m).setObjVal! k v = .obj (m.insert k v) := by
+  simp only [Json.setObjVal!]
 
-theorem cmp_wrong_units : compare "wrong_units" "accepted" ≠ Ordering.eq := by
-  first | decide | simp [compare, compareOfLessAndEq]
+theorem cmp_ne {a b : String} (h : a ≠ b) : compare a b ≠ Ordering.eq :=
+  fun e => h (Std.LawfulEqCmp.compare_eq_iff_eq.1 e)
 
-theorem cmp_integrity_profile : compare "integrity_profile" "accepted" ≠ Ordering.eq := by
-  first | decide | simp [compare, compareOfLessAndEq]
+theorem cmp_wrong_units : compare "wrong_units" "accepted" ≠ Ordering.eq := cmp_ne (by decide)
 
-theorem cmp_profile : compare "profile" "accepted" ≠ Ordering.eq := by
-  first | decide | simp [compare, compareOfLessAndEq]
+theorem cmp_integrity_profile : compare "integrity_profile" "accepted" ≠ Ordering.eq := cmp_ne (by decide)
 
-theorem cmp_accepted : compare "accepted" "accepted" = Ordering.eq := by
-  first | rfl | decide | simp [compare, compareOfLessAndEq]
+theorem cmp_profile : compare "profile" "accepted" ≠ Ordering.eq := cmp_ne (by decide)
+
+theorem cmp_accepted : compare "accepted" "accepted" = Ordering.eq := Std.LawfulEqCmp.compare_eq_iff_eq.2 rfl
 
 /-- **A refused record reads not accepted**: on a well-formed object, `accepted` set to `false` and then `profile`,
 `integrity_profile` and `wrong_units` set, as `attach` does where its check has a code, reads `false`. -/
 theorem accepted_false {m : Std.TreeMap.Raw String Json compare} (hm : m.WF) :
     Spot.jeq (Spot.getD (((((Json.obj m).setObjVal! "accepted" (.bool false)).setObjVal! "profile" .null).setObjVal!
       "integrity_profile" .null).setObjVal! "wrong_units" .null) "accepted") (.bool true) = false := by
-  simp only [setObjVal_obj, getD_obj, Std.TreeMap.Raw.get?_eq_getElem?]
+  simp only [setObjVal_obj, getD_obj]
   rw [Std.TreeMap.Raw.getElem?_insert hm.insert.insert.insert, if_neg cmp_wrong_units,
     Std.TreeMap.Raw.getElem?_insert hm.insert.insert, if_neg cmp_integrity_profile,
     Std.TreeMap.Raw.getElem?_insert hm.insert, if_neg cmp_profile,
