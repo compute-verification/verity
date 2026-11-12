@@ -107936,3 +107936,70 @@ premises: v2's digests (`hc`, `hp`), v2's reads (`hr`), the challenger's family 
 
 **Not established**: AcceptedChecks compiling, and so A13 and the `hset` derivation, which are still only written.
 Nothing yet imports these files, so they are not on any guarantee's path.
+
+## WINDOWAT, Thu 12 Nov 23:11Z: the form holds no later member's tree to open its link first, which soundness's read of a session states; `WindowSessions.members` is an equality the device's log does not have; four files compiled and committed
+
+Mailbox read at `cursor/proofs-inbox` `dfb6fa4ea8`: your 23:07Z message (the second node) read and done, section 5. Heads: soundness `3e26cac7596a`, the lever `7d4e96a5fa07`, #9441 `ce41e7c92e8e`, all unchanged; `main` `417526501974`.
+
+### 1. WRITE-UP, a change to the form's check that A28 needs (not mine to make): each member's tree opens its link first
+
+- **What soundness's statement reads.** `SessionOpens.link` says of the first opening of the `u`-th tree the log opens that it is of the tree's stream named `session` (`Window/Record.lean:287-291`) [read]. `WindowSessions.session` takes `SessionRead`, which extends it, at every drawn member (`Window/Steps.lean:238-251`) [read]. The single-session proof takes the same fact from the verdict: `linkFirst_verdict` (`LinkFirst.lean:169`), used at `MovesLayout.lean:219` and `CountsLayout.lean:431` [read].
+- **What the form checks.** `membersStructure` runs `orderHeld` (`OneStageZk.lean:747-750`, called at `:1397`), which is `Challenger.sampleLinkFirst` over the whole log: its scan refuses an opening that is not a link's only while `opened = false`, and nothing resets `opened` at a new tree (`ChallengerTrees.lean:315-325`) [read]. So it holds the log's first opening, the first member's, and no later tree's. Nothing else holds it: `coinTreesOf` holds each stream's rounds in order, `k == (t.opened.filter (·.stream == s)).size`, and no order between a tree's streams (`:163`); `sessionTreeReason` reads the tree through `t.opening`, a `find?`, and `t.opened.all` (`:219-262`); `memberTreeReason` adds only the last opening (`:388-395`); `membersOrderFrom` reads each line's tree and whether it closes (`:419-428`) [read].
+- **So** a log in which the second member's tree opens `circuit/rep0` round 0 and then `session` round 0 passes every check of the form [derived, no run: I built no such log]. `SessionOpens.link` at `u ≥ 1` is then false of an accept, and A28 can't be proved of the form as it is. Whether a prover gains from it I did not work out [not established]; the single-session form refuses it by name (`SAMPLE_LINK_FIRST`: "the sample, then the link, then the other rounds").
+- **The refusal I would write**, in `memberTreeReason`, beside `NO_CLOSING` (it only refuses more; an honest session opens its link first, as every single-session log `sampleLinkFirst` passes does) [derived]:
+
+```lean
+/-- Whether the first round the log shows opened of `t` is of its stream `TREE_SESSION`: the link points. -/
+def LoggedTree.linkFirst (t : LoggedTree) : Bool :=
+  match t.opened[0]? with
+  | some o => o.stream == TREE_SESSION
+  | none => false
+
+    | some o =>
+      if !o.closes evidence then some NO_CLOSING
+      else if !t.linkFirst then some LINK_FIRST
+      else sessionTreeReason #[t.unclosed] tables record
+```
+
+  That first opening is round 0 by `coinTreesOf`'s count. It touches neither `membersRun` nor `checkMembersAt` nor `membersOrderFrom`.
+- **What it costs** [read]: the digest of `Spot.Challenger.memberTreeReason` is recorded in both locks (`security/lean-audit.json:57944`, `security/Properties/lean-audit.json:23990`), so its record regenerates as `runMembers`'s does, no statement or premise changing; `memberTreeReason_none` (`MemberForm/Order.lean:643`, on `main`) takes one more `split` and can give the fact; the Python twin `member_tree_reason` (`verity/protocols/spot/device/challenger.py:1101-1116`) takes the same line; `test_challenger_difftest.py` takes one case.
+- **What I do meanwhile**: D takes the fact as a hypothesis of its own lemma (each session's tree's first opening is its link's), so the rest of D doesn't wait. I do not write the refusal unless you rule it mine.
+
+### 2. FOR SOUNDNESS: `WindowSessions.members` as stated does not hold of a device's log
+
+- `MemberForm.Accepted log` says `readLog label after recs ξ lines = some log`: the log **is** a read, coins included (`MemberForm/Order.lean:791-795`) [read]. `WindowSessions.members` states it of `x.log`, the device's log (`Window/Steps.lean:238`) [read].
+- `WindowReads` gives `Binding.Logged Binding.readsV2`: the read's frames and answers are the log's, and its coins only where it shows them (`Binding.lean:96-105`, `:141-148`) [read]. The read gives a release of a family other than the sample's no coins, `⟨.fresh lab, root, []⟩` (`Sampled.lean:955`), and the device releases 512 at every `.fresh` (`Game.lean:428-431`) [read]. So on a play with such a release `Accepted x.log` is false while every check passes [derived]; whether the verdict refuses such a play elsewhere I did not check [not established]. In either case it does not follow from `Logged`.
+- Its two uses read frames only: `WindowSessions.specs` (`Steps.lean:253-256`) and `WindowSessions.order` (`:261-264`) [read].
+- **Proposal**: `members : ∃ lr, MemberForm.Accepted lr ∧ List.Forall₂ (fun a b => a.frame = b.frame ∧ a.answers = b.answers) lr x.log`, with `specs` through `helloSpecs_congr` and `order` through `OpensLast` at equal frames; or the two facts as the fields. I prove the first form whichever they pick.
+- Also `Accepted` leaves `recs` free of `records`; the coins clauses of `SessionOpens.link` and `.round` need the read's records to be the sessions', so D states that tie in a predicate of its own, from which `Accepted` follows.
+
+### 3. Done since 22:37Z
+
+- **Compiled and committed**, each with only `propext`, `Classical.choice`, `Quot.sound` and no warning in the file [run `r20261112-220347-1827`, rc 0]: `MemberForm/Consts.lean` (5 theorems, `f84f75fe83`), `MemberForm/Opens.lean` (6, `0cc0d8a91c`), `MemberForm/Accept.lean` (2, `d7d902e8a3`), `MemberForm/Run.lean` (15, `1f00fa87d00e`). Branch `cursor/proofs-windowat-5e4b` at `1f00fa87d00e`, pushed.
+- **E's first statement written**, `MemberForm/States.lean` (128 lines, 4 theorems): `statesMember`, soundness's `StatesMember (stepAt a) m` from `vm.statement slice bs = .ok a`, with `s.blobs = F ++ B`, `TablesSent s`, the member on the window (`MemberOn F vm m`) and the member's circuit and public file among `F` by digest. Not compiled: in the try below (section 5).
+- **E's second statement written**, `MemberForm/Files.lean` (193 lines, 8 theorems): `statementFiles tb w`, the proof files decoded from a session's evidence bytes at the one table `tb`, and `statementFiles_evidence`: where `sessionEvidence bs s = .ok evidence` and `filesOf bs s (.ok (spec, tabs, rest)) = .ok proofs` at `spec.tables = #[tb]`, `statementFiles tb evidence.data.toList = proofs`. That is `filesDec w = proofs` of `WindowSessions.session`. Not compiled on the tree; a model of the whole proof over the same two definitions' text elaborates on the VM in core Lean with the tree's two lemmas (`Record.get_what`, `evidenceParts_evidenceBytes`) as its only assumptions [run on the VM: `lean` on one file, no Mathlib].
+
+### 4. D, what I read (no count yet)
+
+- Soundness already has the closing round's step: `SessionRead.of_dropped` (`Window/Closing.lean:265`) gives `SessionRead` from `SessionOpens` on the log without the closing opening, and `SessionOpens.drop_iff` (`:253`) moves `SessionOpens` between the two logs [read]. `members_read` (`MemberForm/Order.lean:750`) gives that opening and what it answers. So D is `SessionOpens` at each session of a log of several trees.
+- Every single-session lemma that would give a field takes the record held to the trees the log's lines read to (`coinTreesOf lines = .ok trees` and `sessionTreeReason trees tables record = none`, e.g. `recordRounds_le_openedOf`, `RoundsRead.lean:1186`; `helloSpec_of_record`, `SpecTie.lean:251`; `Trees.open_held`, `Trees.lean:354`; `link_read`, `LinkPts.lean:126`, with `trees.size = 1`) [read]. The form holds the record to `#[t.unclosed]`, one tree less its last opening, so none applies as stated. Each is two steps, a fact of the record at any trees (`Trees.round_held`, `rounds_held`, `Trees.coinTree_held`) then a fact of the read at `t ∈ trees`, and the second steps are already general (`coinTreesOf_round`, `opening_lt_openedOf`, `readLog_named`, `treeFold_keyAt`) [read]. So D re-proves each field at `t ∈ trees` over two bridges (`t.unclosed`'s root and record are `t`'s; an opening `t.unclosed` finds, `t` finds), plus the place of the `u`-th session's tree among the trees the log opens, and the record the read finds for a tree being the session's. Count by Friday 18:00Z as ruled.
+
+### 5. Runs
+
+- `r20261112-220347-1827`: done, rc 0 (above).
+- As your 23:07Z message asks, I read both waiting runs' state at 23:09Z (each waiting for a check slot, never started), cancelled them and launched them again on `vy-nebius-2` [run]:
+  - `r20261112-224439-94b3` (cpu-8) cancelled; **`r20261112-231051-ac01`** on `vy-nebius-2`, 12 GB, 90 min: the tries of `MemberForm/SetsUp.lean`, `MemberForm/States.lean`, `MemberForm/Files.lean` and the aggregator, at tree `841ba690fcf6`. Launched 23:10Z.
+  - `r20261112-223333-3d6c` (cpu-10) cancelled; **`r20261112-231053-8366`** on `vy-nebius-2`, 24 GB (it builds the executable and runs the difftest after the tries), 120 min: the undrawn refusal's tries of `Spot/OneStageZk.lean` and `Spot/MembersParse.lean`, then `suites.py verity-core-sampled-proofs -- -k per_member_form`, at tree `631bf2f92211`, the tree of `cursor/proofs-windowat-undrawn-5e4b` at `cc35d5892178`. Launched 23:10Z.
+
+### To post
+
+- **To soundness**: section 2 (the restatement of `WindowSessions.members`), and section 1 for their word that the window's trace needs each session's link before its other rounds (I read it so in `SessionOpens.link` and `SessionPicks.link_before`, `Window/Trees.lean:262`).
+- **To whoever owns the form's check (MEMBERS, S8)**: section 1's refusal, its Python line in `member_tree_reason`: `if t.opened[0].stream != CT.SESSION: return LINK_FIRST`, after the `NO_CLOSING` test.
+
+### Not established
+
+- That any file written after `Run.lean` elaborates: `SetsUp.lean`, `States.lean`, `Files.lean` and the aggregator are untried on the tree.
+- That the undrawn refusal's try or difftest passes: its run was launched at 23:10Z and I have not read it.
+- That an accept of the form with a later tree's link not first exists as bytes: derived from the checks' text, no log built, no run.
+- That a play with a second family's release is accepted; and that soundness's trace needs the link first for a reason beyond its statement.
+- D's count; file C's `WindowPasses` (your question to soundness, no answer in my mailbox).
