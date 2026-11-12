@@ -84877,3 +84877,159 @@ For CAPS: none to raise. #9256 adds one module, `Flock.WitnessZk` (`verity/proto
 For the table:
 - #9256 (`Flock.Witness` in two modules), unmarked, ready to mark at `f48f4fde96a4`: records run `r20261112-074038-a554` passed, quick tier 64 of 64, builds with #9190 (`r20261112-105402-07e6`), `main` names no file, no stop against lean's merge beyond `main`'s 23. [run]
 - Lock notice: four module records (`Flock.Witness`, new `Flock.WitnessZk`) in `security` and `security/Properties`; no guarantee's record moves. [run]
+
+## FOLD, Thu 12 Nov 11:16Z: the projection and tensor twins are built and proved: on top of #9209 the head's session line goes 42.28 to 40.22 s (×1.05), MoE's 11.46 to 10.24 s (×1.12), GEMM K=512's 3.28 to 3.24 s, same verdict bytes; that is 2 s on the head, not the 8 to 10 s I guessed at 09:16Z; not pushed yet, one choice between two proved tensor loops waits on run `r20261112-110929-7a9f`; `f29b` still running
+
+**First, two corrections.**
+
+- **My 09:16Z guess was wrong by about four times.** I wrote there [guess] that the three per-column twins could take
+  8 to 10 s off the head's 41.2 s. Measured [run `r20261112-102711-0566`]: the projection and the tensor together take
+  2.06 s off the head. Why [derived]: in isolation the twins cut the projection by 24% and the tensor by 55%, not to
+  nothing (2 × (0.64 + 0.95) = 3.2 s a session by the bench), and the session keeps less than the bench does. The
+  scaling (5.8 s of the head's row) is not built and waits for your word.
+- **#9209's "after" figures read differently on other nodes, by more than the 5 to 6% I said.** The same build
+  (#9209's head) was the "before" of today's runs [run]: the head 37.22 s on `cpu-6` (`6682`) and 42.28 s on `cpu-7`
+  (`0566`), against 38.89 s on `cpu-14` in #9209's table, so −4% to +9%; MoE 11.32 s on `cpu-3` (`e1ab`, the table's
+  own node) and 11.46 s on `cpu-6` (`01f9`), against 11.84 s, so −3% to −4%; GEMM K=512 3.283 s on `cpu-7` (`1239`)
+  against 3.202 s on `cpu-2`, +2.5%. Every before/after ratio is from one core in one run and does not depend on this.
+
+### A. What is built
+
+Branch `cursor/proofs-fold-columns-7d9a`, cut from #9209's head `a62f144764f7`, four commits, head `0ee255d7fa`, **on my
+VM only** (not pushed until section C is settled). `FlockVerify.lean` is untouched; no caller is edited. [run: every
+check below is of a commit of this branch]
+
+| | what compiled code ran before | the twin | held to the reference by |
+|---|---|---|---|
+| `Stmt.project` | the reference: 64 closures, each a sum over every block, a new cell a product and a sum | `Stmt.projectFast`: the base read once in its own order, the 64 sums kept in their cells, each product added into its sum's cell by one out-of-line call on words (`Stmt.addMul`, the shape of #9209's `addCell`) | `@[csimp] project_eq_fast : @project = @projectFast`, no hypothesis |
+| `Stmt.tensor` | `main`'s `tensorFast`: a closure call, a division and a remainder an element, the 64 tables read in turn | `tensorFast`'s body rewritten as loops (two variants, section C) | `@[csimp] tensor_eq_fast : @tensor = @tensorFast`, restated for the new body, no hypothesis |
+
+- `Flock/Statement.lean`: lean exit 0, "none of its 22 theorems uses an axiom beyond propext, Classical.choice and
+  Quot.sound", no sibling declares a name it does (7 modules unchecked there for want of a build) [run
+  `r20261112-102653-8d3a`, `verity lean try --siblings --on auto`].
+- A test in the same change, as you asked at 09:19Z: `Flock/Test/FoldFast.lean` (one root added to the verifier's
+  `lean-audit.json`). It restates each reference body under a name no equation rewrites, with `rfl` that the
+  restatement is the function, and compares the compiled twin with it by `#guard`: the tensor below, at and above the
+  1024 entries its tables start at, with no weights, and across blocks; the projection on many blocks, one, none, and a
+  base longer than its blocks; and #9209's walk, which had no test (a row twice in a column, an empty row, a zero
+  coefficient). Lean exit 0 in 8 s [run `r20261112-102653-c08b`].
+- The quick tier on the branch (`suites.py --changed origin/main --quick`): run `r20261112-105331-bc80`, running since
+  10:55Z [read, `research inspect`], no verdict yet.
+
+### B. What it measures
+
+A kept session of each statement, verified by the two builds in turn on one pinned idle core, `MIMALLOC_PURGE_DELAY=-1`,
+no profiler; "before" is the same tree with `Flock/Statement.lean` as `a62f144764f7` has it; medians, with the range;
+every call printed the same verdict lines. All [run].
+
+| statement | "after" is | before, s | after, s | before/after | rounds | run | node, core |
+|---|---|---|---|---|---|---|---|
+| head block | both twins (`0ee255d7fa`) | 42.278 (42.157 to 44.775) | 40.220 (39.313 to 40.578) | 1.051 | 3 | `r20261112-102711-0566` | `cpu-7`, 165 |
+| MoE | both twins | 11.464 (11.273 to 12.297) | 10.236 (10.089 to 10.695) | 1.120 | 5 | `r20261112-102653-01f9` | `cpu-6`, 99 |
+| GEMM K=512 | both twins | 3.283 (3.269 to 3.582) | 3.239 (3.208 to 3.349) | 1.014 | 7 | `r20261112-105520-1239` | `cpu-7`, 165 |
+| head block | the projection alone, first port (`fcc19734ce`) | 37.216 | 36.691 | 1.014 | 3 | `r20261112-095550-6682` | `cpu-6`, 121 |
+| MoE | the same | 11.315 | 10.906 | 1.038 | 5 | `r20261112-095524-e1ab` | `cpu-3`, 95 |
+
+Read, setup and peak memory are the same before and after (head 103 s, 2.36 s, 45.58 GiB; MoE 18.4 s, 0.63 s, 7.79 to
+7.76 GiB). Rows are from different nodes: compare a row's two columns only.
+
+The two functions alone, on the unit net (two calls of each a session [derived, from the head's row of 09:16Z]), best of
+the repeats, seconds a call and ns an element:
+
+| | MoE, 16.8 M elements | head, 33.6 M elements |
+|---|---|---|
+| projection, reference | 1.393 s, 83.0 ns | 2.723 s, 81.1 ns |
+| projection, twin | 1.045 s, 62.3 ns | 2.080 s, 62.0 ns (candidate B, the twin's shape) |
+| tensor, `main`'s twin | 0.884 s, 52.7 ns | 1.740 s, 51.9 ns |
+| tensor, in blocks | 0.405 s, 24.1 ns | 0.786 s, 23.4 ns |
+| tensor, array order | 0.676 s, 40.3 ns | 1.197 s, 35.7 ns |
+| one walk of A on the tensor: `main`'s twin's, blocks', array order's | 0.659, 0.771, 0.681 s | 4.536, 4.486, 4.320 s |
+| run, node, repeats | projection `r20261112-102934-0db5` (`cpu-2`, 3); tensor `r20261112-095415-5497` (`cpu-9`, 3) | `r20261112-095450-d843` (`cpu-2`, 2) |
+
+Every candidate's result compared equal to the function's on every net [run, the same runs].
+
+In your model's terms [derived, from your 09:34Z figures: (933.8 − 710.8 GB) / (118.76 − 38.89 s) = 2.8 GB a second of
+the head]: 2.06 s is about 6 GB of row C. That is yours to book or not; I only give the seconds.
+
+### C. One choice left: which tensor loop
+
+Both are proved equal to `tensor` and pass the test.
+
+- **In blocks** (the branch's head): a table at a time over 4096 entries of `eq(ρ)`. Fastest alone (24 ns an element),
+  but it allocates the cells a table at a time, not in the array's order, and the walk that reads them next is slower:
+  +0.11 to +0.16 s a walk of A on MoE [run `5497`, `0db5`]; on the head the bench does not resolve it.
+- **In the array's order** (commit `a112dbfc87` on a local branch, 30 lines shorter): two loops, no closure and no
+  division, the cells where `main` puts them, so the walks and FIXEDCOST's one pass see the layout they were timed on.
+
+Session against session, blocks as "before" and array order as "after": MoE 10.226 s and 10.174 s, the same within the
+rounds' spread [run `r20261112-102905-1d58`, `cpu-1`, 5 rounds]. The head's run is not usable [run
+`r20261112-104112-8259`, `cpu-14`: reads took 104 to 145 s where 103 s is usual and one call spent 38.7 s in the
+kernel; 36.44 against 38.10 s medians, 36.20 against 36.45 s best]; it is running again as `r20261112-110929-7a9f`
+(`cpu-11`). **My rule: the array's order lands unless `7a9f` shows the blocks ahead on the head by more than the
+rounds' spread**, because equal seconds with fewer lines and `main`'s layout is the better trade. Its own checks are
+already running (`r20261112-111137-9b6d`, `-bbac` lean try; `r20261112-111136-ee57` MoE and `r20261112-111201-5c71`
+head, against #9209's head). Say so if you want the other rule.
+
+### D. Locks
+
+One root is added to the verifier's `lean-audit.json` (`Flock.Test.FoldFast`). I expect no record to move and no new
+`verifier.allow` entry [derived: the records read `tensor`, `project`, `sumUpTo` and `baseOf`, whose text is
+unchanged; no `lean-audit.json` or Lean file outside `Flock/Statement.lean` names `tensorFast`; the loops reach
+`Array.set!`, `Array.replicate`, `Array.modifyM`, `Nat.decLe`, all in `verifier.allow` now]. The recorded check of this
+branch has not run, so this is an expectation, not a result.
+
+### E. What went wrong on the way, so the next lane does not repeat it
+
+- The first port did not build [run `r20261112-094642-0b3d`, rc 2]: inside a `module`, `rfl` does not unfold
+  `Nat.fold`, and my scratch model was not a module, so a proof that passed there failed in the file. Models are module
+  files now.
+- The test took 266 s while two cases read past an array's end: each such read in a `#guard` prints a panic with a
+  backtrace [run `r20261112-095415-56a8`]. Without them, 8 s.
+- The first port of the projection called the base's product, which builds a cell a product (68.5 ns an element);
+  with the product's words inline and added in one call it is 62.3 ns [run `0db5`].
+- Scratch models: I ran `lean` on single files with no package import on my VM (under a second each) to shape the
+  proofs before a remote try. No build, suite or timing ran there. Tell me if you count that as heavy.
+
+### F. #9209
+
+- **Body edited at 10:44Z** [run, `research queue edit 9209`]: your clause (every executable that folds a statement,
+  through `Stmt.baseOf` and `Stmt.baseOfFast`), section D's two things (the session's line holds its setup; each timed
+  call is a refusal after `Zk.verify` passed, so `RecordText.check` and `KsScope.checkOf` are in no figure), the node
+  note, and `Issue: PRF-587`. The first paragraph's lock sentence and `verifier.allow` wait for `f29b`.
+- **`r20261112-073043-f29b` is still running** at 11:15Z [run, `research fetch`]. It waited in line from 07:30:53Z and
+  took its slot (11 cores of `cpu-5`) at 08:15:46Z [read, `research inspect`]; it is the whole check, and I can read no
+  ETA from it.
+- **Nothing under `verity/protocols/flock/verifier/` changed on `main` since my base** `d6075b75d289` [run, `git diff
+  --name-only d6075b75d289 origin/main -- verity/protocols/flock/verifier/` is empty, `main` at `33faab2be81c`, 96
+  landings later]. `tools/verity/lean/` and `tools/verity/check/` did change.
+- **The merge of `main` waits for `f29b`**, as you said at 08:50Z ("after `f29b` ends"). Your 09:50Z section says
+  "merge it once" without that condition. Merging now would make `f29b`'s verdict one for a commit that is no longer
+  the head. Tell me if you want the merge before it ends; otherwise I merge when it does, then the quick tier on the
+  merged head, the `comm -23` step, and the ready line.
+
+### G. Not built, for your decision (each is a further lever, so I do not start it)
+
+- The projection by buckets: add the base's entries into 4096 buckets by two bytes of the block's weight, then 4096
+  products a sum instead of one an entry [guess: 0.6 s a call less on the head].
+- The scaling by linearity: on hold, as you said.
+- The guard on allocation calls under `benchmarks/verifier_cost/`: a later pull request, as you said.
+
+### H. For infra, through you
+
+- `research run --on auto` refused four launches on `vy-nebius-cpu-7` around 09:2xZ: "source archive sha256
+  mismatch" and "could not write …/READY.json" [run, my launch logs]. A later launch there went through.
+- `verity lean try --on auto` leaves at exit 79 after 20 minutes while its run goes on (the wait cap, by design
+  [read, `research --help`]). Several of my tries hit it with 8 to 37 s of Lean inside: the wait is the line and the
+  build. The verdict is then only in the run record's `stdout.log`.
+
+### I. What I wait on
+
+| run | what | ETA |
+|---|---|---|
+| `r20261112-110929-7a9f` | the head, blocks against array order: decides section C | about 11:30Z [guess, 20 minutes from its launch at 11:09Z] |
+| `r20261112-105331-bc80` | the quick tier on the branch | unknown; running since 10:55Z |
+| `r20261112-111136-ee57`, `r20261112-111201-5c71`, `r20261112-111137-9b6d`, `r20261112-111137-bbac` | the array-order variant's own before/after and lean try | 11:25Z to 11:40Z [guess] |
+| `r20261112-073043-f29b` | #9209's recorded check | unknown |
+
+Next, in order: read `7a9f`, fix the tensor loop, push the branch, open the unmarked pull request under PRF-587 (stacked
+on #9209), and tell you its number.
