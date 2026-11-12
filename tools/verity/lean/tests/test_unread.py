@@ -6,6 +6,7 @@ from __future__ import annotations
 import gzip
 import importlib.util
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -242,6 +243,29 @@ def test_the_ratchet_fails_when_an_area_s_wholly_unread_modules_rise_and_its_cap
     assert U.main([*cli, "--update-caps"]) == 1 and U.load_caps(tmp_path / "new.json") == tight
     with pytest.raises(ValueError, match="not a lean-unread-caps/v1 file"):
         U.load_caps(FACTS.parent / "unread" / "security" / "lean-audit.json")
+
+
+def test_the_ratchet_s_failure_prints_the_area_s_count_as_the_entry_to_write():
+    """A change that adds proof modules no guarantee reads yet writes its area's count in the same change, with no room:
+    each failure prints that entry, its numbers are `counts`', and with the entries written the ratchet passes with
+    nothing to lower. The failure says what the pull request's body lists."""
+    rep = U.analyse(U.Tree(FIXTURE, U.tracked(FIXTURE)), U.Facts(FACTS), full=False)
+    now = U.counts(rep)
+    fails, _ = U.ratchet(rep, {}, "FILE")
+    assert len(fails) == len(now) == 3
+    said = {}
+    for fail in fails:
+        entry = re.search(r"A change that adds proof modules no guarantee reads yet sets the area's entry in FILE to "
+                          r'its count in the same change, with no room: ("[^"]+": \{[^{}]*\}), and lists in its pull '
+                          r"request's body each such module, the guarantee that will read it and the date that "
+                          r"guarantee is listed by\. ", fail)
+        assert entry, fail
+        (area, n), = json.loads("{" + entry.group(1) + "}").items()
+        assert fail.startswith(f"unread: {area} has {n['modules']} wholly unread modules ({n['declarations']} "
+                               f"declarations), above ")
+        said[area] = n
+    assert said == now
+    assert U.ratchet(rep, said, "FILE") == ([], said)
 
 
 def test_the_kept_caps_are_a_caps_file_as_update_caps_writes_it():

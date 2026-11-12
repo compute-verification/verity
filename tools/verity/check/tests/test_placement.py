@@ -21,7 +21,8 @@ NOW = datetime(2026, 10, 3, 17, 50, tzinfo=UTC)
 #: placement among two machines, whatever AUTO lists today (this module's own copy of check.py)
 N1, N2 = CHECK.AUTO = ("vy-nebius-1", "vy-nebius-2")
 HOLDER = {"pid": 11, "since": "2026-10-03T17:00Z", "minutes": 50, "cmd": "uv run python tools/verity/check/check.py", "run": "r-held",
-          "tree": "/workspace/research/src/" + "6b3d704c8" * 4 + "abcd", "by": "https://cursor.com/agents/bc-1"}
+          "tree": "/workspace/research/src/" + "6b3d704c8" * 4 + "abcd", "by": "https://cursor.com/agents/bc-1",
+          "took": "2026-10-03T17:10Z", "held_minutes": 40, "joined": "2026-10-03T17:00Z", "waited_minutes": 10}
 
 
 @pytest.fixture(autouse=True)
@@ -318,10 +319,11 @@ def test_the_view_shows_each_machine_s_slots_windows_lean_slots_and_waiters_then
     out = capsys.readouterr().out.splitlines()
     assert out == [
         f"{N1} (at 2026-10-03T17:50Z)",
-        "  check c  cores 0-47  held since 2026-10-03T17:00Z (50 min), run r-held, tree 6b3d704c86b3, by bc-1",
+        "  check c  cores 0-47  held since 2026-10-03T17:10Z (40 min; waited 10 min), run r-held, tree 6b3d704c86b3, by bc-1",
         "  check a  cores 0-47  free",
         "  check line: 1 waiting (1 with priority): since 2026-10-03T17:40Z (10 min), run r-wait, by lander, priority",
-        "  Lean check: 1 of 2 free; check/1 since 2026-10-03T17:00Z (50 min), run r-held, tree 6b3d704c86b3, by bc-1; "
+        "  Lean check: 1 of 2 free; check/1 held since 2026-10-03T17:10Z (40 min; waited 10 min), run r-held, tree 6b3d704c86b3, "
+        "by bc-1; "
         "1 waiting: since 2026-10-03T17:40Z (10 min), run r-wait, by proofs",
         f"{N2} (at 2026-10-03T17:50Z)",
         "  check d  cores 0-47  free; blocked: window 2026-10-03T18:05Z (20 min) is open or starts within 30 min",
@@ -334,6 +336,9 @@ def test_the_view_shows_each_machine_s_slots_windows_lean_slots_and_waiters_then
     assert json.loads(capsys.readouterr().out) == {N2: n2}
     assert CHECK.slots_view(["m"], read=lambda names: {"m": "exit 255: ssh"}) == 1
     assert capsys.readouterr().out.splitlines() == ["m: can't be read: exit 255: ssh", "--on m would refuse: no machine's slots could be read"]
+    unrecorded = {k: v for k, v in HOLDER.items() if k in ("pid", "since", "minutes", "cmd", "run")}     # no record of the slot's taking
+    assert CHECK.slots_block(N1, machine([slot("c", unrecorded)]))[1] == (
+        "  check c  cores 0-47  held for a time not recorded (its process started 2026-10-03T17:00Z, 50 min ago), run r-held")
     assert CHECK.slots_view(["--bogus"]) == 2
 
 

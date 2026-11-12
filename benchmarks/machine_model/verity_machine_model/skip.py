@@ -270,7 +270,7 @@ def parts(name: str, ctx: int, phase: str, noise: dict[str, str], rates: dict = 
 # ------------------------------------------------- the tensor–scalar model: checked leaves' vector work, pv's units
 
 #: The tensor–scalar (TS) model's facets in SMSP-cycles, (MMA coefficient, coefficient of every other vector-pipe warp
-#: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/pouw/machine_model/data/rows.csv (checked_strip's
+#: instruction): `M` (the tensor pipe) and JI3e_0..2, benchmarks/machine_model/data/rows.csv (checked_strip's
 #: TS_FACETS).
 TS_FACETS = ((16.0, 0.0), (8.115, 1.0), (15.030, 0.317), (15.539, 0.172))
 #: pv's vector work a tile (16 queries by 8 channels: 128 cells, 4 a lane) beyond the folds, as the checked kernels
