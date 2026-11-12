@@ -1867,3 +1867,21 @@ binds, and the census names a kind by its word Definition. The files name:
 
 My go is at 17:20Z after the calendar's read. Return when the nine statements are staged and the
 three launches are dry-run, or at 13:00Z with where you are.
+- **Added 07:40Z: two more answers on HASH-98 (07:36Z proofs, 07:39Z benchmarks). Read both whole.**
+  - **Proofs answers BY ROW by Thu 14:00Z** (a first line for the heaviest rows by 09:30Z, the table
+    by 12:30Z; its worker OUTBITS reads rows 4, 6 to 12, 14, 15, 16): the Definition a served
+    statement names, whether it is Boolean, and the line that decides it. Its first read
+    (`adapters/vllm/verity_vllm/pipeline/chunk_rows.py:118-136`, `zk_refusal`): every served statement
+    goes through `--zk`, which refuses a word template's statement that reads a table in lookup slots
+    and names the Boolean version in its place. **So row 15 is not settled either way:** circuits
+    reads the partition as naming its word form; proofs' rule may make it Boolean. Keep row 15's
+    `_v2` (already staged, pin `2382a9b3…`) LAST on Thursday's list, run only if proofs' table names
+    it. **Proofs' table decides the final list; I give it to you with the go.** Keep staging.
+  - **Benchmarks' rule for replacing a word-form row:** the new row names the census type in
+    `stage.word` and the Boolean Definition in `stage.definition`, as rows 1 and 2 do; the new run
+    gets `run_of_record=prove-glm53-flock-steady` and the replaced run `superseded_by` it. **A
+    superseded run drops every row it holds.** So benchmarks needs from us, before anything is
+    labelled: **for each word-form row to be replaced, which run of record holds it, and whether that
+    run also holds a row that stays word-form.** Make that list tonight (one table in the notes, one
+    worker comment on HASH-98 for my ring). Where a run holds both, benchmarks adds a per-row rule
+    first. The command prices the census's three bindings of rows 6, 7, 16 until proofs rules.
