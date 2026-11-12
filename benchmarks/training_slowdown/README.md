@@ -239,7 +239,8 @@ A job trains the config's start along its route and scores each checkpoint on it
 `routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`; a dial its
 `LATER` names is out of a config's digest while at its default, so a route gains a dial and no digest moves, and a
 config writes one dial of a group its `EITHER` names); the routes here run their forward under bf16 autocast on every
-device (`routes/subset.py`'s `step`), so a job on a CPU runs the program a job on a GPU does; the harness
+device (`routes/subset.py`'s `step` and `routes/qat.py`'s), so a job on a CPU runs the program a job on a GPU does; the
+harness
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. A route that trained a

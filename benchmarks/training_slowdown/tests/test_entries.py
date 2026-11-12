@@ -34,7 +34,8 @@ LONG = 24
 
 @pytest.fixture(autouse=True)
 def forward_in_float32(monkeypatch):
-    """The routes' forward in float32: their bf16 autocast (`subset.step`'s) is switched off for these tests."""
+    """The routes' forward in float32: their bf16 autocast (`subset.step`'s and `qat.step`'s) is switched off for
+    these tests."""
     monkeypatch.setattr(torch, "autocast", lambda *args, **kwargs: contextlib.nullcontext())
 
 
