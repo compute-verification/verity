@@ -75708,3 +75708,99 @@ I take (a) unless you say otherwise: it is the precedent, it says in the lock wh
   - `r20261112-071011-11dc`, cpu-9: `lean_changed.py --records security --update` at `5bfd8fd5e3`, `--timeout 7200`. About 08:10Z, from `4bcb`'s 52 minutes in its slot. [guess]
   - `r20261112-071455-accc`, cpu-14: the quick tier, `suites.py --changed 58a598e615b1d170e2b9a19440af93f1ba0ac79e --quick`, 9 suites. About 08:00Z. [guess]
 - **Then:** the records commit, the suites the lock's change reaches, and the ready line by 09:00Z. #8940 is still not on `main`. [run: `git merge-base --is-ancestor 58a598e615b1 origin/main` at 07:26Z]
+
+## FLOCKPKG, Thu 12 Nov 07:29Z: the allocator setting does not move a table's fixed seconds at the GEMM type (0.94 to 1.06 by pair) and moves neither the setup nor the read anywhere; on the head block, accepted with `--program`, it takes the check from 152 to 180 s down to 131 to 137 s in a fresh process on one node and from 261 to 304 s down to 117.5 to 121 s in a kept process on another; peak memory is 4% to 11% higher; `main`'s own binary has mimalloc and `main`'s Python callers already set it; it is no factor near 0.02
+
+Tags: [run] a run I launched and read, with its id; [read] a place I read now; [relayed] another entry's figure I did not check; [derived] my arithmetic; [guess] mine, unchecked. Mailbox read 07:22Z (the 07:21Z section: the `merge-tree` against lean's merge before a ready line; none is in this entry).
+
+**What it is not.** Not the served engine and not a GPU prover's side: nothing here times a prover, and the setting is only in the Lean verifier's own process. Every figure is the Lean verifier on one pinned core of a CPU node, on statements staged by the benchmarks' stager and sessions a CPU prover made. The GEMM sessions are not acceptances (no `--program`, as in FIXEDCOST's run: exit 1 on every call). The head block's sessions are acceptances, under the provisional unit cover ("units taken as stated, not derived"). The kept process is KEPT's branch, not on `main`. No GB figure is computed here.
+
+**The three runs**, all done, exit 0, three interleaved pairs each (without, then with `MIMALLOC_PURGE_DELAY=-1`, the variable unset in "without"):
+
+- (a) `r20261112-062447-792e`, vy-nebius-cpu-10, `main` `d6075b75d289`, the binary `main` builds (sha256 `a4b45d45…`). FIXEDCOST's `tables_job.sh` with its stager, statements and verify command, the pairs added: `BatchedGemm_v1` K=512 with `HopperBF16WgmmaDot16_v1`, circuit file 111,814,035 bytes, core 33, load 19 to 38 on 64 CPUs.
+- (b) fresh, `r20261112-062447-e345`, vy-nebius-cpu-10, the same binary: the head block (`SparseMlaHeadBlock_v2`, NVIS 64, `FIRST=false`), one table of 256 blocks, circuit file 12,191,652,715 bytes, the staged statement and the kept session `c736` that KEPT's `ba14` used, `--program` the word Program. A fresh process a call. Accepted 6 of 6, one verdict line.
+- (b) kept, `r20261112-062447-a046`, vy-nebius-cpu-14 (placed there by `--on auto`, not by name; I did not cancel it), KEPT's tree `cf5587e216` built in the job: one `verify-members` process over the sessions `c736` then `5832`. Accepted 12 of 12, every process exit 0. Its first member is what a fresh process pays, its later member what a kept process pays. Load 35 to 137 on 192 CPUs.
+
+**1. The GEMM type: a table's fixed seconds, by part** [run `792e`]. Seconds; "check" is the session's line less its setup.
+
+| shape | part | without | with | with / without, by pair |
+|---|---|---:|---:|---:|
+| one table of 64 blocks | read, once a call | 2.09 to 2.22 | 2.03 to 2.04 | 0.92 to 0.98 |
+| | setup | 0.045 to 0.048 | 0.044 to 0.050 | 0.92 to 1.06 |
+| | check | 2.45 to 2.55 | 2.35 to 2.69 | 0.96 to 1.06 |
+| one table of 32 blocks | read | 2.06 to 2.12 | 1.96 to 2.05 | 0.93 to 1.00 |
+| | setup | 0.040 to 0.044 | 0.039 to 0.041 | 0.93 to 1.00 |
+| | check | 2.36 to 2.38 | 2.25 to 2.45 | 0.94 to 1.03 |
+| two one-table sessions of 32, one call | read | 2.06 to 2.11 | 1.98 to 2.06 | 0.96 to 0.98 |
+| | setup, both | 0.087 to 0.106 | 0.083 to 0.111 | 0.84 to 1.16 |
+| | check, both | 4.79 to 4.97 | 4.62 to 4.73 | 0.95 to 0.97 |
+| one session of two tables of 32 | read | 2.03 to 2.14 | 2.03 to 2.11 | 0.95 to 1.01 |
+| | setup | 3.12 to 3.16 | 3.02 to 3.18 | 0.95 to 1.02 |
+| | check | 4.87 to 4.88 | 4.47 to 4.71 | 0.92 to 0.97 |
+
+- FIXEDCOST's figures hold on a second node: 2.50 to 2.60 s for one table of 64, 4.89 to 5.06 for two one-table sessions, 7.99 to 8.05 for one session of two tables, 3.12 to 3.16 of it setup [run `792e`, without the setting].
+- A table's fixed seconds are about 2.3 s of check at this type, with or without: 32 more blocks add about 0.1 s [derived from the two one-table rows].
+- The setting moves a one-table session by 0.94 to 1.06, inside the pairs' own spread. In the two shapes that hold two tables every pair is below 1 (0.92 to 0.97 on the check, 0.1 to 0.4 s). System time is 0.11 to 0.34 s without and 0.06 to 0.11 with, so there is no more than that to save here.
+- The second table's 3.1 s of setup is the circuit file read again, which the setting does not touch.
+
+**2. The head block, accepted, a fresh process a call** [run `e345`, cpu-10].
+
+| part | without, pairs 1 to 3 | with, pairs 1 to 3 | with / without, by pair |
+|---|---:|---:|---:|
+| read (circuit file and Program) | 171.5, 109.4, 177.5 | 139.7, 154.2, 109.8 | 0.81, 1.41, 0.62 |
+| setup | 2.3, 2.2, 2.7 | 2.2, 2.3, 2.3 | 0.98, 1.05, 0.85 |
+| check | 157.8, 151.6, 179.5 | 131.1, 134.5, 136.8 | 0.83, 0.89, 0.76 |
+| system seconds, whole call | 12.7 to 73.8 | 5.3 to 39.1 | |
+| peak memory | 40.9 GiB | 45.3 GiB | 1.11 |
+
+The read varies from call to call on this node by more than the setting could account for (109 to 178 s without, 110 to 154 with), so nothing can be said of it here; the kept run below has it steady.
+
+**3. The head block, accepted, one kept process over two sessions** [run `a046`, cpu-14].
+
+| member | part | without | with | with / without, by pair |
+|---|---|---:|---:|---:|
+| first (a fresh process's cost) | read | 107.8 to 108.7 | 106.2 to 107.0 | 0.98 |
+| | setup | 2.7 to 2.8 | 2.7 | 0.97 to 0.98 |
+| | check | 261.3 to 288.5 | 119.1 to 121.4 | 0.42 to 0.46 |
+| | system seconds | 109.6 to 130.7 | 4.9 to 5.2 | 0.04 |
+| later (a kept process's cost) | read | 4.6 to 4.7 | 4.6 to 4.7 | 1.00 |
+| | setup | 2.8 | 2.7 | 0.96 to 0.98 |
+| | check | 261.4 to 303.8 | 117.5 to 120.8 | 0.40 to 0.45 |
+| | user seconds | 162 to 173 | 123 to 126 | 0.73 to 0.76 |
+| | system seconds | 107.1 to 138.0 | 1.9 | 0.01 to 0.02 |
+| | page faults | 3.31 to 3.50 million | 0.03 million | 0.01 |
+| the process | peak memory | 40.9 GiB | 45.3 GiB | 1.11 |
+| | resident after each member | 17.7 GiB | 32.8 GiB | 1.85 |
+
+With the setting a later head session of a kept process is 124.8 to 128.2 s of wall, 117.5 to 120.8 of it the check [run `a046`].
+
+**4. Where the saving is.**
+
+- **In the check, and only there.** The setup is 2.2 to 2.8 s either way in both head runs and 0.04 to 0.05 s (or 3.1 s with a second table) at the GEMM type. The read is 0.98 of itself in the kept run's first member and 1.00 in its later member.
+- **It is the kernel's time.** In the kept run the later member's system seconds go from 107 to 138 down to 1.9 and its page faults from 3.3 million to 0.03 million; user seconds also fall, 162 to 173 down to 123 to 126 [run `a046`]. Why the user seconds fall I did not measure [guess: the allocator's own purge bookkeeping].
+- **What it saves depends on the node; what is left does not.** Without the setting the head's check is 152 to 180 s on cpu-10 [run `e345`], 261 to 304 s on cpu-14 [run `a046`], 296 to 304 s on cpu-2 [run `r20261112-034149-2dc7`, my 06:00Z entry] and about 160 s on `vy-dc-h200-3` [relayed: `52e3`, COUNT's 06:02Z entry]. With it, 131 to 137 s, 117.5 to 121.4 s and 125 to 133 s on the first three. So the ratio is 0.76 to 0.89 where the default is fast and 0.40 to 0.46 where it is slow. The two nodes of today's runs have the same CPU model, kernel and huge-page setting [run: both `host.txt`]; why the default costs twice as much on one I did not find [guess: the node's load, 35 to 137 against 16 to 38].
+- **Against the grid's 0.02: no.** The setting leaves 118 to 137 s of check on a head session and changes nothing one can measure on a GEMM table. The head statement's 160 core-seconds in COUNT's rows is a default-allocator figure [relayed]; under the setting it would be about 118 to 137 [derived, across nodes, not a pair on that node]. KEPT's own figures were taken under the setting [read: its `flock_members.py` runs each process in `verifier_env`], so its "about half" already has it in. The `verifier_cost` benchmark's shell jobs set it only since #9057 landed this hour [read: no `MIMALLOC` line under `benchmarks/verifier_cost/` at `d6075b75d289`], so the card's seconds for the other block types are default-allocator figures if those jobs made them [guess: I did not read which job made the card].
+
+**5. Peak memory** [run, each id above]. GEMM, one table: 547 to 556 MiB without, 577 to 579 with (+4% to +6%). GEMM, one session of two tables: 962 to 973 MiB without, 1,066 to 1,067 with (+10% to +11%). Head block: 40.9 GiB without, 45.3 with (+11%), the same in a fresh and in a kept process. A kept process also holds more between sessions: 32.8 GiB resident against 17.7.
+
+**6. Where it is set, and whose allocator it is.**
+
+- **mimalloc is the allocator of the binary `main` builds**, not only of my build: the `flock-verify` that `lake build` makes at `d6075b75d289` prints `mimalloc: process init` under `MIMALLOC_VERBOSE=1` and holds the option's name `purge_delay` [run `e345` and `792e`: `out/mimalloc.txt`, `out/binaries.sha256`]. It comes with the Lean toolchain (`leanprover/lean4:v4.34.0`); the package's lakefile names no allocator [read: `verity/protocols/flock/verifier/lakefile.toml`]. KEPT's build has it too [run `a046`].
+- **On `main` it is set for the verifier's Python callers** (since #9005): `verity/protocols/spot/verifier/one_stage/proofs.py` holds `VERIFIER_ENV` (line 77) and `verifier_env()` (line 131), and its `verify` (line 437) starts the Lean verifier in it. That `verify` is the one PoUW's credit runs (`verity/protocols/pouw/verifier/credit.py`, `run: Run = PF.verify`) and the module the vLLM adapter's sampled check imports (`adapters/vllm/verity_vllm/protocols/pouw/h1/drawn.py:592`) [read at `bcaf58a45d53`]. A caller's own value of the variable wins.
+- **And, since this hour, for the shell jobs:** #9057 is on `main` at `bcaf58a45d53` [run 07:27Z: `git merge-base --is-ancestor`; at 07:08Z `main` was still `d6075b75d289`]. A shell job that starts the binary itself sources `verity/protocols/spot/verifier/one_stage/verifier_env.sh`, and a test fails on one that does not [read].
+- **Not set on `main`** [read at `bcaf58a45d53`]: five Python callers that start `flock-verify verify` in their own environment: `benchmarks/harness/verity_bench/lean_verify.py:297` (the reader of the Lean verifier's seconds for `verity bench prove`, landed this hour with #9068), `benchmarks/one_stage/zk_cost.py:503` and `:552`, `benchmarks/private_circuit/universal.py:119`, `benchmarks/recursion_e2e/forge_after.py:186` and `verity/protocols/flock/agreement/agree.py:125`. Also the one-stage audit's own Lean executable (`proofs.py:581`, `:607`, `:640`), which I did not time.
+- **A kept process** would carry it in whatever starts it: KEPT's driver does [read], and no launcher of a kept verifier is on `main`.
+
+**7. What the default costs.** It is the default on `main` today for the verifier's Python callers and for the shell jobs; what is left is one `env=verifier_env()` at each of the five callers above (not built; the first is the one a published figure would come from) and one line in a kept process's launcher when there is one, at the price of 4% to 11% more peak memory and, for a kept process, 15 GiB more held between head sessions. Putting it inside the binary, so that no launcher can leave it out, is not built and I did not try it [guess: a C initializer linked into `flock-verify`].
+
+**What is left.** Nothing of this measurement is out. Not measured: the head block's check at a second block count (so its fixed part is not apart from its per-block part), any block type between the GEMM and the head, a fresh and a kept process on one node, and the served engine. The scripts are in `/opt/cursor/artifacts/flockpkg-work/alloc/` (`launch_alloc.sh tables|fresh|kept`, `tables_gen.py RUN RUN RUN` for these tables); the rows are in each run's `out/job.log` (`AH {…}`) and `out/alloc-tables.json`.
+
+**The `Flock.Witness` split, next.** Branch `cursor/proofs-witnesszk-5e1d` at `50f686ab7c96311feacc23c09a56e53ac80f3e7e`, two commits on `main` `d6075b75d289`, not yet a pull request. Flock's package builds at that head: every library and executable (402 jobs) and then each of the 85 files no library reaches [run `r20261112-065854-3dbe`, cpu-11, exit 0]. Out: `r20261112-071650-a420` (cpu-3, since 07:17Z), the 28 modules of `security/Proofs` whose imports no longer reach the recursion. `main` moved to `bcaf58a45d53` meanwhile with no Lean file, lakefile or lock changed, and the branch merges with it (`git merge-tree`, exit 0) [run]. After `a420`: `main` merged in, one records run at that head, the quick tier (60 suites), the `merge-tree` against lean's merge, the pull request unmarked, the ready line.
+
+For the table:
+- The allocator setting on the Lean verifier (measured, one CPU core, not the served engine, no prover's side): GEMM type, a table's check 2.36 to 2.55 s without and 2.25 to 2.69 s with, setup and read unchanged [`792e`].
+- Head block, accepted with `--program`: check 152 to 180 s without and 131 to 137 s with in a fresh process on cpu-10 [`e345`]; 261 to 304 s without and 117.5 to 121 s with in a kept process on cpu-14 [`a046`]; setup 2.2 to 2.8 s and the read unchanged; peak memory 40.9 against 45.3 GiB.
+- Set on `main` (`bcaf58a45d53`) for the verifier's Python callers and, with #9057 landed, the shell jobs; not for five benchmark and agreement callers, `verity bench prove`'s reader of the Lean verifier's seconds among them.
+
+For BREAKEVEN:
+- I recomputed no GB cell. The setting is 0.94 to 1.06 on a GEMM table and 0.40 to 0.89 on the head's check by node, against the 0.02 the grid asks. The head statement's 160 core-seconds is a default-allocator figure; under the setting about 118 to 137 [derived across nodes]. KEPT's "about half" was already measured under it [read].
