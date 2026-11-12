@@ -18,7 +18,6 @@ import gzip
 import hashlib
 import json
 import os
-import sys
 import time
 import traceback
 from dataclasses import dataclass
@@ -26,6 +25,7 @@ from typing import Any
 
 from verity_vllm.config import RowConfig, option, workload_arg, workload_file
 from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.log import init_logger
 from verity_vllm.pipeline import launch_context as LC
 from verity.definitions.boolean import write_word
 from verity_vllm.program.frontend.boolean import derived
@@ -35,6 +35,8 @@ from verity_vllm.program.prune import BATCHED, registered_form
 from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
                                                  _write_instances, _write_instances_file, write_instances)
 from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
+
+logger = init_logger(__name__)
 
 
 def _spec_histogram(program) -> dict[str, int]:
@@ -379,7 +381,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
         res["sampling"] = sampling
         if res_target_source == "declared":   # the declared target decides the platform, not the host's NVML (a GPU-free Build host has none)
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
-            print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp, device_name)}", file=sys.stderr)
+            logger.info("[derive_step] declared target %s x%s: vLLM platform %s", target.sm_arch, tp, select_cuda_platform(tp, device_name))
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                    tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop, batched=batched, table_reads=table_reads)
     except _Refused:
@@ -783,8 +785,7 @@ def main(a: Options) -> int:
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)
         _write_json(a.out, "result.json", {"ok": False, "exception": type(e).__name__, "message": str(e)[:4000], "traceback_tail": tb[-6000:]})
-        print(f"[derive_step] CRASH {type(e).__name__}: {str(e)[:800]}", file=sys.stderr)
-        print(tb[-3000:], file=sys.stderr)
+        logger.error("[derive_step] CRASH %s: %s\n%s", type(e).__name__, str(e)[:800], tb[-3000:])
         return 2
     summary = {k: res.get(k) for k in ("ok", "unsupported", "program", "rules_applied", "n_applications", "derive_secs")}
     target, artifact = res.get("target"), res.get("artifact")   # a Build that crashed before its construction states neither
