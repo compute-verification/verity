@@ -393,6 +393,25 @@ def test_a_request_that_stops_on_its_last_allowed_token_executes_no_step_past_it
     assert read(world, "tokens.json")["requests"] == [ROW0 | {"finish_reason": "stop"}, ROW1]
 
 
+UNTIMED: Record = {"arrive_step_realized": None, "first_step": None, "finish_step": None, "finish_reason": None}
+
+
+@pytest.mark.parametrize("steps", [None, {}, {"r0": STEPS["r0"]}, {"r0": STEPS["r0"], "r1": None}, {"r0": STEPS["r0"], "r1": {}}])
+def test_a_request_the_run_s_timing_has_no_record_of_has_no_realized_step_and_did_not_stop_early(world: World, said: Lines,
+                                                                                               steps: Record | None) -> None:
+    """The timing may hold no `requests` at all, or none for one request: that request's row says which steps it ran as unknown,
+    and its executed length is what it served."""
+    run_timing = timing(2.0, steps=steps)
+    if steps is None:
+        del run_timing["requests"]
+    world.runs[1] = (copy.deepcopy(SERVED), run_timing)
+    M1.main(options(world))
+    untimed = row("r1", [5, 2], [5, 2], True, finish=UNTIMED, executed=2, exhausted=False, stopped=False, lag=1)
+    assert read(world, "tokens.json")["requests"] == [ROW0 if steps else ROW0 | UNTIMED, untimed]
+    assert said()[-3:-1] == ["INFO [m1] r1: prompt_len=2 arrive=0 steps=None..None (None) generated [5, 2]",
+                             "INFO [m1]   accepted  [5, 2]  equal=True"]
+
+
 def test_one_request_s_unequal_tokens_make_the_run_s_unequal(world: World) -> None:
     world.runs[1] = ({"r0": [7, 8, 9, 10], "r1": [5, 3]}, timing(2.0))
     M1.main(options(world))
