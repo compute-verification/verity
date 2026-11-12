@@ -292,7 +292,10 @@ def test_a_boolean_row_s_gates_are_its_bits_family_s_with_the_functions_its_buil
     assert DF.kernel_refusal([(SILU, "SiluMul_v4{I=4}")]) == \
         "SiluMul_v1: SiluMul_v1{I=8}: this tree's Boolean Definition of it is a SiluMul_v3, and its rows' is a SiluMul_v4"
     gemm = 'Gemm_v2{K=4,N=4,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}'
-    bits = lambda dot: 'Gemm_v3{K=4,N=4,DOT={"fn":"' + dot + '"}}'                         # noqa: E731
+
+    def bits(dot: str) -> str:
+        return 'Gemm_v3{K=4,N=4,DOT={"fn":"' + dot + '"}}'
+
     assert DF.kernel_refusal([(gemm, bits("AnotherDot16_v1"))]) is None
     whys, checked_with = DF._GATE_CHECKS["Gemm_v2", "Gemm_v3"]
     (hopper,) = (f for f in checked_with if f.startswith("HopperBF16WgmmaDot16_v"))
