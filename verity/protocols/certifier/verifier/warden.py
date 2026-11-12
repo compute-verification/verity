@@ -301,6 +301,16 @@ class WardenParams:
         return _stride_releases(self.lanes, self.every, self.delay, self.ingress_buckets)
 
     @property
+    def phase_releases(self) -> int:
+        """R: a bound on the requests the network certifier releases in one execution phase with lengths rows,
+        `lanes` · ⌈(T + `ingress_buckets` − 1) / (D + 1)⌉. A release is at most `ingress_buckets` − 1 buckets after
+        its connection's admission, so an execution phase's releases are of connections admitted in T +
+        `ingress_buckets` − 1 buckets in a row; and a connection holds its lane through its admission's bucket + D,
+        so the connections admitted in any D + 1 buckets in a row are live together, at most `lanes` of them. It is
+        a bound: at some schedules a load releases R in an execution phase, and at others none does."""
+        return self.lanes * -(-(self.window + self.ingress_buckets - 1) // (self.delay + 1))
+
+    @property
     def span(self) -> int:
         """The most buckets from a connection's admission to its last egress cell's: D + ⌊(`egress_cells` − 1) / r⌋
         (the module docstring's schedule). With lengths rows a connection ends by then, and it is at most `window`."""
