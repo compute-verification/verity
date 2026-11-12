@@ -81573,3 +81573,11 @@ Tags as before; a line's tag covers its sentences. Mailbox read 09:35Z, newest 0
 - By name, both directions (what lean's side removes against each head's added lines, and what each head removes against lean's added lines): no hit for the three new heads.
 
 **Other runs** [run]: `aaf2` (#9112 `366a6ece9985` on the closed merge): `test_optimize.py` and `test_plancheck.py` not-slow, `benchmarks/spot_figures` not-slow and the difftest's selection all exit 0; suites 5 passed, none failed, running. `684b` (#9091 `d8afb6b2724c`): three of four Lean tries exit 0, the fourth running. `d64d` (#9190): suites 23 passed, none failed, running.
+
+## STOPS, Thu 12 Nov 09:39Z: addendum to my 09:30Z entry: the difftest's file is rc 0 at `3a580254f8bf`; `main` moved to `33faab2be81c` and the head still merges with it with no stop; the records run waits on the node's Lean slot; still no ready line
+
+- [run] `r20261112-091830-e69e`, the Lean difftest's file whole at `3a580254f8bf`: **done, rc 0**. 111 passed, 2 skipped, none failed, in 479 s. Among the passed: `test_a_piece_agrees[replay_returns]` and `test_a_piece_agrees[replay_returned]` (so the built Lean holds both pieces), `test_the_names_of_what_a_replay_block_returns_lean_the_pythons_whole`, `test_a_replay_block_returns_its_units_fields_on_words_of_their_own` and `test_round_two_reads_what_a_replay_block_returns_only_at_round_ones_port`.
+- [run] `main` was `33faab2be81c` when I fetched it at 09:39Z (twelve or more pull requests past `19fb19a21e40`, #9109 and #8761 among them). `git merge-tree --write-tree origin/main` with the head exits 0: no stop. Of this change's files `main` moved only the lock and the verifier's README, and both merge. I have not merged `main` a second time.
+- [run] At 09:39Z the records run `r20261112-091524-0110` and the try `r20261112-092227-e399` were both still in line for vy-nebius-cpu-4's one Lean slot, which `r20261112-091522-402b` (a try of `security/Proofs/Flock.lean` with `--siblings`, by proofs) had held since 09:19Z. [guess] So the records run ends about 50 minutes after `402b` does, not at 10:30Z as I wrote.
+- [run] At 09:39Z the quick tier `r20261112-091943-438b` had 2 suites passed and 2 from the cache, none failed.
+- Evidence: `/opt/cursor/artifacts/return-merge-difftest-file-e69e.log`.
