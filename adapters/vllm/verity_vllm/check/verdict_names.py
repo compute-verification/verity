@@ -1,5 +1,7 @@
-"""The Commit verdict's names: the seven named checks (`GROUPS`: each group's claim and the v1 fields it was read under) and the
-v1 -> v2 name table (`OLD_TO_NEW`)."""
+"""The verdicts' names.  The Commit verdict's: the seven named checks (`GROUPS`: each group's claim and the v1 fields it was read
+under) and the v1 -> v2 name table (`OLD_TO_NEW`).  The Match's: the gates' ids (`GATES` and the tuples beside it) and each id by what
+its gate checks (`OBSERVATION` .. `VU_PARTITION`); `gates` hands them on, and they are frozen with the gates.  This module imports
+nothing, so a reader of a gates document can name a gate without loading the gates."""
 
 from __future__ import annotations
 
@@ -105,4 +107,27 @@ OLD_TO_NEW: list[dict[str, str]] = [
     {"old": "extra.collector_failure", "where": "runs.jsonl commit.extra", "new": "runtime_match/collector_errors (differences[collector_failure])"},
     {"old": "declaration_*.json", "where": "commit/ (commit_integ.api.declaration)", "new": "required_value_coverage/required_classes (inputs)"},
     {"old": "sampled_replay_p*.json", "where": "commit/", "new": "local_replay/* (inputs: file sha256s under verdict.inputs)"},
+]
+
+#: The gate ids, in report order.
+GATES = ("G1", "G2", "G3", "G4", "G5", "G6", "G7")
+GATE_NAMES = {
+    "G1": "observation fidelity", "G2": "semantic closure", "G3": "root closure", "G4": "primitive exactness",
+    "G5": "composition exactness", "G6": "canonicality + regression", "G7": "holdout generalization",
+}
+#: The gates a holdout must pass (G7 is the holdout gate itself).
+HOLDOUT_GATES = ("G1", "G2", "G3", "G4", "G5", "G6")
+#: Structural gates outside the frozen G1..G7 set (evaluated and reported, verdict rule in `gates.verdict`).
+STRUCTURAL_GATES = ("G8",)
+GATE_NAMES["G8"] = "VU partition"
+#: Each gate's id by what it checks: a reader of a gates document reads its keys by these names.
+OBSERVATION, SEMANTIC_CLOSURE, ROOT_CLOSURE, PRIMITIVE, COMPOSITION, CANONICALITY, HOLDOUT = GATES
+(VU_PARTITION,) = STRUCTURAL_GATES
+#: Integrity gates outside the frozen set: the fail-closed reference-integrity rule.
+INTEGRITY_GATES = ("R1",)
+GATE_NAMES["R1"] = "reference integrity (fail-closed)"
+
+__all__ = [
+    "GATES", "GATE_NAMES", "HOLDOUT_GATES", "STRUCTURAL_GATES", "INTEGRITY_GATES",
+    "OBSERVATION", "SEMANTIC_CLOSURE", "ROOT_CLOSURE", "PRIMITIVE", "COMPOSITION", "CANONICALITY", "HOLDOUT", "VU_PARTITION",
 ]

@@ -23,7 +23,9 @@ from typing import Any
 import torch
 
 from verity_vllm.engine import hooks
-from verity_vllm.program.frontend.rules.triton_iface import triton_launch as op  # the op definition lives with the rules that bind it
+from verity_vllm.program.frontend.rules.triton_iface import (
+    triton_launch as op,  # the op definition lives with the rules that bind it
+)
 
 try:
     import triton as _triton

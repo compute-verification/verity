@@ -23,8 +23,8 @@ O(leaves)). Two `Refs` denote the same sequence iff their canonical runs are equ
 from __future__ import annotations
 
 import random
-import time
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from verity.circuits.codec import descriptor_id
 from verity.circuits.defs import PrimitiveDefinition, SpecializedDefinition
@@ -206,7 +206,7 @@ def _all_definitions(root: SpecializedDefinition) -> dict[str, Any]:
         if isinstance(fn, SpecializedDefinition):
             for n in fn.body.nodes:
                 visit(n.fn)
-            from verity.circuits.codec import _static_functions, _as_specialized
+            from verity.circuits.codec import _as_specialized, _static_functions
             for k in fn.defn.statics:
                 for f in _static_functions(fn.bindings[k]):
                     visit(_as_specialized(f, fid))
@@ -282,7 +282,6 @@ def compare(A, B, *, gate_samples: int = 2000, call_samples: int = 24, depth: in
     """Compare two programs (`Program` or `DecodedProgram`: `.root`, `.circuit`, `.gates`). Raises `Mismatch`
     on the first difference; returns a report of what was compared."""
     rng = random.Random(seed)
-    t0 = time.time()
     rep: dict[str, Any] = {"definitions": 0, "primitives": 0, "composites": 0, "nodes": 0, "reference_sequences": 0,
                            "reference_runs": 0, "reference_leaves": 0}
     da, db = _all_definitions(A.root), _all_definitions(B.root)
@@ -292,7 +291,6 @@ def compare(A, B, *, gate_samples: int = 2000, call_samples: int = 24, depth: in
     for fid in sorted(da):
         _compare_definition(fid, da[fid], db[fid], rep)
         rep["definitions"] += 1
-    rep["seconds_definitions"] = round(time.time() - t0, 2)
 
     # gates
     if A.gates != B.gates:
@@ -306,7 +304,6 @@ def compare(A, B, *, gate_samples: int = 2000, call_samples: int = 24, depth: in
             raise Mismatch(f"gate {i}: {ga!r} vs {gb!r}")
     rep["gates"] = n
     rep["gates_sampled"] = len(idx)
-    rep["seconds_gates"] = round(time.time() - t0 - rep["seconds_definitions"], 2)
     outs_a, outs_b = ca.root_outputs(), cb.root_outputs()
     if outs_a != outs_b:
         raise Mismatch("root outputs differ")
@@ -317,14 +314,12 @@ def compare(A, B, *, gate_samples: int = 2000, call_samples: int = 24, depth: in
     if len(ra) != len(rb):
         raise Mismatch(f"root call counts differ: {len(ra)} vs {len(rb)}")
     pick = sorted(set(rng.randrange(len(ra)) for _ in range(call_samples)) | {0, len(ra) - 1}) if ra else []
-    t1 = time.time()
     for j in pick:
         va, vb = _call_view(ra[j], depth, rng), _call_view(rb[j], depth, rng)
         if va != vb:
             raise Mismatch(f"root call {j} ({ra[j].id}) differs")
     rep["root_calls"] = len(ra)
     rep["calls_compared"] = len(pick)
-    rep["seconds_calls"] = round(time.time() - t1, 2)
 
     # subcircuit boundaries (S.out needs the consumers of the whole circuit)
     if n <= boundary_gate_limit and ra:
@@ -345,7 +340,6 @@ def compare(A, B, *, gate_samples: int = 2000, call_samples: int = 24, depth: in
         rep["boundaries_compared"] = 0
 
     # evaluation
-    t1 = time.time()
     ev = 0
     cands = [j for j in pick if not ra[j].is_primitive and 0 < ra[j].size <= eval_gate_limit]
     rng.shuffle(cands)
@@ -362,7 +356,5 @@ def compare(A, B, *, gate_samples: int = 2000, call_samples: int = 24, depth: in
             raise Mismatch(f"root call {j} ({c1.id}) evaluates differently")
         ev += 1
     rep["calls_evaluated"] = ev
-    rep["seconds_evaluation"] = round(time.time() - t1, 2)
-    rep["seconds"] = round(time.time() - t0, 2)
     rep["verdict"] = "equivalent"
     return rep

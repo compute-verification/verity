@@ -62,7 +62,8 @@ class Net:
         from verity_vllm.program.frontend.rules.vllm_mhc import MHC_GEOMETRY
         hf, ff = phi.hf_config, FF.facts_for(phi.hf_config)
         self.world, self.rank = int(phi.tp["world"]), int(phi.tp.get("rank", 0))
-        qc = hf.get("quantization_config") or {}
+        quant = hf.get("quantization_config")   # a checkpoint config without the block is refused below, by that name
+        qc = quant if quant else {}
         try:
             rc = rank_hf_config(hf, self.world)
             C, _ = FF.resolve_facts(rc, {})
@@ -118,7 +119,8 @@ class Net:
                 facts.append(str(e))
         if facts:
             _refuse("; ".join(facts))
-        self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), phi.engine.get("env") or {})
+        env = phi.engine.get("env")   # the switches the engines run under; a φ that states none sets none
+        self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), env if env else {})
         self.mhc = {"HC": int(C["HC_MULT"]), "H": H, "TN": MHC_GEOMETRY[H]["TN"], "REPEAT": int(C["HC_REPEAT"]), "EPS": C["EPS"],
                     "HC_EPS": float(C["HC_EPS"])}
         self.model_class = served_class(ff["vllm_class"])

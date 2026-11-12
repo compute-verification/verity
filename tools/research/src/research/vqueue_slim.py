@@ -916,6 +916,23 @@ def key(repo: Path, commit: str, step: str) -> str | None:
     return h.hexdigest()
 
 
+def lean_key(repo: Path, commit: str) -> str | None:
+    """SHA-512 over `KEY_TAG` and each Lean input of ``commit``'s tree (`lean_inputs`) as git holds it (mode, object and path),
+    in path order.  Two commits with one Lean key have the same Lean inputs, which are all a lock run's regenerated records
+    depend on, so records regenerated on one are the other's too (`vqueue_records.commit`'s ``onto``).  None when git can't
+    read ``commit``."""
+    r = _git(repo, "rev-parse", "--verify", "-q", f"{commit}^{{tree}}", check=False)
+    if r.returncode:
+        return None
+    files = _files(repo, r.stdout.strip())
+    inputs = frozenset(lean_inputs(path for path, _ in files))
+    h = hashlib.sha512(f"{KEY_TAG}\0lean inputs\0".encode())
+    for path, entry in files:
+        if meets((path,), inputs):
+            h.update(f"{entry}\t{path}\0".encode(errors="surrogateescape"))
+    return h.hexdigest()
+
+
 @functools.lru_cache(maxsize=8)
 def _files(repo: Path, tree: str) -> tuple[tuple[str, str], ...]:
     """(path, "MODE TYPE OBJECT") of each entry under ``tree`` (an object id, which never changes, so a listing is kept), in

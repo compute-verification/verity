@@ -440,7 +440,9 @@ def launches(layer: str, o: dict[str, Any]) -> tuple[list[dict[str, np.ndarray]]
     ("saved") and after the compress ("after") and the cache bytes ("k"); on ratio 128 the split call on the first run's saved
     state, its f32 `compressed_kv` words ("cols"), state ("state") and cache ("k"), else None."""
     import torch
-    from vllm.models.deepseek_v4.common.ops.save_partial_states import save_partial_states
+    from vllm.models.deepseek_v4.common.ops.save_partial_states import (
+        save_partial_states,
+    )
     from vllm.models.deepseek_v4.nvidia.ops import sparse_attn_compress_cutedsl as K
 
     L = LAYERS[layer]

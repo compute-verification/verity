@@ -19,14 +19,15 @@ what it holds.
   top-p split at its registered count (`sparse_mla`, `topp_pin`), a served engine class's admission
   (`class_admission`), the collectives' sites and the fused norm as one collective (`collectives.collective_sites`,
   `collectives.fused_norm`), the static serving schedule (`static_schedule`), the two checkpoint makers' commands
-  (`fp8_checkpoint`, `int8_checkpoint`), and the facts of models, cards and transports (`profiles.cases`,
-  `profiles.coverage_roles`, `profiles.dense_generic`, `profiles.devices`, `profiles.engine_classes`,
-  `profiles.family_facts`, `profiles.transport`). Each of these lists in `__all__` the names that other packages
-  and the benchmarks import from it. Ten more modules that other packages, the benchmarks or the command line read
-  state no `__all__` yet: `arrivals`, `build`, `env`, `vllm_adapter`, `kernel_identity`, `meta_inventory`,
-  `int8_fused`, `int8_vllm`, `profiles.admission_calibration` and `profiles.layer_classes`; `served_seed`'s does
-  not yet list `DERIVED`, `UNSEEDED`, `param_of` and `rule_of`, and `step_trace`'s does not yet list `SERVED`,
-  `scheduler_config` and `scheduler_of`, which other packages read.
+  (`fp8_checkpoint`, `int8_checkpoint`), a workload's load and its requests' run through a built engine, at once
+  or at declared steps (`vllm_adapter`, `arrivals`), and the facts of models, cards and transports
+  (`profiles.cases`, `profiles.coverage_roles`, `profiles.dense_generic`, `profiles.devices`,
+  `profiles.engine_classes`, `profiles.family_facts`, `profiles.transport`, `profiles.admission_calibration`).
+  Each of these lists in `__all__` the names that other packages and the benchmarks import from it. Seven more
+  modules that other packages, the benchmarks or the command line read state no `__all__` yet: `build`, `env`,
+  `kernel_identity`, `meta_inventory`, `int8_fused`, `int8_vllm` and `profiles.layer_classes`; `served_seed`'s
+  does not yet list `DERIVED`, `UNSEEDED`, `param_of` and `rule_of`, nor `step_trace`'s `SERVED` and
+  `scheduler_config`, which other packages read.
 - **Loaded by:** the integration's `pipeline`, `acquire`, `program`, `protocols`, `observe`, `properties`, `check`
   and `commit` packages, its `llm` and `glue`; and the benchmarks that build, serve or time the engine
   (`benchmarks/hash`, `benchmarks/pouw`, `benchmarks/serve_tax`, `benchmarks/torch_gpu`, `benchmarks/vllm_encoded`
