@@ -297,7 +297,7 @@ def test_the_leg_refuses_a_session_at_other_reads(tmp_path, monkeypatch) -> None
 
 
 def test_the_periods_egress_goes_to_the_check_and_never_to_the_challenger(tmp_path, monkeypatch) -> None:
-    """period.json's `wipe.egress_bits` is evidence: the leg gives it to the check in whole MiB, wherever the
+    """period.json's `wipe.egress_bits` is evidence: the check is given it in whole MiB, wherever the
     challenger runs, and the challenger's command names no egress. The check publishes `certify` at it."""
     period = _side(tmp_path, monkeypatch, {"egress_bits": 3 * sw.EGRESS_UNIT_BITS - 5})
     extras, of = [], WP.side_of

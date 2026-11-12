@@ -35,7 +35,7 @@ fill counts in `R`, the server's disks ahead of it in the same session, `wipe.di
 process whose key and session log are beside the periods). The verifier trusts one memory-challenger key, the one whose
 SHA-512 `wipe.trusted_sha512` pins: a session signed under another is rejected, and a challenger on its own host with no
 key pinned is refused before its session. Only a challenger on this node, whose key the run made, is trusted under the
-key its session came with. No network certifier counts the session's egress yet, so the leg gives the check no
+key its session came with. No network certifier counts the session's egress yet, so the check is given no
 count (unless `wipe.egress_bits` names one) and an accepted leg's bound is vacuous: its verdict is real and its
 quantity isn't. The leg's record names what the bound doesn't cover (`uncertified`): the key off its own host, an
 uncounted egress, the
@@ -327,7 +327,7 @@ streamer (`native`, `wipe_stream` on
 `challenger.wipe.command` says. `foreign_bytes` makes the prover the cheat that keeps that much prior content in place
 of the fill's first labels (`foreign_labels`; `"fM"`, one label past the bound at the expected reads), and `placement`
 `"simulated"` names a challenger on this node the stand-in for one on its own host (`wipe_party.placement`).
-`egress_bits` is the network certifier's count over the session, in bits, which the leg gives the verifier's check as
+`egress_bits` is the network certifier's count over the session, in bits, which the verifier's check is given as
 evidence in whole MiB (`streamed_wipe.egress_units`), wherever the challenger runs; `None` gives none, and the check
 takes `EGRESS_MAX_UNITS`, which bounds nothing. `reads` is the session's timed reads: a challenger on this node is started
 with it (`wipe_party --reads`); one on its own host chooses its own (its `challenger.wipe.command`), and the leg refuses
