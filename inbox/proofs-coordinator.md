@@ -74910,3 +74910,41 @@ S9 as MEMBERS sized it was "4 files of Rust and Python; no Lean". Read against t
 **What I do now, needing no answer:** the Python of the four checks in `challenger.py`, with tests that mirror Lean's `#guard`s; `session_evidence` in a file of its own under `one_stage/` (not `proofs.py`); `Draws` holding the session open, its tree calls and the relay; the driver's closing round and the per-member case's `challenger` and `coins`. The one-statement case stays as it is.
 
 **Next entry 16:00Z**, or sooner with the first run ids.
+
+## WIRED, Thu 12 Nov 06:41Z: the three deciders' size: `rowsUnder` and `namesOnce` read what round 2's check holds and none stops on the cost rule; `wiresWide` reads each template's circuit file, which the check does not hold (it holds the file's SHA-512 and a header with no widths), and the condition as `WiresTie` states it walks the unit's rows at every bit, so its decider is another function, proved to give it
+
+Tags as before. Mailbox read 06:41Z: 128 lines, newest section 05:05Z; your 06:35Z message came through Task [run]. #8940 is not on `main` (`d6075b75d289`) [run: `git merge-base --is-ancestor 58a598e615b1 origin/main`]. Branch `cursor/proofs-wired-deciders-3b9e`, from the scratch's head `8f941d294261`; nothing on it yet [run]. My VM was reset since 06:19Z: worktrees and the local stand-in are gone, nothing unpushed was lost [run: `git ls-remote`].
+
+**0. Two things you should know before I build**
+
+- [read: `Spot/Run.lean:78-91, 134-150, 222-231`; `Spot/SecondStage.lean:337-349`] Round 2's check holds, of a template's circuit file, its SHA-512 (`Run.Interior.circuits`, from `templateCircuits`) and the reference header. The header names each port's schema (`frame_v3.schemas`), not its width. `SecondStage.Own` holds neither the file nor a width. So `wiresWide` cannot be decided on what the check holds today: its decider takes each template's parsed circuit file (`Flock.Circuit`) as an argument, as `SpotFlock.wiresWide` takes `circuitsOf h`. The later wiring is then more than one line for this one of the three: `Run.Interior` has to carry the files' bytes, held to the SHA-512 the params name and parsed. I write the decider and its proof now and say the wiring exactly in the last entry.
+- [read: `Spot/TwoStageCheck.lean:87`, `Spot/SecondStage.lean:1071-1094`] `checkTwoStage` in the tree is the planner's bound on a design's count (`Spot.TwoStageCheck`), not round 2's check. I take your "no call from `checkTwoStage` or any other check" as: no call from `SecondStage.check`, `designOk`, `Run.run` or their mirrors.
+
+**1. Each decider**
+
+| | reads | work | already decided in the tree? |
+|---|---|---|---|
+| `rowsUnder` | `Own.wires` (`template`, `port`) and `Own.rows` (`per`, each run's `row`, `count`, `step`) | one lookup of a port's rows a wire, one comparison a run: wires × rows + runs. A run is one entry a caller node of the replay block's Definition, however many units it holds (`replayRows`) | No, as a condition on the design. `wiredRow` and `linkedRow` (`SecondStage.lean:825-834`) ask `x < r.per` of one slot's row, under `readOk`, only at the slots a statement's registered reads name. `fits` holds the runs' units, not their rows |
+| `namesOnce` | the parts' `template` | one comparison a pair of parts: templates². `wiresOk` already does parts × wires | No. `check` accepting does not give it: parts `[A, A]` with one statement for `A` pass `second-order`, `second-cover` and `second-template` [derived: `SecondStage.lean:968-998`]. `Run.templateCircuits` holds the params' names to the query's templates, not to each other |
+| `wiresWide` | each wire's `template`, `port`, `writer`, `wport`; the reader's file's ports' `name` and `bits`; the writer's file's output ports and rows (`outPorts`, `outRowPorts`), `upv`, `leavesOut`, and three numbers of its unit net (`inWords`, `constPos`, the output group's `col`) | a wire: one pass over one unit's returned leaves (`upv` × leaves × 16 bits, each a lookup among the output rows) into a bitmap of the reader port's `bits`, then one pass over the bitmap. No unit of a batch (the units `n` are never read) and no row of the unit net (`aT`, `bT` never forced) | No. The nearest is `Spot.Wires.check`'s `width` refusal, on a window circuit's wires as the adapter describes them, another object |
+
+**2. The cost rule** [derived from the definitions read; nothing compiled yet]
+
+- None of the three stops on it. `rowsUnder` and `namesOnce` are decidable as `WiresTie` states them, word for word.
+- `wiresWide` as `WiresTie` states it does stop: `writesBit` asks `Bits.outGate` at every bit of the port times every returned leaf, and `outGate` builds `Rows.ofNet c.unit` and its stack each time, every computed row of the unit net (`Bits.lean:93-98, 222-229`). That is a statement, fine in the proofs tree, and not what a verifier may run. The decider computes the same set from the file's layout alone: `nIn = min (inWords·WORD) constPos` and `nIn + nComp = constPos`, so a leaf's bit is on a computed row exactly when `nIn ≤ col·WORD + 16j + t < constPos`. It is exact, not a sufficient condition.
+- [guess] Whether one unit's returned leaves count as the descriptor: the circuit file lists them one by one (META `leaves_out`), and parsing the file already reads each once. A summary that does not read each leaf would need the file to state its leaves as runs; no file does.
+- `tests/test_verifier_cost.py`'s scan reads the new Lean file (it is under `verity/`); it will hold no range over gates, members or a key program.
+
+**3. Files and lines I expect** (new unless said)
+
+| file | what | lines |
+|---|---|---|
+| `verity/protocols/spot/verifier/lean/Spot/SecondWires.lean` | the three deciders, their conjunction, the refusal's name and text, and the difftest piece. Imports `Spot.SecondStage` and `Spot.Bits`; not imported by them | about 150 |
+| `security/Proofs/Flock/SpotFlock/WiresDecided.lean` | each decider true gives its condition as `SecondWiresMove` takes it; with round 2's check of the wires, `wiresMove h` through `secondWiresMove` | about 220, most of it `wiresWide`'s bitmap |
+| `verity/protocols/spot/verifier/second_wires.py` | the mirror, on the mirror's own `Part`, `Wire`, `Rows` and a circuit file's layout fields | about 100 |
+| `verity/protocols/spot/verifier/lean/tests/test_second_wires_difftest.py` | accepting and refusing cases for each of the three, and generated ones, against the Lean piece | about 220 |
+| `Spot/DifftestMain.lean` (8 lines today), `lean/pyproject.toml` | serve the new piece beside `Pieces.table`; list the test as untraced | 2 and 1 |
+
+- [run: `git diff --stat origin/main...` on FRAME's and REDRAW's branches, `gh pr view` for #9116 and #9081] All four branches change `Spot/Pieces.lean`, three change `tests/test_difftest.py`, and #9081 changes `Spot.lean`. So I touch none of those: the piece is served from `DifftestMain.lean`, which none of them changes, and the module is built as that executable's import, not from `Spot.lean`'s list. The suite that runs the difftest is the verifier's Lean package's (`verity/protocols/spot/verifier/lean/tests/`, through `lake exe sampled-proofs-difftest`).
+
+**4. Next**: the Lean module and the proofs file, tried one file at a time; then the mirror and the difftest. Next entry when the proofs file compiles or at 08:00Z.
