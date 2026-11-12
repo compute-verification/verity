@@ -101629,3 +101629,28 @@ def RefusedAt : Prop :=
 - No full check ran at this head; the local tests are the four files above.
 
 **Next.** `964a`'s verdict the moment it ends: sessions, Lean's accepts, round 2's refusal by name, `held`, and whether `record` is true; then `5640`, `c30d`, `4978`. VLLM-412's dry line after 23:30Z and VLLM-300 at 01:00Z, read only. The first try's head and rehearsal to you before Fri 05:30Z, or by Fri 03:00Z the word that it cannot be. STOPDRIVER's branch when it is ready, for the second head by Fri 11:00Z.
+
+## TABLEEXT, Thu 12 Nov 21:08Z: READY #9459 at `6b81c3a65f5c`: the pre-mark run and the opt-in test by name both pass at the head (rc 0); clean against #9375's marked head, and the stop against `cursor/lean-remote-merge-landing-fc8d` is `main`'s own, in files it does not touch
+
+**Ready line.** #9459, branch `cursor/proofs-opt-in-7b2e`, head `6b81c3a65f5c`, `Lane proofs`, unmarked, no Lean file. [run] It changes `check.py`, a Lean input, so it rides a Lean batch. [relayed]
+
+- **What ran at the head:** run `r20261112-195605-e65f` on vy-nebius-cpu-5, in a check slot, rc 0. [run] It ended at 20:47Z, earlier than I told you. [run]
+  - **The pre-mark run,** `suites.py --changed 0e8d16c3b8be --quick`: "4 suites: 4 passed (0 cached), 0 failed". [run]
+    - `benchmarks/spot_figures` 235 passed, 1 skipped; `repository` 352 passed; `verity-check` 969 passed; `verity-graph` 220 passed. [run]
+    - `test_figures.py` ran whole, slow tests included, so the gated test `test_figures_writes_a_figure_of_each_kind` passed there. [run]
+    - The one skip is the opt-in test: its mark is the only skip in that suite's tests at the head. [derived]
+  - **The opt-in test by name,** with `VERITY_SPOT_FIGURES_SLOW=1`, as a cold check runs it: "1 passed in 172 s", none skipped. [run] The test itself took 170.6 s on one worker. [run]
+- **Ratchet gate** at the head against `main` at `5f0c008aa040`, rerun at 21:08Z: "1 change(s), 0 failed". [run]
+- **The body** holds the run's verdict now. [run] `check` was not run. [run]
+
+**Against lean's merge, at 21:07Z.** You named `cursor/lean-remote-merge-landing-fc8d` with marked head `bafae2eaec2e`: those are two branches. [run]
+- **#9375's head** is `cursor/lean-remote-merge-onmain-fc8d` at `bafae2eaec2e`. [run] `git merge-tree --write-tree` of it and #9459's head is **clean**, exit 0. [run]
+- **`cursor/lean-remote-merge-landing-fc8d`** is at `f3ffe4e2bbcb`, the head of #9363, open, last committed 16:36Z. [run] `git merge-tree --write-tree origin/cursor/lean-remote-merge-landing-fc8d` with #9459's head **stops**, exit 1, in 10 files. [run]
+  - The same merge with `main` at `5f0c008aa040` in place of my head stops in the same 10 files. [run]
+  - None of the 10 is one of the three files #9459 changes. [run]
+  - So the stop is that branch against `main`, and #9459 adds nothing to it. [derived]
+- **Also clean:** `main` at `5f0c008aa040`, #9224 at `58bd76f9b0c6`, #9438 at `83e8cb9d30ce`. [run]
+
+**One number for the ci line.** The opt-in test took 171 s alone in a check slot against 138 s on my VM, so the gated test should take about a minute there. [derived] ci's median of 7.2 minutes for the old test is under a whole check's load, and the gated test should be about a third of whatever the old one costs. [guess]
+
+**Next, in this order,** on your 21:03Z rulings: the lint keeping Flock's own caps by place, as its own unmarked pull request(s) with a three-line summary for top; then the third test's faster form, only if it keeps every assert. [relayed] Nothing on the three theorems or the RecCap test. [relayed]
