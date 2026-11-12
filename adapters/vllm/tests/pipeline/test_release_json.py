@@ -9,14 +9,15 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from verity_vllm.pipeline import release_json as rj
 
 HERE = Path(__file__).resolve().parents[2] / "verity_vllm" / "ops"
-EXPORT = {"commit": "a2dabe49314ec6d85d1d62096551cf76751c7ea0", "branch": "lane/r16-int", "dirty_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-          "dirty_patch_bytes": 0, "exported_utc": "2026-09-20T10:08:00Z"}
+EXPORT: dict[str, Any] = {"commit": "a2dabe49314ec6d85d1d62096551cf76751c7ea0", "branch": "lane/r16-int", "dirty_patch_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                          "dirty_patch_bytes": 0, "exported_utc": "2026-09-20T10:08:00Z"}
 TP = "FA2-TAP-OK 2222 /workspace/cp/fa2/build/matReq/verity_fa2_matReq.so arch=8.9 hdims=64,96,128 mask=14 layout=v8"
 NC = "3333 /workspace/cp/nc_build-r16-int-3/verity_native_collect.so"
 TP3 = "FA3-TAP-OK 4444 /workspace/cp/fa2/build/fa3_matReq/verity_fa3_matReq.so hdims=64,128 mask=6 layout=v9"

@@ -16,17 +16,17 @@ import shlex
 import socket
 import threading
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
-
+from verity.commitments.crypto import lms
 from verity.protocols.spot.device import challenger as LC
 from verity.protocols.spot.device import remote as R
 from verity.protocols.spot.device.challenger import CoinError
-from verity.commitments.crypto import lms
-from verity_vllm.commit.challenge import challenge_positions
-from verity_vllm.pipeline import commit_coins as CC
 
 from tests.protocols import challenger_host as CH
+from verity_vllm.commit.challenge import challenge_positions
+from verity_vllm.pipeline import commit_coins as CC
 
 PRIVATE, KEY = CH.challenger_key(3, H=5)
 GATE = "ssh -i KEY -o IdentitiesOnly=yes research@auditor"
@@ -46,7 +46,8 @@ class _Auditor:
     writes the ledger (or the lines given) where a verifier reads it."""
 
     def __init__(self, tmp_path, monkeypatch) -> None:
-        self.gate, self.tmp, self.argv, self._heads = CH.Gate(PRIVATE, KEY), tmp_path, [], 0
+        self.gate, self.tmp, self._heads = CH.Gate(PRIVATE, KEY), tmp_path, 0
+        self.argv: list[list[str]] = []
         self.sessions: dict[str, dict] = {}
         self.client = None
         monkeypatch.setattr(R.RemoteChallenger, "connect", classmethod(lambda cls, at, secret=None: self.client))
@@ -58,7 +59,7 @@ class _Auditor:
         if words[0] == "reserve":
             sid = f"s20261021T1200{len(self.sessions):02d}Z-{len(self.sessions):04x}"
             families = json.loads(opts["--families"])
-            withheld = {"withheld": True} if "--withhold" in words else {}
+            withheld: dict[str, Any] = {"withheld": True} if "--withhold" in words else {}
             e = self.gate.reserve(sid, families, scheme=opts["--scheme"], peer=opts["--peer"], **withheld)
             self.sessions[sid] = {"families": families, "scheme": opts["--scheme"], "withhold": bool(withheld)}
             return 0, json.dumps({"session": sid, "seq": e["seq"], "peer": opts["--peer"], "by": "vllm",
@@ -117,7 +118,8 @@ def _commit(auditor: _Auditor, names: list[str]) -> tuple[list[dict], list[bytes
     """A Commit of one run per name, each run's root that name's, its coins from its own challenge phase: the runs' coins
     records, their roots and the challenge phase's id, the challenge phase closed and ended in the ledger."""
     coins = CC.of_options(_options(), len(names), gate_run=auditor.run)
-    records, roots = [], []
+    records: list[dict] = []
+    roots: list[bytes] = []
     for name in names:
         rc = SimpleNamespace(run_root=_root(name), extra={})
         kw = CC.positions(rc, coins)
@@ -271,8 +273,14 @@ def test_the_commits_options_and_draws_refuse_by_name(tmp_path, monkeypatch):
         CC.of_options(_options(), 1, gate_run=lambda argv: (3, json.dumps({"refused": "busy"})))
     with pytest.raises(CoinError, match="refused status \\(exit 255\\): ssh: connect"):
         CC.ChallengerGate(GATE, lambda argv: (255, "ssh: connect to host auditor")).call("status", "s")
-    lines, asked = ['{"kind":"period-open"}', '{"kind":"reserve"}'], []
-    assert CC.ChallengerGate(GATE, lambda argv: asked.append(argv) or (0, "".join(f"{x}\n" for x in lines))).ledger() == lines
+    lines = ['{"kind":"period-open"}', '{"kind":"reserve"}']
+    asked: list[list[str]] = []
+
+    def gate(argv: list[str]) -> tuple[int, str]:
+        asked.append(argv)
+        return 0, "".join(f"{x}\n" for x in lines)
+
+    assert CC.ChallengerGate(GATE, gate).ledger() == lines
     assert asked[0][-1] == "ledger"
     with pytest.raises(CoinError, match="refused ledger \\(exit 3\\)"):
         CC.ChallengerGate(GATE, lambda argv: (3, json.dumps({"refused": "no such verb"}))).ledger()

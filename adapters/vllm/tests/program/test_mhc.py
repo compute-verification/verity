@@ -16,7 +16,6 @@ import itertools
 
 import numpy as np
 import pytest
-
 from verity.circuits import evaluation as E
 from verity.circuits.boolean import trace as TR
 from verity.circuits.defs import bind
@@ -376,7 +375,7 @@ def test_boolean_tf32_compositions() -> None:
 ])
 def test_statics_refused(definition, statics) -> None:
     with pytest.raises(ValueError):
-        bind(definition, **statics).body
+        _ = bind(definition, **statics).body
 
 
 def test_served_splits() -> None:

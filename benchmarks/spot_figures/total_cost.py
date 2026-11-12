@@ -533,8 +533,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             "least bound. Replay is full-batch: the model's tokens come out bit-exact only in their served batch, so a "
             f"sampled request replays its replay block, one machine's {out['inputs']['window']['value']:g} s, whole "
             f"from its edge, {out['registrations']['machine']['requests']:,.0f} requests at {out['inputs']['replay_factor']['value']:g}× "
-            "serving's busy GPU-seconds (0.97× to 1.02× measured), and a sampled layer of one token its engine step's "
-            "whole batch at that layer.")
+            "serving's busy GPU-seconds (0.97× to 1.02× measured on Moonlight on one H200), and a sampled layer of one "
+            "token its engine step's whole batch at that layer.")
     regs, window = out["registrations"], out["inputs"]["window"]["value"]
     head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled request (of (B), a "
              f"sampled layer of one token) or of a registration's: a registration spans the {window:g} s window on one machine "

@@ -31,13 +31,11 @@ them, what it never reached), the record's C2 population scope.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Mapping
+from typing import Any
 
 import numpy as np
-
-from verity.definitions.ops.prims import AmpereBF16TcDot16
-from verity_vllm.commit import challenge as CH
 from verity.definitions.numerics import dense_rows as DRW
 from verity.definitions.numerics import derived_rows as DR
 from verity.definitions.numerics import fa2_split_twins as FT
@@ -45,6 +43,7 @@ from verity.definitions.numerics import inductor_rows as TW
 from verity.definitions.numerics.act_rows import silu_mul_expf_rows
 from verity.definitions.numerics.moe_router_rows import moe_router_topk
 from verity.definitions.numerics.rows import token_select_first_max
+from verity.definitions.ops.prims import AmpereBF16TcDot16
 from verity.definitions.registry import act, b1, cublas_bf16, cublas_gemv
 from verity.definitions.registry import bf16_gemm_check as BC
 from verity.definitions.registry import fa2_check_inf as F2
@@ -52,9 +51,14 @@ from verity.definitions.registry import fa2_split as W2
 from verity.definitions.registry import fa3_check_inf as F3
 from verity.definitions.registry import inductor as IR
 from verity.definitions.registry import moe as MOE
+
+from verity_vllm.commit import challenge as CH
 from verity_vllm.query.manifest.bind import split_name
-from verity_vllm.query.manifest.format import SERVED_FAMILY, SERVED_IDS as IDS, SERVED_LOGITS as LOGITS
-from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS, SERVED_SAMPLED as SAMPLED
+from verity_vllm.query.manifest.format import SERVED_FAMILY
+from verity_vllm.query.manifest.format import SERVED_IDS as IDS
+from verity_vllm.query.manifest.format import SERVED_LOGITS as LOGITS
+from verity_vllm.query.manifest.format import SERVED_POSITIONS as POSITIONS
+from verity_vllm.query.manifest.format import SERVED_SAMPLED as SAMPLED
 
 #: the rows of a request a GEMM or an attention op is evaluated on: all of a request's rows up to this many, else its first, its
 #: last and evenly spread ones

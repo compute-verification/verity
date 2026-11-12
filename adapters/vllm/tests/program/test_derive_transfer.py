@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import math
 import os
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
@@ -29,11 +29,11 @@ import pytest
 
 torch = pytest.importorskip("torch")
 
-from verity.circuits import Program, program_digest  # noqa: E402
+from verity.circuits import program_digest  # noqa: E402
 from verity.circuits.evaluation import MissingValue, evaluate_region  # noqa: E402
 from verity_vllm.program.frontend.provenance import registry_version  # noqa: E402
 
-from tests.program.test_derive_negative import IMPORTER_NAME, Outcome, _DERIVE, _input_gate_ranges, run_importer  # noqa: E402
+from tests.program.test_derive_negative import IMPORTER_NAME, Outcome, _DERIVE, run_importer  # noqa: E402
 
 pytestmark = pytest.mark.filterwarnings("ignore::verity_vllm.program.frontend.torch_frontend.DeadGateWarning")
 

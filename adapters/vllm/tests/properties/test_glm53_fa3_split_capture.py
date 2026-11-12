@@ -8,6 +8,7 @@ __models__ = ("zai-org/GLM-5.3",)
 
 import copy
 import json
+from typing import Any
 
 import numpy as np
 import pytest
@@ -69,7 +70,7 @@ def test_the_plan_is_consistent() -> None:
 
 def test_the_statics_are_glm53s() -> None:
     G = M.SPARSE_MLA_GLM53
-    assert (X.NH, X.DR, X.DV, X.SCALE) == (G["NH"], G["DR"], G["DV"], G["SCALE"]) and X.SCALE == 0.0625
+    assert (G["NH"], G["DR"], G["DV"], G["SCALE"]) == (X.NH, X.DR, X.DV, X.SCALE) and X.SCALE == 0.0625
 
 
 def test_the_operands() -> None:
@@ -90,7 +91,7 @@ def _attn(tmp_path, name: str, out_of=None):
     o = X.operands([name])
     s = o["sets"][X.LAUNCHES[name][0]]
     ns = W.launch_num_splits(s["valid"], 132, X.TOPK, X.LAUNCHES[name][1])
-    out = np.zeros((len(ns), X.NH, X.DV), np.uint16)
+    out: np.ndarray = np.zeros((len(ns), X.NH, X.DV), np.uint16)
     tokens = X.SAMPLE.get(X.LAUNCHES[name][0], range(len(ns)))
     for i in tokens:
         kv = o["pool"][s["rows"][i, :s["valid"][i]]]
@@ -164,7 +165,7 @@ def _doc(quick: bool = False) -> dict:
     names = X.QUICK_LAUNCHES if quick else tuple(X.LAUNCHES)
     launches = [{"phase": "mufu", "case": c, "checks": {"ok": True}} for c in ("lg2", "ex2", "rcp")]
     launches += [{"phase": "attn", "case": n, "checks": {"deterministic": True, "shape": True}} for n in names]
-    comps = [{"phase": x["phase"], "case": x["case"], "words": 10, "mismatch": 0, "unresolved": 0, "reference": 1, "twin_mismatch": 0,
+    comps: list[dict[str, Any]] = [{"phase": x["phase"], "case": x["case"], "words": 10, "mismatch": 0, "unresolved": 0, "reference": 1, "twin_mismatch": 0,
               "first_mismatch": None, "differing": []} for x in launches]
     doc = {"schema": X.SCHEMA, "quick": quick, "gate": {"ok": True}, "served": {"ok": True}, "errors": {}, "bind": {"ok": True},
            "launches": launches, "comparisons": comps}
@@ -219,7 +220,7 @@ def _stub_envs(monkeypatch, batch_invariant: bool = False) -> None:
     import types
 
     envs = types.ModuleType("vllm.envs")
-    envs.VLLM_BATCH_INVARIANT = batch_invariant
+    vars(envs).update(VLLM_BATCH_INVARIANT=batch_invariant)
     monkeypatch.setitem(sys.modules, "vllm", types.ModuleType("vllm"))
     monkeypatch.setitem(sys.modules, "vllm.envs", envs)
 

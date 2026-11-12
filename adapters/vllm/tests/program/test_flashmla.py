@@ -13,13 +13,12 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 
 import numpy as np
 import pytest
-
 from verity.circuits.boolean.trace import word_of
 from verity.circuits.defs import bind
 from verity.circuits.evaluation import evaluate, evaluate_batch, self_check
 from verity.circuits.evaluation.bits import evaluate_words
-from verity.definitions.kernels import tc as CK
 from verity.definitions import boolean as SW
+from verity.definitions.kernels import tc as CK
 from verity.definitions.numerics import flashmla_twin as T
 from verity.definitions.registry import boolean_flashmla as BF
 from verity.definitions.registry import flashmla as F
@@ -50,8 +49,8 @@ def test_the_twin_is_the_reference(target):
 
 
 def test_the_twin_claims_only_the_hopper_step():
-    from verity.definitions.ops.prims import AmpereBF16TcDot16
     from verity.definitions.numerics import kernel_registry as KR
+    from verity.definitions.ops.prims import AmpereBF16TcDot16
 
     hopper = bind(F.FlashMlaSplit, NB=1, D=32, BN=16, PARTIAL=True, DOT=F.HopperBF16WgmmaDot16, SCALE=0.25)
     ampere = bind(F.FlashMlaSplit, NB=1, D=32, BN=16, PARTIAL=True, DOT=AmpereBF16TcDot16, SCALE=0.25)
@@ -233,7 +232,7 @@ def test_the_scheduler_constants():
 def test_bad_statics_are_refused_by_name(fn, kw, needle):
     extra = {k: v for k, v in (("DOT", F.HopperBF16WgmmaDot16), ("SCALE", 0.25)) if k in fn.statics}
     with pytest.raises(ValueError, match=needle.replace("(", r"\(").replace(")", r"\)")):
-        bind(fn, **kw, **extra).body
+        _ = bind(fn, **kw, **extra).body
 
 
 # --- the Boolean Definitions --------------------------------------------------------------------------------------------------------
