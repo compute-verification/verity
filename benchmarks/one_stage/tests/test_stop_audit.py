@@ -148,7 +148,8 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     verifier's, or reports another root for a port; and an order the challenger's signed log does not show, here a
     log with no coin after the stop registration (case 2). With a boundary outcome that accepted and is complete the
     entry accepts and names the audit record (case 1), and the record is still not complete; the record handed is
-    one made by hand, which no stream wrote, and the two entries that read it name that premise. With one that accepted
+    one made by hand, which no stream wrote, and the two entries that read it name that premise: case 1 on a handed
+    record is on no entry of record, and the summary holds no length on it. With one that accepted
     with an entry that did not run the entry has no verdict and gives its reason (case 4): the record accepts, and
     the boundary-audit entry is among those that keep it from being complete."""
     stage1 = _stage1(tmp_path, monkeypatch, "refusals")
@@ -174,7 +175,9 @@ def test_a_record_is_refused_by_each_entry_that_ran_and_did_not_accept(tmp_path,
     assert entry["complete"] is True and "why" not in entry
     assert entry["premise"] == got["audit"]["verdicts"][SA.ORDER]["premise"] == SA.BOUNDARY_PREMISE
     assert SA.BOUNDARY_PREMISE in summary["premises"]
+    assert [k for k, v in got["audit"]["verdicts"].items() if v.get("of_record")] == [SA.LEAN]
     assert summary["complete"] is False and summary["not_run"] == sorted(NULL - {SA.BOUNDARY_AUDIT})
+    assert summary["length_held"] is False
     got, summary = _audit(stage1, SMALL.incomplete(stage1))
     entry = got["audit"]["verdicts"][SA.BOUNDARY_AUDIT]
     assert got["accepted"] is True and got["symbol"] == S.ACCEPT and got["audit"]["complete"] is False
