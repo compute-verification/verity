@@ -4,6 +4,7 @@ its own average of the weights, or against the published rule where torch has no
 model. An entry whose output is an average over a horizon is held to torch's average of the weights the entry beside
 it writes, the one whose output is those weights, which has its own reference."""
 import fnmatch
+import math
 import tomllib
 
 import pytest
@@ -15,7 +16,7 @@ from torch.optim.swa_utils import AveragedModel, get_ema_multi_avg_fn
 from training_slowdown import config, library
 from training_slowdown.model import LM
 from training_slowdown.routes import subset
-from training_slowdown.routes._optimizers import newton_schulz
+from training_slowdown.routes._optimizers import Muon, newton_schulz
 
 #: six blocks, as the entries' patterns name them, 16 wide
 SHAPE = TINY | {"n_layer": 6}
@@ -42,13 +43,17 @@ def batches(steps: int = STEPS) -> list[torch.Tensor]:
 
 
 def routed(route, dials: dict) -> dict:
-    """The output model after the route's own steps."""
+    """The output model after the route's own steps. A weight the route hands over as its trained parts is the one
+    the route's plan rebuilds on the start from its packing of them, as a job's checkpoint takes it."""
     torch.manual_seed(0)
     model, optimizers = route.build(SHAPE, dials)
+    start = {k: v.clone() for k, v in model.state_dict().items()}
     steps = steps_of(dials)
     for t, rows in enumerate(batches(steps)):
         route.step(model, rows, optimizers, dials, t, steps)
-    return route.output(model, dials) if hasattr(route, "output") else model.state_dict()
+    out = dict(route.output(model, dials) if hasattr(route, "output") else model.state_dict())
+    parts, plan = {k: v for k, v in out.items() if isinstance(v, tuple)}, route.plan(dials)
+    return out | (plan.decode(plan.encode(parts, start), start) if parts else {})
 
 
 class Rule(torch.optim.Optimizer):
@@ -139,6 +144,47 @@ def lora(dials: dict) -> dict:
         opt.step()
         opt.zero_grad()
     return {k: v.detach() for k, v in merged().items()}
+
+
+def qat(dials: dict) -> dict:
+    """Quantization-aware training written out: every matrix the dials name is the start's plus the rounding of a
+    latent, zero at first. The rounding is by hand: the latent's entries at least as large as its ceil(keep · n)-th
+    largest magnitude, and not zero, keep their sign, at their mean magnitude as f16 holds it. Each step builds those matrices, runs one forward of the
+    start's own model on them, takes each matrix's gradient as its latent's, clips over the latents and steps them
+    at the scheduled rate; the output is the matrices as the last latents build them.
+
+    The latents step under the route's own Muon, which the Muon entries hold to the published rule, and the scale is
+    summed as the codec sums it: one rounding apart before Muon's bf16 Newton-Schulz moves a latent by percents of
+    its step, and a latent that crosses the rounding's threshold is a weight a whole scale off."""
+    torch.manual_seed(0)
+    model = LM.of(SHAPE)
+    theta = {k: v.detach().clone() for k, v in model.state_dict().items()}
+    latents = {k: torch.zeros_like(v, requires_grad=True) for k, v in theta.items() if v.ndim == 2 and any(
+        fnmatch.fnmatchcase(k, p.strip()) for p in dials["targets"].split(","))}
+    opt = Muon(list(latents.values()), lr=dials["lr"])
+
+    def built() -> dict:
+        out = {}
+        for k, v in latents.items():
+            a = v.detach().abs().reshape(1, -1)
+            kept = (a >= a.topk(math.ceil(dials["keep"] * a.numel())).values[0, -1]) & (a > 0)
+            scale = ((a * kept).sum(1) / kept.sum(1).clamp(min=1)).half().float()
+            out[k] = theta[k] + (v.detach().sign().reshape(1, -1) * kept * scale).view_as(v)
+        return out
+
+    for t, rows in enumerate(batches()):
+        weights = {k: w.requires_grad_() for k, w in built().items()}
+        logits = torch.func.functional_call(model, theta | weights, (rows[:, :-1],))
+        F.cross_entropy(logits.flatten(0, 1), rows[:, 1:].flatten()).backward()
+        for k, v in latents.items():
+            v.grad = weights[k].grad
+        torch.nn.utils.clip_grad_norm_(list(latents.values()), dials["clip"])
+        left = min(1.0, (1 - t / STEPS) / dials["decay"])
+        fall = {"linear": left, "sqrt": 1 - math.sqrt(1 - left)}[dials["cooldown"]]
+        opt.param_groups[0]["lr"] = dials["lr"] * min(1.0, (t + 1) / dials["warmup"]) * fall
+        opt.step()
+        opt.zero_grad()
+    return theta | built()
 
 
 def adamw(d: dict):
@@ -238,6 +284,9 @@ REFERENCES = {
     "s-t20-1.1x-lion": (under(lion), CLOSE),
     "s-t20-1.1x-lora": (lora, CLOSE),
     "s-t20-1.1x-muon-whole": (under(muon), CLOSE_BF16),
+    "s-t20-1.1x-qat-top2": (qat, CLOSE),
+    "s-t20-1.1x-qat-top3": (qat, CLOSE),
+    "s-t20-1.1x-qat-top4": (qat, CLOSE),
     "s-t20-1.1x-ref-optim": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-1027": (under(muon), CLOSE_BF16),
     "s-t20-1.1x-ref-optim-747": (under(muon), CLOSE_BF16),

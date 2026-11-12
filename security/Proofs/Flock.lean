@@ -54,6 +54,7 @@ public import Proofs.Flock.SamplingGeneric.MaskedTrunc
 public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.SamplingGeneric.Guarantees
+public import Proofs.Flock.SamplingGeneric.TwoFirstHitClassNumbersTables
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitNumbers
 public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
 public import Proofs.Flock.SamplingGeneric.TwoOneWaitKS
@@ -80,6 +81,8 @@ public import Proofs.Flock.SpotFlock.OpensClass
 public import Proofs.Flock.SpotFlock.OpensWhole
 public import Proofs.Flock.SpotFlock.RevealAt
 public import Proofs.Flock.SpotFlock.SlotsAt
+public import Proofs.Flock.SpotFlock.WiredAt
+public import Proofs.Flock.SpotFlock.WireMap
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.Format
 public import Proofs.Flock.SpotFlock.Reads
