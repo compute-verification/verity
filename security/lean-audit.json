@@ -3614,6 +3614,10 @@
     "fails": "Claims.Flock.KS_fails",
     "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
    },
+   "Claims.Flock.KSAt": {
+    "fails": "Claims.Flock.KSAt_fails",
+    "meets": ["Claims.Flock.decoder_meets_plain", "Claims.Flock.decoder_meets_zk"]
+   },
    "Claims.Flock.Nontrivial": {
     "fails": "Claims.Flock.Nontrivial_fails",
     "meets": ["Claims.Flock.scope_meets_plain", "Claims.Flock.scope_meets_zk"]
@@ -4017,6 +4021,10 @@
    "Claims.SamplingGeneric.FlockArgKS": "proved of every Flock record and decoder (`Claims.SamplingGeneric.flockArgKS`)",
    "Claims.SamplingGeneric.FlockKS": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKS`)",
    "Claims.SamplingGeneric.FlockKSReg": "proved of every Flock record, decoder and compiled verifier over it (`Claims.SamplingGeneric.flockKSReg`)",
+   "Claims.SamplingGeneric.FlockArgKSAt": "proved of every Flock record, decoder, tables' lengths and errors, and naming of a table (`Claims.SamplingGeneric.flockArgKSAt`)",
+   "Claims.SamplingGeneric.FlockKSAt": "proved of every Flock record, decoder, tables' lengths and errors, naming of a table and compiled verifier over it (`Claims.SamplingGeneric.flockKSAt`)",
+   "Claims.SamplingGeneric.FlockKSRegAt": "proved of every Flock record, decoder, tables' lengths and errors, naming of a table and compiled verifier over it (`Claims.SamplingGeneric.flockKSRegAt`)",
+   "Claims.SamplingGeneric.FlockRerunsAt": "proved of every Flock record, tables' lengths and errors, and naming of a table (`Claims.SamplingGeneric.flockRerunsAt`)",
    "Claims.SamplingGeneric.Compiled.OpenCallsLe": "a helper the claims read: the opening checks' count, which `CompilerBits` and `CompilerEfficient` read",
    "Claims.SamplingGeneric.ZkCompiled.ZkSessions": "a helper the claims read: the compiler's zero-knowledge contract, the code facts `CompilerZK` takes of a masked compiled verifier",
    "Claims.SamplingGeneric.Compiled.CompleteSessions": "a helper the claims read: the compiler's completeness contract, the code facts `CompilerComplete` takes of a compiled verifier over the proof system's honest prover",
@@ -11352,6 +11360,9 @@
     "reads": []
    },
    "type_hash": "0759a70bbd6545c1088cb7165cd6e06810ba0fa9758373812e93f22b1a2dc804"
+  },
+  "Claims.Flock.KSAt_fails": {
+   "owner": "@proofs"
   },
   "Claims.Flock.KS_fails": {
    "owner": "@proofs",
