@@ -14,12 +14,12 @@ inputs = [
   "verity/__init__.py",
   "verity/ml/__init__.py",
   "verity/circuits",
-  "Security/lean-audit.json",
-  "Security/Definitions/Nci/Assumptions/Layered.lean",
-  "Security/Definitions/Nci/Guarantees/Layered.lean",
+  "security/lean-audit.json",
+  "security/Definitions/Nci/Assumptions/Layered.lean",
+  "security/Definitions/Nci/Guarantees/Layered.lean",
   "verity/definitions/ops/boolean/gemm.py",
   # tiers.CARD pins the ACCEL model's sm_120 card table, and CREDITED_CLOCK_HZ PoUW's H1 record (test_tiers.py)
-  "Security/Definitions/Core/Accel/Sm120.lean",
+  "security/Definitions/Core/Accel/Sm120.lean",
   "verity/protocols/pouw/prover/circuit/h1device.py",
   # the slowdown D is the slowdown calculator's (statement.py, fit.py, imported by path)
   "verity/protocols/inference_only/rho/rho/__init__.py",

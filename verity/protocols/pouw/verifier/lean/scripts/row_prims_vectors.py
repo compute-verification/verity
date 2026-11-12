@@ -142,7 +142,7 @@ def render(vectors: dict[str, list[tuple[int, ...]]]) -> tuple[str, str]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[6] / "Security")
+    ap.add_argument("--out", type=Path, default=Path(__file__).resolve().parents[6] / "security")
     args = ap.parse_args()
     rng = random.Random(SEED)
     vectors = {"sqrt": sqrt_vectors(rng), "sqacc": sqacc_vectors(rng), "sqceil": sqceil_vectors(rng),

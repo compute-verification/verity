@@ -424,7 +424,7 @@ def test_the_red_teams_primitives_are_never_free():
     assert P.class_of("BlackwellS8ImmaDot32_v1") == "family" and P.class_of("NoSuchPrimitive_v1") is None
 
 
-LEAN_REGISTRY = Path(__file__).resolve().parents[3] / "Security/Definitions/Accounting/Gates/Registry.lean"
+LEAN_REGISTRY = Path(__file__).resolve().parents[3] / "security/Definitions/Accounting/Gates/Registry.lean"
 #: the ids the table lists that Lean's registry doesn't yet: the exact-int8 profile's casts, f64 products and LUT index
 NOT_IN_LEAN = {"F32MulWide_v1", "F32Rint_v1", "F32ToS8Rzi_v1", "F64Mul_v1", "F64ToU32RniSat_v1", "LutIndex_v1", "S32ToF32Rn_v1",
                "S8ToF32_v1"}

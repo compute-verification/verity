@@ -4,7 +4,7 @@ with its ε and δ.  They are computed here, the memory line's charges and paced
 and nowhere else: the benchmark and every other consumer reads them from `declared`.
 
 The memory line's forms are the conclusions of `Accounting.Guarantees.Remote.Held` (the snapshot), `HeldOverTime`
-(time-held) and `HeldOverTimeLinks` (link-charged), `Security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read at
+(time-held) and `HeldOverTimeLinks` (link-charged), `security/Definitions/Accounting/Guarantees/RemoteHeld.lean`, read at
 the record.  In the statements' terms, with b a block's bytes and every rate in blocks a ns:
 
 - N, the registered blocks; P, the credited passes; `planned`, their registered receipts (each pass's `lengths` less

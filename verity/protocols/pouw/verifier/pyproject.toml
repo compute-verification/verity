@@ -5,7 +5,7 @@
 # reads the HOPPER wgmma model replays and the RTX 4090 captures. The schemes import the catalog, whose Definitions register
 # their kernels (verity.definitions.kernels) lazily. The schemes' end-to-end tests and the epoch-coin vectors run the clear audit
 # and the work law, a reference tool's.
-inputs = ["verity", "Security", "verity/protocols/pouw/verifier/README.md", "verity/definitions/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json", "verity/definitions/silicon/captures/vectors/fp8-hopper-wgmma-k32.json",
+inputs = ["verity", "security", "verity/protocols/pouw/verifier/README.md", "verity/definitions/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json", "verity/definitions/silicon/captures/vectors/fp8-hopper-wgmma-k32.json",
           "verity/definitions/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json", "verity/circuits", "verity/definitions/kernels",
           "verity/protocols/pouw/clear"]
 parallel = true

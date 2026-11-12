@@ -343,7 +343,7 @@ def test_what_is_lane_text_and_what_is_not() -> None:
         assert found_in(python_prose(src)) == found_in(tokenized(src))
     assert sites("#5040 (12 Oct)", "data.json") == []
     assert not holds("archive/x.md") and not holds("fixtures/a/README.md") and not holds("x/tests/fixtures/y.py")
-    assert holds("x/tests/test_y.py") and holds("Security/A.lean") and not holds("x.csv")
+    assert holds("x/tests/test_y.py") and holds("security/A.lean") and not holds("x.csv")
 
 
 def test_pinned_files_hold_none() -> None:
