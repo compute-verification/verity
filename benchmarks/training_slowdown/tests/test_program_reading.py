@@ -1,39 +1,41 @@
 """A training circuit's work read off its Program (`circuit_properties.work`, which reads the circuit alone) beside this
 benchmark's reading of the same loop body from a trace (`capture_step`'s rows, `formalism.he_of_rows` and `he_figure`),
-on the lf model's tiny step (`adapters/vllm/tests/program/train_step_lf.py`, loaded by its path) under AdamW.
+on the lf model's tiny step (`adapters/vllm/tests/program/train_step_lf.py`, loaded by its path) under AdamW, at each
+k of `products.DIAL_K` at which (H) states β(k).
 
 The Program is the training-step frontend's step (`step_program`) as the body of a scan over iterations: the carry the
 parameters and AdamW's two moments, each iteration's inputs its three scalars and its batch, the rope tables shared. Its
 work an iteration is what a third iteration adds to two, the iteration a trace's step stands for (its weights an update
 away from θ). Both readings are in one unit: the trace's rows priced at f32, the Program's dtype, and |C| in Boolean
-gates on both sides. Where they differ, each for one cause:
+gates on both sides. The Program's reading is never above the trace's: every product it charges is one the trace's M
+holds, with no more MACs and no larger β on either operand, and its blocks at the trace's F are at most the trace
+figure's. Where they differ, the Program's is below, each for one cause:
 
-- N: the Program's dot products the trace has no row for (the softmax's backward, two `DotRef`s a row, which torch writes
-  as a multiply and a sum) are charged.
-- O: those dots' outputs.
-- |C|: the products' gates differ by the MACs only the Program writes as products (those dots, and the sums and means
-  the frontend writes as a product with a repeated constant, which torch writes as reductions and the reading leaves
-  out of N as θ's) and by the MAC's Boolean Definition: the Program's `F32Fma_v1`, whose
-  Boolean version `F32Fma_v3` keeps a NaN's payload rule, against `F32Fma_v4`, the PTX FFMA the trace prices a MAC at.
-  The rest of |C| is every other primitive at its Boolean version on the Program's side, and on the trace's only the
-  ops `training_slowdown.flops` counts, each MAC at one `F32Fma_v4`: the exponentials, square roots, plain adds and
-  subtractions, selections, maxima and comparisons are in the Program's |C| and in no MAC of the trace's.
-- The MACs the slowdown is asked of: the trace's figure keeps the products whose operands its rates pay at the most
-  (`he_of_rows` charges an operand whose rate, the bits a block pays an entry of it from θ′, is below its width at
-  w·ρ/(w + ρ), and `he_figure` keeps the groups at its best threshold of β_w·β_x); the Program reading caps a β at the
-  source bits a value holds, and in the third iteration every operand's are its width, so it keeps every product with
-  a weight. Both are (H)'s premise that a value costs at most the bits it holds; they count those bits differently:
-  the trace gives a gather's rows none (they repeat over the tokens that share an id) and the batch none, the Program
-  reading a gathered row its table's bits and the batch its width.
-- F: the trace's 2/√3 wherever its figure holds a backward product; the Program reading's share at the most arrays its
-  sub-work multiplies pairwise, two among the weight products.
-- β: both slowdowns are priced at the calculator's defaults (a weight's and an output's bf16 width, an activation's
-  β(k)), so the ratio of the slowdowns is the ratio of the blocks, from N, O and F alone, times the ratio of |C|.
+- Rates: each product's operands are paid at most what the trace pays any product of its shape. Attention's scores
+  multiply two activations, which `gemm_rate` prices at the least of attention's form and each single token side's,
+  since a Program doesn't name a token's axis; every rate downstream follows.
+- Gathered rows: every product of two operands that depend on θ′ reads the embedding's rows, which no op a Program
+  states can be shown to make position-specific (the rope tables are inputs of unstated values, the causal mask a
+  constant laid along an axis the Program doesn't name), so the Program charges nothing on this step; the trace's M
+  holds its products after the rope and the mask.
+- The dots only the Program writes as products: the softmax's backward, two `DotRef`s a row, carries the same rows,
+  and the sums and means the frontend writes as a product with a repeated constant are `θ`'s.
+- The head's products and attention's: from `HEAD_K` the Program gives no bound, since it doesn't say which products
+  are the head's, where the trace's figure keeps the weight gradients; a product of two activations, a weight
+  gradient or attention's, is left out, where the trace keeps the weight gradients.
+- β: every operand at most min(16, β(k)), where the trace's weights are at their width, 32.
+- |C|: the products' gates differ by the MACs only the Program writes as products (those dots and sums) and by the
+  MAC's Boolean Definition: the Program's `F32Fma_v1`, whose Boolean version `F32Fma_v3` keeps a NaN's payload rule,
+  against `F32Fma_v4`, the PTX FFMA the trace prices a MAC at. The rest of |C| is every other primitive at its Boolean
+  version on the Program's side, and on the trace's only the ops `training_slowdown.flops` counts, each MAC at one
+  `F32Fma_v4`: the exponentials, square roots, plain adds and subtractions, selections, maxima and comparisons are in
+  the Program's |C| and in no MAC of the trace's.
 """
 from __future__ import annotations
 
 import dataclasses
 import importlib.util
+import math
 import sys
 from collections import Counter
 from pathlib import Path
@@ -61,8 +63,11 @@ from verity_vllm.program.frontend.train_step import AdamW, step_program  # noqa:
 LF_PATH = ROOT / "adapters" / "vllm" / "tests" / "program" / "train_step_lf.py"
 #: the step's batch as rows of tokens, and the model's context (the rope tables' rows)
 BATCH, CTX = (2, 17), 34
-#: the policy both readings are priced at: c in gates and k in bits, where neither is at its floor
-POLICY = (1e13, 65536.0)
+#: the policy's c in gates, and the k |C| is read at
+C, K0 = 1e13, 65536.0
+MC = WK.min_cut()
+#: the k of the dial at which (H) states β(k)
+KS = tuple(float(k) for k in products.DIAL_K if MC.beta(k) is not None)
 #: the primitives no MAC of the trace's prices: every counted op is a multiply, a division, a fused multiply-add, a
 #: scaled add or a gather
 UNCOUNTED = ("F32ExpRn", "F32Sqrt", "F32Add", "F32Sub", "SelectF32", "F32MaxRef", "F32Eq", "I32Eq", "I32Add",
@@ -104,24 +109,27 @@ def loop(step: Program, n: int) -> Program:
     return Program(bind(CompositeDefinition("Loop", 1, (), lambda S: sig, run, register=False)), theta=step.theta)
 
 
-def iteration(step: Program) -> WK.Work:
-    """The work a third iteration adds to two."""
-    two, three = WK.read(loop(step, 2)), WK.read(loop(step, 3))
-    key = lambda g: (g.product, g.widths, g.weight, g.out_width, g.k_dim, g.bits)  # noqa: E731
-    before = {key(g): g for g in two.groups}
-    groups = []
-    for g in three.groups:
-        b = before.get(key(g))
+def _key(g: WK.Group) -> tuple:
+    return (g.product, g.widths, g.weight, g.out_width, g.k_dim, g.dims, g.rates, g.bits, g.beta, g.reason)
+
+
+def iteration(step: Program, k: float) -> WK.Work:
+    """The work a third iteration adds to two, at k."""
+    two, three = WK.read(loop(step, 2), k), WK.read(loop(step, 3), k)
+    before = {_key(g): g for g in two.products}
+    out = []
+    for g in three.products:
+        b = before.get(_key(g))
         g = dataclasses.replace(g, macs=g.macs - (b.macs if b else 0), wires=g.wires - (b.wires if b else 0))
         if g.macs:
-            groups.append(g)
-    return WK.Work(three.gates - two.gates, groups, {k: three.left_out[k] - two.left_out[k] for k in three.left_out})
+            out.append(g)
+    return WK.Work(k, three.gates - two.gates, out, three.r_step, three.keep)
 
 
 def primitives(step: Program) -> Counter:
     """The step's primitives' activations by (inside a product, primitive), counted once a Definition and multiplied
     through batches and scans."""
-    reader, memo = WK.Reader(step), {}
+    reader, memo = WK.Reader(step, K0), {}
     by_id: dict = {}
 
     def walk(fn, inside: bool) -> Counter:
@@ -143,8 +151,19 @@ def primitives(step: Program) -> Counter:
     return Counter({k: n * sum(compile_bits(boolean_version(by_id[k[1]])).counts.values()) for k, n in counts.items()})
 
 
+@dataclasses.dataclass
+class Reading:
+    step: Program
+    #: by k: the Program's work an iteration, the trace's priced rows, `he_of_rows`' M and `he_figure`'s figure
+    work: dict
+    rows: dict
+    he: dict
+    fig: dict
+    size: float
+
+
 @pytest.fixture(scope="module")
-def readings():
+def readings() -> Reading:
     with torch.device("meta"):
         model = LF.LM(LF.SIZES["tiny"], ctx=CTX, vocab=64)
     step = step_program(model, LF.square_loss, AdamW(**LF.ADAMW), torch.empty(*BATCH, dtype=torch.long, device="meta"))
@@ -153,26 +172,78 @@ def readings():
     g = capture_step(model, torch.optim.AdamW(model.parameters(), **LF.ADAMW), LF.square_loss,
                      torch.zeros(*BATCH, dtype=torch.long))
     raw = products.raw_on_dial(g)
-    rows = [products.priced(r, None) for r in raw["rows"]]
-    return step, iteration(step), rows, F.he_of_rows(rows, raw["k"], None, g.tokens), products.step_gates(g, None)
+    size = products.step_gates(g, None)
+    r = Reading(step, {}, {}, {}, {}, size)
+    for k in KS:
+        blk = raw if k == raw["k"] else raw["at"][str(int(k))]
+        r.rows[k] = [products.priced(row, None) for row in blk["rows"]]
+        r.he[k] = F.he_of_rows(r.rows[k], k, None, g.tokens)
+        r.fig[k] = F.he_figure(r.he[k], C, size)
+        r.work[k] = iteration(step, k)
+    return r
+
+
+def _ordered(beta, weight) -> tuple:
+    """An operand pair's β, the weight's first, two of one kind the larger first."""
+    a, b = beta
+    if weight[0] != weight[1]:
+        return (b, a) if weight[1] else (a, b)
+    return tuple(sorted((a, b), reverse=True))
+
+
+def held(g: WK.Group, he: dict) -> bool:
+    """Whether the trace's M holds a group of ``g``'s kinds and contraction with at least its MACs and β."""
+    mine = _ordered(g.beta, g.weight)
+    return any(t["weight"] == list(g.weight) and t["k_dim"] == g.k_dim and t["macs"] >= g.macs and
+               all(m <= th + 1e-9 for m, th in zip(mine, _ordered(t["beta"], t["weight"]))) for t in he["groups"])
+
+
+def trace_blocks(fig: dict, k: float, size: float) -> float:
+    return MC.bound(C, k, N=fig["N"], O=fig["O"], size=size, beta_w=fig["beta_w"], beta_x=fig["beta_x"],
+                    b=fig["b_y"], F=fig["F"]).blocks if fig["N"] else 0.0
 
 
 @pytest.mark.slow
-def test_the_programs_work_is_the_traces_with_each_difference_explained(readings):
-    """Derives the step and captures it (seconds each): what it catches is a Program reading that drifts from the
-    products, kinds and sharing the benchmark finds in a trace of the same step."""
-    _step, it, rows, he, _size = readings
-    traced = sum(r["count"] * r["macs"] for r in rows)
-    assert he["candidates_macs"] == traced and he["self_macs"] == 0
-    dots = [g for g in it.groups if g.product.startswith("DotRef")]
-    assert dots and all(not any(g.weight) for g in dots)
-    assert it.N == traced + sum(g.macs for g in dots)
-    assert it.O == sum(r["count"] * r["outputs"] for r in rows) * 32 + sum(g.wires for g in dots)
-    assert it.left_out["lookup"] == 0 and it.left_out["self"] == 0
-    assert {g.weight for g in it.groups} == {(False, False), (False, True)}
-    assert {w for g in it.groups for w in g.widths} == {w for g in he["groups"] for w in g["width"]} == {32}
-    assert {g.bits for g in it.groups} == {(32.0, 32.0)}
-    assert WK.clique(e for g in it.groups for e in g.edges) == 3
+def test_the_programs_bound_is_never_above_the_traces(readings):
+    """Derives the step, captures it and reads both at each k (about a minute): what it catches is a Program reading
+    that charges work the trace's M doesn't hold, or a β above the trace's, at any k of the dial."""
+    r = readings
+    for k in KS:
+        it, he, fig = r.work[k], r.he[k], r.fig[k]
+        assert all(held(g, he) for g in it.groups)
+        theirs = trace_blocks(fig, k, r.size)
+        at_theirs, own = WK.bound(it, C, F=fig["F"]), WK.bound(it, C)
+        assert (at_theirs.bound.blocks if at_theirs else 0.0) <= theirs
+        assert (own.bound.blocks if own else 0.0) <= theirs
+        assert theirs > 0
+
+
+@pytest.mark.slow
+def test_every_product_pays_at_most_what_the_trace_pays_its_shape(readings):
+    """Each of the Program's products (m, K, n) is a shape the trace has a product of, each operand's rate at most
+    the least the trace's products of that shape pay it, and every product with two θ′ operands carries the
+    embedding's rows, so the Program charges nothing."""
+    r = readings
+    traced = sum(row["count"] * row["macs"] for row in r.rows[KS[0]])
+    for k in KS:
+        it = r.work[k]
+        lins = [g for g in it.products if g.product.startswith("LinearRef")]
+        assert sum(g.macs for g in lins) == traced == r.he[k]["candidates_macs"]
+        rows = [row for row in r.rows[k] if all(row["affected"])]
+        for g in lins:
+            _b, m, kk, n = g.dims
+            least = [math.inf, math.inf]
+            for row in rows:
+                d = row["dims"]
+                for (dm, dn), (ra, rb) in (((d["m"], d["n"]), row["rates"]), ((d["n"], d["m"]), row["rates"][::-1])):
+                    if (dm, d["k"], dn) == (m, kk, n):
+                        least = [min(least[0], ra), min(least[1], rb)]
+            assert math.isfinite(least[0]), g.dims
+            assert g.rates[0] <= least[0] + 1e-9 and g.rates[1] <= least[1] + 1e-9, (g.dims, g.rates, least)
+        assert it.groups == [] and it.r_step is None
+        assert it.left_out["self"] == 0 and it.left_out["activations"] == 0
+        dots = [g for g in it.products if g.product.startswith("DotRef")]
+        assert {g.reason for g in lins} == {"gathered"} and {g.reason for g in dots} == {"gathered", "theta"}
 
 
 @pytest.mark.slow
@@ -180,40 +251,32 @@ def test_both_sizes_are_boolean_gates_and_differ_by_what_each_prices(readings):
     """|C| on both sides in Boolean gates: the products' differ by the MACs only the Program writes as products and by
     their Definition's gates, and the rest of the Program's |C| is the trace's and the primitives no MAC of the
     trace's prices, less what the trace prices its elementwise MACs at beyond the Program's multiplies and divisions."""
-    step, it, rows, _he, size = readings
+    r = readings
+    step, it, rows, size = r.step, r.work[K0], r.rows[K0], r.size
     assert it.gates == WK.boolean_gates(step)
     split = primitives(step)
     assert sum(split.values()) == it.gates
     inside = {fid for (ins, fid), g in split.items() if ins and g}
     assert inside == {"F32Fma_v1"}
     fma_v1 = sum(compile_bits(boolean_version(PRIMS.F32Fma)).counts.values())
-    traced = sum(r["count"] * r["macs"] for r in rows)
-    dots = sum(g.macs for g in it.groups if g.product.startswith("DotRef"))
+    traced = sum(row["count"] * row["macs"] for row in rows)
     mine_products = sum(g for (ins, _f), g in split.items() if ins)
-    assert mine_products == (traced + dots + it.left_out["theta"]) * fma_v1
-    theirs_products = sum(r["count"] * r["macs"] * r["gates_per_mac"] for r in rows)
+    assert mine_products == sum(g.macs for g in it.products) * fma_v1
+    assert sum(g.macs for g in it.products if g.product.startswith("LinearRef")) == traced
+    theirs_products = sum(row["count"] * row["macs"] * row["gates_per_mac"] for row in rows)
     assert theirs_products == traced * G.gates("F32Fma_v4") and G.gates("F32Fma_v4") > fma_v1
     mine_rest, theirs_rest = it.gates - mine_products, size - theirs_products
     uncounted = sum(g for (ins, f), g in split.items() if not ins and f.rsplit("_v", 1)[0] in UNCOUNTED)
     assert mine_rest - uncounted <= theirs_rest <= mine_rest
 
 
-@pytest.mark.slow
-def test_both_slowdowns_are_the_calculators_at_its_defaults(readings):
-    """Each slowdown is `min_cut.bound`'s at the calculator's defaults on its own reading's work: the trace's on the
-    figure `he_figure` keeps, the Program's on the sub-work `circuit_properties.work.bound` picks."""
-    _step, it, _rows, he, size = readings
-    c, k = POLICY
-    mc = WK.min_cut()
-    fig = F.he_figure(he, c, size)
-    theirs, mine = mc.bound(c, k, N=fig["N"], O=fig["O"], size=size, F=fig["F"]), WK.bound(it, c, k)
-    assert (mine.bound.beta_w, mine.bound.beta_x, mine.bound.b) == (theirs.beta_w, theirs.beta_x, theirs.b) == \
-        (mc.BF16, mc.beta(k), mc.BF16)
-    assert theirs.slowdown > 1 and mine.bound.slowdown > 1
-    assert mine.bound.slowdown == pytest.approx(mine.bound.blocks * c / it.gates)
-    kept = [g for g in he["groups"] if g["beta"] == [fig["beta_x"], fig["beta_w"]] and g["weight"] == [False, True]]
-    assert fig["N"] == sum(g["macs"] for g in kept) < sum(g["macs"] for g in he["groups"])
-    assert mine.N == sum(g.macs for g in it.groups if any(g.weight)) and mine.omega == 2
-    assert fig["F"] == pytest.approx(mc.share(3)) and mine.bound.F == 1
-    ratio = (mine.bound.blocks / theirs.blocks) * (size / it.gates)
-    assert mine.bound.slowdown / theirs.slowdown == pytest.approx(ratio)
+def test_the_readings_constants_are_the_benchmarks():
+    assert WK.ACC_BITS == products.ACC_BITS and WK.SHARED_PREFIX == F.SHARED_PREFIX and WK.HEAD_K == F.HEAD_K
+    for w in (1.0, 16.0, 32.0):
+        for rate in (0.5 * w, WK.PAID * w, w):
+            assert WK.paid(rate, w) == F.is_paid(rate, w)
+    for k in products.DIAL_K:
+        assert MC.beta(k) == F.beta_k(k)
+        for w, rank in ((32.0, 4.0), (16.0, 64.0)):
+            assert WK.k_star(k, w) == pytest.approx(F.k_star(k, w))
+            assert WK.beta_eff(w, rank, k) == pytest.approx(F.beta_eff(w, rank, k))

@@ -50,6 +50,10 @@ say which products are the head's. So every error of the reading is less work or
 reading of the same step, and a bound true but weak: a product the tables don't name is not counted, a value with any
 word θ′ doesn't reach is `θ`'s, and overlapping references are one array (F may be higher).
 
+Two limits follow. A Program with no scan has no carried word, so no θ′ and no bound. And from the circuit alone,
+every product downstream of a gather by the batch is left out: a model whose first op is a table lookup by its tokens
+is charged nothing.
+
 `bound` takes the most blocks over the sub-works whose products are at least a threshold β_w·β_x, at least a
 contraction length and of one kind or both, each at the least β_w·β_x, the least `b` and the ω of its own products,
 through the calculator's `min_cut`.

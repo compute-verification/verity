@@ -39,17 +39,21 @@ summaries can't count exactly (one value bound to two activation leaves above th
 
 ## The min-cut bound's work
 
-`work.read(program)` reads off a word Program what `min_cut.bound` takes of a circuit: |C| in Boolean gates (each
-primitive at its registered Boolean version's, `work.boolean_gates`), the charged products' MACs N and output wires O,
-each operand's kind, width and source bits, and the arrays they multiply, which give F. The products are a reader-side
-table of registered Definitions (`work.PRODUCTS`: the reference registry's `LinearRef` and `DotRef`), and the lookups
-another (`work.LOOKUPS`, the gathers). A product is charged where both operands are wholly reached from a fresh input,
-neither reads a lookup of a table no fresh input reaches, and the two are no one array; in a scan, a carried operand is
-a weight, charged from the iteration that first finds it reached from a fresh input (the carry is iterated to a fixed
-point, so a loop's iterations cost what its distinct contexts do). `work.bound(work, c, k)` is the most blocks over its
-sub-works, through the calculator's `min_cut` at its defaults for the β and b, each under its width and a β under the
-source bits its values hold. The module docstring has the rules and which way each of the reading's errors moves the
-bound; the training benchmark's `tests/test_program_reading.py` holds a training loop's reading beside its trace's.
+`work.read(program, k)` reads off a word Program what `min_cut.bound` takes of a circuit at a policy's k: |C| in
+Boolean gates (each primitive at its registered Boolean version's, `work.boolean_gates`), every product with its dims,
+each operand's kind, rate, source bits and β, the charged products' MACs N and output wires O, and the arrays they
+multiply, which give F. The rules are the training benchmark's reading of a trace (`capture.products`' rates,
+`formalism.he_of_rows`' β), each premise a Program doesn't state taken on the side of the smaller bound. The products
+are a reader-side table of registered Definitions (`work.PRODUCTS`: the reference registry's `LinearRef` and `DotRef`),
+and the lookups another (`work.LOOKUPS`, the gathers). The update θ′ is a scan's carried words that a fresh input
+reaches; every input is free like θ (the carry is iterated to a fixed point, so a loop's iterations cost what its
+distinct contexts do). A product is charged where both operands depend on θ′ in every word, neither carries a gather's
+rows, the two are no one array and not two activations; `Work.left_out` holds the rest by why. Its limits: a Program
+with no scan has no bound; and a gather's rows by the batch stay a gather's rows through every op, so from the circuit
+alone every product downstream of a model's table lookup is left out. `work.bound(work, c)` is the most blocks over its
+sub-works, through the calculator's `min_cut` at each sub-work's least β, none from `HEAD_K` on. The module docstring
+has the rules and which way each moves the bound; the training benchmark's `tests/test_program_reading.py` holds a
+training loop's reading beside its trace's, never above it.
 
 ## Interface
 
