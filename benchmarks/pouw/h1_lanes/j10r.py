@@ -4,12 +4,12 @@
 n = 1), then `PouwH1Combine_v2`, which folds every lane's and chunk's ok row into the leaf's one ok. Each statement is
 `h1window.leaf_program`'s at its K and chunk, staged on `h1zy.statement_rows` and checked by the Lean verifier against
 the verifier's own `--registered` file (`leaf_lanes.registered_file` at `leaf_lanes.verifier_entries` of every
-after-draw value, `leaf_lanes.produced_values`).
+after-sample value, `leaf_lanes.produced_values`).
 
 * **The registered values**, as `run.py`'s: ``a`` and ``b`` (each row its `h1zy.chunk_leaves`: n leaves a row, row i's
   chunk c at n i + c), ``zy`` and ``receipt`` (`h1zy.reference` over v5 at the unit's ``call`` and ``blocks``,
   `h1window.j10r_inputs`, which is the lanes' partials' XOR).
-* **The after-draw values** (`one_stage.produced`, under the registration's digest): ``partials`` (row l lane l's
+* **The after-sample values** (`one_stage.produced`, under the registration's digest): ``partials`` (row l lane l's
   `h1zy.lane_partial`), each ``carry<c>`` (row l what lane l's chunk c hands chunk c + 1, `h1zy.lane_chunk_carries`)
   and ``oks`` (row i statement i's ok word, 1), the row every lane and chunk statement's output ``o0`` opens: so those
   oks are in the trace, and only the combine's ``o0`` is a known row (the one 1 of `h1unit.ok_salt`).
@@ -77,14 +77,14 @@ def chunk_rows(words: np.ndarray, n: int) -> list[list[int]]:
 
 @dataclass
 class World:
-    """One registration and the after-draw values over it: the verifier's view of the leaf, honest or not."""
+    """One registration and the after-sample values over it: the verifier's view of the leaf, honest or not."""
 
     name: str
     leaf: RN.Leaf
     roots: tuple
     regs: dict
     registration: str
-    draw: str
+    sample: str
     trees: dict
     record: dict
     reg_record: dict
@@ -149,7 +149,7 @@ def register(ctx: Ctx, leaf: RN.Leaf) -> tuple[dict, tuple, list[int]]:
     return regs, roots, list(receipt)
 
 
-def after_draw(ctx: Ctx, leaf: RN.Leaf, roots: tuple) -> tuple[list, list]:
+def after_sample(ctx: Ctx, leaf: RN.Leaf, roots: tuple) -> tuple[list, list]:
     """The leaf's honest partials (u32 words a lane) and carries (``carries[c][l]``, lane l's chunk c's carry out)."""
     partials, carries = [], [[] for _ in range(ctx.n - 1)]
     for ln in range(LL.lanes(*RC)):
@@ -168,7 +168,7 @@ def world(ctx: Ctx, name: str, leaf: RN.Leaf, regs: dict, roots: tuple, partials
                    {"kind": "stand-in", "harness": "h1_lanes/j10r", "leaf": leaf.position}, partition=ctx.reg.part,
                    registered=[regs[v].entry() for v in REGISTERED])
     d = R.digest(rec)
-    draw = RN.draw_digest(d, 1)
+    sample = RN.sample_digest(d, 1)
     rows = {LL.PARTIALS: [U.receipt_words(p).tolist() for p in partials],
             **{LL.carry(c): [U.receipt_words(Z.carry_words(x)).tolist() for x in carries[c]] for c in range(ctx.n - 1)},
             LL.OKS: [[int(o)] for o in oks]}
@@ -176,7 +176,7 @@ def world(ctx: Ctx, name: str, leaf: RN.Leaf, regs: dict, roots: tuple, partials
         assert len(rows[v]) == n_rows and all(len(r) == words for r in rows[v]), f"{v}: {n_rows} rows of {words} words"
     trees = {v: PR.commit(ctx.prog, v, rs, d, schema=V2) for v, rs in rows.items()}
     ops = {**{v: PR.rows_of(t) for v, t in trees.items()}, **{v: PR.rows_of(regs[v]) for v in REGISTERED}}
-    return World(name, leaf, roots, regs, d, draw, trees, PR.record(d, draw, [t.entry() for t in trees.values()], ops),
+    return World(name, leaf, roots, regs, d, sample, trees, PR.record(d, sample, [t.entry() for t in trees.values()], ops),
                  rec, partials, carries, oks)
 
 
@@ -222,7 +222,7 @@ def stager(ctx: Ctx, kind: str, ch: int | None):
 
 def statement(ctx: Ctx, tag: str, w: World, ln: int | None, ch: int | None) -> dict:
     """Stage one statement and write the verifier's files: every read port opened at its row of the world's registered
-    or after-draw value (`leaf_lanes.reads`, ``o0`` of a lane or chunk the statement's ``oks`` row), every known port at
+    or after-sample value (`leaf_lanes.reads`, ``o0`` of a lane or chunk the statement's ``oks`` row), every known port at
     the verifier's own row (`known_rows`, `produced.known_port`); the verifier's file is `leaf_lanes.registered_file` at
     the world's records' entries and roots alone. The lowered ok is held to the word reference (`expected`)."""
     key = statement_key(ctx, ln, ch)
@@ -329,7 +329,7 @@ def prepare(args) -> None:
     salt = hashlib.sha512(RN.SALT_TAG + args.name.encode()).digest()
     leaf = RN.leaf_data(args.seed, args.k, salt, args.position)
     regs, roots, receipt = register(ctx, leaf)
-    partials, carries = after_draw(ctx, leaf, roots)
+    partials, carries = after_sample(ctx, leaf, roots)
     xor = [0] * len(receipt)
     for p in partials:
         xor = [x ^ v for x, v in zip(xor, p)]
@@ -344,11 +344,11 @@ def prepare(args) -> None:
         swapped[0][LN], swapped[0][SWAP] = carries[0][SWAP], carries[0][LN]
         ctx.worlds["carry"] = world(ctx, "carry", leaf, regs, roots, partials, swapped, oks)
     for nm, w in ctx.worlds.items():
-        assert w.registration == A.registration, "only the after-draw values differ"
+        assert w.registration == A.registration, "only the after-sample values differ"
         (vd / f"{nm}.registration.json").write_text(json.dumps(w.reg_record))
         (vd / f"{nm}.produced.json").write_text(json.dumps(w.record))
     mine = {v: PR.entry(ctx.prog, v, rows, words, A.registration) for v, (rows, words) in ctx.values.items()}
-    produced_check = {nm: list(PR.check(w.record, A.registration, A.draw, mine)) for nm, w in ctx.worlds.items()}
+    produced_check = {nm: list(PR.check(w.record, A.registration, A.sample, mine)) for nm, w in ctx.worlds.items()}
     print(f"registered and produced ({sorted(ctx.values)}): {time.time() - t0:.0f} s; produced records' codes against the "
           f"honest registration: {produced_check}", flush=True)
     ctx.stagers = {kc: stager(ctx, *kc) for kc in kinds}
@@ -378,7 +378,7 @@ def prepare(args) -> None:
     summary = {"k": args.k, "rc": list(RC), "chunks": n, "tile": "PouwH1Tile_v5", "lanes": LL.lanes(*RC),
                "statements": len(LL.statements(*RC, j10r=args.k)), "j10r": [ctx.j10r[0], list(ctx.j10r[1])],
                "programs": programs, "place": ctx.place, "values": ctx.values, "registration": A.registration,
-               "draw": A.draw, "produced": A.record, "produced_check": produced_check, "circuits": circuits,
+               "draw": A.sample, "produced": A.record, "produced_check": produced_check, "circuits": circuits,
                "ok": {tg: by[tg]["ok"] for tg in by}, "want": {tg: by[tg]["want"] for tg in by},
                "binding": {tg: by[tg]["binding"] for tg in by}, "seconds": round(time.time() - t0, 1)}
     (work / "prepare.json").write_text(json.dumps(summary, indent=1))
