@@ -3143,14 +3143,14 @@ def test_a_lean_candidate_s_check_starts_only_after_its_records_run_and_on_its_r
 
 def test_a_pr_changing_a_lean_input_waits_while_a_batch_is_staged_and_is_built_on_it_once_it_is_on_main_s_chain(env):
     """`Ready.lean_input` is a PR's own change meeting the Lean inputs (`vqueue_slim.lean_inputs`) of `main`'s tree with the
-    ready PRs' changes in it: check's code, or a Python file of a Lake package, here the one the staged Lean PR adds.  Neither
+    ready PRs' changes in it: check's `common.py`, or a script of a Lake package, here the one the staged Lean PR adds.  Neither
     is built beside the staged batch, which would change the Lean inputs of the top it goes onto and start its records run
     again there; a PR touching none is.  Once the batch is on main's chain, its records carried onto that PR's candidate,
     the two are built on it."""
     main = env.main()
     loop, records, sha, one, _ = _records_loop(env)
     env.put(2, {"pkg/notes.py": "2\n"})
-    env.put(3, {"tools/verity/check/notes.txt": "3\n"})
+    env.put(3, {"tools/verity/check/common.py": "3\n"})
     env.put(4, {"b.txt": "4\n"})
     (four,) = loop.tick()
     assert (four["members"], four["base"], four["enqueued"]) == ([4], main, True), four
