@@ -342,6 +342,7 @@
     {"file": "verity_vllm/properties/census.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
     {"file": "verity_vllm/properties/fa_tap_exactness.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 8},
     {"file": "verity_vllm/properties/golden.py", "kind": "schema-literal", "symbol": "load_corpus", "detail": "verity-gen/golden/v1"},
+    {"file": "verity_vllm/properties/noninterference.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/noninterference/v2"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "schema-literal", "symbol": "compare", "detail": "verity-capture/noninterference/v1"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "schema-literal", "symbol": "run_hooks_variant", "detail": "verity-capture/noninterference-hooks/v1"},
     {"file": "verity_vllm/properties/noninterference.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 8},
