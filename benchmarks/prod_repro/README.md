@@ -105,10 +105,15 @@ token that does and the first step.
   emitted in the earliest step (its request, its position, the id served and the id replayed there, and that step),
   and the first step whose rows differ, with the rows only serving ran and the rows only the replay ran.
 - **cost**: stock's output tokens a second over ours, less one: the share of stock's serving time our changes add at
-  equal tokens, with its 95% interval and the reps it is over. Beside it, the same figure for stock served a second
-  time, the noise floor. `under 1%: yes` is printed only where the interval's upper end, widened by the floor, is under
-  the target; otherwise `not shown`, as for a cost of too few reps for an interval: the estimate alone shows nothing.
-  On a sessions load it is also `not shown` where the benchmark's own cost says the arms did not do the same work.
+  equal tokens. The verdict's unit is a server lifetime: the passes of one share its server's state, so `under 1%:
+  yes` is printed only where the upper end of the 95% interval over lifetime pairs is under the target, and
+  `not shown` otherwise. A job serves each arm in one lifetime, so it holds one pair and no such interval, and prints
+  `not shown`: the estimate alone shows nothing. Under it, the interval over the job's passes, labelled as taking them
+  as independent, with the reps it is over; and the noise floor, the same figure for stock served a second time,
+  beside and not added (each lifetime pair already holds two servers' draws), with a line where its own interval
+  leaves out 0: stock then differs from stock.
+  On a sessions load the verdict is also `not shown` where the benchmark's own cost says the arms did not do the same
+  work.
   By the corpus client the figure is
   `serve_tax.tax` and is a cost only where stock did not keep up with the arrivals; where it kept up, the line is not
   measured. By vLLM's client it is `serve_tax.serving_cost`, the paired ratio at the rung where stock serves most (for

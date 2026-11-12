@@ -24,10 +24,11 @@ arm, and its replay's), prints the report and writes it to OUT/prod_repro.json a
   the requests of the window that began from a prefix-cache hit. Where they differ: the first token that does (its
   request, position, served and replayed ids and the step that emitted it) and the first step whose rows do;
 - ``cost``: what serving with our changes (``--ours``) costs over stock (``--stock``) on the load, a share of stock's
-  serving time with its 95% interval, beside stock served a second time (``--again``), the noise floor: by vLLM's
-  client the benchmark's paired ratio at the rung where stock is saturated (`serve_tax.serving_cost`), by the corpus
-  client its tax over reps (`serve_tax.tax`), which is a cost only where stock did not keep up with the arrivals. It
-  is under the target only where its whole interval is, widened by the noise floor (`under`); else that is not shown;
+  serving time with its 95% interval over the passes taken as independent, beside stock served a second time
+  (``--again``), the noise floor: by vLLM's client the benchmark's paired ratio at the rung where stock is saturated
+  (`serve_tax.serving_cost`), by the corpus client its tax over reps (`serve_tax.tax`), which is a cost only where
+  stock did not keep up with the arrivals. It is under the target only where the upper end of an interval over
+  server-lifetime pairs is (`under`), which a job of one lifetime an arm does not have; else that is not shown;
 - ``advice``: the bits a request by class, with each class's events, of the certified serve whose trace directory
   ``--advice-trace`` names, by the tree's reader of it (`BY_CLASS`: its ``report``), under the registered stop ids
   (``--advice-stops``, EOS first; else the ``eos_token_id`` of the generation_config.json beside the trace's model).
@@ -107,6 +108,8 @@ TOPK_KEPT = "topk_counters.json"
 LIMITS = HERE / "limits.json"
 #: the cost's verdict against its target (`under`)
 UNDER, NOT_SHOWN = "under", "not shown"
+#: why a job of one server lifetime an arm has no verdict (`under`)
+ONE_LIFETIME = "each arm has one server lifetime, and the verdict reads the interval over lifetime pairs"
 #: why a cost on a sessions load is not shown whatever its interval: the benchmark's own cost has no verdict there
 #: (`serve_tax.session_cost`'s ``same_work``)
 UNEQUAL = ("the arms did not do the same work (one left a request unserved, or their prefix caches served different "
@@ -479,17 +482,22 @@ def kept_up(arm_dir: Path, arm: dict, load: str) -> dict:
             "arrivals_span_s": max(a for _, a in tails)}
 
 
-def under(c: dict, target: float, floor: float) -> str:
+def under(life: list[float] | None, target: float) -> str:
     """Whether a cost is shown to be under ``target``, a fraction: `UNDER` only where the upper end of its 95%
-    interval, widened by ``floor`` (the size of the noise floor), is; else `NOT_SHOWN`, as for a cost of too few reps
-    for an interval. The estimate alone shows nothing."""
-    return UNDER if c.get("ci95") and c["ci95"][1] + floor < target else NOT_SHOWN
+    interval over server-lifetime pairs (``life``) is; else `NOT_SHOWN`, as without one. The unit is a server
+    lifetime: the passes of one share its server's state, so an interval over them as if independent is too narrow
+    to say it, and the estimate alone shows nothing. The noise floor is not added: each lifetime pair already holds
+    two servers' draws."""
+    return UNDER if life and life[1] < target else NOT_SHOWN
 
 
 def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | None, load: str, target: float) -> dict:
-    """The cost line: ``ours`` over ``stock`` on ``load``, a fraction of stock's serving time, with its interval, the
-    noise floor (``again`` over ``stock``, measured the same way) and whether it is under ``target`` percent
-    (`under`). On a sessions load it is under only where the benchmark's own cost says the arms did the same work
+    """The cost line: ``ours`` over ``stock`` on ``load``, a fraction of stock's serving time, with its interval
+    over the passes taken as independent, the noise floor beside (``again`` over ``stock``, measured the same way,
+    and whether its own interval leaves out 0: stock then differs from stock) and whether the cost is under
+    ``target`` percent (`under`). The benchmark's runner serves each arm in one lifetime, so a job holds one
+    lifetime pair and no interval over them, and its verdict is `NOT_SHOWN`. On a sessions load it is so too where
+    the benchmark's own cost says the arms did not do the same work
     (`serve_tax.session_cost`). Not measured where an arm did not serve the load, where an arm left requests unserved
     (the arms then served different tokens), where the benchmark's own cost refuses the arms, or where the corpus
     client's arrivals did not saturate stock."""
@@ -534,12 +542,15 @@ def cost(out: Path, by: dict[str, dict], stock: str, ours: str, again: str | Non
             return not_measured(f"{stock} kept up with the arrivals (its longest rep ended {kept['tail_s']:.1f} s after "
                                 f"the last of {kept['arrivals_span_s']:.1f} s of arrivals), so its tokens a second "
                                 "follow the arrivals and are not a cost: send faster", reading=c, how=how)
-    floor = abs(noise["value"]) if noise and noise.get("value") is not None else 0.0
+    life = None  # the interval over lifetime pairs: a job holds one pair
+    ends = noise.get("ci95") if noise else None
     return {"measured": c["value"] is not None, "value": c["value"], "ci95": c.get("ci95"), "how": how,
             **({} if c["value"] is not None else {"why": "an arm served no token in some rep"}),
-            "noise_floor": {"arm": again, "value": noise["value"], "ci95": noise.get("ci95")} if noise else None,
+            "lifetimes": {"pairs": 1, "ci95": life},
+            "noise_floor": {"arm": again, "value": noise["value"], "ci95": ends,
+                            "leaves_out_zero": bool(ends) and not ends[0] <= 0 <= ends[1]} if noise else None,
             "target": target, "same_work": same,
-            "verdict": NOT_SHOWN if same is False else under(c, target / 100, floor)}
+            "verdict": NOT_SHOWN if same is False else under(life, target / 100)}
 
 
 # --------------------------------------------------------------------------------------------------------- the advice
@@ -858,7 +869,8 @@ def _verdict(c: dict) -> str:
     """A cost's verdict in words: yes, or not shown and, where the interval is not the reason, what is."""
     if c["verdict"] == UNDER:
         return "yes"
-    why = UNLIKE if c.get("settings_differ") else UNEQUAL if c.get("same_work") is False else ""
+    why = (UNLIKE if c.get("settings_differ") else UNEQUAL if c.get("same_work") is False else
+           ONE_LIFETIME if not c["lifetimes"]["ci95"] else "")
     return NOT_SHOWN + (f", {why}" if why else "")
 
 
@@ -919,12 +931,14 @@ def text(r: dict) -> str:
               if bench else f"at {how['rate']:g} requests a second, which stock did not keep up with")
         reps = f"{how['reps']} paired rep{'' if how['reps'] == 1 else 's'}" if bench else f"{how['reps'][0]} and {how['reps'][1]} reps"
         lines += [
-            f"cost: {ours} over {stock} {_pct(c['value'])} of stock's serving time{_interval(c)}; under "
-            f"{c['target']:g}%: {_verdict(c)}",
-            f"  over {reps}, {at}: {how['by']}",
-            "  noise floor: " + (f"{a['again']} over {stock} {_pct(noise['value'])}{_interval(noise)}"
-                                 if noise and noise["value"] is not None else
-                                 "not measured (stock was not served a second time)")]
+            f"cost: {ours} over {stock} {_pct(c['value'])} of stock's serving time; under {c['target']:g}%: {_verdict(c)}",
+            f"  passes taken as independent{_interval(c)}: over {reps}, {at}: {how['by']}",
+            "  noise floor, beside and not added: " + (
+                f"{a['again']} over {stock} {_pct(noise['value'])}{_interval(noise)}, passes taken as independent"
+                if noise and noise["value"] is not None else "not measured (stock was not served a second time)")]
+        if noise and noise.get("leaves_out_zero"):
+            lines.append(f"  STOCK DIFFERS FROM STOCK: the noise floor's interval leaves out 0, so two servers of {stock} "
+                         "differ by more than their passes do")
     if c.get("settings_differ"):
         lines.append(f"  NOT at the same settings: {ours} and {stock} differ in {', '.join(c['settings_differ'])}, so the "
                      "figure is not our changes' cost")

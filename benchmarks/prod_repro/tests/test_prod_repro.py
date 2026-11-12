@@ -136,11 +136,15 @@ def test_a_replayed_window_prints_the_settings_and_the_three_lines(tmp_path: Pat
     want = S.tax(ref, mine)
     assert r["cost"]["value"] == pytest.approx(want["value"]) and r["cost"]["ci95"] == pytest.approx(want["ci95"])
     assert r["cost"]["how"]["client"] == "corpus" and r["cost"]["noise_floor"]["arm"] == "compiled-again"
-    # about +1% with an interval that passes 1%: the estimate alone shows nothing
-    assert f"cost: record over compiled {100 * want['value']:+.2f}% of stock's serving time, 95% interval [" in txt
-    assert "]; under 1%: not shown\n  over 3 and 3 reps, at 1000 requests a second, which stock did not keep up with" in txt
-    assert r["cost"]["verdict"] == "not shown" and r["cost"]["ci95"][1] > 0.01
-    assert "\n  noise floor: compiled-again over compiled" in txt
+    # one lifetime an arm: no interval over lifetime pairs, so no verdict; the interval printed is over the passes
+    assert (f"cost: record over compiled {100 * want['value']:+.2f}% of stock's serving time; under 1%: not shown, each "
+            "arm has one server lifetime, and the verdict reads the interval over lifetime pairs\n"
+            "  passes taken as independent, 95% interval [") in txt
+    assert "]: over 3 and 3 reps, at 1000 requests a second, which stock did not keep up with" in txt
+    assert r["cost"]["verdict"] == "not shown" and r["cost"]["lifetimes"] == {"pairs": 1, "ci95": None}
+    assert "\n  noise floor, beside and not added: compiled-again over compiled" in txt
+    assert ", passes taken as independent\n" in txt and r["cost"]["noise_floor"]["leaves_out_zero"] is False
+    assert "STOCK DIFFERS FROM STOCK" not in txt
     assert "advice: not measured: no trace directory of a certified serve was given (ADVICE_TRACE=DIR)" in txt
     assert txt.endswith("prod_repro: 2 of 3 lines measured\n")
 
@@ -291,7 +295,7 @@ def test_stock_served_once_has_no_noise_floor(tmp_path: Path):
     assert rc == 0 and r["arms"] == {"stock": "compiled", "again": None, "ours": "record", "served": ["compiled", "record"]}
     assert "stock compiled, stock again not served, ours record;" in txt
     assert r["cost"]["measured"] and r["cost"]["noise_floor"] is None
-    assert "\n  noise floor: not measured (stock was not served a second time)\n" in txt
+    assert "\n  noise floor, beside and not added: not measured (stock was not served a second time)\n" in txt
     assert list(r["ran"]["arms"]) == ["compiled", "record"] and txt.endswith("prod_repro: 2 of 3 lines measured\n")
 
 
@@ -494,13 +498,23 @@ def test_by_vllms_client_the_cost_is_the_benchmarks_paired_cost_and_nothing_is_r
     assert rc == 0 and r["cost"]["value"] == pytest.approx(0.004) == pytest.approx(want["value"]) and r["cost"]["ci95"] == want["ci95"]
     assert r["cost"]["how"] == {"client": "vllm-bench", "rung": 16, "reps": 6, "saturated": True, "sessions": False,
                                 "by": r["cost"]["how"]["by"]}
-    assert r["cost"]["verdict"] == "under"
-    assert ("cost: record over compiled +0.40% of stock's serving time, 95% interval [+0.40%, +0.40%]; under 1%: yes\n"
-            "  over 6 paired reps, at concurrency 16, where stock's rungs show it saturated: ") in txt
-    # under the target only where the interval's upper end is, widened by the noise floor; no interval shows nothing
-    assert P.under({"value": 0.004, "ci95": [0.001, 0.0099]}, 0.01, 0.0) == "under"
-    assert P.under({"value": 0.004, "ci95": [0.001, 0.0099]}, 0.01, 0.0002) == "not shown"
-    assert P.under({"value": 0.004, "ci95": [0.001, 0.01]}, 0.01, 0.0) == P.under({"value": 0.004}, 0.01, 0.0) == "not shown"
+    # six passes that all sit under the target show nothing: they are one lifetime an arm, and the verdict reads the
+    # interval over lifetime pairs, which a job does not have
+    assert r["cost"]["verdict"] == "not shown" and r["cost"]["lifetimes"] == {"pairs": 1, "ci95": None}
+    assert ("cost: record over compiled +0.40% of stock's serving time; under 1%: not shown, each arm has one server "
+            "lifetime, and the verdict reads the interval over lifetime pairs\n"
+            "  passes taken as independent, 95% interval [+0.40%, +0.40%]: over 6 paired reps, at concurrency 16, where "
+            "stock's rungs show it saturated: ") in txt
+    # the floor is beside and not added; stock's second lifetime is slower than its first in every pass here, so its
+    # interval leaves out 0 and the report says stock differs from stock
+    assert r["cost"]["noise_floor"]["leaves_out_zero"] is True
+    assert "\n  noise floor, beside and not added: compiled-again over compiled -0.10%, 95% interval [" in txt
+    assert (", passes taken as independent\n"
+            "  STOCK DIFFERS FROM STOCK: the noise floor's interval leaves out 0, so two servers of compiled differ by "
+            "more than their passes do\n") in txt
+    # under the target only where the upper end of an interval over lifetime pairs is; without one nothing is shown
+    assert P.under([0.001, 0.0099], 0.01) == "under"
+    assert P.under([0.001, 0.01], 0.01) == P.under(None, 0.01) == "not shown"
     assert "tokens: not measured: no replay ran: none was asked for (--replay PASS names the pass of vLLM's client" in txt
 
 
@@ -523,11 +537,16 @@ def test_a_sessions_loads_cost_is_under_its_target_only_where_the_benchmark_says
     c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
     own = S.session_cost(list(by.values()), "prod-record", "prod")
     assert c["measured"] and round(100 * c["value"], 2) == own["value"] == 0.5 and c["how"]["sessions"] and c["how"]["rung"] == 4
-    assert (c["same_work"], c["verdict"], P._verdict(c)) == (True, "under", "yes")
-    # one pass an arm has no interval, so nothing is shown
+    # the arms did the same work, and the job is one lifetime an arm: no verdict; with an interval over lifetime
+    # pairs whose upper end is under the target, yes
+    assert (c["same_work"], c["verdict"], P._verdict(c)) == (True, "not shown", "not shown, " + P.ONE_LIFETIME)
+    assert c["ci95"] and c["ci95"][1] < 0.01
+    assert P._verdict(c | {"lifetimes": {"pairs": 6, "ci95": [0.002, 0.008]}, "verdict": P.under([0.002, 0.008], 0.01)}) == "yes"
+    assert P._verdict(c | {"lifetimes": {"pairs": 6, "ci95": [0.002, 0.012]}}) == "not shown"
+    # one pass an arm has no interval over passes either
     one = {n: sessions_arm(n, x) for n, x in (("prod", [2.0]), ("prod-record", ours[:1]))}
     c = P.cost(tmp_path, one, "prod", "prod-record", None, S.AGENTIC, 1.0)
-    assert c["measured"] and c["ci95"] is None and (c["same_work"], c["verdict"], P._verdict(c)) == (True, "not shown", "not shown")
+    assert c["measured"] and c["ci95"] is None and (c["same_work"], c["verdict"]) == (True, "not shown")
     # a rep whose prefix cache served another share of the prompts: the benchmark's own cost has no verdict, nor this
     by["prod-record"]["loads"]["agentic@4"][2]["prompt_cached_share"] = 0.9
     c = P.cost(tmp_path, by, "prod", "prod-record", None, S.AGENTIC, 1.0)
