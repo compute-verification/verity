@@ -136,7 +136,7 @@ DOC_TERMS = {
     "physical block": "server block",
     "thread block": "CTA",
     "KV block": "KV page",
-    "the accelerator model, the machine model": "the ACCEL model (`benchmarks/pouw/machine_model/` and its `machine-model` "
+    "the accelerator model, the machine model": "the ACCEL model (`benchmarks/machine_model/` and its `machine-model` "
                                                 "command keep the name)",
     "coverage premise, coverage table": "the card assumption, the opcode table",
     "envelope ISA, envelope op": "the ACCEL ops",
