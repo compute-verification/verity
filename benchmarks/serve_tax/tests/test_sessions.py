@@ -63,6 +63,8 @@ def test_the_pinned_corpus_is_a_whole_sha512_and_a_commit_of_its_repository():
     assert at_limit.file is S.AGENTX_256K and S.AGENTX_256K.repo == S.AGENTX.repo + "-256k" and S.AGENTX_256K != S.AGENTX
     assert at_limit.context == 262144 == S.MODELS["glm53"].published_context and at_limit.sessions and not at_limit.number
     assert at_limit.dataset == S.TIMED_TRACE and S.context_of({S.AGENTIC_256K: (4,)}, 262144) == 262144
+    # half the other loads' turns a user, at the same users: what the recipe's server's KV cache holds of these sessions
+    assert (at_limit.prompts, at_limit.rungs) == (S.LOADS[S.AGENTIC].prompts // 2, S.LOADS[S.AGENTIC].rungs) == (12, (4,))
     with pytest.raises(SystemExit, match="load agentic-256k's requests need a context of 262144"):
         S.context_of({S.AGENTIC: (4,), S.AGENTIC_256K: (4,)}, 131072)
 

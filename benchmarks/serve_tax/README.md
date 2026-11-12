@@ -309,7 +309,9 @@ that context, so no session of it is cut by ours. The load is closed-loop. Its r
 a client of its own with one request in flight that sends its sessions' turns in order, each once the turn before has
 ended, so no turn arrives before the prompt it repeats is computed; `PASS_PROMPTS=agentic=N` is the turns each user
 sends in a pass. A pass's rate is the sum of its users' rates (`serve_tax.merged`). Its users' sessions must fit the
-engine's KV pool together, or the prefix cache evicts what a later turn repeats. A job that serves two such loads
+engine's KV pool together, or the prefix cache evicts what a later turn repeats: `agentic-256k` sends 12 turns a user
+where the others send 24, since four users' sessions of it at 24 turns pass the KV cache the recipe's server has on
+eight of these cards. A job that serves two such loads
 has a cost of each: `cost` prints the first's and then the others', each written beside the first's as
 `serving_cost.<load>.{json,txt}`.
 

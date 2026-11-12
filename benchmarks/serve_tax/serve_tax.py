@@ -926,7 +926,9 @@ SESSION_TURNS = 2
 #: and long do not; its cost is the row under the number and never enters it. One request in flight, so each second
 #: request starts once the prompt it repeats is computed; from a table of its own (``--dataset prefix=FILE``), its
 #: requests leave as they arrive instead (`ARRIVING`). agentic, agentic-full and agentic-256k: sessions (`Load.sessions`), which
-#: repeat most of every prompt; a cost on them is `session_cost` and never enters the number.
+#: repeat most of every prompt; a cost on them is `session_cost` and never enters the number. agentic-256k sends half the
+#: turns a user: at the others' count its four users' sessions together pass the KV cache the recipe's server has on
+#: eight of these cards, and the prefix cache would evict what a later turn repeats.
 LOADS = {
     "chat": Load("ShareGPT's first turns, each decoding its recorded answer's length (vLLM's sharegpt dataset)",
                  ("--dataset-name", "sharegpt"), 200, (4, 8, 12, 16, 24, 32, 48), 4096,
@@ -950,7 +952,7 @@ LOADS = {
                        number=False, sessions=True),
     AGENTIC_256K: Load("a coding agent's recorded sessions, each turn's prompt beginning as the turn before it, as their "
                        "publisher cut them for a context of 262,144 tokens, of synthetic token ids (SemiAnalysis's "
-                       "AgentX traces, the 256k copy; vLLM's timed_trace dataset)", TIMED_TRACE, 24, (4,), 262144,
+                       "AgentX traces, the 256k copy; vLLM's timed_trace dataset)", TIMED_TRACE, 12, (4,), 262144,
                        AGENTX_256K, slo=("tpot",), number=False, sessions=True),
 }
 
