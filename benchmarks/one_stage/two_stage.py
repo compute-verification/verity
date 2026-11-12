@@ -108,6 +108,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import subprocess
 import sys
 import threading
 from collections.abc import Callable, Mapping, Sequence
@@ -120,7 +121,7 @@ import numpy as np
 from verity.protocols.spot.device import challenger as Ch, coins as CC
 from verity.protocols.spot.verifier import second_stage as SS, service as S
 from verity.protocols.spot.verifier.one_stage import audit as A, draw as D, partition as P, registered as REG
-from verity.circuits.codec import descriptor_id
+from verity.circuits.codec import descriptor_id, encode_program
 from verity.circuits.defs import SpecializedDefinition
 from verity.circuits.program import Program
 from verity.commitments.windows import links as LK, rows as CS
@@ -780,6 +781,39 @@ def round_two(replay: Program, key: str, sample: Sequence[int], window: CS.Bindi
     return SS.check(True, own, stmts).to_json()
 
 
+def round_two_lean(exe: str, replay: Program, key: str, sample: Sequence[int], window: CS.Binding,
+                   irec: Mapping[str, Any], brec: Mapping[str, Any], drawn: Sequence[int],
+                   stmts: Sequence[Mapping[str, Any]], record: Mapping[str, Any], proofs: Mapping[str, Any],
+                   mine: Mapping[str, Any]) -> dict[str, Any]:
+    """The compiled round 2 on the same statements: `Spot.Pieces.secondStatements` (the form allowed), which the
+    difftest executable ``exe`` (``sampled-proofs-difftest``) serves as ``second_statements``, given what `round_two`
+    holds as that piece reads it (one line of canonical JSON in, one out). -> its verdict's ``ok`` and ``codes``, and
+    whether the whole verdict is `round_two`'s ``mine`` (``agrees``); ``error`` where the executable gave none."""
+    links, wires = SS.replay_links(replay, key, brec), SS.replay_wires(replay, key)
+    given = {"allow": True, "sample": list(sample), "drawn": list(drawn), "program": encode_program(window.program),
+             "query": window.query, "interior": irec, "boundary": brec, "verdicts": record.get("verdicts") or {},
+             "links": None if links is None else [{"template": x.template, "port": x.port, "value": x.value} for x in links],
+             "wires": None if wires is None else [{"template": x.template, "port": x.port, "writer": x.writer,
+                                                   "wport": x.wport} for x in wires],
+             "rows": [x.to_json() for x in SS.replay_rows(replay, key)],
+             "returns": list(SS.replay_returns(replay, key, brec)),
+             "refs": {e["template"]: e["header"] for e in proofs["templates"]},
+             "ref_reads": {e["template"]: e["registered"] for e in proofs["templates"]}, "statements": list(stmts)}
+
+    def line(x: Any) -> str:
+        return json.dumps(x, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+    try:
+        got = subprocess.run([exe], input=line({"fn": "second_statements", "input": given}) + "\n", capture_output=True,
+                             text=True, encoding="utf-8", check=False)
+        reply = json.loads(got.stdout.splitlines()[0]) if got.stdout.strip() else {"error": got.stderr[-400:]}
+    except (OSError, ValueError, TypeError) as e:
+        return {"error": f"{type(e).__name__}: {e}"}
+    if "output" not in reply:
+        return {"error": line(reply)[:600]}
+    v = reply["output"]
+    return {"ok": v.get("ok"), "codes": v.get("codes"), "agrees": line(v) == line(json.loads(json.dumps(mine)))}
+
+
 def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_dir: Path, source: Callable[[dict], dict],
                  brec: dict, irec: dict, sample: list[int], second: tuple[dict, dict, dict], reads: dict[str, dict],
                  proofs: dict, out: Path, provenance: dict, *, replay: tuple[Program, str],
@@ -818,6 +852,9 @@ def second_stage(a: argparse.Namespace, sets: dict, window: CS.Binding, window_d
         (out / "statements.json").write_text(json.dumps(stmts, indent=1, sort_keys=True))
         got["pins"] = pins(proofs, stmts)
         got["round_two"] = round_two(*replay, sample, window, irec, brec, s["draw"], stmts, record, proofs)
+        if getattr(a, "pieces", None):
+            got["round_two_lean"] = round_two_lean(a.pieces, *replay, sample, window, irec, brec, s["draw"], stmts,
+                                                   record, proofs, got["round_two"])
     return s, ok, record, got, stmts
 
 
@@ -1018,6 +1055,7 @@ def _second(a: argparse.Namespace) -> int:
         print("TWO " + json.dumps({**{x: summary.get(x) for x in ("refused", "sample", "second_stage", "pins", "held",
                                                                   "proof_server_refused")},
                                    "round_two": r2 and {"ok": r2.get("ok"), "codes": r2.get("codes")},
+                                   "round_two_lean": summary.get("round_two_lean"),
                                    "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                      "refused")}}, default=str))
         return code
@@ -1068,6 +1106,8 @@ def _second(a: argparse.Namespace) -> int:
         if "handed" in s:
             summary["outcome"] = outcome_of(again.stream, r.draw, s["handed"], evidence, stmts, proofs)
         ok = held(s, summary.get("round_two"), summary.get("outcome"), summary.get("pins"))
+        if "round_two_lean" in summary:  # --pieces: the compiled round 2 gave the same verdict on these statements
+            ok = ok and summary["round_two_lean"].get("agrees") is True
         return done(0 if ok else 1, held=ok)
     finally:
         draws.skip(0)
@@ -1123,6 +1163,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                    help="stage each member's statement, after the sample, at its sampled proof blocks alone (each port's "
                         "table the rows those blocks read), its session's sample every unit of it; without this a "
                         "member's statement holds every slot of its part")
+    g.add_argument("--pieces", help="the built sampled-proofs-difftest executable: round 2's compiled check "
+                                    "(Spot.Pieces.secondStatements) is run on the sessions' statements too, and the "
+                                    "second stage held only if its verdict is the Python check's")
     g.add_argument("--proofs", help="the auditor's params (service.template_circuits); without them a development run's "
                                     "are built after the sample (references)")
     g.add_argument("--m0-pythonpath", required=True)

@@ -19,6 +19,7 @@
 #   SMALL_SERVE_PY and SMALL_SECOND_PY name another script for the serve and for `second` (two_stage_control.py: a
 #   negative control's class, and the prover that claims its changed ids); such a run exits 0 only if the control held
 #   as an honest class does, so a control that is refused exits 1 with its summary's reason
+#   SMALL_LEAN_EXES="sampled-proofs-difftest" builds more of SPOT's Lean executables (for `second --pieces`)
 #   SMALL_AFTER="SCRIPT ARGS" runs one more script on the second stage's files before they are removed, given --audit
 #   (the second stage's audit directory), --bin, --lean and --out (two_stage_drawn.py --members 0,19: members restaged
 #   at their sampled proof blocks alone); its log is $OUT/after.log, its records $OUT/after, and its exit goes to
@@ -37,7 +38,7 @@ command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanp
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
 { (cd verity/protocols/flock/verifier && lake build flock-verify flock-firewall) \
-    && (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
+    && (cd verity/protocols/spot/verifier/lean && lake build sampled-proofs-verifier ${SMALL_LEAN_EXES:-}); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 FW=${SMALL_FLOCK_WORK:-$W}
