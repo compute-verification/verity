@@ -22,7 +22,7 @@ namespace Flock.Bridge.Assumptions
 open Flock
 
 /-- **The deployed session's files parse.** There are a circuit file and a public file with the SHA-512 digests of the
-honest case of the one-stage audit's `--zk` fixture `verity/ml/flock/tests/fixtures/forged-proofs`
+honest case of the one-stage audit's `--zk` fixture `verity/protocols/flock/prover/tests/fixtures/forged-proofs`
 (`benchmarks/one_stage/forged_proofs.sh`'s files with their sessions regenerated at the 2^9 coin schedule: one A8
 unit, `LlBf16DotprodDot_v1` at K = 128, staged by `UnitStager` bound to a template query's partition, four instances,
 every unit sampled): `stage/circuit.txt`, 97,364,260 bytes, and `honest/pub-4.bin`, 3,194 bytes, a per-instance public file

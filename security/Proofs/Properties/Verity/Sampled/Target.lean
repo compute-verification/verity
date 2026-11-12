@@ -28,7 +28,7 @@ parameters that don't name the one-stage form, that SPOT accepts nothing (`recur
   is accepted with probability at most the session's error (`Live.sessionDelta`). V5 at `B` the extracted witness's
   incorrect set gives the live acceptance at most the sampling design's miss of `B` plus the tables', binding and roots'
   errors; through the bridge `B` holds more than an `ε` share of the proof blocks, so its miss is at most the sample's
-  term (`Live.drawMiss`).
+  term of the session's error (`Live.sessionDelta`).
 * `spotSound_of_targets`: SPOT's target. Where `error`'s premises hold and the claim fails, the coupling bounds the
   verdict by the live acceptance at the projected strategy and the finders' terms: `Live.ks` bounds the first, the strict
   birthday bound (`StrictBirthday`) each two-continuation finder at `2t + 2h` calls, `FinderCR` the read finder at the
