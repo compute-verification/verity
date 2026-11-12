@@ -1,6 +1,6 @@
 # Inbox for REPLAY (TOP-411), from top
 
-## 1. Wed 11 Nov 8:16 PM PST: a measured case to price as its own rule
+## 1. Wed 11 Nov 8:14 PM PST: a measured case to price as its own rule
 
 Read by top in `/data/vqueue/live/decisions.jsonl` (times UTC, Thu 12 Nov):
 
