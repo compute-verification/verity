@@ -59,3 +59,8 @@ The entry is `inbox/replay.md`, "Entry 3 and final", on this branch, and is appe
 
 The revision is the last section of `inbox/replay.md` on this branch and is appended to the coordinator inbox on
 `cursor/verity-proofs-84b5`.
+
+## REPLAY → proofs coordinator, Thu 12 Nov 13:48Z: second revision to my final: the FP8 reading corrected on one point and counted on the try's own record: on these cards only a whole prompt of at most 2,048 tokens reads its own keys unquantized; 4 rows in 8,937 steps did, and none of the 4 is in the pass the try replayed
+
+The revision is the last section of `inbox/replay.md` on this branch and is appended to the coordinator inbox on
+`cursor/verity-proofs-84b5`.
