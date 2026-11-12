@@ -93968,3 +93968,208 @@ Each piece's done-condition, lane and "safe or your decision first" are my propo
 - The store's table of today is the one read at 13:54Z. I did not read it again this hour.
 - The script that put the table into `bench_prices.json` on 11 Nov: I did not look for it this hour; the file's fields are the table's [read].
 - Three older items of mine are not in the list because I did not read their state again this hour: the row for several verification phases in `total_cost.py`, the split head's column, and the function for the binding error printed beside each figure.
+
+## PERIODREAD, Thu 12 Nov 17:32Z: PRF-600's design: a compiled period check in SPOT's verifier reads from the auditor's ledger every root the lane committed in the monitoring period and holds each, and every registration sampled on its session, to an accepting one-stage v2 audit at the verifier's own parameters; its signature and three statements elaborate (`5a37`); it is soundness's second way and changes no rule in the three trusted files; one session can sample a second registration and one-stage v2 does not refuse it; nothing of part 2 is built
+
+Mailbox read at `342d86ceb2a6` (your notes to 17:09Z). Part 1 is unchanged: #9362 at `260823dd87e6`, unmarked.
+
+### Done on your 16:52Z and 17:09Z notes
+
+- **The line is struck.** #9362's body now says only "Nothing in the change recomputes the two fields for an old directory." The head did not move [run: `research queue edit 9362`, then `gh pr view`].
+- **I do not know that a second reading cannot give the fields.** An old directory that kept its `challenger/` holds what `pinned_session` reads, and its `case-v2.json` is there or not [read: `benchmarks/one_stage/a5_coins.py:32-37`]. No code reads them back [read].
+- **REDRAW's lines hold**: `auditor.py:1118-1124` (`free_port`), `:1131-1137` (`cap_refusal`), `:1155-1156` (one session a root), `:1165-1186` (`gate_reserve`) [read].
+- **Every line cited below is `main`'s.** I read at my base `5c0ae25d6c28`, and `main` `9ddae97ba2f7` changes none of the cited files since [run: `git diff --stat`, empty].
+- **Lean's tip has moved** to `f3ffe4e2bbcb`, with `main` `87fec6c6491b` in it [run: `git fetch`; CROSSCLOSE's 16:58Z entry says the same]. Your brief named `f3837f57d113`. What follows is against the new tip.
+
+### The two reads, first
+
+1. **A sampled-proofs session has no place in PoUW's period.**
+   - PoUW's check holds the roots presented to exactly the close's sessions, in order: `missing` and `order` (`PouwCheck/Credit.lean:2091-2135`, the throws at `:2126`, `:2133`) [read].
+   - It credits each as a PoUW window and its sample against the period's circuit (`periodCredit`, `:2230-2268`, `creditedSession` at `:2254`, `:2257`) [read].
+   - The driver opens that period with `--cap 2` (`benchmarks/one_stage/served_verdicts.py:656`) [read]. A third session is refused at the gate; one inside the cap is `missing` to PoUW or fails its credit [derived].
+   - Presenting it to PoUW's check too means PoUW's Lean learns a third kind of session. That is not mine, and it is the larger change. **So: a period of its own.**
+2. **A lane has one open period at a time** (`Spot/ChallengerSession.lean:640-641`; Python `spot/device/challenger.py:1312`) [read]. So the two periods are one after the other on one lane, or on two lanes. One after the other fits the driver: the audit already runs after PoUW's close.
+
+### The check, in exact words
+
+**Name.** Sampled proofs' period check: `verity/sampled-proofs/period/v1`, `Spot.Period.protocol`, compiled Lean in SPOT's verifier.
+
+**What it answers.** Did every root this lane committed at the auditor's challenger during the monitoring period pass sampled proofs' audit, on the one sample the challenger gave it?
+
+**Parameters.** All are the verifier's own. The prover gives none.
+
+| name | what it is |
+|---|---|
+| `key` | the auditor's challenger key, at the deployed LMS parameters |
+| `label` | the family a sample's coins are of (`draw`) |
+| `lane` | the prover's lane on the gate |
+| `main` | the verifier's copy of main's first-parent history |
+| `start`, `stop` | the monitoring period on the auditor's clock, `start` included and `stop` not |
+| `audit` | the one-stage v2 parameters the verifier holds for a window of this lane, less its window root |
+
+**Commitment.** The auditor's ledger: its signed lines.
+
+**Evidence.** The host's pins log. Then for each window, in the ledger's order: its challenger session's files (`{close, hellos, log, record}`), and one case (one-stage v2's commitment, evidence and blobs) for each registration that session sampled.
+
+**A window** is a session of the lane that the ledger opens on a root, at a time in the monitoring period (its open's `started_utc`), with a layout holding the family `label`.
+
+**The check, in order.** The first refusal is the answer.
+
+| step | what must hold | code |
+|---|---|---|
+| 1 | The ledger verifies under `key`: every line signed and chained, one session a root, one open period a lane, each close listing exactly its windows (`Spot.Challenger.checked`). | `coin` |
+| 2 | The ledger reaches `stop`: one of its entries is at or after `stop` on the auditor's clock. A ledger cut before a later session would hide it. | `early` |
+| 3 | There is at least one window, and every window is in a period of the lane. | `missing`, `outside` |
+| 4 | That period is closed, and every session it lists that opened on a root is a window. | `period` |
+| 5 | No session it lists was left unopened, and each window's end says `complete`. | `missing` |
+| 6 | Each window's session files are the ones the ledger sealed, from a commit the pins log records on `main`, and the session withheld its coins (`trustedSessionOf`, `withheldOn`). | `coin` |
+| 7 | Each window's session released a coin of `label` after at least one registration. A root committed and never sampled fails here. | `missing` |
+| 8 | The cases are one for each registration the session's signed release log shows a coin of `label` released after, in the log's order. The coin after the window's own root is set aside. | `evidence` |
+| 9 | The verifier's parameters at the window (`audit` with the window's root) are one-stage v2's and name `key`, `label` and that root. | `names` |
+| 10 | The compiled one-stage v2 check accepts each case at those parameters, as that registration's. A reject rejects the period. An undecided leaves the period undecided. | `audit` |
+
+**Which record it reads for a window.** The registration whose digest the window's session received before it released the sample's coins. The check takes it from the auditor's signed release log, never from the driver. Under `H1_TIE` that registration is said to be PoUW's Commit record, and no kept run shows it [relayed: REDRAW's read 2].
+
+**What it publishes on accept.** The lane, `start` and `stop`; then each window as `{period, phase, root, session, audits}`, where `phase` is the window's place in the ledger's order and each audit is `{registration, published}`: the registration's digest and what one-stage published for it. The profile is each audit's.
+
+**The signature elaborates** against the built `Spot` library at `260823dd87e6` [run: `r20261112-172550-5a37`, exit 0, on vy-nebius-cpu-7]. The scratch file is the run's `out/PeriodSketch.lean`, 202 lines, sha256 `beaf93a8a79f…`. It is in no tree. `windowsOf` and `check` are `opaque`: nothing is built.
+
+Abridged; the file has the structures in full and the three statements named below.
+
+~~~lean
+Spot.Period.windowsOf : Params → Json → Except (Code × String) (Array Window)
+Spot.Period.check     : Params → Commitment → Evidence → Core.Outcome Public Profile
+Spot.Period.sampledOn : Params → Json → Json → Window → Json → Flock.V (List ByteArray)
+Spot.Period.paramsAt  : Params → Window → ByteArray
+Spot.Period.answerOf  : Params → Window → Case → Core.Answer
+
+inductive Code | coin | early | outside | period | missing | evidence | names | audit
+structure Params   where key : ChallengerKey; label lane : String; main : Json; start stop : String; audit : Json
+structure Window   where period : String; phase : Nat; session root : String
+structure Case     where commitment evidence : ByteArray; blobs : Array ByteArray
+structure Evidence where pins : Json; windows : Array WindowEvidence   -- {session : Json, audits : Array Case}
+structure Public   where lane start stop : String; windows : Array Passed  -- {window, audits : Array Audit}
+~~~
+
+### Which of soundness's two ways: the second
+
+- **What the second way is here.** Every root the lane commits is listed by a close, and one root without an accepting audit fails the whole period. A dropped first root is still a window, so dropping it buys nothing [derived].
+- **It does not bound `t` per phase. It makes `t` worth nothing.** Each root has one session (`verifyLedger` refuses a second open of a root, `ChallengerSession.lean:597`) [read], and every sample on it must pass (steps 7, 8, 10). A server that commits `t` roots for one phase needs all `t` samples to miss [derived].
+- **Your read 1, what bounds the roots in one phase:** in remote nothing does, and the design adds no bound. A ledger period's cap is committed at its open, before any coin (`:508`, `:642-646`) [read], but a lane may open another period. So the pooled statement is read at the number of windows the check publishes, and a server that opens more roots adds samples it must also pass. In onsite the tie to the certifier's link-windows makes the count the certifier's `m` [derived].
+- **Why not the first way.** It needs a phase name at the gate, and in remote the auditor has none that says what was served (next section). It changes all three trusted files (below). And it still needs this reader, for a root abandoned without a second open [derived].
+
+**What "an execution phase" can be, as a name the auditor gives:**
+
+- **Remote: nothing names one today.** The ledger gives each open its place in the auditor's order and `started_utc` on the auditor's clock, held inside its reserve's life (`ChallengerSession.lean:612`) [read]. Neither says what was served. The check publishes the place as `phase`.
+- **Onsite: the certifier's link-window `w`.** The certifier numbers them (`NetworkCheck/Period.lean:120`, `:873`) and its rows form wires link-window `w`'s scan to a compute audit's root (`wired`, `:1001`; `tiedIn`, `:1043`) [read].
+- **Answer to network's ask.** The check publishes, by root, the registration digests it accepted. The certifier's period already matches an audit's answer to its registration by digest (`answered`, `:861-864`) [read]. So the tie is: the certifier's period's audits are exactly the registrations this check publishes, each once. A root opened for one phase and presented for another then fails the tie, because `w` is given by the certifier's wiring and never by the prover [derived]. The tie is the onsite composite's, network's and lean's to write.
+
+**A second open of one phase, in the ledger:**
+
+| | what the ledger shows | what happens |
+|---|---|---|
+| first way | no second open: a reserve never opened, which the close lists `{"complete": false, "root": null}` (`ChallengerSession.lean:654-660`) | the gate refused it; the period's close is not complete |
+| second way | two opens on two roots, both listed by the close; nothing marks them as one phase | both must have an accepting audit |
+
+**What each way changes in the three files:**
+
+| file | first way | second way |
+|---|---|---|
+| `live_challenger/auditor.py` | `open_refusal` (`:1140-1162`) gains the refusal; the open's body gains the phase; the host is redeployed and pinned again | nothing |
+| `spot/device/challenger.py` | `_verify` (`:1211`) reads the phase and refuses a second | nothing |
+| `Spot/ChallengerSession.lean` | `verifyLedger` (`:561-679`) the same, `Win` gains a field, the ledger's difftest gains cases, every record reading it regenerates | no rule changes; one function is split for cost (below) |
+
+### Found on the way: one session can sample a second registration
+
+- **The device releases the next coin after any commitment** it is sent, while the family has coins left (`spot/device/remote.py:268-289`) [read].
+- **The layout has coins to spare:** one, then at least 16 a rank, whatever the sample needs (`a5_coins.py:117-120`) [read].
+- **One-stage v2 holds a sample only to its own registration's coins.** `challengerStream` requires the coins released after the presented digest to be the segment's (`Spot/ChallengerCoins.lean:56-73`), and `sampleLinkFirst` looks only at lines naming that digest (`Spot/ChallengerTrees.lean:313-334`) [read]. The difftest's honest case has other commitments' coins on the same family before and after the sample (`spot/verifier/lean/tests/test_challenger_difftest.py:1757-1773`) [read].
+- **So** a server can register, read the sample, and if it would be caught, register again on the same session and present the second [derived, not run]. The seed salt has a guard against this (`SEED_SALT_ONE`, `Spot/ChallengerDraw.lean:49-61`); the sample has none [read].
+- **Steps 7 and 8 close it:** every registration the session's signed log shows sampled needs its own accepting case. `sampledOn` in the scratch file is that read.
+
+### The drivers
+
+- **Today** `served_verdicts.sh` runs the audit with `--challenger local` (`:423`) [read], after PoUW's period closed [relayed: your brief].
+- **A `local` session's audit is an audit of no window.** Its ledger is a scratch one of its own, under a key made for the run at `LOCAL_PARAMS = (4, 5)` (`a5_coins.py:5-9`, `:77`) [read]. Under the auditor's key the ledger shows no open on its root, so the period's check has no such window. And one-stage v2 refuses its case, since the key is not at the deployed parameters (the same docstring) [read]. It stays a development accept.
+- **What changes:** the audit takes its coins from the gate (`gate:USER@HOST`), inside a period the driver opens for it: `served_verdicts.py spot-period open` before the audit's reserve, `close` after its session ended, then the period's check. PoUW's period closes first. The gate's `period-open` requires a cap and a circuit (`auditor.py:1844-1845`) [read]; the driver gives the registered circuit's SHA-512.
+- **On lean's merge** the audit can take the gate's coins (`V3C_CHALLENGER`, `served_verdicts.sh:523`; `local` is still the default), and then its preflight requires that no period of the lane is open (`v3c_audit`, `:716`, the comment at `:741`, at `f3ffe4e2bbcb`) [read]. That preflight flips: the lane's open period must be this run's sampled-proofs period.
+
+### `verity/remote/v1`, which reads no ledger close
+
+- **It needs no change to accept a run.** Its sampled proofs is one-stage v2 under another id (`VStarRecursive/Sampled.lean:1-18`), on the one session the ledger opens on the run's root [read].
+- **What it lacks** is that this root is the lane's only one. Its ties are the record and the window (`CoreRemote.lean:449-483` at lean's tip, the same lines at the new tip) [read; REDRAW's read 3 says the same].
+- **What it needs:** this check beside it, and one tie: v1's sampled-proofs registration is one of the registrations the period publishes. And the driver must open a sampled-proofs period, since v1's flow has only Pearl+'s, with cap 1 [read: the same script].
+
+### The certifier's period and an `undecided` compute audit
+
+- **One undecided answer leaves the whole period undecided, unless something rejects.** From the code: an undecided answer is a finding (`NetworkCheck/Period.lean:870`); the check returns its first rejection, else its first undecided finding (`firstFinding`, `:1144-1147`; the match at `:1254-1257`); the docstring says so at `:118` [read, not run].
+- **The same on lean's tip**, where that file differs by 564 lines: `answered` at `:921-930`, `firstFinding` at `:1236`, the match's `undecided` at `:1378` [read].
+- **My check does the same** at step 10.
+- **A mismatch to know of:** the certifier's period reads answers under one-stage v1's id (`:250`), and SPOT refuses v1 (`VStarRecursive/Sampled.lean:38-41`) [read]. Network's to settle.
+
+### Where it lives, sizes, order
+
+- **In SPOT's verifier, not beside `PouwCheck.Period`.** The ledger's reader and one-stage v2 are SPOT's, and spot is below pouw. This is your read 3's compiled reader of the ledger: `verity/protocols/spot/verifier/lean/Spot/Period.lean`.
+- **No Python verifier.** The Python is a reference in the test only.
+
+| PR | what | files | lines, about |
+|---|---|---|---|
+| 0 | the audit's v2 case names its challenger and window root, so the compiled check answers other than `NO_CHALLENGER` on a served window | `benchmarks/one_stage/a5.py`, its tests | 60 |
+| 1 | the ledger's half, `windowsOf`, with its difftest | `Spot/Period.lean` (new), the difftest's piece, `tests/test_period_difftest.py` (new) | 130 Lean, 250 test |
+| 2 | the window's half, the protocol, the executable `sampled-proofs-period` | `Spot/Period.lean`, `SpotPeriodMain.lean` (new), `lakefile.toml` | 180 |
+| 3 | the three statements | `security/Properties/Spot/Period.lean` (new) | 110 |
+| 4 | their proofs | `security/Proofs/Properties/Spot/Period.lean` (new) | 300 to 600 |
+| 5 | the drivers, on the merged tree | `served_verdicts.py`, `served_verdicts.sh`, their tests | 240 |
+| 6 | the ties | `CoreRemote.lean`, `CoreOnsite.lean`: lean's and network's | 30 each |
+
+- PoUW's `Period.lean` is 205 lines, for scale [run: `wc -l`].
+- PR 0 is a prerequisite and not part 2. #9199 writes those two for the per-member file only [relayed: my read of it earlier today; it is open at `7a528d6b1c01`].
+- **Verifier cost.** The ledger is checked once and each window costs its own session log and audits. But built from today's functions it is not that: `auditedOpen` runs `checked` on the whole ledger at every call (`ChallengerSession.lean:718-720`), so `m` windows cost about `3m + 1` ledger checks [read, derived]. To meet the rule, `auditedOpen` splits into the ledger's check and the window's lookup. Its body changes and no statement does; the records that read it regenerate.
+
+### Lean's remote merge
+
+- **The design sits on the merged tree.** At lean's tip `f3ffe4e2bbcb` these are byte-equal to `main`: `ChallengerSession.lean`, `ChallengerCoins.lean`, `ChallengerDraw.lean`, `ChallengerTrees.lean`, `OneStageZk.lean`, SPOT's `lakefile.toml`, the gate's `auditor.py`, `spot/device/challenger.py`, `security/Properties/Challenger.lean` and the pooled statements' file [run: `git diff --stat 87fec6c6491b f3ffe4e2bbcb`, none of them listed].
+- **Seven cited files do change there**, none at what I build on [read: each diff]:
+  - `spot/device/remote.py`: a class renamed; `_release` is untouched.
+  - `OneStage.lean`: `ranOut` added. `VStarRecursive/Sampled.lean`: a `main` added.
+  - `Exfiltration.lean`: "wrong" becomes "incorrect", once inside lines 15 to 18.
+  - `PouwCheck/Credit.lean` and the ledger's difftest: 5 and 9 lines, elsewhere.
+  - `NetworkCheck/Period.lean`: 564 lines; the functions I cite are there at other lines (above).
+- **Files that stop:** none for PRs 1 to 4, which add new files. `security/Properties/Spot.lean` changes on the merge by 22 lines, which is why the statements go in a new file beside it.
+- **PRs 5 and 6 wait for the merge:** against `main`, lean's tip adds 1,098 lines to `served_verdicts.sh`, 1,316 to `served_verdicts.py` and 157 to `CoreRemote.lean` [run: `git diff --stat 9ddae97ba2f7 f3ffe4e2bbcb`].
+
+### The bridge to the game
+
+- **The statement that reads "each window committed once"** is the game's own: in each window the prover commits, then the challenger flips that window's coin, live and fresh (`security/Definitions/Spot/Exfiltration.lean:15-18`; the `Strategy` at `:59-61`) [read].
+- **What cites it as the device's behaviour:** `security/Properties/Challenger.lean:48-50`, "that it opens each window once [is] the device's behaviour on `trusted-host`, which these properties don't take" [read].
+- **The pooled statements are over every sampling block of the run** (`IntegrityPeriod`, `IntegrityPeriodLog`, `IntegrityHorizon`, `security/Proofs/Flock/EndToEnd/Period/Statement.lean:201`, `:220`, `:240`) [read]. So they stay true of an abandoned root. What nothing states is that the record presented lists every block.
+- **The `Properties` statements that would say the check gives it**, elaborated in the same run with only `propext`, `Classical.choice` and `Quot.sound`:
+  - `Properties.Spot.Period.LedgerMeans`: what `windowsOf` returns.
+  - `Properties.Spot.Period.AcceptMeans`: what an accept means, audit by audit.
+  - **`Properties.Spot.Period.CommittedOnce`**: the bridge. Under an accept, every root the lane committed in the monitoring period on a session that can sample is exactly one published window, no root or session is two, and no registration is audited twice on a session.
+- **Until it is proved, the premise is "every committed window is presented".** It would be one sentence in the docstrings of the three pooled statements. REDRAW's branch edits those docstrings now, so the sentence goes after it or in it: your call. I add no lock entry and change no listed guarantee.
+
+### Not established
+
+- **Nothing is built and nothing is proved.** The three statements are `Prop`s about two `opaque` functions.
+- **No served run.** No kept run shows an audit of record on a gate session inside a period [relayed: REDRAW's read 2].
+- **The second registration is read, not run.** I did not find whether two different records can both pass one-stage's registration checks on one window root; a second rank's record is one such [derived].
+- **The parameters at a window are more than the root.** `own.pub`, the public file's digest, differs by window (`OneStageZk.lean:163-169`, held to the registration at `:347-352`) [read]. The scratch `paramsAt` sets only `window_root`. Which parameters a case may supply, each held by the compiled check to the registration or the ledger, is PR 2's first question.
+- **Several ranks.** A window with several ranks' registrations needs one accepting case each, and the compiled check refuses the several-member form (`MULTI_REFUSED`, `OneStageZk.lean:772`) [read]. So only one-member windows can pass until that is covered.
+- **A phase with no root.** The check says nothing of an execution phase whose root never reached the challenger. It refuses a period with no window, publishes the windows, and leaves their count to the composite.
+- **One lane.** A developer with a second gate key has a second lane this check does not read. Which lanes are a developer's is the auditor's to say.
+- **The clock.** `start` and `stop` are read against times the auditor's host wrote. That its clock does not run backwards along the ledger is `trusted-host`; the check could refuse a ledger whose times fall, and I did not design that.
+- **The ledger against the device.** `CommittedOnce` is about the ledger presented. That it is the device's own, up to `stop`, wants a fourth statement against `Properties.Challenger`'s device model, which I have not written or read for an order of entries.
+- **The proof's size** is a guess: `verifyLedger` is a loop over mutable state and I found no lemma about `checked` beyond `trustedSessionOf_ok`.
+- **Whether `outside` should reject.** A sample session in no period gives the prover nothing I can find, since its root still has one session and one sample [derived]. I refuse it because the title says every committed root. Rule it the other way and step 3 loses a clause.
+
+### To post
+
+- **PRF-600, for soundness:** "The design is the second way: every root the lane commits in the monitoring period is a window, and one without an accepting audit fails the period, so `t` roots for one phase need `t` misses. One thing found on the way: a session releases a sample's coins after any commitment while its family has coins left, and one-stage v2 holds a sample only to its own registration's coins. The period's check asks for an accepting audit of every registration the session's log shows sampled. Read, not run."
+- **PRF-600, for network:** "The check publishes, by root, the registration digests it accepted, with the window's place in the auditor's order. Your period matches an audit to its registration by digest already. The tie is that your period's audits are exactly those registrations, each once; the phase is your link-window, given by your wiring."
+
+### State
+
+- Code: `cursor/proofs-prf600-coins-59c6` at `260823dd87e6`, #9362, unmarked. Nothing new pushed to it.
+- Runs: `r20261112-172550-5a37` done, exit 0 (the signature). Earlier drafts of the same file: `4c5d` exit 0 with elaboration errors, `2f83`, `4913`, `b9bb`, `f25a` each exit 0 and superseded, `0229` cancelled by me (launched on the old file).
+- I wait on your word on the design. I build nothing of part 2 before it.
