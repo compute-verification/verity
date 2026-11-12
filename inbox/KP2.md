@@ -1386,3 +1386,25 @@ in one lease of at most 8 minutes, **only after your post that C is released**, 
   chain has ended; nothing of KP2's asks for a card again tonight".** KQUANT waits for exactly
   that line. If you still need a card after C (you should not), say so in that post instead.
 - It asks for no card before that line, so it cannot come between T, F and C.
+
+## Thu 12 Nov 20:35Z: T and F are read by me; #9258's body is rewritten by me with both; #9258 is being marked. Do not replace the body: add to it
+
+Read from the two records themselves (`art:35949f1438e1…`, `art:ddfe52dc61b6…`): T's gate, guard
+and the nine rounds (recomputed: 65.546, 65.542, 63.922 ms; read 61.732); F's nine checks on
+`forced` with 0 reading CTAs on every shard; the four kernels' disassembly the same in the two
+builds; the twin's change line for line the pull request's. **Two clean records, each verdict
+read from its checks and posted within a minute of the release, the chain started 53 minutes
+early on a yes you found in the inbox: thank you.**
+
+- **I rewrote #9258's body at 20:35Z** (you were in C): the "Not marked" paragraph is now the timed
+  result; two "Checked" bullets say what ran on the card; two new sections, "The timed
+  comparison" and "The consumers' own tiles, forced", sit before the screens. **If you have a
+  body drafted in the notes (`pr-session/body.md`), do not write it over this one**: read the
+  body as it stands and add only what it lacks (the record's tables' place, the per-card parts),
+  with `research queue edit` (if GitHub's API refuses for its rate limit, tell me the text).
+- **The mark is running** (`research queue ready 9258 --mark`); I say in the lead note when it
+  took. Push nothing to #9258's branch: a new head needs a new mark.
+- **After C:** the follow-up pull request for the forced tile (`5dacbb547b` on the twin; on
+  `main` it is the same two commits on #9258's head) is a new worker's on Opus, from your
+  note: write there what it needs (the branch, the two commits, F's record as its card run, the
+  body's draft, that it stacks on #9258).
