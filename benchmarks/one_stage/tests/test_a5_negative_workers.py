@@ -45,9 +45,13 @@ def workers(n: int, budget: float = 1000 * GB, free: float = 1000 * GB, need: fl
     return a5.NegativeWorkers(n, budget, lambda: free, need=lambda: need, own=lambda: own)
 
 
+AUDIT = os.getpid()
+
+
 def logged(log: Path, name: str, wait: int | None = None, tell: int | None = None, fail: str | None = None) -> dict:
-    """A task that logs its start and end with its process, first waiting for a byte on ``wait`` and last writing one
-    to ``tell`` (pipes: a task that can't end before another did), or failing: raising, or killing its own process."""
+    """A task that logs its start and end with its process, first waiting for a byte on ``wait`` and last writing two
+    to ``tell`` (pipes: a task that can't end before another did), or failing: raising, or killing its own process
+    (never the audit's, this one)."""
     with log.open("a") as f:
         f.write(f"start {name} {os.getpid()}\n")
     if wait is not None:
@@ -55,11 +59,12 @@ def logged(log: Path, name: str, wait: int | None = None, tell: int | None = Non
     if fail == "raise":
         raise ValueError(f"{name} can't decide")
     if fail == "die":
+        assert os.getpid() != AUDIT, f"{name} ran in the audit's process"
         os.kill(os.getpid(), signal.SIGKILL)
     with log.open("a") as f:
         f.write(f"end {name} {os.getpid()}\n")
     if tell is not None:
-        os.write(tell, b"x")
+        os.write(tell, b"xx")
     return {name: {"refused": True, "by": name}}
 
 
@@ -102,16 +107,33 @@ def test_more_workers_run_the_tasks_side_by_side_each_in_its_own_process_and_the
     assert not multiprocessing.active_children()
 
 
-@pytest.mark.parametrize("budget, free", [(GB + 2 * 10 * GB - 1, 1000 * GB), (1000 * GB, 10 * GB - 1), (1, 1000 * GB)])
-def test_a_worker_starts_only_while_its_estimate_fits_and_one_over_the_budget_runs_alone(tmp_path, budget, free):
-    """Three workers allowed, each estimated at 10 GB beside the audit's 1 GB: a budget one byte short of two workers,
-    free memory one byte short of one, or a budget of one byte each leave one worker at a time, in the order submitted
-    (each starts only once the one before ended), and every task still runs."""
+@pytest.mark.parametrize("budget, free, at_once", [
+    (GB + 2 * 10 * GB - 1, 1000 * GB, 1), (1000 * GB, 10 * GB - 1, 1), (1, 1000 * GB, 1),
+    (GB + 2 * 10 * GB, 1000 * GB, 2), (1000 * GB, 1000 * GB, 3)])
+def test_a_worker_starts_only_while_its_estimate_fits_and_one_over_the_budget_runs_alone(tmp_path, monkeypatch, budget,
+                                                                                         free, at_once):
+    """Three workers allowed, each estimated at 10 GB beside the audit's 1 GB. A budget one byte short of two workers,
+    free memory one byte short of one, or a budget of one byte each leave one worker at a time, in the order submitted;
+    a budget of exactly two workers runs two at once, and an ample one all three. Each task holds until the audit
+    waits for its workers, so how many were running at each wait is how many the gate let start; every task still
+    runs."""
     log, w = tmp_path / "log", workers(3, budget=budget, free=free, need=10 * GB, own=GB)
-    tasks = [w.submit(n, lambda n=n: logged(log, n)) for n in ("a", "b", "c")]
+    r, t = os.pipe()
+    waited, wait = [], multiprocessing.connection.wait
+
+    def released(conns):
+        waited.append(len(conns))
+        os.write(t, b"x" * len(conns))
+        return wait(conns)
+
+    monkeypatch.setattr(multiprocessing.connection, "wait", released)
+    tasks = [w.submit(n, lambda n=n: logged(log, n, wait=r)) for n in ("a", "b", "c")]
     assert list(w.entries(tasks)) == ["a", "b", "c"]
-    assert [x[:2] for x in lines(log)] == [[x, n] for n in ("a", "b", "c") for x in ("start", "end")]
-    assert len({x[2] for x in lines(log)}) == 3
+    assert max(waited) == at_once and waited[0] == at_once and len({x[2] for x in lines(log)}) == 3
+    assert sorted(x[:2] for x in lines(log)) == sorted([x, n] for n in ("a", "b", "c") for x in ("start", "end"))
+    if at_once == 1:
+        assert waited == [1, 1, 1]
+        assert [x[:2] for x in lines(log)] == [[x, n] for n in ("a", "b", "c") for x in ("start", "end")]
 
 
 @pytest.mark.parametrize("fail, said", [("raise", "raised:"), ("die", "died (exit -9)")])
