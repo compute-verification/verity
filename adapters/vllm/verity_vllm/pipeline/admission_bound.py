@@ -35,7 +35,12 @@ import math
 import os
 from typing import Any
 
-from verity_vllm.acquire.sources.hidden_source import CHUNK_WORDS, fa2_kblock_n, fa3_tile, mat_total_words
+from verity_vllm.acquire.sources.hidden_source import (
+    CHUNK_WORDS,
+    fa2_kblock_n,
+    fa3_tile,
+    mat_total_words,
+)
 
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
 LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes
@@ -119,7 +124,11 @@ def scheduled_step_bytes(sizing: dict[str, Any], requests: list[dict[str, Any]],
         hb = layers * 4 * hid
         tb, sb, pb = tokens * per_token, len(live) * per_seq, per_step * chunks
         b = tb + sb + pb + hb
-        tot += b; tok_b += tb; seq_b += sb; step_b += pb; hid_b += hb
+        tot += b
+        tok_b += tb
+        seq_b += sb
+        step_b += pb
+        hid_b += hb
         decode_rows += len(dec)
         steps.append({"step": s, "prefills": len(pref), "decodes": len(dec), "tokens": tokens, "K": K, "chunks": chunks, "bytes": b, "hidden_bytes": hb})
     peak = max(steps, key=lambda x: x["bytes"])
