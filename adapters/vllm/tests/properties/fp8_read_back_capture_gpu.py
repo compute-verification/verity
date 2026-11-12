@@ -390,23 +390,19 @@ def capture(out: Path) -> int:
         raise SystemExit("fp8-read-back: PYTHONHASHSEED=0 (a set's order decides a batch's row order)")
     from verity.definitions.registry import fp8_ds_mla_upconvert as U
 
-    doc: dict[str, Any] = {"definition": {"id": U.glm53_row().id, "module": U.__file__}}
-    try:
-        doc["planted"] = planted(out)
-        print(f"fp8-read-back: planted {[{k: c[k] for k in ('call', 'rows', 'rows_differing')} for c in doc['planted']['calls']]}",
-              flush=True)
-    except Exception as e:  # noqa: BLE001 - recorded, and the serve still runs
-        doc["planted"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
-    try:
-        doc["serve"] = serve(out)
-        s = doc["serve"]
-        print(f"fp8-read-back: served {len(s['calls'])} calls, {s['rows']} rows, {s['rows_differing']} differing", flush=True)
-    except Exception as e:  # noqa: BLE001 - recorded
-        import traceback
-
-        doc["serve"] = {"ok": False, "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-4000:]}
+    # A phase that raises ends the script with its traceback; the record written before it then says ok false.
+    doc: dict[str, Any] = {"definition": {"id": U.glm53_row().id, "module": U.__file__}, "ok": False}
+    record = out / "capture.json"
+    record.write_text(json.dumps(doc, indent=1) + "\n")
+    doc["planted"] = planted(out)
+    print(f"fp8-read-back: planted {[{k: c[k] for k in ('call', 'rows', 'rows_differing')} for c in doc['planted']['calls']]}",
+          flush=True)
+    record.write_text(json.dumps(doc, indent=1) + "\n")
+    doc["serve"] = serve(out)
+    s = doc["serve"]
+    print(f"fp8-read-back: served {len(s['calls'])} calls, {s['rows']} rows, {s['rows_differing']} differing", flush=True)
     doc["ok"] = bool(doc["planted"].get("ok")) and bool(doc["serve"].get("ok"))
-    (out / "capture.json").write_text(json.dumps(doc, indent=1) + "\n")
+    record.write_text(json.dumps(doc, indent=1) + "\n")
     return 0 if doc["ok"] else 1
 
 
@@ -489,7 +485,7 @@ def compare(out: Path, library: bool = True, expect_sha256: str | None = None) -
             if s.get("text"):
                 (out / "sass_sm90.txt").write_text(s.pop("text"))
             doc["sass"] = s
-    except Exception as e:  # noqa: BLE001 - recorded, the comparison stands without it
+    except (ImportError, OSError) as e:  # no vLLM, an unreadable library, an unrunnable cuobjdump: the rows' verdict stands
         doc["library"] = {"error": f"{type(e).__name__}: {e}"}
     sets = doc["sets"].values()
     doc["ok"] = all(x["rows"] > 0 and x["rows_differing"] == 0 for x in sets)
