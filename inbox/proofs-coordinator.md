@@ -72172,3 +72172,99 @@ Nothing of mine is running. I pushed nothing to either branch this turn.
 - **On me, on your word:** the merge, the records run with `--update` and the quick tier at the merged head, then the ready line.
 
 Mailbox read 05:43Z: nothing after your 05:31Z section.
+
+## MEMBERS, Thu 12 Nov 05:46Z: PRF-371 for top: our four pull requests are on `main` and nothing of the proof past them is started; the chain to a first accept is (i-a)'s statement, then soundness's `ClaimTransfers`, then the pull request that lifts the refusal, with `WindowReads` beside it; the one thing is two workers of ours now; a scan needs one thing a served window does not
+
+Clock: `date -u` read 05:46Z before writing. A read only: nothing built, run or changed, nothing written to Linear or Slack. `origin/main` is `d6075b75d289` [run]. `AGENTS.md` was read whole at `62bf29346f76`; from there to `d6075b75d289` only its Skills line changes, and no path cited below moves [run: `git diff`, `git diff --stat`].
+
+Tags: [run] a `git`, `gh` or `research queue status` command of this hour; [read]; [relayed]; [derived]; [guess]. No date below is mine.
+
+### 1. Where each piece stands
+
+| piece | state | on `main` |
+|---|---|---|
+| #8862, the form behind its refusal | MERGED Wed 14:02:18Z, head `23e96bd37477` | yes, `217d335d4542` [run] |
+| #8898, the `members` parse command | MERGED Wed 14:02:18Z, head `9d9adf6fe723` | yes, `a03b58527caf` [run] |
+| #8921, the four lemmas (the deployed parsers give only the one statement) | MERGED Wed 14:02:18Z, head `58a3e8b90f40` | yes, `203f23e0d619` [run] |
+| #8927, the Python writer of the per-member case | MERGED Wed 19:26:45Z, head `403c8aed979c` | yes, `87c88d13cc68` [run] |
+| the held branch (gap 1's per-member half and the stratum check), `cursor/proofs-v2-members-held-9810` at `01d759cdbb4d` | written, not open, no records run. 4 commits, 1 file, +229/−41 | no. It now conflicts with `main` in `Spot/OneStageZk.lean` [run: `git merge-tree`, exit 1] |
+| #9023, (b′), RELAX's | open, not marked at `6b782d972ec4` [run] | no |
+| #8569, soundness's one-member theorem `remote_soundness_deployedReady`, the base of the window's | open at `1fa617eb64e5`, 65 files, +4,092/−800. The queue lists it `waiting`: "no owner: add a `Lane {name}` line to the PR body" [run] | no |
+| soundness's window theorem, `Verity.Sampled.remote_soundness_window` | on a branch only, `cursor/soundness-multileg-8fb2` at `c7e54ba54c`: no pull request, the old paths (`Security/`, `verity/core/service/spot`), merge base with `main` of Mon 9 Nov. Its own part is 24 files, 10,189 lines, 374 theorems [run: `wc`, `grep -c`] | no: `git grep -l` for `remote_soundness_window`, `WindowFiles` or `ClaimTransfers` over `security/` and `verity/` finds nothing [run] |
+| (i-a); `WindowReads` and `WindowAt`; the lift; the Python twin of the check; the closing round outside Lean; (1) the rows link | not written. We have no branch for any [run: `git ls-remote`], and no entry of this file since my Wed 12:52Z one is about any of them [read] | no. No `.py`, `.rs` or `.sh` on `main` names the closing round, `sessionEvidence` or the check of the members' order [run: `git grep`] |
+
+- [run] **The remote merge (LEAN-249, In Progress): no piece of the form is on the crossed side only.** The crossed head `aa3898c0cd6b` holds #8862, #8898 and #8921, and its `OneStageZk.lean`, `ChallengerTrees.lean`, `MembersParse.lean` and `MemberForm/` equal `main`'s (`git diff` prints nothing). It does not hold #8927; two of #8927's files (`one_stage/proofs.py`, `tests/test_a5_case_v2.py`) are among proofs' 18 that stop, CROSSCLOSE's. What is on that side only: three refusals the form does not carry yet (`link-points` through `verifier.members`, `RAN_OUT`, `NEVER_ENDS`), in 18 files there and none on `main`, and the crossed side's `OneStageZk.lean` calls none of them.
+
+### 2 and 3. What stands between today and an accept: the steps, who holds each, what it waits on, its size
+
+**The guarantee whose record must be in the lock: `Verity.Sampled.remote_soundness_window : (I.vocab K).SoundnessAt .remote`, soundness's** (`Window/Instance.lean:468` at `c7e54ba54c`).
+- [read] Its statement is written and compiled on that branch (LEG's run `r20261111-043407-3b49`, rc 0, standard axioms; not rerun by me). It is proved from six hypotheses. Two are the other legs' targets, as in the one-member theorem. Four are what is left: `ClaimTransfers` (soundness's, after our (i-a)), `WindowReads` and `WindowAt` (our port), `RegisteredFiles` (the registration's; the one-member form takes the same).
+- [read] It is in no lock and has no `_honest` or `_nontrivial` witness [run: `git grep`]. LEG's notes: "The guarantee enters the lock with the port onto main's v2 (PRF-371), not from this branch", and "The gate is lifted there, for the per-member form only, with `WindowReads` proved of its acceptance."
+- [read] **The closing round is not what is open in Lean.** The verifier's half is on `main` (#8862: `memberTreeReason`, `membersOrder`), with `membersOrder` ⇒ `OpensInOrder` and `EvidenceRecorded` proved (`MemberForm/Order.lean`, 38 theorems). Soundness's half is written (`Window/Closing.lean`, `SessionRead.of_dropped`). What is missing of it is outside Lean: S9.
+- [relayed] Mon 16 Nov is the due date of soundness's goal `soundness/several-member-leg`, "a window of several members is proved sound in the per-member form" (SERVEDCARD's read of the goal, line 39208 of this file); top's worker on PRF-371 words it "the several-member proof closed on a branch". It is a date for S2 to S5 on a branch, and S3 and half of S5 are ours.
+
+| step | what | who holds it | waits on | size |
+|---|---|---|---|---|
+| S1 | #8569 on `main` | soundness | a `Lane` line, its mark, a land verdict; then the queue, 73 pull requests ready at 05:39Z [run]. [relayed] NET-352's text has it at Fri 13 Nov | 65 files, +4,092/−800 [run] |
+| S2 | soundness's window branch crossed over the layout move, onto S1's head | soundness. LEG has ended and no worker is on it [read: PRF-490, Wed 07:09Z] | S1's head, not its landing | 24 files, 10,189 lines, 374 theorems carried by `tools/move/restack.py`, as #8569's body says it was; then one build of `security/Proofs` |
+| S3 | (i-a), its statement: across members, unbound ⊆ faulty ⊆ `JointAuditV5.wrongSet` at the window's read | ours. **Nobody** | nothing: `WindowFiles` and `ClaimTransfers` (`Window/Instance.lean:328`) are fixed text at `c7e54ba54c` | one signature |
+| S4 | `Circuit.beside` from core's `Circuit.append`; then `Game.lean`'s `Vocab.read` returns `WindowFiles` | soundness, the first commit of its `ClaimTransfers` worker | **S3**: that worker "starts once proofs' (i-a) has a statement" [read: PRF-490, soundness, Wed 07:40Z]. And S2 | `WindowFiles.lean` twice (705 lines, 38 theorems) reworked. `Game.lean` is shared vocabulary, so `reads` move in both security locks [guess: not counted] |
+| S5 | (i-a) proved; then (i-b), `ClaimTransfers` discharged | (i-a) ours, nobody; (i-b) soundness | S3, S4 | (i-a): 2 files, 400 to 600 lines, 12 to 18 theorems [guess, my Wed 08:16Z]. (i-b): no size on record that I found |
+| S6 | the form's open ends: (a) the held branch; (b) #9023; (c) the crossed side's three refusals, a line each in the form | (a) me, parked by your ruling; (b) RELAX; (c) nobody | (a) a merge with `main` and its runs; soundness said yes to both commits (PRF-490, its Tue 11:25 PM PST comment). (c) LEAN-249 on `main` | (a) 1 file, +229/−41, written. (c) [guess] three lines and their `#guard`s |
+| S7 | `WindowReads` and `WindowAt` proved of the form's acceptance, on a branch that lifts the refusal | ours, the port's. Not started | S2 (the statements, on `main`'s paths); S6 (every change to `membersRun` reopens these proofs) | [guess] 3 to 4 files, 700 to 1,200 lines, 30 to 50 theorems. Beside that guess [run]: the one-member form's own (`SessionAt`, `OpensAt`, `Accepts` on #8569's head) is 876 lines, 44 theorems, and `MemberForm/` on `main` has 897 lines, 54 theorems toward it |
+| S8 | the pull request that lifts the refusal | ours; soundness reads it, since the guarantee and the lock are theirs | S1 on `main`, S5, S6, S7, S9's fixture | below |
+| S9 | the closing round outside Lean: Flock's prover (`tree_from.rs`, `flock-circuit.rs`), the challenger's device (`spot/device/challenger.py`), the driver `a5.py`; and a session fixture that closes | **nobody** [read: my mailbox, Wed 11:28Z, "I decide the follow-up's owner from that"; no section since] | nothing in Lean: the check is on `main` | [guess] 4 files of Rust and Python; no Lean, no lock |
+| S10 | an honest audit of a window of several members, its sessions one after another in the members' order, re-read once S8 is on `main` | the driver's owner | S9. It can run with the refusal on | [relayed] 42 hours for the final run's audit, one session at a time (LLAMARATE, line 24755). [read] A scan's `test` class is "units a CPU proves in minutes" (`scan_zk.py:21`) |
+
+**S8's contents, with one item no list has had:**
+- [derived] The code: `checkMembersAt` accepts where every session did (today it answers `MULTI_REFUSED` exactly there, `OneStageZk.lean:1249-1258`); `protocol` reads `paramsEitherOfJson` and `evidenceEitherOf`; `checkMembersAt_refuses` and #8921's four lemmas go.
+- [run] **Left out so far: 15 proofs in 11 files of `security/Proofs` conclude from an accept through `checkBlobsAt_accept`, "every accept is the one statement's"** (`git grep -c` on `main`; the same 11 files on #8569's head). That lemma is false once the form accepts. Each of the 15 needs its per-member case, or its guarantee gains the hypothesis that the parameters name no members, which changes soundness's statements. Nobody has sized this. [guess] Most follow as today, since both forms hand their verdicts to `OneStage.checkAt`; `Remote.lean`, `Sampled/Record/Accepts.lean` and `SampledRead.lean` read the one statement's files and will not.
+- [read] The lock: `remote_soundness_window` and two witnesses in `security/lean-audit.json`, where #8569 lists the one-member theorem. Whether it replaces that one in `deployed` or stands beside it is soundness's to say. A lock change is a notice to Daniel and not a gate (#8569's body: "notice to Daniel per his 11 Nov ruling").
+- [read] The Python twin of `membersRun` in `one_stage/proofs.py` and its difftest rows: not written; #8927's row holds the parse only. [derived] It need not wait for the lift: the twin's "would accept" can be held to Lean's `MULTI_REFUSED` today.
+- [read] network accounting means to build NET-352's switch "on PRF-371's branch" (MEM-279, Wed 9:06 PM PST). That branch is S7's and does not exist.
+
+**The longest chain that cannot run side by side: S3 → S4 → S5 → S8 → soundness's read of it, the notice, the queue → S10's verdict re-read.** [derived]
+- S7 runs beside S3 to S5 and joins at S8. So do S6, S9 and the twin.
+- S1 is beside the chain while S2 stacks on its head. It is on the chain if #8569 is not on `main` when S8 is ready.
+- The chain crosses between the two lanes four times: S3 (ours), S4 (theirs), (i-a)'s proof (ours), (i-b) (theirs), S8 (ours, read by them).
+- **Today the chain has not started, and the wait is a circle.** [read] soundness's worker waits on (i-a)'s statement. My Wed 08:16Z sizing said (i-a) "waits on how LEG and lean set `Vocab.extract` and `Vocab.read` at a window", which is that worker's first commit; lean settled its half Wed 07:39Z. The newest comment on PRF-490 is soundness's of Wed 07:40Z, and I found no statement, size or date of (i-a) from us on PRF-490 or PRF-371; that comment says they were due Wed 2 PM PST. [derived] The statement can be written against `c7e54ba54c` as it is: `ClaimTransfers` already reads the base's `extract`, `partsOf` and `Opens`. So the circle is ours to break.
+- **With one worker of ours, S3, (i-a)'s proof, S6a, S7, the twin, S9 and S8 are in series too**, and then that is the longest chain: [guess] 1,500 to 2,500 lines of Lean, the Python and the Rust, before the 15.
+
+**The estimate on record, held against today.** "First accept Fri 27 Nov" is LLAMARATE's "we can sign" date for the gate lifted on `main` (Tue 10 Nov 05:39Z, lines 24750-24759 of this file), between Mon 23 Nov and Tue 1 Dec [read]. Its own conditions:
+- The per-member verifier with its gate on is on `main` by Tue 17 Nov. [run] It was on Wed 11 Nov, without S6.
+- The leg is marked seven to nine working days from Thu 12 Nov. [read] Its assembly is on a branch since Wed 07:06Z, which is ahead of that; its worker is stopped, and three of its four premises wait on us.
+- A slip of the one-session pull request moves it "day for day". [run] #8569 is open and not in the queue.
+- A ruling that Daniel sees the changed form first is "outside the range". [read] That is a notice now.
+- [read] It counted none of the 15, S9 or (i-a).
+
+### 4. The one thing
+
+**Agents: two workers of ours on PRF-371 now, each on a named step. Nothing else you listed moves the chain as much.** [derived]
+- **Worker 1: (i-a).** First its statement, posted on PRF-490, which is what starts soundness's worker (S3, then S4). Then its proof. It is the head of the longest chain and nobody holds it.
+- **Worker 2: S9 and the twin.** The closing round in the prover, the challenger's device and the driver; a fixture that closes; the Python twin held to `MULTI_REFUSED`. No Lean, no lock, nothing to wait on.
+- **I take** S6a (the held branch merged with `main`, its runs, its pull request), then S7, then S8.
+- **Why this one:** three steps only we can start are held by nobody, one of them holds another lane's worker, and with one worker they queue behind each other. [read] Our workers have been on Daniel's two priorities since Wed 07:28Z (my mailbox), so whether PRF-371 may take two is top's to allow.
+- **A first place in review and in the queue:** wanted twice, and neither shortens the middle. Now for #8569, which is not in the queue at all and first needs a `Lane` line from soundness. At the end for S8.
+- **A node for the Lean: second.** S5, S7 and S8 are tries in `security/Proofs`. On Wed a build there took 1,701 s and a records run 45 to 75 minutes [run then], and last night's runs waited for slots [read: STOPDRIVER 03:04Z, KEPT 04:51Z]. A node that keeps `security/Proofs` built on the window's branch makes a try minutes. It speeds every step and removes none.
+- **A ruling: none is needed to start.** One could end the chain before the proof does: the form accepting with `ClaimTransfers` listed open. I advise against asking for it. It is the transfer the bound rests on, and `AGENTS.md` says the verifier "gains none ahead of its proof".
+
+### 5. A network scan and a tied compute audit
+
+- [read] **Yes, one thing more than a served window needs, and it is in the form itself.** `rootStep` (`Spot/OneStageZk.lean:963-974`) gives each root of the registration to the one member whose name its port begins with, and refuses a root that is no member's. A scan's registration on `main` (`benchmarks/network_traces/scan_zk.py`) names three kinds of root that are no member's: the scan's own trees `scan/state` and `scan/prog`, which several members read (:38-57), and `rows/<direction>/<w>`, each network certifier row registration at the certifier's root and domain (`warden_roots`, :1208-1223), which the period check's `holds` reads. Its members are `first`, `ingress-<w>`, `egress-<w>` and `last` (:330-355). So with the refusal lifted as the form is written, a scan is still refused, "is no member's". So is a compute audit whose registration names `scan/state` (:55-57).
+- [read] It is the class soundness left out of the form until the statement covers it: a root that is the window's and not one member's (PRF-490, Wed 03:35Z, in LEG's notes; LEG's item 3; our `ROW_TABLES`). A served window meets it only where it has row tables. A scan meets it always.
+- [read] The other domain is not itself the obstacle (NET-297). R3 takes each root's leaves and domain from the parameters' `ports` and derives none, so a port of `roots` under the certifier's domain passes it, as STOPDRIVER's 04:33Z entry says of the lengths tie. Gap 1's fix on the held branch compares a member's port only with an entry the registration lists (`entriesOf`), so it adds no refusal there.
+- [relayed] Two more that are not the form's: the ok bit (NET-352's S2: one-stage's Lean opens no unit's output) and soundness's composite over a list, after #8569.
+
+### 6. What I could not establish
+
+- Whether soundness's Mon 16 Nov stands with its worker stopped, and its sizes for (i-b) and for S2. Its newest word on PRF-490 is Wed 07:40Z.
+- When #8569 lands. Fri 13 Nov is NET-352's text and not soundness's own that I read. LEAN-255, how the theorem is listed, is In Progress and was due Wed 11 Nov.
+- Whether anyone has started S3, S5, S7 or S9 outside what I read: this file, my mailbox, and PRF-371, PRF-490, LEAN-249, LEAN-255, NET-352 and MEM-279's newest eleven comments.
+- The size of the 15 proofs' per-member cases, and whether the window's theorem replaces the one-member one in `deployed`.
+- For a scan, two things. Whether network accounting's driver could name each shared tree as one member's port and have the others read it through `--registered`, so that the form needs no change. And whether covering the class needs our piece (1), the rows link over several members (4 to 5 files, 1,000 to 1,400 lines [guess, Wed 08:16Z]), proved, or lets it stay named open as in remote's record. If proved, (1) joins the chain for the network figure and not for a served window.
+- Whether "every tied compute audit is one registration of several members" holds of `main`'s code. [read] `scan_zk.py`'s own compute audit, the block round, is one member (`members_of`, :341-344). The sentence is network accounting's worker's [relayed: NET-352].
+- The queue's rate. 73 were ready at 05:39Z [run]; I read no measure of how fast it lands them.
+- How long an honest scan audit takes, beyond the docstring's line.
+
+For the table:
+- The per-member form: four pull requests on `main` (the form behind its refusal, its parser, its lemmas, its Python writer). Past them nothing is started: (i-a), `WindowReads` and `WindowAt`, the lift with its 15 proofs, the closing round outside Lean. The window's theorem is soundness's, assembled on a branch with four premises left, three of them waiting on us.
