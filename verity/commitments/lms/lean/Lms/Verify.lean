@@ -1,7 +1,7 @@
 module
 
-public import Flock.Hash
-public import Flock.Bytes
+public import Base.Hash
+public import Base.Bytes
 
 /-!
 # LMS verification (RFC 8554 over SHA-512)
