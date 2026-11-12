@@ -1,0 +1,35 @@
+# An H200 node: one h200-sxm-141gb card in a VM of a two-socket Xeon Platinum 8468 server. This file holds what the
+# node's registration states that no card does (verity/hardware/README.md): the cards it names, how many GPUs it
+# carries, and the host's own memory, one table a leaf. Each number is { value, unit, mark, source }, as in a card.
+# A GPU's memory is its card's store.dram, whole, and every rate, clock and peak of a card is its card's: none is
+# here. No run has read the interfaces that carry traffic off a node of this kind, so the file has no interface table
+# and the node's entry registers no link.
+
+node = "h200-sxm-141gb-x1"
+name = "An H200 node: one card in a VM of a two-socket Xeon Platinum 8468 server"
+
+[device]
+sku = "h200-sxm-141gb"
+count = { value = 1, unit = "card", mark = "measurement", source = "nvidia-smi -q on each of the two H200 nodes: 'Attached GPUs : 1', an NVIDIA H200 (art:72daa20de42c, art:28ff838a63c9)" }
+
+[host]
+sku = "xeon-platinum-8468-2s"
+
+# The host's own memory. dram is the memory the VM is given, above the total free -b and MemTotal state, which leave
+# out what the kernel keeps; the server's DIMMs are not on record (a guest can't read them). The disks are the VM's
+# block devices, each whole, mounted or not. One VM of this kind was read, and the file is the kind's.
+[memory.dram]
+tier = "dram"
+bytes = { value = 214748364800, unit = "B", mark = "measurement", source = "infra's read, by hand, on a VM of this kind 19 s after its boot: lsmem -b, 'Total online memory', 100 blocks of 2 GiB and none offline, 200 GiB (art:260d54fc36b1); free -b there gives a total of 211,069,931,520 B" }
+
+[memory.vda]
+tier = "disk"
+bytes = { value = 274877906944, unit = "B", mark = "measurement", source = "infra's read, by hand, on a VM of this kind 19 s after its boot: lsblk -b, vda, the boot disk, 256 GiB (art:260d54fc36b1)" }
+
+[memory.vdb]
+tier = "disk"
+bytes = { value = 1048576, unit = "B", mark = "measurement", source = "infra's read, by hand, on a VM of this kind 19 s after its boot: lsblk -b, vdb, 1 MiB, not mounted (art:260d54fc36b1)" }
+
+[memory.vdc]
+tier = "disk"
+bytes = { value = 499289948160, unit = "B", mark = "measurement", source = "infra's read, by hand, on a VM of this kind 19 s after its boot: lsblk -b, vdc, the data disk, 465 GiB (art:260d54fc36b1)" }

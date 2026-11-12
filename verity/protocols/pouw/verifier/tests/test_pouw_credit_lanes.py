@@ -24,12 +24,12 @@ from pathlib import Path
 
 import pytest
 
+from verity.circuits import codec
+from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.pouw.verifier import credit as Cr
 from verity.protocols.pouw.verifier import leaf_lanes as LL
-from verity.protocols.pouw.prover.circuit import h1window as HW
 from verity.protocols.spot.verifier.one_stage import produced as PR
 from verity.protocols.spot.verifier.one_stage import proofs as PF
-from verity.circuits import codec
 
 if "test_circuit_h1window" not in sys.modules:
     _spec = importlib.util.spec_from_file_location("test_circuit_h1window", Path(__file__).parent / "test_circuit_h1window.py")
