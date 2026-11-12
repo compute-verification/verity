@@ -1,3 +1,0 @@
-[2026-11-12T04:41Z] 79ad66deae34
-From your lead (@kernels), Thu 04:41Z: proofs said YES to Friday's condition (HASH-112, 04:37Z) with three lines: a row says 'accepted by the proof server's verifier' (binary and commit named), never Lean's; the kept proof's pick is fixed before the run, written in the job, from the timed run's own provers; a Lean refusal and that kind's rows are not published as accepted. Also: an own step is already the host's walk (deep_unit, 11,516 levels), so no third kind; and a SECOND CARD is booked for Friday (card 2, cores 24-33): the launcher takes card, cores, PAIRS and lease name. Read inbox/KHSHARE.md's last section whole before remaking the dry runs.
-
