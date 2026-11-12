@@ -70329,3 +70329,75 @@ A sentence for that paragraph: "The guarantee now speaks of what a replay block 
 1. Your rulings on item 4 (the form, where the named `Prop`s live, and `writersFirst`), item 5 (the bound leaves, or a refusal first) and item 6 (the first paragraph, and Daniel).
 2. `r20261112-031243-c71c`, about 05:15Z [guess].
 3. #8940 on `main`, then #9043's head to you. FRAME's statement of the opened row before anything is restated for it.
+
+## GATHER, Thu 12 Nov 04:23Z: #9121 is marked at `0174e36bdc31`; #9075's body has `9e35`'s result and circuits' `b35b`; finding 1's test is one commit ready for #9075's next push (and #9128, opened before your 04:19Z, is to be closed); #9075's 20 greedy templates are each 5.8 MB, all past 4 MiB; job 3 waits on #9092
+
+Your 04:06Z section was read at 04:08Z and your 04:19Z correction at 04:20Z [run: `git show origin/cursor/proofs-inbox:inbox/<my id>.md`, 135 lines at 04:22Z].
+
+**1. #9121, the ready line.**
+
+- `#9121 is ready at 0174e36bdc31 (pr:9121@0174e36bdc31b3d08db2a7d09dd9bc16f801f637)` [run: `research queue ready 9121 --mark --by proofs --sha 0174e36bdc31…`, 04:05Z to 04:06Z, exit 0; its output is `/opt/cursor/artifacts/wired-negative/ready-9121.log`].
+- Its preflight merged the head onto `main` at `62bf29346f76` and refused nothing [run: the same command's output].
+- The quick tier passed before the mark: `r20261112-032737-c7c4` on vy-nebius-cpu-12 ended exit 0, 4 suites of 4 passed, none cached (`benchmarks/one_stage` 538 passed, `benchmarks/prove_path` 148, `repository` 308, `verity-graph` 208) [run: `research fetch r20261112-032737-c7c4 --all`, its `out/suites-changed-quick.log`].
+- The body gives that result in place of "waiting", and still ends `Refs CIR-202` and one `Issue: none:` line [run: `research queue edit 9121 --body-file`, just before the mark; `gh pr view 9121`].
+- The queue lists it `ready`, `admitted` [run: `research queue status`, 04:17Z].
+
+**2. #9075, finding 2: done at 04:10Z, with no push.** The head is still `c0d7c3ace97f` [run: `gh pr view 9075 --json headRefOid`, 04:10Z].
+
+- The Runs table's `9e35` row now reads: exit 0, 64 suites, 64 passed, none cached, none failed, with `repository` 308 passed, `verity/definitions` 891, the circuit-check suite 367, `verity/protocols/spot/verifier` 859 and `verity-vllm` 14,071 [run: `research queue edit 9075 --body-file`; the numbers are from `r20261112-012735-9e35`'s `stdout.log`, fetched at 04:09Z].
+- A row for circuits' `r20261112-032850-b35b` is under it (the 20 served units, each lowered whole, 12 vectors each, no mismatch), and the Circuit-check section says circuits ran the same again at this head [relayed: circuits on CIR-202, 03:55Z; I did not read that run].
+- The body is 18,116 bytes; a copy is `/opt/cursor/artifacts/shapeA/pr-9075-body.md` [run: `gh pr view 9075 --json body`].
+- Circuits' 03:55Z comment calls `r20261112-023806-08e8` mine. It is not a run of mine and no machine I can ask holds it, so the body does not cite it [run: `research inspect r20261112-023806-08e8`, 04:09Z: "no machine holds run"; my entries name no such run, `rg 08e8 inbox/proofs-coordinator.md`].
+
+**3. Finding 1: the test is written, as one commit on #9075's head, held for #9075's next push.**
+
+- The commit is `6ef9e427d69b`, whose parent is `c0d7c3ace97f`: `verity/definitions/tests/test_greedy_stages.py` only, 17 lines, no Definition touched [run: `git show --stat 6ef9e427d69b`].
+- It is one test over three chunks, each with one lane alone above -inf, holding the token index's two words on each side of the lane t where the high word goes up [read: the commit]:
+
+  | Chunk | t | The compare at lane t reads |
+  |---|---|---|
+  | `GreedyChunk_v2{N=3,OFF=65535}` | 1 | a subnormal number against +0 |
+  | `GreedyChunk_v2{N=24,OFF=65520}` (circuits' binding) | 16 | a subnormal number against a subnormal number |
+  | `GreedyChunk_v2{N=146,OFF=65408}` | 128 | the smallest normal number against the largest subnormal number |
+
+- Each returns (65,535, 0) at index t - 1 and (0, 1) at index t, which for circuits' binding is its two asserts at i = 15 and i = 16; the first and last lane, the lanes beside the two, and the chunk with no lane above -inf are held too [read: the commit].
+- The other two bindings are mine, the two ends of the range circuits named (t - 1 is +0, and t - 1 is the last subnormal word). If "nothing else rides along" means circuits' binding alone, say so and I drop the two parameters [guess at what you want].
+- It passes: 3 passed in 0.8 s [run: `pytest verity/definitions/tests/test_greedy_stages.py -k subnormal`, my VM, 04:13Z; `/opt/cursor/artifacts/subnormal/test-at-head.log` has it with the carry tests beside it, 25 passed].
+- It can fail: with the carry taken one lane late (`t` where `_token` has `t - 1`, on my VM, not committed) all three cases fail at index t, returning (0, 0) where (0, 1) is expected [run: the same command on that edit; `/opt/cursor/artifacts/subnormal/control-carry-one-lane-late.log`].
+- **#9128 is to be closed, and I cannot close it.** At 04:17Z, on your 04:06Z section ("else a follow-up of its own"), I opened [#9128](https://github.com/compute-verification/verity/pull/9128) for this commit, on branch `cursor/proofs-greedy-subnormal-3c7e`, which is #9075's head and the one commit [run: `research queue open`, 04:17Z]. Your 04:19Z puts the assert in #9075's push instead. I retitled it "SUPERSEDED by #9075's next push (close): …" and its body says so first [run: `research queue edit 9128 --title … --body-file`, 04:21Z]. It is not marked [run: `research queue status`, 04:17Z]. My `gh` is read-only: please close it.
+- Its quick tier `r20261112-041603-6002` was cancelled at 04:20Z while it waited for a check slot, so no check started and it is no result (exit 143) [run: `research cancel … --by proofs`]. `r20261112-041513-1065` was refused before it started, on a flag of mine the runner does not take, and is no result either [run: `research run`'s output, 04:15Z].
+
+**4. The sizes circuits asked for, measured ahead: #9075's form does not bring the greedy select under 4 MiB.**
+
+- Each of #9075's 20 greedy templates has a description of 5.81 MB to 5.82 MB, all 20 past `SIZE` = 4,194,304 bytes [run: #9092's `description_sizes.py` (the file as at `7565f5a6e1b1`) `one T` for each, at #9075's tree, on my VM, 04:19Z, 0.6 s and 0.14 GB each; `/opt/cursor/artifacts/sizes/greedy-v2-description-sizes.json`]:
+
+  | Template | Description, bytes | Its largest Definition, bytes |
+  |---|---|---|
+  | `GreedyChunk_v2{N=7744,OFF=0}` | 5,805,949 | 4,875,078 |
+  | the 16 chunks with no carry, `OFF=7744` to `OFF=139392` | 5,806,864 to 5,806,991 | 4,875,718 to 4,875,720 |
+  | `GreedyChunk_v2{N=7744,OFF=61952}` and `OFF=123904` (the two with a carry) | 5,807,394 and 5,807,401 | 4,876,129 and 4,876,130 |
+  | `GreedyCombine_v2{V=154880,N=7744}` | 5,823,721 | 4,890,401 |
+
+- On `main` the three are 12,322,978 and 12,322,400 bytes (the two chunks) and 5,577,023 (the combine) [read: #9092's `adapters/vllm/tools/description_sizes.json` at `7565f5a6e1b1`, its run `r20261112-012233-2622`].
+- So each chunk's description is less than half of `main`'s and still 1.38 times the size; the select's 20 are 116.2 MB in all where `main`'s 3 are 30.2 MB [derived from the two rows above].
+- Nothing was merged for this: the tool file was copied beside the tree in a scratch directory, and no branch holds it [run: the command above]. These are not the record's entries: `update` in a node job writes those, in job 3.
+- What job 3's commit will therefore hold besides the record [read: #9092's `test_description_sizes.py` and its allowlist at `7565f5a6e1b1`]: in `adapters/vllm/tests/tools/allowlists/description_sizes.json`, the three `_v1` greedy entries out and two in, `GreedyChunk_v2{N=7744,OFF=*}` and `GreedyCombine_v2{V=154880,N=7744}`, as circuits' 02:24Z step 3 says. The list goes from three greedy entries to two, and the ratchet gate compares a per-site list by its count, so it does not grow [read: `adapters/vllm/tools/ratchet_gate.py`'s docstring; not run].
+- A chunk under 4 MiB would be about 5,590 lanes at most at this form's 750 bytes a lane, which is K = 32 (4,840 lanes) among the divisors of 154,880 [derived; nothing built]. I change nothing on this: K = 20 is circuits' term, and their afterwards is the chunks as calls of one body (CIR-215).
+
+**5. Job 3: waiting on #9092.**
+
+- #9092 is OPEN, not merged, at `7565f5a6e1b1`, and `main` is `62bf29346f76` [run: `gh pr view 9092 --json state,mergedAt`; `git fetch origin main`, 04:22Z].
+- #9075 is open, unmarked, at `c0d7c3ace97f` [run: `research queue status`, 04:17Z: "not marked ready at c0d7c3ac"].
+- `6ef9e427d69b` merges with `main` at `62bf29346f76` with no conflict [run: `git merge-tree --write-tree`, my VM, 04:22Z].
+- When #9092 is on `main`: merge `main` into `6ef9e427d69b`, `description_sizes.py update -j 8 --run` in a node job with 16 GB that writes into its own clone, the record and the allowlist's two lines committed, one push, one quick tier, circuit-check on the targets the merge changes, then the ready line with the record's sizes [relayed: your 03:24Z and 04:19Z].
+- I look at #9092 every 15 minutes until 08:00Z and then say so in one line, as you asked.
+
+**Runs since my 03:58Z entry.**
+
+| Run | Head | What | Exit |
+|---|---|---|---|
+| `r20261112-032737-c7c4` | `0174e36bdc31` | #9121's quick tier | 0: 4 suites of 4 passed |
+| `r20261112-041603-6002` | `6ef9e427d69b` | finding 1's quick tier | 143: cancelled by me before its check started, no result |
+| `r20261112-041513-1065` | `6ef9e427d69b` | the same, refused at launch | refused before starting, no result |
+
+**Not done.** Job 3 (waits on #9092). #9128 is open and superseded (yours to close). Nothing is pushed to #9075's branch.
