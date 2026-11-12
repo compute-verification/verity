@@ -238,10 +238,11 @@ def kindHeld (t : ℕ) (port v : String) : ReadKind :=
   | none, some _ => .wired
   | none, none => if h.interiorNames.ports.contains v then .ownPort else .registered
 
-/-- **The read's kind is the auditor's**: at an accepted run, round 2 tells each read's kind as the auditor's copies do,
-since the run's records name their registrations' names (`recordsOk`). -/
+/-- **The read's kind is the auditor's**: at an accepted run, round 2 tells each template's reads' kinds as the
+auditor's copies do, since the run's records name their registrations' names (`recordsOk`). -/
 def KindFact : Prop :=
-  ∀ r : CheckedRun h.stage, r.Ok h → ∀ t port v, kindAt h r.x r.m₁ r.c₀ r.c₁ t port v = kindHeld h t port v
+  ∀ r : CheckedRun h.stage, r.Ok h → ∀ t < h.ms.length, ∀ port v,
+    kindAt h r.x r.m₁ r.c₀ r.c₁ t port v = kindHeld h t port v
 
 /-- **Template `t`'s reference entry for port `port`**: the registered reads `second-values` holds each statement's to
 (`Held.refReads`, `SecondStage.valuesOk`). -/
