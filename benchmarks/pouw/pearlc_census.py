@@ -39,6 +39,12 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import run_result
 
+#: what `pearlc_k256_gate.py` and the tests read
+__all__ = [
+    "ACTIVATION_FAMILIES", "FAMILIES", "FREEZE_FAMILIES", "OUTLIER_FAMILIES", "XCANCEL_FAMILIES", "cell", "chain",
+    "cross_group", "debit", "exact_run_atoms", "family", "group_run", "in_domain", "lines", "selftest", "set_atom",
+]
+
 # ---- E4M3 codec -------------------------------------------------------------------------------------------------------
 MAG = np.zeros(128, dtype=np.float64)
 for _c in range(128):

@@ -43,6 +43,13 @@ import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
+#: what `grind_price.py` and the tests read
+__all__ = [
+    "ALLOCATED", "CONDITIONAL", "Config", "DEFICIT", "FAMILIES", "FILL_DATA", "FILL_GRID", "FILL_MIXES", "LN_INV_DELTA",
+    "P_PASS", "REGIMES", "SAMPLING_DATA", "SPEND_GRID", "TODAY_DRAWS", "allocation", "curve", "hash_leaves", "levers",
+    "main", "optimum", "point", "sample", "spend_for", "today", "unconditional",
+]
+
 LN_INV_DELTA = 41 * math.log(2)   # ℓ_s at δ_s = 2⁻⁴¹, the machine model's luck budget (deficit 0.002368 at p = ¾)
 ROUNDS = 48_000                   # S: one week of 12.6 s rounds (Theorem S; SPEC)
 P_PASS = 0.75                     # a deficient unit's pass probability at 1-bit coins (Theorem S)

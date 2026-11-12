@@ -8,6 +8,9 @@ import json
 import os
 import sys
 
+#: what the tests read
+__all__ = ["main"]
+
 
 def lines(path: str) -> list[dict]:
     return [json.loads(x) for x in open(path) if x.startswith("{")] if os.path.exists(path) else []

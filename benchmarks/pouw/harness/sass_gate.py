@@ -95,6 +95,15 @@ from collections import Counter
 from collections.abc import Callable
 from pathlib import Path
 
+#: what `bench.py`, `ieee_pin.py`, `gpu_kit/sass_gate.py` and the tests read
+__all__ = [
+    "DIV", "EM_CUDA", "EXCEPTABLE", "EXIT_FAIL", "FATBIN_COMPRESSED", "FATBIN_MAGIC", "FATBIN_ZSTD", "Function", "Insn",
+    "MAX_INFLATED", "MAX_LISTED", "PAGE", "PINS", "PINS_VERSION", "POSIX_SEM", "SHT_NOTE", "SassChecker",
+    "SassGateFailed", "VERSION", "ZSTD_MAGIC", "cubin_verdict", "declared", "device_code", "find_tools", "flagged",
+    "has_device_code", "judge", "load_pins", "mapped", "opcode", "parse_nvdisasm", "pin_record", "read_mapped",
+    "regions", "scan", "signature_id", "tool_notes", "toolkit_of", "update_pins", "why_failed",
+]
+
 VERSION = "sass-gate/v4"
 EXIT_FAIL = 7
 PINS = Path(__file__).with_name("sass_pins.json")
