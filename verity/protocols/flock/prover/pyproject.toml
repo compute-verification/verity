@@ -46,7 +46,6 @@ untraced = [
     "tests/test_lean_out_group_slot.py",
     "tests/test_lean_plain_hidden_tables.py",
     "tests/test_lean_public_inputs.py",
-    "tests/test_lean_rec_cap_guards.py",
     "tests/test_lean_record_checks.py",
     "tests/test_lean_region_words.py",
     "tests/test_lean_registered_bit_rows.py",
@@ -96,9 +95,6 @@ inputs = [
     # test_coin_schedule.py holds the prover's coin schedule to the Lean verifier's, and test_rec_live.py the inner coin
     # tree to RecVStar's
     "verity/protocols/flock/verifier/Flock/Zk.lean", "verity/protocols/flock/verifier/Flock/RecVStar.lean",
-    # test_lean_rec_cap_guards.py builds Flock.Test.RecCap, which the Lean check no longer does; its imports reach it through
-    # the flock-verify artifact
-    "verity/protocols/flock/verifier/Flock/Test/RecCap.lean",
     # `flock-firewall live` starts from this directory, where the guard reads its argument `live` as the crate's directory
     "verity/protocols/flock/prover/live/PROTOCOL.md",
     # test_honest_reqs.py's difftest: the harness, and the package `lake` builds its port in under the harness's build
