@@ -26,7 +26,8 @@ that hold separately, each a `Prop` here and a theorem in a file of its own, and
   * `CoinsRead` at each group of coins: on a play the form's check accepts (`Acc`) whose log the check read is the
     device's (`Good`), the coin the check reads for a round of the group is the device's release for it. Every piece but
     the coin map's, the cut's and the assemblies' is a lemma about the form's check alone, at `Acc`; that the sampled
-    verdict accepts only where the check does is the composite's wiring's, one hypothesis of `ProjectionOf`.
+    verdict accepts, on a play of the parameters `θ`, only where the check does is the composite's wiring's, one
+    hypothesis of `ProjectionOf`.
   * `MessagesFixed`: on such a play, the message the check reads for each round is the one the prover sends there, but
     on plays at most `miss` likely; and the prover's calls are within the strategy's (`CallsLe`).
   * `CutBound`: an accepted play whose log the check read is not the device's is at most `terms` likely (the read
@@ -181,28 +182,29 @@ def ProjectionBound (V : Vocab d α) (k : Verity.Registration.Composite) (A : Li
     ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x =>
       (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2).out = .acc) + bound
 
-/-- **The projection from its pieces** (piece: the assembly; its theorem is `projection_of`): the sampled verdict
-only where the form's check accepts (`Acc`, which the composite's wiring owes), the coin map's law, the coins read at
-the first stage's, the second stage's and the sessions' rounds, no coin read at the statements', the messages, the cut,
-the accept and the statement read give the projection's bound at `hide + miss + terms`. -/
+/-- **The projection from its pieces** (piece: the assembly; its theorem is `projection_of`): the sampled verdict, on
+a play of the parameters `θ`, only where the form's check accepts (`Acc`, which the composite's wiring owes; at other
+parameters the sampled verdict also accepts other forms), the coin map's law, the coins read at the first stage's, the
+second stage's and the sessions' rounds, no coin read at the statements', the messages, the cut, the accept and the
+statement read give the projection's bound at `hide + miss + terms`. -/
 def ProjectionOf (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂) (x : Msg) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Prop :=
   ∀ (Fr : Frame V A x θ F c σ) (Rd : Reading A) (Acc Good : Verity.Exchange → Prop) (hide miss terms : ℝ≥0∞),
-    (∀ o, V.Verdict k .sampled o → Acc o) →
+    (∀ o, o.params = θ → V.Verdict k .sampled o → Acc o) →
     CoinMapLaw V A x θ F c σ Fr Rd hide → CoinsRead A Rd Acc Good .first → CoinsRead A Rd Acc Good .second →
       CoinsRead A Rd Acc Good .sessions → StmtReadsNone A Rd → MessagesFixed V A x θ F c σ Fr Rd Acc Good miss →
       CutBound V k θ F c σ Good terms → AcceptsRun A x Rd Acc → StmtAt V A x θ F c σ Fr Rd Acc →
       ProjectionBound V k A x θ F c σ Fr (hide + miss + terms)
 
 /-- **The witness fixed at registration** (piece: the majority): where the claim fails on the vocabulary's transcript
-`X`, an accepted run of the frame's prover whose extracted witness is in the session's relation is at most `bind`
-likely. The transcript is the majority of the boundary values the extractor's witnesses open; `X` is the vocabulary's
+`tr`, an accepted run of the frame's prover whose extracted witness is in the session's relation is at most `bind`
+likely. The transcript is the majority of the boundary values the extractor's witnesses open; `tr` is the vocabulary's
 at the strategy. -/
 def MajorityBound (V : Vocab d α) (A : Live₂) (x : Msg) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Verity.Game.Strategy (V.game θ F c)) (Fr : Frame V A x θ F c σ)
-    (X : Verity.Circuit.Trace (V.circuitOf θ F)) (bind : ℝ≥0∞) : Prop :=
-  V.extract θ F c σ = X →
-    ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) X (V.certOf θ).ε →
+    (tr : Verity.Circuit.Trace (V.circuitOf θ F)) (bind : ℝ≥0∞) : Prop :=
+  V.extract θ F c σ = tr →
+    ¬ Accounting.IntegrityHolds (V.partsOf θ F) (V.Opens θ F c) tr (V.certOf θ).ε →
       ENNReal.ofReal (Claims.Pr fun s : TapeOf V θ F c σ × Coins A x × A.L.E.C x =>
         (Claims.run FlockDeploy.sha512 Fr.P A.L.V x s.1 s.2.1).out = .acc ∧
           Claims.Rel.ext A.R x (A.L.E.eval FlockDeploy.sha512 Fr.P x s.1 s.2.1 s.2.2).1) ≤ bind
@@ -216,12 +218,12 @@ def CouplingOf (V : Vocab d α) (k : Verity.Registration.Composite) (A : Live₂
     (F : Array ByteArray) : Prop :=
   ∀ (x : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Msg)
     (Fr : (c : ByteArray) → (σ : Verity.Game.Strategy (V.game θ F c)) → Frame V A (x c σ) θ F c σ)
-    (X : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Verity.Circuit.Trace (V.circuitOf θ F))
+    (tr : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → Verity.Circuit.Trace (V.circuitOf θ F))
     (bound bind : (c : ByteArray) → Verity.Game.Strategy (V.game θ F c) → ℝ≥0∞),
     (∀ c σ, A.L.Scope (x c σ) ∨ Verity.Game.prob (fun o => V.Verdict k .sampled o) (V.game θ F c) σ = 0) →
     (∀ c σ, ProjectionBound V k A (x c σ) θ F c σ (Fr c σ) (bound c σ)) →
-    (∀ c σ, MajorityBound V A (x c σ) θ F c σ (Fr c σ) (X c σ) (bind c σ)) →
-    (∀ c σ, V.extract θ F c σ = X c σ) →
+    (∀ c σ, MajorityBound V A (x c σ) θ F c σ (Fr c σ) (tr c σ) (bind c σ)) →
+    (∀ c σ, V.extract θ F c σ = tr c σ) →
     (∀ c σ, V.finderCR .sampled θ F c σ → V.premises .sampled θ F c σ →
       ENNReal.ofReal (A.errAt (x c σ) (Fr c σ).P) + (bound c σ + bind c σ) ≤
         V.delta θ .sampled (V.cost θ F c σ)) →
