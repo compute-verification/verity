@@ -1,6 +1,6 @@
 """The network certifier's device state and the start's certificate: a session's base on its key's life is taken once,
-written before it is returned and never given again; one run holds the state at a time; and the start's certificate
-binds the base, the schedule, the link, the session and the key."""
+written before it is returned and never given again; one run holds the state at a time; the start's certificate
+binds the base, the schedule, the link, the session and the key; and its tag is no other separator's."""
 
 import dataclasses
 import json
@@ -8,8 +8,10 @@ import struct
 
 import pytest
 
+from verity.commitments import domains
 from verity.commitments.crypto import lms
 from verity.commitments.identity import tagged_sha512
+from verity.protocols.certifier.verifier import certificate
 from verity.protocols.certifier.verifier.certificate import (
     CertifiedStart, DeviceState, Direction, Issuer, LmsSigner, StartRefused, certificate_digest, start_digest,
     start_link)
@@ -186,3 +188,15 @@ def test_a_refused_signer_gives_no_starts_certificate(tmp_path):
     assert again.certify_start("warden", 600, SCHEDULE) is None
     assert again.refused == [("warden-origin", Direction.EGRESS, 0)] and not again.started
     assert signers.used(first) == [0]
+
+
+def test_the_starts_tag_is_no_other_separator_and_neither_begins_the_other():
+    """The start's tag is a literal of the certificate's, as its other tags are, which the table of domain separators
+    does not hold: this holds what its entry there would. It is no entry of the table and no other tag of the
+    certificate's, and none of them begins it or is begun by it."""
+    mine = certificate.START_TAG.encode()
+    table = [v.encode() for k, v in vars(domains).items() if k.isupper() and isinstance(v, str)]
+    own = [(v if isinstance(v, bytes) else v.encode()).rstrip(b"\0") for k, v in vars(certificate).items()
+           if k.endswith("_TAG") and k != "START_TAG"]
+    assert domains.CERTIFIER_CLOCK.encode() in table and certificate.CLOCK_TAG.encode() in own
+    assert not [t for t in table + own if t.startswith(mine) or mine.startswith(t)]
