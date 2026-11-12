@@ -154,21 +154,30 @@ def reference(j: Any) -> Any:
 # ---- ledgers --------------------------------------------------------------------------------------------------------
 
 class Book:
-    """A ledger under the test's key, written one entry at a time as the gate writes it: a reserve joins its lane's open
-    period, an open binds its reserve and carries its request, a period's close lists its sessions with the outcomes
-    the ledger shows then. `events` are its entries' (kind, session, body); `lines` chains and signs them, entry `i` at
-    leaf `i`."""
+    """A ledger under `key` (the test's small key, unless given), written one entry at a time as the gate writes it: a
+    reserve joins its lane's open period, an open binds its reserve and carries its request, a period's close lists its
+    sessions with the outcomes the ledger shows then. `events` are its entries' (kind, session, body); `lines` chains
+    and signs them, each at the next of the key's first `leaves` leaves that `skip` has not set aside."""
 
-    def __init__(self, rng: random.Random) -> None:
-        self.rng = rng
+    def __init__(self, rng: random.Random, key: lms.PrivateKey = KEY, leaves: int = LEAVES) -> None:
+        self.rng, self.key, self.leaves = rng, key, leaves
+        self.key_sha = hashlib.sha512(lms.public_key(key)).hexdigest()
+        self.leaf: list[int] = []
+        self._next = 0
         self.events: list[tuple[str, str | None, dict]] = []
         self.sessions: dict[str, dict] = {}
         self.periods: dict[str, dict] = {}
         self.current: dict[str, str] = {}
         self._ids = itertools.count()
 
+    def skip(self, n: int = 1) -> int:
+        """Sets the key's next `n` leaves aside for what a session signs between its entries; the first of them."""
+        self._next += n
+        return self._next - n
+
     def _add(self, kind: str, session: str | None, body: dict) -> int:
         self.events.append((kind, session, body))
+        self.leaf.append(self.skip())
         return len(self.events) - 1
 
     def _join(self, lane: str, sid: str) -> None:
@@ -189,8 +198,8 @@ class Book:
         r = s["request"]
         s["root"] = self.rng.randbytes(64).hex()
         body = {"window": {"root": s["root"]}, "reserve": s["reserve"], **{k: r[k] for k in Ch.RESERVED if k in r},
-                "opened_by": r["by"], "pinned": self.rng.randbytes(20).hex(), "key_sha512": KEY_SHA, "host": f"h.{sid}",
-                "started_utc": at(t), **({"withheld": True} if r.get("withheld") is True else {})}
+                "opened_by": r["by"], "pinned": self.rng.randbytes(20).hex(), "key_sha512": self.key_sha,
+                "host": f"h.{sid}", "started_utc": at(t), **({"withheld": True} if r.get("withheld") is True else {})}
         s["open"] = self._add("open", sid, body)
         return s["root"]
 
@@ -199,18 +208,19 @@ class Book:
         the open."""
         sid = f"one-{next(self._ids)}"
         root = self.rng.randbytes(64).hex()
-        body = {"window": {"root": root}, "by": lane, "pinned": self.rng.randbytes(20).hex(), "key_sha512": KEY_SHA,
-                "host": f"h.{sid}", "families": families, **({} if t is None else {"started_utc": at(t)}),
-                **({"withheld": True} if withheld else {})}
+        body = {"window": {"root": root}, "by": lane, "pinned": self.rng.randbytes(20).hex(),
+                "key_sha512": self.key_sha, "host": f"h.{sid}", "families": families,
+                **({} if t is None else {"started_utc": at(t)}), **({"withheld": True} if withheld else {})}
         self.sessions[sid] = {"lane": lane, "root": root, "open": self._add("open", sid, body)}
         self._join(lane, sid)
         return sid
 
-    def end(self, sid: str, t: int, complete: bool = False) -> None:
+    def end(self, sid: str, t: int, complete: bool = False, **sealed: Any) -> None:
+        """Session `sid`'s end at `t`, sealing nothing of the session unless `sealed` says what."""
         s = self.sessions[sid]
         s["complete"] = complete
         s["end"] = self._add("end", sid, {"closed": True, "complete": complete, "files": {}, "rc": 0,
-                                          "record_leaf": None, "ended_utc": at(t)})
+                                          "record_leaf": None, "ended_utc": at(t), **sealed})
 
     def window(self, lane: str, t: int, families: Any = DRAW, withheld: bool = True) -> str:
         """A session of `lane` reserved at `t`, opened a minute later and ended a minute after that."""
@@ -221,7 +231,7 @@ class Book:
 
     def period_open(self, name: str, lane: str, t: int, cap: int = 8) -> None:
         self._add("period-open", None, {"period": name, "lane": lane, "by": "operator", "cap": cap,
-                                        "circuit": "ab" * 64, "key_sha512": KEY_SHA, "opened_utc": at(t)})
+                                        "circuit": "ab" * 64, "key_sha512": self.key_sha, "opened_utc": at(t)})
         self.periods[name] = {"lane": lane, "sessions": []}
         self.current[lane] = name
 
@@ -236,11 +246,11 @@ class Book:
 
     def lines(self, upto: int | None = None) -> list[str]:
         out: list[str] = []
-        assert len(self.events) <= LEAVES, len(self.events)
+        assert self._next <= self.leaves, self._next
         for i, (kind, sid, body) in enumerate(self.events[:upto]):
             entry = {"body": body, "kind": kind, "prev": hashlib.sha512(out[-1].encode()).hexdigest() if out else "0" * 128,
                      "schema": Ch.LEDGER_SCHEMA, "seq": i, "session": sid}
-            out.append(Ch.ledger_text({**entry, "sig": _sign_ledger(KEY, i, entry)}))
+            out.append(Ch.ledger_text({**entry, "sig": _sign_ledger(self.key, self.leaf[i], entry)}))
         return out
 
 
