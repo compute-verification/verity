@@ -49,6 +49,9 @@ ROUND_GATES = MIX_GATES + 2 * W
 SPREAD = CompositeDefinition("TestReadsSpread", 1, ("N",), lambda S: ((("s", Array(S.N, WORD)), ("x", Array(S.N, WORD))),
                                                                       Array(S.N, WORD)),
                              lambda B, S, s, x: B.batch(MIX, s, x, axes=(0, 0)), register=False)
+#: an activation of MIX whose parameter leaves are the returns of the one before it, with no gate between them
+TWICE = CompositeDefinition("TestReadsTwice", 1, (), lambda S: ((("s", WORD), ("x", WORD), ("y", WORD)), WORD),
+                            lambda B, S, s, x, y: B.call(MIX, B.call(MIX, s, x), y), register=False)
 #: MIX with a parameter no gate reads
 SPARE = definition("TestReadsSpare", 1, lambda C, s, x, spare: _mix(C, s, x), (("s", WORD), ("x", WORD), ("spare", BL.BIT)), WORD,
                    register=False)
@@ -192,6 +195,16 @@ def test_an_activation_is_lowered_by_its_builder_once_either_way(kept, monkeypat
     kept()
     _lower(bind(ROUNDS, N=3))
     assert built[3:] == built[:3]
+
+
+def test_an_activation_fed_by_another_is_lowered_by_its_builder_either_way(kept) -> None:
+    """The second activation's parameter leaves are words only once the first is lowered. A caller that names its reads has
+    builder or gates decided before anything is lowered, so from the words that will be there: both by their builders."""
+    d = bind(TWICE)
+    dropped = _made(_lower(d))
+    assert _lower(d).counts()["ands"] == 2 * (MIX_ANDS + W)
+    kept()
+    assert _made(_lower(d)) == dropped
 
 
 def test_a_builder_whose_leaf_has_no_word_is_refused_either_way(kept) -> None:
