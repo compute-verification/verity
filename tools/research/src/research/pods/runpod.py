@@ -51,6 +51,7 @@ import argparse
 import base64
 import binascii
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -194,7 +195,7 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
             _note_call("rest", method, path, getattr(response, "status", None), getattr(response, "headers", None))
     except urllib.error.HTTPError as error:
         _note_call("rest", method, path, error.code, error.headers)
-        detail = error.read()[:500].decode(errors="replace")
+        detail = error.read().decode(errors="replace").replace(cfg["apikey"], "<the API key>")[:500]
         what = "not found (terminated, or never existed)" if error.code == 404 else detail
         raise PodError(f"{method} {path} -> HTTP {error.code}: {what}", code=error.code, pod_id=pod_id) from None
     except (urllib.error.URLError, TimeoutError, OSError) as error:
@@ -221,19 +222,23 @@ def _graphql(query: str) -> Any:
     except urllib.error.HTTPError as error:
         _note_call("graphql", "POST", what, error.code, error.headers)
         raise
-    except (urllib.error.URLError, TimeoutError, OSError):
+    except http.client.InvalidURL:              # its text quotes the request's target, which holds the key
+        _note_call("graphql", "POST", what, None, None)
+        raise PodError("GraphQL: the RunPod config's API URL or key holds a character no request can carry") from None
+    except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException):
         _note_call("graphql", "POST", what, None, None)
         raise
     return json.loads(raw)
 
 
 def _caller() -> str:
-    """Who made a call, by the first words of the command line: `research,pods,ssh`, `research,run`."""
+    """Who made a call, by the program's name and the subcommands after it: `research,pods,ssh`, `research,run`.  A word that
+    is not a subcommand's shape ends it, so no argument's value is written."""
     argv = list(sys.argv) or ["?"]
     head = Path(argv[0])
     words = [head.parent.name if head.name == "__main__.py" else head.name]
     for arg in argv[1:3]:
-        if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,23}", arg):
+        if not re.fullmatch(r"[a-z][a-z0-9-]{0,15}", arg):
             break
         words.append(arg)
     return ",".join(words) or "?"
@@ -248,45 +253,50 @@ def _say(what: str) -> None:
 
 def _note_call(api: str, method: str, what: str, status: int | None, headers: Any) -> None:
     """One line of the call log (module docstring) for a call sent to RunPod: `status` is its HTTP status, `none` when no answer
-    came, and the counts left are read from the answer's headers.  Best effort: nothing here, a full disk included, may fail the
-    call it records, which the budgets guard makes every poll."""
+    came, and the counts left are read from the answer's headers.  It is given neither the key nor the URL that carries it.
+    Nothing here, a full disk included, may fail the call it records, which the budgets guard makes every poll: a line that
+    can't be written is said once on stderr."""
     try:
         get = headers.get if headers is not None else (lambda _name: None)
-        left = dict(re.findall(r'"(minute|hour|day)";r=(\d+)', str(get("ratelimit") or "")))    # REST: `"day";r=5129;t=78111, ...`
+        left = dict(re.findall(r'"(minute|hour|day)";r=(\d+)', str(get("ratelimit") or "")))    # REST: `"day";r=N;t=S, ...`
         for window in ("minute", "hour", "day"):                                                  # GraphQL: one header a window
             if window not in left and re.fullmatch(r"\d+", str(get(f"x-ratelimit-remaining-{window}") or "")):
                 left[window] = str(get(f"x-ratelimit-remaining-{window}"))
-        agent = os.environ.get("RESEARCH_AGENT") or os.environ.get("CURSOR_CONVERSATION_ID") or ""
         line = " ".join([time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(clock())), api, method, what,
                          str(status) if status is not None else "none",
                          *(f"{window}={left[window]}" for window in ("day", "hour", "minute") if window in left),
-                         f"by={_caller()}", f"pid={os.getpid()}",
-                         *([f"agent={agent}"] if re.fullmatch(r"[A-Za-z0-9_.:@/-]{1,80}", agent) else [])])
+                         f"by={_caller()}", f"pid={os.getpid()}"])
         path = _env_dir() / CALL_LOG
         path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
-        try:
-            if path.stat().st_size > CALL_LOG_MAX:
-                os.replace(path, path.with_name(f"{CALL_LOG}.1"))
-        except FileNotFoundError:
-            pass
+        if path.is_file() and path.stat().st_size > CALL_LOG_MAX:
+            os.replace(path, path.with_name(f"{CALL_LOG}.1"))
         with path.open("a") as log:
             log.write(line + "\n")
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as error:  # noqa: BLE001
+        _say(f"RunPod's call log can't be written, so its calls are in none: {type(error).__name__}: {error}")
 
 
 def _graphql_data(query: str, pod_id: str | None = None) -> dict[str, Any]:
-    """`data` of a GraphQL query; any failure (no answer, an HTTP error, `errors` in the answer) is a `PodError`."""
+    """`data` of a GraphQL query; any failure (no answer, an HTTP error, `errors` in the answer) is a `PodError`.  The request's
+    URL holds the API key, so an error's text takes nothing from the request: it quotes RunPod's answer with the key struck out
+    should the answer repeat it, and of a failure whose own text can hold the URL it gives the type alone."""
+    key = str(_config().get("apikey") or "")
+
+    def quoted(answer: str) -> str:
+        return (answer.replace(key, "<the API key>") if key else answer)[:300]
+
     try:
         doc = _graphql(query)
     except urllib.error.HTTPError as error:
-        detail = error.read()[:300].decode(errors="replace")
+        detail = quoted(error.read().decode(errors="replace"))
         raise PodError(f"GraphQL -> HTTP {error.code}: {detail}", code=error.code, pod_id=pod_id) from None
+    except http.client.HTTPException as error:
+        raise PodError(f"GraphQL: {type(error).__name__}", pod_id=pod_id) from None
     except (urllib.error.URLError, TimeoutError, OSError, ValueError) as error:
-        raise PodError(f"GraphQL: {type(error).__name__}: {getattr(error, 'reason', None) or error}", pod_id=pod_id) from None
+        raise PodError(f"GraphQL: {type(error).__name__}: {quoted(str(getattr(error, 'reason', None) or error))}", pod_id=pod_id) from None
     if not isinstance(doc, dict) or doc.get("errors") or not isinstance(doc.get("data"), dict):
         errors = doc.get("errors") if isinstance(doc, dict) else doc
-        raise PodError(f"GraphQL: {json.dumps(errors)[:300]}", pod_id=pod_id)
+        raise PodError(f"GraphQL: {quoted(json.dumps(errors))}", pod_id=pod_id)
     return doc["data"]
 
 

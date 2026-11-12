@@ -6,6 +6,7 @@ command built here, and the clock is the test's."""
 from __future__ import annotations
 
 import email.message
+import http.client
 import io
 import json
 import re
@@ -20,24 +21,25 @@ from research.pods import connect, guard, runpod
 
 POD = "abc123def45678"
 #: the headers as RunPod sends them: REST's one `ratelimit` header, GraphQL's one header a window
-REST_LEFT = {"ratelimit": '"minute";r=21;t=51, "hour";r=404;t=2511, "day";r=5129;t=78111',
+REST_LEFT = {"ratelimit": '"minute";r=21;t=30, "hour";r=400;t=1800, "day";r=5000;t=43200',
              "ratelimit-policy": '"minute";q=22;w=60, "hour";q=450;w=3600, "day";q=5400;w=86400'}
-REST_SPENT = {"ratelimit": '"minute";r=20;t=50, "hour";r=403;t=2510, "day";r=0;t=78110', "retry-after": "78110"}
-GRAPHQL_LEFT = {"x-ratelimit-remaining-minute": "179", "x-ratelimit-remaining-hour": "3574", "x-ratelimit-remaining-day": "43019"}
+REST_SPENT = {"ratelimit": '"minute";r=20;t=29, "hour";r=399;t=1799, "day";r=0;t=43199', "retry-after": "43199"}
+GRAPHQL_LEFT = {"x-ratelimit-remaining-minute": "170", "x-ratelimit-remaining-hour": "3500", "x-ratelimit-remaining-day": "43000"}
 REFUSED = (429, {"error": "rate limit exceeded for the day window", "status": 429}, REST_SPENT)
 REST_POD = {"id": POD, "name": "vy-x-veritor-campaign", "desiredStatus": "RUNNING", "costPerHr": 0.16, "publicIp": "203.0.113.7",
-            "portMappings": {"22": 40123}, "machine": {}, "machineId": "m1", "createdAt": "2026-10-30 13:58:56.573 +0000 UTC",
+            "portMappings": {"22": 40123}, "machine": {}, "machineId": "m1", "createdAt": "2025-01-02 03:04:05.678 +0000 UTC",
             "env": {"PUBLIC_KEY": "ssh-ed25519 dummy"}}
 GRAPHQL_POD = {"id": POD, "name": "vy-x-veritor-campaign", "desiredStatus": "RUNNING", "costPerHr": 0.16, "machineId": "m1",
-               "createdAt": "2026-10-30T13:58:56.573Z", "machine": {"gpuTypeId": "unknown"},
+               "createdAt": "2025-01-02T03:04:05.678Z", "machine": {"gpuTypeId": "unknown"},
                "runtime": {"ports": [{"ip": "100.65.0.9", "isIpPublic": False, "privatePort": 19123, "publicPort": 60302, "type": "http"},
                                      {"ip": "203.0.113.7", "isIpPublic": True, "privatePort": 22, "publicPort": 40123, "type": "tcp"}]}}
 GRAPHQL_STOPPED = {"id": "zzz999yyy88877", "name": "vy-old-veritor-campaign", "desiredStatus": "EXITED", "costPerHr": 0.03,
-                   "machineId": "m2", "createdAt": "2026-09-21T17:53:28.637Z", "machine": {"gpuTypeId": "unknown"}, "runtime": None}
+                   "machineId": "m2", "createdAt": "2024-12-01T01:02:03.456Z", "machine": {"gpuTypeId": "unknown"}, "runtime": None}
 AS_REST = {"id": POD, "name": "vy-x-veritor-campaign", "desiredStatus": "RUNNING", "costPerHr": 0.16, "machineId": "m1",
-           "createdAt": "2026-10-30T13:58:56.573Z", "machine": {"gpuTypeId": "unknown"}, "publicIp": "203.0.113.7",
+           "createdAt": "2025-01-02T03:04:05.678Z", "machine": {"gpuTypeId": "unknown"}, "publicIp": "203.0.113.7",
            "portMappings": {"22": 40123}}
-T0 = 1794449889.0       # 2026-11-12T02:18:09Z
+T0 = 1700000000.0       # 2023-11-14T22:13:20Z
+KEY = "rpa_DUMMY0123456789dummy"
 
 
 class Answer:
@@ -91,13 +93,12 @@ class Wire:
 @pytest.fixture
 def wire(monkeypatch, tmp_path):
     """A machine that holds the account's key, with RunPod played by a `Wire`, the clock at T0, and `research pods ssh` as argv."""
-    (tmp_path / "config.toml").write_text('apikey = "dummy"\napiurl = "https://api.invalid/graphql"\n')
+    (tmp_path / "config.toml").write_text(f'apikey = "{KEY}"\napiurl = "https://api.invalid/graphql"\n')
     monkeypatch.setattr(runpod, "CONFIG", tmp_path / "config.toml")
     w = Wire()
     monkeypatch.setattr(runpod.urllib.request, "urlopen", w)
     monkeypatch.setattr(runpod, "clock", lambda: T0)
     monkeypatch.setattr("sys.argv", ["/opt/venv/bin/research", "pods", "ssh", "vy-x", "--", "nvidia-smi"])
-    monkeypatch.delenv("CURSOR_CONVERSATION_ID", raising=False)
     return w
 
 
@@ -114,23 +115,46 @@ def test_every_call_sent_to_runpod_is_one_log_line_with_the_counts_left(wire, mo
     with pytest.raises(runpod.PodError, match="GET /pods -> HTTP 429: .*rate limit exceeded for the day window") as refused:
         runpod._request("GET", "/pods")
     assert refused.value.code == 429
-    monkeypatch.setenv("RESEARCH_AGENT", "circuits")
     monkeypatch.setattr("sys.argv", ["/data/src/research/__main__.py", "pods", "guard", "--supervise", "--budgets", "/notes"])
     assert runpod._graphql("{ myself { clientBalance } }")["data"]["myself"]["clientBalance"] == 242.0
     with pytest.raises(runpod.PodError, match="DELETE /pods/abc123def45678: URLError"):
         runpod._request("DELETE", f"/pods/{POD}")
     pid = runpod.os.getpid()
     assert log_lines() == [
-        f"2026-11-12T02:18:09Z rest GET /pods/{POD} 200 day=5129 hour=404 minute=21 by=research,pods,ssh pid={pid}",
-        f"2026-11-12T02:18:09Z rest GET /pods 429 day=0 hour=403 minute=20 by=research,pods,ssh pid={pid}",
-        f"2026-11-12T02:18:09Z graphql POST myself.clientBalance 200 day=43019 hour=3574 minute=179 by=research,pods,guard pid={pid} "
-        "agent=circuits",
-        f"2026-11-12T02:18:09Z rest DELETE /pods/{POD} none by=research,pods,guard pid={pid} agent=circuits"]
-    assert "dummy" not in (runpod._env_dir() / runpod.CALL_LOG).read_text(), "the key is in neither the call nor the caller"
+        f"2023-11-14T22:13:20Z rest GET /pods/{POD} 200 day=5000 hour=400 minute=21 by=research,pods,ssh pid={pid}",
+        f"2023-11-14T22:13:20Z rest GET /pods 429 day=0 hour=399 minute=20 by=research,pods,ssh pid={pid}",
+        f"2023-11-14T22:13:20Z graphql POST myself.clientBalance 200 day=43000 hour=3500 minute=170 by=research,pods,guard pid={pid}",
+        f"2023-11-14T22:13:20Z rest DELETE /pods/{POD} none by=research,pods,guard pid={pid}"]
 
 
-def test_the_log_starts_again_past_its_size_and_a_log_that_cannot_be_written_fails_no_call(wire, monkeypatch, tmp_path):
-    wire.rest += [(200, [], REST_LEFT)] * 4
+def test_the_api_key_is_in_no_log_line_no_message_and_no_error(wire, monkeypatch, capsys):
+    """REST's header and the GraphQL request's URL hold the key. It is written nowhere: not when RunPod's answer repeats the
+    request, not when a failure's own text holds the URL, and not when the command line holds the key."""
+    url = f"https://api.invalid/graphql?api_key={KEY}"
+    echo = {"error": f"refused {url} with Authorization: Bearer {KEY}"}
+    struck = json.dumps(echo).replace(KEY, "<the API key>")
+    monkeypatch.setattr("sys.argv", ["/opt/venv/bin/research", KEY, "pods"])
+    invalid = http.client.InvalidURL(f"URL can't contain control characters. '/graphql?api_key={KEY} ' (found at least ' ')")
+    said = []
+    for failure in ((429, echo, {}), (200, {"errors": [echo]}, GRAPHQL_LEFT), invalid, http.client.IncompleteRead(KEY.encode()),
+                    urllib.error.URLError(f"unreachable: {url}")):
+        wire.rest += [(429, echo, REST_SPENT)]
+        wire.graphql += [failure]
+        with pytest.raises(runpod.PodError) as both:
+            runpod.get(POD)
+        said.append(str(both.value).removeprefix(f"GET /pods/{POD} -> HTTP 429: {struck}; "))
+    assert said == [f"GraphQL -> HTTP 429: {struck}", f"GraphQL: [{struck}]",
+                    "GraphQL: the RunPod config's API URL or key holds a character no request can carry", "GraphQL: IncompleteRead",
+                    "GraphQL: URLError: unreachable: https://api.invalid/graphql?api_key=<the API key>"]
+    wire.graphql += [invalid]
+    with pytest.raises(runpod.PodError, match="^GraphQL: the RunPod config's API URL or key holds") as balance:
+        runpod._graphql("{ myself { clientBalance } }")         # the balance read's callers print what it raises
+    written = "\n".join([*said, str(balance.value), *log_lines(), *capsys.readouterr()])
+    assert KEY not in written and len(log_lines()) == 11 and {ln.split()[-2] for ln in log_lines()} == {"by=research"}
+
+
+def test_the_log_starts_again_past_its_size_and_a_log_that_cannot_be_written_fails_no_call(wire, monkeypatch, tmp_path, capsys):
+    wire.rest += [(200, [], REST_LEFT)] * 5
     monkeypatch.setattr(runpod, "CALL_LOG_MAX", 150)
     for _ in range(3):
         assert runpod.pods() == []
@@ -139,7 +163,9 @@ def test_the_log_starts_again_past_its_size_and_a_log_that_cannot_be_written_fai
 
     (tmp_path / "a-file").write_text("")
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "a-file"))
-    assert runpod.pods() == [] and wire.rest == [], "no directory to log in: the call is made and answered all the same"
+    assert runpod.pods() == [] and runpod.pods() == [] and wire.rest == [], "no directory to log in: the calls are made and answered"
+    said, = capsys.readouterr().err.splitlines()
+    assert said.startswith("research: RunPod's call log can't be written, so its calls are in none: NotADirectoryError: ")
 
 
 # ---- GraphQL when REST gives no answer -------------------------------------------------------------------------------------------------------
@@ -158,7 +184,7 @@ def test_the_pods_are_listed_from_graphql_when_rest_refuses(wire):
     wire.rest += [REFUSED, (503, {"error": "upstream"}, {}), urllib.error.URLError(TimeoutError("timed out"))]
     wire.graphql += [(200, {"data": {"myself": {"pods": [GRAPHQL_POD, GRAPHQL_STOPPED]}}}, GRAPHQL_LEFT)] * 3
     stopped = {"id": "zzz999yyy88877", "name": "vy-old-veritor-campaign", "desiredStatus": "EXITED", "costPerHr": 0.03, "machineId": "m2",
-               "createdAt": "2026-09-21T17:53:28.637Z", "machine": {"gpuTypeId": "unknown"}, "publicIp": "", "portMappings": {}}
+               "createdAt": "2024-12-01T01:02:03.456Z", "machine": {"gpuTypeId": "unknown"}, "publicIp": "", "portMappings": {}}
     for _ in range(3):                      # its rate limit, a server error, no answer at all
         assert runpod.pods() == [AS_REST, stopped]
     assert runpod.ssh_target(stopped) is None and wire.apis() == ["rest", "graphql"] * 3
