@@ -143,8 +143,8 @@ V2_BREAKS = {
 }
 
 
-#: One break of sampled proofs' form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form, another
-#: form, or the recursive form with none of its files.
+#: One break of SPOT's form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or another form,
+#: the recursive form's params (refused by name), or its evidence with none of its files.
 FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive"]
 
 
@@ -566,6 +566,46 @@ def test_spot_refuses_one_stage_v1(name, request):
             seen[br] += 1
     check()
     assert set(seen) == set(want), dict(seen)
+
+
+def _recursive(a: dict) -> dict:
+    """v2's audit `a` as the recursive audit's case: its params v1's under the form ``recursive``, naming the recursive
+    audit's own inputs (`VStar.Recursive.ownOf`'s keys: the circuit and public files `BLOBS` hold, a draw, no
+    registration and no part), and its evidence under that form."""
+    own = {"circuit": _sha(CIRCUIT), "draw": _sha(b"draw"), "parts": [], "public": _sha(PUBLIC), "registration": None}
+    return OS._case({"params": {**_without(a["params"], "proofs"), "form": "recursive", "recursive": own},
+                     "record": a["record"], "evidence": {**a["evidence"], "form": "recursive"}})
+
+
+@pytest.mark.parametrize("name", ["remote", pytest.param("onsite", marks=pytest.mark.slow)])
+def test_spot_refuses_the_recursive_form(name, request):
+    """SPOT's soundness covers its one-stage form only, so it refuses the recursive form by name at its params
+    (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`), before it reads their rest: v2's audit under the recursive form,
+    naming the recursive audit's own inputs (`_recursive`) or none of them (the form's break ``params-recursive``).
+    Remote and onsite, every other subprotocol aimed at acceptance on the audit's record, reject with that refusal as
+    SPOT's reason, in Lean as in Python. Onsite's case is slow for its space and bandwidth cases (`recorded`)."""
+    product = {"remote": R.REMOTE, "onsite": R.ONSITE}[name]
+    if name == "onsite":
+        request.getfixturevalue("recorded")
+    server = request.getfixturevalue(f"{name}_server")
+    why = f"params: {R.RECURSIVE_REFUSED}"
+    others = [C for C in product.components if C is not R.SAMPLED_PROOFS]
+    seen = collections.Counter()
+
+    @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
+    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
+    def check(drawn, audit):
+        for br, sampled in {"named": _recursive(audit), "unnamed": form_case(audit, "params-recursive")}.items():
+            got = R.SAMPLED_PROOFS.answer({**sampled, "blobs": BLOBS})
+            assert (got["verdict"], got["reason"]) == (R.REJECT, why), got
+            by_id = {c["id"]: c for c in (*drawn, as_component(R.SAMPLED_PROOFS, sampled))}
+            case = product_case(product, one_record(product, [by_id[C.id] for C in product.components]))
+            assert product.answer(case)["verdict"] == R.REJECT
+            out = server.exchange(case)
+            assert out["verdict"] == R.REJECT and f"{R.SAMPLED_PROOFS.id} reject: {why}" in out["reason"], out
+            seen[br] += 1
+    check()
+    assert set(seen) == {"named", "unnamed"}, dict(seen)
 
 
 #: `reusing`'s R's law: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins

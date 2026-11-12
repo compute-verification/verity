@@ -27,7 +27,8 @@ its Flock witness reveals (`session`, `reveal`); the trace commitment's register
 reads under a run's roots (`ownAt`: `own` unless the code sets it, each no deeper than `own`), the root and leaf
 index of each position under a run's roots (`at_`) and its published leaf layer (`layer`); where each committed bit
 sits, its row's width and its place there (`place`), and how the reveal encodes an opening's data: the row's other bits,
-the salt and the path (`bits`, `salt`, `π`); and its numbers: the sessions' `N₀`, the most tables a session at a
+the salt and the path (`bits`, `salt`, `π`); and its numbers: the sessions' `N₀` at a statement (`innerN₀`) and at each
+unit (`unitN₀`: the statement's unless the code sets it), the most tables a session at a
 statement sets up (`tables`), the most openings one session reveals (`reveals`) and the slots whose checked units'
 sessions are all of a run's (`sessions`: `1` when one session proves every sampled proof block, the proof blocks' count at one
 session per unit); and the reference prover's framing (`Reference.refP`): where a run is at a history (`step`), the
@@ -53,6 +54,7 @@ structure Code where
   salt : Opening Bool → Msg
   π : Opening Bool → Msg
   innerN₀ : Msg → ℝ
+  unitN₀ : Msg → ℕ → ℝ := fun x _ => innerN₀ x
   tables : Msg → ℕ
   reveals : Msg → ℕ
   sessions : Msg → ℕ
@@ -65,5 +67,8 @@ def units (c : Code) (x : Msg) : ℕ :=
   match c.parse x with
   | some s => ((c.partition s).getD ⟨[]⟩).blocks.length
   | none => 0
+
+/-- The code with every unit's `N₀` its statement's (`unitN₀ x _ = innerN₀ x`), as a one-stage record reads it. -/
+def Code.atInnerN₀ (c : Code) : Code := { c with unitN₀ := fun x _ => c.innerN₀ x }
 
 end SamplingDeploy

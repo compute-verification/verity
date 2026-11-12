@@ -47,23 +47,23 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 Each of the sampling compiler's claims (`Definitions.Claims.Sampling`) fails at a toy deployment. The statement is
 `toyStmt`: one input gate, returned, sampled `all`, its partition `toyPart` one proof block `{0}`, in scope
-(`inScope_toy`), so the witnesses hold whether or not `KS`, `KSCount` and `Bits` are read on the scope only.
+(`inScope_toy`).
 
 * `sksD`: the verifier accepts after one round, and no opening passes (`rejCm`), so every unit is faulty and no
-  witness is in the relation at any `δ ≥ 0` or count `t ≤ 1`. The extractor makes no SHA-512 call of its own
-  (`noHash_E`), so `B_ext` finds nothing, `B` finds nothing, and the numbers give `κ < 1/3` at `δ = 0`.
-  `KS_fails`, `KSCount_fails` (at `t = 1`, whose miss is `0`), `Bits_fails` (there `λ > 0`).
+  witness is in the relation at any `δ ≥ 0` or count `t ≤ 1` (`sksD_noR`, `sksD_noRCount`), and its miss at `t = 1` is
+  `0` (`sksD_missAt`). The compiled sampled verifier's `KS`, `KSCount` and `Bits` fail at its compiled record
+  (`Witnesses.SamplingGeneric`'s `sksL`), which reads these.
 * `compSD`: the verifier rejects after one round, and every opening passes (`accCm`), so the opening of the input
   (`toyWit`) leaves no unit faulty. `Complete_fails`, `Nontrivial_fails`, `ZK_fails`
   (`Sampling.ZKMal.not_samplingZK_collSim`, at `Sampling.ZKMal.quietZD`, its masked deployment whose reference prover
   is quiet and whose simulator collides), `Binding_fails` (two openings of different values at one position pass
   with no call), `Universal_fails` (its universal unit returns nothing).
-* `effSD`: its sessions' decoder counts one step, and nothing parses while the check takes everything.
-  `Efficient_fails` at `p = 0`; `ScopeMatches_fails`.
+* `effSD`: nothing parses while the check takes everything. `ScopeMatches_fails`.
 * `ExtractOwnLe_fails`: an extractor that hashes once, at a bound of `0`.
 
-`FaultyBoundary` is a theorem (`Claims.Sampling.faultyBoundary`), so it has no refutation. `BitsLin`, `KSLin` and the
-scoped `KSLinOn` are refuted through `Bits_fails`, `KS_fails` and `KSCount_fails`, whose proofs read each.
+`FaultyBoundary` is a theorem (`Claims.Sampling.faultyBoundary`), so it has no refutation. `BitsLin` and the scoped
+`KSLinOn` are refuted through the compiled sampled verifier's `Bits` and `KS` failing at `sksL`
+(`Witnesses.Stated`).
 
 `ZK` reads the masked deployment's own reference prover and simulator, as `Complete` reads the deployment's
 (`Sampling.Deploy.P`), so it is not met at every masked deployment (`ZK_vacuous_refuted`, at `zkSD`, `compSD` with a
@@ -301,11 +301,6 @@ theorem sksD_nPU (x : Msg) : nPU (sksD Coin) x = 1 := rfl
 
 theorem sksD_k (x : Msg) : (sksD Coin).k x = 2 ^ 10 * 3 := rfl
 
-theorem sksD_innerK (x : Msg) : (sksD Coin).innerK x = 256 := by
-  have h : 4 * (64 * Real.exp 1) / Real.exp 1 = ((256 : ℕ) : ℝ) := by
-    rw [div_eq_iff (Real.exp_pos 1).ne']; push_cast; ring
-  simp only [Deploy.innerK, sksD, h, Nat.ceil_natCast]
-
 theorem slack_pos : 0 < slack := by unfold slack; positivity
 
 theorem slack_le_two : slack ≤ 2 := by
@@ -319,23 +314,6 @@ theorem exp_neg_le_inv {y : ℝ} (hy : 0 ≤ y) : Real.exp (-y) ≤ (y + 1)⁻¹
   rw [Real.exp_neg]
   exact inv_anti₀ (by linarith) (Real.add_one_le_exp y)
 
-theorem sksD_κF (x : Msg) : κF (sksD Coin) x ≤ 1 / 20 := by
-  have hw : (2 : ℝ) ^ (-((8 : ℕ) : ℝ)) = 1 / 256 := by
-    rw [Real.rpow_neg (by norm_num), Real.rpow_natCast]; norm_num
-  have he := exp_neg_le_inv (show (0 : ℝ) ≤ 32 by norm_num)
-  unfold κF
-  rw [sksD_innerK]
-  simp only [sksD] at hw ⊢
-  rw [hw, show -((256 : ℕ) : ℝ) / 8 = -32 by norm_num]
-  have : (32 + 1 : ℝ)⁻¹ = 1 / 33 := by norm_num
-  push_cast
-  linarith
-
-theorem sksD_κF_nonneg (x : Msg) : 0 ≤ κF (sksD Coin) x := by
-  unfold κF
-  simp only [sksD]
-  positivity
-
 theorem sksD_outer (x : Msg) :
     2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) ≤ 1 / 50 := by
   have hk : ((sksD Coin).k x : ℝ) = 2 ^ 10 * 3 := by rw [sksD_k]; push_cast; ring
@@ -347,72 +325,6 @@ theorem sksD_outer (x : Msg) :
     rw [inv_le_comm₀ (by positivity) (by norm_num)]; norm_num
   have h2 : 2 * (2 ^ 10 * 3 : ℝ) / (2 ^ 128 * (2 ^ 10 * 3)) ≤ 1 / 100 := by
     rw [div_le_iff₀ (by positivity)]; norm_num
-  linarith
-
-theorem sksD_κ (x : Msg) : κ (sksD Coin) 0 x < 1 / 3 := by
-  have hs := slack_le_two
-  have hs0 := slack_pos
-  have hF := sksD_κF (Coin := Coin) x
-  have hF0 := sksD_κF_nonneg (Coin := Coin) x
-  have ho := sksD_outer (Coin := Coin) x
-  have ho0 : 0 ≤ 2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) := by
-    positivity
-  unfold κ
-  rw [zero_add]
-  have h1 : slack ^ 2 * κF (sksD Coin) x ≤ 4 * (1 / 20) := by
-    have : slack ^ 2 ≤ 4 := by nlinarith
-    calc slack ^ 2 * κF (sksD Coin) x ≤ 4 * κF (sksD Coin) x := by gcongr
-      _ ≤ 4 * (1 / 20) := by gcongr
-  have h2 : (1 + slack) * (2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) +
-      Real.exp (-((sksD Coin).k x : ℝ) / 8)) ≤ 3 * (1 / 50) := by
-    calc _ ≤ 3 * (2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8)) := by
-          gcongr; linarith
-      _ ≤ 3 * (1 / 50) := by gcongr
-  linarith
-
-theorem sksD_κ_pos (x : Msg) : 0 < κ (sksD Coin) 0 x := by
-  have := sksD_κF_nonneg (Coin := Coin) x
-  unfold κ
-  have := slack_pos
-  positivity
-
-theorem sksD_γ (x : Msg) : γ (sksD Coin) x = slack ^ 4 * 16 := by
-  simp [γ, sksD, accV]
-
-theorem sksD_work (x : Msg) : work (sksD Coin) x ≤ 2 ^ 100 := by
-  unfold work
-  rw [sksD_k, sksD_nPU, sksD_innerK]
-  simp only [sksD]
-  norm_num
-
-theorem sksD_work_pos (x : Msg) : 0 < work (sksD Coin) x := by
-  unfold work
-  positivity
-
-theorem sksD_lam_pos (x : Msg) : 0 < lamLin (κ (sksD Coin) 0 x) (γ (sksD Coin) x) 1 (work (sksD Coin) x) := by
-  have hκ := sksD_κ (Coin := Coin) x
-  have hκ0 := sksD_κ_pos (Coin := Coin) x
-  have hw := sksD_work (Coin := Coin) x
-  have hw0 := sksD_work_pos (Coin := Coin) x
-  have hs := slack_le_two
-  have hs0 := slack_pos
-  have h3 : Real.logb 2 3 < 2 := by
-    rw [Real.logb_lt_iff_lt_rpow (by norm_num) (by norm_num)]; norm_num
-  have h1 : Real.logb 2 3 < Real.logb 2 (1 / κ (sksD Coin) 0 x) := by
-    refine Real.logb_lt_logb (by norm_num) (by norm_num) ?_
-    rw [lt_div_iff₀ hκ0]; linarith
-  have hγ : Real.logb 2 (γ (sksD Coin) x) ≤ 8 := by
-    rw [sksD_γ, Real.logb_le_iff_le_rpow (by norm_num) (by positivity)]
-    have : slack ^ 4 ≤ 16 := by
-      calc slack ^ 4 ≤ 2 ^ 4 := by gcongr
-        _ = 16 := by norm_num
-    norm_num; nlinarith
-  have hW : Real.logb 2 (2 * 1 * work (sksD Coin) x) ≤ 101 := by
-    rw [Real.logb_le_iff_le_rpow (by norm_num) (by positivity)]
-    norm_num; linarith
-  unfold lamLin
-  have := lt_min (lt_min h1 (show Real.logb 2 3 < 255.5 - Real.logb 2 (γ (sksD Coin) x) / 2 by linarith))
-    (show Real.logb 2 3 < 256 - Real.logb 2 (2 * 1 * work (sksD Coin) x) by linarith)
   linarith
 
 theorem sksD_noR (H : Msg → Msg) (δ : ℝ) (hδ : 0 ≤ δ) (x : Msg) (w : Wit) :
@@ -453,119 +365,11 @@ theorem sksD_missAt (x : Msg) : missAt (sksD Coin) 1 x = 0 := by
 
 end Numbers
 
-/-! ## `sksD`'s extractor makes no call of its own -/
-
-section Extract
-
-variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-
-omit [Inhabited Coin] in
-/-- At a deployment whose units have no session, the sampling extractor makes no call of its own: its waits rerun, and
-its unit extractions return nothing. -/
-theorem noHash_E {Col T : Type} [DecidableEq Col] [Zero Col] (D : Deploy Coin Col T) (hs : ∀ x u v, D.session x u v = none)
-    (decode : List (ℕ × Col) → List T) (x : Msg) (r₀ : Fin (D.V.k x) → Coin) (c : (E D decode).C x) :
-    NoHash ((E D decode).ext x r₀ c) := by
-  intro v₀
-  dsimp only [E]
-  split
-  · trivial
-  · split_ifs
-    -- The waits' coin lists are generalized first: unifying against them unfolds `List.finRange` at the cap.
-    · generalize List.map c.1 (List.finRange (D.cap x)) = rs
-      refine noHash_bind _ _ (noHash_waitAccC _ _ _) fun outer => ?_
-      generalize (List.finRange (D.k x)).zip outer = jos
-      refine noHash_bind _ _ (noHash_flatMapRP _ (fun jo => ?_) _) fun _ => trivial
-      generalize List.map (fun l => forkOn (D.stage2 x) jo.2.1 (c.2.1 jo.1 l)) (List.finRange (D.cap x)) = rs'
-      refine noHash_bind _ _ (noHash_waitAccC _ _ _) fun inner => ?_
-      generalize (List.finRange (D.k x)).zip inner = lis
-      refine noHash_flatMapRP _ (fun _ => noHash_flatMapRP _ (fun _ => ?_) _) _
-      simp only [unitExt, hs]
-      trivial
-    · trivial
-
-theorem sksD_bext (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
-    (Bext H (sksD Coin).V (E (sksD Coin) decode) Unit silentP x).Pr H = 0 := by
-  simp only [Bext]
-  rw [dite_eq_left (show 0 < (sksD Coin).V.k x from Nat.one_pos)]
-  unfold Finder.Pr
-  rw [Pr_congr fun s => iff_false_intro (by
-    simp [ownLog_noHash _ _ _ (noHash_E (sksD Coin) (fun _ _ _ => rfl) _ _ _ _), findColl])]
-  exact Pr_false
-
-theorem sksD_expectedCR (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
-    ExpectedCR H (Bext H (sksD Coin).V (E (sksD Coin) decode) Unit silentP x) := by
-  unfold ExpectedCR
-  rw [sksD_bext]
-  exact div_nonneg (Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)
-
-/-- `KSLin`'s bound fails at `sksD`'s silent prover, at a relation with no witness at `x` and a bound `κ' < 1`. -/
-theorem sksD_bound_fails (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (Rx : Rel Wit) (κ' : ℝ) (x : Msg)
-    (hR : ∀ w, ¬ Rx x w) (hκ : κ' < 1) :
-    ¬ PrBad H (sksD Coin).V Rx (E (sksD Coin) decode) x silentP ≤
-      κ' + Real.sqrt (γ (sksD Coin) x * PrB H (sksD Coin).V silentP x) +
-        1 * (Bext H (sksD Coin).V (E (sksD Coin) decode) Unit silentP x).Pr H := by
-  intro h
-  have hp : PrBad H (sksD Coin).V Rx (E (sksD Coin) decode) x silentP = 1 := prBad_accV H Rx _ x silentP hR
-  have hb : PrB H (sksD Coin).V silentP x = 0 := prB_accV H silentP x
-  rw [hp, hb, mul_zero, Real.sqrt_zero, add_zero, sksD_bext, mul_zero, add_zero] at h
-  linarith
-
-end Extract
-
 /-! ## The claims -/
 
 section Claims
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
-
--- The `first` alternatives cover `KS`, `KSCount` and `Bits` read at every statement and read on the scope only, so
--- one proof elaborates on both.
-set_option linter.unreachableTactic false in
-set_option linter.unusedTactic false in
-/-- **The sampling `KS` fails** at `sksD`, at `δ = 0`. -/
-theorem KS_fails (H : Msg → Msg) : ¬ Claims.Sampling.KS H (sksD Coin) := by
-  intro h
-  have h1 := h 0 (fun _ => [()]) le_rfl (Flock.listWithin_unit _ _ _)
-  have hb := sksD_bound_fails (Coin := Coin) H (fun _ => [()]) _ _ [] (sksD_noR (Coin := Coin) H 0 le_rfl []) (by linarith [sksD_κ (Coin := Coin) []])
-  first
-  | exact hb (h1 [] Unit silentP)
-  | exact hb (h1 [] (sksD_scope []) Unit silentP)
-
-set_option linter.unreachableTactic false in
-set_option linter.unusedTactic false in
-/-- **The sampling `KSCount` fails** at `sksD`, at `t = 1`. -/
-theorem KSCount_fails (H : Msg → Msg) : ¬ KSCount H (sksD Coin) := by
-  intro h
-  have h1 := h 1 (fun _ => [()]) (Flock.listWithin_unit _ _ _)
-  have hb := sksD_bound_fails (Coin := Coin) H (fun _ => [()]) _ (κ (sksD Coin) (missAt (sksD Coin) 1 []) []) []
-    (sksD_noRCount (Coin := Coin) H []) (by rw [sksD_missAt]; linarith [sksD_κ (Coin := Coin) []])
-  first
-  | exact hb (h1 [] Unit silentP)
-  | exact hb (h1 [] (sksD_scope []) Unit silentP)
-
-set_option linter.unreachableTactic false in
-set_option linter.unusedTactic false in
-/-- **The sampling `Bits` fails** at `sksD`, at `δ = 0`. -/
-theorem Bits_fails (H : Msg → Msg) : ¬ Claims.Sampling.Bits H (sksD Coin) := by
-  intro h
-  have h1 := h 0 (fun _ => [()]) le_rfl (Flock.listWithin_unit _ _ _)
-  have hlam := sksD_lam_pos (Coin := Coin) []
-  have hc := calls_silentP_accV (Coin := Coin) H []
-  have hB := strictBirthday_B_accV (Coin := Coin) H silentP []
-  have hE := sksD_expectedCR (Coin := Coin) H (fun _ => [()]) []
-  have hp : PrBad H (sksD Coin).V (R H (sksD Coin).commit (sksD Coin).parse (sksD Coin).partition 0)
-      (E (sksD Coin) fun _ => [()]) [] silentP = 1 :=
-    prBad_accV H _ _ [] silentP (sksD_noR (Coin := Coin) H 0 le_rfl [])
-  have h2 : PrBad H (sksD Coin).V (R H (sksD Coin).commit (sksD Coin).parse (sksD Coin).partition 0)
-      (E (sksD Coin) fun _ => [()]) [] silentP ≤
-        (1 : ℕ) * (2 : ℝ) ^ (-lamLin (κ (sksD Coin) 0 []) (γ (sksD Coin) []) 1 (work (sksD Coin) [])) := by
-    first
-    | exact h1 [] Unit silentP 1 le_rfl hc hB hE
-    | exact h1 [] (sksD_scope []) Unit silentP 1 le_rfl hc hB hE
-  rw [hp, Nat.cast_one, one_mul] at h2
-  have : (2 : ℝ) ^ (-lamLin (κ (sksD Coin) 0 []) (γ (sksD Coin) []) 1 (work (sksD Coin) [])) < 1 :=
-    Real.rpow_lt_one_of_one_lt_of_neg (by norm_num) (by linarith)
-  linarith
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The sampling `Binding` fails** at `compSD`: two openings of different values at one position pass with no call. -/
@@ -609,11 +413,6 @@ theorem ZK_vacuous_refuted (H : Msg → Msg) :
   ZKMal.not_forall_samplingZK H zkSD rfl [] toyWit
     ⟨toyStmt, toyPart, rfl, rfl, by show faulty H accCm toyStmt toyPart toyWit = ∅; rw [toy_faulty, toyWit_val]; rfl⟩
     Nat.one_pos
-
-/-- **The sampling `Efficient` fails** at `effSD` and `p = 0`: its sessions' decoder counts one step. -/
-theorem Efficient_fails (H : Msg → Msg) : ¬ Claims.Sampling.Efficient H (effSD Coin) 0 := fun h => by
-  have := h.2.2.2.2 []
-  simp [effSD, Flock.effD] at this
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The sampling `ScopeMatches` fails** at `effSD`, whose scope is empty and whose check takes everything. -/

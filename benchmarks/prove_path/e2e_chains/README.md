@@ -10,15 +10,15 @@ refactor item that changes it, and what has landed since.
 
 | Protocol | Config | Status | Refactor item; what has landed |
 |---|---|---|---|
-| Sampled proofs / Flock | `--zk` | Proved. `sampling_assembled` is not a lock guarantee | item 1, landed: `sampling_assembled` is the `deployZk` instance of `sampling_assembled_of`, and `sampling_deployed_of` gives one deployed record over any Flock record |
-| | plain | Proved in the game form. No sampling theorem at plain in claims form | item 1, landed: `sampling_assembled_plain`, at the trimmed record. Flock's KS at the untrimmed record is on main, without a sampling instance there yet. The game-to-claims link is the broken shared row |
+| Sampled proofs / Flock | `--zk` | Proved. `sampling_assembled` is not a lock guarantee | item 1, landed: `sampling_assembled` holds at any Flock record, and `sampling_deployed_of` gives one deployed record over any Flock record |
+| | plain | Proved in the game form. No sampling theorem at plain in claims form | item 1, landed: `sampling_assembled`, at the trimmed record. Flock's KS at the untrimmed record is on main, without a sampling instance there yet. The game-to-claims link is the broken shared row |
 | | recursive | Effectively none: proved, but near-vacuous. No KS-to-sampling for recursion | item 12, after the `vcalls` escape (the compiled verifier's own evaluations in the V* parts' collision escape). Item 1's recursive instance follows it |
 | PoUW | `--zk` | Chain broken at KS → A: `SessionSoundAt` needs `AcceptedLive`, which no served path meets yet | item 9, after FinishIs: `SessionSoundAt` to `ProofSoundAt` (δs + δ), with the TS headlines its instances. `AcceptedLive` on a served path needs FinishIs and a served window whose lanes all verify (the first pass verified 9 of 32) |
 | | plain, recursive | none | none posted |
 | PoUS | all | none (ideal model only) | item 11, over item 1 as a hypothesis |
 | Bandwidth (over PoUS's store) | all | none with a session layer | item 11 |
 | PoUB (over a node's registered store) | all | none with a session layer | item 11 |
-| Network certifier | all | none: `SampledAuditAccepted` is proved and listed in the lock, but it takes `Claims.Sampling.KS` as a hypothesis, and only `sampling_assembled`, not a lock guarantee, gives it | item 10: proved on main and listed in the lock. The leak step is proved and listed on main, at the registered inputs: c = #(`freeInputs` \ `reg`). That the trace's values at `reg` are the registration's is not proved on main |
+| Network certifier | all | none: `SampledAuditAccepted` is proved and listed in the lock, but it takes `Claims.SamplingGeneric.Compiled.KS` as a hypothesis, and only the compiler at Flock (`Claims.SamplingGeneric.flockKS`), not a lock guarantee, gives it | item 10: proved on main and listed in the lock. The leak step is proved and listed on main, at the registered inputs: c = #(`freeInputs` \ `reg`). That the trace's values at `reg` are the registration's is not proved on main |
 | Inference-only policy | all | none with a session layer; it rests on the assumption `PouwSound`, which no PoUW guarantee instantiates | item 11's inference-only part: `PouwSound` replaced by item 9's e2e, after item 9 |
 | Remote (composite: sampled proofs, PoUW and the inference-only policy) | `--zk` | none: its composed theorem, `Verity.Soundness`, is not in Lean; its sampled-proofs half reads one-stage v2, whose acceptance no Lean statement yet carries to `SampledKSLiveV3`'s event, and its PoUW half is broken at the proof layer (above) | `Verity.Soundness`, after the Lean dedupe (owner soundness) |
 | Accounting (top layer) | — | Already modular: the pattern every lower layer should copy | — |

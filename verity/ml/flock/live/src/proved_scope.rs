@@ -13,6 +13,16 @@
 //! templated statement's is `scopeOkT` ([`tmpl_why`]), on its committed unit: the rows `flock-tmpl-unit` wrote, whose
 //! `ORDER` line is the template's position map, one column per root column.
 
+use std::{
+    collections::BTreeMap,
+    sync::{
+        Arc, Mutex, OnceLock, PoisonError,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
+
+use sha2::{Digest, Sha512};
+
 use crate::circuit::{port_cols, seg_shape, Composite, Instances, Port, STATEMENT, TMPL_STATEMENT};
 use crate::ir_block::{IrUnitNet, RowRead};
 
@@ -299,26 +309,116 @@ pub fn shared_rows_why(shared: bool, registered: bool, plain_leaves: bool) -> Op
     (shared && !(registered && !plain_leaves)).then_some("a shared-row public file (header shared_rows)")
 }
 
+/// What [`check`] reads of a session beside its circuit: whether its public header names registered reads (`registered`)
+/// and shared rows (a shared-row file's tables), `--zk`, and its tables.
+#[derive(Clone, Copy)]
+pub struct Session {
+    pub registered: bool,
+    pub shared_rows: bool,
+    pub zk: bool,
+    pub tables: usize,
+}
+
+impl Session {
+    pub fn of(inst: &Instances, zk: bool, tables: usize) -> Self {
+        Session { registered: inst.header.get("registered").is_some(), shared_rows: inst.tables.is_some(), zk, tables }
+    }
+}
+
 /// **`ProvedScope.check`** on a statement the live build set up: its circuit, its public file (`inst`), `--zk` and its tables.
 /// The Lean verifier holds its own `--registered F` exactly when the public header names registered reads: without it such
 /// a header is refused at setup, and with it a header naming none is (`Registered.check`).
 pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result<(), String> {
+    scope(c, Session::of(inst, zk, tables))
+}
+
+/// [`check`] on the circuit and what it reads of the session: nothing else reaches its verdict.
+fn scope(c: &Composite, s: Session) -> Result<(), String> {
     let typed = c.statement() == crate::typed::STATEMENT;
-    if let Some(why) = statement_why(&lean_name(c), typed, zk, tables, !c.public_inputs.is_empty()) {
+    if let Some(why) = statement_why(&lean_name(c), typed, s.zk, s.tables, !c.public_inputs.is_empty()) {
         return Err(refusal(&why));
     }
-    let registered = inst.header.get("registered").is_some();
-    if let Some(why) = shared_rows_why(inst.tables.is_some(), registered, c.plain_leaves()) {
+    if let Some(why) = shared_rows_why(s.shared_rows, s.registered, c.plain_leaves()) {
         return Err(refusal(why));
     }
     if c.statement() == TMPL_STATEMENT {
-        return tmpl_why(c, true, zk, tables).map_or(Ok(()), |why| Err(refusal(&why)));
+        return tmpl_why(c, true, s.zk, s.tables).map_or(Ok(()), |why| Err(refusal(&why)));
     }
     if wires_feed(c) && !wires_acyclic(c) {
         return Err(refusal(WIRES_WHY));
     }
     circuit_why(c, true).map_or(Ok(()), |why| Err(refusal(&why)))
 }
+
+/// The key of a statement's [`check`] verdict: SHA-512 of everything the verdict reads. The circuit enters by the digest of
+/// the bytes it was parsed from ([`Composite::parsed_from`]), the session by the four values the check reads of it
+/// ([`Session`]), and the build by the two features it reads (`seed-injection` in [`lean_name`], `sha512` in
+/// [`Composite::plain_leaves`]). Nothing else enters: not the session, its sample, its instance count or its public digest,
+/// which the check never reads, so a sampled statement's key is its population's at the same tables. `None` for a circuit
+/// with no parse digest (a copy).
+pub fn verdict_key(c: &Composite, s: Session) -> Option<[u8; 64]> {
+    let parsed = c.parsed_from.digest()?;
+    let mut h = Sha512::new();
+    h.update(b"verity/flock-circuit/proved-scope-verdict\0");
+    h.update(parsed);
+    h.update([s.registered, s.shared_rows, s.zk, cfg!(feature = "seed-injection"), cfg!(feature = "sha512")].map(u8::from));
+    h.update((s.tables as u64).to_le_bytes());
+    Some(h.finalize().into())
+}
+
+/// Each statement's [`check`] verdict, by [`verdict_key`]: the first session of a statement checks it, and every later one
+/// takes that verdict, the acceptance or the refusal word for word. The check is a function of what the key digests, so one
+/// key has one verdict, short of a SHA-512 collision. A session checking a statement waits for that statement's check
+/// already running, never for another's, and a check that panics keeps nothing.
+pub struct Verdicts {
+    kept: Mutex<BTreeMap<[u8; 64], Arc<OnceLock<Result<(), String>>>>>,
+    lookups: AtomicUsize,
+}
+
+impl Default for Verdicts {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Verdicts {
+    pub const fn new() -> Self {
+        Verdicts { kept: Mutex::new(BTreeMap::new()), lookups: AtomicUsize::new(0) }
+    }
+
+    /// [`check`]'s verdict, kept for its key; a circuit with no parse digest is checked afresh each time and keeps nothing.
+    pub fn check(&self, c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result<(), String> {
+        let s = Session::of(inst, zk, tables);
+        match verdict_key(c, s) {
+            Some(key) => self.get(key, || scope(c, s)),
+            None => scope(c, s),
+        }
+    }
+
+    /// `run`'s verdict, run by the first call with `key` alone, outside the lock every key shares.
+    fn get(&self, key: [u8; 64], run: impl FnOnce() -> Result<(), String>) -> Result<(), String> {
+        self.lookups.fetch_add(1, Ordering::Relaxed);
+        let cell = self.kept.lock().unwrap_or_else(PoisonError::into_inner).entry(key).or_default().clone();
+        cell.get_or_init(run).clone()
+    }
+
+    /// The verdicts kept.
+    pub fn len(&self) -> usize {
+        self.kept.lock().unwrap_or_else(PoisonError::into_inner).values().filter(|v| v.get().is_some()).count()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Its lookups so far and the verdicts it keeps, each checked once, so `1 - kept / lookups` is its hit rate.
+    pub fn seen(&self) -> serde_json::Value {
+        serde_json::json!({"lookups": self.lookups.load(Ordering::Relaxed), "kept": self.len()})
+    }
+}
+
+/// The process's verdicts, which the live server's sessions take ([`Verdicts`]).
+pub static VERDICTS: Verdicts = Verdicts::new();
 
 #[cfg(test)]
 mod tests {
@@ -497,7 +597,7 @@ mod tests {
             out_ports: vec![], out_slotted: false, leaf_cuts_of: vec![], leaf_cuts, dummy_bc: vec![], dummy_outputs: vec![],
             leaf_scheme: serde_json::Value::Null, per_vu,
             wires: wires.iter().map(|&(a, b, c, d, e, f)| Wire { dst: (a, b, c), src: (d, e, f) }).collect(),
-            lookups: lookups.into_iter().collect(), typed: None,
+            lookups: lookups.into_iter().collect(), typed: None, parsed_from: Default::default(),
         }
     }
 
@@ -662,5 +762,56 @@ mod tests {
         // a port past the first word's bits
         let two = vec![Group { col: 0, words: 1, bits: vec![16, 16] }];
         assert!(port_reads(&net(two, 1, vec![(vec![31], vec![16])])));
+    }
+
+    #[test]
+    fn a_kept_verdict_is_never_checked_again() {
+        let v = Verdicts::new();
+        let (a, b) = ([1u8; 64], [2u8; 64]);
+        assert_eq!(v.get(a, || Err(refusal("x"))), Err(refusal("x")));
+        assert_eq!(v.get(a, || panic!("checked again")), Err(refusal("x")));
+        assert_eq!(v.get(b, || Ok(())), Ok(()));
+        assert_eq!(v.get(b, || panic!("checked again")), Ok(()));
+        assert_eq!(v.len(), 2);
+    }
+
+    #[test]
+    fn a_check_that_panics_keeps_nothing() {
+        let v = Verdicts::new();
+        let k = [3u8; 64];
+        let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| v.get(k, || panic!("a check that never finished"))));
+        assert!(r.is_err());
+        assert!(v.is_empty());
+        assert_eq!(v.get(k, || Err(refusal("y"))), Err(refusal("y")));
+        assert_eq!(v.len(), 1);
+    }
+
+    /// While one statement's check runs, another statement's takes its verdict without waiting for it, and the same
+    /// statement's waits for that check's verdict rather than checking again. A check that held the lock every statement
+    /// takes fails the test rather than hanging it.
+    #[test]
+    fn one_statements_check_holds_up_no_other() {
+        use std::sync::mpsc::channel;
+        let v = &Verdicts::new();
+        let (slow, quick) = ([4u8; 64], [5u8; 64]);
+        let (started_tx, started) = channel();
+        let (release, held) = channel::<()>();
+        std::thread::scope(|sc| {
+            let first = sc.spawn(move || v.get(slow, move || {
+                started_tx.send(()).unwrap();
+                held.recv().unwrap();
+                Err(refusal("slow"))
+            }));
+            started.recv().unwrap();
+            let free = v.kept.try_lock().is_ok();
+            let same = sc.spawn(move || v.get(slow, || panic!("the same statement checked twice")));
+            let other = free.then(|| v.get(quick, || Ok(())));
+            release.send(()).unwrap();
+            assert!(free, "the running check holds the lock every statement's check takes");
+            assert_eq!(other, Some(Ok(())));
+            assert_eq!(first.join().unwrap(), Err(refusal("slow")));
+            assert_eq!(same.join().unwrap(), Err(refusal("slow")));
+        });
+        assert_eq!(v.len(), 2);
     }
 }

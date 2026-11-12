@@ -30,7 +30,8 @@ static inline size_t fc_arena_bytes(const FcArenaShape* s) {
     const size_t n = (size_t)1 << (log_n - ik + s->log_inv_rates[0]), lanes = s->zk ? w + 4 : w;
     const size_t l0 = fca_al(n * lanes * F) + fca_al((2 * n - 1) * s->hash_bytes) +
                       (s->zk ? fca_al(lanes * (size_t)s->t_pad * F) + fca_al((F << (log_n - ik)) * 4) : 0);
-    // the commitment, beside z, a and b: under M1 a quarter of the witness's lane codewords and the extra lanes' at a time
+    // the commitment, beside z, a and b: under M1 the extra lanes' codewords, and a quarter of the witness's lane codewords
+    // where they aren't transformed in place (FC_NTT_REGS=0)
     const size_t commit = 3 * W + l0 + (s->zk ? fca_al(n * (w >> (ik < 2 ? ik : 2)) * F) + fca_al(n * 4 * F) : 0);
     // the zerocheck (zerocheck_fused.cuh's packed path past 2^10 output words a block): its eq tables and two fold pairs
     const long long zc_out = 1LL << (s->m - 6);

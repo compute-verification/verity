@@ -4,7 +4,8 @@
 // twiddle 2^j - 1 + (u >> (K - j)). The layers go in rounds of at most three: a thread holds one lane's 2^R positions
 // that round's R layers pair among themselves and applies them in order, so a position's values are the tile kernel's.
 // The first round reads the source, the last writes data, and the tile passes through shared memory once between rounds
-// (the tile kernel: once a layer). FC_NTT_REGS=0 launches the tile kernel.
+// (the tile kernel: once a layer). FC_NTT_REGS=0 launches the tile kernel. A row of the data holds `pitch` words (num_ntts unless
+// given), the transforms' lanes its first num_ntts.
 #pragma once
 
 #include <cstdlib>
@@ -46,7 +47,7 @@ __device__ __forceinline__ void ntt_tile_round(F128* data, const F128* src, long
 
 template <int K>
 __global__ void __launch_bounds__(256) ntt_tile_regs(F128* data, const F128* d_tw, int L, int log_d, int num_ntts, int log_lb,
-                                                     const F128* src, long long smask) {
+                                                     const F128* src, long long smask, long long pitch) {
     extern __shared__ F128 sm[];
     constexpr int TILE = 1 << K, NTW = TILE - 1;
     const int lb = 1 << log_lb;
@@ -58,8 +59,8 @@ __global__ void __launch_bounds__(256) ntt_tile_regs(F128* data, const F128* d_t
     const long long lane_tile = (long long)blockIdx.x & ((1 << log_nlt) - 1);
     const long long r = pos_tile & ((1LL << log_seg) - 1);
     const long long block = pos_tile >> log_seg;
-    const long long gbase = block * block_size * (long long)num_ntts + r * (long long)num_ntts + lane_tile * (long long)lb;
-    const long long stride = (long long)num_ntts << log_seg;
+    const long long gbase = block * block_size * pitch + r * pitch + lane_tile * (long long)lb;
+    const long long stride = pitch << log_seg;
     F128* twid = sm + ((long long)TILE << log_lb);
     for (int t = threadIdx.x; t < NTW; t += blockDim.x) {
         const int j = 31 - __clz(t + 1), sub = (t + 1) - (1 << j);
@@ -96,11 +97,50 @@ inline int ntt_tile_kmax(int cap) {
 
 template <int K>
 inline void launch_ntt_tile_regs(F128* d_data, const F128* d_tw, int layer, int log_d, int num_ntts, int log_lb, size_t smem,
-                                 const F128* src, long long smask) {
+                                 const F128* src, long long smask, long long pitch = -1) {
     cudaFuncSetAttribute(ntt_tile_regs<K>, cudaFuncAttributeMaxDynamicSharedMemorySize, (int)smem);
     const int lb = 1 << log_lb;
     const long long tiles = (1LL << (log_d - K)) * (long long)(num_ntts / lb);
     const int per_round = ((1 << K) >> (K < 3 ? K : 3)) << log_lb;
     const int tpb = per_round < 256 ? per_round : 256;
-    ntt_tile_regs<K><<<(unsigned)tiles, tpb, smem>>>(d_data, d_tw, layer, log_d, num_ntts, log_lb, src, smask);
+    ntt_tile_regs<K><<<(unsigned)tiles, tpb, smem>>>(d_data, d_tw, layer, log_d, num_ntts, log_lb, src, smask,
+                                                     pitch < 0 ? (long long)num_ntts : pitch);
+}
+
+// launch_ntt's transform (layers [from, to), launch_ntt_fused_layers' balanced passes and lane tiles) over num_ntts lanes, a
+// power of two, of rows `pitch` words apart, in place. Every pass is this file's kernel, whose layers' butterflies and
+// twiddles are the other kernels', so the words are launch_ntt's. False, nothing launched, under FC_NTT_REGS=0 or where a pass
+// would take fewer than 3 layers.
+inline bool ntt_rows_fit(int layers, int num_ntts, long long pitch) {
+    if (!ntt_tile_regs_on() || num_ntts < 1 || (num_ntts & (num_ntts - 1)) || pitch < num_ntts || layers < 1) return false;
+    const int kmax = ntt_tile_kmax(8), npass = (layers + kmax - 1) / kmax;
+    return layers / npass >= 3;
+}
+
+template <size_t SharedMemoryBytes = 32 * 1024>
+inline bool launch_ntt_rows(F128* d_data, const F128* d_tw, int from, int to, int log_d, int num_ntts, long long pitch) {
+    const int total = to - from;
+    if (!ntt_rows_fit(total, num_ntts, pitch)) return false;
+    const int kmax = ntt_tile_kmax(8);
+    const int npass = (total + kmax - 1) / kmax, base = total / npass, extra = total % npass;
+    for (int p = 0, layer = from; p < npass; p++) {
+        const int c = base + (p < extra ? 1 : 0);
+        int lb = num_ntts, log_lb = 0;
+        while ((1 << log_lb) < num_ntts) log_lb++;
+        while ((size_t)(1LL << c) * (size_t)lb * sizeof(F128) > SharedMemoryBytes && lb > 1) {
+            lb >>= 1;
+            log_lb--;
+        }
+        const size_t smem = ((size_t)(1LL << c) * (size_t)lb + ((1u << c) - 1)) * sizeof(F128);
+        switch (c) {
+            case 8: launch_ntt_tile_regs<8>(d_data, d_tw, layer, log_d, num_ntts, log_lb, smem, d_data, -1, pitch); break;
+            case 7: launch_ntt_tile_regs<7>(d_data, d_tw, layer, log_d, num_ntts, log_lb, smem, d_data, -1, pitch); break;
+            case 6: launch_ntt_tile_regs<6>(d_data, d_tw, layer, log_d, num_ntts, log_lb, smem, d_data, -1, pitch); break;
+            case 5: launch_ntt_tile_regs<5>(d_data, d_tw, layer, log_d, num_ntts, log_lb, smem, d_data, -1, pitch); break;
+            case 4: launch_ntt_tile_regs<4>(d_data, d_tw, layer, log_d, num_ntts, log_lb, smem, d_data, -1, pitch); break;
+            default: launch_ntt_tile_regs<3>(d_data, d_tw, layer, log_d, num_ntts, log_lb, smem, d_data, -1, pitch); break;
+        }
+        layer += c;
+    }
+    return true;
 }

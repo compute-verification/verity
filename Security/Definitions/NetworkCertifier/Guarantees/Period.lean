@@ -51,8 +51,9 @@ prover's registered inputs pinned: `AsReg`) with that read-back, so the content 
 audits, not from a premise:
 
 * each window's audit, at a statement in its scope, fails the leak relation at the network certifier's rows with
-  probability at most `δ + ε_ks + ε_bind + Pr[B_tap]` at that statement (`Claims.Sampling.KS`'s errors, and `B_tap` the
-  collisions between the extracted trace's openings and the network certifier's, under `CommitmentScheme.Binds`);
+  probability at most `δ + ε_ks + ε_bind + Pr[B_tap]` at that statement (`Claims.SamplingGeneric.Compiled.KS`'s errors,
+  and `B_tap` the collisions between the extracted trace's openings and the network certifier's, under
+  `CommitmentScheme.Binds`);
 * where the network certifier registers its observations, the secrets of a covert sender in the server whose every
   window meets its good event (`WindowGood`) number at most
   `#Ss · ∏_c (cap_c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`: the sender moves at most
@@ -72,13 +73,14 @@ incorrect sets, their committed bits and the timing. A proof block the sample mi
 namespace NetTiming.Guarantees
 
 open Claims.Sampling Finset
+open Claims.SamplingGeneric (Arg Compiled)
 
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
 
-/-- **The leak through the network certifier over a monitoring period of accepted sampled audits.** At every
-deployment `D` of the sampled verifier where `Claims.Sampling.KS` holds and the trace's commitment binds
-(`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's radius, over a monitoring period of `n`
+/-- **The leak through the network certifier over a monitoring period of accepted sampled audits.** At every compiled
+sampled verifier `D` where `Claims.SamplingGeneric.Compiled.KS` holds and the trace's commitment binds
+(`CommitmentScheme.Binds`), over a monitoring period of `n`
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
 committed bits of each of its possible incorrect sets), with the network certifier's openings `tops s` at each statement,
 and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
@@ -92,11 +94,10 @@ and the observations of the monitoring period's windows (its record of those cel
   `wit z i`, number at most
   `#Ss · ∏_c (cap c + 1) · ∏_i 2^#(freeInputs_i \ reg_i) · #faultySets_i(δ) · 2^β_i · Dj^k_i`. -/
 def PeriodLeakAccepted : Prop :=
-  ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-    (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ)
+  ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
     (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
-    (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
+    (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ)
     {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition) (hPw : ∀ i, D.partition (sw i) = some (Pw i))
     (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
     (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
@@ -112,9 +113,9 @@ def PeriodLeakAccepted : Prop :=
     (∀ m, ScopeAcc D lay k m → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
       Claims.PrBad H D.V
           (RLeakCertifier H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
-          (E D decode) m P ≤
-        κ D δ m + Real.sqrt (γ D m * Claims.PrB H D.V P m) + (Bext H D.V (E D decode) Ω P m).Pr H +
-          (Btap H D.V (E D decode) D.commit D.parse tops Ω P m).Pr H) ∧
+          D.E m P ≤
+        D.κ δ m + Real.sqrt (D.γ m * Claims.PrB H D.V P m) + (Bext H D.V D.E Ω P m).Pr H +
+          (Btap H D.V D.E D.commit D.parse tops Ω P m).Pr H) ∧
       ((∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → CertifierRegisters H D.commit (lay s) (k s) (op i) s (tops s)
           ((run tap (schedOf z, srvOf z)).2 i)) →
         {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)

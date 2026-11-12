@@ -312,7 +312,7 @@ def _sig_leaf(S):
 FrameV3Leaf = _part(
     "FrameV3Leaf", ("B", "SCHEMA"), _sig_leaf, lambda C, S, *e: leaf_hash(C, S.SCHEMA, e[0:8], e[8:16], e[16], S.B),
     "the frame-v3-sha512 leaf of value at rank = position = x under the domain id domain and SCHEMA; x LSB first, its "
-    "uint 1 ... B bytes")
+    "uint 1 ... B bytes", calls=True)
 
 
 def _sig_node(S):
@@ -324,7 +324,7 @@ FrameV3Node = _part(
     "FrameV3Node", ("B",), _sig_node,
     lambda C, S, *e: node_hash(C, e[0:8], e[8], e[9], e[10][0], e[11:19], e[19:27], S.B),
     "the frame-v3-sha512 node at level k and index i (LSB first, its uint 1 ... B bytes) under the domain id domain over cur "
-    "and sib, cur the right child iff d")
+    "and sib, cur the right child iff d", calls=True)
 
 
 def _sig_leaf_at(S):
@@ -342,7 +342,7 @@ FrameV3LeafAt = _part(
     "FrameV3LeafAt", ("R", "B", "SCHEMA"), _sig_leaf_at,
     lambda C, S, *e: leaf_at_hash(C, S.SCHEMA, e[0:8], e[8:16], e[16], e[17], S.R, S.B),
     "the frame-v3-sha512 leaf of value at rank and position under the domain id domain and SCHEMA; each LSB first, uint(rank) "
-    "1 ... R bytes and uint(position) 1 ... B")
+    "1 ... R bytes and uint(position) 1 ... B", calls=True)
 
 
 def _sig_pick(S):

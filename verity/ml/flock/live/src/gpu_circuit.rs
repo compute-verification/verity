@@ -95,6 +95,10 @@ struct CircuitParams {
     zk_tamper: i32,
     zk_pads: *const u64,
     zk_extra: *const u64,
+    /// where set, `zk_pads` and `zk_extra` once the host has them, which the device asks for when level 0's commitment first
+    /// reads them (`ZkWords`)
+    zk_words: Option<ZkWordsCb>,
+    zk_words_ctx: *mut c_void,
     /// the units' slots are among the host slots: the device's unit kernel does not run
     u_host: i32,
     /// `Reuse`: 0 none, 1 keep for `reuse_tag`, 2 take `reuse_tag`'s
@@ -137,6 +141,29 @@ pub enum Live<'a> {
 }
 
 type Hm96TreeCb = unsafe extern "C" fn(*mut c_void, i32, i64) -> *const u8;
+
+type ZkWordsCb = unsafe extern "C" fn(*mut c_void, *mut *const u64, *mut *const u64) -> i32;
+
+/// Level 0's padding and extra lanes in page-locked memory ([`Words`]), copied on a thread of their own while the device builds
+/// the witness: [`zk_words`] waits for it.
+#[cfg(feature = "sha512")]
+struct ZkWords<'s> {
+    pending: Option<std::thread::ScopedJoinHandle<'s, (Words, Words)>>,
+    words: Option<(Words, Words)>,
+}
+
+#[cfg(feature = "sha512")]
+unsafe extern "C" fn zk_words(ctx: *mut c_void, pads: *mut *const u64, extra: *mut *const u64) -> i32 {
+    // SAFETY: `ctx` is the `ZkWords` that `prove_circuit` keeps until the prover returns
+    let w = unsafe { &mut *(ctx as *mut ZkWords<'_>) };
+    if let Some(h) = w.pending.take() {
+        w.words = h.join().ok();
+    }
+    let Some((p, e)) = &w.words else { return 1 };
+    // SAFETY: the device passes two writable pointers
+    unsafe { (*pads, *extra) = (p.as_ptr(), e.as_ptr()) };
+    0
+}
 
 /// The salts the device's trees take (`hm96_tree`): the table's, and every tree's handed to the device so far, which its
 /// openings read until the prover returns.
@@ -1162,6 +1189,8 @@ pub fn prove_circuit(
         zk_tamper: 0,
         zk_pads: null(),
         zk_extra: null(),
+        zk_words: None,
+        zk_words_ctx: null_mut(),
         u_host,
         rep_reuse: match reuse { Reuse::None => 0, Reuse::Keep(_) => 1, Reuse::Take(_) => 2 },
         reuse_tag: match reuse { Reuse::None => 0, Reuse::Keep(t) | Reuse::Take(t) => t },
@@ -1204,18 +1233,15 @@ pub fn prove_circuit(
         }
     }
     #[cfg(feature = "sha512")]
-    let zk_words: Option<(Words, Words)> = level0.filter(|_| !taken).map(|z| {
+    let zk_src: Option<&Level0> = level0.filter(|_| !taken).map(|z| {
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
         assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
         assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
-        (Words::of(&z.pads), Words::of(&z.extra))
+        z
     });
     #[cfg(feature = "sha512")]
     if let Some(z) = level0 {
         (p.zk_on, p.zk_rep, p.zk_t_pad, p.zk_tamper) = (1, z.rep as i32, z.t_pad as i32, z.tamper as i32);
-        if let Some((pads, extra)) = &zk_words {
-            (p.zk_pads, p.zk_extra) = (pads.as_ptr(), extra.as_ptr());
-        }
     }
     #[cfg(not(feature = "sha512"))]
     let _ = level0;
@@ -1250,7 +1276,18 @@ pub fn prove_circuit(
     let mut out: *mut u8 = null_mut();
     let mut out_len: usize = 0;
     let h_stage = t_stage.elapsed().as_secs_f64();
-    let rc = unsafe { flock_cuda_prove_circuit(&params, &p, &mut out, &mut out_len) };
+    let rc = std::thread::scope(|sc| {
+        #[cfg(feature = "sha512")]
+        let mut words = ZkWords { pending: zk_src.map(|z| sc.spawn(move || (Words::of(&z.pads), Words::of(&z.extra)))), words: None };
+        #[cfg(feature = "sha512")]
+        if words.pending.is_some() {
+            (p.zk_words, p.zk_words_ctx) = (Some(zk_words as ZkWordsCb), &mut words as *mut ZkWords<'_> as *mut c_void);
+        }
+        #[cfg(not(feature = "sha512"))]
+        let _ = sc;
+        // the device's copies from the words are in stream order before it returns, so they may go once it has
+        unsafe { flock_cuda_prove_circuit(&params, &p, &mut out, &mut out_len) }
+    });
     let t_decode = Instant::now();
     drop(mctx);
     #[cfg(feature = "sha512")]

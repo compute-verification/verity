@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["VStarRecursive"],
  "exempt": {
   "VStarRecursiveMain": "the vstar-recursive executable's entry point, one line; its command is VStar.Recursive.main, audited under VStarRecursive"

@@ -26,6 +26,9 @@ spec.loader.exec_module(LA)
 spec = importlib.util.spec_from_file_location("check_for_test_lean_audit", ROOT / "tools" / "verity" / "check" / "check.py")
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
+spec = importlib.util.spec_from_file_location("lean_check_for_test_lean_audit", ROOT / "tools" / "verity" / "lean" / "check.py")
+AUDIT = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(AUDIT)
 
 #: a stand-in for tools/verity/lean/check.py --build PKG... [--replay-cache D --artifacts D] --out O, run in the scratch tree: each named package
 #: fails when a file its policy names under "reads" is missing (an input the key would not cover) or a package it requires by
@@ -119,15 +122,21 @@ def test_the_audit_replays_the_import_closure_against_the_kept_cache_and_a_fresh
     cache = tmp_path / "cache"
     def argv(out):
         return json.loads((out / "argv.json").read_text())
+    def named(a):
+        return [Path(x) for i, x in enumerate(a) if not x.startswith("--") and a[i - 1] not in ("--out", "--repo",
+                                                                                                  "--replay-cache", "--artifacts")]
     LA.run(tmp_path / "kept", cache / "lean-audit", cache / "lean-deps", log=lambda s: None)
     a = argv(tmp_path / "kept")
     assert "--closure" in a and Path(a[a.index("--replay-cache") + 1]).resolve() == (cache / "lean-replay").resolve()
+    # outside every audited package's .lake, which check.py's `build_roots_over` refuses (no build writes a replay entry)
+    assert named(a) and AUDIT.build_roots_over(Path(a[a.index("--replay-cache") + 1]), named(a)) == []
     LA.run(tmp_path / "fresh", cache / "lean-audit", cache / "lean-deps", fresh=True, log=lambda s: None)
     a = argv(tmp_path / "fresh")
     run_cache = Path(a[a.index("--replay-cache") + 1])
     # the packages of one fresh run share a cache in its scratch tree, gone with it; the kept one isn't read
     assert "--closure" in a and "--artifacts" not in a and run_cache.name == "lean-replay"
     assert run_cache.parent.name.startswith(LA.SCRATCH) and not run_cache.parent.exists()
+    assert named(a) and AUDIT.build_roots_over(run_cache, named(a)) == []
 
 
 #: a stand-in for check.py that knows `--regenerate`: a package whose policy says "stale" fails on a record difference, or with

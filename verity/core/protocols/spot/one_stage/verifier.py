@@ -276,7 +276,8 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           declarations: Sequence[Mapping[str, Any]] | None = None, seed_salt: str | None = None,
           pool: Mapping[str, Any] | None = None) -> Verdict:
     """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`,
-    R6's seed salt when it passes `seed_salt`, and R7's pool chain when it passes `pool`."""
+    R6's seed salt when it passes `seed_salt`, and R6's pool reset, week and spent mark, a reset at most once a week,
+    and R7's pool chain when it passes `pool`."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
                  supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,

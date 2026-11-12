@@ -742,9 +742,10 @@ def rk_keys(S, sl: CS.Slice, delta: int) -> dict[int, int]:
     return out
 
 
-def scan(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace:
-    """The window as a prover runs it from `sl` (the module's docstring). ``refused`` says why the load, a step or a call
-    refuses the slice, where one does, and the run ends there; it is None otherwise."""
+def scan(S, sl: CS.Slice, delta: int = COINS[2], stream: V3S.Stream | None = None) -> SimpleNamespace:
+    """The window as a prover runs it from `sl` (the module's docstring), its calls on `stream` (default a new one on the
+    empty pool, RK's keys `rk_keys`'; a given stream is copied, never changed). ``refused`` says why the load, a step or
+    a call refuses the slice, where one does, and the run ends there; it is None otherwise."""
     sh = shape(S)
     Sc, St = CS.chain(S), CS.step_statics(S)
     arrivals = tuple(map(tuple, sl.arrivals))
@@ -753,7 +754,8 @@ def scan(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace:
         return SimpleNamespace(refused="the load refuses the slice")
     cur, win = loaded
     rnum = request_numbers(sl)
-    stream = V3S.Stream(sh.S3, V3S.empty_pool(sh.S3, rk_keys(S, sl, delta)), 1, S.NB - 1)
+    if stream is None:
+        stream = V3S.Stream(sh.S3, V3S.empty_pool(sh.S3, rk_keys(S, sl, delta)), 1, S.NB - 1)
     CA, R, names = sh.CA, S.R, RC.arrival_names(Sc)
     nc, fl = (0,) * R, (0,) * R
     zero = ((0,) * R, (0,) * CA, (0,) * CA, (0,) * R)

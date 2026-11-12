@@ -4,6 +4,8 @@ from __future__ import annotations
 import importlib.util
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -611,6 +613,32 @@ def test_check_refuses_a_python_that_imports_the_trees_packages_from_elsewhere(m
     assert CHECK.main([]) == 2
     assert "against another checkout's code (verity from /tmp/s1350/x.py)" in capsys.readouterr().err
     assert probed == [str(ROOT / "tools/research/src")]
+
+
+def test_check_run_as_a_script_in_a_fresh_trees_environment_installs_the_workspace_first(monkeypatch, capsys):
+    """`uv run --extra torch-cpu python tools/verity/check/check.py` installs the root, torch and the dev group, not every member."""
+    monkeypatch.delenv("RESEARCH_RUN_ID", raising=False)
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda pkgs, env: "verity_identity from nowhere (not importable)")
+    monkeypatch.setattr(CHECK.SUITES, "fresh", lambda env: True)
+    monkeypatch.setattr(CHECK, "run", lambda *a: pytest.fail("a step ran"))
+    resynced = []
+    monkeypatch.setattr(CHECK, "resync", resynced.append)
+    assert CHECK.main(["--cores", "4"], script=True) == 2 and resynced == [["--cores", "4"]]
+    assert f"`{' '.join(CHECK.SUITES.SYNC)} && uv run --extra torch-cpu python" in capsys.readouterr().err
+    assert CHECK.main([]) == 2 and len(resynced) == 1
+
+
+def test_check_resyncs_once_and_runs_again_only_where_the_sync_filled_the_environment(monkeypatch):
+    synced, ran, fresh = [], [], [False]
+    monkeypatch.setattr(CHECK.subprocess, "run", lambda cmd, cwd: synced.append(cmd) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(CHECK.os, "execv", lambda exe, args: ran.append(args))
+    monkeypatch.setattr(CHECK.SUITES, "fresh", lambda env: fresh[0])
+    monkeypatch.setattr(sys, "argv", ["tools/verity/check/check.py", "--cores", "4"])
+    CHECK.resync(["--cores", "4"])
+    assert synced == [CHECK.SUITES.SYNC] and ran == [[sys.executable, "tools/verity/check/check.py", "--cores", "4"]]
+    fresh[0] = True
+    CHECK.resync(["--cores", "4"])
+    assert len(synced) == 2 and len(ran) == 1
 
 
 def test_a_recorded_run_refuses_to_skip_the_store(monkeypatch):

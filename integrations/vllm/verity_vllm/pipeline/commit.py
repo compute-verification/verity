@@ -64,7 +64,7 @@ from typing import Any
 from verity_vllm import protocols as PO
 from verity_vllm.acquire.sources import hidden_source as HS, taps as TAPS
 from verity_vllm import settings  # noqa: E402 (after the process clock, like the imports around it)
-from verity_vllm.config import group, option, workload_arg
+from verity_vllm.config import UsageError, group, option, workload_arg
 from verity_vllm.engine import engine_profile as prof
 
 prof.apply_env()
@@ -1082,6 +1082,8 @@ def main(args: Options, argv: list[str] | None = None) -> None:
     _sid_out = (Path(args.out) / "source_identity.json") if getattr(args, "out", None) else None
     try:
         source_identity_doc = _sid.precheck("commit", out=_sid_out)
+    except UsageError:          # the run store is absent: naming SourceIdentityError would load it again and lose the Commit's name
+        raise
     except _sid.SourceIdentityError as e:
         print(str(e), file=sys.stderr, flush=True)
         raise SystemExit(3) from None

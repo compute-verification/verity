@@ -12,11 +12,11 @@ public import Properties.Spot
 
 `Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.tiedSameB` over three subprotocols, in the order of
 their ids: the inference-only policy (`NciCheck.Protocol.protocol`), PoUW's period credit
-(`PouwCheck.Period.protocol`) and sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
-one-stage v2's audit or the recursive audit, whichever form its params name. The policy's commitment and sampled
-proofs' (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both forms) are the run's
-registration record, and the composite rejects unless both decode to one digest (`Core.Composition.strays` over
-`Core.Remote.tied`);
+(`PouwCheck.Period.protocol`) and SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
+one-stage v2's audit, the recursive audit's form refused (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`). The policy's
+commitment and SPOT's (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both
+forms) are the run's registration record, and the composite rejects unless both decode to one digest
+(`Core.Composition.strays` over `Core.Remote.tied`);
 the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
 record its windows name (`Core.Remote.windowRecords`) has that digest too. The policy's check
 (`NciCheck.Protocol.check`) refuses a record whose `program` is not the

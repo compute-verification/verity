@@ -20,8 +20,8 @@ client      {"type": "hello"} (with "secret" when the session has one), then {"t
 challenger  {"type": "commitment", "commitment"}, {"type": "opening", "opening"}, {"type": "tree", "tree"},
             {"type": "tree-coins", "tree-coins"} and {"type": "closed"}, each answering the client's frame, or
             {"type": "refused", "reason"}, which ends the session
-withheld    {"type": "layout", "layout"}, {"type": "coin", "coin"} and {"type": "released", "released"}: a withheld
-            session's answers (`open_session(..., withhold=True)`)
+withheld    {"type": "layout", "layout"}, {"type": "coin", "coin"}, and {"type": "releasing", "releasing"} frames then
+            {"type": "released", "released"}: a withheld session's answers (`open_session(..., withhold=True)`)
 ~~~
 
 **A ``--zk`` session's coin tree** (`challenger`, "A --zk session's coins") is sampled and opened in the window's
@@ -35,8 +35,12 @@ tree (`coin_tree.check`).
 **A withheld session** keeps the challenger's commitment on its host until the session closes (`challenger`, "A
 withheld session"): it answers the hello with the layout alone (`{epoch, families, scheme}`), each open with the coin's
 raw bytes alone (`{after, coin, epoch, index, label}`: no salt and no path), and the client's close, once its signed close
-is written, with `{commitment, openings}`, the commitment and every coin it opened, in order, with its salt and path.  The
-client checks those openings then (`RemoteChallenger.close`), each against the coin it was given.
+is written, with the commitment and every coin it opened, in order, with its salt and path (`release_frames`), in
+frames whose heads are each at most `RELEASE_HEAD`: `releasing {first, openings}` frames, each the release's openings
+from index `first` on, then `released {commitment, openings}`, the commitment and the openings left; a release that
+fits one frame is that last frame alone.  The client reads them in order (`RemoteChallenger.close`), refusing a frame
+that isn't the next of the coins it was given (one missing, repeated or out of order) and every frame past them, and
+checks the openings, each against the coin it was given.
 
 Every message is fail-closed.  The challenger refuses a frame that isn't the next of that sequence in exactly that form,
 a coin other than its family's next (coin i after the family's i-th root, once: `LiveRecord`) and a root that isn't 64
@@ -107,12 +111,20 @@ MAX_HEAD = 1 << 20
 MAX_BATCH = 64
 """The most coins `RemoteChallenger.open_many` asks for at once: its frames (about 200 bytes each) are written before
 any reply is read, so they must fit the stream's send buffer while the challenger writes its replies back."""
+RELEASE_HEAD = MAX_HEAD // 2
+"""The most bytes the head of a withheld session's release frame holds (`release_frames`): half of `MAX_HEAD`, so a
+relay that pads each frame to whole cells of up to that size (the certifier's coin link, `coin_link.recut`) passes it
+on."""
 SEQUENCE = ("a client's frames are hello, then open {label, index, after} per coin, tree {nonce, spec} per coin tree and "
             "tree-open {after, n, round, stream, tree} per round of one, then close")
 SESSION_ID = f"a session id is at most {Ch.MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'"
 #: an open's label past ASCII is refused in these words alone, since the refusal is how the session ended, which its close
 #: signs and writes
 LABEL = "an open's label is an ASCII string, one of the layout's family labels"
+
+
+def _encode(head: dict) -> bytes:
+    return json.dumps(head, sort_keys=True, separators=(",", ":")).encode()
 
 
 def _unique(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -131,7 +143,7 @@ class _Wire:
         """Each of `heads` as a frame, back to back in one write."""
         out = bytearray()
         for head in heads:
-            h = json.dumps(head, sort_keys=True, separators=(",", ":")).encode()
+            h = _encode(head)
             out += HEADER.pack(len(h), 0) + h
         self.sock.sendall(out)
 
@@ -216,6 +228,27 @@ def layout_json(c: LiveCommitment) -> dict:
 def coin_json(o: LiveOpening) -> dict:
     """What a withheld session's open answers: the coin's raw bytes, without its salt and path."""
     return {"after": o.after.hex(), "coin": o.coin.hex(), "epoch": o.epoch, "index": o.index, "label": o.label}
+
+
+def release_frames(commitment: LiveCommitment, openings: Sequence[LiveOpening]) -> list[dict]:
+    """What a withheld session's close answers: `commitment` and `openings` in order, in frames whose heads are each at
+    most `RELEASE_HEAD` bytes, every frame but the last ``releasing {first, openings}`` (`first` the index in `openings`
+    of its first) and the last ``released {commitment, openings}`` with the openings left; each frame holds as many
+    openings as fit, and at least one (an opening's path is at most `challenger.MAX_PATH` digests)."""
+    docs = [o.to_json() for o in openings]
+    last = {"type": "released", "released": {"commitment": commitment.to_json(), "openings": []}}
+    room = RELEASE_HEAD - max(len(_encode(last)),
+                              len(_encode({"type": "releasing", "releasing": {"first": len(docs), "openings": []}})))
+    cuts, used = [0], 0
+    for i, doc in enumerate(docs):
+        size = len(_encode(doc)) + 1
+        if used and used + size > room:
+            cuts.append(i)
+            used = 0
+        used += size
+    frames = [{"type": "releasing", "releasing": {"first": a, "openings": docs[a:b]}} for a, b in zip(cuts, cuts[1:])]
+    last["released"]["openings"] = docs[cuts[-1]:]
+    return [*frames, last]
 
 
 def close_session(session: Session, ended: str | None) -> ChallengerClose:
@@ -372,8 +405,7 @@ def serve(sock: socket.socket, session: Session, clock: Callable[[], int] = time
                     if reason is not None:
                         break
                     if session.withhold:
-                        wire.send({"type": "released", "released": {"commitment": challenger.commitment.to_json(),
-                                                                    "openings": [o.to_json() for o in opened]}})
+                        wire.send(*release_frames(challenger.commitment, opened))
                     else:
                         wire.send({"type": "closed"})
                     _hang_up(sock)
@@ -426,6 +458,13 @@ def _released_of(doc: Any) -> tuple[LiveCommitment, list[LiveOpening]]:
     if not isinstance(doc, dict) or sorted(doc) != ["commitment", "openings"] or type(doc["openings"]) is not list:
         raise CoinError("a withheld session's release is {commitment, openings}")
     return LiveCommitment.from_json(doc["commitment"]), [LiveOpening.from_json(o) for o in doc["openings"]]
+
+
+def _releasing_of(doc: Any) -> tuple[int, list[LiveOpening]]:
+    if (not isinstance(doc, dict) or sorted(doc) != ["first", "openings"] or type(doc["first"]) is not int
+            or type(doc["openings"]) is not list):
+        raise CoinError("a withheld session's release frame before its last is {first, openings}")
+    return doc["first"], [LiveOpening.from_json(o) for o in doc["openings"]]
 
 
 TREE_FORM = (f"a coin tree's answer is {{key, nonce, root}}: {CT.KEY_BYTES}, {CT.NONCE_BYTES} and 64 bytes in lowercase "
@@ -583,13 +622,13 @@ class RemoteChallenger:
 
     def close(self) -> None:
         """End the session: the challenger closes it, and the stream closes.  On a withheld session the challenger then
-        releases its commitment and the coins' full openings: each must be the coin it gave, in order, opening against
-        that commitment after the root it followed, else `close` raises."""
+        releases its commitment and the coins' full openings (`release_frames`): each must be the coin it gave, in
+        order, opening against that commitment after the root it followed, else `close` raises."""
         if not self.withheld:
             self._ask({"type": "close"}, "closed", lambda _: None)
             self._end("the client closed the session")
             return
-        commitment, openings = self._ask({"type": "close"}, "released", _released_of)
+        commitment, openings = self._released()
         self._end("the client closed the session")
         if (commitment.scheme, commitment.epoch, commitment.families) != self._layout:
             raise CoinError("the challenger's released commitment is not the layout its hello answered")
@@ -600,6 +639,22 @@ class RemoteChallenger:
             if why is not None:
                 raise CoinError(f"the challenger's {o.label} coin {o.index}: {why}")
         self.commitment, self.opened = commitment, {(o.label, o.index): o for o in openings}
+
+    def _released(self) -> tuple[LiveCommitment, list[LiveOpening]]:
+        """The withheld session's release, its frames read in order once the close is sent: each `releasing` frame's
+        openings must start at the next coin given and add at least one, within the coins given, else the session ends
+        there; the `released` frame ends it."""
+        self._send({"type": "close"})
+        got: list[LiveOpening] = []
+        while True:
+            kind, part = self._answer({"releasing": _releasing_of, "released": _released_of})
+            if kind == "released":
+                return part[0], got + part[1]
+            first, openings = part
+            if first != len(got) or not openings or len(got) + len(openings) > len(self._given):
+                raise self._end(f"the challenger's release frame from opening {first} with {len(openings)} openings is "
+                                f"not the next of the {len(self._given)} coins it gave, after the {len(got)} released")
+            got += openings
 
     def __enter__(self) -> RemoteChallenger:
         return self
@@ -735,6 +790,7 @@ def trusted_session(directory: str | os.PathLike, heads: Sequence[str | os.PathL
     return Ch.session_named(audited, key, session_files(d), verify)
 
 
-__all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "ROOT_BYTES",
-           "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines", "log_hello",
-           "log_lines", "main_lines", "open_session", "released_roots", "serve", "session_files", "trusted_session"]
+__all__ = ["CLOSE", "HEADER", "HELLOS", "KEY", "MAX_BATCH", "MAX_HEAD", "RECORD", "RELEASES", "RELEASE_HEAD",
+           "ROOT_BYTES", "RemoteChallenger", "Session", "close_session", "greet", "hello_lines", "ledger_lines",
+           "log_hello", "log_lines", "main_lines", "open_session", "release_frames", "released_roots", "serve",
+           "session_files", "trusted_session"]

@@ -226,14 +226,81 @@ impl Clone for PassCache {
     }
 }
 
+/// One bit-sliced row's words for `N` lane groups of 64 lanes, group g's in word g: what [`IrUnitNet::eval_wide`] walks,
+/// `u64` being one group. Each is aligned to its size, so a read of one row reads one cache line or part of one.
+pub trait RowWord: Copy + PartialEq + std::fmt::Debug + Send + Sync {
+    const N: usize;
+    fn splat(w: u64) -> Self;
+    fn word(&self, g: usize) -> u64;
+    fn set(&mut self, g: usize, w: u64);
+    fn xor(self, o: Self) -> Self;
+    fn and(self, o: Self) -> Self;
+}
+
+impl RowWord for u64 {
+    const N: usize = 1;
+    #[inline(always)]
+    fn splat(w: u64) -> Self {
+        w
+    }
+    fn word(&self, _: usize) -> u64 {
+        *self
+    }
+    fn set(&mut self, _: usize, w: u64) {
+        *self = w
+    }
+    #[inline(always)]
+    fn xor(self, o: Self) -> Self {
+        self ^ o
+    }
+    #[inline(always)]
+    fn and(self, o: Self) -> Self {
+        self & o
+    }
+}
+
+macro_rules! row_word {
+    ($name:ident, $n:literal, $align:literal) => {
+        #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+        #[repr(C, align($align))]
+        pub struct $name(pub [u64; $n]);
+
+        impl RowWord for $name {
+            const N: usize = $n;
+            #[inline(always)]
+            fn splat(w: u64) -> Self {
+                $name([w; $n])
+            }
+            fn word(&self, g: usize) -> u64 {
+                self.0[g]
+            }
+            fn set(&mut self, g: usize, w: u64) {
+                self.0[g] = w
+            }
+            #[inline(always)]
+            fn xor(self, o: Self) -> Self {
+                $name(std::array::from_fn(|g| self.0[g] ^ o.0[g]))
+            }
+            #[inline(always)]
+            fn and(self, o: Self) -> Self {
+                $name(std::array::from_fn(|g| self.0[g] & o.0[g]))
+            }
+        }
+    };
+}
+row_word!(Row2, 2, 16);
+row_word!(Row4, 4, 32);
+row_word!(Row8, 8, 64);
+
 /// Whether row `i` of `rows` is `[i]`.
 fn own_row<R: RowRead + ?Sized>(rows: &R, i: usize) -> bool {
     rows.row_len(i) == 1 && rows.row_cols(i).next() == Some(i)
 }
 
 /// Row `i`'s XOR over `z`, whose entry `i` is still 0, and all ones where it reads column `i` an odd number of times.
-fn fold_own(row: &[u32], i: usize, z: &[u64]) -> (u64, u64) {
-    row.iter().fold((0, 0), |(x, o), &c| (x ^ z[c as usize], o ^ 0u64.wrapping_sub(u64::from(c as usize == i))))
+fn fold_own<W: RowWord>(row: &[u32], i: usize, z: &[W]) -> (W, W) {
+    let (x, o) = row.iter().fold((W::splat(0), 0u64), |(x, o), &c| (x.xor(z[c as usize]), o ^ 0u64.wrapping_sub(u64::from(c as usize == i))));
+    (x, W::splat(o))
 }
 
 /// A netlist's `useful` rows, each line `na a.. nb b..`, written in order.
@@ -379,31 +446,40 @@ impl IrUnitNet {
     /// [`IrUnitNet::eval64`], equal to it bit for bit, in one pass over `a` and `b` where [`IrUnitNet::one_pass`] holds (the
     /// two-pass evaluation where it doesn't).
     pub fn eval64_flat(&self, input: impl Fn(usize) -> u64) -> (Vec<u64>, Vec<u64>, Vec<u64>) {
+        self.eval_wide(&input).unwrap_or_else(|| self.eval64(input))
+    }
+
+    /// [`IrUnitNet::eval64_flat`]'s one pass for `W::N` lane groups at once, `input(col)` each group's word at input column
+    /// `col`: group g's (z, a, b) are every row's word g, bit for bit `eval64_flat` of group g's inputs. One pass reads the
+    /// rows once for all of them. None: the net has no one-pass form ([`IrUnitNet::one_pass`]). Every row is written in order
+    /// and read only by later rows (and the constant's, set first), so only z is initialized.
+    pub fn eval_wide<W: RowWord>(&self, input: impl Fn(usize) -> W) -> Option<(Vec<W>, Vec<W>, Vec<W>)> {
         if !self.one_pass() {
-            return self.eval64(input);
+            return None;
         }
         let (u, cp, first) = (self.useful, self.const_pos, self.in_words * WORD);
-        let (mut z, mut a, mut b) = (vec![0u64; u], vec![0u64; u], vec![0u64; u]);
+        let (zero, one) = (W::splat(0), W::splat(!0));
+        let (mut z, mut a, mut b) = (vec![zero; u], Vec::with_capacity(u), Vec::with_capacity(u));
         for i in 0..first {
-            if own_row(&self.a, i) {
+            let (oa, ob) = (own_row(&self.a, i), own_row(&self.b, i));
+            if oa {
                 z[i] = input(i);
-                a[i] = z[i];
             }
-            if own_row(&self.b, i) {
-                b[i] = z[i];
-            }
+            a.push(if oa { z[i] } else { zero });
+            b.push(if ob { z[i] } else { zero });
         }
-        z[cp] = !0;
-        (a[cp], b[cp]) = (!0, !0);
+        z[cp] = one;
         for i in first..cp {
             let (x, oa) = fold_own(self.a.row(i), i, &z);
             let (y, ob) = fold_own(self.b.row(i), i, &z);
-            let zi = x & y;
+            let zi = x.and(y);
             z[i] = zi;
-            a[i] = x ^ (zi & oa);
-            b[i] = y ^ (zi & ob);
+            a.push(x.xor(zi.and(oa)));
+            b.push(y.xor(zi.and(ob)));
         }
-        (z, a, b)
+        a.push(one);
+        b.push(one);
+        Some((z, a, b))
     }
 
     /// Whether every row's z, a and b are final after one pass in row order, decided once: no position map, the constant
@@ -1041,6 +1117,36 @@ mod tests {
             assert!(fwd.eval64_flat(input) == fwd.eval64(input));
             assert!(fwd.pass.0.get() == Some(&false), "a later column took the one-pass path");
         }
+    }
+
+    #[test]
+    fn eval_wide_is_eval64_per_group() {
+        fn check<W: RowWord>(net: &IrUnitNet, k: u64) {
+            let input = |g: usize, col: usize| (col as u64 + 1).wrapping_mul(0x9e37_79b9_7f4a_7c15 ^ k).rotate_left(7 * g as u32 + 1) ^ g as u64;
+            let (z, a, b) = net.eval_wide(|col| {
+                let mut w = W::splat(0);
+                (0..W::N).for_each(|g| w.set(g, input(g, col)));
+                w
+            }).expect("a one-pass net");
+            for g in 0..W::N {
+                let word = |v: &[W]| v.iter().map(|w| w.word(g)).collect::<Vec<u64>>();
+                assert!((word(&z), word(&a), word(&b)) == net.eval64(|col| input(g, col)), "{} groups, inputs {k}: group {g}", W::N);
+            }
+        }
+        assert_eq!([align_of::<Row2>(), align_of::<Row4>(), align_of::<Row8>()], [16, 32, 64]);
+        assert_eq!([size_of::<Row2>(), size_of::<Row4>(), size_of::<Row8>()], [16, 32, 64]);
+        for (seed, in_words, useful) in [(3u64, 1usize, 300usize), (0x5eed, 2, 5000), (99, 3, 40_000)] {
+            let net = random_net(seed, in_words, useful);
+            for k in 0..2 {
+                check::<u64>(&net, k);
+                check::<Row2>(&net, k);
+                check::<Row4>(&net, k);
+                check::<Row8>(&net, k);
+            }
+        }
+        let mut fwd = random_net(5, 1, 400);
+        fwd.a = appended(&fwd.a, WORD + 3, WORD + 8);
+        assert!(fwd.eval_wide(|_| Row2::splat(1)).is_none(), "a row reading a later column has no one-pass form");
     }
 
     #[test]

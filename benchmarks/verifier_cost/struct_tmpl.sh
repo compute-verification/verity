@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The H1 tile unit's structural template: per SHAPE ("K" for the 4×8 tile, "K R C" otherwise),
-# `python -m verity_flock.struct_lower` lowers the unit with each specialized Definition once and its calls kept as calls,
+# struct_unit.py (`verity_flock.struct_lower`) lowers the unit with each specialized Definition once and its calls kept as calls,
 # writes it as flock-ir-tmpl/v2 and prints its STRUCT statistics, and flock-tmpl (flock_tmpl/Main.lean, built in a scratch
 # Lake package against the checkout's verifier) times the templated read (`Tmpl.parse`, its order check included). With
 # --check K, the unit at K is unrolled and evaluated against the flat lowering first; after --unroll, each later shape's
@@ -71,7 +71,7 @@ while [ $# -gt 0 ]; do
   if [ "$1" = --check ]; then
     k=$2
     shift 2
-    /usr/bin/time -v uv run python -m verity_flock.struct_lower "$k" --check > "$O/check-$k.out" 2> "$O/check-time-$k.txt" \
+    /usr/bin/time -v uv run python benchmarks/verifier_cost/struct_unit.py "$k" --check > "$O/check-$k.out" 2> "$O/check-time-$k.txt" \
       || { tail -40 "$O/check-time-$k.txt" >&2; exit 1; }
     grep '^STRUCT ' "$O/check-$k.out" | sed 's/^STRUCT //' | tee "$O/check-$k.json"
     grep -q '"mismatched_bits": 0,' "$O/check-$k.json" || { echo "K=$k: the structural unit's outputs differ" >&2; exit 1; }
@@ -80,7 +80,7 @@ while [ $# -gt 0 ]; do
   tag=${1// /x}
   shift
   t=$S/unit-$tag.tmpl
-  /usr/bin/time -v uv run python -m verity_flock.struct_lower ${tag//x/ } --out "$t" > "$O/struct-$tag.out" \
+  /usr/bin/time -v uv run python benchmarks/verifier_cost/struct_unit.py ${tag//x/ } --out "$t" > "$O/struct-$tag.out" \
     2> "$O/struct-time-$tag.txt" || { tail -40 "$O/struct-time-$tag.txt" >&2; exit 1; }
   grep '^STRUCT ' "$O/struct-$tag.out" | sed 's/^STRUCT //' | tee "$O/struct-$tag.json"
   /usr/bin/time -v "$X" read "$t" > "$O/read-$tag.out" 2> "$O/read-time-$tag.txt" \

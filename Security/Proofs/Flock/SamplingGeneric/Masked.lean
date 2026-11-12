@@ -89,7 +89,7 @@ sessions' runs, scope (`SessionsIn`) and openings. -/
 theorem ks_masked (hd : c.DrawLaw) (hr : c.Refuses FlockDeploy.sha512)
     (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.DrawFixed)
     (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c))
-    (hnum : SessionsIn c)
+    (hnum : SessionsIn c.atInnerN₀)
     (hopens : Claims.Sampling.SessionOpens FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c) iroots) :
     (compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) c iroots).KS FlockDeploy.sha512 :=
   ks_compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) c iroots FlockDeploy.sha512
@@ -100,7 +100,7 @@ theorem ks_masked (hd : c.DrawLaw) (hr : c.Refuses FlockDeploy.sha512)
 theorem ksReg_masked (hd : c.DrawLaw) (hr : c.Refuses FlockDeploy.sha512)
     (hi : c.InteriorFixed FlockDeploy.sha512 iroots) (hf : c.DrawFixed)
     (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c))
-    (hnum : SessionsIn c)
+    (hnum : SessionsIn c.atInnerN₀)
     (hopens : Claims.Sampling.SessionOpens FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation c) iroots) :
     (compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) c iroots).KSReg FlockDeploy.sha512 :=
   ksReg_compiled (FlockDeploy.deployZk _root_.Flock.Readable.relation) c iroots FlockDeploy.sha512

@@ -1111,6 +1111,29 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
 
 
+def test_the_records_facts_cache_is_outside_every_slot_tree_s_build_roots(tmp_path, monkeypatch):
+    """The records step keeps its facts cache (`facts_dir`) beside its slot trees, so no sandboxed build in any slot's tree
+    can write it: neither `check.py`'s (`writable`, path dependencies included) nor this module's (`in_sandbox`, the
+    closure's `.lake`s). check.py refuses an overlapping `--facts-cache` (`build_roots_over`); this keeps that from firing."""
+    monkeypatch.setattr(LC.LA.COMMON, "cache_dir", lambda: tmp_path / "cache")
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Security"])
+    for slot in ("build/1", "build/2", None):
+        if slot:
+            monkeypatch.setenv(LC.LEAN_SLOT.HELD, slot)
+        else:
+            monkeypatch.delenv(LC.LEAN_SLOT.HELD, raising=False)
+        tree = LC.records_tree()
+        pkgs = [tree / "Security", tree / "Security" / "Proofs"]
+        for p in pkgs:
+            p.mkdir(parents=True, exist_ok=True)
+        (pkgs[1] / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "s", "type": "path", "dir": ".."}]}))
+        assert LC.AUDIT.build_roots_over(LC.facts_dir(), pkgs) == []
+        box = LC.in_sandbox("Security/Proofs", tree, ["lake", "build"])
+        rw = box[box.index(str(LC.SANDBOX)) + 1:box.index("--", box.index(str(LC.SANDBOX)))]
+        assert rw and not any(LC.facts_dir().resolve().is_relative_to(d) or Path(d).is_relative_to(LC.facts_dir().resolve())
+                              for d in rw)
+
+
 def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
     """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
     path alone refused it as matching no package, after the run had waited for its slot."""

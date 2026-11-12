@@ -51,6 +51,8 @@ SURFACE = {
     "vllm.distributed:tensor_model_parallel_all_reduce": "the all-reduce the export's TP ops stand in for",
     "vllm.distributed.parallel_state:get_pp_group": "a PoUW H1 rank's pipeline-parallel rank",
     "vllm.distributed.parallel_state:get_tp_group": "the TP group: its device communicator, and a PoUW H1 rank's TP rank",
+    "vllm.distributed.device_communicators.cuda_communicator:CudaCommunicator": "a group's CUDA communicator, whose "
+                                                                                "all-reduce engine.collectives.all_reduce wraps",
     "vllm.forward_context:get_forward_context": "the forward context, whose KV slot mapping the KV slots source reads",
     "vllm.forward_context:set_forward_context": "a forward context with no attention metadata, for the frontend's export",
     # compilation and CUDA graphs

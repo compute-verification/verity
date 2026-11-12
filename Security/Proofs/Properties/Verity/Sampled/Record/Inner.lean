@@ -21,7 +21,8 @@ statement, and `SessionsIn` holds wherever a reference draw file exists (`∃ d,
   positive at the reference (`N₀_pos`) and `0` where nothing sets up, and its statement fits its length words (`Fits`),
   so flock-verify reads it as `baseRaw` with the draw file (`ins_of_setupOf`).
 
-Then `InnerNumbers` at the record is `innerNumbers_deploy` (`innerNumbers`).
+Then `InnerNumbers` at the record is `innerNumbers_deploy` (`innerNumbers`): every unit of the record's code has the
+reference's `N₀`, so `SessionsIn` holds at `Code.atInnerN₀` too (`sessionsIn_atInnerN₀`).
 -/
 
 @[expose] public section
@@ -126,12 +127,15 @@ theorem code_tables (e : Ext) (x : Msg) : (code A o e).tables x = 1 := rfl
 theorem code_innerN₀ (e : Ext) (x : Msg) : (code A o e).innerN₀ x = FlockDeploy.N₀ true (xS₀ A o) := by
   simp only [code]
 
+theorem code_unitN₀ (e : Ext) (x : Msg) (u : ℕ) : (code A o e).unitN₀ x u = FlockDeploy.N₀ true (xS₀ A o) := by
+  simp only [code]
+
 /-- **`SessionsIn` at the record**: every session's statement is in Flock's masked scope at one table, with the
-reference's `N₀`, wherever a reference draw file exists. -/
+reference's `N₀` at every unit, wherever a reference draw file exists. -/
 theorem sessionsIn (e : Ext) (h : ∃ d, RefOk A o d) : SamplingDeploy.SessionsIn (code A o e) := by
   intro x u v xS vS hs
   change (if x = xOf A o then some (sessionOf A o v) else none) = some (xS, vS) at hs
-  rw [code_tables, code_innerN₀]
+  rw [code_tables, code_unitN₀]
   by_cases hx : x = xOf A o
   swap
   · rw [ite_eq_right hx] at hs
@@ -145,8 +149,16 @@ theorem sessionsIn (e : Ext) (h : ∃ d, RefOk A o d) : SamplingDeploy.SessionsI
   · rw [h1]
     exact ⟨kept_in h hn hf, N₀_eq_of_nums hn⟩
 
-/-- **`InnerNumbers` at the record**, wherever a reference draw file exists. -/
+/-- **`SessionsIn` at the statement's `N₀`**: at a code whose every unit's `N₀` is its statement's, `SessionsIn` holds
+at `Code.atInnerN₀` too, the code the one-stage inner numbers read. -/
+theorem sessionsIn_atInnerN₀ {c : SamplingDeploy.Code} (h : SamplingDeploy.SessionsIn c)
+    (hu : ∀ x u, c.unitN₀ x u = c.innerN₀ x) : SamplingDeploy.SessionsIn c.atInnerN₀ :=
+  fun x u v xS vS hs => ⟨(h x u v xS vS hs).1, (h x u v xS vS hs).2.trans (hu x u)⟩
+
+/-- **`InnerNumbers` at the record**, wherever a reference draw file exists: `innerNumbers_deploy` at the record's
+code, whose units' `N₀` are the reference's (`sessionsIn_atInnerN₀`). -/
 theorem innerNumbers (e : Ext) (h : ∃ d, RefOk A o d) : Claims.Sampling.InnerNumbers (record A o e) :=
-  SamplingDeploy.innerNumbers_deploy _root_.Flock.Readable.relation (code A o e) (sessionsIn e h)
+  SamplingDeploy.innerNumbers_deploy _root_.Flock.Readable.relation (code A o e)
+    (sessionsIn_atInnerN₀ (sessionsIn e h) fun x u => (code_unitN₀ e x u).trans (code_innerN₀ e x).symm)
 
 end Verity.Sampled.Record

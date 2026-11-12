@@ -61,11 +61,11 @@ set_option linter.unusedVariables false
 section Sampled
 
 open Claims.Sampling
+open Claims.SamplingGeneric (Arg Compiled)
 
-/-- **An accepted sampled audit bounds the leak with the checked inputs left out, given `SampledAuditAccepted`.** At any
-deployment `D` of the sampled verifier where `KS` holds, a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`,
-a decoder that lists every trace within Flock's radius, registered inputs `reg`, checked inputs `chk` and each
-statement's check `valid`:
+/-- **An accepted sampled audit bounds the leak with the checked inputs left out.** At every compiled sampled verifier
+`D` where `Claims.SamplingGeneric.Compiled.KS` holds, a public layout `lay` and horizon `k` of each statement, `δ ≥ 0`,
+registered inputs `reg`, checked inputs `chk` and each statement's check `valid`:
 
 * on the statements in scope whose trace run the check holds on except with probability `εchk` (`CheckedWitness`),
   `Pr[acc ∧ ¬RLeakChecked δ] ≤ δ + ε_ks + ε_bind + εchk`: except with that probability, every observation sequence of
@@ -75,24 +75,22 @@ statement's check `valid`:
   `2^#(freeInputs \ (reg ∪ chk)) · #faultySets(δ) · 2^β · Dj^k`, `β` the most committed bits of a possible incorrect
   set. -/
 def SampledLeakChecked : Prop :=
-  SampledAuditAccepted →
-    ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-      (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ)
-      (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T)
-      (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
-      (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Claims.Msg → ℝ)
-      (Dj : ℕ),
-      KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D decode valid εchk x)
-          (RLeakChecked H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) valid
-            Dj)
-          (E D decode) (fun x => κ D δ x + εchk x) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) ∧
-        ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
-          CheckedUnique s.prog P s.design (lay s) (k s) (chk s) (valid s) →
-          ∀ (op : ℕ → List (Obs L K S) → List Bool) (ρ : ℕ → Bool),
-            (AccSeqsChecked s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) (valid s) δ op
-                Dj).encard ≤
-              ((2 ^ (freeInputs s.prog (lay s) (k s) \ (reg s ∪ chk s)).card * (faultySets s.design P δ).card *
-                2 ^ ((faultySets s.design P δ).sup (faultyBits s.prog P)) * Dj ^ k s : ℕ) : ℕ∞)
+  ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+    (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
+    (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (εchk : Claims.Msg → ℝ)
+    (Dj : ℕ),
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D valid εchk x)
+        (RLeakChecked H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) valid
+          Dj)
+        D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) ∧
+      ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
+        CheckedUnique s.prog P s.design (lay s) (k s) (chk s) (valid s) →
+        ∀ (op : ℕ → List (Obs L K S) → List Bool) (ρ : ℕ → Bool),
+          (AccSeqsChecked s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) (valid s) δ op
+              Dj).encard ≤
+            ((2 ^ (freeInputs s.prog (lay s) (k s) \ (reg s ∪ chk s)).card * (faultySets s.design P δ).card *
+              2 ^ ((faultySets s.design P δ).sup (faultyBits s.prog P)) * Dj ^ k s : ℕ) : ℕ∞)
 
 end Sampled
 

@@ -213,14 +213,10 @@ set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record, with zero knowledge of the sampled masked protocol**:
 `sampling_deployed_models` at `L = Sampled.leaky S`, its rounds from `HelloRounds` and its coin check by definition, at
 the record masked at `tapeOf` where the code's reference prover is `L`'s (`Honest`). -/
-theorem sampling_deployed_sampled (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
-    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
-    (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
-    (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
-    (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
-    (hComplete : Complete H (deploy rel c)) (S : Sampled c) (hR : HelloRounds c) (t : ℕ) (ht : 0 < t)
-    {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt] [Fintype B]
-    [DecidableEq B] [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc)
+theorem sampling_deployed_sampled (H : Msg → Msg) (hslots : DrawSlots (deploy rel c))
+    (hprog : ProgramScope (deploy rel c)) (hComplete : Complete H (deploy rel c)) (S : Sampled c) (hR : HelloRounds c)
+    (t : ℕ) (ht : 0 < t) {Salt B Cc : Type} [AddCommGroup Salt] [AddCommGroup B] [Fintype Salt] [DecidableEq Salt]
+    [Fintype B] [DecidableEq B] [DecidableEq Cc] (My : Salt → B) (cs : Salt → Cc)
     (tapeOf : S.leaky.G.Nonce × S.leaky.G.Rand → Reference.Tape) (hP : Honest c H S.leaky.G tapeOf)
     (Mp : ∀ lx x, S.leaky.G.Nonce → (S.leaky.proto lx).PreModel x Salt B Cc)
     (Mc : ∀ lx x, S.leaky.G.Nonce → (Fin (S.leaky.G.K x) → S.leaky.G.Coin) → (S.leaky.proto lx).CoinModel x Salt B Cc)
@@ -230,13 +226,12 @@ theorem sampling_deployed_sampled (H : Msg → Msg) (hKS : Claims.Flock.KS H (Fl
     (hS : ∀ lx, (S.leaky.proto lx).SimLink H (Mc lx)) (hN : ∀ lx, (S.leaky.proto lx).NonDegenerate (Mc lx))
     (hI : ∀ lx, (S.leaky.proto lx).InnerHolds (RAt H (deploy rel c) lx) (Mc lx)) :
     ScopeMatches (deploy rel c) ∧ Binding (deploy rel c) ∧ Universal (deploy rel c) ∧ FaultyBoundary ∧
-      KS H (deploy rel c) ∧ KSCount H (deploy rel c) ∧ Bits H (deploy rel c) ∧
-      Efficient H (deploy rel c) FlockDeploy.zkStepPoly ∧ Complete H (deploy rel c) ∧
+      Complete H (deploy rel c) ∧
       ZK H ((deploy rel c).mask S.leaky.G.Nonce S.leaky.G.Rand tapeOf (S.leaky.simLeakE t (t * 3 ^ t)))
         (fun x => 8 * nL x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal +
           8 * t * nB x * (ENNReal.ofReal (FlockSoundness.CROnly.hidingGap My cs)).toReal + 2 * (1 / 3) ^ t)
         fun _ => 4 * t * 3 ^ t :=
-  sampling_deployed_models rel c H hKS hfixed hsessions hnum hslots iroots hopens hfix hprog hchecks hreveals
-    hComplete S.leaky t ht (S.rounds hR) My cs tapeOf hP Mp Mc nL nB hnL hnB hL hS hN hI S.coinCheck
+  sampling_deployed_models rel c H hslots hprog hComplete S.leaky t ht (S.rounds hR) My cs tapeOf hP Mp Mc nL nB hnL hnB
+    hL hS hN hI S.coinCheck
 
 end SamplingDeploy

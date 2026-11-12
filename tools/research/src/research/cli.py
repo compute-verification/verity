@@ -262,7 +262,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     q.add_argument("--preemptible", action="store_true", help="it may be stopped for higher-ranked work and requeued (a guest's must be)")
     q.add_argument("--gpu-host", action="store_true",
                    help="a job without --gpus whose workload takes its GPUs with gpu-lease itself, around each GPU step: its CPU "
-                        "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle)")
+                        "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle), with GPU_LEASE naming the node's "
+                        "lease tool")
     q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
     q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
     ap.add_argument("--id", default=None, help="use this run id (rYYYYMMDD-HHMMSS-xxxx) instead of allocating one")

@@ -3,7 +3,7 @@ built for it, as a template partition counts them (`TemplatePartition` over ever
 members), at GLM-5.3's class-G registration cut to its first layers: a request beside other sequences, in prefill chunks, after a
 history, resumed, leaving at a window's edge, stochastic, under its length rule and in a launch past FlashInfer's fused all-reduce;
 at INDEX_TOPK 16 under a decode threshold of 2, its dense-MHA prefills; at INDEX_TOPK 4, its rows past it, on a last layer that
-shares the top-k and on one that computes it; and the B8 window's planned units."""
+shares the top-k and on one that computes it, and in several blocks a call; and the B8 window's planned units."""
 
 from __future__ import annotations
 
@@ -112,6 +112,14 @@ def test_a_dense_mha_prefills_counts_are_its_programs(tmp_path, monkeypatch, cas
 @pytest.mark.parametrize("case", LONG)
 def test_rows_past_index_topk_count_their_selection_and_the_slots_they_read(tmp_path, case, layers):
     _check(_phi(tmp_path, layers=layers, topk=4), **LONG[case])
+
+
+@pytest.mark.parametrize("case", LONG)
+def test_rows_past_index_topk_in_several_blocks_count_each_blocks_selection(tmp_path, monkeypatch, case):
+    """At blocks of 2 keys (`vllm_dsa.BLOCK_KEYS`) a call's rows past INDEX_TOPK read several key counts: the chunk of rows of
+    6, 7 and 8 keys has blocks of 6 and 8."""
+    monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", 2)
+    _check(_phi(tmp_path, topk=4), **LONG[case])
 
 
 @pytest.mark.slow

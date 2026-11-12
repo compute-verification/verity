@@ -100,15 +100,18 @@ def test_a_held_definition_is_reported_held_and_a_held_one_that_fits_is_stale(mo
 
 
 def test_a_cut_call_is_held_to_the_block_by_each_unit(monkeypatch):
-    """A Call whose module's ``CUTS`` names its family: the whole (2^29 bits) needs no block, each unit of its cut does; the
-    entry carries the largest unit's block, the whole's and each unit's with its count.  A unit past the range fails naming
-    the Call and the unit; a held Call whose units fit is stale."""
+    """A Call whose module's ``CUTS`` names its family (its cut, or the module whose ``cut`` it is): the whole (2^29 bits) needs
+    no block, each unit of its cut does; the entry carries the largest unit's block, the whole's and each unit's with its
+    count.  A unit past the range fails naming the Call and the unit; a held Call whose units fit is stale."""
     from circuit_check import block_held as BH
     from verity_flock import circuit as FC
 
     whole, unit = _rows(), _toy()
     assert CK.cut_of(whole) is None
-    monkeypatch.setattr(sys.modules[__name__], "CUTS", {"CircuitCheckBlockRows_v1": lambda t: [(unit, 3)]}, raising=False)
+    monkeypatch.setattr(sys.modules[__name__], "cut", lambda t: [(unit, 2)], raising=False)
+    monkeypatch.setattr(sys.modules[__name__], "CUTS", {"CircuitCheckBlockRows_v1": __name__}, raising=False)
+    assert CK.cut_of(whole) == [(unit, 2)]
+    monkeypatch.setattr(sys.modules[__name__], "CUTS", {"CircuitCheckBlockRows_v1": lambda t: [(unit, 3)]})
     assert CK.cut_of(whole) == [(unit, 3)] and CK.cut_of(unit) is None
     F = CK.Findings()
     b = CK.block_range(whole, F)

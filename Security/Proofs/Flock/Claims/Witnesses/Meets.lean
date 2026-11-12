@@ -49,7 +49,7 @@ record, the sampling record's `flock`, and their antecedents are of that record 
   length and radius (`decode_plain`, `listWithin_plain`). That is the antecedent of Flock's `KS` and `Bits` (every
   decoder that meets the spec) and a conjunct of its `Efficient`.
 * `Sampling.decoder_meets_plain`, `_zk`: the same at a sampling record whose `flock` is the deployed record, the
-  antecedent of the sampling `KS`, `KSCount` and `Bits` and a conjunct of its `Efficient`.
+  list bound the compiled sampled verifier's KS reads there (`SamplingDeploy.ks_compiled`).
 * `Flock.masked_meets_zk`: `deployZk` is the masked verifier, the first conjunct of Flock's `ZK`;
   `Sampling.masked_meets_zk`: so is the `flock` of a sampling record over it, the first conjunct of the sampling `ZK`.
 * `Flock.scope_meets_plain`, `_zk`: the record's readable scope (`Flock.InScope` at the record's `zk`) holds a statement

@@ -28,7 +28,7 @@ public file pins it) after `opens_of_stmtOk` (the registered reads open the publ
 
 `reveals_of_frameRows`: `Reveals` (`SpotFlock.Opens`) at a layout's decoder from one premise on the registration,
 `FrameRows`: for each value a checked unit needs, the layout's wire is a column of a table in the unit's block, and the
-frame's reveal holds an opening of the witness's bit there that passes wherever the registered read of the row holding
+code's reveal holds an opening of the witness's bit there that passes wherever the registered read of the row holding
 it passes. So `sessionOpensTwo_of_rows`: `SessionOpensTwo` from `Embeds` and `FrameRows`.
 -/
 

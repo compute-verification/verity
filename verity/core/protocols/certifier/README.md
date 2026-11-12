@@ -118,6 +118,15 @@ A spec-level reference for network accounting's timing channel:
   slot, and one key a block), RB's touched list the NRB addresses the stream touches, and each running slot's request
   number carried in the slot row, which ``cout`` registers, rather than looked up at every call. Its free input is the
   advice and the checked witness, as v4's (`free_width`), and its verdict adds bit 6 ``keys``. `parts` prices it at any
+  class;
+- the compile slice with the block pool carried between windows (`compile_slice_v6`): `CompileSlice_v5` cut in two units,
+  both proved every window. `CompileSlice_v6` is its load and steps from the registered results, their pool calls'
+  bus records held to the registered calls row. `PoolWindow_v1` opens the pool row under the input root, the previous
+  window's output root registered before the window's coins, as the memory check's initial values; runs `CacheStep_v3`'s
+  stream from it over the calls row with v5's ragged keys; and commits the row the stream leaves as the output root. A
+  window from the empty pool's root (`genesis`) is v5's, and a chain restarts from it after a failed window. The compile
+  slice's free input is the advice, the pool window's its checked rows (the left row and the stream's witness) at their
+  widths until their lemma (`free_width`). `PoolChain_v1` is two windows so chained, and `parts` prices both units at any
   class, which `benchmarks/mempool/cost.py` does at a served load's;
 - the served rows (`served_rows`): the step rows a served window ran, from the server's kept rows, committed before the
   sample under the run root as a hiding-commitment registration, a row each block of G steps (G = P unless given: a window's row,
@@ -298,7 +307,7 @@ AEAD (`verity.ml.crypto.aead`). The certificate's signature scheme is a paramete
 From `verity`, `head_check` takes the circuits, their evaluator and the commitment gadgets, and `served` the circuits
 and their evaluator.
 The Boolean Definitions above that core doesn't import (`advice_check`, `cache_step_v2`, `cache_step_v3`, `compile_slice_v2`,
-`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
+`compile_slice_v3`, `compile_slice_v4`, `compile_slice_v5`, `compile_slice_v6`, `egress`, `ingress_scan`, `io_ids`, `served_statics`, `served_tie`, `window_charge`) are in
 `verity.ml.protocols.certifier`, stated over the ones here.
 `PROTOCOL.md` has the semantics and the correspondence to the Lean analysis (`Security/`, area `NetworkCertifier`).
 `lean/` is the certifier program, the Lake package `certifier_program` (Lean core only): List forms of the analysis's

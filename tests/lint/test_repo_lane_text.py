@@ -8,12 +8,13 @@ records how the tree got here or who is working on it, which the tree can't keep
   that follows ``Daniel``;
 * ``date``: a date, ``2026-10-12``, ``27 Oct``, ``Oct 27``;
 * ``name``: a person named as a rule's source, ``Daniel's ruling``, ``per Daniel``, except the Asks for Daniel database and
-  its ``Waiting on Daniel`` status, and where AGENTS.md and the skills name the person who decides;
+  its ``Waiting on Daniel`` status, where AGENTS.md and the skills name the person who decides, and where ``OWN_KINDS``
+  says the code acts for him;
 * ``note``, ``notion``, ``linear``, ``pr``: a ``note:`` id or a worker's note, brief or draft by its codename
   (``CHAINMAP's note``), a Notion URL, a Linear issue id (``VLLM-136``, the workspace's team keys) or URL, and a pull
   request (``#1234``, or its GitHub URL);
 * ``agent``, ``slack``: a Cursor agent id (``bc-`` and hex) and a Slack timestamp or archive URL;
-* ``run``, ``art``: a run id (``r20261025-031300-0fcc``) and an ``art:`` id (``art:23a3``), except where ``OWN_IDS``
+* ``run``, ``art``: a run id (``r20261025-031300-0fcc``) and an ``art:`` id (``art:23a3``), except where ``OWN_KINDS``
   says the tooling mints and reads them;
 * ``codename``: a worker's codename in prose: a board id (``M-1234``, ``F-r16``), a round (``R10``..``R19``), ``[lane `` or
   ``lane NAME`` with a hyphenated lane name, and a handle (``@vllm``), except where AGENTS.md and the skills name a handle
@@ -63,9 +64,10 @@ SKIP = {
     f"tests/lint/test_{NAME}.py": "its examples are the lane text it refuses",
 }
 #: the kinds a path prefix's prose may hold, each with its reason
-OWN_IDS = {
+OWN_KINDS = {
     "tools/research/": (("run", "art"), "runs and the evidence store mint and read these ids: they are its subject"),
-    "infra/": (("run", "art"), "the machines launch runs and fetch evidence by these ids: they are its subject"),
+    "infra/": (("run", "art", "name"), "the machines launch runs and fetch evidence by these ids, act with Daniel's "
+               "user key and relay his decisions to his Asks pages: they are its subject"),
 }
 #: test fixtures: a path with one of these directories is data
 FIXTURE_DIRS = ("fixtures", "testdata", "golden")
@@ -140,7 +142,7 @@ def holds(path: str) -> bool:
 
 def found_in(prose: list[tuple[int, str]], owners: bool = False, own: tuple[str, ...] = ()) -> list[tuple[int, str]]:
     """(line, ``kind: text``) of each site in ``prose``, its chunks' (first line, text); ``owners``: handles name owners
-    here; ``own``: the kinds this prose may hold (``OWN_IDS``)."""
+    here; ``own``: the kinds this prose may hold (``OWN_KINDS``)."""
     text = "\n".join(chunk for _, chunk in prose)
     if not text:
         return []
@@ -251,7 +253,7 @@ def sites(text: str, path: str) -> list[tuple[int, str]]:
         prose = comments(text, SLASH_COMMENT)
     else:
         return []
-    own = tuple(k for p, (kinds, _) in OWN_IDS.items() if path.startswith(p) for k in kinds)
+    own = tuple(k for p, (kinds, _) in OWN_KINDS.items() if path.startswith(p) for k in kinds)
     return sorted(found_in(sorted(prose, key=lambda c: c[0]), owners, own), key=lambda s: s[0])
 
 
@@ -336,6 +338,7 @@ def test_what_is_lane_text_and_what_is_not() -> None:
     named = "per Daniel. It landed 27 Oct (Oct 28 next); the Asks for Daniel database, Waiting on Daniel, Decision 3, 12:30Z, @daniel"
     assert [w for _, w in sites(f"# {named}\n", "a.py")] == ["name: Daniel", "date: 27 Oct", "attribution: (Oct 28 next)"]
     assert [w for _, w in sites(named, ".agents/skills/x/SKILL.md")] == ["date: 27 Oct", "attribution: (Oct 28 next)"]
+    assert [w for _, w in sites(f"# {named}\n", "infra/a.py")] == ["date: 27 Oct", "attribution: (Oct 28 next)"]
     for src in (py, Path(__file__).read_text(encoding="utf-8"), (ROOT / "integrations/vllm/tools/ratchet_gate.py").read_text()):
         assert found_in(python_prose(src)) == found_in(tokenized(src))
     assert sites("#5040 (12 Oct)", "data.json") == []

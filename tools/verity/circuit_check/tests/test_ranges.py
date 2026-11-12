@@ -68,8 +68,9 @@ def test_a_rule_holds_where_the_run_checked_each_of_its_spots_and_each_passed():
 
 
 def test_a_spot_that_passed_without_running_a_check_is_named_beside_the_verdict():
-    """A partition over its leaf budget is a warning, which fails nothing (circuit-check's own verdict); the rule still holds,
-    and the section names the spot and the check it skipped, so a reader doesn't take it as checked."""
+    """The partition over its leaf budget of a spot that is no Call is a warning, which fails nothing (circuit-check's own
+    verdict); the rule still holds, and the section names the spot and the check it skipped, so a reader doesn't take it as
+    checked."""
     skip = {"check": "partition", "code": "unchecked"}
     style = {"check": "redundant-gates", "code": "boolean"}
     targets = [{"target": RULE.spots[0], "failures": [], "warnings": [style]},

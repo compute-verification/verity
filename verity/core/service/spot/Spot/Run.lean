@@ -217,7 +217,8 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
       { sample, parts := SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
         drawn := (Draw.proved draw).map Int.toNat,
         links := SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
-        reported := Record.sessionRegistered i.verdicts, refs := it.circuits.map fun (t, _, h) => (t, h) }
+        reported := Record.sessionRegistered i.verdicts, verified := SecondStage.verifiedOf i.verdicts,
+        refs := it.circuits.map fun (t, _, h) => (t, h) }
     let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])

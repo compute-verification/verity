@@ -5,6 +5,7 @@ public import Proofs.Flock.Claims.JsonEq
 public import Proofs.Flock.Claims.ZkDecodeFlock
 public import Definitions.Claims.SamplingTwo
 public import Properties.Spot.Members
+public import Proofs.Flock.SpotFlock.Reveals
 
 /-!
 # SPOT[Flock]'s two-stage verifier
@@ -24,7 +25,7 @@ are its proof blocks (`membersPart`); the statement's partition query; the two-s
 stage's count per stratum; the registered reads the session must open against at a run's roots and interior roots
 (`registered`); the reference session statement (`xS₀`), in Flock's masked scope, which every session's statement is
 but for its sample and its registered reads; and the commitment's layout and the reference prover's framing (`frame`,
-a code whose verifier and samples are unread).
+a code whose verifier, samples and reveal count are unread).
 
 **The run's statement** (`Roots`): the roots the boundary values are committed under, as canonical bytes
 (`Roots.encode`, read back by `decode`, which keeps only bytes that encode back to themselves).
@@ -48,6 +49,11 @@ proof-block partition a partition of it, each proof block in one replay block an
 replay layout fits the members' files (`filesOk`: the templates are the members, each population slot is its own unit,
 each member has room for its units, and the registration's blocks are theirs); every check is a decision, so the
 verifier refuses every statement out of scope.
+
+**What a session reveals** for a checked unit is the program's (`Reveal.reveal`): one opening for each value its proof
+block's correctness reads (`Prog.needsList`), at that gate, under the interior roots of its replay block where the
+value is one of that block's interior values and under the run's roots otherwise, holding the frame's opening there
+(`Reveal.frameAt`); so at most `reveals` openings, the most one of the partition's proof blocks needs.
 
 So every checked unit has the one session (`sessions = 1`) on rounds 3 on (`session`), and at a run refused before them,
 the session is `xS₀`'s run of a prover whose first message Flock refuses (`refusedSeen`). The coins are the verifier's own
@@ -321,9 +327,17 @@ def session (v : Seen) : Option (Msg × Seen) :=
     if sessionOk h xS then some (xS, ⟨rest, v.out⟩) else some (h.xS₀, refusedSeen)
   | _ => some (h.xS₀, refusedSeen)
 
-/-- **The code before its samples**: the verifier, the statement and its evaluation, the session on rounds 3 on, its
-tables and `N₀` the reference statement's shapes', and the commitment's layout and reference prover's framing
-`frame`'s. -/
+/-- **The interior registration's roots** of replay block `ρ`, as the round-1 message states them; none where it
+doesn't decode or names no such block. -/
+def iroots (_ : Msg) (v : Seen) (ρ : ℕ) : List Msg :=
+  match v.msgs with
+  | (_, _) :: (m₁, _) :: _ => ((interiorsOf m₁).bind fun it => (it.roots.find? (·.1 == ρ)).map (·.2)).getD []
+  | _ => []
+
+/-- **The code before its samples**: the verifier, the statement and its evaluation, the session on rounds 3 on, what a
+session reveals (one opening per value a checked unit's proof block needs, under its roots, holding `frame`'s opening
+there) and the reveal count, its tables and `N₀` the reference statement's shapes', and the commitment's layout and
+reference prover's framing `frame`'s. The interior roots don't read the run's statement (`iroots`). -/
 noncomputable def base : Code :=
   { h.frame with
     V := V h
@@ -334,8 +348,11 @@ noncomputable def base : Code :=
     checked := fun _ _ => []
     rounds := fun _ _ => univ.filter fun t => 2 < t.val
     session := fun _ _ v => session h v
+    reveal := Reveal.reveal (partition h) (two h) (iroots []) (Reveal.frameAt h.frame)
+    reveals := Reveal.reveals (partition h) (parse h)
     sessions := fun _ => 1
     tables := fun _ => (shapeOf h.xS₀).length
+    unitN₀ := fun _ _ => ((shapeOf h.xS₀).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
     innerN₀ := fun _ => ((shapeOf h.xS₀).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum }
 
 /-- The registration the samples read, at a statement that decodes. -/
@@ -348,12 +365,5 @@ noncomputable abbrev code : Code := codeTwoAt (base h) (reg h) (fun _ => L) (fun
 /-- **The replay sample of record**: the first stage's checked slots on the replay layout. -/
 noncomputable def rs : (x : Msg) → (Fin ((code h).V.k x) → FlockDeploy.Coin) → List ℕ :=
   replayTwo ((base h).atOrder (order h)) (reg h) (fun _ => L) (bytesFirst (base h) (fun _ => L) (order h) fun _ => coinByte)
-
-/-- **The interior registration's roots** of replay block `ρ`, as the round-1 message states them; none where it
-doesn't decode or names no such block. -/
-def iroots (_ : Msg) (v : Seen) (ρ : ℕ) : List Msg :=
-  match v.msgs with
-  | (_, _) :: (m₁, _) :: _ => ((interiorsOf m₁).bind fun it => (it.roots.find? (·.1 == ρ)).map (·.2)).getD []
-  | _ => []
 
 end SpotFlock

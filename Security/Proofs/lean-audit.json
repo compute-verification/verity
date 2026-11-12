@@ -154,6 +154,7 @@
   "Proofs.Properties.Verity.Recursive",
   "Proofs.Properties.Verity.Recursive.Target",
   "Proofs.Properties.Verity.Recursive.Refusals",
+  "Proofs.Properties.Verity.Sampled.RecursiveRefused",
   "Proofs.Properties.Verity.Recursive.Audit",
   "Proofs.Properties.Verity.Subprotocols",
   "Proofs.Properties.Verity.Coupling",

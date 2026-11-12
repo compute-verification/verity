@@ -11,8 +11,10 @@ import Proofs.Flock.Claims.Witnesses.Shared
 `Sampling.KSAt` and `Compiled.KSAt` fail at `sksL` (`Witnesses.SamplingGeneric`), which accepts every run while no
 witness is in its relation at `δ = 0`: its `γ` is `0`, so the birthday term vanishes, and at the budget `0` its `B_ext`
 finds nothing at no cost, so the binding term is `0` (`sksL_ecrBound`). The bound is then `κ_0 < 1/3`, below the silent
-prover's `Pr[bad] = 1` (`sksL_ksAt_fails`). So `CompilerKSAt`'s conclusion fails there (`compilerKSAt_nontrivial`); its
-premises are `CompilerBits`', which hold together at `twoL` (`compilerKS_honest`, `compilerBits_honest`).
+prover's `Pr[bad] = 1` (`sksL_ksAt_fails`), at any scope holding `[]` and any relation with no witness there
+(`sksL_ksAt_fails_at`, which `SamplingTwoKSAt` reads). So `CompilerKSAt`'s conclusion fails there
+(`compilerKSAt_nontrivial`); its premises are `CompilerBits`', which hold together at `twoL` (`compilerKS_honest`,
+`compilerBits_honest`).
 -/
 
 @[expose] public section
@@ -50,21 +52,28 @@ theorem sksL_ecrBound (H : Msg → Msg) (x : Msg) :
   unfold ecrBound
   rw [ite_eq_left (And.intro hE hc.le), zero_div, ENNReal.ofReal_zero]
 
-/-- **`Sampling.KSAt` fails** at `sksL`, at `δ = 0` and the budget `0`: the silent prover is accepted while no witness
-is in the relation, `γ = 0`, and `B_ext` at the budget `0` finds nothing at no cost, so the bound is `κ_0 < 1`. -/
-theorem sksL_ksAt_fails (H : Msg → Msg) :
-    ¬ Claims.Sampling.KSAt H (sksL Coin).V (sksL Coin).Scope
-      (Claims.Sampling.R H (sksL Coin).commit (sksL Coin).parse (sksL Coin).partition 0) (sksL Coin).E
-      ((sksL Coin).κ 0) (sksL Coin).γ (sksL Coin).work := by
+/-- **`Sampling.KSAt` fails** at `sksL`'s verifier, extractor and errors, at the budget `0`, on any scope holding `[]`
+and any relation with no witness at `[]`: the silent prover is accepted while no witness is in the relation, `γ = 0`,
+and `B_ext` at the budget `0` finds nothing at no cost, so the bound is `κ_0 < 1`. -/
+theorem sksL_ksAt_fails_at (H : Msg → Msg) {Scope : Msg → Prop} {R : Rel Claims.Sampling.Wit} (hs : Scope [])
+    (hR : ∀ w, ¬ R [] w) :
+    ¬ Claims.Sampling.KSAt H (sksL Coin).V Scope R (sksL Coin).E ((sksL Coin).κ 0) (sksL Coin).γ (sksL Coin).work := by
   intro h
-  have h1 := h [] (sksL_scope []) Unit silentP 0
-  have hp : PrBad H (sksL Coin).V (Claims.Sampling.R H (sksL Coin).commit (sksL Coin).parse (sksL Coin).partition 0)
-      (sksL Coin).E [] silentP = 1 :=
-    prBad_accV H _ _ [] silentP (sksD_noR (Coin := Coin) H 0 le_rfl [])
+  have h1 := h [] hs Unit silentP 0
+  have hp : PrBad H (sksL Coin).V R (sksL Coin).E [] silentP = 1 := prBad_accV H _ _ [] silentP hR
   rw [hp, sksL_γ, Real.sqrt_zero, ENNReal.ofReal_zero, zero_mul, add_zero, Nat.cast_zero, mul_zero, zero_mul,
     sksL_ecrBound, add_zero, ENNReal.ofReal_le_ofReal_iff'] at h1
   have := sksL_κ (Coin := Coin) []
   rcases h1 with h1 | h1 <;> linarith
+
+/-- **`Sampling.KSAt` fails** at `sksL`, at `δ = 0` and the budget `0` (`sksL_ksAt_fails_at`). -/
+theorem sksL_ksAt_fails (H : Msg → Msg) :
+    ¬ Claims.Sampling.KSAt H (sksL Coin).V (sksL Coin).Scope
+      (Claims.Sampling.R H (sksL Coin).commit (sksL Coin).parse (sksL Coin).partition 0) (sksL Coin).E
+      ((sksL Coin).κ 0) (sksL Coin).γ (sksL Coin).work := by
+  refine sksL_ksAt_fails_at H ?_ ?_
+  · exact sksL_scope []
+  · exact sksD_noR (Coin := Coin) H 0 le_rfl []
 
 /-- **`Compiled.KSAt` fails** at `sksL`: its first half, at `δ = 0`. -/
 theorem compiledKSAt_fails (H : Msg → Msg) : ¬ (sksL Coin).KSAt H := fun h => sksL_ksAt_fails H (h.1 0 le_rfl)

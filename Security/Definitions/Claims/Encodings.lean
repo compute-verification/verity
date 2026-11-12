@@ -24,15 +24,16 @@ statement, witness, relation and claims (`Claims.Sampling`, `Claims.SamplingGene
    and agree (`Linked`, `linkedAt`). Then an encoding opening and a record opening at a linked position agree, or the
    checks collide (`LinkBinds`); and a trace in the sampling relation under the sum is in it under the record once its
    encoded openings are replaced by the link's record openings (`relink`), or the checks collide (`RelinkR`).
-4. **The composed claims**, on a compiled sampled verifier whose commitment is the sum and a link that names its
-   statements, with the audit's prover reading the link's run: knowledge soundness at the record (`CompilerKSLinked`,
-   the probability `PrBadLinked`), at the audit's error (`Compiled.KS`'s), the link's (`RegLink.ε`, a term of the
-   registration's one run, which every audit naming it shares) and the binding term `B_link` (`Blink`); and the
-   committed form (`CompilerKSRegLinked`): the committed trace (`FregL` at `tableL`: the link's record value at an
-   encoded position and `Compiled.regVal` elsewhere, fixed by the registration and the prover's tape before the window's
-   coins) is incorrect at a sampled proof block with probability at most `ε_reg` (`Compiled.εreg`), the link's error and
-   `B_cross` (`Bcross`: the audit's extraction and the link's revealing one position two ways) (`εregLinked`), and so
-   outside `M_δ` with probability at most `δ` more.
+4. **What the composed statements read**, on a compiled sampled verifier whose commitment is the sum and a link that
+   names its statements, with the audit's prover reading the link's run: for knowledge soundness at the record, the
+   linked bad event (`PrBadLinked`), the link's error (`RegLink.ε`, a term of the registration's one run, which every
+   audit naming it shares) and the binding term `B_link` (`Blink`); for the committed form, the committed trace's
+   incorrect set (`FregL` at `tableL`: the link's record value at an encoded position and `Compiled.regVal` elsewhere,
+   fixed by the registration and the prover's tape before the window's coins) and its error, `ε_reg`
+   (`Compiled.εreg`), the link's error and `B_cross` (`Bcross`: the audit's extraction and the link's revealing one
+   position two ways) (`εregLinked`). The two statements (`CompilerKSLinked`, `CompilerKSRegLinked`) are closed, over
+   every proof system, compiled verifier and link, and unproved, so they are stated in `Proofs.Flock.Encodings`, not as
+   claims.
 5. **Assumptions**: none new. The encoding binds by a collision reduction at a distance its instance proves, the link's
    error is its proof system's knowledge error (`Arg.KS`), and `ExpectedCR` reads `B_link` and `B_cross` as it reads
    `B_ext` and `B_conf`.
@@ -46,7 +47,7 @@ not stated here.
 namespace Claims.Encodings
 
 open Claims
-open Claims.Sampling (AuditStatement Partition CommitmentScheme Opening LogColl ownLog Bext)
+open Claims.Sampling (AuditStatement Partition CommitmentScheme Opening LogColl ownLog)
 open Claims.SamplingGeneric (Arg Compiled)
 open Claims.Recursion (allOC)
 
@@ -186,7 +187,7 @@ def RegLink.Opens {Coin : Type} (H : Msg → Msg) (Lk : RegLink Coin) (enc : Lis
     (Cm Ce : CommitmentScheme Bool) : Prop :=
   ∀ w, Lk.A.R Lk.x w → ∀ s, Lk.names s → Linked H Cm Ce s.roots (fun g => enc s.roots g = true) (Lk.reveal s w)
 
-/-! ## 4. The composed claims -/
+/-! ## 4. What the composed statements read -/
 
 section Composed
 
@@ -293,40 +294,5 @@ noncomputable def εregLinked (H : Msg → Msg) {A : Arg Coin} (L : Compiled Coi
   L.εreg H x Pa + Lk.ε H Pℓ + (Bcross H L Lk Cm Ce x Pℓ Pa).Pr H
 
 end Composed
-
-/-- **The sampled compiler through a link is knowledge sound at the record**: every compiled sampled verifier over a
-knowledge-sound proof system for proof blocks that meets the contract, whose commitment is the sum of a binding encoding
-and a binding record, with a knowledge-sound link that meets its contract and names its statements, at every `δ ≥ 0`
-and every pair of provers (the audit's reading the link's run): the linked bad event has probability at most the audit's
-error (`Compiled.KS`'s, at the sum), the link's (`RegLink.ε`) and `Pr[B_link]`. -/
-def CompilerKSLinked : Prop :=
-  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
-    (Lk : RegLink Coin) (H : Msg → Msg) (enc : List Msg → ℕ → Bool) (Ce Cm : CommitmentScheme Bool),
-    A.KS H → Lk.A.KS H → L.commit = byPos enc Ce Cm → Ce.Binds H → Cm.Binds H → L.Sessions H →
-    Lk.Opens H enc Cm Ce → ∀ δ : ℝ, 0 ≤ δ → ∀ x, L.Scope x → (∀ s, L.parse x = some s → Lk.names s) →
-    ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (Pℓ : Prover Ω) (Pa : Prover (Ω × (Fin (Lk.A.V.k Lk.x) → Coin))),
-      PrBadLinked H L Lk enc Cm δ x Pℓ Pa ≤
-        L.κ δ x + Real.sqrt (L.γ x * PrB H L.V Pa x) + (Bext H L.V L.E _ Pa x).Pr H + Lk.ε H Pℓ +
-          (Blink H L Lk Cm Ce x Pℓ Pa).Pr H
-
-/-- **The committed form through a link**: as `CompilerKSLinked`, the link's and the audit's runs accept with a sampled
-proof block in the committed trace's incorrect set through the link (`FregL`, fixed by the registration and the tape
-before the window's coins) with probability at most `εregLinked`, and so with that set outside `M_δ` with probability at
-most `δ + εregLinked`, at every `δ ≥ 0`. -/
-def CompilerKSRegLinked : Prop :=
-  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
-    (Lk : RegLink Coin) (H : Msg → Msg) (enc : List Msg → ℕ → Bool) (Ce Cm : CommitmentScheme Bool),
-    A.KS H → Lk.A.KS H → L.commit = byPos enc Ce Cm → Ce.Binds H → Cm.Binds H → L.Sessions H →
-    Lk.Opens H enc Cm Ce → ∀ x, L.Scope x → (∀ s, L.parse x = some s → Lk.names s) →
-    ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (Pℓ : Prover Ω) (Pa : Prover (Ω × (Fin (Lk.A.V.k Lk.x) → Coin))),
-      Pr (fun q : Ω × (Fin (Lk.A.V.k Lk.x) → Coin) × Lk.A.E.C Lk.x × (Fin (L.V.k x) → Coin) =>
-          (run H Pℓ Lk.A.V Lk.x q.1 q.2.1).out = .acc ∧ (run H Pa L.V x (q.1, q.2.1) q.2.2.2).out = .acc ∧
-            ∃ u ∈ L.checked x q.2.2.2, u ∈ FregL H L Lk enc Cm Ce x Pℓ Pa q.1 q.2.1 q.2.2.1) ≤
-          εregLinked H L Lk Cm Ce x Pℓ Pa ∧
-        ∀ s, L.parse x = some s → ∀ δ : ℝ, 0 ≤ δ →
-          Pr (fun q : Ω × (Fin (Lk.A.V.k Lk.x) → Coin) × Lk.A.E.C Lk.x × (Fin (L.V.k x) → Coin) =>
-              (run H Pℓ Lk.A.V Lk.x q.1 q.2.1).out = .acc ∧ (run H Pa L.V x (q.1, q.2.1) q.2.2.2).out = .acc ∧
-                FregL H L Lk enc Cm Ce x Pℓ Pa q.1 q.2.1 q.2.2.1 ∉ s.design.M (L.part s) δ) ≤
-            δ + εregLinked H L Lk Cm Ce x Pℓ Pa
 
 end Claims.Encodings

@@ -12,6 +12,7 @@
 [[words_in]]
 files = [
     "Security/Definitions/Accounting/JointPeriod.lean",
+    "Security/Definitions/Accounting/NetWitness.lean",
     "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityBlock.lean",
     "Security/Proofs/Accounting/JointBridge/Guarantees/IntegrityOfIntegrityPeriod.lean",
     "Security/Proofs/Accounting/JointBridge/HonestH200.lean",

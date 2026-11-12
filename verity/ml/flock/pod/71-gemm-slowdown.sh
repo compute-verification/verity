@@ -6,6 +6,7 @@
 # env: PREFLIGHT=1 (0: skip the preflight check; GATE= is its old name)  WARM=1 RUNS=3  BATCH_ANDS=2^32
 #      MAX_STATEMENT_BITS=2^34  ITERS=100
 #      DEFS=verity/ml/flock/pod/gemm-coordinates.defs.json (the Call counts: gemm-coordinates-4k fills 256 tiles of K = 2048)
+#      RESOLVER=MODULE:FUNC (70-class-sweep.sh's: binds DEFS's ids, which it refuses without)
 #      GPUS="4 5 6 7" (on a machine with /run/gpu-lease: take the first free of these, as gpu-lease does)
 #      any other KEY=VALUE reaches the prover's environment (FC_NATIVE_SHA=0, FC_HOST_PINNED=0, ...)
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done

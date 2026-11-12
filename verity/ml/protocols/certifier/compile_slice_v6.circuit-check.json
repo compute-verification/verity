@@ -1,0 +1,84 @@
+{
+ "definitions": {
+  "CallsEq_v1{K=1,CU=1}": {
+   "and": 13,
+   "type": "8ddae19766135c9810b1c47433d9f7fd94c1af849360c3175981391b4ed2c90092c7fdff083e6ff25401a164ac54fe239caa7d3a5aa774c428dbf24d7e220c56"
+  },
+  "CallsEq_v1{K=3,CU=4}": {
+   "and": 22,
+   "type": "1b7d1475c62b1ccfb0501ad790da797c85ebc8c241c71a4131510bb9716a6dece27e89fae7c42957843311af82a867cff61cceae5b0398209c7954f28d15ce64"
+  },
+  "CallsVerdict_v1{R=2,W=1,A=1,M=2,T=16,L=8,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=3,IW=1,AS=0,EW=0,Q=1,D=2,P=3,K=1,CTW=4,CU=1,DA=1,NS=2,NM=1,NRB=1,NRK=1}": {
+   "and": 130,
+   "type": "28c3c590ef80cb373ee08248bcb04060f728a2eca399a87b6ae2e24dcd94f5fd7287e8392b7533767da21fc39db67d621f40b29eb9893cc93e047c650f4757e7"
+  },
+  "CallsVerdict_v1{R=2,W=1,A=2,M=2,T=16,L=16,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=6,IW=3,AS=0,EW=0,Q=3,D=5,P=5,K=3,CTW=4,CU=4,DA=5,NS=192,NM=16,NRB=12,NRK=8}": {
+   "and": 190,
+   "type": "1a403e7f906f522292e2d6cc6dc4947d27e13431b49b6c1d9060e8fb3dce3e2f00bf68a4d46b66fe68b7b749d93b7e06ae13ec0a5b205747753bd22a02fc5d2e"
+  },
+  "CompileIds_v1{K=1,IW=1}": {
+   "and": 5,
+   "type": "1327fd84558facc5001dcef744ed78e183a80bfce3a2d204241c5d2f436d6c174f3cfe056764b51c5adeb29f502aaf43fccadf2953da08d91fe8dbecccf44b81"
+  },
+  "CompileIds_v1{K=3,IW=3}": {
+   "and": 19,
+   "type": "4d89f24ccead1be2c45ceeceba5c86cf4eb93ee26ebd0d454b6f7018f8ff28edf29a9effdfe7e1ef71e9fa1d7d190f9092c3caaa936ac308551542791f9a05a4"
+  },
+  "CompileSlice_v6{R=2,W=1,A=1,M=2,T=16,L=8,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=3,IW=1,AS=0,EW=0,Q=1,D=2,P=3,K=1,CTW=4,CU=1,DA=1,NS=2,NM=1,NRB=1,NRK=1}": {
+   "and": 3468,
+   "type": "cb30318768eb4cbef4ebac6814c9f63bab59acd3af1d929296e55027941cfddcef2fc15e02755737cd495285279bf633af1967ce3cea0aa048cb33d665b32fa2"
+  },
+  "CompileSlice_v6{R=2,W=1,A=2,M=2,T=16,L=16,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=6,IW=3,AS=0,EW=0,Q=3,D=5,P=5,K=3,CTW=4,CU=4,DA=5,NS=192,NM=16,NRB=12,NRK=8}": {
+   "and": 11907,
+   "type": "398e97147f07dbe119dada58fc10141633625a693337e79d2f8a0e32dfe0f709b962428717d06331c845dcc64d1d75103407a37cbd0944b82304c379feeec9e7"
+  },
+  "CompileWindow_v2{R=2,W=1,A=1,M=2,T=16,L=8,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=3,IW=1,AS=0,EW=0,Q=1,D=2,P=3,K=1,CTW=4,CU=1,DA=1,NS=2,NM=1,NRB=1,NRK=1}": {
+   "and": 2796,
+   "type": "7e87aad991f5370d5df24e2f31823477f14b9ff53965516e59dd5079428c2e7344d7dbc9637ecdbf6383807cb62a697638d3291501929042d1f98277ba55a12a"
+  },
+  "CompileWindow_v2{R=2,W=1,A=2,M=2,T=16,L=16,B=4,H=0,CH=1,WM=0,FULL=1,PC=1,NB=6,IW=3,AS=0,EW=0,Q=3,D=5,P=5,K=3,CTW=4,CU=4,DA=5,NS=192,NM=16,NRB=12,NRK=8}": {
+   "and": 9738,
+   "type": "38371e13df5b8cd5a942b4b3c9c6375ecb09e3e50da19cbcb47bb663fd7d1e4d6b19c22937bed74a07efc674ab306dc1d15520dc792c2c3a7cb69c243585f096"
+  },
+  "PoolClose_v1{NB=3,RW=1,KW=1,REFW=2,TW=2}": {
+   "and": 3001,
+   "type": "4ba82acafff15cb186da86475f75f5500c3f52f810531be6993dbeab2d7dbb3cc6311b5a55ebf03d4a91ffc697e254c551bdc666fe02ac68db5d3f56bf2d96d5"
+  },
+  "PoolClose_v1{NB=6,RW=2,KW=3,REFW=2,TW=8}": {
+   "and": 3087,
+   "type": "6c548142caf0a6a5ec97259e51f6237f221f62a104ae5cd31f16f9355023d09aad8d5e0db7f55de6dc69dbcf23949ccf200d1ee46ba5c7fd169fac692b4983dc"
+  },
+  "PoolCopies_v1{NB=3,RW=1,KW=1,REFW=2,TW=2}": {
+   "and": 2733,
+   "type": "f0ede930b121cc483b85e1ffb25a8a316db52cb56047a536b6f9123f8fc2bbd6d82d63eae2f335528b66da45db9ece1800d1465c9c2dc965c65e00314b5b0689"
+  },
+  "PoolCopies_v1{NB=6,RW=2,KW=3,REFW=2,TW=8}": {
+   "and": 2814,
+   "type": "332965fb9da4fd305f56954ed75eebca875372cb7fad94d9ac404d667503522ca25dd6899f18f4d9901166cc9ef359e83e5957f98f9772ef805a79f0221ffab5"
+  },
+  "PoolCounts_v1{K=1,CU=1}": {
+   "and": 2316,
+   "type": "67be93721a6d48fbfc0b98e70438301d092bdba43bcac03b3a737e8cc460e13a46e5a0702283c037e25864fb55891b858ee40ea9410551a7e3bcc1838b9f0b3f"
+  },
+  "PoolCounts_v1{K=3,CU=4}": {
+   "and": 2321,
+   "type": "49fb3085abbed5b6170fceba4dd5a93879efe8a4b2e53ed8355d0c72db61c595e09f6e4f5416d099005697d097ed7bd62157aff64123518e9aa2296fff5b2ed9"
+  },
+  "PoolOpen_v1{NB=3,RW=1,KW=1,REFW=2,TW=2}": {
+   "and": 5351,
+   "type": "fa92a032245547edb4d98a5f0e591ab2fb078a3d80b8d25061e178ce9dd7f2e77e497821458cc8e82669ad3933270117df2362300aaa7878558764d131b3d87f"
+  },
+  "PoolOpen_v1{NB=6,RW=2,KW=3,REFW=2,TW=8}": {
+   "and": 5456,
+   "type": "51fddc14475982d9ab86629b0b9380d1c253a2eb9f467b7d3a260a7bb104dae4f5899e75f51dbada9c36a3ec699a7b4feefce157629f41cf8777943a1163fdf2"
+  },
+  "PoolVerdict_v1{NB=3,RW=1,KW=1,REFW=2,TW=2}": {
+   "and": 3730,
+   "type": "4acfb38448e17c18c2c96d8d75b65bc2fb1ead87e1f9e97b35fce2d5f867e15f8d694388df36b51aaee8e8d847afc4c35a816ed059c24c516e0212ec3bdf42af"
+  },
+  "PoolVerdict_v1{NB=6,RW=2,KW=3,REFW=2,TW=8}": {
+   "and": 3742,
+   "type": "877a2b0ca57387e19f9d1e869a13c0fecbc72fa486769738bd260076bb4bacf5fe60e48debcfadb7feb001ece26db5a63b3136dedda24fe354edb70b296962b1"
+  }
+ }
+}

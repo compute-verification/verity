@@ -61,15 +61,15 @@ theorem getD_map_range {f : ℕ → F128} {n : ℕ} (hn : 0 < n) : ((Array.range
 
 /-- **From the transcript `t` at round `k` to `t'` at round `k'`, each round taken is recorded**: `t'`'s rounds are `t`'s
 followed by rounds `rs`, `k' = k + |rs|`, and the appended round `i` has at least one coin, its coins round `k + i`'s. -/
-def RecStep (C : Array (Array F128)) (t : Transcript) (k : ℕ) (t' : Transcript) (k' : ℕ) : Prop :=
+def RecStep (C : Array (Array F128)) (t : Flock.Transcript) (k : ℕ) (t' : Flock.Transcript) (k' : ℕ) : Prop :=
   ∃ rs : List Round, t'.rounds.toList = t.rounds.toList ++ rs ∧ k' = k + rs.length ∧
     ∀ i (hi : i < rs.length), 0 < rs[i].n ∧ rs[i].coins = (Array.range rs[i].n).map (padCoin C (k + i))
 
-theorem RecStep.same {C : Array (Array F128)} {t t' : Transcript} {k k' : ℕ} (ht : t'.rounds = t.rounds)
+theorem RecStep.same {C : Array (Array F128)} {t t' : Flock.Transcript} {k k' : ℕ} (ht : t'.rounds = t.rounds)
     (hk : k' = k) : RecStep C t k t' k' :=
   ⟨[], by simp [ht], by simp [hk], fun i hi => absurd hi (Nat.not_lt_zero i)⟩
 
-theorem RecStep.trans {C : Array (Array F128)} {t₀ t₁ t₂ : Transcript} {k₀ k₁ k₂ : ℕ}
+theorem RecStep.trans {C : Array (Array F128)} {t₀ t₁ t₂ : Flock.Transcript} {k₀ k₁ k₂ : ℕ}
     (h1 : RecStep C t₀ k₀ t₁ k₁) (h2 : RecStep C t₁ k₁ t₂ k₂) : RecStep C t₀ k₀ t₂ k₂ := by
   obtain ⟨rs, e1, ek1, hr1⟩ := h1
   obtain ⟨rs', e1', ek1', hr1'⟩ := h2
@@ -87,7 +87,7 @@ theorem RecStep.trans {C : Array (Array F128)} {t₀ t₁ t₂ : Transcript} {k�
 /-- **A transcript computation answered by `asksPad C` that records each round it takes**: every run that returns is a
 `RecStep`. -/
 def RecP (C : Array (Array F128)) {α : Type} (y : TMW (StateT ℕ V) α) : Prop :=
-  ∀ (t : Transcript) (k : ℕ) (a : α) (t' : Transcript) (k' : ℕ), (y.run t).run k = .ok ((a, t'), k') →
+  ∀ (t : Flock.Transcript) (k : ℕ) (a : α) (t' : Flock.Transcript) (k' : ℕ), (y.run t).run k = .ok ((a, t'), k') →
     RecStep C t k t' k'
 
 /-- **The simulation of `RecP`**: a transcript computation answered by `asksPad C` is related to itself when it is
@@ -200,7 +200,7 @@ theorem liftPure_recP (C : Array (Array F128)) {α : Type} (a : α) :
   liftK_recP C _ fun _ _ _ h => by cases h; rfl
 
 theorem get_recP (C : Array (Array F128)) :
-    (recP C).R (get : TMW (StateT ℕ V) Transcript) get := by
+    (recP C).R (get : TMW (StateT ℕ V) Flock.Transcript) get := by
   intro t k a t' k' h
   cases h
   exact RecStep.same rfl rfl
@@ -395,7 +395,7 @@ theorem repCons_rets (io : Asks (StateT ℕ V))
 /-! ## `repCons` at the request's coins -/
 
 /-- A `V` action lifted to the transcript and the round counter keeps both. -/
-theorem liftV_ok {α : Type} {v : V α} {t : Transcript} {k : ℕ} {a : α} {t' : Transcript} {k' : ℕ}
+theorem liftV_ok {α : Type} {v : V α} {t : Flock.Transcript} {k : ℕ} {a : α} {t' : Flock.Transcript} {k' : ℕ}
     (h : ((StateT.lift (monadLift v : StateT ℕ V α) : TMW (StateT ℕ V) α).run t).run k = .ok ((a, t'), k')) :
     v = .ok a ∧ t' = t ∧ k' = k := by
   cases v with
@@ -414,15 +414,15 @@ theorem repCons_parts {C : Array (Array F128)} {st : _root_.Flock.Setup} {sch : 
     {extras : Array _root_.Flock.Claim} {pads : _root_.Flock.Firewall.Finish.PadsZk}
     {ic : _root_.Flock.Firewall.Finish.InnerCommit} {vals : Array F128} {extra lanePad : ℕ → ℕ → F128}
     {salt : ℕ → ℕ → ByteArray} {p : _root_.Flock.Proof} {zl : _root_.Flock.Zk.Level0Msgs}
-    {cons : Array (String × _root_.Flock.Zk.Lin)} {tF : Transcript} {kF : ℕ}
+    {cons : Array (String × _root_.Flock.Zk.Lin)} {tF : Flock.Transcript} {kF : ℕ}
     (h : ((_root_.Flock.Firewall.Finish.repCons (asksPad C)
       (fun lv g s => pure (_root_.Flock.Firewall.Finish.commitFw lv g s)) st sch tPad rep dom g cm0 extras pads ic vals
-      extra lanePad salt).run (Transcript.init #[] dom)).run 0 = .ok (((p, zl, cons), tF), kF)) :
-    ∃ (rs : List Round) (rp : _root_.Flock.Zk.Replayed) (tq : Transcript) (suf : Array (String × _root_.Flock.Zk.Lin)),
+      extra lanePad salt).run (Flock.Transcript.init #[] dom)).run 0 = .ok (((p, zl, cons), tF), kF)) :
+    ∃ (rs : List Round) (rp : _root_.Flock.Zk.Replayed) (tq : Flock.Transcript) (suf : Array (String × _root_.Flock.Zk.Lin)),
       tF.rounds.toList = rs ∧ kF = rs.length ∧
       (∀ i (hi : i < rs.length), 0 < rs[i].n ∧ rs[i].coins = (Array.range rs[i].n).map (padCoin C i)) ∧
       _root_.Flock.Zk.replay st (_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0) p ic.root
-        (Transcript.init tF.rounds dom) = .ok (rp, tq) ∧
+        (Flock.Transcript.init tF.rounds dom) = .ok (rp, tq) ∧
       cons = rp.cons ++ suf ∧
       p.zerocheck.round1c = (Array.range 64).map (fun i =>
         vals[(_root_.Flock.Zk.PadLayout.new st.m st.kLog sch.k0).r1c i]! +

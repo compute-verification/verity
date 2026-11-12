@@ -2160,14 +2160,16 @@ class Stream:
         whose port it names (the boundary values the sessions opened to the registration's audit record, when they
         opened any, and the rest to the interior registration's), `coins` is the first stage's evidence and
         `interior_coins` the second stage's. `statements` are the second-stage sessions' (`second_stage`), which round 2
-        holds to the interior registration and the second stage's cells as the interior registration's audit record's
-        `statements` check: a two-stage outcome without them fails it, and so does every one while `second_stage.FORM`
-        refuses the two-stage form. `proofs` is the auditor's params naming each template's circuit file and the
-        reference header round 2 holds its statements to (`template_circuits`; without them every statement fails
-        ``second-header``), which the run of record reads from its interior params. The outcome accepts when the
-        registration's audit record (over the replay sample) and the interior registration's (over the sample) both do,
-        and the run of record checks both. Raises `Refused` for `statements` on a one-stage outcome, and (`proofs`) for
-        `proofs` on a one-stage stream or in any form `template_circuits` refuses, before anything is decided."""
+        holds to the verdicts of record that checked them (each one's header, registered reads and sample, by the digests
+        and sample a verdict names), the interior registration and the second stage's cells as the interior
+        registration's audit record's `statements` check: a two-stage outcome without them fails it, and so does every
+        one while `second_stage.FORM` refuses the two-stage form. `proofs` is the auditor's params naming each template's
+        circuit file and the reference header round 2 holds its statements to (`template_circuits`; without them every
+        statement fails ``second-header``), which the run of record reads from its interior params. The outcome accepts
+        when the registration's audit record (over the replay sample) and the interior registration's (over the sample)
+        both do, and the run of record checks both. Raises `Refused` for `statements` on a one-stage outcome, and
+        (`proofs`) for `proofs` on a one-stage stream or in any form `template_circuits` refuses, before anything is
+        decided."""
         if statements is not None and self.n_rho is None:
             raise _refuse("statements", "second-stage statements are a two-stage outcome's")
         if proofs is not None:
@@ -2267,8 +2269,9 @@ class Stream:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
         interior program's strata make, the design's links, which it derives from the replay block's Definition
-        (`second_stage.replay_links`), the reads the verdicts report, and the reference header the params `proofs`
-        give each template, `template_circuits`), and the registration's
+        (`second_stage.replay_links`), the reads the verdicts report, what they name of each session they accepted
+        (`second_stage.verified_of`), and the reference header the params `proofs` give each template,
+        `template_circuits`), and the registration's
         over the replay sample, each taking the sessions' reads of its own ports at their own roots (`own_reads`), both
         failing `run` where the whole run isn't the verifier's; and the public outputs."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
@@ -2289,7 +2292,7 @@ class Stream:
         own = SS.Own(tuple(replayed), SS.parts(len(replayed), P.strata(e.interior_program, self.spec.check.query)),
                      ireg.record, reg.record, tuple(D.proved(second.draw)),
                      SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
-                     A.session_registered(verdicts),
+                     A.session_registered(verdicts), SS.verified_of(verdicts),
                      tuple((t, h) for t, _c, h in template_circuits(proofs, self.spec.check.query)))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,

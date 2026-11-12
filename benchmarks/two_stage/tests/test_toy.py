@@ -10,6 +10,7 @@ reference statement's, which the auditor stages before the run, placed in the ru
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -20,7 +21,7 @@ import pytest
 from verity.core.protocols.spot import challenger as Ch, coins as CC, second_stage as SS, service as S
 from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R, \
     verifier as V
-from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.codec import canonical_json, descriptor_id
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.program import Program
 from verity.ml.windows import flock_inputs as FI, wiring as WI
@@ -184,10 +185,11 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
 def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     """Round 2 holds each session's public header to the reference the auditor's params give its template
     (`toy.references`, staged before the run under a run of its own) placed in the run: the honest public files the
-    served path writes (`flock_input_files`, as a5 stages the sessions) pass round 2 with the form allowed and the
-    interior record's replay sample in S's order, while without the params every one fails ``second-header`` and against
-    S reversed ``second-interior-order`` fails. Slow (about 15 s): the only test that lowers the templates, whose circuit
-    SHA-512s and classes are in both headers."""
+    served path writes (`flock_input_files`, as a5 stages the sessions), each session checked by a verifier of record
+    (`second_stage.verified_of`), pass round 2 with the form allowed and the interior record's replay sample in S's
+    order, while without the params every one fails ``second-header``, without a verifier of record ``second-verified``,
+    and against S reversed ``second-interior-order`` fails. Slow (about 15 s): the only test that lowers the templates,
+    whose circuit SHA-512s and classes are in both headers."""
     from verity_flock.class_statement import member_stager
 
     it, irec, brec, tmp = run["it"], run["irec"], run["brec"], run["tmp"]
@@ -209,11 +211,22 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     links = SS.replay_links(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY), brec)
     refs = tuple((e["template"], e["header"]) for e in proofs["templates"])
 
-    def check(sample, refs) -> dict:
-        own = SS.Own(tuple(sample), parts, irec, brec, tuple(drawn), links, SS.statement_reads(stmts), refs)
+    def sha512(j) -> str:
+        return hashlib.sha512(canonical_json(j)).hexdigest()
+
+    # what `flock-verify verify`'s verdict of record names of each session it checked
+    verified = SS.verified_of({f"lean-verify/m{k}": {
+        "of_record": True, "accepted": True, "public_header_sha512": sha512(s["header"]), "unit_draw": s["draw"],
+        "session_tables": 1, **({} if s["registered"] is None else {"registered_sha512": sha512(s["registered"])})}
+        for k, s in enumerate(stmts)})
+
+    def check(sample, refs, verified=verified) -> dict:
+        own = SS.Own(tuple(sample), parts, irec, brec, tuple(drawn), links, SS.statement_reads(stmts),
+                     verified=verified, refs=refs)
         return SS.check(True, own, stmts).to_json()
     assert check(SAMPLE, refs) == {"ok": True, "codes": [], "detail": {}}
     assert check(SAMPLE, ())["codes"] == ["second-header"]
+    assert check(SAMPLE, refs, ())["codes"] == ["second-verified"]
     assert "second-interior-order" in check(SAMPLE[::-1], refs)["codes"]
 
 

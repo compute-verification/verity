@@ -217,7 +217,8 @@ def seal_of(opts: Any) -> dict[str, Any]:
     from verity_vllm.check.replay.driver import engine_facts_of_record
     from verity_vllm.pipeline import source_identity as SI
 
-    return {"label": f"serve-openai:{opts.run_id}", "code": SI.code_identity(SI.TREE)["sha256"], "engine_of_record": engine_facts_of_record()}
+    return {"label": f"serve-openai:{opts.run_id}", "code": SI.code_identity_of("the seal", SI.TREE)["sha256"],
+            "engine_of_record": engine_facts_of_record()}
 
 
 def committer(opts: Any, llm: Any, label: str = "serve-openai") -> Any:

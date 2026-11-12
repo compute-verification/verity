@@ -37,8 +37,8 @@ open FlockComplete.Replay (bind_go)
 
 /-- **A loop cut at its step `i`**: steps before `i` yield, step `i` throws; the loop, then any continuation, throws
 having sent the first `i + 1` steps' bodies. -/
-theorem forIn_go_cut {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Transcript)
-    (B : ℕ → Claims.Msg) (L n i : ℕ) (hi : i < n) {t₀ : Transcript} (hT : T 0 = t₀) (e : String)
+theorem forIn_go_cut {σ β : Type} (body : ℕ → σ → TMW PS (ForInStep σ)) (T : ℕ → Flock.Transcript)
+    (B : ℕ → Claims.Msg) (L n i : ℕ) (hi : i < n) {t₀ : Flock.Transcript} (hT : T 0 = t₀) (e : String)
     (hbody : ∀ k < i, ∀ (s : σ) (l : Array Claims.Msg), l.size = L + k →
       ∃ s', ((body k s).run (T k)).go l = (.ok (.yield s', T (k + 1)), l.push (B k)))
     (hcut : ∀ (s : σ) (l : Array Claims.Msg), l.size = L + i →
@@ -93,7 +93,7 @@ open Loop
 /-- **The cut ring switch, cut at a claim's round**: from `l`, cut at its round `i` below the claims', it stops having
 sent `rsBody`'s first `i + 1` bodies after `t`'s pending bytes. -/
 theorem ringSwitchCut_at (coin : ℕ → ℕ → F128) (n : ℕ) (sv : ℕ → Array F128)
-    (claims : Array _root_.Flock.Claim) (t : Transcript) (l : Array Claims.Msg) {i : ℕ} (hi : i < claims.size)
+    (claims : Array _root_.Flock.Claim) (t : Flock.Transcript) (l : Array Claims.Msg) {i : ℕ} (hi : i < claims.size)
     (hl : n = l.size + i) :
     ∃ L', ((ringSwitchCut (asksCut coin n) sv claims).run t).go l = (.error "past the openings", L') ∧
       L'.toList = l.toList ++ (List.range (i + 1)).map (rsBody sv claims.size t.pending.data.toList) := by

@@ -2,6 +2,8 @@
 Triton targets the integration patches."""
 from __future__ import annotations
 
+import importlib
+import sys
 import types
 from types import SimpleNamespace
 
@@ -125,6 +127,45 @@ def test_a_service_stops_before_the_patches_it_serves_and_keeps_its_counters() -
     assert log == ["start", "stop 7"] and s.result == {"answered": 3} and "sample" not in vars(r) and hooks.live() == before
     s.uninstall()
     assert log == ["start", "stop 7"]
+
+
+@pytest.fixture
+def site(tmp_path, monkeypatch, request):
+    """A module importable by name and not yet imported."""
+    name = f"at_import_{request.node.name.removeprefix('test_')[:40]}"
+    (tmp_path / f"{name}.py").write_text("VALUE = 1\n")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    try:
+        yield name
+    finally:
+        sys.modules.pop(name, None)
+
+
+def test_at_import_runs_once_when_the_module_is_imported_and_imports_nothing_itself(site) -> None:
+    seen: list = []
+    with hooks.Hooks(tag="at-import") as h:
+        armed = h.at_import(site, lambda m: seen.append(m.VALUE))
+        assert site not in sys.modules and seen == [] and sys.meta_path[0] is armed.finder
+        assert hooks.live("at-import") == (armed,) and h.entries == (armed,)
+        importlib.import_module(site)
+        assert seen == [1] and not armed.installed and armed.finder not in sys.meta_path
+        assert hooks.live("at-import") == ()
+        del sys.modules[site]
+        importlib.import_module(site)
+        assert seen == [1]
+
+
+def test_at_import_runs_now_for_an_imported_module_and_uninstall_disarms_one_still_waiting(site) -> None:
+    module = importlib.import_module(site)
+    seen: list = []
+    assert hooks.at_import(site, seen.append) is None and seen == [module]
+    del sys.modules[site]
+    with hooks.Hooks(tag="at-import") as h:
+        armed = h.at_import(site, seen.append)
+    assert armed is not None and not armed.installed and armed.finder not in sys.meta_path
+    assert hooks.live("at-import") == ()
+    importlib.import_module(site)
+    assert seen == [module]
 
 
 def test_an_entry_that_fails_to_uninstall_does_not_keep_the_others() -> None:

@@ -17,6 +17,7 @@
 # The prover runs on the job's first PCPUS cores, the verifier (serve, replay) on the rest. Every step writes out/summary-$STEP.json.
 # env: FLOCK_WORK=/workspace/jobs/zk-cpu-steps  STATEMENTS="4096:2048 14336:512" (build: K:N each)  K=4096 N=2048 (prove, lean)
 #      BUILDS= (prove, lean)  M0=1  WARM=1  RUNS=3  PCPUS=16  SM=120
+#      RESOLVER=MODULE:FUNC (build: binds the statements' Gemm_v2 ids, class_statement --resolver; refused without)
 #      CUDA_TK=/workspace/jobs/rec-reprice/cuda-13.3.1 (node 1's host CUDA 13.0 ptxas doesn't know the kernels' clmad)
 #      WARM_FROM=/workspace/jobs/rec-reprice/flock-gpu-link (a checkout whose cargo target starts the first build warm)
 #      LEAN_FROM=/workspace/jobs/rec-reprice/cache (read only: its flock-verify of the same sources is used, not rebuilt)
@@ -207,6 +208,7 @@ EOF
 
 case $STEP in
 build)
+  [ -n "${RESOLVER:-}" ] || { echo "REFUSED: STEP=build stages Gemm_v2{K, N=4096} by id: RESOLVER=MODULE:FUNC binds it (FUNC(id), the registered Definition)"; exit 2; }
   echo $KEY > $O/key.txt
   (
     export PATH=$HOME/.elan/bin:$PATH
@@ -225,19 +227,19 @@ build)
     [ -f $dd/stage/inst-$n.bin ] && [ -f $dd/stage/partition.json ] && [ -f $dd/stage/program.json ] && { du -sb $dd/stage/* > $so/sizes.txt; continue; }
     python3 -c "import json, sys; json.dump({'Gemm_v2{K=%s,N=4096,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}' % sys.argv[1]: 1151}, open(sys.argv[2], 'w'))" $k $so/defs.json
     FLOCK_STAGE_CACHE=$dd/stage-cache FLOCK_GEMM_TILE=${FLOCK_GEMM_TILE:-4x4} /usr/bin/time -v -o $so/time-stage.txt \
-      python3 -m verity_flock.class_statement --definitions $so/defs.json --partition q-word --out $so/out --stage-only --batch fixed \
+      python3 -m verity_flock.class_statement --definitions $so/defs.json --resolver "$RESOLVER" --partition q-word --out $so/out --stage-only --batch fixed \
       --n $n --max-statement-bits $((1 << 35)) --batch-ands $((1 << 35)) --selftest 0 > $so/stage.log 2>&1
     echo "stage k$k exit $?"; tail -5 $so/stage.log
     C=$(ls -td $dd/stage-cache/*/ 2>/dev/null | head -1)
     [ -n "$C" ] && [ -f $C/inst-$n.bin ] || { echo "no staged statement under $dd/stage-cache"; exit 1; }
     mkdir -p $dd/stage && for f in circuit.txt inst-$n.bin pub-$n.bin; do ln -f $C/$f $dd/stage/$f || cp $C/$f $dd/stage/$f; done
-    python3 - $k $dd/stage/partition.json $dd/stage/circuit.txt $dd/stage/program.json <<'EOF' || exit 1
+    python3 - $k $dd/stage/partition.json $dd/stage/circuit.txt $dd/stage/program.json "$RESOLVER" <<'EOF' || exit 1
 import json, sys
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity_flock import class_statement as CS, partition_units as PU
 defs = {'Gemm_v2{K=%s,N=4096,DOT={"fn":"HopperBF16WgmmaDot16_v1"}}' % sys.argv[1]: 1151}
-program, _calls, _prov = CS.distinct_calls(None, None, defs, None)
+program, _calls, _prov = CS.distinct_calls(None, None, defs, None, definition=PU.resolver(sys.argv[5], "RESOLVER"))
 units = PU.partition_units(program, "q-word")
 obj = PO.build(units.program, units.query)
 with open(sys.argv[3]) as f:

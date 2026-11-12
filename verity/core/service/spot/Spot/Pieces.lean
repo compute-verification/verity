@@ -650,8 +650,9 @@ def run (j : Json) : V Json := do
 /-- `second_stage.check`'s input to its verdict (`SecondStage.check`): the two-stage form allowed or not (`allow`), the
 first stage's replay sample, the interior program and query, whose strata make the parts, the interior and boundary
 registrations' records, the second stage's units (`drawn`), the design's links (`replayLinks`'), null for none, the
-verdicts, whose verifiers of record report the sessions' reads (`Record.sessionRegistered`), the reference header of
-each template's statement (`refs`, `{template: header}`, null for none), and the statements, null for none. -/
+verdicts, whose verifiers of record report the sessions' reads (`Record.sessionRegistered`) and name the header,
+registered reads and sample each checked (`SecondStage.verifiedOf`), the reference header of each template's
+statement (`refs`, `{template: header}`, null for none), and the statements, null for none. -/
 def secondStatements (j : Json) : V Json := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"
@@ -682,7 +683,8 @@ def secondStatements (j : Json) : V Json := do
     | _ => throw "refs is not an object"
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
-      boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts, refs }
+      boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts,
+      verified := SecondStage.verifiedOf verdicts, refs }
   return (SecondStage.check allow own stmts).toJson
 
 /-- `second_stage.replay_links`' input to the design's links (`SecondStage.replayLinks`): a program object, the replay

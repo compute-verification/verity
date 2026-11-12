@@ -5657,7 +5657,7 @@
     {"file": "verity/ml/flock/pod/lean_verdicts.py", "count": 10},
     {"file": "verity/ml/flock/pod/rec-env.sh", "count": 10},
     {"file": "verity/ml/flock/pod/rec_inner.py", "count": 31},
-    {"file": "verity/ml/flock/pod/rec_reprice.py", "count": 14},
+    {"file": "verity/ml/flock/pod/rec_reprice.py", "count": 11},
     {"file": "verity/ml/flock/pyproject.toml", "count": 17},
     {"file": "verity/ml/flock/python/verity_flock/backend.py", "count": 4},
     {"file": "verity/ml/flock/python/verity_flock/bench.py", "count": 6},
@@ -5697,7 +5697,7 @@
     {"file": "verity/ml/flock/python/verity_flock/rec_sparse.py", "count": 22},
     {"file": "verity/ml/flock/python/verity_flock/rec_vstage.py", "count": 66},
     {"file": "verity/ml/flock/python/verity_flock/rec_vstar.py", "count": 26},
-    {"file": "verity/ml/flock/python/verity_flock/struct_lower.py", "count": 19},
+    {"file": "verity/ml/flock/python/verity_flock/struct_lower.py", "count": 12},
     {"file": "verity/ml/flock/python/verity_flock/subcircuit_templates.py", "count": 42},
     {"file": "verity/ml/flock/python/verity_flock/templates/attention_head.py", "count": 7},
     {"file": "verity/ml/flock/python/verity_flock/templates/attention_head_v18.py", "count": 3},
@@ -5728,7 +5728,7 @@
     {"file": "verity/ml/flock/tests/stratified_agree.py", "count": 82},
     {"file": "verity/ml/flock/tests/test_ampere_dot_ids.py", "count": 7},
     {"file": "verity/ml/flock/tests/test_audit_profile.py", "count": 7},
-    {"file": "verity/ml/flock/tests/test_backend.py", "count": 2},
+    {"file": "verity/ml/flock/tests/test_backend.py", "count": 1},
     {"file": "verity/ml/flock/tests/test_challenger_audit.py", "count": 5},
     {"file": "verity/ml/flock/tests/test_circuit.py", "count": 3},
     {"file": "verity/ml/flock/tests/test_class_statement.py", "count": 11},
@@ -5890,6 +5890,7 @@
     {"file": "verity/ml/windows/tests/test_blocks.py", "count": 17},
     {"file": "verity/ml/windows/tests/test_interface.py", "count": 91},
     {"file": "verity/ml/windows/wiring.py", "count": 10},
-    {"file": "Security/Proofs/Pouw/Window/Flock.lean", "count": 6}
+    {"file": "Security/Proofs/Pouw/Window/Flock.lean", "count": 6},
+    {"file": "verity/ml/flock/tests/test_backend_bench.py", "count": 1}
   ]
 }

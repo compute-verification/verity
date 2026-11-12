@@ -21,10 +21,11 @@ public import Proofs.Properties.Verity.Recursive.Refusals
 public import Proofs.Properties.Verity.Recursive.Assumptions
 
 /-!
-# Sampled proofs' recursive configuration: the component's property and its target
+# SPOT's recursive configuration: the component's property and its target
 
-Sampled proofs' recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, which
-`VStar.Recursive.Sampled` runs when the auditor's parameters name `"form": "recursive"`) checks, on the prover's blobs,
+SPOT's recursive configuration (`VStar.Recursive`, `verity/sampled-proofs/recursive/v1`, the form
+`"form": "recursive"` of `VStar.Recursive.Sampled`'s parameters, which that component refuses until SPOT's
+soundness covers it, `VStar.Recursive.Sampled.RECURSIVE_REFUSED`) checks, on the prover's blobs,
 the recursive session that `Flock.Guarantees.RecursiveKSAt` is stated about. This module states two things.
 
 * **The property** (`acc_of_accepts`). Take a run of the deployed recursive verifier that `RecursiveKSAt` reads
@@ -647,7 +648,7 @@ abbrev Sample (S : SessionIn V q k θ F c σ) (ξ : S.Ξ) : Type :=
 /-- **The weight of bit `i` of gate `g` reading `bit`** at the session `S`: the probability, over the sample and a run with
 the extractor's seed, that the run accepts, `g` is a wire of a unit `ξ` samples, and the extractor returns a witness in
 the recursive relation whose reading (`readX`) has `bit` there. -/
-noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript)
+noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → Verity.Circuit.Transcript (V.circuitOf θ F))
     (g : Fin (V.circuitOf θ F).N) (i : ℕ) (bit : Bool) : ℝ :=
   Claims.Ex fun ξ : S.Ξ => Claims.Pr fun s : q.Sample V S ξ =>
     (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧
@@ -659,8 +660,8 @@ noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims
 recursive session): each bit of each gate is the value the extractor's witnesses read there most often, over the
 samples and the accepted runs that sample the gate's unit (`false` on a tie). It is one transcript per strategy, a
 construction applied to `S`, never chosen per strategy. -/
-noncomputable def extract (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → (V.circuitOf θ F).Transcript) :
-    (V.circuitOf θ F).Transcript := fun g =>
+noncomputable def extract (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → Verity.Circuit.Transcript (V.circuitOf θ F)) :
+    Verity.Circuit.Transcript (V.circuitOf θ F) := fun g =>
   BitVec.ofNat ((V.circuitOf θ F).w g) (∑ i ∈ Finset.range ((V.circuitOf θ F).w g),
     if q.weight V S readX g i false < q.weight V S readX g i true then 2 ^ i else 0)
 

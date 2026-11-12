@@ -248,6 +248,8 @@ theorem draws₀ {n : ℕ} (hn : 0 < n) (oc : ℕ) : ∀ x s P, (L₀ n oc).pars
 theorem sessions₀ (H : Msg → Msg) (oc : ℕ) : (L₀ 1 oc).Sessions H where
   draws := draws₀ Nat.one_pos oc
   slots _ _ := le_rfl
+  shared _ _ _ _ _ _ _ _ _ _ _ _ _ := rfl
+  keys _ _ := Finset.card_image_le.trans (Finset.card_range _).le
   unions _ := le_rfl
   refuses _ _ _ _ _ _ := ⟨s₀, P₀, rfl, rfl, inScope₀⟩
   interior _ _ _ _ _ _ _ := rfl
@@ -260,14 +262,14 @@ theorem sessions₀ (H : Msg → Msg) (oc : ℕ) : (L₀ 1 oc).Sessions H where
 
 /-! ## Its extractor's own calls -/
 
-/-- At runs that all accept, a sampled proof block's extraction is the replay, served as one rerun, then the check of
-the one opening its witness reveals: one SHA-512 call. -/
-theorem ownLog_unitExt₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Trace)
+/-- At runs that all accept, a session's extraction at its one proof block is the replay, served as one rerun, then the
+check of the one opening its witness reveals: one SHA-512 call. -/
+theorem ownLog_sessExt₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Trace)
     (hrun : ∀ r, (run' r).out = .acc) (s : AuditStatement) (u : ℕ) (r : Fin ((L₀ n oc).V.k x) → Unit) (v : Seen)
     (c : A₀.EC ((L₀ n oc).sh x u)) :
-    (ownLog H run' ((L₀ n oc).unitExt x s u r v c)).length = 1 := by
+    (ownLog H run' ((L₀ n oc).sessExt x s [u] u r v c)).length = 1 := by
   have hacc : ∀ r', (run' r').seen.out = .acc := hrun
-  unfold Compiled.unitExt
+  unfold Compiled.sessExt Compiled.sessWit
   have hs : (L₀ n oc).session x u v = some (x, v) := rfl
   have hv : ∀ w, (L₀ n oc).view x u w = w := fun _ => rfl
   simp only [hs]
@@ -275,7 +277,7 @@ theorem ownLog_unitExt₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin 
   simp only [serve, viewing, RP.bind, ownLog, hv, hacc, ite_true]
   have hr : (L₀ n oc).reveal s u v () = [([], ⟨0, true, []⟩)] := rfl
   have hc : (L₀ n oc).commit = Cm₀ := rfl
-  simp only [checkRevealed, hr, hc]
+  simp only [flatMapRP, checkRevealed, hr, hc]
   rfl
 
 theorem ownLog_innerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fin ((L₀ n oc).V.k x) → Unit) → Trace)
@@ -286,9 +288,16 @@ theorem ownLog_innerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fi
   refine Eq.trans (ownLog_flatMapRP_const H run' _ 1 _ fun iu hiu => ?_) ?_
   · obtain ⟨i, u⟩ := iu
     obtain rfl : u = 0 := (List.mem_replicate.1 (List.of_mem_zip hiu).2).2
+    have hi : ((L₀ n oc).checked x li.2.1)[i.val]? = some 0 := getElem?_of_mem_zip_finRange hiu
+    have hlt : 0 < (L₀ n oc).nPU x := Nat.one_pos
+    have hk : ∀ p q, (L₀ n oc).skey x ((L₀ n oc).checked x li.2.1) p =
+        (L₀ n oc).skey x ((L₀ n oc).checked x li.2.1) q → p = q := fun _ _ h => h
     dsimp only
-    rw [dite_eq_left (show 0 < (L₀ n oc).nPU x from Nat.one_pos)]
-    exact ownLog_unitExt₀ H n oc x run' hrun s 0 _ _ _
+    rw [dite_eq_left (show 0 < (L₀ n oc).nPU x ∧
+        ((L₀ n oc).sessSlots x ((L₀ n oc).checked x li.2.1) i).head? = some i.val from
+          ⟨hlt, by simp only [Compiled.sessSlots_eq_singleton hk hi hlt, List.head?_cons]⟩),
+      Compiled.sessBlocks_eq_singleton hk hi hlt]
+    exact ownLog_sessExt₀ H n oc x run' hrun s 0 _ _ _
   · show ((List.finRange ((L₀ n oc).nPU x)).zip (List.replicate n 0)).length * 1 = min ((L₀ n oc).nPU x) n
     rw [List.length_zip, List.length_finRange, List.length_replicate, Nat.mul_one]
 

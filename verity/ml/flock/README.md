@@ -31,8 +31,10 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     `flock-circuit`'s sweep.
   - `proof_server.py`: SPOT's proof server. It runs one long-lived `flock-circuit prove --zk --stream -` per GPU and
     one `serve --zk --queue -` per block type; a session's verdict of record runs off the provers' path.
-  - `bench.py`, `ir_bench.py`, `negatives.py`, `register.py`: the benchmark sweeps, statement negatives and cell
-    registration.
+  - `instance_file.py`: a spine input set's range as the instance file (`flock-pure-instances/v1`) a cell's prover and verifier
+    read, with its frame-v3 statement commitments.
+  - `bench.py`, `ir_bench.py`, `negatives.py`, `register.py`, `instances.py`: the benchmark sweeps, statement negatives, cell
+    registration and the bench's frozen input sets.
 - `live/`: the Rust crate `flock-live`, which the pod scripts drop into a Flock `b684b12` checkout as
   `crates/flock-live`: the prover and verifier binaries (`flock-circuit`, `flock-pure`, `flock-ir-frame`,
   `flock-ir-sampling`, `flock-ir-block`, `flock-vllm-v1`, …) and the live-coin session. Under `--zk` with

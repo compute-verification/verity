@@ -412,10 +412,11 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `ServiceSound` and `PouwSound` are undischarged premises.
   - `JointPooledLive` isn't instantiated with parts 2 and 3.
   - Today the parts compose by hand.
-- **The verifier's verdicts.** One-stage v2 (`verity/sampled-proofs/one-stage/v2`) runs the proof
-  check (`verity verify proof`, today's `flock-verify --zk`) itself, as the recursive form runs V*'s compiled check; v1,
-  which takes verdicts as evidence, is refused. Where v2 accepts, its session is in V3's and V5's events
-  (`Verity.Sampled.checkBlobs_event`); only V5's is coupled to it (`Verity.Sampled.CouplingTarget`).
+- **The verifier's verdicts.** SPOT's one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
+  the proof check (`verity verify proof`, today's `flock-verify --zk`) itself; v1, which takes the verdicts as
+  evidence, and the recursive form, which SPOT's soundness doesn't cover, are refused. Where v2 accepts, its session
+  is in V3's and V5's events (`Verity.Sampled.checkBlobs_event`); only V5's is coupled to it
+  (`Verity.Sampled.CouplingTarget`).
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileSampleIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.

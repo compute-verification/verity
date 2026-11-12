@@ -50,9 +50,15 @@ def test_a_gpu_host_on_node_1_runs_at_a_gpu_jobs_weight_and_takes_no_gpus_from_t
                         node="vy-nebius-1", gpu_host=True)
     assert "CPUWeight=idle" not in out["wrap"] and "AllowedCPUs=96-127" in out["wrap"] and out["workload_wrap"] == []
     assert out["gpu_host"] is True
+    env = out["wrap"][:out["wrap"].index("systemd-run")]
+    assert env[-3:] == [*submit.N1_LEASE_ENV, f"GPU_LEASE={submit.GPU_LEASE_N1}"], \
+        "the workload leases from node 1's pool, as the queue's own GPU jobs do"
+    two = submit.resolve(c, _job(cpus=4, memory_gib=16, node="vy-nebius-2"), "r1", T, gpu_host=True)
+    assert f"GPU_LEASE={submit.GPU_LEASE}" in two["wrap"] and not any(w.startswith("GPU_LEASE_DIR=") for w in two["wrap"])
     plain = submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, cpus=4,
                           node="vy-nebius-1")
     assert "CPUWeight=idle" in plain["wrap"] and plain["gpu_host"] is False
+    assert not any(w.startswith("GPU_LEASE=") for w in plain["wrap"])
     with pytest.raises(submit.Refused, match="takes its GPUs with gpu-lease itself"):
         submit.submit(c, reg, run_id="r1", now=T, project="verity", submitter="w", max_s=600, memory_gib=16, gpus=1, gpu_host=True)
 

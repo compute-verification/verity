@@ -14,8 +14,9 @@ decoders produce. It takes no premise: the check is a function of its three inpu
 * **the registration** keeps R1–R7 against the verifier's own copies (`Registered`): the record's format, protocol, law
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window, the
-  window's stream and prover, and its seed salt (`R6`); and for a v2 record its registered values (`R7`), its window
-  opening the pool the previous window of record left, or the empty pool, for a verifier with a pool (`PoolChained`);
+  window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); and for a v2 record its registered
+  values (`R7`), its window opening the pool the previous window of record left, or the empty pool where the public
+  rule or its reset restarts it, for a verifier with a pool (`PoolChained`);
 * **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
   stratified or work sampling design, its strata and closure;
 * **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
@@ -124,9 +125,31 @@ read none. -/
 def WindowSeedSalt (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD (getD rec "window") "seed_salt") (match v.seedSalt with | some s => .str s | none => .null)
 
+/-- The record's window names the reset serving chose for the verifier's pool (`Registration.Pool.reset`), and none for
+a verifier with no pool. -/
+def WindowPoolReset (rec : Json) (v : Registration.Verifier) : Prop :=
+  jeq (getD (getD rec "window") "pool_reset") (match v.pool with | some p => .bool p.reset | none => .null)
+
+/-- The record's window names its week on the verifier's clock (`Registration.Pool.week`), and none for a verifier with
+no pool. -/
+def WindowPoolWeek (rec : Json) (v : Registration.Verifier) : Prop :=
+  jeq (getD (getD rec "window") "pool_week") (match v.pool with | some p => Lean.toJson p.week | none => .null)
+
+/-- The record's window names whether its week's one reset is spent at it: that it resets, or that the previous record,
+of its week, named it spent (`Registration.Pool.spentBefore`); none for a verifier with no pool. -/
+def WindowPoolSpent (rec : Json) (v : Registration.Verifier) : Prop :=
+  jeq (getD (getD rec "window") "pool_spent")
+    (match v.pool with | some p => .bool (p.reset || p.spentBefore v.log) | none => .null)
+
+/-- Serving resets the pool at most once a week: not where the week's reset is spent before this window
+(`Registration.Pool.spentBefore`). -/
+def PoolResetOnce (v : Registration.Verifier) : Prop :=
+  (match v.pool with | some p => !(p.reset && p.spentBefore v.log) | none => true) = true
+
 /-- R6: the record names the digest of the prover's last earlier record (null when the log is empty, or when that record
 has no digest), no earlier record has its window, a verifier bound to a stream and a prover (`binding`) sees its
-window name both, and its window names the verifier's seed salt (`WindowSeedSalt`). -/
+window name both, and its window names the verifier's seed salt (`WindowSeedSalt`) and its pool's reset, week and
+spent mark (`WindowPoolReset`, `WindowPoolWeek`, `WindowPoolSpent`), at most one reset a week (`PoolResetOnce`). -/
 def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   jeq (getD rec "previous") (match v.log.back? with
     | some e => ((Registration.digestHex e).toOption.map Json.str).getD .null
@@ -134,7 +157,7 @@ def R6 (rec : Json) (v : Registration.Verifier) : Prop :=
   (∀ e ∈ v.log, jeq (getD e "window") (getD rec "window") = false) ∧
   (∀ sp, v.binding = some sp → jeq (getD (getD rec "window") "stream") (.str sp.1) = true ∧
     jeq (getD (getD rec "window") "prover") (.str sp.2) = true) ∧
-  WindowSeedSalt rec v
+  WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v
 
 /-- A v2 record's registered values: the string values, each once (`names`), as many as the list's entries and as the
 verifier's own entries, and each one of the verifier's. -/
@@ -224,17 +247,32 @@ def R7 (rec : Json) (v : Registration.Verifier) : Prop :=
 /-- R7's pool chain (`Registration.poolChained`): for a verifier with a pool, the record's entry for the value its window
 opens the pool from (`pin`; `Registration.entryOf`, the last entry naming it) has the domain and root of the pool the
 window opens (`Registration.poolOpen`): the previous record's entry for the value the pool was left in (`pout`) when the
-window carries the previous window's pool (`Registration.Pool.chains`: the verifier accepted the window of the log's last
-record, which registered its program), else the empty pool's, the root R7 recomputes for `pin` filled from `genesis`. -/
+window carries the previous window's pool (`Registration.Pool.chains`: the verifier didn't refuse the window the public
+lag back, serving didn't reset it, and the log's last record registered its program), else the empty pool's, the root
+R7 recomputes for `pin` filled from `genesis`. -/
 def PoolChained (rec : Json) (v : Registration.Verifier) : Prop :=
   ∀ p, v.pool = some p → ∃ e d r, Registration.entryOf rec p.pin = some e ∧
     Registration.poolOpen rec v p = some (d, r) ∧
     jeq (getD e "domain") (.str d) = true ∧ jeq (getD e "root") (.str r) = true
 
-/-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7 and its pool
-chain when the verifier expects values registered. -/
+/-- R7's roots at the values the verifier pinned (`Registration.checkRegistered`'s `R7-held`), which R7 implies: of the
+verifier's own entries (`Registration.ownEntries`), each value it pinned before the record (`pinned`, the first root it
+pins the value to) and neither fills (`supplied`) nor takes from an earlier run (`outputs`) has that root in the record's
+entry for it (`Registration.entryOf`, the last naming it). A window's certified input is such a value: the verifier pins
+the window's arrivals at the root the network certifier signed for the window. So an arrival open at the previous
+window's edge, which continues as a fresh arrival `(id, P + e)` with the `e` outputs the certifier released of it, is
+registered at that root, and a record registering the window's arrivals under any other root, such as arrivals counted
+from the outputs serving computed (`P + n`) or the previous window's arrivals again, is refused. -/
+def PinnedHeld (rec : Json) (v : Registration.Verifier) : Prop :=
+  ∀ mine, Registration.ownEntries v = .ok mine → ∀ want ∈ mine, v.supplied.any (·.1 == want.value) = false →
+    v.outputs.any (·.1 == want.value) = false → ∀ x ∈ v.pinned.find? (·.1 == want.value), ∀ e,
+      Registration.entryOf rec want.value = some e → jeq (getD e "root") (.str x.2) = true
+
+/-- The registration keeps R1–R7 against the verifier's own copies, with `law` the agreed law as derived; R7, its pool
+chain and its pinned roots (`PinnedHeld`) when the verifier expects values registered. -/
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
-  R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧ (ExpectsV2 v → R7 rec v ∧ PoolChained rec v)
+  R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧
+    (ExpectsV2 v → R7 rec v ∧ PoolChained rec v ∧ PinnedHeld rec v)
 
 /-! ## The sample: the registered law over the registered population -/
 

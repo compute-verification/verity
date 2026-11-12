@@ -18,7 +18,8 @@ premise a property of the network certifier takes, that the certifier device run
 sampling's vocabulary: what an accepted sampled audit of the computation's program says about its egress, `Accepted` by
 the circuit's Program at `δ`, on `Definitions.Claims.Sampling`; its guarantee's statement is `Guarantees/SampledAudit`.
 `SampledCharge`, imported the same way: what the incorrect proof blocks add to the leak under a sampled audit, their committed
-bits and the choice of incorrect set; its guarantee's statement is `Guarantees/SampledCharge`.
+bits and the choice of incorrect set; its guarantee's statement is `Guarantees/SampledCharge`. `Witness`, imported the
+same way: the layouts and openings at which the guarantees' nontrivial lemmas fail.
 
 This module, `Assumptions` and `Guarantees` are the trusted text: they import only one another, the claims' definitions
 (`Definitions.Claims`) and Mathlib, so their diff is everything a statement reviewer reads. `SecurityProofs` holds the proofs and every lemma, which nobody reviews
