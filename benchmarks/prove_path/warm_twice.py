@@ -44,7 +44,8 @@ didn't sync; 70 too little free space to start; 71 free space under the floor; 7
 75 the take failed; 76 the cache is still there (whatever else happened); 77 ended by a signal.
 
 ``--stop-at-gb`` and ``--stop-at-templates`` end a pass early and count it as run: a tryout of the command line on one small
-circuit, with ``--jobs 1 --passes 1``. ``--stand-in`` and ``--free-from`` are the tests' (``tests/test_warm_twice.py``), which
+circuit, with ``--jobs 1 --passes 1``, or with a second window and the take, which then read both windows and take what the
+first pass kept. ``--stand-in`` and ``--free-from`` are the tests' (``tests/test_warm_twice.py``), which
 start no unit (``--guardian detached``); a stand-in's ``$2`` is its pass's window and ``$3`` is ``warm`` or ``take``.
 """
 from __future__ import annotations
@@ -466,7 +467,7 @@ class Job:
         if a.passes > 1 and last["state"] == "done":
             self.r["pass2_all_kept"] = bool(last["templates"]) and last["kept"] == last["templates"]
             say(f"PASS 2: {last['kept']} of {last['templates']} template(s) were in the cache")
-        if a.take and last["state"] == "done":
+        if a.take and last["state"] in ("done", "stopped early"):
             self.check()
             self.run_pass(len(windows) + 1, argv(windows[-1], "take"), env)
             self.note_free("after_take")

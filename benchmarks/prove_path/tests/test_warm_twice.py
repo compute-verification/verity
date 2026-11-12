@@ -161,6 +161,18 @@ def test_a_second_window_the_take_cannot_read_is_refused_before_anything_is_comp
     assert r["cache"]["at_removal"]["circuits"] == 0 and r["second_window_read"]["exit"] == 9
 
 
+def test_a_tryout_ended_early_still_reads_the_second_window_and_takes(tmp_path: Path) -> None:
+    os.mkfifo(tmp_path / "hold")
+    # a warm that keeps one circuit, if the cache has none, and then composes on for good: only the job's stop ends it
+    stand_in = BY_WINDOW.replace('for t in one "$w"; do', 'for t in one; do') + 'read -r _ < "$HOLD"\n'
+    p = job(tmp_path, stand_in, "--min-free-gb", "0", "--floor-gb", "0", "--then-window", str(tmp_path / "two"), "--take",
+            "--stop-at-templates", "1", HOLD=str(tmp_path / "hold"))
+    rc, _lines, r = ended(tmp_path, p)
+    assert rc == 0 and [x["state"] for x in r["passes"]] == ["stopped early", "stopped early", "done"]
+    assert r["second_window_read"]["exit"] == 0 and r["passes"][2]["take"] == {"templates": 1, "copy": 1} and r["take"]["copy"] == 1
+    assert nobody_reads(tmp_path / "hold")
+
+
 def test_a_second_window_without_a_second_pass_is_refused(tmp_path: Path) -> None:
     p = job(tmp_path, COMPOSE, "--min-free-gb", "0", "--then-window", str(tmp_path / "two"), "--passes", "1")
     rc, lines, r = ended(tmp_path, p)
