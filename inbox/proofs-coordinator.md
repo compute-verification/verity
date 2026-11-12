@@ -91689,3 +91689,71 @@ The clocks split is fine as it is: the text moved word for word [run].
 - TOP-387's frozen paths [read].
 
 **Scripts and outputs.** `timed.py`, `pb_read.py`, `rev.py`, `locks.py`, `exes.py`, `textpaths.py`, `without.py`, `fixtures.py`, each read only, with their outputs, the checker's four outputs and this entry: `/opt/cursor/artifacts/prf498/`, and the scripts in the notes under `lanes/proofs/tools/headsplit/prf498/` [run]. I wrote nothing to Linear or Slack and changed no tracked file [run].
+
+## OUTBITS, Thu 12 Nov 15:10Z: PRF-594 figure, modeled: the table's rows already weigh a block by its row, so "the row" moves none of them; at the partition's count they would be lower by under 0.001% (Row A on `main`: under 0.006% with an assumption about the head blocks); "count a returned input" moves none; a served window's reported term rises by at most 2.1% under the row on the partition files `main` has; the long row's own term rises 0.66%, and 13% beside its history reads; one line of my 13:52Z entry is corrected
+
+The mailbox was read at 15:10Z and holds nothing after your 14:19Z [run]. Tags as in my 15:06Z entry. **Everything here is modeled: arithmetic on the cost model and on sizes of Definitions. Nothing ran on the served engine.** `main` at `1d71606cc12d`; CPU node vy-nebius-cpu-14.
+
+**A correction to my 13:52Z entry.** I wrote "The weight a figure gives a wrong proof block is the partition's". That holds for a served audit's reported terms only (`prove_path.charge_terms`, `scan_zk.py:1428`, both on `_template_bits`). The table's rows (Row A, the rows C) weigh a block type by the census's `out_bits` on `benchmarks/spot_figures/cards/workload.glm-5.3.json`, and that is the row: for the four block types I could compare, the card's figure equals the served template's row, bit for bit [run].
+
+**The three weights, for the four block types of the card that return a gate on several leaves** [run: `r20261112-144449-ad04`]
+
+| `Fp8GroupQuantUe8m0_v2`, G = 128 | the partition's count today (`_template_bits`) | counting a returned input | the row (the card's `out_bits`) |
+|---|---|---|---|
+| K = 256 | 2,068 | 2,068 | 2,112 |
+| K = 1,536 | 12,408 | 12,408 | 12,672 |
+| K = 2,048 | 16,544 | 16,544 | 16,896 |
+| K = 6,144 | 49,632 | 49,632 | 50,688 |
+
+None of them returns an input, and the card holds none of the three templates that do (the long row's picks; the card has the short row) [run: `rg` on the card], so "count a returned input" is today's count for every row of the table [derived]. What the run changes is these four block types and, as an assumption, the head types. The other served templates below their row are the long row's, which the card does not hold. A block type of the card that no partition file names I did not size, so for those "at its row" is not checked. A token's proof-block output bits: 1,752,906,535 on the card; 1,750,412,403 (−0.1423%) with these four at the partition's count; 1,749,099,942 (−0.2172%) if the 65 head block types are also 96 bits lower each, which is an assumption carried over from the two stand-ins at NVIS 1 and 2 and not a measurement [run; the assumption is a guess].
+
+**The seven rows** [run: `r20261112-144449-ad04`, the table's own kit, its inputs unchanged but for the card's weights and four lines named below]
+
+The figure is the table's: the bound on what the wrong proof blocks can carry, in GB (8·10⁹ bits) over a year of the world's compute, at the design whose audit costs 10% of the compute.
+
+| Row | the partition's count today | counting a returned input | the row (what the table states) | today's count against the row |
+|---|---|---|---|---|
+| A, the partition `main` defines, the program's read at 609.3 s | 9,395.58 | 9,395.58 | 9,395.62 | −0.0004% |
+| A, `main`, read at 692.0 s | 10,147.23 | 10,147.23 | 10,147.27 | −0.0004% |
+| A, the best designed configuration, read at 609.3 s | 3,833.48 | 3,833.48 | 3,833.48 | −0.0002% |
+| A, the best designed configuration, read at 692.0 s | 4,080.79 | 4,080.79 | 4,080.80 | −0.0002% |
+| C, the check as timed | 935.31 | 935.31 | 935.32 | −0.0009% |
+| C, the fold | 710.84 | 710.84 | 710.84 | −0.0009% |
+| C, the one pass | 683.50 | 683.50 | 683.50 | −0.0009% |
+
+- Under "the row" Row A and the three rows C do not move: they are already there. The run's control reproduces the table's seven figures from the card as it is (9,395.6; 10,147.3; 3,833.5; 4,080.8; 935.3; 710.8; 683.5) [run].
+- Under "count a returned input" they do not move either, against today's count.
+- The whole distance between the two is under 0.001% of any row, though a token's output bits differ by 0.14%. I did not trace why so little; my guess is that the heaviest block types set the term and these four are not among them [guess].
+- With the head assumption as well, the two `main` rows read 9,395.06 and 10,146.66 (−0.0059%). In the best designed configuration the assumption says nothing: there the design sets the head units' sizes itself. One of its cells shows −1.49% (3,776.26), and that is not a weight effect: the kit's 10% budget moved from 6.44954·10¹⁴ to 6.45553·10¹⁴ because the planner's rows saw lighter head cells before the design split them, and the design it then picked is another one. I report it so that nobody reads it as a result [run for the figures; read for the cause].
+
+**A served audit's reported term (β at δ through `charge_terms`)** [derived; not run]
+
+I did not run `charge_terms`: it takes an accepted audit's own registration and draw, and I had no served window's at hand. What can be said without one: the bound is monotone in each template's weight and scales with them, so under the row a window's term is at most today's times the largest ratio of row to today's count among its templates. By partition file on `main` [from the sizing runs]:
+
+- `glm53_all_families_tp8_step16`, `glm53_prefill_tp8_step0` and its core: at most ×1.0213 (the quant block at K = 256; 1, 4 and 4 templates below their row).
+- The two MoE files and the two SiLU files: ×1, no template below its row.
+- `glm53_sparse_mla_tp8_step16`: ×1 for the 9 templates sized; its two head blocks are not sized (the stand-ins give ×1.0058).
+- "Count a returned input" moves none of them: no template of a partition file returns an input.
+
+**The long row's own term** (the sum of its blocks' weights) [derived from `r20261112-130020-3bb7` and `r20261112-133251-374d`; table in `/opt/cursor/artifacts/prf594-long-row-term.json`]
+
+| | today | counting a returned input | the row |
+|---|---|---|---|
+| 131,072 keys, 4,213 units | 19,859,752 bits | 19,859,800 (+48) | 19,991,056 (+0.66%) |
+| the same without its 2,048 history reads (18,876,416 bits under all three) | 983,336 | 983,384 | 1,114,640 (+13.35%) |
+| 40,960 keys as `main` splits it, 4,163 units | 19,179,537 | 19,179,537 | 19,179,552 (+15 bits) |
+
+At 131,072 keys the move is the 32 digit counts (131,072 bits today, 262,144 by the row), then the 8 positions blocks (+128) and the 4 picks (168, 216 with returned inputs, 272 by the row). A window that samples only digit counts would weigh twice today's; the pick at round 2 is the largest single ratio, 48 bits against 21.
+
+**The two launches** [run]
+
+- `r20261112-143428-8f35` failed, rc 9, after the control and the two `main` rows: the kit's reader stopped on a list of the wrong length. Cause: the kit tells a head block from a quant block by its weight, 16,544 bits, and the partition's count of the K = 2,048 quant block is also 16,544 bits, so with the changed card it split that quant cell as a head block.
+- `r20261112-144449-ad04`, rc 0: the same inputs with four lines of the kit's `wf_width.py` changed so that a head block is told by its weight and its commitment bytes together (`wf_width.patch`, in the artifacts). Its control is unchanged from the first launch's, and under every card the 48 quant cells sit at the card's weight.
+- Memory: `description_sizes.json` gives 0.84 GB for each of the four templates the run binds; I asked 16 GB on 16 CPUs.
+
+**Not computed**
+
+- A served window's term through `charge_terms` and `scan_zk.py` themselves (above: a bound in its place).
+- The head blocks at NVIS 16 and 64, under any weight.
+- CIR-251's `_v2` units of the long row at 40,960 keys.
+- The weight the two-stage statement's own partition gives a block, its inputs plus its row (my 15:06Z entry): no row of the table uses it, and under it 51 served templates pass the widest class.
