@@ -9,7 +9,8 @@
 # out/same_sass.json, their listings in out/sass): the run ends there (exit 5) unless the build holds every kernel of the base's as it was and
 # none of its own spills, and also when there is no base, the base does not compile or cuobjdump fails. BUILD_ONLY=1
 # ends after the build, so a machine with no GPU checks that it compiles (TOOLKIT=1 assembles CUDA 12.9's nvcc first,
-# `benchmarks/pouw/harness/jobs/toolkit.sh`).
+# `benchmarks/pouw/harness/jobs/toolkit.sh`). The libraries are built in a scratch directory that goes at exit, or in
+# BUILD_DIR, which stays (`host_read_tiers.sh` builds with BUILD_ONLY=1 into its own).
 #
 # Then host_read.py under one lease on CARDS, of at most LEASE_MIN minutes and taken without waiting: a card whose
 # lock is held, or with a compute process or more than a GiB in use on it, ends the run (exit 75) with nothing
@@ -55,7 +56,8 @@ if [ -z "${ARCH:-}" ]; then
     *) say "PREFLIGHT: ARCH (90a, 120a) is not given and the card's name does not tell it"; exit 3 ;;
   esac
 fi
-B=$(mktemp -d /tmp/host-read.XXXXXX); trap 'rm -rf "$B"' EXIT
+B=${BUILD_DIR:-}
+[ -n "$B" ] || { B=$(mktemp -d /tmp/host-read.XXXXXX); trap 'rm -rf "$B"' EXIT; }
 { id -un; hostname; git -C "$TREE" rev-parse HEAD; echo "cores ${CORES:-not pinned} ($(nproc)) cards $CARDS arch $ARCH"
   "$NVCC" --version | tail -n 2; cat /sys/fs/cgroup/cpu.max; nvidia-smi -L; command -v cuobjdump nvdisasm
 } > "$O/machine.txt" 2>&1
