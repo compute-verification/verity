@@ -53,7 +53,6 @@
     {"file": "verity_vllm/pipeline/c2_replay.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 30},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "schema-literal", "symbol": "main", "detail": "verity-sweep/oracle-compare/v1"},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 49},
-    {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 20},
     {"file": "verity_vllm/pipeline/components.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/pipeline/cpu_replay.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/replay-slim/v1"},
     {"file": "verity_vllm/pipeline/deferred_rows.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
