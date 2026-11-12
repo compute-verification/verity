@@ -84205,3 +84205,34 @@ of 2, 4, 8 times the lines, a schedule that does not exist [guess]; all changes 
   length.
 - Not checked: what a table of 2^36 bits or more needs of a device's memory; whether the planner would pick another
   configuration than the best designed one once `p` or `b` moves.
+
+## ACCOUNTS, Thu 12 Nov 10:36Z: the pull request is open, unmarked: #9249 at `e28f52c10a7d`; it moves no lock record, and the interface's lock gains one line
+
+Mailbox read 10:36Z: the 09:50Z section is still the last. [read]
+
+**What you can act on**
+
+- **#9249** (https://github.com/compute-verification/verity/pull/9249), head `e28f52c10a7d`, branch `cursor/proofs-accounts-e4bb`, 8 files, 848 lines added, unmarked, `Lane proofs`, `Refs MEM-279`. [run: `research queue open`, 10:36Z; `gh pr view 9249`]
+- **What it moves in a lock: no record.** The interface's lock lists 0 guarantees before and after and gains one line, `"format": 1`. The packages that require the interface (`security` with its proofs, `security/Properties`, the certifier's Lean) pass the same run against their locks as they are. [run: `r20261112-100213-96fe`, records run at `0ac9c966a129`, pass, 30 minutes; its lock for the interface is byte for byte the head's]
+- **One thing for you in Linear:** `open` warned that no label of MEM-279 names a live goal of the Goals page (its labels: `asker:daniel`, `from:compute-research`), so the body has no `Goal` line. A ready mark warns on that. [run: the same command's stderr]
+- **One run is still out:** the quick tier of the 63 suites, `r20261112-100327-af54`, which left its slot's queue between 10:18Z and 10:23Z. I put its verdict in the body when it ends.
+
+**What changed since the 10:13Z entry** [run: `git log 0ac9c966a129..e28f52c10a7d`]
+
+Two commits of prose, no declaration: `e5918b326689` (the README's paragraph on a period's error now says it reads the amount's pool) and `e28f52c10a7d` (the module's docstring in `Account.lean` says the same, and names the series). Both stated the rule as it was before `c962872c9231`.
+
+**Runs** [run]
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-101635-787d` | `verity lean try` of `Account.lean` at the head `e28f52c10a7d` | exit 0, 48 s |
+| `r20261112-100213-96fe` | the interface's records run at `0ac9c966a129` | pass: the interface 2,308 declarations in 14 modules, 0 guarantees; `security` 1,103 guarantees, `security/Properties` 465, each pass |
+| `r20261112-101515-e86d` | the quick tier of the suites that read the README's change, at `e5918b326689` | 9 suites, 9 passed, 0 failed |
+| `r20261112-100327-af54` | the quick tier of the 63 suites, at `0ac9c966a129` against `main` `33faab2be81c` | running |
+| ratchet gate | `33faab2be81c..e28f52c10a7d` | 0 failed |
+
+**The merges** are as in the 10:13Z entry (B6): against lean's tip `f3837f57d113` the head stops in the same 23 files `main` does, none of them mine. [run, 10:12Z, at `0ac9c966a129`; the two commits since touch `Account.lean` and the README only, neither among the 23]
+
+**Not established:** the records run was not repeated at the head (the two commits after it change no declaration, and the interface's lock lists no guarantee) [derived]; the 63 suites' verdict.
+
+**Next:** the quick tier's verdict into the body; then every three hours, or when you write.
