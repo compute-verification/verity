@@ -173,6 +173,12 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `recursion_figures/` | a recursion bench result's session scaled over the census's fleets and the monitoring periods: its cost, knowledge-soundness error and stop-leak bound per window and pooled | maintained |
 | `private_circuit/` | the universal unit, which runs any private circuit of a size class, proved under `--zk` and verified by the Lean verifier | frozen |
 
+### Checks
+
+| Directory | What it measures | Status |
+| --- | --- | --- |
+| `lean_records/` | a records run of `security/Proofs` under a base version of `tools/verity/lean/` and this tree's, and at a lower reservation: the build step's seconds, the tools' own CPU, peak memory and `lean` jobs at once, each arm on a lemma of its own | maintained |
+
 ### Circuits
 
 | Directory | What it measures | Status |

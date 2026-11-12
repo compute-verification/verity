@@ -584,4 +584,5 @@ lake build   # in security/Properties/, then security/Proofs/ (fetches ArkLib)
 python3 tools/verity/lean/check.py security/   # from the repository root
 ~~~
 
-The check audits `Proofs/` with the spec, from one build, and refuses a machine below its memory floor.
+The check audits `Proofs/` with the spec, from one build, and refuses a run that reserved less than its floor, printing
+the command at its ask (`python3 tools/verity/lean/check.py --ask security/` prints it).

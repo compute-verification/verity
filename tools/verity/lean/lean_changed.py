@@ -8,6 +8,7 @@ prints its usage and exits 2.
     python tools/verity/lean/lean_changed.py --try FILE [--siblings]   a lane's edit loop on a node (`verity lean try FILE --on NODE`)
     python tools/verity/lean/lean_changed.py [--no-wait] --build FILE...   the ready mark's preflight's Lean step (`build_files`)
     python tools/verity/lean/lean_changed.py --inputs-key PKG... [--head SHA] [--repo DIR]   each PKG's inputs key at SHA
+    python tools/verity/lean/lean_changed.py --ask PKG... [--head SHA] [--repo DIR]   the GB a `--records` run of PKG asks (`ask`)
 
 `--try` elaborates one file (FILE: its path from the repository's root) on the slot tree `--records` builds on, under the same
 `build` slot, tree lock, sync, `repair` and dependencies, for the closure of the package that owns FILE only: there it runs
@@ -234,18 +235,48 @@ def closure(pkg: str, read=read_here) -> list[str]:
                                *(d for q in provers(pkg, read) for d in (q, *path_deps(q, read)))]))
 
 
-def lists_guarantees(pkg: str) -> bool:
-    """Whether ``pkg``'s `lean-audit.json` lists a guarantee; True when it can't be read, which the audit then fails."""
+def lists_guarantees(pkg: str, read=read_here) -> bool:
+    """Whether ``pkg``'s `lean-audit.json` lists a guarantee, through ``read``; True when it can't be read, which the audit
+    then fails."""
     try:
-        return bool(json.loads((ROOT / pkg / "lean-audit.json").read_text()).get("guarantees"))
-    except (OSError, ValueError, AttributeError):
+        return bool(json.loads(read(f"{pkg}/lean-audit.json")).get("guarantees"))
+    except (OSError, ValueError, AttributeError, TypeError):
         return True
 
 
-def requirers(pkg: str, pkgs: list[str]) -> list[str]:
+def requirers(pkg: str, pkgs: list[str], read=read_here) -> list[str]:
     """The other packages among ``pkgs`` whose guarantees' records read ``pkg``'s build (``pkg`` is in their `closure`), each
-    after those it requires (`rank`)."""
-    return sorted((q for q in pkgs if q != pkg and pkg in closure(q) and lists_guarantees(q)), key=lambda p: (rank(p), p))
+    after those it requires (`rank`); their manifests and locks read through ``read``."""
+    return sorted((q for q in pkgs if q != pkg and pkg in closure(q, read) and lists_guarantees(q, read)),
+                  key=lambda p: (rank(p), p))
+
+
+def audited(todo: list[str], read=read_here) -> list[str]:
+    """Every package a `--records` run of ``todo`` builds: each of them and those its `proved_in` names (`provers`), which
+    its check.py audits beside it."""
+    return list(dict.fromkeys(q for p in todo for q in (p, *provers(p, read))))
+
+
+def ask(names: list[str], commit: str | None = None, repo: Path | None = None) -> tuple[int, str]:
+    """`--ask`: (the GB a `--records` run of any of the packages ``names`` names asks, the line that says it in GiB,
+    `check.py`'s `ask_lines`): the largest need of the build of each package their runs audit (`requirers`, `audited`),
+    with no replay. Read from this checkout, or with ``commit`` from git's objects at that commit in ``repo`` alone.
+    ValueError when a name matches no single package or git can't list ``commit``."""
+    if commit is None:
+        files, read = LA.COMMON.tracked_files(ROOT), read_here
+        if files is None:
+            raise ValueError("the tree's files cannot be listed")
+    else:
+        if (got := at_commit(commit, [], repo)) is None:
+            raise ValueError(f"git can't list {commit} in {repo or ROOT}")
+        files, blobs = got
+        read = blob_reader({f: b for f, b in blobs.items() if f.endswith(("/lake-manifest.json", f"/{LOCK}"))}, repo)
+    pkgs, todo = LA.packages(files), []
+    for name in names:
+        if len(match := matching(name, pkgs, ROOT if commit is None else None)) != 1:
+            raise ValueError(f"{name!r} matches {len(match)} packages: {', '.join(match or pkgs)}")
+        todo += [match[0], *requirers(match[0], pkgs, read)]
+    return AUDIT.ask_lines({q: AUDIT.pinned(read(f"{q}/lake-manifest.json")) for q in audited(todo, read)}, ("build",))
 
 
 def audits(todo: list[str]) -> str:
@@ -418,8 +449,8 @@ def build(pkg: str, tree: Path, lake: str, targets: list[str] | None = None, san
             return rc, text
     argv = [lake, *(cmd or ["build", *(targets or [])])]
     argv = in_sandbox(pkg, tree, argv) if sandbox else argv
-    env = {**os.environ, "LEAN_NUM_THREADS": os.environ.get("LEAN_NUM_THREADS") or
-           str(AUDIT.build_threads(tree / pkg) or LA.COMMON.cores())}
+    env = {**os.environ, "LEAN_NUM_THREADS": str(AUDIT.build_threads(tree / pkg) or os.environ.get("LEAN_NUM_THREADS")
+                                                 or LA.COMMON.cores())}
     p = subprocess.Popen(argv, cwd=tree / pkg, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
                          encoding="utf-8", errors="replace")
     out = []
@@ -1445,9 +1476,8 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     if not (todo := [p for p in todo if p not in skip]):
         log(f"lean-records: nothing to build: the records of {', '.join(skip)} need no run (--rebuild runs them anyway)")
         return conclude(pkg, verdicts({}, {}, None, ROOT, files, skip, log), 0, out, update, "reused", log, allow=allowed)
-    here = ROOT / pkg
-    audited = [here, *(q for _, q in AUDIT.provers(here, AUDIT.load(here)))] if (here / AUDIT.POLICY).is_file() else [here]
-    if why := AUDIT.memory_refusal(audited, AUDIT.memory_gib()):
+    if why := AUDIT.memory_refusal([ROOT / q for q in audited(todo)], AUDIT.reserved(), steps=("build",),
+                                   run=AUDIT.BELOW_FLOOR_RUN.format(gb="{gb}", pkg=pkg) + " --update" * update):
         return refused(why, pkg)
     log(f"lean-records: this run audits {audits(todo)}: a `--records` run for any of them beside this one audits it again")
     if dev_cache:
@@ -2064,13 +2094,27 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--inputs-key", nargs="+", metavar="PKG",
                     help="print {package: its inputs key} as JSON for each PKG at --head, the key a records run of that commit "
                     "keeps and passes on, from git's objects alone (no checkout, no build)")
-    ap.add_argument("--head", default="HEAD", metavar="SHA", help="with --inputs-key: the commit (default HEAD)")
-    ap.add_argument("--repo", type=Path, metavar="DIR", help="with --inputs-key: the git repository to read --head from "
-                    "(default this file's checkout); a clone with no worktree checked out serves")
+    ap.add_argument("--ask", nargs="+", metavar="PKG", help="print the GB a --records run of any PKG would ask `research run "
+                    "--mem-gb` for, a whole number alone on stdout, and on stderr the GiB that holds and the build that needs "
+                    "it (check.py's `ask_lines`): of this checkout, or with --head of that commit, from git's objects alone")
+    ap.add_argument("--head", default="HEAD", metavar="SHA", help="with --inputs-key or --ask: the commit (default HEAD)")
+    ap.add_argument("--repo", type=Path, metavar="DIR", help="with --inputs-key or --ask: the git repository to read --head "
+                    "from (default this file's checkout); a clone with no worktree checked out serves")
     a = ap.parse_args(argv)
     if a.allow and not a.records:
         ap.error("--allow goes with --records, a lane's fast path, and with nothing else: no other mode takes an "
                  "allowance, --try, --build (the ready mark's preflight) and --inputs-key among them")
+    if a.ask:
+        if a.inputs_key or a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or a.try_ or a.build \
+                or a.no_wait or a.tree:
+            ap.error("--ask takes only --head and --repo")
+        try:
+            asked = ask(a.ask, a.head if a.head != "HEAD" or a.repo else None, a.repo)
+        except (OSError, ValueError, subprocess.CalledProcessError) as e:
+            print(f"lean_changed: --ask: {e}", file=sys.stderr)
+            return 2
+        AUDIT.print_ask(*asked)
+        return 0
     if a.inputs_key:
         if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or a.try_ or a.build or a.no_wait or a.tree:
             ap.error("--inputs-key takes only --head and --repo")
@@ -2081,7 +2125,7 @@ def main(argv: list[str]) -> int:
             return 2
         return 0
     if a.head != "HEAD" or a.repo:
-        ap.error("--head and --repo go with --inputs-key")
+        ap.error("--head and --repo go with --inputs-key or --ask")
     if a.try_ or a.build:
         if a.records or a.update or a.moved or a.out or a.dev_cache or a.rebuild or (a.try_ and a.build) or (a.try_ and a.no_wait):
             ap.error("--try and --build take only --deps and --tree (--build also --no-wait), and not each other")

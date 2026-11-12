@@ -50,12 +50,14 @@ python tools/verity/lean/merge.py --install
 verity lean try FILE [--siblings] [--on NODE]
   the edit loop: `lake env lean FILE` in FILE's package against its built imports, the axiom probe's line last; neither
   runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`)
-research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone \
+research run --on auto --mem-gb 93 --max-min 120 --project verity --source . --cwd clone \
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
-  the fast path (the lean-proofs skill): PKG's records and its requirers'
-research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone -- \
+  93 GB is 86.6 GiB, a heavy build's need. The fast path (the lean-proofs skill): PKG's records and its requirers';
+  `lean_changed.py --ask PKG` prints PKG's ask
+research run --on auto --mem-gb 258 --max-min 180 --project verity --source . --cwd clone -- \
   python3 tools/verity/lean/check.py --build --update PKG
-  a full record, left at lean-audit/audit-TAG/lean-audit.json
+  258 GB is 240.3 GiB, an ArkLib replay's need. A full record, left at lean-audit/audit-TAG/lean-audit.json;
+  `check.py --ask --build PKG` prints PKG's ask
 ~~~
 
 `check.py`'s docstring and `--help` have the other flags (`--closure`, `--replay-cache`, `--artifacts`, `--regenerate`,
@@ -100,8 +102,14 @@ of `check.py` unless it says otherwise, or the lock's section below.
   first build, and everything is sealed and checked after each package (`tampered`, `Seals`).
 
 Where it runs: `--build` builds in the sandbox where the machine allows one (`sandbox.sh`, `sandboxed`), after taking
-one of the node's Lean audit slots (`lean_slot`), and is refused below a package's memory floor (`memory_refusal`,
-`MEM_FLOOR_GIB`, `SPEC_FLOOR_GIB`), with threads as its memory holds (`build_threads`, `replay_threads`). Packages are
+one of the node's Lean audit slots (`lean_slot`). A run is refused where it reserved less than the largest floor among
+the steps it takes of every package it audits, or nothing while one has a floor (a research run that says no
+reservation, or a reservation that is no number), with the command to run at its ask, in GB, and the ask in GiB under
+it (`memory_refusal`, `reserved`; `--ask` prints the ask). A heavy build runs as
+many jobs as what its run reserved holds (`build_threads`), a heavy replay one thread per 4 GiB of it, up to every
+core (`replay_threads`). The numbers
+are `reserve.py`'s, which no audit's key reads, and a step whose peak passes 95% of its need warns, naming the line
+there to raise (`peaked`). Packages are
 audited side by side, each build after those of the packages it requires by path (`setup`, `writing`, `Seals`). `--all`
 first runs the controls, which test the auditor on fixtures that must pass clean and fail once per violation
 (`controls`; `--no-controls` skips them).

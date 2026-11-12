@@ -1,0 +1,4 @@
+# The Lean tools' guard and its tests. Not a package: `guard.py` runs on a node in a `research run` (README), and its log
+# reading and verdict run here as a suite (`uv run tools/verity/check/suites.py benchmarks/lean_records`).
+[tool.pytest.ini_options]
+testpaths = ["tests"]

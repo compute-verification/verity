@@ -6,6 +6,7 @@
     python tools/verity/lean/check.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
     python tools/verity/lean/check.py --name-instances [--build] PACKAGE_DIR...  write each anonymous instance's name into its source
     python tools/verity/lean/check.py --lift FILE [--build] PACKAGE_DIR   lift guarantees into `SecurityProofs.G : G` (`lift`)
+    python tools/verity/lean/check.py --ask [--build] [--no-replay] PACKAGE_DIR...   the GB a run of them asks (`reserve.py`)
 
 For each package it reads the facts from the roots' `.olean` files as data (`Facts.lean`: initializers disabled and no
 environment extension loaded, so none of the package's code runs) and replays the audited modules through the kernel
@@ -38,6 +39,7 @@ import bisect
 import contextlib
 import datetime
 import difflib
+import functools
 import gzip
 import hashlib
 import json
@@ -214,19 +216,19 @@ def cores() -> int:
     return n
 
 
-#: what auditing a package that pins ArkLib (security/Proofs, and Security, which audits it beside itself) needs: its build
-#: of Flock's soundness peaks at 15–24 GB (the lean-proofs skill); `VERITY_LEAN_MEM_FLOOR_GIB` sets another floor, 0 none
-MEM_FLOOR_GIB = 24
-#: an audit of a spec whose guarantees an ArkLib package proves (Security): its whole replay peaks at about 145 GiB at
-#: 48 threads and is killed at a 128 GiB cap at 16, so the replay's resident base is
-#: about 120 GiB and a thread adds under 1: fewer threads don't make it fit, only the floor does
-SPEC_FLOOR_GIB = 160
-#: the run a machine below the floor prints instead, which `research run --on auto` places
-BELOW_FLOOR_RUN = ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone "
+#: the runs a run below its floor prints instead, at its ask (`--mem-gb`, in GB), which `research run --on auto` places: a
+#: records run of a package (`lean_changed.py`'s), and an audit of the packages it names (this file's)
+BELOW_FLOOR_RUN = ("research run --on auto --mem-gb {gb} --max-min 120 --project verity --source . --cwd clone "
                    "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg}")
-#: the same for a spec beside its ArkLib package, on a cluster shape above SPEC_FLOOR_GIB (`cpu-xl`, 280 GiB)
-BELOW_SPEC_FLOOR_RUN = ("research run --on auto --kind lean-audit --project verity --source . --cwd source "
-                        "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py --build {pkg}")
+BELOW_FLOOR_AUDIT = ("research run --on auto --mem-gb {gb} --max-min 180 --project verity --source . --cwd clone "
+                     "--declared-output 'lean-audit/*' -- python3 tools/verity/lean/check.py {args}")
+STEPS = ("build", "replay")
+
+
+@functools.cache
+def reserve():
+    """`reserve.py`, the GiB each step needs and what a run reserved, loaded when a build or a replay first reads it."""
+    return sibling("reserve")
 
 
 def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
@@ -286,71 +288,114 @@ def free_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) 
     return max(0, min(left)) / 2**30
 
 
-#: about what one `lean` of a Mathlib or ArkLib build peaks at: Lake runs as many at once as `LEAN_NUM_THREADS`, so a build
-#: of such a package runs no more than its memory holds (a Security build with more jobs is OOM-killed, even at 64 GB)
-BUILD_GIB_PER_JOB = 8
 #: the dependencies (manifest names) that make a package's build and replay heavy
 HEAVY_DEPS = frozenset({"mathlib", "Arklib"})
 
 
-def pins_heavy(pkg: Path) -> bool:
-    """Whether ``pkg`` pins one of `HEAVY_DEPS`, by its manifest alone."""
-    m = pkg / "lake-manifest.json"
+def pinned(manifest: bytes | str | None) -> frozenset[str]:
+    """The `HEAVY_DEPS` a `lake-manifest.json`'s text pins: none for no manifest, or one that isn't one."""
     try:
-        names = {d.get("name") for d in json.loads(m.read_text()).get("packages", [])} if m.is_file() else set()
-    except (OSError, ValueError):
-        names = set()
-    return bool(names & HEAVY_DEPS)
+        return frozenset({d.get("name") for d in json.loads(manifest).get("packages", [])} & HEAVY_DEPS) \
+            if manifest else frozenset()
+    except (ValueError, AttributeError, TypeError):
+        return frozenset()
+
+
+def pins(pkg: Path) -> frozenset[str]:
+    """The `HEAVY_DEPS` ``pkg`` pins, by its manifest alone."""
+    m = pkg / "lake-manifest.json"
+    return pinned(m.read_bytes()) if m.is_file() else frozenset()
+
+
+def pins_heavy(pkg: Path) -> bool:
+    """Whether ``pkg`` pins one of `HEAVY_DEPS`."""
+    return bool(pins(pkg))
+
+
+def reserved(env=os.environ) -> tuple[float | None, str]:
+    """(the GiB this run reserved, what says so): `reserve.reserved` on this machine's memory (`memory_gib`)."""
+    return reserve().reserved(env, memory_gib())
 
 
 def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
-    """The `LEAN_NUM_THREADS` a build of ``pkg`` runs with, when its memory bounds it: ``pkg`` pins a heavy
-    dependency (`pins_heavy`) and `LEAN_NUM_THREADS` is unset; else None (`lake_env`'s value)."""
-    if "LEAN_NUM_THREADS" in env or not pins_heavy(pkg):
+    """The `LEAN_NUM_THREADS` a build of ``pkg`` runs with, the jobs Lake runs at once, when ``pkg`` pins a heavy dependency
+    (`pins_heavy`): as many of `LEAN_NUM_THREADS` (else of every core) as what the run reserved holds (`reserve.build_jobs`,
+    on ``have_gib`` or `reserved`), all of them where it reserved nothing; else None (`lake_env`'s value)."""
+    if not pins_heavy(pkg):
         return None
-    gib = memory_gib() if have_gib is None else have_gib
-    return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
+    try:
+        jobs = max(1, int(env["LEAN_NUM_THREADS"]))
+    except (KeyError, ValueError):
+        jobs = cores()
+    have = reserved(env)[0] if have_gib is None else have_gib
+    return jobs if have is None else reserve().build_jobs(have, jobs)
 
 
-#: memory per replay thread of a Mathlib or ArkLib package, a cap on its threads: the whole-Security replay's peak is mostly
-#: its resident base (`SPEC_FLOOR_GIB`), with 145 GiB at 48 threads and over 128 at 16; a heavy replay runs alone
-#: (`_HEAVY_REPLAY`), since two side by side took that run to 183 GiB
-REPLAY_GIB_PER_THREAD = 4
+#: a heavy replay runs alone, since two side by side need twice its figure (`reserve.REPLAY_ARKLIB_GIB`)
 _HEAVY_REPLAY = threading.Semaphore(1)
 
 
 def replay_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
-    """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with when its memory bounds it (as `build_threads`, at
-    `REPLAY_GIB_PER_THREAD`); else None."""
-    if build_threads(pkg, env, have_gib=1) is None:
+    """The `LEAN_NUM_THREADS` the kernel replay of ``pkg`` runs with, alone (`_HEAVY_REPLAY`), when it pins a heavy
+    dependency: one per `reserve.REPLAY_PER_THREAD_GIB` of what the run reserved (``have_gib``, else `reserved`, else this
+    machine's memory), up to every core (`reserve.replay_threads`); a run below its need refuses first (`memory_refusal`).
+    None where `LEAN_NUM_THREADS` is set or ``pkg`` pins neither (`lake_env`'s value)."""
+    if "LEAN_NUM_THREADS" in env or not pins_heavy(pkg):
         return None
-    gib = memory_gib() if have_gib is None else have_gib
-    return max(1, min(cores(), int(gib // REPLAY_GIB_PER_THREAD)))
+    have = reserved(env)[0] if have_gib is None else have_gib
+    return reserve().replay_threads(memory_gib() if have is None else have, cores())
 
 
-def memory_refusal(pkgs: list[Path], have_gib: float, env=os.environ) -> str | None:
-    """Why this machine should not audit ``pkgs``, or None: one pins ArkLib and the memory is below the floor, which is
-    `SPEC_FLOOR_GIB` when a spec beside it reads its build (`proved_in`: the facts of every guarantee it proves).
-    `check.py` and the fast path (`lean_changed.py`) refuse by it alike."""
-    heavy = [p for p in pkgs if (m := p / "lake-manifest.json").is_file()
-             and any(d.get("name") == "Arklib" for d in json.loads(m.read_text()).get("packages", []))]
-    spec = [p for p in pkgs if (p / POLICY).is_file() and json.loads((p / POLICY).read_text()).get("proved_in")]
-    need = SPEC_FLOOR_GIB if heavy and spec else MEM_FLOOR_GIB
+def rel(p: Path) -> str:
+    """``p`` from the repository's root where it is under it."""
+    return os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
+
+
+def ask_lines(pins_of: dict[str, frozenset[str]], steps=STEPS) -> tuple[int, str]:
+    """(the GB a run asks `research run --mem-gb` for, the line that says it in GiB): the largest need among ``steps`` of
+    the packages it audits (``pins_of``: {package: what it pins of `HEAVY_DEPS`}), `reserve.ask`'s. `--ask`, the line a
+    refusal prints under its command and the fast path's `--ask` all print it."""
+    r = reserve()
+    gb, n, step, pkg = r.ask(pins_of, steps)
+    if step is None:
+        return gb, "0 GiB: it takes no build and no replay"
+    name = r.figure(step, pins_of[pkg])
+    return gb, (f"{gb} GB is {r.gib(gb):.1f} GiB, for the {n} GiB the {step} of {pkg} needs at its largest ({name}, "
+                f"{r.where(name)}), the most any step of the run needs")
+
+
+def print_ask(gb: int, line: str) -> None:
+    """`--ask`'s output, both tools': one line on stdout, the ask in GB as a whole number, which the records gate reads
+    (`research queue`), and nothing else there; the line in GiB goes to stderr."""
+    print(gb, flush=True)
+    print(f"research run --mem-gb {gb}: {line}", file=sys.stderr, flush=True)
+
+
+def memory_refusal(pkgs: list[Path], have: tuple[float | None, str], env=os.environ, steps=STEPS,
+                   run: str | None = None) -> str | None:
+    """Why a run taking ``steps`` (of `STEPS`) of ``pkgs``, every package it audits (those proving another's guarantees
+    included), must not start with what it reserved (``have``, `reserved`'s), or None: it reserved less than the largest
+    floor among them (`reserve.floor`; `VERITY_LEAN_MEM_FLOOR_GIB` sets another, 0 none, and one that is no number
+    refuses), or, inside a research run, nothing. The reason names the command to run instead (``run``, with ``{gb}`` for
+    the ask; by default this file's audit of ``pkgs``) and, under it, the ask in GiB (`ask_lines`). `check.py` and the fast
+    path (`lean_changed.py`) refuse by it alike."""
+    r = reserve()
+    pins_of = {rel(p): pins(p) for p in pkgs}
+    floor, step, pkg = r.largest(r.floor, pins_of, steps)
     try:
-        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", need))
+        floor = float(env.get("VERITY_LEAN_MEM_FLOOR_GIB", floor))
     except ValueError:
-        floor = need
-    if not heavy or have_gib >= floor:
+        return (f"VERITY_LEAN_MEM_FLOOR_GIB={env['VERITY_LEAN_MEM_FLOOR_GIB']!r} is no number of GiB: set it to one (0 for "
+                "none), or unset it for the floor of what this run audits")
+    got, said = have
+    if floor <= 0 or (got is not None and got >= floor):
         return None
-    def rel(p):
-        return os.path.relpath(p, ROOT) if p.resolve().is_relative_to(ROOT) else str(p)
-    what = (f"{rel(spec[0])}'s audit reads {rel(heavy[0])}'s facts for every guarantee it proves, about 40 GiB beside the "
-            f"replay" if heavy and spec else f"{rel(heavy[0])} pins ArkLib, whose build peaks near {MEM_FLOOR_GIB} GiB")
-    run = BELOW_SPEC_FLOOR_RUN if heavy and spec else BELOW_FLOOR_RUN
-    return (f"{what}, and this machine has {have_gib:.0f} GiB (memory and swap, within its cgroup), under the {floor:.0f} "
-            f"GiB floor: run it on a node, `{run.format(pkg=rel(pkgs[0]))}` "
-            f"(add --update for the record), or set "
-            f"VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
+    gb, line = ask_lines(pins_of, steps)
+    run = (run or BELOW_FLOOR_AUDIT.format(gb="{gb}", args=" ".join(["--build", *pins_of]))).format(gb=gb)
+    what = f"the {step} of {pkg}" if step else "this run"
+    held = f"reserved {got:.1f} GiB ({said})" if got is not None else f"reserved nothing ({said})"
+    return (f"{what} needs at least {floor:g} GiB, and this run {held}: run it where it asks {gb} GB,\n"
+            f"  {run}\n  {line}\nor set VERITY_LEAN_MEM_FLOOR_GIB=0 to try here anyway")
 
 
 #: `--artifacts`: the node's Lake artifact cache, which a run writes after its builds (`lean_audit.LakeArtifacts`)
@@ -402,15 +447,56 @@ def lake_env() -> dict[str, str]:
 
 
 #: per auditing thread, the largest resident set of any process `run` has waited for since `took` last recorded it
+#: (`bytes`), and the most a process tree it sampled held at once (`tree`)
 _peak = threading.local()
+#: how often `run` with ``tree`` sums what its process tree holds
+TREE_EVERY_S = 1.0
+
+
+def tree_bytes(pid: int, proc: Path = Path("/proc")) -> int:
+    """What ``pid`` and every process below it hold now, the page cache aside: each one's anonymous and shared resident
+    pages (`RssAnon` and `RssShmem` of its `status`), its children read from each of its tasks' `children`."""
+    total, todo, seen = 0, [pid], set()
+    while todo:
+        if (q := todo.pop()) in seen:
+            continue
+        seen.add(q)
+        try:
+            for line in (proc / str(q) / "status").read_text().splitlines():
+                k, _, v = line.partition(":")
+                if k in ("RssAnon", "RssShmem"):
+                    total += int(v.split()[0]) * 1024
+            for t in (proc / str(q) / "task").iterdir():
+                todo += [int(c) for c in (t / "children").read_text().split()]
+        except OSError:                                 # it ended since its parent's `children` named it: it holds nothing
+            continue
+    return total
+
+
+def peaked(rep: dict, step: str, pkg: Path, gib: float) -> None:
+    """Record ``step``'s peak, ``gib`` (`peak_gib`), and the warning `reserve.warning` gives it, if any (`warnings`)."""
+    rep.setdefault("peak_gib", {})[step] = gib
+    if w := reserve().warning(step, pins(pkg), gib):
+        rep.setdefault("warnings", []).append(w)
 
 
 def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 * 3600,
         on_line=None) -> tuple[int, str]:
     """``argv``'s exit code and its output. It is reaped with `os.wait4`, whose usage covers the process and every
     descendant it waited for (each `lean` a `lake build` runs), so the step's peak memory is known (`took`). ``on_line``
-    is given each line of its standard output as it comes (a build's, to `Pipeline.line`)."""
+    is given each line of its standard output as it comes (a build's, to `Pipeline.line`). What its whole process tree
+    holds at once is sampled every `TREE_EVERY_S` (`tree_bytes`), its most kept in `_peak.tree`: a build's jobs run side
+    by side, which a single process's peak doesn't add up."""
     p = subprocess.Popen(argv, cwd=cwd, env=lake_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    done, most = threading.Event(), [0]
+
+    def sample():
+        while True:
+            most[0] = max(most[0], tree_bytes(p.pid))
+            if done.wait(TREE_EVERY_S):
+                return
+    sampler = threading.Thread(target=sample, daemon=True)
+    sampler.start()
     got: dict[str, str] = {}
 
     def read(k, f, give=on_line):
@@ -442,12 +528,15 @@ def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 
         raise
     finally:
         timer.cancel()
+        done.set()
+        sampler.join()
     p.returncode = os.waitstatus_to_exitcode(status)
     for r in readers:
         r.join()
     p.stdout.close()
     p.stderr.close()
     _peak.bytes = max(getattr(_peak, "bytes", 0), usage.ru_maxrss * 1024)          # Linux reports it in KiB
+    _peak.tree = max(getattr(_peak, "tree", 0), most[0])
     text = got.get("out", "") + got.get("err", "")
     if log is not None:
         log.write_text(text if (err := got.get("on_line_error")) is None else
@@ -5312,7 +5401,7 @@ class Pipeline:
     def wait(self) -> None:
         """Until the batch running when the build ended (`end`) has stored what the kernel accepted, so the final replay
         reuses those modules rather than checking them beside it. `_HEAVY_REPLAY` doesn't order the two: the final replay
-        takes it only when `replay_threads` caps its threads, which it never does under `lean_audit.py`."""
+        takes it only when `replay_threads` sets its threads, which it never does under `lean_audit.py`."""
         self.thread.join()
 
     def _go(self) -> bool:
@@ -5708,7 +5797,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if build:
         rep["sandbox"] = sandboxed()
         (work / BUILDING).write_text(json.dumps({"package": rep["package"], "sandbox": rep["sandbox"]}))
-        n = build_threads(pkg)
+        n, _peak.tree = build_threads(pkg), 0
         if ARTIFACTS and not rep["sandbox"]:
             rep["staged"] = ("not used: this node builds without the sandbox, where nothing samples what a build restores "
                              "(`sampled_recompile`)")
@@ -5779,6 +5868,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                 pipe.end(stop=bool(rep["failures"]))
             if cache:
                 shutil.rmtree(cache, ignore_errors=True)
+            if _peak.tree:
+                peaked(rep, "build", pkg, round(_peak.tree / 2**30, 1))
         if DEV_CACHE:
             rep["sampled"] = "none sampled: a --dev-cache build restores from Lake's own cache, and its run is never a verdict"
         else:
@@ -5916,6 +6007,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if replayed:
         (rfails, rep["replay"]), rep["seconds"]["replay"] = replayed.result()
         fails += rfails
+        if isinstance(rep["replay"], dict) and rep["replay"].get("peak_gib"):
+            peaked(rep, "replay", pkg, rep["replay"]["peak_gib"])
     if pipe:
         rep["pipeline"] = [dict(b) for b in pipe.batches]
     if fresh:
@@ -6277,6 +6370,10 @@ def main(argv: list[str]) -> int:
                     f"{BOOKKEEPING_DAYS} days; an entry with no owner takes its guarantees', else the lock's "
                     "`default_owner`) passes, and each repair prints a warning naming its entry and owner")
     ap.add_argument("--no-replay", action="store_true", help="skip the kernel replay (`Replay.lean`)")
+    ap.add_argument("--ask", action="store_true", help="print the GB this run would ask `research run --mem-gb` for, a whole "
+                    "number alone on stdout, and on stderr the GiB that holds and the step that needs it, then exit: the "
+                    "largest need (`reserve.py`) among the steps it takes (the build with --build, the replay without "
+                    "--no-replay) of every package it audits")
     ap.add_argument("--dev-cache", action="store_true", help="restore the dependencies from the verified build cache "
                     "(`cache.py get`, Mathlib's `cache get`) for a development check: our packages are still built and "
                     "replayed, but the reports are a lean-fast/v1 result, which no gate accepts")
@@ -6374,7 +6471,14 @@ def main(argv: list[str]) -> int:
         if d is not None and (over := build_roots_over(d, pkgs)):
             ap.error(f"{flag} {d} overlaps {', '.join(map(str, over))}, which a build writes, so a build could forge its "
                      f"entries: put the cache outside every audited package's .lake and its path dependencies'")
-    if a.facts_from is None and (why := memory_refusal(pkgs, memory_gib())):
+    steps = (*(["build"] if a.build else []), *(["replay"] if not a.no_replay and a.facts_only is None else []))
+    if a.ask:
+        print_ask(*ask_lines({rel(p): pins(p) for p in pkgs}, steps))
+        return 0
+    args = [*(f for f, on in (("--build", a.build), ("--closure", a.closure), ("--no-replay", a.no_replay),
+                              ("--update", a.update)) if on), *(rel(p) for p in pkgs if p in named)]
+    if a.facts_from is None and steps and (why := memory_refusal(pkgs, reserved(), steps=steps,
+                                                       run=BELOW_FLOOR_AUDIT.format(gb="{gb}", args=" ".join(args)))):
         print(f"check.py: {why}", file=sys.stderr, flush=True)
         return 2
     try:
@@ -6497,6 +6601,8 @@ def main(argv: list[str]) -> int:
                 print(f"  {w}", flush=True)
             for n in rep.get("notes", []):
                 print(f"  note: {n}", flush=True)
+            for w in rep.get("warnings", []):
+                print(f"  warning: {w}", flush=True)
             if (gaps := rep.get("trust_gap")) is not None:
                 print(f"  trust gap: {sum(map(len, gaps.values()))} premises outside their trust over the {len(gaps)} "
                       f"deployed guarantees, {len(set().union(*gaps.values()))} distinct:", flush=True)

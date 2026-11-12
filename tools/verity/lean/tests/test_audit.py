@@ -1855,7 +1855,7 @@ def test_no_step_before_the_judge_reads_a_section_build_inputs_leaves_out():
         got, name = None if lock is None else sections(lock), owner.get(id(n), "")
         by_path[name] = None if got is None or by_path.get(name, set()) is None else by_path.get(name, set()) | got
     whole = None
-    before = {"memory_refusal": {"proved_in"}, "main": {"proved_in"},       # which packages a run audits, and on what machine
+    before = {"main": {"proved_in"},                                         # which packages a run audits
               "proved": {"roots", "exempt", "guarantees", "compile_time"}}   # the prover's lock, `qpol` above
     apart = {"_open": whole,                                                 # the lock the walk starts from: `policy` in `audit`
              "homes": {"layers"}, "tree_roles": {"trees"}, "read_by_dependents": {"reads"}, "_finish": whole,   # the judge's
@@ -2678,9 +2678,12 @@ def test_all_neither_updates_records_nor_names_instances(capsys):
         assert "neither updates records nor names instances" in capsys.readouterr().err
 
 
-def test_a_package_pinning_arklib_is_refused_below_the_memory_floor(tmp_path):
-    """A machine with less memory than ArkLib's build peaks at (swap included, within its cgroup) refuses to audit a package
-    that pins it, and the refusal prints the fast path's line on a node; other packages, or a floor set to 0, go ahead."""
+def test_a_run_that_reserved_less_than_its_floor_is_refused_with_the_command_at_its_ask(tmp_path):
+    """A run that reserved less than the largest floor among the steps it takes of every package it audits (a heavy
+    build's one job; an ArkLib replay's whole figure) refuses, and prints the command to run instead at its ask, in GB,
+    with the ask in GiB under it; so does a research run that reserved nothing. A light package, the build alone where
+    only the replay's floor is missed, or a floor set to 0, go ahead. What a machine holds is its memory and swap, within
+    its cgroup."""
     (tmp_path / "proc").mkdir()
     (tmp_path / "proc" / "meminfo").write_text("MemTotal:       16000000 kB\nMemFree:  100 kB\nSwapTotal:      4000000 kB\n")
     cg = tmp_path / "cg"
@@ -2691,20 +2694,36 @@ def test_a_package_pinning_arklib_is_refused_below_the_memory_floor(tmp_path):
     assert round(A.memory_gib(tmp_path / "proc", cg), 1) == 11.8
     (cg / "memory.swap.max").write_text("0\n")
     assert A.memory_gib(tmp_path / "proc", cg) == 8
-    heavy, light = tmp_path / "Proofs", tmp_path / "Spec"
-    for p, deps in ((heavy, ["mathlib", "Arklib"]), (light, ["mathlib"])):
+    heavy, mathlib, light = tmp_path / "Proofs", tmp_path / "Spec", tmp_path / "Tool"
+    for p, deps in ((heavy, ["mathlib", "Arklib"]), (mathlib, ["mathlib"]), (light, ["batteries"])):
         p.mkdir()
         (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
-    why = A.memory_refusal([light, heavy], 16)
-    assert why.startswith(f"{heavy} pins ArkLib") and "lean_changed.py --records" in why and str(light) in why
-    assert A.memory_refusal([light], 16) is None
-    assert A.memory_refusal([light, heavy], 64) is None
-    assert A.memory_refusal([heavy], 16, env={"VERITY_LEAN_MEM_FLOOR_GIB": "0"}) is None
+    R, have = A.reserve(), (lambda gib: (gib, "a test's"))
+    why = A.memory_refusal([mathlib, heavy], have(128), env={})
+    assert why.startswith(f"the replay of {heavy} needs at least {R.REPLAY_ARKLIB_GIB} GiB, and this run reserved 128.0 GiB")
+    command, under = why.splitlines()[1:3]
+    assert f"--mem-gb {R.gb(R.REPLAY_ARKLIB_GIB)} " in command and f"check.py --build {mathlib} {heavy}" in command
+    assert under.strip().startswith(f"{R.gb(R.REPLAY_ARKLIB_GIB)} GB is ") and "REPLAY_ARKLIB_GIB" in under, under
+    assert A.memory_refusal([mathlib, heavy], have(R.REPLAY_ARKLIB_GIB), env={}) is None
+    records = A.BELOW_FLOOR_RUN.format(gb="{gb}", pkg="Spec")
+    why = A.memory_refusal([mathlib, heavy], have(16), env={}, steps=("build",), run=records)
+    assert why.startswith(f"the build of {mathlib} needs at least {R.ONE_JOB_GIB} GiB") and "--mem-gb 93 " in why
+    assert "lean_changed.py --records Spec" in why and "86 GiB the build of" in why
+    assert A.memory_refusal([mathlib, heavy], have(R.ONE_JOB_GIB), env={}, steps=("build",)) is None, \
+        "a build runs fewer jobs, down to one"
+    assert A.memory_refusal([light], have(4), env={}) is None
+    assert A.memory_refusal([heavy], have(16), env={"VERITY_LEAN_MEM_FLOOR_GIB": "0"}) is None
+    assert "is no number of GiB" in A.memory_refusal([light], have(500), env={"VERITY_LEAN_MEM_FLOOR_GIB": "lots"})
+    why = A.memory_refusal([mathlib], (None, "research run r1 sets none of them"), env={}, steps=("build",))
+    assert "this run reserved nothing (research run r1 sets none of them)" in why
+    assert A.memory_refusal([light], (None, "research run r1 sets none of them"), env={}) is None
 
 
-def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds(tmp_path):
-    """A Security build with a `lean` per CPU is OOM-killed even in a 64 GB scope: Lake runs as many
-    at once as `LEAN_NUM_THREADS`, so a package that pins Mathlib or ArkLib builds with at most one per `BUILD_GIB_PER_JOB`.
+def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_run_reserved(tmp_path):
+    """Lake runs as many `lean` at once as `LEAN_NUM_THREADS`, so a package that pins Mathlib or ArkLib builds with every
+    job only where its run reserved `BUILD_HEAVY_GIB`, else one in `ONE_JOB_GIB` and one more per `PER_JOB_GIB`, an
+    explicit `LEAN_NUM_THREADS` (lean_audit.py's and the fast path's) being the most it runs. Its replay runs one thread
+    per `REPLAY_PER_THREAD_GIB` of what the run reserved, up to every core.
     The scope's limit is read where `/proc/self/cgroup` says the process is, and the smallest of it and its parents' holds."""
     proc, cg = tmp_path / "proc", tmp_path / "cg"
     (proc / "self").mkdir(parents=True)
@@ -2721,13 +2740,20 @@ def test_a_mathlib_build_runs_no_more_lean_at_once_than_its_scope_s_memory_holds
     for p, deps in ((heavy, ["mathlib"]), (light, ["batteries"])):
         p.mkdir()
         (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": d} for d in deps]}))
-    env = {}
-    assert A.build_threads(heavy, env, have_gib=64) == min(A.cores(), 64 // A.BUILD_GIB_PER_JOB)
+    env, R = {}, A.reserve()
+    assert A.build_threads(heavy, env, have_gib=64) == min(A.cores(), 1 + (64 - R.ONE_JOB_GIB) // R.PER_JOB_GIB)
     assert A.build_threads(heavy, env, have_gib=4) == 1
+    assert A.build_threads(heavy, env, have_gib=R.BUILD_HEAVY_GIB) == A.cores()
     assert A.build_threads(light, env, have_gib=4) is None
-    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "3"}, have_gib=4) is None, "an explicit setting wins"
-    assert A.replay_threads(heavy, env, have_gib=64) == min(A.cores(), 64 // A.REPLAY_GIB_PER_THREAD)
-    assert A.replay_threads(light, env, have_gib=4) is None
+    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "3"}, have_gib=200) == 3, "an explicit setting is the most it runs"
+    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "64"}, have_gib=R.gib(86)) == 6, "and what the run reserved bounds it"
+    assert A.build_threads(heavy, {"LEAN_NUM_THREADS": "64", "RESEARCH_RUN_ID": "r1"}) == 64, "a run that reserved nothing"
+    assert A.replay_threads(heavy, env, have_gib=R.REPLAY_ARKLIB_GIB) == min(A.cores(), R.REPLAY_ARKLIB_GIB // 4)
+    assert A.replay_threads(heavy, env, have_gib=8) == min(A.cores(), 2)
+    assert A.replay_threads(heavy, env, have_gib=1) == 1
+    assert A.replay_threads(heavy, {"CHECK_SLOT_MEM_GB": "12"}) == min(A.cores(), 3), "what the run reserved"
+    assert A.replay_threads(heavy, {"LEAN_NUM_THREADS": "3"}) is None
+    assert A.replay_threads(light, env) is None
 
 
 def test_a_heavy_build_pipelines_its_replay_under_lean_audit_s_thread_setting(tmp_path, monkeypatch):
@@ -2755,20 +2781,28 @@ def test_a_heavy_build_pipelines_its_replay_under_lean_audit_s_thread_setting(tm
     assert not A.pipelined(heavy, True, True, cache, None), "a build bound by its cores keeps them"
 
 
-def test_a_spec_whose_guarantees_an_arklib_package_proves_needs_the_spec_floor(tmp_path):
-    """A whole-Security replay holds about 120 GiB whatever its threads (a 128 GiB cap kills it at 16),
-    so auditing a spec with `proved_in` beside an ArkLib package needs `SPEC_FLOOR_GIB`, and is sent to the shape that has
-    it; the package alone needs the build's floor."""
+def test_an_arklib_replay_needs_its_whole_figure_and_asks_it(tmp_path, capsys):
+    """An ArkLib package's whole replay holds its figure whatever its threads, so its floor is its need: a run that replays
+    it, a spec's audit beside it included, refuses below `REPLAY_ARKLIB_GIB`, and with `--no-replay` needs only the
+    build's floor. `--ask` prints the run's ask, the largest need among its steps of every package it audits: in GB, a
+    whole number alone on stdout, and in GiB on stderr."""
     proofs, spec = tmp_path / "Proofs", tmp_path / "Spec"
     for p in (proofs, spec):
         p.mkdir()
     (proofs / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "Arklib"}]}))
+    (proofs / A.POLICY).write_text(json.dumps({"roots": ["P"]}))
     (spec / A.POLICY).write_text(json.dumps({"roots": ["S"], "proved_in": ["../Proofs"]}))
-    assert A.memory_refusal([proofs], 32) is None
-    why = A.memory_refusal([spec, proofs], 32)
-    assert why and f"under the {A.SPEC_FLOOR_GIB} GiB floor" in why and "facts for every guarantee it proves" in why
-    assert "--kind lean-audit" in (A.memory_refusal([spec, proofs], 128) or "")
-    assert A.memory_refusal([spec, proofs], A.SPEC_FLOOR_GIB) is None
+    R = A.reserve()
+    assert A.memory_refusal([spec, proofs], (R.REPLAY_ARKLIB_GIB - 1, "a test's"), env={})
+    assert A.memory_refusal([spec, proofs], (R.REPLAY_ARKLIB_GIB, "a test's"), env={}) is None
+    assert A.memory_refusal([spec, proofs], (R.ONE_JOB_GIB, "a test's"), env={}, steps=("build",)) is None
+    for argv, n, says in ((["--build", "--no-replay"], R.BUILD_HEAVY_GIB, f"the build of {proofs}"),
+                          (["--build"], R.REPLAY_ARKLIB_GIB, f"the replay of {proofs}"), (["--no-replay"], 0, "no build")):
+        assert A.main(["--ask", *argv, str(spec)]) == 0
+        said = capsys.readouterr()
+        assert said.out == f"{R.gb(n)}\n", argv
+        assert f"--mem-gb {R.gb(n)}: " in said.err and says in said.err and (not n or f"for the {n} GiB {says}" in said.err), \
+            said.err
 
 
 PLUGGED = '''name = "Dep"
@@ -8091,6 +8125,44 @@ assert rep["peak_gib"]["fresh"] < 0.3, rep                              # each s
 """
     r = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_a_build_s_peak_adds_up_the_jobs_it_runs_side_by_side(tmp_path):
+    """A build's jobs run at once and `ru_maxrss` is one process's, so `run` samples what its whole process tree holds
+    (`tree_bytes`: every process below it, by its tasks' `children`, its anonymous and shared pages, the page cache
+    aside), and `peaked` records a step's peak with a warning naming the line of `reserve.py` to raise once it passes
+    `WARN_SHARE` of the step's need, never a failure."""
+    proc = tmp_path / "proc"
+    for pid, kids, anon, shm in ((10, "11 12", 100, 0), (11, "13", 200, 50), (12, "", 300, 0), (13, "", 400, 0)):
+        (proc / str(pid) / "task" / str(pid)).mkdir(parents=True)
+        (proc / str(pid) / "status").write_text(f"Name:\tlean\nVmRSS:\t{anon + shm + 999} kB\nRssAnon:\t{anon} kB\n"
+                                                f"RssFile:\t999 kB\nRssShmem:\t{shm} kB\n")
+        (proc / str(pid) / "task" / str(pid) / "children").write_text(kids)
+    assert A.tree_bytes(10, proc) == (100 + 200 + 50 + 300 + 400) * 1024
+    (proc / "12" / "status").unlink()
+    assert A.tree_bytes(10, proc) == (100 + 250 + 400) * 1024, "a job that ended while the tree was read counts nothing"
+    child = ("import sys; b = bytearray(100 << 20); b[::4096] = b'x' * len(b[::4096]); print('ready', flush=True); "
+             "sys.stdin.read()")
+    parent = f"import subprocess, sys; [q.wait() for q in [subprocess.Popen([sys.executable, '-c', {child!r}]) for _ in '12']]"
+    p = subprocess.Popen([sys.executable, "-c", parent], stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    try:
+        assert [p.stdout.readline() for _ in "12"] == ["ready\n", "ready\n"]
+        assert A.tree_bytes(p.pid) >= 200 << 20, "both children's pages, below the process `run` started"
+    finally:
+        p.stdin.close()
+        p.wait()
+    heavy = tmp_path / "heavy"
+    heavy.mkdir()
+    (heavy / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "mathlib"}, {"name": "Arklib"}]}))
+    R, rep = A.reserve(), {}
+    A.peaked(rep, "replay", heavy, R.WARN_SHARE * R.REPLAY_ARKLIB_GIB)
+    A.peaked(rep, "build", heavy, 10.0)
+    assert rep == {"peak_gib": {"replay": R.WARN_SHARE * R.REPLAY_ARKLIB_GIB, "build": 10.0}}
+    A.peaked(rep, "replay", heavy, R.REPLAY_ARKLIB_GIB + 1)
+    (w,) = rep["warnings"]
+    line = next(i for i, s in enumerate((HERE.parent / "reserve.py").read_text().splitlines(), 1)
+                if s.startswith("REPLAY_ARKLIB_GIB = "))
+    assert w.startswith("replay: its peak") and f"raise REPLAY_ARKLIB_GIB at tools/verity/lean/reserve.py:{line}," in w, w
 
 
 def hyp(name, at, reaches, module=None, source="binder"):
