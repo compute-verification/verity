@@ -255,10 +255,9 @@ def entry_bytes(run: Path, rank: int, e: dict) -> bytes | None:
 
 
 def entry_array(run: Path, rank: int, e: dict) -> np.ndarray:
-    """`view_array` of the entry's snapshot.  FileNotFoundError where the rank's directory does not hold the file the index names."""
-    raw = entry_bytes(run, rank, e)
-    if raw is None:
-        raise FileNotFoundError(f"rank {rank}: the snapshot index names {e.get('file')!r}, which the run does not hold")
+    """`view_array` of the entry's snapshot.  Where the rank's directory does not hold the file the index names, `view_array` is
+    handed None and numpy's TypeError is the collective's status in `body_report`."""
+    raw: Any = entry_bytes(run, rank, e)
     return view_array(raw, e)
 
 

@@ -236,8 +236,7 @@ def test_body_report_checks_each_collective_against_its_arithmetic(tmp_path):
     assert bad["status"] == "ok" and bad["body_matches_rank_outs"] == {"0": True, "1": False} and not bad["out_sha_equal_across_ranks"]
     assert by[REDUCE, 2]["status"] == "no snapshot bytes (root alloc, oversize, or non-snapshot step)"
     # the index names a file that rank 1's directory does not hold: an error of that collective, and the report goes on
-    lost = ta.load_index(run, 1)[4]["file"]
-    assert by[REDUCE, 3]["status"] == f"""error: FileNotFoundError("rank 1: the snapshot index names '{lost}', which the run does not hold")"""
+    assert by[REDUCE, 3]["status"] == """error: TypeError("a bytes-like object is required, not 'NoneType'")"""
     assert "body" not in by[REDUCE, 3]
     gathered = by[GATHER, 0]
     assert gathered["status"] == "ok" and gathered["body"] == "concat(shard_0..shard_1, dim=-1)"
