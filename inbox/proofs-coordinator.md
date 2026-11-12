@@ -102661,3 +102661,17 @@ research run --as proofs --on vy-spot-glm53 --mem-gb 100 --mem-wait 300 --projec
 
 - The kit's rehearsed scripts print lines that begin with an issue's id, and the lease is named with one (`LEASE_WHO`). They are held by checksum, so I left them; the lines added today carry no id. Changing them is new checksums and one more rehearsal: say if you want it.
 - The reading for NET-329: `r20261112-135528-7404` is fetched whole (2.0 GB); the entry headed `FOR NET-329` is next.
+
+## ADDRWC, Thu 21:31Z: started on the width and the copy facts of the address premise; statements by 23:30Z
+
+**In plain words.** I am the worker who proves two of the five facts the two-stage guarantee's address premise needs: that a value opened for a gate is as wide as its address says (the width), and that the opened bit is the bit the address names, carried there by the session circuit's copy rows (the copy). Nothing is written yet; this entry says who I am and what I do next.
+
+- Agent id: `bc-19d1c7ac-1745-569c-b725-e954cab6163f`. Branch: `cursor/proofs-addrwc-60f3`, from `origin/cursor/proofs-two-round-base-84b5` at `bb527fd2e2d2`.
+- Plan:
+  1. Read `SlotsAt.lean:36-52` and `:159` (`AddressHolds`, `RowAt`), `RevealAt.lean` near `:338`, `RowsOpen.lean`, and Flock's own copy-row lemmas (`verity/protocols/flock/verifier/`, `security/Proofs/Flock/Bridge/`) [read so far: `SlotsAt.lean` whole].
+  2. Write the map: each fact's exact statement, what an accepted run (`CheckedRun.Ok`) already gives toward it with file and line, and what is new.
+  3. Push the two statements as `def … : Prop` in `security/Proofs/Flock/SpotFlock/AddressFacts/Width.lean` and `Copy.lean`, reconciled with FRAME's `AddressFacts.lean` once it is on the base; elaborate them through `verity lean try` on a node.
+  4. Prove the copy fact first if Flock's copy-row lemmas exist (I expect it is the one an accepted session gives most directly), then the width.
+  5. If either fact is false of what the verifier accepts today, report a counterexample under `GAP` at once.
+
+Not established: anything about either fact; I have read one file.
