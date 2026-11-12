@@ -163,6 +163,42 @@ def test_max_model_len_is_the_schedulers_where_its_scheduler_config_no_longer_ho
     assert ST.scheduler_config(sched)["max_model_len"] == 1024
 
 
+def test_an_arrival_after_an_empty_schedule_says_how_many_where_the_engine_holds_other_requests():
+    """A replay puts such a request back after as many empty schedules, with the requests the step in flight released; an
+    arrival at an idle engine, or right after a step, says nothing more than its step."""
+    class Sched:
+        def __init__(self):
+            self.requests, self.tokens = {}, 0
+
+        def add_request(self, request):
+            self.requests[request.request_id] = request
+
+        def schedule(self):
+            return SimpleNamespace(total_num_scheduled_tokens=self.tokens)
+
+        def update_from_output(self, so, mro):
+            return {}
+
+        def finish_requests(self, request_ids, finished_status):
+            return []
+
+    sched = Sched()
+    trace = ST.StepTrace().install(sched)
+
+    def arrive(rid: str, schedules: tuple[int, ...] = ()) -> None:
+        for sched.tokens in schedules:
+            sched.schedule()
+        sched.add_request(SimpleNamespace(request_id=rid, prompt_token_ids=[1, 2], sampling_params=None))
+
+    arrive("a")
+    arrive("b", (3, 0, 0))                      # a step, then two schedules that held every request back
+    arrive("c", (2,))
+    sched.requests.clear()
+    arrive("d", (0,))                           # the engine drained: nothing a later schedule could run with it
+    assert [(r["request"], r["before_step"], r.get("after_empty")) for r in trace.records if r["kind"] == "arrive"] == [
+        ("a", 0, None), ("b", 1, 2), ("c", 2, None), ("d", 2, None)]
+
+
 def test_the_header_holds_the_cache_format_and_speculative_settings_an_engine_was_built_with():
     """A replay's engine takes them as its ``kv_cache_dtype`` and ``speculative_config``; an engine with vLLM's default cache
     format and no draft writes neither entry, so its header is what it was."""

@@ -4,7 +4,11 @@ A served run's batches, positions, chunked prefills, preemptions, cache hits and
 serving, so nothing declared before the run predicts them.  `StepTrace` records them from the in-process engine core
 (``VLLM_ENABLE_V1_MULTIPROCESSING=0``, `engine.env`), through `engine.hooks`, without changing what the engine does:
 
-- ``scheduler.add_request``: a request's arrival, its prompt length and sampling parameters, and the step it arrived before;
+- ``scheduler.add_request``: a request's arrival, its prompt length and sampling parameters, and the step it arrived before.
+  Where the engine held other requests and had scheduled nothing since its last step (every one of them held back, as a
+  request at its token limit is until its last step's output is back), the arrival also says after how many such empty
+  schedules it came (``after_empty``): the next schedule runs it with the requests that output released, one before runs it
+  alone;
 - ``scheduler.schedule``: the step's index among the steps that schedule tokens (an empty schedule runs no forward);
 - ``scheduler.update_from_output(scheduler_output, model_runner_output)``: the step's rows in the model runner's order
   (``model_runner_output.req_ids``: the order the step's tokens are laid out in, Model Runner V2's ``sort_batch_req_ids``), each
@@ -126,6 +130,7 @@ class StepTrace:
         self.records: list[dict[str, Any]] = []
         self.hooks = Hooks(tag="step-trace")
         self.scheduled = 0                      # steps scheduled with tokens so far: the index the next such step gets
+        self.empty = 0                          # schedules that scheduled nothing since the last such step
         self.executed = 0
         self._pending: dict[int, int] = {}      # id(SchedulerOutput) -> its step
         self._fh = None
@@ -198,10 +203,11 @@ class StepTrace:
         def add_request(orig):
             def wrapped(request, *a, **kw):
                 fresh = request.request_id not in sched.requests
+                after = {"after_empty": me.empty} if me.empty and sched.requests else {}
                 out = orig(request, *a, **kw)
                 if fresh:
                     sp = getattr(request, "sampling_params", None)
-                    me._emit({"kind": "arrive", "request": me.request_id(request.request_id), "before_step": me.scheduled,
+                    me._emit({"kind": "arrive", "request": me.request_id(request.request_id), "before_step": me.scheduled, **after,
                               "prompt_len": int(getattr(request, "num_prompt_tokens", 0) or len(request.prompt_token_ids or ())),
                               "eos_token_id": _plain(getattr(request, "eos_token_id", None)),
                               "sampling": {n: _plain(getattr(sp, n)) for n in SAMPLING if sp is not None and hasattr(sp, n)}})
@@ -214,6 +220,9 @@ class StepTrace:
                 if int(getattr(so, "total_num_scheduled_tokens", 0) or 0) > 0:
                     me._pending[id(so)] = me.scheduled
                     me.scheduled += 1
+                    me.empty = 0
+                else:
+                    me.empty += 1
                 return so
             return wrapped
 
