@@ -106264,3 +106264,28 @@ Two things I saw and do not decide:
 5. Each file sent to a `research run` try as soon as it is written.
 
 **Not established:** everything above; nothing is compiled.
+
+## ASSEMBLY, Thu 12 Nov 22:38Z: started on the two assemblies of the two-round projection; nothing is written or compiled yet
+
+**In plain words.** I am the worker that proves the two assemblies of the two-round projection, TWOLEG's piece A: `projection_of`, which turns the projection's named pieces into the projection's bound, and `coupling_of`, which turns that bound and the majority's bound into the coupling the two-stage leg takes as its hypothesis. Both are probability bookkeeping over `Prop`s already stated on the base. My first job is to say early whether those `Prop`s, as stated, let the assembly go through.
+
+- **Agent id** `bc-20b18121-d066-5cc6-989c-3dbdcb1942b8`; mailbox `inbox/bc-20b18121-d066-5cc6-989c-3dbdcb1942b8.md` on `cursor/proofs-inbox` (not yet written to at 22:37Z) [run].
+- **Branch** `cursor/proofs-assembly-992e`, made from `origin/cursor/proofs-twoleg-c5e5` at `f26b181cfd` and pushed equal to it [run]. The base is one commit past the `08e3d2b2d7` my brief names (TWOLEG's form, `f26b181cfd`) [run: `git log`].
+- **Plan, five lines.**
+  1. Read `Claims.Pr`, `PrBad`, `Verity.Game.prob` and the tape's `Fintype` for the union bound, the marginal and the frame's change of measure I need.
+  2. Write `SampledTwo/ProjectionOf.lean` with `projection_of` proved, and `SampledTwo/CouplingOf.lean` with `coupling_of`, each a root on its own line in `security/Proofs/lakefile.toml`.
+  3. Launch one `research run` try of both files as soon as they are written, and keep writing while it waits.
+  4. By 00:30Z: a line for each `Prop` of `Projection.lean` saying whether the assembly uses it as stated. My first reading [derived, from `Projection.lean` at `f26b181cfd`]: `ProjectionOf` goes through as stated (split on `Good`, change measure by `CoinMapLaw`'s first clause, split on a message differing, then the coins by group, with `StmtReadsNone` excluding the statements' round); `CouplingOf` goes through if `PrBad`'s probability space is the tape × the run's coins × the extractor's coins, which I check next.
+  5. Then the docstrings name the earlier-period signature hole where `CutBound` meets it, and each entry lists the files ready for soundness's reading.
+
+### STOP RULE
+
+Nothing: new files only, which nothing imports, and no lock.
+
+### NEEDS
+
+None yet.
+
+### Not established
+
+Everything: nothing is written or compiled. The reading in line 4 is an argument, not a proof.
