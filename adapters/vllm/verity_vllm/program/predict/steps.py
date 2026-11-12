@@ -424,9 +424,9 @@ def launch_class(phi: Phi) -> None:
     elif (phi.target or {}).get("compilation") != CLASS_G_EXECUTIONS[phi.execution]:
         facts.append(f"target compilation {(phi.target or {}).get('compilation')!r} at execution {phi.execution!r}, not "
                      f"{CLASS_G_EXECUTIONS[phi.execution]!r}")
-    caps = {**CLASS_G_LIMITS, "max_model_len": int(phi.hf_config.get("max_position_embeddings") or 0)}
-    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {cap}" for k, cap in caps.items()
-              if type(eng.get(k)) is not int or not 0 < eng[k] <= cap]
+    limits = {**CLASS_G_LIMITS, "max_model_len": int(phi.hf_config.get("max_position_embeddings") or 0)}
+    facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {most}" for k, most in limits.items()
+              if type(eng.get(k)) is not int or not 0 < eng[k] <= most]
     if type(eng.get("enable_prefix_caching")) is not bool:
         facts.append(f"engine arg enable_prefix_caching {eng.get('enable_prefix_caching')!r}, not stated True or False")
     if facts:
