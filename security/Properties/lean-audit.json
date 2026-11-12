@@ -1084,12 +1084,21 @@
      "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest",
      "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete"
     ]
+   },
+   "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocolBy": {
+    "fails": "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_nontrivial",
+    "meets": [
+     "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_honest",
+     "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_bites"
+    ]
    }
   },
   "not": {
    "Properties.RemoteAudit.Subprotocol.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtSubprotocol` reads in its event: an event, no claim",
    "Properties.RemoteAudit.Subprotocol.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtSubprotocol_honest`: the honest case, no claim",
-   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim"
+   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.Publishes": "the subprotocol's acceptance of a record's bytes at the public outputs it publishes, which `QBytesAtSubprotocol` and `PublishedQBytes` read in their event: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.QBytesBy": "`q_bytes` within the right receipts at a verifier's record, which `QBytesAtSubprotocolBy` reads in its event: an event, no claim"
   }
  },
  "witnesses": {
@@ -8169,6 +8178,15 @@
    },
    "type_hash": "04953e8d83f5c1c9547e81d0e660650c82389ed2312f1d80ca8e97514a4cb2a3"
   },
+  "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_bites": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Properties.RemoteAudit.Subprotocol.qBytesAtSubprotocol_nontrivial": {
+   "owner": "@memory-accounting"
+  },
   "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_bites": {
    "owner": "@memory-accounting",
    "signature": [
@@ -13067,7 +13085,9 @@
    "Verity.soundness_of_upFront": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfUpFront: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component, over the coins drawn up front, or as its target (Verity.Vocab.SubprotocolBound: Verity.Vocab.ComponentBound, Verity.Vocab.UpFrontBound or Verity.Vocab.Target); each bound is a hypothesis until its subprotocol's piece proves it",
    "Properties.Served.SampleMissesSubset": "unstated: the served draw's miss bound, proved in security_proofs by Properties.Served.SecurityProofs.sampleMissesSubset; INT-TIE's draft statement (#2677), which gets a guarantee entry once red team has read it",
    "Properties.RegisteredCircuit.SecurityProofs.scheduledRequirement": "frozen (no-function,hash): Accounting.SecurityProofs.RegisteredCircuitRequirement's game, premises and bound (its frozen reason in security/lean-audit.json) with SteeredLayout replaced by the named gap Properties.RemoteAudit.ScheduleLayoutGap and, as the event's first conjunct, RemoteAudit.Schedule.check's acceptance of every pass of the session at the steering cap it committed before its first coin (a session the check refuses is credited nothing after the seed, so its shortfall is not counted); on the accepted coins the layout is steered by the schedule's cap + 1 padded bits (Properties.RemoteAudit.steered_of_checked at each prefix), the pass devices told any a bits and the query term's union over both summaries, 2^(a + (cap + 1)); a bound on a game's probability (Pous.pr, not a shape.events constant), whose other hypotheses are G's and not premises, not a property of the check.",
-   "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet"
+   "Accounting.ReadUnit.ExpertReadAccepted": "unstated: what `flock-read-tmpl 256 3072` checks before it exits 0 (render `readTmpl 256 3072`, parse the text back, run `ReadNet.check` on the parsed template); `TableReadBinding`'s honest lemma in the Security lock takes it as an open premise, and no theorem here proves it yet",
+   "Properties.RemoteAudit.Subprotocol.QBytesAtSubprotocol": "unstated: on the subprotocol's acceptance, the `q_bytes` it publishes is at most `BLOCK_BYTES` times the record's receipts the trace gets right, except with `LineHeldAtSubprotocol`'s bound at `DELTA`, under `Live`, `Refused` and `Counted`; unproved, a statement that gets a guarantee entry, and a shape.properties entry naming `RemoteAudit.Protocol.check`'s accept, with its proof",
+   "Properties.RemoteAudit.Subprotocol.PublishedQBytes": "unstated: on the subprotocol's acceptance, `q_bytes` plus `BLOCK_BYTES` times the pooled bound of the record's samples at `DELTA` is at most `BLOCK_BYTES` times its receipts, with no premise: what `RemoteAudit.Protocol.certify` computes; unproved, a statement that gets a guarantee entry beside `publishedEps`'s, and a shape.properties entry naming `RemoteAudit.Protocol.check`'s accept, with its proof"
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
