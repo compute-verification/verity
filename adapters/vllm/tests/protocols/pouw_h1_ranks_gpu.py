@@ -45,7 +45,7 @@ SUMMARY = "ranks-summary.json"
 
 def entropy(label: str) -> Callable[[int], bytes]:
     """A fixed SHA-512 counter stream for `label`: the same coins in every run, so no verifier trusts them."""
-    state = {"i": 0, "buf": b""}
+    state: dict[str, Any] = {"i": 0, "buf": b""}
 
     def draw(n: int) -> bytes:
         while len(state["buf"]) < n:
@@ -154,6 +154,7 @@ def commit_window(a: argparse.Namespace, llm: Any, prompts: list[int], plain: li
     holder = PHR.install(llm, rows=decl.rows, steps=decl.steps, coins=salt_coins, rounds=rounds, admission=RQ.ROUND0,
                          transcript_dir=str(tdir), key=KEY, served=served,
                          commit={"cp": cp, "run_id": f"pouw-h1-ranks-{name}-{os.getpid()}"})
+    w: dict[str, Any]
     h1, w = holder.run, {"install_s": round(time.monotonic() - t0, 1)}
     if edit is not None:
         w["edit"] = {"kind": edit, "ranks": [x for x in holder.executor.collective_rpc(

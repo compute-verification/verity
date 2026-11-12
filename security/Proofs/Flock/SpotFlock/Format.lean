@@ -123,9 +123,9 @@ sits; the unit has its block in its own session statement (`unitStmt`), and at e
 accepts, the block circuit's values at the unit's wires (`unitVals`) hold each of `v`'s gates and carry `κ` wherever
 `v` reads it. -/
 def Embeds (L : Layout) : Prop :=
-  ∀ x s Pt d (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) u b ρ rb S,
+  ∀ x s Pt d (m₁ m₂ : Msg) (c₀ : FlockDeploy.Coin) (c₁ : Stage h) u b ρ rb S,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (stageSrc c₁) →
     FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h m₂ u) = some S →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     ∃ (C' : Verity.Boolean.Circuit) (κ : Fin C'.N → Option Bool) (n : ℕ)
