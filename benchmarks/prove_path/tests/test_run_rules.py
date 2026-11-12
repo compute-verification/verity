@@ -7,7 +7,8 @@ script:
   blocks for the honest run, every one for the forged run, and a stratified design under ``PP_PLAIN=1``;
 * each partition file (`partitions`: this benchmark's, the one-stage audit's and each one the script names) states a
   rate a stream takes or is listed as still stating a fixed design (`FIXED`), which an audit on a challenger's coins
-  (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check. The list only shrinks."""
+  (`prove_path.py audit`, `a5.py --challenger`) refuses at the rule check and a served window's audit from its records
+  (`records_audit.py audit`) refuses by name. The list only shrinks."""
 from __future__ import annotations
 
 import json
@@ -29,25 +30,17 @@ VAR, KEY = "LAW", "law"
 STANDIN, UNITS = "SiluMul_v2{I=256}", 8
 RATE = "a rate (rate:NUM/DEN, stratified-rate:NUM/DEN or work-rate:NUM/DEN)"
 #: the partition files that still state a fixed design (``subset:K``, ``stratified:K`` or ``work:K``), by path from the
-#: root. A stream refuses such a text as its rule, so an audit on a challenger's coins refuses the file. The list only
-#: shrinks: a file leaves it in the change that makes its text a rate, and none joins it.
+#: root. A stream refuses such a text as its rule, so an audit on a challenger's coins refuses the file, and so does a
+#: served window's audit from its records. Each one's rate is its K over the proof blocks its scope registers, a count
+#: only its window gives. The list only shrinks: a file leaves it in the change that makes its text a rate, and none
+#: joins it.
 FIXED = frozenset({
     "benchmarks/one_stage/glm53_all_families_tp8_step16.json",
-    "benchmarks/one_stage/glm53_moe_w13_tp8_step16.json",
-    "benchmarks/one_stage/glm53_moe_w2_tp8_step16.json",
     "benchmarks/one_stage/glm53_prefill_tp8_step0.json",
     "benchmarks/one_stage/glm53_prefill_tp8_step0_core.json",
-    "benchmarks/one_stage/glm53_silu_mul_v2_tp8.json",
-    "benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16.json",
-    "benchmarks/one_stage/glm53_silu_mul_v2_tp8_step16_stratified.json",
     "benchmarks/one_stage/glm53_sparse_mla_tp8_step16.json",
     "benchmarks/one_stage/llama32_1b_rope_d64_l0.json",
-    "benchmarks/one_stage/llama32_1b_silu_mul_v2_tp2.json",
-    "benchmarks/prove_path/glm53_silu_mul_v2_i1536_step16_all.json",
     "benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step0.json",
-    "benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step1.json",
-    "benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step24.json",
-    "benchmarks/prove_path/llama32_1b_tg_l0_step1.json",
     "benchmarks/prove_path/llama32_1b_tg_l0_step24.json",
 })
 
@@ -114,9 +107,10 @@ def test_each_rule_the_stand_in_states_is_a_rate_whose_design_its_window_registe
 
 
 def test_each_partition_file_states_a_rate_or_is_listed_as_still_stating_a_fixed_design():
-    """A partition file's text is the rule an audit on a challenger's coins states, so each one states a rate a stream
-    takes, or is in `FIXED` and that audit is refused at the rule check. A file outside the list that states a fixed
-    design fails, and so does a stale entry: a listed file that states a rate, or that is gone."""
+    """A partition file's text is the rule an audit states to its stream, on a challenger's coins or from a served
+    window's records, so each one states a rate a stream takes, or is in `FIXED` and that audit is refused at the rule
+    check. A file outside the list that states a fixed design fails, and so does a stale entry: a listed file that states
+    a rate, or that is gone."""
     files = partitions()
     assert files, f"no partition file beside {RUN_SH.name}: `partitions` reads none"
     fixed = {name for name, text in files.items() if rule_of(text)[1]}
