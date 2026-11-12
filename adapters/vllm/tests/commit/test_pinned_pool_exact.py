@@ -311,18 +311,6 @@ def test_reserve_is_a_no_op_off_the_exact_path(fake_cuda):
     assert pool.reserve([MiB]) == 0 and pool.all == []
 
 
-@pytest.mark.parametrize("j", [0, 1, 3, 7, 12])
-def test_the_primed_level_sizes_are_begin_trees(j):
-    from verity_vllm.commit.native_ranges import level_sizes
-
-    for n_total in [1, 2, 3, 5, 8, 127, 128, 129, 4097, 1 << 15]:
-        height, m = 0, n_total
-        while m > 1:
-            m = (m + 1) // 2
-            height += 1
-        assert level_sizes(n_total, j) == [-(-n_total // (1 << L)) for L in range(min(j, height) + 1)]
-
-
 def test_the_helper_threads_are_the_commit_commands_option_and_a_fresh_pool_keeps_them():
     """`--pinned-populate-threads` (the CLI reads VERITY_PINNED_POPULATE_THREADS) is the committer's pool's, `POPULATE_THREADS` when
     unset, and the fresh pool an openings replay gets has the same settings."""

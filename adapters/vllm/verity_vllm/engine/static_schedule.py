@@ -25,12 +25,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
+
+from verity_vllm.records.schema_ids import STATIC_SCHEDULE_SCHEMA
 
 __all__ = ["against_warmup", "report_lines"]
 
-SCHEMA = "verity-vllm/static-schedule/v1"
+SCHEMA = STATIC_SCHEDULE_SCHEMA
 RULE = ("sampling.ignore_eos: every request finishes by length at exactly max_tokens, is never preempted and reads no KV block chosen by "
         "the host prefix cache; the realized schedule is then a function of the declaration (arrivals, prompt lengths, caps, engine args)")
 SCHEDULE_FIELDS = ("arrive_step_realized", "first_step", "finish_step", "n_generated", "finish_reason", "prefill_steps", "token_steps")
@@ -61,23 +63,28 @@ def preemptions(snapshots: Iterable[Mapping[str, Any]]) -> dict[str, int]:
     return out
 
 
+def _record(timing: Mapping[str, Any], rid: str) -> Mapping[str, Any]:
+    """`timing`'s record of the request `rid`; an empty one where the timing holds none for it (absent, null or empty)."""
+    held = timing.get("requests")
+    rec = held.get(rid) if held else None
+    return rec if rec else {}
+
+
 def schedule_of(order: list[str], timing: Mapping[str, Any]) -> dict[str, Any]:
     """The realized schedule of `timing` (`run_requests`' record) over the requests in `order`, ids and tokens left out, and its digest."""
-    recs = timing.get("requests") or {}
-    rows = [{k: (recs.get(rid) or {}).get(k) for k in SCHEDULE_FIELDS} for rid in order]
+    rows = [{k: rec.get(k) for k in SCHEDULE_FIELDS} for rec in (_record(timing, rid) for rid in order)]
     doc = {"engine_steps": timing.get("engine_steps"), "requests": rows}
     return {**doc, "digest": hashlib.sha256(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()}
 
 
-def check(requests: list[Mapping[str, Any]], timing: Mapping[str, Any], *, cached_tokens: Mapping[str, int | None] | None = None,
+def check(requests: Sequence[Mapping[str, Any]], timing: Mapping[str, Any], *, cached_tokens: Mapping[str, int | None] | None = None,
           preempted: Mapping[str, int] | None = None) -> dict[str, Any]:
     """`requests`: the declared ones (`request_id`, `max_tokens`), in order; `timing`: `run_requests`' record; `cached_tokens`: {request id:
     the engine's `num_cached_tokens`}; `preempted`: `preemptions(...)` keyed by any id that contains the request's."""
-    recs = timing.get("requests") or {}
     problems: list[str] = []
     for r in requests:
         rid, cap = str(r["request_id"]), int(r["max_tokens"])
-        rec = recs.get(rid) or {}
+        rec = _record(timing, rid)
         reason, n = rec.get("finish_reason"), rec.get("n_generated")
         if any(str(x) != "length" for x in (reason if isinstance(reason, list) else [reason])) or n != cap:
             problems.append(f"{rid}: finished by {reason!r} after {n} of its {cap} tokens: the host stopped it early, so its step count "
@@ -99,7 +106,7 @@ def compare(reference: Mapping[str, Any], run: Mapping[str, Any]) -> dict[str, A
     problems: list[str] = []
     if reference.get("engine_steps") != run.get("engine_steps"):
         problems.append(f"engine steps {reference.get('engine_steps')} vs {run.get('engine_steps')}")
-    a, b = reference.get("requests") or [], run.get("requests") or []
+    a, b = (rows if rows else [] for rows in (reference.get("requests"), run.get("requests")))
     if len(a) != len(b):
         problems.append(f"{len(a)} vs {len(b)} requests")
     for i, (x, y) in enumerate(zip(a, b)):
