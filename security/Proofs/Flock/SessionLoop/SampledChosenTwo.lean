@@ -23,8 +23,8 @@ of the boundary's record and those coins. What the audit sees of each session is
 * **`Flock.SecurityProofs.SampledAuditTwoChosenAnyRelayDeployed`**: `sampledAuditTwoChosen_zkOutRelay` at the second
   conjunct of `Loop.ZkAnyAt` (`SessionLoopZKAnyDeployed`), and `ideal_hm96_stream` for each stream's hiding.
 
-The interior's key here is uniform. The deployed one is drawn from the operating system with the interior session's
-salts (`Flock.Firewall.Values.answer`'s `interior`), no function of the boundary's key.
+The interior's key here is uniform. The deployed one is sampled from the operating system with the interior session's
+salts (`Values.answer`'s `interior`), no function of the boundary's key.
 -/
 
 @[expose] public section
