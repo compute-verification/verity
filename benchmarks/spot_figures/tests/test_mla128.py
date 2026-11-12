@@ -54,6 +54,37 @@ def test_the_rule_gives_the_card_its_own_request_s_blocks():
         M.volume(c | {"strata": [*c["strata"], c["strata"][0] | {"block": "SparseMlaHeadSplit_v9{T=3}"}]}, own)
 
 
+def head_units() -> dict:
+    """The `workload` card cut by the partition card `head-scores-values`: each head block its scores and values units."""
+    import total_cost
+
+    part = next(x for x in cards.load_all("partition", "GLM-5.3") if x["value"]["name"] == "head-scores-values")
+    return card() | {"strata": total_cost.cut_strata(card()["strata"], part)}
+
+
+def test_a_head_block_s_scores_and_values_units_take_its_factor():
+    """Cut into scores and values units, the card's own request still gives every sparse-MLA block's count: a values
+    unit and a 64-column end are one of eight column blocks of their unit. Over the serve plan each unit takes its
+    key block's factor, and a 64-column end its whole end's."""
+    c, u = card(), head_units()
+    assert [M.columns(b) for b in ('SparseMlaHeadValues_v1{NVIS=64,FIRST=false,BN=64,G=64}',
+                                   'SparseMlaHeadEnd_v1{DV=64,INV={"fn":"Fa3InvSum_v1"}}',
+                                   'SparseMlaHeadEnd_v1{DV=512,INV={"fn":"Fa3InvSum_v1"}}',
+                                   'SparseMlaSplitEnd_v1{DV=64,INV={"fn":"Fa3InvSum_v1"}}',
+                                   'SparseMlaSplitEndCols_v1{DV=512,G=64,C=3}',
+                                   'SparseMlaHeadScores_v1{DR=64,DV=512,NVIS=64,FIRST=false}')] == [8, 8, 1, 8, 1, 1]
+    own = [(c["request"]["prefill"], c["tokens"] - c["request"]["prefill"], 0)]
+    vol = M.volume(u, own)
+    assert len(vol) == 142 and all(f == pytest.approx(1.0, rel=1e-12) for f in vol.values())
+    assert not any(b.startswith("SparseMlaHeadBlock_v1{") for b in vol)
+    whole, cut = M.volume(c), M.volume(u)
+    by = {(M.unit_of(b), b.split("{")[0]): f for b, f in whole.items()}
+    for b, f in cut.items():
+        kind = {"SparseMlaHeadScores_v1": "SparseMlaHeadBlock_v1", "SparseMlaHeadValues_v1": "SparseMlaHeadBlock_v1",
+                "SparseMlaSplitEnd_v1": "SparseMlaSplitEndCols_v1"}.get(b.split("{")[0], b.split("{")[0])
+        assert f == pytest.approx(by[(M.unit_of(b), kind)], rel=1e-12), b
+
+
 def test_the_serve_plan_s_requests_set_each_block_s_factor():
     """The 128k workload reads many times the census request's keys a token: its head blocks a token are several
     times the card's, its whole rows a small share of them, and a combine over n splits counts as n / 5 of the card's

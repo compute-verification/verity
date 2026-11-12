@@ -13,8 +13,10 @@ reaches 10% of its compute, and a row's sampling plan, from one entry point at a
 
 from the repository's root. A row (`ROWS`) is the proof server's line at its last step
 (`sweep.served_line()["P5+poolwin600"]`) with its case's levers at their measured values, over the 128k workload with
-every sparse-MLA head's blocks (`volume`: the `workload` card's head blocks counted over the serve plan's requests,
-`mla128`), its verification phase a datacenter's window. `price` prices its strata: the planner's per-type pricing, the quant types' host walk, the Lean verifier
+every sparse-MLA head's blocks as served (`PARTITION`: the `partition` card that cuts each head's key block into its
+scores unit and its values units, beside the line's own cut; `volume`: the cut `workload` card's sparse-MLA blocks
+counted over the serve plan's requests, `mla128`), its verification phase a datacenter's window. A row names its cut
+and the cut's label (`cut`). `price` prices its strata: the planner's per-type pricing, the quant types' host walk, the Lean verifier
 as measured and the row's scale. `evaluate` charges it: the carried pool's pages recommitted at each edge
 (a copy stratum and the kv arm's hash tax), a request cut at the edge recomputed, its prefix hits reproved, B128's
 wait at paced egress, the pool's AND gates when only replays read it, and a replay block served at most trace128's
@@ -40,8 +42,10 @@ or its Definition's at the same static K (`family`) takes that row's seconds a b
 (the walk and the row's scale in it) times one factor, so that a block and its share of a statement's fixed seconds
 come to the row's seconds and keep the planner's proportion, and the measured verifier's seconds a statement on top,
 not its seconds a block; every other block keeps its price (the planner's). A table's row for no block of the
-line is refused by name. Each row then says which table priced it (`prices`), and its split gives the share of the
-plan's proving each source prices (`split.sources`: own row, family row, the planner's price, the copy stratum).
+line is refused by name, but for a block of the `workload` card that the row's cut leaves out: that row measured
+another cut, and the row counts it unread by family (`prices.unread`), as a steady-state row of one is listed unread.
+Each row then says which table priced it (`prices`), and its split gives the share of the plan's proving each source
+prices (`split.sources`: own row, family row, the planner's price, the copy stratum).
 """
 from __future__ import annotations
 
@@ -87,9 +91,14 @@ MEASURED = {"prover": PROVER_MEASURED, "tmpl": "measured", "dense_k": 2, "verify
             "replay": 5258.0, "live": False, "commit_write": False, "registration": "datacenter"}
 #: the served tokens' line, unfused
 TOKENS = {"line": "tokens", "fuse": False, "fused": ""}
-#: the types whose seconds a warm served block replaces in (iii): the sparse-MLA row's units as the card cuts it (its
-#: head blocks, a head's end, a split's column ends, the combine, a whole row) and the families beside them
-WARM_FAMILIES = ("SparseMlaHeadBlock_v1{", "SparseMlaHeadEnd_v1{", "SparseMlaSplitEndCols_v1{", "Fp8GroupQuantUe8m0_v1{",
+#: the sparse attention as served: each head's key block its scores unit and its values units of 64 columns, a
+#: `partition` card that cuts every row's line beside the line's own cut
+PARTITION = "head-scores-values"
+#: the types whose seconds a warm served block replaces in (iii): the sparse-MLA row's units under either cut (a head
+#: block whole, or its scores and values units; a head's end; a split's column ends; the combine; a whole row) and
+#: the families beside them
+WARM_FAMILIES = ("SparseMlaHeadBlock_v1{", "SparseMlaHeadScores_v1{", "SparseMlaHeadValues_v1{", "SparseMlaHeadEnd_v1{",
+                 "SparseMlaSplitEndCols_v1{", "SparseMlaSplitEnd_v1{", "Fp8GroupQuantUe8m0_v1{",
                  "SparseMlaCombine_v1{", "BatchedGemm_v1{", "CublasSplitKGemmF32Out_v1{", "CublasSplitKGemm_v1{",
                  "DsaRMSNorm_v1{", "RmsNormMnnvl_v1{", "AllReduceResidualMnnvl_v1{", "AllReduceMnnvl_v1{",
                  "EmbeddingShard_v1{", "LlBf16DotprodGemm_v1{", "SparseMlaSplit_v1{", "Gemm_v2{")
@@ -100,9 +109,9 @@ def warm(f: float) -> dict:
 
 
 #: each row's case fields over the P5 line's, and the factors (seconds a block, fixed seconds) its types take
-ROWS = {"(i) honest": {"case": TOKENS | MEASURED, "scale": {}},
-        "(ii) honest": {"case": dict(MEASURED), "scale": {}},
-        "(iii) honest": {"case": dict(MEASURED), "scale": warm(0.25)}}
+ROWS = {"(i) honest": {"case": TOKENS | MEASURED | {"partition": PARTITION}, "scale": {}},
+        "(ii) honest": {"case": MEASURED | {"partition": PARTITION}, "scale": {}},
+        "(iii) honest": {"case": MEASURED | {"partition": PARTITION}, "scale": warm(0.25)}}
 
 RMS8 = "RMSNormFusedCudaVector8_v1{N=6144,"
 #: the Lean verifier as measured, core-seconds a one-block statement and a block: RMSNorm v8's measured statement times
@@ -119,9 +128,13 @@ QUANT_WALK = (10.53 - 26.84 / 32) / 12 / 2048
 GPU_GIB = 2163991326720 / 2**30 / 8
 #: each type's prover and verifier pair in host memory, GiB: quant at 291 GiB a K6144 pair, other K's in proportion
 #: (assumed); the sparse-MLA head block's as a prover and verifier of a row's 64 keys took at load, a floor (assumed:
-#: the head block's own pair is unmeasured, and at 64 keys it has that statement's MACs and k_log)
+#: the head block's own pair is unmeasured, and at 64 keys it has that statement's MACs and k_log); its scores unit's
+#: the same, at most its k_log, and its values unit's an eighth of it, at three k_log below it or more (assumed: neither
+#: unit's pair is measured)
+HEAD_PAIR_GIB = 64.4 + 72.1
 PAIR_GIB = {**{f"Fp8GroupQuantUe8m0_v1{{K={k},": 291.0 * k / 6144 for k in (6144, 2048, 1536, 256)},
-            "SparseMlaHeadBlock_v1": 64.4 + 72.1}
+            "SparseMlaHeadBlock_v1": HEAD_PAIR_GIB, "SparseMlaHeadScores_v1": HEAD_PAIR_GIB,
+            "SparseMlaHeadValues_v1": HEAD_PAIR_GIB / 8}
 
 
 def host_provers(pair: float, budget: float = GPU_GIB) -> int:
@@ -175,20 +188,54 @@ def heads() -> int:
     return SPARSE_MLA_GLM53["NH"]
 
 
-@lru_cache(maxsize=None)
-def _volume(registered: int, n: int) -> tuple:
+def _flat() -> None:
     for path in (HERE, HERE.parent):
         if str(path) not in sys.path:
             sys.path.insert(0, str(path))
+
+
+def partition_card(name: str) -> dict:
+    """GLM-5.3's `partition` card `name`."""
+    _flat()
     import cards
+    got = {c["value"]["name"]: c for c in cards.load_all("partition", MODEL)}
+    if name not in got:
+        raise ValueError(f"{MODEL} has no partition card `{name}`: its cards are {sorted(got)}")
+    return got[name]
+
+
+def workload(partition: str = "") -> dict:
+    """The `workload` card's value, its circuit cut by the `partition` card of that name where one is given (its strata
+    in place of the card's of the kinds it replaces, `total_cost.cut_strata`)."""
+    _flat()
+    import cards
+    v = cards.load("workload", MODEL)["value"]
+    if not partition:
+        return v
+    import total_cost
+    return v | {"strata": total_cost.cut_strata(v["strata"], partition_card(partition))}
+
+
+def replaced(partition: str) -> frozenset:
+    """The `workload` card's blocks that the `partition` card's cut leaves out: a steady-state row or a table's row of
+    one is another cut's measurement, which no block of the cut line takes."""
+    if not partition:
+        return frozenset()
+    return frozenset({x["block"] for x in workload()["strata"]} - {x["block"] for x in workload(partition)["strata"]})
+
+
+@lru_cache(maxsize=None)
+def _volume(registered: int, n: int, partition: str) -> tuple:
+    _flat()
     import mla128
-    return tuple(mla128.volume(cards.load("workload", MODEL)["value"], heads=n).items())
+    return tuple(mla128.volume(workload(partition), heads=n).items())
 
 
-def volume(n: int | None = None) -> dict:
+def volume(n: int | None = None, partition: str = PARTITION) -> dict:
     """The 128k workload's sparse-MLA blocks a token over the `workload` card's, by block (`mla128.volume`), its rows
-    counted at `n` heads (GLM-5.3's when not given)."""
-    return dict(_volume(heads(), heads() if n is None else n))
+    counted at `n` heads (GLM-5.3's when not given), on the card cut by the `partition` card of that name (the rows'
+    served cut when not given, the card's own when empty)."""
+    return dict(_volume(heads(), heads() if n is None else n, partition))
 
 
 def factors(x: dict, scale: dict) -> tuple | None:
@@ -400,7 +447,8 @@ def installed(P: SimpleNamespace, spec: dict):
     vol = spec["volume"]
 
     def line(n, strata=None, **kw):
-        strata = list(strata or P.levers.priced_strata(n)) + ([trace.extra] if trace.extra else [])
+        strata = (list(strata or P.levers.priced_strata(n, spec["case"].get("partition", "")))
+                  + ([trace.extra] if trace.extra else []))
         strata = [x | {"per_token": x["per_token"] * next((f for p, f in vol.items() if x["block"].startswith(p)), 1.0)}
                   for x in strata]
         return make_line(n, strata, **kw)
@@ -432,15 +480,25 @@ def installed(P: SimpleNamespace, spec: dict):
 
 
 def spec_of(row: str, scope: str, beta: float, n_heads: int | None = None, steady: dict | None = None,
-            prices: dict | None = None) -> dict:
-    """A job: `ROWS[row]` at `scope` and the pinned `beta`, over every sparse-MLA head, its blocks priced at the
-    steady-state rows of `steady` (`steady()`) where it holds one, or at `verity bench prove`'s table (`prices()`)."""
+            prices: dict | None = None, partition: str | None = None) -> dict:
+    """A job: `ROWS[row]` at `scope` and the pinned `beta`, over every sparse-MLA head, its line cut by its row's
+    `partition` card (`partition` another, or "" the `workload` card's own cut), its blocks priced at the steady-state
+    rows of `steady` (`steady()`) where it holds one, or at `verity bench prove`'s table (`prices()`). A row of either
+    for a block the cut leaves out (`replaced`) is listed unread: it measured the census's cut, not this line's."""
     if steady and prices:
         raise ValueError("a row is priced at steady-state rows or at a table, not both")
     r = ROWS[row]
-    return {"row": row, "scope": scope, "beta": beta, "case": r["case"], "scale": r["scale"], "steady": steady,
-            "prices": prices,
-            "volume": volume(n_heads), "heads": heads() if n_heads is None else n_heads, "S": SERVED_BITS,
+    case = r["case"] | ({} if partition is None else {"partition": partition})
+    gone = replaced(case.get("partition", ""))
+    if steady:
+        steady = {"rows": {b: x for b, x in steady["rows"].items() if b not in gone},
+                  "unread": sorted([*steady["unread"], *(x["type"] for b, x in steady["rows"].items() if b in gone)])}
+    if prices:
+        prices = prices | {"cells": {b: x for b, x in prices["cells"].items() if b not in gone},
+                           "unread": sorted([*prices.get("unread", ()), *(b for b in prices["cells"] if b in gone)])}
+    return {"row": row, "scope": scope, "beta": beta, "case": case, "scale": r["scale"], "steady": steady,
+            "prices": prices, "volume": volume(n_heads, case.get("partition", "")),
+            "heads": heads() if n_heads is None else n_heads, "S": SERVED_BITS,
             "share": SHARE, "step": STEP, "set": CHARGES, "S_case": SERVED_CASE, "mix": MIX, "rule": RULE,
             "run_s": RUN_S}
 
@@ -502,12 +560,18 @@ def evaluate(spec: dict, P: SimpleNamespace | None = None) -> tuple[dict, dict]:
                "served_bits": L[1]["served_bits"].value, "requests": s.requests, "flop_request": s.flop_request,
                "gpu_seconds": gs, "case": spec["case"], "scale": spec["scale"], "volume": spec["volume"],
                "census_scope": {k: getattr(sweep.SCOPES[scope], k) for k in ("requests", "flop_request")}}
+        if cut := spec["case"].get("partition"):
+            card = partition_card(cut)
+            row["cut"] = {k: card["value"][k] for k in ("name", "label", "replaces")} | {"art": card.get("art")}
         if st := spec.get("steady"):
             row["steady"] = {"priced": [{k: r[k] for k in ("block", "type", "per_block", "provers", "record")}
                                         for r in st["rows"].values()], "unread": st["unread"]}
         if pr := spec.get("prices"):
+            unread: dict = {}
+            for b in pr.get("unread", ()):
+                unread[family(b)] = unread.get(family(b), 0) + 1
             row["prices"] = {"read": pr["read"], "cores": pr["cores"], "rows": len(pr["cells"]),
-                             "above_cores": pr["above_cores"]}
+                             "above_cores": pr["above_cores"], "unread": unread}
         verify = [c for c in trace.calls if c[0]]
         reads = {"design": trace.designs[-1], "strata": strata, "calls": list(trace.calls),
                  "pricing": (verify or trace.calls)[-1][1]}
@@ -731,11 +795,13 @@ def show(figure: dict) -> str:
 def show_prices(pr: dict) -> str:
     """The table a row was priced at: when it was read, its rows and its host's cores, and the share of its proving
     on rows timed at more cores."""
-    above = pr["above_cores"]
+    above, unread = pr["above_cores"], pr.get("unread") or {}
     return (f"verity bench prove's table, read {pr['read'] or '(when: not stated in the file)'}: {pr['rows']} rows"
             + (f" at {pr['cores']} host cores a card" if pr["cores"] else "")
             + (f", {above['time_share'] * 100:.3f}% of its proving on {above['block_types']} rows timed at "
-               f"{above['timed_at']} cores" if above.get("time_share") else ""))
+               f"{above['timed_at']} cores" if above.get("time_share") else "")
+            + (f"; unread, of blocks the line's cut leaves out: {sum(unread.values())} rows ("
+               + ", ".join(f"{f} {n}" for f, n in unread.items()) + ")" if unread else ""))
 
 
 def show_row(row: dict) -> str:
@@ -795,6 +861,8 @@ def main(argv=None) -> int:
         figure = read(got)
         (a.out / "figure.json").write_text(json.dumps(figure, indent=1) + "\n")
         print(show(figure))
+        if cut := got[0].get("cut"):
+            print(f"cut by the partition card {cut['name']} ({cut['art']}): {cut['label']}")
         if table:
             print(show_prices(got[0]["prices"]))
     elif a.cmd == "read":

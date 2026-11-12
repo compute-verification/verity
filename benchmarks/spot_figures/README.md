@@ -316,7 +316,9 @@ uv run python benchmarks/spot_figures/record.py stamp META.json [--out DIR]  # a
   on every rank and step of one request, one stratum per proof-block Definition; its `source` names the census.
   `workload_card.py` writes it from the census file and nothing else, so no stratum is edited by hand. The 128k
   workload's sparse-MLA blocks are that card's, counted over the serve plan's requests as serving splits a row
-  (`breakeven/mla128.py`).
+  (`breakeven/mla128.py`). The figure of record's driver (`breakeven/headline.py`) cuts every row's line by the
+  `partition` card `head-scores-values` too, so its rows price each head's key block as its scores unit and its
+  values units, as served, and carry that card's label.
 
 Limits of the model:
 - A replay re-runs its whole replay block from its edge at the `replay` card's factor. Each sampled request pays its

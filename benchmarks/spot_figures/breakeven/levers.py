@@ -2,9 +2,10 @@
 each lever rewrites the priced strata, the replay per sampled request or the scope's budget, and the bound and the
 break-even beta follow from optimize.two_stage_design."""
 from dataclasses import replace
+from functools import lru_cache
 from math import sqrt
 
-from common import SCOPES, c, computed, confs, f1, inputs, lines, sc, tc
+from common import SCOPES, c, computed, confs, cuts, f1, inputs, lines, sc, tc
 
 PEAK_MAC_S = sc["proof_overhead"]["value"]["peak_mac_s"]
 #: the measured compressed size of the FP8 checkpoint, a share of its 8 bits a weight: what an FP8 theft must recover
@@ -31,8 +32,22 @@ def refit(name, strata):
     return i2, line, comp
 
 
-def priced_strata(name):
-    return [dict(x) for x in inputs[name]["partition"].value["strata"]]
+@lru_cache(maxsize=None)
+def _cut(name, partition):
+    """`name`'s inputs with its circuit also cut by the `partition` card `partition`, priced as the line's own are."""
+    if partition not in cuts:
+        raise ValueError(f"GLM-5.3 has no partition card `{partition}`: its cards are {sorted(cuts)}")
+    own = confs[name].partition
+    if own and (both := set(cuts[own]["value"]["replaces"]) & set(cuts[partition]["value"]["replaces"])):
+        raise ValueError(f"the partition cards `{own}` and `{partition}` both replace {sorted(both)}: a line takes one "
+                         "cut of a kind")
+    return tc.priced(tc.cut(tc.cut(c, cuts[own]) if own else c, cuts[partition]), sc["proof_overhead"])
+
+
+def priced_strata(name, partition=""):
+    """The line's priced strata, its circuit also cut by the `partition` card of that name where one is given."""
+    i = _cut(name, partition) if partition else inputs[name]
+    return [dict(x) for x in i["partition"].value["strata"]]
 
 
 # ---- strata transforms -------------------------------------------------------------------------------------------

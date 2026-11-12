@@ -34,12 +34,13 @@ def row(p, requests=None):
 
 def test_the_sparse_mla_blocks_count_glm53_s_heads():
     """The 128k workload's sparse-MLA blocks are GLM-5.3's eight heads', not one head's: every sparse-MLA block of
-    the `workload` card takes a factor, a head's units at one head a row an eighth of it and a whole row its own."""
+    the `workload` card under the rows' cut takes a factor, a head's units at one head a row an eighth of it and a
+    whole row its own."""
     from verity.definitions.registry.sparse_mla import SPARSE_MLA_GLM53
 
     assert H.heads() == SPARSE_MLA_GLM53["NH"] == 8
     vol, one = H.volume(), H.volume(1)
-    card = [x["block"] for x in cards.load("workload", "GLM-5.3")["value"]["strata"]]
+    card = [x["block"] for x in H.workload(H.PARTITION)["strata"]]
     assert set(vol) == {b for b in card if b.startswith("SparseMla")} and len(vol) > 1
     for b, f in vol.items():
         assert f > 0 and isclose(one[b], f if b.startswith("SparseMlaSplit_v1{") else f / 8, rel_tol=1e-12), b
@@ -60,12 +61,40 @@ def test_the_head_count_is_read_not_written(monkeypatch):
 
 def test_no_row_rescales_the_combine_and_the_warm_factor_names_the_card_s_units():
     """The lever counts a combine's splits in its volume, so no row scales the combine's seconds; the third row's warm
-    factor names the card's sparse-MLA units, and each type kept at one prover a GPU is on the card."""
+    factor names the card's sparse-MLA units under either cut, and each type a pair's host memory is given for is on
+    one of them."""
     assert [r["scale"] for r in H.ROWS.values()][:2] == [{}, {}]
     warm = H.ROWS["(iii) honest"]["scale"]
-    card = [x["block"] for x in cards.load("workload", "GLM-5.3")["value"]["strata"]]
-    assert all(H.factors({"block": b}, warm) == (0.25, 0.25) for b in card if b.startswith("SparseMla"))
-    assert all(any(b.startswith(p) for b in card) for p in ("SparseMlaHeadBlock_v1{", *H.PAIR_GIB))
+    whole, cut = ([x["block"] for x in H.workload(p)["strata"]] for p in ("", H.PARTITION))
+    assert all(H.factors({"block": b}, warm) == (0.25, 0.25) for b in whole + cut if b.startswith("SparseMla"))
+    assert all(any(b.startswith(p) for b in cut) for p in ("SparseMlaHeadScores_v1{", "SparseMlaHeadValues_v1{"))
+    assert all(any(b.startswith(p) for b in whole + cut) for p in H.PAIR_GIB)
+
+
+def test_every_row_is_cut_as_served_and_a_row_of_another_cut_is_unread():
+    """Each row's line is cut by the served partition card: each head's key block its scores unit and its values
+    units, no whole head block left, its volume the cut card's. A table's or a steady-state row for a block that cut
+    leaves out (the head blocks, their whole ends and column ends) is listed unread, not refused: it measured the
+    census's cut. On the `workload` card's own cut (`partition=""`) nothing is unread."""
+    assert {r["case"]["partition"] for r in H.ROWS.values()} == {H.PARTITION}
+    gone = H.replaced(H.PARTITION)
+    assert {H.family(b) for b in gone} == {"SparseMlaHeadBlock_v1", "SparseMlaHeadEnd_v1", "SparseMlaSplitEndCols_v1"}
+    assert len(gone) == 74 and H.replaced("") == frozenset()
+    block = min(gone)
+    doc = {"cores": 10, "cells": {COMBINE: {"source": "steady", "seconds": 1.0}, block: {"source": "steady",
+                                                                                         "seconds": 2.0}}}
+    rows = {"rows": {block: {"type": "Head_v1{NVIS=64}"}, COMBINE: {"type": COMBINE}}, "unread": ["Other_v1"]}
+    spec = H.spec_of("(i) honest", "world year", 0.4, prices=H.prices(doc))
+    assert spec["case"]["partition"] == H.PARTITION and spec["volume"] == H.volume()
+    assert list(spec["prices"]["cells"]) == [COMBINE] and spec["prices"]["unread"] == [block]
+    assert not any(b.startswith("SparseMlaHeadBlock_v1{") for b in spec["volume"])
+    measured = H.spec_of("(i) honest", "world year", 0.4, steady=rows)["steady"]
+    assert list(measured["rows"]) == [COMBINE] and measured["unread"] == ["Head_v1{NVIS=64}", "Other_v1"]
+    whole = H.spec_of("(i) honest", "world year", 0.4, prices=H.prices(doc), partition="")
+    assert whole["case"]["partition"] == "" and list(whole["prices"]["cells"]) == [COMBINE, block]
+    assert whole["prices"]["unread"] == [] and whole["volume"] == H.volume(partition="")
+    with pytest.raises(ValueError, match="no partition card `per-head`"):
+        H.spec_of("(i) honest", "world year", 0.4, partition="per-head")
 
 
 def test_a_row_whose_requests_are_not_its_plan_s_is_refused():
@@ -332,16 +361,17 @@ PLAN_BETA = 0.05544106123672309
 
 
 def test_row_ii_at_the_control_s_table_is_the_plan_s():
-    """Row (ii) at the control's table and the plan's budget (about 3 s): its bound is the plan's to 1e-12, its 193
-    blocks are the plan's in order, every planner input within 1e-9 of the plan's, and its plan's proving is the
-    table's own rows', its family rows' and the planner's price's in their shares. Catches a change to the pricing
-    rule, the planner or the card that moves the figure, which the stand-in pricing above can't."""
+    """Row (ii) on the `workload` card's own cut, at the control's table and the plan's budget (about 3 s): its bound
+    is the plan's to 1e-12, its 193 blocks are the plan's in order, every planner input within 1e-9 of the plan's, and
+    its plan's proving is the table's own rows', its family rows' and the planner's price's in their shares. Catches a
+    change to the pricing rule, the planner or the card that moves the figure, which the stand-in pricing above
+    can't."""
     for name, digest in CONTROL_SHA256.items():
         assert hashlib.sha256((CONTROL / name).read_bytes()).hexdigest() == digest, f"fixtures/control/{name}"
     want = json.loads((CONTROL / "plan_inputs.json").read_text())
     P = H.planner()
     spec = H.spec_of("(ii) honest", "world year", PLAN_BETA,
-                     prices=H.prices(json.loads((CONTROL / "bench_prices.json").read_text())))
+                     prices=H.prices(json.loads((CONTROL / "bench_prices.json").read_text())), partition="")
     row, reads = H.evaluate(spec, P)
     p = H.plan(spec, row, reads, {}, P)
     got = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
@@ -353,22 +383,48 @@ def test_row_ii_at_the_control_s_table_is_the_plan_s():
     off = [(want["strata"][i]["block"], f, u, v) for i, (a, b) in enumerate(zip(want["cells"], cells))
            for f, u, v in zip(want["cell_fields"], a, b) if not isclose(u, v, rel_tol=1e-9)]
     assert off == []
-    assert got["prices"] == {"read": None, "cores": None, "rows": 192, "above_cores": {}}
+    assert got["prices"] == {"read": None, "cores": None, "rows": 192, "above_cores": {}, "unread": {}}
+    assert "cut" not in got
     sources = got["split"]["sources"]
     assert list(sources) == ["own row", "family row", H.PLANNER, H.COPY_BASIS]
     assert [round(v, 6) for v in sources.values()] == [0.995394, 0.004465, 0.00014, 1e-06]
 
 
+def test_row_ii_at_the_control_s_table_on_the_served_cut_prices_the_units_at_the_planner_s():
+    """Row (ii) on its served cut at the control's table (about 3 s): the table's rows for the head blocks and their
+    ends are counted unread by family, every scores and values unit is priced by the planner (the table holds no row
+    of either), every other block the table prices keeps its row, and the row names its cut and the cut's label.
+    Catches the served cut dropping out of the rows, or a whole-block measurement pricing a unit."""
+    P = H.planner()
+    table = H.prices(json.loads((CONTROL / "bench_prices.json").read_text()))
+    spec = H.spec_of("(ii) honest", "world year", PLAN_BETA, prices=table)
+    row, reads = H.evaluate(spec, P)
+    p = H.plan(spec, row, reads, {}, P)
+    got = H.assemble(row, p, reads["calls"], reads["strata"], reads["pricing"])
+    assert got["prices"]["unread"] == {"SparseMlaHeadBlock_v1": 65, "SparseMlaHeadEnd_v1": 1,
+                                       "SparseMlaSplitEndCols_v1": 8}
+    assert got["prices"]["rows"] == 192 - 74
+    card = H.partition_card(H.PARTITION)
+    assert got["cut"] == {"name": H.PARTITION, "label": card["value"]["label"], "replaces": ["SparseMlaSplit_v1"],
+                          "art": card["art"]}
+    units = [x for x in reads["pricing"] if x["block"].startswith(("SparseMlaHeadScores_v1{", "SparseMlaHeadValues_v1{"))]
+    assert len(units) == 130 and all(x["table"] is None for x in units)
+    tabled = {x["block"] for x in reads["pricing"] if x["table"]}
+    assert tabled and tabled <= set(table["cells"]) and not tabled & H.replaced(H.PARTITION)
+    assert not any(x["block"].startswith("SparseMlaHeadBlock_v1{") for x in reads["strata"])
+    assert {"own row", "family row", H.PLANNER} <= set(got["split"]["sources"])
+
+
 @pytest.mark.slow
 def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
-    """Two rows on the planner (about 12 s): with a steady-state row mapped to the 64-key head block, the planner
+    """Two rows on the planner (about 12 s): with a steady-state row mapped to the 64-key scores unit, the planner
     prices that block at the row (the row's seconds a block and the measured verifier's, in statements of the row's
     blocks; its plan's proving says `steady` for it and the bound falls with the cheaper block), every other block as
     without it, and a row for no block of the line stops the row. Catches the planner's own
     pricing no longer taking a row by the line's block, which the stand-in pricing above can't."""
     P = H.planner()
-    part = next(x["block"] for x in P.levers.priced_strata("tokens")
-                if x["block"].startswith("SparseMlaHeadBlock_v1{") and "NVIS=64,FIRST=false" in x["block"])
+    part = next(x["block"] for x in P.levers.priced_strata("tokens", H.PARTITION)
+                if x["block"].startswith("SparseMlaHeadScores_v1{") and "NVIS=64,FIRST=false" in x["block"])
     rows = tmp_path / "rows.json"
     rows.write_text(json.dumps({"rows": [{"block": "Head_v1{NVIS=64}", "statement_seconds": 0.128, "blocks": 128,
                                           "provers": 1, "record": "art:head"}]}))
@@ -383,7 +439,7 @@ def test_a_planner_row_is_priced_at_a_steady_row_through_its_map(tmp_path):
     assert got["steady"] == {"priced": [{"block": part, "type": "Head_v1{NVIS=64}", "per_block": 1, "provers": 1,
                                          "record": "art:head"}], "unread": []}
     priced = next(x for x in reads["pricing"] if x["block"] == part)
-    card = next(x for x in P.levers.priced_strata("tokens") if x["block"] == part)
+    card = next(x for x in P.levers.priced_strata("tokens", H.PARTITION) if x["block"] == part)
     assert card["statement_blocks"] != 128 and card["priced"] != "steady"
     assert (priced["priced"], priced["basis"], priced["statement_blocks"]) == ("steady", "steady: art:head", 128)
     assert isclose(priced["seconds_per_block"], 0.128 / 128 + H.V_OTHER[1] / P.reprice.CORE_PER_GPU, rel_tol=1e-12)
