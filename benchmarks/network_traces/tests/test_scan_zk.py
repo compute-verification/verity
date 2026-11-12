@@ -392,7 +392,8 @@ def test_lean_reads_each_warden_port_at_the_root_the_warden_signed_never_one_the
 def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     """`window_answer` as the rows form reads an execution phase's scan answer (`pouw.core_check.answer_of` and
     `integrity`, the period mirror's own reads): every proof block of a G = 2 group sampled, one level sampled
-    stratified over the three templates, its bound 0, for the group's registration, and the tied values R8 let through
+    stratified over the three templates, its bound 0, for the group's registration, whether every verdict ran as the
+    audit record says it (``complete``, false of a record that doesn't), and the tied values R8 let through
     in its public when there are any (``rests_on_period_check``, an extra key the period check's parser takes); a
     refused audit a reject of the same registration naming why; an accepted record of another registration the driver's
     error."""
@@ -413,6 +414,9 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     assert CC.answer_of(a)["verdict"] == "accept" and a["commitment"] == R.digest(reg) and a["protocol"] == R.PROTOCOL
     assert a["public"]["bound"] == 0 and a["public"]["drawn"] == a["public"]["proved"] == list(range(N))
     assert "rests_on_period_check" not in a["public"]
+    whole = sz.window_answer(reg, {**record, "complete": True}, sz.Fraction(1, 100), "unused")
+    assert whole["public"] == {**a["public"], "complete": True} and a["public"]["complete"] is False
+    assert sz.AU.answer_complete(whole) and not sz.AU.answer_complete(a)
     tied = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused", ["prog"])
     assert CC.answer_of(tied)["verdict"] == "accept"
     assert tied["public"] == {**a["public"], "rests_on_period_check": ["prog"]}

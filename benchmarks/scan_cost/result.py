@@ -38,8 +38,8 @@ round's units its answers say were proved), T and the tick, the traffic, the cor
 verifier's. The group is a setting, beside the identity: the numbers are for a second of execution phase at any group.
 
 **The guard**: the scan exited 0, and each execution phase's answer accepts with the public part `public.json` pins
-for the class (the bound 0, every block sampled and proved; over a group, G times the blocks). Where it does not hold,
-no measurement is written: the document says why and the run's validation fails.
+for the class (the bound 0, every block sampled and proved, every verdict run; over a group, G times the blocks).
+Where it does not hold, no measurement is written: the document says why and the run's validation fails.
 """
 from __future__ import annotations
 

@@ -3,6 +3,8 @@
 * an accepted audit record is sampled proofs' accept: the registration's digest, the sampled and proved units with the bound
   on incorrect proof blocks at δ, and the profile as `Core.Integrity` with δ an exact ratio, all read back by the core answer's
   decoder; the report's ε is that bound over the window's units;
+* that accept says whether every verdict ran (``public.complete``), as the audit record says it of itself, and a record
+  that doesn't say it is an accept that is not complete;
 * that accept names whose coins its sample is on, as the audit's coins' check verified it (the audit record's
   ``coins.verified``): the challenger key's SHA-512 and the session's id, in ``public.coins``. An accepted audit record
   that names none in that form is undecided by name and makes nothing public; the driver's own account of the session
@@ -30,7 +32,7 @@ import pytest
 
 from verity.protocols.pouw.verifier import core_check as CC
 from verity.protocols.spot.device import challenger as Ch
-from verity.protocols.spot.verifier.one_stage import registration as R
+from verity.protocols.spot.verifier.one_stage import audit as A, registration as R
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
@@ -73,12 +75,26 @@ def test_an_accepted_audit_is_an_accept(tmp_path):
     assert check_answer(a) == a
     assert a["verdict"] == "accept" and a["protocol"] == "verity/sampled-proofs/one-stage/v1"
     assert a["commitment"] == R.digest(REG)
-    assert a["public"] == {"bound": 3, "case_v2": {"written": True}, "coins": WHOSE, "drawn": [5, 700],
-                           "per_template": None, "proved": [5, 700]}
+    assert a["public"] == {"bound": 3, "case_v2": {"written": True}, "coins": WHOSE, "complete": False,
+                           "drawn": [5, 700], "per_template": None, "proved": [5, 700]}
     p = CC.integrity(a["profile"])
     assert str(p["delta"]) == "1/2" and p["drawn"] == [("unit", 2)]
     assert p["levels"] == [{"name": "unit", "query": "bb" * 64, "size": 1024, "draw": {"subset": 2}}]
     assert epsilon(a) == "3/1024"
+
+
+@pytest.mark.parametrize("said,complete", [({"complete": True}, True), ({"complete": False}, False), ({}, False),
+                                           ({"complete": None}, False), ({"complete": 1}, False)])
+def test_an_accept_carries_the_audit_records_own_complete(tmp_path, said, complete):
+    """The accept's public ``complete`` is the audit record's own, whether every verdict ran; a record that doesn't
+    say it in that form, as one kept before the answer had the field, is an accept that is not complete
+    (`audit.answer_complete`). The verdict, the bound and the other public outputs are the same either way."""
+    a = I.answer(write(tmp_path / "a", dict(SUMMARY), {**record(True), **said}), REG)
+    assert check_answer(a) == a and a["verdict"] == "accept" and a["public"]["complete"] is complete
+    assert A.answer_complete(a) is complete
+    assert {k: v for k, v in a["public"].items() if k != "complete"} == {
+        "bound": 3, "case_v2": {"written": True}, "coins": WHOSE, "drawn": [5, 700], "per_template": None,
+        "proved": [5, 700]}
 
 
 @pytest.mark.parametrize("summary,rec,why", [
