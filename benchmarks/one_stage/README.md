@@ -293,14 +293,17 @@ negatives.
   (stratified:1, H1_TIE's default) is named refused, since it writes no sampled-proofs case. Beside them are the network
   certifier's K term by term in the notation table's symbols, on one-stage answers the driver verified; the check read
   them as given, so the record calls K no bound and states "answers read as given" beside it wherever it or one of its
-  lines states K (the record's `bound` and its figure of record, its periods, the `ONSITE` and `ONSITE-BESIDE` lines),
+  lines states K (the record's `bound` and its figure of record, the `ONSITE` and `ONSITE-BESIDE` lines),
   with its overcount, the seconds it covers, the
   connections it counts and δ_net term by term with each term's source (the check's `eps`, only its δ part, and each
   phase's knowledge, binding and collision errors, which no check computes), `eps` split into the scans' δ and the
   charged tied audits' with what sets each and what a smaller one costs, k_{skip,j}'s slot entries (every one of a tied
   audit sampled in part; sampled whole, it adds none and proves each of its proof blocks), the composite of record's
   error as the sum of its subprotocols' errors (four, or three without PoUW's), each δ with where the
-  run states it and the terms no check computes named, and that K over the
+  run states it and the terms no check computes named. While the period's check reads its answers as given the record
+  makes no period's figure from K (`periods` is missing, with why: nothing scaled, pooled or summed, no cell called
+  proved, no share of weights or egress; `ANSWERS_VERIFIED` in `onsite_record.py` is the one switch). Once the check
+  verifies them, it states that K over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
   whose sources the record states, beside its figure over one execution phase, and its share of one copy of the

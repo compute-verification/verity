@@ -1,7 +1,7 @@
 """onsite-record: the onsite demo's record of one served run (``record/onsite.json``, `FORMAT`): every verdict its run of
-record needs, the network certifier's K term by term, on one-stage answers the driver verified and the period's check
-read as given, and that K over each monitoring period for the serving node, a datacenter and the world. It reads only
-the run's public $OUT and decides nothing:
+record needs, and the network certifier's K term by term, on one-stage answers the driver verified and the period's
+check read as given: a labelled number, from which no period's figure is made. It reads only the run's public $OUT and
+decides nothing:
 
     python benchmarks/one_stage/onsite_record.py OUT [--window-steps S --max-tokens M] [--advice-charge FILE]
         [--certifier-key RECORD --site-registration FILE] [--inference-only-case-policy FILE]
@@ -132,9 +132,9 @@ composite has it, PoUW's from their rows (their answers' integrity-profile δ), 
 more; the rest is ``unvalued`` (`COMPOSITE_UNVALUED`).
 
 **K** (the record's ``bound``) is the network certifier's accepted answer's public in its rows form, on one-stage
-answers the driver verified; the check read them as given (`GIVEN`). The record calls it no bound, and ``answers``
-(`ANSWERS`) stands beside K wherever the record or one of its lines states it: here, in the figure of record, over its
-periods, and in the ``ONSITE`` and ``ONSITE-BESIDE`` lines. It holds K and each of its terms in the
+answers the driver verified; the check read them as given (`GIVEN`, `ANSWERS_VERIFIED`). The record calls it no
+bound, and ``answers`` (`ANSWERS`, `given`) stands beside K wherever the record or one of its lines states it: here, in
+the figure of record, and in the ``ONSITE`` and ``ONSITE-BESIDE`` lines. It holds K and each of its terms in the
 notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields it sums (``lean``): k_sched
 (``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's link-window,
 the public's ``scans[j]``), ℓ_{a,j} (``free``), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
@@ -177,7 +177,11 @@ clock; ``phases`` says where those phases start, `TEST_PHASES`), measured on a t
 (`advice_charge.py`'s record, ``--advice-charge``) and labelled as
 that run's, never a figure of this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
 
-**Periods**, of the figure of record and on its answers (``answers``): the run's own certification period (``run``), proved, and each monitoring period
+**Periods** are ``missing`` (`NOT_SCALED`) while the period's check reads its answers as given: nothing is scaled,
+pooled or summed from a K read so, no cell is called proved, and K is set against no weights and no egress; the
+``ONSITE`` line's year's datacenter cell and pooled eps are then None, and ``--beside`` prints the missing as it is, and
+the cells of a record written with them as it wrote them. Once the check verifies them (`ANSWERS_VERIFIED`), they are
+the figure of record's: the run's own certification period (``run``), proved, and each monitoring period
 of `leak_bounds.PERIODS` for the serving node, the census's reference datacenter and the world, conditional on the coins
 and each open premise of `UNCHARGED` while they are open (``conditional_on``). A node's cell is proved where the run's
 period covers the monitoring period's seconds (its m execution phases), and otherwise scaled from the run to the period; a
@@ -288,7 +292,13 @@ ANSWERS = "answers read as given"
 GIVEN = ("K, on one-stage answers the driver verified; the check read them as given: the period's check, which states "
          "K, verified none of them, and no Lean statement covers a K read so. It is a labelled number and no bound: "
          f"{ANSWERS!r} stands beside it wherever it is stated (answers)")
-OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the "
+#: whether the period's check verifies the one-stage answers it reads. It reads them as given, so `ANSWERS` stands
+#: beside K (`given`) and the record scales nothing from it (`NOT_SCALED`); once it verifies them, the label goes and
+#: the periods' cells are written
+ANSWERS_VERIFIED = False
+NOT_SCALED = ("no period's figure: K is a labelled number whose answers the period's check read as given (`GIVEN`), so "
+              "nothing is scaled, pooled or summed from it, and it is set against no weights and no egress")
+OVERCOUNT = ("a known overcount, larger than necessary: k_sched and k_fail charge every connection the "
              "schedule can carry (`Schedule.caps`), whatever the traffic, and each connection's cell count twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
              "run coincide; K is PeriodLeakAccepted's count as it states it")
@@ -1198,12 +1208,18 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
     sources = [EPS, *ERRORS.values()]
     skip = {"is": SKIP, "bits_per_phase": [t["bits"] for t in terms if t["symbol"] == "k_{skip,j}"],
             "entries_per_phase": [int(s["faulty_entries"]) for s in public["scans"]]}
-    return {"statement": LB.STATEMENTS["per_period"], "K": K, "answers": ANSWERS, "is": GIVEN, "phases": m,
-            "notes": [OVERCOUNT], "terms": terms,
+    return given() | ({} if ANSWERS_VERIFIED else {"is": GIVEN}) | {
+            "statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "notes": [OVERCOUNT], "terms": terms,
             "delta_net": {"terms": [t | s for t, s in zip(delta_net(eps, m), sources)], "note": UNVALUED},
             "delta": {"scan": str(scan), "charged": str(eps - m * scan), "eps_per_phase": str(eps / m), "is": DELTA,
                       "charged_audits": {"missing": NO_READINGS} if readings is None else readings},
             "skip": skip}
+
+
+def given() -> dict[str, str]:
+    """What stands beside K wherever the record or a line states it: ``answers`` (`ANSWERS`) while the period's check
+    reads its answers as given, nothing once it verifies them (`ANSWERS_VERIFIED`)."""
+    return {} if ANSWERS_VERIFIED else {"answers": ANSWERS}
 
 
 def delta_net(eps: Fraction, phases: int) -> list[dict[str, Any]]:
@@ -1951,8 +1967,7 @@ def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mappi
     open_ = [c for c in CHECKS if c not in held] + list(prem["open"]) + [c for c in conditional if c not in prem["open"]]
     tied = [s.get("tied") for s in public["scans"]]
     per = [sum(ell[int(i)] + 1 for i in (t if t is not None else range(len(ell)))) for t in tied]
-    return {"K": K + (sum(per) if open_ else 0), "answers": ANSWERS, "held": held, "open": open_, "is": OPEN,
-            "premises": prem,
+    return given() | {"K": K + (sum(per) if open_ else 0), "held": held, "open": open_, "is": OPEN, "premises": prem,
             "advice": {"bits_per_phase": per,
                        "tied": "scans[j].tied" if all(t is not None for t in tied) else TIED_ALL}} | (
         {"tight": TIGHT} if open_ else {}) | ({"conditional_on": list(conditional)} if conditional else {})
@@ -2175,9 +2190,10 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
     if "K" not in b["of_record"]:
         why = b["of_record"].get("error") or b["of_record"]["missing"]
         return rec | {"periods": {"missing": f"no figure of record: {why}"}}
+    if not ANSWERS_VERIFIED:
+        return rec | {"periods": {"missing": NOT_SCALED}}
     eps, m, K = eps_of(b), b["phases"], b["of_record"]["K"]
-    rec["periods"] = {"answers": ANSWERS} | ({"conditional_on": cond} if cond else {}) | periods(
-        K, eps, m, phase_s, connections, capacity)
+    rec["periods"] = ({"conditional_on": cond} if cond else {}) | periods(K, eps, m, phase_s, connections, capacity)
     rec["periods"]["eps"] = pooled_eps(b["delta"], m, rec["periods"])
     return rec
 
@@ -2189,10 +2205,11 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     `NO_COMPUTE_CLAIM`), and what every figure is conditional on
     (`COINS`; open for a record that read no coins), what is open in Lean (`MEMBER_OPEN`), what the record doesn't
     claim (`DAY`, `POUW`), the drawn members it
-    doesn't credit (`CREDIT`), K of record with the answers it is on (``answers``, `ANSWERS`: beside K wherever the line
+    doesn't credit (`CREDIT`), K of record with the answers it is on (``answers``, `given`: beside K wherever the line
     states one, None where it states none) and what is open under it, its δ_net's terms, eps's split and connections,
     the tied audits the period reads and eps per window and pooled over each monitoring period (`pooled_eps`), the
-    composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window and pooled
+    composite's stated error, the year's datacenter cell (both None where the record holds no periods' cells,
+    `NOT_SCALED`), sampled proofs' guarantee per window and pooled
     (`guarantee`), and the measured advice charge's test run."""
     b, p, s = rec.get("bound") or {}, rec.get("periods") or {}, rec.get("serving") or {}
     year = (p.get("year") or {}).get("datacenter")
@@ -2207,7 +2224,8 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "open_in_lean": [MEMBER_OPEN],
             "not_claimed": [DAY_OPEN] * (rec.get("one_program_a_day") or {"open": True})["open"] + [POUW_OPEN],
             "not_credited": rec["of_record"].get("not_credited", []),
-            "K": fig.get("K"), "answers": None if fig.get("K") is None else ANSWERS, "open": fig.get("open"),
+            "K": fig.get("K"), "answers": None if fig.get("K") is None else given().get("answers"),
+            "open": fig.get("open"),
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
             "eps_pooled": None if "eps" not in p else {
@@ -2239,12 +2257,12 @@ def guarantee(g: Mapping[str, Any] | None) -> Any:
 
 def cells(p: Mapping[str, Any] | None) -> Any:
     """``p`` (`periods`) as each cell's bits, share and how, the run's own period's with its phases and its figure over
-    one, under the answers they are on (`ANSWERS`); ``p`` as it is where it holds no figure (its ``missing`` or
-    ``error``, or None)."""
+    one, under the answers they are on (`given`: a record written with its cells is printed as it wrote them); ``p`` as
+    it is where it holds no figure (its ``missing`` or ``error``, or None)."""
     if not isinstance(p, Mapping) or "run" not in p:
         return p
     run = p["run"]
-    return {"answers": ANSWERS} | ({"conditional_on": p["conditional_on"]} if "conditional_on" in p else {}) | {
+    return given() | ({"conditional_on": p["conditional_on"]} if "conditional_on" in p else {}) | {
         "run": {"bits": run["bits"], "share": run["share"], "phases": run["phases"],
                 "per_phase": run["per_phase"]["bits"]},
         **{name: {where: {k: p[name][where][k] for k in ("bits", "share", "how")}

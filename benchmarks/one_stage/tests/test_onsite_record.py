@@ -265,6 +265,13 @@ def write_lock(f: Path, given: dict[str, list[str] | None] | None = None,
     f.write_text(json.dumps(lock_doc({g: a for g, a in listed.items() if a is not None}, stated)))
 
 
+@pytest.fixture
+def verified(monkeypatch) -> None:
+    """The side on which the period's check verifies the answers it reads (`ANSWERS_VERIFIED`): nothing stands beside K,
+    and the record writes its periods' cells. It reads them as given, so every other test is on that side."""
+    monkeypatch.setattr(OR, "ANSWERS_VERIFIED", True)
+
+
 @pytest.fixture(autouse=True)
 def lock(tmp_path_factory, monkeypatch) -> Path:
     """A lock in Security's lock's place discharging every premise, each of `UNNAMED` by its `TOY` stand-in, each
@@ -536,24 +543,46 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
     assert line.startswith("ONSITE ") and json.loads(line[7:])["K"] is None and json.loads(line[7:])["answers"] is None
 
 
-def test_wherever_K_is_stated_the_answers_it_is_on_stand_beside_it_and_nothing_calls_it_a_bound(tmp_path, capsys):
+def test_wherever_K_is_stated_the_answers_it_is_on_stand_beside_it_and_nothing_is_scaled_from_it(tmp_path, capsys):
     """K is on one-stage answers the driver verified, which the period's check read as given: the record's K, its
-    figure of record, its periods and its line each state that beside the number, and the record's own account of K
-    doesn't call it a bound."""
+    figure of record and its line each state that beside the number, the record's own account of K doesn't call it a
+    bound, and no period's figure is made from it: no cell, none proved, no share, no pooled eps, no year's cell."""
     out = accepted(tmp_path)
     assert main([str(out)]) == 0
-    rec, line = json.loads((out / "record" / "onsite.json").read_text()), json.loads(capsys.readouterr().out.strip()[7:])
+    text = (out / "record" / "onsite.json").read_text()
+    rec, line = json.loads(text), json.loads(capsys.readouterr().out.strip()[7:])
     b = rec["bound"]
-    assert OR.ANSWERS == "answers read as given"
+    assert OR.ANSWERS_VERIFIED is False and OR.ANSWERS == "answers read as given" and OR.given() == {"answers": OR.ANSWERS}
     assert OR.GIVEN.startswith("K, on one-stage answers the driver verified; the check read them as given")
     assert (b["K"], b["answers"], b["is"]) == (K, OR.ANSWERS, OR.GIVEN)
     assert (b["of_record"]["K"], b["of_record"]["answers"]) == (KR, OR.ANSWERS) and "`GIVEN`" in OR.OPEN
-    assert rec["periods"]["answers"] == OR.ANSWERS and OR.cells(rec["periods"])["answers"] == OR.ANSWERS
+    assert rec["periods"] == {"missing": OR.NOT_SCALED} and OR.cells(rec["periods"]) == rec["periods"]
+    assert "read as given" in OR.NOT_SCALED and "labelled number" in OR.NOT_SCALED
+    assert '"how"' not in json.dumps({k: rec[k] for k in ("bound", "periods")}) and '"how": "proved"' not in text
+    assert not {"share", "share_served", "share_of_capacity"} & set(re.findall(r'"(\w+)":', json.dumps(rec["periods"])))
     assert (line["K"], line["answers"]) == (KR, OR.ANSWERS)
+    assert (line["year_datacenter"], line["eps_pooled"]) == (None, None)
     assert "no bound" in OR.GIVEN and "The bound" not in OR.__doc__
     assert "certifier's bound" not in OR.__doc__.split("\n\n")[0]
 
 
+@pytest.mark.usefixtures("verified")
+def test_once_the_check_verifies_its_answers_nothing_stands_beside_K_and_the_periods_cells_are_written(tmp_path, capsys):
+    """The other side of `ANSWERS_VERIFIED`: no label in the record or its line, and the cells as `periods` makes them."""
+    out = accepted(tmp_path)
+    assert main([str(out)]) == 0
+    text = (out / "record" / "onsite.json").read_text()
+    rec, line = json.loads(text), json.loads(capsys.readouterr().out.strip()[7:])
+    assert OR.given() == {} and '"answers"' not in text and OR.GIVEN not in text and OR.NOT_SCALED not in text
+    assert (rec["bound"]["K"], rec["bound"]["of_record"]["K"], line["K"], line["answers"]) == (K, KR, KR, None)
+    p = rec["periods"]
+    assert p["run"]["bits"] == KR and p["run"]["how"] == "proved" and set(LB.PERIODS) <= set(p)
+    assert all(p[n][w]["how"] == "scaled" for n in LB.PERIODS for w in ("datacenter", "world"))
+    assert line["year_datacenter"]["bits"] == p["year"]["datacenter"]["bits"] and line["eps_pooled"] is not None
+    assert "answers" not in OR.cells(p) and OR.cells(p)["run"]["bits"] == KR
+
+
+@pytest.mark.usefixtures("verified")
 def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_connections(tmp_path):
     rec = record(accepted(tmp_path))
     b = rec["bound"]
@@ -571,13 +600,13 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
         ("T_j \\log_2 d_{jit}", 0, 63, ["scans[0].jitter"])]
     assert sum(t["bits"] for t in b["terms"]) == b["K"]
     assert b["notes"] == [OR.OVERCOUNT] and "k_sched" in OR.OVERCOUNT and "k_fail" in OR.OVERCOUNT
+    assert "answers" not in b and "is" not in b and "proved" not in OR.OVERCOUNT
     assert b["connections"] == {"count": 4 * 63, "from": OR.CONNECTIONS}
     assert rec["placement"] == {"trusted-host": "the certifier on the gate's host"}
     assert rec["advice_charge"]["charged"] == {"is": OR.CHARGED, "bits_per_phase": [9088], "share": 9088 / K,
                                                "lean": "scans[j].free"}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
-    assert b["of_record"] == {"K": KR, "answers": OR.ANSWERS, "held": [], "open": ["free", "circuit"], "is": OR.OPEN,
-                              "premises": discharged(),
+    assert b["of_record"] == {"K": KR, "held": [], "open": ["free", "circuit"], "is": OR.OPEN, "premises": discharged(),
                               "advice": {"bits_per_phase": [2 ** 23 + 1], "tied": OR.TIED_ALL}, "tight": OR.TIGHT,
                               "state_charge": FREE_CHARGE}
     assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [0], "entries_per_phase": [0]}
@@ -610,6 +639,7 @@ def test_the_served_audits_cap_is_charged_while_a_check_is_open_and_no_tight_K_i
     assert K not in numbers(line)
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("held, open_", [(["free", "circuit"], []), (["circuit", "free"], []), (["free"], ["circuit"]),
                                          (["circuit", "x"], ["free"])])
 def test_the_figure_of_record_is_the_tight_K_only_where_the_verdict_held_both_checks(tmp_path, held, open_):
@@ -740,6 +770,7 @@ def with_coins(tmp_path: Path, said: list[str]) -> dict:
     ["COINS the bandwidth audit's: vy-auditor-2's bw_party, inside PoUS's piece"],
     [],
 ])
+@pytest.mark.usefixtures("verified")
 def test_coins_no_line_names_live_leave_the_figure_of_record_and_each_cell_conditional_on_them(tmp_path, capsys, said):
     """A run whose COINS lines name a local development challenger session (the served node's, a deferral's or its
     follow-on's), a gate at no named peer, another challenger or no sampled proofs' coins, or that published none, has
@@ -1052,6 +1083,7 @@ def test_the_figure_says_its_charge_was_state_free_only_where_rows_state_held_st
 RECORDED = {"audits": [{"circuit": "c0" * 64, "order": {}, "pins": {}, "program": {}, "steps": 0}]}
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("stands", [True, False])
 def test_a_tied_audit_with_a_circuit_record_has_a_figure_of_record_only_where_its_state_free_charge_stands(
         tmp_path, lock, monkeypatch, stands):
@@ -1140,6 +1172,7 @@ def test_a_commitment_the_record_cant_read_leaves_no_figure_of_record_and_no_bou
     assert "missing" in rec["bound"] and rec["periods"] == {"missing": "no bound"} and "periods_tight" not in rec
 
 
+@pytest.mark.usefixtures("verified")
 def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever_the_traffic(tmp_path):
     """Three execution phases of w63k4's schedule at a 4 s tick: its 4 lanes over T = 32 buckets carry at most 128
     connections a phase, each capped at 5 egress cells, so k_sched and k_fail charge 128 · ⌈log2 6⌉ = 384 bits a phase
@@ -1164,6 +1197,7 @@ def test_w63k4_at_a_4_s_tick_charges_800_bits_a_phase_beside_its_advice_whatever
     assert rec["periods"]["egress"]["capacity_bits_per_phase"] == 4 * 4 * 32 * 512 * 8
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("drawn, entries", [(1, 896), (16, 0)])
 def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whole_doesnt(tmp_path, drawn, entries):
     """w63k4's schedule with a toy tied audit: w63k4 at a 4 s tick over three execution phases, each phase's tied audit
@@ -1198,6 +1232,7 @@ def test_w63k4s_tied_audit_drawn_in_part_charges_its_slot_entries_and_drawn_whol
         8_390_305 if drawn < 16 else 8_389_409)
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("drawn", [1, 16])
 def test_eps_is_pooled_over_each_monitoring_period_at_its_windows_with_the_tied_audits_the_period_reads(
         tmp_path, capsys, drawn):
@@ -1257,6 +1292,7 @@ def census_line(name: str, *fields: str) -> dict:
             "sha512": digest.hexdigest()}
 
 
+@pytest.mark.usefixtures("verified")
 def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one_phase(tmp_path):
     p = record(accepted(tmp_path))["periods"]
     phase = Fraction(63 * 20, 1000)
@@ -1302,6 +1338,7 @@ def test_the_runs_period_is_proved_and_every_monitoring_period_scaled_beside_one
     assert world["read"]["model"] == "DeepSeek-V4-Pro" and world["id"] == "world-inference-2027"
 
 
+@pytest.mark.usefixtures("verified")
 def test_eps_is_split_into_the_scans_and_the_charged_audits_delta_beside_each_cells_threshold(tmp_path):
     """The served defaults: the scan drawn whole at 2^-20, and a tied audit drawn subset:1 at δ = 1/2, whose δ the
     period's eps carries. The bound says which δ is which; a cell whose eps a phase is past its threshold is vacuous."""
@@ -1380,6 +1417,7 @@ def test_a_composite_term_stated_as_a_float_is_the_ratio_it_was_given_as(tmp_pat
     assert (sampled["delta"], pouw["delta"]) == ("1/100", f"1/{2 ** 64}")
 
 
+@pytest.mark.usefixtures("verified")
 def test_a_node_cell_is_proved_where_the_runs_period_covers_its_monitoring_period(tmp_path):
     """An execution phase of 63 buckets of 10,000 s covers a week but not a month: the node's week is the run's K,
     proved, and its datacenter scaled from that by its machines; its month is scaled from the run."""
@@ -1393,6 +1431,7 @@ def test_a_node_cell_is_proved_where_the_runs_period_covers_its_monitoring_perio
     assert (month["node"]["bits"], month["node"]["rule"], month["phases"]) == (KR * w, "run-to-period", w)
 
 
+@pytest.mark.usefixtures("verified")
 def test_a_scaled_cell_over_several_phases_rounds_up(tmp_path):
     two = dict(PUBLIC, K=PUBLIC["K"] + 9088 + 63 + 1, eps="1/524288", windows=2,
                scans=[SCAN, dict(SCAN, faulty_sets=1)])
@@ -1703,6 +1742,7 @@ def test_the_inference_only_verdict_says_where_alpha_and_gamma_came_from_never_a
     assert not any(str(x) in text for x in (*ALPHA, GAMMA) for text in (written, line))
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("how", ["unlisted", "restated", "another key", "no registration", "a case rewritten"])
 def test_while_certifier_key_is_open_an_accepted_network_verdict_is_not_established_and_its_bound_conditional_on_it(
         tmp_path, lock, capsys, how):
@@ -2931,6 +2971,7 @@ def test_sampled_proofs_guarantee_rests_on_its_coins_and_is_missing_but_for_an_a
         f"sampled proofs' verdict is {OR.NOT_ESTABLISHED}: only its accepted answer states a bound")
 
 
+@pytest.mark.usefixtures("verified")
 @pytest.mark.parametrize("n2, scan, named", [("subset:8", "all", ["the period draw"]),
                                              ("all", "stratified:4", ["the scan's draw"]),
                                              (None, None, ["the period draw", "the scan's draw"])])
@@ -2953,6 +2994,7 @@ def test_a_chain_draw_that_doesnt_take_everything_is_open_under_live_coins_by_it
     assert json.loads(capsys.readouterr().out.strip()[7:])["conditional_on"] == cond
 
 
+@pytest.mark.usefixtures("verified")
 def test_padding_out_of_free_open_leaves_the_conservative_figure_of_record_and_no_tight_figure(
         tmp_path, monkeypatch, capsys):
     """Both checks held, the coins live and every premise discharged but padding-out-of-free: the figure of record is K
@@ -3206,6 +3248,7 @@ def test_serving_settings_are_given_both_or_neither_each_a_whole_number_of_at_le
     assert e.value.code == 2 and not (out / "record" / "onsite.json").exists()
 
 
+@pytest.mark.usefixtures("verified")
 def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_with_its_own(tmp_path, capsys):
     paths = []
     for s, m, cap in SETTINGS:
@@ -3221,7 +3264,7 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
     assert [(r["record"], r["run"], r["tree"], r["serving"], r["ell_a"]) for r in runs] == [
         (str(p), "toy-run", TREE, {"window_steps": s, "max_tokens": m}, [cap]) for p, (s, m, cap) in zip(paths, SETTINGS)]
     assert [(r["of_record"], r["conditional_on"], r["not_claimed"], r["not_credited"], r["K"], r["answers"], r["open"])
-            for r in runs] == [(True, [], [OR.DAY_OPEN, OR.POUW_OPEN], [], K + cap + 1, OR.ANSWERS, ["free", "circuit"])
+            for r in runs] == [(True, [], [OR.DAY_OPEN, OR.POUW_OPEN], [], K + cap + 1, None, ["free", "circuit"])
                                for _, _, cap in SETTINGS]
     for p, r in zip(paths, runs):
         rec = json.loads(p.read_text())
@@ -3232,14 +3275,40 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
                    for n in LB.PERIODS for w in ("node", "datacenter", "world"))
         assert r["sampled_proofs"] == OR.guarantee(rec["sampled_proofs"]) and "year" in r["sampled_proofs"]["pooled"]
         assert "conditional_on" not in r["periods"] and not {"K_tight", "periods_tight"} & set(r)
-        assert r["periods"]["answers"] == OR.ANSWERS
+        assert "answers" not in r["periods"]
     assert runs[1]["periods"]["run"]["bits"] - runs[0]["periods"]["run"]["bits"] == 7432 - 1328
     said = (OR.ONSITE, "none", f"no verified compute is credited: {OR.ONSITE}'s verdict is no compute claim")
     assert [(r["composite"], r["verified_compute"], r["compute"]) for r in runs] == [said] * len(SETTINGS)
     line = capsys.readouterr().out.strip()
     assert line.startswith("ONSITE-BESIDE ") and [
         (x["serving"], x["K"], x["answers"], x["composite"], x["verified_compute"], x["compute"])
-        for x in json.loads(line[14:])] == [(r["serving"], r["K"], OR.ANSWERS, *said) for r in runs]
+        for x in json.loads(line[14:])] == [(r["serving"], r["K"], None, *said) for r in runs]
+
+
+def test_beside_states_the_answers_beside_each_runs_K_and_prints_a_records_periods_as_it_wrote_them(
+        tmp_path, capsys, monkeypatch):
+    """Read as given, each run's K has `ANSWERS` beside it in the document and in the line, and a record's periods are
+    printed as it wrote them: the missing with its why, and the cells of a record written with them, under the label."""
+    paths = []
+    for i, (s_, m, cap) in enumerate(SETTINGS):
+        with monkeypatch.context() as mp:
+            mp.setattr(OR, "ANSWERS_VERIFIED", i == 0)    # the first record holds its periods' cells and no label
+            out = accepted(tmp_path / f"s{s_}", registration=published(cap))
+            assert main([str(out), "--window-steps", str(s_), "--max-tokens", str(m)]) == 0
+        paths.append(out / "record" / "onsite.json")
+    capsys.readouterr()
+    f = tmp_path / "beside" / "onsite-beside.json"
+    assert main(["--beside", *map(str, paths), "--to", str(f)]) == 0
+    with_cells, without = json.loads(f.read_text())["runs"]
+    wrote = json.loads(paths[0].read_text())["periods"]
+    assert "answers" not in wrote and with_cells["periods"]["answers"] == OR.ANSWERS
+    assert with_cells["periods"]["run"]["bits"] == wrote["run"]["bits"] == K + SETTINGS[0][2] + 1
+    assert all(with_cells["periods"][n][w] == {k: wrote[n][w][k] for k in ("bits", "share", "how")}
+               for n in LB.PERIODS for w in ("node", "datacenter", "world"))
+    assert without["periods"] == {"missing": OR.NOT_SCALED}
+    assert [(r["K"], r["answers"]) for r in (with_cells, without)] == [(K + cap + 1, OR.ANSWERS) for _, _, cap in SETTINGS]
+    line = capsys.readouterr().out.strip()
+    assert [(x["K"], x["answers"]) for x in json.loads(line[14:])] == [(r["K"], OR.ANSWERS) for r in (with_cells, without)]
 
 
 def test_beside_refuses_by_path_a_record_of_another_format_or_one_stating_no_serving_settings(tmp_path, capsys):
