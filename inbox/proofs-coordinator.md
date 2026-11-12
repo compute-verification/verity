@@ -104400,3 +104400,42 @@ def RoundTwo (h : Held) : Prop := ∀ {own ss x m₁ m₂ c₀ c₁ st rec draw}
 - **RUNSAS, the five clauses round 2 doesn't see.** `two`, `sessionOk`, `pinOk`, the rounds and `recordsOk` are not L1's to remove: they are the verdicts' and the registration step's, RUNCOINS's side. L1 adds clauses (`second-inputs`, the design); expect one lemma each.
 
 **Not established.** That either new file elaborates. That the base compiles. That one address map meets all five facts: the map is not written. Every hour above.
+
+## PERIODREAD, Thu 12 Nov 22:01Z: A24 is taken and its statement is written and in a run (`ae36`), but it needs one fact about the device that the model does not hold, so I stop there for your word; PR 1's quick tier ran 53 of 61 suites green before the slot's hour ended and the other 8 are in a run; PR 2's check compiles and its difftest is in a run
+
+Mailbox read at `bf6f5af8a8` (21:51Z). **I can pause now:** three runs are out and nothing is half-pushed.
+
+**A24 (yours of 21:51Z): taken.**
+- **The statement** `Properties.Spot.Period.LedgerOfDevice`, scratch, in no tree, in run `r20261112-215815-ae36` (vy-nebius-cpu-8, launched 21:58Z; builds `Spot` and `Properties.Challenger`, then elaborates the file and prints its axioms). **Its hour: 22:45Z**, in my next entry, with the file's sha256 (`sha256sum` of the scratch is in the run's log). Not elaborated yet.
+- **What it says** [derived]: for every device history `dev`, period parameters `p` and ledger that `Spot.Period.read p ledger` accepts, either the presented lines are, line for line, the first lines of `dev.ledger p.key.pub` (equal in everything but `sig`: the canonical text of the entry less its signature, which is what `ledgerMessage` hashes), and one of them is stamped at or after `p.stop`; or `Break dev p.key p.label {ledger}` (a forgery under the key or a SHA-512 collision among what the finder hashes: the model's own break, `security/Properties/Challenger.lean:350`). So no line the device wrote up to the period's end is missing, moved or changed.
+- **The fact it needs, which is new: STOP for your word.** `History.ledger pk` is any list of lines (`Challenger.lean:113`). A forgery-free, collision-free ledger gives each presented line the content of *some* device line; that it is the device's line *at the same place* needs the device to number its own lines (`seq` = the line's index), which the device does (`challenger.py:1503`, `"seq": len(lines)`) [read] and the model does not say. My draft takes it as a named `Prop` hypothesis in the statement's own file, `Numbered dev pk`, and changes nothing in `Properties/Challenger.lean`, so no listed record moves. Your 19:06Z rule says a new named assumption comes to you first, so: nothing is built on it until you answer. The choices as I see them:
+  1. `Numbered` as a hypothesis of this one statement (my draft). It is device behaviour, so it sits with `trusted-host`; which list of the lock it goes in (`domain`, or under `trust.extra`) is yours or Daniel's.
+  2. The `prev` chain instead of numbering: also a device fact (the device's only line with a zero `prev` is its first), so no saving.
+  3. A field of `History`: changes the model `DrawnByDevice` reads, so its record moves. Not proposed.
+- **What it does not say:** signatures are not claimed equal (a second valid signature on a signed message is not a forgery); "up to the period's end" is the ledger's order, not clock time (no clock premise; the stamp is the device's).
+- **Proof, sized by reading** [read]: `verifyLedger_sig` (`security/Proofs/Properties/Challenger/Window.lean:126`), `ledger_mem_signatures` (`:245`), `signed_or_break` (`Break.lean:118`), `ledger_hashed` (`Window.lean:214`), `eq_or_break` (`Break.lean:126`) and `taggedBytes_inj2` (`:197`) already do this for one entry (the open, in `window_opens`, `:304`); A24 is the same for every line, plus the numbering. No proof written.
+
+**The hour for `CommittedOnce`'s proof: Fri 13 Nov 22:00Z, compiled in a run on my own branch, with `LedgerMeans`; I say by Fri 12:00Z whether it holds.** [derived]
+- What makes it holdable: the ledger's half is on `main` already. `verifyLedger_inv` (`security/Proofs/Properties/Pouw/LiveSalt/Ledger.lean:361`) gives `LedgerInv`: every `open` is one window, and no two windows share a root or a session (`:76-91`). `Spot.Period.read` is a `filterMap` over those windows, no loop.
+- What is unproved and unsized: the fold in `Spot.PeriodAudit.run` (`foldlM` over the windows zipped with the evidence), whose invariant ("one published window for each one read, in order") is the other half.
+- Conditions: PR 3's statements elaborate on the real functions by Fri 04:00Z; `ef46` shows nothing that changes `run`'s shape; I am not pulled to the GLM run.
+- **Not held for Sat 02:00Z:** A24's proof (statement only, pending your word above), and landing: PRs 1 to 3 land in order first and none is opened yet.
+
+**PR 1** (`cursor/proofs-prf600-period-ledger-3b1f` at `44b84839217d`, 0 behind `main`):
+- Quick tier `r20261112-203218-77ca`: 53 of 61 suites passed, none failed, then killed at the check slot's one-hour cap (rc 137, `slot.py --run-max 3600`) [run]. Among the 53: `verity/protocols/spot/verifier` (892 passed) and `verity-core-sampled-proofs` (319 passed, 2 skipped) with the new module.
+- The 8 it did not reach, launched by name at the same tree on our pool: `r20261112-215441-6715` (vy-nebius-cpu-12, 21:54Z, ETA 23:00Z). PR 1 opens, unmarked, with its ready line, when it passes.
+
+**PR 2** (`cursor/proofs-prf600-period-audit-9c4e` at `5b92156ab8`):
+- `r20261112-205407-f29e` rc 0: the `auditedIn` split builds [run]. The records that regenerate are `reads/Spot.ChallengerSession` in `security/lean-audit.json` and `security/Properties/lean-audit.json` (body only, no statement changes).
+- `r20261112-213330-dbcd` rc 0 at `c41cdcd6c8`: the check compiles (501 jobs) and PR 1's difftest passes on it (12 passed) [run].
+- The audits' difftest is pushed and running: `r20261112-215441-ef46` (vy-nebius-cpu-8, 21:54Z, ETA 22:30Z). Its Python reference alone answers each of the 29 named cases with the verdict and code named [run on the VM, 12 s]. **The accept path is run only through a stand-in audit:** no proof here is one one-stage v2 accepts, so against v2 itself the test checks an undecided answer and a refused coin, never an accept.
+- Runs I cancelled or that waited: `d340` cancelled (its head was superseded); `f29e` waited 25 minutes in a research line before your 20:11Z note.
+- Still waiting on your word (asked 20:09Z): a public file whose header names `shared_rows` is refused under `names`; ruling 2 is its own code, `members`; no executable in PR 2 (it comes with PR 3).
+
+**Corrections to my 20:59Z entry's line numbers** [read]: `Spot/OneStage.lean:519`, `:528` are `:516`, `:527`; `checkAt` is `:560-563`, not `:549-552`; `Spot/Bound.lean` is `:14-15`; the Bernoulli refusal is `NetworkCheck/Period.lean:1148`; the publish line is `CoreProtocol/Protocol.lean:110`. Also from that read: the driver's first `draw` coin is after the window's own root (`a5_coins.py:222`).
+
+**#9375** is OPEN at `bafae2eaec2e` (21:59Z) [run: `gh pr view`], so the stale sentence's PR is not started.
+
+**Not established:** that the statement elaborates; that the Lean check agrees with the reference (`ef46`); that PR 1's last 8 suites pass (`6715`); anything proved.
+
+**Need from you:** the word on `Numbered` (choice 1, or another); the two PR 2 words above.
