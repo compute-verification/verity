@@ -6,16 +6,16 @@ of values a step rounds a hair apart is no distinct pair.
 
 Each step is `test_program_reading.loop`'s scan of three iterations of a training step under AdamW at random weights,
 and the third iteration's products are the ones compared. The batch repeats a token within each row and meets
-`work`'s premise: past each row's first position, no two positions of the batch hold equal words. At a batch that
-breaks it in each of its three ways (`BROKEN`, a row of one token among them), the readings do charge MACs that read
-one pair twice (`test_a_batch_that_breaks_the_premise_repeats_pairs_the_readings_charge`). The steps:
+`SHARED_PREFIX`'s premise: past each row's first position, no two positions of the batch hold equal words. At a batch that
+breaks it in each of its three ways (`BROKEN`, a row of one token among them), the reading does charge MACs that read
+one pair twice (`test_a_batch_that_breaks_the_premise_repeats_pairs_the_reading_charges`). The steps:
 
 - `sdpa`: an embedding, two layers of one-head causal attention (`scaled_dot_product_attention`) and a head.
 - `after_mask`: the same with the mask an explicit constant added to the scores, and a product of the masked scores by
-  a weight right after the add, which no reading may charge: the add leaves two positions of one token equal
+  a weight right after the add, which the reading may not charge: the add leaves two positions of one token equal
   wherever the mask's words are 0, so that product reads one pair at both.
 - `rope`: `sdpa` with rotary tables, inputs the Program doesn't state.
-- `relu`: `sdpa` with a ReLU MLP (`clamp_min`) after the second layer, whose down-projection no reading may charge:
+- `relu`: `sdpa` with a ReLU MLP (`clamp_min`) after the second layer, whose down-projection the reading may not charge:
   two of its inputs' negative words give one 0, so an op with a specific argument does not give a specific value by
   that alone.
 - `lf`: the lf model's step at its smallest size.
