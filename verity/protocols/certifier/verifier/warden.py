@@ -99,8 +99,10 @@ With lengths rows the network certifier:
 
 **The content rows** (`WardenParams.content`, none by default: the classes of a schedule with lengths rows, each
 (P, O, rows), `content_rows`' "The classes"): the network certifier also keeps, of each request it releases, the
-request's bytes as it cut them into cells and the id of each `DATA` cell it released, and hands them with the release
-(`Released.request`, `Released.ids`), so that `connection_rows` lays three more tables a class under the same head.
+request's bytes as it cut them into cells and the id of each `DATA` cell it released, four bytes an id, and hands them
+with the release (`Released.request`, `Released.ids`), so that `connection_rows` lays three more tables a class under
+the same head. The hand copies an execution phase's ids and makes nothing else: the tables are laid, committed and
+signed by whoever takes the hand, never on the tick.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
 it, or to where that hand would have been for a release it never hands (the last point above), and no longer; of a
 connection it never released it keeps nothing. The classes enter the parameters' digest; a schedule without content
@@ -158,7 +160,6 @@ import hashlib
 import math
 import secrets
 import time
-from array import array
 from collections import Counter, defaultdict, deque
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass, field, fields, replace
@@ -468,7 +469,7 @@ class _Connection:
     bytes_in: int = 0
     bytes_out: int = 0
     request: bytes = b""  # with content rows, its request's bytes as cut, from its release to its hand
-    ids: array = field(default_factory=lambda: array("I"))  # with content rows, each released DATA cell's id
+    ids: bytearray = field(default_factory=bytearray)  # with content rows, each released DATA cell's id, a u32
     tasks: list[asyncio.Task] = field(default_factory=list)
 
 
@@ -477,14 +478,14 @@ class Released(NamedTuple):
     place in the release order; `request_bytes`, its request's; `outputs`, n, its response's `DATA` cells before its
     `END` or `FAIL`; and `failed`, whether it ended in a `FAIL`. With content rows (the module docstring's "The
     content rows") also `request`, those bytes as the network certifier cut them, and `ids`, each of those cells' id
-    in order; without them both are empty."""
+    in order, a little-endian u32 each (`content_rows.ids_of` reads them); without them both are empty."""
 
     order: int
     request_bytes: int
     outputs: int
     failed: bool
     request: bytes = b""
-    ids: tuple[int, ...] = ()
+    ids: bytes = b""
 
 
 def _pad(c: _Connection, cell_bytes: int) -> bytes:
@@ -715,7 +716,7 @@ class Warden:
                                f"client's, at window {w}'s close")
         self.hand_lengths(w - 1, tuple(tuple(
             Released(c.release, c.bytes_in, c.egress_cells - (c.failed is None), c.failed is not None, c.request,
-                     tuple(c.ids)) for c in stride) for stride in strides))
+                     bytes(c.ids)) for c in stride) for stride in strides))
 
     async def _reports(self, pacer: Pacer) -> None:
         async for report in pacer.reports():
@@ -891,7 +892,7 @@ class Warden:
                         del c.egress[:p]
                         c.egress_cells += 1
                         if kind == DATA and self.params.content is not None:
-                            c.ids.append(read.id)
+                            c.ids += read.id.to_bytes(4, "little")
                         if kind == END:
                             c.ended = t
                         continue

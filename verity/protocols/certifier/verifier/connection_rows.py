@@ -231,7 +231,7 @@ def of_records(params: WardenParams, ingress: Sequence[Record],
                 if kind in (DATA, END):
                     cut.setdefault(o, bytearray()).extend(payload)
                 if kind == END:
-                    live[o] = [n, bytes(cut.pop(o)), [], None]
+                    live[o] = [n, bytes(cut.pop(o)), bytearray(), None]
                     out[w][t // params.every].append(live[o])
                     n += 1
             for f in row_out[:row_count(row_out)]:
@@ -243,10 +243,11 @@ def of_records(params: WardenParams, ingress: Sequence[Record],
                     raise ValueError(f"egress bucket {w * params.window + t}: connection {o}'s cell is no DATA cell "
                                      f"of the id egress form, END or FAIL")
                 if read is not None:
-                    live[o][2].append(read.id)
+                    live[o][2] += read.id.to_bytes(CT.U32_BYTES, "little")
                 else:
                     live.pop(o)[3] = kind == FAIL
-    return {w: tuple(tuple(Released(order, len(request), len(ids), failed, *((request, tuple(ids)) if content else ()))
+    return {w: tuple(tuple(Released(order, len(request), len(ids) // CT.U32_BYTES, failed,
+                                    *((request, bytes(ids)) if content else ()))
                            for order, request, ids, failed in stride) for stride in strides)
             for w, strides in out.items() if all(e[3] is not None for stride in strides for e in stride)}
 

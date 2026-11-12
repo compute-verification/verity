@@ -52,8 +52,8 @@ is refused, never cut short.
 release as the network certifier cut it and nothing a server says. It has one caller, `connection_rows.tables`, and
 `tables` lays whatever class that caller gives.
 
-**A row of zero bytes** is what every table holds where no release is filed, and each table's decoder reads it its
-own way. `request_of` refuses it: its count is 0, and a released request has a byte. `response_of` reads a response
+**A row of zero bytes** is what every table holds where no release is filed (`empty_rows`, the one statement of
+it), and each table's decoder reads it its own way. `request_of` refuses it: its count is 0, and a released request has a byte. `response_of` reads a response
 of no id, and `end_of` an `END` after no `DATA` cell. So a held connection that ended before any id has the response
 and end rows of an unheld row, and of the three only the request row says whether a row is held (`held`).
 """
@@ -201,9 +201,14 @@ def end_of(row: bytes) -> tuple[bool, int]:
     return cls == FAILED, at
 
 
+def empty_rows(B: int, P: int, O: int) -> tuple[bytes, bytes, bytes]:
+    """What a class's request, response and end tables hold where no release is filed: zero bytes, each of its
+    table's row size (the module docstring's "A row of zero bytes")."""
+    return bytes(request_bytes(B, P)), bytes(response_bytes(O)), bytes(END_BYTES)
+
+
 def held(request: bytes) -> bool:
-    """Whether a request row is a filed release's: its count is not 0 (the module docstring's "A row of zero
-    bytes")."""
+    """Whether a request row is a filed release's: its count is not 0, as an empty row's is."""
     return any(request[:U32_BYTES])
 
 
@@ -259,12 +264,19 @@ def layout(params: WardenParams, name: str) -> dict[str, int]:
     raise ValueError(f"the schedule has no content table {name!r}")
 
 
+def ids_of(packed: bytes) -> tuple[int, ...]:
+    """The ids a release carries (`warden.Released.ids`, a little-endian u32 each), in order."""
+    if len(packed) % U32_BYTES:
+        raise ValueError(f"a release's ids are {U32_BYTES} bytes each, not {len(packed)} bytes")
+    return struct.unpack(f"<{len(packed) // U32_BYTES}I", packed)
+
+
 def file(params: WardenParams, release: Released) -> int | None:
     """The class the network certifier files a release in (the module docstring's "The filing"): the first of the
     schedule's that holds its request's bytes and its ids, or None where none does."""
     B = params.cell_bytes
     for i, (P, O, _) in enumerate(params.content):
-        if len(release.request) <= request_room(B, P) and len(release.ids) <= O:
+        if len(release.request) <= request_room(B, P) and len(release.ids) <= U32_BYTES * O:
             return i
     return None
 
@@ -285,29 +297,30 @@ def tables(params: WardenParams, released: Sequence[Released],
         if r.order <= last:
             raise ValueError(f"the releases are in release order, and {r.order} follows {last}")
         last = r.order
-        if len(r.request) != r.request_bytes or len(r.ids) != r.outputs:
+        if len(r.request) != r.request_bytes or len(r.ids) != U32_BYTES * r.outputs:
             raise ValueError(f"release {r.order} has {len(r.request)} bytes of its request's {r.request_bytes} and "
-                             f"{len(r.ids)} ids of its {r.outputs} outputs: not the content of its lengths slot")
+                             f"{len(r.ids)} bytes of ids for its {r.outputs} outputs, {U32_BYTES} each: not the "
+                             f"content of its lengths slot")
         if i is None:
             continue
         if type(i) is not int or not 0 <= i < len(filed):
             raise ValueError(f"release {r.order} is filed in class {i!r}, and the schedule lists {len(filed)}")
         P, O, rows = params.content[i]
-        if len(r.request) > request_room(B, P) or len(r.ids) > O:
-            raise ValueError(f"release {r.order}, of {len(r.request)} bytes and {len(r.ids)} ids, is filed in class "
+        if len(r.request) > request_room(B, P) or r.outputs > O:
+            raise ValueError(f"release {r.order}, of {len(r.request)} bytes and {r.outputs} ids, is filed in class "
                              f"{i}, which holds {request_room(B, P)} bytes and {O} ids")
         if len(filed[i]) < rows:
             filed[i].append(r)
     out: dict[str, list[bytes]] = {}
     for i, ((P, O, rows), mine) in enumerate(zip(params.content, filed)):
-        made = ([request_row(r.request, B, P) for r in mine], [response_row(r.ids, O) for r in mine],
+        made = ([request_row(r.request, B, P) for r in mine], [response_row(ids_of(r.ids), O) for r in mine],
                 [end_row(r.failed, r.outputs) for r in mine])
-        for name, held_, size in zip(names(i), made, (request_bytes(B, P), response_bytes(O), END_BYTES)):
-            out[name] = held_ + [bytes(size)] * (rows - len(mine))
+        for name, held_, empty in zip(names(i), made, empty_rows(B, P, O)):
+            out[name] = held_ + [empty] * (rows - len(mine))
     return out
 
 
 __all__ = ["END", "END_BYTES", "END_SLOT", "ENDED", "FAILED", "MIN_SIZE", "MOST_CLASSES", "NO_COUNT", "REQUEST",
-           "RESPONSE", "TIE_WORDS", "U32_BYTES", "check_ids", "check_size", "classes", "end_of", "end_row", "file",
-           "held", "layout", "most_ids", "names", "request_bytes", "request_of", "request_room", "request_row",
-           "response_bytes", "response_of", "response_row", "tables", "tables_of"]
+           "RESPONSE", "TIE_WORDS", "U32_BYTES", "check_ids", "check_size", "classes", "empty_rows", "end_of",
+           "end_row", "file", "held", "ids_of", "layout", "most_ids", "names", "request_bytes", "request_of",
+           "request_room", "request_row", "response_bytes", "response_of", "response_row", "tables", "tables_of"]

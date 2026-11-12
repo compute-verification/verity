@@ -93,7 +93,7 @@ def test_a_schedule_without_content_rows_has_the_digest_records_heads_and_certif
         assert fingerprint(params, tmp_path / name) == was
     _, arrivals, answers = traffic()
     warden, _, _ = run(answers, arrivals, params=LEN, windows=3)
-    assert all((r.request, r.ids) == (b"", ()) for _, strides in warden.lengths for stride in strides for r in stride)
+    assert all((r.request, r.ids) == (b"", b"") for _, strides in warden.lengths for stride in strides for r in stride)
     assert [name for name, _, _ in CR.tables_of(LEN)] == ["lengths", "fails"] and CT.tables_of(LEN) == ()
     with pytest.raises(ValueError, match="no content rows"):
         CT.tables(LEN, [], [])
@@ -217,8 +217,9 @@ def test_the_device_hands_each_release_its_request_and_its_ids_as_its_own_record
     assert sorted(handed) == [0, 1]
     got = released(handed)
     assert [r.order for r in got] == list(range(7))
-    assert [(r.request, r.ids, r.failed) for r in got] == list(zip(reqs, SENT, FAILED))
-    assert all((r.request_bytes, r.outputs) == (len(r.request), len(r.ids)) for r in got)
+    assert [(r.request, CT.ids_of(r.ids), r.failed) for r in got] == list(zip(reqs, SENT, FAILED))
+    assert all((r.request_bytes, 4 * r.outputs) == (len(r.request), len(r.ids)) for r in got)
+    assert got[0].ids == b"\x0b\0\0\0\x16\0\0\0\x21\0\0\0"
     ingress, egress, _ = records(warden)
     read = CR.of_records(CON, ingress, egress)
     assert sorted(read) == [0, 1, 2] and {w: read[w] for w in handed} == handed
@@ -229,7 +230,7 @@ def test_the_device_hands_each_release_its_request_and_its_ids_as_its_own_record
     bare = CR.of_records(LEN, *records(plain)[:2])
     assert {w: bare[w] for w in handed} == dict(plain.lengths)
     assert [tuple(r)[:4] for r in released(dict(plain.lengths))] == [tuple(r)[:4] for r in got]
-    assert all((r.request, r.ids) == (b"", ()) for r in released(dict(plain.lengths)))
+    assert all((r.request, r.ids) == (b"", b"") for r in released(dict(plain.lengths)))
 
 
 def test_the_records_reading_takes_a_runs_records_from_its_first_and_leaves_out_a_phase_still_live(ran):
@@ -278,10 +279,10 @@ def test_the_tables_are_the_schedules_size_whatever_the_load_and_hold_each_relea
                 request, ids, end = rows_of(tables, i, r)
                 release = held[phase].get((i, r))
                 if release is None:
-                    assert (request, ids, end) == (bytes(CT.request_bytes(B, p)), bytes(4 * (o + 1)), bytes(4))
+                    assert (request, ids, end) == CT.empty_rows(B, p, o)
                     continue
                 assert CT.request_of(request, B, p) == release.request and CT.held(request)
-                assert CT.response_of(ids, o) == release.ids
+                assert CT.response_of(ids, o) == CT.ids_of(release.ids)
                 assert CT.end_of(end) == (release.failed, release.outputs)
         assert CR.releases(CON, tables["lengths"], tables["fails"]) == \
             [[Released(*tuple(r)[:4]) for r in stride] for stride in handed[phase]]
@@ -313,7 +314,7 @@ def test_a_release_is_filed_in_the_first_class_that_holds_it_and_the_builder_lay
     assert [CT.held(row) for row in told["request.3"]] == [True, True]
     monkeypatch.setattr(CT, "file", lambda params, r: max(i for i, (p, o, _) in enumerate(params.content)
                                                           if len(r.request) <= CT.request_room(B, p)
-                                                          and len(r.ids) <= o))
+                                                          and r.outputs <= o))
     swapped = CR.tables(CON, handed[0])
     assert {name: swapped[name] for name in ruled} == CT.tables(CON, first, [3, 3, 3, 3]) != ruled
     monkeypatch.undo()
@@ -335,6 +336,7 @@ def test_a_release_is_filed_in_the_first_class_that_holds_it_and_the_builder_lay
             (first, [0, 0, 2, 0], "which holds 413 bytes and 4 ids"), (first, [1, 2, 2, 0], None),
             ([b, a], [2, 0], "in release order"), ([a, a], [0, 0], "in release order"),
             ([Released(*tuple(a)[:4])], [0], "not the content of its lengths slot"),
+            ([a._replace(ids=a.ids[:-4])], [0], "not the content of its lengths slot"),
             ([a._replace(ids=a.ids[:-1])], [0], "not the content of its lengths slot"),
             ([a._replace(request=a.request + b"x")], [0], "not the content of its lengths slot")):
         if why is None:  # a release whose ids fit the class it is told: laid, never refused
@@ -354,20 +356,21 @@ def test_a_row_of_zero_bytes_reads_as_each_tables_decoder_says(ran):
     _, _, _, handed = ran
     tables = CR.tables(CON, handed[0])
     for i, (p, o, rows) in enumerate(CLASSES):
-        zero = (bytes(CT.request_bytes(B, p)), bytes(CT.response_bytes(o)), bytes(CT.END_BYTES))
+        zero = CT.empty_rows(B, p, o)
+        assert zero == (bytes(CT.request_bytes(B, p)), bytes(CT.response_bytes(o)), bytes(CT.END_BYTES))
         assert not CT.held(zero[0])
         with pytest.raises(ValueError, match="the request row's bytes is 0"):
             CT.request_of(zero[0], B, p)
         assert CT.response_of(zero[1], o) == () and CT.end_of(zero[2]) == (False, 0)
         assert zero[1] == CT.response_row((), o) and zero[2] == CT.end_row(False, 0)
     no_id = released(handed)[2]
-    assert (no_id.ids, no_id.failed) == ((), False) and FILED[2] == (2, 1)
+    assert (no_id.ids, no_id.failed) == (b"", False) and FILED[2] == (2, 1)
     request, ids, end = rows_of(tables, 2, 1)
     assert (ids, end) == (bytes(36), bytes(4)) and CT.held(request)
     assert CT.request_of(request, B, 128) == no_id.request
     # a connection that failed before any id is told apart by its end row too
     late = released(handed)[4]
-    assert (late.ids, late.failed) == ((), True)
+    assert (late.ids, late.failed) == (b"", True)
     assert rows_of(CR.tables(CON, handed[1]), 1, 0)[1:] == (bytes(20), CT.end_row(True, 0))
 
 
@@ -457,7 +460,7 @@ def test_every_content_row_opens_its_tables_signed_root_at_its_place_and_nowhere
         for release in (r for stride in handed[phase] for r in stride):
             i, r = FILED[release.order]
             p, o, rows = CLASSES[i]
-            want = (CT.request_row(release.request, B, p), CT.response_row(release.ids, o),
+            want = (CT.request_row(release.request, B, p), CT.response_row(CT.ids_of(release.ids), o),
                     CT.end_row(release.failed, release.outputs))
             for name, row in zip(CT.names(i), want):
                 table, entry, dom = opened.table(name), head.table(name), domains[name]
