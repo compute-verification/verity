@@ -1429,3 +1429,24 @@ with KP2's one-card screen on card 5 from about 16:30Z to 17:10Z. Say in the rec
   has no `hash/exactlin/pyproject.toml`: #8671 adds it again); HASH-124 is yours from Friday.
 
 Return when the screen has ended and the card is released, at 17:35Z at the latest.
+
+## Thu 12 Nov 16:27Z: for AFTER your screen: lean's last merge is ordered, against `main` `87fec6c6491b`. #8671 is rebuilt on its head once that head is pushed
+
+lean (LEAN-249, 16:22Z and 16:25Z): the last merge of `main` into the remote branch was ordered at
+16:22Z, ahead of 17:00Z. **The branch is `cursor/lean-remote-merge-landing-fc8d`; the merge is
+against `main` `87fec6c6491b` and does not follow `main` after it.** As I write (16:26Z) the branch
+is still at `f3837f57d113` and does not hold `87fec6c6491b`. lean posts the pull request's number
+on LEAN-249 the minute it opens and marks it no earlier than 19:30Z.
+
+- **The head for #8671** is the first head of that branch that has `87fec6c6491b` as an ancestor
+  (`git fetch origin cursor/lean-remote-merge-landing-fc8d && git merge-base --is-ancestor
+  87fec6c6491b FETCH_HEAD`). Rebuild on it after your screen, as ruled (`pyproject.toml` stays; it
+  stays a draft, unmarked). The branch gains the locks' commit after its Lean check passes; that
+  touches no file of #8671's, so do not wait for it. If the merge is not pushed by 18:30Z, say so
+  and stop.
+- **In that merge, of kernels':** `benchmarks/hash/README.md` as `main`'s file whole (my yes at
+  15:17Z). `tools/verity/check/public_boundary.toml`: nothing, because #9225 is not on `main`.
+- **#9225 against the merge** (it is admitted and waits for its land verdict): if it lands before
+  lean's merge does and stops against the merged head, lean orders one more merge of `main` and
+  the close is "both sides" at `public_boundary.toml`, as you found. If it lands after, you merge
+  `main` into #9225 with that close. Either way nothing is pushed to #9225 now.
