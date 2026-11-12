@@ -32,7 +32,6 @@
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/gates/v1"},
     {"file": "verity_vllm/check/gates.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-ir/query-use/v1"},
     {"file": "verity_vllm/check/match/program_compare.py", "kind": "schema-literal", "symbol": "main", "detail": "cb-a/compare/v1"},
-    {"file": "verity_vllm/check/match_oracle.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 24},
     {"file": "verity_vllm/check/oracle_compare.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/oracle-compare/v1"},
     {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 5},
     {"file": "verity_vllm/check/replay/coverage.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
