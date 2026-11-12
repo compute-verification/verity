@@ -67404,3 +67404,137 @@ The lower end is 2^-55.2, not the 2^-54.8 of my 21:52Z entry [run `r20261111-203
 **One thing you may rule on.** The queue lands a stack's bases first ("each after the PRs it contains") [read: the team skill's Landing], so steps 3 to 5 could run now at `f247b1479d` and the mark need not wait for #8940 on `main` [guess: I have not marked a stack before]. My default is your ruling: wait for #8940, then merge once. Say so if you want the records run started now.
 
 **Next.** My hours, re-dated after the stop: this entry stands for the one I had set for 23:05Z Wed; the next is when `r20261112-020432-69f0` reports, about 02:50Z [guess], with its verdict; then one at 06:00Z Thu 12 Nov on #8940 whichever way it went; the ready line stays Thu 12 Nov 08:00Z and moves with #8940, as you ruled [read: your 22:16Z section]. No other run of mine is in flight [read: `research status`].
+
+## EXTFORM, Thu 12 Nov 02:10Z: option (C) at two stages, read line by line. Its premise is the one-stage premise `CertifierRegisters` word for word, at the roots registered before the first stage's coins; about 750 lines of Lean and one new read rule in the two-stage verifier; (B) is a part of (C) and could land first, but as a guarantee it says no more than (A)
+
+Item 3 of your 21:50Z message, re-dated to 04:00Z. Nothing of (A), (B) or (C) is built. Every line below is [read] at `ca5db45b83` (which holds `main` at `be9a3d566905`) unless it says [derived] or [guess]. No line of the two-stage chain has been compiled. Paths without a prefix are under `security/`.
+
+### 1. How the one-stage proof uses `NetTiming.CertifierRegisters`
+
+**What it says** (`Definitions/NetworkCertifier/TapRows.lean:79-87`). `CertifierRegisters H Cm lay k op s ops o`, for a statement `s`, the network certifier's openings `ops` and its record `o`, is three things:
+
+1. every opening in `ops` passes under the statement's roots: `∀ q ∈ ops, Cm.Opens H s.roots q = true`;
+2. at each step before `k`, every egress gate and every ingress gate has an opening in `ops`, and at an egress gate the program holds constant the opening holds that constant;
+3. at each step the record exists, its egress rows are the values the openings hold at the egress gates, and the operator's move on the records before it is the ingress the openings hold.
+
+It reads the hash, the commitment scheme, the layout, the horizon, the operator, the statement's roots and program, the openings and the record. It reads no partition, no sampling design and no witness.
+
+**Where the statement takes it** (`Definitions/NetworkCertifier/Guarantees/Period.lean:100-128`, `PeriodLeakAccepted`). Twice:
+
+- inside the relation of the first conclusion, `RLeakCertifier` (`Definitions/NetworkCertifier/TapRows.lean:93-99`): every record of the right length that the certifier registers is among the records the count counts. The first conclusion bounds one verification phase: $\Pr[\text{accepted} \wedge \neg\texttt{RLeakCertifier}] \le \kappa_\delta + \sqrt{\gamma\cdot\Pr_B} + \Pr[B_{\mathrm{ext}}] + \Pr[B_{\mathrm{tap}}]$.
+- as the hypothesis of the second conclusion (`:123-124`), at every verification phase's statement and that phase's operator. The second conclusion counts the secrets a covert sender can pass over the monitoring period.
+
+**Where the proof uses it**, in order:
+
+| step | lemma | what `CertifierRegisters` gives it |
+|---|---|---|
+| 1 | `certifierColl_of_disagree` (`Proofs/NetworkCertifier/TapRows.lean:204`, 27 lines), `Pr_certifierColl_le_Btap` (`:234`) | part 1: the certifier's openings and the extracted witness's openings both pass under `s.roots`, so where they open one gate two ways binding gives a collision, charged to $B_{\mathrm{tap}}$ |
+| 2 | `carries_fillTrace` (`:103`, 14 lines) | parts 2 and 3: the committed trace, filled with the certifier's values where the witness opens nothing, carries the record at the gates where bytes enter and leave |
+| 3 | `accepted_of` (`Proofs/NetworkCertifier/SampledAuditAccepted.lean:433`, 28 lines) | nothing directly: a trace that carries the record, with every proof block outside a set `F` correct, makes the circuit's Program accept the record at an advice of `F`'s committed bits |
+| 4 | `rLeakCertifier_of_r` (`TapRows.lean:130`, 47 lines), `sampledLeak_certifier` (`:252`, 33 lines) | steps 1 to 3 together: the sampling relation gives `RLeakCertifier`, then the probability bound |
+| 5 | `mem_accSeqsSampled_of_windowGood` (`Proofs/NetworkCertifier/Period.lean:121`, 20 lines) | the hypothesis itself (`htap`), to pass from the relation to "this run's record is in the counted set" |
+| 6 | `encard_periodGood_le` (`:142`, 39 lines), `encard_periodSeqs_le` (`:81`), `periodLeak` (`:184`) | nothing more: the count for one phase (`encard_accSeqsSampled_le`, `Proofs/NetworkCertifier/SampledCharge.lean:388`) multiplied over the phases, and the device's read-back (`certifier_cells_read`, `Proofs/NetworkCertifier/Tap.lean:39`, from `TrustedHost`) |
+
+**What it is in the lock** (`security/lean-audit.json`). `NetTiming.CertifierRegisters` is an open premise of `NetTiming.SecurityProofs.PeriodLeakAccepted` (issue LEAN-186, due 2026-11-30, owner `@network-accounting`), and it is in that guarantee's `trust_gap` beside `Compiled.KS` and `NetTiming.ScopeAcc`. So at one stage nothing discharges it today: no code proves that the certifier's openings pass under the statement's roots. Option (C) at two stages inherits that open premise. It does not close it.
+
+### 2. The exact premise (C) needs at two stages
+
+**In plain words.** At every verification phase, the network certifier holds openings, under the roots the datacenter registered for that phase before the first stage's coins, of the value at every gate where bytes enter or leave, and the certifier's record of that phase is those values. That is the one-stage premise word for word. It supposes nothing about the second registration, the values inside the sampled replay blocks.
+
+**Its Lean shape.** `CertifierRegisters` unchanged, at the two-stage verifier `L : CompiledTwo Coin A` where the one-stage statement has `D : Compiled Coin A`:
+
+```lean
+(htap : ∀ z ∈ Zs, ∀ i s, L.parse (x z i) = some s →
+  NetTiming.CertifierRegisters H L.commit (lay s) (k s)
+    (op i (runsBefore (run tap (schedOf z, srvOf z)).2 i)) s (tops s)
+    ((run tap (schedOf z, srvOf z)).2 i))
+```
+
+**Why no new kind of premise is needed** [derived from the three reads named]:
+
+- `BoundaryGates.Fits` (`Definitions/NetworkCertifier/SampledAudit.lean:130`) makes every egress gate a gate the program returns and every ingress gate an input.
+- An input and a returned gate are on the boundary of every set of gates (`glue_of_boundary`, `Proofs/Flock/SamplingGeneric/TwoCount.lean:146`). So in the two-stage design their values are committed under `s.roots`, the first registration, as in the one-stage design. `CompiledTwo.Sessions.opens` (`Definitions/Claims/SamplingTwo.lean:308-317`) reads a sampled proof block's boundary values under `s.roots`, and only its replay block's interior values under the interior roots.
+- So the certifier and the extracted witness open those gates under the same roots, and step 1's binding argument is the one-stage one.
+
+**What changes in the statement around the premise**, all mirrors of the one-stage definitions:
+
+- the relation: `RLeakCertifierTwo`, which is `RLeakCertifier` with the counted set read at the two-stage design, `AccSeqsSampledTwo := {o | ∃ F ∈ admissibleTwo Pt d δ, AcceptedFaulty …}` (`admissibleTwo`, `Definitions/Claims/SamplingTwo.lean:195`, where one stage has `faultySets`);
+- the scope: `ScopeAccTwo L lay k x := L.Scope x ∧ ∃ s, L.parse x = some s ∧ (lay s).Fits s.prog (k s)`;
+- `SameRegistrationTwo`, which is `SameRegistration` plus `L.two s = L.two s₀`, and `WindowGoodTwo` over those;
+- the bits: `hβ : ∀ i, ∀ F ∈ admissibleTwo (Pw i) (dw i) δ, bitsOf (sw i) (Pw i) F ≤ β i` (`bitsOf`, `:199`, is the same sum as `faultyBits` at the statement's program);
+- the count's factor: `(admissibleTwo (Pw i) (dw i) δ).card * 2 ^ β i` where one stage has `(faultySets …).card * 2 ^ β i`;
+- knowledge soundness: `L.KS H` (`CompiledTwo.KS`, `:325`: `Compiled.KS`'s form at the two-stage relation `RTwo`, with the same extractor, $\kappa_\delta$, $\gamma$ and $B_{\mathrm{ext}}$), which `compilerKSTwo` (`Proofs/Flock/SamplingGeneric/Two.lean:675`) gives from `CompiledTwo.Sessions` and the base argument's knowledge soundness;
+- unchanged: `Binds`, `TrustedHost`, the schedules, the decoder, and `hcap`, `hfit`, `hs`, `hdz`.
+
+So the two-stage statement's premises would be `CompiledTwo.KS` (or `Sessions` and the base argument's `Arg.KS`), `Binds`, `CertifierRegisters`, `ScopeAccTwo` and `TrustedHost`. Against the one-stage guarantee's list only the scope and the knowledge soundness are new, and both are the two-stage forms of what is there.
+
+### 3. Which existing lemmas carry over unchanged
+
+**Used as they are** [derived: each is stated over a general program, partition, set `F` or compiled verifier, and none reads the one-stage sampling design]:
+
+- the definitions `CertifierRegisters`, `certifierVal`, `fillTrace`, `Btap`, `certifierLog`, `AcceptedFaulty`, `faultyBits`, `freeInputs`, `AsReg`, `BoundaryGates.Fits`, `Carries`, `Covered`, and the device's (`TrustedHost`, `CertifierSchedule`, `RecordFormat`, `recordingCode`);
+- `certifierColl_of_disagree` and `Pr_certifierColl_le_Btap`, at `L.toCompiled`;
+- `carries_fillTrace`;
+- `accepted_of`, which is general in the trace `ref`, the set `F` and the interiors. It applies at `ref :=` the committed trace glued with the interiors the two-stage relation picks (`glue`, `TwoCount.lean:136`) and `F := wrongOf s.prog Pt ref` (`:178`);
+- `encard_acceptedFaulty_le` (`SampledCharge.lean:308`, the 62-line count for one set `F`: at most $\#A_s \cdot 2^{\mathrm{bits}(F)} \cdot D^k$ records);
+- `wrongOf_mem_admissible` (`TwoCount.lean:225`: the relation's footprint in $\bar M_\delta$ puts `wrongOf …` in `admissibleTwo`), `glue_correct_iff` (`:155`), `inter_cell_wrongOf` (`:197`);
+- the period layer: `encard_periodSeqs_le`, `encard_chain_le`, `certifier_cells_read`, `asReg_congr`, `valOver_congr_held`, `encard_asReg_le`.
+
+**Need a two-stage twin**, the same proof over the two-stage names:
+
+| new | mirrors | the one-stage proof's lines |
+|---|---|---|
+| `rLeakCertifierTwo_of_rTwo` | `rLeakCertifier_of_r` | 47 |
+| `sampledLeakTwo_certifier` | `sampledLeak_certifier` | 33 |
+| `encard_accSeqsSampledTwo_le` | `encard_accSeqsSampled_le` | 26 |
+| `mem_accSeqsSampledTwo_of_windowGood` | `mem_accSeqsSampled_of_windowGood` | 20 |
+| `encard_periodGoodTwo_le` | `encard_periodGood_le` | 39 |
+| `periodLeakTwo` | `periodLeak` | 7 |
+
+**Three short lemmas with no one-stage counterpart** [derived; the line figures are my estimates]:
+
+- a proof block correct on its replay block's values is correct at the glued trace in the form `accepted_of` asks (`C.Correct (C.refIn u ref ι') u`), from `glue_correct_iff`, `Prog.correct_mono` and `Prog.refIn_mono` (`Proofs/Flock/Claims/Sampling/ProgReads.lean:192`, `:181`): about 20 lines;
+- `Carries` at the glued trace from `Carries` at the committed trace, since the two agree at every gate where bytes enter or leave (`glue_of_boundary`): about 15 lines;
+- `val_some_of_input` (`Proofs/NetworkCertifier/SampledLeakReg.lean:80`, 11 lines) at `wrongOf` of the glued trace: about 15 lines.
+
+### 4. What the two-stage verifier would have to check that it does not check today
+
+Paths in this section are under `verity/protocols/spot/verifier/lean/`.
+
+1. **A sampled block's outputs read against the certifier's value at the block's own rows: a new read rule**, in `readOk`, `Spot/SecondStage.lean:844-868`.
+   - A port a link names (`:847-855`) may read only an interior registered value of the link's name, or the boundary record's **port** of that name, which is the datacenter's own tree (`Record.byPort own.boundary`, `:852`). A boundary **registered value** of that name, which is what a root the verifier held for the certifier would be, falls to `| _, _, _ => false` (`:855`).
+   - A port no link names (`:861-867`) may read a value either registration registers, held to its root, domain and leaves only (`sameAt`, `:866`). Its rows are then fixed before the run by `second-values`, to the reference statement's, "the same rows in every run". The file says what is missing itself (`:915-916`): "A workload whose rows there depend on the sampled block (a positional table) would need a rule of its own."
+   - So (C) needs a further case: a port that reads a boundary registered value the verifier pinned, each slot at its unit's row. It goes in `readOk` beside the link case, with its case in `runPlacesRows` (`:917`) and its lemma beside `check_ok_wired` (`:1418`).
+2. **That the pinned root is the one the certifier signed.** The mechanism that holds a registered value to a root the verifier had before the record exists: `pinned` (`Spot/Registration.lean:178`), held by `R7-held` (`:403-405`, fed at `:586` and `:660`), parsed at `Spot/OneStage.lean:305-313`, and applied to the boundary record at `Spot/Run.lean:250` and to the interior record at `:196`. But the root arrives in the auditor's params. No Lean file under this directory names the certifier, egress or ingress (`rg -i 'certifier|egress|ingress'` there: 0 files). This gap is the one-stage verifier's too: it is what the open premise `CertifierRegisters` stands for.
+3. **The form is refused whole today.** `Spot/SecondStage.lean:142`, `FORM : Bool := false`: once every check passes, a two-stage run is refused last (`two-stage-form`, `:1068`). The verifier gains the form only with its proof.
+
+For reference, the serving side of this: the certifier's rows are rows in the certifier's own tree, whose root its signed head names, and proof blocks read them by the proof system's registered read (`verity/protocols/certifier/verifier/PROTOCOL.md`, "The I/O tie"). That file calls it a design with a prototype, in no Spec and unproved.
+
+### 5. The line count, as a read
+
+| part | lines | how I count it |
+|---|---|---|
+| definitions and the statement (two modules under `Definitions/NetworkCertifier/`) | about 190 | six definitions about 50; the statement 29 lines with a 19-line docstring, the one-stage one's size (`Definitions/NetworkCertifier/Guarantees/Period.lean:81-128`); two module headers of about 35 lines each; module docstrings about 25 |
+| one verification phase (one module under `Proofs/NetworkCertifier/`) | about 235 | the three twins 47 + 33 + 26 = 106, about 125 with the two-stage design carried through; the three short lemmas about 50; header and docstrings about 60 |
+| the monitoring period (one module) | about 125 | the three twins 20 + 39 + 7 = 66, about 75 as written; header and docstrings about 50 |
+| witnesses | about 200 | the one-stage chain at the accepting verifier in `Proofs/NetworkCertifier/Witnesses.lean` is about 150 of its 558 lines (`:270-310`, `:362-460`, `:498-509`), plus the honest toy |
+| **Lean under `security/`** | **about 750** | I would be surprised below 650 or above 850 |
+| the verifier's Lean (`Spot/SecondStage.lean`) | about 110 | the rule about 8, its `runPlacesRows` case about 3, its lemma about 40, examples about 60 [guess: I have written none of it] |
+| the verifier's Python mirror and its difftest | not counted | I did not read them |
+
+My 21:39Z figure was "about 700 to 900 lines of Lean"; the read puts it at about 750. [derived] It is a count of mirrored proofs, not of compiled ones. The risk sits in the three short lemmas, which have no one-stage counterpart.
+
+### 6. Is (B) a part of (C)'s work? Yes, and it could land first, but it buys no stronger sentence than (A)
+
+- **In Lean, yes** [derived]. (B), stated with the release's openings as a parameter, is section 2's chain for one verification phase with `tops s` read as the datacenter's own openings and no device: `RLeakCertifierTwo`, the twins of `rLeakCertifier_of_r` and `sampledLeak_certifier`, and the count for one phase. (C) reuses every one of them. It adds the device's hypotheses (`TrustedHost`, the schedules, the record format), which carry over from one stage unchanged, and the period layer.
+- **In the verifier, yes, and (B) needs nothing new** [read]. (B)'s check is what `readOk`'s link case already does: a sampled block's boundary outputs are held to the boundary port, each at the block's own row (`linkedRow`, `Spot/SecondStage.lean:825`, used at `:854`). (C) adds rule 1 of section 4.
+- **So (B) could land first as a step**, as theorems: the first two parts of the table, about 425 lines.
+- **As a guarantee, (B) says no more than (A)** [derived]. Under (B) the only word on what left the datacenter is the datacenter's own commitment. Nothing ties that commitment to the bytes on the wire. The certifier's record is what does, and that is (C).
+- **A correction to my 21:39Z entry.** Its sentence on (B) said the two-stage verifier would enforce it as a new check. Read line by line, the verifier already makes that check. What (B) lacks is not a check but an independent witness of what left.
+
+### 7. What I did not establish
+
+- No line of the two-stage chain is compiled. Section 3's "used as they are" comes from reading each lemma's statement, not from applying it.
+- I did not read the Python mirror of `readOk` or its difftest, so the verifier's cost outside Lean is uncounted.
+- I did not read how the certifier's signed head would reach the Lean verifier (rule 2 of section 4). That is the one-stage design's question too, under LEAN-186.
+- Whether `second-values` could hold a pinned value's rows per sampled unit without a new rule: I read that it holds them to the reference statement's, the same in every run (`Spot/SecondStage.lean:61-69`, `:909-916`), and conclude it cannot [derived].
