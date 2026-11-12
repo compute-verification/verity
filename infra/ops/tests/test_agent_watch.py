@@ -22,11 +22,14 @@ class FakeApi:
     """`older[agent]` lists an agent's runs before its latest, newest first; `GET .../runs` lists the latest, then those.
     A goal run's id (run-goal-...) is listed but can't be read on its own, as on the API. `workers` (Task subagents) aren't
     listed but are read by id (`GET /v1/agents/{id}`; 404 for any other id); `gets` counts each read. `convs[agent]` is its
-    conversation as `GET /v0/agents/{id}/conversation` gives it (user and assistant text only; 404 when absent)."""
+    conversation as `GET /v0/agents/{id}/conversation` gives it (user and assistant text only; 404 when absent). `v0[agent]`
+    is its status as the legacy `GET /v0/agents/{id}` gives it, or the error that read raises; without one it is RUNNING
+    for a worker v1 has ACTIVE and FINISHED for any other."""
 
-    def __init__(self, agents, runs, older=None, workers=None, convs=None):
+    def __init__(self, agents, runs, older=None, workers=None, convs=None, v0=None):
         self._agents, self._runs, self.older, self.posts = agents, runs, older or {}, []
         self.workers, self.gets, self.convs = workers if workers is not None else {}, [], convs if convs is not None else {}
+        self.v0 = v0 if v0 is not None else {}
 
     def agents(self):
         """Each agent as the list gives it, on Verity's repository unless it says otherwise (`repos`)."""
@@ -40,6 +43,12 @@ class FakeApi:
                 raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
             return {"id": parts[-2], "messages": [{"id": str(i), "type": k, "text": s}
                                                   for i, (k, s) in enumerate(self.convs[parts[-2]])]}
+        if len(parts) == 4 and parts[1] == "v0":
+            if isinstance(got := self.v0.get(parts[-1]), Exception):
+                raise got
+            if got is None and parts[-1] not in self.workers:
+                raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
+            return {"id": parts[-1], "status": got or ("RUNNING" if self.workers[parts[-1]].get("status") == "ACTIVE" else "FINISHED")}
         if len(parts) == 4:
             if parts[-1] not in self.workers:
                 raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
@@ -1675,9 +1684,9 @@ def test_a_conversation_is_unanswered_when_nothing_of_its_agents_follows_its_las
         "an assistant message with no text is nothing of its own"
 
 
-def test_an_agent_the_platform_reports_in_error_is_recorded_so_and_no_other_is(tmp_path):
-    """The record's `status` is what the platform reported at that sweep: the words that Cursor shows an agent in ERROR
-    are for one it reports so, and a dropped message on an IDLE agent is recorded IDLE."""
+def test_an_agent_the_platform_reports_in_error_is_crashed_and_never_dropped(tmp_path):
+    """One fact, one record: an agent in error stopped mid-work, which `crashed` says, and is no message that never became
+    a turn, whatever its conversation ends on. Its own status ERROR, should v1 give one, needs no further read."""
     api, clock, w, st = seat(tmp_path)
     api.workers[W2_] = {**worker("IDLE", W.iso(T0), name="SEAT-B"), "latestRunId": "run-w"}
     w.workers[W2_] = {"heard": T0, "lane": "circuits", "handle": "circuits"}
@@ -1686,8 +1695,10 @@ def test_an_agent_the_platform_reports_in_error_is_recorded_so_and_no_other_is(t
         api.convs[agent] = [("user_message", "You are a seat."), ("assistant_message", "Filled."), ("user_message", "Check it.")]
         api.workers[agent]["updatedAt"] = W.iso(clock.t)
     st["status"] = "ERROR"
-    sweeps(w, clock, 10, step=1)
-    assert {r["agent"]: r["status"] for r in drops(tmp_path)} == {W1_: "ERROR", W2_: "IDLE"}
+    before = len(api.gets)
+    sweeps(w, clock, 15, step=1)
+    assert {r["agent"]: (r["kind"], r["status"]) for r in records(tmp_path)} == {W1_: ("crashed", "ERROR"), W2_: ("dropped", "IDLE")}
+    assert f"/v0/agents/{W1_}" not in api.gets[before:] and conv_reads(api, W1_) == 0
 
 
 def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
@@ -1826,19 +1837,22 @@ def test_worker_reads_are_bounded_and_a_long_idle_worker_is_read_only_when_a_not
     long_idle = W.iso(T0 - W.WORKER_IDLE_S)
     api, clock, w = coordinators(tmp_path, [{"id": ids[0], "status": "IDLE", "latestRunId": "run-f"}], {"run-f": dict(FINISHED)},
                                  workers={a: worker("IDLE", long_idle) for a in ids}, notes=notes)
-    reads = []
+    reads, stops = [], []
     for _ in range(4):
         before = len(api.gets)
         w.sweep(lambda r: None)
-        reads.append([g for g in api.gets[before:] if g.count("/") == 3])
+        reads.append([g for g in api.gets[before:] if g.count("/") == 3 and g.startswith("/v1/")])
+        stops.append([g for g in api.gets[before:] if g.count("/") == 3 and g.startswith("/v0/")])
         clock.t += 60
     assert [len(r) for r in reads] == [W.WORKERS_NEW, W.WORKERS_NEW, 9, 0], \
         "20 first reads a sweep; a listed agent is no worker; one IDLE for 12 h isn't read again"
     assert all(len(set(r)) == len(r) for r in reads), "at most one read per worker a sweep"
+    assert [[g[4:] for g in r] for r in stops] == [[g[4:] for g in r] for r in reads], \
+        "and one read of how it stopped (its v0 status), with its first read: FINISHED, so never again"
     p = note(notes, "circuits", "7.md", f"circuits worker ({ids[7]}), back at work", age_s=0)
     W.os.utime(p, (clock.t, clock.t))
     w.sweep(lambda r: None)
-    assert [g for g in api.gets if g.count("/") == 3][-1:] == [f"/v1/agents/{ids[7]}"]
+    assert [g for g in api.gets if g.count("/") == 3][-2:] == [f"/v1/agents/{ids[7]}", f"/v0/agents/{ids[7]}"]
     clock.t += 60
     before = len(api.gets)
     w.sweep(lambda r: None)
@@ -3376,14 +3390,16 @@ KEYED = "bc-efefefef-efef-efef-efef-efefefefefef"
 
 def linear_teams(tmp_path):
     """The registry's lanes, each a handle with a Linear team that a cloud agent holds: circuits and vllm with a team of their
-    own, two that share one, one whose name extends vllm's, and kernels, renamed from another name. Three handles are no
+    own, two that share one (compute-accounting's own, which compute-research files in under its `linear_label`), one whose
+    name extends vllm's, and kernels, renamed from another name. Three handles are no
     lane: console (no team, a desktop agent's), dashboard (a team, a desktop agent's) and steward (a cloud agent's, no team)."""
     reg = json.loads((tmp_path / "registry.json").read_text())
     for h in reg["handles"]:
         h.update({"linear": team} if (team := {"circuits": "CIR", "vllm": "VLLM"}.get(h["handle"])) else {})
     reg["handles"] += [
         {"handle": "compute-accounting", "holder": f"its coordinator ({W4_})", "linear": "CMP"},
-        {"handle": "compute-research", "holder": f"its coordinator ({W5_})", "linear": "CMP"},
+        {"handle": "compute-research", "holder": f"its coordinator ({W5_})", "linear": "CMP",
+         "linear_label": "lane:compute-research"},
         {"handle": "vllm-serve", "holder": f"its coordinator ({W6_})", "linear": "SRV"},
         {"handle": "kernels", "holder": f"its coordinator ({W3_})", "linear": "HASH", "charter": "renamed from @hash"},
         {"handle": "dashboard", "holder": "a desktop agent (4d92fa93-101a-42e1-8282-d4a998892829)", "linear": "CON"},
@@ -4148,3 +4164,668 @@ def test_a_silent_worker_the_api_wont_archive_is_a_no_step_for_top_with_why(tmp_
     got = [r for r in records(tmp_path) if r["kind"] in ("no_step", "archived")]
     assert [{k: r.get(k) for k in ("kind", "owner", "role", "archive_failed")} for r in got] == [
         {"kind": "no_step", "owner": "top", "role": "worker", "archive_failed": "HTTP 403"}]
+
+
+W7_, W8_ = (f"bc-{c * 8}-{c * 4}-{c * 4}-{c * 4}-{c * 12}" for c in "78")
+
+
+def registered(tmp_path, clock, agent=W1_, lane="circuits", by=CO, **more):
+    """A workers.d entry for `agent`, written at the clock's time: an entry's mtime is when the watch last heard of it."""
+    d = tmp_path / "workers.d"
+    d.mkdir(exist_ok=True)
+    p = d / f"{lane}-{agent}.json"
+    p.write_text(json.dumps({"agent_id": agent, "lane": lane, "launched_by": by, **more}))
+    W.os.utime(p, (clock.t, clock.t))
+    return p
+
+
+def integrator(tmp_path, v0="ERROR", name="CIR-7 INTEGRATOR", status="IDLE", agents=(), runs=None, **kw):
+    """A swarm's integrator (W1_), a Task subagent the circuits coordinator launched and registered, named after its issue:
+    no run the API lists, IDLE on v1 since T0 however its turn ended, and `v0` what the legacy status says of it. The
+    watch, before its first sweep."""
+    api, clock, w = coordinators(tmp_path, list(agents), runs or {}, workers={W1_: worker(status, W.iso(T0), name=name)}, **kw)
+    linear_teams(tmp_path)
+    registered(tmp_path, clock)
+    api.v0[W1_] = v0
+    return api, clock, w
+
+
+def stops(api, agent=W1_, since=0):
+    return api.gets[since:].count(f"/v0/agents/{agent}")
+
+
+RESUME_IT = "can't start a run on a worker: resume it with Task, which only the agent that launched it can, or relaunch it"
+
+
+def test_a_worker_stopped_with_an_error_is_recorded_once_for_its_lane_naming_it_and_its_issue(tmp_path):
+    """A swarm's integrator the platform cuts mid-turn (a billing stop) reads IDLE on v1 as after any turn, and has no
+    run to read ERROR. Its v0 status says ERROR: one record for its lane, whose coordinator alone can resume it, and
+    no second however long it sits so."""
+    api, clock, w = integrator(tmp_path)
+    sweeps(w, clock, 3 * 60, step=1)
+    (rec,) = records(tmp_path)
+    assert {k: v for k, v in rec.items() if k not in ("t", "since")} == {
+        "kind": "crashed", "agent": W1_, "name": "CIR-7 INTEGRATOR", "run": "", "role": "worker", "status": "ERROR",
+        "lane": "circuits", "handle": "circuits", "issue": "CIR-7", "action": RESUME_IT}
+    assert W.epoch(rec["since"]) == T0 + W.DROPPED_S, "once its last change is `DROPPED_S` old: a turn would have begun by then"
+    assert status(tmp_path)[W1_]["watch_state"] == "crashed"
+    assert stops(api) == 2 and api.posts == [], "read at its first read and once past `DROPPED_S`; nothing is started on it"
+    again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d")
+    sweeps(again, clock, 60, step=1)
+    assert len(records(tmp_path)) == 1 and stops(api) == 2, "nor after the watch restarts, as it does on every deploy"
+
+
+def test_a_worker_in_error_that_runs_again_and_stops_again_rings_again(tmp_path):
+    """Once per stop. Its launcher resumes it with Task: the message moves its `updatedAt`, v1 still reads IDLE, and v0 has
+    it in a turn, read every `STOP_S` until that ends. A turn that ends well clears the error and rings nobody; one that
+    ends in ERROR is a new stop."""
+    api, clock, w = integrator(tmp_path)
+    sweeps(w, clock, 20, step=1)
+    for end, kinds in (("ERROR", ["crashed"] * 2), ("FINISHED", ["crashed"] * 2), ("ERROR", ["crashed"] * 3)):
+        api.workers[W1_]["updatedAt"], api.v0[W1_], before = W.iso(clock.t), "RUNNING", len(api.gets)
+        sweeps(w, clock, 20, step=1)
+        assert stops(api, since=before) == 4, "at the change, then every `STOP_S` of its turn: not every sweep"
+        assert status(tmp_path)[W1_]["watch_state"] == "ok", "in a turn again: no longer shown in error"
+        api.v0[W1_], before = end, len(api.gets)
+        sweeps(w, clock, 20, step=1)
+        assert [r["kind"] for r in records(tmp_path)] == kinds, end
+        assert stops(api, since=before) == 1, "its end is read once"
+    assert [r["agent"] for r in records(tmp_path)] == [W1_] * 3
+
+
+def test_a_worker_seen_to_stop_in_error_is_one_crashed_record_and_no_worker_idle(tmp_path):
+    """One record of one stop. A worker v1 shows ACTIVE and then IDLE went idle, which rings its lane as `worker_idle`
+    when it finished; one v0 has in ERROR at that read is `crashed` at once, in its place."""
+    for d, end, kinds in ((tmp_path / "error", "ERROR", ["crashed"]), (tmp_path / "done", "FINISHED", ["worker_idle"])):
+        d.mkdir()
+        api, clock, w = integrator(d, v0="RUNNING", status="ACTIVE")
+        sweeps(w, clock, 10, step=1)
+        assert stops(api) == 0, "v1 has it in a turn: nothing to ask"
+        api.workers[W1_].update(status="IDLE", updatedAt=W.iso(clock.t))
+        api.v0[W1_] = end
+        sweeps(w, clock, 30, step=1)
+        assert [r["kind"] for r in records(d)] == kinds
+        assert W.epoch(records(d)[0]["since"]) <= clock.t - 29 * 60, "from the first read after it stopped"
+        api.workers[W1_].update(status="ACTIVE", updatedAt=W.iso(clock.t))
+        api.v0[W1_] = "RUNNING"
+        sweeps(w, clock, 10, step=1)
+        api.workers[W1_].update(status="IDLE", updatedAt=W.iso(clock.t))
+        api.v0[W1_] = "ERROR"
+        sweeps(w, clock, 10, step=1)
+        assert [r["kind"] for r in records(d)] == [*kinds, "crashed"], "it ran again and stopped again, in error"
+
+
+def test_workers_of_one_coordinator_stopped_in_error_together_are_one_record_naming_each(tmp_path):
+    """A billing stop cuts every worker of a swarm at once: their coordinator is rung once, as for any workers that stop
+    together, each member saying it is in error and its issue. No conversation is read for a wake-up."""
+    api, clock, w = integrator(tmp_path)
+    api.workers[W7_] = worker("IDLE", W.iso(T0), name="CIR-8 SEAT-A")
+    api.v0[W7_] = "ERROR"
+    registered(tmp_path, clock, W7_)
+    sweeps(w, clock, 60, step=1)
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["agent"], rec["handle"], rec["owner"], rec["count"]) == ("workers_failed", CO, "circuits", "circuits", 2)
+    assert [(m["kind"], m["agent"], m["status"], m["issue"]) for m in rec["members"]] == [
+        ("crashed", W1_, "ERROR", "CIR-7"), ("crashed", W7_, "ERROR", "CIR-8")]
+    assert not [g for g in api.gets if g.endswith("/conversation")]
+
+
+def test_a_v0_status_the_api_wont_give_records_nothing_and_is_read_again(tmp_path, capsys):
+    api, clock, w = integrator(tmp_path, v0=W.urllib.error.HTTPError("/v0/agents/x", 500, "Server Error", {}, None))
+    sweeps(w, clock, 30, step=1)
+    assert records(tmp_path) == [] and stops(api) == 30 * 60 // W.STOP_S, "every `STOP_S`, not every sweep"
+    assert capsys.readouterr().err.count("v0 status went unread") == 1, "said once an hour"
+    api.v0[W1_] = "ERROR"
+    sweeps(w, clock, 10, step=1)
+    assert [(r["kind"], r["agent"]) for r in records(tmp_path)] == [("crashed", W1_)]
+
+
+def test_a_worker_nothing_places_is_recorded_in_error_quietly(tmp_path):
+    """Only a worker the watch places rings a lane: one it can't place rang infra once as unplaced, and its error, which
+    nobody the watch knows could act on, is posted and rings no one."""
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", W.iso(T0), name="INTEGRATOR")})
+    api.v0[W1_] = "ERROR"
+    w.workers[W1_] = {"heard": T0, "lane": "", "handle": None}
+    sweeps(w, clock, 20, step=1)
+    assert [(r["kind"], r.get("quiet"), r.get("handle"), r.get("issue")) for r in records(tmp_path)] == [
+        ("unplaced", None, None, None), ("crashed", True, None, None)]
+
+
+def test_a_listed_agent_with_no_run_is_read_as_a_worker_by_id(tmp_path):
+    """The sweep judges a listed agent by its latest run and leaves one without a run alone, and the worker read skipped
+    every agent the list has: an agent on the list with no run was read by neither."""
+    listed = {"id": W1_, "name": "CIR-7 INTEGRATOR", "status": "IDLE", "updatedAt": W.iso(T0)}
+    api, clock, w = integrator(tmp_path, agents=[listed])
+    sweeps(w, clock, 20, step=1)
+    assert [(r["kind"], r["agent"], r["handle"], r["issue"]) for r in records(tmp_path)] == [("crashed", W1_, "circuits", "CIR-7")]
+    assert status(tmp_path)[W1_]["run_id"] == "", "one row, a worker's"
+
+
+def test_a_listed_worker_in_error_is_restarted_and_each_record_names_its_lead_and_its_issue(tmp_path):
+    """An agent on the list has runs the watch can start: one whose latest run ended in ERROR, or whose own status the
+    list gives as ERROR, is restarted, and its coordinator rung with each try and when they are spent."""
+    by_run = {"id": W1_, "name": "CIR-7 INTEGRATOR", "status": "IDLE", "latestRunId": "run-e1", "updatedAt": W.iso(T0)}
+    by_status = {"id": W7_, "name": "CIR-8 SEAT-A", "status": "ERROR", "latestRunId": "run-f", "updatedAt": W.iso(T0)}
+    api, clock, w = integrator(tmp_path, agents=[by_run, by_status], runs={"run-e1": {"status": "ERROR"}, "run-f": dict(FINISHED)})
+    registered(tmp_path, clock, W7_)
+    w.sweep(lambda r: None)
+    w.sweep(lambda r: None)
+    assert [(r["kind"], r["agent"], r["owner"], r["issue"], r["action"]) for r in records(tmp_path)] == [
+        ("crashed", W1_, "circuits", "CIR-7", "restarted (1 of 3)"), ("crashed", W7_, "circuits", "CIR-8", "restarted (1 of 3)")]
+    assert [p for p, _ in api.posts] == [f"/v1/agents/{W1_}/runs", f"/v1/agents/{W7_}/runs"]
+    assert status(tmp_path)[W7_]["watch_state"] == "crashed" and f"/v0/agents/{W1_}" not in api.gets
+    for n in (2, 3, 4):
+        clock.t += W.RESTART_S
+        by_run["latestRunId"] = f"run-e{n}"
+        api._runs[f"run-e{n}"] = {"status": "ERROR"}
+        w.sweep(lambda r: None)
+    mine = [r for r in records(tmp_path) if r["agent"] == W1_]
+    assert [(r["kind"], r["owner"], r["issue"]) for r in mine] == [("crashed", "circuits", "CIR-7")] * 3 + [
+        ("erroring", "circuits", "CIR-7")]
+    assert not drops(tmp_path)
+
+
+def test_a_restart_the_api_refuses_is_tried_again_and_ends_as_erroring_for_top(tmp_path):
+    """A coordinator in error whose restart the API refused got one `crashed` line and was never tried again: its run
+    stayed judged, so it was neither restarted, nor counted erroring, nor relaunched. Each refused try now counts toward
+    the row and the next is made `RESTART_S` later; when they are spent it is erroring, which rings top, and relaunched."""
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "IDLE", "latestRunId": "run-e",
+                                             "updatedAt": W.iso(T0)}], {"run-e": {"status": "ERROR"}})
+    tried = []
+
+    def refuse(path, body=None):
+        tried.append((path, clock.t))
+        raise W.urllib.error.HTTPError(path, 402, "Payment Required", {}, None)
+    api.post = refuse
+    sweeps(w, clock, 60, step=1)
+    assert tried == [(f"/v1/agents/{CO}/runs", T0 + 60 + n * W.RESTART_S) for n in range(W.MAX_RESTARTS)]
+    got = [(r["kind"], r["owner"], r["action"]) for r in records(tmp_path)]
+    assert got[:4] == [
+        ("crashed", "top", "got no restart from the API (HTTP 402): try 1 of 3, the next in 10 min"),
+        ("crashed", "top", "got no restart from the API (HTTP 402): try 2 of 3, the next in 10 min"),
+        ("crashed", "top", "got no restart from the API (HTTP 402): try 3 of 3, the last"),
+        ("erroring", "top", "relaunching it")]
+    assert [g[0] for g in got[4:]] == ["relaunch"] and got[4][2].startswith("not relaunched: no launch key")
+    assert status(tmp_path)[CO]["watch_state"] in ("erroring", "relaunch") and status(tmp_path)[CO]["restart_count"] == 3
+
+
+class FakeLinear:
+    """Linear beside the fake API, as `W.Linear.issue` gives an issue: `issues[key]` holds its `comments` (`said` adds
+    one, which a read gives from its time on by `clock`), `state` and `labels`; an issue it doesn't hold is one Linear
+    answers it can't find. `fail` is the error every read raises while it is set. `calls` lists each read, `(key, the
+    cursor it paged from)`."""
+
+    def __init__(self, clock=None, **issues):
+        self.issues, self.calls, self.fail = {k.replace("_", "-"): {"comments": [], **v} for k, v in issues.items()}, [], None
+        self.clock = clock
+
+    def said(self, key, t, by):
+        """A comment on `key` at `t`, signed `by`; its id."""
+        n = len(self.issues[key]["comments"]) + 1
+        self.issues[key]["comments"].append({"id": f"{key}-c{n}", "t": float(t), "by": by})
+        return f"{key}-c{n}"
+
+    def issue(self, key, after=None):
+        self.calls.append((key, after))
+        if self.fail is not None:
+            raise self.fail
+        if key not in self.issues:
+            raise ValueError("Linear: Entity not found: Issue - Could not find referenced Issue.")
+        d, at = self.issues[key], int(after or 0)
+        newest = sorted((c for c in d["comments"] if not self.clock or c["t"] <= self.clock.t), key=lambda c: -c["t"])
+        return {"url": f"https://linear.example/issue/{key}", "state": d.get("state", "started"),
+                "labels": list(d.get("labels", ())), "comments": [dict(c) for c in newest[at:at + W.HANDIN_PAGE]],
+                "after": str(at + W.HANDIN_PAGE) if at + W.HANDIN_PAGE < len(newest) else None}
+
+
+def swarm(tmp_path, name="CIR-7 INTEGRATOR", linear=..., **entry):
+    """A swarm of the circuits lane: its integrator (W1_, as `integrator` makes it, its last turn ended well) registered
+    by its lead as taking hand-ins on the issue it is named after, and Linear holding that issue with no comment yet."""
+    lin = FakeLinear(CIR_7={})
+    api, clock, w = integrator(tmp_path, v0="FINISHED", name=name, linear=lin if linear is ... else linear)
+    lin.clock = clock
+    registered(tmp_path, clock).unlink()
+    registered(tmp_path, clock, integrates="CIR-7", **entry)
+    return api, clock, w, lin
+
+
+def handins(tmp_path):
+    return [r for r in records(tmp_path) if r["kind"] == "handin_waiting"]
+
+
+def read_at(w, clock, lin, minutes):
+    """A sweep a minute for `minutes`: the minutes after T0 at which Linear was read, one entry a call."""
+    out = []
+    for _ in range(minutes):
+        clock.t += 60
+        n = len(lin.calls)
+        w.sweep(lambda r: None)
+        out += [int(clock.t - T0) // 60] * (len(lin.calls) - n)
+    return out
+
+
+def test_a_hand_in_waiting_two_hours_on_an_integrator_is_recorded_once_for_its_lead(tmp_path):
+    """A swarm's integrator that stopped answers no hand-in, and nothing else tells its lead when its stop went unseen.
+    A comment on the issue the integrator takes hand-ins on, with none of the integrator's after it, is one record for
+    its lead once it is two hours old: not before, not again while it waits, not for the comments that wait behind it,
+    and not after the watch restarts."""
+    api, clock, w, lin = swarm(tmp_path)
+    first = lin.said("CIR-7", T0 + 10 * 60, "circuits/SEAT-A")
+    assert read_at(w, clock, lin, 129) == [1, 121] and handins(tmp_path) == [], "nothing until it is two hours old"
+    lin.said("CIR-7", T0 + 100 * 60, "circuits/SEAT-B")
+    assert read_at(w, clock, lin, 1) == [130]
+    (rec,) = records(tmp_path)
+    assert rec == {
+        "t": W.iso(T0 + 130 * 60), "kind": "handin_waiting", "agent": W1_, "name": "CIR-7 INTEGRATOR", "run": "",
+        "role": "worker", "issue": "CIR-7", "url": "https://linear.example/issue/CIR-7", "comment": first,
+        "by": "circuits/SEAT-A", "since": W.iso(T0 + 10 * 60), "minutes": 120, "waiting": 2, "signs": "INTEGRATOR",
+        "lane": "circuits", "handle": "circuits"}
+    assert status(tmp_path)[W1_]["watch_state"] != "handin_waiting", "the integrator's row is judged by its own turns"
+    lin.said("CIR-7", clock.t, "circuits/SEAT-C")
+    assert read_at(w, clock, lin, 9 * 60) == [250, 370, 490, 610] and len(handins(tmp_path)) == 1
+    again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
+                    linear=lin)
+    assert read_at(again, clock, lin, 5 * 60) == [671, 791, 911] and len(handins(tmp_path)) == 1
+
+
+@pytest.mark.parametrize("answer, rings", [
+    ("circuits/INTEGRATOR", False),
+    ("vllm/integrator", False),         # signed under another lane's handle, in another case: still its name
+    ("circuits", True),                 # its lead's own comment is no answer of the integrator's
+    ("circuits/SEAT-B", True),
+    ("INTEGRATOR", True),               # a handle's or a person's comment, never a worker's: a worker signs LANE/NAME
+    ("", True)])
+def test_a_hand_in_the_integrator_answered_rings_nobody_and_one_only_another_answered_does(tmp_path, answer, rings):
+    """The team's agents all post through one app, so a comment's author doesn't say whose it is: its signature does.
+    Only a comment signed as a worker of the integrator's name (`--worker NAME`: LANE/NAME) answers a hand-in."""
+    api, clock, w, lin = swarm(tmp_path)
+    first = lin.said("CIR-7", T0 + 10 * 60, "circuits/SEAT-A")
+    lin.said("CIR-7", T0 + 30 * 60, answer)
+    read_at(w, clock, lin, 5 * 60)
+    assert [(r["comment"], r["by"], r["waiting"]) for r in handins(tmp_path)] == ([(first, "circuits/SEAT-A", 2)] if rings else [])
+
+
+def test_each_hand_in_left_waiting_after_the_integrators_last_answer_rings_once(tmp_path):
+    """Once per comment: an integrator that answered and then stopped leaves the next hand-in waiting, which rings when
+    it is two hours old, and one it answers late stops counting."""
+    api, clock, w, lin = swarm(tmp_path)
+    first = lin.said("CIR-7", T0, "circuits/SEAT-A")
+    read_at(w, clock, lin, 150)
+    lin.said("CIR-7", clock.t, "circuits/INTEGRATOR")
+    second = lin.said("CIR-7", clock.t + 20 * 60, "circuits/SEAT-B")
+    read_at(w, clock, lin, 6 * 60)
+    got = handins(tmp_path)
+    assert [(r["comment"], r["by"], r["minutes"], r["waiting"]) for r in got] == [
+        (first, "circuits/SEAT-A", 120, 1), (second, "circuits/SEAT-B", 120, 1)]
+    assert [int(W.epoch(r["t"]) - T0) // 60 for r in got] == [120, 290], "each within a sweep of its two hours"
+
+
+def test_a_hand_in_that_waits_for_days_is_still_recorded_once(tmp_path):
+    """The watch forgets what it hasn't met for two days, whenever it saves its state. A hand-in it keeps meeting is not
+    forgotten: however long it waits, it is one record."""
+    api, clock, w, lin = swarm(tmp_path)
+    lin.said("CIR-7", T0, "circuits/SEAT-A")
+    for _ in range(40):
+        clock.t += W.HANDIN_S
+        w.sweep(lambda r: None)
+        w.save()
+    assert clock.t - T0 > 3 * 86400 and len(lin.calls) == 40 and len(handins(tmp_path)) == 1
+
+
+def test_an_integrator_that_stopped_days_ago_still_has_a_hand_in_on_its_issue_recorded(tmp_path):
+    """A worker idle for two days is forgotten, and its name with it. An integrator's name says which comments are its
+    own, so it is kept while its entry stands: a hand-in days after its last turn is the one its lead most needs."""
+    api, clock, w, lin = swarm(tmp_path)
+    for _ in range(40):
+        clock.t += W.HANDIN_S
+        w.sweep(lambda r: None)
+    assert W1_ in w.workers and handins(tmp_path) == []
+    late = lin.said("CIR-7", clock.t, "circuits/SEAT-A")
+    clock.t += W.HANDIN_S
+    w.sweep(lambda r: None)
+    assert [(r["comment"], r["name"], r["signs"]) for r in handins(tmp_path)] == [(late, "CIR-7 INTEGRATOR", "INTEGRATOR")]
+
+
+@pytest.mark.parametrize("state", ["completed", "canceled"])
+def test_a_closed_issue_takes_no_hand_in(tmp_path, state):
+    """An issue that is done or cancelled has no integrator to answer on it: a comment left on it rings nobody."""
+    api, clock, w, lin = swarm(tmp_path)
+    lin.issues["CIR-7"]["state"] = state
+    lin.said("CIR-7", T0, "circuits/SEAT-A")
+    assert read_at(w, clock, lin, 5 * 60) == [1, 121, 241] and handins(tmp_path) == []
+    lin.issues["CIR-7"]["state"] = "started"
+    assert read_at(w, clock, lin, 2 * 60) == [361] and len(handins(tmp_path)) == 1, "reopened, it takes them again"
+
+
+def test_a_linear_read_that_fails_records_nothing_and_is_made_again_at_the_next_sweep_once_per_issue(tmp_path, capsys):
+    """A failed read is no finding: nothing is recorded from it, each issue due is read again at the next sweep and at
+    most once a sweep, and the hand-in that waited through it still rings, once. An answer that Linear can't (no such
+    issue) is asked again far less often."""
+    api, clock, w, lin = swarm(tmp_path)
+    registered(tmp_path, clock, W7_, integrates="CIR-8")
+    api.workers[W7_] = worker("IDLE", W.iso(T0), name="CIR-8 MERGER")
+    lin.issues["CIR-8"] = {"comments": []}
+    lin.said("CIR-7", T0 - 3 * 3600, "circuits/SEAT-A")
+    lin.said("CIR-8", T0 - 3 * 3600, "circuits/SEAT-B")
+    lin.fail = W.urllib.error.URLError("timed out")
+    assert read_at(w, clock, lin, 5) == [1, 2, 3, 4, 5] and [k for k, _ in lin.calls] == ["CIR-7"] * 5, \
+        "one read a sweep while Linear is down: the second issue is not tried after the first fails"
+    assert records(tmp_path) == []
+    assert capsys.readouterr().err.count("Linear unread (URLError") == 1, "said once, not at every sweep"
+    lin.fail = W.urllib.error.HTTPError(W.LINEAR_API, 400, "Bad Request", {}, None)
+    assert read_at(w, clock, lin, 1) == [6] and records(tmp_path) == []
+    lin.fail = None
+    assert read_at(w, clock, lin, 30) == [7, 7]
+    assert [(r["issue"], r["agent"], r["minutes"]) for r in handins(tmp_path)] == [("CIR-7", W1_, 187), ("CIR-8", W7_, 187)]
+    del lin.issues["CIR-8"]
+    lin.calls.clear()
+    assert read_at(w, clock, lin, 3 * 60) == [127, 127, 137, 147, 157, 167, 177, 187, 197, 207], \
+        "an issue Linear won't give is read every `HANDIN_RETRY_S`, and the other goes on being read"
+    assert len(handins(tmp_path)) == 2 and "issue CIR-8 unread: Linear: Entity not found" in capsys.readouterr().err
+
+
+def test_with_no_linear_credential_no_hand_in_is_recorded_and_the_log_says_so_once(tmp_path, capsys):
+    """Without the Linear app's two names in the file the watch is handed, or with no file, there is no hand-in ring:
+    nothing is read or recorded, and the log says so once, however many sweeps and issues."""
+    env = tmp_path / "relay.env"
+    env.write_text("GH_TOKEN=dummy-not-a-secret\nLINEAR_CLIENT_ID=\n")
+    asked = []
+    lin = W.Linear(env, tmp_path / "linear-token.json", http=lambda *a: asked.append(a))
+    api, clock, w, _ = swarm(tmp_path, linear=lin)
+    registered(tmp_path, clock, W7_, integrates="CIR-8")
+    api.workers[W7_] = worker("IDLE", W.iso(T0), name="CIR-8 MERGER")
+
+    def three_hours(watch):
+        for _ in range(3 * 60):
+            clock.t += 60
+            watch.sweep(lambda r: None)
+        return capsys.readouterr().err
+
+    err = three_hours(w)
+    assert records(tmp_path) == [] and asked == [] and not (tmp_path / "linear-token.json").exists()
+    assert err.count("no Linear credential") == 1 and f"no LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET in {env}" in err
+    bare = W.Watch(api, tmp_path / "bare" / "events.jsonl", clock, registry=tmp_path / "registry.json",
+                   routes=tmp_path / "routes.d")
+    (tmp_path / "bare" / "workers.d").mkdir(parents=True)
+    (tmp_path / "bare" / "workers.d" / "i.json").write_text((tmp_path / "workers.d" / f"circuits-{W1_}.json").read_text())
+    err = three_hours(bare)
+    assert not (tmp_path / "bare" / "events.jsonl").exists()
+    assert err.count("no Linear credential") == 1 and "started without --gh-env" in err
+
+
+def test_an_integrators_issue_is_read_when_a_hand_in_may_be_due_and_never_at_every_sweep(tmp_path):
+    """The calls are counted: an issue with nothing waiting is read once in two hours, one with a hand-in waiting once
+    more when that turns two hours old, and a sweep reads an issue at most once. Two integrators of one issue (one
+    relaunched, its old entry still there) are one read, and the record names the one registered last."""
+    api, clock, w, lin = swarm(tmp_path)
+    assert read_at(w, clock, lin, 24 * 60) == [1 + 120 * n for n in range(12)] and len(lin.calls) == 12
+    clock.t += 60
+    api.workers[W7_] = worker("IDLE", W.iso(clock.t), name="CIR-7 INTEGRATOR-2")
+    registered(tmp_path, clock, W7_, integrates="CIR-7")
+    lin.said("CIR-7", clock.t, "circuits/SEAT-A")
+    lin.said("CIR-7", clock.t + 30 * 60, "circuits/INTEGRATOR")
+    late = lin.said("CIR-7", clock.t + 40 * 60, "circuits/SEAT-A")
+    lin.calls.clear()
+    at = read_at(w, clock, lin, 4 * 60)
+    assert at == [1442, 1441 + 120, 1481 + 120] and lin.calls == [("CIR-7", None)] * 3
+    (rec,) = handins(tmp_path)
+    assert (rec["agent"], rec["name"], rec["comment"], rec["signs"]) == (W7_, "CIR-7 INTEGRATOR-2", late, "INTEGRATOR-2")
+    lin.issues["CIR-7"]["state"] = "completed"
+    lin.said("CIR-7", clock.t, "circuits/SEAT-B")
+    read_at(w, clock, lin, 6 * 60)
+    assert len(handins(tmp_path)) == 1, "a closed issue takes no hand-in"
+
+
+def test_the_integrators_last_answer_is_looked_for_pages_back_and_no_further(tmp_path):
+    """An issue's comments come newest first, a page a call: the watch pages back only until it meets the integrator's
+    last, and stops after `HANDIN_PAGES`, saying that older comments may wait too, once."""
+    api, clock, w, lin = swarm(tmp_path)
+    lin.said("CIR-7", T0 - 9 * 3600, "circuits/INTEGRATOR")
+    for n in range(W.HANDIN_PAGE + 20):
+        lin.said("CIR-7", T0 - 8 * 3600 + n, f"circuits/SEAT-{n % 5}")
+    read_at(w, clock, lin, 1)
+    assert lin.calls == [("CIR-7", None), ("CIR-7", str(W.HANDIN_PAGE))]
+    (rec,) = handins(tmp_path)
+    assert (rec["comment"], rec["waiting"], rec["minutes"], rec.get("older")) == ("CIR-7-c2", W.HANDIN_PAGE + 20, 481, None)
+    lin.issues["CIR-7"]["comments"] = []
+    for n in range(W.HANDIN_PAGE * W.HANDIN_PAGES + 50):
+        lin.said("CIR-7", T0 - 8 * 3600 + n, "circuits/SEAT-A")
+    lin.calls.clear()
+    read_at(w, clock, lin, 5 * 60)
+    assert lin.calls == [("CIR-7", None), ("CIR-7", "100"), ("CIR-7", "200")] * 2, "two reads in five hours, three pages each"
+    assert [(r["waiting"], r.get("older")) for r in handins(tmp_path)[1:]] == [(W.HANDIN_PAGE * W.HANDIN_PAGES, True)]
+
+
+def test_an_integrators_signature_is_its_entrys_else_the_word_after_its_names_issue_key(tmp_path, capsys):
+    """Which comments are the integrator's is its entry's `signs`, else the NAME of `TEAM-7 NAME`; an integrator with
+    neither is said in the log and no hand-in on its issue is recorded, since every answer of its would read as none."""
+    assert [W.signer(n) for n in ("CIR-7 INTEGRATOR", "CIR-7: merge-1 takes the seats' rows", "INTEGRATOR (CIR-7)", "")] == [
+        "INTEGRATOR", "merge-1", "", ""]
+    api, clock, w, lin = swarm(tmp_path, name="the swarm's integrator", signs="MERGE")
+    lin.said("CIR-7", T0, "circuits/SEAT-A")
+    lin.said("CIR-7", T0 + 60, "circuits/merge")
+    read_at(w, clock, lin, 3 * 60)
+    assert handins(tmp_path) == []
+    lin.said("CIR-7", clock.t, "circuits/SEAT-A")
+    read_at(w, clock, lin, 3 * 60)
+    assert [(r["signs"], r["name"]) for r in handins(tmp_path)] == [("MERGE", "the swarm's integrator")]
+    registered(tmp_path, clock, integrates="CIR-7")
+    lin.calls.clear()
+    lin.said("CIR-7", clock.t, "circuits/MERGE")
+    lin.said("CIR-7", clock.t + 60, "circuits/SEAT-A")
+    capsys.readouterr()
+    read_at(w, clock, lin, 3 * 60)
+    assert len(handins(tmp_path)) == 1 and lin.calls == []
+    assert capsys.readouterr().err.count("nothing says which comments are its own") == 3, "said, at most once an hour"
+
+
+def test_a_hand_in_on_an_issue_whose_integrator_no_handle_owns_names_no_handle(tmp_path):
+    """The lead rung is the one `placed` gives the integrator: its launcher's handle. An entry whose launcher and lane
+    no handle owns gives none, and the record says so by carrying none, for the relay to ring infra."""
+    api, clock, w, lin = swarm(tmp_path, lane="swarm-x", by=W8_)
+    lin.said("CIR-7", T0 - 3 * 3600, "circuits/SEAT-A")
+    read_at(w, clock, lin, 5)
+    (rec,) = handins(tmp_path)
+    assert rec["lane"] == "swarm-x" and "handle" not in rec and "quiet" not in rec
+
+
+ISSUE = {"url": "https://linear.example/issue/CIR-7", "state": {"type": "started"},
+         "labels": {"nodes": [{"name": "swarm"}, {"name": "lane:circuits"}]},
+         "comments": {"pageInfo": {"hasNextPage": True, "endCursor": "cursor-2"}, "nodes": [
+             {"id": "c-3", "createdAt": "2026-10-18T19:40:00.512Z", "botActor": None, "user": {"name": "A Person"}},
+             {"id": "c-2", "createdAt": "2026-10-18T19:30:00.000Z", "botActor": {"userDisplayName": "circuits/INTEGRATOR"},
+              "user": None},
+             {"id": "c-1", "createdAt": "2026-10-18T19:20:00.000Z", "botActor": {"userDisplayName": "circuits"}, "user": None}]}}
+
+
+class FakeHttp:
+    """Linear's two endpoints as `W.Linear` calls them: `posts` lists each call (url, body, headers), `n` counts the
+    tokens granted, `refuse` holds the bearer tokens the API answers 401 for, and `answer` is what it says of an issue
+    (ISSUE, as its GraphQL gives one: the app's comments signed in `botActor`, a person's in `user`)."""
+
+    def __init__(self):
+        self.posts, self.n, self.refuse, self.answer = [], 0, set(), {"data": {"issue": ISSUE}}
+
+    def __call__(self, url, data, headers):
+        self.posts.append((url, data, headers))
+        if url == W.LINEAR_TOKEN_URL:
+            self.n += 1
+            return {"access_token": f"dummy-token-{self.n}", "expires_in": 30 * 86400}
+        if headers["Authorization"].removeprefix("Bearer ") in self.refuse:
+            raise W.urllib.error.HTTPError(url, 401, "Unauthorized", {}, None)
+        return self.answer
+
+
+def test_the_linear_reader_gets_its_token_as_the_teams_client_does_and_keeps_it(tmp_path):
+    """The watch can't import the team's Linear client, so it does what that client does: the app's client-credentials
+    grant, always for the one scope set (a grant for another revokes the app's live tokens), a token kept 0600 and
+    reused until an hour before it expires, fetched again once when Linear refuses it; one query an issue, with no
+    comment's text asked for."""
+    env, cache, clock = tmp_path / "relay.env", tmp_path / "state" / "linear-token.json", Clock(T0)
+    env.write_text("SLACK_BOT_TOKEN=dummy-slack\nexport LINEAR_CLIENT_ID='dummy-client'\nLINEAR_CLIENT_SECRET=\"dummy-secret\"\n")
+    http = FakeHttp()
+    lin = W.Linear(env, cache, clock, http)
+    assert lin.issue("CIR-7") == {
+        "url": "https://linear.example/issue/CIR-7", "state": "started", "labels": ["swarm", "lane:circuits"], "after": "cursor-2",
+        "comments": [{"id": "c-3", "t": T0 - 20 * 60, "by": "A Person"}, {"id": "c-2", "t": T0 - 30 * 60, "by": "circuits/INTEGRATOR"},
+                     {"id": "c-1", "t": T0 - 40 * 60, "by": "circuits"}]}
+    (url, form, head), (api_url, body, bearer) = http.posts
+    assert url == "https://api.linear.app/oauth/token" and api_url == "https://api.linear.app/graphql"
+    assert W.urllib.parse.parse_qs(form.decode()) == {"grant_type": ["client_credentials"], "scope": ["read,write"]}
+    assert head == {"Authorization": "Basic " + W.base64.b64encode(b"dummy-client:dummy-secret").decode(),
+                    "Content-Type": "application/x-www-form-urlencoded"}
+    assert bearer == {"Authorization": "Bearer dummy-token-1", "Content-Type": "application/json"}
+    sent = json.loads(body)
+    assert sent["variables"] == {"id": "CIR-7", "n": W.HANDIN_PAGE, "after": None}
+    assert sent["query"] == W.ISSUE_QUERY and "body" not in W.ISSUE_QUERY and "mutation" not in W.ISSUE_QUERY, \
+        "a comment's text is never read, and nothing is written"
+    assert cache.stat().st_mode & 0o777 == 0o600
+    assert json.loads(cache.read_text()) == {
+        "client": W.hashlib.sha256(b"dummy-client").hexdigest()[:16], "scope": "read,write", "access_token": "dummy-token-1",
+        "expires_at": T0 + 30 * 86400}, "the team client's cache, entry for entry, and nothing of the secret"
+    lin.issue("CIR-7", "cursor-2")
+    assert len(http.posts) == 3 and json.loads(http.posts[-1][1])["variables"]["after"] == "cursor-2", "the token is reused"
+    assert W.Linear(env, cache, clock, http).issue("CIR-7")["state"] == "started" and http.n == 1, "and by the next process"
+    http.refuse.add("dummy-token-1")
+    lin.issue("CIR-7")
+    assert http.n == 2 and [h["Authorization"] for _, _, h in http.posts[-3:]] == [
+        "Bearer dummy-token-1", head["Authorization"], "Bearer dummy-token-2"], "a refused token is fetched again, once"
+    http.refuse.add("dummy-token-2")
+    http.refuse.add("dummy-token-3")
+    with pytest.raises(W.urllib.error.HTTPError):
+        lin.issue("CIR-7")
+    assert http.n == 3
+    http.refuse.clear()
+    clock.t += 30 * 86400 - W.LINEAR_EARLY_S
+    lin.issue("CIR-7")
+    assert http.n == 4, "replaced an hour before it expires"
+    env.write_text("LINEAR_CLIENT_ID=dummy-other\nLINEAR_CLIENT_SECRET=dummy-secret\n")
+    lin.issue("CIR-7")
+    assert http.n == 5, "a token kept for another client is never used: a rotated credential needs no restart"
+    for damaged in ("[not a cache", "[]", json.dumps({**json.loads(cache.read_text()), "expires_at": "soon"})):
+        cache.write_text(damaged)
+        lin.issue("CIR-7")
+    assert http.n == 8 and json.loads(cache.read_text())["access_token"] == "dummy-token-8", "a cache it can't use is replaced"
+
+
+def test_the_linear_reader_says_what_it_cant_read_without_a_credentials_value(tmp_path):
+    env, clock = tmp_path / "relay.env", Clock(T0)
+    lin = W.Linear(env, tmp_path / "linear-token.json", clock, http := FakeHttp())
+    for text in (None, "", "LINEAR_CLIENT_ID=dummy-client\n", "LINEAR_CLIENT_SECRET=dummy-secret\nLINEAR_CLIENT_ID=\n"):
+        if text is not None:
+            env.write_text(text)
+        with pytest.raises(W.NoCredential) as e:
+            lin.issue("CIR-7")
+        assert "dummy" not in str(e.value) and http.posts == []
+    env.write_text("LINEAR_CLIENT_ID=dummy-client\nLINEAR_CLIENT_SECRET=dummy-secret\n")
+    http.answer = {"errors": [{"message": "Entity not found: Issue"}], "data": None}
+    with pytest.raises(ValueError, match="Linear: Entity not found: Issue") as e:
+        lin.issue("CIR-99")
+    assert not isinstance(e.value, W.NoCredential) and "dummy" not in str(e.value)
+    for answer, why in (({"data": {"issue": None}}, "no issue CIR-99"), ([], "no issue CIR-99"),
+                        ({"data": {"issue": {**ISSUE, "comments": None}}}, "CIR-99 came in another shape"),
+                        ({"data": {"issue": {**ISSUE, "labels": {"nodes": [None]}}}}, "CIR-99 came in another shape"),
+                        ({"data": {"issue": {**ISSUE, "comments": {"pageInfo": {"hasNextPage": False}, "nodes": [
+                            {"id": "c-1", "createdAt": None}]}}}}, "a comment with no time")):
+        http.answer = answer
+        with pytest.raises(ValueError, match=why):
+            lin.issue("CIR-99")
+    assert issubclass(W.urllib.error.HTTPError, OSError), "a refused grant or a 400 is a read that failed, made again"
+
+
+def test_a_shared_teams_sender_is_placed_by_the_lane_its_issue_is_under_read_once(tmp_path, capsys):
+    """Two lanes file under one Linear team, so a key of that team at a name's start names neither, and such a sender
+    went to infra to place by hand. Which lane an issue is under is in Linear, as the team's client reads it: the lane
+    its `lane:` label names, and with no such label the team's own lane, the one the registry gives no `linear_label`.
+    The issue is read once for an unplaced sender and what it gave is kept. A label naming a lane that doesn't share the
+    team places nobody and is not read again; a read that failed, or an issue Linear can't find, is read again at the
+    sender's next run's end."""
+    labelled, bare, wrong, gone, down = (f"bc-{c * 4}-{c * 2}-{c * 2}-{c * 2}-{c * 6}" for c in ("a3", "a4", "a5", "a6", "a7"))
+    names = {labelled: "CMP-377 HARDNESS-SPEC", bare: "CMP-12 TABLES", wrong: "CMP-13 ROWS", gone: "CMP-14 GONE",
+             down: "CMP-15 LATER"}
+    lin = FakeLinear(CMP_377={"labels": ["swarm", "lane:compute-research"]}, CMP_12={"labels": ["swarm"]},
+                     CMP_13={"labels": ["lane:vllm"]}, CMP_15={"labels": ["lane:compute-accounting"]})
+    api, clock, w, _, roots = nodes_setup(tmp_path, linear=lin)
+    linear_teams(tmp_path)
+    for agent, name in names.items():
+        api.workers[agent] = worker("IDLE", W.iso(T0 - 600), name)
+    w.sweep(lambda r: None)
+    for n, agent in enumerate((labelled, bare, wrong, gone)):
+        sends(roots, clock, w, agent, f"r20261105-11000{n}-000{n}")
+    first, second, *rest = ended(tmp_path)
+    assert {k: first.get(k) for k in ("agent", "handle", "role", "lane", "placed_by", "issue")} == {
+        "agent": labelled, "handle": "compute-research", "role": "worker", "lane": "compute-research", "placed_by": "label",
+        "issue": "CMP-377"}
+    assert {k: second.get(k) for k in ("agent", "handle", "role", "lane", "placed_by", "issue")} == {
+        "agent": bare, "handle": "compute-accounting", "role": "worker", "lane": "compute-accounting", "placed_by": "team",
+        "issue": "CMP-12"}
+    assert placed_files(tmp_path) == {
+        f"placed-{labelled}.json": {"agent_id": labelled, "lane": "compute-research", "role": "worker", "name": names[labelled],
+                                    "placed_by": "label", "issue": "CMP-377"},
+        f"placed-{bare}.json": {"agent_id": bare, "lane": "compute-accounting", "role": "worker", "name": names[bare],
+                                "placed_by": "team", "issue": "CMP-12"}}
+    assert [(r["role"], r.get("handle")) for r in rest] == [("unknown", None)] * 2, "no guess for the others"
+    assert lin.calls == [("CMP-377", None), ("CMP-12", None), ("CMP-13", None), ("CMP-14", None)]
+    err = capsys.readouterr().err
+    assert "by the lane label of its name's issue CMP-377" in err
+    assert "by its name's issue CMP-12, which has no lane label: its team's own lane" in err
+    for n, agent in enumerate((labelled, bare, wrong, gone)):
+        sends(roots, clock, w, agent, f"r20261105-12000{n}-000{n}")
+    assert lin.calls[4:] == [("CMP-14", None)], "read once per sender: a placement is the worker's entry, and a label " \
+        "that places nobody is remembered; only the issue Linear couldn't find is asked for again"
+    later = [r for r in ended(tmp_path) if r["agent"] == labelled][-1]
+    assert (later["handle"], later["role"], later.get("placed_by")) == ("compute-research", "worker", None)
+    lin.fail = W.urllib.error.URLError("timed out")
+    sends(roots, clock, w, down, "r20261105-130000-0009")
+    assert lin.calls[5:] == [("CMP-15", None)] and f"placed-{down}.json" not in placed_files(tmp_path)
+    lin.fail = None
+    sends(roots, clock, w, down, "r20261105-140000-0009")
+    assert lin.calls[6:] == [("CMP-15", None)] and placed_files(tmp_path)[f"placed-{down}.json"]["lane"] == "compute-accounting"
+    restarted = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d",
+                        notes=tmp_path / "notes", nodes=tmp_path / "nodes.json", sh=w.sh, linear=lin)
+    restarted.sweep(lambda r: None)
+    sends(roots, clock, restarted, wrong, "r20261105-150000-0001")
+    assert len(lin.calls) == 7, "nor after the watch restarts"
+
+
+def test_an_issue_with_no_lane_label_places_nobody_when_no_one_lane_owns_its_team(tmp_path):
+    """The team's own lane is the one sharing lane with no `linear_label`: a registry that marks none, or leaves two
+    unmarked, names no owner, and an unlabelled issue of that team places nobody."""
+    agent = "bc-a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3"
+    lin = FakeLinear(CMP_12={"labels": []})
+    api, clock, w, _, roots = nodes_setup(tmp_path, linear=lin)
+    reg = json.loads(linear_teams(tmp_path).read_text())
+    for h in reg["handles"]:
+        h.pop("linear_label", None)
+    (tmp_path / "registry.json").write_text(json.dumps(reg))
+    api.workers[agent] = worker("IDLE", W.iso(T0 - 600), "CMP-12 TABLES")
+    w.sweep(lambda r: None)
+    sends(roots, clock, w, agent, "r20261105-110000-0001")
+    sends(roots, clock, w, agent, "r20261105-120000-0002")
+    assert [r["role"] for r in ended(tmp_path)] == ["unknown"] * 2 and placed_files(tmp_path) == {}
+    assert lin.calls == [("CMP-12", None)]
+
+
+def test_a_name_one_lane_already_places_costs_no_linear_read(tmp_path):
+    """The label is read only for a key of a team several lanes share that the name alone doesn't place: a key of one
+    lane's team, a shared team's key with its lane named, a leading handle and a name with no key read nothing."""
+    names = {"bc-a3a3a3a3-a3a3-a3a3-a3a3-a3a3a3a3a3a3": "CIR-9 WIDTHS", "bc-a4a4a4a4-a4a4-a4a4-a4a4-a4a4a4a4a4a4": "no key at all",
+             "bc-a5a5a5a5-a5a5-a5a5-a5a5-a5a5a5a5a5a5": "CMP-377 HARDNESS-SPEC (compute-research)",
+             "bc-a6a6a6a6-a6a6-a6a6-a6a6-a6a6a6a6a6a6": "vllm-longrow: rows", "bc-a7a7a7a7-a7a7-a7a7-a7a7-a7a7a7a7a7a7": "SEAT: CMP-9"}
+    lin = FakeLinear(CMP_377={"labels": ["lane:compute-accounting"]}, CMP_9={"labels": ["lane:compute-accounting"]})
+    api, clock, w, _, roots = nodes_setup(tmp_path, linear=lin)
+    linear_teams(tmp_path)
+    for agent, name in names.items():
+        api.workers[agent] = worker("IDLE", W.iso(T0 - 600), name)
+    w.sweep(lambda r: None)
+    for n, agent in enumerate(names):
+        sends(roots, clock, w, agent, f"r20261105-11000{n}-000{n}")
+    assert lin.calls == [] and sorted(d["placed_by"] for d in placed_files(tmp_path).values()) == ["handle", "name", "name"]
+
+
+def test_the_pods_wrapper_hands_the_watch_the_file_its_github_and_linear_credentials_are_in():
+    """Without `--gh-env` the watch reads no open pull request and no Linear issue, and says only that it has no
+    credential. The wrapper passes the pod's relay.env as a path: its values never enter the watch's environment."""
+    sh = (W.Path(__file__).resolve().parents[3] / "infra/control/agent_watch.sh").read_text()
+    assert " --gh-env /root/.config/verity/relay.env " in sh
+    assert not re.search(r"(^|[\s;(])(\.|source)\s+\S*relay\.env", sh), "never sourced"

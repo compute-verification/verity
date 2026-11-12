@@ -98,19 +98,20 @@ table.
 ## The node files (`verity.hardware.nodes`)
 
 One TOML file per kind of node in `nodes/`, beside their loader (`nodes/__init__.py`): what a node's registration
-states that no card does. A node is a host and the GPUs it carries. Its kind is the GPU card and its count, never a
-host's name, and each number is an entry under the cards' rules above.
+states that no card does. A node is a host and the GPUs it carries. Its kind is the GPU card and its count, and each
+number is an entry under the cards' rules above. A node file names no machine, no address and no provider: it is the
+kind's, read on one node of it, and its sources cite what read it by `art:` id.
 
 | Node | file | GPU card | host card | the host's own leaves |
 |---|---|---|---|---|
 | An RTX PRO 6000 node, eight cards | `nodes/rtx-pro-6000-server-x8.toml` | `rtx-pro-6000-server` | `xeon-6776p-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` |
-| An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | none yet: no run has read them |
+| An H200 node, one card | `nodes/h200-sxm-141gb-x1.toml` | `h200-sxm-141gb` | `xeon-platinum-8468-2s` | `dram`, and the disks `vda`, `vdb` and `vdc` |
 
 A file has `device` (`sku`, the GPU card, and `count`, how many of it the node carries), `host` (`sku`, the host card)
 and, one table a leaf, `memory.NAME`: a memory leaf of the host's own, with its `tier` (`dram` or `disk`) and its
 `bytes`. DRAM's bytes are the memory the node's VM is given (`lsmem -b`), above `MemTotal`, which leaves out what the
-kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf no run has read has no
-table. A GPU's own memory is not stated: it is its card's `store.dram`, whole. A node file holds no rate, clock or
+kernel keeps. A disk's leaf is one block device, whole, mounted or not (`lsblk -b`). A leaf with no read on record has
+no table. A GPU's own memory is not stated: it is its card's `store.dram`, whole. A node file holds no rate, clock or
 peak, which are the cards', and no link, network certifier or memory challenger: each is a table of its own once it
 has a figure for the node.
 
@@ -131,6 +132,5 @@ log = Registration("remote")
 site = check(log.append(log.node_entry(node, gpu, host="node0")), Auditor.of_files([gpu]))
 ~~~
 
-`remote` accepts the eight-card node's log against the auditor the GPU card files give. `onsite` refuses it by
-`challenger-reach` until a memory challenger is registered with a link to the host. The H200 node gives no entry until
-its file states its host's DRAM and disks (`tests/test_nodes.py`).
+`remote` accepts each node's log against the auditor the GPU card files give. `onsite` refuses each by
+`challenger-reach` until a memory challenger is registered with a link to the host (`tests/test_nodes.py`).
