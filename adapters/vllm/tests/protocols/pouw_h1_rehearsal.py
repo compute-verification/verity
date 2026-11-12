@@ -206,7 +206,8 @@ class Gate:
     """The gate's verbs as ``argv + VERB``, each call and its answer kept in ``log``."""
 
     def __init__(self, argv: list[str]) -> None:
-        self.argv, self.log = argv, []
+        self.argv = argv
+        self.log: list[dict[str, Any]] = []
 
     def raw(self, *args: str) -> tuple[int, bytes]:
         from tests.protocols.pouw_h1_gpu import gate_argv
