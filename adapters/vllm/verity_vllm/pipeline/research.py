@@ -42,6 +42,7 @@ from verity_vllm.config import ROOT, UsageError
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import source_identity
 from verity_vllm.pipeline.row_driver import CLI, utc
+from verity_vllm.records.schema_ids import ROW_ATTEMPTS_SCHEMA
 
 REPO_ROOT = os.path.realpath(os.path.join(ROOT, "../.."))
 STORE_VARS = ("RESEARCH_STORE_CONFIG", "RESEARCH_STORE", "RESEARCH_RUNS")
@@ -181,7 +182,7 @@ def _row_json(d: str, path: tuple[str, ...], value: Any) -> None:
     """``value`` at ``path`` in ``row.json`` beside the row: a stage's Attempt under ``stages``, the record's at ``record``."""
     p = f"{d}/row.json"
     try:
-        doc: Any = {"schema": "verity-sweep/row-v2/v1", "stages": {}}
+        doc: Any = {"schema": ROW_ATTEMPTS_SCHEMA, "stages": {}}
         if os.path.exists(p):
             with open(p) as f:
                 doc = json.load(f)
