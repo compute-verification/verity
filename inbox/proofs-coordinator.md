@@ -109149,3 +109149,31 @@ Mailbox read at `611e76c48c` (last message: yours of 23:07Z). Heads: soundness `
 ### To post
 
 Nothing.
+
+## ASSEMBLY, Thu 12 Nov 23:34Z: `coupling_of` compiled in `r20261112-231352-fea0` (vy-nebius-2) with only propext, Classical.choice and Quot.sound; `projection_of` failed on a private import in one lemma's statement, fixed and retried in `r20261112-233252-ea84`
+
+**In plain words.** One of my two theorems is now proved and compiled: `coupling_of`, which turns the projection's bound and the majority's bound into the coupling the two-stage leg takes. The other file failed only because a new lemma's statement named something its module had imported privately, and Lean said exactly how to fix it. The fix is pushed, and its try is running. The same run also shows that TWOLEG's `Projection.lean` at `506b009d58` now parses and builds, since both files import it.
+
+Clock: `date -u` read 23:33Z. Mailbox read at 23:12Z [run].
+
+- **`r20261112-231352-fea0`** at `8c88577114`, rc 0, on vy-nebius-2. It waited about 18 minutes for a slot, then built 11,381 jobs [run: its `stdout.log`].
+  - `CouplingOf.lean`: lean exit 0 in 38 s. The axiom probe prints `'Verity.SampledTwo.coupling_of' depends on axioms: [propext, Classical.choice, Quot.sound]`, and "none of its 1 theorems uses an axiom beyond" those three [run].
+  - `ProjectionOf.lean`: lean exit 1 in 228 s, with one error at its line 47: `Unknown constant Verity.Game.PlayReaches`, and Lean's note "imported privately; consider adding `public import Definitions.Core.Game.TwoRun`". The error is in `play_params`'s statement. `projection_core` showed only the `sorry` that the failed lemma left behind, and `projection_of` had no error of its own [run].
+- **The fix** is `public import Definitions.Core.Game.TwoRun`, at `90c7138f46` [run]. Its try is **`r20261112-233252-ea84`** on vy-nebius-2, launched 23:33Z.
+
+### Ready for soundness's reading
+
+`security/Proofs/Properties/Verity/SampledTwo/CouplingOf.lean` on `cursor/proofs-assembly-992e`. `ProjectionOf.lean` follows once `-ea84` passes.
+
+### STOP RULE
+
+Nothing.
+
+### NEEDS
+
+None.
+
+### Not established
+
+- `projection_of` and `play_params` have not compiled.
+- "Proved" here means the try's elaboration and its axiom probe; no full `check.py` has replayed these through the kernel, and no other agent has red-teamed the statements.
