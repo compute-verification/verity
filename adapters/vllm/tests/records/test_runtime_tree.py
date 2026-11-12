@@ -1,5 +1,6 @@
 """`verity_vllm.records.runtime_tree`: the runtime's module tree reads back what `save` wrote, refuses a field its writer
-writes and the document lacks, by name, and is the one type the observation and the acquisition's reader hand on."""
+writes and the document lacks, by name, and is the one type the observation and the acquisition's reader hand on; and the
+tree the observation makes of a model on the meta device (`verity_vllm.observe.runtime_tree.meta_runtime_tree`)."""
 from __future__ import annotations
 
 import json
@@ -95,3 +96,48 @@ def test_the_observation_and_the_acquisitions_reader_hand_on_the_same_names():
         assert module.RuntimeTree is RuntimeTree and module.RUNTIME_TREE_SCHEMA is SCHEMA and module.RUNNER_PATH is RUNNER_PATH
         assert module.runtime_tree_of is runtime_tree_of and module.runtime_tree_from_paths is runtime_tree_from_paths
         assert module.mro_names is mro_names
+
+
+def test_the_meta_tree_is_the_built_models_with_the_runner_declared_or_copied(monkeypatch):
+    """`meta_runtime_tree` with vLLM's three calls stood in, since no CPU machine has vLLM: the tree is the instantiated
+    model's, and the runner's facts are declared, with the sampler's class where it is declared a module, or copied."""
+    pytest.importorskip("torch")
+    from verity_vllm.program.frontend import vllm_meta
+
+    class Model:
+        def named_modules(self):
+            return [("", self), ("inner", object())]
+
+        def named_buffers(self):
+            return [("inner.scale", None)]
+
+    calls: list[object] = []
+
+    def config(**kw):
+        calls.append(kw)
+        return "the config"
+
+    def instantiate(cfg):
+        calls.append(("instantiate", cfg))
+        return Model()
+
+    monkeypatch.setattr(vllm_meta, "make_vllm_config", config)
+    monkeypatch.setattr(vllm_meta, "ensure_distributed", lambda cfg: calls.append(("distributed", cfg)))
+    monkeypatch.setattr(vllm_meta, "instantiate_meta", instantiate)
+
+    bare = observed.meta_runtime_tree("org/model", "rev1", tensor_parallel_size=2, attention_backend="FLASH_ATTN")
+    assert calls == [{"model": "org/model", "revision": "rev1", "dtype": "bfloat16", "max_model_len": 2048, "attention_backend": "FLASH_ATTN",
+                      "tensor_parallel_size": 2}, ("distributed", "the config"), ("instantiate", "the config")]
+    assert bare.modules == {"": ["Model", "object"], "inner": ["object"]} and bare.buffers == ["inner.scale"]
+    assert bare.source == "meta:org/model@rev1"
+    assert {k: v for k, v in bare.runner.items() if k != "source"} == {"sample": True, "sampler_module": False}
+    assert bare.runner["source"].startswith("declared (meta path builds no runner)") and bare.runner["source"].endswith("absent on the pinned vLLM's live engine")
+
+    declared = observed.meta_runtime_tree("org/model", "rev1", sampler_module=True)
+    assert {k: v for k, v in declared.runner.items() if k != "source"} == {"sample": True, "sampler_module": True, "sampler_class": ["Sampler"]}
+    assert declared.runner["source"].endswith("declared present")
+
+    live = {"sample": True, "sampler_module": False, "source": "engine runner"}
+    copied = observed.meta_runtime_tree("org/model", "rev1", sampler_module=True, runner_facts=live)
+    assert copied.runner == {"sample": True, "sampler_module": False, "source": "copied from a live engine's tree: engine runner"}
+    assert live["source"] == "engine runner" and copied.modules == bare.modules

@@ -24,7 +24,7 @@ from verity_vllm.query.manifest import format as fmt
 from verity_vllm.query.program_view import from_instances
 from verity_vllm.query.required import request_manifest
 
-E, M, TOPK, H, INTER, G, NV = S.E, S.M, S.TOPK, S.H, S.I, S.G, S.NV
+E, M, TOPK, H, INTER, G, NV = S.E, S.M, S.TOPK, S.H, S.INTER, S.G, S.NV
 X = "model.model.layers.3.mlp.experts"
 EPS = '{"f64":"0x1.0c6f7a0b5ed8dp-20"}'
 RESULT = {"program": {"digest": "d0", "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}}}

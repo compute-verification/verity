@@ -18,6 +18,7 @@ import json
 from dataclasses import dataclass
 
 from verity_vllm.config import option
+from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.records.runtime_tree import (
     RUNNER_PATH,
     RuntimeTree,
@@ -46,7 +47,7 @@ def meta_runtime_tree(model: str, revision: str, *, dtype: str = "bfloat16", max
         rt.runner = {"sample": True, "sampler_module": bool(sampler_module),
                      "source": "declared (meta path builds no runner): the runner's sample() is wrapped by install(); sampler nn.Module attribute " + ("declared present" if sampler_module else "absent on the pinned vLLM's live engine")}
         if sampler_module:
-            rt.runner["sampler_class"] = ["Sampler"]
+            rt.runner["sampler_class"] = [LC.SAMPLER]
     return rt
 
 
