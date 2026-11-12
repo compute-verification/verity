@@ -5,7 +5,9 @@ and the versions and host documents.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import importlib.metadata as md
 import json
 import os
 import time
@@ -16,16 +18,16 @@ import numpy as np
 import torch
 
 from verity_vllm.engine import handle
-from verity_vllm.engine.build import (Engine, compilation_facts, observed_flash_attn_version, resolved_async_scheduling,
-                                      vllm_has_flashinfer)
+from verity_vllm.engine.build import (
+    Engine,
+    compilation_facts,
+    observed_flash_attn_version,
+    resolved_async_scheduling,
+    vllm_has_flashinfer,
+)
 from verity_vllm.engine.code_identity import generated_kernels_of_this_process
+from verity_vllm.engine.profiles.cases import ACCEPTED
 
-
-#: The accepted production record per checkpoint role (its tokens are the reference the runs are compared with).
-ACCEPTED: dict[str, dict[str, str]] = {
-    "B0": {"profile_id": "88e1b098d719", "record": "out/scale/e8/live/V5-N32x16-1req-bex0-inc-sc1"},
-    "B1": {"profile_id": "40f0cebeb670 / c37c3f0b8363", "record": "fixtures/results/B1-40f0cebeb670-20260907T1242Z/production (and B1-c37c3f0b8363-20260907T1328Z; both RTX 4090 eager)"},
-}
 ACCEPTED_PROFILE_ID = ACCEPTED["B0"]["profile_id"]
 ACCEPTED_RECORD = ACCEPTED["B0"]["record"]
 
@@ -195,10 +197,8 @@ def host_doc() -> dict:
         doc["cpu_quota"] = None if q[0] == "max" else float(q[0]) / float(q[1])
     except (OSError, IndexError, ValueError, ZeroDivisionError):
         pass
-    try:
+    with contextlib.suppress(OSError, ValueError):
         doc["clocksource"] = Path("/sys/devices/system/clocksource/clocksource0/current_clocksource").read_text().strip()
-    except (OSError, ValueError):
-        pass
     n = 20000
     t0 = time.perf_counter()
     for _ in range(n):
@@ -208,8 +208,6 @@ def host_doc() -> dict:
 
 
 def versions_doc(engine: Engine | None = None) -> dict:
-    import importlib.metadata as md
-
     def ver(name: str) -> str | None:
         try:
             return md.version(name)

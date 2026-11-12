@@ -9,6 +9,7 @@ import sys
 import threading
 import types
 from collections import deque
+from collections.abc import Sequence
 from typing import Any
 
 import pytest
@@ -63,7 +64,7 @@ class Sched:
 class Proc:
     """vLLM's ``EngineCoreProc`` as the seam drives it, each call logged."""
 
-    def __init__(self, log: list, now: list = (), later: list = (), batches: list | None = None) -> None:
+    def __init__(self, log: list, now: Sequence = (), later: Sequence = (), batches: list | None = None) -> None:
         self.log, self.scheduler, self.running = log, Sched(), True
         self.input_queue, self.aborts_queue = Inputs(log, list(now), list(later)), Aborts(log)
         self.batch_queue = None if batches is None else deque(batches)
@@ -91,6 +92,7 @@ class Proc:
         return {}, True
 
     def step_with_batch_queue(self) -> Any:
+        assert self.batch_queue is not None
         scheduling = self.scheduler.has_requests()
         self.log.append(("step", scheduling))
         if scheduling:
@@ -103,7 +105,7 @@ class Proc:
 class Gate:
     """A gate whose answers follow a script."""
 
-    def __init__(self, log: list, name: str, ready: list, pending: list = (), poll_s: float = 0.25) -> None:
+    def __init__(self, log: list, name: str, ready: list, pending: Sequence = (), poll_s: float = 0.25) -> None:
         self.log, self.name, self.poll_s = log, name, poll_s
         self.answers, self.pendings = deque(ready), deque(pending)
 
@@ -293,8 +295,7 @@ def test_a_gate_or_edge_is_refused_without_its_place_twice_or_after_a_core_made_
 
 def test_it_wraps_vllms_engine_core_classes_when_given_none(monkeypatch):
     mod = types.ModuleType("vllm.v1.engine.core")
-    mod.EngineCoreProc = type("EngineCoreProc", (Proc,), {})
-    mod.EngineCore = type("EngineCore", (Proc,), {})
+    mod.__dict__.update(EngineCoreProc=type("EngineCoreProc", (Proc,), {}), EngineCore=type("EngineCore", (Proc,), {}))
     for name in ("vllm", "vllm.v1", "vllm.v1.engine"):
         monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
     monkeypatch.setitem(sys.modules, mod.__name__, mod)

@@ -6,7 +6,10 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.observe.fold.patterns import TokenSelectArgmax, TokenSelectGumbelTwoStage
+from verity_vllm.observe.fold.patterns import (
+    TokenSelectArgmax,
+    TokenSelectGumbelTwoStage,
+)
 
 
 @pytest.mark.parametrize("mod, shard, full_vocab, qkv, gu, bias", [
@@ -29,6 +32,7 @@ def test_rank_profile_states_the_shard_configuration_and_the_rank_patterns(mod, 
 
 def test_qwen_rank_profile_shares_the_llama_rank_facts_not_a_copy():
     import importlib
+
     from verity_vllm.observe.fold.patterns.collectives import EmbeddingShardCuda
     llama = importlib.import_module("verity_vllm.observe.fold.profiles.derived_LLAMA32_1B_tp2")
     qwen = importlib.import_module("verity_vllm.observe.fold.profiles.derived_B1_tp2")
