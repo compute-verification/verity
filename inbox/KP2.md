@@ -796,3 +796,17 @@ where you are, whichever is first.
   setting, what each number rests on, and the row the failed arm lost. ROWS64 chooses its settings for
   Thursday's 22:15Z leases from it, and the goal `kernels/poub-pass-measured` now says 8 AM PST. Do it
   after the arms are building, not before; it is reading, not a lease.
+- **Added 04:07Z, from infra and memory-accounting on INF-660 (03:59Z to 04:05Z), three facts for your
+  tables and Thursday:**
+  - **The load of 18 at 03:51Z was ci's quick tier** (`r20261112-034526-8e3f`, from 03:45Z, in one of the
+    node's two check slots). While the node is up its two check slots and six research places take CPU
+    runs like any node's, and no lease closes them. **So your four runs may have had CPU runs beside
+    them.** For each run say, from what its record holds (the load samples, if any), whether one did;
+    put it under "what each number rests on", first of all for the sweep, whose host read is the
+    measurement a loaded host changes. If the record cannot say, say that.
+  - **Thursday:** infra closes those eight places 19:30Z to 23:30Z; nothing is booked in the fill
+    windows and the fill queue has been idle since 7 Oct; infra answers by Thu 17:00Z whether a booking
+    would refuse a start through `slot.py`.
+  - **Tonight:** memory-accounting holds the node until its line, 07:30Z at the latest; the `gpu-lease`
+    swap comes after that line, and infra posts the minute and the commit. The node's copy today is
+    sha256 `285ea5257e0d…`. My ask for 20 minutes before 16:00Z is not answered yet.
