@@ -1136,22 +1136,20 @@ def test_the_rehearsals_check_hands_the_harness_its_samples_tree_by_name(monkeyp
     """`pouw_h1_rehearsal.check` calls `pouw_h1_gpu.check_challenger` with the tree of the window's sample as the
     harness's directory of its sample session, the one parameter it has for a second directory, and not as its
     statements, which stand before it: the tree itself on a check of the challenge phase's tree, its ``out/`` on a check
-    with a window. It names no statements and no live session, and answers the five fields of what the harness found."""
+    with a window. It passes the harness nothing else, so no statements and no live session, and answers the five fields
+    of what the harness found."""
     signature = inspect.signature(GPU.check_challenger)
     (second,) = (name for name in signature.parameters if name.endswith("_directory"))
     found = {"ok": True, "reason": None, "manifest": None, "period": {"id": "p"}, "credit": {"credit": 3}}
     bound = []
 
     def check_challenger(*args, **kwargs):
-        call = signature.bind(*args, **kwargs)
-        call.apply_defaults()
-        bound.append(call.arguments)
+        bound.append(signature.bind(*args, **kwargs).arguments)
         return {**found, "rounds": 2}
 
     monkeypatch.setattr(GPU, "check_challenger", check_challenger)
     calls, tree, ledger, out, sample = (tmp_path / n for n in ("calls.json", "tree", "ledger.jsonl", "check", "sample"))
-    plain = {"calls_file": str(calls), "public_sha512": "ab" * 64, "out": str(out), "ledger": [str(ledger)],
-             "statements": (), "live": None}
+    plain = {"calls_file": str(calls), "public_sha512": "ab" * 64, "out": str(out), "ledger": [str(ledger)]}
 
     assert RH.check(calls, tree, "ab" * 64, [ledger], out, None, None, None, None, None, sample) == found
     assert bound.pop() == {**plain, "directory": str(tree), "window_file": None, "period": None, "descriptor": None,
