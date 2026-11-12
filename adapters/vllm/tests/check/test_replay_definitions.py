@@ -21,7 +21,13 @@ from types import SimpleNamespace
 import pytest
 from verity.circuits import Array, Program, Value
 from verity.circuits.codec import descriptor_id, encode_program, program_digest
-from verity.circuits.defs import REGISTRY, Builder, CompositeDefinition, PrimitiveDefinition, bind
+from verity.circuits.defs import (
+    REGISTRY,
+    Builder,
+    CompositeDefinition,
+    PrimitiveDefinition,
+    bind,
+)
 from verity.circuits.refs import Affine, Coll
 from verity.circuits.types import RecordType
 from verity.definitions import boolean as BB
