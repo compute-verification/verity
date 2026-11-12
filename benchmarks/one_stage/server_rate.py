@@ -59,6 +59,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/protocols/flock/prover/python"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from verity.protocols.spot.verifier.one_stage.proofs import verifier_env
 from verity_flock import circuit as FC
 from verity_flock.proof_server import ProofServer, Statement
 
@@ -271,7 +272,8 @@ def cores(cpus=None, nodes: Path | None = None) -> dict:
 class Lean:
     """Lean `flock-verify verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
     file and tables archived once, in scratch outside ``out`` (`close` removes it); ``statement``, the one `verify` sets
-    up."""
+    up. `verify` runs in `verifier_env`: under the verifier's allocator setting unless this process's environment sets
+    its own, which both the seconds and the peak read."""
 
     def __init__(self, lean: str, d: Path, out: Path, statement: str = STATEMENT_ID) -> None:
         self.lean, self.out, self.statement = lean, out, statement
@@ -293,7 +295,7 @@ class Lean:
         log = self.out / f"lean-{s.label.replace('/', '-')}.log"
         with self._one, open(log, "w") as f:
             t = time.monotonic()
-            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=f, text=True)
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=f, text=True, env=verifier_env())
             stdout = p.stdout.read()
             _, status, ru = os.wait4(p.pid, 0)
             p.returncode = os.waitstatus_to_exitcode(status)

@@ -5550,6 +5550,52 @@ def test_the_call_queries_cut_call_by_call(pieces):
             slots(copy.deepcopy(refused))
 
 
+def _keyed(key: str, first: bool = False) -> dict:
+    """The descriptor of a root of one instance of `PAIR` and one Call of a composite of one gate whose id is the input id
+    `key`, the Call the later node or, `first`, the earlier; its program put among `PROGRAMS`."""
+    name, version = key.rsplit("_v", 1)
+    keyed = bind(CompositeDefinition(name, int(version), (), lambda S: ((("y", Value(8)),), Value(8)),
+                                     lambda B, S, y: B.call(XOR8, y, y), register=False))
+    assert codec.descriptor_id(keyed) == key
+
+    def body(B, S, x, y):
+        calls = [lambda: B.call(keyed, y), lambda: B.call(PAIR, x)]
+        return tuple_of(*(call() for call in (calls if first else calls[::-1])))
+
+    program = Program(bind(CompositeDefinition(
+        f"CoreSpotKeyed{name}{'First' if first else ''}", 0, (),
+        lambda S: ((("x", Array(2, Value(8))), ("y", Value(8))), Tuple(Value(8), Value(8))), body, register=False)))
+    PROGRAMS[PO.program_sha512(program)] = program
+    return _json(codec.encode_program(program))
+
+
+@pytest.mark.parametrize("key, first", [("Input16_v1", False), ("Input16_v1", True), ("RegisteredInput16_v1", False)])
+def test_a_composite_whose_id_is_an_input_id_is_no_input(pieces, key, first):
+    """A root Call of a composite whose id is an input id is no input node (`program.is_input`: only a primitive is one):
+    its gate is computed. A template query that doesn't list the composite refuses the program, Lean with the Python's
+    reason, in `unit_gates`, `slots` and `select`. One that lists it, and `Q_call` at `X = 16`, which cuts every Call,
+    take the Call as a unit, and Lean's slots are the Python's whole: the Call's gate is its unit's and no input block's,
+    so the proof blocks' gates and the input class's are every gate of the program once."""
+    desc = _keyed(key, first)
+    case = {"closure": None, "program": desc, "source": hashlib.shake_256(b"keyed").hexdigest(400), "work_table": None}
+    one = _json(P.template_instance_query(PAIR.id))
+    refused = {**case, "query": one, "rule": {"rule": "all"}}
+    for port, reference, j in [(UNIT_GATES, unit_gates, {"program": desc, "query": one}), (SLOTS, slots, refused),
+                               (SELECT, select, refused)]:
+        with pytest.raises(D.Reject) as why:
+            reference(copy.deepcopy(j))
+        assert f"is a call of '{key}'" in str(why.value)
+        assert D.replay(port, j, pieces) == ("reject", f"query-refused: {why.value}")
+    size = PROGRAMS[PO.program_sha512(desc)].circuit.size
+    for query in (P.template_instances_query([PAIR.id, key]), PO.call_query(16)):
+        taken = {**case, "query": _json(query), "rule": {"law": "rate:1/2", "rule": "law"}}
+        out = slots(copy.deepcopy(taken))
+        assert D.replay(SLOTS, taken, pieces) == ("output", D.canonical(out))
+        blocks = [b for c in out["classes"] for s in c for b in s]
+        assert sorted(g for b in blocks for lo, hi in b["pus"] for g in range(lo, hi)) == list(range(size))
+        assert sorted(b["unit"] for b in blocks if b["unit"] is not None) == [0, 1]
+
+
 XOR64 = PrimitiveDefinition("CoreSpotXor64", 1, (("a", Value(64)), ("b", Value(64))), Value(64),
                             lambda a, b: a ^ b, register=False)
 #: A template of one batch of `N` 64-bit XORs: an instance returns `64 N` bits.
@@ -6470,7 +6516,7 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
         ({**wired, "wires": [{**wire, "wport": "x"}]}, ["second-header", "second-read"]),
         ({**wired, "wires": [wire, {"template": pair, "port": "x", "writer": triple, "wport": "out"}],
           "rows": [*wired["rows"], {"template": pair, "port": "x", "per": 2, "runs": [[0, 3, 0, 0]]}]},
-         ["second-header", "second-read"]),
+         ["second-wires"]),
         ({**wired, "wires": [wire, {"template": pair, "port": "x", "writer": triple, "wport": "out"}]},
          ["second-wires"]),
         ({**wired, "wires": None}, ["second-wires"]),
@@ -6488,6 +6534,20 @@ def test_round_two_holds_a_wired_port_to_its_writers_output(pieces):
         got = second_statements(copy.deepcopy(case))
         assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
         assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+
+
+def test_round_two_refuses_a_wire_that_reads_a_returned_output(pieces):
+    """A wire whose writer's port a link names reads an output the replay block returns: the boundary record commits
+    that output and the interior record's port is what the reader is held to, two entries nothing holds to each other.
+    The design fails `second-wires`, its links derived, alike in both."""
+    pair, triple = SECOND_MIXED.templates
+    wired = _second_case(SECOND_MIXED, True, [0, 2], [1, 4, 6, 9], wires=[(triple, pair)], allow=True)
+    per, n = BOUNDARY.ports[BX]["leaves"] // BOUNDARY.population, wired["rows"][0]["per"]
+    case = {**wired, "links": [{"template": pair, "port": "out", "value": BX}],
+            "rows": [*wired["rows"], {"template": pair, "port": "out", "per": per, "runs": _runs(n, per)}]}
+    got = second_statements(copy.deepcopy(case))
+    assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), got
+    assert "second-wires" in got["codes"] and "second-links" not in got["codes"], got
 
 
 def test_round_two_reads_each_unit_at_the_row_its_rows_name(pieces):
