@@ -67,11 +67,11 @@ the most ids a response holds, and the scan's δ its error is at, as the documen
 don't compare, and neither do errors at two δ. A δ the command gives is named as given and assumed, since no scan
 has run at it.
 
-The result of record names its class and its scan's δ on the command line, whatever the calculator's defaults are:
-at most 1,024 ids a response, and the δ at which the world's year has an error of 2^-20, so that every row is
-bounded. That δ, `D`, is 2^-20 divided by the world year's execution phases, which the command's own document counts
-(the `scan` row's `phases`). It is computed from them each time and never copied, and `--scan-delta` takes a fraction,
-so it holds `D` exactly. No term depends on the scan's δ: only the errors move with it.
+The command of record passes its class and its scan's δ, whatever the calculator's defaults are: `--response-ids 1024`
+and `--scan-delta D`, and the result's `inputs` name both. `D` is the δ at which the world's year has an error of
+2^-20, so that every row is bounded: 2^-20 divided by the world year's execution phases, which the command's own
+document counts (the `scan` row's `phases`). It is computed from them each time and never copied, and `--scan-delta`
+takes a fraction, so it holds `D` exactly. No term depends on the scan's δ: only the errors move with it.
 
 ```text
 verity bench certifier_term --json --response-ids 1024 --scope world --period year |
