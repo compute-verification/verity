@@ -394,36 +394,140 @@ impl UnitComp {
     }
 }
 
-/// The z of `comps`' seeds in `lanes` slots (at most 32; bit l is slot l's), in the compressions' and [`UnitComp::seeds`]'
-/// order, each compression's computed in 64-bit words ([`UnitComp::seed_bits`]) from its chaining value and block. Those two
-/// are read off the unit's own rows ([`UnitComp::inputs`]): `read(rows)` is the z of `rows` in the slots, from whatever
-/// evaluates them. A walk that takes these seeds needs the rows `read` is asked for, and nothing past them, before each
-/// compression's seeds. None where a compression's inputs can't be read.
-pub fn unit_seeds_native(comps: &[UnitComp], lanes: usize, read: impl Fn(&[u32]) -> Vec<u32>) -> Option<Vec<u32>> {
-    assert!(lanes <= 32, "unit_seeds_native: at most 32 slots");
+/// A compression's chaining value and block.
+pub type CompIn = ([u64; 8], [u64; 16]);
+
+/// Each of `comps`' chaining value and block in each of `lanes` slots (at most 32), `[compression][slot]`, read off the
+/// unit's own rows ([`UnitComp::inputs`]): `read(rows)` is the z of `rows` in the slots (bit l slot l's), from whatever
+/// evaluates them. None where a compression's inputs can't be read.
+pub fn unit_inputs_read(comps: &[UnitComp], lanes: usize, read: impl Fn(&[u32]) -> Vec<u32>) -> Option<Vec<Vec<CompIn>>> {
+    assert!(lanes <= 32, "unit_inputs_read: at most 32 slots");
     const N: usize = UnitComp::READ_ROUNDS;
     let rows: Vec<u32> = comps.iter().flat_map(|c| c.read_rows()).collect();
     if rows.len() != comps.len() * 2 * N * 64 {
         return None;
     }
     let z = read(&rows);
-    assert_eq!(z.len(), rows.len(), "unit_seeds_native: a z per row read");
-    let mut out = vec![0u32; comps.iter().map(|c| 8 * 64 + c.ff_rows.len()).sum()];
-    let mut at = 0;
-    for (c, zc) in comps.iter().zip(z.chunks(2 * N * 64)) {
-        for l in 0..lanes {
+    assert_eq!(z.len(), rows.len(), "unit_inputs_read: a z per row read");
+    comps.iter().zip(z.chunks(2 * N * 64)).map(|(c, zc)| {
+        (0..lanes).map(|l| {
             let word = |k: usize| (0..64).fold(0u64, |x, i| x | (u64::from(zc[64 * k + i] >> l & 1) << i));
             let (e, a): (Vec<u64>, Vec<u64>) = (0..N).map(|k| (word(2 * k), word(2 * k + 1))).unzip();
-            let (cv, msg) = c.inputs(&e, &a)?;
+            c.inputs(&e, &a)
+        }).collect::<Option<Vec<CompIn>>>()
+    }).collect()
+}
+
+/// The z of `comps`' seeds (bit l is slot l's), in the compressions' and [`UnitComp::seeds`]' order, each compression's
+/// computed in 64-bit words ([`UnitComp::seed_bits`]) from its chaining value and block in each slot (`inputs`:
+/// `[compression][slot]`, at most 32 slots).
+pub fn unit_seeds_of(comps: &[UnitComp], inputs: &[Vec<CompIn>]) -> Vec<u32> {
+    assert_eq!(comps.len(), inputs.len(), "unit_seeds_of: inputs per compression");
+    let mut out = vec![0u32; comps.iter().map(|c| 8 * 64 + c.ff_rows.len()).sum()];
+    let mut at = 0;
+    for (c, ins) in comps.iter().zip(inputs) {
+        assert!(ins.len() <= 32, "unit_seeds_of: at most 32 slots");
+        for (l, (cv, msg)) in ins.iter().enumerate() {
             let mut s = at;
-            c.seed_bits(&cv, &msg, |bit| {
+            c.seed_bits(cv, msg, |bit| {
                 out[s] |= u32::from(bit) << l;
                 s += 1;
             });
         }
         at += 8 * 64 + c.ff_rows.len();
     }
-    Some(out)
+    out
+}
+
+/// [`unit_seeds_of`] the inputs [`unit_inputs_read`] reads: the seeds in 64-bit words, their inputs still read off the
+/// unit's rows. A walk that takes these seeds needs the rows `read` is asked for, and nothing past them, before each
+/// compression's seeds.
+pub fn unit_seeds_native(comps: &[UnitComp], lanes: usize, read: impl Fn(&[u32]) -> Vec<u32>) -> Option<Vec<u32>> {
+    Some(unit_seeds_of(comps, &unit_inputs_read(comps, lanes, read)?))
+}
+
+/// Where a compression's chaining value comes from, by its values in the slots a census is taken on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CvFrom {
+    /// the same in every slot
+    Const([u64; 8]),
+    /// an earlier compression's output, in every slot
+    Out(usize),
+    Other,
+}
+
+/// One compression's inputs by where they come from ([`unit_sources`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompFrom {
+    pub cv: CvFrom,
+    /// the block's 1,024 bits: the same in every slot; else a unit input column's bit in every slot; else a bit of an
+    /// earlier compression's output in every slot; else none of those
+    pub msg: [usize; 4],
+    /// the earlier compressions whose output bits the block's bits are
+    pub outs: Vec<usize>,
+}
+
+/// A census of the compressions' inputs by their values in `slots` slots (`inputs`: `[compression][slot]`;
+/// `input_bit(col, slot)`: the unit's input column `col`, of `n_inputs`): what a program that computes each compression's
+/// inputs from the unit's inputs and the earlier outputs has to cover. A bit that is none of the three is one the unit
+/// computes between its compressions (a selection, a swap) or a sum of several.
+pub fn unit_sources(n_inputs: usize, slots: usize, input_bit: impl Fn(usize, usize) -> bool, inputs: &[Vec<CompIn>]) -> Vec<CompFrom> {
+    #[derive(Clone, Copy)]
+    enum Src {
+        Input,
+        Out(usize),
+    }
+    let sig = |bit: &dyn Fn(usize) -> bool| -> Vec<u64> {
+        let mut s = vec![0u64; slots.div_ceil(64)];
+        (0..slots).filter(|&l| bit(l)).for_each(|l| s[l / 64] |= 1 << (l % 64));
+        s
+    };
+    let ones = sig(&|_| true);
+    let mut from: std::collections::HashMap<Vec<u64>, Src> = std::collections::HashMap::new();
+    for col in 0..n_inputs {
+        from.entry(sig(&|l| input_bit(col, l))).or_insert(Src::Input);
+    }
+    let mut outs: Vec<Vec<[u64; 8]>> = Vec::new();
+    let mut res = Vec::new();
+    for (k, ins) in inputs.iter().enumerate() {
+        assert_eq!(ins.len(), slots, "unit_sources: inputs per slot");
+        let cv = if ins.iter().all(|x| x.0 == ins[0].0) {
+            CvFrom::Const(ins[0].0)
+        } else {
+            (0..k).rev().find(|&j| outs[j].iter().zip(ins).all(|(o, x)| *o == x.0)).map_or(CvFrom::Other, CvFrom::Out)
+        };
+        let mut msg = [0usize; 4];
+        let mut read = std::collections::BTreeSet::new();
+        for t in 0..16 {
+            for i in 0..64 {
+                let s = sig(&|l| ins[l].1[t] >> i & 1 == 1);
+                if s == ones || s.iter().all(|&w| w == 0) {
+                    msg[0] += 1;
+                } else {
+                    match from.get(&s) {
+                        Some(Src::Input) => msg[1] += 1,
+                        Some(&Src::Out(j)) => {
+                            msg[2] += 1;
+                            read.insert(j);
+                        }
+                        None => msg[3] += 1,
+                    }
+                }
+            }
+        }
+        let out: Vec<[u64; 8]> = ins.iter().map(|(cv, m)| {
+            let st = working_state(cv, m);
+            std::array::from_fn(|j| cv[j].wrapping_add(st[j]))
+        }).collect();
+        for j in 0..8 {
+            for i in 0..64 {
+                from.entry(sig(&|l| out[l][j] >> i & 1 == 1)).or_insert(Src::Out(k));
+            }
+        }
+        outs.push(out);
+        res.push(CompFrom { cv, msg, outs: read.into_iter().collect() });
+    }
+    res
 }
 
 /// The compressions among `net`'s rows, in row order, by shape alone. A committed word is 64 rows in a row whose B is the
@@ -1042,6 +1146,24 @@ mod tests {
             let sum: [u64; 8] = std::array::from_fn(|j| cv[j].wrapping_add(st[j]));
             assert_eq!(sum, want);
         }
+        // a census: a chain of two compressions over unit input bits, then one over the first's output and constants
+        let slots = 70;
+        let bits: Vec<Vec<u64>> = (0..slots).map(|_| (0..40).map(|_| xorshift(&mut s)).collect()).collect();
+        let iv = SHA512_IV;
+        let out = |x: &CompIn| -> [u64; 8] {
+            let st = working_state(&x.0, &x.1);
+            std::array::from_fn(|j| x.0[j].wrapping_add(st[j]))
+        };
+        let c0: Vec<CompIn> = bits.iter().map(|b| (iv, std::array::from_fn(|t| b[t]))).collect();
+        let c1: Vec<CompIn> = bits.iter().zip(&c0).map(|(b, x)| (out(x), std::array::from_fn(|t| if t < 8 { b[16 + t] } else { 0x80 }))).collect();
+        let c2: Vec<CompIn> = bits.iter().zip(&c0).map(|(b, x)| {
+            let o = out(x);
+            (iv, std::array::from_fn(|t| if t < 8 { o[t] } else if t == 8 { o[0] ^ b[30] } else { !0 }))
+        }).collect();
+        let got = unit_sources(40 * 64, slots, |col, l| bits[l][col / 64] >> (col % 64) & 1 == 1, &[c0, c1, c2]);
+        assert_eq!(got, [CompFrom { cv: CvFrom::Const(iv), msg: [0, 1024, 0, 0], outs: vec![] },
+                         CompFrom { cv: CvFrom::Out(0), msg: [512, 512, 0, 0], outs: vec![] },
+                         CompFrom { cv: CvFrom::Const(iv), msg: [448, 0, 512, 64], outs: vec![0] }]);
         let few = UnitComp { rounds: 19, state: [0; 8], ff: (0, 0), words: vec![(0, 0); 19], ff_rows: Vec::new() };
         assert_eq!((few.inputs(&[0; 20], &[0; 20]), few.read_rows().count()), (None, 0));
     }

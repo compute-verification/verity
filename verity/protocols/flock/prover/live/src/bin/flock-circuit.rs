@@ -13,7 +13,7 @@
 //!   flock-circuit unit-levels --circuit FILE [--net N] [--widths]   (the unit's level schedule, `unit_levels`; nothing proved)
 //!   flock-circuit walk-twin --instances FILE --circuit FILE [--slots N]   (the device's level walk on the host against the host's
 //!       builder on the statement's own unit slots, `walk_twin`; nothing proved)
-//!   flock-circuit unit-cut --instances INST --circuit FILE [--widths] [--walk [--native] [--slots N]]   (the unit's level schedule cut at its
+//!   flock-circuit unit-cut --instances INST --circuit FILE [--widths] [--walk [--native] [--sources [--random N]] [--slots N]]   (the unit's level schedule cut at its
 //!                          SHA-512 compressions' chaining values, `unit_cut`; nothing proved)
 //!
 //! The verifier loads only its own public file (`verity_flock.circuit.stage(..., public_only=True)`: roots and each row's
@@ -5004,7 +5004,9 @@ fn level_widths(widths: &[usize]) -> serde_json::Map<String, Value> {
 /// and whether one seed off in one slot is refused. With `--native` too, a `NATIVE` line: the same walk and compare on seeds
 /// computed in 64-bit words (`sha512_native::unit_seeds_native`), each compression's from its chaining value and block,
 /// which are still read off the host's evaluation at the compression's first rounds; the seed bits that differ from the
-/// host evaluator's; and one of those seeds off. Exits 1 unless every compare a line makes is `same` and every seed off is
+/// host evaluator's; and one of those seeds off. With `--sources`, a `SOURCES` line: each compression's inputs (read the
+/// same way) by where they come from, by their values in the statement's slots (`sha512_native::unit_sources`), and with
+/// `--random N` a second one on N slots of random unit inputs. Exits 1 unless every compare a line makes is `same` and every seed off is
 /// refused.
 fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
     use flock_live::circuit::{unit_ab_into, unit_ab_seeded, unit_rows_z};
@@ -5145,6 +5147,55 @@ fn unit_cut(st: &Arc<Stmt>, inst: &Arc<Instances>) {
             "inputs_from": "the host's evaluation, at each compression's first 20 found rounds' committed words", "rows_read": read_rows,
             "native_s": native_s}).as_object().unwrap().clone());
         println!("NATIVE\t{line}");
+    }
+    if flag("--sources") {
+        // each compression's inputs by where they come from, in the statement's slots and, with `--random N`, in N slots
+        // of random unit inputs (no statement's: every bit of every input column on its own)
+        let n: usize = arg("--random", "0").parse().expect("--random");
+        let mut s = 0x243f6a8885a308d3u64;
+        let mut next = || {
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            s
+        };
+        let random: Vec<Vec<F128>> = (0..n).map(|_| (0..net.in_words).map(|_| F128::new(next(), next())).collect()).collect();
+        for (what, ins) in [("the statement's slots", &ins), ("random unit inputs", &random)] {
+            if ins.is_empty() {
+                continue;
+            }
+            let groups: Vec<_> = ins.par_chunks(32)
+                .map(|grp| flock_live::sha512_native::unit_inputs_read(&comps, grp.len(), |rows| unit_rows_z(net, rows, grp))).collect();
+            if groups.iter().any(|g| g.is_none()) {
+                println!("SOURCES\t{}", json!({"slots_of": what, "slots": ins.len(), "unread": true}));
+                ok = false;
+                continue;
+            }
+            let inputs: Vec<Vec<flock_live::sha512_native::CompIn>> =
+                (0..comps.len()).map(|k| groups.iter().flat_map(|g| g.as_ref().unwrap()[k].iter().copied()).collect()).collect();
+            let bit = |col: usize, l: usize| { let w = &ins[l][col / 128]; (if col % 128 < 64 { w.lo } else { w.hi }) >> (col % 64) & 1 == 1 };
+            let from = flock_live::sha512_native::unit_sources(first, ins.len(), bit, &inputs);
+            use flock_live::sha512_native::CvFrom;
+            let cv_tag = |f: &flock_live::sha512_native::CompFrom| match &f.cv {
+                CvFrom::Const(_) => json!("const"),
+                CvFrom::Out(j) => json!(j),
+                CvFrom::Other => json!("other"),
+            };
+            let consts: std::collections::BTreeSet<[u64; 8]> = from.iter().filter_map(|f| if let CvFrom::Const(c) = &f.cv { Some(*c) } else { None }).collect();
+            let sum = |i: usize| from.iter().map(|f| f.msg[i]).sum::<usize>();
+            // the compressions by shape: (chaining value's kind, the block's four counts), how many of each
+            let mut shapes = std::collections::BTreeMap::new();
+            for f in &from {
+                let kind = match &f.cv { CvFrom::Const(_) => "const", CvFrom::Out(_) => "an earlier output", CvFrom::Other => "other" };
+                *shapes.entry((kind, f.msg)).or_insert(0usize) += 1;
+            }
+            println!("SOURCES\t{}", json!({"slots_of": what, "slots": ins.len(), "compressions": comps.len(),
+                "chaining_values": {"the_same_in_every_slot": from.iter().filter(|f| matches!(f.cv, CvFrom::Const(_))).count(), "distinct_constants": consts.len(),
+                    "an_earlier_output": from.iter().filter(|f| matches!(f.cv, CvFrom::Out(_))).count(), "other": from.iter().filter(|f| f.cv == CvFrom::Other).count()},
+                "block_bits": {"all": 1024 * comps.len(), "the_same_in_every_slot": sum(0), "a_unit_input_bit": sum(1), "an_earlier_output_bit": sum(2), "none_of_those": sum(3)},
+                "shapes": shapes.iter().map(|((kind, msg), n)| json!([n, kind, msg])).collect::<Vec<_>>(),
+                "by_compression": from.iter().map(|f| json!([cv_tag(f), f.msg, f.outs])).collect::<Vec<_>>()}));
+        }
     }
     if !ok {
         std::process::exit(1);
