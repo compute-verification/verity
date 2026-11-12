@@ -109,11 +109,24 @@ def test_cloud_workers_foreground_lookups_and_other_agents_pass(tmp_path, conver
     assert answer(tmp_path, conversation_id, tool_input) == {"permission": "allow"}
 
 
-def test_each_verdict_is_logged_without_the_prompt(tmp_path):
+def test_each_verdict_is_logged_with_its_model_and_without_the_prompt(tmp_path):
     answer(tmp_path, HOLDER, {"subagent_type": "generalPurpose", "prompt": "a secret plan", "run_in_background": False})
+    answer(tmp_path, WORKER, {"subagent_type": "generalPurpose", "prompt": "a secret plan", "model": "claude-opus-5-5-high"})
+    answer(tmp_path, WORKER, {"prompt": "go on", "resume": WORKER, "model": "inherit"})
+    recs = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
+    assert recs[0] == {"conversation_id": HOLDER, "tool_name": "Task", "deny": True,
+                       "input_keys": ["prompt", "run_in_background", "subagent_type"], "environment": None,
+                       "subagent_type": "generalPurpose", "run_in_background": False, "model": None, "resume": False}
+    assert [(r["deny"], r["model"], r["resume"]) for r in recs[1:]] == [(False, "claude-opus-5-5-high", False),
+                                                                         (False, "inherit", True)]
+    assert "a secret plan" not in (tmp_path / "task.jsonl").read_text()
+
+
+def test_a_dynamic_task_calls_model_is_logged_like_a_direct_ones(tmp_path):
+    args = {"subagent_type": "generalPurpose", "prompt": "x", "environment": "cloud", "model": "claude-opus-5-5-high"}
+    answer(tmp_path, WORKER, {"namespace": "cursor", "toolName": "Task", "arguments": args}, "CallDynamicTool")
     (rec,) = [json.loads(ln) for ln in (tmp_path / "task.jsonl").read_text().splitlines()]
-    assert rec == {"conversation_id": HOLDER, "tool_name": "Task", "deny": True, "input_keys": ["prompt", "run_in_background", "subagent_type"],
-                   "environment": None, "subagent_type": "generalPurpose", "run_in_background": False}
+    assert (rec["tool_name"], rec["model"], rec["resume"]) == ("CallDynamicTool", "claude-opus-5-5-high", False)
 
 
 @pytest.mark.parametrize("tool", ["save_issue", "save_comment", "save_status_update", "create_attachment"])
