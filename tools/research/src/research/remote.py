@@ -2059,18 +2059,21 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
            source: Path | None, sends: list[Path], cwd: str | None, env: dict[str, str], exclusive: bool,
            mem_gb: float | None = None, mem_wait_s: float = 0.0, custody_ttl: str | None = None,
            preflight_tool: str | None = None, queue: dict[str, Any] | None = None, job_user: str | None = None,
-           gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = ()) -> dict[str, Any]:
+           gpus: int | None = None, store_read: bool = False, job_namespaces: tuple[str, ...] = (),
+           auto: dict[str, Any] | None = None) -> dict[str, Any]:
     """`custody_ttl` (--custody-r2): mint a delete-free key for that long and stage it for the machine's runner (store.custody).
     `gpus` (--gpus without --queue): the machine runs the workload under `gpu-lease N --wait` (module doc, GPUs).
     `preflight_tool` (--preflight): run that tool's declared preflight on the machine before this run, whatever the run's --tool.
     `queue` (--queue): the queue's placement (queue_placement); the machine runs the runner under its `wrap`, so the allocation
     is held until the runner, custody included, exits.  `job_user` (--job-user): the machine runs the workload as that user
     (research.jobuser), and refuses the run when it can't; `job_namespaces` (--job-namespaces): the namespace types its unit
-    may make."""
+    may make.  `auto` (--on auto): where the launcher's placement sent the run and why, in the words it printed (the
+    machine, the pool or none for the queue, and `said`); kept in the launch record here and in the machine's request.json,
+    so the reason outlasts the launcher's terminal, and read by nothing that runs the job."""
     local_dir.mkdir(parents=True, exist_ok=False)
     rec: dict[str, Any] = {"schema": "research/remote/v0.1", "run_id": run_id, "machine": machine_name, "project": project, "phase": "resolving",
                            "created_utc": utc_now_ms(), "observed_utc": None, "last_observed": None, "command": command, "launch_args": harness_args,
-                           **({"queue": queue} if queue else {})}
+                           **({"queue": queue} if queue else {}), **({"auto": auto} if auto else {})}
     write_json_atomic(local_dir / "remote.json", rec)
     try:
         m = resolve_machine(machine_name, project)
@@ -2185,6 +2188,7 @@ def launch(*, run_id: str, local_dir: Path, machine_name: str, project: str, com
                    **({"job_namespaces": list(job_namespaces)} if job_user and job_namespaces else {}),
                    **({"gpus": gpus} if gpus else {}),
                    **({QUEUE_WRAP: queue["wrap"], QUEUE_WORKLOAD_WRAP: queue.get("workload_wrap") or [], "queue": queue} if queue else {}),
+                   **({"auto": auto} if auto else {}),
                    "cost": {"provider": m.get("provider", "runpod"), "pod_id": m.get("pod_id"), "machine": machine_name, "currency": "USD",
                             "rate_usd_per_hour": tgt["cost_per_hr"], "rate_observed_utc": tgt["rate_observed_utc"], "reason": None},
                    "remote": {"machine": machine_name, "pod_id": m.get("pod_id"), "pod_name": tgt["pod_name"], "host": tgt["host"], "port": tgt["port"],

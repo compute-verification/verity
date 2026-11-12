@@ -698,6 +698,74 @@ def test_on_auto_spills_to_the_pool_as_a_pool_run_with_the_kinds_time(tmp_path, 
     assert kw["env"]["CHECK_RUN_MEM_GB"] == "16", "the slot reserves the larger of its mem= and the sized run's"
 
 
+def test_on_auto_keeps_in_the_launch_where_it_sent_the_job_and_why(tmp_path, monkeypatch, capsys):
+    """What `--on auto` says of a placement went only to the launcher's terminal, so nobody could tell afterwards why a job
+    stood in a line that started nothing. The launch carries it: the machine, the pool (none for the queue) and each line
+    printed, which hold what the queue's node and every pool answered and, where the pool was the last resort, that it was."""
+    launched = []
+    stalled = pool(slot("r0", held=True), slot("r1"), asks=(256,) * 3, minutes=88, free_gb=100, passed_gib=150)
+    reads = [{N2: share(waiters=56), CPU1: pool(slot("r0")), CPU5: pool(slot("r0", held=True), waiters=2)},
+             {N2: DOWN, CPU1: stalled, CPU5: "no answer in 30 s"},
+             {N2: share(free=48), CPU1: pool(slot("r0", held=True), waiters=9)}]
+    monkeypatch.setattr(auto, "read", lambda source, cpus: reads.pop(0))
+    monkeypatch.setattr(remote, "launch", _refusing(launched))
+    monkeypatch.setattr(remote, "queue_placement", lambda src, run_id, spec: {"job": {"cpus": 4}, "machine": N2, "why": "its share", "max_s": 3600})
+    monkeypatch.chdir(_auto_repo(tmp_path))
+    for _ in range(3):
+        assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "auto", "--", "pytest", "-q"]) == 3
+        printed = capsys.readouterr().err.splitlines()
+        assert all(f"research run --on auto: {line}" in printed for line in launched[-1]["auto"]["said"]), "the words it printed"
+    free, last, queued = (kw["auto"] for kw in launched)
+    assert (free["machine"], free["pool"]) == (CPU1, "research") and len(free["said"]) == 2
+    assert free["said"][0].startswith(f"spilled to {CPU1}'s research pool, from ")
+    assert f"({N2}'s share: 0 of 48 CPUs free, 2 claim(s), 56 waiting; " in free["said"][0], "what the queue's node answered"
+    assert f"; {CPU5}'s research pool: slots r0 held; 2 waiting: " in free["said"][0], "and each pool"
+    assert free["said"][0].endswith(f": {CPU1}'s research pool has the most places for it (1): a slot is free there now)")
+    assert free["said"][1] == f"it starts now on {CPU1}'s research pool", "and when it should start"
+    assert (last["machine"], last["pool"]) == (CPU1, "research")
+    assert f"({N2} is down: its ssh doesn't answer (Connection timed out); {CPU1}'s research pool skipped: its line is stalled: a run " \
+           f"has waited 88 min while slot r1 is free, for more memory than the 100 GB free there; {CPU5}'s research pool skipped: " \
+           "no answer in 30 s: " in last["said"][0]
+    assert last["said"][0].endswith(f": every pool that fits is stalled and {N2} can't be reached, so the shortest stalled line, "
+                                    f"{CPU1}'s research pool, where it waits until memory frees)"), "the last resort, said as that"
+    assert last["said"][1].startswith(f"warning: it isn't expected to start within 10 min: no estimate of when it starts on {CPU1}'s")
+    assert (queued["machine"], queued["pool"]) == (N2, None) and queued["said"][0].startswith(f"queued onto {N2} as agent-test, from ")
+    assert queued["said"][0].endswith(f"; {CPU1}'s research pool: slots r0 held; 9 waiting: no pool slot is free, and it starts on {N2} now)")
+    assert [kw["machine_name"] for kw in launched] == [CPU1, CPU1, N2]
+
+
+def test_a_launch_records_an_auto_placement_beside_the_run_and_in_its_request(tmp_path, monkeypatch, capsys):
+    """The placement is kept where a launch is already written about: the launcher's remote.json, which `research inspect`
+    prints, and the request.json staged on the machine, read by whoever asks there why the run stands in that line. A run
+    nothing placed carries none."""
+    monkeypatch.setattr(remote, "resolve_machine", lambda name, project: {"root": "/r", "python": "python3"})
+    monkeypatch.setattr(remote, "pod_target", lambda m: {"host": "h", "port": 22, "user": "research", "pod_name": "n1",
+                                                         "cost_per_hr": 0, "rate_observed_utc": "t"})
+    monkeypatch.setattr(remote, "wake", lambda m, ssh: None)
+    monkeypatch.setattr(remote, "ship_tool", lambda *a: "/r/tool/x")
+    staged = []
+
+    def stage(ssh, root, run_id, request, sends, private=None):
+        staged.append(request)
+        raise remote.Refused("staged")
+
+    monkeypatch.setattr(remote, "stage_request", stage)
+    placed = {"machine": CPU1, "pool": "research", "said": [f"spilled to {CPU1}'s research pool, from /src (the shortest stalled line)",
+                                                           "it should start within 10 min"]}
+    runs = tmp_path / "runs"
+    for run_id, auto_ in (("a1", placed), ("a2", None)):
+        with pytest.raises(remote.Refused, match="staged"):
+            remote.launch(run_id=run_id, local_dir=runs / run_id, machine_name=CPU1, project="verity", command=["true"],
+                          harness_args=["--stage", "t"], source=None, sends=[], cwd=None, env={}, exclusive=False, auto=auto_)
+    assert staged[0]["auto"] == placed and "auto" not in staged[1]
+    assert json.loads((runs / "a1" / "remote.json").read_text())["auto"] == placed
+    assert "auto" not in json.loads((runs / "a2" / "remote.json").read_text())
+    assert main(["inspect", "a1", "--runs-dir", str(runs)]) == 0
+    out = capsys.readouterr().out
+    assert all(f"auto      {line}\n" in out for line in placed["said"])
+    assert main(["inspect", "a2", "--runs-dir", str(runs)]) == 0 and "auto  " not in capsys.readouterr().out
+
+
 def test_on_auto_places_a_records_run_by_its_lean_pool_and_says_which(tmp_path, monkeypatch, capsys):
     """The launcher asks for the machines' Lean slots only for a run that takes one, places it by the pool it takes (the
     run's --env names another than `build`), and its one line of reason names that pool."""
