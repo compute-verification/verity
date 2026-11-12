@@ -36,17 +36,18 @@ def reads(tp: Any) -> str:
     """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: flat for a ``STAGES`` stage on bits (its
     Boolean version, `boolean_topp_stages`: its MUFU operations are gates, so it reads no table and its unit returns its
     own outputs, the one form `verify --zk` takes, `one_stage.proofs.ks_form_why`); else in lookup slots (`read_slots`,
-    each table folded once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN), for a whole attention
-    row (``SLOT_ROWS``) and for its heads' per-key-block Calls: inline, their EX2 and RCP reads outnumber the rest of
-    their nonzeros, so the build and the prover's memory grow with the reads, while in slots each table is folded once.
-    Everything else that reads a table reads it inline, with fewer reads than a whole block's: a key block of fewer keys
-    than BN (a read a key), a ``CHAINS`` end and column end (one read each) and combine (seven for five splits). The
-    RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``) read inline at their served shapes. A ``STAGES`` stage
-    reads in slots: a top-p stats part or a probabilities block reads EX2 a lane, thousands of them; a greedy select's
-    stage reads no table, so it lowers flat either way. A Boolean template's reads are inline whatever its layout, a key
-    block's Boolean body (``SparseMlaHeadBlock_v2``) at every key count among them: a body whose MUFU is gates has no
-    table to read, and one that still read a table would keep it in its own rows, so its unit returns its own outputs,
-    the one form ``verify --zk`` takes (`zk_refusal`, `one_stage.proofs.ks_form_why`)."""
+    each table folded once per statement) for a ``CHAINS`` key block or scores unit of a whole block (NVIS = BN), for a
+    whole attention row (``SLOT_ROWS``) and for its heads' per-key-block Calls: inline, their EX2 and RCP reads
+    outnumber the rest of their nonzeros, so the build and the prover's memory grow with the reads, while in slots each
+    table is folded once. Everything else that reads a table reads it inline, with fewer reads than a whole block's: a
+    key block or scores unit of fewer keys than BN (a read a key), a ``CHAINS`` end and column end (one read each) and
+    combine (seven for five splits). The RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``) read inline at
+    their served shapes. A ``CHAINS`` values unit reads no table. A ``STAGES`` stage reads in slots: a top-p stats part
+    or a probabilities block reads EX2 a lane, thousands of them; a greedy select's stage reads no table, so it lowers
+    flat either way. A Boolean template's reads are inline whatever its layout, a key block's Boolean body
+    (``SparseMlaHeadBlock_v2``) at every key count among them: a body whose MUFU is gates has no table to read, and one
+    that still read a table would keep it in its own rows, so its unit returns its own outputs, the one form
+    ``verify --zk`` takes (`zk_refusal`, `one_stage.proofs.ks_form_why`)."""
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 
@@ -56,7 +57,7 @@ def reads(tp: Any) -> str:
         return "slots" if spec_base(tp.id) in SLOT_ROWS else "inline"
     if tp.layout == "stage":
         return "slots"
-    if tp.layout != "chain" or CH.kind(tp) not in ("first", "block"):
+    if tp.layout != "chain" or CH.kind(tp) not in ("first", "block", "scores"):
         return "inline"
     S = spec_statics(tp.word)
     return "slots" if int(S["NVIS"]) >= int(S["BN"]) else "inline"

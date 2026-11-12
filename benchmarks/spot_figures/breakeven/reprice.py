@@ -167,8 +167,8 @@ FUSED_PROVE_SHARE = 1.101 * 0.570
 FUSED_SERVER = {e: (f * k, m * k, FUSED_PROVE_SHARE, 1 << (35 - FUSED_K_LOG))
                 for e, (f, m), k in (("w13", (1.24, 2.77e-3), 1 / FUSED_SESSIONS_S / (1.24 + 1024 * 2.77e-3)),
                                      ("w2", (1.30, 2.93e-3), 1 / FUSED_SESSIONS_S / (1.24 + 1024 * 2.77e-3)))}
-#: the types kept at one prover an H200: the split part's host memory is unmeasured
-ONE_PROVER = ("SparseMlaSplitPart_v1",)
+#: the types kept at one prover an H200: the sparse-MLA head block's host memory is unmeasured
+ONE_PROVER = ("SparseMlaHeadBlock_v1",)
 #: K provers on one H200, sessions a second over one prover's, measured on M1 (the fused w13 at full statements) on
 #: node A; four under MPS; the dense types fit two provers a GPU in host memory today (`dense_k`)
 K_GAIN = {2: 0.768 / 0.570, 4: 0.903 / 0.570}

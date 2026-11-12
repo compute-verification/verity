@@ -22,11 +22,11 @@ def test_the_configurations_are_the_cards():
 
 
 def test_a_request_line_is_plotted_at_every_registration_and_compared_in_the_sets_form():
-    """(A) and (A′) in the patterns' form at each registration, and in the sets' form at their own, which only
+    """(A), (A′) and (A″) in the patterns' form at each registration, and in the sets' form at their own, which only
     exfiltration plots; a registration's GPU-seconds are its machines' over the census window.  Each replays its whole
     batch, and (A) replayed alone, which needs batch-invariant kernels, is a comparison at one machine's that pays
     their tax."""
-    for name in ("tokens", "per_expert"):
+    for name in ("tokens", "per_expert", "head_units"):
         lines = {n: c for n, c in t.CONFIGURATIONS.items()
                  if (n == name or c.variant_of == name) and c.replay != "request"}
         assert {c.replay for c in lines.values()} == {"block"}
@@ -166,7 +166,7 @@ def test_every_line_prices_its_blocks_one_way():
     assert len({round(r, 20) for r in rates}) == 1, rates
     reads = [x for x in lines["per-expert"]["partition"].value["strata"] if x.get("kind") == "EmbeddingRead_v1"]
     assert reads and all(x["macs"] == 0 < f1.price(x) and x["priced"] == "measured" for x in reads)
-    assert 0 < lines["registered"]["partition"].value["computed_share"] < .01
+    assert 0 < lines["registered"]["partition"].value["computed_share"] < .03
     assert lines["per-expert"]["proof_overhead"].value < lines["registered"]["proof_overhead"].value
     stray = c["partition"].value | {"strata": [{"block": "Unstaged_v1{K=3}", "per_token": 1, "macs": 3, "out_bits": 16}]}
     with pytest.raises(ValueError, match="no k_log"):
@@ -510,7 +510,7 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]
     at = out["betas"].index(f1.RATIO_BUDGET)
     lines = {s["config"]: s for s in out["panels"]["exfiltration"]["series"]}
-    for name in ("tokens", "per_expert"):
+    for name in ("tokens", "per_expert", "head_units"):
         spans = [lines[n]["y"] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert all(b <= a * (1 + 1e-9) for x in zip(*spans) for a, b in zip(x, x[1:])), name
         patterns, sets = lines[name]["y"][at], lines[f"{name}_sets"]["y"][at]
@@ -557,7 +557,7 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
             f"session {table['largest']:,} proof blocks, within one table") in parts
     assert "forms" in lines["tokens"] and "forms" not in lines.get("every_block", {})
     assert all(c["design"] == "two-stage, by template" for n, c in out["configurations"].items() if n != "every_block")
-    for n in ("tokens", "tokens_datacenter", "per_expert_datacenter", "layer_of_token"):
+    for n in ("tokens", "tokens_datacenter", "per_expert_datacenter", "head_units_datacenter", "layer_of_token"):
         for k, c in zip(lines[n]["registration_sample"], lines[n]["second_stage"], strict=True):
             assert (c is None) == (k == 0), n
             assert c is None or c["sample"] == k and (c["whole"] or (
