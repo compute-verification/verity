@@ -47,11 +47,13 @@ It loads an execution phase (`loaded`): with `--load grid`, releases of each cla
 longest request and most ids, until the classes' rows, the lengths table's slots or the cells the schedule's grids
 carry in an execution phase are used up; with `--load rows`, every row of every class, whether or not a grid carries
 that much. `--lengths` is the lengths rows' form, 1 by default. Under 2 the classes are `P,O`, the default ones the
-same sizes, and the rows to use up are the execution phase's, R = `WardenParams.phase_releases` over all the
-classes. It then times, over `--phases` execution phases: the device's own hand of it to `warden_serve`'s publisher
-process (`Warden._emit_lengths`, what the ticker does at the close: `hand_ms`), the pickling of the queue's items,
-which the queue's thread does in the ticker's process (`pickle_ms`, and the longest item's), and, in the publisher's
-process, the build, the commit and the signature (`rows.jsonl`'s cost). The result is `--out`'s JSON.
+same sizes, and an execution phase holds at most R = `WardenParams.phase_releases` releases over all the classes:
+`--load grid` stops there too, and `--load rows` is R releases of the one class whose rows are the most bytes, the
+costliest close the schedule has. It then times, over `--phases` execution phases: the device's own hand of it to
+`warden_serve`'s publisher process (`Warden._emit_lengths`, what the ticker does at the close: `hand_ms`), the
+pickling of the queue's items, which the queue's thread does in the ticker's process (`pickle_ms`, and the longest
+item's), and, in the publisher's process, the build, the commit and the signature (`rows.jsonl`'s cost). The result
+is `--out`'s JSON.
 """
 
 from __future__ import annotations
@@ -326,7 +328,8 @@ def check(run: Path, dep: Mapping, params: WardenParams, ingress: Sequence[Recor
 def loaded(params: WardenParams, load: str) -> list[tuple[int, int]]:
     """An execution phase's releases for the cost, in release order: each one's (request bytes, ids), the longest
     request and the most ids its class holds in the schedule (the module docstring's "The cost"). Where a class's
-    rows are a count (`content_rows.counted`) they are at most the execution phase's, `phase_releases` in all."""
+    rows are a count (`content_rows.counted`) the releases are at most the execution phase's, `phase_releases`, and
+    `rows` is that many of the one class whose rows are the most bytes."""
     if params.content is None or load not in ("grid", "rows"):
         raise ValueError("the cost is of a schedule with content rows, loaded to its grid or to its rows")
     B, slots = params.cell_bytes, CR.strides_of(params) * params.stride_releases
@@ -336,6 +339,11 @@ def loaded(params: WardenParams, load: str) -> list[tuple[int, int]]:
     listed = CT.sized(params)
     sizes = [(min(CT.request_room(B, p), params.ingress_cells * params.payload), min(o, params.egress_cells - 1))
              for p, o, _ in listed]
+    if CT.counted(params) and load == "rows":
+        own = [i for i, (size, n) in enumerate(sizes)
+               if CT.file(params, Released(0, size, n, False, bytes(size), bytes(4 * n))) == i]
+        widest = max(own, key=lambda i: CT.request_bytes(B, listed[i][0]) + CT.response_bytes(listed[i][1]))
+        return [sizes[widest]] * slots
     left = [rows for _, _, rows in listed]
     out: list[tuple[int, int]] = []
     request_cells = ids = 0

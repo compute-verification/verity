@@ -519,11 +519,12 @@ COSTED_LOADS = {"grid": (90, 1195378), "rows": (96, 1360768)}
 
 def test_the_cost_is_of_form_1_by_default_and_of_form_2_a_classes_rows_are_the_execution_phases(tmp_path):
     """Without `--lengths` the cost command measures the schedule and the load it measured before it took the flag,
-    held to that digest and those loads. With `--lengths 2` the default classes are the same sizes, each (P, O), the
-    schedule another, and the load is at most R = `phase_releases` releases over all the classes, which is more than
-    form 1's rows held. At a small schedule the form-2 load is R releases, the classes in turn, the close hands
-    execution phase 0 alone, and its tables are the lengths and fails tables' and each class's releases three
-    times; a class of the other form's numbers is refused by the schedule."""
+    held to that digest and those loads. With `--lengths 2` the default classes are the same sizes, each (P, O), and
+    the schedule another. Its `rows` load is the costliest close the schedule has: R = `phase_releases` releases, all
+    of the class whose rows are the most bytes, each its longest request and most ids. Its `grid` load is the
+    classes in turn and no more than R releases or than the grids carry. At a small schedule the close hands
+    execution phase 0 alone, and its tables are the lengths and fails tables' and the one class's R rows three
+    times, the other class's of no row; a class of the other form's numbers is refused by the schedule."""
     default = crr.costed(crr.parser().parse_args(["cost", "--out", "x"]))
     assert (default.lengths, default.content, default.digest.hex()) == (1, crr.CLASSES, COSTED_DIGEST)
     for load, (releases, handed) in COSTED_LOADS.items():
@@ -531,13 +532,19 @@ def test_the_cost_is_of_form_1_by_default_and_of_form_2_a_classes_rows_are_the_e
         assert (len(got), sum(size + 4 * n for size, n in got)) == (releases, handed)
     held = crr.costed(crr.parser().parse_args(["cost", "--out", "x", "--lengths", "2"]))
     assert (held.lengths, held.content) == (2, tuple(c[:2] for c in crr.CLASSES)) and held.digest != default.digest
-    assert COSTED_LOADS["rows"][0] < len(crr.loaded(held, "rows")) <= held.phase_releases
+    widest = (min(CT.request_room(512, 4096), 96 * held.payload), 4096)
+    assert crr.loaded(held, "rows") == [widest] * held.phase_releases and held.phase_releases == 336
+    cells = held.slots * held.lanes * held.window
+    grid = crr.loaded(held, "grid")
+    assert len(set(grid)) == 6 and len(grid) <= held.phase_releases and sum(n + 1 for _, n in grid) <= cells
     small = crr.costed(crr.parser().parse_args(["cost", "--out", "x", "--lengths", "2", "--classes", "4,4", "128,8",
                                                 *SMALL_COST]))
     R = small.phase_releases
     rows = crr.loaded(small, "rows")
     filed = [CT.file(small, Released(0, size, n, False, bytes(size), bytes(4 * n))) for size, n in rows]
-    assert (R, len(rows), filed) == (12, R, [0, 1] * (R // 2))
+    assert (R, len(rows), filed) == (12, R, [1] * R)
+    assert [CT.file(small, Released(0, size, n, False, bytes(size), bytes(4 * n)))
+            for size, n in crr.loaded(small, "grid")] == [0, 1] * (R // 2)
     out = tmp_path / "cost.json"
     assert crr.main(["cost", "--out", str(out), "--lengths", "2", "--classes", "4,4", "128,8", "--load", "rows",
                      "--phases", "2", "--height", "4", *SMALL_COST]) == 0
