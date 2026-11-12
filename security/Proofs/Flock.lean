@@ -79,6 +79,7 @@ public import Proofs.Flock.SpotFlock.RevealAt
 public import Proofs.Flock.SpotFlock.SlotsAt
 public import Proofs.Flock.SpotFlock.WiredAt
 public import Proofs.Flock.SpotFlock.WireMap
+public import Proofs.Flock.SpotFlock.WireMapRewires
 public import Proofs.Flock.SpotFlock.Jeq
 public import Proofs.Flock.SpotFlock.Format
 public import Proofs.Flock.SpotFlock.Reads
