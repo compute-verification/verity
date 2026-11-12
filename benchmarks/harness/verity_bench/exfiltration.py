@@ -36,6 +36,11 @@ store, with no GPU and no node.
   at the calculator's jitter bound of record (`OF_RECORD`, two release schedules). A figure at its other jitter
   bound, and every figure of a row that carries the calculator's label (the row's `with_set_time_card`), is printed
   only under that label, which the command reads from the document and never spells itself.
+* **The security level** is the row's binding bound, the planner's (`_binding`: the row's `verification_phase`'s
+  `binding`): the two-stage first-hit finder's bound over one verification phase of the row's design and over the
+  world's year of them, each counted in calls and in compressions, the inputs it assumes, and what Lean proves of
+  each, a theorem of `LEAN_NUMBERS` by name or `NOT_PROVED`. The command computes none of it, names each figure by
+  what it is over, and says so where the rows hold no bound.
 * **Every figure carries the error summed over everything it covers**, and a figure whose error is 1 or more is
   printed as `NO_BOUND`, with that error and no amount. The compute audit's part fails with at most its rows' δ over
   the monitoring period. The network certifier's fails with at most the ε of its row (`eps`): its scans' δ summed over
@@ -149,6 +154,14 @@ TOGETHER = {"scan": "as the scan's check charges it today", "N2": "as N2 charges
 OUTPUT_COUNT = "design, no stop block"
 GB = 8e9
 MARKS = ("measured", "modeled", "assumed")
+#: the part of the inputs a row's binding bound assumes, and what the bound is called
+SECURITY = "security level"
+#: where the Lean instances a binding bound names are declared
+LEAN_NUMBERS = "Claims.Flock.Numbers"
+#: a Lean instance's numerals, as a binding bound names them (`lean.past`), in the bound's own symbols
+NUMERALS = {"T": "calls a run", "e": "e_s", "Ns": "N_s", "Ks": "K_s", "Km": "K_m", "c": "c"}
+#: printed where no Lean theorem gives a number at a design's sizes
+NOT_PROVED = "not proved at these sizes"
 #: the inputs both parts read: the fleet and what a request of the plan is, which give the requests, and the weights
 SHARED = ("world_machines", "datacenter_machines", "machine_gpus", "mfu_serve", "peak_flops", "request_tokens",
           "token_macs", "world_requests", "request_count", "weights")
@@ -398,7 +411,21 @@ def at_share(scope: str, run: str, rows: Sequence[Mapping], share: float,
             "bound": {"bits": bits, "GB": bits / GB}, "bits": bits * lam, "GB": bits * lam / GB,
             "parts": {p: _between(rows, p, beta) for p in PARTS if all(r.get(p) is not None for r in rows)},
             "priced": _held(scope, run, rows, counts[0], *plan) if plan
-            else _own(run, min(rows, key=lambda r: abs(r["b10"] - beta)))}
+            else _own(run, min(rows, key=lambda r: abs(r["b10"] - beta))),
+            "binding": _binding(run, min(rows, key=lambda r: abs(r["b10"] - beta)))}
+
+
+def _binding(run: str, row: Mapping) -> dict | None:
+    """A row's binding bound as the planner wrote it (its `verification_phase`'s `binding`): the two-stage first-hit
+    finder's bound of one verification phase of the row's design and of its scope of them, each counted in calls and
+    in compressions, with the inputs it assumes and what Lean proves of one phase; beside it the row's budget and the
+    phase's counts it is at. None for a row written before the planner computed one. The command computes none."""
+
+    phase = row.get("verification_phase") or {}
+    if not (bound := phase.get("binding")):
+        return None
+    return {"run": run, "beta": row["b10"], "scope": row["scope"],
+            **{k: phase.get(k) for k in ("name", "seconds", "machines", "sampled", "sessions")}, **bound}
 
 
 # ---- the network certifier's part, and the requests both parts count over --------------------------------------------
@@ -495,6 +522,9 @@ def _inputs(points: Mapping[str, dict], runs: Sequence[str], term: Mapping, coun
     ]
     for name, i in term["inputs"].items():
         out.append(one(both if name in SHARED else net, name, i["value"], i["unit"], i["mark"], i["source"]))
+    for i in (head.get("binding") or {}).get("assumed", ()):
+        out.append(one(SECURITY, i["input"], i["value"], i["unit"], "assumed",
+                       f"`{RECORD}` ({head['binding']['run']}) `verification_phase.binding`: {i['source']}"))
     if off := sorted(i["input"] for i in out if i["mark"] not in MARKS or not i["source"]):
         raise ValueError(f"an input is marked one of {', '.join(MARKS)}, with its source: {', '.join(off)}")
     return out
@@ -735,6 +765,49 @@ def _labelled(year: Mapping, key: str, set_time: str) -> list[str]:
             for label in dict.fromkeys((*own, *other))]
 
 
+def _lean(lean: Mapping) -> str:
+    """What Lean proves at numbers of one verification phase's conflict and first-hit part, as a binding bound says
+    it: the instance the phase is within and its bits, or `NOT_PROVED` with the nearest instance and each numeral
+    the phase is past."""
+
+    if lean["theorem"]:
+        return (f"`{LEAN_NUMBERS}.{lean['theorem']}` holds its conflict and first-hit part to at most 2^-{lean['bits']}, "
+                "beside the sessions' κ_s and the rewinding term")
+    past = "; ".join(f"{NUMERALS.get(name, name)} at most {v['instance']:,} there and {v['design']:,} here"
+                     for name, v in lean["past"].items())
+    return (f"{NOT_PROVED}: the nearest instance, `{LEAN_NUMBERS}.{lean['nearest']}`, at most 2^-{lean['bits']}, has "
+            f"{past}")
+
+
+def _security(bound: Mapping | None) -> list[str]:
+    """The security level's lines: a row's binding bound (`_binding`) over one verification phase and over its scope
+    of them, each counted in calls and in compressions, what it assumes, and what Lean proves of each; or that the
+    rows hold none."""
+
+    if bound is None:
+        return [f"- **the {SECURITY}**: not read. The rows of record hold no binding bound (`verification_phase.binding`): "
+                f"the planner wrote them before it computed one. Run it again and label its run ({_label()})."]
+    design, (calls, compressions) = bound["design"], (bound["counted"][c] for c in ("calls", "compressions"))
+    scope = bound["scope"].replace(" ", "-")
+    return [
+        f"- **the {SECURITY}** (modeled): the probability that an accepted run opens a value off the committed trace, by "
+        f"the two-stage first-hit finder's bound by classes of gates, every run at {design['calls_a_run']} calls of "
+        f"SHA-512, at the row's own design at the pinned budget nearest, β = {_part(bound['beta'])} ({bound['run']}). "
+        f"**Over one verification phase: at most {calls['phase']['bound']}** counted in calls, as the Lean counts, and "
+        f"{compressions['phase']['bound']} in compressions. **Over a {scope} of phases**, {_n(design['phases'])} of "
+        f"them: **at most {calls['phases']['bound']}** in calls and {compressions['phases']['bound']} in compressions. "
+        f"A verification phase is a {bound['name']}'s {_n(bound['seconds'])} s on {_n(bound['machines'])} machines: its "
+        f"first stage samples {_n(bound['sampled'])} replay blocks, and its second {_n(bound['proof_blocks'])} of their "
+        f"proof blocks in {_n(design['sessions'])} sessions, the largest of {_n(bound['tables'])} "
+        f"table{'s' * (bound['tables'] != 1)}.",
+        f"- the {SECURITY} assumes: "
+        + "; ".join(i["input"] if i["value"] is None else f"{_n(i['value'])} {i['input']}" for i in bound["assumed"])
+        + ". It counts the sessions' κ_s and the run's own opening checks as 0.",
+        f"- what Lean proves of the {SECURITY}: over one verification phase counted in calls, {_lean(calls['lean'])}. "
+        f"Counted in compressions, {_lean(compressions['lean'])}. Over a {scope} of phases, {NOT_PROVED}: no theorem "
+        "sums a monitoring period's verification phases."]
+
+
 def render(doc: Mapping[str, Any]) -> str:
     """``doc`` (`build`) as text: the figure and what it is, the inputs with their marks, each part, and the two side
     by side for every scope and monitoring period. The network certifier's figures of record come first; a figure
@@ -823,6 +896,7 @@ def render(doc: Mapping[str, Any]) -> str:
         f"- with the network check's own proving at {_pct(net['share'])} of total compute, which the planner's rows "
         f"don't count (assumed, no run), the audit budget is β = {_part(net['beta'])} and the compute audit's part "
         f"{_n(net['GB'])} GB.",
+        *_security(head["binding"]),
         f"- of {len(doc['inputs'])} inputs, {marks['measured']} {'is' if marks['measured'] == 1 else 'are'} measured, "
         f"{marks['modeled']} modeled and {marks['assumed']} assumed.", "",
         f"Inputs, each a labelled record of the store (`{RUN_OF_RECORD}`):", "",
