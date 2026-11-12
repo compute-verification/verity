@@ -954,7 +954,8 @@ def _added(a: dict, b: dict) -> dict:
 def outside_steps(structures: dict, parts: list[dict]) -> dict:
     """One step record for what several segments counted outside any step, each one's setup and what a stopped one
     counted after its last kept step: their counts and times added, and their structures merged into one, which
-    joins `structures`."""
+    joins `structures`. An op log's rows are added where they are one op at one shape in one dtype: a row names its
+    dtype last, and one written before rows did names none and is added to the rows that name none."""
     out = dict(parts[0])
     for p in parts[1:]:
         for k in ("tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "cpu_s", "wall_s", "gpu_s",
@@ -965,12 +966,12 @@ def outside_steps(structures: dict, parts: list[dict]) -> dict:
         out["shapes"] = out["shapes"] | p["shapes"]
         mine, its = structures[out["struct"]], structures[p["struct"]]
         log: dict[tuple, list[int]] = {}
-        for *sig, count, macs in mine["log"] + its["log"]:
-            entry = log.setdefault(tuple(sig), [0, 0])
+        for phase, role, op, shapes, count, macs, *dtype in mine["log"] + its["log"]:
+            entry = log.setdefault((phase, role, op, shapes, *dtype), [0, 0])
             entry[0] += count
             entry[1] += macs
         struct = {"updated": sorted(mine["updated"] + its["updated"], key=lambda u: (u[1], u[0])),
-                  "log": sorted([list(k) + v for k, v in log.items()])}
+                  "log": sorted([*k[:4], *v, *k[4:]] for k, v in log.items())}
         out["struct"] = structure_id(struct)
         structures[out["struct"]] = struct
     return out

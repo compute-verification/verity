@@ -167,7 +167,9 @@ def per_row(struct: dict, shape: dict) -> dict:
     batched over rows x heads: a `bmm` whose every operand leads with rows x heads over a context and nothing but
     contexts and a head's width, and that leading dimension becomes the heads. An optimizer's entries have no such
     shape and stay whole. A `_foreach_` op's operands are sorted: their order is the order a program lists its
-    parameters in, which is no part of the step."""
+    parameters in, which is no part of the step. The dtype a row names for its op, where it names one, is not part
+    of an entry: a record's rows name none where a config's counted step names each, so rows of one op and shape in
+    several dtypes are one entry, their counts added. The bits a use reads its weight at are compared in `updated`."""
     ctx, heads = shape["ctx"], shape["n_head"]
     r = rows_a_forward(struct, ctx)
     a_head = {ctx, shape["d_model"] // heads}
@@ -180,7 +182,7 @@ def per_row(struct: dict, shape: dict) -> dict:
         return len(s) == 3 and s[0] == r * heads and ctx in s[1:] and set(s[1:]) <= a_head
 
     log: dict[tuple, list] = {}
-    for phase, kind, op, shapes, count, macs in struct["log"]:
+    for phase, kind, op, shapes, count, macs, *_ in struct["log"]:
         was = json.loads(shapes)
         now = ([[heads, *s[1:]] for s in was] if op == "bmm" and all(map(over_heads, was)) else
                [of_tokens(s) for s in was])
