@@ -95,7 +95,10 @@ def test_allow_lets_a_named_field_differ(tmp_path: Path) -> None:
     # --allow does not cover another field
     cand2 = write_run(tmp_path, "r-cand2", conforming_result("r-cand2", K=1536, proof_class="NO_PROOF"))
     assert judge(str(base), str(cand2), "--allow", "K").returncode == 2
-    assert judge(str(base), str(cand2), "--allow", "B").returncode == 2  # argparse error: not an identity field
+    assert judge(str(base), str(cand2), "--allow", "B").returncode == 2  # nor does allowing B, which agrees
+    # a name that is no identity field is refused as an argument, before a run is read
+    proc = judge(str(base), str(cand2), "--allow", "batch")
+    assert proc.returncode == 2 and "--allow takes identity fields" in proc.stderr and proc.stdout == ""
 
 
 def test_unreadable_run_is_an_error(tmp_path: Path) -> None:
