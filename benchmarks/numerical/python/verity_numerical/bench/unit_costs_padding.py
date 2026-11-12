@@ -1,4 +1,4 @@
-"""Front F6's padding table: what proving an audit's sampled proof blocks in fixed-shape sessions costs over their own nonzeros, per
+"""The padding table: what proving an audit's sampled proof blocks in fixed-shape sessions costs over their own nonzeros, per
 workload and bucket menu, at unit = one subcircuit with :mod:`unit_costs`' per-unit nonzeros (registered lowering where one
 exists).
 

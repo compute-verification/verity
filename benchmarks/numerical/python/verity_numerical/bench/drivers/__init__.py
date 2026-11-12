@@ -11,7 +11,7 @@ backend's own pod scripts.  A module defines
                                                    the commands (the backend's own registration script) that write the
                                                    ``bench-result/v1`` document to ``out``
 
-A backend without a module is ``n/s`` for every cell until its lane adds one.
+A backend without a module is ``n/s`` for every cell.
 """
 from __future__ import annotations
 

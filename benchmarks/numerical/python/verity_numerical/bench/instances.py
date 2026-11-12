@@ -370,8 +370,8 @@ def build(out: Path | str = DEFAULT_ROOT, procs: int = 1, seeds_dir: Path | str 
           log=print) -> dict:
     """Regenerate every array of the dataset under ``out`` (built and committed alike) and write ``manifest.json``.
     Needs network access to Hugging Face for the real weight rows (cached under ``cache``, default ``<out>/.cache/hf``).
-    Stops with ``RuntimeError`` on any seed check failure, silicon domain error or hawkeye_close disagreement -- those
-    are discrepancy-log entries for the coordinator, not things to fix here."""
+    Stops with ``RuntimeError`` on any seed check failure, silicon domain error or hawkeye_close disagreement: each is an
+    entry for the discrepancy log, not a thing to fix here."""
 
     t_start = time.time()
     out = Path(out)

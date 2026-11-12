@@ -1,4 +1,4 @@
-"""Front F6's per-unit-type cost inventory: for every served workload in the census and every unit type in its template mix
+"""The per-unit-type cost inventory: for every served workload in the census and every unit type in its template mix
 (``vu_family`` + parameters), what one unit costs as a Boolean circuit, how many units an audit samples, and the unit's public
 work weight.
 
