@@ -106072,3 +106072,60 @@ This is the before and after of what your 21:50Z decision 2 ordered on a branch 
 - A law whose proved slots exceed its drawn ones (a work sample's closure): the driver stages at the proved slots and the rule is worded on the drawn; in `db0f` they are the same 40. Such a run would be refused by `second-population`, a visible refusal, until the rule reads the proved set.
 - The form at any size but 2 of 8; under a rate law, where K varies; with a port that is not read registered.
 - A request Program in the cut round 2 takes, at any size.
+
+## FIRSTACCEPT, Thu 22:34Z: `publicHeld` is the one refusal left; with only it reading a one-member window's ports bare, the compiled check accepts both one-member cases; building the slice change now on its own branch
+
+Read: the coordinator's 22:21Z rulings. Branch `cursor/proofs-firstaccept-320f` at `d7ed22a0e3`.
+
+**Shown by run `r20261112-221348-871c`** (cpu-12, done) [run]. A scratch build, never pushed, of `checkOneAt` with one change: `publicHeld` given the record with every port's text up to its last `/` taken off. On the two cases from d2b2:
+- The unpatched executable refuses both at `publicHeld`. Its SHA-512 is `169108a9…7df09`, the same as d2b2's.
+- The scratch accepts both, exit 0:
+  - `subset:1`: `public` {bound 1, drawn [0], proved [0]}.
+  - `stratified:1`: {bound 0, drawn [0], proved [0]}.
+
+So the other readers of the record (`tablesHeld`, `sessionRegistered`, `provedHeld`, v1's `checkAt`) take the record as it stands. The change is `publicHeld` alone.
+
+**The change, as I'm building it** (new branch `cursor/proofs-firstaccept-5a1c`, from `d7ed22a0e3`)
+- `Record.lean`: `matchesPublicBy reg rec …`, the body of `matchesPublic` with the port-to-root map as an argument; `matchesPublic rec … := matchesPublicBy (byPort rec) rec …`. The population check still reads `getD rec "population"`, so the population lemmas keep their statements.
+- `OneStageZk.lean`:
+  - `publicPorts rec : V (Array (String × Json))`. Where no root's port names a member (no `/`), it is `byPort rec`, which is today's behaviour exactly. Otherwise `n` is the longest name every root's port reads as `<n>/<port>` (`splitsOf`); the roots are taken through `rootStep` from `{n}` alone, which refuses a row table and a root that is no member's; the result is `byPort` of those bare roots.
+  - No common name: refused, "the registration's roots are not one member's".
+  - `publicHeld rec pubB` then compares the header to `matchesPublicBy (← publicPorts rec) rec …`, and `indicesHeld rec` is unchanged.
+  - `splitsFrom`/`splitsOf`/`TABLE_PORT`/`ROW_TABLES`/`rootStep` move above `publicHeld` (moved, not changed).
+- The member's name comes from the record; there is no new parameter. `checkOneAt`'s do-chain is unchanged, so `Credited.lean`'s `bind_ok` walk over it stays as it is.
+- The narrowest form: a record of two or more members has no common `<n>`, so it stays refused. The tests that will hold it:
+  - a `#guard` in `OneStageZk.lean` beside the existing `publicHeld heldRecord` guard (`:1421`), with a two-member record refused and a one-member record accepted;
+  - the difftest's `matches_public` / new `public_ports` cases (below).
+- Python twin: `registration.public_ports(rec)` beside `matches_public`, used where `proofs.check_v2` and the drivers hold the public file. Difftest: a `public_ports` piece in `Spot/Pieces.lean` and `lean/tests/test_difftest.py`.
+
+**Lemmas that unfold `publicHeld` or `matchesPublic`, and whose file** [read, `git grep`]
+- `Spot.OneStageZk.indicesHeld_of_publicHeld`: `verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean:356`. Ours. Its statement stays; its proof gains one bind.
+- `Properties.Spot.Credited.population_of_matchesPublic`: `security/Proofs/Properties/Spot/Credited.lean:367`. Ours. It unfolds `matchesPublic`; it goes over `matchesPublicBy`, same statement.
+- The proof at `Credited.lean:455` (inside the theorem around `:430-470`) unfolds `publicHeld`. Ours. It gains one bind.
+- `Credited.lean:533` reads `indicesHeld_of_publicHeld`. Ours. Unchanged.
+- `Verity.Sampled…matchesPublic_population`: `security/Proofs/Properties/Verity/Sampled/Held.lean:394`. Soundness's. It unfolds `matchesPublic`; it goes over `matchesPublicBy`, same statement.
+- `…publicHeld_population`: `Held.lean:408`, which unfolds `publicHeld`. Soundness's. One bind more; same statement.
+- Read, not unfolded: `Held.lean:484` (`publicHeld_population`) and `Moves.lean:372` (`publicHeld c.record pubB = .ok ()` in the check's moves). Soundness's; their statements are unchanged.
+
+I'll make every one of these compile myself in this change, unless soundness wants its two. **No statement moves** [derived], so the lock records should not change; the records run will say.
+
+**A25: what a real serve on live coins under the deployed key needs** [read]
+- Challenger: `a5.py --challenger gate:USER@HOST`, which is vy-challenger-1 through infra's gate, with `--peer`, `--challenger-key` (the host's `challenger-key/v1` record) and `--main`.
+- Key: the gate runs each window's session as `serve.py --key <host.key>` with no `--params` (`auditor.py:2192-2202`), so `serve.py` loads or makes the key at `lms.DEPLOYED` (`serve.py:195`; `auditor.load_key` defaults to it, `:854-859`). That is LMS N = 64, W = 1, H = 20, what v2's `KEY_PARAMS` asks.
+- The question for infra (please send): "Is the LMS key in vy-challenger-1's host key directory at W = 1, H = 20, i.e. was it made by `serve.py`/`auditor.load_key` with no `--params`? Which `challenger-key/v1` record names it?"
+- The serve: a TP Commit (`--tp-commit` with `--build-root`, `--windows`, `--workload`), streamed, `--zk`, `FLOCK_CHALLENGER=1`. Its windows are committed while serving; the drawn window must be one member (the one-statement form); its public file is staged before the sample.
+
+**A3**: left, as ruled. The kept window has no challenger session, and the first accept of record will be a new run.
+
+**Runs**
+- `r20261112-222107-6544` (cpu-12): queued, 9 ahead at 22:32Z. It runs `test_audit_one_member.py` (expected: xfail at `PUBLIC_PORTS`) and `test_composite.py`, directly and through `suites.py one_stage`.
+- Later runs go to cpu-8 or cpu-10.
+
+**Expected hour** [guess]: the Lean and its twin pass `verity lean try` and the suites on a node by about 03:00Z; the accept on record (`test_audit_one_member` passing on the branch, plus a kept run) by about 06:00Z.
+
+**Not established**
+- That the proofs above compile over the change.
+- That the records don't move.
+- The host key's parameters on vy-challenger-1 (the code reads H = 20; the file is unknown).
+
+**NEEDS**: the A25 question to infra (above). **To post**: none.
