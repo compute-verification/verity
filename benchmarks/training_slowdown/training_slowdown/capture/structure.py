@@ -22,7 +22,9 @@ values, however the circuit is written.
   slot an earlier step wrote that this one doesn't, and every slot the step writes from a dependent slot (its own old
   value included: W ← W − u). Of the slots the step writes, the largest set closed under that rule is dependent, so a
   cache the step rewrites from θ, constants and token data alone (``copy_``, ``fill_`` and in-place samplers write a
-  whole storage without reading it) is not, and a parameter the step updates in place is.
+  whole storage without reading it) is not, and a parameter the step updates in place is. A storage copied onto itself
+  is read: the copy's source is the storage's own value (``b.copy_(b.float().mul_(μ).add_(g))`` on an fp32 buffer,
+  whose ``float()`` is the buffer), so a momentum buffer written that way keeps what it held.
 - A value is **update-dependent** when it is computed, through any path, from a dependent slot's value at the step's
   start. A gather of a dependent table is (its rows are), with no MAC; a value computed only from θ, constants and token
   data is not.
@@ -93,7 +95,8 @@ _SCALE = {"mul", "div", "neg", "add", "sub"}
 #: ops that read only their argument's shape
 _SHAPE_ONLY = {"ones_like", "zeros_like", "empty_like", "full_like", "new_zeros", "new_ones", "new_empty", "new_full",
                "sym_size", "sym_numel", "sym_stride", "empty_strided", "randn_like", "rand_like", "randint_like"}
-#: in-place ops that write every element of what they write without reading it
+#: in-place ops that write every element of what they write without reading it. `_Flow` skips the written argument by
+#: its position, so a source that is the storage written (``b.copy_(b)``) is still read
 _OVERWRITE = {"copy_", "fill_", "zero_", "set_", "normal_", "uniform_", "bernoulli_", "random_", "exponential_",
               "geometric_", "log_normal_", "cauchy_", "_foreach_copy_", "_foreach_zero_"}
 #: matmul-like names that `_gemms` must account for (training_slowdown.flops's); any other op with one of these in its name is refused
@@ -501,8 +504,8 @@ class _Flow:
         mutated = [a for p, a in singles if p in written_pos]
         reads = set(scalars)
         if not shape_only:
-            for _, a in singles:
-                if not (overwrite and a in mutated and self._whole(a)):
+            for p, a in singles:
+                if not (overwrite and p in written_pos and self._whole(a)):
                     reads |= self._rd(a)
             for _, a in lists:
                 for x in a:
@@ -547,6 +550,27 @@ def _arg_nodes(n) -> list:
         elif isinstance(a, (list, tuple)):
             out.extend(x for x in a if isinstance(x, torch.fx.Node))
     return out
+
+
+def _slots(base, flow) -> tuple[dict, dict, set]:
+    """The graph attributes' values where the capture first reads them, by slot; the values the capture writes to each
+    slot; and the slots that hold the run's own value there, not θ's: the ones steps before the capture wrote
+    (`Capture.written_before`), and in a capture that starts after its run's first step (`Capture.mid_run`) every slot
+    the capture writes."""
+    entry = {k: v for v, k in flow.source.items() if k[0] == "attr"}
+    writes: dict = {}
+    for k, v, _ in flow.writes:
+        if k[0] == "attr":
+            writes.setdefault(k, []).append(v)
+    before = {("attr", t) for t in base.written_before if ("attr", t) in entry}
+    return entry, writes, before | (set(writes) & set(entry) if base.mid_run else set())
+
+
+def _past(flow, region: int, entry: dict, before: set) -> set:
+    """What the run produced before step `region` of a capture that names it: the token inputs of the steps before it,
+    and the slots that hold the run's own value where the capture first reads them (`_slots`)."""
+    return ({v for v, k in flow.source.items() if k[0] == "input" and flow.step[v] < region}
+            | {entry[k] for k in before})
 
 
 def _closure(flow: _Flow, seed) -> list[bool]:
@@ -639,16 +663,10 @@ class StepGraph:
         # dependent slots: the largest set of written slots closed under the rule (module docstring); a program recorded
         # from its start reads it off its history: what a step reads is the run's own when it depends on an earlier
         # step's token data, through whatever the program carried (in place, rebound, by hand)
-        entry = {k: v for v, k in flow.source.items() if k[0] == "attr"}
-        writes: dict = {}
-        for k, v, _ in flow.writes:
-            if k[0] == "attr":
-                writes.setdefault(k, []).append(v)
-        before = {("attr", t) for t in base.written_before if ("attr", t) in entry}
+        entry, writes, before = _slots(base, flow)
         carried: list[int] = []
         if region is not None:
-            past = {v for v, k in flow.source.items() if k[0] == "input" and flow.step[v] < region}
-            dep = _closure(flow, past.__contains__)
+            dep = _closure(flow, _past(flow, region, entry, before).__contains__)
             carried = sorted({p for v, ps in enumerate(flow.preds) if flow.step[v] == region for p in ps
                               if flow.step[p] < region and dep[p]})
             dependent: set = set()

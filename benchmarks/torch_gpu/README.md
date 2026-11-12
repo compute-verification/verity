@@ -25,7 +25,18 @@ heap layout, on the lengths of the paths it reads and on how long its passes tak
 off, from a copy of their sources and with TMPDIR at paths of one length, and with a counted clock inside nvcc's front end
 (`ship_clock.c`), and the manifest names each shared library's cubins: a rebuild at the same commit, from any checkout,
 with the same toolkit at the same path and the same host compiler (a `research run --cwd source` on a node with
-`/usr/local/cuda-13.0`), reproduces every cubin byte for byte, on a busy machine too.
+`/usr/local/cuda-13.0`), reproduces every cubin byte for byte, on a busy machine too. They compile with `ship_nvcc.sh`,
+nvcc with the three things its device compiler reads that follow a file's place in the tree fixed (the file names in the
+preprocessed text's line markers, the source's path, and its directory and environment): wherever a source or a header
+it includes sits, the device compiler is handed the same text and the same arguments, in the same directory, so a commit
+that only moves one leaves each cubin they compile with it as it was. The program's own text is compiled as written,
+so `ship_nvcc.sh` refuses one that names a file (`__FILE__`, or an assert, which expands to it, gives the name as its
+`#include` spells it, which a move changes). Each build first holds its compiler to that (`ship_probe.sh`): a probe that
+nvcc itself compiles to two cubins at two places must be one cubin with `ship_nvcc.sh`, and a toolkit or a wrapper with
+which it isn't builds no ship. That leaves out the row tables' cubins in `s8_linear`'s ship, which the adapter's own
+build compiles. A library a job builds off the card outside a ship (`j10r_sm90/job.sh`'s, and
+`benchmarks/hash/dither/job.sh`'s) compiles with `job_nvcc.sh`, that wrapper without the frame and its probe: its cubin
+doesn't follow its place either, and nothing holds a rebuild to the same bytes from run to run.
 
 - `commit_slots/`: the serve-time commit call, a step's proof-block outputs as hm96-sha512 rows under hiding leaves in
   frame-v3-sha512 trees, one subtree per sequence slot. `gpu.sh` holds the GPU's roots to the CPU reference's.

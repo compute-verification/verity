@@ -527,6 +527,7 @@ def TokenSelect(B, S, logits):
 
 #: bf16 -inf, the V-chunks' starting best: every logit but -inf and a NaN is strictly above it
 NEG_INF_BF16 = 0xFF80
+CUTS = {"TokenSelect_v1": "verity.definitions.registry.greedy_stages"}  # staged as its cut (`checks.cut_of`), named: it imports b1
 
 
 def chunks(V: int, C: int) -> list[tuple[int, int]]:

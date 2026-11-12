@@ -92,7 +92,12 @@ def test_a_marked_step_on_graphs_marks_each_add() -> None:
 
 
 def test_a_plan_on_some_sms_gives_the_reference_s_roots_on_graphs() -> None:
-    """Graphs captured on a green context's stream, their leaf grid sized to its SMs, replayed under a second key."""
+    """Graphs captured on a green context's stream, their leaf grid sized to its SMs, replayed under a second key.
+    Skipped where this Python's torch has no driver bindings to make a green context with."""
+    try:
+        G.driver_bindings()
+    except RuntimeError as e:
+        pytest.skip(str(e))
     layout = S.h200_layout(layers=3)
     plan = G.Plan(CTX, layout, sms=16)
     for step, key in ((6, KEY), (7, bytes(range(32)))):

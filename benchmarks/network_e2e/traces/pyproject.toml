@@ -1,14 +1,14 @@
 # Real vLLM V1 scheduler traces under varied traffic (README.md). Not a package: the corpus runs in a node's pinned vLLM venv,
 # and the suite tests the scheduler hook on a stand-in Scheduler, the traffic plan, the summary, the stand-in network
-# certifier's and the network certifier's release headers and watermark against the server's tick feed and `tick.sh` on
-# a stand-in node, stdlib only.
+# certifier's and the network certifier's release headers and watermark against the server's tick feed, `tick.sh` on
+# a stand-in node and `ids.sh` with a stand-in interpreter, stdlib only.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
-untraced = ["tests/test_tick_job.py"]
+untraced = ["tests/test_ids_job.py", "tests/test_tick_job.py"]
 # `corpus.tick_modules` (tests/test_tick_corpus.py): the vLLM integration's `--admit tick` under vLLM's own server
 # (`serve_admit`, `tick_plugin`), whose release headers, watermark and feed the stand-in network certifier speaks, and
 # the modules they import
@@ -39,6 +39,7 @@ tests = [
     "tests/test_admit_release.py",
     "tests/test_adversary.py",
     "tests/test_arrival_order.py",
+    "tests/test_ids_job.py",
     "tests/test_plugin_summary.py",
     "tests/test_tick_corpus.py",
     "tests/test_tick_job.py",

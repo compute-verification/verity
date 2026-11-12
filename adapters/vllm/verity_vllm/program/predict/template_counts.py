@@ -18,7 +18,8 @@ the registered compiler's form keeps (`prune.dead_free`):
 - each Definition `prune.dead_free_versions` names is its dead-free version;
 - the form is batched (`prune.batched_form`, class G's): each token's latent row is one `DsaLatentRow`, and a row past INDEX_TOPK
   is read at its block's keys (`vllm_dsa.long_row_blocks`), its logits there, its own key count a one-word pad, and its counted
-  mask, settings and rows at the block's class.
+  mask, settings and rows at the block's class; under table reads (`table_reads`), its index in place of the settings and its
+  history reads at the block's keys in place of the rows, without their pad.
 
 Consts count, a pad block as its words. A const called alone (the select's settings under a seeded policy, a dense prefill's empty
 context) is a root primitive, one instance here, which `TemplatePartition` refuses. `tests/program/predict/test_template_counts.py`
@@ -64,12 +65,14 @@ class _Pass:
 
 
 class TemplateCounts(StepNeeds):
-    """`StepNeeds`' decoder for φ (one tensor-parallel rank), each kind named by its dead-free version's descriptor id (`kind`),
-    and n_t of a request unit's Program (`unit`, `request`)."""
+    """    `StepNeeds`' decoder for φ (one tensor-parallel rank), each kind named by its dead-free version's descriptor id (`kind`),
+    and n_t of a request unit's Program (`unit`, `request`); `table_reads`: the registration's DSA long rows by table reads
+    (`steps.Registered.dsa_table_reads`)."""
 
-    def __init__(self, phi) -> None:
+    def __init__(self, phi, table_reads: bool = False) -> None:
         super().__init__(phi)
         self._fns: dict[str, Any] = {}
+        self.table_reads = bool(table_reads)
 
     def kind(self, role: str, **statics: object) -> Need:
         """The vocabulary's Definition for `role` at `statics` as a template partition names it, or `Unexpressible`."""
@@ -204,7 +207,7 @@ class TemplateCounts(StepNeeds):
                 n, Nb = P.keys[i], block[i]
                 N = long_row_keys(Nb, TOPK)
                 out += [(self.kind("dsa_mqa_logits", N=Nb, H=IH, D=ID), 1), (self.kind("dsa_topk_mask_counted", N=N, TOPK=TOPK), 1),
-                        (self.kind("dsa_butterfly_settings", N=N, TOPK=TOPK), 1)]
+                        (self.kind("dsa_topk_index" if self.table_reads else "dsa_butterfly_settings", N=N, TOPK=TOPK), 1)]
                 pads.add((32, n, 1))
                 if N > Nb:
                     pads.add((32, PAD_SCORE, pad_words(TOPK)))
@@ -216,7 +219,9 @@ class TemplateCounts(StepNeeds):
             if n > TOPK:
                 Nb = block[i]
                 N = long_row_keys(Nb, TOPK)
-                if N > Nb:
+                if self.table_reads:
+                    out.append((self.kind("dsa_history_reads", V=Nb, TOPK=TOPK, H=KVL + R), 1))
+                elif N > Nb:
                     out.append((self.kind("dsa_butterfly_rows_pad", T=Nb, N=N, TOPK=TOPK, W=KVL + R), 1))
                     pads.add((16, 0, pad_words(TOPK, KVL + R)))
                 else:
