@@ -554,16 +554,21 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     beside = ledger.DELTA_FORM.removeprefix("δ")
     (d := tmp_path / "bandwidth").mkdir()
     (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
-    session = {"registration": {"digest": "cd" * 64},
-               "answer": {"verdict": "accept", "delta": "1/1099511627776", "span_ns": 16448, "q_bytes": 8224, "draws": [0],
-                          "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}}
+
+    def written(delta: str, samples: int) -> dict:
+        """The piece's answer of an accepted session at ``delta`` that sampled ``samples`` openings: its eps is
+        ``delta`` + ``samples``/2^64."""
+        session = {"registration": {"digest": "cd" * 64},
+                   "answer": {"verdict": "accept", "delta": delta, "span_ns": 16448, "q_bytes": 8224, "draws": [samples],
+                              "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}}
+        return SB.answer(session, "beside the served window", 1000)
 
     def composed(answer: dict) -> tuple:
         (d / "answer.json").write_text(json.dumps(answer))
         return S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
                         servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
 
-    a = SB.answer(session, "beside the served window", 1000)
+    a = written("1/1099511627776", 0)
     assert a["verdict"] == "accept" and a["profile"]["named_terms"] == ledger.NAMED_TERMS
     report, rec, line = composed(a)
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
@@ -575,8 +580,7 @@ def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it
     assert f"; the bandwidth audit: accept (its error reads 1/1099511627776{beside}); " in line["reason"]
     assert line["reason"] == report["composed"]["reason"]
 
-    weak = SB.answer({**session, "answer": {**session["answer"], "delta": "1/100", "draws": [1]}}, "beside", 1000)
-    _, rec, line = composed(weak)
+    _, rec, line = composed(written("1/100", 1))
     assert BR.check(rec) == {}
     assert all(x["not_established"] == ["bandwidth"] for x in rec["composed"]["joint_horizon"]["at"].values())
     assert ("; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: the run established "
@@ -729,7 +733,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         row = next(r for k, r in report["protocols"].items() if S.NAMES[k] == name)
         why = {"malformed": "KeyError", "unnamed": "ValueError: bandwidth: its answer's profile names no term its error "
                                                    "leaves out; its piece writes them in its answer's profile as named_terms"}
-        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {leg} leg: {why[case]}")
+        assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {piece} leg: {why[case]}")
         return
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
