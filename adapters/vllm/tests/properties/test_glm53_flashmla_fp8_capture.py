@@ -173,6 +173,8 @@ arch = sm_90a
     got = [(a, n, "".join(b)) for a, n, b in X.split_sass(listing)]
     assert [(a, n) for a, n, _ in got] == [("sm_90a", "_Z3foov"), ("sm_90a", "_Z3barv")]
     assert "FMUL" in got[0][2] and "EXIT" not in got[0][2] and "ptx" not in got[1][2]
+    by_section = ['\t.section\t.text._Z3bazv,"ax",@progbits\n', "        /*0000*/                   EXIT ;\n"]
+    assert [n for _, n, _ in X.split_sass(by_section)] == ["_Z3bazv"]
     assert X.SASS_KEEP.search("_ZN4sm906decode10sparse_fp839flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateIL"
                               "NS1_9ModelTypeE0ELi64EEENS1_9TMAParamsEEEvx")
     assert X.SASS_INSTANCE.search("flash_fwd_splitkv_mla_fp8_sparse_kernelINS1_14KernelTemplateIL9ModelType0ELi64EEE")

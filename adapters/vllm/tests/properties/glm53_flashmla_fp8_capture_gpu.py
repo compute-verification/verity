@@ -337,7 +337,7 @@ def split_sass(lines) -> Any:
     arch, name, buf = None, None, []
     for line in lines:
         m = re.match(r"\s*arch = (sm_\w+)", line)
-        f = re.match(r"\s*Function : (\S+)", line) or re.match(r"\s*\.section\s+\.text\.(\S+)", line)
+        f = re.match(r"\s*Function : (\S+)", line) or re.match(r"\s*\.section\s+\.text\.([^\s,]+)", line)
         if m or f or line.startswith("Fatbin") or re.match(r"\s*\.section\s", line):
             if name is not None:
                 yield arch, name, buf
