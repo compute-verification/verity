@@ -242,12 +242,12 @@ def overheads(registry: Registry, out: Path, names: Sequence[str] | None = None,
         for i, f in enumerate(r.families):
             best = f.best_attack
             rows.append({"scenario": name, "family": f.family, "lo": f.lo,
-                         "attack": {"argument": best.argument, "slowdown": best.rho} if best else None,
+                         "attack": {"argument": best.argument, "slowdown": best.slowdown} if best else None,
                          "lo_by_status": {st: by_status[st].families[i].lo for st in by_status},
-                         "bounds": [{"argument": e.argument, "status": e.status, "premise": e.premise, "slowdown": e.rho}
+                         "bounds": [{"argument": e.argument, "status": e.status, "premise": e.premise, "slowdown": e.slowdown}
                                     for e in f.bounds],
                          "excluded": list(f.combined.excluded),
-                         "attacks": [{"argument": e.argument, "status": e.status, "slowdown": e.rho} for e in f.attacks],
+                         "attacks": [{"argument": e.argument, "status": e.status, "slowdown": e.slowdown} for e in f.attacks],
                          "contradictions": list(f.contradictions)})
     finite = [v for row in rows for v in (row["lo"], *row["lo_by_status"].values(),
                                           *(e["slowdown"] for e in row["bounds"] + row["attacks"]))
@@ -538,14 +538,14 @@ def corner(registry: Registry, out: Path, names: Sequence[str] | None = None, ta
         _targets(ax, targets)
         ax.set_yscale("log")
         ax.set_ylabel("overhead (lower bound)" if metric is LO else "overhead")
-        note = "" if c.joint == c.rho else f" (all at once: {c.joint:.3g})"
-        ax.set_title(f"{name}: {c.base:.3g} today → {c.rho:.3g} at the corner{note}", fontsize=10)
+        note = "" if c.joint == c.slowdown else f" (all at once: {c.joint:.3g})"
+        ax.set_title(f"{name}: {c.base:.3g} today → {c.slowdown:.3g} at the corner{note}", fontsize=10)
         ax.grid(True, which="major", alpha=0.3)
         ax.legend(fontsize=8, loc="upper right")
     fig.suptitle("The adversarial corner: each ranged parameter moved to the worse end of its plausible range, "
                  "cumulatively", fontsize=11)
     return _save(fig, out, "corner", {"targets": list(targets), "scenarios": {
-        n: {"base": c.base, "slowdown": c.rho, "joint": c.joint, "values": dict(c.values), "path": c.path}
+        n: {"base": c.base, "slowdown": c.slowdown, "joint": c.joint, "values": dict(c.values), "path": c.path}
         for n, c in found.items()}})
 
 

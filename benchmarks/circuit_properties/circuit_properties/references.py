@@ -37,12 +37,12 @@ def boolean_gemm(K: int, N: int) -> Program:
     return Program(bind(BG.Gemm, K=K, N=N, **BG.GEMM_AMPERE), registered=("w",), theta=("w",))
 
 
-def rho_models() -> dict:
+def slowdown_models() -> dict:
     """verity/protocols/inference_only/slowdown's models by name (`slowdown.instances.models`). Its directory goes last on the path: it holds a `run.py`
     and a `tests`, as this package's does, and must shadow neither."""
-    rho = str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "slowdown")
-    if rho not in sys.path:
-        sys.path.append(rho)
+    calculator = str(Path(__file__).resolve().parents[3] / "verity" / "protocols" / "inference_only" / "slowdown")
+    if calculator not in sys.path:
+        sys.path.append(calculator)
     from slowdown import instances
     return instances.models()
 
@@ -62,7 +62,7 @@ def shape(model) -> dict:
 def configs() -> dict[str, tuple[dict, str]]:
     """name -> (b1 configuration, where its shape comes from)."""
     from verity.definitions.registry import b1
-    models = rho_models()
+    models = slowdown_models()
     qwen7 = b1.B1_CONFIG | shape(models["qwen25-7b"]) | {"model": "Qwen/Qwen2.5-7B"}
     llama = b1.B1_CONFIG | shape(models["llama3-405b"]) | {"model": "meta-llama/Llama-3.1-405B", "EPS": 1e-5,
                                                             "BIAS": False}

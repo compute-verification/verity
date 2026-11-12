@@ -22,9 +22,9 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-RHO = ROOT / "verity" / "protocols" / "inference_only" / "slowdown"
+SLOWDOWN = ROOT / "verity" / "protocols" / "inference_only" / "slowdown"
 # first on the path: the slowdown calculator's `periods` imports the slowdown calculator's own `run`, not this benchmark's
-sys.path.insert(0, str(RHO))
+sys.path.insert(0, str(SLOWDOWN))
 
 from slowdown import hardware, min_cut  # noqa: E402
 from slowdown.params import Registry  # noqa: E402
@@ -171,13 +171,13 @@ def periods(work: float, limit: float) -> list[dict[str, Any]]:
     policy's blocks the fleet holds at capacity, each of ``work`` MACs, the training MACs they hold at most at ``limit``
     a block, and that as a share of the fleet's compute. A fleet's rate is its locations' data-sheet dense rate
     (`location.<name>.flops`, two FLOPs a MAC)."""
-    import periods as rho_periods
+    import periods as slowdown_periods
 
     reg, rows = Registry.load(), []
-    for fleet, label in rho_periods.FLEETS:
+    for fleet, label in slowdown_periods.FLEETS:
         f = hardware.fleet(reg, fleet)
         rate = f.count * reg[f"location.{f.location}.flops"] / 2
-        for name in rho_periods.PERIODS:
+        for name in slowdown_periods.PERIODS:
             blocks = rate * hardware.monitoring_period(reg, name).seconds / work
             rows.append({"where": label, "fleet": fleet, "location": f.location, "locations": f.count, "period": name,
                          "blocks": blocks, "training_macs": blocks * min(limit, work), "share": min(1.0, limit / work)})

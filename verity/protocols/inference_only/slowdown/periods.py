@@ -113,7 +113,7 @@ def parts(r: Result, reg: Registry) -> dict:
     e = run.setter(f) if f else None
     if e is None:
         return {"setter": None, "kinds": {}, "standings": {}}
-    k = _binding_k(r.scenario.regime.partition(r.scenario.context), e.overhead)
+    k = _binding_k(r.scenario.regime.partition(r.scenario.context), e.parts)
     table = premises(reg)
     kinds: dict[str, list[str]] = {v: [] for v in KINDS.values()}
     for c in dict.fromkeys(e.cites):
@@ -180,7 +180,7 @@ def evaluate(reg: Registry, names=SCENARIOS, fleets=FLEETS, periods=PERIODS) -> 
                     "scenario": name, "proofs": proofs(r), "fleet": fleet, "where": label, "period": period,
                     "servers": r.scenario.context.fleet.count, "period_s": r.scenario.context.period.seconds,
                     "slowdown": r.lo, **sensitivities(at, name), "padded": run.padded(r), "mfu": r.scenario.mfu,
-                    "range": [min(ends), max(ends)], "corner": corner.rho, "seconds": r.scenario.seconds(r.lo),
+                    "range": [min(ends), max(ends)], "corner": corner.slowdown, "seconds": r.scenario.seconds(r.lo),
                     "family": f.family if f else None, "parts": parts(r, at), "scaled": scaled(r),
                     "attribution": [{"name": t.name, "share": t.share} for t in analysis.attribution(r)],
                     "ranking": ranking(at, name, swings)})
