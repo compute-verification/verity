@@ -32,7 +32,7 @@ of failing tests.
 
 The check that gates (`research queue vqueue --gate check`).  `start` with ``shards`` launches a whole check of the
 candidate in place of the run of `SLIM_STEPS`: every step of `AFTER_LANDING` as that many shards, one launch a shard on its
-own machines (`shard_machines`), with the same keywords (`Landing.beside_args`).  ``shards`` `auto:N` (`AUTO_SHARDS`) is N
+own machines first and then every other (`shard_machines`), with the same keywords (`Landing.beside_args`).  ``shards`` `auto:N` (`AUTO_SHARDS`) is N
 shards of an auto plan of the candidate's tree, which splits pytest by suite where ci.toml's plans can't split it: `start`
 has `check.py --shard-plan --deferred STEPS --n N` make it in the background (`Landing.plan_shards`), and the first `judge`
 that finds it made (`Landing.planned`) launches every shard `--shard auto:K/N` with its file, which is removed once each

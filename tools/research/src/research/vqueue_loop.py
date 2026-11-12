@@ -3840,8 +3840,8 @@ def main(argv: list[str]) -> int:
                          f"plan for, or auto:N, N shards of an auto plan of the candidate's tree made before they launch, "
                          f"which splits pytest by suite (default {SHARDS})")
     ap.add_argument("--on", default="", help="the machines the run beside each check and each records run take, a comma list, "
-                                             "each shard its share of them (default drive.toml's `on` "
-                                             "at `main`)")
+                                             "each shard its share of them first, then the rest (`landing.shard_machines`; "
+                                             "default drive.toml's `on` at `main`)")
     ap.add_argument("--no-records", action="store_true",
                     help="start the check of a candidate with a member that changes Lean, a lock or a spec at once, with no "
                          "records run before it (research.vqueue_records: lean-audit alone, on --on's machines) "
