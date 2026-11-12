@@ -713,11 +713,9 @@ class CertifiedStart:
             return "key"
         if self.schedule != schedule:
             return "schedule"
-        try:
-            opened = start_digest(self.base_ms, self.schedule)
-        except ValueError:
-            opened = None
-        if c.digest != opened:
+        base, named = self.base_ms, self.schedule
+        if (type(base) is not int or not 0 <= base < 1 << 64 or type(named) is not bytes
+                or len(named) != DIGEST_BYTES or c.digest != start_digest(base, named)):
             return "opening"
         if not c.verify(key, session):
             return "signature"

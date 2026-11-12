@@ -169,8 +169,9 @@ def test_the_starts_certificate_binds_base_schedule_link_session_and_key(tmp_pat
     assert refusal(start, key=LmsSigner(signers.key(b"another certifier"), tmp_path / "none").public_key()) == "key"
     assert refusal(start, schedule=OTHER_SCHEDULE) == "schedule"
     assert refusal(replace(start, base_ms=1201)) == "opening"
-    assert refusal(replace(start, base_ms=-1)) == "opening"
+    assert refusal(replace(start, base_ms=-1)) == refusal(replace(start, base_ms=1 << 64)) == "opening"
     assert refusal(replace(start, schedule=OTHER_SCHEDULE), schedule=OTHER_SCHEDULE) == "opening"
+    assert refusal(replace(start, schedule=SCHEDULE[:-1]), schedule=SCHEDULE[:-1]) == "opening"
     assert refusal(start, session=OTHER_SESSION) == "signature"
     moved = replace(c, digest=start_digest(0, SCHEDULE))
     assert refusal(CertifiedStart(0, SCHEDULE, moved)) == "signature"
