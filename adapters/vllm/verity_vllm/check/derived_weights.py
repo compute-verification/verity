@@ -16,13 +16,17 @@ import numpy as np
 
 from verity_vllm.check.tp_shards import rows_of
 
+__all__ = ["compose"]
+
 NEG_INF_F32 = 0xFF800000
 
 
 def compose(live: str, shape: list[int], bits: int, role: dict[str, Any] | None, ck: Any, world: int,
             rank: int) -> tuple[np.ndarray, dict[str, Any]] | None:
     """The served words of the field `live` (its served name) under its Build `role`, and the note; None when no rule here applies."""
-    kind = (role or {}).get("role")
+    if role is None:
+        return None
+    kind = role.get("role")
     if kind == "mhc.fn_broadcast":
         src, hc, h = live.removesuffix("_broadcast"), int(role["HC"]), int(role["H"])
         if bits != 32 or hc > 4 or not ck.has(src) or ck.dtype(src) != "F32" or ck.tensors[src][2] != [shape[0], hc * h] or shape[1:] != [h]:

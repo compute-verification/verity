@@ -72,8 +72,14 @@ run names one and bundles the branch into its outputs, and the lead pushes it fr
     research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
 
 If `main` moves before the move lands, the lead stages it again on the new `main`: the map reruns over whatever landed
-since. A move's PR, whose body says `Move: tools/move/NAME.toml`, goes through the queue as any PR does, on a land
-verdict (the team skill's "Landing"); once it lands, each open branch crosses it with `restack.py`.
+since. Where a `[[words_in]]` row renames a Lean declaration that a file outside the row still spells, `move_check.py`
+certifies the move and only a build would find the file. Neither `stage.py` nor `check` looks for it on a move: whoever
+stages a move, or stages it again, runs `main`'s `python3 tools/move/resolve_check.py PARENT COMMIT` on each commit of a
+word map once `stage.py` has made it, before the move's Lean build, and reads each issue. The script compares the two
+commits' text and elaborates nothing, so it names some files that are fine and misses others: an issue is where to look,
+and the Lean build stays the authority on whether the move builds. A move's PR, whose body says
+`Move: tools/move/NAME.toml`, goes through the queue as any PR does, on a land verdict (the team skill's "Landing"); once
+it lands, each open branch crosses it with `restack.py`.
 
 `stage.py` refuses (exit 1) a map outside this directory or missing at the commit it would run on, a map with both
 `[words]` and `[paths]` or neither (a move that needs both stages two maps), a map with `[[words_in]]` and no `[words]`
@@ -104,7 +110,7 @@ is what its script writes on its base, which takes as long as the script. With `
 check's cache (under `~/.cache/verity-check/restack-generated/`), so on one machine only the first restack across a move
 runs it. A word move that renames declarations a lock records leaves
 those records for a commit of their own: `tools/verity/lean/check.py --update --moved` with the map `rename.py --moves`
-prints.
+prints. `stage.py` makes the move's commits alone: it makes no records commit and runs no records run.
 
 A layout map is written from `main`'s tree, so a file only a branch has gets a row only where a directory row carries it.
 Where the branch holds such a file under a path the map retires (`[retired]`: a directory the map empties, which

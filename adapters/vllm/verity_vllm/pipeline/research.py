@@ -42,6 +42,7 @@ from verity_vllm.config import ROOT, UsageError
 from verity_vllm.pipeline import config_record as CR
 from verity_vllm.pipeline import source_identity
 from verity_vllm.pipeline.row_driver import CLI, utc
+from verity_vllm.records.schema_ids import ROW_ATTEMPTS_SCHEMA
 
 REPO_ROOT = os.path.realpath(os.path.join(ROOT, "../.."))
 STORE_VARS = ("RESEARCH_STORE_CONFIG", "RESEARCH_STORE", "RESEARCH_RUNS")
@@ -80,7 +81,8 @@ def job_input(run_dir: str | None, name: str) -> str:
     if not run_dir:
         return ""
     try:
-        d = json.load(open(os.path.join(run_dir, "job.json")))
+        with open(os.path.join(run_dir, "job.json")) as f:
+            d = json.load(f)
         return ((d.get("store") or {}).get("inputs") or {}).get(name) or ""
     except (OSError, ValueError, AttributeError):
         return ""
@@ -169,7 +171,10 @@ def preserve(path: str, run_id: str) -> None:
     """Register ``run_id`` on the pod guard's durability list (once)."""
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        have = open(path).read().split("\n") if os.path.exists(path) else []
+        have: list[str] = []
+        if os.path.exists(path):
+            with open(path) as f:
+                have = f.read().split("\n")
         if run_id not in have:
             with open(path, "a") as f:
                 f.write(run_id + "\n")
@@ -181,7 +186,7 @@ def _row_json(d: str, path: tuple[str, ...], value: Any) -> None:
     """``value`` at ``path`` in ``row.json`` beside the row: a stage's Attempt under ``stages``, the record's at ``record``."""
     p = f"{d}/row.json"
     try:
-        doc: Any = {"schema": "verity-sweep/row-v2/v1", "stages": {}}
+        doc: Any = {"schema": ROW_ATTEMPTS_SCHEMA, "stages": {}}
         if os.path.exists(p):
             with open(p) as f:
                 doc = json.load(f)

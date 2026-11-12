@@ -33,7 +33,7 @@ MAP = Path(__file__).parents[2] / "manifests" / "capture-maps" / "glm-moe-dsa-ea
 CMAP = CM.load(MAP)
 
 #: `exists` Program -> {vocabulary role: representative statics}
-SITES = {
+SITES: dict[str, dict[str, dict]] = {
     "embedding-shard": {"embedding_shard": dict(VS=8, H=8, START=0)},
     "fp8-block-linear-deepgemm": {"flashinfer_fp8_linear": dict(K=256, N=256), "deepgemm_fp8_linear": dict(K=256, N=256)},
     "silu-mul": {"silu_mul": dict(I=8)},
