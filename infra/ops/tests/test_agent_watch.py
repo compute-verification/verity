@@ -68,6 +68,16 @@ class FakeApi:
         return {"run": {"id": "run-new"}} if path.endswith("/runs") else {"id": "run-1"}
 
 
+SWITCH = W.CANCEL_OFF           # as the watch runs with it; each test runs with a file of its own (`_cancelling_is_on`)
+
+
+@pytest.fixture(autouse=True)
+def _cancelling_is_on(tmp_path, monkeypatch):
+    """The switch that turns cancelling off is a file on the machine the watch runs on: here, one beside the watch's log that
+    only a test of the switch makes."""
+    monkeypatch.setattr(W, "CANCEL_OFF", str(tmp_path / "cancel.off"))
+
+
 def held_tool_call(w, run="run-1", cid="c1"):
     """A tool call as the API streams it: the simple event, then its `interaction_update` twin (nearly always)."""
     w.on_event(run, "tool_call", {"callId": cid, "name": "run_terminal_cmd", "status": "running"})
@@ -930,6 +940,33 @@ def test_a_continue_refused_for_half_an_hour_is_left_for_a_person(tmp_path):
         clock.t += 60
         w.sweep(started.append)
     assert [r["kind"] for r in records(tmp_path)] == ["held", "continue_failed"]
+
+
+CANCEL, CONTINUE = "/v1/agents/bc-a/runs/run-1/cancel", "/v1/agents/bc-a/runs"
+
+
+def test_while_the_switch_file_exists_a_held_run_is_recorded_once_and_cancelled_only_once_it_is_removed(tmp_path):
+    """`CANCEL_OFF`, a file a person makes on the machine the watch runs on: while it exists the watch records a held run
+    once and cancels nothing, however long the run stays held; the first sweep after it is removed cancels and continues
+    it. The pod's wrapper names the file where it lists the watch's others."""
+    sh = (W.Path(__file__).resolve().parents[3] / "infra/control/agent_watch.sh").read_text()
+    assert SWITCH == "/data/agent-watch/cancel.off" and "DIR=/data/agent-watch\n" in sh and "$DIR/cancel.off" in sh
+    api, clock, w, started = setup(tmp_path)
+    held_tool_call(w)
+    held_from, off = clock.t, W.Path(W.CANCEL_OFF)
+    off.write_text("")
+    clock.t += W.HELD_S
+    for _ in range(5):
+        w.sweep(started.append)
+        clock.t += 60
+    assert api.posts == [], "nothing is cancelled while the file exists"
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["since"]) == ("held", W.iso(held_from))
+    assert rec["action"] == f"none: cancelling is off by hand ({off} exists), so nothing was cancelled; a person looks"
+    off.unlink()
+    w.sweep(started.append)
+    assert [p for p, _ in api.posts] == [CANCEL, CONTINUE]
+    assert [(r["kind"], r["action"][:9]) for r in records(tmp_path)] == [("held", "none: can"), ("held", "cancelled")]
 
 
 def test_an_error_seen_in_the_stream_is_recorded_once(tmp_path):

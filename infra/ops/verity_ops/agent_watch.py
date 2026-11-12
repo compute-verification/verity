@@ -37,7 +37,9 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   worker it waits on streamed within `WORKER_LIVE_S`: a resumed worker streaming in the foreground hides it from every rule
   above, and its follow-ups sit unread for hours. For the handle's inbox holder a doorbell must have rung after its last own event an hour ago, or its timer lapsed; a
   lane's subscriptions the watch can't see, so the hour alone. It is cancelled and continued as a held run is (the worker, a
-  cloud agent, runs on), owner top, under the same once-an-hour limit;
+  cloud agent, runs on), owner top, under the same once-an-hour limit. While `CANCEL_OFF`
+  (`/data/agent-watch/cancel.off`, a file a person makes on the pod) exists, none of these three is cancelled: each
+  finding is recorded once, for a person, and cancelled once the file is gone if it still holds;
 - **in a long call** when a tool call the parent waits on has been running for `LONG_CALL_S` (recorded, never cancelled: a
   build or a wait may be legitimate, unless it is a holder's held unread);
 - **crashed** when the platform has it stopped with an error: for an agent on the list, its latest run ended in ERROR
@@ -277,6 +279,9 @@ STALL_S = 30 * 60           # RUNNING with nothing streamed, subagents' progress
 UNREAD_S = 60 * 60          # a holder that did nothing itself this long while a worker it waits on streamed: held (unread)
 WORKER_LIVE_S = 15 * 60     # ... a worker counts as streaming when its progress came this recently
 RECANCEL_S = 3600
+#: while this file exists the watch cancels no held, stalled or held-unread run: it records the finding once and leaves the
+#: run for a person
+CANCEL_OFF = "/data/agent-watch/cancel.off"
 RESTART_S = 10 * 60         # an ERROR run is restarted at most this often
 AGENTS_PAGE = 10            # GET /v1/agents page size, halved on each 503 down to AGENTS_PAGE_MIN for the process's life: the
 AGENTS_PAGE_MIN = 2         # largest page Cursor answers keeps shrinking (100, 50 and 25 have each 503'd for hours, blinding
@@ -1660,11 +1665,18 @@ class Watch:
         return None
 
     def free(self, r: Run, t: float, kind: str = "held", why: str = "") -> None:
-        """Cancel a held, stalled or held-unread run and start a continue run on its agent, at most once per agent an hour."""
+        """Cancel a held, stalled or held-unread run and start a continue run on its agent, at most once per agent an hour.
+        While `CANCEL_OFF` exists it cancels nothing, and records the finding once."""
         quiet = r.last_t if kind in ("held", "held_unread") else max(r.last_t, r.bg_t)
         since, mins, owner = iso(quiet), int((t - quiet) // 60), self.owned(r.agent)
         if why:
             owner = {**owner, "handle": self.holders_all.get(r.agent), "reason": why}
+        if os.path.exists(CANCEL_OFF):
+            if "cancel-off" not in r.told:
+                r.told.add("cancel-off")
+                self.record(kind, r, since=since, minutes=mins, action=f"none: cancelling is off by hand ({CANCEL_OFF} exists), "
+                            "so nothing was cancelled; a person looks", **owner)
+            return
         if t - self.freed.get(r.agent, -RECANCEL_S) < RECANCEL_S:
             if "held-again" not in r.told:
                 r.told.add("held-again")
