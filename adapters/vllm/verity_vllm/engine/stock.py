@@ -3,8 +3,8 @@
 
 `engine` is an in-process V1 ``LLMEngine`` built from ``EngineArgs``: its caller adds requests and steps it, and with
 ``VLLM_ENABLE_V1_MULTIPROCESSING=0`` (`engine.env.ENGINE`) `engine.handle` reaches its scheduler and model runner.
-`sampling` is vLLM's ``SamplingParams``, `version` vLLM's version and `build` its commit, one of `BUILDS`.  Each imports
-vLLM when called, so this module imports without it.
+`sampling` is vLLM's ``SamplingParams``, `version` vLLM's version, `build` its commit, one of `BUILDS`, and `revision`
+the version with the commit in it.  Each imports vLLM when called, so this module imports without it.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from vllm import SamplingParams
     from vllm.v1.engine.llm_engine import LLMEngine
 
-__all__ = ["BUILDS", "build", "engine", "sampling", "version"]
+__all__ = ["BUILDS", "build", "engine", "revision", "sampling", "version"]
 
 #: The vLLM builds this tree installs, by short commit: the pin (`config.VLLM`), which every row, profile and Definition
 #: is derived at and served on, and the build GLM-5.3's serving benchmark may serve stock on instead
@@ -53,3 +53,10 @@ def build() -> str:
     from vllm._version import __commit_id__
 
     return __commit_id__.removeprefix("g")
+
+
+def revision() -> str:
+    """The installed vLLM's version with its commit in it, which a target's ``vllm_revision`` is held to: `version` where
+    it carries ``+g<commit>`` (the pin), and at a tagged build `version` with ``+g<build>`` after it."""
+    v = str(version())
+    return v if "+g" in v else f"{v}+g{build()}"

@@ -307,7 +307,8 @@ def checkpoint_dir(model: str, revision: str, hf_home: str, checkpoints: str | P
     return local
 
 
-#: The vLLM commit this tree derives and serves on: ``vllm.__version__`` must carry ``+g<VLLM>`` (``TargetProfile.vllm_revision``).
+#: The vLLM commit this tree derives and serves on: the running vLLM's version with its commit (``engine.stock.revision``) must
+#: carry ``+g<VLLM>`` (``TargetProfile.vllm_revision``).
 #: A move of it rewrites, in one change: the wheel URL, its sha256 and its readiness check in ``ops/pod_bootstrap.sh``; this name,
 #: which every workload file's ``engine.vllm`` states; benchmarks' ``VLLM_PIN`` (``verity_bench.vllm.presets``) and each benchmark
 #: spec's ``vllm_pin``; and PoUW's serving venv (``benchmarks/pouw/pearl_c_vllm/setup.sh``).  ``git grep`` of the old short sha

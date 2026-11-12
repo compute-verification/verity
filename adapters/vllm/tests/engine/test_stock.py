@@ -53,6 +53,15 @@ def test_a_build_is_named_by_its_commit_whatever_its_version_says(fake_vllm, mon
     assert stock.build() in stock.BUILDS[1:] and stock.build() not in stock.version()
 
 
+def test_the_revision_is_the_version_with_its_commit_in_it_at_the_pin_and_at_a_tagged_build(fake_vllm, monkeypatch):
+    assert stock.revision() == VERSION
+    monkeypatch.delattr(sys.modules["vllm._version"], "__commit_id__")          # the pin's version names its commit itself
+    assert stock.revision() == VERSION
+    monkeypatch.setattr(sys.modules["vllm"], "__version__", "0.34.0rc1")
+    monkeypatch.setattr(sys.modules["vllm._version"], "__commit_id__", "g52aeb5806", raising=False)
+    assert stock.revision() == "0.34.0rc1+g52aeb5806"
+
+
 def test_importing_it_imports_no_vllm(monkeypatch):
     class NoVllm:
         def find_spec(self, name, path=None, target=None):
