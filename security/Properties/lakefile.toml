@@ -116,5 +116,6 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Accounting.JointBridge.ServiceSoundOfSessions",
   "Properties.Flock.Circuit", "Properties.Nci.Protocol", "Properties.Verity.Soundness", "Properties.Verity.Game",
   "Properties.Verity.Sha512", "Properties.Verity.Idle", "Properties.Verity.Subprotocols", "Properties.Verity.Coupling",
-  "Properties.Flock.Nets", "Properties.Remote", "Properties.Pous.WipeSigned", "Properties.Challenger",
-  "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.ReadNet", "Properties.Assumptions"]
+  "Properties.Flock.Nets", "Properties.Remote", "Properties.Nci.Record", "Properties.Pous.WipeSigned",
+  "Properties.Challenger", "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.ReadNet",
+  "Properties.Assumptions"]
