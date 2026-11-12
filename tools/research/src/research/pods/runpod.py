@@ -167,6 +167,13 @@ def public_key() -> str:
     return out.stdout.strip()
 
 
+def _struck(text: str, cfg: dict[str, Any]) -> str:
+    """`text` with the config's API key struck out.  A config that holds no key, or an empty one, strikes nothing: an empty key
+    is between every two characters of any text."""
+    key = str(cfg.get("apikey") or "")
+    return text.replace(key, "<the API key>") if key else text
+
+
 def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
     try:
         cfg = _config()
@@ -195,7 +202,7 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
             _note_call("rest", method, path, getattr(response, "status", None), getattr(response, "headers", None))
     except urllib.error.HTTPError as error:
         _note_call("rest", method, path, error.code, error.headers)
-        detail = error.read().decode(errors="replace").replace(cfg["apikey"], "<the API key>")[:500]
+        detail = _struck(error.read().decode(errors="replace"), cfg)[:500]
         what = "not found (terminated, or never existed)" if error.code == 404 else detail
         raise PodError(f"{method} {path} -> HTTP {error.code}: {what}", code=error.code, pod_id=pod_id) from None
     except ValueError:                          # its text quotes the header it could not send, which holds the key
@@ -283,10 +290,10 @@ def _graphql_data(query: str, pod_id: str | None = None) -> dict[str, Any]:
     """`data` of a GraphQL query; any failure (no answer, an HTTP error, `errors` in the answer) is a `PodError`.  The request's
     URL holds the API key, so an error's text takes nothing from the request: it quotes RunPod's answer with the key struck out
     should the answer repeat it, and of a failure whose own text can hold the URL it gives the type alone."""
-    key = str(_config().get("apikey") or "")
+    cfg = _config()
 
     def quoted(answer: str) -> str:
-        return (answer.replace(key, "<the API key>") if key else answer)[:300]
+        return _struck(answer, cfg)[:300]
 
     try:
         doc = _graphql(query)

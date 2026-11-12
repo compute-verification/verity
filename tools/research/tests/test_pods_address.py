@@ -159,6 +159,21 @@ def test_the_api_key_is_in_no_log_line_no_message_and_no_error(wire, monkeypatch
     assert KEY not in written and len(log_lines()) == 14 and {ln.split()[-2] for ln in log_lines()} == {"by=research"}
 
 
+@pytest.mark.parametrize("key", ["", KEY], ids=["empty-key", "key"])
+def test_only_a_key_the_config_holds_is_struck_from_what_runpod_answers(wire, tmp_path, key):
+    """An empty key is between every two characters of any text, so striking it would leave RunPod's answer unreadable: with no
+    key to strike, REST's answer and GraphQL's are quoted as they came."""
+    (tmp_path / "config.toml").write_text(f'apikey = "{key}"\napiurl = "https://api.invalid/graphql"\n')
+    echo = {"error": f"rate limit exceeded for Bearer {KEY}"}
+    answer = json.dumps(echo).replace(KEY, "<the API key>") if key else json.dumps(echo)
+    wire.rest += [(429, echo, REST_SPENT)] * 2
+    wire.graphql += [(429, echo, {}), (200, {"errors": [echo]}, GRAPHQL_LEFT)]
+    for graphql in (f"GraphQL -> HTTP 429: {answer}", f"GraphQL: [{answer}]"):
+        with pytest.raises(runpod.PodError) as both:
+            runpod.get(POD)
+        assert str(both.value) == f"GET /pods/{POD} -> HTTP 429: {answer}; {graphql}"
+
+
 def test_the_log_starts_again_past_its_size_and_a_log_that_cannot_be_written_fails_no_call(wire, monkeypatch, tmp_path, capsys):
     wire.rest += [(200, [], REST_LEFT)] * 5
     monkeypatch.setattr(runpod, "CALL_LOG_MAX", 150)
