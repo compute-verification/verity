@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import dataclasses
 import json
-import sys
-import types
 
 import pytest
 from verity.definitions.registry import b1
@@ -15,6 +13,7 @@ from verity.definitions.silicon.models import (
     HOPPER_BF16_WGMMA_K16,
 )
 
+from tests import fake_vllm
 from verity_vllm.program.frontend import gemm_targets as GT
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.target_profile import (
@@ -226,10 +225,9 @@ def test_a_tagged_build_is_held_to_its_commit_through_the_read_back(monkeypatch)
     that commit is not refused for its revision, one at another commit is, and the bare version still is."""
     pytest.importorskip("torch")
     from verity_vllm.program.frontend.export_compat import read_back_applied
-    root, scm, envs = types.ModuleType("vllm"), types.ModuleType("vllm._version"), types.ModuleType("vllm.envs")
-    root.__version__, root.envs, scm.__commit_id__, envs.VLLM_BATCH_INVARIANT = "0.34.0rc1", envs, "g52aeb5806", True
-    for name, mod in {"vllm": root, "vllm._version": scm, "vllm.envs": envs}.items():
-        monkeypatch.setitem(sys.modules, name, mod)
+    fake = fake_vllm.install(monkeypatch)
+    fake["vllm"].__version__, fake["vllm.envs"].VLLM_BATCH_INVARIANT = "0.34.0rc1", True
+    fake.set("vllm._version:__commit_id__", "g52aeb5806")
     got = read_back_applied()
     assert got["vllm_version"] == "0.34.0rc1+g52aeb5806" and got["batch_invariant"] is True
 
@@ -240,7 +238,8 @@ def test_a_tagged_build_is_held_to_its_commit_through_the_read_back(monkeypatch)
     assert refused("52aeb5806", got["vllm_version"]) == []
     assert refused("d9105ea80", got["vllm_version"]) == ["vllm_revision declared 'd9105ea80', running vllm '0.34.0rc1+g52aeb5806'"]
     assert refused("52aeb5806", "0.34.0rc1") == ["vllm_revision declared '52aeb5806', running vllm '0.34.0rc1'"]
-    scm.__commit_id__, root.__version__ = "g000000000", "0.28.1rc1.dev472+gd9105ea80"   # the pin: its version, as it is
+    fake.set("vllm._version:__commit_id__", "g000000000")
+    fake["vllm"].__version__ = "0.28.1rc1.dev472+gd9105ea80"   # the pin: its version, as it is
     assert read_back_applied()["vllm_version"] == "0.28.1rc1.dev472+gd9105ea80"
 
 
