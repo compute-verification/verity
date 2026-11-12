@@ -2,6 +2,7 @@ module
 
 public import NetworkCheck.Check
 public import NetworkCheck.Clocks
+public import NetworkCheck.ScanOk
 public import CoreProtocol.Profile
 public import Flock.Program
 public import Flock.Public
@@ -10,6 +11,7 @@ public import NciCheck.Desc
 public import NciCheck.DefinitionDigest
 meta import NetworkCheck.Check
 meta import NetworkCheck.Clocks
+meta import NetworkCheck.ScanOk
 meta import CoreProtocol.Profile
 meta import Flock.Program
 meta import Flock.Public
@@ -35,7 +37,7 @@ bits a covert sender in the server can move through the network certifier in the
 `NetTiming.Guarantees.PeriodLeakAccepted` counts them. In the rows form each link-window's scan's Programs' row must be a
 compute audit's slot entries (`wired`, below), and the state that audit's Programs read (its `SCAN_STATE`) the scan's
 state, by root and domain (`stateTied`), so a slot's entry is the one its Program computed on the requests the scan
-read.
+read; and each scan's ok bits must be at the roots the check computes from the schedule's T (`okChecks`).
 
 **Params**, JSON with exactly these keys (and each nested object exactly its own), in the clock form
 
@@ -173,6 +175,14 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
   occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
   the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`).
+* in the rows form, each execution phase's scan's ok bits are the schedule's constants (`okChecks`,
+  `NetworkCheck.ScanOk`): a scan proof block's public word `o0` is its ok bit, and a member's `o0` rows are committed
+  under public salts, so the root of a member whose every proof block is ok is a function of the schedule's T alone.
+  The check computes those roots once a period (`ScanOk.consts`, `ScanOk.calls` SHA-512 calls whatever `m`) and holds
+  every registration to them by comparison (`ScanOk.held`, no hash an execution phase): its `roots` name each member's
+  `<member>/o0` at its constant's root, leaves and domain, and no other port ending `/o0`. A member's statement opens
+  its proof blocks' ok words at the root its registration names, so each is the row `[1]` the verifier computed, not a
+  row the prover's registered file states.
 
 **Public**, on acceptance: `K` and its terms, each a ceiling of `log2` of `PeriodLeakAccepted`'s factor:
 
@@ -241,7 +251,8 @@ What it doesn't check: the proof's public row against the certificates' digests 
 verifier checks inside the answer (`LinkWindows.verify`, with Flock's Lean verifier on the `--zk` proof);
 the clock form's link-window registration's domain; in the rows form, the records' certificates' digests against the
 rows (each signs its salted record, witness) and the scan's statements against its registration (lane `j`'s slot
-entries' input node the value it registers as `scan/prog<j>`), which one-stage's verifier checks inside the
+entries' input node the value it registers as `scan/prog<j>`, and a member's public word its `<member>/o0` entry's
+root, which `okChecks` holds to the constant), which one-stage's verifier checks inside the
 answer, and each connection's cap against its lane (the parameters' `cells`; the network certifier holds a lane to
 `egress_cells`); that a tied audit's `SelectEntry_v1` units read their `occ` from its `ScanSlots_v2` units, which read
 its `SCAN_STATE` (the check reads no wires of an audit's Program, only its root templates' ids and closure digests);
@@ -1228,6 +1239,35 @@ def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × S
   | .rows s .. => c.windows.zipIdx.map fun (reg, i) => stateCheck p s c.audits (p.first + i) reg
   | .clock _ => #[]
 
+/-- `okCheck`'s refusal, after its execution phase's number. -/
+def okRefusal : String :=
+  "the scan's ok bits are not the schedule's constants: its registration's roots do not name each member's public \
+    word, <member>/o0, at the root, leaves and domain of that member's proof blocks' ok rows under the public salts \
+    (ScanOk.consts at the schedule's T: first, ingress-0, last and egress-0), or name another port ending /o0, so a \
+    proof block's ok bit is the prover's word: commit each member's o0 rows, one word 1 each, under the public salts \
+    (scan_ok.salt)"
+
+/-- Execution phase `w`'s ok finding in the rows form: a refusal unless its scan's registration names each member's ok
+rows at the schedule's constants `cs` (`ScanOk.held`), and where the constants do not compute. It reads `cs`, which
+the period computes once, and hashes nothing. -/
+def okCheck (cs : V (Array ScanOk.Const)) (w : Nat) (reg : Json) : Option (Core.Verdict × String) :=
+  match cs with
+  | .ok ks => if ScanOk.held ks reg then none else some (.reject, s!"execution phase {w}: {okRefusal}")
+  | .error e => some (.reject, s!"execution phase {w}: the scan's ok bits' constants do not compute: {e}")
+
+/-- The ok findings of the registrations `windows` at the constants `cs`, one an execution phase from `first`, in
+order (`okCheck`): comparisons alone, no hash an execution phase. -/
+def okChecksAt (cs : V (Array ScanOk.Const)) (first : Nat) (windows : Array Json) :
+    Array (Option (Core.Verdict × String)) :=
+  windows.zipIdx.map fun (reg, i) => okCheck cs (first + i) reg
+
+/-- The rows form's ok findings, one an execution phase, in order: the schedule's constants (`ScanOk.consts` at its
+`T`, the one place the period hashes for them, once) and each registration held to them (`okChecksAt`); none in the
+clock form. -/
+def okChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
+  | .rows s .. => okChecksAt (ScanOk.consts s.window) p.first c.windows
+  | .clock _ => #[]
+
 def findingOf {α : Type} : Found α → Option (Core.Verdict × String)
   | .error x => some x
   | .ok _ => none
@@ -1373,7 +1413,7 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
         (.reject, s!"a scan's δ {f.delta.toString} is not the period's, {f0.delta.toString}")
     let as := auditChecks p c e
     match firstFinding (ws.toList.map findingOf ++ [oneDelta] ++ as.toList.map findingOf ++ (wiredChecks p c).toList ++
-        (stateChecks p c).toList) with
+        (stateChecks p c).toList ++ (okChecks p c).toList) with
     | some (.reject, r) => .reject r
     | some (_, r) => .undecided r
     | none =>
@@ -1543,5 +1583,19 @@ def protocol : Core.Protocol where
 #guard progPort (progName 0) && progPort "scan/prog3" && progPort "scan/prog12" && progName 3 == "scan/prog3"
 #guard !(progPort "scan/prog" || progPort "scan/prog01" || progPort "scan/prog/" || progPort "Scan/prog0" ||
   progPort "scan/prog0x" || progPort "prog0" || progPort "scan/state" || progPort "")
+-- the ok findings, one an execution phase, numbered from the period's first: none where its registration is at the
+-- schedule's constants, a refusal at another schedule's; every execution phase refused where the constants do not
+-- compute; and none of no execution phase
+#guard
+  let entry := fun (c : ScanOk.Const) => Json.mkObj [
+    ("port", .str c.port), ("leaves", toJson c.leaves), ("domain", .str c.domain), ("root", .str c.root)]
+  let regOf := fun (T : Nat) =>
+    (ScanOk.consts T).toOption.map fun cs => Json.mkObj [("roots", Json.arr (cs.map entry))]
+  match regOf 3, regOf 4 with
+  | some r3, some r4 =>
+    (okChecksAt (ScanOk.consts 3) 5 #[r3, r4, r3]).map (·.map (·.2.startsWith "execution phase 6: ")) ==
+        #[none, some true, none] &&
+      (okChecksAt (.error "x") 0 #[r3, r3]).all (·.isSome) && (okChecksAt (ScanOk.consts 3) 0 #[]).isEmpty
+  | _, _ => false
 
 end NetworkCheck.Period

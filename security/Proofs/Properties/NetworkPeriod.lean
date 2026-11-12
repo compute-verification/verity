@@ -133,7 +133,7 @@ theorem rowsProgWired : RowsProgWired := by
   · cases h
   · rename_i hF
     have h0 := firstFinding_none hF _
-      (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))
+      (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))))
     unfold wiredCheck at h0
     split at h0
     · assumption
@@ -234,7 +234,8 @@ theorem rowsStateTied : RowsStateTied := by
   · cases h
   · cases h
   · rename_i hF
-    have h0 := firstFinding_none hF _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem))
+    have h0 := firstFinding_none hF _
+      (List.mem_append_left _ (List.mem_append_right _ (Array.mem_toList_iff.mpr hmem)))
     unfold stateCheck at h0
     split at h0
     · assumption
@@ -350,10 +351,10 @@ theorem check_rows {p : Params} {c : Commitment} {e : Evidence} {pub : Public} {
     refine ⟨by omega, by omega, by omega, ?_, ?_, ?_⟩
     · intro y hy
       exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _
-        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))
+        (List.mem_append_left _ (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))))
     · intro y hy
-      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
-        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy)))))
+      exact h0 _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _
+        (List.mem_map_of_mem (Array.mem_toList_iff.mpr hy))))))
     · injection h with hp
       rw [hform]
       exact hp.symm
