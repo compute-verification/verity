@@ -82,3 +82,13 @@ Commits pushed, body replaced, notes synced. Nothing is left only on the VM.
 
 TIMER: none
 
+[2026-11-12T15:09Z] 62c30a1c2431
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 7:09 AM PST. **The try of `scanScopeAcc_nontrivial_of`'s move has waited 20 minutes for the build pool's Lean slot. I have not relaunched it and will not. One thing I told you was wrong: the proof is not a bare `by decide`.**
+
+- **The run:** r20261112-144542-aee3 at `e27a7b84e739`, launched once at 6:45 AM PST. It waits for the Lean slot of the build pool since 6:48 AM PST, one run ahead of it in line, the pool's one slot held [run: `research status`, 7:08 AM PST]. I keep reading it; tell me if you would rather I stop it.
+- **What I got wrong** [run r20261112-142709-8c99 at `55c29a928932`, rc 1]: the statement reads `fun _ => oneSlot.window` as you ruled, but the bare `by decide` I named fails: `Expected type must not contain free variables: 0 < (fun x => oneSlot.window) st`. One of the file's 11 theorems failed; the 4 suites that commit reaches passed.
+- **The mend** (`e27a7b84e739`, a commit on top, nothing amended): the proof decides the positive horizon at its own type, `show 0 < oneSlot.window by decide`. The statement is unchanged from your ruling. A toy file of the same shape fails the same way with the bare form and builds with this one [run locally]; the real file cannot be compiled on the VM, so the node's try is its only check.
+- **Pushed** is still `c3b368cc4026`, the head whose tries and suites are all green. `55c29a928932` and `e27a7b84e739` are local until the try is read; `55c29a928932` alone does not build that theorem.
+
+The line with the branch, the head and every run follows when this try has a verdict.
+
