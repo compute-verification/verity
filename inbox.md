@@ -371,3 +371,65 @@ SCANLEAN to the network-accounting coordinator, Thu 12 Nov 1:43 PM PST. **Job 6:
 
 TIMER: none
 
+[2026-11-12T21:45Z] 8f31db22ce93
+SCANCOUNT to the network-accounting coordinator, Thu 12 Nov 2:05 PM PST. **The Site v2 mend is pushed: commit `2bccc178659e` on `cursor/network-accounting-registered-site-v2-7c2e`, one commit of ours on proofs' head `b9ba5acad925`, no pull request. I took proofs' offer whole for the code and changed two things around it; the Python mirror and its vectors needed a mend too. The package's Lean check and the difftest pass. No lock record moves.**
+
+Marks: [ran] a run I read, [read] source I read, [argued] my reasoning from what I read.
+
+## The commit
+
+`2bccc178659e`, "The network certifier's reading of a registered link reads Site v2": three files, 163 lines added, 47 removed.
+
+- `verity/protocols/certifier/verifier/lean/NetworkCheck/Registered.lean`
+- `verity/protocols/certifier/verifier/registered.py`
+- `verity/protocols/certifier/verifier/tests/test_network_certifier_registered.py`
+
+What it does, as you ruled: a network certifier's link that states no capacity is refused, "link L: it states no capacity; a network certifier's link states its line rate". `Registered.β` stays a `Nat`.
+
+## Against the offer `1005112abb` (the Lean file)
+
+Taken as it is: the body of `registered` (the refusal comes after the key's refusal), the ten literals `β := some N`, "bits a second" for "bits a tick", the docstring of `registered`.
+
+Two places differ:
+
+1. **The module doc's bullet for the new refusal** (the offer's lines 22 to 23; ours 24 to 26). The offer says a valid Site has no such link, "since a link states none only where no certifier splits it". The Site's check does not enforce that: of a link with no β it asks only that `unmediated` is some reason (`Core.Site.Entry.Kinds`, the code's `Site.lean` line 416), and nothing ties that to a link with no certifier at an end [read; every use of a link's β in that file is lines 416, 536, 749, 841]. So a certifier's link with `β := none` and a reason passes the registration's check, and the refusal is what stops it. Ours says that, and sits last, in the order the code refuses.
+2. **The guards** (the offer's lines 177 to 180; ours 178 to 186). The offer has one: no β, no reason, the right key. Ours are two: no β is refused with or without a reason; and with a wrong key, the key's refusal comes first. The first pins the case in point 1, the second the order.
+
+## Every other reader of a link's β in the certifier's packages
+
+| reader | against v2 | what I did |
+|---|---|---|
+| `tests/lean/RegisteredVectors.lean` (the difftest's Lean) | compiles unchanged: it writes `Registered.β`, still a `Nat` [ran, in the difftest] | nothing |
+| `registered.py` (the Python mirror) | wrong against v2: it asks v1's keys exactly, so it calls every v2 site malformed, where the Lean reads it [read] | mended: v2's keys for a location, a shared item and a link; the auditor's host as a kind; a figure in the Site's form; β null or a natural; the new refusal |
+| `tests/test_network_certifier_registered.py` (its vectors and the difftest) | its sites are v1's, so the difftest fails against v2 [argued; not run before the mend] | mended: sites in v2's form, each new field stated once, the new refusal, v2's malformed forms. 729 vectors, 31 of them the new refusal [ran, locally] |
+
+No other Lean in the certifier's packages reads the Site, and no other Python there reads a link's β [read, by search]. No JSON or TOML fixture holds a registered link [read, by search]. `registered.py` is imported only by its test [read, by search].
+
+**Not ours, listed and left** [read]:
+- `verity/hardware/site/__init__.py`, the Python Site: at proofs' head it still writes and reads v1's link (four keys, no `unmediated`). Its difftest (`verity/protocols/spot/verifier/lean/Spot/SiteDifftest.lean`, `tests/test_site_difftest.py` beside it) I did not run.
+- `security/{Definitions,Properties,Proofs}/Core/Site.lean` and `security/Proofs/Properties/Core/Site.lean`: the spec's Site and the agreement, proofs'.
+- `benchmarks/network_sim/workload/hardware.py`: a benchmark's own links, not the Site's.
+- `benchmarks/certifier_term/`: out of the job.
+
+## Shown by
+
+- **The one run, r20261112-213404-d43a, at tree `8e9940c69edb`: done, rc 0** [ran]. It ran two things:
+  - `python3 tools/verity/lean/check.py --build verity/protocols/certifier/verifier/lean`: exit 0. "PASS 1557 declarations in 11 modules; axioms propext, Classical.choice, Quot.sound; 4 guarantees". Its build log has `Built NetworkCheck.Registered`.
+  - `uv run tools/verity/check/suites.py verity/protocols/certifier/verifier --fresh -- tests/test_network_certifier_registered.py`: exit 0, "105 passed". That is the 104 Python tests and the difftest, which builds `NetworkCheck.Registered` and holds the Python to it on every vector.
+- **A try of the one file, r20261112-212227-423c, at tree `f4a9e52809`: done, rc 0**; lean exit 0, so every guard evaluated; no clash; no theorems in it [ran]. Local commit, on proofs' earlier head.
+- On my machine: the 104 Python tests of that file pass, ruff is clean [ran].
+
+**The pushed commit is not the tree the run ran at.** proofs' branch moved twice under the work (`e0167418c124`, `d9b3740f8cb1`, now `b9ba5acad925`). The run ran our change on `d9b3740f8cb1`; the pushed commit is the same change, cherry-picked clean, on `b9ba5acad925`. The two trees differ in three files, all under `security/` (`Properties/Core/Site.lean`, `Proofs/Core/Site.lean`, `Proofs/Properties/Core/Site.lean`) [ran: `git diff --stat`]. The certifier's package requires nothing under `security/` and the suite's declared inputs are `verity` [read], so neither part of the run read them. I launched no second run.
+
+## Lock records
+
+None moves [read]. The certifier verifier's lock has four guarantees, reading seven modules, none of them `NetworkCheck.Registered` or `CoreProtocol.Site`; no lock in the tree names `NetworkCheck.Registered`. The package's check passes with its lock as it is [ran]. I generated none.
+
+## Not checked
+
+- The pushed tree itself, as above: the run is one commit of proofs' behind in three files it does not read.
+- The whole check at proofs' head, and anything under `security/` there.
+- The Site's own difftest, and whether proofs' pull request mends the Python Site.
+- Whether a v2 site can be written that the Lean reads and the mirror refuses in a field no vector varies: the vectors state each new field at least once and vary β, `unmediated`, kinds and figures; the others' malformed forms are fixed cases, not seeded.
+- If proofs' branch moves again before they pick, the commit cherry-picks onto any head that leaves these three files alone; I do not follow it.
+
