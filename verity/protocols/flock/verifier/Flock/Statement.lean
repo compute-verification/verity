@@ -475,7 +475,7 @@ after it, so it stays above `partialRanges`. -/
     rw [project, Array.size_ofFn] at h1
     have h : (projectFast base eLo)[j]? = some (sumUpTo eLo.size fun u => base[j + 64 * u]! * eLo[u]!) := by
       have := projRows_get base eLo j h1 eLo.size 0 (Array.replicate 64 0)
-        (by rw [Array.getElem?_replicate, if_pos h1]; rfl)
+        (by rw [Array.getElem?_replicate, if_pos h1, sumUpTo, Nat.fold_zero])
       rwa [Nat.zero_add] at this
     rw [Array.getElem?_eq_getElem h2] at h
     rw [Option.some.inj h]
