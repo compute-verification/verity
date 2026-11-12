@@ -100647,3 +100647,162 @@ NetworkCheck/Registered.lean:159 … 198 (every #guard): error: cannot evaluate 
 Not established for the two lists: `verity-core-sampled-proofs`; the two new slow composition tests; which lock records move.
 
 **4. A time I did not read.** My correction headed "20:02Z" was pushed at 20:00:35Z by `date -u`.
+
+## CLOSEROUND, Thu 12 Nov 20:46Z: #9452 is ready at `378fcba9dae6`, to land after #9375; your `disagree` ruling is built and open unmarked as #9466, with one choice of mine in it that is yours to keep or take back; its two runs and #9230's `b76f` are out; the two labels are set; no test in `check` runs any of the 38 other sites
+
+The VM was reset between my 19:58Z entry and 20:21Z: I rebuilt the worktrees and refetched the logs, and nothing
+pushed was lost. Of your six items of 20:24Z: 2 has its ready line below, as far as it goes before #9375 lands; 1 is
+built and open as #9466 but not ready, its two runs still waiting for a slot; 3 waits on `b76f`, which had passed 55 of
+its 64 suites with none failed at 20:43Z; 4, 5 and 6 are done. One thing is yours to rule: in #9466 I read "the same
+reason" as the same words, which meant bringing nine of the Python's refusal texts to the Lean's, and which turns a
+malformed table from `R7-history` into `disagree`. I wrote it before asking you. Runs out: `r20261112-203652-d5e4` and
+`r20261112-203722-00a6` for #9466, about 21:30Z [guess], and `r20261112-192909-b76f` for #9230, about 21:00Z [guess].
+Nothing marked; on Linear only the two labels you asked for.
+
+Mailbox read 20:42Z, newest section yours of 16:07Z. Tags: [run] a command I ran and read now; [read]; [derived];
+[guess].
+
+**READY LINE, #9452 (PRF-603), with its one condition**
+
+- **Head** `378fcba9dae6d4c39f5b43c214393cb976f7f790` [run: `git ls-remote`], unmarked. Four files, 112 added and 18
+  removed; no Lean file, lock or lakefile [run].
+- **Runs, both read whole** [run]: `r20261112-194233-32d3`, `suites.py --changed 4a90174415b7 --quick` at the head:
+  exit 0, `5 suites: 5 passed (0 cached), 0 failed` (`benchmarks/one_stage` 638 tests with `test_a5_history.py` run
+  whole, `benchmarks/prove_path` 155, verity-graph 220, verity-network-traces 647, repository 352).
+  `r20261112-193739-ed8c`, the three slow tests with the real Lean: exit 0, 8 passed.
+- **Merge-trees at 20:27Z** [run]: clean onto `main` at `5f0c008aa040`, #9237 at `9d4aec0111fb` and #9230 at
+  `737f5707134e`. One stop against #9375 at `bafae2eaec2e`, in `a5.py`: lean's new control
+  `program-not-the-days-declared (R2)` sits beside my R2 line and still holds the old expression. Mine to resolve.
+  Stops against #9319 at `0e7b13e39bd1` in `a5.py`, as my 19:58Z entry said; that pull request is network's.
+- **The condition.** #9375 is not on `main` (`main` still `5f0c008aa040` at 20:42Z [run]). Marked now, #9452 would land
+  clean and leave #9375 the stop. When #9375 is on `main` I merge `main`, give its control `a0.negative(v)`, rerun the
+  quick tier and write the ready line at the new head.
+- **Its body** now carries `Goal proofs/spot-ten-percent` and `32d3`'s verdict (`research queue edit`, 20:44Z [run]).
+- **Not run:** the full check, the Lean check, a5 on a pod.
+
+**#9466, your ruling 1: built, open unmarked, not ready**
+
+- **Where:** [#9466](https://github.com/compute-verification/verity/pull/9466), branch
+  `cursor/proofs-history-disagree-4e1b`, head `83026ce773847025d59b9242a6a07410113ebb32`, opened 20:41Z with
+  `Refs PRF-603` [run].
+- **What it does** [run: the diff]. Before, `verifier.check` returned `R7-history` for history tables the Python
+  refuses whenever the Lean's place held `{"refused": ...}`, whatever the reason and whether or not the Lean ran. Now
+  it returns `R7-history` only where the Lean's own answer is a refusal whose reason is the Python's; otherwise
+  `disagree`. `verifier.lean` marks a refusal that is not the Lean's own with `"answered": False`. Both verdicts fail,
+  so the accepted set is unchanged. No Lean file changes.
+- **The choice I made, yours to rule.** The Lean's refusal of a history table is free text with no code, so "the same
+  reason" can only be tested as equal text, or not tested. I built equal text. The other reading is "the Lean itself
+  refused", for any reason. What equal text costs:
+  - **Nine texts changed** in `verity/commitments/history.py` (`_run_why`, `tile`) to say what the Lean says
+    (`Spot.HistoryTable.runWhy`, `order`). Conditions and their order are untouched. Without it an existing case, a held
+    run short of its rows, turned into `disagree` only because the two sides worded it differently. It is its own commit,
+    `7efe82c1f1`.
+  - **A malformed table is now `disagree`** [read: both sides' parsing messages]. Where the JSON form itself is wrong
+    (a list that is not one, a string that is not hex, a member's ports) the two sides word the refusal differently, and
+    the Lean's "a member's key twice among the digests" has no Python counterpart. Those were `R7-history`. Not changed
+    here.
+  - **To take it back:** one new commit that tests `"refused" in got and got.get("answered", True)` in place of the
+    equal text, reverts `7efe82c1f1`, and makes the new test's "another reason" case expect `R7-history`. No force push.
+- **What a verdict records.** For `R7-history` each side is now `{"ok": False, "codes": ["R7-history"]}`, with the one
+  reason in the detail. So `refused` in a verdict's `verifiers` for the Lean now always means `disagree`, and
+  `a0.negative` needs no case for history: `a0.history_negative` is deleted and a5's history root reads `a0.negative`.
+- **The test that holds both cases** [run on the VM for the replaced half]:
+  `test_history_read.py::test_a_history_table_is_r7_history_only_where_the_lean_itself_gave_the_pythons_reason`. The
+  real Lean on a table registered at a wrong root gives `R7-history`. With the Lean replaced: a Lean that can't run is
+  `disagree`, also when its error text is the Python's reason; a Lean refusing for another reason is `disagree`; a Lean
+  accepting is `disagree`. `test_refused_orders` holds thirteen orders, covering the nine texts, to the Lean's reason
+  word for word. `test_a5_history.py`'s dead-Lean half now expects `disagree` for all five kinds.
+- **Stacked on #9452.** `a0.history_negative` exists only there, so the branch holds `378fcba9dae6` merged in. Its own
+  change is 11 files, 107 added and 50 removed; against `main` the diff is 12 files, 201 added and 50 removed, #9452's
+  included [run]. The first two commits (the texts, the verifier) stand without #9452 if you want them ahead of it.
+- **Lines of `a0.py`** (your 16:07Z ask) [run]: the docstring of `lean_answered`, now 385–386, and the eleven lines
+  of `history_negative` removed (399–409 at #9452's head, after `negative`). REFUSE's lines 364–380 are untouched.
+- **Merge-trees at 20:41Z** [run]: clean onto `main` at `5f0c008aa040`, #9237, #9230 and #9452. Against #9375 and
+  #9319 the only stop is `a5.py`, the stop #9452 already has; #9375 also changes `registration.py`,
+  `test_registered.py`, `test_interface.py` and `a0.py`, and those merge.
+- **Runs out**, on named machines as item 6 says [run]: `r20261112-203652-d5e4` (vy-nebius-cpu-12),
+  `suites.py --changed 5f0c008aa040 --quick` at the head; `r20261112-203722-00a6` (vy-nebius-cpu-10), the three slow
+  one-stage tests and the adapters' `test_a_table_round_1_did_not_register_is_refused` with the real Lean. Both waiting
+  for a slot at 20:42Z. About 21:30Z [guess].
+- **What the runs can still show:** a history fault in an existing test where the Lean's text or its order of checks
+  differs from the Python's now reads `disagree` and fails that test. On the VM I checked only the Python's side of the
+  thirteen orders. If one fails I fix it in a new commit and rerun.
+- **The no-growth lints** [run: `ratchet_gate.py`]: three retired-term sites, the same three #9452 adds; none of its
+  own.
+
+**Labels, item 4: set** [run: `research msg linear edit`, 20:40Z]
+
+- **PRF-603:** `proofs/spot-ten-percent`. It is the measured audit's negative controls, and that goal is the measured
+  audit.
+- **PRF-585:** `proofs/sampled-audits-sound`. It is the per-member check the deployed soundness reads, and #9441's
+  change is Lean.
+- If either is the wrong goal, say so and I swap it; #9466 and #9452 carry `Goal proofs/spot-ten-percent`.
+
+**#9230, item 3**
+
+- `r20261112-192909-b76f` at `737f5707134e`: running at 20:43Z, 55 of 64 suites passed, none failed;
+  `benchmarks/one_stage` 640 passed and `verity/protocols/spot/verifier` 907 passed are among them [run: its log so
+  far]. Its body and ready line follow its last line.
+
+**The 38 other sites, item 5** [run: `rg` and `ast` on `main` at `5f0c008aa040`]
+
+Each is `{"refused": not v.ok, "codes": list(v.codes)}` on a verdict of `verifier.py`. The answer is no for all 38:
+no test in `check` calls the function that holds them, with the Lean or without. They run only from the pod scripts.
+Four of them sit in a loop and write more than one row.
+
+- **`a0.py`** (8), run by `pod.sh`: six test files import `a0` and call `session`, `lean_verify`, `challenger_draw`, `templated`, `lean_refused`; none calls `a0.main` [run: `rg`].
+  - `a0.py:564` (`main`, `V.matches_public`), `registration-root-mismatch`: no.
+  - `a0.py:566` (`main`, `V.matches_public`), `public-file-domain-mismatch`: no.
+  - `a0.py:568` (`main`, `V.check`), `registration-partition-mismatch`: no.
+  - `a0.py:571` (`main`, `V.check`), `registration-domain-not-the-layout's`: no.
+  - `a0.py:573` (`main`, `V.check`), `registration-law-not-the-agreement's`: no.
+  - `a0.py:575` (`main`, `V.check`), `second-registration-for-the-window`: no.
+  - `a0.py:577` (`main`, `V.check`), `registration-null-leaf-layer (R4)`: no.
+  - `a0.py:592` (`main`, `V.check_draw`), each `name` of the loop at line 588: no.
+- **`a2.py`** (5), run by `pod.sh`: no test imports `a2` [run: `rg`].
+  - `a2.py:163` (`main`, `V.check`), `public-file-b||c-byte-flipped (R4)`: no.
+  - `a2.py:168` (`main`, `V.check`), `domains-of-another-run (R3)`: no.
+  - `a2.py:170` (`main`, `V.check`), `registration-partition-mismatch (R2)`: no.
+  - `a2.py:173` (`main`, `V.check_draw`), `draw-outside-the-partition`: no.
+  - `a2.py:175` (`main`, `V.check`), `registration-null-leaf-layer (R4)`: no.
+- **`a3.py`** (6), run by `pod.sh`: no test imports `a3` [run: `rg`].
+  - `a3.py:207` (`main`, `V.check`), `registration-partition-mismatch`: no.
+  - `a3.py:209` (`main`, `V.check`), `registration-query-drops-a-template`: no.
+  - `a3.py:211` (`main`, `V.check_draw`), `union-draw-outside-the-partition`: no.
+  - `a3.py:217` (`main`, `V.check_proved`), `session-dropped (NAME)`, one row a member in a loop: no.
+  - `a3.py:223` (`main`, `V.check_proved`), `proved-unit-not-drawn`: no.
+  - `a3.py:225` (`main`, `V.check`), `registration-null-leaf-layer (R4)`: no.
+- **`a6.py`** (8), run by `a6.sh`: no test imports `a6` [run: `rg`].
+  - `a6.py:265` (`main`, `V.check`), `registration-partition-mismatch (R2)`: no.
+  - `a6.py:268` (`main`, `V.check`), `registration-query-drops-a-template (R2)`: no.
+  - `a6.py:272` (`main`, `V.check`), each `name` of the loop at line 269: no.
+  - `a6.py:276` (`main`, `V.check`), `public-file-not-the-registered-leaf-layer (R4)`: no.
+  - `a6.py:278` (`main`, `V.check_draw`), `draw-outside-the-partition`: no.
+  - `a6.py:286` (`main`, `V.check_draw`), `draw-moves-a-unit-across-strata`: no.
+  - `a6.py:289` (`main`, `V.check_proved`), `proved-set-short-of-the-draw`: no.
+  - `a6.py:293` (`main`, `V.check_proved`), `proved-unit-not-drawn`: no.
+- **`a7.py`** (4), run by `a7.sh`: no test imports `a7`; `negatives` is called only from `a7.py`'s own run [run: `rg`].
+  - `a7.py:1487` (`negatives`, `V.check`), `registration-partition-mismatch (R2)`: no.
+  - `a7.py:1490` (`negatives`, `V.check`), `registration-law-another-k (R1)`: no.
+  - `a7.py:1492` (`negatives`, `V.check`), `registration-without-the-canonical-commitments (R3)`: no.
+  - `a7.py:1494` (`negatives`, `V.check_draw`), `draw-outside-the-partition`: no.
+- **`a11.py`** (7), run by `a9.sh`, `a10.sh`, `a11.sh`: three test files import `a11` and call `evaluate_units`; none calls `a11.main` [run: `rg`].
+  - `a11.py:1005` (`main`, `V.check`), `registration-partition-mismatch (R2)`: no.
+  - `a11.py:1008` (`main`, `V.check`), `registration-query-drops-a-template (R2)`: no.
+  - `a11.py:1012` (`main`, `V.check`), each `name` of the loop at line 1009: no.
+  - `a11.py:1015` (`main`, `V.check`), `public-file-not-the-registered-leaf-layer (R4)`: no.
+  - `a11.py:1017` (`main`, `V.check_draw`), `draw-outside-the-partition`: no.
+  - `a11.py:1020` (`main`, `V.check_proved`), `proved-set-short-of-the-draw`: no.
+  - `a11.py:1024` (`main`, `V.check_proved`), `proved-unit-not-drawn`: no.
+
+**Not run, not done**
+
+- #9466's two runs have not started, so nothing about it is established with the real Lean.
+- The full check and the Lean check for none of the three pull requests.
+- The checkpoint note due by 22:50Z is not yet written; I write it after this entry.
+
+**Next**
+
+- Read `b76f`, then #9230's body and ready line.
+- Read `d5e4` and `00a6`, then #9466's ready line, or a fix.
+- At each step `git log origin/main` for #9375.
