@@ -20,7 +20,7 @@
 #      for b/<K>, the server's --h1-model; or H1_WEIGHTS_KEY, a key file)  H1_DRAW_K (else period.json's)
 #      FLOCK_PROVE, FLOCK_SELFTEST, FLOCK_VERIFY (prebuilt; else job.sh builds them under HZ_CACHE)  FC_FIREWALL_LEAN (the
 #      ZK server's flock-firewall, prebuilt; else built beside FLOCK_VERIFY)  H1_DRAWN_MEM_GB (the job's budget, default
-#      90% of the host's memory)  H1_ZK_SERVER_GB (a session's live verifier, `serve --zk`, its cap, default 125)
+#      90% of the host's memory)  H1_ZK_SERVER_GB (a session's live verifier, `serve --zk`, its limit, default 125)
 #      H1_ZK_LEAN_GB (what the prover's share leaves the ZK server's Lean processes, default 145)  H1_FIREWALL (1; 0 the
 #      unfirewalled --zk path, for a cost comparison only: no ZK server serves it)
 #      PY (served_verdicts.sh's venv python, default .venv's)  H1_DRAWN_ONLY=1: write and check the statements, no verdict
@@ -30,19 +30,19 @@
 #      H1_DRAWN_STAGED (a work dir `drawn.py stage` already wrote, its plan.json: proved and checked as it is, no staging;
 #      drawn_cost.sh's DC_REAL=0 fixture, whose stand-in tile the CLI's word reference can't restage)
 # Memory: staging is capped at 90% of H1_DRAWN_MEM_GB. A session's live verifier and prover then run side by side, each
-# under an address-space cap (`ulimit -S -v`): the verifier gets H1_ZK_SERVER_GB and the prover the rest of
+# under an address-space limit (`ulimit -S -v`): the verifier gets H1_ZK_SERVER_GB and the prover the rest of
 # H1_DRAWN_MEM_GB less H1_ZK_LEAN_GB. The ZK server's Lean processes are the prover's children, and under an
-# address-space cap their runtime can't create its threads, so they start through a wrapper that lifts the soft cap
-# they inherit: they are bounded by the H1_ZK_LEAN_GB the prover's cap leaves them and the job's cgroup, not by a
+# address-space limit their runtime can't create its threads, so they start through a wrapper that lifts the soft limit
+# they inherit: they are bounded by the H1_ZK_LEAN_GB the prover's limit leaves them and the job's cgroup, not by a
 # limit of their own. An unfirewalled K 2048 lane session (2^27 slots: 24.4M ANDs, k_log 26, m 29; a combine is 4223
 # ANDs) peaked at 65.4 GiB resident in the verifier and 61.3 GiB in the prover;
 # under the ZK server, 64.2 GiB in the prover and 77.8 GiB summed over the ZK server's two Lean
 # processes (r20261104-012048-4559). A J10-R tile call of one unit (k_log 27, m 30) peaked at 92.2 GiB in the verifier on
-# either path (whose 88 GiB cap it outgrew, r20261104-032759-3438), 98.5 GiB in the prover and 108.1 GiB in the Lean
+# either path (whose 88 GiB limit it outgrew, r20261104-032759-3438), 98.5 GiB in the prover and 108.1 GiB in the Lean
 # processes (r20261104-043623-2364). The defaults are those k_log 27 peaks plus ~35% for the verifier and the Lean
 # processes, since an address space outgrows resident memory by the allocator's arenas and the threads' stacks.
-# drawn.sh refuses before staging when the prover's cap is below its 99 GB resident peak, so a k_log 27 window wants
-# H1_DRAWN_MEM_GB >= 125 + 145 + 99 = 369 (H1_DRAWN_MEM_GB=400: the prover's cap is 130, its peak plus 32%).
+# drawn.sh refuses before staging when the prover's limit is below its 99 GB resident peak, so a k_log 27 window wants
+# H1_DRAWN_MEM_GB >= 125 + 145 + 99 = 369 (H1_DRAWN_MEM_GB=400: the prover's limit is 130, its peak plus 32%).
 # Out: PIECE_DIR/drawn/ (statements.json and job.log, and sessions/<statement>/: the live verifier's log, the prover's
 # LIVE verdict lines, both sides' wall seconds, peak RSS and CPU seconds, and the job cgroup's CPU seconds over the
 # session (cgroup.json, the ZK server's Lean processes among them), kept whether the session passed or failed;

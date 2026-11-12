@@ -3149,7 +3149,7 @@
     {"file": "benchmarks/pouw/h1_lanes/run.py", "count": 22},
     {"file": "benchmarks/pouw/h1_lanes/served.py", "count": 36},
     {"file": "benchmarks/pouw/h1_lanes/served.sh", "count": 73},
-    {"file": "benchmarks/pouw/h1_prove/drawn.py", "count": 10},
+    {"file": "benchmarks/pouw/h1_prove/drawn.py", "count": 9},
     {"file": "benchmarks/pouw/h1_prove/drawn.sh", "count": 49},
     {"file": "benchmarks/pouw/h1_prove/h1unit.py", "count": 9},
     {"file": "benchmarks/pouw/h1_prove/job.sh", "count": 41},
