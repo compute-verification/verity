@@ -223,6 +223,24 @@ class VllmProtocol(PlainProtocol):
 ID_PAYLOAD = 503
 
 
+def id_request_fields(request: bytes, payload: int) -> dict[str, Any] | None:
+    """The fields (`active.id_request`'s keywords) of `request`, its head and body as the server read them, where it is an id
+    request as the network certifier forwards it: without the release headers it puts on the server's copy
+    (`release.with_release`), exactly `active.id_request` of its own fields in the scan's B = P + 9-byte cells (P =
+    ``payload``), from their first byte (``offset`` 0). None for anything else."""
+    head, _, body = request.partition(b"\r\n\r\n")
+    line, *fields = head.split(b"\r\n")
+    kept = b"".join(f + b"\r\n" for f in fields
+                    if f.partition(b":")[0].strip().lower() not in (REL.RELEASE_HEADER, REL.RUN_HEADER, REL.BUCKET_HEADER))
+    try:
+        b = json.loads(body)
+        got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
+        canonical = A.id_request(**got, frame_bytes=payload + A.HEADER.size, offset=0)
+        return got if canonical == line + b"\r\n" + kept + b"\r\n" + body else None
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
 class IdsProtocol:
     """The scan's id form (``--protocol ids``) for the network certifier's id requests, and ``base`` for every other request (`of`),
     so that clients straight to the endpoint (the network certifier's shim and probes, the load) get vLLM's HTTP and JSON.
@@ -251,20 +269,9 @@ class IdsProtocol:
         return self if self.id_request_of(request) else self.base
 
     def id_request_of(self, request: bytes) -> bool:
-        """Whether `request` (its head and body as the server read them) is an id request as the network certifier forwards it:
-        without the release headers it puts on the server's copy (`release.with_release`), exactly `active.id_request`
-        of its own fields in the scan's B = P + 9-byte cells, from their first byte (``offset`` 0)."""
-        head, _, body = request.partition(b"\r\n\r\n")
-        line, *fields = head.split(b"\r\n")
-        kept = b"".join(f + b"\r\n" for f in fields
-                        if f.partition(b":")[0].strip().lower() not in (REL.RELEASE_HEADER, REL.RUN_HEADER))
-        try:
-            b = json.loads(body)
-            got = {k: b[k] for k in ("model", "user", "prompt", "max_tokens", "temperature", "top_p", "seed")}
-            canonical = A.id_request(**got, frame_bytes=self.payload + A.HEADER.size, offset=0)
-            return canonical == line + b"\r\n" + kept + b"\r\n" + body
-        except (ValueError, KeyError, TypeError):
-            return False
+        """Whether `request` (its head and body as the server read them) is an id request as the network certifier forwards it
+        (`id_request_fields`) in the scan's B = P + 9-byte cells."""
+        return id_request_fields(request, self.payload) is not None
 
     def parse(self, body: Any) -> Completion:
         req = self.base.parse(body)

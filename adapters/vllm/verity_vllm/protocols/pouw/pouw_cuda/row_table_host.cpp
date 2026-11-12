@@ -64,7 +64,7 @@ extern "C" int rt_hist_init_host(const Hist* t, uint64_t* tree) {
 }
 
 extern "C" int rt_hist_append_host(const Hist* t, uint64_t at, uint32_t k, const uint8_t* rows, const uint64_t* hm,
-                                   const uint64_t* prefixes, uint64_t* tree, uint64_t* bcs, uint32_t* salts) {
+                                   const uint64_t* prefixes, uint64_t* tree, uint64_t* bcs, const uint32_t* salts) {
   if (!hist_ok(*t) || k == 0 || at + k > t->cap) return 1;
   uint64_t ms[16];
   midstates(prefixes, ms);

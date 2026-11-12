@@ -469,8 +469,13 @@ def traffic_json() -> dict:
 
 
 def linear_check(state, ring, reg, now, log_path: Path | None) -> None:
+    """The sweep's audit is the one `research msg linear audit` lists: an issue waiting only on landing is no finding in
+    either, so a ring's counts are the ones its command shows."""
+    from research.queue import landing_waiter
+
     lin, owners = linear.Linear(), linear.owners(reg)
-    linear_audit(state, ring, now, lambda: lin.audit(owners, now=now), volume_json, log_path, lambda: lin.unread(sorted(owners)))
+    linear_audit(state, ring, now, lambda: lin.audit(owners, now=now, waiting=landing_waiter()), volume_json, log_path,
+                 lambda: lin.unread(sorted(owners)))
 
 
 def volume_json() -> dict:
