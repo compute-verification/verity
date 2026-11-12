@@ -46,9 +46,13 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   widest block's output bits, and a sampled one costs the count-weighted mean MACs to prove.
 * `request`: request-level sampling, each sampled request replayed and proved whole, its output the session's cap.
 
-Lean checks every one-stage and request-level point's design (`lean_check`, unless `run`'s `lean` is off): a series'
-`lean` says which points it checked, an exfiltration point is the bits Lean certifies (`plancheck`), and a design Lean
-refuses is an error.  A two-stage point is the planner's alone.
+Lean checks every point's design unless `run`'s `lean` is off, and a design Lean refuses is an error; a series' `lean`
+says which points it checked, None at the trivial bound, which has no design to check.  A one-stage or request-level
+exfiltration point is the bits Lean certifies for its design (`lean_check`, `plancheck`).  A two-stage point is the
+bits Lean certifies for the planner's design (`lean_point`, `lean_two`), at most its trivial bound, at the θ Lean finds
+from the planner's: in the uncapped sets' form (`TwoStageCheckSound`), the capped sets' (`TwoStageCheckServedSound`)
+or the patterns' (`TwoStageCheckPatternsSound`), with the planner's bits (`planner`) and Lean's θ (`theta`) beside it.
+`total_cost.py` checks its two-stage lines with the same `lean_two`.
 
 Exfiltration is in bits: the main figure plots the width-stratified two-stage design, uncapped and in the capped
 sets' form, and request-level sampling (`MAIN`), and an appendix figure every design with the reference lines the
@@ -70,14 +74,16 @@ from concurrent.futures import ProcessPoolExecutor
 from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from itertools import repeat
-from math import inf, log, sqrt
+from math import ceil, inf, log, sqrt
 from pathlib import Path
+from typing import Sequence
 
 import cards as spot_cards
 from verity.core.protocols.reporting import PERIODS
 from verity.core.protocols.spot import plancheck
 from verity.core.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design)
+from verity.ml.circuits.partition_v2 import unit_class
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -442,19 +448,25 @@ def served_total(m: Model) -> float:
     return m.request.units * m.served
 
 
+def two_stage_top(m: Model, design: str, top: float | None = None) -> float:
+    """A two-stage point's trivial bound: `top` (default everything the scope outputs), under a capped form at most
+    the scope's served bits too (`SERVED_STATUS`, `OUTS_STATUS`)."""
+    top = cap(m, "leak") if top is None else top
+    return min(top, served_total(m)) if TWO_STAGE[design][1] else top
+
+
 def point(m: Model, design: str, target: str, budget: float, rel: float = 1e-4, top: float | None = None) -> dict:
     """The least target whose cost is at most `budget` GPU-seconds, by bisection in log, capped at `top` (default
-    `cap`); a two-stage design's bound at the budget, which certifies exfiltration alone (its interiors are committed
-    after its first stage), a capped form at most the scope's served bits too (`SERVED_STATUS`, `OUTS_STATUS`)."""
-    top = cap(m, target) if top is None else top
+    `cap`); a two-stage design's planned bound at the budget, which certifies exfiltration alone (its interiors are
+    committed after its first stage), at most its trivial bound (`two_stage_top`), which `lean_point` checks."""
     if design in TWO_STAGE:
         if target != "leak":
             raise ValueError("the two-stage design's interior commitments come after its first stage: no work target")
-        if TWO_STAGE[design][1]:
-            top = min(top, served_total(m))
+        top = two_stage_top(m, design, top)
         row = two_stage(m, design, budget)
         bound = top if row is None else min(row["bound"], top)
         return {"bound": bound, "capped": bound >= top, "row": row}
+    top = cap(m, target) if top is None else top
 
     def fits(v: float) -> dict | None:
         row = cost(m, design, target, v)
@@ -501,6 +513,47 @@ def lean_check(points: list[tuple[Model, str, str, dict]]) -> list[tuple[bool | 
             raise plancheck.LeanError(f"Lean refuses the planner's {design} design at {m.scope.name}: {d}")
         out.append((True, plancheck.upper(a) if target == "leak" else p["bound"]))
     return out
+
+
+def _size_class(bits: float) -> int:
+    if (w := unit_class(ceil(bits))) is None:
+        raise ValueError(f"a proof block of {bits} bits fits no public size class")
+    return w
+
+
+def split_cells(cells: Sequence[Cell], merged: int) -> list[Cell]:
+    """The cells in a two-stage design's strata: the size classes up to `merged` in stratum 0, each wider one its own."""
+    return [replace(c, stratum=0 if _size_class(c.bits) <= merged else _size_class(c.bits)) for c in cells]
+
+
+def lean_two(cells: Sequence[Cell], replay_blocks: float, row: dict, delta: float, served: float | None = None,
+             union: bool = False) -> tuple[float, dict]:
+    """Lean's check of the planner's two-stage design `row` (`optimize.two_stage_design`'s) on `replay_blocks` replay
+    blocks of `cells`, as one class (`plancheck.two`) whose strata are the row's (`split_cells`): every bit charged
+    (`TwoStageCheckSound`), each replay block charged at most the `served` bits it serves in the capped sets' form
+    (`TwoStageCheckServedSound`) or, under `union`, the patterns' (`TwoStageCheckPatternsSound`).  The bits Lean
+    certifies, rounded up to a float, at the θ it finds from the planner's, with the planner's bits and that θ beside
+    them; a point Lean refuses is an error."""
+    d = plancheck.two(split_cells(cells, row["merged"]), row["k"], replay_blocks, row["q"], delta, served, union,
+                      row["theta"])
+    ((bits, theta),) = plancheck.check([d])
+    if bits is None:
+        raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")
+    return plancheck.upper(bits), {"lean": True, "planner": row["bound"], "theta": float(theta)}
+
+
+def lean_point(m: Model, design: str, p: dict) -> dict:
+    """A two-stage `point`'s `p` with Lean's check of its design (`lean_two`): its bound the bits Lean certifies, at most
+    its trivial bound (`two_stage_top`), with `lean` True, the planner's bits (`planner`) and Lean's θ (`theta`); at
+    the trivial bound, where there is no design to check, `lean` and `theta` None."""
+    row = p["row"]
+    if row is None or p["capped"]:
+        return p | {"lean": None, "planner": None if row is None else row["bound"], "theta": None}
+    form = TWO_STAGE[design][1]
+    bits, checked = lean_two(m.cells, m.replay.replay_blocks, row, m.delta, None if form is None else m.served,
+                             form == "patterns")
+    top = two_stage_top(m, design)
+    return p | {"bound": min(bits, top), "capped": bits >= top} | checked
 
 
 PLAN = ("merged", "kappa", "q", "k", "draws", "replay_sample", "prove", "replay", "boundary", "interior", "commit",
@@ -681,8 +734,8 @@ def infiltration_panel(card: dict | None, scope_names: list[str]) -> dict:
 def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, ...] | None = None,
         request: str = "census", workers: int = 1, designs: tuple[str, ...] | None = None, lean: bool = True) -> dict:
     """Figure 1's JSON at `points` proof overheads besides the vertical line's, over the scopes and designs named
-    (default all), each curve's points planned on `workers` processes, with Lean checking the one-stage and
-    request-level designs unless `lean` is off."""
+    (default all), each curve's points planned and checked on `workers` processes, with Lean checking every design
+    unless `lean` is off."""
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
         return _run(model_name, points, scope_names, request, designs, pool.map if pool else map, lean)
 
@@ -718,8 +771,11 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
             for design in planned[panel]:
                 for beta in budgets:
                     pts = list(each(point, models, repeat(design), repeat(target), repeat(beta * s.gpu_seconds)))
+                    two = lean and design in TWO_STAGE
+                    if two:
+                        pts = list(each(lean_point, models, repeat(design), pts))
                     checked = (lean_check([(m, design, target, p) for m, p in zip(models, pts)])
-                               if lean and design not in TWO_STAGE else None)
+                               if lean and not two else None)
                     ys = [b for _, b in checked] if checked else [p["bound"] for p in pts]
                     series[panel].append({
                         "scope": s.name, "design": design, "budget": beta, "headline": design == HEADLINE[panel],
@@ -727,6 +783,7 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
                         "capped": [p["capped"] for p in pts],
                         "share": [y / cap(models[0], target) for y in ys],
                         **({"lean": [c for c, _ in checked]} if checked else {}),
+                        **({k: [p[k] for p in pts] for k in ("lean", "planner", "theta")} if two else {}),
                         "plan": [None if p["row"] is None else _plan(p["row"]) for p in pts]})
         ratio = infiltration_ratio(infiltration, series["exfiltration"], s.name, c["proof_overhead"].value)
         out_scopes[s.name] = {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
@@ -744,7 +801,8 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
                                                     base.blocks_per_request, served_total(base)) if capped else None)}
     return {
         "schema": SCHEMA, "model": model_name, "request": request,
-        "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK)} if lean else None,
+        "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
+                 "precision": plancheck.TWO_P} if lean else None,
         "inputs": {k: v.__dict__ for k, v in c.items()},
         "cards": sc,
         "partition": part.__dict__ | part.coverage(),

@@ -98,7 +98,7 @@ def test_a_stochastic_units_counts_hold_its_selects_consts(tmp_path):
     the position, the temperature and S), which no greedy unit calls; the Program's select at GLM-5.3's vocabulary is most of
     its 2 minutes."""
     phi = _phi(tmp_path)
-    policy, _ = policy_of(0, {"temperature": 0.8, "top_p": 0.95, "seed": 11}, phi.target_profile().num_sms)
+    policy, _ = policy_of(0, {"temperature": 0.8, "top_p": 0.95, "seed": 11}, phi.target_profile().num_sms, request_id="q1")
     _check(phi, 3, 2, policy, batch=_decodes(3, 2, [[3, 0]]))
 
 

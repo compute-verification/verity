@@ -2,7 +2,7 @@ module
 
 /-!
 The shared domain separators: the entries of the one table (`Identity.Domains`, whose docstring has its rules) of the
-identity hash, the commitments, randomness, sampled proofs, Flock and the served path, which more than one protocol reads.
+identity hash, the commitments, randomness, SPOT, Flock and the served path, which more than one protocol reads.
 -/
 
 @[expose] public section

@@ -55,13 +55,15 @@ from typing import Any, Callable, Mapping
 
 from verity_vllm.check.batch import BATCH, SHARED, Fields, Template, own, separable
 from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.program.frontend.seed_rule import PARAMS as SEED_PARAMS, rid_of_ids
 
 from .build import Unexpressible, _Specs, build_program, model_shape
 from .common import _ptypes, kind
 from .phi import Phi
 
-#: the request-local Input groups a request's own certified body fixes; any other request-local group is the batch's
-OWN_GROUPS = ("prompt", "seed")
+#: the request-local Input groups a request's own certified body fixes, with its seed rule's (`seed_rule.PARAMS`: its body's seed
+#: and id, and the window's public seed salt); any other request-local group is the batch's
+OWN_GROUPS = ("prompt", "seed", *SEED_PARAMS)
 #: the Input groups of a request's history (`build.build_program`'s C: every layer's rows of its first C positions, and a resumed
 #: request's last token), its own where R2 checks it (`workload_labels`)
 HISTORY_GROUPS = ("prefix", "prefix_ik", "prefix_iks", "last_token")
@@ -118,9 +120,10 @@ def _workload(phi: Phi, shapes: list[tuple[int, int]], policy: dict) -> Any:
     from verity_vllm.program import workload as W
 
     from .score import request_component
-    pq = Phi.from_json({**phi.to_json(), "sampling": policy})
+    ids = [request_id_of(i) for i in range(len(shapes))]
+    pq = Phi.from_json({**phi.to_json(), "sampling": {**policy, "rid": rid_of_ids(ids)} if policy["kind"] == "stochastic" else policy})
     comps = {s: request_component(build_program(pq, "request", LP=s[0], T=s[1])) for s in dict.fromkeys(shapes)}
-    reqs = [W.WorkloadRequest(request_id_of(i), i, LP, T + 1, i, comps[(LP, T)], T=T) for i, (LP, T) in enumerate(shapes)]
+    reqs = [W.WorkloadRequest(ids[i], i, LP, T + 1, i, comps[(LP, T)], T=T) for i, (LP, T) in enumerate(shapes)]
     return W.WorkloadProgram(reqs, manifest_digest=None, lag=int(phi.target_profile().lag()))
 
 
@@ -271,7 +274,8 @@ def _unit(u: Any) -> tuple:
 def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], compiled: Any,
                    plan: Callable[..., Any]) -> None:
     """Refuse (`BatchDependent`) ``compiled`` (`steps.Compiled` of ``advice``, a Commit window's `Advice`, and ``ingress``) where a request's
-    outputs could depend on its batch-mates: R3, R2 and R1 of the module docstring, cheapest first. ``plan`` is `steps.plan_steps`.
+    outputs could depend on its batch-mates: R3, R2 and R1 of the module docstring, cheapest first. ``plan`` plans a solo `Advice`
+    (`steps._replan`).
     Returns None when every request's Programs read only its own certified inputs and the registration."""
     units = compiled.requests
     for u in units:

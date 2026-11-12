@@ -30,11 +30,3 @@ integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/core/proto
 integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/ml/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/program/predict/steps.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/program/predict/window_rows.py -> verity/ml/protocols/certifier/__init__.py
-verity/core/protocols/pouw/lean/check/PouwCheck/Credit.lean -> verity/core/primitives/identity/Identity/Domains.lean
-verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean -> verity/core/primitives/identity/Identity/Domains.lean
-verity/core/protocols/pouw/lean/commit/PouwCommit/Bindings.lean -> verity/core/primitives/identity/Identity/Domains.lean
-verity/core/protocols/pouw/lean/commit/PouwCommit/Draws.lean -> verity/core/primitives/identity/Identity/Domains.lean
-verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean -> verity/core/primitives/identity/Identity/Domains.lean
-verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean -> verity/core/primitives/identity/Identity/Tagged.lean
-verity/core/protocols/pouw/lean/commit/PouwCommit/Rows.lean -> verity/core/primitives/identity/Identity/Domains.lean
-verity/core/protocols/pouw/lean/window/PouwWindow/Side.lean -> verity/core/primitives/identity/Identity/Domains.lean

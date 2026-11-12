@@ -1,7 +1,6 @@
 """Figure 1 in its total-cost form: the configurations and their serve-tax card, the registrations' spans, the write form
 against every admissible set of a small design, the break-even's search, and one scope end to end with a measured tax
 dropped in."""
-from fractions import Fraction
 from itertools import product
 from math import comb
 
@@ -275,28 +274,6 @@ def test_the_write_form_is_at_most_every_replay_block_at_its_footprint():
     assert t.write_form(cells, {"merged": 16, "k": {0: 1}, "q": 1e-12}, 1000, .01, 500) == 1000 * 500
 
 
-def test_a_two_stage_point_is_what_lean_certifies(monkeypatch):
-    """A two-stage point's count is the bits Lean certifies for its design (`plancheck.two` of its strata, its replay
-    blocks and the planner's θ, in the patterns' form or the capped sets'), rounded up to a float, with the planner's
-    bits and Lean's θ beside it; a point Lean refuses is an error.  The checker is stubbed here; the sampled-proofs
-    suite runs it."""
-    cells = (Cell(3, 16), Cell(1, 64, stratum=64))
-    g = t.Grain(4, cells, 1.0, 100.0)
-    row = {"merged": 64, "k": {0: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
-    seen = []
-    monkeypatch.setattr(t.plancheck, "check", lambda ds: seen.extend(ds) or [(Fraction(10**6, 7), Fraction(3))])
-    count, checked = t.lean_two(g, row, .01, 80.0, "patterns")
-    assert (count, checked) == (t.plancheck.upper(Fraction(10**6, 7)), {"lean": True, "planner": 50.0, "theta": 3.0})
-    assert seen == [t.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, 80.0, True, 2.0)]
-    seen.clear()
-    assert t.lean_two(g, row, .01, 80.0, "sets") == (count, checked)
-    assert seen == [t.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, 80.0, False, 2.0)]
-    assert seen[0]["form"] == "capped"
-    monkeypatch.setattr(t.plancheck, "check", lambda ds: [(None, Fraction(0))])
-    with pytest.raises(t.plancheck.LeanError, match="refuses the planner's two-stage point"):
-        t.lean_two(g, row, .01, 80.0, "patterns")
-
-
 def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
     """Two of a hundred narrow blocks sampled pay their statement's whole fixed cost, so a computed type at 2 of a
     sampled replay block's 3 marginal seconds is 52 of its 53."""
@@ -310,8 +287,8 @@ def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
 
 @pytest.fixture(scope="module")
 def measured(tmp_path_factory) -> dict:
-    """One scope at four shares, with (A)'s tax measured, planned without Lean's checks (`test_figure1.py` stubs (C)'s,
-    `test_a_two_stage_point_is_what_lean_certifies` the two-stage lines', and the sampled-proofs suite runs both)."""
+    """One scope at four shares, with (A)'s tax measured, planned without Lean's checks (`test_figure1.py` stubs (C)'s
+    and the two-stage lines', and the sampled-proofs suite runs both)."""
     mp = pytest.MonkeyPatch()
     load = cards.load
 

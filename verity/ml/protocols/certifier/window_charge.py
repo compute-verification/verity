@@ -7,13 +7,13 @@ deviations, every count and every value as `code_v1` codes them, with the carry 
                              -> (ok, bits[CW])
     carry = (n0[3], n1[3], run[2], pos[32], rank[25])
 
-`ChargeCount_v1` (`arith_encode`) charges a window that sends only decisions: it codes `code_v1`'s four other counts
-(n_hits, n_resumes, n_order, n_lag) as 0. Advice v1 never sends resumes or lag bits. The replay derives preemptions and
-the certified O forces every lag row, and `v1.py` refuses a window that sends either. It does send two of the four:
-past the pool bound, a shortfall for each lookup the replay reads (`hits`), and, where the arrivals deviate from release
-order (the client's ingress), an order entry for each deviating arrival (`order`). This unit charges them. It counts
-`code_v1._window`'s segment for the whole window with the counting encoder (`arith_encode`, "The counting variant"),
-in `code_v1`'s order:
+`ChargeCount_v1` (`arith_encode`) charges a window that sends only decisions: it codes `window_code`'s four other
+counts (n_hits, n_resumes, n_order, n_lag) as 0. Advice v1 never sends resumes or lag bits. The replay derives
+preemptions and the certified O forces every lag row, and the advice code (`advice_code.codec`) refuses a window that
+sends either. It does send two of the four: past the pool bound, a shortfall for each lookup the replay reads (`hits`),
+and, where the arrivals deviate from release order (the client's ingress), an order entry for each deviating arrival
+(`order`). This unit charges them. It counts `window_code._window`'s segment for the whole window with the counting
+encoder (`arith_encode`, "The counting variant"), in `window_code`'s order:
 1. n_arrived, then each decision at the book's KT estimate for min(run, 2): `ChargeCount_v1`'s gates;
 2. n_hits, then each hit's value (v1's sent shortfall, in hit units);
 3. n_resumes, 0;

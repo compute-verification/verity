@@ -15,7 +15,8 @@ silicon references, every vLLM kernel's self-check specialisations, each templat
 suite checks every specialisation reachable from them (`suite`), and fails by name for a registered Definition family no root
 reaches: a new Definition needs a binding.  A binding lives beside the Definitions it binds, in their module's sidecar
 (`sidecars`), in this module's forms: a root function (``_X_roots``, `root_functions`), a `_model_roots` entry, a
-``TEMPLATE_PARAMS`` entry; a module with a sidecar is one the registries import (`load_registries`).  A root too large to build
+``TEMPLATE_PARAMS`` entry (a template, or ``<template>@<name>``: some of its instances, `template_params`); a module with a
+sidecar is one the registries import (`load_registries`).  A root too large to build
 whole is listed in ``_by_calls_roots`` and checked by its calls (`by_calls`), never built.  This module keeps what no one
 Definition module owns.
 """
@@ -367,18 +368,28 @@ def _root_bindings(name: str) -> list[tuple[tuple[str, ...], Callable[[], list[A
 
 
 def template_params() -> dict[str, tuple[str, list[dict]]]:
-    """{template id: (unit, its parameters)} over every binding file's ``TEMPLATE_PARAMS``; a template in two is an error."""
+    """{entry: (unit, its parameters)} over every binding file's ``TEMPLATE_PARAMS``.  An entry is a template id, or
+    ``<template>@<name>`` (`template_of`): some of the template's instances as a binding of their own, so that an instance
+    whose check takes about as long as a binding task may is a task apart.  A template with entries in two files is an error."""
     out: dict[str, tuple[str, list[dict]]] = {}
+    where: dict[str, str] = {}
     for prefix, ns in binding_files():
-        for tid, params in ns.get("TEMPLATE_PARAMS", {}).items():
-            if tid in out:
-                raise ValueError(f"template {tid} has parameters in two binding files ({out[tid][0]}, {prefix}TEMPLATE_PARAMS)")
-            out[tid] = (f"{prefix}TEMPLATE_PARAMS:{tid}", params)
+        for entry, params in ns.get("TEMPLATE_PARAMS", {}).items():
+            tid = template_of(entry)
+            if where.setdefault(tid, prefix) != prefix:
+                raise ValueError(f"template {tid} has parameters in two binding files ({where[tid]}TEMPLATE_PARAMS, "
+                                 f"{prefix}TEMPLATE_PARAMS)")
+            out[entry] = (f"{prefix}TEMPLATE_PARAMS:{entry}", params)
     return out
 
 
-def _template_unit(tid: str) -> str:
-    return template_params().get(tid, (f"TEMPLATE_PARAMS:{tid}",))[0]
+def template_of(entry: str) -> str:
+    """The template a ``TEMPLATE_PARAMS`` entry binds: the entry, or its part before ``@``."""
+    return entry.partition("@")[0]
+
+
+#: the binding unit `templates` made each template subcircuit under, by its id
+_TEMPLATE_UNITS: dict[str, str] = {}
 
 
 def _produce(units: tuple[str, ...], make: Callable[[], list[Any]], by_unit: list | None = None) -> list[Any]:
@@ -391,19 +402,22 @@ def _produce(units: tuple[str, ...], make: Callable[[], list[Any]], by_unit: lis
 
 
 def templates() -> list[tuple[str, Any, list[dict]]]:
-    """(label, subcircuit, instance statics) for every template in the catalogue: its ``TEMPLATE_PARAMS`` (`template_params`),
-    else its example."""
+    """(label, subcircuit, instance statics) for every template in the catalogue: at its ``TEMPLATE_PARAMS`` entries'
+    parameters, each under its entry's unit (`template_params`), else at its example."""
     from verity_flock import subcircuit_templates as TM
 
     load_registries()
-    params_of = template_params()
+    entries: dict[str, list[tuple[str, list[dict]]]] = {}
+    for entry, got in template_params().items():
+        entries.setdefault(template_of(entry), []).append(got)
     out = []
     for tid, t in sorted(TM.TEMPLATES.items()):
-        unit = (_template_unit(tid),)
-        for params in params_of.get(tid, ("", [dict(t.example)]))[1]:
-            sub, sts = _produce(unit, lambda t=t, params=params: (lambda s: [s, instance_statics(s, params)])(t.bind(**params)))
-            BINDINGS.setdefault(sub.id, set()).update(unit)
-            out.append((sub.id, sub, sts))
+        for unit, params_list in entries.get(tid, [(f"TEMPLATE_PARAMS:{tid}", [dict(t.example)])]):
+            for params in params_list:
+                sub, sts = _produce((unit,), lambda t=t, params=params: (lambda s: [s, instance_statics(s, params)])(t.bind(**params)))
+                BINDINGS.setdefault(sub.id, set()).add(unit)
+                _TEMPLATE_UNITS[sub.id] = unit
+                out.append((sub.id, sub, sts))
     return out
 
 
@@ -659,7 +673,7 @@ def _kinds_and_templates() -> list[Any]:
 
         out = _produce(units, kinds)
         for _label, sub, sts in templates():
-            out += _produce((_template_unit(sub.template.id),), lambda sub=sub, sts=sts: [sub.definition(**st) for st in sts])
+            out += _produce((_TEMPLATE_UNITS[sub.id],), lambda sub=sub, sts=sts: [sub.definition(**st) for st in sts])
         _BOUND["bindings"], _BOUND["unbound"] = out, unbound
     return _BOUND["bindings"]
 
@@ -695,10 +709,11 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
         "DsaButterflyRows_v2",
         "DsaButterflySettings_v2",
         "DsaButterflyTagBits_v1",
+        "DsaTopKMaskCounted_v2",
         "DsaTopKMask_v2",
         "MhcFusedSplit_v2",
     ),
-    "Const1[0x1]_v1": ("DsaTopKMask_v2",),
+    "Const1[0x1]_v1": ("DsaTopKMaskCounted_v2", "DsaTopKMask_v2"),
     "Const32[0x3727c5ac]_v2": ("AllReduceRmsNormMnnvl_v2", "RMSNormFusedCudaVector8_v4"),
     "Const32[0x43800000]_v2": ("AllReduceRmsNormMnnvl_v2",),
     "Const32[0x44060000]_v2": ("RMSNormFusedCudaVector8_v4",),
@@ -707,9 +722,10 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "DsaMqaLogit_v3": ("DsaMqaLogits_v3",),
     "DsaMqaLogitsKey_v1": ("DsaMqaLogits_v4",),
     "DsaMqaLogitsQ_v1": ("DsaMqaLogits_v4",),
-    "DsaRadixPass_v1": ("DsaTopKMask_v2",),
-    "DsaRadixTies_v1": ("DsaTopKMask_v2",),
-    "DsaTopKKey_v2": ("DsaTopKMask_v2",),
+    "DsaRadixPass_v1": ("DsaTopKMaskCounted_v2", "DsaTopKMask_v2"),
+    "DsaRadixTies_v1": ("DsaTopKMaskCounted_v2", "DsaTopKMask_v2"),
+    "DsaRowValid_v1": ("DsaTopKMaskCounted_v2",),
+    "DsaTopKKey_v2": ("DsaTopKMaskCounted_v2", "DsaTopKMask_v2"),
     "DsaWaksmanPick_v1": ("DsaButterflyRows_v1",),
     "DsaWaksmanPick_v2": ("DsaButterflyRows_v2",),
     "DsaWaksmanSwap_v1": ("DsaButterflyRows_v1",),
@@ -900,7 +916,7 @@ def catalog_units() -> Iterator[tuple[tuple[str, ...], Callable[[], list[Any]], 
         for label, make in ns["_model_roots"]() if "_model_roots" in ns else []:
             yield (f"{prefix}_model_roots:{label}",), lambda make=make: [make()], "model", label
     for label, sub, sts in templates():
-        yield ((_template_unit(sub.template.id),),
+        yield ((_TEMPLATE_UNITS[sub.id],),
                lambda sub=sub, sts=sts: [x for st in sts for x in (sub.definition(**st), sub.target(**st))], "template", label)
 
 
@@ -1077,10 +1093,10 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
             if fid in out:
                 BINDINGS.setdefault(fid, set()).update(units)
     tpls = []
-    for tid, params_list in sorted(ns.get("TEMPLATE_PARAMS", {}).items()):
-        unit = (f"{prefix}TEMPLATE_PARAMS:{tid}",)
+    for entry, params_list in sorted(ns.get("TEMPLATE_PARAMS", {}).items()):
+        unit, template = (f"{prefix}TEMPLATE_PARAMS:{entry}",), TM.TEMPLATES[template_of(entry)]
         for params in params_list:
-            sub, sts = _produce(unit, lambda t=TM.TEMPLATES[tid], params=params: (lambda s: [s, instance_statics(s, params)])(t.bind(**params)))
+            sub, sts = _produce(unit, lambda t=template, params=params: (lambda s: [s, instance_statics(s, params)])(t.bind(**params)))
             BINDINGS.setdefault(sub.id, set()).update(unit)
             tpls.append((sub.id, sub, sts))
     hit = _SIDECARS[p] = (dict(sorted(out.items())), tpls)
@@ -1092,4 +1108,4 @@ __all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "PINNED_KINDS"
            "boolean_call_families", "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units",
            "certified_boolean_calls", "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call",
            "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
-           "table_probe", "template_params", "templates", "word_call_families"]
+           "table_probe", "template_of", "template_params", "templates", "word_call_families"]

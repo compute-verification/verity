@@ -18,7 +18,7 @@ import json
 import random
 from functools import cache
 from pathlib import Path
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import cuda_build
 import numpy as np
@@ -33,6 +33,9 @@ from verity.ml.commitments.gates import hm96 as H
 from verity.ml.commitments.gates.sha512 import midstate, words_be
 from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.kernels import ROW_COMMIT, SHA512
+
+if TYPE_CHECKING:
+    from numpy.typing import ArrayLike
 
 SOURCE = Path(__file__).resolve().with_name("row_commit_cases.cu")
 COMMITMENTS = Path(F.__file__).resolve().parents[1]
@@ -205,7 +208,8 @@ def _hm96_cases() -> dict[str, list[tuple]]:
     rng = random.Random("row-commit/hm96")
     out: dict[str, list[tuple]] = {"default": [], "other": []}
 
-    def add(name: str, x: bytes, y: bytes, bc: bytes, h: bytes, did: bytes, schema: str, pos: int, leaf: bytes | None = None):
+    def add(name: str, x: bytes, y: bytes, bc: bytes, h: bytes, did: bytes, schema: str, pos: int,
+            leaf: bytes | None = None) -> None:
         out[name].append((x, y, did, schema, pos, bc, h, leaf if leaf is not None else F.leaf_ref(did, schema, h, pos)))
 
     for i, v in enumerate(HV["leaves"]):
@@ -266,7 +270,7 @@ def test_hm96_leaves_through_every_mask_are_the_vectors_and_the_reference(host: 
     _check_hm96(_runner(host), host.rc_hm96_forms())
 
 
-def _digest(bits) -> bytes:
+def _digest(bits: ArrayLike) -> bytes:
     return b"".join(sum(int(b) << j for j, b in enumerate(w)).to_bytes(8, "big") for w in np.asarray(bits).reshape(8, 64))
 
 
