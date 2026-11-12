@@ -14,6 +14,10 @@ from pathlib import Path
 
 import numpy as np
 
+#: what the later kernels' references and diff.py import
+__all__ = ["BASE", "CHAINED", "TB", "TBC", "emit_key", "key_mul", "key_xor", "mix32", "rot_of", "rotl", "tb_key", "tb_operand",
+           "tb_receipts", "tbc_receipts", "u8bytes"]
+
 
 def mix32(x: np.ndarray | np.uint32) -> np.ndarray | np.uint32:
     """fgemm.cu's mix32 on u32 words: two multiply-xorshift rounds."""

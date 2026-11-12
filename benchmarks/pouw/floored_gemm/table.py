@@ -16,6 +16,9 @@ import sys
 from functools import partial
 from pathlib import Path
 
+#: what tb_table.py imports
+__all__ = ["LINEAR", "ncu_tensor"]
+
 ARMS = [("lt", "(a) cuBLASLt"), ("plain", "mine, plain"), ("b", "(b) noised"), ("c", "(c) duo /32"), ("d", "(d) duo /64"),
         ("c2", "duo2 /32"), ("d2", "duo2 /64"), ("c3", "probe: duo, IMAD -> IADD3 /32"), ("c4", "probe: duo, rotate-add -> IMAD /32")]
 #: the columns of ncu's CSV that `ncu_tensor` reads
