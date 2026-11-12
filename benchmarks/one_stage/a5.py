@@ -178,7 +178,9 @@ import inspect
 import json
 import multiprocessing
 import os
+import re
 import shutil
+import subprocess
 import sys
 import time
 from collections.abc import Iterator, Sequence
@@ -202,7 +204,7 @@ import r2_population as R2  # noqa: E402
 from verity.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
-from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
+from verity_flock.proof_server import ProofServer, ProofServerError, Session, Statement  # noqa: E402
 from verity.commitments import row_table as RT  # noqa: E402
 from verity.protocols.spot.device import coins as CC
 from verity.protocols.spot.verifier import service as S  # noqa: E402
@@ -789,7 +791,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                                "program_file": out / "program.json",
                                "public": a0.sha512_file(st_dir / f"pub-{m.n}.bin")},
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
-    summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
+    # staging composes the circuits and writes the members' files on the host: it starts nothing on a card
+    summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members), "gpus": 0}
     leaf_layer = CS.leaf_layer(publics)
     hist = history(publics) if history is not None else None
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
@@ -858,6 +861,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             print("A5 " + json.dumps({"refused_after_draw": {"wiring": False}, "checks": after}, default=str))
             return summary, False
     served_units, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
+    proving: dict[str, dict] = {}   # by member key, what the summary's timing adds to its statement (`proving_of`)
     linked = None       # the first sampled chunk with registered reads: its session, for the registered-reads negatives
     row_verdicts: dict[str, dict] = {}      # each sampled chunk's Lean verdict with registered reads, whose finding the record carries
     if (why := port_refusal(mine, union_draw, port, ports)) is not None:
@@ -991,6 +995,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     # its sessions at its close, each member's audit then a verdict. On the window's challenger session (`window_trees`)
     # a session is submitted once the one before has closed its tree there, and the session's log is the audit of them all.
     relayed: list[str] = []
+    clocks = card_clocks(devices(a)) if server is not None else None
     try:
         statements = [staged(mm, local) for mm, local in drawn]
         with ThreadPoolExecutor(1) as lean:
@@ -999,8 +1004,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     finally:
         if server is not None:
             exits = server.close()
-            (out / "proof-server" / "server.json").write_text(json.dumps({"routes": server.routes, "exits": exits},
-                                                                         indent=1, sort_keys=True))
+            summary["proof_server"] = {"devices": devices(a), "busy": server.busy,
+                                       "clocks": {"before": clocks, "after": card_clocks(devices(a))}}
+            (out / "proof-server" / "server.json").write_text(json.dumps(
+                {"routes": server.routes, "exits": exits, **summary["proof_server"]}, indent=1, sort_keys=True))
         if relay is not None:
             relayed = relay.close()
             a.coins.release(rank)
@@ -1025,6 +1032,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             row_verdicts[mm["m"].key] = got["lean_verify"]
             linked = linked or (mm, got["sdir"])
         statement[mm["m"].key] = got["statement"]
+        proving[mm["m"].key] = proving_of(got["handle"])
         sessions += got["sessions"]
         if got["challenger"] is not None:
             summary.setdefault("challengers", {})[f"m{mm['k']}"] = got["challenger"]
@@ -1125,7 +1133,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     summary["audit"]["verdicts"] = {x: y.get("accepted") for x, y in verdicts.items()}
     summary["audit"]["why"] = {x: y.get("why") for x, y in verdicts.items() if y.get("accepted") is not True}
     summary.update(draw=union_draw["units"], draw_counts=counts, served_is_lean_draw=sorted(served_units) == sorted(union_draw["units"]),
-                   timing=statement, negatives={x: y["refused"] for x, y in neg.items()})
+                   timing={x: {**y, **proving[x]} for x, y in statement.items()},
+                   negatives={x: y["refused"] for x, y in neg.items()})
     summary["verifier_checks"] = AM.counts()
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     ok = bool(result.get("accepted")) and result.get("registered_reads", {"ok": True})["ok"] and all(summary["negatives"].values()) \
@@ -1421,18 +1430,86 @@ def window_trees_held(published: dict, done: Sequence[dict], relayed: Sequence[s
     return {"ok": why is None, "sessions": len(named), "why": why, "relay": list(relayed)}
 
 
+#: a prover given a card numbers the cards as nvidia-smi does (by PCI bus), so ``--devices`` names nvidia-smi's indices
+NVIDIA_SMI_ORDER = {"CUDA_DEVICE_ORDER": "PCI_BUS_ID"}
+
+
+def devices(a: argparse.Namespace) -> list[int] | None:
+    """The cards the audit's proof server proves on (``a.devices``, `cards`'s), by nvidia-smi's indices
+    (`NVIDIA_SMI_ORDER`); None: on the CPU. The command line is the only place an audit takes cards from: it reads no
+    lease and asks for none."""
+    return list(getattr(a, "devices", None) or ()) or None
+
+
+def card_clocks(cards: Sequence[int] | None, run: Callable[[list[str]], str] | None = None) -> dict[str, dict[str, int]] | None:
+    """Each of ``cards``' clock event counters as ``nvidia-smi -q -d PERFORMANCE`` prints them: the microseconds its
+    clocks were held back, by reason (a thermal slowdown, a power cap), under the card's index; a card whose driver
+    prints none has none. Read before and after an audit's sessions, their difference says whether a card was slowed
+    while it proved. None without cards, or where nvidia-smi doesn't answer (``run``: the command's output)."""
+    if not cards:
+        return None
+    run = run or (lambda cmd: subprocess.run(cmd, capture_output=True, text=True, timeout=60, check=True).stdout)
+    try:
+        return {str(card): {m[1]: int(m[2]) for m in CLOCK_COUNTER.finditer(
+            run(["nvidia-smi", "-q", "-d", "PERFORMANCE", "-i", str(card)]).partition(CLOCK_COUNTERS)[2])} for card in cards}
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+#: nvidia-smi's heading over a card's clock event counters, and one of its lines (``SW Thermal Slowdown : 1038546 us``)
+CLOCK_COUNTERS, CLOCK_COUNTER = "Clocks Event Reasons Counters", re.compile(r"^\s+(\S[^:\n]*?)\s*:\s*(\d+) us\s*$", re.M)
+
+
+def cards(text: str) -> list[int]:
+    """``--devices``: the proof server's cards, their indices comma-separated (``0,1``), each once."""
+    got = [x.strip() for x in text.split(",")]
+    if not all(x.isdigit() for x in got) or len(set(got)) != len(got):
+        raise argparse.ArgumentTypeError(f"the proof server's cards are their indices, each once (0,1), not {text!r}")
+    return [int(x) for x in got]
+
+
+def devices_refusal(a: argparse.Namespace) -> str | None:
+    """Why an audit given cards (`devices`) can't prove on them, or None: only the proof server's provers take a card,
+    and a plain session or one behind the ZK server (``--firewall``) is a process pair of its own on the CPU
+    (`proof_server`)."""
+    if devices(a) is None or not (plain(a) or getattr(a, "firewall", None)):
+        return None
+    return ("--devices names the proof server's cards, and a plain session or one behind the ZK server (--firewall) "
+            "is a process pair of its own on the CPU: drop --devices, or run the sessions on the proof server")
+
+
 def proof_server(a: argparse.Namespace, out: Path, relay: MT.Relay | None = None) -> ProofServer | None:
     """SPOT's proof server for an audit's sessions (`verity_flock.proof_server`, its processes' logs under
-    ``out/proof-server``): one CPU prover and one verifier a template, each verifier on a challenger of its own under
+    ``out/proof-server``): one prover a card of `devices` (`prove --zk --gpu`), else one CPU prover, and one verifier a
+    template, each verifier on a challenger of its own under
     FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both; with ``relay`` (`window_trees`),
     every verifier on the window's challenger session through it, one session at a time. None where a session is one it
     doesn't prove (plain, or behind the ZK server under ``--firewall``): each session is then a process pair of its own
-    (`a0.session`)."""
+    (`a0.session`), which takes no card (`devices_refusal`)."""
+    if why := devices_refusal(a):
+        raise ValueError(why)
     if plain(a) or a.firewall:
         return None
+    env = {**a0.DIRECT, **({} if devices(a) is None else NVIDIA_SMI_ORDER)}
     if relay is not None:
-        return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, verify_ahead=0, tree_from=relay.flags)
-    return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, challenger=a0.own_challenger(zk=True))
+        return ProofServer(a.bin, out / "proof-server", devices=devices(a), env=env, verify_ahead=0,
+                           tree_from=relay.flags)
+    return ProofServer(a.bin, out / "proof-server", devices=devices(a), env=env,
+                       challenger=a0.own_challenger(zk=True))
+
+
+def proving_of(handle: Session | None) -> dict[str, Any]:
+    """What the summary's ``timing`` says of a member session's proving, beside the statement's own fields (which the
+    audit record holds, so nothing is added to those): ``gpus``, the cards its prover held (1 on a card, 0 on the CPU);
+    ``device``, that card's index (None on the CPU), so a figure names the card it came from; and
+    ``prove_seconds_source``, which of its seconds are its proving's. On the proof server (``handle``) that is
+    ``busy``: ``busy_s``, its share of its prover's busy seconds (`Session.busy_seconds`), where ``session_s`` runs from
+    its submission and so holds its wait behind the sessions before it. A process pair of its own has no such wait:
+    ``session``, its ``session_s``."""
+    if handle is None:
+        return {"gpus": 0, "device": None, "prove_seconds_source": "session"}
+    return {"gpus": 0 if handle.device is None else 1, "device": handle.device, "busy_s": handle.busy_seconds,
+            "prove_seconds_source": "busy"}
 
 
 def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:
