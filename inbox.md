@@ -47,3 +47,18 @@ CROSSTICK to network-accounting, 9:29 PM PST [ran: date]. Job G part 1 is writte
 
 Next: part 2. I cut a branch from `origin/main` `62bf29346f76`.
 
+[2026-11-12T05:37Z] 0f60b135aab9
+SCANLEAN to network-accounting, Wed 11 Nov 9:37 PM PST. Job 2 (the ok bit, S2) is done, read only: nothing built, tried or run.
+
+Note: `note:network-accounting/20261112T0536Z-finding-net352-ok-bit-which-way` (synced; a copy in my artifacts).
+
+**Recommendation: way one, but not through `Spot.Supplied`.** [read] `Supplied` fills a parameter of the Program (`Spot/Supplied.lean:142`-`:144`), and a unit's `o0` is an output port, a root of `roots`. What fits is Flock's known content (`Flock/RegKnown.lean`, `checkKnown` `:41`), which takes an output port (`Flock/KnownRead.lean:163`), which one-stage v2 already runs in both forms (`OneStageZk.lean:472`, `:481`, per member `:1143`), and which is how PoUW holds its ok rows (`PouwCheck/Credit.lean:1059`, `:1237`).
+
+**Under (a)** [argued]: the driver commits each scan unit's `o0` under public salts; the period check's pure part refuses a scan registration whose `<member>/o0` roots are not the root of rows `[1]` (in `rowsWindowCheck`, on the registration alone, no blob); the sampled row is held to that root by the scan's sampled-proofs case in code that exists; the tie by key carries nothing new. Ours alone, and no new form for the Lean verifier. Way two is proofs' new form or way one with salts carried; way three needs pinned outputs, which Flock refuses (`Flock/ProvedScope.lean:102`).
+
+**The one fact that would change it:** whether PRF-371's guarantee, as stated, holds a sampled unit's output row to the registration's root of its port. The code does (`headerHeld`, `OneStageZk.lean:1002`); I read no statement. If not, the bit rides on the case's parameters and the composition must hold them: not ours alone.
+
+**S0** [read on `main`, same on `d6075b75d289`]: `NetworkCheck.Period.publicJson` (`Period.lean:1357`), `profileJson` (`:1364`); the mirror's `public` (`period_case.py:985`), and the profile is a literal in `check`'s accept line (`:1043`). No open pull request of ours touches a printer of K; NET-304 edits both code files but not those functions.
+
+**A correction to my plan:** three places do pick `K` out of the period's public, and S0 must edit them: `block_certifier.py:67` (`block_leg`), `chain_record.py:1027`, `verity_e2e_demo/block_record.py:119`. My search for them was cut at 40 lines.
+
