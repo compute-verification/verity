@@ -81433,3 +81433,59 @@ Mailbox read: 29 sections, the last 09:23Z, read at 09:30Z.
 **Mailboxes.** Both files read at 09:33Z: nothing newer than 07:40Z and 05:31Z. [run]
 
 **Next.** PRF-576 is mine now and not started; it lands after the census of record's workload card (PRF-577, on #9112, open at `366a6ece9985`). [read; run: `gh pr view`, 09:33Z]
+
+## ACCOUNTS, Thu 12 Nov 09:35Z: the changed type is pushed at `c962872c9231`: errors summed, spans named by keys, steps numbered in a series; both lanes can draft against it
+
+**Headline.** `cursor/proofs-accounts-e4bb` is at `c962872c9231` [run: `git push`, 09:35Z]. `Account.lean` compiles there with 44 guards [run `r20261112-093252-391d`, exit 0 in 51 s]. A value written against `afe45dcfd5ab` still compiles: `Amount` gained one field with a default and lost none [derived: the diff `afe45dcfd5ab..c962872c9231` of `Account.lean`; the example protocol's `account` is unchanged and compiles in the same run].
+
+**What moved in the type since `afe45dcfd5ab`** [read: `Account.lean` at `c962872c9231`, lines 188-242]
+
+| Declaration | Change |
+|---|---|
+| `Amount` | one new field, `series : Option Key := none`: the key under which an answer names the series its steps are numbered in (a session). No field renamed or removed. `Amount.Formed` unchanged. |
+| `Time` | one new constructor, `steps (name : Steps) (seconds : Ratio)`. `moment`, `span key seconds`, `unstated` keep their form. |
+| `Steps` (new) | `index k` (one step: an epoch), `range first last` (both included), `run first count` (a list counts its entries). |
+| `Pool` | unchanged (`sum`, the default, and `once`). An amount at a moment now reads it too. |
+
+**What moved in `rows`** [read: same file, lines 402-495, 521-530]
+
+1. Memory's period row is at its sessions' errors **summed** (`pool := .sum`, the default); "the largest of their errors" is gone. Guard: two sessions at 1/100 and 1/50 give a period row at 3/100.
+2. A flow's verified amount is the largest total over answers of one series whose named spans share no step, or the largest amount of an answer that names no span, whichever is more; never the sum of the two. Guards (each fails on `afe45dcfd5ab`): one span twice, 700 and 500, gives 700; overlapping gives 700; disjoint gives 1,200; one named and one unnamed gives the larger; two unnamed gives the larger; two sessions' spans give the larger.
+3. A tick's cover counts once on the free side: the steps of one series' named spans, each once, or the longest span that names none, whichever is more. The free amounts themselves still add (each bounds its own span from above, so the sum bounds the union) [derived].
+4. New rows, not asked for: one row for each device whose sheet states more memory than its leaves hold, "not audited: charged at capacity" (`Account.unregistered`). Before it, the example's device (sheet 64 GiB, one leaf of 1 GiB) had 63 GiB in no row [read: `Registration.lean` lines 389, 409 at `c962872c9231`; run `r20261112-093008-f5fe`, exit 0]. It is also where item 9's 3 GiB lands if a sheet carries 144 GiB and its leaf 141 GiB. Say if you want it out: it is one commit, `d735d1d97d61`.
+
+**Where I differ from your reading of the sound rule** (item 2). You wrote "each group of overlapping spans gives its largest amount". I took the largest total over pairwise-disjoint spans, which is never less [derived: a group's largest member alone is a disjoint choice]. They differ on a chain: audits of 700 over steps 0-9, 900 over 5-14 and 500 over 10-19 are one overlapping group, so your rule gives 900; the two ends share no step, so mine gives 1,200 [run: the guard in `r20261112-093252-391d`]. Both are sound; mine credits more. One line changes if you prefer yours (`disjointMost`).
+
+**`series`, which I added** [derived]. The certifier numbers its link-windows from its session's own first index [read: `NetworkCheck/Period.lean` lines 42-52 at `19fb19a21e40`], so steps 0-9 of one session and 10-19 of another may be the same seconds. An amount that names a series adds spans only within one series; an amount with `series := none` says all its answers' steps are on one clock (lean's `TickSpan`, an epoch number, an H1 window index).
+
+**What each drafting lane writes** [derived from the type; relayed where it names another lane's keys]
+
+| Lane's amount | `time` | `series` | What `rows` then does |
+|---|---|---|---|
+| network-accounting: K on a link, span as a count | `.span (.published "windows") seconds` | none | compiles and is sound; the sessions' cover does not add: beyond the longest single session's span every tick is charged at the link's capacity |
+| the same once the certifier publishes its first index and its session (two new keys) | `.steps (.run first count) seconds` | the session's key | cover adds within a session; two sessions' cover does not |
+| compute-accounting: Pearl+ | `.steps (.index epoch) seconds` | none | audits of different epochs add; one epoch twice counts once |
+| compute-accounting: H1 | `.steps (.range first last) seconds` | none, if window indices are one clock | disjoint ranges add |
+| memory-accounting: PoUB (a read rate, free) | `.span` today (`span_ns`); `.steps (.run start span) 1/10^9` once it publishes its start | none | as the link's rows above |
+| memory-accounting: PoUS, the wipe | `.moment` | none | a row a session and the period's at errors summed |
+
+Whether the certifier's and the remote audit's spans fit, in one line each: the certifier's fits `run` with a series after two new public keys (its first index and its session; both are in its parameters today, not its public output [read: `Period.lean` lines 1276-1284]); PoUB P2 publishes `span_ns` and no start [read: `RemoteAudit/P2Protocol.lean` line 155 at `19fb19a21e40`], so it fits `run` after one new key; `verity/remote-bandwidth/v0` publishes neither [read: `Protocol.lean` line 118], so it names no span and covers no tick.
+
+**Two limits a drafting lane should know** [derived]. `rows` never adds the rows of two amounts of one part (PoUB's and a certifier's bits are separate rows). On the free side two answers of one span add their amounts: sound, and loose by the smaller.
+
+**For infra, through you.** `--on auto` placed four of my launches on `vy-nebius-cpu-7` between 09:20Z and 09:24Z and each was refused before starting: "the machine has no git" and "source archive sha256 mismatch: the machine received <nothing>" [run: `/tmp/acc/try8.log`]. `--on vy-nebius-cpu-9` works.
+
+**Runs** [run]
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-091055-d1fd` | `Account.lean` with changes 1-3 | exit 0, 86 s |
+| `r20261112-092417-7e96` | with `series` | exit 0, 50 s |
+| `r20261112-093008-f5fe` | with the device-memory rows | exit 0, 50 s |
+| `r20261112-093252-391d` | head `c962872c9231` | exit 0, 51 s |
+| `r20261112-092850-00b0` | scratch: the v2 field in place, `Part.capacity (.read ts)` reading a host leaf's rate | exit 0, 59 s |
+| `r20261112-082204-a895` | records run at `5d9bf917788b` | exit 0: the interface lock gains one line, `"format": 1`; no record moves |
+
+**Not established.** That the file compiles on lean's merge branch. The records run and the quick tier at this head (both before the pull request).
+
+**Next.** The 12:30Z entry with the Lean text for items 5-11, then the pull request by 13:00Z.
