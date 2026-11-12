@@ -33,6 +33,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import settings
+
 METRIC = "vllm/remote-demo-minutes"
 #: remote's composite of record, whose verdict is the demo's, as `served_composite.sh` writes it under the run's out/
 PRODUCT = "remote-v1"
@@ -117,8 +119,7 @@ def result(run_id: str, runs: list[str], m: dict | None, why: str | None) -> dic
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("runs", nargs="+", metavar="RUN", help="the demo's runs, first to last (module docstring)")
-    ap.add_argument("--runs-dir", type=Path,
-                    default=Path(os.environ.get("RESEARCH_RUNS") or Path.home() / ".research" / "runs").expanduser())
+    ap.add_argument("--runs-dir", type=Path, default=settings.runs_root())
     ap.add_argument("--main", default="origin/main", help="the ref the served commit must be a commit of")
     a = ap.parse_args(argv)
     try:
@@ -126,11 +127,10 @@ def main(argv: list[str] | None = None) -> int:
     except Refused as e:
         m, why = None, str(e)
     print(f"MINUTES {json.dumps(m, sort_keys=True)}" if m else f"MINUTES refused: {why}")
-    if d := os.environ.get("RESEARCH_RUN_DIR"):
-        f = Path(d) / "result.json"
+    if d := settings.run_dir():
+        f = d / "result.json"
         tmp = f.with_name(f"{f.name}.tmp.{os.getpid()}")
-        tmp.write_text(json.dumps(result(os.environ.get("RESEARCH_RUN_ID") or Path(d).name, a.runs, m, why), indent=1)
-                       + "\n")
+        tmp.write_text(json.dumps(result(settings.run_id() or d.name, a.runs, m, why), indent=1) + "\n")
         os.replace(tmp, f)
     return 0 if m else 1
 
