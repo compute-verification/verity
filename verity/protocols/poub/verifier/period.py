@@ -48,7 +48,7 @@ from verity.protocols.pous.verifier.period import records
 from verity.protocols.spot.verifier.profile import WINDOW_DELTA
 from verity.commitments.identity import canonical_json_bytes
 
-from . import audit, codec, ledger, pooled, receipts
+from . import audit, codec, pooled, receipts
 from . import coins as C
 
 PROTOCOL = "verity/remote-bandwidth/v0"
@@ -301,7 +301,7 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     ran each party, and whether `trusted-host`'s premise holds (`verifier_party.placement`), go in
     `bandwidth.json` and in an accepted answer's profile (`placement`); `bandwidth.json` names the term its `eps`
     leaves out beside it (`ledger.NAMED_TERMS`)."""
-    from . import verifier_party  # noqa: PLC0415  (it imports this module)
+    from . import ledger, verifier_party  # here: the party imports this module, and a leg alone reads the ledger
 
     doc = json.loads((Path(period_dir) / "period.json").read_text())
     tools = doc.get("tools") or {}
