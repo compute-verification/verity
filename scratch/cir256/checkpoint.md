@@ -1,1 +1,2 @@
 2026-11-12T12:26Z SESSIONREC: read the brief's list, units.py, conftest.py, cache.py's key/store, cli.py's records/run, check.py's env, the guard; no code yet; writing comment A (interface, questions 1-3) next.
+13:05Z SESSIONREC: interface agreed by ci's worker (12:39Z); PR branch head ace7c2894f38 (code + tests pushed, local selections pass); designing the measured run (a comment line makes no record stale: modules are read by parsed content), no research run launched yet
