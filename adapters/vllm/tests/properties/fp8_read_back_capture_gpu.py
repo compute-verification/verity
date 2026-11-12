@@ -412,22 +412,30 @@ def coverage(nope: np.ndarray, scale: np.ndarray, words: np.ndarray, DN: int) ->
             "infinite_products": int(((w & 0x7FFF) == 0x7F80).sum()), "nan_products": int((w == 0x7FFF).sum())}
 
 
+def sass_counts(text: str) -> dict[str, int]:
+    """Instruction counts of a ``cuobjdump -sass`` listing: each of `SASS_OPS` by its exact opcode, every ``FFMA`` form, and
+    the opcodes with ``.FTZ`` other than ``F2I`` (an index computation's)."""
+    opcodes = [m.group(1) for m in re.finditer(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)", text)]
+    counts = {op: opcodes.count(op) for op in SASS_OPS}
+    counts["FFMA*"] = sum(o.startswith("FFMA") for o in opcodes)
+    counts[".FTZ outside F2I"] = sum(".FTZ" in o and not o.startswith("F2I") for o in opcodes)
+    counts["instructions"] = len(opcodes)
+    return counts
+
+
 def sass(lib: Path) -> dict[str, Any]:
-    """The kernel's sm_90 SASS in ``lib`` by `cuobjdump`, where one is found: its instruction counts for `SASS_OPS`."""
+    """The kernel's sm_90 SASS in ``lib`` by `cuobjdump`, where one is found, and its `sass_counts`."""
     tools = [shutil.which("cuobjdump"), *sorted(glob.glob("/usr/local/cuda*/bin/cuobjdump"))]
     tool = next((t for t in tools if t), None)
     if tool is None:
         return {"cuobjdump": None}
     p = subprocess.run([tool, "-sass", "-arch", "sm_90", "-fun", KERNEL, str(lib)], capture_output=True, text=True)
-    text = p.stdout
-    opcodes = [m.group(1) for m in re.finditer(r"/\*[0-9a-f]{4,}\*/\s+(?:@!?U?P[T0-9]+\s+)?([A-Z][A-Z0-9_.]*)", text)]
-    counts = {op: opcodes.count(op) for op in SASS_OPS}
-    counts["FFMA*"] = sum(o.startswith("FFMA") for o in opcodes)
-    counts[".FTZ outside F2I"] = sum(".FTZ" in o and not o.startswith("F2I") for o in opcodes)
-    return {"cuobjdump": tool, "rc": p.returncode, "instructions": len(opcodes), "counts": counts, "text": text}
+    return {"cuobjdump": tool, "rc": p.returncode, "counts": sass_counts(p.stdout), "text": p.stdout}
 
 
-def compare(out: Path) -> int:
+def compare(out: Path, library: bool = True, expect_sha256: str | None = None) -> int:
+    """Every saved row through the Definition's evaluator; with ``library``, the loaded vLLM's ``_C_stable_libtorch.abi3.so``
+    by sha256 (against ``expect_sha256``, a build whose SASS was read, where given) and its kernel's SASS."""
     from verity.circuits.evaluation import evaluate_batch
     from verity.definitions.registry import fp8_ds_mla_upconvert as U
 
@@ -447,14 +455,17 @@ def compare(out: Path) -> int:
         print(f"fp8-read-back: {name}: {doc['sets'][name]['rows']} rows through {D.id}, "
               f"{doc['sets'][name]['rows_differing']} differing", flush=True)
     try:
-        import vllm
+        if library:
+            import vllm
 
-        lib = Path(vllm.__file__).parent / "_C_stable_libtorch.abi3.so"
-        doc["library"] = {"path": str(lib), "sha256": hashlib.sha256(lib.read_bytes()).hexdigest(), "vllm": vllm.__version__}
-        s = sass(lib)
-        if s.get("text"):
-            (out / "sass_sm90.txt").write_text(s.pop("text"))
-        doc["sass"] = s
+            lib = Path(vllm.__file__).parent / "_C_stable_libtorch.abi3.so"
+            sha = hashlib.sha256(lib.read_bytes()).hexdigest()
+            doc["library"] = {"path": str(lib), "sha256": sha, "vllm": vllm.__version__, "expected": expect_sha256,
+                              "matches": None if expect_sha256 is None else sha == expect_sha256}
+            s = sass(lib)
+            if s.get("text"):
+                (out / "sass_sm90.txt").write_text(s.pop("text"))
+            doc["sass"] = s
     except Exception as e:  # noqa: BLE001 - recorded, the comparison stands without it
         doc["library"] = {"error": f"{type(e).__name__}: {e}"}
     sets = doc["sets"].values()
@@ -467,15 +478,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--out", required=True)
     ap.add_argument("--phase", choices=("capture", "compare"))
+    ap.add_argument("--library-sha256", help="compare: the sha256 of the _C_stable_libtorch.abi3.so whose SASS was read")
     a = ap.parse_args()
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     if a.phase == "capture":
         return capture(out)
     if a.phase == "compare":
-        return compare(out)
+        return compare(out, expect_sha256=a.library_sha256)
     rc = subprocess.run([sys.executable, __file__, "--out", str(out), "--phase", "capture"]).returncode
-    return max(rc, subprocess.run([sys.executable, __file__, "--out", str(out), "--phase", "compare"]).returncode)
+    more = ["--library-sha256", a.library_sha256] if a.library_sha256 else []
+    return max(rc, subprocess.run([sys.executable, __file__, "--out", str(out), "--phase", "compare", *more]).returncode)
 
 
 if __name__ == "__main__":
