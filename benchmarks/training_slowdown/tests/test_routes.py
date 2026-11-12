@@ -148,6 +148,30 @@ def test_the_grown_model_gives_the_starts_logits_bit_for_bit_at_its_first_step()
             assert same == same_bf16 == zero, (depth, zero)
 
 
+def test_an_origin_may_stack_its_copies_above_the_starts_blocks():
+    """The map states each block's source and place, so copies stacked above θ's L blocks (new block i of n a copy of
+    θ's block ⌊iL/n⌋ at L+i, its output projections zero) need nothing of the harness that `grow`'s interleaving
+    doesn't: `start_state` builds it, and the model gives θ's logits bit for bit."""
+    torch.manual_seed(0)
+    theta = LM.of(SHAPE)
+    blocks, n = SHAPE["n_layer"], 3
+    model = LM.of(SHAPE | {"n_layer": blocks + n})
+    origin = {}
+    for k in model.state_dict():
+        j, rest = (int(k.split(".")[1]), k.split(".", 2)[2]) if k.startswith("blocks.") else (None, k)
+        if j is None or j < blocks:
+            origin[k] = k
+        else:
+            src = (j - blocks) * blocks // n
+            origin[k] = None if rest in grow.ZEROED else f"blocks.{src}.{rest}"
+    model.load_state_dict(run.start_state(theta.state_dict(), model.state_dict(), origin))
+    rows = torch.randint(0, SHAPE["vocab"], (2, 9), generator=torch.Generator().manual_seed(1))
+    with torch.no_grad():
+        assert torch.equal(model(rows), theta(rows))
+    assert torch.equal(model.blocks[blocks].wq.weight, theta.blocks[0].wq.weight)
+    assert not model.blocks[blocks].wo.weight.any() and not model.blocks[blocks + n - 1].w_down.weight.any()
+
+
 def test_muon_takes_the_matrices_and_adamw_the_gains():
     dials = subset.DIALS | {"trainable": "blocks.0.*,norm", "opt": "muon", "lr": 0.01, "weight_decay": 0.05}
     torch.manual_seed(0)
