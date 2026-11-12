@@ -6,16 +6,12 @@ public import Proofs.Pouw.PoolWitness
 /-!
 # The headline on the cards says something
 
-The honest and nontrivial witnesses of `WorkSoundAtTables`, `WorkSoundH200` and `WorkSoundSm120`. No statement here
-reads the proofs tree: each binds by `∃` every part of its instance that is built here (the semantics, the devices,
-the accelerator, the layout, the resource match, the period and the prices), and its proof supplies them.
+The honest and nontrivial witnesses of `WorkSoundAtTables`. No statement here reads the proofs tree: each binds by `∃`
+every part of its instance that is built here (the table, the menu, the host row, the semantics, the devices, the
+accelerator, the layout, the resource match, the period and the prices), and its proof supplies them.
 
-* `WorkSoundAtTables_honest`, `WorkSoundAtTables_nontrivial`: the statement over every table. They name no table: the
-  table, the menu and the host row are `∃`s too, and the proofs supply the H200's.
-* `WorkSoundH200_honest`, `WorkSoundH200_nontrivial`: the statement at the H200. They name its table
-  `Verity.Accel.H200.card`, its menu `pubBestH200` and its host row `hostH200`, which the definitions tree holds.
-* `WorkSoundSm120_honest`, `WorkSoundSm120_nontrivial`: the same at the RTX PRO 6000's `Verity.Accel.Sm120.card`,
-  `pubBestSm120` and `hostSm120`.
+* `WorkSoundAtTables_honest`, `WorkSoundAtTables_nontrivial`: the statement over every table. They name no table, and
+  the proofs supply `unitCard`, a table that models no hardware, with its menu `unitMenu` and host row `unitHost`.
 
 An honest witness concludes, at one instance, the premises its statement takes on the semantics, the devices, the
 accelerator and the period. A nontrivial witness states that at such an instance the statement's conclusion
@@ -25,8 +21,8 @@ accelerator and the period. A nontrivial witness states that at such an instance
 semantics `Verity.Accel.s8Open`; one card with its row's hosts and no other memory (`devs`); the accelerator
 `cardAccel` on those devices with its call step at the first SHA-512 schedule of the menu (`accelAt`); the layout that
 moves nothing (`idLayout`); the identity match; the one-second period `halfPd` at the prices 1. `honest_at` and
-`nontrivial_at` hold at any table whose rates are positive, so a table's numbers enter through `h200_rates_pos`,
-`sm120_rates_pos`, `hostH200_pos` and `hostSm120_pos` alone.
+`nontrivial_at` hold at any table whose rates are positive and any host row whose rates are positive, which is all the
+witnesses read of `unitCard` and `unitHost` (`unitCard_rates_pos`, `unitHost_pos`).
 -/
 
 @[expose] public section
@@ -203,6 +199,29 @@ theorem nontrivial_at (c : Verity.Accel.Card) (hρ : ∀ r, 0 < c.ρ r) (hr : Ho
       (fun _ => True) :=
   fun h => freedSound_fails_at c hρ hr hh u x h.1
 
+/-- **A table that models no hardware**: one word in every store, one unit a second of every resource, one tensor unit
+a MAC of every format, and no exactness range or code. The witnesses read only that its rates are positive. -/
+def unitCard : Verity.Accel.Card where
+  size _ := 1
+  size_pos _ := Nat.one_pos
+  ρ _ := 1
+  weight _ := 1
+  exact := 0
+  text := 0
+
+theorem unitCard_rates_pos : ∀ r, 0 < unitCard.ρ r := fun _ => zero_lt_one
+
+/-- The SHA-512 schedule on `unitCard`: one ALU lane a compression. -/
+def unitSha : ResUnits := shaUnits 1 0 0
+
+/-- The menu on `unitCard`: no matmul program and the one SHA-512 schedule `unitSha`. -/
+def unitMenu : PubBest unitCard := ⟨[], [unitSha]⟩
+
+/-- A host row of one AMX MAC and one SHA-512 compression a second. -/
+noncomputable def unitHost : HostRow := ⟨1, 1⟩
+
+theorem unitHost_pos : 0 < unitHost.amx ∧ 0 < unitHost.sha := ⟨zero_lt_one, zero_lt_one⟩
+
 end Instance
 
 section Witnesses
@@ -240,8 +259,8 @@ accelerator `G` that is those devices at `x` under a match `e` and a layout `L` 
 (`OnCard`) with the row's hosts counted (`HostsCounted`) and its oracle calls at a public compression (`CallsAtPub`),
 meeting (G1), (G2) and (G3), and period with a dual price at λ = 1 (`DualOpt`).
 
-The statement names no table. **The proof's instance is the H200's**: `Verity.Accel.H200.card`, `pubBestH200`,
-`hostH200`, and at them `honest_exists`'s instance with the call step at `pubShaH200`'s first schedule. It shows no
+The statement names no table. **The proof's instance is `unitCard`'s**, a table that models no hardware, with
+`unitMenu` and `unitHost`, and at them `honest_exists`'s instance with the call step at `unitSha`. It shows no
 honest prover passing, none of the named assumptions (`SAKMatmul` is false at `cardAccel`, whose programs are any runs
 within the rates) and none of the statement's hypotheses on the work split and the call bound. -/
 theorem WorkSoundAtTables_honest :
@@ -250,86 +269,24 @@ theorem WorkSoundAtTables_honest :
       (μ : G.Res → ℝ),
       c.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧ OnCard G c x D twRound L e ∧ HostsCounted D hr ∧
         CallsAtPub G e pb ∧ G.G1 ∧ G.G2 ∧ G.G3 ∧ Pd.DualOpt μ 1 :=
-  ⟨Verity.Accel.H200.card, pubBestH200, hostH200,
-    honest_exists Verity.Accel.H200.card h200_rates_pos hostH200 hostH200_pos pubBestH200
-      (shaUnits 3400 152 (3608 / 32)) (List.Mem.head _)⟩
+  ⟨unitCard, unitMenu, unitHost,
+    honest_exists unitCard unitCard_rates_pos unitHost unitHost_pos unitMenu unitSha (List.Mem.head _)⟩
 
 /-- **`WorkSoundAtTables`'s nontrivial witness**: at some accelerator `G`, period `Pd` and prices `μ`, the statement's
 conclusion (`WorkBound`, at `W_reg = μ · hon`) fails for the no-fold round `twRound` with two sampling
 blocks under the verdict that accepts everything (`fun _ _ _ _ => True`), at `ε = κ = 1/2`: a verdict that checks
 nothing bounds no prover's freed compute.
 
-The statement names no table. **The proof's instance is the H200's**, the one `WorkSoundAtTables_honest`'s proof
-supplies: `cardAccel` on one card of `Verity.Accel.H200.card` with `hostH200`'s hosts at `Verity.Accel.s8Open`
-(`accelAt`), the period `halfPd` and the prices 1; the prover the bound fails at is the idle one (`idleAt`). -/
+The statement names no table. **The proof's instance is `unitCard`'s**, the one `WorkSoundAtTables_honest`'s proof
+supplies: `cardAccel` on one card of `unitCard` with `unitHost`'s hosts at `Verity.Accel.s8Open` (`accelAt`), the
+period `halfPd` and the prices 1; the prover the bound fails at is the idle one (`idleAt`). -/
 theorem WorkSoundAtTables_nontrivial :
     ∃ (G : Accel) (Pd : Period G) (μ : G.Res → ℝ),
       ¬ WorkBound G twRound 2 (Obs := Unit) (fun _ _ _ _ => True) (fun _ _ _ => ()) Pd (fun _ => 1 / 2)
         (∑ r, μ r * (1 * Pd.hon r)) (fun _ => 1 / 2) (fun _ => True) :=
-  ⟨accelAt Verity.Accel.H200.card Verity.Accel.s8Open hostH200 (shaUnits 3400 152 (3608 / 32)),
-    halfPd (accelAt Verity.Accel.H200.card Verity.Accel.s8Open hostH200 (shaUnits 3400 152 (3608 / 32))) fun _ => 1,
-    fun _ => 1,
-    nontrivial_at Verity.Accel.H200.card h200_rates_pos hostH200 hostH200_pos _ _⟩
-
-/-- **`WorkSoundH200`'s honest witness**: on the H200's table `Verity.Accel.H200.card`, with its menu `pubBestH200`
-and its host row `hostH200`, the statement's premises on the semantics, the devices, the accelerator and the period
-hold together at some instance. The statement names the table, the menu and the row, which the definitions tree
-holds, and binds the rest by `∃`; the proof supplies `honest_exists`'s instance with the call step at `pubShaH200`'s
-first schedule. It shows no honest prover passing and none of the named assumptions. -/
-theorem WorkSoundH200_honest :
-    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.H200.card) (G : Accel) (L : RoundPlan (D.machine x) twRound)
-      (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G) (μ : G.Res → ℝ),
-      Verity.Accel.H200.card.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧
-        OnCard G Verity.Accel.H200.card x D twRound L e ∧ HostsCounted D hostH200 ∧ CallsAtPub G e pubBestH200 ∧
-        G.G1 ∧ G.G2 ∧ G.G3 ∧ Pd.DualOpt μ 1 :=
-  honest_exists Verity.Accel.H200.card h200_rates_pos hostH200 hostH200_pos pubBestH200
-    (shaUnits 3400 152 (3608 / 32)) (List.Mem.head _)
-
-/-- **`WorkSoundH200`'s nontrivial witness**: on the H200's table, at some instance where the premises
-`WorkSoundH200_honest` concludes hold, the statement's conclusion (`WorkBound`) fails for the no-fold round with two
-sampling blocks under the verdict that accepts everything, at `ε = κ = 1/2`. The statement names the table, the menu
-and the row and binds the rest by `∃`; the proof's instance is `WorkSoundH200_honest`'s, and the prover the bound
-fails at is the idle one (`idleAt`). -/
-theorem WorkSoundH200_nontrivial :
-    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.H200.card) (G : Accel) (L : RoundPlan (D.machine x) twRound)
-      (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G) (μ : G.Res → ℝ)
-      (_ : Verity.Accel.H200.card.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧
-        OnCard G Verity.Accel.H200.card x D twRound L e ∧ HostsCounted D hostH200 ∧ CallsAtPub G e pubBestH200 ∧
-        G.G1 ∧ G.G2 ∧ G.G3 ∧ Pd.DualOpt μ 1),
-      ¬ WorkBound G twRound 2 (Obs := Unit) (fun _ _ _ _ => True) (fun _ _ _ => ()) Pd (fun _ => 1 / 2)
-        (∑ r, μ r * (1 * Pd.hon r)) (fun _ => 1 / 2) (fun _ => True) :=
-  nontrivial_exists Verity.Accel.H200.card h200_rates_pos hostH200 hostH200_pos pubBestH200
-    (shaUnits 3400 152 (3608 / 32)) (List.Mem.head _)
-
-/-- **`WorkSoundSm120`'s honest witness**: on the RTX PRO 6000's table `Verity.Accel.Sm120.card`, with its menu
-`pubBestSm120` and its host row `hostSm120`, the statement's premises on the semantics, the devices, the accelerator
-and the period hold together at some instance. The statement names the table, the menu and the row, which the
-definitions tree holds, and binds the rest by `∃`; the proof supplies `honest_exists`'s instance with the call step
-at `pubShaSm120`'s first schedule. It shows no honest prover passing and none of the named assumptions. -/
-theorem WorkSoundSm120_honest :
-    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.Sm120.card) (G : Accel) (L : RoundPlan (D.machine x) twRound)
-      (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G) (μ : G.Res → ℝ),
-      Verity.Accel.Sm120.card.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧
-        OnCard G Verity.Accel.Sm120.card x D twRound L e ∧ HostsCounted D hostSm120 ∧ CallsAtPub G e pubBestSm120 ∧
-        G.G1 ∧ G.G2 ∧ G.G3 ∧ Pd.DualOpt μ 1 :=
-  honest_exists Verity.Accel.Sm120.card sm120_rates_pos hostSm120 hostSm120_pos pubBestSm120
-    (shaUnits 3415 0 (3415 / 32)) (List.Mem.head _)
-
-/-- **`WorkSoundSm120`'s nontrivial witness**: on the RTX PRO 6000's table, at some instance where the premises
-`WorkSoundSm120_honest` concludes hold, the statement's conclusion (`WorkBound`) fails for the no-fold round with two
-sampling blocks under the verdict that accepts everything, at `ε = κ = 1/2`. The statement names the table, the menu
-and the row and binds the rest by `∃`; the proof's instance is `WorkSoundSm120_honest`'s, and the prover the bound
-fails at is the idle one (`idleAt`). -/
-theorem WorkSoundSm120_nontrivial :
-    ∃ (x : Verity.Accel.Open) (D : Devices Verity.Accel.Sm120.card) (G : Accel) (L : RoundPlan (D.machine x) twRound)
-      (e : G.Res ≃ Verity.Accel.Res ⊕ D.oth.Res) (Pd : Period G) (μ : G.Res → ℝ)
-      (_ : Verity.Accel.Sm120.card.Exact x ∧ Verity.Assumptions.AccelProductForm x ∧
-        OnCard G Verity.Accel.Sm120.card x D twRound L e ∧ HostsCounted D hostSm120 ∧ CallsAtPub G e pubBestSm120 ∧
-        G.G1 ∧ G.G2 ∧ G.G3 ∧ Pd.DualOpt μ 1),
-      ¬ WorkBound G twRound 2 (Obs := Unit) (fun _ _ _ _ => True) (fun _ _ _ => ()) Pd (fun _ => 1 / 2)
-        (∑ r, μ r * (1 * Pd.hon r)) (fun _ => 1 / 2) (fun _ => True) :=
-  nontrivial_exists Verity.Accel.Sm120.card sm120_rates_pos hostSm120 hostSm120_pos pubBestSm120
-    (shaUnits 3415 0 (3415 / 32)) (List.Mem.head _)
+  ⟨accelAt unitCard Verity.Accel.s8Open unitHost unitSha,
+    halfPd (accelAt unitCard Verity.Accel.s8Open unitHost unitSha) fun _ => 1, fun _ => 1,
+    nontrivial_at unitCard unitCard_rates_pos unitHost unitHost_pos _ _⟩
 
 end Witnesses
 
