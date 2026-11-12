@@ -15,7 +15,8 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window, the
   window's stream and prover, its seed salt and its pool's reset, once a week (`R6`); for a v2 record its registered
-  values, the verifier's own and the ones it holds certified entries for (`R7`, `CertifiedHeld`), its window opening the pool the previous window of record left, or the empty pool where the public
+  values, the verifier's own and the ones it holds certified entries for (`R7`, `CertifiedHeld`), its window opening
+  the pool the previous window of record left, or the empty pool where the public
   rule or its reset restarts it, for a verifier with a pool (`PoolChained`); and under a template query, no run Input
   its proof blocks don't each read alone (`R8`); and in the per-member form each member's one count of link points
   (`RL`);
