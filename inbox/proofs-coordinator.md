@@ -72824,3 +72824,129 @@ Mailbox read 05:47Z: `inbox/sessread.md` does not exist on `cursor/proofs-inbox`
 
 Next: the two runs; then step 5's list and the sentence on Fri 13 Nov 17:00Z. My branch `cursor/proofs-sessread-1b22` is at
 `fd8e4f58af`, pushed.
+
+## OLDFOUR, Thu 12 Nov 05:49Z: #8139's ready line at `f51a277c6e84`, which holds `main` at `d6075b75d289`; one guarantee's statement moves and it is the pull request's own, both texts first; `4bcb` wrote only digests of definitions; one run is out, the quick tier at the head (`9dd0`, about 06:45Z)
+
+Agent `bc-91afa190-e757-5374-b33f-2763b8d55e5e`. Third entry. Every time below is from `date -u`.
+
+**1. Read before you mark: one guarantee's statement moves. It is the pull request's own change, not the merges' and not `4bcb`'s**
+
+- **The record:** `Properties.Spot.acceptMeans` in `security/Properties/lean-audit.json`. Its `unfolded_hash` is `c0eec71a7f30` on `main` and `5ab5dac9f433` at the head. [run: `main`'s lock against the head's, every leaf]
+- Its `type_hash` (`b7d2aff59405`) and its premises are `main`'s: one open premise, `Properties.Spot.ExpectsV2`, no assumption, no domain premise. [run: the same comparison]
+- The new hash is the one this pull request had at `c274cac9c132`, before any merge of mine, and at `952d8070471c`. [run: `git show REV:security/Properties/lean-audit.json` at each]
+- **On `main`** (`security/Properties/Spot.lean`) [read]:
+
+  ```lean
+  def AcceptMeans : Prop :=
+    ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+      OneStage.check p c e = .accept pub prof →
+        ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
+          UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+          Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
+          pub = publicOf p e law d n ∧ prof = profileOf p c e d n
+  def WindowSeedSalt (rec : Json) (v : Registration.Verifier) : Prop :=
+    jeq (getD (getD rec "window") "seed_salt") (match v.seedSalt with | some s => .str s | none => .null)
+  -- R6, which `Registered` reads, ends:
+  --   … ∧ WindowSeedSalt rec v ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v
+  ```
+
+- **At the head** [read]:
+
+  ```lean
+  def AcceptMeans : Prop :=
+    ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),
+      OneStage.check p c e = .accept pub prof →
+        ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
+          UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
+          Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
+          pub = publicOf p e law d n ∧ prof = profileOf p c e d n ∧ SeedSaltNamed p c e
+  def WindowSeedSalt (rec : Json) (salt : Option String) : Prop :=
+    jeq (getD (getD rec "window") "seed_salt") (match salt with | some s => .str s | none => .null)
+  def SeedSaltNamed (p : Params) (c : Commitment) (e : Evidence) : Prop :=
+    ∃ salt, OneStage.seedSaltOf p e = .ok salt ∧ WindowSeedSalt c.record salt
+  -- R6 ends:
+  --   … ∧ WindowPoolReset rec v ∧ WindowPoolWeek rec v ∧ WindowPoolSpent rec v ∧ PoolResetOnce v
+  ```
+
+- **In a line:** `main` holds the window's `seed_salt` to a field of the verifier's parameters (`v.seedSalt`), inside R6. The head holds it to the salt the check read from the challenger's log in its evidence (`OneStage.seedSaltOf p e`), as a last conjunct of its own. [read: both texts]
+- **Two guarantees are new, the statement's witnesses, neither with a premise.** [run: the same comparison; read: their `signature` in the lock]
+  - `Properties.Spot.acceptMeans_honest`: `OneStage.check Honest.params Honest.commitment Honest.evidence = .accept (publicOf Honest.params Honest.evidence Honest.law (Core.Draw.subset 1) 1) (profileOf Honest.params Honest.commitment Honest.evidence (Core.Draw.subset 1) 1)`.
+  - `Properties.Spot.acceptMeans_nontrivial (law) (d) (n)`: the negation of `AcceptMeans`' conclusion at `Honest.saltParams`, `Honest.commitment`, `Honest.evidence`, `barePublic`, `bareProfile`, its last conjunct `SeedSaltNamed Honest.saltParams Honest.commitment Honest.evidence`.
+  - `acceptMeans` leaves `unwitnessed`, and `witnesses` lists it with `honest: [acceptMeans_honest]` and `nontrivial: acceptMeans_nontrivial`.
+- **Nothing else in a statement or a premise list differs from `main`.** Against `main`, `security/lean-audit.json` differs in `reads` alone, `security/Properties/lean-audit.json` in `guarantees` (the three records above), `unwitnessed`, `witnesses` and `reads`, and `security/Proofs/lean-audit.json` in `roots` alone, which gains `Proofs.Properties.Spot.AcceptHonest`. [run: the same comparison, all three locks]
+- The pull request's body now says this in its first paragraph. [run: `research queue edit 8139 --body-file`; read back with `gh pr view 8139`]
+
+**2. The ready line**
+
+- **#8139**, head `f51a277c6e846dda3c99f4a0001ef0b618a1bf08`, holding `main` at `d6075b75d289bcca363087683fb62774c5c2829b`. Open, mergeable. [run: `git push` without force, `git rev-parse`, `gh pr view 8139`]
+- **I merged `main`'s tip in rather than only test the merge.** The merge has no conflict, and its tree is the one `git merge-tree --write-tree b8ce43c6c604 origin/main` gave, `53c60cf7f142`. [run: both]
+- **Diff against `main`:** 40 files, +1837 −592. [run: `git diff --shortstat origin/main HEAD`]
+- **Runs, each with its exit code** [run: `research status`; read: each run's `stdout.log`, fetched with `research fetch --all`]:
+  - `r20261112-035756-a864`, exit 0, at `952d8070471c`: `lean_changed.py --try security/Proofs/Properties/Spot/AcceptHonest.lean --siblings`. "lean exit 0 in 129 s"; no name clash with a sibling; "none of its 51 theorems uses an axiom beyond propext, Classical.choice and Quot.sound", with `Honest.templateRanges_program`, `Honest.r8` and `Honest.registered` each on those three. So the proof of R8 I wrote in the merge holds against the real definitions.
+  - `r20261112-035726-4bcb`, exit 0, at `952d8070471c`: `lean_changed.py --records security --update`. `result.json`: `lean-fast/v1`, outcome `regenerated`, validation `passed`. `security` and `security/Properties` regenerated; `security/Proofs` `pass` as it stands. Axioms `propext`, `Classical.choice`, `Quot.sound`. It is the fast path: no kernel replay, and no merge accepts it.
+  - `r20261112-035801-afee`, exit 0, at `952d8070471c`: `suites.py --changed 62bf29346f76 --quick`. Its last line: "71 suites: 71 passed (0 cached), 0 failed; 157.5 min of test time".
+  - `r20261112-054128-9dd0`, **out**, at `f51a277c6e84`: `suites.py --changed d6075b75d289 --quick`, 71 suites, the pre-mark run on the head. Launched 05:41Z on vy-nebius-cpu-11, waiting for a slot at 05:47Z. About 06:45Z. [guess: `afee` ran 41 minutes once it had its slot]
+  - `r20261112-053317-9409`, exit 143, cancelled by me before it took a slot (`research cancel`, by its id): the nine suites the lock commit touches, at `b8ce43c6c604`. `9dd0` runs them among its 71 on the newer tree.
+- **Lock records that moved, against `main`:** the statement of `Properties.Spot.acceptMeans`; the new `acceptMeans_honest` and `acceptMeans_nontrivial`; `acceptMeans` out of `unwitnessed` and into `witnesses`; one root of `security/Proofs`; and digests of definitions that statements read, 18 in `security/lean-audit.json` and 47 in `security/Properties/lean-audit.json` (23 of them the new `Properties.Spot.Honest.*`). Section 3 has the ones `4bcb` wrote. [run: the same comparison]
+- **Your mark:** `research queue ready 8139 --mark --by proofs` at that head once `9dd0` passes, or `research queue ready 8139 --on MACHINE` now, which runs the same tier itself. [read: `research queue status`' line for #8139; the testing skill's pre-mark run]
+
+**3. What `4bcb` wrote: only digests of definitions that statements read. No guarantee's statement, no premise**
+
+- Between `952d8070471c` and the head the two locks differ in `reads` alone: 9 leaves in `security/lean-audit.json`, 12 in `security/Properties/lean-audit.json`, none in `security/Proofs/lean-audit.json`. [run: the two heads' locks compared, every leaf]
+- The lock commit `b8ce43c6c604` is the run's two records byte for byte: sha256 `bea6e70229e0…` and `d9c7b6e50247…`, the ones `result.json` names. [run: `sha256sum` of each, in this turn before the commit]
+- **Six definitions, in both locks, the same digests in each** (old is the digest the merge driver carried from `main`; new is the regenerated one):
+  - `Spot.OneStage.paramsParsed`: `998cfd2d39be` → `404e53ba9ddc`. `main`'s parsing of `tied` without the `seed_salt` parameter this pull request removes.
+  - `Spot.OneStageZk.checkMembersAt`: `833eb22fe3f0` → `f556bcd91823`. Its text is `main`'s. It builds `OneStage.Evidence`, which gains `seedSalt` here.
+  - `Spot.OneStageZk.checkOneAt`: `947d9d43c535` → `b5b1219a476a`. The same reason.
+  - `Spot.Registration.Verifier`: `30ac2ede30ec` → `8debdede323b`. `main`'s `tied` field, and this pull request's removal of `seedSalt`.
+  - `Spot.Registration.Verifier.tied`: `333909cd0a9b` → `6f4ee9b1868f`. `main`'s field, its text unchanged, in the changed structure.
+  - `Spot.Registration.check`: `731a472bd523` → `995ada17b22b`. `main`'s R1 to R8 with the salt as the check's argument.
+- **Two more in `security/Properties/lean-audit.json`**, this pull request's two literals of `Registration.Verifier`, their text unchanged, the structure having gained `tied`:
+  - `Properties.Spot.Honest.saltParams`: `45cbc041aaf9` → `3472da9cb647`. Read by `acceptMeans_nontrivial`.
+  - `Properties.Spot.Honest.verifier`: `0fba5ae97e58` → `76c67cb8888c`. Read by `acceptMeans_honest` and `acceptMeans_nontrivial`.
+- **The groups' digests follow:** `Spot.OneStage`, `Spot.OneStageZk` and `Spot.Registration` in both locks, and `Properties.Spot` in `security/Properties`. [run: the same comparison]
+- **Who reads the six.** In `security`: `Flock.SecurityProofs.RecursiveAuditC3`, and for `Registration.Verifier` also `SampledKSTwo`, `SampledKSTwo_honest`, `SpotExfilTwo` and `SpotKSTwo`. In `security/Properties`, 31 guarantees: `Properties.Spot.acceptMeans` and its two witnesses, `Properties.Spot.bernoulliBounds`, `Properties.Spot.SecurityProofs.tablesRegistered`, `Properties.Remote.SecurityProofs.acceptComplies`, `acceptInferenceOnly` and its `_nontrivial`, and 23 under `Verity.`: `coins_couple`, `remote_soundness_of_subprotocols`, `soundness_at_of_componentBounds`, `soundness_at_of_targets`, `soundness_of_subprotocols`, `soundness_of_upFront` and `target_of_periods`, each with its `_honest` and `_nontrivial`, and `wipe_target` with its `_nontrivial`. [read: the run's review printout, its `definition … read by …: changed` lines; it prints no guarantee item]
+- **One thing in the record that is no change of content:** two keys of `shape/inline/NetTiming.SecurityProofs.PooledLeakAccepted` in `security/lean-audit.json` change places, the last two of its eleven. Keys and values are the same. [run: the two locks read with their key order kept]
+
+**4. Whether `afee` or `4bcb` must rerun on `main` at `d6075b75d289`**
+
+- **`4bcb`: no.** The Lean inputs keys of `security`, `security/Properties`, `security/Proofs` and `verity/protocols/spot/verifier/lean` are the same at the head as at `b8ce43c6c604`. [run: `lean_changed.py --inputs-key … --head` at each]
+  - Between `62bf29346f76` and `d6075b75d289` `main` changed no `.lean` file, no lock and nothing under `security/`. [run: `git diff --name-only`]
+- **`a864`: no**, for the same reason.
+- **`afee`: yes, and it is running as `9dd0`.** `main` moved 167 files between the two tips. One is in this pull request too, the spot verifier's README, and the two sides changed different places in it. [run: `git diff --name-only` of each side, `comm`]
+  - But `main`'s new `benchmarks/one_stage/tests/test_two_stage_driver.py` imports `coins`, `a5_coins` and `fake_challenger`, three modules this pull request changes. `afee` never ran that test against them. [read: `main`'s diff of the file; this pull request's diff of the three]
+  - This pull request changes no signature there except by adding parameters with defaults (`fake_challenger.Challenger.__init__`, `a5_coins.register`), so I expect it to pass. [read: the diff's `def` lines; guess: that it passes]
+  - 77 suites read something `main` moved, most through the whole of `verity/`, so the pre-mark run on the head is again 71 suites. [run: `suites.py --changed b8ce43c6c604 --list` on the merge, and the launcher's line for `9dd0`]
+
+**5. For the reviewer**
+
+- **The ratchet gate is red on this change, and I had not run it before this turn.** `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD` exits 1: "adds 141 retired-term site(s) to the files it changes". [run]
+  - By file: `AcceptHonest.lean` 0 → 70, `test_difftest.py` 1219 → 1251, `test_service.py` 205 → 216, `security/Properties/Spot.lean` 100 → 110, `fake_challenger.py` 27 → 34, `test_composition_difftest.py` 114 → 118, and one or two each in `test_challenger_difftest.py`, `test_challenger_coins.py`, `service.py`, `test_a5_coins.py` and `security/Proofs/Properties/Spot.lean`. [read: the gate's line]
+  - The terms it names are `law` (say sampling design), `drawn` and `draws`, `Period` and `unitClass`. It prints the first twelve sites only. [read: its output]
+  - **It holds nothing:** ratchet-gate is off the merge gate (`warn_steps` in drive.toml), and retired terms are bookkeeping, which a later pull request fixes. [read: drive.toml; `AGENTS.md`'s Tests section]
+  - **Yours to choose:** land it so and I open the fix after as a small pull request, or I fix it on this branch first. The 81 sites in Lean cost a new try and a new records run, about 90 minutes, and renaming `Honest.law` renames a definition the lock lists. [guess: the cost, from `a864`'s and `4bcb`'s times]
+- **The other gates pass at the head:** `pins.py --stale`, `tools/verity/lean/unread_gate.py origin/main HEAD` and `tools/verity/check/gates/markdown_caps.py origin/main HEAD` each exit 0. [run]
+  - At `b8ce43c6c604` the Markdown gate failed: the README was 49,776 bytes against a cap of 49,152. `main` had trimmed it, and at the head it is 47,069. That is one reason I merged. [run: the gate at each head]
+- **The merge's own code, in `6e2ffd8b89c3`** [read: the merged files, in my 04:04Z entry; `a864` and `afee` passed on them]:
+  - `security/Proofs/Properties/Spot/AcceptHonest.lean`: `templateRanges_program` and `r8`, with `import all Init.Data.Array.QSort.Basic`.
+  - `security/Proofs/Properties/Spot.lean`: `registration_nil` with `main`'s `R8 v` in `Registered` and `WindowSeedSalt rec salt` as its second conjunct.
+  - `verity/protocols/spot/verifier/lean/Spot/Pieces.lean`: the registration piece keeps `main`'s verdict object and reads `seed_salt` beside `params` and `record`.
+  - `verity/protocols/spot/verifier/lean/tests/test_difftest.py`, `one_stage/verifier.py` and `service.py`: the conflicts' resolutions.
+- **No run here replays the kernel.** The records run is the fast path, and the queue's own records run is the first replay. [read: `4bcb`'s `result.json`]
+
+**6. The body**
+
+- I replaced its first section, "Crossed the layout move", which named `c274cac9c132` as the head and said it did not merge with #8539. In its place: the paragraph on what it moves in the lock, then "At the head" with the four commits, the runs above, the gates and the ratchet gate's red. The rest is as it was. [run: `research queue edit 8139 --body-file`, 22,300 bytes; `gh pr view` shows it]
+- `Lane proofs` and `Goal proofs/spot-post-ready` are as they were, and so is `Refs CIR-188, PRF-462`. I did not check that the goal is live. [read: the body]
+- `9dd0`'s line there says the run is out. I put its result in when it ends.
+
+**7. The other three, as I left them**
+
+- **#8406: redo as a new small pull request on #8940's `stmtOk`. #8940 is not on `main`.** `58a598e615b1` is no ancestor of `d6075b75d289`, and the queue lists #8940 as ready and admitted: it merges once it has a land verdict. [run: `git merge-base --is-ancestor`, `research queue status`]
+  - **What I build on:** #8940's head `58a598e615b1`, on a new branch `cursor/proofs-oldfour-<4 hex>` cut from it, since your 05:30Z message says to redo it on #8940's head. It can't open as a pull request against `main` until #8940 lands, or its diff would carry #8940's. I push nothing to #8406's branch. [read: your 04:19Z and 05:30Z messages]
+  - WIRED's branch has moved, from `f8df31eb0807` to `094274dc71be`. I have not read what changed. [run: `git ls-remote`]
+- **#8414: drop.** Nothing is left that `main` lacks. [read: my 04:04Z entry]
+- **#8363: drop the pull request.** The instance is redone against WIRED's statements; `InstanceBoundary.lean` carries over. [read: my 04:13Z entry]
+- I close nothing.
+
+**Next.** #8406's redo on `58a598e615b1`, its entry by 09:00Z. `9dd0`'s result here when it ends.
