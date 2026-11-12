@@ -48,15 +48,17 @@ its records say (`failing`): the repository paths and `art:` ids they name (`Fai
 declared inputs narrowed by what its run traced, a failed Lean build's modules and their imports, a step's declared reads;
 None when nothing bounds them); and what failed (`Failed.kind`).  It fails as soon as a
 shard has failed a step it judges, or a suite of one, while the others run (`_early`: a shard's failures so far, which its
-check writes as each one fails), a failure read then as it would be at the end; a candidate on another candidate whose check
+check writes as each one fails), a failure read then as it would be at the end, and it passes as soon as every step it
+judges passed in every shard holding it, while a shard still runs a step off the gate (`_passed_early`: circuit-check holds
+no pass); a candidate on another candidate whose check
 runs is compared with what that check has failed so far, the rest unknown until it ends (`based` with ``so_far``).  A
 candidate built on another in flight, no member of it changing a Lean input (`lean_inputs`), audits nothing itself where its
 base's check is judged on lean-audit (`audits`) or took its verdict on it from the check of a candidate below that is: `start`
 with ``audit_from``, the candidate whose check ran it, leaves lean-audit out of its run (``lean_audit_from``), and `audited`
 gives it the verdict on the step that the run beside `main` keeps once that candidate has landed (`answers`), pending until
 then whatever that check says, so it lands after that candidate, drops with it, and stays pending while it is rerun.  A step
-it leaves out still runs: `failures` reads what it failed, which the loop rings to who acts on it, but what the run beside
-the base's check failed too (`Loop._off_gate`)."""
+it leaves out still runs: `failures` reads what it failed once every run has ended, which the loop rings to who acts on
+it, but what the run beside the base's check failed too (`Loop._off_gate`), its candidate landed or dropped by then or not."""
 from __future__ import annotations
 
 import ast
@@ -581,7 +583,8 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     drive.toml's `warn_steps` (`_gate`).  Pending while it waits for the records of the runs it replaces, the call that finds
     the wait over launching it (`_waited`), and while its auto plan is made, the call that finds it made launching the
     shards (`_planned`), and while it launches or runs, each shard's launch read as the run's own is; the check that gates,
-    while it runs, fails once a shard has failed one of those steps (`_early`).
+    while it runs, fails once a shard has failed one of those steps (`_early`), and passes once each of them passed in every
+    shard that holds it, whatever a step off the gate still does (`_passed_early`), its runs left to end.
     Infra when it registered no run (``rec`` None, its auto plan failed, or a detached launch that printed no run ids,
     a shard's stopping the other shards; `Failed.launch` when it says one of `LAUNCH_ONLY`), never ran or was stopped, or was lost or killed before it passed each of those
     steps; infra's one `Failed` says which.  Once it ended, pass when it passed each of them (the check that gates: in
@@ -595,6 +598,8 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     if rec is None:
         return _down(None, "registered no run")
     if "verdict" in rec:
+        if rec.get("still_running"):
+            _settle(driver, rec)
         return _kept(rec["verdict"])
     if "wait" in rec:
         return _waited(driver, rec)
@@ -632,7 +637,10 @@ def judge(driver: Landing, rec: dict | None) -> Verdict:
     if lost := driver._lost(rec, states):
         states = {r: ("lost", -1) for r in states}
     if any(st in ACTIVE for st, *_ in states.values()):
-        return _early(driver, rec, states) if check else Verdict(PENDING)
+        if not check:
+            return Verdict(PENDING)
+        v = _early(driver, rec, states)
+        return _passed_early(driver, rec, states) if v.state == PENDING else v
     why = "lost" if lost else ", ".join(f"{st} rc={rc}" for st, rc, *_ in states.values())
     if not lost and driver._never_ran(rec, states):
         return _keep(rec, _down(rec, f"never ran or was stopped ({why})"))
@@ -736,6 +744,36 @@ def _early(driver: Landing, rec: dict, states: dict) -> Verdict:
     return v
 
 
+def _passed_early(driver: Landing, rec: dict, states: dict) -> Verdict:
+    """The verdict of the check that gates (``rec``) while a shard of it runs and none has failed a step it is judged on
+    (`_early`): pass, kept as the end's is, once every step it is judged on (`_gate`) passed in every shard that holds it
+    (`shard_steps`, `shard_passed`: a failure an allowance at its base covers counting as passed), whatever a step off the
+    gate (policy.toml's `off_gate`, drive.toml's `warn_steps`) still does there; pending while a shard's plan isn't known, a
+    shard's records can't be fetched, or one of those steps hasn't ended in a shard that holds it.  The records are each
+    shard's dirs fetched afresh (`landing.evidence`), never the Landing's cache, which the end's reading and `failures` read.
+    ``rec`` says its runs still run (``still_running``) until a later `judge` finds each ended (`_settle`): `failures`
+    reads nothing of them until then."""
+    groups = rec.get("groups") or [rec["ids"]]
+    dirs = driver.evidence(driver.repo, rec["ids"])
+    shards = [[d for d in dirs if d.name in g] for g in groups]
+    if not all(shards):
+        return Verdict(PENDING)
+    view = shard_steps(shards, [any(states.get(r, (None, None))[1] == 0 for r in g) for g in groups])
+    judged = _gate(driver, rec)
+    passes = shard_passed(view, driver._allowed_steps(rec.get("base") or rec["tip"], dirs))
+    if view is None or any(s not in passes for s in judged):
+        return Verdict(PENDING)
+    rec["still_running"] = True
+    return _keep(rec, Verdict(PASS), judged)
+
+
+def _settle(driver: Landing, rec: dict) -> None:
+    """``rec``'s ``still_running`` (`_passed_early`) dropped once none of its runs is active, or they are lost (`Landing._lost`)."""
+    states = driver.states(driver.repo, rec["ids"])
+    if driver._lost(rec, states) or not any(st in ACTIVE for st, *_ in states.values()):
+        del rec["still_running"]
+
+
 def _written(path: Path, otherwise: float) -> float:
     """When ``path`` was last written (a fetched file keeps its node's time), ``otherwise`` when it wasn't fetched."""
     return path.stat().st_mtime if path.is_file() else otherwise
@@ -751,9 +789,10 @@ def failures(driver: Landing, rec: dict | None, step: str) -> dict[str, str] | N
     """What the run ``rec`` records failed of ``step``, a step `judge` leaves out (policy.toml's `off_gate`, drive.toml's
     `warn_steps`), once its verdict is kept: each failure the step's logs name (`reds.named`: ratchet-gate's merges,
     circuit-check's failures), by its key with its line, else the step itself; {} when it passed.  A shard's twin that passed
-    it answers for the shard (`shard_steps`).  None while the run runs, and when it didn't run the step to its end: no shard
-    holds it, one skipped or stopped it, or a kill ended it (`KILLED_RC`, a signal)."""
-    if rec is None or "verdict" not in rec or not rec.get("ids"):
+    it answers for the shard (`shard_steps`).  None while the run runs, a pass kept early among it (``still_running``), and
+    when it didn't run the step to its end: no shard holds it, one skipped or stopped it, or a kill ended it (`KILLED_RC`, a
+    signal)."""
+    if rec is None or "verdict" not in rec or rec.get("still_running") or not rec.get("ids"):
         return None
     groups = driver._shards(rec)
     view = shard_steps(groups, [True] * len(groups)) or []
