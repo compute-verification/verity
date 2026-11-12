@@ -68,11 +68,6 @@ without a word to another directory.
 | `p2_stage/full.py` | `Segments`, `sync`, `DEVICE` | `benchmarks/pous/p2_v1/bandwidth.py` |
 | `p2_stage/build.sh` | run as a script: `libp2v1.so` for one architecture, with its manifest | `benchmarks/one_stage/served_bandwidth.sh`; `benchmarks/pous/p2_v1/bw_session.sh`; `benchmarks/pous/served_case.sh` and `served_piece.sh`; `adapters/vllm/tests/protocols/pous_gpu.sh` |
 | `benchmarks/torch_gpu/p2_stage/served_weights.py` | the seeded weights' generator, by its module name `benchmarks.torch_gpu.p2_stage.served_weights`: `SHAPES`, `ALIASES`, `tensors`, `generate`, `stream_bytes`, `tensor_bytes` | `benchmarks/network_traces/demo_endpoint.py`; `benchmarks/pous/p2_v1/store.py` |
-| `attn_bf16/attn.py` | `qk`, `pv` | `benchmarks/pouw/gemm_rate/attn_rate.py` |
-| `attn_bf16/build.sh` | run with `CUBIN_ONLY=1`; the cubin it writes is passed on as `$ATTN_BF16_CUBIN` | `benchmarks/pouw/gemm_rate/attn_rate.sh` |
-| `s8_linear/wgmma.py` | `scaled_mm`, `Cfg`, `default_cfg`; its cubin through `$S8_WGMMA_CUBIN` | `benchmarks/pouw/gemm_rate/torch_rate.py` |
-| `s8_linear/build.sh` | run as a script: `s8_wgmma.cubin` | `benchmarks/pouw/gemm_rate/rate.sh` |
-| `s8_linear/s8_acc.h` | `#include` | `benchmarks/pouw/accel_v31` |
 | `commit_slots/slots.py` | the commit call's layout, domains and trees: `CommitShape`, `Group`, `Part`, `Row`, `ROW_SCHEMA`, `layout_digest`, `row_salts`, `slot_domain`, `step_domain`, `unit_domain`, `step_tree` | `benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py` |
 
 That bundle check also reads two private names of `slots.py`, `_unit_tree` and `_strings`; a private name is not an
