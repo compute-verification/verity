@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SamplingGeneric.TwoOffClassAt
 public import Proofs.Flock.SamplingGeneric.TwoFirstHitAvg
 import Proofs.Flock.Claims.Prob
+import Proofs.Flock.SamplingGeneric.RegTrace
 
 /-!
 # The first-hit bounds by class of gates, at the prover's expected calls
@@ -22,9 +23,12 @@ of the run's calls and the three counts of its sample.
   (`Compiled.CallsAvg.of_counts`), the bound is `εclsAt`'s expression with `T` the expected calls:
   `κ_s + √(k·γ_s·Pr[B]) + (2·(T·(1 + e_s·N_s) + n_PU·openCalls) + 4·(T·(1 + e_s·N_s + K_s + e_s·K_m)`
   `+ (1 + K_s)·n_PU·openCalls))/2^256`.
+* `Compiled.eventX_le_cls_avg`, `Compiled.eventX_le_cls_exp`: **the one-stage event at the prover's expected
+  calls**, `κ_s + √(k·γ_s·Pr[B]) + (2·runCostAvg + 2·firstHitCostAvg)/2^256`, and its form at the sample's counts:
+  `Compiled.eventX_le_cls_at` with the same replacement, the event having the first two masses only.
 
-The other premises are `eventTwoX_le_cls_at_budget`'s, unchanged: a run's extractions open a class whole or not at
-all, the opening checks' count, and the linear expected-time bound at `B_conf,X` and at the two by-class finders of
+The other premises are those of the theorems at a budget, unchanged: a run's extractions open a class whole or not
+at all, the opening checks' count, and the linear expected-time bound at `B_conf,X` and at the by-class finders of
 every `K`. No statement of the definitions tree changes.
 -/
 
@@ -123,6 +127,74 @@ theorem pr_offRegX_le_cls_avg {H : Msg → Msg} {L : Compiled Coin A} (hbind : L
   have hc := ex_calls_le_avg_cls hS hopen hs P needs cls hC.calls hC.sessions hC.classes hC.needed hC.count
   exact h.trans (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_left hc (by norm_num : (0 : ℝ) ≤ 2))
     (by positivity : (0 : ℝ) ≤ 2 ^ (256 : ℝ)))
+
+set_option synthInstance.maxSize 1024 in
+/-- **The one-stage event at the trace read at the statement, by class, at the prover's expected calls.** On a
+statement in scope, under `pr_offRegX_le_cls_avg`'s premises and the linear expected-time bound at `B_conf,X`, an
+accepted run samples a proof block of `FregX` with probability at most
+
+`κ_s + √(k·γ_s·Pr[B]) + (2·(T + e_s·A_s + n_PU·openCalls) + 2·(T + e_s·A_s + A_k + e_s·A_m`
+`+ (1 + K_s)·n_PU·openCalls))/2^256`:
+
+`eventX_le_cls_at` with its budget on every run replaced by the averages of `CallsAvg`. No run of the prover is held
+to a budget. -/
+theorem eventX_le_cls_avg {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    (hSK : L.SessionKS H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : Sampling.InScope Pt s) {Ω : Type} [Fintype Ω]
+    [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (cls : Fin (L.nG x) → Fin (L.nG x))
+    (hallX : ∀ (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g g' : Fin (L.nG x)), cls g = cls g' →
+      (L.opensAt H P x a.1 a.2.1 a.2.2 g).isSome → (L.opensAt H P x a.1 a.2.1 a.2.2 g').isSome)
+    {T As Ak Am Ks : ℝ} (hC : L.CallsAvg H P x needs cls T As Ak Am Ks)
+    (hB : ExpectedCR H (BconfX H L Ω P x))
+    (hX : ∀ K : ℕ, ExpectedCR H (L.finderXCls H P x s needs cls K)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregX H P x) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) +
+        (2 * L.runCostAvg x T As + 2 * L.firstHitCostAvg x T As Ak Am Ks) / 2 ^ (256 : ℝ) := by
+  have hI := (pr_inConfX_le hbind hs P).trans
+    (bconfX_le_avg hS.toCostContract hopen x P hC.calls hC.sessions hB)
+  have hO := (Pr_mono (p := fun q : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x) =>
+      (run H P L.V x q.1 q.2.1).out = .acc ∧ L.OffRegX H P x q.1 q.2.1 q.2.2) fun _ h => h.2).trans
+    (pr_offRegX_le_cls_avg hbind hS.toCostContract hopen hs P needs hpos cls hallX hC hX)
+  simp only [FregX_eq_FregAt]
+  refine (event_le_of_off hS hSK hs hPt hin P (fun _ _ => L.regValX H P x) hI hO).trans ?_
+  rw [add_div]
+  linarith
+
+set_option synthInstance.maxSize 1024 in
+/-- **The one-stage event at the trace read at the statement, by class, at the prover's expected calls and the
+sample's counts.** Under `eventX_le_cls_avg`'s premises with a run's expected calls at most `T` and the sample's
+three counts at most `N_s`, `K_s` and `K_m` whatever the coins, an accepted run samples a proof block of `FregX` with
+probability at most `eventX_le_cls_at`'s expression at the expected calls:
+
+`κ_s + √(k·γ_s·Pr[B]) + (2·(T·(1 + e_s·N_s) + n_PU·openCalls) + 2·(T·(1 + e_s·N_s + K_s + e_s·K_m)`
+`+ (1 + K_s)·n_PU·openCalls))/2^256`. -/
+theorem eventX_le_cls_exp {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H) (hS : L.Sessions H)
+    (hSK : L.SessionKS H) (hopen : L.OpenCallsLe H) {x : Msg} {s : AuditStatement} {Pt : Partition}
+    (hs : L.parse x = some s) (hPt : L.partition s = some Pt) (hin : Sampling.InScope Pt s) {Ω : Type} [Fintype Ω]
+    [Nonempty Ω] (P : Prover Ω) (needs : ℕ → Finset ℕ)
+    (hpos : ∀ u v w, ∀ p ∈ L.reveal s u v w, p.2.pos ∈ needs u) (cls : Fin (L.nG x) → Fin (L.nG x))
+    (hallX : ∀ (a : Ω × ((Fin (L.V.k x) → Coin) × L.SlotEC x)) (g g' : Fin (L.nG x)), cls g = cls g' →
+      (L.opensAt H P x a.1 a.2.1 a.2.2 g).isSome → (L.opensAt H P x a.1 a.2.1 a.2.2 g').isSome)
+    {T Ns Ks Km : ℝ}
+    (hT : Ex (fun q : Ω × (Fin (L.V.k x) → Coin) => (L.partiesCalls H P x q.1 q.2 : ℝ)) ≤ T)
+    (hNs : ∀ r : Fin (L.V.k x) → Coin, ((L.firstSlots x (L.checked x r)).card : ℝ) ≤ Ns)
+    (hKs : ∀ r : Fin (L.V.k x) → Coin, (((L.sampleNeeds x needs (L.checked x r)).image cls).card : ℝ) ≤ Ks)
+    (hKm : ∀ r : Fin (L.V.k x) → Coin,
+      (L.sessCountIn x needs (fun l => (L.sampleNeeds x needs l).image cls) (L.checked x r) : ℝ) ≤ Km)
+    (hB : ExpectedCR H (BconfX H L Ω P x))
+    (hX : ∀ K : ℕ, ExpectedCR H (L.finderXCls H P x s needs cls K)) :
+    Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
+        ∃ u ∈ L.checked x p.2, u ∈ L.FregX H P x) ≤
+      L.κs x + Real.sqrt (L.V.k x * L.γs x * PrB H L.V P x) +
+        (2 * (T * (1 + L.es x * Ns) + (L.nPU x : ℝ) * L.openCalls x) +
+          2 * (T * (1 + L.es x * Ns + Ks + L.es x * Km) + (1 + Ks) * ((L.nPU x : ℝ) * L.openCalls x))) /
+          2 ^ (256 : ℝ) := by
+  have h := eventX_le_cls_avg hbind hS hSK hopen hs hPt hin P needs hpos cls hallX
+    (CallsAvg.of_counts hT hNs hKs hKm) hB hX
+  rw [runCostAvg_counts, firstHitCostAvg_counts] at h
+  exact h
 
 end Compiled
 
