@@ -648,9 +648,9 @@ class Committed:
             values={p: {"root": self.roots[p].hex(), "words": L.words(p), **ports[p]} for p in ports},
             index=self.index_leaf, index_rule=CS.INDEX_RULE, seconds=round(self.seconds, 3)).dump()
 
-    def record(self, law: Mapping[str, Any], previous: str | None = None,
+    def record(self, design: Mapping[str, Any], previous: str | None = None,
                window: Mapping[str, Any] | None = None) -> dict[str, Any]:
-        return record(self.public(), self.layout.check, law, previous, window, stop=self.layout.stop)
+        return record(self.public(), self.layout.check, design, previous, window, stop=self.layout.stop)
 
     def port(self, value: str) -> LK.Port:
         """Value ``value`` as a later statement reads its rows (`links.Port`): its rows, every row's ``b || c`` and
@@ -693,17 +693,17 @@ def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition, stop: Any = 
     return L
 
 
-def record(pub: Mapping[str, Any], check: SpecializedDefinition, law: Mapping[str, Any], previous: str | None = None,
+def record(pub: Mapping[str, Any], check: SpecializedDefinition, design: Mapping[str, Any], previous: str | None = None,
            window: Mapping[str, Any] | None = None, stop: Any = None) -> dict[str, Any]:
     """The class's boundary registration (one-stage's record) from its ``commit.json``, laid out under ``check`` and the
-    stop rule ``stop`` (`layout_of`): `Layout.program` under `Layout.grain` at ``law`` (the first stage's,
+    stop rule ``stop`` (`layout_of`): `Layout.program` under `Layout.grain` at sampling design ``design`` (the first stage's,
     `service.selection_law`), each of its values' root (`Layout.values`), and its window: served, the run, the window's
     index as its row, the class, the check and the index's leaf, with ``window``'s items (the advice's binding)."""
     L, c = layout_of(pub, check, stop), BoundaryCommit.of(pub, COMMIT)
     roots = [{"port": p, "root": c.values[p]["root"], **e} for p, e in L.ports().items()]
     w = {"kind": "served", "run": L.run, "row": c.window, **L.provenance(), "index": c.index, "boundary": FORMAT,
          **(window or {})}
-    return R.record(L.program, L.grain, law, CS.SCHEME, roots, w, previous=previous)
+    return R.record(L.program, L.grain, design, CS.SCHEME, roots, w, previous=previous)
 
 
 def commit(spans: Sequence[Span], layout: Layout, window: int, *, salts: Mapping[str, bytes] | None = None,
