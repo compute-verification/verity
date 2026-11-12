@@ -193,6 +193,9 @@ protocols = [
     # the recorded population programs, some keyed by PoUB's plan and memory-map units, and the test that rebuilds each
     "verity/circuits/tests/{population_recorded.json,test_population_recorded.py}",
 ]
+# the auditor host's challenger service, under SPOT's public `device`: it serves the network certifier's link beside SPOT's
+# challenger, and its gate and units are the team's pods'
+challenger_service = ["verity/protocols/spot/device/live_challenger"]
 # vLLM's tests that read a private protocol (NCI, the bandwidth audit, PoUS)
 protocol_tests = [
     "adapters/vllm/tests/pipeline/test_memory_map.py",
@@ -322,7 +325,7 @@ from = "*"
 [[needed]]
 why = "the challenger and service code SPOT needs"
 paths = [
-    "verity/{claims,commitments,configuration,definitions,difftest,hardware,protocols}",
+    "verity/{claims,commitments,configuration,definitions,hardware,protocols}",
     "security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}",
 ]
 from = ["spot"]

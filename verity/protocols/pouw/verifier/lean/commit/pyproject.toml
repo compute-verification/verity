@@ -7,7 +7,9 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_pouw_commit_lean_difftest.py"]
 # the difftest's samples are the clear audit's, a reference tool's
-inputs = ["verity", "verity/protocols/pouw/clear"]
+inputs = ["verity", "verity/protocols/pouw/clear",
+          # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
+          "tools/difftest/python/verity_difftest"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

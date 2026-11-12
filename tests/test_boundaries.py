@@ -182,8 +182,8 @@ NO_UNIT = (
     # memory-accounting
     "protocols/poub/device/live_verifier/host.py", "protocols/poub/verifier/remote_session/verifier_process.py",
     # proofs
-    "composite/device/live_challenger/auditor.py", "composite/device/live_challenger/coin_link.py",
-    "composite/device/live_challenger/models.py", "composite/device/live_challenger/serve.py",
+    "protocols/spot/device/live_challenger/auditor.py", "protocols/spot/device/live_challenger/coin_link.py",
+    "protocols/spot/device/live_challenger/models.py", "protocols/spot/device/live_challenger/serve.py",
 )
 _LISTED = {*_UNIT_AT, *NO_UNIT}
 #: ml and core are two named sets: the units named ``ml.*`` and ``core.*``, each with its tests, and with them the trees
@@ -191,7 +191,7 @@ _LISTED = {*_UNIT_AT, *NO_UNIT}
 #: what else is core's, from ``verity/``.
 ML_TREES = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
             "protocols/poub/verifier/commitments/gates/block_check.circuit-check.py")
-CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement", "difftest",
+CORE_TREES = ("commitments/identity", "commitments/lms", "definitions/evaluate", "definitions/requirement",
               "protocols/certifier/device", "protocols/compose", "protocols/flock/sigma", "protocols/inference_only/verifier",
               "protocols/recursion", "protocols/remote", "protocols/tests")
 _SIDE_AT = {t: side for side, trees in (("ml", ML_TREES), ("core", CORE_TREES)) for t in trees}
@@ -204,11 +204,10 @@ FORBIDDEN_EXTERNAL = ("verity_sp1", "verity_vllm", "verity_numerical", "verity_f
 #: ``verity``.  A protocol imports none: it is the standard library and ``verity``, and the application composes protocols.
 DEPENDENCIES = {"numpy"}
 #: Trees under ``verity/`` with import roots of their own: Flock's distribution (``verity_flock``) and its verifier's
-#: scripts, the differential test of the Lean against its Python (``verity_difftest``, which their tests import, on
-#: Hypothesis), and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
+#: scripts, and the PoUS Lean check (``pous-check``), whose Python is run by path beside ``benchmarks/pous``: its difftest generator, which its ``lean-audit.json`` runs, and ``interop.py``,
 #: which holds it to the wire's Python reference through ``verity_difftest``.
 SEPARATE = ("protocols/flock/agreement", "protocols/flock/pod", "protocols/flock/prover", "protocols/flock/tool.py",
-            "difftest", "protocols/pous/verifier/check", "configuration/config", "protocols/inference_only/rho",
+            "protocols/pous/verifier/check", "configuration/config", "protocols/inference_only/rho",
             "protocols/inference_only/nci")
 #: Source subtrees that must stay stdlib-only, the scalar references, and within them what may use numpy.
 NUMPY_FREE = ("circuits", "definitions/circuits", "definitions/silicon", "commitments/randomness", "claims", "hardware")

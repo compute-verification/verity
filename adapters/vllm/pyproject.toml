@@ -144,7 +144,10 @@ inputs = ["verity", "verity/README.md", "verity/configuration/config/verity_conf
           "tools/research/src/research/withdraw.py",
           "tools/research/src/research/__main__.py",
           "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/live.py",
-          "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py"]
+          "benchmarks/pouw/hidden_zk/fast_stage.py", "benchmarks/pouw/hidden_zk/compact_stage.py",
+          # the difftest harness's Lake package: the Lean executables these tests run are built under the lock in
+          # its `.lake`
+          "tools/difftest/lean"]
 parallel = true
 # benchmarks/pouw/edited_gemm/fattn_ref.py is the int8 attention tests' oracle (tests/engine), beside benchmarks/ppl's linears;
 # tests/engine/int8_attention_sass.py reads the int8 attention kernels' SASS with the PoUW SASS gate's nvdisasm parser

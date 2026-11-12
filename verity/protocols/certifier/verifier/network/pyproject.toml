@@ -14,7 +14,10 @@ untraced = [
     "tests/test_network_period_protocol.py",
     "tests/test_network_records_protocol.py",
 ]
-inputs = ["verity"]
+inputs = ["verity",
+          # the difftest harness: `verity_difftest`, through which the verifiers these tests run speak to their Lean
+          # executables, and its Lake package, under the lock in whose `.lake` those executables are built
+          "tools/difftest/python/verity_difftest", "tools/difftest/lean"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

@@ -15,4 +15,7 @@ untraced = ["tests/test_toy.py", "tests/test_guard.py"]
 # reads the tests hold them to, and the Lean packages its verifier of record builds from; that lakefile, named on its own, is
 # the package the tests build (`one_stage.verifier.executable`), so check runs them after lean-build; `verity_config`, which
 # reads the guard's command from this directory's settings registry
-inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/configuration/config/verity_config"]
+inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/configuration/config/verity_config",
+          # the difftest harness's Lake package: the Lean executables these tests run are built under the lock in
+          # its `.lake`
+          "tools/difftest/lean"]

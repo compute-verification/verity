@@ -13,7 +13,10 @@ untraced = [
     "tests/test_network_certifier_service.py",
     "tests/test_network_certifier_tie_service.py",
 ]
-inputs = ["verity"]
+inputs = ["verity",
+          # the difftest harness's Lake package: the Lean executables these tests run are built under the lock in
+          # its `.lake`
+          "tools/difftest/lean"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

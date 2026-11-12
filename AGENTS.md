@@ -26,7 +26,8 @@ what the layout's design has and the tree does not.
     policy's check (`inference_only/verifier/nci/`), `remote/` and `onsite/` are Lean only. `interface/` is the Lean
     interface each protocol's check implements. Code the move brought from `benchmarks/`, which no unit rule reads yet:
     `pouw/clear/`, `pouw/receipts/`, `poub/device/live_verifier/`, `poub/verifier/remote_session/`,
-    `inference_only/nci/` and `inference_only/rho/`.
+    `spot/device/live_challenger/` (the auditor host's challenger service), `inference_only/nci/` and
+    `inference_only/rho/`.
   - `verity/circuits/`: the circuit language (format in `circuits/PROTOCOL.md`). Three base Lean packages, which Flock's
     verifier and the packages requiring it load, hold the shared Lean: `verity/circuits/base/` (bytes, hashes and
     parsing), `verity/circuits/lean/` (the circuit format) and `verity/commitments/lean/` (frame-v3 and the
@@ -45,8 +46,7 @@ what the layout's design has and the tree does not.
     channels, the configuration and the runtime that runs them) and `config/` (`verity_config`, its own distribution). Target, not yet: four files
     directly under `verity/` (what a party is, the registered hardware, what a protocol declares, the configuration)
     and `verity/runtime/`, which runs parties over channels.
-  - `verity/claims/`: the security claims' ids. `tools/difftest/`: the Python held to each Lean (target, not yet: under
-    `tools/`). `verity/protocols/spot/device/live_challenger/`: the auditor host's challenger service, from `benchmarks/` too.
+  - `verity/claims/`: the security claims' ids.
 - `security/`: the Lean every guarantee is stated and proved in (Lean, below).
 - `adapters/`: one directory per serving system, holding only what attaches Verity to it: an adapter, which the Design
   rules below still call an integration. `adapters/vllm/` (`verity_vllm`) builds each served workload's circuit and
@@ -55,6 +55,8 @@ what the layout's design has and the tree does not.
 - `benchmarks/`: the measuring side: reproducible workloads and measurements, among them `one_stage/`, the one-stage audit
   end to end, GPU probes, and `benchmarks/census/`, data that `verity` only takes as parameters.
 - `tools/verity/`: the `verity` command, `check/` (the one check), `circuit_check/` and `lean/` (the Lean check).
+  `tools/difftest/`: the Python held to each Lean (`verity_difftest`, its own distribution) and the harness's Lake
+  package, which each Lean difftest under `verity/` requires by path.
 - `fixtures/artifacts.json`: every replicated fixture by `art:` id (target, not yet: no `fixtures/`, each file beside
   its reader). `tests/`: invariants of the whole tree. The tree keeps no archive directory: code that is retired is
   deleted, and history keeps every file. The archived proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were

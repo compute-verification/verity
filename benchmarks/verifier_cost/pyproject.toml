@@ -16,4 +16,7 @@ untraced = ["tests/test_mains.py"]
 inputs = ["verity/protocols/flock/verifier/lakefile.toml",
           "verity/protocols/inference_only/verifier/nci/lean/lakefile.toml",
           "verity/protocols/spot/verifier/lean/lakefile.toml",
-          "verity"]
+          "verity",
+          # the difftest harness: `verity_difftest`, through which the verifiers these tests run speak to their Lean
+          # executables, and its Lake package, under the lock in whose `.lake` those executables are built
+          "tools/difftest/python/verity_difftest", "tools/difftest/lean"]

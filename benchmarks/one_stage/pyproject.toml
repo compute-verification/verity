@@ -82,7 +82,10 @@ inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity
           "adapters/vllm/verity_vllm", "benchmarks/network_traces",
           "benchmarks/pous/p2_v1", "benchmarks/pous/onsite_pieces.sh",
           "benchmarks/torch_gpu/p2_stage/layout.py", "benchmarks/torch_gpu/p2_stage/stage.py",
-          "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py"]
+          "benchmarks/torch_gpu/p2_stage/full.py", "benchmarks/torch_gpu/p2_stage/gemm.py",
+          # the difftest harness: `verity_difftest`, through which the verifiers these tests run speak to their Lean
+          # executables, and its Lake package, under the lock in whose `.lake` those executables are built
+          "tools/difftest/python/verity_difftest", "tools/difftest/lean"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

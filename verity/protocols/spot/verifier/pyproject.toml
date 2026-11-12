@@ -46,7 +46,10 @@ inputs = ["verity", "security/Proofs/Flock/Soundness/Audit/Influence.lean",
           "tools/research/src/research/store/remote_s3.py", "tools/research/src/research/store/tool.py",
           "tools/research/src/research/store/tools_registry.py", "tools/research/src/research/store/vocab.py",
           "tools/research/src/research/telemetry/__init__.py", "tools/research/src/research/telemetry/cgroup.py",
-          "tools/research/src/research/telemetry/events.py", "tools/research/src/research/telemetry/job.py"]
+          "tools/research/src/research/telemetry/events.py", "tools/research/src/research/telemetry/job.py",
+          # the difftest harness: `verity_difftest`, through which the verifiers these tests run speak to their Lean
+          # executables, and its Lake package, under the lock in whose `.lake` those executables are built
+          "tools/difftest/python/verity_difftest", "tools/difftest/lean"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

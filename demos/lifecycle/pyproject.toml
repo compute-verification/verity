@@ -11,6 +11,8 @@ inputs = [
     # the deployment runtime, circuits, commitments, LMS, sampled proofs' draw, PoUW's grid and the composition's
     # reference (verity/protocols/remote/verifier/composition/tests/reference.py), which the demo runs
     "verity",
+    # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
+    "tools/difftest/python/verity_difftest",
 ]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
