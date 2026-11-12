@@ -29,10 +29,11 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Literal
 
 from verity_vllm.config import option
-from verity_vllm.engine import env as engine_env, hooks
+from verity_vllm.engine import env as engine_env
+from verity_vllm.engine import hooks
 
 SCHEMA = "verity-vllm/meta-inventory/v1"
 
@@ -198,10 +199,10 @@ class _Stream:
     def __init__(self, *a: Any, **k: Any) -> None:
         pass
 
-    def __enter__(self) -> "_Stream":
+    def __enter__(self) -> _Stream:
         return self
 
-    def __exit__(self, *exc: Any) -> bool:
+    def __exit__(self, *exc: Any) -> Literal[False]:
         return False
 
     def __getattr__(self, name: str) -> Any:
