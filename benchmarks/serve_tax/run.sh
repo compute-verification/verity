@@ -284,9 +284,10 @@ gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"
-# the cost of the last arm over compiled; a job of compiled alone (a calibration of its rungs) has none. WITH: the out/
-# directories of earlier jobs on this node whose arms served another load, which joins the number
-if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ]; then
+# the cost of the last arm over compiled; a job that ends on stock has none: compiled alone (a calibration of its
+# rungs), or published, which is stock under other settings and no arm of ours. WITH: the out/ directories of earlier
+# jobs on this node whose arms served another load, which joins the number
+if [ "$CLIENT" = vllm-bench ] && [ ${#dirs[@]} -gt 0 ] && [ "${ARMS##* }" != compiled ] && [ "${ARMS##* }" != published ]; then
   for o in ${WITH:-}; do for d in "$o"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done; done
   cost=("$PY" "$here/serve_tax.py" cost "${dirs[@]}" --arm "${ARMS##* }" ${TARGET:+--target "$TARGET"})
   "${cost[@]}" --out "$OUT" --result || rc=1

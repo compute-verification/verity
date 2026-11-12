@@ -1942,6 +1942,9 @@ def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anythi
     assert rc != 0 and "run this under research run" in out
     sh = (S.HERE / "run.sh").read_text()
     assert 'cost "${dirs[@]}" --arm "${ARMS##* }"' in sh and '--client vllm-bench --loads "$LOADS"' in sh
+    # a job that ends on a stock arm has no cost: no arm of ours is over it
+    assert all(f'[ "${{ARMS##* }}" != {stock} ]' in sh for stock in ("compiled", "published"))
+    assert S.ARMS["published"].plugin == S.ARMS["compiled"].plugin and not S.ARMS["published"].args
     # an earlier job's arms join the cost, after this job's table is made of this job's arms alone
     assert sh.index('table "${dirs[@]}"') < sh.index('for o in ${WITH:-}; do for d in "$o"/*/') < sh.index('cost "${dirs[@]}"')
     assert 'ARMS=${ARMS:-compiled compiled-again two-stage}; LOADS=${LOADS:-chat,long}' in sh

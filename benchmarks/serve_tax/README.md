@@ -47,7 +47,8 @@ vLLM's own for the cards. A model with no recipe here is refused. Of GLM-5.3's r
 but three things, which the arm therefore lacks: the Rust front end (`VLLM_USE_RUST_FRONTEND=1`), the tokenizer mode
 `glm5_next`, and the release the recipe names as its minimum. The recipe's speculative decoding is opt-in and stays
 off. The recipe's page asks for prefix caching off under a benchmark; the arm keeps it on, as a server has it, and
-each pass starts from an empty cache as every arm's does.
+each pass starts from an empty cache as every arm's does. A job that ends on `published` prints no cost: the arm is
+stock, and a cost is of an arm of ours over stock.
 
 What an arm keeps that holds values never goes under its run's directory, which is published: a boundary commitment's
 classes (each class's requests' tokens and its salts), the history tables' rows and salts, and the top-k's counters.
