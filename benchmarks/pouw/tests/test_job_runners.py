@@ -1,6 +1,6 @@
 """Each directory's runner, `run.sh JOB [ARGS...]`: a job is a script beside it, named without `.sh`, every one but those
-the jobs source, and the directory's README has a table row a job.  A name that is no job is refused with the usage,
-before anything starts."""
+the jobs source, and the directory's README has a table row a job, but a job whose name holds a term the Glossary
+retires, which it describes under the table.  A name that is no job is refused with the usage, before anything starts."""
 
 from __future__ import annotations
 
@@ -16,6 +16,8 @@ POUW = Path(__file__).resolve().parents[1]
 RUNNERS = {"served_h1": {"arch"}, "served_zk": set(), "hidden_zk": set(), "h1_prove": set(), "h1_lanes": set()}
 #: the directories whose `run.py` is a step of their jobs, beside the runner
 STEP_BESIDE = ("h1_prove", "h1_lanes")
+#: each directory -> how many of its jobs the README describes without a row
+NO_ROW = {"served_h1": 1, "h1_prove": 1}
 
 
 def jobs(d: str) -> list[str]:
@@ -24,8 +26,10 @@ def jobs(d: str) -> list[str]:
 
 @pytest.mark.parametrize("d", RUNNERS)
 def test_the_readme_has_a_row_for_every_job_and_no_other(d):
-    rows = re.findall(r"^\| `([a-z0-9_]+)` \|", (POUW / d / "README.md").read_text(), re.M)
-    assert sorted(rows) == jobs(d) and len(set(rows)) == len(rows)
+    text = (POUW / d / "README.md").read_text()
+    rows = re.findall(r"^\| `([a-z0-9_]+)` \|", text, re.M)
+    assert set(rows) <= set(jobs(d)) and len(set(rows)) == len(rows)
+    assert len(jobs(d)) - len(rows) == NO_ROW.get(d, 0) == text.count("One more job has no row")
 
 
 @pytest.mark.parametrize("d", RUNNERS)

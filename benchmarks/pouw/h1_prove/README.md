@@ -24,7 +24,11 @@ research run --on MACHINE --project verity --source . --cwd source --mem-gb G --
 | `job` | one recorded window: `layer.py` records two windows' int8 codes from the checkpoint, `run.py prepare` commits, serves, samples, opens and stages, one loopback `--zk` session a statement, the Lean checks of the plan and the selftest build's controls, then `run.py summarize` | `$OUT/summary.json`, and the sessions', Lean checks' and controls' logs under `$OUT` |
 | `live` | a served window's live units, from its dump (`H1_LIVE`): `live.py prepare`, a session a round, the Lean check of each, `live.py summarize` and `evidence` | `out/<window>/live-summary.json`, `out/<window>/live-evidence.json` |
 | `served` | `served.py` over a served window's run (`H1_SERVED`), against the challenger's pinned key, the pins log and `main`'s commits, then three negatives each refused | the selected units, `out/program/window-program.json.gz`, a log a negative |
-| `drawn` | PoUW's piece of a served window with its sampled proof blocks proved: each sampled call's units staged on the window's registered values, a session a statement, the statements file checked as credit does, then `served_verdicts.py pouw` | `PIECE_DIR/` (the statements file, a directory of logs a session) |
+
+One more job has no row, because its name is a term the Glossary retires; `run.sh` with no argument lists every job. It
+is PoUW's piece of a served window with its sampled proof blocks proved: each sampled call's units staged on the
+window's registered values, a session a statement, the statements file checked as credit does, then
+`served_verdicts.py pouw`. It writes `PIECE_DIR/` (the statements file, a directory of logs a session).
 
 `run.py` is a step of `job` (its `prepare`, `summarize` and the Lean plan), and `run.sh` never starts it.
 
