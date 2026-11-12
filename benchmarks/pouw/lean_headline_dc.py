@@ -227,7 +227,7 @@ class _Exact:
     fold_names: list[str]                # the design's `fold_routes`, `folds`' entries after its fold
     counted: list[str]                   # those no run has built: the cheater's menu holds them, ♭'s fold never does
     fold_mix: str                        # ♭'s fold in words (`_fold_mix`)
-    words_mix: str                       # ♭'s word production in words (`_words_mix`)
+    words_mix: str                       # how ♭ makes its words, in words (`_words_mix`)
     untimed: list[str]                   # the sheet's classes the vector has no line for, read at its issue slot alone
     q: Fraction                          # the vector and table routes' floors q = q_T (b_T = 0)
     ln_p: Fraction                       # the lower bound on ln(1/p) the folded branch reads
@@ -343,7 +343,7 @@ def _flat_shares(d: E.Design, shares: dict[str, float], bound) -> dict[str, Frac
 
 
 def _words_mix(d: E.Design, wb: Fraction) -> str:
-    """♭'s word production in words: the tensor route, and the design's baseline program on its share of the words."""
+    """How ♭ makes its words, in words: the tensor route, and the design's baseline program on its share of them."""
     if not wb:
         return "the MMA and the operand floor"
 
@@ -690,9 +690,9 @@ def _menu_text(names: list[str], counted: list[str]) -> str:
     if counted:
         text += "; and the counted folds, none built, which ♭ never folds by: "
         text += "; ".join(
-            ([f"{', '.join(moved)}, the counted moves: each lane route and the fold with LI's 64 LOP3 a "
-              "segment as a memory round trip of three issue slots (ATOM.E.XOR and two LD.E back), its 64 IMAD as "
-              "IMAD.WIDE, or both"] if moved else [])
+            ([(f"{', '.join(moved)}, the counted moves: each lane route and the fold with LI's 64 LOP3 a "
+               "segment as a memory round trip of three issue slots (ATOM.E.XOR and two LD.E back), its 64 IMAD as "
+               "IMAD.WIDE, or both")] if moved else [])
             + ([f"{', '.join(members)}, li-bulk's BT1024 and trimmed W = ∞ members"] if members else []))
     return text + ")"
 
@@ -744,14 +744,14 @@ def render_sheet(fam: Family, r: Reading) -> str:
         f"`classes`: the {nk} instruction classes of the {fam.sheet} census, in the order `Fin {nk}` indexes them."
         + (f" `{CATCH_ALL[fam.key]}` is A2's catch-all: every warp instruction no other class names counts there, at its "
            f"issue slot alone." if fam.key in CATCH_ALL else ""),
-        f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), `{S._rel(fam.sh)}` as "
-        f"`{_as_written(fam.sh.lean)}` states it: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
-        f"instruction ({SHAPES[fam.ns]}) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
-        f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()}, each at its width (the Programming "
-        f"Guide's, and the uniform datapath's the census's measured UP line, which no document states); no "
-        f"shared-memory row ({fam.sheet} prices none). An MMA class the sheet rates on no peak (b1) and the memory, "
-        f"atomic and control classes are their issue slot alone (A2). Its machine reproduces every {fam.sheet} "
-        f"coefficient.",
+        (f"`{sv}`, `sheet`: the {fam.gpu}'s data sheet ({fam.sheet}), `{S.relative_path(fam.sh)}` as "
+         f"`{_as_written(fam.sh.lean)}` states it: f_max {fam.fmax} MHz ({fam.fmax_src}); each tensor class's dense MACs a warp "
+         f"instruction ({SHAPES[fam.ns]}) and its operand type's dense MACs an SM clock; the Nsight Compute pipes "
+         f"{', '.join(p.upper() for p in lane[:-1])} and {lane[-1].upper()}, each at its width (the Programming "
+         f"Guide's, and the uniform datapath's the census's measured UP line, which no document states); no "
+         f"shared-memory row ({fam.sheet} prices none). An MMA class the sheet rates on no peak (b1) and the memory, "
+         f"atomic and control classes are their issue slot alone (A2). Its machine reproduces every {fam.sheet} "
+         f"coefficient."),
         f"`d2s`, `model`: `{fam.design}` as a TS model on the sheet's machine: writer kinds every MMA class of the "
         f"census (ω its destination's 32-bit words a warp instruction, A6, sheet.toml's `omega`: an f64 element two)"
         + _uniform_words(fam)
@@ -765,16 +765,16 @@ def render_sheet(fam: Family, r: Reading) -> str:
         + f"the table level's bytes counted in {fam.bytes}, which `b_T = 0` prices at nothing (the census has no load "
         f"class); A6's floors `q = q_T = ½`, `b_T = 0`; {x.Nw} committed words a unit of honest work ({honest})"
         + ("; its filler menu the one route ffill runs on (sm_90's uniform datapath has no FFMA)." if filler else "."),
-        f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold "
-        f"({x.fold_mix}), {fill_doc}and ε_skip's skippable work at {x.skip}'s price, {r.eps_skip:.6%} of ♭'s bound "
-        f"(`eps_budget.design_skip` on {fam.sheet}).",
+        (f"`flat`: the floor program ♭ a unit: the MMA and the design's operand floor (word production), the fold "
+         f"({x.fold_mix}), {fill_doc}and ε_skip's skippable work at {x.skip}'s price, {r.eps_skip:.6%} of ♭'s bound "
+         f"(`eps_budget.design_skip` on {fam.sheet})."),
         f"`lamStar`: π*, the certificate minimising the bound over this menu ({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
         "`checks`: the checks a window, one a round (Theorem S's S).",
     ]
     pipes = [f"some .{p}" if p else "none" for p in x.sheet["pipe"]]
     fold_lines = ",\n".join(f"    {_sparse(x, f)}" for f in x.folds)
     pipe_ctors = "\n".join(f"  | {p}" for p in lane)
-    width_lines = "\n".join(f"  | .{p} => {S._num(w)}" for p, w in fam.pipes.values())
+    width_lines = "\n".join(f"  | .{p} => {S.literal(w)}" for p, w in fam.pipes.values())
     return _header(fam, f"headline instance: {fam.sheet} and `{fam.design}`", "Definitions.Accounting.HeadlineDc.Encoding",
                    f"{fam.ns}SheetHeadline") + f'''
 {_bullets(bullets)}
@@ -902,8 +902,8 @@ def render_measured(fam: Family, r: Reading, s: Reading) -> str:
                   for p in mine)
         + f", with ε_skip's skippable work at {fam.measured}'s {r.eps_skip:.6%} (`eps_budget.design_skip` on "
         f"{fam.measured}), at {x.skip}'s price.",
-        f"`lamStar`: π*, the certificate minimising the bound over this menu "
-        f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
+        (f"`lamStar`: π*, the certificate minimising the bound over this menu "
+         f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())})."),
     ]
     nt, nfo = len(x.writers), len(x.folds)
     body = (f"d2s.modelFill {nk} {nt} {nfo} machine {fam.ns}.flatFill" if x.nx else f"d2s.model {nk} {nt} {nfo} machine")
@@ -976,12 +976,12 @@ def render_twin(fam: Family, t: Reading, r: Reading) -> str:
     body = (f"d2s.modelFill {nk} {nt} {nfo} {fam.ns}Measured.machine {fam.ns}.flatFill" if x.nx
             else f"d2s.model {nk} {nt} {nfo} {fam.ns}Measured.machine")
     bullets = [
-        f"`d2s`, `model`: `{fam.ns}Measured.d2s` (its writer kinds, and `{fam.ns}.d2s`'s vector classes, fold routes "
-        f"and `N_w`) at (I3)'s floors `q = q_T = {qd}`, `b_T = 0`, on `{fam.ns}Measured.machine`. (I3) `ScalarRoute` "
-        "there is `accounting-ts-scalar-route`, assumed: A6 gives it only at `q, q_T ≤ ½` (`SheetScalarRouteHalf`). ♭ "
-        f"is `{fam.ns}Measured.flat`, since `setup`'s floor program doesn't read `q`.",
-        f"`lamStar`: π*, the certificate minimising the bound over this menu at `q = {qd}` "
-        f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())}).",
+        (f"`d2s`, `model`: `{fam.ns}Measured.d2s` (its writer kinds, and `{fam.ns}.d2s`'s vector classes, fold routes "
+         f"and `N_w`) at (I3)'s floors `q = q_T = {qd}`, `b_T = 0`, on `{fam.ns}Measured.machine`. (I3) `ScalarRoute` "
+         "there is `accounting-ts-scalar-route`, assumed: A6 gives it only at `q, q_T ≤ ½` (`SheetScalarRouteHalf`). ♭ "
+         f"is `{fam.ns}Measured.flat`, since `setup`'s floor program doesn't read `q`."),
+        (f"`lamStar`: π*, the certificate minimising the bound over this menu at `q = {qd}` "
+         f"({' + '.join(f'{k} {float(v):.6f}' for k, v in x.lam.items())})."),
     ]
     return _header(fam, f"(I3) twin: {fam.measured} at q = {qd} and `{fam.design}`",
                    f"Definitions.Accounting.HeadlineDc.{fam.ns}Measured", f"{fam.ns}MeasuredI3Headline") + f'''
