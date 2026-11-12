@@ -110,7 +110,10 @@ from verity_vllm.check.match.record import (
     request_aliases,
 )
 from verity_vllm.config import UsageError, option, workload_arg
+from verity_vllm.log import init_logger
 from verity_vllm.records.global_match import SCHEMA as GM_SCHEMA
+
+logger = init_logger(__name__)
 
 COMPARATOR = "cb_a.global_match/v1"
 RULES_VERSION = "r14-v1"
@@ -312,11 +315,9 @@ def impl_module(name: str | None = None):
     ~4 min on 8 cores at 13.5 GB for the same verdict.  `MATCH_IMPL=record` still selects the audit checker explicitly."""
     name = (name if name is not None else settings.get(IMPL_ENV) or IMPL_DEFAULT).strip().lower() or IMPL_DEFAULT
     if name == "record":
-        import sys
         return sys.modules[__name__]
     if name == "fast":
-        from verity_vllm.check.match import global_match_fast
-        return global_match_fast
+        return GMF
     raise ValueError(f"{IMPL_ENV}={name!r}: not one of {IMPLS}")
 
 
@@ -394,7 +395,7 @@ def main(a: Options) -> int:
             raise UsageError("--workload is required without --global-program")
         gp = mock_global_program(a.workload, a.component)
     mod = impl_module()   # MATCH_IMPL: fast (default, the Match of record) | record (the audit checker) -- never a silent fallback
-    print(impl_banner(mod, gp), file=sys.stderr, flush=True)   # what is about to run, BEFORE the hours it may take (not after)
+    logger.info("%s", impl_banner(mod, gp))   # what is about to run, BEFORE the hours it may take (not after)
     res = mod.check(gp, a.oracle, run_x09=not a.no_x09, within_step=a.within_step, record_alternate=not a.no_alternate,
                     tokens_optional=a.tokens_optional, _loaded=loaded)
     res["impl"] = impl_info(mod)
@@ -415,7 +416,7 @@ def main(a: Options) -> int:
     if a.decomp_out:
         x = loaded.get(X09_DOCUMENT)
         if x is None or (res.get("x09") or {}).get("verdict") == "ERROR":   # X-09 did not produce a document: no file, loud
-            print(json.dumps({"decomp_out": a.decomp_out, "error": "X-09 produced no document", "x09": res.get("x09")}, default=str), file=sys.stderr)
+            logger.error("%s", json.dumps({"decomp_out": a.decomp_out, "error": "X-09 produced no document", "x09": res.get("x09")}, default=str))
             return 3
         with open(a.decomp_out, "w") as f:
             json.dump(x, f, indent=1, default=str)   # byte-for-byte what cb_a.batch_decomp's CLI writes for this run
@@ -427,7 +428,7 @@ def main(a: Options) -> int:
              "achieved_concurrency": res.get("achieved_concurrency"),
              "requests": [{k: e.get(k) for k in ("request_id", "workload_request_id", "LP", "n_instances", "local_steps", "executed_steps_equal", "eos_truncated",
                                                  "first_step", "output_events", "generated_length")} for e in res["requests"]], "seconds": res["seconds"]}
-    print(json.dumps(brief, indent=1, default=str))
+    logger.info("%s", json.dumps(brief, indent=1, default=str))
     if rc_x09 == 4:   # the shapes X-09 could not compare are not derived yet: row_pod derives them and reruns (the compare stage's exit 4)
         return 4
     return 0 if res["verdict"] == "PASS" else 3

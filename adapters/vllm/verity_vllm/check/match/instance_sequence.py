@@ -3,12 +3,14 @@ events, and the canonical source of every operand run (the forms are `program_co
 
 from __future__ import annotations
 
+import bisect
 import collections
+import gc
 import re
-import sys
 from collections.abc import Iterable
 from typing import Any
 
+from verity.circuits import codec, refs
 from verity.circuits.program import RUN, input_id
 
 from verity_vllm.check.match import compiler_form, split_selects
@@ -17,9 +19,13 @@ from verity_vllm.check.match import supplied_inputs as SI
 from verity_vllm.check.match.canonical_operands import as_progression as _asP
 from verity_vllm.check.match.canonical_operands import weight_field_name as _field_name
 from verity_vllm.check.match.peer_reads import PeerReads
+from verity_vllm.log import init_logger
+from verity_vllm.program.compact import expand, lean_root, rle_mapped
 
 # the step-boundary families
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
+
+logger = init_logger(__name__)
 
 PAD_SPECS = ("Const", "I32Eq_v1", "BitNot_v1", "BitAnd_v1", "SelectI32_v1", "SelectBf16_v1")
 # the top-p split count S: the fold and the Program both emit it as `Const32[S]` "splits", the 6th operand (index 5) of the top-p
@@ -47,7 +53,7 @@ def _registry():
     from verity.definitions.registry.catalog import load
     reg, errors = load()
     for e in errors:
-        print(f"[compare] registry module unavailable ({e}): Programs naming its Definitions will not decode", file=sys.stderr)
+        logger.warning("[compare] registry module unavailable (%s): Programs naming its Definitions will not decode", e)
     return reg
 
 
@@ -69,17 +75,15 @@ class RootView(PeerReads, PX.PrefixInput):
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
                  compact: bool = False, checks: Iterable[int] = ()):
-        from verity.circuits.codec import program_digest
         self.label = label
         self.compact = bool(compact)
-        self.digest = desc.get("digest") or program_digest(desc)
+        self.digest = desc.get("digest") or codec.program_digest(desc)
         registry = _registry()
         self.inputs: dict[int, tuple[str, int]] = {}
         self.inst: list[dict] = []  # k, spec, form, args=[runs | progressions], out
         if self.compact:
             # the root body read straight from the descriptor JSON into run progressions: no Node / Coll / Refs objects for
             # the root, no per-row expansion of a Strided (compact.lean_root; the non-root Definitions are decoded as decode_program does)
-            from verity_vllm.program.compact import lean_root
             lr = lean_root(desc, registry)
             row, skip = -1, frozenset(checks)
             for k, fid, form, args6, out, n in lr["nodes"]:
@@ -94,9 +98,8 @@ class RootView(PeerReads, PX.PrefixInput):
             self.param_names = lr["params"]
             del lr
         else:
-            from verity.circuits.codec import decode_program
             descriptor_id, runs = self._node_functions()
-            dec = decode_program(desc, registry)
+            dec = codec.decode_program(desc, registry)
             root = dec.root
             body = root.body if hasattr(root, "body") else root.defn.body
             row, skip = -1, frozenset(checks)
@@ -116,7 +119,6 @@ class RootView(PeerReads, PX.PrefixInput):
             self.param_names = [n for n, _ in getattr(body, "params", ())]   # empty for a lowered root; kept for callers that inspect it
             del dec, root, body
         if len(self.inst) > 50_000:   # the decoded body is a reference cycle (nodes <-> body); collect it now, not at an arbitrary later point
-            import gc
             gc.collect()
         # the seed parameters (a stochastic Program's declared runtime inputs: the request wrapper's `seed`, the fold's
         # `seed_<i>` per seeded request in request order, fold._header) are lowered to `Input64_v1` batch nodes of one 64-bit value
@@ -147,7 +149,6 @@ class RootView(PeerReads, PX.PrefixInput):
         self._segment()
 
     def _node_functions(self):   # the run-form decode's per-node spec id and operand runs; a subclass may return functions equal to these
-        from verity.circuits import codec, refs
         return codec.descriptor_id, refs.runs
 
     def _bind_splits(self) -> None:
@@ -171,7 +172,6 @@ class RootView(PeerReads, PX.PrefixInput):
             # operand), so count per progression: a progression over one node (dI == 0) is `count` reads of it; a node-index progression
             # (dI != 0: the gathers, 97 % of all runs) is one read of every candidate it visits -- found by bisection in the sorted
             # candidates instead of enumerating its runs.  Exactly the record's per-run count on every consulted key.
-            import bisect
             cands: set[int] = set()
             for r in self.inst:
                 sp = r["spec"].split(":", 1)[-1]
@@ -263,7 +263,6 @@ class RootView(PeerReads, PX.PrefixInput):
         r = self.inst[i]
         bound = r["k"] in getattr(self, "splits_values", {})
         if self.compact:
-            from verity_vllm.program.compact import rle_mapped
             for ai, a in enumerate(r["args"]):
                 if bound and ai == SPLITS_OPERAND:
                     e = self.i2step[i][0]
@@ -313,7 +312,6 @@ class RootView(PeerReads, PX.PrefixInput):
                 return [("W", _field_name(self.weight_fields[idx0]), (lo0, hi0), (dL, dH), c)]
             wr = getattr(self, "oracle_wmap", None)
             if wr:
-                import bisect
                 b0 = getattr(self, "input_base", {}).get(idx0, 0)
                 last_lo, last_hi = lo0 + (c - 1) * dL, hi0 + (c - 1) * dH
                 glo, ghi = min(lo0, last_lo) + b0, max(hi0, last_hi) + b0
@@ -356,7 +354,6 @@ class RootView(PeerReads, PX.PrefixInput):
 
     def _per_run(self, p: tuple, unfold: bool) -> list[tuple]:
         """The record's `_src` on every run of a progression (a peers read split as the record splits it), each as a one-run progression."""
-        from verity_vllm.program.compact import expand
         return [_asP(self._src(r, unfold)) for run in expand([p]) for r in self._split_peer(run)]
 
     def _src(self, run, unfold: bool):
@@ -380,7 +377,6 @@ class RootView(PeerReads, PX.PrefixInput):
                 return ("W", _field_name(self.weight_fields[idx]), lo, hi)
             wr = getattr(self, "oracle_wmap", None)
             if wr:  # locate the field range containing lo (offsets are Record-global: node base + in-node offset,)
-                import bisect
                 b0 = getattr(self, "input_base", {}).get(idx, 0)
                 glo, ghi = lo + b0, hi + b0
                 j = bisect.bisect_right(self._wlos, glo) - 1

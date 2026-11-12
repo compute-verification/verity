@@ -3,6 +3,7 @@ another request's prompt, seed, peers, witness or node canonicalised as a cross-
 
 from __future__ import annotations
 
+import bisect
 import collections
 
 from verity_vllm.check.match import prefix_reads as PX
@@ -161,7 +162,6 @@ class Projection(PX.CachedKv, C.RootView):
 
     def _own_count(self, lo_i: int, hi_i: int) -> int:
         """How many of this request's instance node indices lie in [lo_i, hi_i]."""
-        import bisect
         own = getattr(self, "_own_sorted", None)
         if own is None:
             own = self._own_sorted = sorted(self.k2i)

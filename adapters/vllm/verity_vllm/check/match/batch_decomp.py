@@ -81,9 +81,13 @@ from verity_vllm.check.match.occurrence import SHARED, attribute, shared_legs
 from verity_vllm.check.match.projection import Projection, engine_steps_of
 from verity_vllm.check.program_ops import Ops
 from verity_vllm.config import option
+from verity_vllm.log import init_logger
 from verity_vllm.observe.capture_log import read_steps, request_params
 from verity_vllm.program import prefix_plan as PP
+from verity_vllm.program.compact import idx_values as _idx_values
 from verity_vllm.program.sampling_event import is_sampling_event as _is_sampling_event
+
+logger = init_logger(__name__)
 
 # the within-step criterion of record: `dag` accepts a request whose projection
 # is the same live-cone DAG multiset as its Program although the fold's emission SEQUENCE differs (a co-scheduled prefill displaced
@@ -270,8 +274,6 @@ def _instance_owners(fold: _Fold, oracle_dir: str) -> _Owners:
     how: collections.Counter[str] = collections.Counter()
     disagree = 0
     compact = getattr(B, "compact", False)
-    if compact:
-        from verity_vllm.program.compact import idx_values as _idx_values
     for i, r in enumerate(B.inst):
         o = meta_of.get(r["k"])
         if o is None:
@@ -533,5 +535,5 @@ def main(a: Options) -> int:
                                                                                  for e in res["requests"]],
              "attribution": {k: v for k, v in res["attribution"].items() if k != "unattributed_examples"}, "missing_derived": res["missing_derived"],
              "xreq_total": res["xreq_total"], "seconds": res["seconds"]}
-    print(json.dumps(brief, indent=1, default=str))
+    logger.info("%s", json.dumps(brief, indent=1, default=str))
     return 0 if res["verdict"] == "PASS" else (4 if res["verdict"] == "MISSING_DERIVED" else 3)

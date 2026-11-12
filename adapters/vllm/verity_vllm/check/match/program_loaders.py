@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import gzip
+import hashlib
 import json
 import os
 
@@ -76,7 +77,6 @@ def load_oracle(d: str, label: str, cls: type[RootView] = RootView, compact: boo
     # instances_sha256): a Match document -- the record checker's as much as the fast one's -- is tied to the IMMUTABLE INPUT ARTIFACTS by
     # content, so the audit tool compares the two documents' digests with the row's files (and with each other) instead of trusting that
     # two oracle_dir paths named the same bytes.  ~2-3 s per GB at load; nothing else changes (rows, form handling, the RootView).
-    import hashlib
     with open(os.path.join(d, "program.json"), "rb") as f:
         raw = f.read()
     program_sha = hashlib.sha256(raw).hexdigest()

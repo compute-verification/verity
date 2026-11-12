@@ -28,9 +28,16 @@ from __future__ import annotations
 
 import collections
 import functools
+import gc
 import os
+import pickle
+import tempfile
+import traceback
 from collections.abc import Callable
 from typing import TYPE_CHECKING
+
+from verity.circuits import codec
+from verity.circuits import refs as circuit_refs
 
 from verity_vllm import settings
 from verity_vllm.check.match import dag_form as DAG
@@ -404,7 +411,7 @@ def _runs_fast(refs):
     """verity.circuits.refs.runs for an Affine or a Concat of Affines (every operand of a fold descriptor: 1.40 M affine + 137 k concat, and
     the alias chains codec._decode_refs splices flat are Concats of Affines) -- one loop, no recursion, no closures; the merge rule is
     the record's `push` (adjacent runs of the same (space, idx) with hi == next lo fuse).  Anything else goes to the original."""
-    from verity.circuits.refs import Affine, Concat
+    Affine, Concat = circuit_refs.Affine, circuit_refs.Concat
     if type(refs) is Affine:
         return [(refs.space, refs.idx, refs.base, refs.base + refs.count)] if refs.count else []
     if type(refs) is Concat:
@@ -425,8 +432,7 @@ def _runs_fast(refs):
             out.append((s, i, b, b + c))
         else:
             return out
-    from verity.circuits.refs import runs
-    return runs(refs)
+    return circuit_refs.runs(refs)
 
 
 _chron_memo: dict[int, tuple] = {}   # id(engine_step_of) -> (engine_step_of, B, step_of_k)
@@ -500,8 +506,7 @@ def _spec_id_memo(fn):
     kept = getattr(fn, "__dict__", None)   # None for a __slots__ definition class: nothing to keep it on; recompute as the checker of record does
     sid = kept.get("_gmf_spec_id") if kept is not None else None
     if sid is None:
-        from verity.circuits.codec import descriptor_id
-        sid = descriptor_id(fn)
+        sid = codec.descriptor_id(fn)
         if kept is not None:
             kept["_gmf_spec_id"] = sid
     return sid
@@ -628,10 +633,6 @@ def request_legs(items: list, fn: Callable, n_workers: int, weight: Callable | N
     same."""
     if n_workers <= 1 or len(items) <= 1 or not hasattr(os, "fork"):
         return [fn(x) for x in items]
-    import gc
-    import pickle
-    import tempfile
-    import traceback
     order = sorted(range(len(items)), key=lambda j: -(weight(items[j]) if weight else 0))
     parts: list[list[int]] = [[] for _ in range(min(n_workers, len(items)))]
     for rank, j in enumerate(order):
