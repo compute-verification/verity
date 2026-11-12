@@ -167,7 +167,7 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   anchored at bucket 0 read it, whose entries the scan reads for no slot, since its state before bucket 0 has none
   occupied. A slot's Program anchored at bucket a reads row a, the scan's state before a, so it computes its entry on
   the requests the scan read, not on a state the prover chose (`Properties.NetworkPeriod.RowsStateTied`);
-* in the rows form, link-window `w`'s scan's answer names no tied Input but ones that wiring holds
+* in the rows form, execution phase `w`'s scan's answer names no tied Input but ones that wiring holds
   (`tiedInputWired`): where its public outputs hold `rests_on_period_check`, the run Inputs one-stage's registration
   check let several proof blocks read because a later check ties their rows to the registrations that computed them,
   every name under it is a lane's `prog<j>`, `j` < `lanes` (`progParams`): the scan root's parameter its
@@ -1284,7 +1284,7 @@ def stateCheck (p : Params) (s : Schedule) (audits : Array Json) (w : Nat) (reg 
       domain are not every {stateValue} entry's of an audit whose slot entries are its prog, so a slot's Program can \
       compute its entry on a state the prover chose: register the scan's state tree as that audit's SCAN_STATE")
 
-/-- The rows form's state findings, one a link-window, in order (`stateCheck`); none in the clock form. -/
+/-- The rows form's state findings, one an execution phase, in order (`stateCheck`); none in the clock form. -/
 def stateChecks (p : Params) (c : Commitment) : Array (Option (Core.Verdict × String)) := match p.form with
   | .rows s .. => c.windows.zipIdx.map fun (reg, i) => stateCheck p s c.audits (p.first + i) reg
   | .clock _ => #[]
@@ -1318,8 +1318,8 @@ def tiedUnheld (s : Schedule) (a : Core.Answer) : String :=
   | .arr ts => s!"names {((ts.find? (!laneTied s ·)).getD .null).compress}, none of the scan's lanes' {lanes}"
   | j => s!"is {j.compress}, no list of names of the scan's lanes' {lanes}"
 
-/-- Link-window `w`'s tied Input finding in the rows form: a refusal unless its scan's answer names no tied Input but
-the scan's lanes' `prog<j>` (`tiedInputWired`), naming what it holds instead (`tiedUnheld`). -/
+/-- Execution phase `w`'s tied Input finding in the rows form: a refusal unless its scan's answer names no tied Input
+but the scan's lanes' `prog<j>` (`tiedInputWired`), naming what it holds instead (`tiedUnheld`). -/
 def tiedInputCheck (s : Schedule) (w : Nat) (x : Window) : Option (Core.Verdict × String) :=
   if tiedInputWired s x.answer then none else
     some (.reject, s!"window {w}: the scan's answer rests on a tie this check does not hold: its public outputs' \
@@ -1328,7 +1328,7 @@ def tiedInputCheck (s : Schedule) (w : Nat) (x : Window) : Option (Core.Verdict 
       computed them: name only lanes' prog<j> tied in the scan's registration check, and let no two proof blocks read \
       another run Input")
 
-/-- The rows form's tied Input findings, one a link-window, in order (`tiedInputCheck`); none in the clock form. -/
+/-- The rows form's tied Input findings, one an execution phase, in order (`tiedInputCheck`); none in the clock form. -/
 def tiedInputChecks (p : Params) (e : Evidence) : Array (Option (Core.Verdict × String)) := match p.form with
   | .rows s .. => e.windows.zipIdx.map fun (x, i) => tiedInputCheck s (p.first + i) x
   | .clock _ => #[]

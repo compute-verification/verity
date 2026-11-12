@@ -17,8 +17,8 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 `2 ^ K` is the product of the factors' bounds.
 
 `RowsProgWired`, `RowsStateTied` and `RowsTiedInputWired` read the check's refusals off its findings: on acceptance
-every finding is none (`firstFinding_none`), each link-window's `wiredCheck`, `stateCheck` and `tiedInputCheck` among
-them.
+every finding is none (`firstFinding_none`), each execution phase's `wiredCheck`, `stateCheck` and `tiedInputCheck`
+among them.
 
 `RowsTiedCharged` reads the public the rows form accepts with (`check_rows`): with no finding, every audit's check gave
 its facts and every link-window's its scan's, so the public's `audits` and `units` hold them position for position
@@ -322,10 +322,10 @@ def tiedAnswer (tied : Array Lean.Json) : Core.Answer :=
 /-- `slotSchedule` with a second lane. -/
 def twoLanes : Schedule := { slotSchedule with lanes := 2 }
 
-/-- Its honest side: a link-window whose scan's `prog` is wired to the slot audit and whose answer names that lane's
-`prog0` has the property's conclusion; so does an answer that names none, one with no public outputs, with other keys
-only (a scan no two units of which read one row) or with an empty list; and under two lanes, an answer that names both
-lanes' in either order, one lane's alone, or one twice. -/
+/-- Its honest side: an execution phase whose scan's `prog` is wired to the slot audit and whose answer names that
+lane's `prog0` has the property's conclusion; so does an answer that names none, one with no public outputs, with other
+keys only (a scan no two units of which read one row) or with an empty list; and under two lanes, an answer that names
+both lanes' in either order, one lane's alone, or one twice. -/
 theorem rowsTiedInputWired_honest :
     (tiedInputWired slotSchedule (tiedAnswer #[.str "prog0"]) = true ∧
         wired #[slotAudit] slotSchedule #[slotReg] tiedWindow = true) ∧
@@ -354,8 +354,8 @@ theorem tiedAnswer_unwired :
   decide +kernel
 
 /-- **No period check that accepts every period has `RowsTiedInputWired`'s property** (its nontrivial lemma): such a
-check accepts a rows-form period of one link-window whose scan's `prog` is wired to the slot audit and whose answer
-names a second tied Input, which no check wires. -/
+check accepts a rows-form period of one execution phase whose scan's `prog` is wired to the slot audit and whose
+answer names a second tied Input, which no check wires. -/
 theorem rowsTiedInputWired_nontrivial : ¬ RowsTiedInputWiredOf acceptAllRows := by
   intro h
   let p : Params :=

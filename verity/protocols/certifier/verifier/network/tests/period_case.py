@@ -1508,26 +1508,27 @@ def templates_of(desc: dict) -> list[tuple[str, str, int]]:
             if (d := defs[k := callees[x["fn"]]])["form"] != "primitive"]
 
 
-#: How `rows-prog-untied` breaks its link-window's tie of the scan's `prog` to an audit's output, at every lane: the
+#: How `rows-prog-untied` breaks its execution phase's tie of the scan's `prog` to an audit's output, at every lane: the
 #: scan's `scan/prog<j>` entries at another root or domain, the audit's chunks' entries at ports that are no unit's
-#: output nor a chunk's entries port, no `scan/prog<j>` entry or each under another name (`scan/prog` among them),
-#: the chunks' entries in the scan's own registration and in no audit's, or no entry's root a string
+#: output nor a chunk's entries port, no `scan/prog<j>` entry or each under another name (`scan/prog` among them), the
+#: chunks' entries in the scan's own registration and in no audit's, or no entry's root a string
 UNTIES = ("root", "domain", "port", "missing", "renamed", "scan", "untyped")
-#: How `rows-prog-unwired` breaks its link-window's wiring at one lane j while its tie holds: the audit's chunk j
+#: How `rows-prog-unwired` breaks its execution phase's wiring at one lane j while its tie holds: the audit's chunk j
 #: entry at an output port (another unit's `o1`, or the chunk's own), at another `SlotEntry_v1` or `SelectEntry_v1`
 #: template's entries port than any of its Program's, at another chunk's (`chunk`), of other than T / every leaves
 #: (`leaves`), the scan's lane j entry named another lane's (`lane`), its Program's slot entries' template one member
 #: off a slot each, or that template under its name and descriptor id with another body (`RENAMED_SLOT_ENTRY`,
 #: `RENAMED_SELECT_ENTRY`)
 UNWIRES = ("output", "key", "chunk", "leaves", "lane", "members", "body")
-#: How `rows-state-untied` breaks its link-window's tie of the scan's state to its wired audit's `SCAN_STATE` while its
-#: `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of the
-#: scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no string,
-#: or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a second
+#: How `rows-state-untied` breaks its execution phase's tie of the scan's state to its wired audit's `SCAN_STATE` while
+#: its `prog` stays wired: the scan's state entry at another root or domain (a state tree that skips or alters one of
+#: the scan's transitions), no state entry or one under another name, at another audit's `SCAN_STATE`, its root no
+#: string, or a second state entry at another root; the wired audit's `SCAN_STATE` absent, at another root, or beside a
+#: second
 UNSTATES = ("root", "domain", "missing", "renamed", "other", "untyped", "extra", "audit", "audit-root", "audit-extra")
-#: What `rows-answer-tied-held` puts under `TIED_KEY` in its link-window's scan's answer, each a list of lanes' names:
-#: every lane's in the lanes' order, all but the last lane's (a proper subset), the lanes' in reverse, the first lane's
-#: twice after them, and none
+#: What `rows-answer-tied-held` puts under `TIED_KEY` in its execution phase's scan's answer, each a list of lanes'
+#: names: every lane's in the lanes' order, all but the last lane's (a proper subset), the lanes' in reverse, the first
+#: lane's twice after them, and none
 TIED_HELD = ("all", "subset", "order", "twice", "empty")
 #: What `rows-answer-tied-unheld` puts there, each naming a tie the check does not wire or no list of names: after the
 #: lanes' names the name past the last lane's (``prog<lanes>``), another Input's (``state``) or the first lane's

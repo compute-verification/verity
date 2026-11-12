@@ -36,9 +36,9 @@ state is the scan's own. The check accepts a tied audit at any sample; the consi
 no link-window whose scan's `prog` is not a compute audit's slot entries, a lane's tree the entries port of its chunk
 of a `SlotEntry_v1` or `SelectEntry_v1` template of that audit's own Program. `RowsStateTied` says it accepts no
 link-window whose scan's state is not the `SCAN_STATE` of an audit its `prog` is wired to, so a state that skips or
-alters one of the scan's transitions is no Program's input. `RowsTiedInputWired` says it accepts no link-window whose
-scan's answer names a tied Input other than the scan's lanes' `prog<j>`, which are wired as `RowsProgWired` says: a
-tied Input is a run Input several proof blocks read, which one-stage's registration check lets through only named.
+alters one of the scan's transitions is no Program's input. `RowsTiedInputWired` says it accepts no execution phase
+whose scan's answer names a tied Input other than the scan's lanes' `prog<j>`, which are wired as `RowsProgWired` says:
+a tied Input is a run Input several proof blocks read, which one-stage's registration check lets through only named.
 `RowsTiedCharged` says the public it accepts with supplies
 the charge itself: `charged` is the facts of each tied audit sampled in part (`drawn < units`), each once, so each
 one's δ is in `eps` (`Public.eps` sums the terms' facts' and `charged`'s, and nothing else), and where such an audit's
@@ -130,9 +130,9 @@ def RowsStateTied : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsStateTiedAt p c
 
-/-- What `RowsTiedInputWired` says of a period its check accepted: in the rows form, each link-window's scan's answer
-names no tied Input but the scan's lanes' `prog<j>` (`tiedInputWired`), and its registration is wired to the audits'
-slot entries (`wired`). -/
+/-- What `RowsTiedInputWired` says of a period its check accepted: in the rows form, each execution phase's scan's
+answer names no tied Input but the scan's lanes' `prog<j>` (`tiedInputWired`), and its registration is wired to the
+audits' slot entries (`wired`). -/
 def RowsTiedInputWiredAt (p : Params) (c : Commitment) (e : Evidence) : Prop :=
   ∀ (s : Schedule) (sd : ByteArray) (scan : Scan), p.form = .rows s sd scan →
     ∀ (i : ℕ) (reg : Lean.Json) (x : Window), c.windows[i]? = some reg → e.windows[i]? = some x →
@@ -143,17 +143,17 @@ def RowsTiedInputWiredOf (chk : Params → Commitment → Evidence → Core.Outc
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     chk p c e = .accept pub prof → RowsTiedInputWiredAt p c e
 
-/-- **The rows form accepts no link-window whose scan's answer names a tied Input the check does not wire.**
+/-- **The rows form accepts no execution phase whose scan's answer names a tied Input the check does not wire.**
 One-stage's registration check refuses a run Input that several proof blocks read, unless its verifier names the Input
 tied: a later check then ties its rows to the registrations that computed them, and its registration verdict names
 each Input it let through (`rests_on_period_check`), a list the scan's answer carries in its public outputs. If the
-check accepts a period in the rows form, every name each link-window's scan's answer carries there is one of the
+check accepts a period in the rows form, every name each execution phase's scan's answer carries there is one of the
 scan's lanes' `prog<j>` (`tiedInputWired`, `progParams`: in any order, a lane's more than once or not at all, and none
-where the answer has no such list), and that link-window's `scan/prog<j>` entries are wired, each lane's to a compute
-audit's slot entries (`wired`, as `RowsProgWired` says): every tied Input an accepted scan's answer names is one this
-check ties. It is a statement about the names the answer carries. That the answer carries every Input the registration
-check let through, and that lane `j`'s name `prog<j>` is the Input the entry `scan/prog<j>` registers, which is
-one-stage's registration check's, are not said here. -/
+where the answer has no such list), and that execution phase's `scan/prog<j>` entries are wired, each lane's to a
+compute audit's slot entries (`wired`, as `RowsProgWired` says): every tied Input an accepted scan's answer names is
+one this check ties. It is a statement about the names the answer carries. That the answer carries every Input the
+registration check let through, and that lane `j`'s name `prog<j>` is the Input the entry `scan/prog<j>` registers,
+which is one-stage's registration check's, are not said here. -/
 def RowsTiedInputWired : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsTiedInputWiredAt p c e

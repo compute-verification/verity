@@ -178,8 +178,8 @@ def test_a_scan_whose_state_is_not_its_wired_audits_is_refused(server, monkeypat
 
 
 def tied_cases(m: str, kind: str, monkeypatch) -> list[tuple[int, dict, dict]]:
-    """Periods with the change `m` at the one list `kind` of its lists (`PC.TIED_HELD`, `PC.TIED_UNHELD`), over seeds
-    that reach scans of one lane and of two: each seed, its case and its aimed link-window's scan's schedule."""
+    """The cases with the change `m` at the one list `kind` of its lists (`PC.TIED_HELD`, `PC.TIED_UNHELD`), over seeds
+    that reach scans of one lane and of two: each seed, its case and its aimed execution phase's scan's schedule."""
     monkeypatch.setattr(PC, "TIED_HELD" if m == "rows-answer-tied-held" else "TIED_UNHELD", (kind,))
     out = []
     for n in range(8):
@@ -242,10 +242,10 @@ def test_a_scan_whose_answer_names_only_its_lanes_tied_is_accepted(server, monke
 
 
 def test_an_honest_scans_answer_names_its_lanes_tied_or_nothing(server):
-    """Over honest rows periods, each link-window's scan's answer names its lanes' `prog<j>` tied, every lane's in the
-    lanes' order and nothing else, exactly where several of its units read one slot entry (the schedule's `every` ≥
-    2), as one-stage's registration check publishes them, and has no such key where each unit reads its own (`every`
-    = 1): Lean accepts each with the mirror's public, some of either kind and of one lane and of two."""
+    """Over honest rows periods, each execution phase's scan's answer names its lanes' `prog<j>` tied, every lane's in
+    the lanes' order and nothing else, exactly where several of its units read one slot entry (the schedule's `every`
+    ≥ 2), as one-stage's registration check publishes them, and has no such key where each unit reads its own
+    (`every` = 1): Lean accepts each with the mirror's public, some of either kind and of one lane and of two."""
     seen = Counter()
     for n in range(28):
         case = build("rows-honest", n, small=n % 2 == 0)
