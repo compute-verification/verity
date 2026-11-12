@@ -34,30 +34,58 @@ from __future__ import annotations
 
 import hashlib
 import operator
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, NoReturn
-from collections.abc import Sequence
 
 import torch
-
-from verity.circuits.codec import descriptor_id, canonical_json, encode_program, program_digest
+from verity.circuits.codec import (
+    canonical_json,
+    descriptor_id,
+    encode_program,
+    program_digest,
+)
 from verity.circuits.defs import Builder, CompositeDefinition, SpecializedDefinition
 from verity.circuits.defs import bind as ir_bind
+from verity.circuits.liveness import dead_gates as _dead_gates
 from verity.circuits.program import Program
 from verity.circuits.refs import Affine, Coll, concat
-from verity.circuits.liveness import dead_gates as _dead_gates
-from verity.circuits.types import Array, RecordType, Tuple as TupleT, Type, Value
-from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refuse, Unsupported, _jsonable, refuse
+from verity.circuits.types import Array, RecordType, Type, Value
+from verity.circuits.types import Tuple as TupleT
+from verity.definitions.replay import replayer
+
+from verity_vllm.program.frontend import seed_rule as SEED
+from verity_vllm.program.frontend import stop_rule as SR
+from verity_vllm.program.frontend.derive_context import (
+    Ctx,
+    StaticIndex,
+    WeightLeaf,
+    _runs,
+    fx_arg_nodes,
+)
+from verity_vllm.program.frontend.derive_context import (
+    module_registrations as module_registrations,  # read through this module
+)
+from verity_vllm.program.frontend.outcomes import (
+    _CODE_TO_REASON,
+    REASONS,
+    Refuse,
+    Unsupported,
+    _jsonable,
+    refuse,
+)
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
-from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
-from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
-from verity_vllm.program.frontend.derive_context import Ctx, StaticIndex, WeightLeaf, _runs, fx_arg_nodes
-from verity_vllm.program.frontend.derive_context import module_registrations as module_registrations  # read through this module
-from verity.definitions.replay import replayer
-from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor
-from verity_vllm.program.frontend.value_types import Alloc
+from verity_vllm.program.frontend.report import DerivationTail, DeriveReport
 from verity_vllm.program.frontend.rules.base import InPlaceRule, RuleSet, StateRule
+from verity_vllm.program.frontend.torch_frontend import (
+    FRONTEND_VERSION,
+    FrontendError,
+    check_identity,
+    shape_of,
+    type_of_tensor,
+)
+from verity_vllm.program.frontend.value_types import Alloc
 
 DERIVE_VERSION = "verity_vllm.program.frontend.derive/2026-09-09.d4"  # d4: rotary table without terminal cast, 0-d buffer operand in Elementwise; d3: embedding padding_idx, bf16 inv_freq rotary table; d2: HF 5.x plumbing
 
@@ -101,7 +129,8 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     ruleset = rules if rules is not None else DEFAULT_RULES
     vocab = vocabulary_for(mode, profile)
     allowed_dims, config, theta = dict(allowed_dims or {}), dict(config or {}), tuple(theta)
-    name = name or (type(source).__name__ if isinstance(source, torch.nn.Module) else getattr(source, "__name__", "Derived"))
+    source_name: str = type(source).__name__ if isinstance(source, torch.nn.Module) else getattr(source, "__name__", "Derived")
+    name = name or source_name
     source_desc = _describe_source(source, example_inputs, mode, profile, config, allowed_dims)
     prov: dict[str, Any] = {"schema": "verity_ir/derive-provenance/v1", "frontend": FRONTEND_VERSION, "derive": DERIVE_VERSION,
                             "torch": torch.__version__, "mode": mode, "profile": profile, "vocabulary": vocab.to_json(),
@@ -112,7 +141,7 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
         flat_sd, ctx = _derive_flat(source, example_inputs, mode=mode, profile=profile, config=config, allowed_dims=allowed_dims,
                                     name=name, ruleset=ruleset, vocab=vocab, _ctx_holder=holder, exported=exported,
                                     registered_values=registered_values)
-        head = (dict(prov), dict(ctx.unresolved_module_paths)) if session is not None else None
+        head = (dict(prov), dict(ctx.unresolved_module_paths))
         rep = _finish_report(flat_sd, ctx, prov, mode=mode, ruleset=ruleset, rank=rank, check_registry=check_registry, dead_free=dead_free, correspondence=correspondence, theta=theta)
         if session is not None:
             session.append(DerivationTail(flat_sd, ctx, *head, name, mode, ruleset, check_registry, rank, rep.family, dead_free, theta))
@@ -147,7 +176,8 @@ def _finish_report(flat_sd: SpecializedDefinition, ctx: Ctx, prov: dict, *, mode
         prov["checks"] = {"output": ctx.checks_output, "accept": 1, "of": [w for _, w in ctx.checks]}
     # runtime correspondence (`runtime-correspondence/v1`): per Call the owning module, the source occurrence and the return /
     # argument slots -- data beside the Program, under ONE annotation namespace, digested apart (annotations never enter program_digest)
-    from verity_vllm.program.frontend.emit import NAMESPACE as _CORR, kept_correspondence
+    from verity_vllm.program.frontend.emit import NAMESPACE as _CORR
+    from verity_vllm.program.frontend.emit import kept_correspondence
     body, corr_doc, corr_digest, hints = kept_correspondence(ctx, flat_sd.body, rank=rank, registered=dead_free, emit=correspondence)
     flat_sd = flat_sd if body is flat_sd.body else _flat_definition(flat_sd.defn.name[len("Derived["):-1], body, flat_sd.bindings["SRC"], mode)
     holes = {"survey_holes": ctx.state["survey_holes"]} if ctx.state.get("survey_holes") else {}
@@ -375,6 +405,7 @@ def _translate(ctx: Ctx) -> Coll:
             if node.name in ctx.user_inputs:
                 ctx.env[node] = ctx.user_inputs[node.name]
             elif node.name in ctx.placeholder_to_weight:
+                assert ctx.weights_coll is not None
                 w = ctx.weights[ctx.placeholder_to_weight[node.name]]
                 ctx.env[node] = ctx.weights_coll[w.index]
             elif node.name in ctx.lifted_constants:

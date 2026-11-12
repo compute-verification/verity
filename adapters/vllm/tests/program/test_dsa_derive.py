@@ -32,12 +32,30 @@ import pytest
 import torch
 import torch.fx.traceback as fxt
 import torch.nn as nn
-
 from verity.circuits import codec
 from verity.circuits.defs import bind, composite
+from verity.circuits.evaluation import evaluate
 from verity.circuits.refs import Affine, Coll, concat, runs
 from verity.circuits.types import Array, Value
-from verity.circuits.evaluation import evaluate
+from verity.definitions.numerics.serve3_reference import materialize
+from verity.definitions.registry import (
+    b1,
+    cublas_bf16,
+    dsa,
+    dsa_norm,
+    dsa_topk,
+    dsa_topk_mask,
+    fa3_check_inf,
+    fa3_split,
+    hopper,
+    sparse_mla,
+    sparse_mla_split,
+)
+from verity.definitions.registry import bf16_gemm_check as BC
+from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
+from verity.definitions.registry.sparse_mla_split import launch_num_splits
+
+from tests import fake_vllm
 from verity_vllm.program import dsa_table
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
@@ -46,15 +64,12 @@ from verity_vllm.program.frontend.rules import vllm_bindings as VB
 from verity_vllm.program.frontend.rules import vllm_dsa, vllm_dsa_dense
 from verity_vllm.program.frontend.rules.vllm_bindings import vllm_ruleset
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
-from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
+from verity_vllm.program.frontend.rules.vocab import (
+    PROFILE_B1_EAGER_V3,
+    PROFILES,
+    Vocabulary,
+)
 from verity_vllm.program.frontend.target_profile import TargetProfile
-from verity.definitions.numerics.serve3_reference import materialize
-from verity.definitions.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, dsa_topk_mask, fa3_check_inf, fa3_split, hopper
-from verity.definitions.registry import sparse_mla
-from verity.definitions.registry import sparse_mla_split
-from verity.definitions.registry import bf16_gemm_check as BC
-from verity.definitions.registry.boolean_rope import RoPEHeadGptJV2
-from verity.definitions.registry.sparse_mla_split import launch_num_splits
 
 H200 = TargetProfile(compute_capability=(9, 0), num_sms=132, batch_invariant=False, moe_backend="triton")
 NH, P, R, L, V, NQ = 2, 16, 16, 16, 16, 16   # heads, nope, rope, latent, value, q_lora
@@ -489,9 +504,8 @@ def test_the_observed_split_count_is_the_pin_on_the_impls_module(monkeypatch):
     """`vllm_meta.attention_impls` reads an MLA layer's FA3 split count from the `flash_attn_varlen_func` its impl's module calls:
     the one-split pin's marker, else None (vLLM's heuristic)."""
     from verity_vllm.program.frontend import vllm_meta as vm
-    attention = types.ModuleType("vllm.model_executor.layers.attention")
-    attention.__dict__.update(Attention=type("Attention", (nn.Module,), {}), MLAAttention=type("MLAAttention", (nn.Module,), {}))
-    monkeypatch.setitem(sys.modules, attention.__name__, attention)
+    attention = fake_vllm.install(monkeypatch)["vllm.model_executor.layers.attention"]
+    attention.Attention, attention.MLAAttention = type("Attention", (nn.Module,), {}), type("MLAAttention", (nn.Module,), {})
     backend = types.ModuleType("sparse_backend_standin")
     backend.__dict__["Impl"] = type("Impl", (), {"dcp_world_size": 1, "__module__": backend.__name__})
     monkeypatch.setitem(sys.modules, backend.__name__, backend)
