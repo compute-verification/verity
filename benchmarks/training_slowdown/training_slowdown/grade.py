@@ -548,7 +548,7 @@ def _said(provenance) -> str:
 def text(s: dict) -> str:
     """The block the grade prints (module docstring)."""
     pol, f, rho, S, basis = s["policy"], s["fit"], s["rho"], s["S"], s["basis"]["split"]
-    mine, per, bound = s["attack"]["splits"], s["per_period"], s["bound_of_record"]
+    mine, per, of_record = s["attack"]["splits"], s["per_period"], s["bound_of_record"]
     lines = [f"SLOWDOWN {s['config']}   start {s['start']}, gain {s['gain']:g}x, policy {pol['name']} ({pol['kind']}: "
              f"c = {pol['c_gates']:.4g} gates, k = {pol['k_bits']:,.0f} bits; {pol['why']})"]
 
@@ -593,10 +593,10 @@ def text(s: dict) -> str:
         + (r["capture_code"] or f"blank: {rho.get('blank', {}).get('capture_code', 'rho is unmeasured')}")
         + (f"; the record's provenance: {_said(r['provenance'])}" if r["provenance"] is not None else ""),
         f"p: {r['p']}", f"gain: {r['gain']}")
-    add("bound of record", *([bound["why"]] if not bound["available"] else [
+    add("bound of record", *([of_record["why"]] if not of_record["available"] else [
         f"every partition of the attack's traced circuit into the policy's blocks pays at least "
-        f"{bound['slowdown']:,.6g}x ({bound['theorem']}: at least {bound['blocks']:.4g} blocks of c gates over its |C|)",
-        f"rests on: {bound['rests_on']}", BOUND_IS_RHO]))
+        f"{of_record['slowdown']:,.6g}x ({of_record['theorem']}: at least {of_record['blocks']:.4g} blocks of c gates over its |C|)",
+        f"rests on: {of_record['rests_on']}", BOUND_IS_RHO]))
     if per is None:
         add("per period", "none: no S")
     else:
