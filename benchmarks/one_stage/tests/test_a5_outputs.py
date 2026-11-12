@@ -95,6 +95,19 @@ def test_an_output_class_is_refused_before_the_sample():
     assert A5.output_refusal(args(outputs=None)) is None and A5.output_refusal(args(outputs=[])) is None
 
 
+def test_an_output_class_the_design_samples_whole_needs_no_closure_map():
+    """A design that samples every unit of the class's stratum (`draw.derive` at k = N) puts the class in every sample, so
+    a5 takes it; at K of N the same class is refused, and a class split across a whole stratum and a sampled one is refused
+    for the sampled one's units alone."""
+    table = S.selection_table(RULE, program(), QUERY, TABLE)
+    whole, part = (D.derive(program(), QUERY, {"law": "work", "k": k}, table) for k in (N, K))
+    assert [s["k"] for s in whole["strata"]] == [N]
+    assert A5.output_refusal(args(), whole) is None
+    assert A5.output_refusal(args(), part) == {"output-class-needs-a-closure-map": {"units": len(OUTS)}}
+    split = {"strata": [{"units": [[0, 24]], "k": 24}, {"units": [[24, 32]], "k": 2}]}
+    assert A5.output_refusal(args(), split) == {"output-class-needs-a-closure-map": {"units": 8}}
+
+
 @pytest.mark.parametrize("seed", range(3))
 def test_the_class_closure_map_is_refused_and_the_work_draw_without_it_accepted(seed):
     """The stream refuses the class's closure map (every unit's closure the whole class) before any coin is read, so its
