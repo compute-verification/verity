@@ -62,7 +62,7 @@ from verity_vllm.correspondence.runtime import (
 from verity_vllm.query.program_view import ProgramView, param_reads
 
 __all__ = ["CallName", "parse_call_name", "row_place", "call_place", "runtime_rows", "recorded_names", "Correspondence", "implementation_prefix",
-           "held_module_paths"]
+           "held_module_paths", "call_name_of"]
 
 _ROW_RE = re.compile(r"\[([^\[\]]*)\]$")
 

@@ -21,6 +21,8 @@ from typing import Any
 from verity_vllm.records.commit_binding import CommitBinding
 from verity_vllm.records.fields import RecordError, only, optional, required
 
+__all__ = ["CommitRun", "SCHEMA", "TP_SCHEMA"]
+
 SCHEMA = "verity/commit-integ/delta/v1"
 TP_SCHEMA = "verity/commit-integ/delta-tp/v1"
 SCHEMAS = (SCHEMA, TP_SCHEMA)
