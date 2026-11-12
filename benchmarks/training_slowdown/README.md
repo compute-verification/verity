@@ -20,12 +20,12 @@ measures bumps `VERSION` (`training_slowdown/__init__.py`), which every record c
 | `routes/` | the routes a config names, and the route contract (`routes/__init__.py`); `subset`, the parameters a pattern names trained with the optimizer its `opt` dial names (AdamW, SGD, Lion, Adafactor, Muon, Shampoo; the ones torch lacks in `_optimizers`; under Muon and Shampoo the gains, and the embedding unless the config puts it among the matrices, train under AdamW beside it), a rate each for the matrices, the gains and the embedding, on a linear, cosine or constant schedule, AdamW in torch's default step or its fused kernel, E the tensors in full or their deltas in codes; `ema`, `subset`'s step with the output an exponential average of the weights, at one decay or reaching back a share of the steps so far; `lora`, the start frozen and a low-rank adapter trained beside each matrix a pattern names, the output the start with the adapters merged in; `qat`, quantization-aware training, each matrix a pattern names read as the start's plus the sparse ternary rounding of a latent that Muon trains straight through, the output the start with the last codes, handed over as codes: E is each matrix's scales and codes as one xz stream of its own, at xz's strongest preset and no other |
 | `flops.py` | `Counter`, the dispatch-mode count of every op's multiply-adds and their provenance; `guard_exits`, token data read out of torch; `flags`, work the count can't vouch for; `forward_macs_per_token` |
 | `opnames.py` | the op-name sets the counter, the capture and the gate prices share |
-| `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions |
+| `gates.py` | each counted op's price in Boolean gates, from the circuits' Definitions, in the dtype its record names for it (`kind_of`); a dtype no Definition prices is refused (`Unpriced`), and a record that names none is priced by `ASSUMED`. The counter writes torch's dtype, so a float32 GEMM is priced as the exact one; a row whose dtype reads `tf32` is priced as the TF32 one, and whoever reads a record of a run that set `cuda.matmul.allow_tf32` names its rows so |
 | `annotate.py` | a record's maximal annotation: per step U and D_t, the depth profile and the cut |
 | `capture/` | one training step traced on fake tensors (`capture_step` traces any PyTorch step, `capture_steps` a step among the steps before and after it, with its step circuit): |C|, the update's dependence and the cuts (`capture.circuit`) and the step's matrix products as rows (`capture.products`) |
 | `work.py` | the work a step's record states for the theorem of record: M, the products whose two operands both depend on the update, from a trace's product rows (`priced`, `products_of_trace`, `he_of_rows`), and each reason a record states none. It computes no slowdown |
 | `formalism.py` | a record's quantities (`of_record`, `measure`), Fit at (c, k) (`at`), the one bound's products term, which is the entry point's, and its sensitivities, Slowdown's token form among them (`bound`), and the published ρ with what it rests on (`published`) |
-| `as_math.py` | a record that holds a fused attention kernel as one row, rewritten as the counter writes the kernel: `python -m training_slowdown.as_math SRC DST [--partial none\|SUBSET:CALLS]`. Which gradients a backward call asked for is read from the record's trace; where the trace doesn't show it the rewrite is refused unless `--partial` says, and a `--partial` the trace contradicts is refused. One case the trace leaves open: k's gradient alone in c calls leaves the products of k's with q's, or with v's, in 2c, so there the rewrite is refused naming the readings and `--partial` picks one |
+| `as_math.py` | a record that holds a fused attention kernel as one row, rewritten as the counter writes the kernel: `python -m training_slowdown.as_math SRC DST [--partial none\|SUBSET:CALLS]`. Which gradients a backward call asked for is read from the record's trace; where the trace doesn't show it the rewrite is refused unless `--partial` says, and a `--partial` the trace contradicts is refused. One case the trace leaves open: k's gradient alone in c calls leaves the products of k's with q's, or with v's, in 2c, so there the rewrite is refused naming the readings and `--partial` picks one. Such a record names no dtype and its rewritten rows name none; a fused row that names one is refused, since the counter that names dtypes writes the kernel's ops itself |
 | `policy.py` | a start's reference shapes and the (c, k) grid; the console's policy (`CONSOLE`), one session of the 45M reference model; `named`, the one place a config's policy name becomes (c, k) |
 | `grade.py` | the grade: a config's slowdown S = p·ρ from its jobs' records and its honest config's, printed and written as `slowdown.json` (below) |
 | `library.py` | the library's table: each entry of `attacks/` with its step traced on a CPU, its slowdown at its policy (the entry point's on that step) and what binds, and its planned run over each fleet and period |
@@ -255,10 +255,18 @@ each product by its shape and each elementwise multiplication at one MAC an elem
 kernel as the ops the math kernel computes attention by, which are the ones a trace runs: the forward's two scalings and
 two products, and in the backward the products and scalings of the gradients the step asks for. The card's fused
 backward computes the scores again, a fifth product: this count, and the library's table with it, holds six of the
-kernel's seven products, and a circuit of the kernel as it runs holds seven. A job's record has the same ops, shapes and
-MACs under either kernel, in the dtype its kernel ran them in (a fused kernel in the query's, the math kernel in float32
-for a 16-bit call), and its counted step is its trace's, which prices a call's ops in the query's dtype too
-(`tests/test_run.py`). A fused optimizer kernel is one op,
+kernel's seven products, and a circuit of the kernel as it runs holds seven. A job's record is the same under either
+kernel in its ops, their shapes and their MACs (`tests/test_run.py`). Each row of a record's op log names the dtype its
+op computed in, its result's (`flops.dtype_of`): its first operand's for an op that returns nothing (an in-place list
+form, a fused optimizer step, an op of a fused kernel, on a stand-in in the kernel's operands' dtype) and for
+`_scaled_mm`, whose result is cast out of the FP8 it computes in. The op's gates are priced in that dtype, never by its
+phase or its class (`gates.kind_of`). A job runs attention under a fused kernel, in its operands' dtype, bf16 under
+the routes' autocast, and its rows name that; a job run under the math kernel, which casts half-width operands to
+float32, names float32. The trace's circuit prices each node by the same rule, and the ops of an attention call in the
+dtype the call computes in (below), so a counted step is its trace's circuit in gates, to the last digit
+(`tests/test_run.py`). A dtype no Definition prices has no price and none is assumed for it:
+float64, an integer product, a list op over tensors of two dtypes. The grade refuses a record that holds such an op and
+the capture a step that does (`unpriced_dtype`), each naming the op and the dtype. A fused optimizer kernel is one op,
 priced at a constant per parameter (`opnames.FUSED_OPTIMIZER_MACS`, which the counter and the trace both read). Choosing
 a fused kernel never lowers a step's count, at any setting of the optimizer's options (`tests/test_flops.py`): AdamW
 counts 8 multiplications a parameter and Adam 7, where their unfused steps make 6 at most, and SGD and Adagrad count 4,
@@ -332,7 +340,7 @@ start, and `--starts-root` points at it.
 
 ~~~text
 python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.toml --records DIR --honest DIR \
-    [--also NAME=DIR ...] [--out OUT]
+    [--also NAME=DIR ...] [--out OUT] [--as-if-assumed]
 ~~~
 
 A config names its `start`, its `target.gain`, its `policy`, its `honest` config and its `seeds`; each DIR holds one
@@ -370,6 +378,35 @@ takes it with the capture of the tree it runs in), or says the record has no con
 whose trace was not taken (`trace.failed`) has none either, and its ρ is "unmeasured", not "refused", with why the
 trace failed and the same job: the step was not refused, the process that traced it ended or raised. A record's
 `provenance`, where it has one (no job writes it), is passed on unread, beside the record and in what S rests on.
+
+A record is counted in the dtypes its op log names. One whose log names none is counted by the assumed dtypes
+(`gates.ASSUMED`: products and forward or backward elementwise ops in bf16, optimizer and decomposition ops in
+float32), and the block says of each record which it was and the device it ran on. A record whose log names a dtype
+in some rows and none in others is refused, with how many rows of each kind it has: no job writes one, and it would
+be counted two ways. Records of both kinds give no p
+and no S, since C over H would compare a count in one pricing with a count in the other; the reason names the
+records and the two ways out. One is to count the configs whose records name no dtype again, with a job of this
+version. The other is `--as-if-assumed`, which counts every record by the assumed dtypes whatever its log names: its
+block says so in its first two lines and begins every other line with `as-if`, and it writes
+`OUT/slowdown.as-if.json` (`slowdown-as-if/v1`), never `slowdown.json`. An as-if figure is no config's slowdown.
+
+ρ divides the work of the search record's traced products by the record's count, so the two have one price too: a
+product the term's M holds is priced, in the trace, in the dtype the record's op log names for it. A record whose
+trace prices one in another (`grade.priced_apart`, which matches a product to the log's ops by its shape and by
+whether it is the backward's) has no ρ, and then there is no S. The reason names the product, the two dtypes and the
+way out: for a product its capture's rule prices in another dtype than it was traced in, the job traced again at
+capture `capture.products.PRICED_AS_TRACED_FROM` or later, which prices each product as traced; for one priced as
+traced, whose traced step ran it in another dtype than the job did, the job traced again on a device of the kind the
+record states. torch's autocast casts `mv`, `addmv` and `addr` on a card and not on a CPU, so a card's job whose M
+holds one is refused so when it is traced again on a CPU: it is traced again on a card. A record whose log names no
+dtype has none to differ from.
+
+A record states torch's switch for TF32 matrix products as it stands when the record is written, by both of torch's
+readings of it (`tf32`: `torch.backends.cuda.matmul.allow_tf32` and `torch.get_float32_matmul_precision()`), and the
+block says of each record whether it was on, off or not stated (a record written before one stated it, which is read
+as before). No dtype of torch's says a product ran in TF32, so a record that states the switch on while its op log
+names a GEMM float32 is refused: the reason names the ops and the two ways out, those rows named `tf32` (the TF32
+GEMM's price) or the job run again with the switch off.
 
 ## Limits of the count
 

@@ -135,8 +135,17 @@ def _gemm_price(phase: str, op: str, dtype: str | None) -> tuple[float, float]:
 
 
 def traced_dtype(row: dict) -> str | None:
-    """The dtype a raw row's product was traced in, operand A's."""
-    return row["dtypes"][0]
+    """The dtype a raw row's product was traced in, the one it computed in: its result's, by the counter's rule
+    (`flops.dtype_of`), which is what the trace's circuit prices its node at (`capture.structure`'s GEMMs). torch
+    computes a product in its operands' one dtype, so that is operand A's where the two agree; where they don't it
+    is the one torch promotes them to, and operand A's for a kernel that casts its result
+    (`flops.CAST_RESULTS`)."""
+    from training_slowdown.flops import CAST_RESULTS
+
+    a, b = row["dtypes"]
+    if a == b or a is None or b is None or row["op"].split(".")[0] in CAST_RESULTS:
+        return a
+    return str(torch.promote_types(getattr(torch, a), getattr(torch, b))).removeprefix("torch.")
 
 
 def counted_dtype(row: dict) -> str | None:
@@ -198,7 +207,8 @@ def step_gates(graph) -> float:
     elementwise multiplications and dense linear algebra (`_other_macs`), and the forward's other ops that combine an
     activation with an updated parameter (a gather of an updated table by token data at the circuit's gather, any other
     at its work)."""
-    from training_slowdown.capture.structure import _arg_nodes, _arg_nodes_of, _dtype_bits, _other_macs, _work
+    from training_slowdown.capture.structure import (
+        _arg_nodes, _arg_nodes_of, _computed_in, _dtype_bits, _other_macs, _work)
     from training_slowdown.flops import _is_view, gather_macs
     from training_slowdown.gates import kind_of, per_mac
 
@@ -206,8 +216,8 @@ def step_gates(graph) -> float:
     phases = _phases(vs.gm)
     total = 0.0
 
-    def dtype(n, x) -> str | None:
-        return _counted_dtype(vs.attention, n, _dtype_name(x))
+    def dtype(n) -> str | None:
+        return _counted_dtype(vs.attention, n, _computed_in(n))
 
     for n in vs.nodes:
         if n.op != "call_function" or not isinstance(n.target, torch._ops.OpOverload):
@@ -218,11 +228,11 @@ def step_gates(graph) -> float:
         gs = _gemms(n)
         if gs:
             for g in gs:
-                total += _macs(g.dims) * _gemm_price(ph, name, dtype(n, g.operands[0]))[0]
+                total += _macs(g.dims) * _gemm_price(ph, name, dtype(n))[0]
             continue
         k, kind = _other_macs(n)
         if kind:
-            total += k * per_mac(kind_of(ph, "", name, dtype(n, n))[0])
+            total += k * per_mac(kind_of(ph, "", name, dtype(n))[0])
         if ph != "forward" or _is_view(n.target):
             continue
         ops = _arg_nodes(n)
@@ -233,7 +243,7 @@ def step_gates(graph) -> float:
                               n.meta["val"].numel())
             total += gm_ * per_mac("gather", _dtype_bits(n.args[0].meta["val"].dtype))
         elif not src and not kind and acts and any(vs.updated_param(a) for a in ops):
-            total += _work(n) * per_mac(kind_of(ph, "", name, dtype(n, n))[0])
+            total += _work(n) * per_mac(kind_of(ph, "", name, dtype(n))[0])
     return total
 
 

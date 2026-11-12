@@ -1,7 +1,7 @@
 """The grade: a config's slowdown S = p·ρ, from its jobs' records and its honest config's.
 
     python -m training_slowdown.grade --config attacks/NAME.toml --starts starts.toml --records DIR --honest DIR \\
-        [--also NAME=DIR ...] [--out OUT]
+        [--also NAME=DIR ...] [--out OUT] [--as-if-assumed]
 
 A config (an attack's TOML file) names its `start`, its `target.gain`, its `policy`, its `honest` config and its
 `seeds` (`search` and `final`). DIR holds one config's records as its jobs wrote them, `DIR/<seed>/<split>/run.json`
@@ -23,15 +23,28 @@ no job writes): the grade never reads it and passes it on, beside each record it
 - **p** = C/H against each, with its range over the seeds (C's least over H's greatest, to C's greatest over H's
   least). C and H are read on one split (`basis`): the final set where the attack and the honest config each have a
   final record, else the search split, and the block says which;
+- **one pricing** (`pricing`): a record whose op log names each op's dtype is counted in those dtypes, and one whose
+  log names none by the assumed ones (`gates.ASSUMED`), which the block says of each record. A record whose log
+  names a dtype in some rows and none in others is refused (`one_pricing`). Records of both kinds
+  give no p and no S, since C over H would then compare counts priced two ways; the reason names the two ways out
+  (`MIXED`): the records without dtypes counted again by a job of this version, or `--as-if-assumed`, which counts
+  every record by the assumed dtypes whatever its log names (`without_dtypes`), labels every line it prints as-if
+  and writes `OUT/slowdown.as-if.json` (`SCHEMA_AS_IF`), never `slowdown.json`;
+- **the TF32 switch**: a record states torch's switch for TF32 matrix products (`gates.tf32_on`), which the block
+  says of each record (`TF32`; a record written before one stated it says nothing, and is read as before). One that
+  states it on while its op log names a GEMM float32 is refused, with the two ways out (`TF32_FIX`): no dtype of
+  torch's says a product ran in TF32, and the exact product's price is not that job's;
 - **ρ**, the attack's own cost at the config's policy (`policy.named`): `formalism.published` at (c, k) on the search
   record, at its first checkpoint reaching the gain on the search split, else at its last, which the block says. It
   reads the record's `trace`, the step the job traced itself, and prices its product rows here (`traced`,
   `work.priced`): the grade holds no price. Where the Fit fails it is the slowdown the benchmark's one entry point
   gives on those products (`calculator.slowdown`, which `formalism.bound` calls): the grade computes none. A search
-  record with no trace, with one the capture refused or of a capture version this tree doesn't read, or with a step
-  `formalism.measure` refuses, has no ρ, and then there is no S; the reason names how the trace is taken again
-  (`retrace`). So does a record whose trace was not taken (`trace.failed`: the process that traced the step raised, or
-  ended), whose ρ is unmeasured, not refused: nothing was found against the step;
+  record with no trace, with one the capture refused or of a capture version this tree doesn't read, with one that
+  prices a product of M in another dtype than the record's op log names for it (`priced_apart`: ρ divides the
+  trace's work by the record's count, and the two have one price), or with a step `formalism.measure` refuses, has
+  no ρ, and then there is no S; the reason names how the trace is taken again (`retrace`). So does a record whose
+  trace was not taken (`trace.failed`: the process that traced the step raised, or ended), whose ρ is unmeasured,
+  not refused: nothing was found against the step;
 - **the sensitivities** beside ρ, never in it (`formalism.SENSITIVITIES`' reduction and update), and the version of
   the code that took the trace (`capture_code`): from the trace's `circuit`, the measured step's own cut of its
   gradient and its structure, and its `capture_code`. A record whose trace has neither still grades, at the same ρ
@@ -61,6 +74,26 @@ from . import VERSION, calculator, gates, policy, work
 from . import formalism as F
 
 SCHEMA = "slowdown/v1"
+#: what `--as-if-assumed` writes, under another schema and file name than a slowdown's, so that nothing reads it as one
+SCHEMA_AS_IF, AS_IF_FILE = "slowdown-as-if/v1", "slowdown.as-if.json"
+#: how a record is counted, by whether its op log names each op's dtype (`names_dtypes`)
+PRICED = {True: "in the dtype its op log names for each op",
+          False: "by the assumed dtypes (its op log names none)",
+          None: "with no op row to price"}
+#: what a record states of torch's switch for TF32 matrix products (`gates.tf32_on`), which the block says of each
+TF32 = {True: "TF32 on", False: "TF32 off", None: "TF32 switch not stated"}
+#: the two ways out for a record that states the switch on and names a GEMM float32, which its refusal names
+TF32_FIX = ("name those rows `tf32`, the dtype training_slowdown.gates prices a float32 GEMM under TF32 by, or run "
+            "the job again with the switch off (torch.backends.cuda.matmul.allow_tf32 = False and "
+            "torch.set_float32_matmul_precision('highest'))")
+#: what `--as-if-assumed` does, which every block it prints says first
+AS_IF = ("every record's ops are counted by the assumed dtypes (`gates.ASSUMED`: "
+         + ", ".join(f"{cls} {dtype}" for cls, dtype in gates.ASSUMED.items())
+         + "), whatever dtype its op log names: no figure here is the config's slowdown")
+#: the two ways out of records priced two ways, which the reason for no S names
+MIXED = ("count the configs whose records name no dtype again with a job of this version, whose op log names each "
+         "op's dtype; or grade with --as-if-assumed, which counts every record by the assumed dtypes and labels "
+         "every figure as-if")
 SPLITS = {"search": "the search split", "final": "the final set"}
 FORM = "L(C) = E + A*C^-gamma"
 #: the fit: its points per decade of C, the fewest it takes and the least factor in C they span, the count under which
@@ -82,8 +115,10 @@ BESIDE = {"circuit": "the measured step's cut of its gradient and its structure,
 BOUND_IS_RHO = ("rho's products term is this bound, the theorem's count solved for the fewest blocks, times c/|C|, on "
                 "the same N, O, β, b and F: where products bind, rho is it and S is p times it")
 #: the job that takes a record's trace again (`training_slowdown.run`'s `retrace`), which the reason names where ρ
-#: has no trace to read: one refused, or one that was not taken
-RETRACE = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device cpu"
+#: has no trace to read: one refused, or one that was not taken. `RETRACE_ON` is the job less its device, for a trace
+#: that is to be taken on a device of the job's kind
+RETRACE_ON = "python -m training_slowdown.run --retrace RUN_JSON --out DIR --device "
+RETRACE = RETRACE_ON + "cpu"
 
 
 # ---- the fit -----------------------------------------------------------------------------------------------------------
@@ -161,8 +196,9 @@ def c_spread(f: dict, loss: float) -> float | None:
 # ---- a job's checkpoints ---------------------------------------------------------------------------------------------
 
 def macs_log(record: dict, through: int | None) -> dict:
-    """A record's MACs by class (`by`) and by op and shape (`ops`: [count, MACs]) over its setup and its steps through
-    `through` (None: the whole run, its tail too): what `formalism` checks a trace's products against."""
+    """A record's MACs by class (`by`) and by op, shape and the dtype its op log names (`ops`, by `gates.op_key`:
+    [count, MACs]) over its setup and its steps through `through` (None: the whole run, its tail too): what
+    `formalism` checks a trace's products against."""
     by, ops = {}, {}
     steps = [record["setup"], *(s for s in record["steps"] if through is None or s["step"] <= through)]
     if through is None:
@@ -171,9 +207,51 @@ def macs_log(record: dict, through: int | None) -> dict:
         for k, v in s.get("by", {}).items():
             by[k] = by.get(k, 0) + v
         for row in (record["structures"].get(s.get("struct")) or {}).get("log", []):
-            n, m = ops.get(key := " ".join(map(str, row[:4])), (0, 0))
+            n, m = ops.get(key := gates.op_key(row), (0, 0))
             ops[key] = [n + row[4], m + row[5]]
     return {"by": by, "ops": ops}
+
+
+def dtype_rows(record: dict) -> tuple[int, int]:
+    """How many rows of the record's op log name their op's dtype, and how many name none."""
+    named = [len(row) > 6 for s in record["structures"].values() for row in s.get("log", [])]
+    return sum(named), len(named) - sum(named)
+
+
+def names_dtypes(record: dict) -> bool | None:
+    """Whether the record's op log names each op's dtype, so its count is priced in them: True where every row
+    does, False where none does (`gates.of_log` then prices each row by the assumed dtype), None for a record with
+    no row. A log with rows of both kinds is refused where the record is read (`one_pricing`)."""
+    named, bare = dtype_rows(record)
+    return not bare if named or bare else None
+
+
+def one_pricing(run: dict) -> None:
+    """Refuse a job (`run`: its `seed`, its `split` and its `record`) whose op log names a dtype in some rows and none
+    in others: `gates.of_log` would count the first in the dtypes they name and the rest by the assumed ones, one
+    record two ways, and nothing `PRICED` says would be true of it. No job writes such a log: the counter names every
+    row's dtype, a record written before rows did names none, and neither rewrite of a record makes one of both."""
+    named, bare = dtype_rows(run["record"])
+    if named and bare:
+        raise ValueError(
+            f"grade: the record at seed {run['seed']}, {run['split']} names a dtype in {named:,} of its op log's rows "
+            f"and none in {bare:,}: the first would be counted in the dtypes they name and the rest by the assumed "
+            f"ones, one record two ways. No job writes such a log: one of this version names every row's dtype, and "
+            f"a record written before rows did names none. Count the config again with a job of this version")
+
+
+def without_dtypes(record: dict) -> dict:
+    """The record as one whose op log names no dtype, which is then priced by the assumed dtypes: each structure's
+    rows of one phase, kind, op and shapes are one row of their counts and MACs, whatever dtype each names."""
+    def plain(log: list) -> list:
+        rows: dict[tuple, list] = {}
+        for row in log:
+            n = rows.setdefault(tuple(row[:4]), [0, 0])
+            n[0], n[1] = n[0] + row[4], n[1] + row[5]
+        return sorted([*key, *n] for key, n in rows.items())
+
+    return record | {"structures": {name: s | {"log": plain(s["log"])} if "log" in s else s
+                                    for name, s in record["structures"].items()}}
 
 
 def prefix(record: dict, step: int) -> int | None:
@@ -209,10 +287,24 @@ def counted(row: dict) -> float | None:
 def checkpoints(run: dict, start: str) -> list[dict]:
     """A job's checkpoints by step (`run`: its `seed`, its `split` and its `record`): each one's loss, the start's
     loss on the job's split and its counted |C| in gates (`counted`), or why it has none. A job from another start, or
-    scored on another split than its place says, is refused."""
+    scored on another split than its place says, is refused, and so is one whose op log names a dtype in some rows
+    and none in others (`one_pricing`), names an op in a dtype no Definition prices (`gates.Unpriced`), or names a
+    GEMM float32 while the record states the TF32 switch on (`gates.exact_under_tf32`): the exact product's price is
+    not that job's."""
     where = f"seed {run['seed']}, {run['split']}"
     out = []
-    for r in sorted(rows_of(run["record"]), key=lambda r: r["checkpoint_step"]):
+    one_pricing(run)
+    exact = gates.exact_under_tf32(run["record"])
+    if exact:
+        raise ValueError(f"grade: the record at {where} states torch's TF32 switch on, and its op log names GEMM ops "
+                         f"float32, the exact product ({', '.join(exact[:4])}"
+                         f"{f' and {len(exact) - 4} more' if len(exact) > 4 else ''}): under the switch a GPU "
+                         f"computes a float32 GEMM in TF32, at another price. Either {TF32_FIX}")
+    try:
+        rows = rows_of(run["record"])
+    except gates.Unpriced as e:
+        raise ValueError(f"grade: the record at {where} has no count in gates: {e}") from None
+    for r in sorted(rows, key=lambda r: r["checkpoint_step"]):
         if r.get("start") not in (None, start):
             raise ValueError(f"grade: the record at {where} is from start {r['start']!r}, not the config's {start!r}")
         if r.get("split") not in (None, run["split"]):
@@ -270,16 +362,19 @@ def ratio(c: dict | None, h: dict | None) -> dict | None:
 
 # ---- ρ, the bound of record and the periods --------------------------------------------------------------------------
 
-def retrace(record: dict) -> str:
+def retrace(record: dict, on: str = "cpu") -> str:
     """How a record's trace is taken again, which a record ρ can't read says: by the job that re-traces a record's
     own config (`RETRACE`), which reads its `config.text`, takes the trace with the capture of the tree it runs in
     (so this tree's, for a trace this grade is to read) and refuses a tree that reads the config as another program
-    than the record's; a record without its `config.text` or its `commit` has no config to re-trace from."""
+    than the record's; a record without its `config.text` or its `commit` has no config to re-trace from. The job
+    is a CPU's unless `on` names another kind of device (`RETRACE_ON`), which a trace that must run its products
+    as the record's job did asks for (`priced_apart_reason`)."""
     lacks = [k for k, v in (("config.text", (record.get("config") or {}).get("text")), ("commit", record.get("commit")))
              if not v]
     if lacks:
         return f"the record has no {' and no '.join(lacks)}, so no config to re-trace from"
-    return (f"re-trace it at the record's commit {record['commit']} and config.text with a CPU job, `{RETRACE}`, "
+    job = "a CPU job" if on == "cpu" else f"a job on {on}"
+    return (f"re-trace it at the record's commit {record['commit']} and config.text with {job}, `{RETRACE_ON}{on}`, "
             f"RUN_JSON the record: the tree the job runs in takes the trace with its own capture, and refuses a "
             f"config it reads as another program than the record's")
 
@@ -316,6 +411,67 @@ def with_circuit(record: dict, circuit: dict) -> dict:
     return out
 
 
+def priced_apart(tr: dict, log: dict) -> list[dict]:
+    """The products of a record's trace `tr` that the products term's M holds (`work.in_m`) and that the trace prices
+    in another dtype (`capture.products.priced_dtype`) than the record's op log names for them: ρ divides the work of
+    the trace's products by the record's count, so the two have one price only where the two dtypes are one. `log` is
+    the record's `macs_log` through the checkpoint ρ is read at. A product is matched to the log's ops as
+    `formalism.other_program` matches a trace to a run, by its shape (m, K, n) in either orientation, from the one
+    reading of a log's products (`formalism.products_of_log`), and by whether it is the backward's; the dtypes the
+    log names for it are those of every op of that shape. Each found is {"row", "priced", "named"}, the largest first
+    by its MACs.
+
+    What this finds is a product priced in a dtype the record ran no product of its shape in. A product whose shape
+    the log never ran is `other_program`'s to find, as is an entry of the log that reading can't read; one the log
+    names in several dtypes is apart from none it is priced in; and an op whose row names no dtype names none: a
+    record written before rows named one is counted by the assumed dtypes, and has nothing here to differ from."""
+    from .capture import products
+
+    named: dict[tuple, set] = {}
+    for key, prods in F.products_of_log(log)[0].items():
+        phase, *_, dtype = gates.split_key(key)
+        for _, m, k, n in prods if dtype is not None else ():
+            named.setdefault((phase == "bwd", m, k, n), set()).add(dtype)
+    found = []
+    for r in tr["rows"]:
+        if not work.in_m(r):
+            continue
+        back, shape = r["phase"] == "backward", (r["dims"]["m"], r["dims"]["k"], r["dims"]["n"])
+        names = named.get((back, *shape), set()) | named.get((back, *shape[::-1]), set())
+        priced = products.priced_dtype(r, tr.get("capture"))
+        if names and priced not in names:
+            found.append({"row": r, "priced": priced, "named": sorted(names)})
+    return sorted(found, key=lambda x: -x["row"]["count"] * math.prod(x["row"]["dims"].values()))
+
+
+def priced_apart_reason(record: dict, found: list[dict]) -> str:
+    """Why ρ is refused where `priced_apart` finds products in `record`'s trace, with the way out: the work would be
+    priced in one dtype and the count it is divided by in another. It names how many, and the largest with its two
+    dtypes. For a product its capture's rule prices in another dtype than it was traced in (a capture before
+    `capture.products.PRICED_AS_TRACED_FROM`), the way out is the trace taken again by this tree's capture, which
+    prices each product as traced (`retrace`). For one priced as traced, the traced step ran it in another dtype than
+    the job did, as a CPU's trace of a card's job does where torch's autocast casts a product on a card and not on a
+    CPU (`mv`, `addmv` and `addr`): the way out is the trace taken again on a device of the kind the record states
+    its job ran on."""
+    from .capture import products
+
+    x, tr = found[0], record["trace"]
+    r, d, named = x["row"], x["row"]["dims"], " or ".join(x["named"])
+    if x["priced"] != products.traced_dtype(r):
+        fix = (f"trace the job again at capture {products.PRICED_AS_TRACED_FROM} or later, which prices each product "
+               f"in the dtype it was traced in ({products.traced_dtype(r)} here; this trace is capture "
+               f"{tr.get('capture')}'s); {retrace(record)}")
+    else:
+        kind = str(record.get("device") or "").split(":")[0]
+        fix = (f"the traced step ran it in {x['priced']}, not as the job did, and only a trace whose step runs it in "
+               f"{named} has one price with this record: trace the job again on a device of the kind it ran on"
+               + (f"; {retrace(record, kind)}" if kind else ", which the record does not state"))
+    return (f"{sum(x['row']['count'] for x in found)} of the traced step's matrix products in M are priced in another "
+            f"dtype than the search record's op log names for them (the largest: {r['count']} {r['phase']} {r['op']} "
+            f"of {d['m']}×{d['k']} by {d['k']}×{d['n']}, priced in {x['priced']} where the record names {named}), "
+            f"and one slowdown has one price: {fix}")
+
+
 def traced(record: dict, row: dict) -> dict:
     """`row` (one of `rows_of(record)`) as ρ reads it: with the products of the record's `trace`, the step its job
     traced (`traced.trace_step`), in its `formalism` block, as `formalism.measure` takes a traced record's. Each raw
@@ -333,8 +489,9 @@ def traced(record: dict, row: dict) -> dict:
     it; without it they state none, since a record whose trace was taken again keeps its job's `training_slowdown`.
 
     Raises `formalism.Refused`, with how the trace is taken again (`retrace`), for a record with no trace, with one
-    the capture refused, with one of a capture version this tree's `priced` doesn't read, or with one that lacks a
-    key of `TRACE`; and for a checkpoint with a nonempty E that no step after the run's first update precedes. A
+    the capture refused, with one of a capture version this tree's `priced` doesn't read, with one that lacks a
+    key of `TRACE`, or with one that prices a product of M in another dtype than the record's op log names for it
+    (`priced_apart`); and for a checkpoint with a nonempty E that no step after the run's first update precedes. A
     record whose trace was not taken (`failed`, with why: `run.inside`, `run.outside`) raises a plain `ValueError`
     with the same way out: its step is unmeasured, and nothing refused it."""
     from .capture import products
@@ -356,6 +513,9 @@ def traced(record: dict, row: dict) -> dict:
     lacks = [k for k in TRACE if k not in tr]
     if lacks:
         raise F.Refused(f"the search record's trace has no {', '.join(lacks)}, which ρ reads; {retrace(record)}")
+    apart = priced_apart(tr, row.get("macs_log") or {})
+    if apart:
+        raise F.Refused(priced_apart_reason(record, apart))
     steps = changed_steps(record, prefix(record, row["checkpoint_step"]))
     if not steps and (row.get("output") or {}).get("e_bytes") != 0:
         raise F.Refused(f"update-free prefix: E is not empty, but no step through checkpoint {row['checkpoint_step']} "
@@ -459,11 +619,28 @@ def per_period(run_gates: float, rho: dict) -> dict:
 
 # ---- the grade ---------------------------------------------------------------------------------------------------------
 
+def two_pricings(jobs: dict[str, list[dict]]) -> str | None:
+    """Why the jobs' records give no p: some name each op's dtype and some name none (`names_dtypes`), with which and
+    the two ways out (`MIXED`). None where every record read is priced one way."""
+    named, unnamed = ([f"{n} {r['seed']}/{r['split']}" for n, rs in jobs.items() for r in rs if r["dtypes"] is want]
+                      for want in (True, False))
+    if not (named and unnamed):
+        return None
+
+    def some(xs: list[str]) -> str:
+        return ", ".join(xs[:3]) + (f" and {len(xs) - 3} more" if len(xs) > 3 else "") + f" ({len(xs)} in all)"
+
+    return (f"the records read are priced two ways, and C over H would compare a count in one with a count in the "
+            f"other. Counted {PRICED[True]}: {some(named)}. Counted {PRICED[False]}: {some(unnamed)}. Either {MIXED}")
+
+
 def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
-          others: dict[str, list[dict]] | None = None) -> dict:
+          others: dict[str, list[dict]] | None = None, as_if_assumed: bool = False) -> dict:
     """The slowdown of `config` (its `name`, `start`, `target.gain`, `policy`, `honest` and `seeds`) from its jobs
     `runs`, its honest config's (`honest`) and other configs' at the same start and gain (`others`, by name), each job
-    its `seed`, its `split` and its `record`; `starts` is the starts registry (module docstring)."""
+    its `seed`, its `split` and its `record`; `starts` is the starts registry (module docstring). With
+    `as_if_assumed` every record is counted by the assumed dtypes (`without_dtypes`), and the result says so
+    (`as_if`, under `SCHEMA_AS_IF`): it is no config's slowdown."""
     starts = starts.get("starts", starts)
     if config["start"] not in starts:
         raise ValueError(f"grade: no start {config['start']!r} in the starts registry ({', '.join(starts)})")
@@ -475,25 +652,35 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
         raise ValueError(f"grade: the {len(data)} starts on data {entry.get('data')!r} give no fit: it takes "
                          f"{FIT_MIN} frontier points spanning a factor {FIT_SPAN:g} in C0")
     me, hon = config["name"], config["honest"]
-    jobs = {n: [r | {"checkpoints": checkpoints(r, config["start"])} for r in rs]
-            for n, rs in ({me: runs, hon: honest} | (others or {})).items()}
+
+    def job(r: dict) -> dict:
+        one_pricing(r)  # as it was read: with its dtypes left out, a log of both kinds of row is one of none
+        counted_as = r | {"record": without_dtypes(r["record"])} if as_if_assumed else r
+        return counted_as | {"checkpoints": checkpoints(counted_as, config["start"]),
+                             "dtypes": names_dtypes(r["record"]), "as_if": as_if_assumed}
+
+    jobs = {n: [job(r) for r in rs] for n, rs in ({me: runs, hon: honest} | (others or {})).items()}
+    two = None if as_if_assumed else two_pricings(jobs)
     sides = {n: side(n, rs, f, g, config.get("seeds") if n == me else None) for n, rs in jobs.items()}
     lacking = [n for n in (me, hon) if not any(r["split"] == "final" for r in jobs[n])]
     basis = "search" if lacking else "final"
     C, at = sides[me]["splits"][basis]["C"], {n: s["splits"][basis] for n, s in sides.items()}
-    best = min((n for n in at if at[n]["C"]), key=lambda n: at[n]["C"]["mean"], default=None)
+    best = None if two else min((n for n in at if at[n]["C"]), key=lambda n: at[n]["C"]["mean"], default=None)
     H = {"honest": {"config": hon} | {k: at[hon][k] for k in ("C", "reached", "of")},
-         "any": {"config": best, "over": list(at)} | {k: at[best][k] if best else None for k in ("C", "reached", "of")}}
-    p = {k: ratio(C, h["C"]) for k, h in H.items()}
+         "any": {"config": best, "over": list(at)} | {k: at[best][k] if best else None for k in ("C", "reached", "of")}
+         | ({"why": "the configs' records are priced two ways, and the least of their C is of no one pricing"}
+            if two else {})}
+    p = {k: None if two else ratio(C, h["C"]) for k, h in H.items()}
     wanted = (config.get("seeds") or {}).get("search") or [None]
     search = next((r for r in jobs[me] if r["split"] == "search" and wanted[0] in (None, r["seed"])), None)
     rho, of_record = rho_of(search, f, g, pol, entry["shape"])
-    why = (rho.get("why") or "ρ is unmeasured") if rho["rho"] is None else \
-        None if C else f"no seed of the config reaches {g:g}x on {SPLITS[basis]}"
+    why = two or ((rho.get("why") or "ρ is unmeasured") if rho["rho"] is None else
+                  None if C else f"no seed of the config reaches {g:g}x on {SPLITS[basis]}")
     S = {k: None if why or not p[k] else p[k]["p"] * rho["rho"] for k in H} | {
         "why": why, "lower_bound": bool(rho.get("partial"))}
     return {
-        "schema": SCHEMA, "training_slowdown": VERSION, "config": me, "start": config["start"], "gain": g,
+        "schema": SCHEMA_AS_IF if as_if_assumed else SCHEMA, "as_if": AS_IF if as_if_assumed else None,
+        "training_slowdown": VERSION, "config": me, "start": config["start"], "gain": g,
         "policy": pol, "basis": {"split": basis, "why": (f"no final record of {' or '.join(lacking)}" if lacking else
                                                          "the attack and the honest config each have a final record")},
         "fit": f | {"data": entry.get("data"), "starts": data,
@@ -503,21 +690,26 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
         "bound_of_record": of_record,
         "rests_on": {
             "p": f"counted |C| ({gates.UNIT}) at each seed's first checkpoint at or below its target on "
-                 f"{SPLITS[basis]}, the mean over the seeds that reach, over the same for H",
+                 f"{SPLITS[basis]}, the mean over the seeds that reach, over the same for H"
+                 + (", every record counted by the assumed dtypes (as-if)" if as_if_assumed else ""),
             "rho": rho.get("rests_on"), "capture": rho.get("capture"), "capture_code": rho.get("capture_code"),
             "provenance": rho.get("provenance"),
             "gain": f"the fit {FORM} on {f['points']} of the {len(data)} starts on data {entry.get('data')}"
                     + (f", provisional under {FIT_TARGET}" if f["provisional"] else "")},
-        "per_period": per_period(C["mean"] * rho["rho"], rho) if C and rho["rho"] is not None else None,
+        "per_period": per_period(C["mean"] * rho["rho"], rho) if C and rho["rho"] is not None and not two else None,
         "records": [_read(n, r) for n, rs in jobs.items() for r in rs]}
 
 
 def _read(name: str, run: dict) -> dict:
-    """What the grade read of one job: its place, the label and the version of the code that wrote its record, how
-    many of its checkpoints are scored, and the record's `provenance` where it has one, passed on as it is."""
+    """What the grade read of one job: its place, the label and the version of the code that wrote its record, the
+    device it ran on, what it states of the TF32 switch (`gates.tf32_on`; None where it states nothing), how its
+    count is priced (`PRICED`; under `--as-if-assumed`, as if its log named no dtype), how many of its checkpoints
+    are scored, and the record's `provenance` where it has one, passed on as it is."""
     wrote = run["record"]
+    priced = "as if its op log named no dtype" if run["as_if"] and run["dtypes"] else PRICED[run["dtypes"]]
     return {"config": name, "seed": run["seed"], "split": run["split"], "source": run.get("source"),
             "label": wrote.get("label"), "version": wrote.get("training_slowdown") or wrote.get("te_core"),
+            "device": wrote.get("device"), "tf32": gates.tf32_on(wrote), "priced": priced,
             "checkpoints": len(run["checkpoints"]),
             "scored": sum(c["gates"] is not None for c in run["checkpoints"])} | (
         {"provenance": wrote["provenance"]} if "provenance" in wrote else {})
@@ -534,7 +726,8 @@ def _seed(split: str, seed: str, s: dict) -> str:
 
 def _h(h: dict) -> str:
     if not h["C"]:
-        return f"{h['config'] or 'no config'}: none ({h['reached'] or 0} of {h['of'] or 0} seeds reach)"
+        why = h.get("why") or f"{h['reached'] or 0} of {h['of'] or 0} seeds reach"
+        return f"{h['config'] or 'no config'}: none ({why})"
     return f"{h['config']}: {h['C']['mean']:.4g} gates ({h['reached']} of {h['of']} seeds reach)"
 
 
@@ -547,14 +740,18 @@ def _said(provenance) -> str:
 
 
 def text(s: dict) -> str:
-    """The block the grade prints (module docstring)."""
+    """The block the grade prints (module docstring). An as-if grade's block says so in its first line and its
+    second, and every line after them begins with `as-if`, so a line read apart from the block still says it."""
     pol, f, rho, S, basis = s["policy"], s["fit"], s["rho"], s["S"], s["basis"]["split"]
     mine, per, bound = s["attack"]["splits"], s["per_period"], s["bound_of_record"]
-    lines = [f"SLOWDOWN {s['config']}   start {s['start']}, gain {s['gain']:g}x, policy {pol['name']} ({pol['kind']}: "
-             f"c = {pol['c_gates']:.4g} gates, k = {pol['k_bits']:,.0f} bits; {pol['why']})"]
+    tag = "as-if " if s["as_if"] else ""
+    lines = [f"{tag.upper()}SLOWDOWN {s['config']}   start {s['start']}, gain {s['gain']:g}x, policy {pol['name']} "
+             f"({pol['kind']}: c = {pol['c_gates']:.4g} gates, k = {pol['k_bits']:,.0f} bits; {pol['why']})"]
+    if s["as_if"]:
+        lines.append(f"  as-if: {s['as_if']}")
 
     def add(head: str, *body: str) -> None:
-        lines.extend(f"  {h:<17} {b}" for h, b in zip((head, *[""] * len(body)), body))
+        lines.extend(f"  {tag}{h:<17} {b}" for h, b in zip((head, *[""] * len(body)), body))
 
     if S["why"]:
         add("S = p x rho", f"none: {S['why']}")
@@ -609,6 +806,7 @@ def text(s: dict) -> str:
             f"(the window is {per['window']}'s; each fleet at its peak rate)",
             *(f"{k}: {v}" for k, v in per["parts"].items()))
     add("records", *(f"{x['config']} {x['seed']}/{x['split']}: version {x['version']}, "
+                     + (f"on {x['device']}, " if x["device"] else "") + f"{TF32[x['tf32']]}, counted {x['priced']}, "
                      f"{x['scored']} of {x['checkpoints']} checkpoints scored" + (f", {x['label']}" if x["label"] else "")
                      + (f", provenance: {_said(x['provenance'])}" if "provenance" in x else "")
                      for x in s["records"]))
@@ -639,15 +837,19 @@ def main(argv=None) -> int:
     ap.add_argument("--honest", type=Path, required=True, help="its honest config's records")
     ap.add_argument("--also", action="append", default=[], metavar="NAME=DIR",
                     help="another config's records at the same start and gain")
-    ap.add_argument("--out", type=Path, default=None, help="where slowdown.json goes")
+    ap.add_argument("--out", type=Path, default=None,
+                    help=f"where slowdown.json goes ({AS_IF_FILE} under --as-if-assumed)")
+    ap.add_argument("--as-if-assumed", action="store_true",
+                    help="count every record by the assumed dtypes, whatever dtype its op log names, and label "
+                         "every line as-if: for records that name dtypes beside records that name none")
     a = ap.parse_args(argv)
     config = tomllib.loads(a.config.read_text()) | {"name": a.config.stem}
     others = {n: read(Path(d)) for n, _, d in (x.partition("=") for x in a.also)}
-    s = grade(config, tomllib.loads(a.starts.read_text()), read(a.records), read(a.honest), others)
+    s = grade(config, tomllib.loads(a.starts.read_text()), read(a.records), read(a.honest), others, a.as_if_assumed)
     print(text(s))
     if a.out:
         a.out.mkdir(parents=True, exist_ok=True)
-        (a.out / "slowdown.json").write_text(json.dumps(_plain(s), indent=1) + "\n")
+        (a.out / (AS_IF_FILE if a.as_if_assumed else "slowdown.json")).write_text(json.dumps(_plain(s), indent=1) + "\n")
     return 0
 
 

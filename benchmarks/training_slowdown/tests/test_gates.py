@@ -41,24 +41,78 @@ def test_kinds_and_assumptions():
     assert gates.kind_of("fwd", "updated", "embedding")[0] == "gather"
     assert gates.kind_of("other", "param", "linalg_qr")[0] == "elementwise/f32"
     assert gates.kind_of("fwd", "theta", "_scaled_mm") == ("gemm/e4m3", "")
-    kind, note = gates.kind_of("fwd", "theta", "_int_mm", "int8")
-    assert kind == "gemm/bf16" and "no Definition" in note
     for op in ("mv", "addmv", "addmv_"):   # matrix-vector products, which training_slowdown.capture.structure counts as GEMMs
         assert gates.kind_of("forward", "", op, "bfloat16") == ("gemm/bf16", "")
     assert gates.kind_of("forward", "", "mvlgamma", "bfloat16")[0] == "elementwise/bf16"
 
 
-def test_a_v23_log_in_gates():
-    log = {"by": {"fwd/theta": 100, "other/param": 10, "bwd/grad": 50},
+@pytest.mark.parametrize("phase, role", [("fwd", "theta"), ("bwd", "grad"), ("other", "param"), ("optimizer", "")])
+def test_an_op_is_priced_in_the_dtype_it_ran_in_whatever_its_phase_and_role(phase, role):
+    """The dtype an op's row names decides its price, never a rule of its class: an optimizer's product in bf16 (Muon's
+    Newton-Schulz) is a bf16 GEMM and one in f32 (Shampoo's) an f32 one, a forward scaling in f32 is an f32
+    multiply, and an optimizer's elementwise update in bf16 a bf16 one."""
+    assert gates.kind_of(phase, role, "mm", "bfloat16") == ("gemm/bf16", "")
+    assert gates.kind_of(phase, role, "mm", "float32") == ("gemm/f32", "")
+    assert gates.kind_of(phase, role, "mul", "bfloat16") == ("elementwise/bf16", "")
+    assert gates.kind_of(phase, role, "mul", "float32") == ("elementwise/f32", "")
+    assert gates.kind_of(phase, role, "_linalg_eigh", "float32") == ("elementwise/f32", "")
+
+
+@pytest.mark.parametrize("op, dtype, what", [
+    ("_int_mm", "int32", "a GEMM"), ("mm", "float64", "a GEMM"), ("mul", "float64", "an elementwise"),
+    ("eq", "bool", "an elementwise"), ("_foreach_mul_", "bfloat16+float32", "an elementwise"),
+    ("_linalg_eigh", "float64", "an elementwise")])
+def test_a_dtype_no_definition_prices_is_refused_with_the_op_and_the_dtype(op, dtype, what):
+    """Nothing is priced as the cheapest: an op in a dtype with no Definition, and one whose results are in two, has
+    no kind, and neither has a log that holds it."""
+    with pytest.raises(gates.Unpriced, match=f"^{op} in {dtype.replace('+', '[+]')}: no Definition prices {what} MAC"):
+        gates.kind_of("fwd", "theta", op, dtype)
+    with pytest.raises(gates.Unpriced, match=f"^{op} in "):
+        gates.of_log({"ops": {f"fwd theta {op} [[4, 4]] {dtype}": [1, 16]}})
+
+
+def test_a_gather_moves_words_of_its_dtypes_bits():
+    assert gates.gather_bits("embedding") == (16, "gather of 16-bit words (no dtype)")
+    assert [gates.gather_bits("index", d)[0] for d in ("bfloat16", "float32", "int64", "bool")] == [16, 32, 64, 1]
+    with pytest.raises(gates.Unpriced, match="^take in complex64: a gather's words"):
+        gates.gather_bits("take", "complex64")
+    out = gates.of_log({"ops": {"fwd updated embedding [[9, 4], [2, 3]] float32": [1, 10],
+                                "fwd updated embedding [[9, 4], [2, 3]] bfloat16": [1, 10]}})
+    assert out == {"gates": 10 * 3 * 32 + 10 * 3 * 16, "macs": 20, "assumed": {},
+                   "kinds": {"gather": {"macs": 20, "gates": 10 * 3 * 32 + 10 * 3 * 16}}}
+
+
+def test_a_logs_key_is_its_rows_with_the_dtype_where_the_row_names_one():
+    old, new = ["fwd", "theta", "mm", "[[4, 5], [5, 5]]", 2, 200], ["other", "param", "mm", "[[4, 5], [5, 5]]", 1, 100, "float32"]
+    assert gates.op_key(old) == "fwd theta mm [[4, 5], [5, 5]]"
+    assert gates.op_key(new) == "other param mm [[4, 5], [5, 5]] float32"
+    assert [gates.split_key(gates.op_key(r)) for r in (old, new)] == [(*old[:4], None), (*new[:4], "float32")]
+
+
+def test_a_log_without_dtypes_in_gates():
+    log = {"by": {"fwd/theta": 100, "other/param": 10, "bwd/grad": 50, "fwd/updated": 5},
            "ops": {"fwd theta mm [[4, 5], [5, 5]]": [1, 100], "other param _fused_adamw_ [[5]]": [1, 10],
-                   "bwd grad mm [[4, 5], [5, 5]] bfloat16": [1, 40]}}
+                   "bwd grad mm [[4, 5], [5, 5]] bfloat16": [1, 40], "fwd updated embedding [[9, 4], [2]]": [1, 5]}}
     out = gates.of_log(log)
     assert out["kinds"]["gemm/bf16"]["macs"] == 140
     assert out["kinds"]["elementwise/f32"]["macs"] == 10
     assert out["kinds"]["elementwise/bf16"]["macs"] == 10
-    assert out["gates"] == pytest.approx(140 * gates.per_mac("gemm/bf16") + 10 * 12637 + 10 * 3947)
+    assert out["gates"] == pytest.approx(140 * gates.per_mac("gemm/bf16") + 10 * 12637 + 10 * 3947 + 5 * 48)
     assert out["assumed"] == {"gemm in bf16 (no dtype)": 100, "optimizer in f32 (no dtype)": 10,
-                              "MACs in no op row, as elementwise bf16": 10}
+                              "gather of 16-bit words (no dtype)": 5, "MACs in no op row, as elementwise bf16": 10}
+
+
+def test_a_log_that_names_every_dtype_is_priced_by_them_with_no_assumption():
+    """An optimizer's products in bf16 and in f32 and a forward's scalings in f32 and in bf16, each at its own
+    Definition's price: by `ASSUMED` every product is a bf16 GEMM and every forward scaling a bf16 multiply."""
+    ops = {"other param mm [[4, 5], [5, 4]] bfloat16": [5, 400], "other param mm [[4, 5], [5, 4]] float32": [1, 80],
+           "fwd theta mul [[2, 4]] float32": [1, 8], "fwd theta mul [[2, 4]] bfloat16": [1, 8]}
+    out = gates.of_log({"by": {"other/param": 480, "fwd/theta": 16}, "ops": ops})
+    assert out["assumed"] == {} and out["macs"] == 496
+    assert out["gates"] == pytest.approx(400 * gates.per_mac("gemm/bf16") + 80 * 12637 + 8 * 12637 + 8 * 3947)
+    assumed = gates.of_log({"by": {"other/param": 480, "fwd/theta": 16},
+                            "ops": {k.rsplit(" ", 1)[0]: [6, 480] if "mm" in k else [2, 16] for k in ops}})
+    assert assumed["gates"] == pytest.approx(480 * gates.per_mac("gemm/bf16") + 16 * 3947) != out["gates"]
 
 
 def test_a_row_named_tf32_is_priced_at_the_tf32_step():
@@ -70,3 +124,11 @@ def test_a_row_named_tf32_is_priced_at_the_tf32_step():
     assert out["kinds"] == {"gemm/bf16": {"macs": 32, "gates": 32 * 1480.125},
                             "gemm/tf32": {"macs": 64, "gates": 64 * 2385.375}}
     assert out["assumed"] == {"gemm in bf16 (no dtype)": 32}
+
+
+def test_tf32_names_a_gemm_alone():
+    """TF32 is a GEMM's arithmetic: an elementwise op or a gather a row names `tf32` has no price."""
+    with pytest.raises(gates.Unpriced, match="^mul in tf32: no Definition prices an elementwise MAC"):
+        gates.kind_of("other", "param", "mul", "tf32")
+    with pytest.raises(gates.Unpriced, match="^embedding in tf32: a gather's words"):
+        gates.gather_bits("embedding", "tf32")

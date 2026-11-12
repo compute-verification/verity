@@ -80,8 +80,9 @@ DEEP_COPY = ("the step deep-copies a tensor of the model's (copy.deepcopy of the
 
 class CaptureRefused(Exception):
     """The step is not one fixed graph this package can count. `reason` is one of ``dynamic_control_flow``,
-    ``data_dependent_shape``, ``custom_kernel``, ``uncounted_op``, ``batch_dependent``, ``deep_copy`` or ``trace``;
-    `op` the ATen op or construct; `where` the user's source line, if found."""
+    ``data_dependent_shape``, ``custom_kernel``, ``uncounted_op``, ``unpriced_dtype`` (a counted op in a dtype no
+    Definition prices, `gates.Unpriced`), ``batch_dependent``, ``deep_copy`` or ``trace``; `op` the ATen op or
+    construct; `where` the user's source line, if found."""
 
     def __init__(self, reason: str, op: str | None, message: str, where: str | None = None) -> None:
         self.reason, self.op, self.where = reason, op, where

@@ -71,8 +71,9 @@ reads such a record as unmeasured, with the reason. `--retrace` takes a record's
 capture, from the record's own config text, for a record whose trace a later grade doesn't read or that has none.
 
 Writes `OUT/run.json` once, when the route's process has ended: that process's record (the count, the checkpoints,
-the flags, the config with its digest and text, the route, θ's digest, the trace or why there is none, and the job's
-label) with the scores in, over every segment the job ran in; a job told to stop writes the record of the stop there
+the flags, the config with its digest and text, the route, θ's digest, the trace or why there is none, the job's
+label, the device, and torch's switch for TF32 matrix products as it stands when the record is written, `tf32`) with
+the scores in, over every segment the job ran in; a job told to stop writes the record of the stop there
 instead. No weights are kept by default: of the last checkpoint the job keeps E, the bytes that rebuild its output
 from θ, under `OUT` when E is under 50 MiB (`E_KEEP_BYTES`), and with `--keep-weights` the whole state. Torch
 compilation is disabled and CUDA graph replay refused: both run work the counter can't see. For the same reason a run is
@@ -211,6 +212,14 @@ def no_function_modes():
     finally:
         for mode in reversed(modes):
             torch._C._push_on_torch_function_stack(mode)
+
+
+def tf32() -> dict:
+    """torch's two readings of its switch for TF32 matrix products, as they stand: with either on a GPU computes a
+    float32 GEMM in TF32, which no dtype of an op says. A record states them beside its device (`Harness.finish`),
+    and `gates.tf32_on` reads them."""
+    return {"cuda_matmul_allow_tf32": bool(torch.backends.cuda.matmul.allow_tf32),
+            "float32_matmul_precision": torch.get_float32_matmul_precision()}
 
 
 def git_commit() -> str:
@@ -533,7 +542,7 @@ class Harness:
         rec |= meta | {
             "schema": SCHEMA, "training_slowdown": VERSION, "seed": self.seed, "tier": self.tier,
             "split": self.split, "start": self.start, "theta_sha256": theta_sha256(self.theta), "device": self.device,
-            "forward_macs_per_token": self.forward_macs_per_token, "c": c, "planned_steps": self.n_steps,
+            "tf32": tf32(), "forward_macs_per_token": self.forward_macs_per_token, "c": c, "planned_steps": self.n_steps,
             "checkpoints": self.checkpoints,
             "flags": flags(rec["totals"], float(meta.get("peak_macs_per_s", 0))) + list(notes or []),
             "invalid": problems, "families": [],
@@ -945,7 +954,8 @@ def _added(a: dict, b: dict) -> dict:
 def outside_steps(structures: dict, parts: list[dict]) -> dict:
     """One step record for what several segments counted outside any step, each one's setup and what a stopped one
     counted after its last kept step: their counts and times added, and their structures merged into one, which
-    joins `structures`."""
+    joins `structures`. An op log's rows are added where they are one op at one shape in one dtype: a row names its
+    dtype last, and one written before rows did names none and is added to the rows that name none."""
     out = dict(parts[0])
     for p in parts[1:]:
         for k in ("tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "cpu_s", "wall_s", "gpu_s",
@@ -956,12 +966,12 @@ def outside_steps(structures: dict, parts: list[dict]) -> dict:
         out["shapes"] = out["shapes"] | p["shapes"]
         mine, its = structures[out["struct"]], structures[p["struct"]]
         log: dict[tuple, list[int]] = {}
-        for *sig, count, macs in mine["log"] + its["log"]:
-            entry = log.setdefault(tuple(sig), [0, 0])
+        for phase, role, op, shapes, count, macs, *dtype in mine["log"] + its["log"]:
+            entry = log.setdefault((phase, role, op, shapes, *dtype), [0, 0])
             entry[0] += count
             entry[1] += macs
         struct = {"updated": sorted(mine["updated"] + its["updated"], key=lambda u: (u[1], u[0])),
-                  "log": sorted([list(k) + v for k, v in log.items()])}
+                  "log": sorted([*k[:4], *v, *k[4:]] for k, v in log.items())}
         out["struct"] = structure_id(struct)
         structures[out["struct"]] = struct
     return out

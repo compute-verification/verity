@@ -15,7 +15,7 @@ import torch.nn.functional as F
 from synthetic import JOBS, LORA, job_counted, run_job, tiny_data, tiny_registry, tiny_start, write_config
 from torch import nn
 
-from training_slowdown import VERSION, config, flops, formalism, grade, policy, run, starts, work
+from training_slowdown import VERSION, config, flops, formalism, gates, grade, policy, run, starts, work
 from training_slowdown.capture import products
 from training_slowdown.codecs import Identity, Plan, QuantDelta, SeedReplay, SparseTernary, derive_seed
 from training_slowdown.counterexample import check
@@ -93,6 +93,34 @@ def test_sgd_run_records_every_step_and_verifies_an_identity_family(tmp_path, th
     # tied table's lookup (58 multiplexers per word), w1 and the head
     floor = 32 * (V * D + D * D) / (58 * D + D * D + V * D)
     assert all(b > floor for b in fam["beta"].values()), fam["beta"]
+
+
+def test_a_record_states_torchs_tf32_switch_as_it_stands_when_it_is_written(tmp_path, theta):
+    """A record states both of torch's readings of its switch for TF32 matrix products, read when the record is
+    written: off as torch starts, and on by whichever reading a job's code set. The record of a job that set it
+    names its float32 products float32, as torch does, which `gates.exact_under_tf32` lists and the grade refuses."""
+    allow, precision = torch.backends.cuda.matmul.allow_tf32, torch.get_float32_matmul_precision()
+
+    def switched(te):
+        torch.backends.cuda.matmul.allow_tf32 = True
+        sgd(te)
+
+    try:
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.set_float32_matmul_precision("highest")
+        off = counted(tmp_path / "off", theta, sgd)
+        assert off["tf32"] == {"cuda_matmul_allow_tf32": False, "float32_matmul_precision": "highest"} == run.tf32()
+        assert gates.tf32_on(off) is False and gates.exact_under_tf32(off) == []
+        on = counted(tmp_path / "on", theta, switched)
+        assert on["tf32"]["cuda_matmul_allow_tf32"] is True and gates.tf32_on(on) is True
+        assert gates.exact_under_tf32(on) == ["bwd mm", "fwd mm"] and on["invalid"] == []
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.set_float32_matmul_precision("medium")
+        assert run.tf32()["float32_matmul_precision"] == "medium" and gates.tf32_on({"tf32": run.tf32()}) is True
+        assert gates.tf32_on({}) is None and gates.exact_under_tf32(off | {"tf32": None}) == []
+    finally:
+        torch.set_float32_matmul_precision(precision)
+        torch.backends.cuda.matmul.allow_tf32 = allow
 
 
 EPS, LR = 1e-3, 1e-2
@@ -417,7 +445,7 @@ def test_the_counters_split_of_a_step_on_a_model_with_position_tables_is_the_tra
         was = side[kind].get(key, (0, 0))
         side[kind][key] = (was[0] + count, was[1] + macs)
 
-    for _, kind, op, shapes, count, macs in log:
+    for _, kind, op, shapes, count, macs, *_ in log:
         if kind in counted and op in ("mm", "addmm"):
             (m, k), (_, n) = json.loads(shapes)[-2:]
             add(counted, kind, (op, m, k, n), count, macs)
@@ -511,7 +539,51 @@ def counted_and_traced(root: Path, steps: int, **over):
     return rec, *traced_step(cfg, route, model, optimizers, "cpu"), model
 
 
-@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 3)])
+#: the dtype a job's optimizer computes its products in, and their kind: Muon casts its Newton-Schulz to bf16, and
+#: Shampoo's factors and roots stay in the weights' f32
+OPTIMIZER_PRODUCTS = {"muon": ("bfloat16", "gemm/bf16"), "shampoo": ("float32", "gemm/f32")}
+#: attention's ops, as the counter writes them for a fused kernel (`flops.Counter._attention`), and the dtype each
+#: side computes them in under the routes' bf16 autocast: a fused kernel in its operands', and torch's math kernel,
+#: which a trace is taken under, from operands it casts to float32
+ATTENTION = {"bmm": "its products", "mul": "its scalings"}
+FUSED, MATH = "bfloat16", "float32"
+
+
+@contextlib.contextmanager
+def attention_rows():
+    """What the counter writes for a fused attention kernel while this is entered, the rows it names attention's ops
+    by: {step: {(phase, kind, op, shapes, dtype): [count, MACs]}}, what each call of `flops.Counter._attention` adds
+    to its step's log."""
+    added, inner = {}, flops.Counter._attention
+
+    def spy(self, func, *rest):
+        before = {key: list(n) for key, n in self.cur.log.items()}
+        out = inner(self, func, *rest)
+        into = added.setdefault(self.cur.index, {})
+        for key, n in self.cur.log.items():
+            was = before.get(key, [0, 0])
+            if n != was:
+                into[key] = [a + b - c for a, b, c in zip(into.get(key, [0, 0]), n, was)]
+        return out
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(flops.Counter, "_attention", spy)
+        yield added
+
+
+def in_dtype(log: list, rows: dict, dtype: str) -> list:
+    """A step's op log with the rows of `rows` (`attention_rows`' of that step) named `dtype`."""
+    out: dict = {}
+    for *key, count, macs, was in log:
+        moved = rows.get((*key, was), [0, 0])
+        for name, n in ((dtype, moved), (was, [count - moved[0], macs - moved[1]])):
+            if any(n):
+                out[*key, name] = [a + b for a, b in zip(out.get((*key, name), [0, 0]), n)]
+    return sorted([*key, *n, name] for (*key, name), n in out.items())
+
+
+@pytest.mark.parametrize("job, steps", [("whole", 1), ("whole", 3), ("block", 3), ("lora", 3), ("ema", 3), ("muon", 2),
+                                        ("shampoo", 3)])
 def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, steps):
     """What a job's trace says of a step (`traced.traced_step`: the capture's graph of it, from shapes alone) against
     what the job's counter recorded of that same step as it ran: the step's tokens, its GEMMs' MACs, its elementwise
@@ -522,15 +594,44 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
     step on the counter holds it at the gather Definition's multiplexers, which |C| counts and no product is, so the
     counter's forward is the trace's forward GEMMs, that lookup and the forward's elementwise work.
 
+    In gates, attention's ops excepted by name (`ATTENTION`): the counted step's, each op at the price of the dtype
+    its row names with no assumption made (`gates.of_log`), against the traced circuit's, whose nodes are priced by
+    the same rule. A job runs attention under a fused kernel, in its operands' bf16, and the trace under the math
+    kernel, which casts them to float32, so the rows the counter writes for the kernel name bf16 where the circuit
+    holds float32: the counted step is under the circuit by those rows' MACs at the two dtypes' prices and by nothing
+    else, and with those rows named float32 it is the circuit, to the last digit: both are compared as they are,
+    with no tolerance, since at this shape every sum of gates is a whole number of eighths a float holds exactly. An
+    optimizer's products are in the dtype it ran them in, whatever the forward's: Muon's in bf16, Shampoo's in f32,
+    with its roots.
+
     As a job runs: under torch's fused attention kernel, which the counter counts as the ops the math kernel computes
     attention by (`flops.Counter._attention`), the ones the trace holds.
 
     The step's `updated` rows are not compared: the trace's are by update dependence and the counter's by use. No
     cheaper test holds the trace to the counter: each of the two has its own tests, on its own count."""
-    rec, tr, g, model = counted_and_traced(tmp_path, steps, **JOBS[job])
+    with attention_rows() as kernel:
+        rec, tr, g, model = counted_and_traced(tmp_path, steps, **JOBS[job])
     assert rec["invalid"] == [] and tr["step"] == min(1, steps - 1)
     step = rec["steps"][tr["step"]]
     assert [step[k] for k in COUNTS] == [g.tokens, g.macs, g.elementwise_macs, g.c_macs]
+    log, attention = rec["structures"][step["struct"]]["log"], kernel[step["step"]]
+    ops = {gates.op_key(r): r[4:6] for r in log}
+    counted = gates.of_log({"by": step["by"], "ops": ops})
+    assert {(key[2], key[4]) for key in attention} == {(op, FUSED) for op in ATTENTION}
+    assert all(ops[gates.op_key([*key[:4], *n, key[4]])] == n for key, n in attention.items())
+    as_traced = gates.of_log({"by": step["by"], "ops": {gates.op_key(r): r[4:6] for r in in_dtype(log, attention, MATH)}})
+    assert counted["assumed"] == as_traced["assumed"] == {}
+    assert as_traced["gates"] == tr["circuit"]["gates"] and counted["macs"] == as_traced["macs"]
+    under = sum(n[1] * (gates.per_mac(gates.kind_of(*key[:3], MATH)[0]) - gates.per_mac(gates.kind_of(*key[:3], FUSED)[0]))
+                for key, n in attention.items())
+    assert under > 0 and tr["circuit"]["gates"] - counted["gates"] == under
+    if job in OPTIMIZER_PRODUCTS:
+        dtype, kind = OPTIMIZER_PRODUCTS[job]
+        products = {k: v for k, v in ops.items() if k.startswith("other param mm ")}
+        macs = sum(m for _, m in products.values())
+        assert macs and {gates.split_key(k)[4] for k in products} == {dtype}
+        assert gates.of_log({"ops": products})["kinds"] == {kind: {"macs": macs, "gates": macs * gates.per_mac(kind)}}
+        assert (step["approx_macs"] > 0) == (job == "shampoo")
     rows = work.priced(tr)["rows"]
     assert tr["tokens"] == step["tokens"] and sum(r["count"] * r["macs"] for r in rows) == step["matmul_macs"]
     log = [r for r in rec["structures"][step["struct"]]["log"] if r[0] == "fwd"]
@@ -547,7 +648,10 @@ def test_a_jobs_trace_and_its_counter_agree_on_the_traced_step(tmp_path, job, st
 def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job):
     """A job's steps under the fused attention kernel it runs against the same job's under the math kernel, the one
     its trace is taken under: every step's counts, its op log, its updated nodes and the weights it read, the setup's
-    and the tail's too. The fused kernel does run: the model's attention reaches the counter as one op."""
+    and the tail's too, but for the dtype the log names for attention's ops (`ATTENTION`). The fused kernel computes
+    them in its operands' bf16, and the math kernel casts those operands to float32 first, so each record names what
+    its kernel ran: the rows the counter writes for the fused kernel, named float32, are the math kernel's rows. The
+    fused kernel does run: the model's attention reaches the counter as one op."""
     seen = []
     inner = flops.Counter._attention
 
@@ -555,19 +659,24 @@ def test_a_jobs_record_is_one_record_under_either_attention_kernel(tmp_path, job
         seen.append(str(func.overloadpacket))
         return inner(self, func, *rest)
 
-    def steps_of(rec):
+    def steps_of(rec, rows=None):
         keep = ("step", "tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "by", "shapes", "device_macs")
-        return [{k: s.get(k) for k in keep} | rec["structures"][s["struct"]] | {"weights": sorted(s["weights"])}
-                for s in (rec["setup"], *rec["steps"], rec["tail"])]
+        out = [{k: s.get(k) for k in keep} | rec["structures"][s["struct"]] | {"weights": sorted(s["weights"])}
+               for s in (rec["setup"], *rec["steps"], rec["tail"])]
+        return [s | {"log": in_dtype(s["log"], (rows or {}).get(s["step"], {}), MATH)} for s in out]
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(flops.Counter, "_attention", spy)
-        fused = steps_of(job_counted(tmp_path / "fused", 3, **JOBS[job])[0])
+        with attention_rows() as kernel:
+            ran = job_counted(tmp_path / "fused", 3, **JOBS[job])[0]
         kernels, seen[:] = set(seen), []
         math = steps_of(job_counted(tmp_path / "math", 3, math=True, **JOBS[job])[0])
     assert kernels == {"aten._scaled_dot_product_flash_attention_for_cpu",
                        "aten._scaled_dot_product_flash_attention_for_cpu_backward"} and not seen
-    assert fused == math and fused[2]["matmul_macs"] > 0 < fused[2]["elementwise_macs"]
+    fused = steps_of(ran)
+    assert steps_of(ran, kernel) == math != fused and fused[2]["matmul_macs"] > 0 < fused[2]["elementwise_macs"]
+    named = [{(row[2], row[6]) for row in s["log"] if (*row[:4], row[6]) in kernel.get(s["step"], {})} for s in fused]
+    assert named[2] == {(op, FUSED) for op in ATTENTION} and all(n in (set(), named[2]) for n in named)
 
 
 @pytest.mark.parametrize("job", ["whole", "lora"])

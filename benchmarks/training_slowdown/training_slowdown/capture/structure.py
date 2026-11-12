@@ -76,8 +76,8 @@ import torch
 from training_slowdown.capture.circuit import ATTR, CARRIED, COMPUTED, OTHER_INPUT, RANDOM, TOKEN_INPUT, Net, StepCircuit, measure
 from training_slowdown.capture.trace import ATTENTION, BACKWARD, Capture, CaptureRefused
 from training_slowdown.flops import (ELEMENTWISE_NAMES, FUSED_OPTIMIZER_MACS, GATHERS, GEMM_LIKE, LINALG_NAMES, NOT_GEMM, SCALED_NAMES,
-                           TOKEN_INDEX, _is_view, gather_macs)
-from training_slowdown.gates import kind_of, per_mac
+                           TOKEN_INDEX, _is_view, dtype_of, gather_macs)
+from training_slowdown.gates import Unpriced, kind_of, per_mac
 
 __all__ = ["CLASSES", "Matmul", "StepGraph"]
 
@@ -752,9 +752,12 @@ class StepGraph:
         # GEMMs and their dims in every capture; each counted op's gates at its Definition's price (training_slowdown.gates)
         node_gates: dict = {}
 
-        def priced(n, macs, dtype, kind=None, width=16) -> None:
+        def priced(n, macs, kind=None, width=16) -> None:
             if macs:
-                k = kind or kind_of(phases.get(n, "forward"), "", _pk(n.target), _counted_dtype(attention, n, dtype))[0]
+                try:
+                    k = kind or kind_of(phases.get(n, "forward"), "", _pk(n.target), _counted_dtype(attention, n, _computed_in(n)))[0]
+                except Unpriced as e:
+                    raise CaptureRefused("unpriced_dtype", str(n.target), f"node {n.name}: {e}") from None
                 node_gates[n] = node_gates.get(n, 0.0) + macs * per_mac(k, width)
 
         raw = []
@@ -764,7 +767,7 @@ class StepGraph:
                 continue
             vgs = [_gemms(vs[pos[n]]) for vs in vnodes]
             for j, g in enumerate(gs):
-                priced(n, _macs(g.dims), _dtype_name(g.operands[0]))
+                priced(n, _macs(g.dims))
                 tdims = {}
                 for d, size in g.dims.items():
                     axes = tuple(axis_names[a] for a, vg in enumerate(vgs) if vg[j].dims[d] != size)
@@ -835,11 +838,11 @@ class StepGraph:
                 gm_ = gather_macs(_pk(n.target), n.args[0].meta["val"].shape, n.args[1] if len(n.args) > 1 else None,
                                   n.meta["val"].numel())
                 extra += gm_
-                priced(n, gm_, None, "gather", _dtype_bits(n.args[0].meta["val"].dtype))
+                priced(n, gm_, "gather", _dtype_bits(n.args[0].meta["val"].dtype))
             elif "activation" in mixed and "updated" in mixed and not kind:
                 work = _work(n)
                 extra += work
-                priced(n, work, _dtype_name(n))
+                priced(n, work)
             macs = k if kind else work
             out = n.meta.get("val")
             g = _G("elementwise", {"batch": 1, "m": macs, "k": 1, "n": 1}, tuple(ops),
@@ -899,7 +902,7 @@ class StepGraph:
             k, kind = _other_macs(n)
             if kind:
                 other[kind] += k
-                priced(n, k, _dtype_name(n))
+                priced(n, k)
 
         # the cut (module docstring)
         fr = [False] * len(flow.preds)
@@ -1120,6 +1123,16 @@ def _dtype_name(x) -> str | None:
     if isinstance(v, (list, tuple)):
         v = next((y for y in v if isinstance(y, torch.Tensor)), None)
     return str(v.dtype).removeprefix("torch.") if isinstance(v, torch.Tensor) else None
+
+
+def _computed_in(n) -> str | None:
+    """The dtype node `n`'s op computes in, as the counter names it in its op log (`flops.dtype_of`): None for a node
+    with no tensor result and no tensor first argument."""
+    def tensors(nodes) -> list:
+        vals = [x.meta.get("val") for x in nodes]
+        return [t for v in vals for t in (v if isinstance(v, (list, tuple)) else [v]) if isinstance(t, torch.Tensor)]
+
+    return dtype_of(_pk(n.target), tensors([n]), tensors(_arg_nodes_of(n.args[:1]))) or None
 
 
 def _storage_positions(v: torch.Tensor) -> np.ndarray:

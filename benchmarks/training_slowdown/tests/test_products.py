@@ -12,7 +12,7 @@ import torch.nn.functional as tF
 from torch import nn
 
 from training_slowdown import calculator, policy, work
-from training_slowdown.capture import capture_step, capture_steps, products, trace
+from training_slowdown.capture import CaptureRefused, capture_step, capture_steps, products, trace
 
 V, H, B, CTX = 16, 256, 4, 8
 SHAPES = {"emb": [V, H], "fc": [H, H], "head": [V, H]}
@@ -90,6 +90,23 @@ def test_a_product_is_priced_in_its_traced_dtype_and_an_earlier_captures_wider_o
     assert products.priced_dtype(unstated, "4.23.0") == products.priced_dtype(unstated, products.CAPTURE) == "float32"
 
 
+def test_a_products_traced_dtype_is_its_results_by_the_counters_rule():
+    """One rule with the counter (`flops.dtype_of`): the dtype a product computes in is its result's. A raw row holds
+    its operands' dtypes, and torch computes a product in its operands' one dtype, so the row's dtype is operand A's
+    wherever the two agree; a row whose operands differ is in the dtype torch promotes them to, the wider, whichever
+    operand is first; and a kernel that casts its result (`_scaled_mm`) is in its first operand's."""
+    def row(op: str, a: str, b: str) -> dict:
+        return {"phase": "forward", "op": op, "dtypes": [a, b]}
+
+    assert products.traced_dtype(row("mm", "bfloat16", "bfloat16")) == "bfloat16"
+    assert products.traced_dtype(row("mm", "float32", "bfloat16")) == "float32"
+    assert products.traced_dtype(row("mm", "bfloat16", "float32")) == "float32"
+    assert products.traced_dtype(row("_scaled_mm", "float8_e4m3fn", "float8_e5m2")) == "float8_e4m3fn"
+    a, b = torch.ones(2, 3, dtype=torch.bfloat16), torch.ones(3, 2)
+    with pytest.raises(RuntimeError, match="dtype"):
+        a @ b
+
+
 RAW = {"count", "phase", "op", "dims", "token_dims", "dtypes", "attention", "affected", "widths", "self", "gathered",
        "rates"}
 PRICE = {"macs", "outputs", "paid", "b_c", "gates_per_mac", "cell_gates"}
@@ -126,29 +143,27 @@ def test_a_raw_row_has_no_price_and_priced_makes_it_the_row_rows_states():
                                                       raw["capture"])["gates_per_mac"]
 
 
-def test_rows_that_differ_only_in_a_dtype_their_price_doesnt_read_are_one_priced_row():
-    """Two layers read the same activations, one in bf16 and one cast to fp64, which has no Definition and is priced
-    as bf16: the capture's rows keep them apart by dtype, and priced they are one row of count 2, as `rows` states
-    them."""
+@pytest.mark.parametrize("wide, op, dtype", [
+    (lambda h, w: tF.linear(h.double(), w.double()).float(), "mm", "float64"),
+    (lambda h, w: tF.linear(h, w) * (torch.arange(32) * 2).sum(), "mul", "int64")])
+def test_a_step_with_an_op_in_a_dtype_no_definition_prices_is_refused(wide, op, dtype):
+    """A layer cast to fp64, and an integer multiplication beside an fp32 layer: the step's circuit has an op no
+    Definition prices, and the capture refuses the step with the op and the dtype, where it priced such an op as a
+    bf16 one."""
     class Wide(nn.Module):
         def __init__(self):
             super().__init__()
-            self.w1, self.w2, self.w3 = (nn.Parameter(torch.randn(32, 32).bfloat16()) for _ in range(3))
+            self.w1, self.w2, self.w3 = (nn.Parameter(torch.randn(32, 32)) for _ in range(3))
 
         def forward(self, x):
             h = tF.linear(x, self.w1)
-            return tF.linear(h, self.w2) + tF.linear(h.double(), self.w3.double()).bfloat16()
+            return tF.linear(h, self.w2) + wide(h, self.w3)
 
     model = Wide()
-    g = capture_step(model, torch.optim.SGD(model.parameters(), lr=1e-3), lambda m, b: m(b).square().mean(),
-                     torch.randn(4, 32).bfloat16())
-    raw = products.raw_on_dial(g)["rows"]
-    assert all(r["count"] == 1 for r in raw) and {tuple(r["dtypes"]) for r in raw} == {
-        ("bfloat16", "bfloat16"), ("float64", "float64")}
-    priced = products.rows(g)["rows"]
-    assert len(raw) > len(priced) and sorted(r["count"] for r in priced) == [1, 1, 2, 2, 2]
-    assert sum(r["count"] * r["macs"] for r in priced) == sum(
-        r["count"] * math.prod(r["dims"].values()) for r in raw)
+    with pytest.raises(CaptureRefused, match=f"unpriced_dtype: node .*: {op} in {dtype}: no Definition") as e:
+        capture_step(model, torch.optim.SGD(model.parameters(), lr=1e-3), lambda m, b: m(b).square().mean(),
+                     torch.randn(4, 32))
+    assert (e.value.reason, e.value.op) == ("unpriced_dtype", f"aten.{op}.{'default' if op == 'mm' else 'Tensor'}")
 
 
 class Fan(nn.Module):
@@ -576,8 +591,8 @@ class Packed(nn.Module):
         self.head = nn.Linear(64, 8, bias=False)
         if form == "vector":
             self.v = nn.Parameter(torch.randn(64))
-        self.register_buffer("lanes", torch.arange(8))
-        self.register_buffer("octets", torch.arange(bits))
+        self.register_buffer("lanes", bits * torch.arange(8))   # each lane's shift, and each byte's
+        self.register_buffer("octets", 8 * torch.arange(bits))
 
     def forward(self, x):
         bits, half = self.bits, 2 ** (self.bits - 1)
@@ -587,10 +602,10 @@ class Packed(nn.Module):
             step = (g.pow(2).mean(-1, keepdim=True).sqrt() * 0.9957 if bits == 2 else
                     g.abs().amax(-1, keepdim=True) * (2.0 / 2 ** bits)).to(torch.bfloat16).float().clamp_min(1e-30)
             c = (torch.floor(g / step).clamp(-half, half - 1) + half).long()
-            word = (c.reshape(*c.shape[:-1], -1, 8) << (bits * self.lanes)).sum(-1)
-            packed = ((word.unsqueeze(-1) >> (8 * self.octets)) & 255).to(torch.uint8)
-            word = (packed.long() << (8 * self.octets)).sum(-1)
-            j = ((word.unsqueeze(-1) >> (bits * self.lanes)) & (2 ** bits - 1)).reshape(c.shape).float() - half
+            word = (c.reshape(*c.shape[:-1], -1, 8) << self.lanes).sum(-1)
+            packed = ((word.unsqueeze(-1) >> self.octets) & 255).to(torch.uint8)
+            word = (packed.long() << self.octets).sum(-1)
+            j = ((word.unsqueeze(-1) >> self.lanes) & (2 ** bits - 1)).reshape(c.shape).float() - half
         if self.form == "vector":
             return self.head(y + ((j + 0.5) * self.v).reshape(y.shape))
         return self.head(y + (((j + 0.5) * step).reshape(y.shape) - y).detach())

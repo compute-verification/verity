@@ -131,6 +131,28 @@ def test_a_segment_from_a_kept_state_runs_the_steps_that_remain_as_the_unbroken_
     assert_continues(whole, run.joined(run.joined(None, stopped["record"]), rest), at=2)
 
 
+def test_two_segments_op_logs_are_added_whether_their_rows_name_a_dtype_or_none(stopped, rest):
+    """What two segments counted outside their steps is added row by row (`run.outside_steps`), a row being one op at
+    one shape in one dtype. The counter's rows name each op's dtype, a seventh field; a record written before rows
+    did has six. Both are read: the two segments joined without their dtypes are the two joined with them, the
+    dtypes then left out. An op at one shape in two dtypes stays two rows."""
+    named = run.joined(run.joined(None, stopped["record"]), rest)
+    bare = run.joined(run.joined(None, grade.without_dtypes(stopped["record"])), grade.without_dtypes(rest))
+    seven = named["structures"][named["setup"]["struct"]]["log"]
+    six = bare["structures"][bare["setup"]["struct"]]["log"]
+    assert seven and {len(row) for row in seven} == {7} and {len(row) for row in six} == {6}
+    assert six == grade.without_dtypes(named)["structures"][named["setup"]["struct"]]["log"]
+    counts = ("tokens", "macs", "matmul_macs", "elementwise_macs", "approx_macs", "by", "device_macs")
+    assert {k: bare["setup"][k] for k in counts} == {k: named["setup"][k] for k in counts}
+    assert sum(row[5] for row in six) == sum(row[5] for row in seven) == named["setup"]["macs"] > 0
+
+    first = seven[0]
+    structures = named["structures"] | {"other": {"updated": [], "log": [[*first[:6], "float64"]]}}
+    both = run.outside_steps(structures, [named["setup"], named["setup"] | {"struct": "other"}])
+    assert [row for row in structures[both["struct"]]["log"] if row[:4] == first[:4]] == sorted(
+        [first, [*first[:6], "float64"]])
+
+
 def test_a_kept_state_without_its_optimizers_state_continues_to_other_weights(tiny, stopped, rest):
     fresh = stopped["state"] | {"optimizers": [{"state": {}, "param_groups": o["param_groups"]}
                                                for o in stopped["state"]["optimizers"]]}

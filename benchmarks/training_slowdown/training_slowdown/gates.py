@@ -16,16 +16,25 @@ Each price is one of the circuits' own Definitions (`verity.definitions.ops.bool
   `HopperTf32WgmmaDot8_v2` / 8, the k8 step cuBLAS's unsplit TF32 GEMM takes K/8 of a dot product (`GemmTf32_v1`);
 - an elementwise MAC (training_slowdown.flops's `mul`, `div`, `addcmul`, a scaled `add`, a counted forward op) is a bf16 multiply
   then a bf16 add (`Bf16MulBf16_v2` + `Bf16Add_v2`), or one `F32Fma_v4` in f32;
-- an optimizer's MAC (phase `other`/`optimizer`, role `param`) and dense linear algebra's are f32 (`F32Fma_v4`);
+- dense linear algebra's MAC is an elementwise MAC of its dtype (`F32Fma_v4` in f32);
 - a gather's MAC (training_slowdown.flops's `gather_macs`) is one word multiplexer, y ⊕ (b ∧ (x ⊕ y)) per bit: 3 gates per bit.
 
-A record names each op's dtype from training_slowdown 4.0's capture on. A record without one (v2.3's `macs_log`) is priced by
-`ASSUMED`: GEMMs and forward or backward elementwise ops in bf16 (the lf model trains under bf16 autocast), the
-optimizer in f32; `of_log` lists every assumption it made. A torch dtype doesn't say whether a run set
-cuda.matmul.allow_tf32, so a float32 GEMM row is priced as the exact f32 one, and only a row whose dtype reads `tf32`
-as the TF32 one: whoever reads a record of a run that set it names its f32 GEMMs' rows so.
-The ops training_slowdown.flops doesn't count (exp, max, comparisons, casts) are in no record, so |C| here is the counted
-ops' gates.
+An op is priced in the dtype it ran in, its result's, which its row of a record's op log names
+(`flops.Counter.record`) and a trace's node has: never by a rule of its class. An optimizer's product in bf16 is a bf16
+GEMM, and a forward scaling autocast leaves in f32 is an f32 multiply. A dtype no Definition prices is refused, with
+the op and the dtype (`Unpriced`): nothing is priced as the cheapest. A gather moves words of its dtype's bits
+(`BITS`).
+
+A torch dtype doesn't say whether a run set cuda.matmul.allow_tf32, and the counter writes torch's, so a float32 GEMM
+row is priced as the exact f32 one, and only a row whose dtype reads `tf32` as the TF32 one: whoever reads a record of
+a run that set it names its f32 GEMMs' rows so. `tf32` names a GEMM alone: no elementwise op or gather has a price in
+it. A record states the switch (`tf32_on`), and one that states it on while a GEMM row of its log reads float32 is
+priced at neither (`exact_under_tf32`, which the grade refuses by).
+
+A record whose op log names no dtype is priced by `ASSUMED`: GEMMs and forward or backward elementwise ops in bf16
+(the lf model trains under bf16 autocast), the optimizer and linear algebra in f32, a gather's words at 16 bits;
+`of_log` lists every assumption it made. The ops training_slowdown.flops doesn't count (exp, max, comparisons, casts)
+are in no record, so |C| here is the counted ops' gates.
 """
 from __future__ import annotations
 
@@ -78,10 +87,19 @@ DTYPES = {"bfloat16": "bf16", "bf16": "bf16", "float16": "f16", "f16": "f16", "f
           "tf32": "tf32", "float8_e4m3fn": "e4m3", "float8_e5m2": "e5m2", "float4_e2m1fn_x2": "fp4"}
 #: what a record without dtypes is priced as (module docstring)
 ASSUMED = {"gemm": "bf16", "elementwise": "bf16", "optimizer": "f32", "linalg": "f32"}
+#: the bits of the words a gather without a dtype is priced as moving
+ASSUMED_BITS = 16
 OPTIMIZER_PHASES = {"other", "optimizer"}
+#: a word's bits by dtype: what a gather moves, a multiplexer a bit at any width
+BITS = {"bool": 1, "int8": 8, "uint8": 8, "float8_e4m3fn": 8, "float8_e5m2": 8, "int16": 16, "float16": 16,
+        "bfloat16": 16, "int32": 32, "float32": 32, "int64": 64, "float64": 64}
 
 
-def per_mac(kind: str, width: int = 16) -> float:
+class Unpriced(ValueError):
+    """An op in a dtype no Definition prices."""
+
+
+def per_mac(kind: str, width: int = ASSUMED_BITS) -> float:
     """The gates of one counted MAC of `kind` (`PRICES`, or `gather` with a word of `width` bits)."""
     if kind == "gather":
         return MUX_GATES_PER_BIT * width
@@ -98,8 +116,10 @@ UNIT = f"gates: AND + XOR + NOT, {per_and('gemm/bf16'):.1f}x a bf16 GEMM's AND c
 
 
 def kind_of(phase: str, role: str, op: str, dtype: str | None = None) -> tuple[str, str]:
-    """(kind, assumption) of a counted op: its class by training_slowdown.flops's name sets, its dtype the record's or `ASSUMED`'s
-    (the assumption names it; "" when the record gave the dtype)."""
+    """(kind, assumption) of a counted op. With its `dtype` (the name of the one it ran in), its kind is a GEMM's or
+    an elementwise MAC's in that dtype, whatever its phase and role, and the assumption is ""; `Unpriced` where no
+    Definition prices that. Without one its dtype is `ASSUMED`'s for its class by training_slowdown.flops's name sets, and
+    the assumption names it. A gather's kind is `gather`, whose width is `gather_bits`'."""
     base = op.split(".")[0]
     if base in GATHER_NAMES:
         return "gather", ""
@@ -113,14 +133,52 @@ def kind_of(phase: str, role: str, op: str, dtype: str | None = None) -> tuple[s
         cls = "elementwise"
     if base == "_scaled_mm" and dtype is None:
         dtype = "float8_e4m3fn"
-    dt = DTYPES.get(dtype, dtype) if dtype else None
-    note = "" if dt else f"{cls} in {ASSUMED[cls]} (no dtype)"
-    dt = dt or ASSUMED[cls]
     group = "gemm" if cls == "gemm" else "elementwise"
-    if f"{group}/{dt}" not in PRICES:
-        note = f"{cls} in {dt}: no Definition, priced as bf16"
-        dt = "bf16"
-    return f"{group}/{dt}", note
+    if dtype is None:
+        return f"{group}/{ASSUMED[cls]}", f"{cls} in {ASSUMED[cls]} (no dtype)"
+    kind = f"{group}/{DTYPES.get(dtype, dtype)}"
+    if kind not in PRICES:
+        have = ", ".join(sorted(d for d, short in DTYPES.items() if d != short and f"{group}/{short}" in PRICES))
+        raise Unpriced(f"{op} in {dtype}: no Definition prices {'a GEMM' if group == 'gemm' else 'an elementwise'} MAC "
+                       f"in {dtype}, and none is assumed for it. The priced dtypes are {have}: run the op in one, or "
+                       f"give {dtype} its Definition in training_slowdown.gates' PRICES")
+    return kind, ""
+
+
+def gather_bits(op: str, dtype: str | None = None) -> tuple[int, str]:
+    """(bits, assumption) of the words a gather moves: its `dtype`'s (`BITS`; `Unpriced` for one it doesn't hold), or
+    `ASSUMED_BITS` without one, an assumption it names."""
+    if dtype is None:
+        return ASSUMED_BITS, f"gather of {ASSUMED_BITS}-bit words (no dtype)"
+    if dtype not in BITS:
+        raise Unpriced(f"{op} in {dtype}: a gather's words are priced at their dtype's bits, and {dtype} has none in "
+                       f"training_slowdown.gates' BITS ({', '.join(BITS)})")
+    return BITS[dtype], ""
+
+
+def tf32_on(record: dict) -> bool | None:
+    """Whether the record's job ran with torch's switch for TF32 matrix products on, by the two readings of it the
+    record states (`tf32`, which `run.Harness.finish` writes): on where either says so. None for a record that
+    states neither, one written before a record stated them."""
+    stated = record.get("tf32")
+    if stated is None:
+        return None
+    return bool(stated["cuda_matmul_allow_tf32"]) or stated["float32_matmul_precision"] != "highest"
+
+
+def exact_under_tf32(record: dict) -> list[str]:
+    """The GEMM ops, by phase and name, that the record's op log names float32, the exact product, while the record
+    states the TF32 switch on: none where it states it off or states nothing."""
+    if not tf32_on(record):
+        return []
+    return sorted({f"{row[0]} {row[2]}" for s in record["structures"].values() for row in s.get("log", [])
+                   if len(row) > 6 and row[6] == "float32" and kind_of(*row[:3], row[6])[0] == "gemm/f32"})
+
+
+def op_key(row: list) -> str:
+    """An op log's row [phase, role, op, shapes, count, MACs] or [..., dtype] (`flops.Counter.record`) as its
+    `macs_log` key, "phase role op shapes [dtype]" (`split_key` reads it back)."""
+    return " ".join(map(str, [*row[:4], *row[6:7]]))
 
 
 def split_key(key: str) -> tuple[str, str, str, str, str | None]:
@@ -135,17 +193,21 @@ def split_key(key: str) -> tuple[str, str, str, str, str | None]:
 
 
 def of_log(log: dict) -> dict:
-    """A record's `macs_log` (`by` class -> MACs, `ops` "phase role op shapes [dtype]" -> [count, MACs]) in gates: the total, the MACs and gates per kind, and the assumptions made. MACs `by` counts that no op row holds are
-    priced as elementwise bf16, an assumption it names."""
+    """A record's `macs_log` (`by` class -> MACs, `ops` "phase role op shapes [dtype]" -> [count, MACs]) in gates: the
+    total, the MACs and gates per kind, and the assumptions made, each with its MACs (none where every op row names
+    its dtype). MACs `by` counts that no op row holds are priced as elementwise bf16, an assumption it names."""
     kinds: dict[str, list[float]] = {}
     notes: dict[str, int] = {}
     listed = 0
     for key, (_, macs) in log.get("ops", {}).items():
         phase, role, op, _, dtype = split_key(key)
         kind, note = kind_of(phase, role, op, dtype)
+        width = ASSUMED_BITS
+        if kind == "gather":
+            width, note = gather_bits(op, dtype)
         k = kinds.setdefault(kind, [0, 0.0])
         k[0] += macs
-        k[1] += macs * per_mac(kind)
+        k[1] += macs * per_mac(kind, width)
         listed += macs
         if note:
             notes[note] = notes.get(note, 0) + macs
