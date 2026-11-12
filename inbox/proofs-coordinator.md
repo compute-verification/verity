@@ -89954,3 +89954,132 @@ Not established: I did not run the stop record's test (`adapters/vllm/tests/pipe
 1. Yes to N spans: the compute side registers a class's N spans on `main` today and the sampled-proofs verifier builds its population from that N, so under the charged form no block stands at an empty slot, and the empty form in the replay block, our lemma on `StopRule16` and NET-377 are not needed, on two conditions that are not ours: the compute side has to file a span as the network certifier files its release (the execution phase of its release, the class `content_rows.file` gives, release order; today it files by the serve's own commitment window and by the ids served), and the tie's population has to be the count the head signs, after which one-stage itself refuses a compute-side port of another leaf count (`R7-output`).
 2. Yes to a committed count for a no-stop span: the replay block reads no count today (it is a stand-in laid out from the class's two sizes, and under a stop rule a no-stop span's `b.egress` is its O ids with no count, so its n is committed nowhere), the count is one more committed word a span that `ResponseTieNoStop` checks as `at ≤ count ≤ O` (not equality: a server may have served ids that never left), nothing in the sampled-proofs verifier or its Lean changes, and the word is advice the server chooses, so it is charged at its width unless soundness rules that the certifier's `at` already pays for it.
 3. A stream's log can hold a tie's record and take a port of its `roots` as an output value (a stop record's stream does this with its class's record today), but one-stage takes the port only where it has exactly the reader's rows, so a table of R rows is named so by a population of R blocks and not by a class of N spans, and the root so taken is the tie's record's own field, which R3 never compares with the signed head; both your limits are right (the ids alone are 360,448 bits at P = 4,096; we did not recompute 369,232), the first one binding a block that returns the request row.
+
+## FINDER, Thu 12 Nov 13:47Z: item 2, the pooled period statement that charges the prover's calls once: the statement is written and proved in a scratch file; both ways, what each covers, the table
+
+**In plain words.**
+
+- **Yes, the calls can be charged once, and the pooled step that does it is proved** (a scratch file, on a node, not in the tree). A phase's bound may hold one more term, a charge that depends on the phase's own coins; the period's bound then holds the charges' sum averaged over the period's coins, once. Today's pooled statement is that one with the charge zero.
+- **Soundness's question, from the Lean: each phase's extraction stands alone.** Nothing is rewound across phases, and no finder over the whole period has to be built: the pooled step sums the phases' bounds itself. `e_s` is a phase's and the fork term is a phase's.
+- **But soundness's way does not charge once for every prover.** It charges each phase at the largest count of calls the prover could make in it. A prover that decides from the phase's own coins whether to spend (the natural one: spend when the sample falls on the block it got incorrect) can still spend in every phase until it does, so those largest counts do not sum to the budget. Your way of 11:46Z (a phase's bound at the calls expected in it) does charge once for every prover within the budget, and needs a change of proof on SPOT's side.
+- **The fork term is what stays.** It reads a phase's largest count of calls, not the expected one, so it is paid once only where soundness's condition holds. For any prover within a budget of 2^80 calls it is still one a phase, and over the world's year it is then the largest term: within 2^-100 only up to about 2^14 sessions a sample at one table where a phase's bound holds it once, 2^12 where twice.
+- Nothing here is a figure reached: no theorem on `main` or on a branch states a period's bound with the calls charged once. The scratch proof is the pooled step alone.
+
+**What ran.**
+
+- [run] `r20261112-132604-6cc7`, `verity lean try` of `security/Proofs/NetworkCertifier/ScratchPooledOnce.lean` (418 lines, on the tree of #9286's head with the file untracked): lean exit 0 on the first attempt; none of its 9 theorems uses an axiom beyond `propext`, `Classical.choice`, `Quot.sound`. It proves the statement in 2 below (`pooledLeakOnce`) and that today's follows from it (`pooledLeak_of_once`).
+- [run] `r20261112-132705-986a`, the same of `security/Proofs/Flock/SamplingGeneric/ScratchExpCalls.lean`: lean exit 0. The two statements in 3 below elaborate as `Prop`s. **They are statements, not proved.** The one theorem in it (`costs_eq`, the closed form's algebra) is proved.
+- Both files, the table's script and its output are in the notes: `lanes/proofs/tools/net329/` (`ScratchPooledOnce.lean`, `ScratchExpCalls.lean`, `finder-net329-item2.py`, `finder-net329-item2.txt`). Neither Lean file is in the tree or on a branch.
+
+**1. Soundness's question: what the extractor rewinds.** [read]
+
+- A session's extraction reruns the judged run of that phase's statement, whole, at the same tape and at coins that differ from the judged run's only on that session's rounds (`Compiled.sessExt`, `sessExt_runs_eq`, `served_seen` in `SamplingGeneric/Efficient.lean`: each rerun is `run H P L.V x ω (L.place x u xS r d)`). The earlier phases enter only as the fixed history, through the statement and the prover the pooled statement hands it (`acc z i ω`). So each phase's extraction stands alone, `e_s` is a phase's, and the fork term is a phase's.
+- No reduction across phases is needed, and none is built: the collision assumption is linear in a finder's expected calls (`ExpectedCR`), so the phases' finders' bounds add, and the pooled step's induction does the adding at each history (`pr_adaptive_add_ex_le` takes each phase's bound separately).
+- What does block reading the budget as "the phases' counts sum to `T`": the reruns are at **other coins of the same phase**. The Lean bounds a rerun's calls by the largest count over the phase's tape and coins (`calls_le_own` takes `ht : ∀ r, calls (run r) ≤ t`), not by what the play spent. So the `T_i` that the Lean can charge today is `Compiled.runCalls` of phase `i` at its history, and `Σ_i runCalls_i ≤ T` is a stronger condition than "every play makes at most `T` calls".
+
+**2. The pooled statement (proved in scratch).** [run] `PooledLeakAccepted` with three more arguments, one more term in `hesc` and one in the bound; everything else is its text:
+
+```lean
+    (cl : Z → Fin m → (Fin m → Ω) → Ω → ℝ)
+    (hcl : ∀ z i ω ω', (∀ j, j < i → ω j = ω' j) → cl z i ω = cl z i ω')
+    (hcl0 : ∀ z i ω x, 0 ≤ cl z i ω x)
+    (hesc : ∀ z ∈ Zs, ∀ i ω, Pr (acc z i ω) ≤ (1 - q) ^ (W z ω i).card + e i + Ex (cl z i ω))
+    ...
+    (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧ ¬PooledGood ... ) ≤
+        δ + ∑ i, e i + (Ex fun ω => ∑ i, cl z i ω (ω i)) + ∑ i, e' i) ∧ ...
+```
+
+- `cl z i ω x` is phase `i`'s charge at its own coins `x`; it reads the earlier phases' coins only (`hcl`). `e i` keeps the terms that are one a phase.
+- **So network's form is right**: with `cl z i ω x := C · (the calls of phase i's run at x) / 2^256`, the bound is `δ + C·E[calls over the period]/2^256 + Σ_i e_i + Σ_i e'_i`, and `E[calls over the period] ≤ T` for a prover every play of which makes at most `T` calls (one line, `exLeOfForall`).
+- It takes no budget as a hypothesis: the average of the charges is in the bound, and a budget bounds it. A prover that spends its whole budget in one phase is covered by the statement itself, whichever coins it chooses the phase from.
+- The lemma under it, for any reader of `Periods.lean`: `pr_adaptive_add_ex_le`, `pr_adaptive_add_le` with `hesc : ∀ i ω, Pr (A i ω) ≤ r ^ f i ω + e i + Ex (w i ω)` and conclusion `≤ r ^ F + ∑ i, e i + Ex fun ω => ∑ i, w i ω (ω i)`.
+
+**3. A phase's bound with `hT` as an average (statement only).**
+
+- [read] Today (`ex_calls_le_at_cls`, `TwoFirstHitAt.lean`): `hT : ∀ ω r, (run H P L.V x ω r).pLog.length + (run H P L.V x ω r).vLog.length ≤ T` with `T : ℕ`, and the three counts as averages (`hNs`, `hKs`, `hKm : Ex (fun r => …) ≤ Ns`), giving `Ex (the finder's calls) ≤ L.firstHitCost x T Ns Ks Km = T·(1 + e_s·N_s + K_s + e_s·K_m) + (1 + K_s)·n_PU·openCalls`.
+- [run: elaborates; not proved] What it would have to give (`ExCallsLeExpCls`): `T Ns Ks Km : ℝ`,
+
+```lean
+    Ex (fun p : Ω × (Fin (L.V.k x) → Coin) =>
+      (((run H P L.V x p.1 p.2).pLog.length + (run H P L.V x p.1 p.2).vLog.length : ℕ) : ℝ)) ≤ T →
+    (∀ r : Fin (L.V.k x) → Coin, ((L.firstSlots x (L.checked x r)).card : ℝ) ≤ Ns) →
+    (∀ r, (((L.sampleNeeds x needs (L.checked x r)).image cls).card : ℝ) ≤ Ks) →
+    (∀ r, (L.sessCountIn x needs (fun l => (L.sampleNeeds x needs l).image cls) (L.checked x r) : ℝ) ≤ Km) →
+    Ex (the same finder's calls) ≤
+      T * (1 + L.es x * Ns + Ks + L.es x * Km) + (1 + Ks) * ((L.nPU x : ℝ) * L.openCalls x)
+```
+
+  and the event's bound with it (`EventXLeClsExp`): `eventX_le_cls_at`'s text with that `hT`, the three counts at every sample, and the same right-hand side `κ_s + √(k·γ_s·Pr[B]) + (T·(4·(1 + e_s·N_s) + 2·K_s + 2·e_s·K_m) + (4 + 2·K_s)·n_PU·openCalls)/2^256`.
+- [derived] Why the closed form is the same with `T` the average: each wait's samples are fresh and its stopping rule reads only the earlier samples, so the expected sum of the reruns' calls is the expected number of reruns times the expected calls of one run (Wald's identity), where today it is the number of reruns times the largest count.
+- [derived] **The price: the three counts become bounds at every sample, not averages.** The sample's size multiplies the run's calls inside the average, and a prover may spend more when the sample is large. If the served sampler's size is not fixed, the honest form is a bound on the average of (count × calls); I did not read which the served sampler has.
+- [read] What changes in the Lean: only the lemmas that bound a finder's expected calls. The finders are the same machines, the `ExpectedCR` hypotheses are at the same finders, `Arg.rerunsExp_le` is a theorem (`SamplingGeneric/Efficient.lean`), not a field. **No file under `security/Definitions/` changes and no named assumption is added.**
+
+**4. Both ways, and which the Lean takes more cheaply.**
+
+- **(a) soundness's: today's phase bound, at each phase's largest count.** `cl z i ω _ := (C/2^256 + 2·√(k·γ_s)/2^256.5) · runCalls_i(ω)`, constant in the phase's own coins. The period's bound is `δ + (C/2^256 + 2·√(k·γ_s)/2^256.5)·E[Σ_i runCalls_i] + Σ_i (κ_s + terms in c) + Σ e'`. The fork term goes in the charge too, because under `StrictBirthday` it is linear in the phase's largest count.
+  - Cost in Lean: the pooled step and nothing on SPOT's side, so it is the cheaper one. The pooled step is proved in scratch; its instance at this charge is not written.
+  - What it covers: [derived] `E[Σ_i runCalls_i] ≤ T` for a prover whose spending in a phase is fixed by the earlier phases' coins (it picks its phase from the history). Then everything in calls is paid once, the fork term included.
+  - What it does not: a prover that decides from the phase's own tape or coins. If it spends its budget when an event of probability `q` a phase happens, it can still spend in `min(phases, 1/q)` phases on average, and the charge is `T·min(phases, 1/q)`, not `T`. At `q` small this is today's sum again. **So "an adaptive prover that spends them all in one phase is covered" holds under (a) only when the phase is chosen from earlier coins**; the statement is true for the other prover too, but at that larger charge.
+- **(b) yours of 11:46Z: a phase's bound at the calls expected in it.** `cl z i ω x := C·(calls of phase i's run at x)/2^256`; the period's bound is `δ + C·E[calls over the period]/2^256 + Σ_i (κ_s + fork term + terms in c) + Σ e'`.
+  - Cost in Lean: the same pooled step, plus the phase lemma of 3 (sized below).
+  - What it covers: every prover every play of which makes at most `T` calls, or whose expected calls over the period are at most `T`. The linear part is paid once for all of them.
+  - What it leaves: the fork term, one a phase, at the phase's largest count.
+- [derived] The two compose: the pooled statement takes both charges at once, so the fork term can be charged as in (a) (`E[Σ_i fork(runCalls_i)]`, which is one fork term for a prover that picks its phase from the history and at most `phases` of them) and the linear part as in (b).
+
+**5. The fork term.** [read] `StrictBirthday H F := ∀ q, (∀ s, F.cost s ≤ q) → F.Pr H ≤ q²/2^513` is a bound at a finder's largest cost, and `B` runs the phase's run twice. So `√(k·γ_s·Pr[B]) ≤ √(k·γ_s)·2T/2^256.5` at the phase's largest count `T`, and an average does not enter it.
+
+- [derived] Over a period, at 2^80 calls: one fork term where (a)'s condition holds; `phases` of them for any prover within the budget; `1/q` of them for the prover that spends on an event of probability `q` a phase.
+- [guess] `√phases` of them would need a birthday bound in the second moment of a finder's calls (`Pr ≤ E[cost²]/2^513`). That is a new named assumption, so Daniel's decision, and I do not propose it now.
+- [derived] **Sample sizes that keep `phases × fork term` within 2^-100**, each phase at 2^80 calls, sessions of one shape (log2 of the most sessions a sample; tables 1 / 16 / 64 / 200; `--` = not even at one session):
+
+| fork term once in a phase's bound (one stage, `main`) | week | month | year |
+|---|---|---|---|
+| node | 76.5 / 68.5 / 64.5 / 61.2 | 72.3 / 64.3 / 60.3 / 57.0 | 65.1 / 57.1 / 53.1 / 49.8 |
+| datacenter | 49.3 / 41.3 / 37.3 / 34.0 | 45.1 / 37.1 / 33.1 / 29.8 | 37.9 / 29.9 / 25.9 / 22.6 |
+| world | 25.5 / 17.5 / 13.5 / 10.2 | 21.3 / 13.3 / 9.3 / 6.0 | 14.1 / 6.1 / 2.1 / -- |
+
+  Where the term appears twice (two stages with one wait, branch `cursor/proofs-finder-7c1e`) every entry is 2.0 lower: the world's year is 12.1 / 4.1 / 0.1 / --. So at 2^26 sessions a sample the world's year needs the fork term charged once, or a smaller sample, or fewer tables a session.
+
+**6. The terms that stay one a phase, and the period's bound.** [derived: `finder-net329-item2.py` evaluates the Lean's expressions; `T` = 2^80 calls, `N_s` = 2^26, `K_s = K_m` = 2^38; phases a period as relayed: node 4,725 / 20,250 / 246,375, datacenter 5.91e7 / 2.53e8 / 3.08e9, world 2.21e11 / 9.49e11 / 1.155e13 a week / month / year. All figures are log2 of a probability bound. None is proved as a period's bound.]
+
+- A phase, tables 1 / 16 / 64 / 200, two stages with one wait (branch `cursor/proofs-finder-7c1e`): the part linear in the calls −111.44 / −107.44 / −105.44 / −103.80; the fork term (twice) at one session a sample −149.45 / −145.45 / −143.45 / −141.80, at 2^12 sessions −143.45 / …, at 2^26 sessions −136.45 / −132.45 / −130.45 / −128.80; the knowledge error (three times) −201.40 / −197.41 / −195.41 / −193.77; the terms in `c = n_PU·openCalls`: `2^41·c/2^256`, which is −175 at `c = 2^40`.
+- One stage on `main` (`eventX_le_cls_at`), the same order: −105.73 / −101.73 / −99.73 / −98.08; fork term (once) −150.45 / … at one session, −137.45 / −133.45 / −131.45 / −129.80 at 2^26; knowledge error −202.99 / −199.00 / −197.00 / −195.36; `2^39·c/2^256`.
+- **Over a period, one table, two stages with one wait** (week / month / year):
+
+| | today: every term each phase, each phase at 2^80 | calls once (b), 2^26 sessions a sample | calls once (b), 2^12 sessions | calls once (b), 1 session | calls and fork term once (a's condition) |
+|---|---|---|---|---|---|
+| node | −99.24 / −97.14 / −93.53 | −111.44 / −111.44 / −111.43 | −111.44 / −111.44 / −111.44 | −111.44 / −111.44 / −111.44 | −111.44 |
+| datacenter | −85.63 / −83.53 / −79.92 | −109.98 / −108.35 / −104.91 | −111.42 / −111.36 / −110.66 | −111.44 / −111.44 / −111.43 | −111.44 |
+| world | −73.76 / −71.65 / −68.05 | −98.76 / −96.66 / −93.05 | −105.73 / −103.65 / −100.05 | −110.59 / −109.29 / −106.02 | −111.44 |
+
+- At 16 / 64 / 200 tables the last column is −107.44 / −105.44 / −103.80, and the world's year with the calls once and 2^26 sessions a sample is −89.05 / −87.05 / −85.41. One stage on `main` at one table: today −68.04 / −65.94 / −62.33 over the world's week / month / year; calls once −99.74 / −97.65 / −94.05 at 2^26 sessions a sample; calls and fork term once −105.73. Every other cell (node, datacenter and world; week, month and year; 1, 16, 64 and 200 tables; 1, 2^12 and 2^26 sessions a sample; both forms) is in `finder-net329-item2.txt`.
+- **What then limits it.** With the calls once: the fork term over the world's periods, and nothing else for a node or a datacenter. With the fork term once too: the part linear in the calls, −111.44 at one table, which is the phase's own figure and does not grow with the period.
+- The knowledge error summed over the world's year: −159.60 / −155.61 / −153.61 / −151.96 at 1 / 16 / 64 / 200 tables (once a phase; three times that where it appears three times). It limits nothing.
+- The terms in `c`: summed over a period they are within 2^-101 while `c` a phase is at most 2^96.09 / 2^82.48 / 2^70.61 (node / datacenter / world, a year, two stages with one wait). I have no served figure for `c`; it is the opening checks' own calls of one run.
+
+**7. What it assumes that today's does not.** [read]
+
+- No new named assumption and no new premise: the same `ExpectedCR` at the same finders, the same `StrictBirthday` at `B`.
+- The budget is not a hypothesis of the pooled statement. The bound holds the average of the charges; "every play makes at most `T` calls" or "the expected calls over the period are at most `T`" bounds it in one line. The budget is the adversary resource model's figure for the period.
+- (b)'s phase lemma asks more of the sample: its three counts at every sample (3 above).
+
+**8. Size, and what would stop it.**
+
+- **The pooled step.** [run] The scratch file is 418 lines: the induction with a charge 126, the event form 71, the pooled form 26, the statement 45, the theorem 19, today's as its instance 17, four small lemmas. Landed, `pr_adaptive_add_le`, `pr_pooled_le` and `pooledLeak` become instances at the charge zero, so [guess] about 250 lines net in `Proofs/NetworkCertifier/PooledLeak.lean`.
+  - What would stop it: the statement is a guarantee of network's area (`Definitions/NetworkCertifier/Guarantees/`). Beside today's it is a new record and moves none; replacing today's changes a listed statement that 17 files name. That is network-accounting's to choose and to list. I hand them the file.
+- **The phase lemma at expected calls.** [derived, from the line counts of the lemmas it would copy; not built] About 850 to 1,000 lines over 5 files under `security/Proofs/Flock/`, none under `security/Definitions/`:
+  - `Claims/ERepCost.lean`: the waits' expected reruns with a weight on each rerun (`waitRuns_exp`, `waits_exp`, `ERep_runs_exp` and what they stand on: 124 lines today);
+  - `SamplingGeneric/Efficient.lean`: `Arg.rerunsExp_le`, `sessExt_runs_eq`, `runExt_runs_eq`, `slotRuns_*`, `slot_exp_le_un`, `runExt_runs_exp` (about 260 lines today);
+  - `SamplingGeneric/TwoFirstHitAt.lean`: `slot_exp_le_weighted`, `ex_weighted_runs_le`, `ex_runExt_runs_le`, `ex_callsAt_le_at`, `ex_bconfX_cost_le`, `bconfX_le_at`, `ex_calls_le_at_in`, `ex_calls_le_at_cls` and the two counts under them (about 430 lines today);
+  - `Claims/Sampling/Bext.lean`: `calls_le_own` as an equality (13 lines today);
+  - `SamplingGeneric/TwoOffClassAt.lean`: the two theorems that read it.
+  - What would stop it, in order: (i) a rerun program reports how many runs it reran, not which (`RP.eval`'s third component), so a weighted sum over the reruns is a new fold with its own congruence lemmas; this is why it is 900 lines and not 300. (ii) The counts at every sample, if the served sampler's size is not fixed. (iii) Nothing I know of in the mathematics: the Wald step is standard and each wait is a finite product of fresh samples.
+- **The fork term once for every prover**: not available under `StrictBirthday` as named (5 above).
+
+**9. TABLEEXT's form, one line.** [read: branch `cursor/proofs-tableext-7c3e` at `035ad78452b2`, `SamplingGeneric/OneVerifierTables.lean`, not compiled by me] `Compiled.es_ofFlockTable_le`: over the proof system at one table of a session, `e_s` is at most `1 + m·k` with `k` the largest `k_j` of the tables the proof blocks' statements name, so the factor is at one table's `k` whatever number of tables the session holds: the part linear in the calls is then the one-table column above (−111.44 with one wait) at 16, 64 and 200 tables too, if the tables are of the size the one-table column takes and the three counts do not change; I checked neither. I did not read what it does to `γ_s`, so the fork term's columns stand as they are.
+
+**What I propose, and what I need.**
+
+- Hand `ScratchPooledOnce.lean` to network-accounting as it is: with it, (a) is available on `main`'s phase bound at once, and (b) is the same statement at another charge. Say if you want it as a pull request of mine instead (a file under `Proofs/NetworkCertifier/` and no statement under `Definitions/`, so no record).
+- (b)'s phase lemma is mine to build if you want it: say so, and whether the counts at every sample are acceptable for the served sampler.
+- Nothing else needed.
