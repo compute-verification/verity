@@ -758,7 +758,7 @@ def index_k_probe_launches(work: Path, o: dict[str, Any]) -> tuple[dict[str, Any
         kpe.append(_u16(k_pe_out))
     torch.cuda.synchronize()
     idx = _u8(c["idx"])
-    slots = np.arange(n * PROBE_LAUNCHES)
+    slots: np.ndarray = np.arange(n * PROBE_LAUNCHES)
     q = np.stack([slot_bytes(idx, sl)[0] for sl in slots])
     s = np.array([slot_bytes(idx, sl)[1] for sl in slots], dtype=np.uint32)
     b_arr, cs_arr = np.array(bs, dtype=np.uint32), np.array(css, dtype=np.uint16)
@@ -1016,7 +1016,7 @@ def phase_topk(o: dict[str, Any], lst: dict[str, Any]) -> dict[str, Any]:
     vals, lens, names = _topk_rows(11)
     rows = len(lens)
     start = 5
-    wide = np.full((rows, MAX_MODEL_LEN + start + 8), np.inf, dtype=np.float32)
+    wide: np.ndarray = np.full((rows, MAX_MODEL_LEN + start + 8), np.inf, dtype=np.float32)
     wide[:, start:start + MAX_MODEL_LEN] = vals
     wide[:, :start] = 1e30
     pl = torch.from_numpy(wide).to("cuda")
@@ -1256,7 +1256,7 @@ def bind_check() -> dict[str, Any]:
     targets[f"SparseMla_v1{{T={TOPK},NH={NH},...}}"] = lambda: bind(M.SparseMla, T=TOPK, **M.SPARSE_MLA_GLM53)
     for T, NS in ((130, 2), (1001, 8), (TOPK, 16), (TOPK, 28)):
         targets[f"SparseMlaHeadSplit_v1{{T={T},NS={NS},...}}"] = lambda T=T, NS=NS: bind(W.SparseMlaHeadSplit, T=T, NS=NS, **mla)
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in targets.items():
         try:
             out[name] = bool(make().signature())

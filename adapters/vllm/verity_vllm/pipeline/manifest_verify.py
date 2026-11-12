@@ -22,6 +22,8 @@ from typing import Any
 from verity_vllm.config import option, workload_arg
 from verity_vllm.query.manifest.verify import verify
 
+__all__ = ["Options", "main"]
+
 
 def _load(p: str) -> Any:
     with open(p) as f:

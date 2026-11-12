@@ -86,13 +86,6 @@ class Sites(dict):
         return site(key[1]) if key[1] in self.modules else default
 
 
-class _EveryStep(dict):
-    """`Int8Source`'s names at each engine step (its ``_at``, the targets): step 0's at every step."""
-
-    def get(self, key: Any, default: Any = None) -> Any:
-        return super().get(0, default)
-
-
 def _host(t: Any) -> np.ndarray:
     return t.detach().cpu().numpy() if hasattr(t, "detach") else np.asarray(t)
 
