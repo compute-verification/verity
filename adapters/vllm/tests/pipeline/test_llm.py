@@ -18,13 +18,14 @@ import json
 import subprocess
 import sys
 from types import ModuleType, SimpleNamespace
+from typing import Any
 
 import pytest
 
 import verity_vllm
 from verity_vllm import config
-from verity_vllm.config import EnginePin
 from verity_vllm import llm as L
+from verity_vllm.config import EnginePin
 from verity_vllm.engine import handle
 from verity_vllm.engine.profiles import engine_classes as EC
 from verity_vllm.errors import Refused
@@ -96,6 +97,8 @@ def test_a_repo_pinned_under_two_roles_resolves_to_the_downloaded_one(tmp_path):
 
 
 class _FakeVllm:
+    llm_engine: SimpleNamespace
+
     def __init__(self):
         self.calls = []
 
@@ -111,7 +114,7 @@ class _FakeVllm:
 @pytest.fixture
 def built(monkeypatch):
     from verity_vllm.engine import vllm_adapter as va
-    seen = {}
+    seen: dict[str, Any] = {}
 
     def build_engine(checkpoints, **kw):
         seen.update(kw, checkpoints=checkpoints)
@@ -300,7 +303,7 @@ def built_g(monkeypatch):
     overridden by ``seen["effective"]``, its ``env_flags`` the ``env`` it was given (``seen["env_flags"]`` when set), and an
     in-process scheduler."""
     from verity_vllm.engine import vllm_adapter as va
-    seen = {"effective": {}}
+    seen: dict[str, Any] = {"effective": {}}
 
     def build_engine(checkpoints, **kw):
         seen.update(kw)
@@ -406,7 +409,8 @@ def test_class_g_reaches_vllms_engine_args_and_is_read_back_from_its_scheduler_c
                 scheduler=_Scheduler(), model_executor=SimpleNamespace())))
 
     vllm, envs = ModuleType("vllm"), ModuleType("vllm.envs")
-    vllm.LLM, vllm.envs, envs.VLLM_BATCH_INVARIANT = _VllmLLM, envs, False
+    vllm.__dict__.update(LLM=_VllmLLM, envs=envs)
+    envs.__dict__["VLLM_BATCH_INVARIANT"] = False
     monkeypatch.setitem(sys.modules, "vllm", vllm)
     monkeypatch.setitem(sys.modules, "vllm.envs", envs)
     monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
