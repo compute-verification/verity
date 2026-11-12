@@ -45,7 +45,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/hardware/registration.py", "verity/hardware/site", "verity/configuration/wire",
           "verity/protocols/onsite/verifier", "verity/protocols/remote/verifier", "verity/protocols/interface",
           "verity/protocols/pouw/verifier", "verity/protocols/spot",
-          "verity/protocols", "verity/protocols/certifier",
+          "verity/protocols/inference_only/verifier/nci", "verity/protocols/certifier",
           "verity/protocols/pous", "verity/protocols/poub/verifier",
           "verity/protocols/pous/device/lean", "verity/commitments/attest/lean",
           "verity/protocols/spot/verifier/lean", "verity/protocols/recursion/verifier/recursive", "verity/protocols/flock/verifier",
@@ -53,4 +53,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml", "verity/core/__
           "verity/commitments/identity", "verity/commitments/randomness",
           # the deployment layer and its wire, which space's and bandwidth's challenger-host sides are started through
           # (`deploy.stream.Side`)
-          "verity/configuration/deploy", "verity/configuration/wire"]
+          "verity/configuration/deploy", "verity/configuration/wire",
+          "verity/circuits", "verity/commitments", "verity/configuration/__init__.py", "verity/hardware/__init__.py",
+          "verity/definitions", "verity/protocols/flock/agreement", "verity/protocols/flock/pod", "verity/protocols/flock/prover", "verity/protocols/flock/tool.py",
+          "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py", "verity/protocols/pouw/__init__.py"]

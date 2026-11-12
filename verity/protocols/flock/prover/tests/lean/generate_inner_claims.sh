@@ -7,13 +7,13 @@
 #   bash tests/lean/generate_inner_claims.sh [PACKAGE_DIR]
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)
-root=$(cd "$here/../../../../.." && pwd)
+root=$(cd "$here/../../../../../.." && pwd)
 package=$root/verity/protocols/flock/verifier
 pkg=$(cd "${1:-$package}" && pwd)
 set_dir="$here/../fixtures/hidden-outputs/flat/gemm-coordinate"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
-python3 "$here/../../verifier/selftest_records.py" "$set_dir/records-cpu" "$work/sessions" >&2
+python3 "$here/../../../agreement/selftest_records.py" "$set_dir/records-cpu" "$work/sessions" >&2
 (cd "$pkg" && lake build Flock >&2 &&
   lake env lean --run "$here/InnerClaims.lean" verity/flock-circuit@f5df3bbc+seed-injection "$set_dir/stage/circuit.txt" \
     "$set_dir/stage/pub-4.bin" "$work/sessions/honest") > "$work/dump.json"

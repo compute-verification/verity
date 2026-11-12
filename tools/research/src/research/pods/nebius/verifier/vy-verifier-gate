@@ -7,4 +7,4 @@ set -eu
 if [ "$(id -u)" != 0 ]; then
   exec sudo -n /usr/local/sbin/vy-verifier-gate --ssh "${SSH_ORIGINAL_COMMAND:-}" --key "${1:--}"
 fi
-exec /usr/bin/python3 -I /opt/vy-verifier/current/benchmarks/live_verifier/host.py gate "$@"
+exec /usr/bin/python3 -I /opt/vy-verifier/current/verity/protocols/poub/device/live_verifier/host.py gate "$@"
