@@ -32,7 +32,7 @@ say() { echo "$(date -u +%H:%M:%SZ) $*" | tee -a "$O/host_read.txt"; }
 first() { local p; for p in "$@"; do [ -x "$p" ] && { echo "$p"; return; }; done; }
 
 GIB=${GIB:-32} HOST_GIB=${HOST_GIB:-1} CHUNK_BLOCKS=${CHUNK_BLOCKS:-65536} BUDGET_S=${BUDGET_S:-1080}
-NAMES=${NAMES:-ahead1 ahead2 ahead3 ahead3-keep ahead2-prefetch feed8-keep feed8}
+NAMES=${NAMES:-ahead1 ahead2 ahead3 ahead4 ahead2-keep ahead2-prefetch feed8 feed8-keep ahead2-feed8}
 LEASE_MIN=${LEASE_MIN:-25} LEASE_MEM_GB=${LEASE_MEM_GB:-64}
 N=$(($(tr -cd , <<< "$CARDS" | wc -c) + 1))
 if [ -n "${TOOLKIT:-}" ]; then
