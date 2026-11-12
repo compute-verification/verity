@@ -112,7 +112,9 @@ def reach(fn) -> frozenset[str]:
     reach_of[id(fn)] = frozenset()  # a Definition never holds itself
     got = {spec_base(CD.descriptor_id(fn))}
     if isinstance(fn, SpecializedDefinition):
-        for g in {id(n.fn): n.fn for n in fn.body.nodes}.values():
+        held = list({id(n.fn): n.fn for n in fn.body.nodes}.values())
+        fn._body = None  # a unit's gates are gigabytes: the Definitions it holds are read, the body is built again if asked
+        for g in held:
             got |= reach(g)
         fid = CD.descriptor_id(fn)
         for k in fn.defn.statics:
