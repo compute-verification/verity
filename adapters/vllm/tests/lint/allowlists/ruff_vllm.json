@@ -706,7 +706,6 @@
     {"file": "verity_vllm/observe/fold/profiles/gen_dense_softcap_patterns.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ln_patterns.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ln_patterns.py", "kind": "SIM300", "symbol": "RotaryEmbeddingPartial.match", "detail": "Yoda condition detected"},
-    {"file": "verity_vllm/observe/fold/profiles/gen_marlin_moe_patterns.py", "kind": "E741", "symbol": "MoEMarlinSharedExperts._routed", "detail": "Ambiguous variable name: `I`"},
     {"file": "verity_vllm/observe/fold/profiles/gen_marlin_moe_patterns.py", "kind": "SIM300", "symbol": "MoEMarlinSharedExperts._routed", "detail": "Yoda condition detected"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py", "kind": "B023", "symbol": "MoEFusedExperts.match", "detail": "Function definition does not bind loop variable `keep`"},
     {"file": "verity_vllm/observe/fold/profiles/gen_ov_moe_patterns.py", "kind": "E741", "symbol": "MoEFusedExperts.match", "detail": "Ambiguous variable name: `I`"},
