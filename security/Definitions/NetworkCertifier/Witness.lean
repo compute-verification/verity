@@ -33,8 +33,8 @@ conclusion false at an audit that accepts everything. Those statements read thes
   at rate `1/2` (`sampDesign`);
 * `fxRows`: a rows format of the Python network certifier's fixture `fxQueue` (three connections), one window of ten
   buckets, whose schedule is `fxQueueSched`;
-* `noFormat`: the record format of a network certifier with no connection over a monitoring period of no windows,
-  at which `PeriodLeakChecked`'s honest lemma states its period's premises.
+* `noFormat`: the record format of a network certifier with no connection over a monitoring period of no execution
+  phases, at which `PeriodLeakChecked`'s honest lemma states its period's premises.
 -/
 
 @[expose] public section
