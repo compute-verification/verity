@@ -3468,7 +3468,9 @@ class Loop:
         that passed while its runs still ran those steps (`vqueue_slim._passed_early`) failed of them is read once they ended
         (`vqueue_slim.failures`), its candidate dropped by then or not: a dropped one's runs (`Past.off_gate_running`, its
         landing's drop among them) are judged each tick until they and its base's have ended, then rung as a candidate's
-        are, and an `off_gate` line says they were read, unless a post failed, which the next tick rings again."""
+        are, and an `off_gate` line says they were read, unless a post failed, which the next tick rings again.  Its base's
+        run is judged here too while it has no verdict, as one beside a `main` since moved on, or beside a candidate since
+        dropped, is nowhere else; one still launching, waiting or planning isn't, since judging it would launch it."""
         recs, rung, d = [], t.past.rung(), self.world.slim_driver()
         for c in t.snap.candidates:
             if (j := t.judged[c.sha]).slim is None or j.slim.state not in (PASS, FAIL):
@@ -3478,7 +3480,8 @@ class Loop:
             c = Candidate(sha, drop.get("base") or "", tuple(drop.get("members") or ()), tuple(drop.get("heads") or ()))
             rec, base = dict(drop["off_gate_running"]), t.below if c.base == t.main else t.past.slim(c.base)[1]
             self.slim.judge(d, rec)
-            if base is not None and base.get("still_running"):
+            if base is not None and (base.get("still_running") or "verdict" not in base and base.get("ids")
+                                     and not any(k in base for k in ("launch", "wait", "shards"))):
                 self.slim.judge(d, base := dict(base))
             if rec.get("still_running") or base is not None and ("verdict" not in base or base.get("still_running")):
                 continue

@@ -4819,6 +4819,23 @@ def test_under_gate_check_a_landed_candidate_s_red_off_the_gate_rings_once_main_
                                                        f"lowering/pin-mismatch {HEAD} it failed")]
 
 
+def test_under_gate_check_a_candidate_that_landed_early_on_a_main_whose_check_still_ran_is_read_once_both_ended(env, monkeypatch):
+    """`main`'s own check still runs a step it is judged on when the candidate passes early and lands: once both runs ended, its
+    red off the gate is rung and its entry closed, though nothing judges the run beside the old `main` any more."""
+    loop, runs, main, sha = _off(env, monkeypatch, CIRCUITS, decide=vqueue.decide)
+    runs.end(main)
+    runs.runs_on(main, 2, "pytest")
+    runs.end(sha)
+    runs.runs_on(sha, 3, "circuit-check")
+    logged = loop.tick()
+    assert "advance" in _acts(logged) and logged[-1]["off_gate_running"]["still_running"]
+    runs.end(main)
+    runs.end(sha, also={"circuit-check": _circuit(f"lowering/pin-mismatch {HEAD}")})
+    for _ in range(3):
+        loop.tick()
+    assert len(env.posts) == 1 and not L.Past.read(env.log, 0).off_gate_running()
+
+
 def test_under_gate_check_a_red_off_the_gate_waits_for_the_run_beside_main_s_check_started_again_after_infra(env, monkeypatch):
     """The run beside `main`'s check that ended in infra errors runs again, and what a candidate fails off the gate is compared
     with that run once it ends, not with the one that ended so."""
