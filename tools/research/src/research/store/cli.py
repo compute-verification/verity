@@ -10,7 +10,11 @@
                                                    --skip-record-less pushes no attempt that names no run record
   research data labels-sync [--push-only|--pull-only|--from-backup ART|--from-dir DIR] [--jobs N] [--json]
                                                    union labels/ with the remote's labels/<target>/<content sha256>.json (nothing overwritten, ever);
-                                                   --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/
+                                                   --from-backup unions a labels-backup/v1 tarball, --from-dir another store's labels/;
+                                                   a pull of more than 5,000 takes the labels pack first, one request for all it holds
+  research data labels-pack [--every S] [--jobs N] [--json]
+                                                   pull every remote assertion, then rebuild the labels pack (all of them as one tarball,
+                                                   packs/labels/latest.tar.gz beside latest.json) and replace the remote's; --every repeats
   research data fetch ART [--to DIR] [--path GLOB]... [--list [--json]]
                                                    materialise the payload (file or tree, or just the files matching --path); prints the path;
                                                    --list prints the tree's files (path, bytes, local/remote) and fetches nothing
@@ -79,6 +83,8 @@
   research data sql "SELECT ..." [--json]          read-only connection
   research data mint-credential [--ttl 6h] [--permission object-read-write] [--prefix P]... [--actions A,B] [--via auto|local|api] [--env]
                                                    a short-lived bucket-scoped R2 credential for a pod (JSON, or --env export lines)
+  research data mint-credential --job push|fetch [--ttl 6h] [--env]
+                                                   a cluster job's key: custody's actions (push: no delete or copy; fetch: read only)
   (lookup / pull / attempt are provided by cli_prov when present)
 
 Every command takes `--store ROOT` (default `$RESEARCH_STORE` or `~/.research/store`) and accepts abbreviated artifact ids
@@ -92,8 +98,10 @@ import argparse
 import fnmatch
 import json
 import os
+import shlex
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -703,9 +711,35 @@ def cmd_labels_sync(argv: list[str]) -> int:
     if ns.json:
         _dump(rep)
     else:
-        print(f"labels: {rep['local']} local, {rep['remote_before']} on {rep['remote']}: {len(rep['pushed'])} pushed, {len(rep['pulled'])} pulled, "
-              f"{rep['already']} already on both" + (f", {len(rep['bad'])} bad remote key(s) skipped" if rep["bad"] else ""))
+        print(f"labels: {rep['local']} local, {rep['remote_before']} on {rep['remote']}: {len(rep['pushed'])} pushed, {len(rep['pulled'])} pulled"
+              + (f" ({rep['pack']} from the labels pack)" if rep["pack"] else "")
+              + f", {rep['already']} already on both" + (f", {len(rep['bad'])} bad remote key(s) skipped" if rep["bad"] else ""))
     return 1 if rep["bad"] else 0
+
+
+def cmd_labels_pack(argv: list[str]) -> int:
+    """Rebuild the labels pack and replace the remote's (`labels_sync.publish_pack`): pull every assertion the remote lists into this
+    store, then upload them as one tarball at a fixed key, which a `labels-sync` that lacks most of them takes in one request before
+    it pulls the rest.  `--every S` repeats, S seconds after each pass; a pass that fails ends the command."""
+    from . import labels_sync as LS
+
+    ap = _ap("labels-pack")
+    ap.add_argument("--every", type=float, metavar="S", help="repeat, S seconds after each pass")
+    ap.add_argument("--jobs", type=int, default=LS.SYNC_JOBS, metavar="N")
+    ap.add_argument("--json", action="store_true")
+    ns = ap.parse_args(argv)
+    st = LocalStore(ns.store)
+    warn = None if ns.json else (lambda s: print(s, file=sys.stderr, flush=True))
+    while True:
+        rep = LS.publish_pack(st, jobs=max(1, ns.jobs), log=warn)
+        if ns.json:
+            print(json.dumps(rep, sort_keys=True), flush=True)
+        else:
+            print(f"labels-pack: {rep['labels']} labels in {rep['bytes']} bytes at {LS.PACK_KEY} (sha256 {rep['sha256']}), {rep['pulled']} pulled first"
+                  + (f", {rep['bad']} bad remote key(s) left out" if rep["bad"] else ""), flush=True)
+        if ns.every is None:
+            return 0
+        time.sleep(ns.every)
 
 
 def cmd_vocab(argv: list[str]) -> int:
@@ -1125,10 +1159,14 @@ def cmd_push(argv: list[str]) -> int:
 def cmd_mint_credential(argv: list[str]) -> int:
     """A short-lived, bucket-scoped R2 credential for a pod (`credentials.py`): signed locally with the parent key from the environment
     (the env vars store.toml names, default AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY), or via the Cloudflare API with
-    CLOUDFLARE_API_TOKEN.  Prints JSON, or with `--env` the three `export` lines for a bootstrap; never writes a file."""
+    CLOUDFLARE_API_TOKEN.  Prints JSON, or with `--env` the three `export` lines for a bootstrap; never writes a file.  `--job` mints
+    what a cluster job holds (`custody.job_env`): the key `research run` stages for a run's custody, or its `--store-read` key."""
     from . import credentials as C  # noqa: PLC0415
+    from . import custody as CU
 
     ap = _ap("mint-credential")
+    ap.add_argument("--job", default=None, choices=sorted(CU.JOB_ACCESS),
+                    help="a cluster job's key, with custody's actions: push = write without delete or copy, fetch = read only (takes --ttl and --env alone)")
     ap.add_argument("--ttl", default="1h", help="lifetime: <n>[s|m|h|d], max 7d (default 1h)")
     ap.add_argument("--permission", default="object-read-write", choices=C.SCOPES, help="scope preset (default object-read-write)")
     ap.add_argument("--prefix", action="append", default=[], metavar="P", help="restrict to keys under this prefix (repeatable)")
@@ -1141,6 +1179,17 @@ def cmd_mint_credential(argv: list[str]) -> int:
     ap.add_argument("--env", action="store_true", help="print `export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_SESSION_TOKEN=...`")
     ap.add_argument("--json", action="store_true", help="(default output) the credential with bucket, scope, expiry, how it was minted")
     ns = ap.parse_args(argv)
+    if ns.job:
+        given = {k: v for k, v in vars(ns).items() if k not in ("job", "ttl", "env", "json", "store") and v != ap.get_default(k)}
+        if given:
+            raise C.MintError(f"--job {ns.job} fixes the key's actions and where it is minted: drop --{', --'.join(k.replace('_', '-') for k in sorted(given))}")
+        key = CU.job_env(ns.job, ns.ttl)
+        if ns.env:
+            print("\n".join(f"export {k}={shlex.quote(v)}" for k, v in key.items() if k != "expires_utc"))
+            print(f"# a {ns.job} key until {key['expires_utc']}")
+        else:
+            _dump(key)
+        return 0
     actions = [a for a in (ns.actions or "").split(",") if a] or None
     cred = C.mint(via=ns.via, scope=ns.permission, ttl_s=C.parse_ttl(ns.ttl), prefixes=ns.prefix or None, objects=ns.object or None, actions=actions,
                   endpoint=ns.endpoint, bucket=ns.bucket, account_id=ns.account_id)
@@ -1536,7 +1585,7 @@ COMMANDS: dict[str, Callable[[list[str]], int]] = {
     "snapshot": cmd_snapshot,
     "labels": cmd_labels, "label": cmd_label, "reindex": cmd_reindex, "index": cmd_index, "sql": cmd_sql, "push": cmd_push, "mint-credential": cmd_mint_credential,
     "vocab": cmd_vocab, "refresh-fixtures": cmd_refresh_fixtures, "fetch-fixtures": cmd_fetch_fixtures, "export": cmd_export,
-    "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync,
+    "doctor": cmd_doctor, "evict": cmd_evict, "labels-sync": cmd_labels_sync, "labels-pack": cmd_labels_pack,
     "catalog": cmd_catalog, "vocab-check": cmd_vocab_check, "pending": cmd_pending, "refresh": cmd_refresh,
     "parity": cmd_parity, "reconcile-attempts": cmd_reconcile_attempts, "gc": cmd_gc, "withdraw": cmd_withdraw,
 }

@@ -844,7 +844,12 @@ def test_dry_run_renders_the_cloud_init_and_vm_spec_without_credentials():
                       ("/usr/local/share/vy/lease.sh", L.LEASE_SH), ("/usr/local/bin/gpu-lease", GPU_LEASE)]:
         assert code(embedded[path]) == code(src.read_bytes()), path
         assert subprocess.run(["bash", "-n"], input=embedded[path], capture_output=True).returncode == 0, path
-    assert embedded["/etc/systemd/system/user@.service.d/vy-cpuset.conf"] == (NEBIUS / "user-cpuset.conf").read_bytes()
+    for path, name in [("/etc/systemd/system/user@.service.d/vy-cpuset.conf", "user-cpuset.conf"),
+                       ("/etc/apt/apt.conf.d/52vy-trust", "apt-security-updates.conf"),
+                       ("/etc/needrestart/conf.d/50-vy.conf", "needrestart-list-only.conf")]:
+        assert embedded[path] == (NEBIUS / name).read_bytes(), path
+    # the first boot writes no unattended-upgrades policy of its own: the one cloud-init wrote is the one deploy.toml installs
+    assert "apt.conf.d" not in "\n".join(code((NEBIUS / "vm_setup.sh").read_bytes()))
     assert b"VY_USER=research\n" in embedded["/etc/vy/vy.env"]
     s = json.loads(spec)["spec"]
     assert s["resources"] == {"platform": "gpu-rtx6000-a", "preset": "8gpu-192vcpu-1744gb"}
@@ -876,6 +881,8 @@ def test_n1s_replacement_plan_prints_each_create_for_a_deploy_node_and_calls_not
     for n in creates:
         assert f"research deploy install {n} --by infra --ref origin/main --apply" in r.stdout
     assert ("NEBIUS_DATA_DISK=vy-nebius-1-data" in r.stdout) == (path == "reattach")
+    assert not re.search(r"\bcat [^|'>]*(\.ssh/vy-cluster'|lean-cache\.env)", r.stdout)       # a key or env file is copied, never printed
+    assert r.stdout.count("tar -C ~/.ssh -cf - vy-cluster vy-cluster.pub' | ") == nodes and "sudo tar -C /etc/verity -cf - lean-cache.env' | " in r.stdout
     assert subprocess.run(["bash", str(NEBIUS / "n1_replacement.sh"), "plan", "elsewhere"], capture_output=True).returncode == 2
 
 

@@ -154,7 +154,7 @@ def test_a_text_file_over_the_limit_stops_the_move_which_names_it_until_the_map_
 
 def test_the_maps_paths_as_a_trie_match_what_the_list_of_them_longest_first_matches():
     """`_paths` finds the map's old paths with one regex over every file. Written as a list, `re` tries each path at every
-    character: nine of a run's ten minutes on a draft of the one map (LEAN-258). `alternation` writes the same set as a
+    character: nine of a run's ten minutes on a draft of the one map. `alternation` writes the same set as a
     trie, and a branch crosses a move only if both find the same spans: the longest path that matches, or a shorter one
     where what follows refuses the longer (`a/b/c.py` before `a/b/c`, and `a/b` in `a/b/c-d`)."""
     words = ["a/b", "a/b/c", "a/b/c.py", "a/bc", "a.b", "a", "x-y", "x-y/z", "tools/x+y", "tools/x", "census", "(odd)/[p]"]
@@ -315,6 +315,60 @@ def test_a_distributions_tests_path_follows_the_move_and_moves_json_records_only
         "Inputs of `tests/new/t.py`, beside `tests/test_root.py`.\n"
     moves = json.loads((r / "tools/research/src/research/store/moves.json").read_text())["moves"]
     assert moves == [{"paths": {"dist/tests/old/": "dist/tests/new/"}}]
+
+
+def test_uv_lock_names_a_moved_distribution_by_its_new_directory(tmp_path):
+    """A map that moves a distribution and renames no member (the machine model to `verity/hardware/`): `uv lock` reads the
+    locked distribution's metadata at its old directory and fails, and `uv sync` with it, so every suite of the moved tree
+    fails before it starts. The mover rewrites the directory, under `--no-lock` too; one that stays keeps its line, and
+    so does a second run."""
+    r = tmp_path / "repo"
+    lock = ('[manifest]\nmembers = ["model", "other"]\n\n[[package]]\nname = "model"\nsource = { editable = "bench/model" }\n\n'
+            '[[package]]\nname = "probe"\nsource = { virtual = "bench/model/probe" }\n\n'
+            '[[package]]\nname = "other"\nsource = { editable = "bench/other" }\n\n'
+            '[package.metadata]\nrequires-dist = [{ name = "model", editable = "bench/model" }]\n')
+    files = {"bench/model/pyproject.toml": "[project]\nname = 'model'\n", "bench/model/probe/pyproject.toml": "[project]\nname = 'probe'\n",
+             "bench/other/pyproject.toml": "[project]\nname = 'other'\n", "uv.lock": lock,
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    (tmp_path / "map.toml").write_text('[roots]\nold = {}\nnew = {}\n\n[paths]\n"bench/model/" = "hardware/model/"\n\n[modules]\n'
+                                       '"bench.model" = "hardware.model"\n\n[rewrite]\nexclude = ["uv.lock"]\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    run = ["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"]
+    subprocess.run(run, check=True, capture_output=True)
+    want = lock.replace('"bench/model/probe"', '"hardware/model/probe"').replace('"bench/model"', '"hardware/model"')
+    assert (r / "uv.lock").read_text() == want and '"bench/other"' in want
+    git(r, "commit", "-q", "-m", "moved")
+    subprocess.run(run, check=True, capture_output=True)
+    assert git(r, "status", "--porcelain") == ""
+
+
+def test_a_failed_uv_lock_fails_the_move(tmp_path, monkeypatch):
+    """A move whose `uv lock` failed left a lock `uv sync` fails on, and exited 0, so `stage.py` certified a commit no suite
+    could start on. It exits 1 with uv's reason, which `stage.py` and `restack.py` refuse on."""
+    r = tmp_path / "repo"
+    files = {"old/a.txt": "", "tools/verity/check/pod_setup.sh": "UV_VERSION=${UV_VERSION:-9.9.9}\n",
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n'}
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    uv = tmp_path / "bin" / "uv"
+    uv.parent.mkdir()
+    uv.write_text('#!/bin/sh\n[ "$1" = --version ] && echo "uv 9.9.9" && exit 0\necho "error: Distribution not found at: old" >&2\nexit 2\n')
+    uv.chmod(0o755)
+    (tmp_path / "map.toml").write_text('[roots]\nold = {}\nnew = {}\n\n[paths]\n"old/" = "new/"\n\n[modules]\n"old" = "new"\n')
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "old")
+    monkeypatch.setenv("PATH", str(uv.parent), prepend=os.pathsep)
+    p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml")], capture_output=True,
+                       text=True)
+    assert p.returncode == 1, p.stderr
+    assert "Distribution not found at: old" in p.stdout and "`uv sync` fails on it" in p.stderr
 
 
 def test_a_shell_scripts_paths_from_its_own_directory_are_recounted_from_where_it_moved(tmp_path):
@@ -780,3 +834,152 @@ def test_rust_literals_spans_strings_and_skips_comments_chars_and_lifetimes():
     text = '''// "no" \n/* "no" /* "nested" */ */ let a = "x\\"y"; let b = br##"r"#"##; let c = '"'; fn f<'a>() { "z" }'''
     got = [text[s:e] for s, e in L.rust_literals(text)]
     assert got == ['"x\\"y"', 'br##"r"#"##', '"z"']
+
+
+ROWS_MAP = """[roots]
+old = {}
+new = {}
+
+[paths]
+"old/lib/__init__.py" = "new/lib/__init__.py"
+"old/lib/a.py" = "new/lib/a.py"
+"old/whole/" = "new/whole/"
+
+[retired]
+paths = ["old/lib/"]
+
+[drop]
+paths = ["old/lib/gone.py"]
+
+[modules]
+"old.lib" = "new.lib"
+"old.lib.a" = "new.lib.a"
+"old.whole" = "new.whole"
+
+[rewrite]
+exclude = ["tools/move/**"]
+"""
+#: what an open branch adds: three files under the path the map retires, one in a directory that stays, and their readers
+ADDED = {"old/lib/added.py": "import old.lib.a\n", "old/lib/sub/deep.py": "", "old/lib/sub/deeper/x.py": "",
+         "stays/extra.py": "", "doc.md": "See old/lib/added.py, old/lib/sub/ and `old.lib.sub.deep`.\n"}
+ROWS = "tools/move/layout_map.rows.toml"
+MAP_AT = "tools/move/layout_map.toml"
+
+
+def rows_repo(tmp_path: Path, rows: str | None, name: str = "repo", map_text: str = ROWS_MAP) -> Path:
+    """A checkout whose map retires `old/lib/`, with a branch's files in it (`ADDED`) and its rows file when `rows` is given."""
+    r = tmp_path / name
+    files = {"old/lib/__init__.py": "", "old/lib/a.py": "X = 1\n", "old/lib/gone.py": "", "old/whole/w.py": "",
+             "stays/s.py": "", "use.py": "import old.lib.a\n", MAP_AT: map_text,
+             "tools/research/src/research/store/moves.json": '{"moves": []}\n', **ADDED}
+    if rows is not None:
+        files[ROWS] = rows
+    for p, t in files.items():
+        (r / p).parent.mkdir(parents=True, exist_ok=True)
+        (r / p).write_text(t)
+    git(r, "init", "-q", "-b", "main")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "a branch, merged with the move's base")
+    return r
+
+
+def layout(r: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", MAP_AT, "--no-lock", *args], cwd=r,
+                          capture_output=True, text=True)
+
+
+def test_a_tracked_file_under_a_retired_path_with_no_row_stops_the_move_by_name_with_an_exit_of_its_own(tmp_path):
+    """The map is written from main's tree, so a file a branch adds under a directory the map empties has no row and would
+    stay behind. The move stops before it changes anything, with `NO_ROW` (not the 1 of any other failure), the fix and
+    the rows file's name in the first line of stderr, and each file on a line of its own. A file in a directory the map
+    does not retire is not named: nothing says it should have moved."""
+    r = rows_repo(tmp_path, None)
+    p = layout(r)
+    first, *named = p.stderr.splitlines()
+    assert p.returncode == L.NO_ROW == 3, p.stdout + p.stderr
+    assert first.startswith("no row for 3 tracked files under a path the map retires: ") and ROWS in first and "[paths]" in first
+    assert named == ["  old/lib/added.py", "  old/lib/sub/deep.py", "  old/lib/sub/deeper/x.py"]
+    assert git(r, "status", "--porcelain") == ""
+
+
+def test_a_row_of_the_rows_file_moves_its_file_and_rewrites_its_references_as_a_row_of_the_map_does(tmp_path):
+    """The rows file is read after the map: a file row and a directory row move the branch's files, and every reference to
+    them is rewritten, a module name too, though the rows file declares none. A row the map already has changes nothing.
+    The tree is, file for file, the one the same rows give as rows of the map; the rows file is deleted once read, so a
+    second run finds none and changes nothing; and `moves.json` records the map's rows alone."""
+    rows = '[paths]\n"old/lib/added.py" = "new/lib/added.py"\n"old/lib/sub/" = "new/lib/sub/"\n"old/whole/" = "new/whole/"\n'
+    r = rows_repo(tmp_path, rows)
+    assert layout(r, "--dry-run").returncode == 0 and git(r, "status", "--porcelain") == "", "a dry run reads it and keeps it"
+    p = layout(r)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert f"rows read from {ROWS}: 2" in p.stdout
+    assert (r / "new/lib/added.py").read_text() == "import new.lib.a\n"
+    assert (r / "new/lib/sub/deep.py").is_file() and (r / "new/lib/sub/deeper/x.py").is_file() and not (r / "old").exists()
+    assert (r / "doc.md").read_text() == "See new/lib/added.py, new/lib/sub/ and `new.lib.sub.deep`.\n"
+    assert (r / "stays/extra.py").is_file() and not (r / ROWS).exists()
+    moves = json.loads((r / "tools/research/src/research/store/moves.json").read_text())["moves"]
+    assert moves == [{"paths": {"old/lib/__init__.py": "new/lib/__init__.py", "old/lib/a.py": "new/lib/a.py",
+                                "old/whole/": "new/whole/"}}]
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "moved")
+    assert layout(r).returncode == 0 and git(r, "status", "--porcelain") == ""
+
+    in_map = ROWS_MAP.replace('"old/whole/" = "new/whole/"\n', '"old/whole/" = "new/whole/"\n"old/lib/added.py" = '
+                              '"new/lib/added.py"\n"old/lib/sub/" = "new/lib/sub/"\n')
+    in_map = in_map.replace('"old.whole" = "new.whole"\n', '"old.lib.added" = "new.lib.added"\n"old.lib.sub" = "new.lib.sub"\n'
+                            '"old.whole" = "new.whole"\n')
+    m = rows_repo(tmp_path, None, "as-map-rows", in_map)
+    assert layout(m).returncode == 0
+    git(m, "add", "-A")
+    trees = [{line.split("\t")[1]: line for line in git(repo, "ls-files", "-s").splitlines()
+              if not line.endswith(("/layout_map.toml", "/moves.json"))} for repo in (m, r)]
+    assert trees[0] == trees[1] and "new/lib/sub/deeper/x.py" in trees[0]
+
+
+@pytest.mark.parametrize("rows, why", [
+    ('[paths]\n"old/lib/a.py" = "elsewhere/a.py"\n', "'old/lib/a.py' = 'elsewhere/a.py': the map sends it to 'new/lib/a.py'"),
+    ('[paths]\n"old/whole/w.py" = "elsewhere/w.py"\n', "'old/whole/w.py' = 'elsewhere/w.py': the map sends it to 'new/whole/w.py'"),
+    ('[paths]\n"old/whole/" = "elsewhere/"\n', "'old/whole/' = 'elsewhere/': the map sends it to 'new/whole/'"),
+    ('[paths]\n"old/" = "elsewhere/"\n', "'old/': the map names 4 paths at or under it (old/lib/__init__.py, ...)"),
+    ('[paths]\n"old/lib/gone.py" = "new/lib/gone.py"\n', "'old/lib/gone.py': the map deletes it"),
+    ('[paths]\n"old/lib/missing.py" = "new/lib/missing.py"\n', "'old/lib/missing.py': no tracked file is at it"),
+    ('[paths]\n"old/lib/nothing/" = "new/lib/nothing/"\n', "'old/lib/nothing/': no tracked file is under it"),
+    ('[paths]\n"old/lib/added.py" = "new/lib/"\n', "'old/lib/added.py' = 'new/lib/': a file to a file"),
+    ('[paths]\n"old/lib/added.py" = "new/lib/added.py"\n\n[retired]\npaths = []\n', "holds [paths] alone, not ['retired']"),
+    ("[paths\n", "Expected"),
+])
+def test_a_rows_file_that_changes_what_the_map_says_or_moves_nothing_is_refused_and_nothing_moves(tmp_path, rows, why):
+    """A branch's rows add to the map and never change it: a row for a path the map sends elsewhere (by its own row or a
+    directory's) or deletes, a directory row over paths the map names (it would take main's files with it), a row no
+    tracked file is at or under (a path mistyped would leave its file behind unsaid), a file sent to a directory, and any
+    table but [paths] each stop the move with the row and the reason, exit 1, before anything changes."""
+    r = rows_repo(tmp_path, rows)
+    p = layout(r)
+    assert p.returncode == 1 and p.stderr.startswith(f"{ROWS}: ") and why in p.stderr, p.stdout + p.stderr
+    assert git(r, "status", "--porcelain") == ""
+
+
+def test_a_rows_file_renaming_a_module_the_map_renames_another_way_is_refused(tmp_path):
+    """`old/lib/a.py` and a directory `old/lib/a/` share the module name `old.lib.a`. The map sends the file to `new.lib.a`;
+    a row sending the directory elsewhere would rename that module a second way, in every file that imports it."""
+    r = rows_repo(tmp_path, '[paths]\n"old/lib/a/" = "other/a/"\n"old/lib/added.py" = "new/lib/added.py"\n'
+                            '"old/lib/sub/" = "new/lib/sub/"\n')
+    (r / "old/lib/a").mkdir()
+    (r / "old/lib/a/z.py").write_text("")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "a directory named as a module is")
+    p = layout(r)
+    assert p.returncode == 1 and "module old.lib.a: the map renames it new.lib.a, and these rows other.a" in p.stderr, p.stderr
+    assert git(r, "status", "--porcelain") == ""
+
+
+def test_a_rows_file_outside_the_checkout_is_refused(tmp_path):
+    """The rows file is its branch's own, a tracked file beside the map: one beside a map kept outside the checkout is
+    nobody's commit, and deleting it once read would lose it."""
+    r = rows_repo(tmp_path, None)
+    (tmp_path / "map.toml").write_text(ROWS_MAP)
+    (tmp_path / "map.rows.toml").write_text('[paths]\n"old/lib/added.py" = "new/lib/added.py"\n')
+    p = subprocess.run(["python3", str(LAYOUT), "--root", str(r), "--map", str(tmp_path / "map.toml"), "--no-lock"],
+                       capture_output=True, text=True)
+    assert p.returncode == 1 and "a rows file is its branch's own" in p.stderr, p.stdout + p.stderr
+    assert (tmp_path / "map.rows.toml").is_file() and git(r, "status", "--porcelain") == ""

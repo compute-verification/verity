@@ -33,6 +33,11 @@ ever written to disk by the tool. A pod with those three variables and the same 
 (the token rides in the signed headers: the store README, §7). A temporary credential cannot mint another (the tool refuses when
 `AWS_SESSION_TOKEN` is set); revoking the parent token kills every child.
 
+`--job push|fetch` mints what a cluster job holds in place of the parent key (`custody.job_env`; the Nebius `sky/submit.sh` passes
+it to the job as its secrets): the key `research run` stages for a run's custody (`push`: it writes, and can neither delete nor
+copy) or its `--store-read` key (`fetch`: read only). It takes `--ttl` and `--env` alone, since no other flag may widen it, and
+prints the three variables with no bucket name.
+
 ## No remote, or an unusable one
 
 No remote configured (no file, or no `[remote]` table) => the local store is the only replica and `where` says so; nothing
@@ -48,12 +53,13 @@ to set). `research run` reports which of the three happened: `PRESERVED on the r
 ## PRESERVED, and how `push` checks it
 
 **PRESERVED** means: for the manifest and every blob, the remote holds an object of the right size whose content was checked,
-by one of two checks, and the replica record (`replicas.verified`) says which:
+by one of three checks, and the replica record (`replicas.verified`) says which:
 
 ~~~text
 etag-md5          `push --verify head` (default): HEAD after upload; Content-Length == bytes and the single-part ETag == hex MD5 of
-                  the local bytes (S3 and R2 make a single-PUT object's ETag its MD5; a `-` in the ETag marks multipart, which is not
-                  an MD5, and such an object falls back to read-back). One extra round trip per object.
+                  the local bytes (S3 and R2 make a single-PUT object's ETag its MD5). One extra round trip per object.
+etag-multipart    the same HEAD for an object uploaded in parts: its ETag == the one the local file's parts yield (the MD5 of
+                  the parts' MD5s); an ETag the client can't reproduce falls back to read-back.
 sha256-readback   `push --verify readback`, `verify`, `put --preserve`'s manifest: download and sha256 against the manifest.  Costs
                   the object's bytes again.  Manifests are always read back (they are small); blobs on request.
 ~~~
