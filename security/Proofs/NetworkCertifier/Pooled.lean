@@ -36,10 +36,10 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.Wait
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Sampling.Draws
-import Proofs.Flock.Soundness.Audit.Periods
-import Proofs.Flock.Soundness.Game
+import Proofs.Flock.Soundness.Audit.PeriodsCharge
 import Proofs.NetworkCertifier.PeriodSum
 import Std.Tactic.BVDecide.Normalize.Prop
 
@@ -50,8 +50,13 @@ A uniform `k`-subset of `n` units misses a set of `f` units with probability `C(
 `(1 - k/n)^f` (`choose_sub_le`, `pr_disjoint_le`). Over windows on independent coins, each with its wrong
 set fixed before its own sample, every sample missing its window's set while the sets hold `F` units in total has
 probability at most `r^F` when each window's miss has probability at most `r` to the power of its set's size
-(`pr_adaptive_le`, the monitoring-period step `prCoin_forall_sum_le_pow` read in `Pr`). With
-each window's soundness error added by a union bound, that is `pooledIncorrectBlocks`.
+(`pr_adaptive_le`). With each window's soundness error added by a union bound, that is `pooledIncorrectBlocks`.
+
+The area has one step over a monitoring period's execution phases, `pr_adaptive_add_ex_le`: the monitoring-period
+step with a charge (`FlockSoundness.Audit.Periods.ex_prod_add_le`) at the phases' accepting events, each phase's
+bound an escape `r^(f i)`, an error `e i` fixed before the period and the average over the phase's own coins of a
+charge. The errors add, and the period pays the charges once, at the average over its coins of their sum.
+`pr_adaptive_add_le` is that step at the charge zero, and `pr_adaptive_le` at the charge and the errors zero.
 -/
 
 @[expose] public section
@@ -174,12 +179,129 @@ theorem sampleUniform_val (n k : ℕ) :
     exact ⟨⟨S, hS⟩, by ext x; simp [Subtype.ext_iff]⟩
   rw [h1, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
-/-! ### The escapes multiply over windows on independent coins -/
+/-! ### The escapes multiply over execution phases on independent coins -/
 
-open FlockSoundness.Game in
+/-- Bounds capped at `1`, each an escape `a i ≤ 1` plus an error `e i`, multiply to at most the escapes' product plus
+the errors' sum. -/
+theorem prod_min_add_le : ∀ {m : ℕ} (a e : Fin m → ℝ), (∀ i, 0 ≤ a i) → (∀ i, a i ≤ 1) → (∀ i, 0 ≤ e i) →
+    ∏ i, min 1 (a i + e i) ≤ ∏ i, a i + ∑ i, e i
+  | 0, _, _, _, _, _ => by simp
+  | m + 1, a, e, ha0, ha1, he => by
+    have ih : ∏ i : Fin m, min 1 (a i.succ + e i.succ) ≤ ∏ i : Fin m, a i.succ + ∑ i : Fin m, e i.succ :=
+      prod_min_add_le _ _ (fun i => ha0 _) (fun i => ha1 _) (fun i => he _)
+    have hm0 : ∀ i : Fin m, 0 ≤ min 1 (a i.succ + e i.succ) := fun i => le_min zero_le_one (add_nonneg (ha0 _) (he _))
+    have hX0 : 0 ≤ ∏ i : Fin m, min 1 (a i.succ + e i.succ) := Finset.prod_nonneg fun i _ => hm0 i
+    have hX1 : ∏ i : Fin m, min 1 (a i.succ + e i.succ) ≤ 1 :=
+      Finset.prod_le_one₀ (fun i _ => hm0 i) fun i _ => min_le_left _ _
+    have hE0 : 0 ≤ ∑ i : Fin m, e i.succ := Finset.sum_nonneg fun i _ => he _
+    rw [Fin.prod_univ_succ, Fin.prod_univ_succ, Fin.sum_univ_succ]
+    calc min 1 (a 0 + e 0) * ∏ i : Fin m, min 1 (a i.succ + e i.succ)
+        ≤ (a 0 + e 0) * ∏ i : Fin m, min 1 (a i.succ + e i.succ) := mul_le_mul_of_nonneg_right (min_le_right _ _) hX0
+      _ = a 0 * ∏ i : Fin m, min 1 (a i.succ + e i.succ) + e 0 * ∏ i : Fin m, min 1 (a i.succ + e i.succ) :=
+          add_mul _ _ _
+      _ ≤ a 0 * (∏ i : Fin m, a i.succ + ∑ i : Fin m, e i.succ) + e 0 * 1 :=
+          add_le_add (mul_le_mul_of_nonneg_left ih (ha0 0)) (mul_le_mul_of_nonneg_left hX1 (he 0))
+      _ ≤ a 0 * ∏ i : Fin m, a i.succ + (e 0 + ∑ i : Fin m, e i.succ) := by
+          rw [mul_add, mul_one]
+          linarith [mul_le_of_le_one_left hE0 (ha1 0)]
+
+open FlockSoundness.Audit.Periods in
+/-- **The escapes multiply, with errors that add and a charge paid once**: execution phases whose audits, given the
+earlier phases' coins `ω`, accept with probability at most `r^(f i ω) + e i` plus the average over the phase's own
+coins `x` of a charge `w i ω x` that is not negative, `f i` and `w i` fixed before phase `i`'s coins, all accept with
+`Σ_i f i ≥ F` with probability at most `r^F + Σ_i e i` plus the average, over the period's coins, of the charges'
+sum. It is the monitoring-period step with a charge (`ex_prod_add_le`) at the accepting events' indicators, each
+phase's bound capped at `1`. -/
+theorem pr_adaptive_add_ex_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1)
+    (m : ℕ) (A : Fin m → (Fin m → Ω) → Ω → Prop) (f : Fin m → (Fin m → Ω) → ℕ) (e : Fin m → ℝ)
+    (w : Fin m → (Fin m → Ω) → Ω → ℝ)
+    (hA : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → A i ω = A i ω')
+    (hf : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → f i ω = f i ω')
+    (hw : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → w i ω = w i ω') (he : ∀ i, 0 ≤ e i)
+    (hw0 : ∀ i ω x, 0 ≤ w i ω x) (hesc : ∀ i ω, Pr (A i ω) ≤ r ^ f i ω + e i + Ex (w i ω)) (F : ℕ) :
+    Pr (fun ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤ r ^ F + ∑ i, e i + Ex fun ω => ∑ i, w i ω (ω i) := by
+  classical
+  have hind0 : ∀ (t : Fin m) (ω : Fin m → Ω), 0 ≤ (if A t ω (ω t) then (1 : ℝ) else 0) := fun t ω => by
+    split_ifs
+    · exact zero_le_one
+    · exact le_rfl
+  have hind1 : ∀ (t : Fin m) (ω : Fin m → Ω), (if A t ω (ω t) then (1 : ℝ) else 0) ≤ 1 := fun t ω => by
+    split_ifs
+    · exact le_rfl
+    · exact zero_le_one
+  have key := ex_prod_add_le (Ω := fun _ : Fin m => Ω)
+    (fun t ω => if A t ω (ω t) then (1 : ℝ) else 0) (fun t ω => min 1 (r ^ f t ω + e t))
+    (fun t ω => w t ω (ω t))
+    (fun t ω ω' h => by
+      show (if A t ω (ω t) then (1 : ℝ) else 0) = if A t ω' (ω' t) then (1 : ℝ) else 0
+      rw [hA t ω ω' fun j hj => h j hj.le, h t le_rfl])
+    (fun t ω ω' h => by simp only [hf t ω ω' h])
+    (fun t ω ω' h => by
+      show w t ω (ω t) = w t ω' (ω' t)
+      rw [hw t ω ω' fun j hj => h j hj.le, h t le_rfl])
+    hind0 hind1 (fun t ω => le_min zero_le_one (add_nonneg (pow_nonneg hr0 _) (he t))) (fun t ω => hw0 _ _ _)
+    (fun t ω => by
+      have hupd : ∀ a : Ω, A t (Function.update ω t a) (Function.update ω t a t) = A t ω a := fun a => by
+        rw [Function.update_self,
+          hA t (Function.update ω t a) ω fun j hj => Function.update_of_ne (ne_of_lt hj) _ _]
+      have hwupd : ∀ a : Ω, w t (Function.update ω t a) (Function.update ω t a t) = w t ω a := fun a => by
+        rw [Function.update_self,
+          hw t (Function.update ω t a) ω fun j hj => Function.update_of_ne (ne_of_lt hj) _ _]
+      have hE : Ex (fun a : Ω => if A t (Function.update ω t a) (Function.update ω t a t) then (1 : ℝ) else 0) =
+          Pr (A t ω) := by
+        simp only [hupd]
+        exact (Pr_eq_sum (A t ω)).symm
+      have hW : Ex (fun a : Ω => w t (Function.update ω t a) (Function.update ω t a t)) = Ex (w t ω) :=
+        congrArg Ex (funext hwupd)
+      have h1 : Pr (A t ω) ≤ min 1 (r ^ f t ω + e t) + Ex (w t ω) := by
+        have hw1 : 0 ≤ Ex (w t ω) := Ex_nonneg fun x => hw0 t ω x
+        rcases le_total 1 (r ^ f t ω + e t) with h2 | h2
+        · rw [min_eq_left h2]
+          have h3 := Pr_le_one (A t ω)
+          linarith
+        · rw [min_eq_right h2]
+          exact hesc t ω
+      exact (hE.trans_le h1).trans_eq (congrArg (fun y => min 1 (r ^ f t ω + e t) + y) hW.symm))
+    (r ^ F + ∑ i, e i) (add_nonneg (pow_nonneg hr0 F) (Finset.sum_nonneg fun i _ => he i))
+  have hprod : ∀ ω : Fin m → Ω, F ≤ ∑ i, f i ω → ∏ t, min 1 (r ^ f t ω + e t) ≤ r ^ F + ∑ i, e i :=
+    fun ω hF => by
+      refine (prod_min_add_le (fun i => r ^ f i ω) e (fun i => pow_nonneg hr0 _)
+        (fun i => pow_le_one₀ hr0 hr1) he).trans ?_
+      rw [Finset.prod_pow_eq_pow_sum]
+      exact add_le_add (pow_le_pow_of_le_one hr0 hr1 hF) le_rfl
+  have hfin : Pr (fun ω : Fin m → Ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤
+      Ex fun ω : Fin m → Ω => (∏ t, if A t ω (ω t) then (1 : ℝ) else 0) *
+        if ∏ t, min 1 (r ^ f t ω + e t) ≤ r ^ F + ∑ i, e i then 1 else 0 := by
+    refine Pr_le_Ex _ _ (fun ω => mul_nonneg (Finset.prod_nonneg fun t _ => hind0 t ω) ?_) fun ω hω => ?_
+    · split_ifs
+      · exact zero_le_one
+      · exact le_rfl
+    · have hone : (∏ t, if A t ω (ω t) then (1 : ℝ) else 0) = 1 := Finset.prod_eq_one fun t _ => if_pos (hω.1 t)
+      refine le_of_eq ?_
+      rw [if_pos (hprod ω hω.2), mul_one, hone]
+  exact hfin.trans key
+
+/-- **The escapes multiply with additive errors**: execution phases whose audits, given the earlier phases' coins,
+accept with probability at most `r^(f i) + e i`, `f i` fixed before phase `i`'s coins, all accept with `Σ_i f i ≥ F`
+with probability at most `r^F + Σ_i e i`: `pr_adaptive_add_ex_le` at the charge zero. -/
+theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1)
+    (m : ℕ) (A : Fin m → (Fin m → Ω) → Ω → Prop) (f : Fin m → (Fin m → Ω) → ℕ) (e : Fin m → ℝ)
+    (hA : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → A i ω = A i ω')
+    (hf : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → f i ω = f i ω') (he : ∀ i, 0 ≤ e i)
+    (hesc : ∀ i ω, Pr (A i ω) ≤ r ^ f i ω + e i) (F : ℕ) :
+    Pr (fun ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤ r ^ F + ∑ i, e i := by
+  have h := pr_adaptive_add_ex_le hr0 hr1 m A f e (fun _ _ _ => 0) hA hf (fun _ _ _ _ => rfl) he
+    (fun _ _ _ => le_rfl)
+    (fun i ω => by
+      simp only [Ex_const, add_zero]
+      exact hesc i ω)
+    F
+  simp only [Finset.sum_const_zero, Ex_const, add_zero] at h
+  exact h
+
 /-- **The escapes multiply**: execution phases whose audits, given the earlier phases' coins, accept with probability
 at most `r^(f i)`, `f i` fixed before phase `i`'s coins, all accept with `Σ_i f i ≥ F` with probability at most `r^F`:
-the monitoring-period step at predictable weights. -/
+`pr_adaptive_add_le` at the errors zero. -/
 theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1) :
     ∀ (m : ℕ) (A : Fin m → (Fin m → Ω) → Ω → Prop) (f : Fin m → (Fin m → Ω) → ℕ),
       (∀ i ω ω', (∀ j, j < i → ω j = ω' j) → A i ω = A i ω') →
@@ -187,24 +309,13 @@ theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0
       (∀ i ω, Pr (A i ω) ≤ r ^ f i ω) → ∀ F : ℕ,
       Pr (fun ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤ r ^ F := by
   intro m A f hA hf hesc F
-  have hle1 : ∀ p : Ω → Prop, prCoin p ≤ 1 := fun p =>
-    (prCoin_mono (q := fun _ => True) fun _ _ => trivial).trans_eq (by simp [prCoin, avg_const])
-  have hstep : ∀ (t : Fin m) (ω : Fin m → Ω), prCoin (fun a : Ω => A t (Function.update ω t a)
-      (Function.update ω t a t)) ≤ ENNReal.ofReal r ^ f t ω := fun t ω => by
-    have hupd : (fun a : Ω => A t (Function.update ω t a) (Function.update ω t a t)) = A t ω := funext fun a => by
-      rw [Function.update_self, hA t (Function.update ω t a) ω fun j hj => Function.update_of_ne (ne_of_lt hj) _ _]
-    rw [hupd, ← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (hle1 _)),
-      ← Claims.Sampling.Pr_eq_toReal_prCoin, ← ENNReal.ofReal_pow hr0]
-    exact ENNReal.ofReal_le_ofReal (hesc t ω)
-  have key := FlockSoundness.Audit.Periods.prCoin_forall_sum_le_pow (Ω := fun _ : Fin m => Ω)
-    (fun t ω => A t ω (ω t)) f
-    (fun t ω ω' h => by
-      show A t ω (ω t) = A t ω' (ω' t)
-      rw [hA t ω ω' fun j hj => h j hj.le, h t le_rfl])
-    (fun t ω ω' h => hf t ω ω' h) (ENNReal.ofReal_le_one.2 hr1) hstep F
-  rw [Claims.Sampling.Pr_eq_toReal_prCoin]
-  refine (ENNReal.toReal_mono (ENNReal.pow_ne_top ENNReal.ofReal_ne_top) key).trans_eq ?_
-  rw [ENNReal.toReal_pow, ENNReal.toReal_ofReal hr0]
+  have h := pr_adaptive_add_le hr0 hr1 m A f (fun _ => 0) hA hf (fun _ => le_rfl)
+    (fun i ω => by
+      simp only [add_zero]
+      exact hesc i ω)
+    F
+  simp only [Finset.sum_const_zero, add_zero] at h
+  exact h
 
 /-! ### The monitoring period -/
 

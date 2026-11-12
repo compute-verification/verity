@@ -50,11 +50,11 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
 
-The probability half: each window's audit, given the earlier windows' coins, accepts with probability at most
-`(1 - q)^|W_i| + e_i`, and the escapes multiply over the windows with the errors adding (`pr_adaptive_add_le`). That is
-the monitoring-period step (`FlockSoundness.Audit.Periods.prCoin_forall_prod_le`) at each window's bound capped at `1`,
-whose product is at most the product of the escapes plus the errors' sum (`prod_min_add_le`); a union bound adds the
-leak relations' errors `e' i`.
+The probability half: each execution phase's audit, given the earlier phases' coins, accepts with probability at
+most `(1 - q)^|W_i| + e_i` plus the average over the phase's own coins of a charge that is not negative, and the
+escapes multiply over the phases with the errors adding and the charges paid once, at the average over the period's
+coins of their sum (`pr_adaptive_add_ex_le`, the area's one step over a period's phases); a union bound adds the leak
+relations' errors `e' i` (`pr_pooled_ex_le`). At the charge zero that is `pr_pooled_le`, which `pooledLeak` reads.
 
 The count half: a family of incorrect sets with fewer than `Fmax` proof blocks in total is the proof blocks listed by some
 `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
@@ -76,73 +76,6 @@ period (`pooledLeak_fixed`).
 namespace NetTiming
 
 open Claims Claims.Sampling Finset
-
-/-! ### The escapes multiply, each with an additive error -/
-
-/-- Bounds capped at `1`, each an escape `a i ≤ 1` plus an error `e i`, multiply to at most the escapes' product plus
-the errors' sum. -/
-theorem prod_min_add_le : ∀ {m : ℕ} (a e : Fin m → ℝ), (∀ i, 0 ≤ a i) → (∀ i, a i ≤ 1) → (∀ i, 0 ≤ e i) →
-    ∏ i, min 1 (a i + e i) ≤ ∏ i, a i + ∑ i, e i
-  | 0, _, _, _, _, _ => by simp
-  | m + 1, a, e, ha0, ha1, he => by
-    have ih : ∏ i : Fin m, min 1 (a i.succ + e i.succ) ≤ ∏ i : Fin m, a i.succ + ∑ i : Fin m, e i.succ :=
-      prod_min_add_le _ _ (fun i => ha0 _) (fun i => ha1 _) (fun i => he _)
-    have hm0 : ∀ i : Fin m, 0 ≤ min 1 (a i.succ + e i.succ) := fun i => le_min zero_le_one (add_nonneg (ha0 _) (he _))
-    have hX0 : 0 ≤ ∏ i : Fin m, min 1 (a i.succ + e i.succ) := Finset.prod_nonneg fun i _ => hm0 i
-    have hX1 : ∏ i : Fin m, min 1 (a i.succ + e i.succ) ≤ 1 :=
-      Finset.prod_le_one₀ (fun i _ => hm0 i) fun i _ => min_le_left _ _
-    have hE0 : 0 ≤ ∑ i : Fin m, e i.succ := Finset.sum_nonneg fun i _ => he _
-    rw [Fin.prod_univ_succ, Fin.prod_univ_succ, Fin.sum_univ_succ]
-    calc min 1 (a 0 + e 0) * ∏ i : Fin m, min 1 (a i.succ + e i.succ)
-        ≤ (a 0 + e 0) * ∏ i : Fin m, min 1 (a i.succ + e i.succ) := mul_le_mul_of_nonneg_right (min_le_right _ _) hX0
-      _ = a 0 * ∏ i : Fin m, min 1 (a i.succ + e i.succ) + e 0 * ∏ i : Fin m, min 1 (a i.succ + e i.succ) :=
-          add_mul _ _ _
-      _ ≤ a 0 * (∏ i : Fin m, a i.succ + ∑ i : Fin m, e i.succ) + e 0 * 1 :=
-          add_le_add (mul_le_mul_of_nonneg_left ih (ha0 0)) (mul_le_mul_of_nonneg_left hX1 (he 0))
-      _ ≤ a 0 * ∏ i : Fin m, a i.succ + (e 0 + ∑ i : Fin m, e i.succ) := by
-          rw [mul_add, mul_one]
-          linarith [mul_le_of_le_one_left hE0 (ha1 0)]
-
-open FlockSoundness.Game in
-/-- **The escapes multiply with additive errors**: windows whose audits, given the earlier windows' coins, accept with
-probability at most `r^(f i) + e i`, `f i` fixed before window `i`'s coins, all accept with `Σ_i f i ≥ F` with
-probability at most `r^F + Σ_i e i`: the monitoring-period step at the bounds capped at `1`. -/
-theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0 ≤ r) (hr1 : r ≤ 1)
-    (m : ℕ) (A : Fin m → (Fin m → Ω) → Ω → Prop) (f : Fin m → (Fin m → Ω) → ℕ) (e : Fin m → ℝ)
-    (hA : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → A i ω = A i ω')
-    (hf : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → f i ω = f i ω') (he : ∀ i, 0 ≤ e i)
-    (hesc : ∀ i ω, Pr (A i ω) ≤ r ^ f i ω + e i) (F : ℕ) :
-    Pr (fun ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤ r ^ F + ∑ i, e i := by
-  have hle1 : ∀ p : Ω → Prop, prCoin p ≤ 1 := fun p =>
-    (prCoin_mono (q := fun _ => True) fun _ _ => trivial).trans_eq (by simp [prCoin, avg_const])
-  have hstep : ∀ (t : Fin m) (ω : Fin m → Ω), prCoin (fun a : Ω => A t (Function.update ω t a)
-      (Function.update ω t a t)) ≤ ENNReal.ofReal (min 1 (r ^ f t ω + e t)) := fun t ω => by
-    have hupd : (fun a : Ω => A t (Function.update ω t a) (Function.update ω t a t)) = A t ω := funext fun a => by
-      rw [Function.update_self, hA t (Function.update ω t a) ω fun j hj => Function.update_of_ne (ne_of_lt hj) _ _]
-    rw [hupd, ← ENNReal.ofReal_toReal (ne_top_of_le_ne_top ENNReal.one_ne_top (hle1 _)),
-      ← Claims.Sampling.Pr_eq_toReal_prCoin]
-    exact ENNReal.ofReal_le_ofReal (le_min (Pr_le_one _) (hesc t ω))
-  have key := FlockSoundness.Audit.Periods.prCoin_forall_prod_le (Ω := fun _ : Fin m => Ω)
-    (fun t ω => A t ω (ω t)) (fun t ω => ENNReal.ofReal (min 1 (r ^ f t ω + e t)))
-    (fun t ω ω' h => by
-      show A t ω (ω t) = A t ω' (ω' t)
-      rw [hA t ω ω' fun j hj => h j hj.le, h t le_rfl])
-    (fun t ω ω' h => by simp only [hf t ω ω' h]) hstep (ENNReal.ofReal (r ^ F + ∑ i, e i))
-  have he0 : 0 ≤ r ^ F + ∑ i, e i := add_nonneg (pow_nonneg hr0 F) (Finset.sum_nonneg fun i _ => he i)
-  have hprod : ∀ ω : Fin m → Ω, F ≤ ∑ i, f i ω →
-      ∏ t, ENNReal.ofReal (min 1 (r ^ f t ω + e t)) ≤ ENNReal.ofReal (r ^ F + ∑ i, e i) := fun ω hF => by
-    rw [← ENNReal.ofReal_prod_of_nonneg fun i _ => le_min zero_le_one (add_nonneg (pow_nonneg hr0 _) (he i))]
-    refine ENNReal.ofReal_le_ofReal ((prod_min_add_le (fun i => r ^ f i ω) e (fun i => pow_nonneg hr0 _)
-      (fun i => pow_le_one₀ hr0 hr1) he).trans ?_)
-    rw [Finset.prod_pow_eq_pow_sum]
-    exact add_le_add (pow_le_pow_of_le_one hr0 hr1 hF) le_rfl
-  have hmono : prCoin (fun ω : Fin m → Ω => (∀ i, A i ω (ω i)) ∧ F ≤ ∑ i, f i ω) ≤
-      ENNReal.ofReal (r ^ F + ∑ i, e i) :=
-    (prCoin_mono (q := fun ω : Fin m → Ω => (∀ t, A t ω (ω t)) ∧
-      ∏ t, ENNReal.ofReal (min 1 (r ^ f t ω + e t)) ≤ ENNReal.ofReal (r ^ F + ∑ i, e i))
-      fun ω hω => ⟨hω.1, hprod ω hω.2⟩).trans key
-  rw [Claims.Sampling.Pr_eq_toReal_prCoin]
-  exact (ENNReal.toReal_mono ENNReal.ofReal_ne_top hmono).trans_eq (ENNReal.toReal_ofReal he0)
 
 /-! ### The families of incorrect sets -/
 
@@ -371,19 +304,23 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
 
 /-! ### The monitoring period -/
 
-/-- **The monitoring period's bound at any per-window good event**: every audit accepts while the incorrect sets hold
-`Fmax` proof blocks or more, or some window's good event fails, with probability at most `(1 - q)^Fmax + Σ e + Σ e'`:
-`pr_adaptive_add_le` at the conditional escape, and a union bound over the good events' errors. -/
-theorem pr_pooled_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} (acc : Fin m → (Fin m → Ω) → Ω → Prop)
+/-- **The monitoring period's bound at any good event of an execution phase, with a charge paid once**: every audit
+accepts while the incorrect sets hold `Fmax` proof blocks or more, or some phase's good event fails, with probability
+at most `(1 - q)^Fmax + Σ e + Σ e'` plus the average, over the period's coins, of the charges' sum, where phase `i`'s
+conditional escape holds, beside `e i`, the average over the phase's own coins of its charge `cl i ω`:
+`pr_adaptive_add_ex_le` at the conditional escape, and a union bound over the good events' errors. -/
+theorem pr_pooled_ex_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} (acc : Fin m → (Fin m → Ω) → Ω → Prop)
     (hacc : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → acc i ω = acc i ω') (W : (Fin m → Ω) → Fin m → Finset ℕ)
-    (hW : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → W ω i = W ω' i) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ)
-    (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hesc : ∀ i ω, Pr (acc i ω) ≤ (1 - q) ^ (W ω i).card + e i)
+    (hW : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → W ω i = W ω' i) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i)
+    (cl : Fin m → (Fin m → Ω) → Ω → ℝ) (hcl : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → cl i ω = cl i ω')
+    (hcl0 : ∀ i ω x, 0 ≤ cl i ω x) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+    (hesc : ∀ i ω, Pr (acc i ω) ≤ (1 - q) ^ (W ω i).card + e i + Ex (cl i ω))
     (Good : Fin m → (Fin m → Ω) → Prop) (hleak : ∀ i, Pr (fun ω => acc i ω (ω i) ∧ ¬Good i ω) ≤ e' i) (Fmax : ℕ) :
     Pr (fun ω => (∀ i, acc i ω (ω i)) ∧ ¬(∑ i, (W ω i).card < Fmax ∧ ∀ i, Good i ω)) ≤
-      (1 - q) ^ Fmax + ∑ i, e i + ∑ i, e' i := by
+      (1 - q) ^ Fmax + ∑ i, e i + (Ex fun ω => ∑ i, cl i ω (ω i)) + ∑ i, e' i := by
   classical
-  have hmiss := pr_adaptive_add_le (Ω := Ω) (r := 1 - q) (by linarith) (by linarith) m acc
-    (fun i ω => (W ω i).card) e hacc (fun i ω ω' h => by simp only [hW i ω ω' h]) he hesc Fmax
+  have hmiss := pr_adaptive_add_ex_le (Ω := Ω) (r := 1 - q) (by linarith) (by linarith) m acc
+    (fun i ω => (W ω i).card) e cl hacc (fun i ω ω' h => by simp only [hW i ω ω' h]) hcl he hcl0 hesc Fmax
   calc Pr (fun ω => (∀ i, acc i ω (ω i)) ∧ ¬(∑ i, (W ω i).card < Fmax ∧ ∀ i, Good i ω))
       ≤ Pr (fun ω => ((∀ i, acc i ω (ω i)) ∧ Fmax ≤ ∑ i, (W ω i).card) ∨
           ∃ i ∈ (univ : Finset (Fin m)), acc i ω (ω i) ∧ ¬Good i ω) := by
@@ -396,8 +333,27 @@ theorem pr_pooled_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} (acc : Fin
           exact Or.inr ⟨i, mem_univ i, hall i, hi⟩
         · exact Or.inl ⟨hall, not_lt.1 hlt⟩
     _ ≤ _ := Pr_or_le _ _
-    _ ≤ ((1 - q) ^ Fmax + ∑ i, e i) + ∑ i, e' i :=
+    _ ≤ ((1 - q) ^ Fmax + ∑ i, e i + Ex fun ω => ∑ i, cl i ω (ω i)) + ∑ i, e' i :=
         add_le_add hmiss ((Pr_exists_mem_le_sum univ _).trans (sum_le_sum fun i _ => hleak i))
+
+/-- **The monitoring period's bound at any good event of an execution phase**: every audit accepts while the incorrect
+sets hold `Fmax` proof blocks or more, or some phase's good event fails, with probability at most
+`(1 - q)^Fmax + Σ e + Σ e'`: `pr_pooled_ex_le` at the charge zero. -/
+theorem pr_pooled_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} (acc : Fin m → (Fin m → Ω) → Ω → Prop)
+    (hacc : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → acc i ω = acc i ω') (W : (Fin m → Ω) → Fin m → Finset ℕ)
+    (hW : ∀ i ω ω', (∀ j, j < i → ω j = ω' j) → W ω i = W ω' i) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ)
+    (hq0 : 0 ≤ q) (hq1 : q ≤ 1) (hesc : ∀ i ω, Pr (acc i ω) ≤ (1 - q) ^ (W ω i).card + e i)
+    (Good : Fin m → (Fin m → Ω) → Prop) (hleak : ∀ i, Pr (fun ω => acc i ω (ω i) ∧ ¬Good i ω) ≤ e' i) (Fmax : ℕ) :
+    Pr (fun ω => (∀ i, acc i ω (ω i)) ∧ ¬(∑ i, (W ω i).card < Fmax ∧ ∀ i, Good i ω)) ≤
+      (1 - q) ^ Fmax + ∑ i, e i + ∑ i, e' i := by
+  have h := pr_pooled_ex_le acc hacc W hW e e' he (fun _ _ _ => 0) (fun _ _ _ _ => rfl) (fun _ _ _ => le_rfl) q hq0
+    hq1
+    (fun i ω => by
+      simp only [Ex_const, add_zero]
+      exact hesc i ω)
+    Good hleak Fmax
+  simp only [Finset.sum_const_zero, Ex_const, add_zero] at h
+  exact h
 
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.PooledLeakAccepted`, from
 `pr_pooled_le` at the leak relations, `(1 - q)^Fmax ≤ δ` at `Fmax ≥ ln(1/δ)/q`, and `encard_pooledGood_le` at each sample
