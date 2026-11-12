@@ -32,14 +32,18 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     interior record's `window.run`, `k` its template's position among the parts, `posOf`), and its
     `frame_v3.bindings` are each of its `frame_v3.schemas` ports' bindings in the run (`portBinding`: the window-domain
     rule over the interior record's program, partition and that port's leaves, a port a wire names its writer's output
-    port's, `heldPort`): the verifier computes both, so the prover chooses neither;
+    port's, `heldPort`): the verifier computes both, so the prover chooses neither. For a statement of only its part's
+    sampled proof blocks the reference is also placed at those slots (`atSampled`): its `range` and `units.classes`
+    theirs, and each port of its `shared_rows` the rows the statement's registered reads give them;
   - `second-population`: its header's `units.indices` are not its part's slots in order, or its `instances` not their
-    count, or more than `2^64` (`MAX_LEAVES`);
+    count, or more than `2^64` (`MAX_LEAVES`); or, for a statement of only its part's sampled proof blocks
+    (`sampledOnly`, `sampledCodes`), not the part's slots the second draw samples and no other (`sampledOk`);
   - `second-roots`: its scheme is not the interior record's, or its `frame_v3` roots and `domain_ids`, its registered
     reads aside, are not the record's for its template's ports (port `p` of template `t` is the record's `t/p` when the
     record names its ports by template, else `p`), each of which it roots or reads;
   - `second-sample`: its sample is not the verifier's own, the second draw's units in its part as a subset of its slots
-    (`ownDraw`);
+    (`ownDraw`); or, for a statement of only its part's sampled proof blocks, not every unit of the statement
+    (`wholeDraw`);
   - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
     each slot reading only its unit's row of its cell's replay block's (`S[i]·r + ρ(j)`, `r` the port's rows a block
     and `ρ` its units' rows, the port's `Rows`, `j` the slot's unit in its cell, the port's leaves the boundary
@@ -813,6 +817,65 @@ def ownDraw (q : Nat) (p : Part) (drawn : Array Nat) : Json :=
   Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson (q * p.n)), ("k", Lean.toJson units.size),
     ("units", natsJson units)]
 
+/-- Part `p`'s slots among the second draw's units `drawn`, in the draw's order. -/
+def sampledSlots (q : Nat) (p : Part) (drawn : Array Nat) : Array Nat := drawn.filter (p.holds q)
+
+/-- The header's `units.indices` are part `p`'s slots the second draw samples (`sampledSlots`) and no other, at least
+one, and its `instances` their count: the header of a statement of only its part's sampled proof blocks. -/
+def sampledOk (q : Nat) (p : Part) (drawn : Array Nat) (h : Json) : Bool :=
+  let slots := sampledSlots q p drawn
+  match getD (getD h "units") "indices", nat? (getD h "instances") with
+  | .arr is, some m => decide (0 < m) && m == slots.size && is.toList.map nat? == slots.toList.map some
+  | _, _ => false
+
+/-- Header `h` is of only part `p`'s sampled proof blocks (`sampledOk`), and not of every slot of the part
+(`populationOk`): where the second draw samples every slot the two are one header, held as the part's whole. -/
+def sampledOnly (q : Nat) (p : Part) (drawn : Array Nat) (h : Json) : Bool :=
+  sampledOk q p drawn h && !populationOk q p h
+
+/-- The rows registered-reads entry `e` gives slots `slots` (slot `reads_from + k` reads row `reads[k]`), each once. -/
+def rowsRead (e : Json) (slots : Array Nat) : Nat :=
+  let f := match getD e "reads_from" with | .null => 0 | x => (nat? x).getD 0
+  match getD e "reads" with
+  | .arr rs => ((slots.toList.filterMap fun u => if u < f then none else (rs[u - f]?).bind nat?).eraseDups).length
+  | _ => 0
+
+/-- Reference header `r`, placed in the run, **at the slots a statement of only its part's sampled proof blocks
+holds**: its `range` those `slots.size` instances', its `units.classes` its first `slots.size`, and each port of its
+`shared_rows` the rows the statement's registered reads `reads` give those slots (`rowsRead`), a port they don't read
+left as it is; a field the reference lacks stays absent. -/
+def atSampled (r : Json) (slots : Array Nat) (reads : Array (String × Json)) : Json :=
+  let k := slots.size
+  let r := match field? r "range" with
+    | some _ => putAt (Json.arr #[Lean.toJson (0 : Nat), Lean.toJson k]) r ["range"]
+    | none => r
+  let r := match getD (getD r "units") "classes" with
+    | .arr cs => putAt (Json.arr (cs.extract 0 k)) r ["units", "classes"]
+    | _ => r
+  match getD r "shared_rows" with
+  | .obj _ => putAt (Json.mkObj ((entries (getD r "shared_rows")).toList.map fun (p, n) =>
+      (p, match reads.find? (·.1 == p) with
+        | some (_, e) => Lean.toJson (rowsRead e slots)
+        | none => n))) r ["shared_rows"]
+  | _ => r
+
+/-- `headerOk` for a statement of only its part's sampled proof blocks `slots`, reading `reads` registered: its header
+is its template's reference header placed in the run (`atRun`) and at those slots (`atSampled`), but for the run's
+fields. -/
+def sampledHeaderOk (own : Own) (named : Bool) (k : Nat) (t : String) (h : Json) (slots : Array Nat)
+    (reads : Array (String × Json)) : Bool :=
+  match refOf own t with
+  | some r => match atRun own named k t r with
+    | some r' => jeq (blankRun h) (blankRun (atSampled r' slots reads))
+    | none => false
+  | none => false
+
+/-- **The sample of every unit** of a population of `m`, as `unit_draw` writes a subset of it: the session's sample
+of a statement of only its part's sampled proof blocks. -/
+def wholeDraw (m : Nat) : Json :=
+  Json.mkObj [("law", Json.str "subset"), ("population", Lean.toJson m), ("k", Lean.toJson m),
+    ("units", natsJson (Array.range m))]
+
 /-- Value `v`'s entry among registration `rec`'s registered values. -/
 def registeredEntry (rec : Json) (v : String) : Option Json :=
   (match getD rec "registered" with | .arr es => es | _ => #[]).find? fun e => jsonStrIs (getD e "value") v
@@ -994,14 +1057,36 @@ def stmtCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : List 
    ("second-values", valuesOk own s)].filterMap
     fun (code, ok) => if ok then none else some code
 
+/-- `stmtCodes` for a statement of only its part `p`'s sampled proof blocks (`sampledOnly`): its population is the
+part's slots the second draw samples (`sampledOk`), its header its template's reference's placed at them
+(`sampledHeaderOk`), and its session's sample every unit of it (`wholeDraw`). Every other check is `stmtCodes`'s: its
+reads each slot's own rows, a read of a slot it doesn't hold bound to that slot's rows all the same; and every root it
+names outside its reads the interior record's, so a statement whose tables hold fewer rows than the record's trees
+reads every port registered. -/
+def sampledCodes (own : Own) (named : Bool) (k : Nat) (p : Part) (s : Stmt) : List String :=
+  let q := own.sample.size
+  let reads := entries (getD s.registered "ports")
+  [("second-verified", verifiedOk own s),
+   ("second-tables", tablesOk own s),
+   ("second-header", sampledHeaderOk own named k s.template s.header (sampledSlots q p own.drawn) reads),
+   ("second-population", sampledOk q p own.drawn s.header),
+   ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
+   ("second-sample", jeq s.draw (wholeDraw (sampledSlots q p own.drawn).size)),
+   ("second-read", reads.all (fun (port, e) => readOk own named p port e) && linkedRead own p.template reads &&
+     wiredRead own p.template reads),
+   ("second-refs", refsOk s),
+   ("second-values", valuesOk own s)].filterMap
+    fun (code, ok) => if ok then none else some code
+
 def detailOf (i : Nat) (t : Json) : Json := Json.mkObj [("statement", Lean.toJson i), ("template", t)]
 
 /-- The templates statements `ss` are for, those that are statements. -/
 def templates (ss : List Json) : List String := ss.filterMap fun j => (Stmt.ofJson? j).map (·.template)
 
 /-- Statement `i` of `ss`'s failures, `(code, detail)` each: `second-statement` for one that is not a statement,
-`second-template` for one for no part's template or an earlier statement's, else its failing checks, its header placed
-at its template's position (`posOf`). -/
+`second-template` for one for no part's template or an earlier statement's, else its failing checks (`sampledCodes`
+for one of only its part's sampled proof blocks, `sampledOnly`; else `stmtCodes`), its header placed at its template's
+position (`posOf`). -/
 def stmtFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : List (String × Json) :=
   match Stmt.ofJson? (ss.getD i .null) with
   | none => [("second-statement", detailOf i .null)]
@@ -1009,7 +1094,8 @@ def stmtFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : List
     match ps.find? (·.template == s.template) with
     | some p =>
       if (templates (ss.take i)).contains s.template then [("second-template", detailOf i (.str s.template))]
-      else (stmtCodes own (byTemplate own.interior) (posOf ps s.template) p s).map
+      else ((if sampledOnly own.sample.size p own.drawn s.header then sampledCodes else stmtCodes)
+          own (byTemplate own.interior) (posOf ps s.template) p s).map
         fun c => (c, detailOf i (.str s.template))
     | none => [("second-template", detailOf i (.str s.template))]
 

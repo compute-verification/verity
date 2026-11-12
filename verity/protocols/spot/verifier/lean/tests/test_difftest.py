@@ -4465,6 +4465,40 @@ def _shared_at(c: dict, i: int, ports, reads=()) -> dict:
             "verdicts": {**changed["verdicts"], "lean": {**lean, **({"registered": reported} if reported else {})}}}
 
 
+def _sampled_at(c: dict, i: int) -> dict:
+    """`c` with its `i`-th statement of only its part's sampled proof blocks: its header's slots the second stage's
+    units among the part's, in the draw's order, its instances, range and classes theirs, each port it shares rows at a
+    table of the rows its registered reads give those slots, and at each port it reads registered a root of that
+    table's own, which round 2 doesn't hold to the interior record; its sample every unit of it, and its session
+    checked as it states it."""
+    s = c["statements"][i]
+    h = s["header"]
+    lo, m = h["units"]["indices"][0], h["instances"]
+    slots = [u for u in c["drawn"] if lo <= u < lo + m]
+    k, ports = len(slots), (s["registered"] or {}).get("ports", {})
+    header = {**h, "instances": k, "range": [0, k],
+              "units": {**h["units"], "indices": slots, "blocks": [[u] for u in slots],
+                        "classes": h["units"]["classes"][:k]},
+              "frame_v3": {**h["frame_v3"], "roots": {p: _sha(f"sampled/{p}".encode()) if p in ports else r
+                                                      for p, r in h["frame_v3"]["roots"].items()}}}
+    if "shared_rows" in h:
+        header["shared_rows"] = {
+            p: len({ports[p]["reads"][u - ports[p]["reads_from"]] for u in slots}) if p in ports else n
+            for p, n in h["shared_rows"].items()}
+    return _second_with(c, i, header=header, draw={"law": "subset", "population": k, "k": k, "units": list(range(k))})
+
+
+def _sampled(c: dict, x: int) -> dict:
+    """`c` with one of its statements, its `x`-th, of only its part's sampled proof blocks (`_sampled_at`), reading its
+    own `out` registered too (`_shared_at`), its header sharing rows at both ports or at none; `c` where it has no such
+    statement."""
+    try:
+        i = x % len(c["statements"])
+        return _sampled_at(_shared_at(c, i, ("out", "x") if x // 8 % 2 else (), reads=("out",)), i)
+    except (AttributeError, IndexError, KeyError, StopIteration, TypeError, ValueError, ZeroDivisionError):
+        return c
+
+
 def _shared_rows(c: dict, x: int) -> dict:
     """`c` with its first statement's header sharing rows (``shared_rows``) at its `frame_v3` ports, at the ports it
     reads registered, or at none, its template's reference sharing them too or not."""
@@ -4732,8 +4766,11 @@ def _shadowing(c: dict, x: int) -> dict:
 #: reference reads it or another (`_read_registered`), a value only the interior registers read (`_read_interior`),
 #: the interior registering a value of a name the boundary record has (`_shadowing`), the names of what the replay
 #: block returns or the interior registering one's value (`_returned`), the interior record's replay
-#: sample or run (`_reordered`), or the rows a header shares (`_shared_rows`).
+#: sample or run (`_reordered`), the rows a header shares (`_shared_rows`), or a statement of only its part's sampled
+#: proof blocks (`_sampled`).
 SECOND_CHANGES = [
+    _sampled,
+    _sampled,
     lambda c, x: {**c, "statements": _shifted(c["statements"], 1 + x % 3)},
     lambda c, x: _as_stated({**c, "statements": _shifted(c["statements"], 1 + x % 3)}),
     _relinked,
@@ -6846,6 +6883,64 @@ def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(
             **both["statements"][0]["registered"]["ports"], "x": {**mine, "reads": mine["reads"][::-1]}}}),
          ["second-read"]),
         ({**both, "refs": own["refs"]}, ["second-header"]),
+    ]
+    for case, codes in cases:
+        got = second_statements(copy.deepcopy(case))
+        assert D.replay(SECOND_STATEMENTS, case, pieces) == ("output", D.canonical(got)), (codes, got)
+        assert got["codes"] == codes and got["ok"] == (codes == []), (codes, got)
+
+
+def test_round_two_takes_a_statement_of_only_its_sampled_blocks(pieces):
+    """A statement of only its part's sampled proof blocks, Lean's the Python's whole, over the two-template interior
+    after a replay sample of two, PAIR reading its own `x` and `out` and TRIPLE its linked `x` at the boundary and its
+    own `out`, each header sharing rows at both ports. PAIR's statement of its two sampled slots passes, its session's
+    sample both of them, as do both parts' so stated, and one beside a statement of every slot: its header's roots at
+    the ports it reads registered are its own tables', which round 2 doesn't hold to the interior record, and its
+    reads are each slot's own rows, the reference's but for the run's fields. Refused: a slot more or one fewer than
+    the sample's, or the slots out of the draw's order (`second-population`, the statement then held as one of every
+    slot); a sample of some of its units, or the part's own sample (`second-sample`); a `range`, a class count or a
+    shared table's row count other than the slots' (`second-header`); a port left unread, at a root that isn't the
+    interior record's (`second-roots`, with `second-values` and `second-refs` where the reference reads it and the
+    header shares rows at it); and a sampled slot read at another slot's row (`second-read`)."""
+    pair, triple = SECOND_MIXED.templates
+    sample, drawn = [0, 2], [1, 4, 6, 9]
+    own = _second_case(SECOND_MIXED, True, sample, drawn, links={triple}, own={pair}, allow=True)
+    whole = _shared_at(_shared_at(own, 0, ("out", "x"), reads=("out",)), 1, ("out", "x"), reads=("out",))
+    one, both = _sampled_at(whole, 0), _sampled_at(_sampled_at(whole, 0), 1)
+    s0 = one["statements"][0]
+    h, reads = s0["header"], s0["registered"]["ports"]
+    assert h["units"]["indices"] == [1, 4] and h["shared_rows"] == {"out": 2, "x": 2} and h["range"] == [0, 2]
+    assert both["statements"][1]["header"]["units"]["indices"] == [6, 9]
+    assert h["frame_v3"]["roots"] != whole["statements"][0]["header"]["frame_v3"]["roots"]
+    unread = {**s0["registered"], "ports": {"x": reads["x"]}}
+
+    def units(**change) -> dict:
+        return {**h, "units": {**h["units"], **change}}
+    cases = [
+        (whole, []),
+        (one, []),
+        (both, []),
+        ({**one, "allow": False}, ["two-stage-form"]),
+        (_second_with(one, 0, header={**units(indices=[1, 4, 5]), "instances": 3}),
+         ["second-header", "second-population", "second-sample"]),
+        (_second_with(one, 0, header={**units(indices=[1]), "instances": 1}),
+         ["second-header", "second-population", "second-sample"]),
+        (_second_with(one, 0, header=units(indices=[4, 1])), ["second-header", "second-population", "second-sample"]),
+        (_second_with(one, 0, header=units(indices=[1, 5])), ["second-header", "second-population", "second-sample"]),
+        (_second_with(one, 0, draw={"law": "subset", "population": 2, "k": 1, "units": [0]}), ["second-sample"]),
+        (_second_with(one, 0, draw=whole["statements"][0]["draw"]), ["second-sample"]),
+        (_second_with(one, 0, header={**h, "range": [0, 6]}), ["second-header"]),
+        (_second_with(one, 0, header=units(classes=whole["statements"][0]["header"]["units"]["classes"])),
+         ["second-header"]),
+        (_second_with(one, 0, header={**h, "shared_rows": {"out": 2, "x": 3}}), ["second-header"]),
+        (_second_with(one, 0, header={**h, "shared_rows": whole["statements"][0]["header"]["shared_rows"]}),
+         ["second-header"]),
+        (_second_with(one, 0, registered=unread), ["second-header", "second-roots", "second-refs", "second-values",
+                                                   "second-reported"]),
+        (_second_with(one, 0, registered={**s0["registered"], "ports": {
+            **reads, "x": {**reads["x"], "reads": reads["x"]["reads"][::-1]}}}), ["second-read"]),
+        (_second_with(one, 0, registered={**s0["registered"], "ports": {
+            **reads, "out": {**reads["out"], "reads": [r + 1 for r in reads["out"]["reads"]]}}}), ["second-read"]),
     ]
     for case, codes in cases:
         got = second_statements(copy.deepcopy(case))
