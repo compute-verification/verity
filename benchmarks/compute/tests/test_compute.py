@@ -424,3 +424,129 @@ def test_under_a_research_run_the_printed_document_is_also_its_output(store, tmp
     store.add(RUN, a_record(tmp_path / "run", ANSWER=to("verdict", value="reject")))
     (out / "compute.json").unlink()
     assert bench(store, "--from", RUN) == 1 and not (out / "compute.json").exists()
+
+
+#: the fixture's give-up, TOTAL less CREDITED, by cause: the verify document's split puts 4 excluded A rows in call 6
+#: and 1 in call 70, ε's deduction on calls 2 and 71, and holds 120,150,994,944 of the linears' MACs
+GIVE_UP = {"lm_head": 4_202_692_608, "attention": 165_150_720, "outside": 16_079_998_976, "excluded_a": 150_994_944,
+           "excluded_b": 0, "voluntary": 0, "kept_width": 0, "epsilon_macs": Fraction(5_700_348_825_400, 399),
+           "over_cap_macs": 0, "rho_macs": Fraction(210_898_255_873, 798), "floor": Fraction(1, 2)}
+
+
+def resum(doc: dict) -> None:
+    """Restate a verify document's split totals as its calls' sums, as the verifier states them."""
+    got, sums = doc["uncredited"], {}
+    for c in got["calls"]:
+        for x, v in (("macs", c["macs"]), ("checked_macs", c["checked_macs"]), *c["uncredited_macs"].items(),
+                     *((x, Fraction(c[x])) for x in C.TERMS)):
+            sums[x] = sums.get(x, 0) + v
+    got["totals"] = {**{x: str(v) if isinstance(v, Fraction) else v for x, v in sums.items()},
+                     "credited": int(sums["credited_macs"])}
+
+
+def moved(n: Fraction) -> Callable[[dict], None]:
+    """An edit that moves `n` MACs of call 71's ε deduction to its credit, ρ taking its share, and restates the totals."""
+    def edit(doc: dict) -> None:
+        c = doc["uncredited"]["calls"][3]
+        c["epsilon_macs"] = str(Fraction(c["epsilon_macs"]) - n)
+        c["rho_macs"] = str(Fraction(c["rho_macs"]) + Fraction(n, 400))
+        c["credited_macs"] = str(Fraction(c["credited_macs"]) + Fraction(399 * n, 400))
+        resum(doc)
+    return edit
+
+
+def test_per_call_prints_the_give_up_by_cause_and_the_calls_that_give_up_the_most(store, tmp_path, capsys):
+    """`--per-call` reads the verify document beside the answer, and only then: the causes sum to the model's MACs less
+    the credit exactly, and the calls are ordered by what each gives up, named by their linear where the model's shape
+    has one."""
+    store.add(RUN, a_record(tmp_path))
+    assert bench(store, "--from", RUN) == 0 and "per_call" not in printed(capsys)[1]
+    assert store.fetched == [C.RECORDS]
+    assert bench(store, "--from", RUN, "--per-call", "--top", "2") == 0
+    text, doc, err = printed(capsys)
+    assert err == "" and store.fetched[-1] == [*C.RECORDS, C.VERIFY] and doc["value"] == 0.75
+    got = doc["per_call"]
+    assert got["give_up"] == TOTAL - CREDITED == sum(GIVE_UP.values()) and got["calls"] == 4 and got["source"] == C.VERIFY
+    assert [(c["cause"], Fraction(c["macs"])) for c in got["causes"]] == list(GIVE_UP.items())
+    assert sum(Fraction(c["macs"]) for c in got["causes"]) == got["give_up"]
+    assert [(c["call"], c["linear"]) for c in got["top"]] == [(71, "1x1"), (2, "gate_up")]
+    assert got["top"][1]["causes"] == {"epsilon_macs": "3000000001/3", "rho_macs": "9884901887/1200"}
+    assert text[7:] == [
+        "  per call: the model gives up 35,149,709,312 of its MACs (25.00%); by cause, from the verifier's split of its 4 "
+        "calls (out/pieces/pouw/verify.json):",
+        "    LM head, which Pearl+ doesn't credit        4,202,692,608 MACs   11.96%",
+        "    attention, which Pearl+ doesn't credit        165,150,720 MACs    0.47%",
+        "    linears outside the passes                 16,079,998,976 MACs   45.75%",
+        "    excluded A rows                               150,994,944 MACs    0.43%",
+        "    excluded B rows' column blocks                          0 MACs    0.00%",
+        "    voluntary rows' bands and blocks                        0 MACs    0.00%",
+        "    side channels (k beyond |K|)                            0 MACs    0.00%",
+        "    ε's deduction                              14,286,588,535 MACs   40.64%",
+        "    draws over the inert-work bound                         0 MACs    0.00%",
+        "    ρ, the scheme's cap                           264,283,529 MACs    0.75%",
+        "    the credit's floor                                      0 MACs    0.00%",
+        "  ε's deduction is the run's, at its draws: the verifier takes it off the records whose cells hold the most MACs "
+        "a ticket, so the calls it lands on carry it for the whole run",
+        "  the 2 calls that give up the most:",
+        "    pass 1 call 71, weight 1000 1x1, 111493951488x1x1 with 111493951488 real rows: 13,532,106,942 MACs "
+        "(ε's deduction 13,286,588,535, ρ 245,518,407)",
+        "    pass 0 call 2, weight 2 gate_up, 128x2048x16384 with 128 real rows: 1,008,237,419 MACs "
+        "(ε's deduction 1,000,000,000, ρ 8,237,418)",
+    ]
+    assert bench(store, "--from", RUN, "--per-call") == 0
+    top = printed(capsys)[1]["per_call"]["top"]
+    assert [(c["call"], c["linear"], c["causes"].get("excluded_a")) for c in top] == [
+        (71, "1x1", None), (2, "gate_up", None), (6, "gate_up", "134217728"), (70, "down", "16777216")]
+
+
+@pytest.mark.parametrize("edits, why", [
+    ({"VERIFY": None}, "the record's verify document holds no per-call split (it predates it): `served_passes.py "
+                       "uncredited` writes one from the run's passes, and --uncredited reads it"),
+    ({"VERIFY": lambda d: d.pop("uncredited")}, "the record's verify document holds no per-call split (it predates it)"),
+    ({"VERIFY": lambda d: d["uncredited"].pop("totals")}, "the per-call split doesn't read as one (KeyError: 'totals')"),
+    ({"VERIFY": to("commitment", value="c1" * 64)}, "the per-call split is of another run commitment than the answer's"),
+    ({"VERIFY": lambda d: (d["uncredited"]["calls"][1].update(macs=d["uncredited"]["calls"][1]["macs"] + 1), resum(d))},
+     "the per-call split's call 6 doesn't sum: its MACs are not its checked MACs and its causes"),
+    ({"VERIFY": lambda d: d["uncredited"]["calls"][2].update(epsilon_macs="-1")},
+     "the per-call split's call 70 holds a count that is no count of MACs"),
+    ({"VERIFY": to("uncredited", "totals", "excluded_a", value=0)}, "the per-call split's totals are not its calls' sums"),
+    ({"VERIFY": moved(400)}, "the per-call split's calls credit 105,449,128,335 of 120,000,000,000 MACs and the answer "
+                             "105,449,127,936 of 120,000,000,000"),
+    ({"VERIFY": lambda d: (d["uncredited"]["calls"][3].update(macs=d["uncredited"]["calls"][3]["macs"] + 16_079_998_977,
+                                                              uncredited_macs={**d["uncredited"]["calls"][3]["uncredited_macs"],
+                                                                               "kept_width": 16_079_998_977}), resum(d))},
+     "the per-call split's calls hold 136,230,993,921 real MACs, more than the 136,230,993,920 of the class's linears"),
+])
+def test_a_per_call_split_that_is_not_the_answers_is_refused(store, tmp_path, capsys, edits, why):
+    """The split is the answer's or `--per-call` prints nothing and exits 2; moving ε's MACs to the credit by less than
+    the floor's room moves no number and is the answer's still."""
+    store.add(RUN, a_record(tmp_path, **edits))
+    assert bench(store, "--from", RUN, "--per-call") == 2
+    out, err = capsys.readouterr()
+    assert out == "" and f"compute: {why}" in err
+    store.add(RUN, a_record(tmp_path / "again", VERIFY=moved(Fraction(1, 2))))
+    assert bench(store, "--from", RUN, "--per-call") == 0
+    assert printed(capsys)[1]["per_call"]["causes"][-1] == {"cause": "floor", "macs": "799/800",
+                                                            "share": float(Fraction(799, 800) / (TOTAL - CREDITED))}
+
+
+def test_per_call_reads_served_passes_split_for_a_record_that_predates_it(store, tmp_path, capsys):
+    """``--uncredited F`` reads ``served_passes.py uncredited``'s file in place of the verify document, which isn't
+    fetched, and holds its passes' records to the answer's where the answer names them."""
+    split = json.loads((RECORD / "pieces/pouw/verify.json").read_text())["uncredited"]
+    given = tmp_path / "uncredited.json"
+    given.write_text(json.dumps({"schema": split["schema"], "verify": "verify.json", "commitment": "c0" * 64,
+                                 "records": ["aa" * 64, "bb" * 64], "uncredited": split}))
+    passes = [{"records": "aa" * 64}, {"records": "bb" * 64}]
+    store.add(RUN, a_record(tmp_path, VERIFY=None, ANSWER=to("public", "passes", value=passes)))
+    assert bench(store, "--from", RUN, "--per-call", "--uncredited", str(given)) == 0
+    doc = printed(capsys)[1]
+    assert store.fetched == [C.RECORDS] and doc["per_call"]["source"] == str(given)
+    assert [Fraction(c["macs"]) for c in doc["per_call"]["causes"]] == list(GIVE_UP.values())
+    store.add(RUN, a_record(tmp_path / "other", VERIFY=None, ANSWER=to("public", "passes", value=passes[::-1])))
+    assert bench(store, "--from", RUN, "--per-call", "--uncredited", str(given)) == 2
+    assert "compute: the per-call split's passes' records are not the answer's" in capsys.readouterr().err
+    for argv in (["--uncredited", str(given)], ["--top", "3"]):
+        with pytest.raises(SystemExit) as e:
+            bench(store, "--from", RUN, *argv)
+        assert e.value.code == 2 and "--uncredited and --top go with --per-call" in capsys.readouterr().err

@@ -32,7 +32,8 @@ from collections import Counter
 from collections.abc import Collection, Iterable, Iterator
 from typing import Any
 
-from verity_vllm.commit import challenge as CH, json_chunks as JC
+from verity_vllm.commit import challenge as CH, executed_prefix as _EPX, json_chunks as JC
+from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, runtime_place, split_name
 from verity_vllm.query.manifest.format import MOE_PLANES, batch_launch_shortfall
 from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported
@@ -82,6 +83,7 @@ class LaunchIdentity(tuple):
     """A batch-level hidden identity (member `*`: one per request a B>1 launch row lists, at its engine step) and the launch the op's
     committed stream must carry there: `launch` = {"geometry": the row's launch geometry, "rows": {r<i>: token rows} of the step's declared
     composition} (`format.batch_launch_shortfall`).  It equals its identity tuple: the population's digest and record read the identity only."""
+    launch: dict[str, Any]
 
     def __new__(cls, ident: tuple, launch: dict[str, Any] | None = None) -> LaunchIdentity:
         self = super().__new__(cls, ident)
@@ -334,8 +336,6 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     # the manifest is an INPUT the consumer must not trust blindly: its `manifest_digest` is recomputed
     # over the rows it carries (a manifest edited after digesting is refused); a zero-width identity is refused, never
     # "vacuously covered"; a request id that is not `r<k>` / `*` (nor resolvable through requests_declared) is refused.
-    from verity_vllm.query.manifest import format as MF
-
     if doc.get("schema") != MF.SCHEMA:
         raise ValueError(f"required manifest {path}: schema {doc.get('schema')!r} is not {MF.SCHEMA!r}: refused")
     if not isinstance(doc.get("program_digest"), str) or not doc.get("program_digest"):
@@ -402,8 +402,6 @@ def load_required_manifest(path: str, program_digest: str, *, requests: list[str
     # the classification is ON THE RECORD by family / request / kind so the population's third bucket
     # (sampled_replay.population.not_executed_by_rule) reconciles against it identity-count by identity-count (executed_prefix.reconcile_not_executed);
     # the manifest of record is not edited: rows_n / manifest_digest above are the file's
-    from verity_vllm.commit import executed_prefix as _EPX
-
     hdr["not_executed_by_rule"] = None if executed is None else _EPX.new_classification()
     for r in rows:
         ident = r.get("identity") or r
@@ -620,8 +618,7 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
     executed_of = None if request_steps is None else {str(k): {int(x) for x in v} for k, v in request_steps.items()}
     restricted = None
     if request_steps is not None and not padded:
-        from verity_vllm.commit.executed_prefix import restrict_engine_steps
-        steps, restricted = restrict_engine_steps(steps, request_steps)
+        steps, restricted = _EPX.restrict_engine_steps(steps, request_steps)
     ref = man_hdr.get("composition_reference") or {}
     tok, samp = ref.get("input_token_ids"), ref.get("sampled_token_ids")
     if not tok:
@@ -736,7 +733,7 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
 # ---------------------------------------------------------------------- sampling from the expected population
 
 def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_root: bytes, k: int, *, salt: bytes = b"",
-                         forced_late_step: bool = True, source: bytes | None) -> list[tuple[tuple, dict[str, Any], int]]:
+                         forced_late_step: bool = True, source: bytes | None) -> list[tuple[tuple, dict[str, Any] | None, int]]:
     """Sample `k` identities from the EXPECTED population (not from the leaves that exist) with `challenge.identity_picker` over
     (source, run_root, map digest, salt), `source` the run's identities coin; map each to one committed leaf of its binding
     (a leaf chosen by the same picker inside the entry's leaf range).  Forced picks: the
@@ -759,7 +756,7 @@ def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_
         fam = p[4].split(".")[-1].split("/")[0] if not p[4].startswith(HIDDEN_FAMILIES) else p[4].split("/")[0]
         fams.setdefault(fam, p)
     chosen.extend(fams.values())
-    out = []
+    out: list[tuple[tuple, dict[str, Any] | None, int]] = []
     op_keys = _op_key_index(idx)
     for j, ident in enumerate(chosen):
         pd, rid, st, inv, op, mem, (lo, hi), rk = ident

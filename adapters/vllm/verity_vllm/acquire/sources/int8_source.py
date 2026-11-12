@@ -18,10 +18,14 @@ and acquire their results on their device.
 from __future__ import annotations
 
 import time
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.acquire.sources.call_boundary_plan import FAMILY
+from verity_vllm.log import init_logger
 from verity_vllm.query.manifest.bind import Port
+
+logger = init_logger(__name__)
 
 SHORT_NAME = "int8"
 QUANT_SPEC = "Int8RowQuant_v1"
@@ -262,12 +266,12 @@ def attach(com: Any, enabled: bool, manifest: Mapping[str, Any] | None, required
         return required_classes, None
     quant, kv = quant_sites(manifest), kv_modules(manifest)
     if not quant and not kv:
-        print("[delta] REFUSE: the int8 source but the required-value manifest names no Int8RowQuant_v1 call boundary and no "
-              "Int8KvQuant_v1 output", flush=True)
+        logger.error("[delta] REFUSE: the int8 source but the required-value manifest names no Int8RowQuant_v1 call boundary and no "
+                     "Int8KvQuant_v1 output")
         raise SystemExit(3)
     src = Int8Source(com, model if model is not None else getattr(com, "model", None), quant, kv)
     com.attach_source(src)
-    print(f"[delta] int8 source attached: {len(quant)} row_quant sites, {len(kv)} kv_quant modules -> committer {com.name}", flush=True)
+    logger.info("[delta] int8 source attached: %d row_quant sites, %d kv_quant modules -> committer %s", len(quant), len(kv), com.name)
     if quant and not explicit_classes and FAMILY not in required_classes:
         return (*required_classes, FAMILY), src
     return required_classes, src
