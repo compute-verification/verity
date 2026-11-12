@@ -20,8 +20,9 @@ import pytest
 from verity.errors import InvalidArtifact
 from verity.hardware import cards, nodes
 from verity.hardware.cards import MARKS
-from verity.hardware.site import (NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, Entry, Link, Loc,
-                                  Malformed, Refused, Registration, Sheet, check, refusal)
+from verity.hardware.site import (NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, Entry, HostFigures,
+                                  Link, Loc, Malformed, Refused, Registration, Sheet, Site, check, node_figures,
+                                  refusal)
 
 HOST = "host0"
 """The id a test registers a node's host under: a node file names none."""
@@ -53,9 +54,14 @@ def entries(table: dict, at: str = "") -> dict[str, dict]:
     return out
 
 
-def auditor(**keys: str) -> Auditor:
-    """The auditor whose data sheets are the GPU card files', with these keys of its own devices, each of `SCHEME`."""
-    return Auditor.of_files(map(cards.load, cards.skus("gpu")), keys={i: (k, SCHEME) for i, k in keys.items()})
+def auditor(kind: str, **keys: str) -> Auditor:
+    """The auditor whose data sheets are the GPU card files', with these keys of its own devices, each of `SCHEME`,
+    and its figures for node `kind` registered as `HOST`, which `node_figures` reads from the node's files."""
+    node = nodes.load(kind)
+    memory, host = node_figures(node, cards.load(node["host"]["sku"]), HOST, ways=nodes.ways_out(node, HOST),
+                                leaves=nodes.leaves(node, HOST))
+    return Auditor.of_files(map(cards.load, cards.skus("gpu")), keys={i: (k, SCHEME) for i, k in keys.items()},
+                            memory=memory, hosts=[(HOST, host)])
 
 
 def log_of(kind: str, composite: str, certifier: tuple[str, str, str] | None = None) -> Registration:
@@ -155,7 +161,7 @@ def test_remote_accepts_a_nodes_log(kind: str) -> None:
     node = nodes.load(kind)
     sheet = Sheet.of_file(cards.load(node["device"]["sku"]))
     count, leaves = int(cards.number(node["device"]["count"])), node.get("memory", {}).values()
-    site = check(log_of(kind, "remote"), auditor())
+    site = check(log_of(kind, "remote"), auditor(kind))
     assert site.units == tuple(f"{HOST}/gpu{i}" for i in range(count))
     assert all(site.sheet(d) == sheet and site.held(d) == sheet.mem for d in site.units)
     assert site.tiers(HOST) == {"hbm": count * sheet.mem} | {
@@ -180,7 +186,7 @@ def test_a_node_whose_interface_reads_no_rate_says_why_no_certifier_splits_it(ki
     entry = log_of(kind, "onsite").entries[0]
     assert [(k.id, k.beta, k.unmediated) for k in entry.links] == [
         (f"{HOST}/eth0", None, NO_LINE_RATE), (f"{HOST}/storage", 5_293_292_307_696, STORAGE_PATH)]
-    keys = auditor(**{CHALLENGER: "dummy-key"})
+    keys = auditor(kind, **{CHALLENGER: "dummy-key"})
     assert refusal(Registration("onsite"), entry, keys) == "challenger-reach"
     assert not check(Registration("onsite", (reached(entry),)), keys).mediated
     for composite in ("remote", "onsite"):
@@ -201,7 +207,7 @@ def test_onsite_refuses_a_nodes_own_ways_out(kind: str, certifier: tuple[str, st
     bare = [f"{HOST}/{name}" for name in nodes.load(kind)["interface"]]
     for e in (entry, reached(entry)):
         with pytest.raises(Refused) as refused:
-            check(Registration("onsite", (e,)), auditor(**keys))
+            check(Registration("onsite", (e,)), auditor(kind, **keys))
         assert refused.value.name == "uncertified"
         assert sorted(re.findall(rf"{HOST}/\w+", refused.value.detail)) == bare
 
@@ -216,33 +222,37 @@ def test_a_certifier_links_to_one_host_and_the_outside(kind: str) -> None:
     beta = sum(way.bw for way in nodes.ways_out(nodes.load(kind), HOST) if way.split)
     assert entry.links[-2:] == (Link(f"{HOST}/{cert}", (HOST, cert), beta, 0),
                                 Link(f"{cert}/{OUTSIDE}", (cert, OUTSIDE), beta, 0))
-    assert check(log, auditor(**{CERTIFIER[0]: CERTIFIER[1]})).far(cert) == [HOST, OUTSIDE]
+    assert check(log, auditor(kind, **{CERTIFIER[0]: CERTIFIER[1]})).far(cert) == [HOST, OUTSIDE]
     assert [k.id for k in entry.links if cert in k.ends] == [f"{HOST}/{cert}", f"{cert}/{OUTSIDE}"]
     blind = replace(entry, links=entry.links[:-1])
     second = replace(entry, locs=(*entry.locs, Loc("host1", "host", "site")),
                      links=(*entry.links, Link(f"host1/{cert}", ("host1", cert), beta, 0)))
     for e in (blind, second):
-        assert refusal(Registration("remote"), e, auditor(**{CERTIFIER[0]: CERTIFIER[1]})) == "kind"
+        assert refusal(Registration("remote"), e, auditor(kind, **{CERTIFIER[0]: CERTIFIER[1]})) == "kind"
 
 
 @pytest.mark.parametrize("kind", WIRED)
 def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_certifier(kind: str) -> None:
     """No rule of the Site refuses a host that has a bare link out beside a certified one: `remote` accepts the entry
     with both. `onsite` refuses it by `uncertified`. With a certifier named and the interface's bare link taken out,
-    it accepts the eight-card node, storage path and all, since that link says why no certifier splits it: a
+    takes the eight-card node's entry, storage path and all, since that link says why no certifier splits it: a
     certifier on the interface does not mediate the disks, so the site is not mediated. Without the path's link too,
-    it is."""
+    it is. Either log is refused at its end by `inventory`: the auditor's figures list the ways the entry left out."""
     keys = {CHALLENGER: "dummy-key", **{CERTIFIER[0]: CERTIFIER[1]}}
     ports = [f"{HOST}/{name}" for name in nodes.load(kind)["interface"]]
-    site = check(log_of(kind, "remote", CERTIFIER), auditor(**keys))
+    site = check(log_of(kind, "remote", CERTIFIER), auditor(kind, **keys))
     assert [(k.id, site.certified(k)) for k in site.boundary(HOST)] == [
         *((port, False) for port in ports), (f"{HOST}/storage", False), (f"{HOST}/{CERTIFIER[0]}", True)]
     entry = reached(log_of(kind, "onsite", CERTIFIER).entries[0])
-    assert refusal(Registration("onsite"), entry, auditor(**keys)) == "uncertified"
+    assert refusal(Registration("onsite"), entry, auditor(kind, **keys)) == "uncertified"
     stored = replace(entry, links=tuple(k for k in entry.links if k.id not in ports))
-    assert not check(Registration("onsite", (stored,)), auditor(**keys)).mediated
     certified = replace(entry, links=tuple(k for k in entry.links if OUTSIDE not in k.ends or CERTIFIER[0] in k.ends))
-    assert check(Registration("onsite", (certified,)), auditor(**keys)).mediated
+    for e, mediated in ((stored, False), (certified, True)):
+        assert refusal(Registration("onsite"), e, auditor(kind, **keys)) is None
+        assert Site.of_log([e]).mediated is mediated
+        with pytest.raises(Refused) as refused:
+            check(Registration("onsite", (e,)), auditor(kind, **keys))
+        assert (refused.value.name, refused.value.entry) == ("inventory", 1) and ports[0] in refused.value.detail
 
 
 @pytest.mark.parametrize("kind", WIRED)
@@ -252,16 +262,16 @@ def test_a_certifiers_key_is_the_one_the_auditor_holds_for_its_id(kind: str, hel
     entry by `owner`; with the caller's key under the caller's id it is accepted."""
     log = log_of(kind, "remote", CERTIFIER)
     with pytest.raises(Refused) as refused:
-        check(log, auditor(**held))
+        check(log, auditor(kind, **held))
     assert refused.value.name == "owner" and CERTIFIER[0] in refused.value.detail
-    assert check(log, auditor(**{CERTIFIER[0]: CERTIFIER[1]})).registered(CERTIFIER[0])
+    assert check(log, auditor(kind, **{CERTIFIER[0]: CERTIFIER[1]})).registered(CERTIFIER[0])
 
 
 def test_the_quoted_bytes() -> None:
     """Each node's tiers, so a changed entry is a changed number here."""
-    assert check(log_of("rtx-pro-6000-server-x8", "remote"), auditor()).tiers(HOST) == {
+    assert check(log_of("rtx-pro-6000-server-x8", "remote"), auditor("rtx-pro-6000-server-x8")).tiers(HOST) == {
         "hbm": 8 * 103_079_215_104, "dram": 1_872_605_741_056, "disk": 274_877_906_944 + 1_048_576 + 5_991_479_377_920}
-    assert check(log_of("h200-sxm-141gb-x1", "remote"), auditor()).tiers(HOST) == {
+    assert check(log_of("h200-sxm-141gb-x1", "remote"), auditor("h200-sxm-141gb-x1")).tiers(HOST) == {
         "hbm": 151_397_597_184, "dram": 214_748_364_800, "disk": 274_877_906_944 + 1_048_576 + 499_289_948_160}
 
 
@@ -270,12 +280,35 @@ def test_the_quoted_rates() -> None:
     at the 5,584,738,461,544 bit/s that bound its disks together, and the H200 node's interface at none, since it
     reads no rate, and its storage path at 5,293,292,307,696 bit/s. The storage paths and the interface that reads no
     rate say why no certifier splits them."""
-    assert check(log_of("rtx-pro-6000-server-x8", "remote"), auditor()).links == (
+    assert check(log_of("rtx-pro-6000-server-x8", "remote"), auditor("rtx-pro-6000-server-x8")).links == (
         Link(f"{HOST}/eth0", (HOST, OUTSIDE), 400_000_000_000, 0),
         Link(f"{HOST}/storage", (HOST, OUTSIDE), 5_584_738_461_544, 0, "storage path"))
-    assert check(log_of("h200-sxm-141gb-x1", "remote"), auditor()).links == (
+    assert check(log_of("h200-sxm-141gb-x1", "remote"), auditor("h200-sxm-141gb-x1")).links == (
         Link(f"{HOST}/eth0", (HOST, OUTSIDE), None, 0, "no line rate stated"),
         Link(f"{HOST}/storage", (HOST, OUTSIDE), 5_293_292_307_696, 0, "storage path"))
+
+
+def test_the_quoted_host_figures() -> None:
+    """Each node's host figures as `node_figures` reads them, so a changed card or node file is a changed number
+    here: the host's on-chip state, eight times its host card's `store.chip` in bytes; its cards; each tier's shared
+    rate, the leaves' together; and its ways out at their rates. The node's entry states the same, which its check
+    holds it to."""
+    def figures(kind: str) -> HostFigures:
+        node = nodes.load(kind)
+        return node_figures(node, cards.load(node["host"]["sku"]), HOST, ways=nodes.ways_out(node, HOST),
+                            leaves=nodes.leaves(node, HOST))[1]
+
+    assert figures("rtx-pro-6000-server-x8") == HostFigures(
+        8_002_732_032, (("rtx-pro-6000-server", 8),), (("dram", 9_011_200_000_000), ("disk", 5_584_738_461_544)),
+        ((f"{HOST}/eth0", 400_000_000_000), (f"{HOST}/storage", 5_584_738_461_544)))
+    assert figures("h200-sxm-141gb-x1") == HostFigures(
+        3_519_021_056, (("h200-sxm-141gb", 1),), (("dram", 4_915_200_000_000), ("disk", 5_293_292_307_696)),
+        ((f"{HOST}/eth0", None), (f"{HOST}/storage", 5_293_292_307_696)))
+    for kind in READ:
+        node = nodes.load(kind)
+        host = next(x for x in log_of(kind, "remote").entries[0].locs if x.id == HOST)
+        assert (host.chip, host.shared) == (figures(kind).chip, figures(kind).shared)
+        assert host.chip == 8 * cards.number(cards.load(node["host"]["sku"])["store"]["chip"])
 
 
 def test_the_quoted_ways_out() -> None:
@@ -337,7 +370,7 @@ def test_the_leaves_are_the_ones_the_entry_registers(kind: str) -> None:
     the same order, and each tier's rate is the host card's ceiling in bits."""
     node = nodes.load(kind)
     each, together = nodes.leaves(node, HOST)
-    site = check(log_of(kind, "remote"), auditor())
+    site = check(log_of(kind, "remote"), auditor(kind))
     registered = [(loc.id, loc.tier, loc.bytes) for loc in site.locs if loc.kind == "memory" and loc.parent == HOST]
     assert [(leaf.id, leaf.tier, leaf.bytes) for leaf in each] == registered
     host = cards.load(node["host"]["sku"])

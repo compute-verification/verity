@@ -1,7 +1,8 @@
-"""The Site: each check `check_registration` makes, on a later entry of each composite's site's log (the lifecycle
-example's cases, and the figures check it doesn't make yet), the order the checks are made in, a sheet's figures against
-the auditor's estimate, the fold and its prefixes, the views, the device model read off the bounding figures, a sheet read
-from a card file, and the log's encoding."""
+"""The Site: each check `check_registration` makes, on a later entry of each composite's site's log, the order the
+checks are made in, each of v2's checks on its own as `SiteV2Guards.lean` states it, the inventory a log is held to at
+its end, a sheet's figures against the auditor's estimate, the fold and its prefixes, the views, the read rate, the
+device model read off the bounding figures at the site's unit of time, a sheet read from a card file, a node's entry
+and figures from its files, and the log's encoding."""
 
 from __future__ import annotations
 
@@ -11,10 +12,10 @@ from fractions import Fraction
 
 import pytest
 
-from verity.hardware.site import (NO_LINE_RATE, OPERAND_CLASSES, OUTSIDE, REFUSALS, SCHEMES, STORAGE_PATH, TIME_UNIT,
-                                  Auditor, DeviceFigures, Entry, HostFigures, Link, Loc, Malformed, MemoryFigures,
-                                  Refused, Registration, Sheet, Site, check, check_registration, genesis, node_figures,
-                                  refusal)
+from verity.hardware.site import (CHECKS, NO_LINE_RATE, OPERAND_CLASSES, OUTSIDE, REFUSALS, SCHEMES, STORAGE_PATH,
+                                  TIME_UNIT, Auditor, DeviceFigures, Entry, HostFigures, Link, Loc, Malformed,
+                                  MemoryFigures, Refused, Registration, Sheet, Site, check, check_registration, genesis,
+                                  incomplete, node_figures, refusal)
 from verity.configuration.wire import canonical
 
 GHZ = 10 ** 9
@@ -23,12 +24,35 @@ SHEET_B = Sheet(DeviceFigures("sim-int8-b", GHZ, 128 * GHZ), 6400 * GHZ, 1 << 26
 A, B = SHEET_A.digest(), SHEET_B.digest()
 TOLERANCE = Fraction(1, 20)
 SCHEME = SCHEMES[0]
+NS = Fraction(1, 10 ** 9)
+HOSTS = {"node0": HostFigures(1 << 23, (("sim-int8-a", 1), ("sim-int8-b", 1)), (("disk", 50),), (("uplink0", 100_000),)),
+         "node1": HostFigures(1 << 23), "node9": HostFigures(1 << 23)}
+"""The auditor's figures for the hosts a log below registers: `node0` with its on-chip state, a device of each SKU,
+its disks' shared rate and its uplink; the others with their on-chip state alone."""
+MEMORY = {"dram0": MemoryFigures("node0", 6554, 512 << 30), "nvme0": MemoryFigures("node0", 28, 1 << 40),
+          "nvme1": MemoryFigures("node0", 28, 1 << 40), "dram1": MemoryFigures("node1", 6554, 1)}
+"""The auditor's figures for the memory leaves directly under a host: its DRAM and two disks under `node0`, the
+second registered later, and `node1`'s DRAM."""
+
+
+def host(i: str) -> Loc:
+    """Host `i` under `site0`, stating the auditor's figures for it."""
+    return Loc(i, "host", "site0", chip=HOSTS[i].chip, shared=HOSTS[i].shared)
+
+
+def leaf(i: str, tier: str) -> Loc:
+    """Memory leaf `i` of tier `tier` under its host, stating the auditor's figures for it."""
+    f = MEMORY[i]
+    return Loc(i, "memory", f.host, tier=tier, bytes=f.bytes, bw=f.bw)
+
+
 AUDITOR = {"onsite": Auditor((SHEET_A, SHEET_B), TOLERANCE,
-                             (("cert0", "dummy-cert0-key", SCHEME), ("chal0", "", SCHEME))),
-           "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE)}
+                             (("cert0", "dummy-cert0-key", SCHEME), ("chal0", "", SCHEME)),
+                             tuple(MEMORY.items()), tuple(HOSTS.items())),
+           "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE, (), tuple(MEMORY.items()), tuple(HOSTS.items()))}
 """The auditor's data sheets for the simulated SKUs, 1 GHz clocks at 64 and 128 MACs a nanosecond in every operand class,
-its 5% tolerance around them, and its own devices' keys, each with its scheme: onsite a certifier and a challenger. The
-node registers the auditor's own sheets."""
+its 5% tolerance around them, its own devices' keys, each with its scheme (onsite a certifier and a challenger), and
+its figures for the hosts and their leaves. The node registers the auditor's own sheets."""
 
 
 def figures(sheet: Sheet, clock: Fraction | int | None = None, **rates: Fraction | int) -> Sheet:
@@ -37,16 +61,16 @@ def figures(sheet: Sheet, clock: Fraction | int | None = None, **rates: Fraction
     peak = {c: rates.get(c.replace("-", "_"), f.rate(c)) for c in OPERAND_CLASSES}
     return replace(sheet, figures=replace(f, clock=f.clock if clock is None else clock, peak_rate=peak))
 NODE = Entry("", (SHEET_A, SHEET_B), (
-    Loc("site0", "site"), Loc("node0", "host", "site0"),
+    Loc("site0", "site", time_unit=NS), host("node0"),
     Loc("gpu0", "device", "node0", sheet=A), Loc("hbm0", "memory", "gpu0", tier="hbm", bytes=64 << 30),
     Loc("gpu1", "device", "node0", sheet=B), Loc("hbm1", "memory", "gpu1", tier="hbm", bytes=128 << 30),
-    Loc("dram0", "memory", "node0", tier="dram", bytes=512 << 30),
-    Loc("nvme0", "memory", "node0", tier="disk", bytes=1 << 40)))
-"""What both composites' sites register first: one node with two devices, each with its HBM, and the host's DRAM and
-disk."""
+    leaf("dram0", "dram"), leaf("nvme0", "disk")))
+"""What both composites' sites register first: the site at a nanosecond, one node with two devices, each with its
+HBM, and the host's DRAM and disk."""
 FIRST = {
-    "onsite": replace(NODE, locs=(*NODE.locs, Loc("cert0", "certifier", "site0", "auditor", key="dummy-cert0-key"),
-                                  Loc("chal0", "challenger", "site0", "auditor")),
+    "onsite": replace(NODE, locs=(*NODE.locs,
+                                  Loc("cert0", "certifier", "site0", "auditor", key="dummy-cert0-key", scheme=SCHEME),
+                                  Loc("chal0", "challenger", "site0", "auditor", scheme=SCHEME)),
                       links=(Link("uplink0", ("node0", "cert0"), 100_000, 100_000),
                              Link("uplink0-out", ("cert0", OUTSIDE), 100_000, 0),
                              Link("chal0-link", ("chal0", "node0"), 100_000, 1_000_000))),
@@ -55,7 +79,7 @@ FIRST = {
 """Each composite's first entry: onsite, the uplink split by the network certifier and the memory challenger's link to
 the node; remote, a bare uplink."""
 LATER = Entry("", locs=(Loc("gpu2", "device", "node0", sheet=B), Loc("hbm2", "memory", "gpu2", tier="hbm", bytes=128 << 30),
-                        Loc("nvme1", "memory", "node0", tier="disk", bytes=1 << 40)))
+                        leaf("nvme1", "disk")))
 """The hardware a site adds later: a third device and a disk."""
 UPLINK9 = (Link("u9", ("node0", "cert9"), 1, 1), Link("u9-out", ("cert9", OUTSIDE), 1, 0))
 ENTRIES = {
@@ -70,20 +94,25 @@ ENTRIES = {
                                                                                        sku="sim-int8-z")),))),
     "unregistered-sheet": ("sheet-digest", Entry("", locs=(Loc("gpu9", "device", "node0", sheet="00"),))),
     "doubled-clock": ("figures", Entry("", sheets=(figures(SHEET_A, clock=2 * GHZ),))),
+    "unrated-leaf": ("figures", Entry("", locs=(replace(leaf("nvme1", "disk"), bw=None),))),
+    "second-clock": ("figures", Entry("", locs=(Loc("site1", "site", time_unit=2 * NS),))),
+    "chipless-host": ("figures", Entry("", locs=(replace(host("node9"), chip=None),))),
     "over-hbm": ("capacity", Entry("", locs=(Loc("gpu9", "device", "node0", sheet=A),
                                              Loc("hbm9", "memory", "gpu9", tier="hbm", bytes=(64 << 30) + 1)))),
-    "empty-memory": ("capacity", Entry("", locs=(Loc("dram9", "memory", "node0", tier="dram"),))),
+    "empty-memory": ("capacity", Entry("", locs=(Loc("hbm9", "memory", "gpu0", tier="hbm"),))),
     "foreign-certifier": ("owner", Entry("", locs=(Loc("cert9", "certifier", "site0", "auditor", key="00"),),
                                          links=UPLINK9)),
-    "auditor-host": ("owner", Entry("", locs=(Loc("node9", "host", "site0", "auditor"),))),
+    "auditor-host": ("owner", Entry("", locs=(replace(host("node9"), owner="auditor"),))),
+    "keyed-host": ("owner", Entry("", locs=(replace(host("node9"), scheme=SCHEME),))),
     "bare-uplink": ("uncertified", Entry("", links=(Link("u9", ("node0", OUTSIDE), 1, 1),))),
-    "unreached-host": ("challenger-reach", Entry("", locs=(Loc("node1", "host", "site0"),
-                                                           Loc("dram1", "memory", "node1", tier="dram", bytes=1)),
+    "unreached-host": ("challenger-reach", Entry("", locs=(host("node1"), leaf("dram1", "dram")),
                                                  links=(Link("n01", ("node0", "node1"), 1, 1),))),
 }
-"""A later entry for each check `check_registration` makes, with the refusal it draws, and one it accepts: the lifecycle
-example's 14, its `not-the-sheet` now a sheet of an SKU the auditor has no data sheet for, `doubled-clock`, the
-figures check the example doesn't make yet, and `unrated-link`, a link that states no capacity and no reason."""
+"""A later entry for each check `check_registration` makes, with the refusal it gets, and one it accepts: the lifecycle
+example's 14, its `not-the-sheet` now a sheet of an SKU the auditor has no data sheet for; `doubled-clock`, a sheet's
+figures; `unrated-leaf`, `second-clock` and `chipless-host`, a host's leaf with no rate, a second site at another unit
+of time and a host with no on-chip state, each refused by `figures`; `keyed-host`, a prover's location stating a
+scheme; and `unrated-link`, a link that states no capacity and no reason."""
 REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
 """The entries a remote site accepts: it has no certifier and no memory challenger to hold its links to."""
 
@@ -99,7 +128,16 @@ def grown(composite: str = "onsite") -> Registration:
 
 
 def test_every_check_has_a_case() -> None:
-    assert len(ENTRIES) == 16 and {name for name, _ in ENTRIES.values()} - {None} == set(REFUSALS)
+    """Every refusal but `inventory`, which no entry gets on its own, has an entry here, and every check of the
+    spec's but `Figures`, `Fresh` and `Refs`, which the lifecycle's cases cover, more than one."""
+    assert len(ENTRIES) == 20 and {name for name, _ in ENTRIES.values()} - {None} == set(REFUSALS) - {"inventory"}
+    assert list(CHECKS) == ["Fresh", "Refs", "Kinds", "Sheets", "Figures", "Rates", "Timed", "Chips", "Capacity",
+                            "Owners", "Covered", "Reached"]
+    assert [name for name, _ in CHECKS.values()] == [
+        "duplicate-id", "unknown-ref", "kind", "sheet-digest", *["figures"] * 4, "capacity", "owner", "uncertified",
+        "challenger-reach"]
+    assert REFUSALS == ("previous", "duplicate-id", "unknown-ref", "kind", "sheet-digest", "figures", "capacity",
+                        "owner", "inventory", "uncertified", "challenger-reach")
 
 
 @pytest.mark.parametrize("composite", ["onsite", "remote"])
@@ -123,10 +161,13 @@ def test_check_registration(composite: str, case: str) -> None:
     (Entry("00", locs=(Loc("gpu0", "device", "node0", sheet=A),)), "previous"),
     (Entry("", locs=(Loc("gpu9", "device", "nowhere", sheet="00"),)), "unknown-ref"),
     (Entry("", locs=(Loc("gpu9", "device", "site0", sheet="00"),)), "kind"),
-    (Entry("", locs=(Loc("dram9", "memory", "node0", "auditor", tier="dram"),)), "capacity"),
+    (Entry("", locs=(Loc("hbm9", "memory", "gpu0", "auditor", tier="hbm"),)), "capacity"),
     (Entry("", sheets=(ENTRIES["unknown-sku"][1].sheets[0], figures(SHEET_A, clock=2 * GHZ))), "sheet-digest"),
-    (Entry("", sheets=(figures(SHEET_A, clock=2 * GHZ),), locs=(Loc("dram9", "memory", "node0", tier="dram"),)),
+    (Entry("", sheets=(figures(SHEET_A, clock=2 * GHZ),), locs=(Loc("hbm9", "memory", "gpu0", tier="hbm"),)),
      "figures"),
+    (Entry("", locs=(replace(leaf("nvme1", "disk"), bytes=0),)), "figures"),
+    (Entry("", locs=(replace(host("node9"), scheme=SCHEME),), links=(Link("u9", ("node9", OUTSIDE), 1, 1),)), "owner"),
+    (Entry("", locs=(replace(host("node9"), chip=None, scheme=SCHEME),)), "figures"),
 ])
 def test_the_first_check_failed_names_the_refusal(entry: Entry, name: str) -> None:
     """An entry failing several checks is refused by the earliest of them in `REFUSALS`."""
@@ -221,9 +262,10 @@ def test_a_zero_rate_is_refused_at_any_tolerance() -> None:
 ])
 def test_the_device_model_reads_the_bounding_figures(rates: dict[str, Fraction], tc: int, half: int) -> None:
     """A device's tensor-core MACs a tick are the highest of the larger rates, class by class, of its sheet's and the
-    auditor's estimate's, over the tick and rounded up (`half`: at half a nanosecond): stating less than the estimate
-    reads the estimate, stating more reads what is stated, and the highest class counts. The rest of the model is the
-    sheet's memory figures and the parameters."""
+    auditor's estimate's, over a tick of the site's unit of time and rounded up (`half`: a site at half a nanosecond):
+    stating less than the estimate reads the estimate, stating more reads what is stated, and the highest class
+    counts. The rest of the model is the sheet's memory figures and the parameters. A site that states no unit of time
+    has no device model."""
     log = first("remote")
     sheet = figures(SHEET_A, **rates)
     log = check_registration(log, log.entry([sheet], [Loc("gpu9", "device", "node0", sheet=sheet.digest())]),
@@ -231,7 +273,12 @@ def test_the_device_model_reads_the_bounding_figures(rates: dict[str, Fraction],
     s = Site.of_log(log)
     assert s.device("gpu9", AUDITOR["remote"], cuda=7, oracle=1, cap={"pcie": 9}) == {
         "bw": 3200, "cap": {"pcie": 9}, "chip": 1 << 25, "mem": 8 * (64 << 30), "rate": {"cuda": 7, "oracle": 1, "tc": tc}}
-    assert s.device("gpu9", AUDITOR["remote"], tick=Fraction(1, 2 * GHZ))["rate"]["tc"] == half
+    def at(u: Fraction | None) -> Site:
+        return replace(s, locs=tuple(replace(x, time_unit=u) if x.kind == "site" else x for x in s.locs))
+
+    assert at(Fraction(1, 2 * GHZ)).device("gpu9", AUDITOR["remote"])["rate"]["tc"] == half
+    assert at(Fraction(1, 2 * GHZ)).device("gpu9", AUDITOR["remote"])["bw"] == 1600
+    assert at(None).device("gpu9", AUDITOR["remote"]) is None and s.node("node0").device("gpu9", AUDITOR["remote"]) is None
 
 
 def _entry(v: object) -> dict[str, object]:
@@ -260,10 +307,11 @@ def test_a_sheet_from_its_card_file() -> None:
     sheet = Sheet.of_file(CARD_FILE)
     assert sheet == Sheet(DeviceFigures("sim-file", 1530 * 10 ** 6, 2 * 1024 * 1530 * 10 ** 6), 9_876_480_000_000,
                           32 * 2 * 65536 + 8 * (2 * 262144 + (1 << 20)), 16 << 30)
-    auditor = Auditor.of_files([CARD_FILE], TOLERANCE)
+    auditor = Auditor.of_files([CARD_FILE], TOLERANCE, hosts=[("node0", HostFigures(0))])
     assert auditor.sheet("sim-file") == sheet and auditor.sheet("sim-int8-a") is None
     log = Registration("remote")
-    log = check_registration(log, log.entry([sheet], [Loc("site0", "site"), Loc("node0", "host", "site0"),
+    log = check_registration(log, log.entry([sheet], [Loc("site0", "site", time_unit=NS),
+                                                      Loc("node0", "host", "site0", chip=0),
                                                       Loc("gpu0", "device", "node0", sheet=sheet.digest()),
                                                       Loc("hbm0", "memory", "gpu0", tier="hbm", bytes=16 << 30)]), auditor)
     assert Site.of_log(log).device("gpu0", auditor) == {"bw": 9877, "cap": {}, "chip": sheet.chip, "mem": 8 * (16 << 30),
@@ -326,9 +374,22 @@ def _entry_of(log: Registration, node: dict, host: str = "n0", site: str = "site
                           leaves=_leaves(host, node.get("memory")), **more)
 
 
+def _audit(node: dict, *ways: tuple[tuple, ...], **keys: str) -> Auditor:
+    """The auditor of `CARD_FILE`'s sheet at the tolerance, with these keys of its devices, each of `SCHEME`, and the
+    figures `node_figures` gives node file `node` under each host the ways out name, at those ways."""
+    memory, hosts = [], []
+    for w in ways:
+        h = w[0][0].split("/")[0]
+        leaves, figures = node_figures(node, HOST_CARD, h, ways=w, leaves=_leaves(h, node.get("memory")))
+        memory += leaves
+        hosts.append((h, figures))
+    return Auditor.of_files([CARD_FILE], TOLERANCE, {i: (k, SCHEME) for i, k in keys.items()}, memory=memory,
+                            hosts=hosts)
+
+
 def _reached(entry: Entry, site: str = "site") -> Entry:
     """`entry` with a memory challenger under `site` linked to host `n0`."""
-    return replace(entry, locs=(*entry.locs, Loc("chal0", "challenger", site, "auditor")),
+    return replace(entry, locs=(*entry.locs, Loc("chal0", "challenger", site, "auditor", scheme=SCHEME)),
                    links=(*entry.links, Link("chal0-link", ("chal0", "n0"), 100_000, 1_000_000)))
 
 
@@ -339,7 +400,7 @@ def test_a_nodes_entry_from_its_files() -> None:
     same log adds neither the sheet nor the site again. Remote accepts both; onsite refuses the
     entry by `uncertified`, and the same entry without its links out by `challenger-reach` until a memory challenger
     links to the host."""
-    sheet, auditor = Sheet.of_file(CARD_FILE), Auditor.of_files([CARD_FILE], TOLERANCE, {"chal0": ("", SCHEME)})
+    sheet, auditor = Sheet.of_file(CARD_FILE), _audit(NODE_FILE, _ways(), _ways("n1"), chal0="")
     log = Registration("remote")
     first = _entry_of(log, NODE_FILE, "n0", "site0", ways=_ways())
     hbm = {"tier": "hbm", "bytes": 16 << 30}
@@ -373,7 +434,7 @@ def test_a_nodes_interfaces_are_its_own_boundary_links() -> None:
     with a challenger reaching the host or without one. An interface whose table states no rate is a link that states
     no capacity and says why no certifier splits it, which onsite takes: it names only the rated interface. A site
     with that link is not mediated."""
-    node, auditor = NODE_FILE, Auditor.of_files([CARD_FILE], TOLERANCE, {"chal0": ("", SCHEME)})
+    node, auditor = NODE_FILE, _audit(NODE_FILE, _ways(), chal0="")
     entry = _entry_of(Registration("remote"), node, "n0", ways=_ways())
     assert entry.links == (ETH0, ETH1) and (entry.links[0].unmediated, entry.links[1].unmediated) == (None, None)
     quiet = {**node, "interface": {**UNRATED, "eth1": PORTS["eth1"]}}
@@ -381,7 +442,7 @@ def test_a_nodes_interfaces_are_its_own_boundary_links() -> None:
     assert unrated.links == (QUIET, ETH1) and unrated.locs == entry.locs
     site = check(Registration("remote").append(entry), auditor)
     assert site.boundary("n0") == list(entry.links) and not any(site.certified(k) for k in site.links)
-    assert site.mediated and not check(Registration("remote").append(unrated), auditor).mediated
+    assert site.mediated and not check(Registration("remote").append(unrated), _audit(quiet, _ways(eth0=None))).mediated
     onsite = Registration("onsite")
     for file, ways, bare in ((node, _ways(), "['n0/eth0', 'n0/eth1']"), (quiet, _ways(eth0=None), "['n0/eth1']")):
         e = _entry_of(onsite, file, "n0", ways=ways)
@@ -396,7 +457,7 @@ def test_a_stand_in_certifier_is_registered_beside_the_nodes_own_links() -> None
     to certifier and certifier to outside, each at the interfaces' rates summed. The interfaces' own links stay, so
     onsite still refuses the entry by `uncertified`, naming them and not the certified link."""
     node = NODE_FILE
-    auditor = Auditor.of_files([CARD_FILE], TOLERANCE, {"cert0": ("dummy-cert0-key", SCHEME), "chal0": ("", SCHEME)})
+    auditor = _audit(NODE_FILE, _ways(), cert0="dummy-cert0-key", chal0="")
     plain = _entry_of(Registration("remote"), node, "n0", "site0", ways=_ways())
     entry = _entry_of(Registration("remote"), node, "n0", "site0", certifier=("cert0", "dummy-cert0-key", SCHEME),
                                               ways=_ways())
@@ -424,10 +485,11 @@ def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> 
     at the path's rate, saying why no certifier splits it. A certifier's two links stay at the interfaces' rates
     summed: the path's rate is not in the sum, and no certifier is at an end of its link. So onsite refuses the entry
     by `uncertified` with the interfaces' bare links, naming them and not the path's, and accepts it without them,
-    the path's link and all; the site is then not mediated. Where the file's one interface has no rate, the entry's
+    the path's link and all; the site is then not mediated, and the log is refused at its end by `inventory`, since
+    the auditor's figures list the interfaces the entry left out. Where the file's one interface has no rate, the entry's
     links are that interface's, with no capacity, and the path's, and a certifier named on the node is refused."""
     node = {**NODE_FILE, "storage": STORAGE}
-    auditor = Auditor.of_files([CARD_FILE], TOLERANCE, {"cert0": ("dummy-cert0-key", SCHEME), "chal0": ("", SCHEME)})
+    auditor = _audit(node, _ways(storage=DISKS), cert0="dummy-cert0-key", chal0="")
     plain = _entry_of(Registration("remote"), node, "n0", ways=_ways(storage=DISKS))
     assert plain.links == (ETH0, ETH1, PATH)
     assert plain.locs == _entry_of(Registration("remote"), NODE_FILE, "n0", ways=_ways()).locs
@@ -446,8 +508,10 @@ def test_a_nodes_storage_path_is_a_boundary_link_no_certifier_is_linked_to() -> 
         check_registration(onsite, reached, auditor)
     assert refused.value.name == "uncertified" and "['n0/eth0', 'n0/eth1']" in refused.value.detail
     stored = replace(reached, links=tuple(k for k in reached.links if k not in plain.links[:2]))
-    assert refusal(onsite, stored, auditor) is None
-    assert not check(onsite.append(stored), auditor).mediated
+    assert refusal(onsite, stored, auditor) is None and not Site.of_log(onsite.append(stored)).mediated
+    with pytest.raises(Refused) as refused:
+        check(onsite.append(stored), auditor)
+    assert (refused.value.name, refused.value.entry) == ("inventory", 1) and "n0/eth0" in refused.value.detail
     one = {**node, "interface": UNRATED}
     alone = (("n0/eth0", None, True), ("n0/storage", DISKS, False))
     lone = _entry_of(Registration("remote"), one, "n0", ways=alone)
@@ -462,7 +526,7 @@ def test_an_interface_that_reads_no_rate_is_registered_without_a_capacity() -> N
     capacity and says why no certifier splits it, so remote and onsite (with a challenger) accept it and the site is
     not mediated."""
     one = {**NODE_FILE, "interface": UNRATED}
-    auditor = Auditor.of_files([CARD_FILE], TOLERANCE, {"chal0": ("", SCHEME)})
+    auditor = _audit(one, [("n0/eth0", None, True)], chal0="")
     entry = _entry_of(Registration("remote"), one, "n0", ways=[("n0/eth0", None, True)])
     assert entry.links == (QUIET,) and not check(Registration("remote").append(entry), auditor).mediated
     onsite = Registration("onsite")
@@ -476,7 +540,7 @@ def test_a_link_states_no_capacity_only_with_its_reason(composite: str) -> None:
     says, and takes a link with no capacity that says why no certifier splits it. Onsite, `uncertified` refuses a bare
     boundary link that says no reason and takes it with one; remote takes both. A site with a link that says a reason
     is not mediated."""
-    log, auditor = first(composite), AUDITOR[composite]
+    log, auditor = grown(composite), AUDITOR[composite]
     unrated, bare = Link("u9", ("node0", OUTSIDE), None, 1), Link("u9", ("node0", OUTSIDE), 1, 1)
     assert refusal(log, log.entry(links=[unrated]), auditor) == "kind"
     assert refusal(log, log.entry(links=[replace(bare, beta=0, unmediated="a stand-in")]), auditor) == "kind"
@@ -721,3 +785,204 @@ def test_a_rational_in_another_spelling_is_malformed_at_any_length(lowest_limit)
                   "1/", "\u0663"):
         with pytest.raises(Malformed, match="lowest terms"):
             _sheet_json(clock=clock)
+
+
+ROOT2 = SCHEMES[1]
+G_HOST = Loc("node0", "host", "site0", chip=8002732032)
+G_ROOT = Loc("site0", "site", time_unit=NS)
+G_GPU = Loc("gpu0", "device", "node0", sheet="s")
+G_AUDITOR = Auditor(memory=(("dram0", MemoryFigures("node0", 6554, 1 << 31)),),
+                    hosts=(("node0", HostFigures(8002732032)),))
+WITH_DISK = replace(G_AUDITOR, memory=(("disk0", MemoryFigures("node0", 28, 1 << 40)), *G_AUDITOR.memory))
+"""`SiteV2Guards.lean`'s scratch site and auditors: a host stating its on-chip bits, the site at a nanosecond, a device,
+and the auditor's figures for the host and its DRAM leaf, and for a disk leaf beside it."""
+
+
+def g_dram(bw: int | None, size: int = 1 << 31) -> Loc:
+    return Loc("dram0", "memory", "node0", tier="dram", bytes=size, bw=bw)
+
+
+def g_hbm(bw: int | None) -> Loc:
+    return Loc("hbm0", "memory", "gpu0", tier="hbm", bytes=1 << 30, bw=bw)
+
+
+def g_disk(bw: int | None, i: int = 0, parent: str = "node0") -> Loc:
+    return Loc(f"disk{i}", "memory", parent, tier="disk", bytes=1 << 40, bw=bw)
+
+
+def g_entry(*xs: Loc, links: tuple[Link, ...] = ()) -> Entry:
+    return Entry("", locs=(G_ROOT, G_HOST, G_GPU, *xs), links=links)
+
+
+def holds(name: str, auditor: Auditor, e: Entry, s: Site | None = None, composite: str = "remote") -> bool:
+    """`Site.Entry.<name>` of entry `e` against site `s`, as `CHECKS` makes it."""
+    return CHECKS[name][1](composite, auditor, Site() if s is None else s, e) is None
+
+
+def test_a_hosts_leaves_state_the_auditors_rates() -> None:
+    """`Rates`, as the guards state it: a host's leaf states the auditor's rate, above 0, and bytes, under the host
+    its figure names, and a device's leaf, a host or a site states no rate; a disk's leaf under a host is held as a
+    DRAM leaf is."""
+    assert holds("Rates", G_AUDITOR, g_entry(g_dram(6554), g_hbm(None)))
+    for bad in (g_dram(None), g_dram(6553), g_dram(6554, 1), g_hbm(3200)):
+        assert not holds("Rates", G_AUDITOR, g_entry(bad))
+    assert not holds("Rates", replace(G_AUDITOR, memory=()), g_entry(g_dram(6554)))
+    assert not holds("Rates", replace(G_AUDITOR, memory=(("dram0", MemoryFigures("node0", 0, 1 << 31)),)),
+                     g_entry(g_dram(0)))
+    assert not holds("Rates", replace(G_AUDITOR, memory=(("dram0", MemoryFigures("node1", 6554, 1 << 31)),)),
+                     g_entry(g_dram(6554)))
+    assert holds("Rates", WITH_DISK, g_entry(g_dram(6554), g_disk(28)))
+    assert not holds("Rates", WITH_DISK, g_entry(g_dram(6554), g_disk(None)))
+    assert not holds("Rates", G_AUDITOR, Entry("", locs=(G_ROOT, replace(G_HOST, bw=1))))
+    assert holds("Rates", G_AUDITOR, Entry("", locs=(G_ROOT,)))
+
+
+def test_a_site_states_the_sites_unit_of_time() -> None:
+    """`Timed`: a location of kind `site` states the unit of time, not 0, and a second one the same; no other
+    location states one. The site's unit is its first site's, and a rate over ticks of it is rounded up once."""
+    assert holds("Timed", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST)))
+    assert holds("Timed", G_AUDITOR, Entry("", locs=(G_ROOT, replace(G_ROOT, id="site1"))))
+    for locs in ((replace(G_ROOT, time_unit=None),), (replace(G_ROOT, time_unit=0),),
+                 (G_ROOT, replace(G_HOST, time_unit=NS))):
+        assert not holds("Timed", G_AUDITOR, Entry("", locs=locs))
+    us = Fraction(1, 10 ** 6)
+    assert not holds("Timed", G_AUDITOR, Entry("", locs=(replace(G_ROOT, id="site1", time_unit=us),)),
+                     Site(locs=(G_ROOT,)))
+    assert Site(locs=(G_ROOT, G_HOST)).time_unit == NS and Site().time_unit is None
+    assert Site(locs=(G_ROOT,)).over(1310000, 1000000) == 1310
+    assert Site(locs=(G_ROOT,)).over(1310000, 1) == 1 and Site().over(1, 1) is None
+
+
+def test_a_link_says_why_no_certifier_splits_it() -> None:
+    """`Covered` and `Kinds`: a bare boundary link is refused onsite and taken where it says why or remote; a link
+    states no capacity only where it says why, and never a capacity of 0; a site with a reason is not mediated."""
+    bare = Link("eth0", ("node0", OUTSIDE), 1_000_000_000, 0)
+    why, unrated = replace(bare, unmediated="a stand-in"), replace(bare, beta=None, unmediated="a stand-in")
+    locs = (G_ROOT, G_HOST)
+    assert not holds("Covered", G_AUDITOR, Entry("", locs=locs, links=(bare,)), composite="onsite")
+    assert holds("Covered", G_AUDITOR, Entry("", locs=locs, links=(why,)), composite="onsite")
+    assert holds("Covered", G_AUDITOR, Entry("", locs=locs, links=(bare,)))
+    assert not Site(locs=locs, links=(why,)).mediated and Site(locs=locs, links=(bare,)).mediated
+    assert holds("Kinds", G_AUDITOR, Entry("", locs=locs, links=(bare,)))
+    assert holds("Kinds", G_AUDITOR, Entry("", locs=locs, links=(unrated,)))
+    assert not holds("Kinds", G_AUDITOR, Entry("", locs=locs, links=(replace(unrated, unmediated=None),)))
+    assert not holds("Kinds", G_AUDITOR, Entry("", locs=locs, links=(replace(bare, beta=0),)))
+    assert not Site(locs=locs, links=(unrated,)).mediated
+
+
+def test_a_host_states_the_auditors_figures_for_it() -> None:
+    """`Chips`: a host states the auditor's on-chip bits and shared rates, none 0; refused with none, with another,
+    or for a host the auditor has no figures for; no other location states either."""
+    assert holds("Chips", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, G_GPU)))
+    for locs in ((G_ROOT, replace(G_HOST, chip=None)), (G_ROOT, replace(G_HOST, chip=1)),
+                 (G_ROOT, G_HOST, replace(G_GPU, chip=1))):
+        assert not holds("Chips", G_AUDITOR, Entry("", locs=locs))
+    assert not holds("Chips", replace(G_AUDITOR, hosts=()), Entry("", locs=(G_ROOT, G_HOST)))
+    sharing = replace(G_AUDITOR, hosts=(("node0", HostFigures(8002732032, shared=(("disk", 50),))),))
+    shared = replace(G_HOST, shared=(("disk", 50),))
+    assert holds("Chips", sharing, Entry("", locs=(G_ROOT, shared)))
+    assert not holds("Chips", sharing, Entry("", locs=(G_ROOT, G_HOST)))
+    assert not holds("Chips", G_AUDITOR, Entry("", locs=(G_ROOT, shared)))
+    zero = (("disk", 0),)
+    assert not holds("Chips", replace(G_AUDITOR, hosts=(("node0", HostFigures(8002732032, shared=zero)),)),
+                     Entry("", locs=(G_ROOT, replace(G_HOST, shared=zero))))
+
+
+def test_an_auditors_device_states_its_scheme_and_drift() -> None:
+    """`Owners`: a key's scheme is the auditor's for the device and one the check knows, and a clock's drift the
+    auditor's figure, or none where it has none, below 1; a location that is not the auditor's states neither."""
+    def keyed(drift: tuple = (), scheme: str = ROOT2) -> Auditor:
+        return replace(G_AUDITOR, keys=(("cert0", "k0", scheme),), drift=drift)
+
+    def cert(drift: Fraction | None = None, scheme: str = ROOT2) -> Entry:
+        return Entry("", locs=(G_ROOT, Loc("cert0", "certifier", "site0", "auditor", key="k0", scheme=scheme,
+                                            drift=drift)))
+
+    tenth = Fraction(1, 10)
+    assert ROOT2 in SCHEMES
+    assert not holds("Owners", keyed(scheme=SCHEME), cert())
+    assert not holds("Owners", keyed(scheme="x"), cert(scheme="x"))
+    assert not holds("Owners", keyed(), Entry("", locs=(G_ROOT, replace(G_HOST, scheme=ROOT2))))
+    assert holds("Owners", keyed((("cert0", tenth),)), cert(tenth)) and holds("Owners", keyed(), cert())
+    assert not holds("Owners", keyed((("cert0", tenth),)), cert())
+    assert not holds("Owners", keyed(), cert(tenth))
+    assert not holds("Owners", keyed((("cert0", Fraction(1)),)), cert(Fraction(1)))
+    assert not holds("Owners", keyed(), Entry("", locs=(G_ROOT, replace(G_HOST, drift=tenth))))
+
+
+CARD = Sheet(DeviceFigures("k", 0, 0), 1, 1, 1 << 30)
+
+
+def g_node(*xs: Loc) -> Site:
+    return Site((CARD,), (G_ROOT, G_HOST, *xs))
+
+
+def g_gpus(n: int) -> tuple[Loc, ...]:
+    return tuple(Loc(f"gpu{i}", "device", "node0", sheet=CARD.digest()) for i in range(n))
+
+
+def test_a_site_holds_the_auditors_inventory() -> None:
+    """`Complete`, of a whole site: every memory leaf the auditor has figures for under a host is registered under it,
+    and every card it lists for the host; not with the disk left out, with the leaf under a device, or with a card
+    short. A host the auditor has no figures for has nothing to hold."""
+    assert incomplete(g_node(g_dram(6554), g_disk(28)), WITH_DISK) is None
+    assert "disk0" in incomplete(g_node(g_dram(6554)), WITH_DISK)
+    assert "disk0" in incomplete(g_node(*g_gpus(1), g_dram(6554), g_disk(28, parent="gpu0")), WITH_DISK)
+    listed = replace(WITH_DISK, hosts=(("node0", HostFigures(8002732032, (("k", 2),))),))
+    assert incomplete(g_node(*g_gpus(2), g_dram(6554), g_disk(28)), listed) is None
+    assert incomplete(g_node(*g_gpus(3), g_dram(6554), g_disk(28)), listed) is None
+    assert "1 devices of k" in incomplete(g_node(*g_gpus(1), g_dram(6554), g_disk(28)), listed)
+    assert incomplete(g_node(), replace(G_AUDITOR, memory=(), hosts=())) is None
+
+
+@pytest.mark.parametrize("composite", ["onsite", "remote"])
+def test_a_log_is_held_to_the_inventory_at_its_end(composite: str) -> None:
+    """`check` refuses a log whose entries each pass by `inventory`, at the log's length, where the site lacks what the
+    auditor's figures list: the first entry alone lacks the disk the later one adds, and the grown log passes. It lacks
+    a way out the auditor lists at another rate, and devices past the count registered. `check_registration` holds
+    one entry and never refuses by it."""
+    with pytest.raises(Refused) as refused:
+        check(first(composite), AUDITOR[composite])
+    assert (refused.value.name, refused.value.entry) == ("inventory", 1) and "nvme1" in refused.value.detail
+    assert check(grown(composite), AUDITOR[composite]) == Site.of_log(grown(composite))
+    assert check(Registration(composite), AUDITOR[composite]) == Site()
+    figures = HOSTS["node0"]
+    for other, what in ((replace(figures, ways=(("uplink0", 99_999),)), "uplink0"),
+                        (replace(figures, cards=(("sim-int8-b", 3),)), "2 devices of sim-int8-b")):
+        with pytest.raises(Refused) as refused:
+            check(grown(composite), replace(AUDITOR[composite], hosts=(("node0", other), *AUDITOR[composite].hosts[1:])))
+        assert (refused.value.name, refused.value.entry) == ("inventory", 2) and what in refused.value.detail
+
+
+def g_disks(shared: tuple = ()) -> Site:
+    return Site(locs=(G_ROOT, replace(G_HOST, shared=shared), g_dram(6554), *(g_disk(28, i) for i in range(3))))
+
+
+@pytest.mark.parametrize(("shared", "xs", "rate"), [
+    ((), ["disk0", "disk1", "disk2"], 84 + 6554),
+    ((("disk", 50),), ["disk0", "disk1", "disk2"], 50 + 6554),
+    ((("disk", 50),), ["disk0", "disk1"], 50 + 6554),
+    ((("disk", 50),), ["disk0"], 28 + 6554),
+    ((("disk", 100),), ["disk0", "disk1", "disk2"], 84 + 6554),
+    ((("disk", 50),), ["disk0", "disk1", "disk2", "dram0"], 50 + 6554),
+    ((("disk", 50),), ["dram0"], 6554),
+    ((("disk", 50), ("dram", 6000)), ["disk0"], 28 + 6000),
+])
+def test_the_read_rate_of_a_hosts_leaves(shared: tuple, xs: list[str], rate: int) -> None:
+    """`readRate`, as the guards state it: three disks at 28 bits a second each read 84 together, or the host's
+    shared rate where that is less; a disk leaf's bytes can be returned from memory, so the host's DRAM tier adds its
+    rate, once, whether or not its leaf is among them."""
+    assert g_disks(shared).read_rate(xs) == rate
+
+
+def test_the_read_rate_counts_a_devices_sheet_once() -> None:
+    """A host's leaf alone reads at its rate; with a device's leaf whose sheet is not registered there is no rate, and
+    with one whose sheet is, the device's `bw` once, however many of its leaves are among them. An id that names
+    nothing has no rate."""
+    s = Site(locs=g_entry(g_dram(6554), g_hbm(None)).locs)
+    assert s.read_rate(["dram0"]) == 6554 and s.read_rate(["dram0", "hbm0"]) is None
+    grown_site = Site.of_log(grown())
+    assert grown_site.read_rate(["hbm0"]) == SHEET_A.bw
+    assert grown_site.read_rate(["hbm1", "hbm2", "dram0"]) == 2 * SHEET_B.bw + 6554
+    assert grown_site.read_rate(["nvme0", "nvme1"]) == 50 + 6554
+    assert grown_site.read_rate(["nvme9"]) is None and grown_site.read_rate([]) == 0

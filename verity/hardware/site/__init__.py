@@ -25,7 +25,9 @@ the storage path, as a boundary link that no certifier splits.
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
 is the site a log registers, and `check_registration` holds one entry to the log before it, refusing by the first check
-it fails (`REFUSALS`, the spec's `Registration.Refusal` in kebab case):
+it fails (`CHECKS`, the spec's `Site.Entry` checks by name and in its order, each with its refusal; `REFUSALS`, the
+spec's `Registration.Refusal` in kebab case); `check` holds each entry so, then the whole log by `inventory` at its
+end (`incomplete`):
 
 | Refusal | The check |
 | --- | --- |
@@ -34,14 +36,16 @@ it fails (`REFUSALS`, the spec's `Registration.Refusal` in kebab case):
 | `unknown-ref` | each new location's parent and each new link's ends are registered |
 | `kind` | each new location sits under a parent its kind allows and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity or, where it says why no certifier splits it, at none; each certifier splits exactly one uplink |
 | `sheet-digest` | each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet |
-| `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.accepted`), and its memory figures are the auditor's |
+| `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.accepted`), and its memory figures are the auditor's; each new memory leaf directly under a host states the auditor's figures for it (its host, a rate above 0, its bytes), and no other new location a rate; each new site states the site's unit of time, above 0, and no other new location one; each new host states the auditor's figures for it (its on-chip state and each tier's shared rate, none 0), and no other new location either |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
-| `owner` | each new certifier or challenger is one of the auditor's own devices with its key, and every other new location is the prover's |
+| `owner` | each new certifier or challenger is one of the auditor's own devices, with its key, its key's scheme, one of `SCHEMES`, and the auditor's figure for its clock's drift, below 1 where there is one; every other new location is the prover's and states no scheme and no drift |
+| `inventory` | the log, at its end: under each host, every memory leaf the auditor has figures for, at least its count of devices of each SKU it lists, and each way out it lists, as a link under that id with an end at the host at its rate |
 | `uncertified` | onsite: every boundary link is certified or says why no certifier splits it |
 | `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
 
-The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `boundary`, `units`, `registered`) are functions of
-the site alone, but `device`, which reads the auditor's sheet too. Digests are SHA-512 over canonical JSON
+The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `held`, `read_rate`, `over`, `time_unit`,
+`mediated`, `boundary`, `units`, `registered`) are functions of the site alone, but `device`, which reads the
+auditor's sheet too. Digests are SHA-512 over canonical JSON
 (`verity.configuration.wire.canonical`) under the registration log's tags; a rational is the string `n` or `n/d` in lowest terms.
 Stdlib and the wire only.
 """
@@ -51,7 +55,7 @@ from __future__ import annotations
 import hashlib
 import math
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any
@@ -82,10 +86,9 @@ OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero
 """The operand classes of a tensor-core MAC (`OperandClass`, in kebab case): int8 operands drawn uniformly over
 [-128, 127], [-2, 1], [0, 3] and [0, 15], and the one value 0."""
 REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "sheet-digest", "figures", "capacity", "owner",
-            "uncertified", "challenger-reach")
-"""The checks `check_registration` makes, in the order it makes them."""
-TICK = Fraction(1, 10 ** 9)
-"""A tick, in seconds: a nanosecond."""
+            "inventory", "uncertified", "challenger-reach")
+"""The refusals, in the spec's order: `check_registration` makes each check but `inventory` in this order, and
+`check` makes `inventory` once, at the log's end."""
 TIME_UNIT = Fraction(1, 10 ** 9)
 """The unit of time `Registration.node_entry` gives a site it adds, in seconds: a nanosecond."""
 NO_LINE_RATE = "no line rate stated"
@@ -911,6 +914,13 @@ class Site:
         return next((k for k in self.sheets if k.digest() == x.sheet), None)
 
     @property
+    def time_unit(self) -> Fraction | None:
+        """The site's unit of time in seconds: the one its first location of kind `site` states. Its views round a
+        rate at it, and its links' latency is counted in it."""
+        x = next((x for x in self.locs if x.kind == "site"), None)
+        return None if x is None else x.time_unit
+
+    @property
     def mediated(self) -> bool:
         """No link of the site says that no certifier splits it."""
         return all(k.unmediated is None for k in self.links)
@@ -964,18 +974,19 @@ class Site:
         x = self.loc(d)
         return self.sheet_of(x) if x is not None and x.kind == "device" else None
 
-    def device(self, d: str, auditor: Auditor, tick: Fraction = TICK, cuda: int = 0, oracle: int = 0,
+    def device(self, d: str, auditor: Auditor, cuda: int = 0, oracle: int = 0,
                cap: Mapping[str, int] | None = None) -> dict[str, Any] | None:
-        """**Device `d`'s model** (`Accounting.Device`, `Site.device`), read off its sheet `k` and the auditor's sheet
-        `a` for `k`'s SKU: `k`'s on-chip state (`chip`), `k`'s memory bandwidth in bits a tick, rounded up (`bw`), `k`'s
-        device memory in bits (`mem`), and as its tensor-core MACs a tick (`rate["tc"]`) the highest peak rate of the figures the bound reads
-        (`DeviceFigures.bounding`: class by class, the larger of `k`'s and `a`'s estimate's) over a tick of `tick`
-        seconds, rounded up. No sheet states a device's CUDA-core ops or oracle queries a tick, or its side channels'
-        capacities (`cap`), so they are parameters. None when `d` names no registered sheet or the auditor has none for
-        its SKU."""
-        k = self.sheet(d)
+        """**Device `d`'s model** (`Accounting.Device`, `Site.device`), at ticks of the site's unit of time
+        (`time_unit`), read off its sheet `k` and the auditor's sheet `a` for `k`'s SKU: `k`'s on-chip state (`chip`),
+        `k`'s device memory in bits (`mem`), and a tick's bits from device memory to the chip (`bw`) and tensor-core
+        MACs (`rate["tc"]`), each a rate a second over one tick, rounded up: `k`'s `bw`, and the highest peak rate of
+        the figures the bound reads (`DeviceFigures.bounding`: class by class, the larger of `k`'s and `a`'s
+        estimate's). No sheet states a device's CUDA-core ops or oracle queries a tick, or its side channels'
+        capacities (`cap`), so they are parameters. None when the site states no unit of time, `d` names no registered
+        sheet or the auditor has none for its SKU."""
+        tick, k = self.time_unit, self.sheet(d)
         a = None if k is None else auditor.sheet(k.sku)
-        if k is None or a is None:
+        if tick is None or k is None or a is None:
             return None
         f = k.figures.bounding(auditor.estimate(a))
         return {"bw": math.ceil(tick * k.bw), "cap": dict(cap or {}), "chip": k.chip, "mem": 8 * k.mem,
@@ -1014,6 +1025,41 @@ class Site:
         p = self.part(h)
         return {t: sum(x.bytes for x in p.locs if x.kind == "memory" and x.tier == t) for t in TIERS}
 
+    def read_rate(self, xs: Iterable[str]) -> int | None:
+        """**The bits a second readable from the memory leaves `xs`** (`Site.readRate`): a host's leaves of one tier
+        at the sum of their own registered rates, or at the host's shared rate for the tier where that is less; and
+        each device with a leaf among them at its sheet's `bw`, once. A disk leaf's rate bounds the bytes that come off
+        the disk, and a host can return a disk leaf's bytes from memory, so a host with a disk leaf among `xs` counts
+        its whole DRAM tier's rate, whichever of its DRAM leaves are among them. None when an id names nothing, or a
+        location states no rate and is under no device with a registered sheet."""
+        ys = [self.loc(x) for x in xs]
+        if any(y is None for y in ys):
+            return None
+        devices = [y.parent for y in ys if y.bw is None]
+        if any(d is None for d in devices):
+            return None
+        sheets = [self.sheet(d) for d in dict.fromkeys(devices)]
+        if any(k is None for k in sheets):
+            return None
+        rated = [y for y in ys if y.bw is not None]
+
+        def tier(zs: Iterable[Loc], g: tuple[str | None, str | None]) -> int:
+            total = sum(y.bw for y in zs if (y.parent, y.tier) == g and y.bw is not None)
+            h = None if g[0] is None else self.loc(g[0])
+            ceiling = None if h is None or g[1] is None else _lookup(h.shared, g[1])
+            return total if ceiling is None else min(total, ceiling)
+
+        disks = list(dict.fromkeys(y.parent for y in rated if y.tier == "disk"))
+        groups = dict.fromkeys([(y.parent, y.tier) for y in rated] + [(h, "dram") for h in disks])
+        return (sum(tier(self.locs, g) if g[1] == "dram" and g[0] in disks else tier(rated, g) for g in groups)
+                + sum(k.bw for k in sheets))
+
+    def over(self, rate: int, ticks: int) -> int | None:
+        """What a rate of `rate` bits a second carries over `ticks` of the site's units of time, rounded up once
+        (`Site.over`); None when the site states no unit of time."""
+        u = self.time_unit
+        return None if u is None else math.ceil(u * rate * ticks)
+
     def boundary(self, h: str | None = None) -> list[Link]:
         """The boundary links (`is_boundary`) with an end at host `h`, or every boundary link."""
         return [k for k in self.links if self.is_boundary(k) and (h is None or h in k.ends)]
@@ -1034,62 +1080,201 @@ def _dups(xs: Sequence[str]) -> list[str]:
     return sorted({x for x in xs if xs.count(x) > 1})
 
 
+def _fresh(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """No id is registered twice, the outside's among them, and no sheet twice."""
+    t = s.add(e)
+    digests = [k.digest() for k in t.sheets]
+    if dup := _dups(t.ids()) + [k.sku for k in t.sheets if digests.count(k.digest()) > 1]:
+        return f"{dup} registered twice"
+    return None
+
+
+def _refs(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Each new location's parent and each new link's ends name something registered."""
+    t = s.add(e)
+    for x in e.locs:
+        if x.parent is not None and not t.known(x.parent):
+            return f"{x.id}'s parent {x.parent!r} isn't registered"
+    for k in e.links:
+        if bad := [n for n in k.ends if not t.known(n)]:
+            return f"link {k.id} names {bad}, which aren't registered"
+    return None
+
+
+def _kinds(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Parents and tiers by kind, links between kinds a link may join, each at a positive capacity or, where it says
+    no certifier splits it, at none, and each certifier splitting exactly one uplink."""
+    t = s.add(e)
+    for x in e.locs:
+        if ((None if x.parent is None else t.kind(x.parent)) not in PARENTS[x.kind]
+                or (x.kind == "memory") != (x.tier is not None)):
+            return f"{x.kind} {x.id} can't sit under {x.parent!r}, or has a tier exactly when it isn't memory"
+    for k in e.links:
+        if (k.ends[0] == k.ends[1] or not any(t.joins(k, p, q) for p, q in LINKS) or k.beta == 0
+                or (k.beta is None and k.unmediated is None)):
+            return (f"link {k.id} can't join {list(k.ends)} at capacity {k.beta}: a link states no capacity only where "
+                    "it says why no certifier splits it (unmediated)")
+    for x in t.locs:
+        if x.kind == "certifier" and (far := [t.kind(n) for n in t.far(x.id)]) not in (["host", "outside"],
+                                                                                       ["outside", "host"]):
+            return f"certifier {x.id} doesn't split one uplink: it links to {far}"
+    return None
+
+
+def _sheets(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet."""
+    for k in e.sheets:
+        if a.sheet(k.sku) is None:
+            return f"sheet {k.sku} ({k.digest()[:16]}...) names an SKU the auditor has no data sheet for"
+    digests = [k.digest() for k in s.add(e).sheets]
+    for x in e.locs:
+        if x.kind == "device" and x.sheet not in digests:
+            return f"{x.id}'s sheet {x.sheet[:16]}... isn't registered"
+    return None
+
+
+def _figures(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Each new sheet is accepted against the auditor's sheet for its SKU: its figures against the estimate, and its
+    memory figures exactly the auditor's."""
+    for k in e.sheets:
+        if (b := a.sheet(k.sku)) is not None and not (k.figures.accepted(a.estimate(b))
+                                                       and (k.bw, k.chip, k.mem) == (b.bw, b.chip, b.mem)):
+            return (f"sheet {k.sku}'s figures aren't within the auditor's tolerance of its estimate, or its memory "
+                    "figures aren't the auditor's")
+    return None
+
+
+def _rates(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Each new memory leaf directly under a host states the auditor's figures for it: the host it is under, a rate
+    that is not 0, and its bytes; every other new location states no rate."""
+    t = s.add(e)
+    for x in e.locs:
+        if x.kind == "memory" and x.parent is not None and t.kind(x.parent) == "host":
+            f = _lookup(a.memory, x.id)
+            if f is None or (x.parent, x.bw, x.bytes) != (f.host, f.bw, f.bytes) or f.bw == 0:
+                return (f"memory {x.id} under host {x.parent} states {x.bytes} bytes at {x.bw} bits a second, and the "
+                        f"auditor's figures for it are {f}; they must be the same, at a rate above 0")
+        elif x.bw is not None:
+            return f"{x.kind} {x.id} states a rate, which only a memory leaf directly under a host does"
+    return None
+
+
+def _timed(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Each new location of kind `site` states the site's unit of time, which is not 0 and is the one the site states;
+    every other new location states none."""
+    t = s.add(e)
+    for x in e.locs:
+        if x.kind == "site":
+            if x.time_unit is None or x.time_unit == 0 or t.time_unit != x.time_unit:
+                return (f"site {x.id} states the unit of time {x.time_unit}, and the site's is {t.time_unit}; a site "
+                        "states the site's, above 0")
+        elif x.time_unit is not None:
+            return f"{x.kind} {x.id} states a unit of time, which only a site does"
+    return None
+
+
+def _chips(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Each new host states the auditor's figures for it, its on-chip state in bits and each tier's shared rate, none
+    of them 0; every other new location states neither."""
+    for x in e.locs:
+        if x.kind == "host":
+            h = _lookup(a.hosts, x.id)
+            if h is None or (x.chip, x.shared) != (h.chip, h.shared) or any(bw == 0 for _, bw in h.shared):
+                return (f"host {x.id} states chip {x.chip} and shared rates {list(x.shared)}, and the auditor's "
+                        f"figures for it are {h}; they must be the same, with no rate 0")
+        elif x.chip is not None or x.shared:
+            return f"{x.kind} {x.id} states on-chip state or shared rates, which only a host does"
+    return None
+
+
+def _capacity(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory."""
+    t = s.add(e)
+    for x in e.locs:
+        if x.kind == "memory" and x.bytes == 0:
+            return f"memory {x.id} holds nothing"
+    for x in t.locs:
+        if x.kind == "device" and (k := t.sheet_of(x)) is not None and t.held(x.id) > k.mem:
+            return f"{x.id}'s memory leaves hold {t.held(x.id)} bytes, over its sheet's {k.mem}"
+    return None
+
+
+def _owners(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Each new certifier or challenger is one of the auditor's own devices, owned by it, with its key, its key's
+    scheme, one of `SCHEMES`, and the auditor's figure for its clock, below 1 where there is one; every other new
+    location is the prover's and states no scheme and no clock."""
+    for x in e.locs:
+        if x.kind in AUDITOR_KINDS:
+            if x.owner != "auditor" or a.key(x.id) != x.key or a.scheme(x.id) != x.scheme:
+                return f"{x.kind} {x.id} isn't one of the auditor's own devices, with its key and scheme"
+            if x.scheme not in SCHEMES:
+                return f"{x.kind} {x.id}'s key is of scheme {x.scheme!r}, not one of {list(SCHEMES)}"
+            if x.drift != _lookup(a.drift, x.id) or (x.drift is not None and x.drift >= 1):
+                return (f"{x.kind} {x.id} states the drift {x.drift}, and the auditor's figure is "
+                        f"{_lookup(a.drift, x.id)}; it must be that, below 1")
+        elif x.owner != "prover" or x.scheme != "" or x.drift is not None:
+            return (f"{x.kind} {x.id} is a prover's location, registered as the {x.owner}'s, or states a scheme or a "
+                    "drift")
+    return None
+
+
+def _covered(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Onsite: every boundary link is certified, or says why no certifier splits it."""
+    t = s.add(e)
+    if c == "onsite" and (bare := [k.id for k in t.links if t.is_boundary(k) and not t.certified(k)
+                                   and k.unmediated is None]):
+        return f"boundary links {bare} have no certifier splitting them and say no reason none does"
+    return None
+
+
+def _reached(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
+    """Onsite: the host of every memory leaf is at an end of a memory challenger's link."""
+    t = s.add(e)
+    if c == "onsite":
+        reached = t.reached()
+        if far := sorted({h for x in t.locs if x.kind == "memory" and (h := t.host_of(x)) is not None} - set(reached)):
+            return f"hosts {far} hold the prover's memory, and no memory challenger links to them"
+    return None
+
+
+CHECKS: dict[str, tuple[str, Callable[[str, Auditor, Site, Entry], str | None]]] = {
+    "Fresh": ("duplicate-id", _fresh), "Refs": ("unknown-ref", _refs), "Kinds": ("kind", _kinds),
+    "Sheets": ("sheet-digest", _sheets), "Figures": ("figures", _figures), "Rates": ("figures", _rates),
+    "Timed": ("figures", _timed), "Chips": ("figures", _chips), "Capacity": ("capacity", _capacity),
+    "Owners": ("owner", _owners), "Covered": ("uncertified", _covered), "Reached": ("challenger-reach", _reached)}
+"""A site entry's checks (`Site.Entry`'s), by their names in the spec, in the order `Site.Entry.refusal` makes them,
+each with the refusal it gives and the check: given the composite, the auditor, the site of the log before the entry
+and the entry, what it fails, or None."""
+
+
 def _first(composite: str, s: Site, head: str, e: Entry, auditor: Auditor) -> tuple[str, str] | None:
     """The first check `e` fails against the site `s` and head `head` of the log before it, with what failed."""
     if e.previous != head:
         return "previous", f"the entry follows {e.previous[:16]}..., not the log's head {head[:16]}..."
-    t = s.add(e)
-    digests = [k.digest() for k in t.sheets]
-    if dup := _dups(t.ids()) + [k.sku for k in t.sheets if digests.count(k.digest()) > 1]:
-        return "duplicate-id", f"{dup} registered twice"
-    for x in e.locs:
-        if x.parent is not None and not t.known(x.parent):
-            return "unknown-ref", f"{x.id}'s parent {x.parent!r} isn't registered"
-    for k in e.links:
-        if bad := [n for n in k.ends if not t.known(n)]:
-            return "unknown-ref", f"link {k.id} names {bad}, which aren't registered"
-    for x in e.locs:
-        if ((None if x.parent is None else t.kind(x.parent)) not in PARENTS[x.kind]
-                or (x.kind == "memory") != (x.tier is not None)):
-            return "kind", f"{x.kind} {x.id} can't sit under {x.parent!r}, or has a tier exactly when it isn't memory"
-    for k in e.links:
-        if (k.ends[0] == k.ends[1] or not any(t.joins(k, a, b) for a, b in LINKS) or k.beta == 0
-                or (k.beta is None and k.unmediated is None)):
-            return "kind", (f"link {k.id} can't join {list(k.ends)} at capacity {k.beta}: a link states no capacity "
-                            "only where it says why no certifier splits it (unmediated)")
-    for x in t.locs:
-        if x.kind == "certifier" and (far := [t.kind(n) for n in t.far(x.id)]) not in (["host", "outside"],
-                                                                                       ["outside", "host"]):
-            return "kind", f"certifier {x.id} doesn't split one uplink: it links to {far}"
-    for k in e.sheets:
-        if auditor.sheet(k.sku) is None:
-            return "sheet-digest", f"sheet {k.sku} ({k.digest()[:16]}...) names an SKU the auditor has no data sheet for"
-    for x in e.locs:
-        if x.kind == "device" and x.sheet not in digests:
-            return "sheet-digest", f"{x.id}'s sheet {x.sheet[:16]}... isn't registered"
-    for k in e.sheets:
-        if (a := auditor.sheet(k.sku)) is not None and not (k.figures.accepted(auditor.estimate(a))
-                                                             and (k.bw, k.chip, k.mem) == (a.bw, a.chip, a.mem)):
-            return "figures", (f"sheet {k.sku}'s figures aren't within the auditor's tolerance of its estimate, or its "
-                               "memory figures aren't the auditor's")
-    for x in e.locs:
-        if x.kind == "memory" and x.bytes == 0:
-            return "capacity", f"memory {x.id} holds nothing"
-    for x in t.locs:
-        if x.kind == "device" and (k := t.sheet_of(x)) is not None and t.held(x.id) > k.mem:
-            return "capacity", f"{x.id}'s memory leaves hold {t.held(x.id)} bytes, over its sheet's {k.mem}"
-    for x in e.locs:
-        if x.kind in AUDITOR_KINDS and (x.owner != "auditor" or auditor.key(x.id) != x.key):
-            return "owner", f"{x.kind} {x.id} isn't one of the auditor's own devices"
-        if x.kind not in AUDITOR_KINDS and x.owner != "prover":
-            return "owner", f"{x.kind} {x.id} is a prover's location, registered as the {x.owner}'s"
-    if composite == "onsite" and (bare := [k.id for k in t.links if t.is_boundary(k) and not t.certified(k)
-                                           and k.unmediated is None]):
-        return "uncertified", f"boundary links {bare} have no certifier splitting them and say no reason none does"
-    if composite == "onsite":
-        reached = t.reached()
-        if far := sorted({h for x in t.locs if x.kind == "memory" and (h := t.host_of(x)) is not None} - set(reached)):
-            return "challenger-reach", f"hosts {far} hold the prover's memory, and no memory challenger links to them"
+    for name, check in CHECKS.values():
+        if (detail := check(composite, auditor, s, e)) is not None:
+            return name, detail
+    return None
+
+
+def incomplete(s: Site, auditor: Auditor) -> str | None:
+    """What the site lacks of the auditor's figures (`Registration.Complete`), or None: under each host, every memory
+    leaf the auditor has figures for, at least the count of devices of each SKU it lists, and every way out it lists,
+    a link under the way's id with an end at the host at the way's rate."""
+    for h in (x for x in s.locs if x.kind == "host"):
+        for i, f in auditor.memory:
+            if f.host == h.id and not any(x.id == i and x.kind == "memory" and x.parent == h.id for x in s.locs):
+                return f"host {h.id} registers no memory leaf {i}, which the auditor's figures place under it"
+        if (g := _lookup(auditor.hosts, h.id)) is None:
+            continue
+        for sku, n in g.cards:
+            have = sum(1 for d in s.locs if d.kind == "device" and d.parent == h.id
+                       and (k := s.sheet_of(d)) is not None and k.sku == sku)
+            if n > have:
+                return f"host {h.id} registers {have} devices of {sku}, and the auditor's figures say {n}"
+        for w, beta in g.ways:
+            if not any(k.id == w and h.id in k.ends and k.beta == beta for k in s.links):
+                return f"host {h.id} registers no link {w} at {beta} bits a second, a way out the auditor's figures list"
     return None
 
 
@@ -1113,11 +1298,15 @@ def check_registration(log: Registration, e: Entry, auditor: Auditor) -> Registr
 
 
 def check(log: Registration, auditor: Auditor) -> Site:
-    """**A valid log**: each entry held to the log before it, and the site the log registers; `Refused` at the first
-    entry that fails."""
+    """**A valid log** (`Registration.check`): each entry held to the log before it, and the site the log registers;
+    `Refused` at the first entry that fails, or, where every entry passes and the site lacks hardware the auditor's
+    figures list (`Complete`), `Refused` by `inventory` at the log's length. The log is held to the auditor's
+    inventory at its end and not entry by entry, so a later entry may add hardware under a registered host."""
     s, head = Site(), genesis(log.composite)
     for i, e in enumerate(log.entries):
         if r := _first(log.composite, s, head, e, auditor):
             raise Refused(*r, i)
         s, head = s.add(e), e.digest()
+    if lack := incomplete(s, auditor):
+        raise Refused("inventory", lack, len(log.entries))
     return s
