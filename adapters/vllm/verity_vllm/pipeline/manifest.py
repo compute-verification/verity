@@ -623,7 +623,7 @@ def main(a: Any) -> int:
     log = lambda s: print(s, file=sys.stderr, flush=True)  # noqa: E731
     if a.cmd in ("build", "build-global"):
         # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-        from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+        from verity_vllm.gc_tuning import tune as _gc_tune
         _gc_tune()
         word_query.use_rule_cache(a.unit_rule_cache)
     if a.cmd == "build":

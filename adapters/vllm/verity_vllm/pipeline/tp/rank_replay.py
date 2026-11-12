@@ -80,7 +80,7 @@ def load(cfg: dict[str, Any], rank: int, world: Any, *, definitions: bool = True
     for a caller that evaluates none) and every Program's TP context (result.json `tp`) is this rank's of this world.  Loaded under
     `gc_tuning.tuned`'s thresholds: the load builds the rank's resident graph (GBs), which the interpreter's defaults walk again
     every time it grows a quarter."""
-    from verity_vllm.pipeline import gc_tuning
+    from verity_vllm import gc_tuning
 
     with gc_tuning.tuned():
         return _load(cfg, rank, world, definitions)

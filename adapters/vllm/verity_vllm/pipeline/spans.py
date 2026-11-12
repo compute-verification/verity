@@ -23,6 +23,8 @@ from collections import defaultdict
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+__all__ = ["Spans"]
+
 COMPONENTS = ("acquisition", "movement", "hashing", "root_finalisation", "opening_generation", "wait")
 
 
