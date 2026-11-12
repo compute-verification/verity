@@ -1084,12 +1084,9 @@ def member_line(line: str) -> tuple[str, bool] | None:
     a closing round; a line opening a round (`OPEN_EVENT`) is of the tree its ``tree`` names, and a closing round
     where the round is `CLOSING_ROUND` of the stream ``session`` (`coin_tree.SESSION`). None of every other line: a
     root's line and its coin's release are the window's sample's, no member's."""
-    try:
-        doc = _event(line)
-    except CoinError:
+    if not tree_line(line):
         return None
-    if not isinstance(doc, dict):
-        return None
+    doc = _event(line)
     if doc.get("event") == TREE_EVENT:
         return (doc["root"], False) if type(doc.get("root")) is str else None
     if doc.get("event") == OPEN_EVENT and type(doc.get("tree")) is str:
