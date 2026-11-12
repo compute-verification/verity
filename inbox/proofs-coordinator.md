@@ -92190,3 +92190,75 @@ Next entry by 16:25Z.
   replay is the queue's; no suite ran on `main` after `8b536f5c1d62` merged with the head.
 - Next from me: the body's Lean item and its "Not run" restated with this run (no push, the head does not move); then
   the NET-369 entry. Nothing marked, nothing posted.
+
+## ACCOUNTS, Thu 12 Nov 15:38Z: the demo's row at a premised ρ compiles and prints; way A is in the row's text; #9313 holds `main` as of 15:12Z and its records pass, but `main` moved under it again: do not mark its head yet
+
+**The row, as the scratch prints it at ρ = 5·10⁻⁴** [run `r20261112-152030-770d`, exit 0 in 70 s wall; the two lines are its log's output of `#eval (weekRows bare onPremise).map fun r => r.toJson.compress`]:
+
+```json
+{"capacity":60480000000000000,"error":"1/1000","free":60480000000000000,"metric":"sent","part":"link","place":"up0","premises":[],"reading":"registered","session":null,"sessions":1,"status":"certified","unit":"bits","unpriced":[],"verified":0}
+{"capacity":60480000000000000,"error":"1/1000","free":1060464880000000,"metric":"sent","part":"link","place":"up0","premises":["ClockRateWithin(vm0, 5e-4)"],"reading":"registered","session":null,"sessions":1,"status":"certified","unit":"bits","unpriced":[],"verified":59419535120000000}
+```
+
+The first line is the row of record, the second the premised row. They are two rows of one link over one week; the second replaces nothing and joins no total.
+
+**What the example is** [read: the scratch's `Account.lean` lines 1175 to 1207, on `c962872c9231` plus the scratch diff]. One link, `up0`, of β = 10¹¹ bit/s (the example's figure, not the demo's); a monitoring period of one week (604,800 s) in ticks of 1 ns; one certifier's series, timed by `cert0`, of 604,800,000 steps of 1 ms; one answer that certifies at most 10¹⁵ bits sent over those steps, at error 1/1000. `cert0`'s location states no drift.
+
+| | Row of record | Premised row, ρ = 1/2000 |
+|---|---|---|
+| `premises` | none | `ClockRateWithin(vm0, 5e-4)` |
+| Capacity, bits | 6.048·10¹⁶ | 6.048·10¹⁶ |
+| Time the series covers | 0 s | 604,195.3512 s |
+| Time charged at capacity | 604,800 s | 604.6488 s |
+| Verified (covered capacity less the 10¹⁵ bits the answer allows), bits | 0 | 5.941953512·10¹⁶ |
+| Free, bits | 6.048·10¹⁶ | 1.06046488·10¹⁵ (10¹⁵ allowed, 6.046488·10¹³ uncovered) |
+
+- **Where the 604.6488 s come from** [derived; the scratch's two guards on `stepsWithin` and `ticksCredited` state both steps and pass in the same run]. A clock that may be slow by ρ may end its last ρ·N steps past the week, so 302,400 steps (302.4 s) are dropped; each step kept is credited at the shortest time it can cover, (1 − ρ) ms. Covered: 604,497,600 × 0.9995 ms = 604,195.3512 s. Not covered: T·(1 − (1 − ρ)²).
+- **Per monitoring period** [derived, from that formula]. The share not covered is 1 − (1 − ρ)² = 0.099975% of any period the series spans whole: 604.6488 s of a week, 2,591.352 s of a 30-day month, 31,528.116 s of a 365-day year. At the example's 10¹¹ bit/s that is 6.046488·10¹³, 2.591352·10¹⁴ and 3.1528116·10¹⁵ bits. None of these is a datacenter's or the demo's figure: the demo's link and its answer's amount are network's, and I have neither.
+
+**How it is shaped** [read: the same file, lines 493 to 520 and 700 to 745].
+
+- `structure Premised where device : String; drift : Figure; premise : String`. `rows` takes a last argument `premised : List Premised := []`, beside the Site; no answer states one.
+- A device whose location states a drift is timed of record at that drift, and an entry of the list for it is ignored. A device that states none times nothing of record, as before.
+- For a flow's amount with a certified series timed on a listed device, `rows` prints the rows of record first, then the same rows computed at the listed drift, each with `Row.premises` set to the premises' names. `Loc.drift` is never written.
+- `Row.toJson` gains the key `premises`, a list of strings, empty on a row of record.
+- Guards that pass in the run: the rows of record are the same with and without the list; a location that states the drift is timed of record with no premise; a listed device that times no series adds no row; the JSON above, as text.
+
+**Three things a reader should know before quoting it.**
+
+1. **The premise's name is the auditor's string; `rows` checks nothing in it.** [read] compute-research's card (`verity/hardware/cards/nebius-vm-monotonic-raw.toml` lines 15 to 16, at `9f66622d243f`, #9308's head now) names the premise `ClockRateWithin(host, 5e-4)` for the host the auditor's device runs in. The example's `cert0` sits under `site0` with no host (`Registration.lean` line 424 of the scratch), so `vm0` in the printed row is a name I wrote, not a location of the example's Site. If the row must name a host the Site registers, the Site needs the auditor's device's host as a location, or `Premised` names the host and `rows` checks it is the device's parent. I built neither: your ruling says device, ρ and the premise's name.
+2. **`status` reads `certified` on both rows**, the row of record included, though it covers 0 s. That is how the period's scratch prints a series its clock cannot place; I did not change it here. A reader who filters on `status` alone would count the premised row as certified: the filter for a figure of record is `premises == []`.
+3. **"Joins no total" holds because `rows` builds no total.** [read] `rows` returns a list; nothing in `Account.lean` sums rows. Whoever sums them (compose, a report) must skip a row whose `premises` is not empty; the docstring of `Row` says so, and no code enforces it.
+
+**Way A** [run `r20261112-152030-770d`; the earlier guards on `Site.readRate` in `r20261112-142553-92c4`].
+
+- `Loc`'s docstring (`Site.lean` lines 163 to 164 of the scratch): "A disk leaf's `bw` bounds the bytes that come off the disk, not a read the host returns from memory, so a read rate over a host's disk leaves counts the host's DRAM tier's rate beside them, once."
+- A read rate's row over a set with a host's disk leaf prints `"reading":"registered, the host's DRAM tier counted once beside its disk"` (`Part.READ_WITH_DRAM`, `Account.lean` line 171), in place of `"registered"`. The row not audited prints the same reading: on the example with a disk of 2,000 and DRAM of 6,554 bit/tick over 1,000 ticks, capacity (2,000 + 6,554) × 1,000.
+
+**Scratch runs.**
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-151805-e1f6` | `Account.lean`, first try | exit 1: a `Decidable` instance not found for one condition of `rows`; written as a Boolean |
+| `r20261112-152030-770d` | `Account.lean` with the probe that prints the rows | exit 0 in 70 s wall |
+| `r20261112-152234-9612` | `Account.lean`, the probe removed and its output frozen in a guard | exit 0 in 848 s wall, most of it waiting for a slot |
+| `r20261112-152234-badf` | `SiteV2Guards.lean` | exit 0 in 453 s wall |
+| `r20261112-152234-de4b` | `Registration.lean` | exit 0 in 840 s wall |
+
+The scratch is on no branch; its diff is `site-v2-with-period-scratch.diff` in my artifacts (1,747 lines, sha256 `1c7936d7ab2ae507…`), on `c962872c9231`. Still not in it: network's rule for the mark, the name `egress` for the link's part (the row prints `"part":"link"`), a Python mirror, and the wrapping of 13 lines of `Site.lean` over 120 columns.
+
+**#9313, head `19474e53e4f7`: not yet a ready line.**
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-151249-4750` | records run of `security` at `19474e53e4f7` | [run] pass (`security`, `security/Properties`, `security/Proofs`); the lock it regenerated is the head's file, byte for byte (`cmp`). No kernel replay, no tests |
+| `r20261112-151252-2d2e` | quick tier of the changed suites at `19474e53e4f7`, against `main` at `1a3ea2e6b06b` | running since 15:13Z on `vy-nebius-cpu-6`; ETA about 16:20Z [guess: the last tier took about an hour] |
+| `r20261112-140308-6cbd` | quick tier at the head before the merge, `9c1d260d0f87` | [run] 63 suites, 63 passed, 0 failed |
+
+- [run] The merge of 15:12Z holds `main` at `1a3ea2e6b06b`, with #9271. Against that `main` the lock differs in two lines: `Verity.Accel.H200.card`'s hash and its module's digest.
+- **`main` moved again after it.** [run: `git merge-tree origin/main 19474e53e4f7`, `main` at `5c0ae25d6c28`, at 15:31Z] #9298 (the leaves' rates) reached `main` after my merge and rewrites the same four doc texts (`verity/hardware/README.md`, `nodes/__init__.py`, the two node files), one hunk each. So `19474e53e4f7` conflicts with `main` again. **Do not mark it.**
+- **A second merge is made and not pushed**, because your order said once. Local commit `0925b60b20c4` (parents `19474e53e4f7` and `5c0ae25d6c28`): each of the four texts is `main`'s with `store.dram` read as `store.dram_installed`. [run, on my VM, the light files only] 231 tests of `test_nodes.py`, `test_site.py`, `test_lean.py` and `test_cards.py` pass; `python -m verity.hardware.lean` reports the generated modules current; the lock differs from `main` in the same two lines. Its four resolved texts are in my artifacts (`sheet-second-merge-four-texts.diff`).
+- **Yours to say:** (a) I push it now and rerun (the push 1 minute, the records run about 25, the tier about 65), or (b) one merge on the day you mark. My reading is (b) unless Daniel answers today: memory's lane changed these four texts twice this afternoon, and each merge costs an hour of a slot.
+- The body's edit (the one sentence on the mark's date, the merge, these runs) goes on at the tier's verdict.
+
+**Not established.** The whole `check` and a kernel replay of #9313's Lean. The demo's own link, β and answer, so no row above is the demo's figure. Whether the row must name a host the Site registers (point 1). A Python mirror of any of the scratch.
