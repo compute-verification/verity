@@ -1007,7 +1007,8 @@
   "CoreProtocol.Site",
   "Definitions.Flock.Audit",
   "Definitions.Flock.Game",
-  "Properties.Flock.Nets"
+  "Properties.Flock.Nets",
+  "Properties.Challenger"
  ],
  "witnesses": {
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
@@ -1406,6 +1407,16 @@
   "Properties.CertifierDevice.issuerVerifies": {
    "type_hash": "11f8ab25570c9b0dcd30644a0ad3a36b753d637c94108f0acaee5d60c4d1f99b",
    "unfolded_hash": "a5e57eeb37704509ed54d1a22e04d20e7f71bb1aca5e006a4f38e7c5b101d5f7"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitment": {
+   "type_hash": "d25d13708014dcd8d2eb549d47fd2fdc14f164abb43696f548a4e9609d653c15",
+   "missing": "honest",
+   "why": "an honest instance is a whole withheld session that Challenger.drawCoins reads: a key from LMS key generation, the auditor's ledger with its signed open, the session's signed record and its close over the release log, and each coin of the family opened under the session's commitment with its salt and path, all as the JSON the reader parses; no proof builds one yet"
+  },
+  "Properties.Challenger.Drawn.familyOneCommitmentRead": {
+   "type_hash": "c32f42da09da1597027e700239c40027d4973993f5c7627028ccdb1bf9500f31",
+   "missing": "honest",
+   "why": "an honest instance is a whole withheld session that Challenger.coinsReason passes: the evidence's key from LMS key generation, the auditor's ledger with its signed open, the session's signed record and its close over the release log, and each coin read opened under the session's commitment with its salt and path, all as the JSON the reader parses, with the bytes read; no proof builds one yet"
   },
   "Properties.Composition.acceptMeans": {
    "type_hash": "62c9c4ab346e4e8737a8dd33e32a7442528b5943912fec653650c09f23382320",
