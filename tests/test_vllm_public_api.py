@@ -45,7 +45,8 @@ PUBLIC = {
                                        "that see each pass begin and end, with its runner state, output or error",
     "verity_vllm.engine.stock": "I1: a stock engine at the pin, with no protocol on: an in-process LLMEngine, vLLM's "
                                 "SamplingParams and its version",
-    "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
+    "verity_vllm.engine.served_seed": "I1: the seed a served request is sampled under (its own, the public default for a greedy "
+                                      "one, or derived from its window's seed coin and its id) and the windows' seed coins",
     "verity_vllm.program.predict.block_counts": "I7: a window circuit record's (c, k)-inference blocks by NciCheck.Count's "
                                                 "rule: its session Definition, gates by the gate table, fresh bits at the "
                                                 "verifier's pins, and a day's public judgment against n, no count (block-counts)",
@@ -107,6 +108,15 @@ PUBLIC = {
                                           "b.ingress and b.egress rows by size class, committed as the engine core serves "
                                           "(BoundaryWindows, which benchmarks/serve_tax's plugin installs), a class's "
                                           "layout, record and files (Layout, record, reopen), which "
+                                          "benchmarks/one_stage/two_stage.py registers",
+    "verity_vllm.pipeline.boundary_tables": "I1: a two-stage window's history tables at serve: rank 0's step hook on Model "
+                                            "Runner V2 (StepHook), the builder and its channel to the boundary commitment "
+                                            "(Builder, Channel), and the rows and salts kept on the node for round 2 (Kept), "
+                                            "which benchmarks/serve_tax's plugin installs",
+    "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
+                                          "(interior, register), the block parameters it registers as values, the "
+                                          "verifier's (Supply) and the replay's own (Operand), and the challenger's "
+                                          "copies of them (span_values, link_words, link_schemas, sources, history), which "
                                           "benchmarks/one_stage/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
@@ -270,8 +280,8 @@ KNOWN = frozenset({
     "verity_vllm.protocols.pouw.pearl_c.screen",
     "verity_vllm.protocols.pouw.pearl_c.whole",
     "verity_vllm.protocols.remote_bandwidth.binder",
-    "verity_vllm.protocols.remote_bandwidth.commit_map",
     "verity_vllm.protocols.remote_bandwidth.interface",
+    "verity_vllm.protocols.remote_bandwidth.memory_map",
     "verity_vllm.protocols.remote_bandwidth.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.manifest.format",
