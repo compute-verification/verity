@@ -11,14 +11,14 @@ public import Definitions.Pous.Claims.StreamedWipeServer
 the deployed H200 as measured (`StreamedWipeMeetsServerH200`) and an 8×H200 server with a minimal context per GPU and
 a host OS, its HBM (`StreamedWipeMeetsServer8H200HBM`), its HBM and host RAM (`StreamedWipeMeetsServer8H200HBMRAM`)
 and every tier (`StreamedWipeMeetsServer8H200`). The vocabulary is
-`Security/Definitions/Pous/Model/StreamedWipeServer.lean`, the game `Security/Definitions/Pous/Model/StreamedWipe.lean`,
-the proofs `Security/Proofs/Pous/StreamedWipe/Server.lean`.
+`security/Definitions/Pous/Model/StreamedWipeServer.lean`, the game `security/Definitions/Pous/Model/StreamedWipe.lean`,
+the proofs `security/Proofs/Pous/StreamedWipe/Server.lean`.
 
-The first four are their claims (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) at the wipe's own
+The first four are their claims (`security/Definitions/Pous/Claims/StreamedWipeServer.lean`) at the wipe's own
 acceptance rule, `StreamedWipe.Accepts`. Each has its honest lemma (`Pous.Claims.<name>_meets`: its numeric
 antecedents hold at the deployed H200 as measured, `StreamedWipe.h200`) and its nontrivial lemma
 (`Pous.Claims.<name>_fails`: the claim is false at `StreamedWipe.acceptAll`), both in
-`Security/Proofs/Pous/StreamedWipe/Witnesses.lean`. The PRF term is the advantage of the distinguisher built from the
+`security/Proofs/Pous/StreamedWipe/Witnesses.lean`. The PRF term is the advantage of the distinguisher built from the
 prover, `StreamedWipe.wipeDistinguisher P`.
 
 **What they rest on.** No named assumption, as `StreamedWipe`: the PRF (C3) enters as its advantage in the conclusion,

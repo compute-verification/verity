@@ -13,7 +13,7 @@ meta import PousCheck.Run
 # A PoUS run as a core protocol
 
 `PousCheck.Run.checkAt` behind the core interface (`Core.Protocol`), PoUS's component of onsite Verity
-(`verity/core/protocols/onsite`), each byte string canonical JSON:
+(`verity/protocols/onsite`), each byte string canonical JSON:
 
 * params `{"point": {"k", "limit_ns", "params": {"blocks_per_segment", "c0", "segments", "w"}}, "session_id": hex,
   "trusted": [hex, …]}`: the point the run is checked at, the id the auditor designated for the period's session, and

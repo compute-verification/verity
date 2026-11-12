@@ -6,15 +6,15 @@ public import Definitions.Pous.Model.StreamedWipe
 # The streamed-label wipe on one server: its threshold, and the 5 GB point
 
 What the per-server statements of the streamed-label wipe read
-(`Security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`). In the physical model
-(`Security/Definitions/Accounting/Physical.lean`) a server `s` is a location whose state is at most its *assumed memory
+(`security/Definitions/Pous/Guarantees/StreamedWipeServer.lean`). In the physical model
+(`security/Definitions/Accounting/Physical.lean`) a server `s` is a location whose state is at most its *assumed memory
 capacity* `M_s` bits at every tick (`Placed.Memory`), a public parameter over every memory tier it has: each GPU's HBM,
 the host's RAM, its disks. The memory challenger fills `n` labels of 512 bits (64 bytes) into it, and
 `R = M_s − 512·n` is every bit of `M_s` the fill doesn't reach, on any tier: the boot disk, the GPU contexts, a
 driver's reserve, the host OS. At ratio `r` the fill's share of what the server keeps through the wipe is about
 `(n/r)·(512 + log₂(e·r))` bits (`fillShare`); `R` and the egress count in full.
 
-The claims (`Security/Definitions/Pous/Claims/StreamedWipeServer.lean`) take the acceptance rule as a parameter
+The claims (`security/Definitions/Pous/Claims/StreamedWipeServer.lean`) take the acceptance rule as a parameter
 (`Acceptance`, with `winRealBy` and `wipeDistinguisherBy` the game's `winReal` and `wipeDistinguisher` under it), so
 they can be stated false at `acceptAll`; and they are met at a deployment (`Deployment`), the H200 as measured (`h200`).
 -/
