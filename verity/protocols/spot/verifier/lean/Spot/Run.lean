@@ -42,7 +42,7 @@ check the stream ran on it, in the stream's order.
   names of what the block returns, which the verifier derives from the replay block's Definition in the challenger's
   program (`SecondStage.replayLinks`, `SecondStage.replayWires`, `SecondStage.replayRows`,
   `SecondStage.replayReturns`), as its `statements` check
-  (`SecondStage.check`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
+  (`SecondStage.checkAny`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
   record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
   their own roots (`own_reads`), whose rows round 2 holds.
 
@@ -237,7 +237,7 @@ private def secondStage (i : Input) (sample : Array Nat) :
   | _, none => return .ok none
 
 /-- The interior registration's audit record over the second stage's proved units, with round 2's statement check
-(`SecondStage.check`) over the first stage's replay sample `sample`: whether it accepts, and the run's `interior` entry;
+(`SecondStage.checkAny`) over the first stage's replay sample `sample`: whether it accepts, and the run's `interior` entry;
 nothing under a one-stage rule. -/
 private def interiorAudit (i : Input) (sample : Array Nat) :
     Option (Interior × Json × Json × Json × Nat) → V (Bool × List (String × Json))
@@ -255,7 +255,7 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
         wires := SecondStage.replayWires i.params.verifier.program.prog it.replay.prog.programFn,
         rows := SecondStage.replayRows i.params.verifier.program.prog it.replay.prog.programFn,
         returns := SecondStage.replayReturns i.params.verifier.program.prog it.replay.prog.programFn i.record }
-    let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
+    let rec_ := SecondStage.attach rec_ (SecondStage.checkAny SecondStage.FORM own it.statements)
       (SecondStage.interiorReads own ((it.statements.getD #[]).toList))
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])

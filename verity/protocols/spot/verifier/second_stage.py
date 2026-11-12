@@ -1334,7 +1334,9 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
 
 def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     """Round 2's statement check of `statements`, the two-stage form allowed when `allow` (`FORM` in a run): each code
-    once, with the detail it first failed with (`SecondStage.check`), the interior record's order first."""
+    once, with the detail it first failed with, the interior record's order first (`SecondStage.checkAny`:
+    `SecondStage.check` where every statement is of every slot of its part, and a statement of only its part's sampled
+    proof blocks held to `_sampled_codes`)."""
     if own.parts is None:
         found = [*_interior_failures(own), ("second-cells", CELLS_WHY)]
     elif not (_links_ok(own.parts, own) and _wires_ok(own.parts, own)):

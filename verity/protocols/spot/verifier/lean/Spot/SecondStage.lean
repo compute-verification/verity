@@ -37,7 +37,8 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     theirs, and each port of its `shared_rows` the rows the statement's registered reads give them;
   - `second-population`: its header's `units.indices` are not its part's slots in order, or its `instances` not their
     count, or more than `2^64` (`MAX_LEAVES`); or, for a statement of only its part's sampled proof blocks
-    (`sampledOnly`, `sampledCodes`), not the part's slots the second draw samples and no other (`sampledOk`);
+    (`sampledOnly`, `sampledCodes`, which `checkAny` holds it to), not the part's slots the second draw samples and no
+    other (`sampledOk`);
   - `second-roots`: its scheme is not the interior record's, or its `frame_v3` roots and `domain_ids`, its registered
     reads aside, are not the record's for its template's ports (port `p` of template `t` is the record's `t/p` when the
     record names its ports by template, else `p`), each of which it roots or reads;
@@ -835,7 +836,9 @@ def sampledOnly (q : Nat) (p : Part) (drawn : Array Nat) (h : Json) : Bool :=
 
 /-- The rows registered-reads entry `e` gives slots `slots` (slot `reads_from + k` reads row `reads[k]`), each once. -/
 def rowsRead (e : Json) (slots : Array Nat) : Nat :=
-  let f := match getD e "reads_from" with | .null => 0 | x => (nat? x).getD 0
+  let f : Nat := match getD e "reads_from" with
+    | .null => 0
+    | x => (nat? x).getD 0
   match getD e "reads" with
   | .arr rs => ((slots.toList.filterMap fun u => if u < f then none else (rs[u - f]?).bind nat?).eraseDups).length
   | _ => 0
@@ -1084,9 +1087,8 @@ def detailOf (i : Nat) (t : Json) : Json := Json.mkObj [("statement", Lean.toJso
 def templates (ss : List Json) : List String := ss.filterMap fun j => (Stmt.ofJson? j).map (·.template)
 
 /-- Statement `i` of `ss`'s failures, `(code, detail)` each: `second-statement` for one that is not a statement,
-`second-template` for one for no part's template or an earlier statement's, else its failing checks (`sampledCodes`
-for one of only its part's sampled proof blocks, `sampledOnly`; else `stmtCodes`), its header placed at its template's
-position (`posOf`). -/
+`second-template` for one for no part's template or an earlier statement's, else its failing checks, its header placed
+at its template's position (`posOf`). -/
 def stmtFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : List (String × Json) :=
   match Stmt.ofJson? (ss.getD i .null) with
   | none => [("second-statement", detailOf i .null)]
@@ -1094,8 +1096,7 @@ def stmtFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : List
     match ps.find? (·.template == s.template) with
     | some p =>
       if (templates (ss.take i)).contains s.template then [("second-template", detailOf i (.str s.template))]
-      else ((if sampledOnly own.sample.size p own.drawn s.header then sampledCodes else stmtCodes)
-          own (byTemplate own.interior) (posOf ps s.template) p s).map
+      else (stmtCodes own (byTemplate own.interior) (posOf ps s.template) p s).map
         fun c => (c, detailOf i (.str s.template))
     | none => [("second-template", detailOf i (.str s.template))]
 
@@ -1229,6 +1230,48 @@ def check (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
 -- of the declaration that first asks for them, and the theorems below that unfold `check` elaborate in parallel, so
 -- without this, whichever of them asks first decides the module's `.olean`.
 example := @check.eq_1
+
+/-- Some statement of `ss` for a template of parts `ps` is of only its part's sampled proof blocks (`sampledOnly`). -/
+def anySampled (own : Own) (ps : Array Part) (ss : List Json) : Bool :=
+  ss.any fun j =>
+    match Stmt.ofJson? j with
+    | some s =>
+      match ps.find? (·.template == s.template) with
+      | some p => sampledOnly own.sample.size p own.drawn s.header
+      | none => false
+    | none => false
+
+/-- `stmtFailures`, a statement of only its part's sampled proof blocks (`sampledOnly`) held to `sampledCodes` and any
+other to `stmtCodes`. -/
+def sampledFailures (own : Own) (ps : Array Part) (ss : List Json) (i : Nat) : List (String × Json) :=
+  match Stmt.ofJson? (ss.getD i .null) with
+  | none => [("second-statement", detailOf i .null)]
+  | some s =>
+    match ps.find? (·.template == s.template) with
+    | some p =>
+      if (templates (ss.take i)).contains s.template then [("second-template", detailOf i (.str s.template))]
+      else ((if sampledOnly own.sample.size p own.drawn s.header then sampledCodes else stmtCodes)
+          own (byTemplate own.interior) (posOf ps s.template) p s).map
+        fun c => (c, detailOf i (.str s.template))
+    | none => [("second-template", detailOf i (.str s.template))]
+
+/-- `failures` over `sampledFailures`. -/
+def failuresSampled (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : List (String × Json) :=
+  let found := interiorFailures own ++ (List.range ss.length).flatMap (sampledFailures own ps ss) ++
+    orderFailures ps ss ++ coverFailures ps ss ++ reportedFailures own ss
+  if found.isEmpty && !allow then [("two-stage-form", Json.str FORM_WHY)] else found
+
+/-- **Round 2's statement check of either shape of statement**: `check` itself where every statement is of every slot
+of its part. Where the design is derived and one is of only its part's sampled proof blocks (`anySampled`), the same
+failures in the same order, that statement held to `sampledCodes` (`failuresSampled`). No theorem is about this
+function yet: `check_ok` and what follows from it are about `check`. -/
+def checkAny (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
+  match own.parts, stmts with
+  | some ps, some ss =>
+    if designOk ps own && anySampled own ps ss.toList then
+      (failuresSampled allow own ps ss.toList).foldl (fun (c : Check) x => c.fail x.1 x.2) {}
+    else check allow own stmts
+  | _, _ => check allow own stmts
 
 /-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, and the reads
 `reads` that rest on the interior's own values (`interiorReads`) as `interior_reads` where there are any. It fails where

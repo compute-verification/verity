@@ -802,10 +802,10 @@ private def secondOwn (j : Json) : V (Bool × SecondStage.Own × Option (Array J
       verified := SecondStage.verifiedOf verdicts, refs, refReads, wires, rows, returns }
   return (allow, own, stmts)
 
-/-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.check`). -/
+/-- `second_stage.check`'s input (`secondOwn`) to its verdict (`SecondStage.checkAny`). -/
 def secondStatements (j : Json) : V Json := do
   let (allow, own, stmts) ← secondOwn j
-  return (SecondStage.check allow own stmts).toJson
+  return (SecondStage.checkAny allow own stmts).toJson
 
 /-- `second_stage.check`'s input (`secondOwn`) to the reads that rest on the interior's own values
 (`SecondStage.interiorReads`), each `{"template", "port", "value"}`. -/
