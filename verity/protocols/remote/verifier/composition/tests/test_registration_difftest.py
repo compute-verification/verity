@@ -68,6 +68,15 @@ ITEMS = (WEIGHTS, {"domain": "e" * 128, "kind": "theta", "leaves": 1, "root": "d
          {"advice": "verity/advice/v1", "cap": 32, "digest": "f" * 128, "kind": "builder"})
 DAY0 = G.Declaration(0, "1" * 128, ("block0",))
 EXAMPLE = (G.site((SHEET,), LOCS, LINKS), G.Information(ITEMS), DAY0)
+#: An auditor's host at the site (the Lean's `vm0`), and `AUDITOR` holding its key (`withVm`).
+VM0 = S.Loc("vm0", "auditor-host", "site0", owner="auditor", key="k2", scheme=LMS)
+WITH_VM = dataclasses.replace(AUDITOR, keys=(*AUDITOR.keys, ("vm0", "k2", LMS)))
+
+
+def in_vm(host: S.Loc = VM0) -> list:
+    """The example's site with its certifier in the auditor's host `host`, registered after it (the Lean's `inVm`)."""
+    locs = tuple(dataclasses.replace(x, parent="vm0") if x.id == "cert0" else x for x in LOCS)
+    return [G.site((SHEET,), (*locs, host), LINKS)]
 
 
 def _wrap(f):
@@ -124,12 +133,13 @@ class RegistrationPort(D.ProtocolPort):
         return out
 
 
-IDS = ["site0", "node0", "node1", "gpu0", "hbm0", "cert0", "chal0", S.OUTSIDE, "up0"]
+IDS = ["site0", "node0", "node1", "gpu0", "hbm0", "cert0", "chal0", S.OUTSIDE, "up0", "vm0"]
 HEX = st.sampled_from(["a" * 128, "b" * 128, "e" * 128])
 locs = st.builds(S.Loc, st.sampled_from(IDS), st.sampled_from(S.KINDS), st.none() | st.sampled_from(IDS),
                  st.sampled_from(S.OWNERS), st.sampled_from(["", SHEET.digest(), SHEET_B.digest()]),
                  st.none() | st.sampled_from(S.TIERS), st.sampled_from([0, 1, 1 << 30, (64 << 30) + 1]),
-                 st.sampled_from(["", "k0", "k1"]), st.sampled_from(["", LMS, "x"]), st.sampled_from([None, 0, 6554]),
+                 st.sampled_from(["", "k0", "k1", "k2"]), st.sampled_from(["", LMS, "x"]),
+                 st.sampled_from([None, 0, 6554]),
                  st.sampled_from([None, 1 << 25]), st.sampled_from([(), (("disk", 50),)]),
                  st.sampled_from([None, Fraction(1, 10)]), st.sampled_from([None, NS, 0]))
 links = st.builds(S.Link, st.sampled_from(["up0", "up1", "mc0", "l3", "gpu0"]),
@@ -165,7 +175,7 @@ def pick(draw, xs):
 
 #: Values a location's or link's field takes when a change sets it.
 FIELDS = {"kind": S.KINDS, "parent": [None, *IDS], "owner": S.OWNERS, "sheet": ["", SHEET.digest(), SHEET_B.digest()],
-          "tier": [None, *S.TIERS], "bytes": [0, 1, 64 << 30, (64 << 30) + 1], "key": ["", "k0", "k1"],
+          "tier": [None, *S.TIERS], "bytes": [0, 1, 64 << 30, (64 << 30) + 1], "key": ["", "k0", "k1", "k2"],
           "ends": [("node0", S.OUTSIDE), ("node0", "node0"), ("chal0", "hbm0"), ("cert0", "node0"), ("up0", "node0")],
           "beta": [None, 0, 1], "unmediated": [None, "a stand-in"], "id": IDS, "scheme": ["", LMS, "x"],
           "bw": [None, 0, 6554], "chip": [None, 1, 1 << 25], "time_unit": [None, 0, NS, 2 * NS],
@@ -175,13 +185,15 @@ FIELDS = {"kind": S.KINDS, "parent": [None, *IDS], "owner": S.OWNERS, "sheet": [
 #: Site entries that, after the example's, each fail one check of their own: an uplink no certifier splits
 #: (`uncertified`, onsite), a host's memory no challenger reaches (`challenger-reach`, onsite), a device's memory over its
 #: sheet's (`capacity`), a sheet the auditor has no data sheet for (`sheet-digest`), a certifier that splits no uplink
-#: (`kind`). The second is checked under `WIDE`, which has figures for its host and DRAM.
+#: (`kind`), an auditor's host whose key the auditor does not hold (`owner`; `WITH_VM` holds it). The second is checked
+#: under `WIDE`, which has figures for its host and DRAM.
 TWISTS = (G.site(links=(S.Link("l3", ("node0", S.OUTSIDE), 1, 0),)),
           G.site(locs=(S.Loc("node1", "host", "site0", chip=1 << 25),
                        S.Loc("dram1", "memory", "node1", tier="dram", bytes=1, bw=6554))),
           G.site(locs=(S.Loc("hbm1", "memory", "gpu0", tier="hbm", bytes=64 << 30),)),
           G.site((SHEET_B,), (S.Loc("gpu1", "device", "node0", sheet=SHEET_B.digest()),)),
-          G.site(locs=(S.Loc("cert1", "certifier", "site0", owner="auditor", key="k0", scheme=LMS),)))
+          G.site(locs=(S.Loc("cert1", "certifier", "site0", owner="auditor", key="k0", scheme=LMS),)),
+          G.site(locs=(VM0,)))
 
 
 @st.composite
@@ -261,7 +273,7 @@ def cases(draw) -> dict:
     if log and not pick(draw, range(8)):
         k = pick(draw, range(len(log)))
         log[k] = dataclasses.replace(log[k], previous=pick(draw, ["0" * 128, S.genesis("remote")]))
-    auditor = pick(draw, [AUDITOR] * 6 + [G.Auditor(), WIDE, dataclasses.replace(AUDITOR, sheets=(SHEET_B,)),
+    auditor = pick(draw, [AUDITOR] * 6 + [G.Auditor(), WIDE, WITH_VM, dataclasses.replace(AUDITOR, sheets=(SHEET_B,)),
                                          dataclasses.replace(AUDITOR, tolerance=0),
                                          dataclasses.replace(AUDITOR, tolerance=1),
                                          dataclasses.replace(AUDITOR, keys=(("cert0", "k1", LMS), ("chal0", "k1", LMS))),
@@ -356,7 +368,11 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
                     _listing(ways=(("eth0", 1000),))), "entry 1: inventory"),
               (case("remote", chain("remote", [G.site(locs=LOCS[:2], links=(_eth0(None, None),))])), "entry 0: kind"),
               (case("remote", chain("remote", [G.site(locs=(LOCS[0], S.Loc("node0", "host", "site0")))])),
-               "entry 0: figures")]
+               "entry 0: figures"),
+              (case("onsite", chain("onsite", in_vm()), WITH_VM), None),
+              (case("onsite", chain("onsite", in_vm())), "entry 0: owner"),
+              (case("onsite", chain("onsite", in_vm(dataclasses.replace(VM0, parent="node0"))), WITH_VM),
+               "entry 0: kind")]
     with D.Server(PORT.argv()) as server:
         for c, reason in expect:
             out = reference(c)

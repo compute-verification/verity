@@ -4,7 +4,8 @@ links and log, `Site.ofLog`, and `Registration.Entry.refusal`, check for check a
 
 The Site is a tree of locations, each with its owner: the site at the root, stating the site's unit of time
 (`Site.time_unit`), its hosts, a host's devices, memory leaves by tier and bytes under a device or a host, and at the
-site the auditor's devices, its network certifiers and memory challengers (`PARENTS`), each with its key, the key's
+site the auditor's own: its devices, the network certifiers and memory challengers, and its hosts, each a machine a
+device of its may run in and one that holds none of the prover's hardware (`PARENTS`), each with its key, the key's
 scheme (`SCHEMES`) and how far its clock may drift. A host states its on-chip state and the rate its leaves of a tier
 share, and a leaf under a host the rate it is read at. Links join two ends, each a location or `OUTSIDE`, with a
 capacity `beta` in bits a second each way and a latency in the site's units of time (`LINKS`). A boundary link no
@@ -38,11 +39,11 @@ end (`incomplete`):
 | `previous` | the entry follows the log's head |
 | `duplicate-id` | no id is registered twice, `outside`'s included, and no sheet twice |
 | `unknown-ref` | each new location's parent and each new link's ends are registered |
-| `kind` | each new location sits under a parent its kind allows and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity or, where it says why no certifier splits it, at none; each certifier splits exactly one uplink |
+| `kind` | each new location sits under a parent its kind allows, so an auditor's host is at the site and holds only the auditor's devices, and has a tier exactly when it is memory; each new link joins two different ends of kinds a link may join, at a positive capacity or, where it says why no certifier splits it, at none; each certifier splits exactly one uplink |
 | `sheet-digest` | each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet |
 | `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.accepted`), and its memory figures are the auditor's; each new memory leaf directly under a host states the auditor's figures for it (its host, a rate above 0, its bytes), and no other new location a rate; each new site states the site's unit of time, above 0, and no other new location one; each new host states the auditor's figures for it (its on-chip state and each tier's shared rate, none 0), and no other new location either |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
-| `owner` | each new certifier or challenger is one of the auditor's own devices, with its key, its key's scheme, one of `SCHEMES`, and the auditor's figure for its clock's drift, below 1 where there is one; every other new location is the prover's and states no scheme and no drift |
+| `owner` | each new certifier, challenger or auditor's host is the auditor's own, with its key, its key's scheme, one of `SCHEMES`, and the auditor's figure for its clock's drift, below 1 where there is one; every other new location is the prover's and states no scheme and no drift |
 | `inventory` | the log, at its end: under each host, every memory leaf the auditor has figures for, at least its count of devices of each SKU it lists, and each way out it lists, as a link under that id with an end at the host at its rate |
 | `uncertified` | onsite: every boundary link is certified or says why no certifier splits it |
 | `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
@@ -74,16 +75,21 @@ GENESIS = "verity/registration/genesis/v1"
 OUTSIDE = "outside"
 """The rest of the world: an end every site has, whose id no location may take."""
 COMPOSITES = ("onsite", "remote")
-KINDS = ("site", "host", "device", "memory", "certifier", "challenger", "outside")
+KINDS = ("site", "host", "device", "memory", "certifier", "challenger", "auditor-host", "outside")
+"""What a location is. `host` is a machine of the prover's; `auditor-host` is a machine of the auditor's, which its
+devices may run in and which holds none of the prover's hardware. `outside`, the kind of the rest of the world, is no
+registered location's."""
 TIERS = ("hbm", "dram", "disk")
 OWNERS = ("prover", "auditor")
 PARENTS: dict[str, tuple[str | None, ...]] = {
-    "site": (None,), "host": ("site",), "device": ("host",), "memory": ("device", "host"), "certifier": ("site",),
-    "challenger": ("site",), "outside": ()}
+    "site": (None,), "host": ("site",), "device": ("host",), "memory": ("device", "host"),
+    "certifier": ("site", "auditor-host"), "challenger": ("site", "auditor-host"), "auditor-host": ("site",),
+    "outside": ()}
 """The kinds of parent a location of each kind may have, None being the root."""
 LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
-"""The pairs of kinds a link may join, in either order."""
-AUDITOR_KINDS = ("certifier", "challenger")
+"""The pairs of kinds a link may join, in either order. No link ends at an auditor's host."""
+AUDITOR_KINDS = ("certifier", "challenger", "auditor-host")
+"""The auditor's own: its devices, the network certifiers and the memory challengers, and its hosts."""
 SCHEMES = ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0")
 """The signature schemes a registered key may be of: one LMS key that signs, and a root LMS key that certifies the
 keys that sign."""
@@ -566,11 +572,11 @@ class Loc:
     disk leaves counts the host's DRAM tier's rate beside them, once. `chip` is a host's on-chip state in bits, as a
     sheet's is, and None on every other location. `shared` is, for a tier, the bits a second read from or written to a
     host's leaves of that tier together, where one ceiling holds them all; empty on every other location. `key` is the
-    public key one of the auditor's devices is registered under, and `scheme` the id of the signature scheme that key
-    is of (`SCHEMES`), which says how many levels of keys stand under it; both empty on every other location. `drift`
-    is how far the clock of one of the auditor's devices may run from real time, as a share of it; None on every other
-    location, and a device that states none times nothing. `time_unit` is the site's unit of time in seconds, on a
-    location of kind `site` and None on every other (`Site.time_unit`)."""
+    public key one of the auditor's devices or hosts is registered under, and `scheme` the id of the signature scheme
+    that key is of (`SCHEMES`), which says how many levels of keys stand under it; both empty on every other location.
+    `drift` is how far the clock of one of the auditor's devices may run from real time, as a share of it; None on
+    every other location, and a device that states none times nothing. `time_unit` is the site's unit of time in
+    seconds, on a location of kind `site` and None on every other (`Site.time_unit`)."""
 
     id: str
     kind: str
@@ -850,12 +856,12 @@ def _lookup(pairs: Iterable[tuple[str, Any]], i: str) -> Any:
 @dataclass(frozen=True)
 class Auditor:
     """What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the
-    SKU's; the relative tolerance registration allows around an estimate; the key of each of its own devices and the
-    scheme it is of, by the device's id (`keys`, each `(id, key, scheme)`); its figures for each memory leaf directly
-    under a host, by the leaf's id (`memory`); its figures for each host, by the host's id (`hosts`); and how far each
-    of its own devices' clocks may run from real time, by the device's id (`drift`). The first under an SKU or an id
-    is the one the check reads. That these figures are the hardware is a public input: no check holds it and no
-    premise says it, and a result is over the registered hardware."""
+    SKU's; the relative tolerance registration allows around an estimate; the key of each of its own devices and hosts
+    and the scheme it is of, by its id (`keys`, each `(id, key, scheme)`); its figures for each memory leaf directly
+    under a host, by the leaf's id (`memory`); its figures for each host of the prover's, by the host's id (`hosts`);
+    and how far each of its own devices' clocks may run from real time, by the device's id (`drift`). The first under
+    an SKU or an id is the one the check reads. That these figures are the hardware is a public input: no check holds
+    it and no premise says it, and a result is over the registered hardware."""
 
     sheets: tuple[Sheet, ...] = ()
     tolerance: Fraction = Fraction(0)
@@ -1072,11 +1078,15 @@ class Site:
                 "rate": {"cuda": cuda, "oracle": oracle, "tc": math.ceil(tick * max(f.peak_rate))}}
 
     def host(self, i: str) -> str | None:
-        """The host a location is in: itself when it is a host."""
+        """The host of the prover's a location is in: itself when it is one. None for a location in none, as the
+        auditor's devices and hosts are."""
         x = self.loc(i)
         if x is None:
             return None
-        return x.id if x.kind == "host" else self.host_of(x)
+        if x.kind == "host":
+            return x.id
+        h = self.host_of(x)
+        return h if h is not None and self.kind(h) == "host" else None
 
     def _within(self, x: Loc, i: str) -> bool:
         """`x` is `i` or lies under it: `i` is on its chain of parents, followed at most once per location."""
@@ -1181,8 +1191,9 @@ def _refs(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
 
 
 def _kinds(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
-    """Parents and tiers by kind, links between kinds a link may join, each at a positive capacity or, where it says
-    no certifier splits it, at none, and each certifier splitting exactly one uplink."""
+    """Parents and tiers by kind, so an auditor's host is at the site and holds only the auditor's devices; links
+    between kinds a link may join, each at a positive capacity or, where it says no certifier splits it, at none, and
+    each certifier splitting exactly one uplink."""
     t = s.add(e)
     for x in e.locs:
         if ((None if x.parent is None else t.kind(x.parent)) not in PARENTS[x.kind]
@@ -1279,13 +1290,13 @@ def _capacity(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
 
 
 def _owners(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
-    """Each new certifier or challenger is one of the auditor's own devices, owned by it, with its key, its key's
+    """Each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key, its key's
     scheme, one of `SCHEMES`, and the auditor's figure for its clock, below 1 where there is one; every other new
     location is the prover's and states no scheme and no clock."""
     for x in e.locs:
         if x.kind in AUDITOR_KINDS:
             if x.owner != "auditor" or a.key(x.id) != x.key or a.scheme(x.id) != x.scheme:
-                return f"{x.kind} {x.id} isn't one of the auditor's own devices, with its key and scheme"
+                return f"{x.kind} {x.id} isn't the auditor's own, with its key and scheme"
             if x.scheme not in SCHEMES:
                 return f"{x.kind} {x.id}'s key is of scheme {x.scheme!r}, not one of {list(SCHEMES)}"
             if x.drift != _lookup(a.drift, x.id) or (x.drift is not None and x.drift >= 1):

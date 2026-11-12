@@ -108,7 +108,8 @@ SHEET_S = figures(SHEET_A, clock=Fraction(21, 20) * GHZ, uniform_s8=Fraction(21,
 the higher rate it states."""
 A, B, Q, S = SHEET_A.digest(), SHEET_B.digest(), SHEET_Q.digest(), SHEET_S.digest()
 AUDITOR = {"onsite": Auditor((SHEET_A, SHEET_B), TOLERANCE,
-                             (("cert0", "dummy-cert0-key", SCHEME), ("chal0", "", SCHEME)),
+                             (("cert0", "dummy-cert0-key", SCHEME), ("chal0", "", SCHEME),
+                              ("vm0", "dummy-vm0-key", SCHEME), ("chal9", "", SCHEME)),
                              tuple(MEMORY.items()), tuple(HOSTS.items())),
            "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE, (), tuple(MEMORY.items()), tuple(HOSTS.items()))}
 SITE0 = Loc("site0", "site", time_unit=NS)
@@ -149,14 +150,17 @@ ENTRIES = {
     "empty-memory": ("capacity", Entry("", locs=(Loc("hbm9", "memory", "gpu0", tier="hbm"),))),
     "foreign-certifier": ("owner", Entry("", locs=(Loc("cert9", "certifier", "site0", "auditor", key="00"),),
                                          links=UPLINK9)),
-    "auditor-host": ("owner", Entry("", locs=(replace(host("node9"), owner="auditor"),))),
+    "auditor-owned-host": ("owner", Entry("", locs=(replace(host("node9"), owner="auditor"),))),
     "keyed-host": ("owner", Entry("", locs=(replace(host("node9"), scheme=SCHEME),))),
     "bare-uplink": ("uncertified", Entry("", links=(Link("u9", ("node0", OUTSIDE), 1, 1),))),
     "unreached-host": ("challenger-reach", Entry("", locs=(host("node1"), leaf("dram1", "dram")),
                                                  links=(Link("n01", ("node0", "node1"), 1, 1),))),
 }
 REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
-LATERS = [e for _, e in ENTRIES.values()]
+VM0 = Loc("vm0", "auditor-host", "site0", "auditor", key="dummy-vm0-key", scheme=SCHEME)
+HOUSED = Entry("", locs=(VM0, Loc("chal9", "challenger", "vm0", "auditor", scheme=SCHEME)))
+"""An auditor's host at the site with a second memory challenger in it, which the onsite auditor holds the keys of."""
+LATERS = [*(e for _, e in ENTRIES.values()), HOUSED]
 
 
 def first(composite: str, unit: Fraction = NS) -> Registration:
@@ -184,14 +188,15 @@ GENESIS_ONSITE = ("d6356b427985ba6dab9a8deb46447a8108cdd9ca3fafa720f5b51af748999
 # --- strategies ------------------------------------------------------------------------------------------------------
 
 POOL = ["site0", "node0", "node1", "gpu0", "gpu1", "gpu9", "hbm0", "dram0", "cert0", "cert9", "chal0", "uplink0", OUTSIDE,
-        "nowhere", 'gpu"\n\t\\']
+        "nowhere", 'gpu"\n\t\\', "vm0"]
 """The ids a change draws from: the site's own, unregistered ones, the outside's, a link's, and one canonical JSON
 escapes."""
 LOC_FIELDS = {"id": st.sampled_from(POOL), "kind": st.sampled_from(KINDS), "parent": st.sampled_from([None, *POOL]),
               "owner": st.sampled_from(OWNERS), "sheet": st.sampled_from([A, B, Q, S, "00", ""]),
               "tier": st.sampled_from([None, *TIERS]),
               "bytes": st.sampled_from([0, 1, 64 << 30, (64 << 30) + 1, 1 << 40]),
-              "key": st.sampled_from(["", "dummy-cert0-key", "00"]), "scheme": st.sampled_from(["", SCHEME, "x"]),
+              "key": st.sampled_from(["", "dummy-cert0-key", "dummy-vm0-key", "00"]),
+              "scheme": st.sampled_from(["", SCHEME, "x"]),
               "bw": st.sampled_from([None, 0, 28, 6554]), "chip": st.sampled_from([None, 0, 1 << 23]),
               "shared": st.sampled_from([(), (("disk", 50),), (("disk", 50), ("disk", 60))]),
               "drift": st.sampled_from([None, Fraction(0), Fraction(1, 10 ** 6), Fraction(1)]),
@@ -208,7 +213,8 @@ TOLERANCES = [Fraction(0), TOLERANCE, Fraction(1), Fraction(3, 2)]
 """None, the auditor's, one at which `figures(SHEET_B, uniform_u4=...)` is on the edge, and one past 1, which sets no lower
 bound."""
 KEYS = [("cert0", "dummy-cert0-key", SCHEME), ("cert0", "00", SCHEME), ("cert0", "dummy-cert0-key", "x"),
-        ("chal0", "", SCHEME), ("cert9", "00", SCHEME), ('gpu"\n\t\\', "", SCHEME)]
+        ("chal0", "", SCHEME), ("cert9", "00", SCHEME), ('gpu"\n\t\\', "", SCHEME),
+        ("vm0", "dummy-vm0-key", SCHEME), ("vm0", "00", SCHEME), ("chal9", "", SCHEME)]
 MEMORIES = [*MEMORY.items(), ("nvme1", MemoryFigures("node0", 0, 1 << 40)), ("dram9", MemoryFigures("node9", 1, 1))]
 HOST_FIGURES = [*HOSTS.items(), ("node0", HostFigures(1 << 25)), ("node0", HostFigures(1 << 23, ways=(("uplink0", None),))),
                 ("node1", HostFigures(1 << 23, (("sim-int8-a", 1),)))]
@@ -388,6 +394,28 @@ def test_the_sample_site(server):
     empty = {"auditor": AUDITOR["onsite"].to_json(), "log": Registration("onsite").to_json()}
     assert server.call("site_check", empty) == ("output", D.canonical({"head": GENESIS_ONSITE,
                                                                         "site": {"links": [], "locs": [], "sheets": []}}))
+
+
+def test_an_auditors_host(server):
+    """An auditor's host with a challenger in it is taken with the host's key, and refused by `owner` without it and by
+    `kind` under a host of the prover's, on both sides; in the views the host and the device in it are in no host of
+    the prover's."""
+    log = grown()
+    housed = replace(HOUSED, previous=log.head)
+    keyless = replace(AUDITOR["onsite"], keys=AUDITOR["onsite"].keys[:2])
+    under = replace(housed, locs=(replace(VM0, parent="node0"), housed.locs[1]))
+    for auditor, e, want in ((AUDITOR["onsite"], housed, None), (keyless, housed, "owner"),
+                             (AUDITOR["onsite"], under, "kind")):
+        j = {"auditor": auditor.to_json(), "entry": e.to_json(), "log": log.to_json()}
+        assert ref_refusal(j)["refusal"] == want
+        assert server.call("site_refusal", j) == ("output", D.canonical(ref_refusal(j)))
+    log = log.append(housed)
+    j = {"auditor": AUDITOR["onsite"].to_json(), "log": log.to_json()}
+    assert ref_check(j) == {"head": log.head, "site": Site.of_log(log).to_json()}
+    assert server.call("site_check", j) == ("output", D.canonical(ref_check(j)))
+    views = ref_views(j)
+    assert views["ids"]["vm0"]["host"] is None and views["ids"]["chal9"]["host"] is None
+    assert server.call("site_views", j) == ("output", D.canonical(views))
 
 
 def test_a_device_models_its_bounding_figures(server):

@@ -103,7 +103,7 @@ ENTRIES = {
     "empty-memory": ("capacity", Entry("", locs=(Loc("hbm9", "memory", "gpu0", tier="hbm"),))),
     "foreign-certifier": ("owner", Entry("", locs=(Loc("cert9", "certifier", "site0", "auditor", key="00"),),
                                          links=UPLINK9)),
-    "auditor-host": ("owner", Entry("", locs=(replace(host("node9"), owner="auditor"),))),
+    "auditor-owned-host": ("owner", Entry("", locs=(replace(host("node9"), owner="auditor"),))),
     "keyed-host": ("owner", Entry("", locs=(replace(host("node9"), scheme=SCHEME),))),
     "bare-uplink": ("uncertified", Entry("", links=(Link("u9", ("node0", OUTSIDE), 1, 1),))),
     "unreached-host": ("challenger-reach", Entry("", locs=(host("node1"), leaf("dram1", "dram")),
@@ -923,6 +923,50 @@ def test_an_auditors_device_states_its_scheme_and_drift() -> None:
     assert not holds("Owners", keyed(), cert(tenth))
     assert not holds("Owners", keyed((("cert0", Fraction(1)),)), cert(Fraction(1)))
     assert not holds("Owners", keyed(), Entry("", locs=(G_ROOT, replace(G_HOST, drift=tenth))))
+
+
+G_CERT = Loc("cert0", "certifier", "site0", "auditor", key="k0", scheme=ROOT2)
+G_IN_VM = replace(G_CERT, parent="vm0")
+G_UPLINKS = (Link("up0", ("node0", "cert0"), 1, 0), Link("up1", ("cert0", OUTSIDE), 1, 0))
+G_KEYED = replace(G_AUDITOR, keys=(("cert0", "k0", ROOT2),))
+VM_KEYED = replace(G_KEYED, keys=(*G_KEYED.keys, ("vm0", "k1", ROOT2)))
+"""`SiteV2Guards.lean`'s certifier, at the site and in the auditor's host `vm0`, its two uplinks, and the auditors
+that hold the certifier's key and the host's beside it."""
+
+
+def g_vm(parent: str = "site0") -> Loc:
+    return Loc("vm0", "auditor-host", parent, "auditor", key="k1", scheme=ROOT2)
+
+
+def test_an_auditors_host_is_the_auditors_own_at_the_site() -> None:
+    """An auditor's host, as the guards state it. `Kinds`: it is at the site, a certifier or a challenger may be in
+    it, it is under no host of the prover's, holds no device and no memory leaf, and no link ends at it. `Owners`: it
+    is the auditor's own, with its key. `Chips`: it states no on-chip bits. The auditor's inventory holds nothing of
+    it. In the views it is no host of the prover's, a device in it is in none, and a challenger in it reaches the
+    hosts its links end at."""
+    vm = g_vm()
+    assert holds("Kinds", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, vm, G_IN_VM), links=G_UPLINKS))
+    assert holds("Kinds", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, vm, replace(G_IN_VM, kind="challenger"))))
+    assert not holds("Kinds", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, g_vm("node0"))))
+    assert not holds("Kinds", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, replace(G_IN_VM, parent="node0")),
+                                               links=G_UPLINKS))
+    assert not holds("Kinds", G_AUDITOR, Entry("", locs=(G_ROOT, vm, replace(G_GPU, parent="vm0"))))
+    assert not holds("Kinds", G_AUDITOR, Entry("", locs=(G_ROOT, vm, replace(g_dram(None), parent="vm0"))))
+    assert not holds("Kinds", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, vm),
+                                               links=(Link("l0", ("node0", "vm0"), 1, 0),)))
+    assert holds("Owners", VM_KEYED, Entry("", locs=(G_ROOT, vm, G_IN_VM)))
+    assert not holds("Owners", VM_KEYED, Entry("", locs=(G_ROOT, replace(vm, owner="prover"))))
+    assert not holds("Owners", VM_KEYED, Entry("", locs=(G_ROOT, replace(vm, key="k9"))))
+    assert not holds("Owners", G_KEYED, Entry("", locs=(G_ROOT, vm)))
+    assert holds("Chips", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, vm)))
+    assert not holds("Chips", G_AUDITOR, Entry("", locs=(G_ROOT, G_HOST, replace(vm, chip=1))))
+    assert incomplete(Site((CARD,), (G_ROOT, G_HOST, g_dram(6554), g_disk(28), vm, G_IN_VM)), WITH_DISK) is None
+    assert Loc.of_json(vm.to_json()) == vm and vm.to_json()["kind"] == "auditor-host"
+    site = Site(locs=(G_ROOT, G_HOST, G_GPU, vm, G_IN_VM), links=G_UPLINKS)
+    assert (site.host("cert0"), site.host("vm0"), site.host("gpu0")) == (None, None, "node0")
+    challenged = Site(locs=(G_ROOT, G_HOST, vm, replace(G_IN_VM, id="chal0", kind="challenger")),
+                      links=(Link("mc0", ("chal0", "node0"), 1, 0),))
+    assert "node0" in challenged.reached()
 
 
 CARD = Sheet(DeviceFigures("k", 0, 0), 1, 1, 1 << 30)
