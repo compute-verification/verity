@@ -6,10 +6,12 @@
                                           --uni with a uniform instruction at each COST of an issue slot (A2u)"""
 from __future__ import annotations
 
+import argparse
+
 from verity_machine_model.sheet import at_fmax, differences, figures, lean, lines, moves, reading, sheet, uni
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     c = sub.add_parser("sheet")
     g = c.add_mutually_exclusive_group()
     g.add_argument("--lean", action="store_true", help="print the Lean module sheet.toml's `lean` names")
@@ -19,7 +21,7 @@ def add(sub) -> None:
                         "sheet's is 1)")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     s = sheet(args.data)
     if args.uni and not args.eps:
         raise SystemExit("sheet --uni prices the headline's sheet reading, so it needs --eps")

@@ -4844,7 +4844,8 @@ fn plan_of(name: &str, gpu: bool) -> Plan {
 /// witness builds its host units (`unit_ab_into`), at each `--wide` lane groups a pass (default 1,2,4,8) on each `--threads`
 /// pool size (default the global pool's) in turn, asking the cache for z at each `--ahead` distance (default 0, never, then
 /// the walk's own, `ir_block::unit_ahead`), `--reps` rounds, first with every walk mapping its own row vectors and then with
-/// the vectors kept between walks (`--keep`, default 0,1; `ir_block::keep_rows`): a `WALK` line each with its wall and CPU
+/// the vectors kept between walks, on the prover's pages and on huge ones (`--keep`, default 0,1,2; `ir_block::keep_rows`,
+/// `set_keep_huge`): a `WALK` line each with its wall and CPU
 /// seconds, the CPU seconds spent in the kernel, and whether its packed words are the first run's. The walk reads no input
 /// value, so seeded words time it as a served statement's do, and it runs on the device prover's small pages (`main`;
 /// `--huge-pages`: with the huge-page advice a CPU prover takes).
@@ -4856,7 +4857,7 @@ fn unit_walk(c: &Composite) {
     let list = |name: &str, default: &str| -> Vec<usize> { arg(name, default).split(',').map(|w| w.parse().expect(name)).collect() };
     let widths = list("--wide", "1,2,4,8");
     let aheads = list("--ahead", &format!("0,{}", flock_live::ir_block::unit_ahead()));
-    let keeps = list("--keep", "0,1");
+    let keeps = list("--keep", "0,1,2");
     let pools: Vec<rayon::ThreadPool> = list("--threads", &rayon::current_num_threads().to_string()).into_iter()
         .map(|t| rayon::ThreadPoolBuilder::new().num_threads(t).stack_size(flock_live::THREAD_STACK).build().expect("a thread pool"))
         .collect();
@@ -4876,6 +4877,9 @@ fn unit_walk(c: &Composite) {
     let (mut out, mut first) = (vec![0u64; 4 * uw * slots], None::<(bool, Vec<u64>)>);
     // the kept vectors outermost: a walk that keeps them maps them once, on its first pass, as a prover's first statement does
     for &keep in &keeps {
+        // the vectors kept before are dropped, so each case maps its own
+        flock_live::ir_block::set_keep_rows(false);
+        flock_live::ir_block::set_keep_huge(keep == 2);
         flock_live::ir_block::set_keep_rows(keep != 0);
         for rep in 0..reps {
             for pool in &pools {
@@ -4886,7 +4890,7 @@ fn unit_walk(c: &Composite) {
                     let (wall_s, cpu_s, sys_s) = (t.elapsed().as_secs_f64(), cpu_seconds() - cpu, sys_seconds() - sys);
                     let want = first.get_or_insert_with(|| (ok, out.clone()));
                     println!("WALK\t{}", json!({"net": ni, "rows": net.useful, "nnz": nnz, "slots": slots,
-                        "groups": slots.div_ceil(64), "wide": n, "ahead": ahead, "keep": keep != 0, "rep": rep,
+                        "groups": slots.div_ceil(64), "wide": n, "ahead": ahead, "keep": keep, "rep": rep,
                         "threads": pool.current_num_threads(), "one_pass": one_pass, "flat_s": flat_s, "wall_s": wall_s,
                         "cpu_s": cpu_s, "sys_s": sys_s, "ok": ok, "same": want.0 == ok && want.1 == out}));
                 }
@@ -7630,6 +7634,6 @@ fn main() {
                 println!("LIVE\t{v}");
             });
         }
-        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1] [--huge-pages]"),
+        _ => eprintln!("usage: flock-circuit serve|prove|selftest|statement|replay --instances FILE --circuit FILE [--pin SHA256] ... | stacked --table R.bin ... | unit-walk --circuit FILE [--slots N] [--wide 1,2,4,8] [--ahead 0,64] [--keep 0,1,2] [--huge-pages]"),
     }
 }

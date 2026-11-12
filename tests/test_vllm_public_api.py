@@ -105,6 +105,15 @@ PUBLIC = {
                                           "(BoundaryWindows, which benchmarks/serve_tax's plugin installs), a class's "
                                           "layout, record and files (Layout, record, reopen), which "
                                           "benchmarks/one_stage/two_stage.py registers",
+    "verity_vllm.pipeline.boundary_tables": "I1: a two-stage window's history tables at serve: rank 0's step hook on Model "
+                                            "Runner V2 (StepHook), the builder and its channel to the boundary commitment "
+                                            "(Builder, Channel), and the rows and salts kept on the node for round 2 (Kept), "
+                                            "which benchmarks/serve_tax's plugin installs",
+    "verity_vllm.pipeline.interior_rows": "I1: a two-stage window's interior at replay: the sampled spans' registration "
+                                          "(interior, register), the block parameters it registers as values, the "
+                                          "verifier's (Supply) and the replay's own (Operand), and the challenger's "
+                                          "copies of them (span_values, link_words, link_schemas, sources, history), which "
+                                          "benchmarks/one_stage/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "

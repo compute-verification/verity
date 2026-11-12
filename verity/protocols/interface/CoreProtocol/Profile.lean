@@ -10,7 +10,7 @@ that consumes another's answer.
 -/
 module
 
-public import Flock.Canon
+public import Base.Canon
 public import CoreProtocol.Ratio
 
 @[expose] public section

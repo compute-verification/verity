@@ -8,20 +8,21 @@
                                           load, with each group's placement-attested σ beside it"""
 from __future__ import annotations
 
+import argparse
 import json
 
 from verity_machine_model import capacity as C
 from verity_machine_model import eps as E
 
 
-def add(sub) -> None:
+def add(sub: argparse._SubParsersAction) -> None:
     k = sub.add_parser("capacity")
     k.add_argument("groups", nargs="+", metavar="GROUP")
     k.add_argument("--vector", help="the vector whose rows are Π (default: model.toml's current)")
     k.add_argument("--json", action="store_true")
 
 
-def run(args) -> int:
+def run(args: argparse.Namespace) -> int:
     pi = E.machine(args.vector or "", args.data)
     groups = []
     for g in args.groups:
@@ -44,6 +45,6 @@ def run(args) -> int:
     print(f"  hidden: {p.hidden:.5f} slots a SMSP-cycle, " + (", ".join(f"{k} {v:.4g}" for k, v in p.mix.items())
                                                              or "nothing") +
           f"; binding {', '.join(p.binding) or 'none'}")
-    print(f"  σ {x.sigma():.4f}  (ε_cap {x.eps_cap():.4f}; placement-attested {x.sigma_placed():.4f}; time credit B "
-          f"{x.credit():.4f}; tensor share {x.tensor():.4f})")
+    print(f"  σ {x.sigma():.4f}  (ε_capacity {x.eps_capacity():.4f}; placement-attested {x.sigma_placed():.4f}; time "
+          f"credit B {x.credit():.4f}; tensor share {x.tensor():.4f})")
     return 0

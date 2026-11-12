@@ -28,12 +28,16 @@ R = _load("pearl_c4_real", "real.py")
 RT = _load("pearl_c4_real_table", "real_table.py")
 
 
+def _fork(monkeypatch) -> None:
+    fork = multiprocessing.get_context("fork")
+    monkeypatch.setattr(R, "ProcessPoolExecutor", functools.partial(ProcessPoolExecutor, mp_context=fork))
+
+
 @pytest.fixture(autouse=True)
 def forked_workers(monkeypatch):
     """real.py's pool with forked workers, which inherit `pearl_c4_real` from this process.  A forkserver's workers (Python
     3.14's default on Linux) import the pool's callable by module name, and this module's name is importable only here."""
-    fork = multiprocessing.get_context("fork")
-    monkeypatch.setattr(R, "ProcessPoolExecutor", functools.partial(ProcessPoolExecutor, mp_context=fork))
+    _fork(monkeypatch)
 
 NAME, K, M, N = "model.layers.0.self_attn.q_proj", 1024, 128, 128
 
@@ -62,14 +66,31 @@ def capture(root: Path) -> Path:
     return src
 
 
-def test_real_activation_replay(tmp_path):
-    cap, out = capture(tmp_path), tmp_path / "out"
+@pytest.fixture(scope="module")
+def replayed(tmp_path_factory):
+    """The capture directory's replay, out of budget after one task (its exit code and checkpoints) and then resumed: the
+    capture, the output directory, and what the first run left there."""
+    root = tmp_path_factory.mktemp("replayed")
+    cap, out = capture(root), root / "out"
     args = [str(cap), str(out), "--tiles", "1", "--workers", "2"]
-    assert R.main(args + ["--budget-min", "0"]) == 99                      # one task started, then out of budget
-    assert len(list(out.glob("admit-*.json")) + list(out.glob("tile-*.json"))) == 1
-    split = json.loads((out / "split-L000-attn.json").read_text())
+    with pytest.MonkeyPatch.context() as mp:
+        _fork(mp)
+        rc = R.main(args + ["--budget-min", "0"])
+        first = {"rc": rc, "tasks": len(list(out.glob("admit-*.json")) + list(out.glob("tile-*.json"))),
+                 "split": json.loads((out / "split-L000-attn.json").read_text())}
+        assert R.main(args) == 0
+    return cap, out, first
+
+
+@pytest.mark.slow
+def test_real_activation_replay(tmp_path, replayed):
+    """The replay end to end on a capture: the split, a budget exit, the resumed run's debit and the table's row, which
+    the table's own test (on a summary) can't reach."""
+    cap, out, first = replayed
+    assert first["rc"] == 99                      # one task started, then out of budget
+    assert first["tasks"] == 1
+    split = first["split"]
     assert len(split["side"]) == K // 100 and 5 in split["side"]
-    assert R.main(args) == 0
     s = json.loads((out / "summary.json").read_text())
     x, w = s["inputs"]["L000-attn.npy"], s["weights"][NAME]
     assert x["rows"] == M and x["dnf_fail_full"] == M and x["dnf_fail_split"] == 0 and x["non_finite"] == 0
@@ -110,18 +131,19 @@ def test_the_table_flags_the_first_and_last_down_proj_and_counts_both_bounds():
     assert "12.50% at 1/1000" in text and "| Over the bound at 1/400 | Over the bound at 1/1000 |" in text
 
 
-def test_an_npz_capture_is_read_as_its_linears(tmp_path):
+@pytest.mark.slow
+def test_an_npz_capture_is_read_as_its_linears(tmp_path, replayed):
     """`fp4_v3_real.capture`'s npz (``layers.<i>.<linear>.x`` and ``.w``, float32 holding BF16): the same admission,
-    split and tile as the capture directory gives, keyed by the capture's own sha256."""
-    cap = capture(tmp_path)
+    split and tile as the capture directory gives (`replayed`), keyed by the capture's own sha256. Only a replay of each
+    form shows that the npz reader feeds the replay the directory's rows."""
+    cap, out_dir, _first = replayed
     x = np.load(cap / "L000-attn.npy")
     snap = json.loads((cap / "manifest.json").read_text())["snapshot"]
     w = (R.w_codes(Path(snap), NAME).astype(np.uint32) << 16).view(np.float32)
     npz = tmp_path / "Qwen--synthetic.npz"
     np.savez(npz, **{NAME[len("model."):] + ".x": x, NAME[len("model."):] + ".w": w})
-    out_dir, out_npz = tmp_path / "out-dir", tmp_path / "out-npz"
-    for c, o in ((cap, out_dir), (npz, out_npz)):
-        assert R.main([str(c), str(o), "--tiles", "1", "--workers", "2"]) == 0
+    out_npz = tmp_path / "out-npz"
+    assert R.main([str(npz), str(out_npz), "--tiles", "1", "--workers", "2"]) == 0
     a, b = (json.loads((o / "summary.json").read_text()) for o in (out_dir, out_npz))
     assert b["manifest_sha256"] == hashlib.sha256(npz.read_bytes()).hexdigest() and b["model"] == npz.name
     assert b["inputs"][NAME + ".npy"] == a["inputs"]["L000-attn.npy"] and b["weights"] == a["weights"]
