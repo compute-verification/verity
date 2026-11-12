@@ -36,7 +36,6 @@ from verity_vllm.commit import challenge as CH, executed_prefix as _EPX, json_ch
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.manifest.bind import HIDDEN_FAMILIES, runtime_place, split_name
 from verity_vllm.query.manifest.format import MOE_PLANES, batch_launch_shortfall
-from verity_vllm.query.manifest.format import PROMOTED_DTYPE_BYTES  # noqa: F401  -- re-exported
 from verity_vllm.query.manifest.format import PROMOTED_OBSERVATION_RULE as PROMOTED_INPUT_RULE  # noqa: F401  -- re-exported
 from verity_vllm.query.manifest.format import promoted_observation as promoted_input_acquisition  # noqa: F401  -- re-exported
 
