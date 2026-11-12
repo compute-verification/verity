@@ -490,7 +490,7 @@ circuit.
 3. Measurements: the longest cache hit read back this way is 384 tokens; nothing at an agentic load or past
    131,072 context. The design does not limit context; this node's memory stops near 400,000 tokens.
 
-## Addendum, Thu 12 Nov 03:49Z, revised 04:57Z for the two builds, the pin first (due 06:15Z): row 16 for vLLM's published line: an FP8 KV cache, five draft tokens a step, Model Runner V2
+## Addendum, Thu 12 Nov 03:49Z, revised 04:58Z for the two builds, the pin first (due 06:15Z): row 16 for vLLM's published line: an FP8 KV cache, five draft tokens a step, Model Runner V2
 
 **Row 16 stays the route. For this serve none of it is shown bit for bit: every showing was at a BF16 cache, with no
 draft token, at the pin, and the FP8 cache puts another attention kernel under every layer. What serving commits
@@ -502,21 +502,21 @@ advice for every request, at most 2.585 bits a decoding request a step, until ea
 nothing outside the token's own row, so zero stand-ins stay enough for the write. For the FP8 read, and for
 anything with draft tokens, that is not established.**
 
-**Revised 04:57Z, the pin first** (the lead's 04:06Z, 04:30Z and 04:38Z sections). **My 03:49Z lines were all read
+**Revised 04:58Z, the pin first** (the lead's 04:06Z, 04:30Z and 04:38Z sections). **My 03:49Z lines were all read
 at vLLM `main`, `20ad1db3fe90`, which is neither the build Friday serves, the pin `d9105ea8001e` (P), nor the tag
 `v0.34.0rc1` (T).** Section 0 puts each of the 69 cited places at both: at P 34 have the same text, 26 differ and 9
 are not there; at T 66 have the same text and 3 differ. **The conflict, at each build apart: at P a hit under `mtp`
 drops its trailing block; at T it drops none, and a block's key covers the token after it. vllm's reader is right at
-T, and my line was wrong where I read it.** Four more lines of mine are corrected: when a page enters the prefix
-cache; a row's draft count in a step, which is the scheduler's and not only short near a request's end; vLLM's own
-token replay, which refuses a draft at P and takes one at T; and the index keys' row, which holds at P and is not
-read at T. Between the builds the route sees five differences: the FP8 write's scale rule, the drawn token's noise,
-the hit's rule, when a page is published, and vLLM's token replay. The accept rule and the scheduler's draft
-arithmetic are the same at both. **vllm's two questions: (a) yes at both builds: the request's block computes the
-accept test and the kept count is its output, with no draft probabilities under the default; its gate count is not
-read. (b) Registered, in round 1's step record, and charged until checked: at most 2.585 bits a decode row a step
-for the kept count, and 0 for the scheduled count once the advice code models the scheduler under drafts. At P as
-every run of ours has served it, a BF16 cache and no draft token, entry 2's row 16 stands as written.**
+T, and my line was wrong where I read it.** Three more lines of mine are corrected: when a page enters the prefix
+cache; a row's draft count in a step, which is the scheduler's and not only short near a request's end; and vLLM's
+own token replay, which refuses a draft at P and takes one at T. Between the builds the route sees five differences:
+the FP8 write's scale rule, the drawn token's noise, the hit's rule, when a page is published, and vLLM's token
+replay. The accept rule and the scheduler's draft arithmetic are the same at both. **vllm's two questions: (a) yes
+at both builds: the request's block computes the accept test and the kept count is its output, with no draft
+probabilities under the default; its gate count is not read. (b) Registered, in round 1's step record, and charged
+until checked: at most 2.585 bits a decode row a step for the kept count, and 0 for the scheduled count once the
+advice code models the scheduler under drafts. At P as every run of ours has served it, a BF16 cache and no draft
+token, entry 2's row 16 stands as written.**
 
 **Sources.** P: the pin `d9105ea8001e`, the build Friday's goal serves. T: the tag `v0.34.0rc1` at `52aeb5806585`.
 M: vLLM `main` at `20ad1db3fe90` (12 Nov 03:11Z), where sections 1 to 6 were first read: **a line cited "M" below
@@ -624,10 +624,13 @@ line numbers, and 3 differ.** The notes [read, each]:
 - **(f)** **The FP8 write's scale differs.** P: a tile's largest magnitude over 448, floored at FLT_MIN, not rounded
   (P `:276-280`: `tl.maximum(tile_amax * (1.0 / 448.0), 1.1754944e-38)`). T and M: floored at 1e-4 and rounded up to
   a power of two (T `:368-374`). I had this for P as relayed from prodserve; it is now read.
-- **(g)** The index keys' quantizer at P is `_fp8_ue8m0_quantize` (P `:50-62`): one scale a token from the largest
-  magnitude floored at 1e-4, over 448. T's write adds a slot mapping of the index's own and layout options
-  (`INDEXER_CACHE_SHUFFLE`, block and head tiles, `MX_SCALE`) that P does not have. **Whether T's defaults store P's
-  132-byte row I did not read**, so section 2's item 5, "nothing changes for them", holds at P and is not read at T.
+- **(g)** **The index keys: the same quantizer and the same row at both builds on an H200.** One scale a token, its
+  largest magnitude floored at 1e-4 over 448, rounded up to a power of two (P `:50-60`; T `:64-75`); the write puts
+  a token's key bytes and its 4-byte scale at the same offsets (P `:77-86`; T `:98-119` with its options off). T's
+  options are off on an H200: the shuffled layout is ROCm's (T `model_executor/models/deepseek_v2.py:670-673`; T
+  `models/deepseek_v32/amd/rocm.py:29-32`), the packed scale is SM 10.x's (T `utils/deep_gemm.py:656-666`), and 448
+  becomes 224 only for the FNUZ type (T `kernels.py:23-27`). T also gives the index cache a slot mapping of its own,
+  which I did not follow.
 - **(h)** Plain `fp8` at P always loads the layer's scale and divides by it (P `kernels.py:300-301`); T and M skip
   the division when the scale is 1.0 (T `attention.py:366-400`, `skip_scale`). The scale is 1.0 at both, so the
   stored bytes agree unless a division by 1.0 is not the identity, which it is in IEEE arithmetic [argued].
@@ -794,8 +797,7 @@ row of a read against a committed root) [relayed; the sorting is argued, mine]:
    `model_executor/layers/attention/attention.py:148-168`) and which nothing under `vllm/` at M recomputes [ran: `rg
    calculate_kv_scales`, no match]; at 1.0 the division is skipped (M `models/deepseek_v32/attention.py:390-424`).
 5. **The index's keys** are FP8 with one scale a token at the pin already, 132 bytes (M `kernels.py:63-119`,
-   `:409-515`) [read]; nothing changes for them at P. At T their write has layout options P's does not, and whether
-   T's defaults store the same row I did not read (section 0, note g).
+   `:409-515`) [read]; nothing changes for them, at P or at T on an H200 (section 0, note g).
 6. **Nothing outside the token's own row is read.** The write is one Triton program a token (M `kernels.py:204`),
    which loads that token's row, the norm's weight, the rotation at its position and its slot [read]. No batch-mate,
    no other token of the request, no running statistic, in either format. **So zero stand-ins stay enough as far as
@@ -971,7 +973,7 @@ that nobody is building it.
   which the tree's sampler Definitions are written for (V `verity/definitions/registry/sampling.py:1-17`) [read].
 - DeepGEMM: exists; pinned again at the new build, and reached from 6 decoding requests.
 - The compile slice: a decode row of K + 1 tokens, the roll-back, the draft count a step gives a request, the
-  build's rule for a block's key (section 3, f): none in `verity/protocols/certifier/prover/compile_slice_v6.py` [relayed, prodserve].
+  build's rule for a block's key (section 0): none in `verity/protocols/certifier/prover/compile_slice_v6.py` [relayed, prodserve].
 - A kept-count class in the advice code: none, and its charge counts one output a row a step (V
   `pipeline/advice_code/codec.py:434-447`) [read]. Its scheduler model refuses speculative decoding whole (V
   `pipeline/advice_code/replay.py:23-25`) [read].
@@ -1069,6 +1071,3 @@ note a result at P says nothing of T.
    the scheduled count costs while the advice code does not model it: the same pass, the trace's row lengths.
 9. **The accept test's gate count a decode row** (section 0, a): no run on a GPU; the accept Definition under
    sampling at a vocabulary of 154,880, counted by `circuit-check`.
-10. **Whether T's index keys are P's 132-byte row** (section 0, note g): one engine start at T with the line's flags
-   and the index cache's shape in its log, or a reading of T's `kernels.py:63-119` against P's `:50-62`, which I did
-   not finish.
