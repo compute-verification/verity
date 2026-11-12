@@ -4254,7 +4254,8 @@ def test_an_announcement_that_asks_for_comments_on_an_issue_is_answered_there_by
     assert not rep["unanswered"] and [x["ts"] for x in rep["answered"]] == [post["ts"]]
     monkeypatch.delenv("LINEAR_API_KEY")
     rep = json.loads(run(capsys, "traffic", "--hours", "48", "--now", now, "--json")[1])
-    assert not rep["unanswered"] and [x["ts"] for x in rep["unchecked"]] == [post["ts"]]
+    (unread,) = rep["unchecked"]
+    assert not rep["unanswered"] and unread["ts"] == post["ts"] and unread["state"].startswith("unreadable (")
 
 
 def test_traffic_does_not_count_the_askers_own_comment_as_taken_when_linear_writes_as_a_person(monkeypatch):

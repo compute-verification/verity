@@ -2891,16 +2891,16 @@ def issue_state(ident: str, asker: str | None, cache: dict[str, tuple[bool, str]
     return cache[ident]
 
 
-def issue_commenters(ident: str, cache: dict[str, set[str] | None]) -> set[str] | None:
-    """Who commented on the Linear issue `ident` (`comment_by`), or None when Linear can't say."""
+def issue_commenters(ident: str, cache: dict[str, set[str] | str]) -> set[str] | str:
+    """Who commented on the Linear issue `ident` (`comment_by`), or why Linear can't say."""
     if ident not in cache:
         from . import linear
         q = "query($id: String!) { issue(id: $id) { comments { nodes { botActor { userDisplayName } user { name } body } } } }"
         try:
             nodes = linear.Linear().gql(q, {"id": ident})["issue"]["comments"]["nodes"]
             cache[ident] = {w for c in nodes if (w := comment_by(c))}
-        except (linear.LinearError, OSError, KeyError, TypeError, ValueError):
-            cache[ident] = None
+        except (linear.LinearError, OSError, KeyError, TypeError, ValueError) as e:
+            cache[ident] = f"{RECORD_UNREADABLE} ({e})"
     return cache[ident]
 
 
@@ -3270,7 +3270,7 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
     dropped, asks, groups, alerts = [], [], {g for h in reg["handles"] for g in group_ids(h)}, {}
     fresh: set[str] | None = None                                    # origin/main's group ids, fetched on the first unknown
     taken: dict[str, tuple[bool, str]] = {}                          # Linear issue -> (taken, its state)
-    said: dict[str, set[str] | None] = {}                            # Linear issue -> who commented on it
+    said: dict[str, set[str] | str] = {}                             # Linear issue -> who commented on it, or why unreadable
     for m in posts:
         for n in lead_names(m.get("text") or "", reg):
             if not routes.get_route(n) and n not in handles:
@@ -3297,11 +3297,11 @@ def cmd_traffic(ns: argparse.Namespace, reg: dict) -> int:
         elif len(x["to"]) > 1 and (named := LINEAR_ISSUE_URL_RE.search(m.get("text") or "")):
             replied = bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
             who, names = issue_commenters(named[1], said), len(x["to"])
-            if who is not None:
+            if not isinstance(who, str):
                 x["to"] = [n for n in x["to"] if n not in who]
-            answered = True if replied else None if who is None else not x["to"]
+            answered = True if replied else None if isinstance(who, str) else not x["to"]
             x.update(record="linear", ref=named[1],
-                     state=RECORD_UNREADABLE if who is None else f"{names - len(x['to'])} of its {names} names commented there")
+                     state=who if isinstance(who, str) else f"{names - len(x['to'])} of its {names} names commented there")
         else:
             answered = bool(m.get("reply_count")) or any(r.get("name") in ANSWER_REACTIONS for r in m.get("reactions", []))
             x.update(record="slack", ref=None, state=("replied" if m.get("reply_count") else "reacted") if answered else "no reply or reaction")
