@@ -494,6 +494,10 @@ def test_the_published_arm_starts_the_server_as_the_models_recipe_does(tmp_path,
     for model_id, why in (("moonlight", "no recipe for moonlight"), (None, "no recipe for no model")):
         with pytest.raises(SystemExit, match=why + r" \(Model.published; it holds glm53's\)"):
             S.published_context("published", model_id, None)
+    # the line of a model with no recipe, which a job never starts, adds nothing to stock's
+    plain = S.server_argv(S.ARMS["compiled"], S.MODELS["moonlight"], Path("/ck"), 8000)
+    seqs = plain.index("--max-num-seqs")
+    assert S.server_argv(S.ARMS["published"], S.MODELS["moonlight"], Path("/ck"), 8000) == plain[:seqs] + plain[seqs + 2:]
     # a recipe is its flags, its context limit and its tokenizer mode behind each front end together, and one arm
     # alone is started by it
     for name, m in S.MODELS.items():
