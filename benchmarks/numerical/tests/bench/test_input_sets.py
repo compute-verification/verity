@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import subprocess
 from pathlib import Path
 
 import numpy as np
@@ -281,6 +282,24 @@ def test_a_suite_reports_each_finished_set_to_its_caller_and_prints_nothing(tmp_
     assert G.main(["--suite", "tiny", "--seed", "9", "--out", str(tmp_path / "cli")]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert [json.loads(line)["content_digest"] for line in lines[:2]] == [s["content_digest"] for s in sets]
+
+
+def test_a_sets_source_commit_is_the_callers_else_the_checkouts_head_else_none(monkeypatch):
+    def git(code, out):
+        return lambda cmd, **kw: subprocess.CompletedProcess(cmd, code, stdout=out, stderr="")
+
+    head, named = "0123456789abcdef0123456789abcdef01234567", "89abcdef0123456789abcdef0123456789abcdef"
+    monkeypatch.setattr(G.shutil, "which", lambda name: f"/usr/bin/{name}")
+    monkeypatch.setattr(G.subprocess, "run", git(0, head + "\n"))
+    monkeypatch.setenv("RESEARCH_SOURCE_COMMIT", named)
+    assert G._versions()["git_head"] == named
+    monkeypatch.delenv("RESEARCH_SOURCE_COMMIT")
+    assert G._versions()["git_head"] == head
+    monkeypatch.setattr(G.subprocess, "run", git(128, "HEAD\n"))
+    assert G._versions()["git_head"] is None
+    monkeypatch.setattr(G.shutil, "which", lambda name: None)
+    monkeypatch.setattr(G.subprocess, "run", None)
+    assert G._versions()["git_head"] is None
 
 
 def test_cli(tmp_path, capsys):
