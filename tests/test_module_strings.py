@@ -58,7 +58,7 @@ EXEMPT = {
     ("adapters/vllm/tests/lint/test_p06_one_cli.py", "verity_vllm.not_code"): "a stand-in",
     # the vLLM row tools research's registry names: research_tools computes them from `research` on first read (its
     # `__getattr__`), so no top-level line binds them
-    **{("tools/research/src/research/store/tools_registry.py", f"integrations.vllm.verity_vllm.pipeline.research_tools:VLLM_{s}"):
+    **{("tools/research/src/research/store/tools_registry.py", f"adapters.vllm.verity_vllm.pipeline.research_tools:VLLM_{s}"):
        "lazy" for s in ("BUILD", "PLAN", "MATCH", "COMMIT", "REPLAY")},
 }
 

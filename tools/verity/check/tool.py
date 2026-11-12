@@ -3,7 +3,7 @@
     research run --tool check --project verity --cwd clone -- uv run --locked --all-packages --extra torch-cpu python tools/verity/check/check.py
 
 No key params and no closure: the attempt's source (a clean commit) is the whole input, and `research merge` reads the attempt by
-that commit.  A merge that changes verity/protocols/flock/prover/ or the Lean verifier's package verity/protocols/flock/verifier/, other than a
+that commit.  A merge that changes verity/protocols/flock/ (the Lean verifier's package verity/protocols/flock/verifier/ included), other than a
 README.md or PROTOCOL.md (which nothing the agreement runs reads), needs an attempt whose `lean-agreement` step passed
 (`merge_requires`; the step runs when the run has the pinned upstream build's URLs, which `check.py --record` sends then).  A merge
 that changes V*'s stager (`rec_vstage`, `rec_outer`, `rec_open`, `rec_residuals`, `rec_cap`, `circuit`, `one_stage.registered`)
