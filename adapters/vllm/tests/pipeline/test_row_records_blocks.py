@@ -18,6 +18,7 @@ import pytest
 import verity_vllm.pipeline.row_records as R
 from tests.pipeline.test_row import STAGE_START, _summary_row
 from verity_vllm.config import CHECKPOINTS, WORKLOADS
+from verity_vllm.pipeline import row_json
 
 SAMPLED = WORKLOADS / "llama32-1b__bf16__l40s__tp1__b8__i1024__o128__mixed__stoch-t0.8-p0.95__bi-eager.json"
 
@@ -35,6 +36,17 @@ def _put(path: Path, doc: Any) -> str:
 
 def _read(path: Path) -> Any:
     return json.loads(path.read_text())
+
+
+def test_a_block_that_lists_nothing_is_walked_as_nothing():
+    """What a block lists is the block's own list or mapping; one it leaves out, or states as null or empty, is nothing to walk."""
+    nothing: list[dict[str, Any]] = [{}, {"xs": None}, {"xs": []}, {"xs": {}}, {"xs": 0}, {"xs": ""}]
+    for block in nothing:
+        assert len(row_json.listed_of(block, "xs")) == 0 and list(row_json.listed_of(block, "xs")) == [], block
+    stated: dict[str, Any] = {"xs": [1, 2], "by": {"a": 1}}
+    assert row_json.listed_of(stated, "xs") is stated["xs"] and row_json.listed_of(stated, "by") is stated["by"]
+    with pytest.raises(AttributeError):
+        row_json.listed_of(None, "xs")
 
 
 def test_a_rows_shape_reads_a_sweep_without_its_sampling_parameters_as_greedy(tmp_path):
