@@ -70223,3 +70223,109 @@ Answer to the mailbox's 03:39Z section (NET-297, item 3). By read and arithmetic
 9. **Against the limits of my table.** [read] On `main` now: 2^24 coins of 64 bytes a layout (2^30 bytes), 2^23 coin-tree lines, 41,943,041 release-log lines, 2^20 ledger lines at one leaf each (`challenger.py:219-303`; Lean `Spot/Challenger.lean:50`, `ChallengerSession.lean:85-87`, `ChallengerCoins.lean:121-128`); an auditor host has 89 ports, one live session each, a peer its own range of them (`auditor.py:330`, `:1118-1124`, `:77-80`). [derived] The wait adds no line, no coin byte and no leaf, wherever it sits. The table's proof sessions start after the second stage's sample, so none is open during the wait. Challenger sessions open at once are unchanged with the wait before the reserve; inside a session, a serve has two first-stage sessions open at once where it had one.
 
 10. **What `main` lacks for the wait.** [read] The certifier hands a phase's rows only where that phase's and the next one's records were published complete, and never for a run's last phase (`warden.py:93-98`, `:683-686`); a class whose rank ends before planning refuses the whole phase's session (`a5_coins.py:692-705`); `_first_all` takes the classes' files and starts, reading nothing of the certifier (`two_stage.py:719-737`). [derived] So the wait needs an end both ways: the head, or the certifier's word that none comes, and in that case the class is skipped, a visible failure of that class, not left to the reserve's expiry, which refuses every class. `main` has neither that signal nor a class record that reads the head. The placing that costs nothing is to start the first stage after the hand, one phase late, with the reserve's minutes as they are; that is network-accounting's and vllm's to confirm.
+
+## WIRED, Thu 12 Nov 04:21Z: items 4, 5 and 6 by read, no file changed: `noReturnedWired` is the one to drop and `wiresMove` stays as its own open `Prop`; no verifier decides `memberOk`'s size bound, the proof does not need it and the served vocabulary's member is over it, so the bound leaves the statement; the statement's verifier accepts a run with no link and the restated `SpotExfilTwo` says nothing of it; `SecondWiresMove` keeps `(two h s).isSome`; `WiresTie.lean` elaborates (`c71c`, still running)
+
+Tags: [run] a command run now or a run's fetched log (id given), [read] a file read now (place given), [relayed], [derived] reasoned from what I read and not compiled, [guess]. Times from `date -u`. Mailbox read 04:21Z, newest section 03:55Z [run]. Read at the scratch `cursor/proofs-wired-5d1b`, head `f8df31eb0807`, at `main` `62bf29346f76` for the deployed verifier, and at #9080's head `601df7cb4bb5` [run: `git ls-remote`, `gh pr view`]. No file of the repository changed, nothing restated, no pull request opened, no run launched [run: `git status`].
+
+**Two verifiers; each line below says which.** `V h` is the Lean verifier the two guarantees are stated about (`security/Proofs/Flock/SpotFlock/Code.lean`). The deployed Lean verifier is `verity/protocols/spot/verifier/lean/Spot/`, whose round 2 is `SecondStage.check`, called from `Run.lean:232`.
+
+- [read: `Code.lean:463-520`; `rg` over `SpotFlock/`] `V h` runs round 2's per-statement check (`stmtCodes`) and none of `designOk`, `linksOk`, `wiresOk`.
+- [read: `SecondStage.lean:142, 1065-1091`] The deployed check asks `designOk` before it reads a statement. With `FORM := false` it refuses every two-stage run last (`two-stage-form`), so on `main` today the deployed verifier accepts no two-stage run.
+- [read: `tests/test_verifier_cost.py:91-107`, `benchmarks/two_stage/tests/TwoGuard.lean`] Nothing compiles or runs `V h`'s `stmtOk` whole: its `partition` and `two` lay out every unit of every member. The toy's guard evaluates `filesOk` and `templateOk` only.
+
+**0. `r20261112-031243-c71c`** (scratch `f8df31eb0807`; `WiresTie.lean`, `WireMap.lean`, `Proofs/Flock.lean` in that order)
+
+- [run: `research fetch --all`, 04:14Z] `SpotFlock/WiresTie.lean`: Lean exit 0 in 1,606 s; no theorem in it, so no axiom line. The three conditions and `SecondWiresMove`, `SecondWiresCovered`, `SecondWiresOrder` elaborate as stated in my 03:18Z entry. None is proved.
+- [run] `WireMap.lean` is building; `Proofs/Flock.lean` follows. [guess] Ends about 05:15Z. Its verdict goes in an entry when it ends.
+
+**4. Each conjunct of `wiredOk h`, and `sourcesNamed h`** [read: `WiredCode.lean:83-122`, `WiredKS.lean:261-288`, `WireMapRewires.lean:253-306, 398-499`, `WireMap.lean:63-64, 256-282, 361-364`; #9080's `AddressesWired.lean:219-245`]
+
+| condition | `V h` decides it | the deployed verifier decides it | a proof uses it | proposal |
+|---|---|---|---|---|
+| `templateOk h t`, every template | yes: `two h` asks it (`Code.lean:365-372`), and `stmtOk` asks `(two h s).isSome` (`513-520`) | per session, on the session's own statement: `OneStageZk.scopeOf` (`ProvedScope.checkOf`, then `templateOk`; `OneStageZk.lean:1081-1085`). Not read clause against clause | yes: `templateOk_facts` gives `Built` and `unitLog ≤ 32` | no hypothesis: it comes with the scope, see below |
+| `memberOk`, every member | no | no (item 5) | only its first two clauses, see item 5 | leaves the statement (item 5) |
+| `writersFirst h` | no | yes: `wiresOk`'s fourth clause, `posOf ps w.writer < posOf ps w.template` (`SecondStage.lean:641-647`), refused as `second-wires` | yes: `rewires_wireMap`'s `hfirst`, through `writer_lt_of_wireUnit` (`WireMapRewires.lean:420`) | stays, as the one named `Prop` for what a check decides |
+| `noReturnedWired h` | no | yes: `wiresOk`'s third clause, `(linkOf own w.writer w.wport).isNone`, the same expression at `own.links = h.links` | no: `writer_not_linked` is its only reader, and no proof reads that | dropped |
+| `wiresMove h` | no | no | none of the two guarantees'; #9080's `wireTarget_of_sourcesNamed` reads it, and no guarantee reads that | its own named `Prop`, open |
+| `sourcesNamed h` | no | no | it will: pull request 3's proof applies `AddressesConnected h` to it | its own named `Prop`, open |
+
+One sentence each, as you asked:
+
+- **`noReturnedWired` is the one that is dropped.** No proof uses it, and under `wiresMove` it changes nothing the statement says: `wireTarget` gives no gate to a source bit whose writer's port a link names (`WireMap.lean:276-282`), so `wiresMove` already fails at every such wire that a source bit reads through, and a wire no source bit reads through moves no gate of the connected program [read; derived, not compiled].
+- **`wiresMove` stays, for what the statement means and not for its proof.** Without it a wired source bit with no gate to go to stays an input gate of the connected program, and the bound on what the inputs determine then takes as given a value the prover chose inside the replay block [read: `Rewire.lean:57-68`, `Definitions/Claims/SamplingTwo.lean:203-218`; derived].
+
+`sourcesNamed`, which it is:
+
+- [read: `AddressesWired.lean:219-222`, `WireMap.lean:233-239`] Nothing either verifier runs decides it. It asks of every source gate of every member (`sourceBits`) that its port has a link or a wire, and no check walks the members' gates.
+- [read: `SecondStage.lean:488-500, 546-553, 574-590, 626-647`] The nearest check is the deployed derivation of the design: `nodeLinks` and `nodeWires` give a link or a wire to each argument of the replay block's body that reads a parameter or a node, or the design is refused (`second-links`, `second-wires`).
+- [read: `Code.lean:118-132`; relayed: FRAME, 02:13Z, section 2] That is about the registered Definition's arguments. Nothing ties `Held.links`, `Held.wires` and `Held.names`, which are free fields, to that derivation, or the members' circuits' ports to the Definition's parameters.
+- [derived] So it is open in `wiresMove`'s way, and what discharges it is a second statement of `SecondWiresMove`'s kind, not written.
+
+`templateOk` needs no hypothesis [derived, not compiled]:
+
+- [read: `RevealsWired.lean:114-115`, `Definitions/Claims/Sampling.lean:587-590`, `SamplingTwo.lean:325-339`] The connected code's design is `(two h s).map …`, and `KS` and `Exfil` speak only of statements in scope, which asks that design to evaluate. `two` does not read its statement. So where `two h` gives nothing both guarantees hold with no statement in scope, and where it gives a design, `templateOk` holds at every template.
+- The proof then splits on `(two h s).isSome` once, in `ksTwo_connected`.
+
+The form this gives, if you rule as proposed (names are mine; nothing is written):
+
+```lean
+∀ h, WiresFirst h → WiresMove h → SourcesNamed h → BuiltWired h (wireMap h) (returned h) → AddressesConnected h →
+  (compiledTwo … (codeConnected h) iroots (twoConnected h) (rsConnected h) (cap h)).KS sha512
+```
+
+- `SpotFlock.WiresFirst h : Prop := writersFirst h = true`. Reason: decided by round 2's `SecondStage.wiresOk`, fourth clause, in the deployed verifier.
+- `SpotFlock.WiresMove h : Prop := wiresMove h = true`. Open; reason: decided by nothing the verifier runs, until `SecondWiresMove` is proved and its three conditions are in the check.
+- `SpotFlock.SourcesNamed h : Prop := sourcesNamed h = true`. Open; reason: decided by nothing the verifier runs.
+- `BuiltWired` and `AddressesConnected` as ruled (`domain`; `open`, PRF-460, due 2026-11-30).
+
+Two things in that form are yours:
+
+- **"In the definitions tree" cannot be met as worded** [read: `Code.lean:118`, `FrameIsBuilt.lean:31`, `SlotsAt.lean:322`, `RevealsWired.lean:211`, `main`'s `security/lean-audit.json:16493-16512`; AGENTS.md's Lean rule]. `Held` is declared in the proofs tree, and no module of the definitions tree reads the proofs tree. `SpotFlock.Built` and `SpotFlock.Addresses`, which the lock names today, are in the proofs tree too. The new `Prop`s would sit in `SpotFlock` beside `BuiltWired`. Say if you want it otherwise.
+- **`writersFirst` is decided by the deployed check and not by `V h`** [read, above]. Listed as decided, its reason names a check the statement's own verifier does not run. The other route is `stmtOk` asking `designOk` as the deployed check does; an accepted run then gives `writersFirst` through `SecondWiresOrder`, and the hypothesis goes [derived]. That changes `V h`, which every SPOT[Flock] guarantee reads. I do not start it without your word, and it is not in pull request 3.
+
+**5. `memberOk`: the bound leaves the statement** (my answer; you decide)
+
+- **Where the deployed verifier decides it: nowhere** [read: `rg 'unitClass|UNIT_CLASS_MAX|262144'` over `verity/**/*.lean`; `Spot/Partition.lean:62-145`, `Spot/OneStageZk.lean:144-159`]. Its size checks are on the bits a template instance commits or returns (`Partition.checkTemplates`, `OneStageZk.templateOk`'s `WIDE_WHY`), never on a member's lowered program. `memberOk`'s other two clauses are decided, session by session: `unitLog ≤ 32` by `ProvedScope.scopeOkH`, `scopeOkI` and `scopeOkT` (`ProvedScope.lean:151, 159, 269`), and `0 < upv`, a template instance of one unit at least, by `OneStageZk.templateOk`'s `NO_ROW_WHY`.
+- **`V h` does not decide it either** [read: `Code.lean:220-240`, `ScopeDesc.lean:120-121, 199-202`; `rg descOk`]. Its `two h` asks, block by block, that a proof block's committed bits fit a class (`partitionsOk`). `memberOk` is read only by `descOk`, and nothing but `ScopeDesc.lean` and my scratch reads `descOk`.
+- **Does a verifier refuse a member over 262,144 lowered gates: no, neither** [derived from the two reads above]. So with the bound in it, the restated guarantee covers less than either verifier accepts.
+- **The proof does not need the bound** [read: `ScopeOf.lean:176-186, 280-292`, `WireMapRewires.lean:253-306`]. It reaches `rewires_wireMap` only through `partitions_keyProg`, where it proves that each proof block's committed bits fit the widest class. `gateMember_touches` reads the other parts of that lemma's conclusion: a block's gates are under the member's length, and a block has a gate that is no input. Those rest on `Built`, `unitLog ≤ 32` and a computed row a unit.
+- **The served design's members are not under it** [derived; nothing run]. The bound is on a template's units in the whole registration, every replay block's, sampled or not: `filesOk` asks room for `(ρ + 1)·n_t` units at every slot `ρ` (`Code.lean:289-299`). A member's program has `2 + n·B + 3·n·R` gates, `n` the template's instances, `B` an instance's input gates and `R` its computed rows (`ScopeDesc.lean:78, 92`), so it grows with the requests in the window.
+  - At the served vocabulary, 154,880 scores (`verity/definitions/registry/dead_free.circuit-check.py:15-16`) of 16 bits (`benchmarks/one_stage/two_stage_small.py`, the capture's rows), one token's select reads 2,478,080 input bits. That is 9.5 times 262,144 before any computed row, any second token or any second request. Arithmetic on two figures in the tree; nothing was run.
+  - At the rehearsal's statics (128 scores, 4 tokens a request, 6 requests: 24 instances; `two_stage_small.py serve`'s defaults) the inputs are at least 49,152 gates, and the member fits only if one select has at most 2,958 computed rows. I found no file with that count and evaluated nothing. [guess] It is over.
+  - [read: `benchmarks/one_stage/two_stage.py`'s docstring] No served class passes round 2 today in any case: the served vocabulary's replay block is one round 2 derives no wires from, and the rehearsal's is refused at the block's return.
+- **Why not a refusal in the verifier** [derived]. It would refuse every registration of real size, and the 262,144 it would use is the public size class of one proof block's outputs, not a limit on a template's population.
+- **What changes if you rule so** [derived, not compiled]: `gateMember_touches` and `rewires_wireMap` take `Built`, `unitLog ≤ 32` and a computed row a unit in place of `MemberFits`; one lemma is `partitions_keyProg` without its last conjunct. Both theorems are in pull request 2's file, which is not open, so no marked head moves.
+- **The body's sentence.** If the bound leaves: "Against `main`'s scope the restated statements ask nothing more of a member's size." If it stays: "The restated statements cover only registrations in which each template's units together lower to at most 262,144 gates, which `main`'s scope does not ask and no verifier checks."
+
+**6. What "served" is, and a run with no link**
+
+The two sentences:
+
+- In the restated `SpotExfilTwo`, served is the values the trace opens at the connected program's returned gates, and those are the written bits at an output port that a link names for its template (`returned h`), which is what a replay block returns and the boundary record holds; in `main`'s it is every written bit of every member, a replay block's interior values included [read: `SamplingTwo.lean:208-210`, `Rewire.lean:65-68`, `WireMap.lean:268-269, 290`, `Properties/Spot/Members.lean:52-56, 77-78`; relayed: EXTFORM, 03:50Z, section 2].
+- `V h` accepts a run at a held code with no link, and the restated statement says nothing of that run: nothing is returned, so there is no served value to bound, and `sourcesNamed h` is false as soon as a member has a source bit [read: `Code.lean:463-520`, `SecondStage.lean:844-868`; derived].
+
+What stands behind the second:
+
+- [read: `SecondStage.lean:844-868, 871-876, 945-957`] `V h` reads `h.links` only inside `stmtCodes`. With no link and no wire, `readOk` takes every port at the interior record's own port and never at a boundary port. That is the run `two_stage.py second --unlinked` makes, which "ties nothing".
+- [read: `SecondStage.lean:521-562, 626-629`; derived] The deployed verifier refuses a design whose links are not derived (`linksOk` at `none`). It derives an empty list only for a replay block whose body reads no parameter and whose return has no part: `returnLinks` makes a link for every part of the return or fails. And it accepts no two-stage run today (`FORM`).
+- [derived] `main`'s statement does say something of that run: each member's written bits are held to the members' own source bits, side by side. So this is a change in what the guarantee says, and it goes in the body's first paragraph.
+
+A sentence for that paragraph: "The guarantee now speaks of what a replay block returns: its served outputs are the written bits at an output port a link names, where before they were every written bit of every proof block. At a design with no link it says nothing, though the Lean verifier it is stated about accepts such a run."
+
+**`descOk h` against `(two h s).isSome`: `SecondWiresMove` keeps `(two h s).isSome`** [derived, not compiled; lemmas read]
+
+- `(two h s).isSome` gives `scopeOk` and `filesOk` (`Code.lean:365-372`). `filesOk_sound` gives `FilesFit`. `scopeOk` gives a replay block for every proof block, and `replayOf_filesReplay` with `exists_of_mem_slotFiles` (`Bridge/Members.lean:563, 638-643`) puts that proof block in a slot's run. That is `FilesFill`, and `fillOk_iff` makes it `fillOk`.
+- One step is in no lemma: that a proof block's index names one member and one unit (`unitBase ms t + x`). No lemma on the tree derives `FilesFill` from `two h` [run: `rg FilesFill`].
+- So `two h` gives what `SecondWiresMove` took `descOk h` for. The statement keeps `(two h s).isSome`, which `stmtOk` asks of every run `V h` accepts (`Code.lean:516`), and loses `descOk h`, which nothing that runs decides and which carries `memberOk`.
+
+**State**
+
+- [run: `git merge-base --is-ancestor`, `research queue status`, 04:16Z] #8940 (`58a598e615b1`, ready, admitted) is not on `main` (`62bf29346f76`). #9043 (`972a687a0583`) and #9080 (`601df7cb4bb5`) are not marked.
+- Scratch `cursor/proofs-wired-5d1b` at `f8df31eb0807`, unchanged this turn.
+
+**I wait on**
+
+1. Your rulings on item 4 (the form, where the named `Prop`s live, and `writersFirst`), item 5 (the bound leaves, or a refusal first) and item 6 (the first paragraph, and Daniel).
+2. `r20261112-031243-c71c`, about 05:15Z [guess].
+3. #8940 on `main`, then #9043's head to you. FRAME's statement of the opened row before anything is restated for it.
