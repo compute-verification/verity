@@ -307,19 +307,18 @@ def test_a_silent_coordinators_words_count_its_turn_and_its_text_and_a_workers_i
         f"{lead} has been ACTIVE 83 min with no note and no push for 61 min; check on it."]
 
 
-def test_a_dropped_records_words_say_only_what_it_holds_and_error_only_where_its_status_is(relay):
+def test_a_dropped_records_words_say_only_what_it_holds_and_never_that_it_is_in_error(relay):
     """Seats that had each run a resumed turn to its end, IDLE on the list, were told to their lane as having "a message that
     never became a run" and as shown "in ERROR". The sentence says a message went unanswered where the record holds that
     its conversation ended on one, that this is unchecked where the conversation went unread or wasn't read at all, and
-    ERROR only for a record whose `status`, the platform's at that sweep, is ERROR."""
+    nothing of an error: an agent the platform has in error is recorded crashed, never dropped."""
     proofs = relay.slack.tag(relay.slack.entry(relay.REG, "proofs"))
     w = "bc-22222222-2222-2222-2222-222222222222"
     rec = {"kind": "dropped", "agent": w, "name": "SEAT-A", "run": "run-w", "status": "IDLE", "role": "worker",
            "since": "2026-10-26T02:11:00Z", "ended": "2026-10-26T02:00:00Z", "lane": "proofs", "handle": "proofs",
            "owner": "proofs", "unanswered": True}
     timed = {k: v for k, v in rec.items() if k != "unanswered"}
-    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [
-        rec, {**rec, "status": "ERROR"}, {**timed, "unread_minutes": 60}, {**timed, "status": "ERROR"}]) + "\n"
+    relay.log_text["text"] = "\n".join(json.dumps(r) for r in [rec, {**timed, "unread_minutes": 60}, timed]) + "\n"
     relay.once()
     lead = f"{proofs} *Agent watch:* worker SEAT-A (<https://cursor.com/agents/{w}|{w}>) of lane proofs"
     times = "last changed at 2026-10-26T02:11:00Z, and no run followed the one that ended at 2026-10-26T02:00:00Z"
@@ -327,10 +326,66 @@ def test_a_dropped_records_words_say_only_what_it_holds_and_error_only_where_its
     look = "so whether a message went unanswered is unchecked. Look at it: resume it, or relaunch it fresh, if one did."
     assert relay.posts == [
         f"{lead} {asked} {times}. Resume it, or relaunch it fresh.",
-        f"{lead} {asked} {times}; Cursor shows it in ERROR. Resume it, or relaunch it fresh.",
         f"{lead} {times}; the API gave no conversation for it for 60 min, {look}",
-        f"{lead} {times}; Cursor shows it in ERROR; its conversation wasn't read, {look}"]
-    assert [kw["thread_ts"] for kw in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 4, "each rings its owner's inbox"
+        f"{lead} {times}; its conversation wasn't read, {look}"]
+    assert [kw["thread_ts"] for kw in rings(relay)] == [PROOFS_INBOX["inbox_ts"]] * 3, "each rings its owner's inbox"
+    assert "ERROR" not in "".join(relay.posts)
+
+
+def test_a_worker_stopped_in_error_rings_its_lane_naming_it_and_its_issue_and_says_who_can_resume_it(relay):
+    """A worker the platform stopped with an error is `crashed`, as a coordinator's run that ended so, and its sentence
+    says what the watch did: for a worker read by id nothing, since only the agent that launched it can resume it. It
+    rings the lane's inbox once; one the watch placed nowhere is posted and rings no one."""
+    proofs = relay.slack.tag(relay.slack.entry(relay.REG, "proofs"))
+    w = "bc-22222222-2222-2222-2222-222222222222"
+    rec = {"kind": "crashed", "agent": w, "name": "PRF-7 INTEGRATOR", "run": "", "role": "worker", "status": "ERROR",
+           "since": "2026-11-11T14:05:00Z", "lane": "proofs", "handle": "proofs", "issue": "PRF-7",
+           "action": "can't start a run on a worker: resume it with Task, which only the agent that launched it can, or "
+                     "relaunch it"}
+    unplaced = {k: v for k, v in rec.items() if k not in ("handle", "issue")} | {"lane": "", "quiet": True}
+    relay.log_text["text"] = json.dumps(rec) + "\n" + json.dumps(unplaced) + "\n"
+    relay.once()
+    said = ("ended in ERROR; the watch can't start a run on a worker: resume it with Task, which only the agent that launched "
+            "it can, or relaunch it.")
+    assert relay.posts[0] == (f"{proofs} *Agent watch:* worker PRF-7 INTEGRATOR (<https://cursor.com/agents/{w}|{w}>, issue "
+                              f"PRF-7) of lane proofs {said}")
+    assert relay.posts[1].startswith(f"*Agent watch:* worker PRF-7 INTEGRATOR (<https://cursor.com/agents/{w}|{w}>) ended in")
+    assert [kw["thread_ts"] for kw in rings(relay)] == [PROOFS_INBOX["inbox_ts"]]
+
+
+def test_an_erroring_worker_rings_its_owner_and_a_coordinator_or_an_agent_nobody_owns_rings_top(relay):
+    """Whoever relaunches it is rung: a worker's launcher for a worker past its restarts, top for a coordinator, and top
+    for an agent no handle owns, as before. The sentence holds whether its restarts ran and ended in ERROR or were refused."""
+    top, proofs = (relay.slack.tag(relay.slack.entry(relay.REG, h)) for h in ("top", "proofs"))
+    relay.log_text["text"] = "\n".join([
+        line("run-w", "erroring", restarts=3, name="PRF-7 INTEGRATOR", owner="proofs", issue="PRF-7", status="ERROR"),
+        line("run-c", "erroring", restarts=3, name="verity: proofs", owner="top", status="ERROR"),
+        line("run-n", "erroring", restarts=3, status="ERROR")]) + "\n"
+    relay.once()
+    said = ("is in ERROR after 3 restarts in a row, each refused by the API or ended in ERROR again: left for a person "
+            "(relaunch it, or report it to Cursor).")
+    assert relay.posts == [
+        f"{proofs} *Agent watch:* PRF-7 INTEGRATOR (<https://cursor.com/agents/bc-x|bc-x>, issue PRF-7, run run-w) {said}",
+        f"{top} *Agent watch:* verity: proofs (<https://cursor.com/agents/bc-x|bc-x>, run run-c) {said}",
+        f"{top} *Agent watch:* x (<https://cursor.com/agents/bc-x|bc-x>, run run-n) {said}"]
+    assert [kw["thread_ts"] for kw in rings(relay)] == [PROOFS_INBOX["inbox_ts"], TOP_INBOX["inbox_ts"], TOP_INBOX["inbox_ts"]]
+
+
+def test_workers_cut_together_in_error_are_one_post_saying_so_of_each(relay):
+    proofs, co = relay.slack.tag(relay.slack.entry(relay.REG, "proofs")), PROOFS_INBOX["holder"]
+    members = [{"kind": "crashed", "agent": f"bc-{i + 1:08x}-0000-0000-0000-{i + 1:012x}", "name": n, "run": "", "role": "worker",
+                "status": "ERROR", "since": "2026-11-11T14:05:00Z", "lane": "proofs", "handle": "proofs", **issue}
+               for i, (n, issue) in enumerate([("PRF-7 INTEGRATOR", {"issue": "PRF-7"}), ("SEAT-A", {})])]
+    relay.log_text["text"] = json.dumps({"kind": "workers_failed", "agent": co, "name": "verity: proofs", "run": "",
+                                         "role": "workers", "lane": "proofs", "handle": "proofs", "owner": "proofs", "count": 2,
+                                         "minutes": 0, "members": members}) + "\n"
+    relay.once()
+    (post,) = relay.posts
+    assert post.startswith(f"{proofs} *Agent watch:* 2 workers of @proofs's coordinator verity: proofs ")
+    assert ("PRF-7 INTEGRATOR (<https://cursor.com/agents/bc-00000001-0000-0000-0000-000000000001|bc-00000001>) stopped in "
+            "ERROR on PRF-7; SEAT-A (<https://cursor.com/agents/bc-00000002-0000-0000-0000-000000000002|bc-00000002>) stopped "
+            "in ERROR. Resume each") in post
+    assert [kw["thread_ts"] for kw in rings(relay)] == [PROOFS_INBOX["inbox_ts"]]
 
 
 def test_a_workers_no_step_names_it_a_worker_of_its_lane_and_still_rings_top(relay):

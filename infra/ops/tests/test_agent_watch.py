@@ -22,11 +22,14 @@ class FakeApi:
     """`older[agent]` lists an agent's runs before its latest, newest first; `GET .../runs` lists the latest, then those.
     A goal run's id (run-goal-...) is listed but can't be read on its own, as on the API. `workers` (Task subagents) aren't
     listed but are read by id (`GET /v1/agents/{id}`; 404 for any other id); `gets` counts each read. `convs[agent]` is its
-    conversation as `GET /v0/agents/{id}/conversation` gives it (user and assistant text only; 404 when absent)."""
+    conversation as `GET /v0/agents/{id}/conversation` gives it (user and assistant text only; 404 when absent). `v0[agent]`
+    is its status as the legacy `GET /v0/agents/{id}` gives it, or the error that read raises; without one it is RUNNING
+    for a worker v1 has ACTIVE and FINISHED for any other."""
 
-    def __init__(self, agents, runs, older=None, workers=None, convs=None):
+    def __init__(self, agents, runs, older=None, workers=None, convs=None, v0=None):
         self._agents, self._runs, self.older, self.posts = agents, runs, older or {}, []
         self.workers, self.gets, self.convs = workers if workers is not None else {}, [], convs if convs is not None else {}
+        self.v0 = v0 if v0 is not None else {}
 
     def agents(self):
         """Each agent as the list gives it, on Verity's repository unless it says otherwise (`repos`)."""
@@ -40,6 +43,12 @@ class FakeApi:
                 raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
             return {"id": parts[-2], "messages": [{"id": str(i), "type": k, "text": s}
                                                   for i, (k, s) in enumerate(self.convs[parts[-2]])]}
+        if len(parts) == 4 and parts[1] == "v0":
+            if isinstance(got := self.v0.get(parts[-1]), Exception):
+                raise got
+            if got is None and parts[-1] not in self.workers:
+                raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
+            return {"id": parts[-1], "status": got or ("RUNNING" if self.workers[parts[-1]].get("status") == "ACTIVE" else "FINISHED")}
         if len(parts) == 4:
             if parts[-1] not in self.workers:
                 raise W.urllib.error.HTTPError(path, 404, "Not Found", {}, None)
@@ -1675,9 +1684,9 @@ def test_a_conversation_is_unanswered_when_nothing_of_its_agents_follows_its_las
         "an assistant message with no text is nothing of its own"
 
 
-def test_an_agent_the_platform_reports_in_error_is_recorded_so_and_no_other_is(tmp_path):
-    """The record's `status` is what the platform reported at that sweep: the words that Cursor shows an agent in ERROR
-    are for one it reports so, and a dropped message on an IDLE agent is recorded IDLE."""
+def test_an_agent_the_platform_reports_in_error_is_crashed_and_never_dropped(tmp_path):
+    """One fact, one record: an agent in error stopped mid-work, which `crashed` says, and is no message that never became
+    a turn, whatever its conversation ends on. Its own status ERROR, should v1 give one, needs no further read."""
     api, clock, w, st = seat(tmp_path)
     api.workers[W2_] = {**worker("IDLE", W.iso(T0), name="SEAT-B"), "latestRunId": "run-w"}
     w.workers[W2_] = {"heard": T0, "lane": "circuits", "handle": "circuits"}
@@ -1686,8 +1695,10 @@ def test_an_agent_the_platform_reports_in_error_is_recorded_so_and_no_other_is(t
         api.convs[agent] = [("user_message", "You are a seat."), ("assistant_message", "Filled."), ("user_message", "Check it.")]
         api.workers[agent]["updatedAt"] = W.iso(clock.t)
     st["status"] = "ERROR"
-    sweeps(w, clock, 10, step=1)
-    assert {r["agent"]: r["status"] for r in drops(tmp_path)} == {W1_: "ERROR", W2_: "IDLE"}
+    before = len(api.gets)
+    sweeps(w, clock, 15, step=1)
+    assert {r["agent"]: (r["kind"], r["status"]) for r in records(tmp_path)} == {W1_: ("crashed", "ERROR"), W2_: ("dropped", "IDLE")}
+    assert f"/v0/agents/{W1_}" not in api.gets[before:] and conv_reads(api, W1_) == 0
 
 
 def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
@@ -1826,19 +1837,22 @@ def test_worker_reads_are_bounded_and_a_long_idle_worker_is_read_only_when_a_not
     long_idle = W.iso(T0 - W.WORKER_IDLE_S)
     api, clock, w = coordinators(tmp_path, [{"id": ids[0], "status": "IDLE", "latestRunId": "run-f"}], {"run-f": dict(FINISHED)},
                                  workers={a: worker("IDLE", long_idle) for a in ids}, notes=notes)
-    reads = []
+    reads, stops = [], []
     for _ in range(4):
         before = len(api.gets)
         w.sweep(lambda r: None)
-        reads.append([g for g in api.gets[before:] if g.count("/") == 3])
+        reads.append([g for g in api.gets[before:] if g.count("/") == 3 and g.startswith("/v1/")])
+        stops.append([g for g in api.gets[before:] if g.count("/") == 3 and g.startswith("/v0/")])
         clock.t += 60
     assert [len(r) for r in reads] == [W.WORKERS_NEW, W.WORKERS_NEW, 9, 0], \
         "20 first reads a sweep; a listed agent is no worker; one IDLE for 12 h isn't read again"
     assert all(len(set(r)) == len(r) for r in reads), "at most one read per worker a sweep"
+    assert [[g[4:] for g in r] for r in stops] == [[g[4:] for g in r] for r in reads], \
+        "and one read of how it stopped (its v0 status), with its first read: FINISHED, so never again"
     p = note(notes, "circuits", "7.md", f"circuits worker ({ids[7]}), back at work", age_s=0)
     W.os.utime(p, (clock.t, clock.t))
     w.sweep(lambda r: None)
-    assert [g for g in api.gets if g.count("/") == 3][-1:] == [f"/v1/agents/{ids[7]}"]
+    assert [g for g in api.gets if g.count("/") == 3][-2:] == [f"/v1/agents/{ids[7]}", f"/v0/agents/{ids[7]}"]
     clock.t += 60
     before = len(api.gets)
     w.sweep(lambda r: None)
@@ -4148,3 +4162,186 @@ def test_a_silent_worker_the_api_wont_archive_is_a_no_step_for_top_with_why(tmp_
     got = [r for r in records(tmp_path) if r["kind"] in ("no_step", "archived")]
     assert [{k: r.get(k) for k in ("kind", "owner", "role", "archive_failed")} for r in got] == [
         {"kind": "no_step", "owner": "top", "role": "worker", "archive_failed": "HTTP 403"}]
+
+
+W7_, W8_ = (f"bc-{c * 8}-{c * 4}-{c * 4}-{c * 4}-{c * 12}" for c in "78")
+
+
+def registered(tmp_path, clock, agent=W1_, lane="circuits", by=CO, **more):
+    """A workers.d entry for `agent`, written at the clock's time: an entry's mtime is when the watch last heard of it."""
+    d = tmp_path / "workers.d"
+    d.mkdir(exist_ok=True)
+    p = d / f"{lane}-{agent}.json"
+    p.write_text(json.dumps({"agent_id": agent, "lane": lane, "launched_by": by, **more}))
+    W.os.utime(p, (clock.t, clock.t))
+    return p
+
+
+def integrator(tmp_path, v0="ERROR", name="CIR-7 INTEGRATOR", status="IDLE", agents=(), runs=None, **kw):
+    """A swarm's integrator (W1_), a Task subagent the circuits coordinator launched and registered, named after its issue:
+    no run the API lists, IDLE on v1 since T0 however its turn ended, and `v0` what the legacy status says of it. The
+    watch, before its first sweep."""
+    api, clock, w = coordinators(tmp_path, list(agents), runs or {}, workers={W1_: worker(status, W.iso(T0), name=name)}, **kw)
+    linear_teams(tmp_path)
+    registered(tmp_path, clock)
+    api.v0[W1_] = v0
+    return api, clock, w
+
+
+def stops(api, agent=W1_, since=0):
+    return api.gets[since:].count(f"/v0/agents/{agent}")
+
+
+RESUME_IT = "can't start a run on a worker: resume it with Task, which only the agent that launched it can, or relaunch it"
+
+
+def test_a_worker_stopped_with_an_error_is_recorded_once_for_its_lane_naming_it_and_its_issue(tmp_path):
+    """A billing stop cut a swarm's integrator mid-turn: v1 read it IDLE as after any turn, it has no run to read ERROR,
+    and nothing rang until a seat reported hand-ins with no answer hours later. Its v0 status says ERROR: one record for
+    its lane, whose coordinator alone can resume it, and no second however long it sits so."""
+    api, clock, w = integrator(tmp_path)
+    sweeps(w, clock, 3 * 60, step=1)
+    (rec,) = records(tmp_path)
+    assert {k: v for k, v in rec.items() if k not in ("t", "since")} == {
+        "kind": "crashed", "agent": W1_, "name": "CIR-7 INTEGRATOR", "run": "", "role": "worker", "status": "ERROR",
+        "lane": "circuits", "handle": "circuits", "issue": "CIR-7", "action": RESUME_IT}
+    assert W.epoch(rec["since"]) == T0 + W.DROPPED_S, "once its last change is `DROPPED_S` old: a turn would have begun by then"
+    assert status(tmp_path)[W1_]["watch_state"] == "crashed"
+    assert stops(api) == 2 and api.posts == [], "read at its first read and once past `DROPPED_S`; nothing is started on it"
+    again = W.Watch(api, tmp_path / "events.jsonl", clock, registry=tmp_path / "registry.json", routes=tmp_path / "routes.d")
+    sweeps(again, clock, 60, step=1)
+    assert len(records(tmp_path)) == 1 and stops(api) == 2, "nor after the watch restarts, as it does on every deploy"
+
+
+def test_a_worker_in_error_that_runs_again_and_stops_again_rings_again(tmp_path):
+    """Once per stop. Its launcher resumes it with Task: the message moves its `updatedAt`, v1 still reads IDLE, and v0 has
+    it in a turn, read every `STOP_S` until that ends. A turn that ends well clears the error and rings nobody; one that
+    ends in ERROR is a new stop."""
+    api, clock, w = integrator(tmp_path)
+    sweeps(w, clock, 20, step=1)
+    for end, kinds in (("ERROR", ["crashed"] * 2), ("FINISHED", ["crashed"] * 2), ("ERROR", ["crashed"] * 3)):
+        api.workers[W1_]["updatedAt"], api.v0[W1_], before = W.iso(clock.t), "RUNNING", len(api.gets)
+        sweeps(w, clock, 20, step=1)
+        assert stops(api, since=before) == 4, "at the change, then every `STOP_S` of its turn: not every sweep"
+        assert status(tmp_path)[W1_]["watch_state"] == "ok", "in a turn again: no longer shown in error"
+        api.v0[W1_], before = end, len(api.gets)
+        sweeps(w, clock, 20, step=1)
+        assert [r["kind"] for r in records(tmp_path)] == kinds, end
+        assert stops(api, since=before) == 1, "its end is read once"
+    assert [r["agent"] for r in records(tmp_path)] == [W1_] * 3
+
+
+def test_a_worker_seen_to_stop_in_error_is_one_crashed_record_and_no_worker_idle(tmp_path):
+    """One record of one stop. A worker v1 shows ACTIVE and then IDLE went idle, which rings its lane as `worker_idle`
+    when it finished; one v0 has in ERROR at that read is `crashed` at once, in its place."""
+    for d, end, kinds in ((tmp_path / "error", "ERROR", ["crashed"]), (tmp_path / "done", "FINISHED", ["worker_idle"])):
+        d.mkdir()
+        api, clock, w = integrator(d, v0="RUNNING", status="ACTIVE")
+        sweeps(w, clock, 10, step=1)
+        assert stops(api) == 0, "v1 has it in a turn: nothing to ask"
+        api.workers[W1_].update(status="IDLE", updatedAt=W.iso(clock.t))
+        api.v0[W1_] = end
+        sweeps(w, clock, 30, step=1)
+        assert [r["kind"] for r in records(d)] == kinds
+        assert W.epoch(records(d)[0]["since"]) <= clock.t - 29 * 60, "from the first read after it stopped"
+        api.workers[W1_].update(status="ACTIVE", updatedAt=W.iso(clock.t))
+        api.v0[W1_] = "RUNNING"
+        sweeps(w, clock, 10, step=1)
+        api.workers[W1_].update(status="IDLE", updatedAt=W.iso(clock.t))
+        api.v0[W1_] = "ERROR"
+        sweeps(w, clock, 10, step=1)
+        assert [r["kind"] for r in records(d)] == [*kinds, "crashed"], "it ran again and stopped again, in error"
+
+
+def test_workers_of_one_coordinator_stopped_in_error_together_are_one_record_naming_each(tmp_path):
+    """A billing stop cuts every worker of a swarm at once: their coordinator is rung once, as for any workers that stop
+    together, each member saying it is in error and its issue. No conversation is read for a wake-up."""
+    api, clock, w = integrator(tmp_path)
+    api.workers[W7_] = worker("IDLE", W.iso(T0), name="CIR-8 SEAT-A")
+    api.v0[W7_] = "ERROR"
+    registered(tmp_path, clock, W7_)
+    sweeps(w, clock, 60, step=1)
+    (rec,) = records(tmp_path)
+    assert (rec["kind"], rec["agent"], rec["handle"], rec["owner"], rec["count"]) == ("workers_failed", CO, "circuits", "circuits", 2)
+    assert [(m["kind"], m["agent"], m["status"], m["issue"]) for m in rec["members"]] == [
+        ("crashed", W1_, "ERROR", "CIR-7"), ("crashed", W7_, "ERROR", "CIR-8")]
+    assert not [g for g in api.gets if g.endswith("/conversation")]
+
+
+def test_a_v0_status_the_api_wont_give_records_nothing_and_is_read_again(tmp_path, capsys):
+    api, clock, w = integrator(tmp_path, v0=W.urllib.error.HTTPError("/v0/agents/x", 500, "Server Error", {}, None))
+    sweeps(w, clock, 30, step=1)
+    assert records(tmp_path) == [] and stops(api) == 30 * 60 // W.STOP_S, "every `STOP_S`, not every sweep"
+    assert capsys.readouterr().err.count("v0 status went unread") == 1, "said once an hour"
+    api.v0[W1_] = "ERROR"
+    sweeps(w, clock, 10, step=1)
+    assert [(r["kind"], r["agent"]) for r in records(tmp_path)] == [("crashed", W1_)]
+
+
+def test_a_worker_nothing_places_is_recorded_in_error_quietly(tmp_path):
+    """Only a worker the watch places rings a lane: one it can't place rang infra once as unplaced, and its error, which
+    nobody the watch knows could act on, is posted and rings no one."""
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", W.iso(T0), name="INTEGRATOR")})
+    api.v0[W1_] = "ERROR"
+    w.workers[W1_] = {"heard": T0, "lane": "", "handle": None}
+    sweeps(w, clock, 20, step=1)
+    assert [(r["kind"], r.get("quiet"), r.get("handle"), r.get("issue")) for r in records(tmp_path)] == [
+        ("unplaced", None, None, None), ("crashed", True, None, None)]
+
+
+def test_a_listed_agent_with_no_run_is_read_as_a_worker_by_id(tmp_path):
+    """The sweep judges a listed agent by its latest run and leaves one without a run alone, and the worker read skipped
+    every agent the list has: an agent on the list with no run was read by neither."""
+    listed = {"id": W1_, "name": "CIR-7 INTEGRATOR", "status": "IDLE", "updatedAt": W.iso(T0)}
+    api, clock, w = integrator(tmp_path, agents=[listed])
+    sweeps(w, clock, 20, step=1)
+    assert [(r["kind"], r["agent"], r["handle"], r["issue"]) for r in records(tmp_path)] == [("crashed", W1_, "circuits", "CIR-7")]
+    assert status(tmp_path)[W1_]["run_id"] == "", "one row, a worker's"
+
+
+def test_a_listed_worker_in_error_is_restarted_and_each_record_names_its_lead_and_its_issue(tmp_path):
+    """An agent on the list has runs the watch can start: one whose latest run ended in ERROR, or whose own status the
+    list gives as ERROR, is restarted, and its coordinator rung with each try and when they are spent."""
+    by_run = {"id": W1_, "name": "CIR-7 INTEGRATOR", "status": "IDLE", "latestRunId": "run-e1", "updatedAt": W.iso(T0)}
+    by_status = {"id": W7_, "name": "CIR-8 SEAT-A", "status": "ERROR", "latestRunId": "run-f", "updatedAt": W.iso(T0)}
+    api, clock, w = integrator(tmp_path, agents=[by_run, by_status], runs={"run-e1": {"status": "ERROR"}, "run-f": dict(FINISHED)})
+    registered(tmp_path, clock, W7_)
+    w.sweep(lambda r: None)
+    w.sweep(lambda r: None)
+    assert [(r["kind"], r["agent"], r["owner"], r["issue"], r["action"]) for r in records(tmp_path)] == [
+        ("crashed", W1_, "circuits", "CIR-7", "restarted (1 of 3)"), ("crashed", W7_, "circuits", "CIR-8", "restarted (1 of 3)")]
+    assert [p for p, _ in api.posts] == [f"/v1/agents/{W1_}/runs", f"/v1/agents/{W7_}/runs"]
+    assert status(tmp_path)[W7_]["watch_state"] == "crashed" and f"/v0/agents/{W1_}" not in api.gets
+    for n in (2, 3, 4):
+        clock.t += W.RESTART_S
+        by_run["latestRunId"] = f"run-e{n}"
+        api._runs[f"run-e{n}"] = {"status": "ERROR"}
+        w.sweep(lambda r: None)
+    mine = [r for r in records(tmp_path) if r["agent"] == W1_]
+    assert [(r["kind"], r["owner"], r["issue"]) for r in mine] == [("crashed", "circuits", "CIR-7")] * 3 + [
+        ("erroring", "circuits", "CIR-7")]
+    assert not drops(tmp_path)
+
+
+def test_a_restart_the_api_refuses_is_tried_again_and_ends_as_erroring_for_top(tmp_path):
+    """A coordinator in error whose restart the API refused got one `crashed` line and was never tried again: its run
+    stayed judged, so it was neither restarted, nor counted erroring, nor relaunched. Each refused try now counts toward
+    the row and the next is made `RESTART_S` later; when they are spent it is erroring, which rings top, and relaunched."""
+    api, clock, w = coordinators(tmp_path, [{"id": CO, "name": "verity: circuits", "status": "IDLE", "latestRunId": "run-e",
+                                             "updatedAt": W.iso(T0)}], {"run-e": {"status": "ERROR"}})
+    tried = []
+
+    def refuse(path, body=None):
+        tried.append((path, clock.t))
+        raise W.urllib.error.HTTPError(path, 402, "Payment Required", {}, None)
+    api.post = refuse
+    sweeps(w, clock, 60, step=1)
+    assert tried == [(f"/v1/agents/{CO}/runs", T0 + 60 + n * W.RESTART_S) for n in range(W.MAX_RESTARTS)]
+    got = [(r["kind"], r["owner"], r["action"]) for r in records(tmp_path)]
+    assert got[:4] == [
+        ("crashed", "top", "got no restart from the API (HTTP 402): try 1 of 3, the next in 10 min"),
+        ("crashed", "top", "got no restart from the API (HTTP 402): try 2 of 3, the next in 10 min"),
+        ("crashed", "top", "got no restart from the API (HTTP 402): try 3 of 3, the last"),
+        ("erroring", "top", "relaunching it")]
+    assert [g[0] for g in got[4:]] == ["relaunch"] and got[4][2].startswith("not relaunched: no launch key")
+    assert status(tmp_path)[CO]["watch_state"] in ("erroring", "relaunch") and status(tmp_path)[CO]["restart_count"] == 3

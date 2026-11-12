@@ -40,16 +40,21 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   cloud agent, runs on), owner top, under the same once-an-hour limit;
 - **in a long call** when a tool call the parent waits on has been running for `LONG_CALL_S` (recorded, never cancelled: a
   build or a wait may be legitimate, unless it is a holder's held unread);
-- **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once every `RESTART_S` and
+- **crashed** when the platform has it stopped with an error: for an agent on the list, its latest run ended in ERROR
+  (or its own status reads ERROR, should the list give one: v1 documents none, an errored run leaving its agent IDLE; a
+  worker read by id is told by another sign, below). The watch starts a new run, at most once every `RESTART_S` and
   `MAX_RESTARTS` times in a row (a run can error within a minute, run after run), then records it as
-  **erroring**, for a person. A latest run that FINISHED ends the row, and so does a coordinator back from ERROR for
+  **erroring**, for a person: top for a coordinator, its launcher's handle for a worker. A restart the API refuses (other
+  than 409) is one of the row and is made again `RESTART_S` later, so an agent the watch can't start ends erroring, and a
+  coordinator relaunched, as one whose restarts each ended in ERROR does, never as one refused try nothing follows.
+  A latest run that FINISHED ends the row, and so does a coordinator back from ERROR for
   `STICK_S` (a restarted run reads RUNNING for a while before it errors again, so seeing it running is not enough). When
   `OUTAGE_MIN` or more coordinators are down at once, it is the platform's failure: each is restarted every `OUTAGE_RETRY_S`,
   not counted and never relaunched, until it comes back; and once `RING_MIN` have been down `RING_DOWN_S`, an **outage**
   record (the relay posts it to the top coordinator and the registry's human) is written, again every `RING_EVERY_S` while it lasts. A sweep the API
   refuses with 429 waits its Retry-After (`rate_wait`) rather than asking again every minute.
-- **dropped** when an agent out of a turn (IDLE, or ERROR where the platform says so: the record's `status` is what it
-  reported at that sweep) changed (`updatedAt`) `DROPPED_S` past the end of its latest run, which FINISHED, with no newer
+- **dropped** when an agent out of a turn (IDLE; one the platform has in error is crashed, never dropped) changed
+  (`updatedAt`) `DROPPED_S` past the end of its latest run, which FINISHED, with no newer
   run, has sat unchanged `DROPPED_S` since, and its conversation ends on a message it wrote nothing after (`unanswered`):
   a message reached it and became neither a run nor a turn. Its latest run reads FINISHED, so the restart above never
   sees it. The times alone don't say so: a turn a Task resume runs is no run the API lists, and its end moves `updatedAt`
@@ -93,7 +98,8 @@ A cloud worker (a coordinator's Task subagent) is not in `GET /v1/agents`, lists
 under `lanes/` modified in the last `WORKER_NOTES_S`, and in `workers.d/*.json` beside `--log` (`{agent_id, lane,
 launched_by}`, for a coordinator, or a worker, that registers the workers it launches; one with `placed_by` the watch wrote
 itself, for a sender it placed by its name, below), and in the `task` tool calls of every run it follows (the
-call's `args.agentId` is the worker launched or resumed, so a worker named nowhere else is still watched), minus the coordinators and every agent the list has.
+call's `args.agentId` is the worker launched or resumed, so a worker named nowhere else is still watched), minus the coordinators and every agent the list has
+with a run (one it has with none, which the sweep can't judge, is read as a worker).
 A worker's lane is its launcher's, by one rule for a worker and for a run's sender (`placed`), the first of these that gives
 a handle: the agent whose Task call the watch saw launch or resume it, whatever its registration says (only that agent can
 resume it); its registration (a workers.d entry's `launched_by`, else its lane; a note's lane, else the coordinator its
@@ -111,7 +117,15 @@ it reads each one once (`GET /v1/agents/{id}`; `WORKERS_NEW` first reads a sweep
 note of its changes; a 404 never again), and records **worker_idle** when it went from ACTIVE to IDLE (once per transition,
 at its `updatedAt`, which moves on a status change and not during work), unless its parent's Task call completed as it
 stopped (`reported_back`: it reported back), and **worker_long** once when it has been ACTIVE for
-`--worker-long-h` (6). It records only; the relay rings the lane's handle. A worker's worker_idle and idle_after_run are
+`--worker-long-h` (6). A worker that stopped with an error is **crashed** as any agent is, by the one sign the platform
+gives of it: v1 reads it IDLE however its turn ended and lists no run for a turn a Task resume ran, so the watch reads
+its status as the legacy `GET /v0/agents/{id}` gives it (`stopped`: ERROR; FINISHED or EXPIRED otherwise, CREATING or
+RUNNING in a turn), when a stop may have happened (it left ACTIVE, its `updatedAt` moved, as a Task resume's message
+moves it, or a note, a registration or a Task call named it again) and every `STOP_S` while v0 has it in a turn or the
+read fails, `STOPS_SWEEP` such reads a sweep at most. It is recorded once per stop, with the issue key in its name
+(`issue`), in place of that stop's worker_idle and never as dropped, and not again until it has run and stopped again;
+the watch can't start it, and the record says so. It records only; the relay rings the lane's handle. A worker's
+worker_idle, crashed and idle_after_run are
 held with its parent's others (`bursts` in `state.json`) and posted once none has joined for `BURST_QUIET_S`, or `BURST_S`
 after the first: one alone as itself, several as one **workers_failed** naming them all. Each names the wake-up the worker
 says it set (`subscribe_timer`, "a wake-up in 15 minutes") in its last messages, `GET /v0/agents/{id}/conversation`. That
@@ -266,9 +280,12 @@ RING_EVERY_S = 3600         # ... again this often while it lasts
 RATE_WAIT_S = (120, 900)    # a sweep refused with 429 waits Retry-After, else from the first, doubling, to the second
 UNREADABLE_S = 3600         # a latest run the API won't read this long is recorded again, for a person
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
+IN_TURN = ("CREATING", "RUNNING")   # `GET /v0/agents/{id}`'s status of an agent in a turn; FINISHED, ERROR or EXPIRED out of one
+STOP_S = 5 * 60             # a worker's v0 status the watch can't take as its stop's (in a turn, unread, or read within
+#                             `DROPPED_S` of its change) is read again this often
+STOPS_SWEEP = 20            # v0 statuses read a sweep: a fresh deploy reads one for each worker it watches
 DROPPED_S = 5 * 60          # an agent out of a turn that changed this long after its latest run ended, with none newer, and
                             # has sat unchanged as long since, is dropped if its conversation ends on a message it never answered
-DROPPED_STATUSES = ("IDLE", "ERROR")    # ... out of a turn, as the platform reports the agent
 DROPPED_RETRY_S = 10 * 60   # ... a conversation the API won't read is read again this often,
 DROPPED_UNREAD_S = 60 * 60  # and one unread this long is recorded all the same, its answer unchecked
 RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
@@ -534,6 +551,13 @@ def name_lane(name: str, registry: Path | None) -> tuple[str, dict] | None:
     teams = {str(h["linear"]) for h in read_json(registry).get("handles") or [] if h.get("linear")}
     keys = [m for m in ISSUE_KEY_RE.finditer(name) if m[1] in teams]
     return of(keys[0]) if len({m[1] for m in keys}) == 1 else None
+
+
+def issue_of(name: str, registry: Path | None) -> dict[str, str]:
+    """`{"issue": KEY}` for the first Linear issue key in an agent's `name` whose team some registry handle has, as a worker
+    is named after its issue; {} for a name with none."""
+    teams = {str(h["linear"]) for h in read_json(registry).get("handles") or [] if h.get("linear")}
+    return next(({"issue": m[0]} for m in ISSUE_KEY_RE.finditer(name) if m[1] in teams), {})
 
 
 def workers(notes: Path | None, workers_d: Path, registry: Path | None, coords: dict[str, str], t: float) -> dict[str, dict]:
@@ -1051,6 +1075,7 @@ class Watch:
         self.worker_status: dict[str, str] = {}             # worker -> its status as this sweep read it, for status.json
         self.slow_convs: dict[str, float] = {}              # agent -> until when its conversation goes unread (CONV_SKIP_S)
         self.agent_status: dict[str, str] = {}              # listed agent -> its status as this sweep read it, for run_ended
+        self.runless: frozenset[str] = frozenset()          # listed agents with no run: read as workers, by id
         self.registry, self.routes, self.timers = registry, routes, timers
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
         self.runs: dict[str, Run] = {}
@@ -1091,6 +1116,7 @@ class Watch:
         self.rung_outage: float = s.get("rung_outage", 0.0)       # when the last `outage` record was written
         self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again (not saved)
         self.learn_tried: dict[str, float] = {}                   # sender whose brief named no launcher -> when (not saved)
+        self.stops_left = STOPS_SWEEP                             # v0 statuses the current sweep may still read
         self.learn_left = 0                                       # briefs the current node read may still read
 
     def save(self) -> None:
@@ -1243,7 +1269,7 @@ class Watch:
                 if x["kind"] == "worker_idle" and self.reported_back(x["agent"], x.get("idle_t", t)):
                     continue
                 idle_t = x.pop("idle_t", t)
-                items.append({**x, **self.wake_of(x["agent"], idle_t)})
+                items.append({**x, **({} if x["kind"] == "crashed" else self.wake_of(x["agent"], idle_t))})
             if not items:
                 continue
             if len(items) == 1:
@@ -1305,9 +1331,12 @@ class Watch:
 
     def restart(self, a: dict, run: str, t: float) -> None:
         """A new run on an agent whose latest run ended in ERROR, at most once every `RESTART_S` and `MAX_RESTARTS` times in a
-        row; then a coordinator is relaunched."""
+        row; then a coordinator is relaunched. A restart the API refuses (other than 409) counts as one of the row and is
+        made again `RESTART_S` later, so an agent it never starts ends as `erroring` too, and never as one refused try. Each
+        record names its owner, top for a coordinator and its launcher's handle for a worker, and a worker's its issue."""
         r = Run(a["id"], run, a.get("name") or "")
         n = self.errors.get(a["id"], 0)
+        own = {**self.owned(a["id"]), **({} if a["id"] in self.coords else issue_of(r.name, self.registry))}
         if a["id"] in self.coords and self.outage():
             if t - self.freed.get(a["id"], -OUTAGE_RETRY_S) < OUTAGE_RETRY_S:
                 return
@@ -1318,13 +1347,13 @@ class Watch:
                 new = self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": AFTER_ERROR}})
                 action = "restarted in an outage (not counted toward its limit)"
                 self.record("crashed", r, status="ERROR", action=action, down=down,
-                            new_run=((new or {}).get("run") or {}).get("id"), **self.owned(a["id"]))
+                            new_run=((new or {}).get("run") or {}).get("id"), **own)
             except urllib.error.HTTPError as e:
                 self.record("crashed", r, status="ERROR", action=f"restart in an outage failed: HTTP {e.code}; again in "
-                            f"{OUTAGE_RETRY_S // 60} min", down=down, **self.owned(a["id"]))
+                            f"{OUTAGE_RETRY_S // 60} min", down=down, **own)
             except (urllib.error.URLError, OSError, ValueError) as e:
                 self.record("crashed", r, status="ERROR", action=f"restart in an outage failed: {type(e).__name__}: {e}; again "
-                            f"in {OUTAGE_RETRY_S // 60} min", down=down, **self.owned(a["id"]))
+                            f"in {OUTAGE_RETRY_S // 60} min", down=down, **own)
             return
         if run in self.done:                        # restarted already: only the next ERROR run counts
             return
@@ -1334,7 +1363,7 @@ class Watch:
                 self.save()
                 handle = self.coords.get(a["id"])
                 self.record("erroring", r, status="ERROR", restarts=n,
-                            action="relaunching it" if handle else "none: left for a person", **self.owned(a["id"]))
+                            action="relaunching it" if handle else "none: left for a person", **own)
                 if handle:
                     self.relaunch_coordinator(a, handle, f"ended in ERROR after {n} restarts in a row", run, t)
             return
@@ -1345,7 +1374,7 @@ class Watch:
         try:
             new = self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": AFTER_ERROR}})
             self.record("crashed", r, status="ERROR", action=f"restarted ({n + 1} of {MAX_RESTARTS})",
-                        new_run=((new or {}).get("run") or {}).get("id"), **self.owned(a["id"]))
+                        new_run=((new or {}).get("run") or {}).get("id"), **own)
         except urllib.error.HTTPError as e:
             if e.code == 409:                       # agent_busy: one of its own events already started a run; not ours to count
                 self.freed.pop(a["id"], None)
@@ -1353,9 +1382,17 @@ class Watch:
                 self.done.pop(run, None)
                 self.save()
             else:
-                self.record("crashed", r, status="ERROR", action=f"restart failed: HTTP {e.code}", **self.owned(a["id"]))
+                self.refused(r, run, n + 1, f"HTTP {e.code}", own)
         except (urllib.error.URLError, OSError, ValueError) as e:
-            self.record("crashed", r, status="ERROR", action=f"restart failed: {type(e).__name__}: {e}", **self.owned(a["id"]))
+            self.refused(r, run, n + 1, f"{type(e).__name__}: {e}", own)
+
+    def refused(self, r: Run, run: str, n: int, why: str, own: dict) -> None:
+        """A restart the API refused: recorded, and its run left unjudged so `restart` makes the next try of the row."""
+        self.done.pop(run, None)
+        self.save()
+        then = f"the next in {RESTART_S // 60} min" if n < MAX_RESTARTS else "the last"
+        self.record("crashed", r, status="ERROR", action=f"got no restart from the API ({why}): try {n} of {MAX_RESTARTS}, {then}",
+                    **own)
 
     @staticmethod
     def ready(status: str | None, last: float | None, bell: float | None, t: float, every: float | None = None) -> str | None:
@@ -1576,14 +1613,14 @@ class Watch:
             self.save()
 
     def dropped(self, a: dict, last: dict | None, t: float, **detail) -> None:
-        """Record `a` **dropped**, once per `updatedAt`: out of a turn (`DROPPED_STATUSES`), changed `DROPPED_S` past the end
+        """Record `a` **dropped**, once per `updatedAt`: out of a turn (IDLE), changed `DROPPED_S` past the end
         of its latest run ``last``, which FINISHED, unchanged `DROPPED_S` since, and its conversation ending on a message it
         wrote nothing after (`unanswered`). The conversation is read once it is so, and never before: a turn a Task resume
         ran is no run the API lists and moves `updatedAt` as a dropped message does, and only its text tells them apart. One
         the API won't read, or that holds no message, is read again every `DROPPED_RETRY_S`, and after `DROPPED_UNREAD_S`
-        the agent is recorded all the same, with `unread_minutes` where the record otherwise says `unanswered`. Its
-        `status` is the platform's as this sweep read it."""
-        if not (a.get("status") in DROPPED_STATUSES and last and last.get("status") == "FINISHED"
+        the agent is recorded all the same, with `unread_minutes` where the record otherwise says `unanswered`. An agent
+        the platform reports in error is never dropped: it is `crashed`."""
+        if not (a.get("status") == "IDLE" and last and last.get("status") == "FINISHED"
                 and (moved := epoch(a.get("updatedAt"))) is not None and (ended := epoch(last.get("updatedAt"))) is not None
                 and moved - ended >= DROPPED_S and t - moved >= DROPPED_S):
             return
@@ -1654,12 +1691,39 @@ class Watch:
             runs = [info]
         return runs + [x for x in listed if x.get("id") not in {y["id"] for y in runs}]
 
-    def watch_workers(self, coords: dict[str, str], listed: set[str], t: float) -> None:
-        """Read each known worker (`GET /v1/agents/{id}`, at most once a sweep): record `worker_idle` when it went from ACTIVE
-        to IDLE, and `worker_long` once when it has been ACTIVE `worker_long_s`. A worker has no runs the API lists and can't
-        be started (400 legacy workflow), so only its coordinator can resume it (Task); the watch records, never acts. Its
-        handle is the one `placed` gives it, as a run's sender's is; one with neither a handle nor a lane is recorded once
-        as `unplaced`, and its alerts are marked `quiet`."""
+    def stopped(self, agent: str, w: dict, status: str, prev: str | None, t: float) -> bool:
+        """Whether a worker read by id, out of a turn, stopped with an error, by the platform's own word: its status as
+        `GET /v0/agents/{id}` gives it (ERROR; FINISHED or EXPIRED otherwise, CREATING or RUNNING in a turn). v1 reads such a
+        worker IDLE however its turn ended, a turn a Task resume ran is no run it lists, and the run its `latestRunId` names
+        may be weeks older than its last turn, so nothing else says it; should v1 give ERROR as the agent's status, that is
+        it too, with no further read. v0 is read when a stop may have happened since the last read (`stop` in the worker's
+        entry): the watch saw it leave ACTIVE, its `updatedAt` moved, which a Task resume's message does, or something named
+        it again (a Task call, a note, a registration); and again every `STOP_S` while that read can't be taken as the
+        stop's: v0 has it in a turn, the read failed, or it came within `DROPPED_S` of the change, when a turn may not have
+        begun. `STOPS_SWEEP` reads a sweep at most; one left over is made at the next."""
+        if status == "ERROR":
+            return True
+        s, updated = w.get("stop") or {}, w["updated"]
+        new = prev == "ACTIVE" or s.get("at") != updated or w["heard"] > s.get("t", 0.0)
+        open_ = s.get("status") in (*IN_TURN, "") or s.get("t", 0.0) - updated < DROPPED_S
+        if not new and not (open_ and t - s["t"] >= STOP_S):
+            return s.get("status") == "ERROR"
+        if self.stops_left <= 0:
+            return False
+        self.stops_left -= 1
+        try:
+            got = str((self.api.get(f"/v0/agents/{agent}") or {}).get("status") or "")
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            self.say("v0 status", f"a worker's v0 status went unread ({agent}: {type(e).__name__}: {e}); read again in "
+                     f"{STOP_S // 60} min, and no worker is recorded in error meanwhile", t)
+            got = ""
+        w["stop"] = {"at": updated, "t": t, "status": got}
+        return got == "ERROR"
+
+    def place_workers(self, coords: dict[str, str], listed: set[str], t: float) -> dict[str, dict]:
+        """Each worker the notes, workers.d and the Task calls seen name, with the handle `placed` gives it, as a run's
+        sender's is, and for one the list has, its owner (`owners`): before the sweep judges any agent, so a failure it
+        records at the first sweep that meets the agent names who follows it up. Returns the Task calls' workers."""
         before = json.dumps([self.workers, self.owners], sort_keys=True)
         names = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
         for agent, d in workers(self.notes, self.log.with_name("workers.d"), self.registry, coords, t).items():
@@ -1702,14 +1766,29 @@ class Watch:
             w.update(lane=lane, handle=handle)
             if c:
                 w.update(parent=c["parent"], heard=max(w["heard"], c["t"]), name=w.get("name") or c.get("name") or "")
-        self.worker_status, new = {}, 0
+        if json.dumps([self.workers, self.owners], sort_keys=True) != before:
+            self.save()
+        return kids
+
+    def watch_workers(self, coords: dict[str, str], listed: set[str], t: float, kids: dict[str, dict]) -> None:
+        """Read each known worker (`GET /v1/agents/{id}`, at most once a sweep): record `worker_idle` when it went from ACTIVE
+        to IDLE, `worker_long` once when it has been ACTIVE `worker_long_s`, and `crashed` once per stop when the platform
+        says it stopped with an error (`stopped`), in place of any other record of that stop. A worker has no runs the API
+        lists and can't be started (400 legacy workflow), so only its coordinator can resume it (Task); the watch records,
+        never acts. One with neither a handle nor a lane (`place_workers`) is recorded once as `unplaced`, and its alerts
+        are marked `quiet`. An agent the list has is the sweep's to read, but for one with no run (`runless`), which the
+        sweep can't judge: it is read here as any worker."""
+        before = json.dumps([self.workers, self.owners], sort_keys=True)
+        self.worker_status, new, self.stops_left = {}, 0, STOPS_SWEEP
         # the most recently heard first: `WORKERS_NEW` a sweep reaches a worker heard today before a backlog heard last week
         for agent, w in sorted(self.workers.items(), key=lambda kv: (-kv[1].get("heard", 0.0), kv[0])):
-            if agent in listed or agent in coords:              # an agent the sweep reads already, or a coordinator now
+            if (agent in listed and agent not in self.runless) or agent in coords:  # the sweep's to read, or a coordinator now
                 self.workers.pop(agent)
                 continue
             idle_long = w.get("status") == "IDLE" and t - w.get("updated", t) >= WORKER_IDLE_S
-            if w.get("gone") or (idle_long and w["heard"] <= w.get("read", 0)):
+            stop = w.get("stop") or {}
+            turn = stop.get("status") in IN_TURN and t - stop["t"] >= STOP_S    # v0 has it in a turn: read until that ends
+            if w.get("gone") or (idle_long and w["heard"] <= w.get("read", 0) and not turn):
                 continue
             if "read" not in w:
                 if new >= WORKERS_NEW:
@@ -1745,6 +1824,20 @@ class Watch:
                 if self.unplaced(agent, t) and not stray(kids.get(agent)):
                     self.record("unplaced", r, judged=False, role="worker", lane="", status=status,
                                 **({"parent": w["parent"]} if w.get("parent") else {}))
+            if status in ("ACTIVE", "ARCHIVED"):
+                w.pop("error", None)
+                w.pop("stop", None)
+            elif self.stopped(agent, w, status, prev, t):
+                # one record of the stop: no `worker_idle` for the same change, and no `dropped`, which is a message
+                # that never became a turn
+                if (w.get("error") or {}).get("at") != updated and (prev == "ACTIVE" or t - updated >= DROPPED_S):
+                    w["error"] = {"at": updated, "t": t}
+                    self.hold("crashed", r, t, w, role="worker", status="ERROR", since=iso(t),
+                              action="can't start a run on a worker: resume it with Task, which only the agent that launched "
+                                     "it can, or relaunch it", **issue_of(w["name"], self.registry), **detail)
+                continue
+            else:
+                w.pop("error", None)
             if status == "ACTIVE":
                 if prev != "ACTIVE":                            # updatedAt moves on a status change, not during work
                     w["since"], w["long"] = updated, False
@@ -1766,7 +1859,7 @@ class Watch:
             # a Task worker's runs aren't the API's, so its `latestRunId` never moves (one kept a week-old id through ten runs):
             # one seen working so is never asked, an IDLE read right after an ACTIVE one is a turn that ended, and any other
             # change is a turn the watch didn't see or a dropped message, which its conversation tells apart (`dropped`)
-            if (status in DROPPED_STATUSES and not w.get("no_runs") and w.get("idle_at") != updated
+            if (status == "IDLE" and not w.get("no_runs") and w.get("idle_at") != updated
                     and (latest := info.get("latestRunId"))):
                 self.dropped({**info, "id": agent}, self.read({**info, "id": agent}, latest), t, role="worker", **detail)
         for agent in [a for a, w in self.workers.items() if (w.get("gone") or w.get("status") == "IDLE")
@@ -2039,8 +2132,8 @@ class Watch:
             with self.kids_lock:
                 self.children.pop(agent, None)
             w.pop("lane", None)
-        if agent in self.names:                     # a listed agent has an owner, not a worker's entry (`watch_workers`)
-            self.owners[agent] = handle
+        if agent in self.names and agent not in self.runless:   # a listed agent the sweep reads has an owner, not a
+            self.owners[agent] = handle                         # worker's entry (`watch_workers`)
         else:
             w = self.workers.setdefault(agent, {"heard": 0.0})
             w.update(lane=w.get("lane") or handle, handle=handle, name=name, heard=max(w["heard"], t))
@@ -2425,11 +2518,13 @@ class Watch:
         # the key sees every agent on the account (its owner's own too);
         # only Verity's are followed, restarted or woken, and only they are status rows
         listed, agents = {a["id"] for a in agents}, [a for a in agents if verity(a)]
+        self.runless = frozenset(a["id"] for a in agents if not a.get("latestRunId"))
         self.coords = coords = holders(self.registry, self.routes)
         self.holders_all = all_holders(self.registry, self.routes)
+        kids = self.place_workers(coords, listed, t)
         for a in agents:
             recent = t - (epoch(a.get("updatedAt")) or 0) < IDLE_RECENT_S
-            if a.get("latestRunId") and (a.get("status") == "ACTIVE" or (a.get("status") == "IDLE" and recent)):
+            if a.get("latestRunId") and (a.get("status") == "ACTIVE" or (a.get("status") in ("IDLE", "ERROR") and recent)):
                 live[a["id"]] = a
         current: dict[str, tuple[dict, dict]] = {}      # run -> (agent, run record)
         judged: dict[str, dict] = {}                    # run -> agent: the run each agent read is judged by
@@ -2454,14 +2549,17 @@ class Watch:
             if judge:
                 judges[a["id"]] = judge
                 self.status_of[a["id"]] = (judge["id"], str(judge.get("status")))
+            # in error by its latest run, or by its own status should the list give one (v1 documents none: an errored
+            # run leaves its agent IDLE)
+            error = a.get("status") == "ERROR" or bool(last and last.get("status") == "ERROR")
             if a["id"] in coords:
-                self.track(a["id"], last.get("status") if last else None, t)
-            if last and last.get("status") == "FINISHED":   # not a run going: a restart runs a minute before it errors
+                self.track(a["id"], "ERROR" if error else last.get("status") if last else None, t)
+            if error:
+                errored.append((a, latest))
+            elif last and last.get("status") == "FINISHED":     # not a run going: a restart runs a minute before it errors
                 if self.errors.pop(a["id"], None) is not None or a["id"] in self.left:
                     self.left.discard(a["id"])
                     self.save()
-            elif last and last.get("status") == "ERROR":
-                errored.append((a, latest))
             self.dropped(a, last, t)
         for x in [x for x in self.down if x not in coords]:
             self.down.pop(x)
@@ -2483,7 +2581,7 @@ class Watch:
                 continue
             if why := self.ready(info.get("status"), last, bells.get(handle), t, every.get(handle)):
                 self.wake_up(a, handle, info["id"], why, t, info.get("status"))
-        self.watch_workers(coords, listed, t)
+        self.watch_workers(coords, listed, t, kids)
         self.names = {a["id"]: str(a.get("name") or "") for a in agents}
         self.agent_status = {a["id"]: str(a.get("status") or "") for a in agents}
         known, active = {}, {}
@@ -2566,8 +2664,9 @@ def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
     its newest run that started or is CREATING, else its latest). `watch_state` is the last finding on that run (a long call
     only while it lasts), else `followed` or `ok`; `since` is when that finding began; `run_status` is the run's status when
     the watch last read it. A worker the sweep read is a row too, with no run (`run_id` "", `run_status` unknown): its
-    `watch_state` is `worker_idle` while idle after the watch saw it ACTIVE, `worker_long` while that long spell lasts, else
-    `ok`. A value outside the pinned enums raises, so the last valid file stays."""
+    `watch_state` is `crashed` while the platform has it stopped with an error, `worker_idle` while idle after the watch
+    saw it ACTIVE, `worker_long` while that long spell lasts, else `ok`. A value outside the pinned enums raises, so the
+    last valid file stays."""
     agents = []
     for run, a in live.items():
         agent, r = a["id"], w.runs.get(run)
@@ -2585,7 +2684,8 @@ def snapshot(w: Watch, live: dict[str, dict], t: float) -> dict:
                        "watch_state": state, "since": since, "restart_count": int(w.errors.get(agent, 0))})
     for agent, status in w.worker_status.items():
         k = w.workers.get(agent, {})
-        state, since = (("worker_idle", iso(k["idle_at"])) if status == "IDLE" and k.get("idle_at") is not None else
+        state, since = (("crashed", iso(k["error"]["t"])) if status != "ACTIVE" and k.get("error") else
+                        ("worker_idle", iso(k["idle_at"])) if status == "IDLE" and k.get("idle_at") is not None else
                         ("worker_long", iso(k["since"])) if status == "ACTIVE" and k.get("long") else ("ok", None))
         agents.append({"agent_id": agent, "run_id": "", "agent_status": status if status in AGENT_STATUSES else "unknown",
                        "run_status": "unknown", "watch_state": state, "since": since, "restart_count": 0})
