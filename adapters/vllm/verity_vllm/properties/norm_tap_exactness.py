@@ -27,6 +27,7 @@ The GPU run is `tests/properties/norm_tap_exactness_gpu.py`.
 from __future__ import annotations
 
 import difflib
+from collections.abc import Iterable
 from typing import Any
 
 from verity_vllm.records.property_record import REGISTRY, digest_of
@@ -78,7 +79,7 @@ def _scale_gate(kernel: str, call: Any) -> int:
     return next(c for c in prims if c.name == "F32Mul" and div.lo in c.args).lo
 
 
-def ir_scale(kernel: str, N: int, eps: float, x: list[int], res: list[int] | None, w: list[int]) -> int:
+def ir_scale(kernel: str, N: int, eps: float, x: Iterable[int], res: Iterable[int] | None, w: Iterable[int]) -> int:
     """The circuit's scale word of one row: evaluate `RMSNormFusedCuda_v2{N,EPS}` (x, res, w) or `RMSNormTriton_v1{N,EPS}` (x, w) as a
     standalone Call and read its scale gate from the trace."""
     # inside the function: these load numpy, and importing this module must not
