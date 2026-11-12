@@ -131,8 +131,10 @@ MANIFEST_COMPONENT_S = 1200
 #: limit is 350 s a GiB (3x that), at least 7200 s
 FOLD_GM_SUM_RATIO = 5.5
 FOLD_SUM_RATIO = 0.6
-FOLD_LEG_S_PER_GIB = 350
-FOLD_LEG_MIN_S = 7200
+FOLD_PART_S_PER_GIB = 350
+FOLD_PART_MIN_S = 7200
+#: the older name of `FOLD_PART_MIN_S`, which `pipeline/row_tp.py` reads
+FOLD_LEG_MIN_S = FOLD_PART_MIN_S
 
 
 def derive_bytes(lp: int, t: int, layers: int) -> int:
@@ -163,7 +165,7 @@ def fold_plan(shapes: list[tuple[int, ...]], layers: int, world: int, mem_bytes:
     rw = max(1, min(world, (mem - max(1, folds) * fold) // gm))
     return {"gm_bytes": gm, "fold_bytes": fold, "mem_bytes": mem, "rank_workers": rw,
             "fold_workers": folds or max(1, min(world, (mem - rw * gm) // fold)), "fits": mem >= gm + fold,
-            "leg_s": max(FOLD_LEG_MIN_S, int(FOLD_LEG_S_PER_GIB * s / 2**30))}
+            "leg_s": max(FOLD_PART_MIN_S, int(FOLD_PART_S_PER_GIB * s / 2**30))}
 
 
 def fold_phase_s(leg_s: int, world: int, rank_workers: int, fold_workers: int) -> int:
