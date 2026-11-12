@@ -277,9 +277,12 @@ the node's disk. A point whose row names its statement in the store is launched 
    in its memory (`/dev/shm`, the default of `VERITY_BENCH_STEADY_SCRATCH`, which the setup then exports) is refused,
    as is a disk with less free than the statement twice, and the node's own store keeps no copy;
 2. takes one lease of one card for the spec's `max_minutes`, the kit's (`kit.lease`), preemptible and with the spec's
-   `mem_gb`, and inside it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and the toolkit's version
-   from the node's nvcc, refuses a card that isn't the spec's or a driver or toolkit version that isn't, records what
-   else is on the node before and after the provers run (`steady.card_file`), and times the row;
+   `mem_gb`. A slot gives a run its CPUs and no card, so the lease is asked of the cards on the NUMA node of the run's
+   CPUs (gpu-lease's `--on`) where the node says which those are, and of any card where it doesn't; `out/point.json`
+   says which (`lease_on`). Inside the lease it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and
+   the toolkit's version from the node's nvcc, refuses a card that isn't the spec's or a driver or toolkit version
+   that isn't, records what else is on the node before and after the provers run (`steady.card_file`), and times the
+   row;
 3. after the lease has ended, so that its usage line is among the run's files, computes the verdict from the run's own
    files and writes `out/verdict.json`, `out/point.json` and `result.json`, whose validation passes with it. A passed
    point's rate is the result's one measurement, appended by the kit's writer (`kit.Writer`) under the host stamp the

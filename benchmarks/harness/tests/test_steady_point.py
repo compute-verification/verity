@@ -948,6 +948,10 @@ class Node:
         monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
         monkeypatch.chdir(self.root)
         self.monkeypatch = monkeypatch
+        #: what the node lists of its NUMA nodes and its PCI devices (`numa`): nothing, unless a test says
+        self.sys = tmp_path / "sys"
+        monkeypatch.setattr(N, "NODES", self.sys / "node")
+        monkeypatch.setattr(N, "DEVICES", self.sys / "pci")
         self.row, self.files = made(OWN | {SP.VERSIONS: DROP} | (row or {}), **texts)
         self.answers = ANSWERS | (answers or {})
         self.circuit, self.said, self.units, self.cpus, self.lease_exit = circuit, said, units, cpus, lease_exit
@@ -1076,6 +1080,64 @@ def test_the_node_side_times_the_point_under_one_lease_and_computes_its_verdict_
 
     spec = SP.load_spec(node.root / node.spec, root=node.root)
     assert SP.point_why(row, S.files_in(node.run_dir), spec, SP.point(spec, POINT), own=True) is None
+
+
+#: a made-up node of two NUMA nodes, two cards on each: the run's CPUs (20 to 29) are on the second
+CARDS = "0, 00000000:17:00.0\n1, 00000000:65:00.0\n2, 00000000:B1:00.0\n3, 00000000:CA:00.0\n"
+NUMA = {"node/node0/cpulist": "0-15\n", "node/node1/cpulist": "16-31\n", "node/node1/meminfo": "",
+        "pci/0000:17:00.0/numa_node": "0\n", "pci/0000:65:00.0/numa_node": "0\n",
+        "pci/0000:b1:00.0/numa_node": "1\n", "pci/0000:ca:00.0/numa_node": "1\n"}
+
+
+def numa(node: Node, cards: str | None = CARDS, **changes: str | None) -> None:
+    """What the node says of its NUMA nodes and its cards: `NUMA`, with files replaced or left out (None), their
+    names' `/`, `:` and `.` written `_`."""
+
+    node.answers = node.answers | {" ".join(N.CARDS): cards}
+    by_key = {re.sub(r"[/:.]", "_", path): path for path in NUMA}
+    for path, text in (NUMA | {by_key[key]: text for key, text in changes.items()}).items():
+        if text is not None:
+            (node.sys / path).parent.mkdir(parents=True, exist_ok=True)
+            (node.sys / path).write_text(text)
+
+
+def test_the_lease_is_asked_of_the_cards_on_the_numa_node_of_the_runs_cpus(tmp_path, monkeypatch):
+    """A slot gives the run its CPUs and no card: without this the lease takes the first free card of the node."""
+
+    node = Node(tmp_path, monkeypatch)
+    numa(node)
+    assert node.point() == 0
+    lease = node.ran[1]
+    assert lease[:lease.index("--")] == ["gpu-lease", "1", "--wait", "--max-min", "90", "--on", "2,3", "--preemptible",
+                                         "--mem-gb", "80"]
+    assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": [1], "cards": [2, 3]}
+
+
+#: a node that doesn't say which cards are on the NUMA node of the run's CPUs: what it says instead, and why the lease
+#: is asked of any card
+ANY_CARD = [
+    ({"node_node0_cpulist": "0-24\n", "node_node1_cpulist": "25-31\n"}, [0, 1], "lists 2 NUMA nodes for the run's CPUs"),
+    ({"node_node0_cpulist": None, "node_node1_cpulist": None}, [], "lists 0 NUMA nodes for the run's CPUs"),
+    ({"cards": None}, [1], "`nvidia-smi --query-gpu=index,pci.bus_id --format=csv,noheader` exited 1"),
+    ({"pci_0000_b1_00_0_numa_node": "-1\n", "pci_0000_ca_00_0_numa_node": None}, [1],
+     "none of the node's 3 cards says it is on NUMA node 1"),
+]
+
+
+@pytest.mark.parametrize("says, nodes, why", ANY_CARD, ids=[why for *_, why in ANY_CARD])
+def test_a_node_that_does_not_say_which_cards_are_near_the_runs_cpus_leases_any_card_and_the_point_says_why(
+        tmp_path, monkeypatch, says, nodes, why):
+    node = Node(tmp_path, monkeypatch)
+    numa(node, **({"cards": CARDS} | says))
+    assert node.point() == 0
+    assert "--on" not in node.ran[1]
+    assert node.read(N.POINT_FILE)["lease_on"] == {"numa_nodes": nodes, "cards": None, "why": why}
+
+
+def test_a_node_that_lists_nothing_of_its_numa_nodes_leases_any_card(tmp_path, monkeypatch):
+    node = Node(tmp_path, monkeypatch)
+    assert node.point() == 0 and "--on" not in node.ran[1]
+    assert node.read(N.POINT_FILE)["lease_on"]["cards"] is None
 
 
 def test_the_result_lists_every_file_plan_judges_the_run_by(tmp_path, monkeypatch):

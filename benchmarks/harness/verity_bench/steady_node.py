@@ -11,8 +11,9 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
    `benchmarks/served_units/stage.py`, or takes the one the row names as `staged`: a copy of a directory on the node,
    or a directory of an artifact fetched from the store (`fetched`), onto the node's disk and never into its memory.
    It refuses a statement whose circuit isn't the row's `pin` or whose units aren't its `n`.
-2. **One lease of one card** (the harness kit's, `kit.lease`: `gpu-lease 1 --wait --max-min M`), and inside it the
-   timed step (this module again, with `--inside`): it reads the card and the driver's version from the kit's host
+2. **One lease of one card** (the harness kit's, `kit.lease`: `gpu-lease 1 --wait --max-min M`), asked of the cards on
+   the NUMA node of the run's CPUs where the node says which they are (`cards_near`: a slot gives a run its CPUs and
+   no card), and inside it the timed step (this module again, with `--inside`): it reads the card and the driver's version from the kit's host
    stamp (`kit.host_stamp`, the lease's card) and the toolkit's from the node's nvcc, and refuses a card or a version
    that isn't the spec's; records what else is on the node (`steady.card_file`) before and after;
    runs `benchmarks/one_stage/server_rate.py` at the point's load (`steady_spec.timed_sessions`); and keeps the row,
@@ -23,11 +24,11 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
    and a passed point's rate is its one measurement, appended by the kit's writer under the step's host stamp.
 
 It exits 0 for a passed point, `steady_spec.NOT_PASSED` for a point that was timed and didn't pass, and `REFUSED` where
-nothing was timed. Its records are `out/point.json` (the point, the prover, the cores, the card and the versions),
-`out/verdict.json` (each check's answer) and `out/rate/`; `result.json` lists every file a verdict reads (`kept`), so
-the store holds what `plan` judges the run by. The statement and the provers' session files stay in a scratch directory
-that it removes, also when the run is cancelled or timed out: TERM and INT end it with `STOPPED`, after the command
-it was waiting for (`_run`) and with no result.
+nothing was timed. Its records are `out/point.json` (the point, the prover, the cores, the cards its lease was asked
+of, the card and the versions), `out/verdict.json` (each check's answer) and `out/rate/`; `result.json` lists every
+file a verdict reads (`kept`), so the store holds what `plan` judges the run by. The statement and the provers' session
+files stay in a scratch directory that it removes, also when the run is cancelled or timed out: TERM and INT end it
+with `STOPPED`, after the command it was waiting for (`_run`) and with no result.
 """
 
 from __future__ import annotations
@@ -65,6 +66,10 @@ STAGED = ("stage.json", "circuit.txt", "pin.txt")
 FETCH = ("-m", "research", "data", "fetch")
 #: where a node keeps files in its memory: no statement fetched from the store goes there
 MEMORY = Path("/dev/shm")
+#: where a node lists each NUMA node's CPUs (`nodeN/cpulist`) and each PCI device's NUMA node (`ADDRESS/numa_node`), and
+#: the query that gives each card's index, as gpu-lease counts them, with its PCI address
+NODES, DEVICES = Path("/sys/devices/system/node"), Path("/sys/bus/pci/devices")
+CARDS = ("nvidia-smi", "--query-gpu=index,pci.bus_id", "--format=csv,noheader")
 #: the bytes kept of each of the server's logs, from its end
 KEPT_LOG_BYTES = 200_000
 
@@ -220,17 +225,49 @@ def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner,
             "stage": {key: record.get(key) for key in ("definition", "word", "k_log", "vus_per_block", "circuit_bytes")}}
 
 
-def lease_argv(spec: steady_spec.SteadySpec, inside: Sequence[str]) -> list[str]:
+def cards_near(cpus: Sequence[int], ask: Asker) -> dict[str, Any]:
+    """The cards on the NUMA node of the run's CPUs (`cards`, by index), which the point's lease is asked of: a slot of
+    the node gives a run its CPUs and no card, and a card across the machine from its provers' CPUs is another
+    measurement. `cards` is None, with `why`, where the node doesn't say: the run's CPUs aren't on one NUMA node it
+    lists (of a timed row, the check `one_numa_node` says so), or no card says it is on that node (a machine with one
+    node, or a VM, says none). The lease then takes any card."""
+
+    mine, held = set(cpus), []
+    for listed in sorted(NODES.glob("node[0-9]*/cpulist")):
+        spans = [span.split("-") for span in listed.read_text().strip().split(",") if span]
+        if any(mine & set(range(int(span[0]), int(span[-1]) + 1)) for span in spans):
+            held.append(int(listed.parent.name[4:]))
+    if len(held) != 1:
+        return {"numa_nodes": sorted(held), "cards": None, "why": f"the node lists {len(held)} NUMA nodes for the run's CPUs"}
+    rc, text = ask(list(CARDS))
+    where: dict[int, int] = {}
+    for line in text.splitlines() if rc == 0 else ():
+        index, _, address = (part.strip() for part in line.partition(","))
+        try:
+            # nvidia-smi writes the address with eight digits of domain and in capitals, the kernel with four and without
+            where[int(index)] = int((DEVICES / address[-12:].lower() / "numa_node").read_text())
+        except (OSError, ValueError):
+            continue
+    if not (cards := sorted(index for index, node in where.items() if node == held[0])):
+        return {"numa_nodes": held, "cards": None, "why": (
+            f"none of the node's {len(where)} cards says it is on NUMA node {held[0]}" if rc == 0 else
+            f"`{' '.join(CARDS)}` exited {rc}")}
+    return {"numa_nodes": held, "cards": cards}
+
+
+def lease_argv(spec: steady_spec.SteadySpec, inside: Sequence[str], on: Sequence[int] | None = None) -> list[str]:
     """The timed step under the kit's lease (`kit.lease`) of one card for the spec's bound, with what a point's lease
-    says beside it, before the command: preemptible, as a guest's GPU job must be (a preempted point has no passing
-    run, so the next `run` launches it again), and the host memory the spec admits."""
+    says beside it, before the command: the cards it may be (`on`, gpu-lease's `--on`: `cards_near`), preemptible, as a
+    guest's GPU job must be (a preempted point has no passing run, so the next `run` launches it again), and the host
+    memory the spec admits."""
 
     minutes = spec.admission.max_minutes
     if minutes is None:
         raise Refused(f"spec {spec.id!r} has no admission max_minutes, which bounds the point's lease")
+    near = ["--on", ",".join(map(str, on))] if on else []
     memory = ["--mem-gb", str(spec.admission.mem_gb)] if spec.admission.mem_gb is not None else []
     *lease, command = kit.lease(1, minutes)
-    return [*lease, "--preemptible", *memory, command, *inside]
+    return [*lease, *near, "--preemptible", *memory, command, *inside]
 
 
 # ---- inside the lease ---------------------------------------------------------------------------------------------------------
@@ -411,10 +448,12 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
     scratch = None
     try:
         record["prover"] = prover()
-        record["cores"] = {"count": spec.cores, "list": _spans(own_cores(spec, cpus()))}
+        own = own_cores(spec, cpus())
+        record["cores"] = {"count": spec.cores, "list": _spans(own)}
+        record["lease_on"] = cards_near(own, ask)
         scratch = Path(tempfile.mkdtemp(prefix="verity-bench-steady-", dir=settings.VERITY_BENCH_STEADY_SCRATCH))
         lease = lease_argv(spec, [sys.executable, "-m", "verity_bench.steady_node", "--spec", a.spec, "--point", a.point,
-                                  "--identity", a.identity, "--inside", str(scratch)])
+                                  "--identity", a.identity, "--inside", str(scratch)], record["lease_on"]["cards"])
         record["statement"] = statement(item.row, scratch, out, run, ask)
         record["lease_exit"] = run(lease, out / "lease.log")
         step = json.loads((run_dir / TIMED_FILE).read_text()) if (run_dir / TIMED_FILE).is_file() else {}
