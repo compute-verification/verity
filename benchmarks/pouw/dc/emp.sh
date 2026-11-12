@@ -10,7 +10,8 @@
 #       unpacks the build's bins.tgz (from $RESEARCH_RUN_DIR/inputs/), records the clocks (A1: nvidia-smi -q -d CLOCK
 #       before and after, clocks sampled every 200 ms under the lease) and runs probe.py run on every binary (gate, the
 #       poisoned sink and its control, then the interleaved timing) into $OUT/<binary>/. With EMP_ONLY=REGEX it times
-#       only the probes whose name matches (probe.py run --only). With EMP_GPU=INDEX (and EMP_CORES=CPUS) it takes
+#       only the probes whose name matches (probe.py run --only), and with EMP_PASSED_ONLY=1 it times the probes that
+#       pass even where others are refused (probe.py run --passed-only). With EMP_GPU=INDEX (and EMP_CORES=CPUS) it takes
 #       only that card (gpu-lease --on, --cores), once and without waiting, and first exits 3, touching no card, if
 #       that card holds a compute process; $OUT/env/node-{before,after}.txt hold every card's leases and processes.
 # Exit: 0 done, 1 nothing built or a gate verdict not the declared one, 2 no nvcc or no inputs, 3 the card in use.
@@ -86,6 +87,7 @@ time)
   for b in "$WORK"/*; do
     [ -x "$b" ] || continue
     python3 "$PROBE" run "$b" --out "$OUT/$(basename "$b")" --reps "$REPS" ${EMP_ONLY:+--only "$EMP_ONLY"} \
+      ${EMP_PASSED_ONLY:+--passed-only} \
       || { echo "emp.sh: probe.py run $(basename "$b") failed" >&2; rc=1; }
   done
   nvidia-smi "${dev[@]}" -q -d CLOCK,PERFORMANCE,POWER >"$OUT/env/clocks-after.txt" 2>&1
