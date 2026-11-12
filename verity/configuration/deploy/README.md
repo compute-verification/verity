@@ -11,15 +11,15 @@ Nothing is retried: every failure the runtime sees finishes the party refused by
 
 What code outside this directory may use. Everything else here is internal.
 
-The names outside code imports, in four groups. A protocol's parties are written against `party`: `Party`, `Params`,
+The names, in four groups. A protocol's parties are written against `party`: `Party`, `Params`,
 `Identity` and `Received`, and the actions (`Action`) `Send`, `Timer`, `LogEntry` and `Finish`. What a protocol declares
 is `manifest`'s `Manifest`, `Role` and `Channel` and `config`'s `Component` and `Workload`, with `manifest.place` and
 `site_of` for a placement (`Topology`, `PlaceResult`). The configuration is the rest of `config`: `check`, `digest`,
 `new`, `parse`, `render`, `canonical`, `declared` and `composite`, with `COMPOSITES`, `LOCAL`, `PARTY`, `CHANNEL` and
 `TRANSPORT`. The runtime is `runtime`'s `run`, `ProtocolDef` and `RunResult`, `stream`'s `run`, `Side`, `Codec` and
 `sleep_until`, and the sources a caller hands `runtime.run` (`sources`): `VirtualClock` on a `VirtualTime`,
-`SeededCoins`, `seeded` and `OWNER`. In `party`, `manifest`, `stream` and `sources` these are the module's `__all__`;
-`config`'s and `runtime`'s `__all__` also lists names only this directory reads.
+`SeededCoins`, `seeded` and `OWNER`. A refusal by name is raised as the wire's `Refused`: import it from
+`verity.configuration.wire`.
 
 | Entry point | What it is |
 |---|---|
