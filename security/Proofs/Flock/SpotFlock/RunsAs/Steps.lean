@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.SpotFlock.RunsAs.Outcome
+import all Lean.Data.Json.Basic
+import Std.Data.TreeMap.Raw.Lemmas
+import Std.Data.TreeMap.Raw.WF
 import all Spot.Run
 import all Spot.Record
 import Proofs.Flock.Claims.Sampling.Select.Code
@@ -84,13 +87,13 @@ private theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .
       Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
         .ok (draw, rest, read) ∧
       ¬(!Spot.Run.coinsHold i.coins i.record i.params.verifier.windowRoot (i.source.extract 0 read)) = true ∧
-      ∃ (inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)) (rec_ : Json) (acc₂ : Bool)
-        (staged : List (String × Json)) (receipt pub audit : Json),
+      ∃ (inner : Option (Spot.Run.Interior × Json × Json × Json × ℕ)) (acc₂ : Bool)
+        (staged : List (String × Json)) (receipt : Json) (sym : String) (pub audit : Json),
         Spot.Run.secondStage i ((Spot.Draw.proved draw).map Int.toNat) = .ok (.ok inner) ∧
         Spot.Run.interiorAudit i ((Spot.Draw.proved draw).map Int.toNat) inner = .ok (acc₂, staged) ∧
         j = Json.mkObj ([("receipt", receipt), ("draw", draw), ("read", Lean.toJson read),
-          ("symbol", Json.str (if (Spot.jeq (Spot.getD rec_ "accepted") (.bool true) && acc₂) = true then "accept"
-            else "reject")), ("public", pub), ("audit", audit)] ++ staged) := by
+          ("symbol", Json.str sym), ("public", pub), ("audit", audit)] ++ staged) ∧
+        (sym = "accept" → ∃ rec_, (Spot.jeq (Spot.getD rec_ "accepted") (.bool true) && acc₂) = true) := by
   unfold Spot.Run.run at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat'
@@ -100,7 +103,9 @@ private theorem run_path {i : Spot.Run.Input} {j : Json} (h : Spot.Run.run i = .
     | (obtain ⟨_, h⟩ | ⟨_, h⟩ := Spot.Run.ite_eq_ok h; exact Or.inl ⟨_, _, h.symm⟩)
     | exact Or.inl ⟨_, _, (Except.ok.inj h).symm⟩
     | exact Or.inr ⟨_, _, _, _, _, by assumption, by assumption, by assumption, by assumption, by assumption,
-        _, _, _, _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm⟩
+        _, _, _, _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm, fun _ => ⟨_, by assumption⟩⟩
+    | exact Or.inr ⟨_, _, _, _, _, by assumption, by assumption, by assumption, by assumption, by assumption,
+        _, _, _, _, _, _, _, by assumption, by assumption, (Except.ok.inj h).symm, fun hs => by simp at hs⟩
 
 /-- **The second stage under a two-stage rule with an interior** is the interior's steps. -/
 private theorem secondStage_two {i : Spot.Run.Input} {sample : Array ℕ} {grain : Json} {replay : String}
@@ -197,7 +202,7 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
       Spot.Select.select resolved i.params.verifier.program i.params.verifier.query workTable i.closure i.source =
         .ok (draw, rest, read) ∧
       ¬(!Spot.Run.coinsHold i.coins i.record i.params.verifier.windowRoot (i.source.extract 0 read)) = true ∧
-      ∃ (grain : Json) (replay : String) (k : Spot.Select.Counts) (ns ids ks : Array ℕ) (draw₂ : Json) (read₂ : ℕ)
+      ∃ (grain : Json) (replay : String) (k : Spot.Select.Counts) (ns : Array ℕ) (ids : Array String) (ks : Array ℕ) (draw₂ : Json) (read₂ : ℕ)
         (strata : Array (String × Array (ℕ × ℕ))),
         i.rule = .twoStage grain replay k ∧
         Spot.Select.replayCells it.replay it.params.verifier.query = .ok ns ∧
@@ -209,7 +214,7 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
           it.statements).codes = #[] := by
   obtain ⟨grain, replay, k, hr⟩ := ha.two
   rcases run_path ha.run with ⟨step, codes, hj⟩ | ⟨workTable, resolved, draw, rest, read, ht, hc, hres, hsel, hcoins,
-      inner, rec_, acc₂, staged, receipt, pub, audit, hsec, hia, hj⟩
+      inner, acc₂, staged, receipt, sym, pub, audit, hsec, hia, hj, himp⟩
   · have hs := ha.accept
     rw [hj, symbol_refused] at hs
     cases hs
@@ -221,11 +226,8 @@ theorem accepted_steps {i : Spot.Run.Input} {it : Spot.Run.Interior} {j : Json} 
     obtain ⟨⟨e, he⟩, rec₂, strata, haud, hstrata, hacc⟩ := interiorAudit_some hia
     have hsym := ha.accept
     rw [hj, symbol_answer _ _ _ _ _ _ _ (Or.inr ⟨e, he⟩)] at hsym
-    have hboth : (Spot.jeq (Spot.getD rec_ "accepted") (.bool true) && acc₂) = true := by
-      by_contra hn
-      rw [if_neg hn] at hsym
-      simp at hsym
-    have hacc₂ : acc₂ = true := (Bool.and_eq_true _ _).1 hboth |>.2
+    obtain ⟨rec_, hboth⟩ := himp (Json.str.inj hsym)
+    have hacc₂ : acc₂ = true := (Bool.and_eq_true_iff.1 hboth).2
     obtain ⟨m, hm, hwf⟩ := audit_wf haud
     rw [hacc₂, hm] at hacc
     refine ⟨Option.not_isSome_iff_eq_none.1 hc, workTable, resolved, draw, rest, read, ht, hres, hsel, hcoins,

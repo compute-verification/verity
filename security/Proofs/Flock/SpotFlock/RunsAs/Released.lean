@@ -36,11 +36,6 @@ theorem run_pure_eq {α : Type} {a : α} {s : ℕ} {x : α × ℕ}
   rw [StateT.run_pure] at h
   exact (Except.ok.inj h).symm
 
-/-- A continuation that only returns leaves the position where it found it. -/
-local macro "pure_le_tac" h:ident : tactic => `(tactic| first
-  | exact pure_le $h
-  | (revert $h; (repeat' split) <;> intro $h <;> exact pure_le $h))
-
 theorem bind_read {α β : Type} {x y : StateT ℕ (Except String) α} {f g : α → StateT ℕ (Except String) β}
     {s R : ℕ} {out : β × ℕ} (h : (x >>= f).run s = .ok out)
     (hx : ∀ r, x.run s = .ok r → s ≤ r.2 ∧ (r.2 ≤ R → y.run s = .ok r))
@@ -137,11 +132,11 @@ theorem onWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) {N :
   unfold Flock.Draw.onWith at h ⊢
   try dsimp only at h ⊢
   refine bind_read h (fun r hr => take_read hA hr) (fun r _ hr => ?_)
-  refine bind_read hr (fun r' hr' => ?_) (fun r'' _ hk => ⟨by pure_le_tac hk, fun _ => hk⟩)
+  refine bind_read hr (fun r' hr' => ?_) (fun r'' _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
   refine loop_read _ _ ξ.size R (fun b s z hz => ?_) (fun b s b' s' hz => ?_) _ _ _ (Nat.lt_succ_self _) r' hr'
   · split at hz
     · exact ⟨pure_le hz, fun _ => hz⟩
-    · exact bind_read hz (fun r hr => take_read hA hr) (fun r _ hk => ⟨by pure_le_tac hk, fun _ => hk⟩)
+    · exact bind_read hz (fun r hr => take_read hA hr) (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
   · split at hz
     · rw [StateT.run_pure] at hz
       obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hz)
@@ -162,9 +157,9 @@ theorem stratifiedWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ'
   dsimp only at h ⊢
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h ⊢
   refine bind_read h (fun r hr => forIn_read _ _ R (fun i b s z hz => ?_) _ _ _ _ hr)
-    (fun r _ hk => ⟨by pure_le_tac hk, fun _ => hk⟩)
+    (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
   exact bind_read hz (fun r hr => onWith_read hA (by unfold Flock.Draw.Stratum.need; omega) hr)
-    (fun r _ hk => ⟨by pure_le_tac hk, fun _ => hk⟩)
+    (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
 
 theorem drawWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) (law : Flock.Draw.Law) (n : ℕ) {p : ℕ}
     {x : Option Flock.Draw.UnitDraw × ℕ}
@@ -174,19 +169,19 @@ theorem drawWith_read {ξ ξ' : ByteArray} {R : ℕ} (hA : AgreesTo ξ ξ' R) (l
   | subset k =>
     unfold Flock.Draw.drawWith at h ⊢
     dsimp only at h ⊢
-    exact bind_read h (fun r hr => onWith_read hA (by omega) hr) (fun r _ hk => ⟨by pure_le_tac hk, fun _ => hk⟩)
+    exact bind_read h (fun r hr => onWith_read hA (by omega) hr) (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
   | bernoulli a b =>
     unfold Flock.Draw.drawWith at h ⊢
     dsimp only at h ⊢
-    exact bind_read h (fun r hr => onWith_read hA (by omega) hr) (fun r _ hk => ⟨by pure_le_tac hk, fun _ => hk⟩)
+    exact bind_read h (fun r hr => onWith_read hA (by omega) hr) (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
   | stratified k strata =>
     unfold Flock.Draw.drawWith at h ⊢
     dsimp only at h ⊢
-    exact bind_read h (fun r hr => stratifiedWith_read hA hr) (fun r _ hk => ⟨by pure_le_tac hk, fun _ => hk⟩)
+    exact bind_read h (fun r hr => stratifiedWith_read hA hr) (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
   | work k strata =>
     unfold Flock.Draw.drawWith at h ⊢
     dsimp only at h ⊢
-    exact bind_read h (fun r hr => stratifiedWith_read hA hr) (fun r _ hk => ⟨by pure_le_tac hk, fun _ => hk⟩)
+    exact bind_read h (fun r hr => stratifiedWith_read hA hr) (fun r _ hk => ⟨by first | exact pure_le hk | (revert hk; (repeat' split) <;> intro hk <;> exact pure_le hk), fun _ => hk⟩)
 
 /-- **A draw reads only the bytes it reports reading**: the units a law draws from `ξ`, having read `r.2` bytes, are
 the same from any source that starts with `ξ`'s first `r.2` bytes. -/
