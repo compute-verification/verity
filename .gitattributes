@@ -4,7 +4,7 @@ lean-audit.json merge=lean-audit
 *.lean merge=lean-imports
 # a conflict only in `[[require]]` blocks or a string array (`roots`) merges as a set or list; any other stays git's (merge.py --lakefile)
 lakefile.toml merge=lakefile-lists
-# a conflict only in the ratchet caps' lines (`UNWITNESSED`, `INLINE`) merges as counters; any other stays git's (merge.py --caps)
+# a conflict only in the ratchet caps' lines (`UNWITNESSED`, `INLINE`) merges key by key as the larger cap; any other stays git's (merge.py --caps)
 tests/test_lean_packages.py merge=lean-caps
 # each area's `modules` and `declarations` merge as counters (theirs plus ours' change); another schema or a non-count stays git's (merge.py --caps)
 tools/verity/lean/unread-caps.json merge=lean-caps
