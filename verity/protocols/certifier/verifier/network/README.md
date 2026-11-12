@@ -56,6 +56,10 @@ one-stage, one answer per registered sampling block of the workload). Its parame
 - **the rows form**: the network certifier's own run, each link-window's cells committed as rows under one fixed
   schedule a direction, its records certified, and the scan's one-stage answer for it.
 
+Either form's parameters list the trusted network certifiers' LMS public keys (`"keys": [hex, …]`, at least one, no
+two with one identifier) beside the one certifier session. A certificate or a rows registration is checked under the
+listed key whose first 16 bytes are its key id, and one whose signer is not listed is refused by name.
+
 It accepts when every link-window passes its form's check and every compute audit accepted. It then publishes `K`, the
 bits a covert sender in the server can move through the network certifier in the period, as
 `NetTiming.Guarantees.PeriodLeakAccepted` counts them (`security/Proofs/NetworkCertifier/README.md`).

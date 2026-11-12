@@ -5,9 +5,9 @@ and its Lean.
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         [--v3c PERIOD_JSON] NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...
 
-* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, session
-  and one schedule, its integer fields and its response cap when it has one: the period check reads the id egress
-  form, and a run in another is refused),
+* **The case** (`rows_case`) of link-window W: the parameters the warden run's ``deployment.json`` (its key, the one
+  key the parameters list, its session and one schedule, its integer fields and its response cap when it has one: the
+  period check reads the id egress form, and a run in another is refused),
   the link `warden_serve.LINK`, the Program the scan's registration's, the compute audits
   ``answers.json`` carries (the block round's, whose o0 is the scan's `prog`: its descriptor, free inputs and steps),
   the jitter bound `leak_bounds.JITTER_BOUND` (K's jitter term T bits a link-window, `leak_bounds.JITTER`), and the

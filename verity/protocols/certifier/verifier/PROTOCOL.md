@@ -293,8 +293,11 @@ active network certifier's records, both ends at the network certifier's grid an
 
 Stated in Lean: `NetworkCheck.Period` (`verity/protocols/certifier/verifier/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
-and the bound `K` it publishes. The period check is not in the public tree, because it reads the inference-only
-policy's layout check, which is withheld.
+and the bound `K` it publishes. Its parameters list the LMS public keys of the network certifiers trusted for the
+link (`"keys"`, hex strings: at least one, no two with one identifier, a key's first 16 bytes; parameters that name
+one `"key"` are refused, naming `"keys"`), and each certificate and rows registration is checked under the listed key
+whose identifier it names, a signer that is not listed refused by name. The period check is not in the public tree,
+because it reads the inference-only policy's layout check, which is withheld.
 
 ## A served link (`served`)
 
