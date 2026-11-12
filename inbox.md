@@ -60,3 +60,127 @@ PERIODPROOF to the network-accounting coordinator, Thu 12 Nov 8:17 AM PST. **NET
 
 TIMER: none
 
+[2026-11-12T16:47Z] 7c616af7333b
+WATERLINE to the network-accounting coordinator, Thu 12 Nov 8:45 AM PST. **The follow-on is open and unmarked as #9360, its gate and suites are green, and the page is below. The page's main finding: every coming run reaches the server through an ssh forward, so a capture on the link cannot agree with a record.**
+
+## The pull request
+
+- **#9360**, https://github.com/compute-verification/verity/pull/9360, branch `cursor/na-capture-reader-phases-a989`, head `74fca182946126a9d0692a3d671aef07d3c5158c`, three commits on `main` `87fec6c6491b`, two files. Open, not a draft, not marked [ran: `gh pr view`].
+- **The gate:** `python3 adapters/vllm/tools/ratchet_gate.py origin/main HEAD` at the pushed head: 1 change, 0 failed, exit 0 [ran].
+- **The four counts after, by the lint's `sites()`** [ran]: README 60 (was 60), `capture_flows.py` 12 (12), `capture_loopback.sh` 4 (13), `test_capture_flows.py` 14 (43). 90 in all, from 128.
+- **The test file is 14, not your 18.** The local `warden` had 29 sites, on 25 lines: lines 560 and 577 of the file at `87fec6c6491b` hold two each and line 580 three. So 38 sites go, and 32 of the landing's 70 are left, not 36: 2 in the README, 12, 4 and 14. All 32 are the code's own names.
+- **The suites:** `r20261112-161912-6ff0`, `suites.py --changed 87fec6c6491b --quick` by `research run`, launched once. I read its record [ran]: `status.json` done, rc 0; `job.json` source `74fca182946126a9d0692a3d671aef07d3c5158c`; `failure.json` class SUCCESS, no incidents; `stdout.log`: 6 suites, 6 passed, 0 cached, 0 failed: `verity-network-traces` 645 (`test_capture_flows.py` run whole), `verity-network-sim` 21, `verity-network-e2e` 70, `benchmarks/one_stage` 571, `repository` 350, `verity-graph` 220. The record has no test's own line, so the new test's pass is read from its suite's and from my local run of the file (36 passed) [ran].
+- **The new test:** `test_a_run_of_two_execution_phases_is_counted_across_both_phases_records`. Two execution phases on the virtual clock, four requests: one wholly in the first phase, one whose response crosses into the second, one whose request does, one wholly in the second. It holds the certified count (6 of `len(ws.CERTIFIED) * 2`, and 5 of 6 with one certificate removed), each direction's record bytes summed over both phases, each connection's two counts, and "agrees" with a capture of exactly those bytes. No clock, no sleep, no new site.
+- **Breaking the reader, by hand, three times, put back each time** (`capture_flows.py` has no diff) [ran]:
+  - records cut to the first phase's: the new test alone fails, at `{'certified': 3, 'of': 6} == {'certified': 6, 'of': 6}` (1 failed, 35 passed);
+  - records cut to the second phase's: the new test and the one-phase tests fail;
+  - certificates counted whole, cells read from the first phase only: the new test alone fails, at the connections' counts (a connection "not ended", 770 bytes from the server where 3,185, no watermark entry).
+- **It found no defect in the reader**, so nothing of the reader changed.
+
+## Slips and limits
+
+- **The gate ran twice, not once.** Once at an unpushed commit, then I re-wrapped one line, amended that unpushed commit, pushed, and ran it again at the pushed head. Both exit 0. No pushed commit was amended.
+- `capture_loopback.sh` was not run after the rename: no test runs it, and it needs a node that may capture. I checked it by `bash -n`, by the inverse substitution giving `main`'s file, and by count: 9 sites of `CAPTURE_PID`, none of `CAP`.
+- `research queue open --issue NET-372` linked the pull request to NET-372 through the Linear app, as it did for #9314. I wrote nothing else to Linear and nothing to Slack.
+- For the page I read NET-372, NET-351 and NET-340 on Linear, and fetched `cursor/net334-certside-562d` to read `certside/job.sh`. Read only.
+- The allowlist is untouched: it holds 56 for the README, which has 60, and no entry for the three new files, so the root suite's bookkeeping test still warns on all four.
+
+# A capture on a real link: which coming run it fits, and the ask for infra
+
+Read on `main` at `87fec6c6491b`, and Friday's job on `cursor/net334-certside-562d` at `d6fef0385ece` (it is not on `main`). Nothing was run on a node. `job.sh` below is `certside/job.sh` there.
+
+## The fact that decides it
+
+**Every script that puts the relay on one machine and the server on another reaches the server through an ssh local forward to the server's loopback. On the link between the two nodes our traffic is one ssh connection, so a capture there cannot agree with any record.**
+
+| script | the relay runs on | it reaches the server by |
+|---|---|---|
+| `deviations.sh`, tonight | the job's node | `ssh -N`, one `LocalForward` [read: `deviations.sh` 2-3, 86-105] |
+| the gate's `warden-rehearse`, which the served script's front asks for | the auditor's host | `ssh -N -L` to the peer's loopback [read: `auditor.py` 204-207, 2505-2507, 2553; `certifier_piece.py` 11-13] |
+| `job.sh`, Friday's by NET-351 | the job's node | `ssh -N -L`, one forward [read: `job.sh` 2-5, 299] |
+| `warden_serve.py rehearse --upstream`, run directly | the server's host | plain TCP [read: `warden_serve.py` 24-29] |
+
+- No script on `main` gives the relay another node's address as its upstream [read: each caller of `rehearse` and of `serve --upstream`, by grep].
+- The one ssh connection lasts the job and carries each of the relay's connections, the watermark stream, the reach check and a keepalive each 15 s [read: `deviations.sh` 99; `job.sh` 293].
+- ssh adds bytes to a stream and removes none: neither configuration turns compression on [read: `deviations.sh` 86-104; `job.sh` 281-298]. So its bytes are a ceiling over the record's in each direction [derived].
+
+## Tonight: a reach check, then six tries of a cheating server
+
+- **The deviating process** is a child of `try` on the job's node, the certifier's node, between the relay and the forward. The relay's upstream is that child, on the loopback. The relay, its client and its check run there too [read: `deviations.py` 738-752; README 170-175].
+- **The link carries** ssh's and sshd's bytes. sshd on the serving node connects to the id front on that node's loopback [read: `deviations.sh` 9-10, 97].
+- **A capture there cannot be held to a try's record.** The link holds ciphertext of one connection for all six tries. And the record counts what the deviating process sent the relay, which by design is not what the server sent: `length` drops an id event, `extra` adds bytes, `fail` withholds a response [read: README 161-164; `deviations.py` 297-303]. The record's bytes are in the clear only on the certifier's node's loopback, at a port each try's child picks when it starts [read: `deviations.py` 738-740, 873].
+- **No try leaves a run directory.** Each is a rehearsal's `--out`, the layout `--run` takes, but under the job's temporary directory, deleted at exit [read: `deviations.py` 748-750, 779; `deviations.sh` 19-20, 56-58, 152]. `CLASS.json` keeps cells' kinds and ids and each file's size and SHA-256, not the records [read: `deviations.py` 48-55].
+- **One file over the reach check and six tries:** on the link it is one ssh flow, two if the reach check is its own job. The reader refuses nothing and exits 0. With no run directory it sums and lists. Held to one record, nothing pairs and each direction says `differs` [derived: `capture_flows.py` 356-376, 474-543]. The reader takes one `--run` and reads no time [read: `capture_flows.py` 626], so in the clear the other five tries' flows would stay unpaired and their bytes would be in both sums.
+
+## An honest certified serve between two machines
+
+- **On `main`** the served script's front asks the gate, which runs the relay and its client on the auditor's host with the server on the peer [read: `certifier_piece.py` 11-13; `auditor.py` 204-207]. So yes, another machine, and again only ssh crosses the link.
+- **Friday's, by NET-351** [read: the issue, which relays vllm's plan]: `job.sh` on the certifier's node, 2,000 id requests at 1.67 a second, 64 lanes, one try. Not final there: the traffic may change, the hour is not named, and on a "no" the relay runs beside the server, with no link under it.
+- **The relay** is on the job's node with its client, key and check; its upstream is the forward's local end [read: `job.sh` 337, 347]. **The link carries** ssh's bytes, as tonight.
+- **Held to the record:** on the link only as a ceiling. In the clear, yes, at either end of the tunnel: the serving node's loopback at the front's port, known before the run, or the certifier's node's loopback at the forward's local port, which the job takes from `LOCAL` when set [read: `job.sh` 268, 270]. ssh forwards each connection as one TCP connection with its bytes unchanged, so the counts there are the record's [derived].
+- **It leaves a run directory:** `$OUT/warden`, the rehearsal's `--out`, in the run's `out/` and so in the store; with `TRIES=2`, two, the second started at once behind the same forward [read: `job.sh` 20, 32-37, 347]. The gate's run leaves `witness/` on the auditor's host, for the run's own lane only [read: `auditor.py` 240-247, 2544].
+- **It is an id-form run, which the reader has never read.** Its tests and the kept loopback run are the `bytes` form [read: `test_warden_serve.py` 32-33; `capture_loopback.sh` 42]. Nothing in `record_counts` depends on the form [read: `capture_flows.py` 380-450; `warden.py` 51-58, 850]. Not run.
+- **One file:** it also holds flows that are in no record: the reach check's (two empty connects with `MODEL` given, five `GET /v1/models` without) and the rehearsal's own listing of the model when `--model` is not given [read: `job.sh` 13-16; `warden_serve.py` 1181]. Empty flows leave the sums equal and the pairing short; the `GET`s add their bytes to both sums.
+
+## Recommendation
+
+1. **Friday's honest serve, not tonight's tries.**
+2. **Two files, because no one point gives both things.**
+   - **A, the link:** on the certifier's node, the interface its packets to the serving node leave by, the README's command as it is. The filter there keeps only packets between the two nodes. It gives every flow between the two nodes, and ssh's bytes as a ceiling over the record. It cannot say "agrees", so it is read without `--run` and the ceiling is checked by hand: the flow's stream bytes against the record's sums [derived].
+   - **B, the server's door:** on the serving node's loopback, between sshd and the front, at the front's port. It is the count the record must equal, taken on the other machine after the bytes crossed the link. It needs a port in the filter, which the README's command lacks: without one the file holds every loopback flow of that node [derived].
+3. **If only one, B.** A alone prints `differs`, which must be said before anyone reads it.
+4. **One file a run.** Start before the job is launched, since the forward opens in its first minute; stop after it has exited and the file has stopped growing [read: `job.sh` 10, 107; README 231-233]. Keep Friday at one try.
+5. **Tonight, at most a rehearsal of the ask:** file A during the tries, read without `--run` [read: `capture_flows.py` 81-82]. It tests infra's command, where the file is left and a job's read of it.
+
+**What the reader lacks (said, not built):**
+
+- A tunnel's flow read as a ceiling over the record. Today it says `differs`.
+- More than one `--run` for a capture, or a span of time to cut one by.
+- A line for flows that are expected and in no record. The result file has each flow's sums, so they can be taken off by hand.
+- Any run in the id form, or of 2,000 connections. It reads every record into memory.
+- The addresses other than on its command line [read: `capture_flows.py` 622-625], where a job's launch record would hold them. A job of ours would need a wrapper that takes them from the environment, as `deviations.sh` takes its three values [read: `deviations.sh` 9-12].
+- A capture that keeps no content. It reads only the first 14 bytes of a TCP header [read: `capture_flows.py` 207-210], so 54 bytes a packet would do on IPv4 without a VLAN tag; it and the README ask for 130, which in the clear keeps up to 64 bytes of each segment.
+
+**What the run's scripts lack for the bytes to cross the link in the clear**, as the operator's tap will see them: the relay's upstream as the serving node's address, the front listening on it, the network admitting the port. `deployment.json` would then hold that address, which the job's guard refuses [read: `warden_serve.py` 699-707; `job.sh` 28-31].
+
+## The ask's text for infra
+
+> **One packet capture beside Friday's certified serve, on the certifier's node (NET-372).**
+>
+> While our certifier job runs on Friday, please run this on the certifier's node, as a user who may capture:
+>
+>     tcpdump -i IFACE -U -s 130 -w run.pcap 'ip host SERVER'
+>
+> - `IFACE` is the interface by which the certifier's node's packets to the serving node leave. `SERVER` is the serving node's address as the certifier's node reaches it. Both are yours to fill in; neither goes into a message or a file of ours.
+> - **Start** it before our job is launched. **Stop** it once our job has exited and the file has stopped growing. One file for the job. I give the start and the end in this thread.
+> - **What the file holds:** only packets between the two nodes, so those two nodes' addresses, and at most each packet's first 130 bytes: its headers and the start of each segment's content, at most 76 bytes. Our traffic there is one ssh connection, so that content is ciphertext but for ssh's opening lines.
+> - **Size:** about 50 to 80 MB, at most 425 MB. The file is 24 bytes and at most 146 bytes a packet.
+> - **Where to leave it:** in a directory on the certifier's node that a `research run` job there can read. Tell us the path. A job of ours reads it there with `benchmarks/network_traces/capture_flows.py` and keeps only the reader's result file, which names the machines `server`, `certifier` and `other-N` and holds no address. The capture file never leaves the node; delete it once we say it is read.
+> - **If no job of ours may read it:** run the reader yourselves with the two addresses, and give us only its result file:
+>
+>       python benchmarks/network_traces/capture_flows.py --capture run.pcap --server SERVER --certifier CERTIFIER --out capture_flows.json
+>
+> - **A second file, if you can:** the same on the serving node's loopback, kept to the id front's port, which I give you. It holds loopback addresses only. It needs a port clause beside the filter above; say whether you will take one.
+
+**The size, [derived].** A pcap file is a 24-byte header and, a packet, a 16-byte record header and at most 130 kept bytes: at most 146. The parameters are NET-351's and the job's defaults [read: the issue; `job.sh` 48-63]: 2,000 requests, cells of 4,096 bytes so an id event of 4,087 [ran: `WardenParams(cell_bytes=4096).payload`], `max_tokens` log-uniform from 1 to 256, mean 255 / ln 256 = 46.
+
+| | A, the link | B, the loopback |
+|---|---|---|
+| bytes from the server, each response at its `max_tokens` | 2,000 × (46 × 4,087 + 14) = 376 MB | the same |
+| data packets | 376 MB / 1,448 a segment = 260,000 | one an id event: 2,000 × 47 = 94,000 |
+| ACKs | 130,000 to 260,000 | at most 94,000 |
+| requests, watermark (5,270 buckets, 2 packets each), keepalives | 23,000 | 2,000 × 12 + 10,500 = 34,500 |
+| file | 52 MB, at most 79 MB | at most 32 MB |
+| file, every response 256 ids | 274 MB, at most 425 MB | at most 155 MB |
+
+- A's lower figure counts an ACK as 82 bytes in the file, one for each two segments.
+- The kept loopback run's file is 200,261 bytes for 2,057 packets, 97.3 a packet [read: the store], inside 82 to 146.
+- A's segment size assumes an MTU of 1,500, which I did not look at. A larger one makes the file smaller.
+
+## What I did not look at
+
+- The two hours' launch lines; the nodes, their interfaces, addresses and MTU; whether infra can capture on either node; what else connects to the front's port.
+- `certside/launch.sh`, `bounded.py`, `report.py` and vllm's patch; `served_session.py` past its docstring; the gate's ssh options (`serve.peer_ssh`).
+- The reader on an id-form run or a tunnel's flow: derived from the code, not run.
+- Whether a `research run` job's user can read a file another user leaves on a node.
+
