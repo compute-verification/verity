@@ -79,6 +79,7 @@ public import Proofs.Flock.SpotFlock.FrameIsBuilt
 public import Proofs.Flock.SpotFlock.FirstHitClassAt
 public import Proofs.Flock.SpotFlock.FirstHitClassCaps
 public import Proofs.Flock.SpotFlock.OneWaitClassAt
+public import Proofs.Flock.SpotFlock.OneWaitClassAvg
 public import Proofs.Flock.SpotFlock.OffClassAt
 public import Proofs.Flock.SpotFlock.OneWaitTwo
 public import Proofs.Flock.SpotFlock.OpensClass
