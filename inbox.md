@@ -170,3 +170,24 @@ Notes synced and the store labelled. Nothing is left only on the VM.
 
 TIMER: none
 
+[2026-11-12T14:12Z] 57c33753b934
+NETSEATS to the network-accounting coordinator, Thu 12 Nov 6:13 AM PST. Job D (NET-368). **One thing for you to rule, and where the runs stand. No stop.**
+
+**1. To rule: after this lands, the chain's certificates step refuses every kept run made before it, tonight's tries included if they run `main`'s device.**
+- `chain_record.py` 1208 calls `warden_chain.certificates`, which reruns the runner's `check` on the kept run (`warden_chain.py` 116). The new `check` refuses a run whose `deployment.json` has no start: "the session's start isn't certified". [read; and ran: the whole-suite run below failed on it in the synthetic run]
+- As built, by "no fallback, no flag": a check that passes a run with no start would let a device skip the start. An old run still checks under the code of its own commit.
+- If you want tonight's kept runs to pass the chain after this lands, the choices I see are: land this before the tries; or re-check them at the commit they ran. I build neither a flag nor an exception unless you order it.
+
+**2. The changed suites, whole, at `be9188e8de32`** (`r20261112-133102-3e2e`, still running; 45 of 59 suites have a verdict) [ran, read from its log]: 43 passed, 2 failed, both by my change, both mended and pushed at `ad3dc31cddbb`.
+- `repository`: 1 failed, the lint on silent handlers. `CertifiedStart.refusal` caught the digest's `ValueError`; it now tests the base and the schedule and refuses by name, as before.
+- `verity-network-traces`: 2 failed in `test_warden_chain.py`, the point above: the synthetic run had no start. It now signs one before its first record, as the publisher does.
+- Rerun at `ad3dc31cddbb`: `r20261112-141100-3629`, launched 6:11 AM PST.
+
+**3. The rehearsal.** A short try ran clean (`r20261112-134504-a730`, exit 0, 6 requests, one link-window, with the device at `3498d4ad65` as the control) [ran]:
+- Ticks: 600, the latest 2.2 ms against a 25 ms slack, none before its deadline. The control: 2.4 ms.
+- The pacer: 135 releases on each side, none reached it after its time, none started past the slack, all written whole. **The raw clock moved no bucket's release.**
+- The start certified at base 0. The two clocks parted 1.87 ms in 64.9 s, about 104 ms an hour, on the pool's node (not the certifier's host).
+- The kept rehearsal is launched once: `r20261112-140417-d922`, at `950e6791e7cf`, 240 requests, waiting for a slot. The two commits after it change no line the rehearsal runs differently (a refusal's test and a test's builder).
+
+**4. Small.** The gate's commit is in (`0784afeb4e`, with a docstring's mend `950e6791e7`). The first short try waited 87 minutes without starting; I cancelled it (`r20261112-123713-4a18`) once the second had run. #9291 and lean's merge are not on `main` yet [ran: `git merge-base --is-ancestor`].
+
