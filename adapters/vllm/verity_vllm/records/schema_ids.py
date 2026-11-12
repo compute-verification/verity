@@ -23,6 +23,49 @@ COVERAGE_DECLARATION_SCHEMA = "verity/commit-integ/coverage-declaration/v1"
 #: writes
 CALL_BOUNDARIES_GATE_SCHEMA = "verity-vllm/call-boundaries-gate/v1"
 
+# --- the Commit (`verity_vllm.commit`)
+#: a dumped store's `store.json` (`commit.store_dump.SCHEMA`), which `dump_files` writes and `load` refuses any other
+#: than
+COMMITTED_STORE_SCHEMA = "verity-vllm/committed-store/v1"
+#: a window's `index.json` (`commit.index.INDEX_SCHEMA`), which `index_doc` writes
+SERVING_ROWS_INDEX_SCHEMA = "verity-vllm/serving-rows/index/v0"
+#: the reconciliation of what a Commit did not execute, which `commit.executed_prefix.reconcile_not_executed` writes
+NOT_EXECUTED_RECONCILIATION_SCHEMA = "verity-sweep/not-executed-reconciliation/v3"
+
+# --- the Commit's driver (`verity_vllm.pipeline`)
+#: the Commit plan's document (`pipeline.commit_plan.SCHEMA`), which `derive` writes; `use` takes no plan of another
+COMMIT_PLAN_SCHEMA = "verity-vllm/commit-plan/v1"
+#: a slim keep's `slim.json` (`pipeline.cpu_replay.SLIM_SCHEMA`), which `keep` writes and `open_keep` refuses any other
+#: than
+REPLAY_SLIM_SCHEMA = "verity-vllm/replay-slim/v1"
+#: a replay bundle's `context.json` and its manifest (`pipeline.replay_bundle.SCHEMA`), which `seal` writes;
+#: `open_bundle` refuses a manifest with any other
+REPLAY_BUNDLE_SCHEMA = "verity-vllm/replay-bundle/v1"
+#: a capture's `spec_tokens.json`, the workload as known before any engine step, which `pipeline.m1_capture`'s `main`
+#: writes
+SPEC_TOKENS_SCHEMA = "verity-gen/spec-tokens/v1"
+
+# --- the row driver (`verity_vllm.pipeline`)
+#: a row's `config_record.json` (`pipeline.config_record.SCHEMA`), which `record` writes
+CONFIG_RECORD_SCHEMA = "verity-vllm/config-record/v1"
+#: the circuit database's index, `manifests/records.json` (`pipeline.config_record.INDEX_SCHEMA`): `load_index` gives
+#: an empty index with it and refuses any other
+RECORDS_INDEX_SCHEMA = "verity-vllm/records-index/v1"
+#: a run's `spec.json`, what was to run as known before execution (`pipeline.experiment.SPEC_SCHEMA`), which
+#: `build_spec` writes
+EXPERIMENT_SPEC_SCHEMA = "verity-gen/spec/v1"
+#: a run's `experiment.json` (`pipeline.experiment.EXPERIMENT_SCHEMA`), which `build_experiment` writes
+EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
+#: the configuration card (`pipeline.report.CARD_SCHEMA`), which `build_card` writes
+CONFIGURATION_CARD_SCHEMA = "verity-gen/card/v1"
+#: one event of a row's `timeline.jsonl` (`pipeline.timeline.SCHEMA`), which `Timeline.event` writes; `report` writes
+#: it with `/report` appended
+TIMELINE_SCHEMA = "verity-sweep/timeline/v1"
+#: the `row.json` beside a row, its stages' Attempts, which `pipeline.research._row_json` writes
+ROW_ATTEMPTS_SCHEMA = "verity-sweep/row-v2/v1"
+#: the document of `epoch digests`, which `pipeline.epoch`'s `main` writes
+REBASELINE_DIGESTS_SCHEMA = "verity-vllm/rebaseline-digests/v1"
+
 # --- the Match (`verity_vllm.check.match`)
 #: the global workload Program's interface as the Match reads it (`check.match.declaration.GP_SCHEMA`)
 GLOBAL_PROGRAM_SCHEMA = "cb-a/global-program/v1"
