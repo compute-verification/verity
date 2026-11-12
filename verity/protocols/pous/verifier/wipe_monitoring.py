@@ -23,9 +23,10 @@ by it, in the same closing words (`UNPRICED`).
 `short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
 (`verity.protocols.reporting`).
 
-A wipe signed `UNCOUNTED` stays vacuous: `counted` refuses every `wipe-egress/v1` record (`REFUSED`), because the memory
-challenger signs its session's times on its monotonic clock and a record's window (`t0_unix_ns`, `t1_unix_ns`) is real
-time handed to the record's writer, so nothing signed says a record covers the wipe's session.
+An uncounted wipe, one whose check was given no egress count, stays vacuous: `counted` refuses every `wipe-egress/v1`
+record (`REFUSED`), because the memory challenger signs its session's times on its monotonic clock and a record's
+window (`t0_unix_ns`, `t1_unix_ns`) is real time handed to the record's writer, so nothing signed says a record covers
+the wipe's session.
 
 Both statements leave out (`EXCEPT`) each wipe's labels' and coins' PRF advantage, which is not priced and not assumed;
 δ_net and the egress count's premises, which are premises, not numbers; and what the wipe's own bound doesn't cover
@@ -62,9 +63,9 @@ EXCEPT = (f"each wipe's labels' PRF advantage and its coins' PRF advantage {UNPR
 REFUSED = (f"the {EGRESS} record is refused. The memory challenger signs its session's times on its monotonic clock "
            "(CLOCK_MONOTONIC ns, from an unspecified start). The record's window (t0_unix_ns, t1_unix_ns) is real time "
            "(Unix ns), handed to the record's writer. So nothing signed says the record covers this wipe's session, and "
-           "comparing the two would compare two clocks. A wipe signed UNCOUNTED stays uncounted until what the memory "
-           "challenger signs ties its session to the span the record counts: until then give no record (no --egress, "
-           "egress=None), and the table is the wipe's as it was signed")
+           "comparing the two would compare two clocks. A wipe whose check was given no egress count stays uncounted "
+           "until what the memory challenger signs ties its session to the span the record counts: until then give no "
+           "record (no --egress, egress=None), and the table is the wipe's as its check answered")
 
 
 def short_sessions(t: int, p: Fraction, delta: Fraction) -> tuple[int, Fraction]:
@@ -96,7 +97,7 @@ def per_wipe(t: int, eps: Fraction) -> dict[str, Any]:
 
 def counted(answer: Mapping[str, Any], egress: Mapping[str, Any]) -> NoReturn:
     """Refused (`REFUSED`) for every `answer` and every `egress` record, a covered one over the session's own real-time
-    window included: no record's count replaces the bound of a wipe signed `UNCOUNTED`."""
+    window included: no record's count replaces the bound of an uncounted wipe."""
     raise ValueError(REFUSED)
 
 

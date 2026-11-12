@@ -75,8 +75,8 @@ from a tree infra pinned, one run at a time, each run's parameters a lane's requ
   so a forced command that drops the caller's words can't hold a store the caller didn't name. `party_key wipe|pous` prints the public half, which the lane pins as `--trusted`, and
   `party_log wipe|pous [LOG]` lets any key read the sessions and each one's stdout as the host kept it (its signed t0 and
   t1). A lane
-  never names a path, an address or an egress count: a session signs `UNCOUNTED` egress until the network certifier's
-  count reaches the host. A session waits for no verifier unit to run, each party serves one session at a time, and the
+  never names a path, an address or an egress count: a session signs no egress count and its party takes none (the
+  count is evidence the wipe's check takes beside the signed session). A session waits for no verifier unit to run, each party serves one session at a time, and the
   gate kills a party after its session's `--minutes M` (60 by default, at most 180), so a session no prover joined ends.
 - **The store.** When a run's or a replay's unit stops, `vy-verifier-publish@<run>.service` puts `runs/<run>/` in the
   evidence store (a preserved tree of kind `verifier-run/v1`, by the pinned tree's store client) with the credential infra keeps in
@@ -573,7 +573,7 @@ def party_argv(verb: str, rest: list[str], host: Host) -> list[str]:
     `wipe_party`'s `--reads K`, `--native` (the streamer, built on this host) and `--threads T`, `bw_party`'s
     `--pous-session SID` (the registration the block challenger's record of PoUS session SID gives, read on this host)
     or `--fixture` (`PARTY_FIXED`'s), one of them, and nothing of `challenger_party`'s; never a path, an address or an egress count (the
-    session signs UNCOUNTED, which bounds nothing, until the network certifier's count reaches the host)."""
+    session signs none, and `wipe_party` takes none)."""
     name, module, port = PARTIES[verb]
     extra: list[str] = []
     args = list(rest)
