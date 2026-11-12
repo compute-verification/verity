@@ -336,7 +336,7 @@ def _chain_of(tmp_path, case: dict) -> SimpleNamespace:
     p, c = case["params"], json.loads(bytes.fromhex(case["commitment"]))
     regs = {r["window"]["window"]: R.digest(r) for r in c["windows"]}
     Path(steps.certs).write_text(json.dumps({"verdict": "accepted", "link": p["link"], "session": p["session"],
-                                             "key": {"public": p["key"]},
+                                             "key": {"public": p["keys"][0]},
                                              "rows": [{"window": w, "certified": True} for w in regs]}))
     n2 = json.loads(Path(steps.n2).read_text())
     n2["members"]["honest"]["windows"] = [{"window": w, "registration": d, "accepted": True, "proof": {"proved": True},
@@ -395,6 +395,11 @@ def test_the_block_entry_is_written_only_for_this_chains_period_and_the_verifier
         "the case's link, session: not the chain's, so another certifier session's period")
     assert why(period_answer=_period(tmp_path / "mixed", foreign, answer)) == (
         "the case isn't the answer's: its commitment's digest is another")
+    another = period.lms.public_key(period._key(0, 2)).hex()
+    trusting = case | {"params": case["params"] | {"keys": [*case["params"]["keys"], another]}}
+    assert period.reference(trusting) == answer
+    assert why(period_answer=_period(tmp_path / "trusting", trusting, answer)) == (
+        "the case's keys: not the chain's, so another certifier session's period")
     rows = period.build("rows-honest", 0, small=True)
     assert why(period_answer=_period(tmp_path / "rows", rows, period.reference(rows))).startswith("a rows-form answer")
     assert why(period_answer=_period(tmp_path / "k", case, answer | {"public": answer["public"] | {"K": 1}})) == (

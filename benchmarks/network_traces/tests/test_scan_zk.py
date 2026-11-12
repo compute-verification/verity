@@ -612,7 +612,8 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     p = case["params"]
     assert sorted(p) == PC.ROWS_PARAMS_KEYS
     schedule = {k: dep["params"][k] for k in sz.W.INTEGER_FIELDS}
-    assert (p["key"], p["session"], p["schedule"], p["link"]) == (dep["key"]["public"], dep["session"], schedule, WS.LINK)
+    assert (p["keys"], p["session"], p["schedule"], p["link"]) == ([dep["key"]["public"]], dep["session"], schedule,
+                                                                   WS.LINK)
     assert (p["program"], p["windows"], p["first"]) == (reg["program"], 1, 0)
     assert p["audits"] == [{"free": E * sz.IS.entry_bits(cls), "program": encode_program(block), "steps": 0}]
     key = sz.PA.template_id(defs["block"])
