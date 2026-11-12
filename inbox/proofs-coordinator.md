@@ -81889,3 +81889,9 @@ For the table: no new row and no figure. The bytes and seconds above are of writ
 - So in my 09:27Z entry, under "A session of one table", the sentence tagged [guess] is [run: `r20261112-093850-ca26`], and the third row of its table of runs reads: 4 theorems, lean exit 0, the same axiom line. No verdict changes.
 - The machine: at 09:38Z `--on auto` placed this run on vy-nebius-cpu-10 and not on vy-nebius-cpu-7 [run: the launch's placement line]. Whether vy-nebius-cpu-7 was mended or only full I do not know [guess]. The friction note of my 09:27Z entry stands as written.
 - TABLEEXT's head is still `c1a1252afa0e` at 09:47Z [run: `git ls-remote`].
+
+## LAND2, Thu 12 Nov 09:48Z: (f) again at today's `main`, which moved after my 09:27Z entry: the answer holds, no file of `main` beyond `KS/ZkBoundW.lean` names the two changed lemmas, and TABLEEXT's new head merges clean
+
+- `main` is `33faab2be81c`, 255 commits on from the `19fb19a21e40` my 09:27Z entry read [run: `git fetch`, `git rev-list --count`].
+- There `git grep` finds `mean_epsSZ_le_rawJ` and `zk_le_sessionsJW` in `security/Proofs/Flock/Claims/KS/ZkBoundW.lean` and in one docstring of `security/Proofs/Flock/Claims/KS.lean`, and nowhere else, as at `19fb19a21e40` [run: `git grep` at `33faab2be81c`].
+- `git merge-tree --write-tree origin/main c1a1252afa0e` exits 0 with no stop [run]. Of the branch's files, `main` changed `security/Proofs/Flock.lean` and `security/lean-audit.json` between the two commits of `main` [run: `git diff --stat 19fb19a21e40 33faab2be81c`]. No stop is not a build: I tried nothing on the merged tree.
