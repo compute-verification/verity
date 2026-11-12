@@ -6,7 +6,7 @@ returns: `content_rows` has their formats alone.
 **One proof block a connection**, of one of two Definitions by the kind of its class: `ResponseTieStop` in a stop
 class, whose rows have a stop word, and `ResponseTieNoStop` in a no-stop class, whose rows have none. Each takes
 every connection its kind of class holds, however the connection ended. It reads ``egress``, the compute side's
-committed row of the O ids it served the connection, O its class's size; in a stop class ``stop``, the compute
+committed row of the connection's O ids, O its class's size; in a stop class ``stop``, the compute
 side's committed stop word of the same connection; and ``end``, the network certifier's end row of it, a certified
 input. Its outputs are ``o0``, a u16 whose bit 0 is 1 (`ACCEPT`) exactly when every check
 of its form holds and whose other 15 bits are 0, and ``o1``, the response row. The row is gates of the circuit, never
@@ -38,9 +38,10 @@ count where every check holds.
   - 0, the connection ended in its `END`: the count is n. `at` is in no check: the row's count is n, and the
     signed row holds it to the network certifier's.
   - 1, the network certifier failed the connection after the engine finished it: the count is `at`, and the check
-    is that `at` is at most n. Soundness needs it: the stop word is the same whatever the egress row holds past
-    its n-th id, so the ids past n in the committed row are held by nothing, and without the check a server could
-    commit ids it chose there, send them, and have the connection failed.
+    is that `at` is at most n. Soundness needs the check, and the check alone does not give it. The stop word is
+    the same whatever the egress row holds past its n-th id, so the ids past n in the committed row are held by
+    nothing, and without the check a server could commit ids it chose there, send them, and have the connection
+    failed. With it the row carries no id past n; what holds the ids below n is the premise below.
 
   No other value of the finish is refused: the stop word is its own proof block's output, and this one reads where
   it ends, not why.
@@ -51,14 +52,17 @@ count where every check holds.
 
 So in either form an end row whose class is neither 0 nor 1 is refused.
 
-**The no-stop form's premise, which is open.** Its soundness has a premise the block cannot check: every one of the
-row's O ids below the count is one the compute audit holds. A stop class's form has the stop word's n to hold its
-count under; this form has no count word, and whether the compute audit's replay holds all O ids of a no-stop row
-or only the ids served is not settled.
+**The premise of both forms, which is open.** The block computes the network certifier's row from the compute
+side's committed row, and holds nothing about where the committed ids came from. So either form is sound only where
+the compute audit holds the committed ids below the count to be the Program's outputs, a premise no gate here can
+check. Nothing in the tree holds it today, for either kind of class. In a stop class the stop rule's proof block
+holds the stop word to the rule over the committed ids: it holds none of those ids to the Program. A no-stop
+class's form has, beside that, no committed count: its count is the network certifier's `at`, and the compute side
+commits none.
 
 **Where a check fails** o0 is 0 and the count word of o1 is all ones (`content_rows.NO_COUNT`), a count no response
 row has, since a row's count is at most its O ids. So no row a refused block returns is one the network certifier
-signs, and the block is sound where nothing holds o0 to `ACCEPT`: a statement that registers o1 as a read of the
+signs, and a refusal needs nothing to hold o0 to `ACCEPT`: a statement that registers o1 as a read of the
 signed row opens its root on no refused input. That rests on the network certifier signing only rows of the form
 (`trusted-host`) and on the commitment binding its row. The ids of such a row are still what the gates compute
 (`outputs` gives the same): those below `at` where the end row's class has its low bit, and below n otherwise.

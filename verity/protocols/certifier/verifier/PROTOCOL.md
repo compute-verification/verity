@@ -2115,13 +2115,17 @@ response row: the count, then the first count ids and zeros to O.
   row's class is 0 or 1. Where the connection ended in its `END` (class 0) the count is n, and `at` is in no check:
   the signed row holds the count to the network certifier's. Where the network certifier failed the connection
   after the engine finished it (class 1) the count is `at`, and the block checks that `at` is at most n. Soundness
-  needs that check: the ids past n in the committed egress row are held by nothing, so without it a server could
-  commit ids it chose there, send them, and have the connection failed.
+  needs that check, and the check alone does not give it: the ids past n in the committed egress row are held by
+  nothing, so without it a server could commit ids it chose there, send them, and have the connection failed.
 - **A no-stop class.** The block checks that the end row's class is 0 or 1 and that `at` is at most O, and the
   count is `at`. It takes an aborted connection and one that ended in its `END` (past the stop rule's most ids, a
-  body's own stop strings, a `min_tokens`). Its soundness has a premise the block cannot check: every one of the
-  row's O ids below the count is one the compute audit holds. The premise is open: whether the compute audit's
-  replay holds all O ids of a no-stop row or only the ids served is not settled, and the form has no count word.
+  body's own stop strings, a `min_tokens`).
+
+**The premise of both forms is open.** The block computes the network certifier's row from the committed row and
+holds nothing about where the committed ids came from: either form is sound only where the compute audit holds the
+committed ids below the count to be the Program's outputs. Nothing in the tree holds that today, for either kind of
+class: the stop rule's proof block holds the stop word to the rule over the committed ids, and holds none of those
+ids to the Program. A no-stop class's form has, beside that, no committed count.
 
 Its outputs are a verdict and the row. Where a check fails the row's count word is all ones, a count no response
 row has, so a statement that registers the row as a read of the signed one opens its root on no refused input,

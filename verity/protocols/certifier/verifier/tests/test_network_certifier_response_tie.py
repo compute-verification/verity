@@ -351,8 +351,8 @@ def test_an_honest_row_is_the_response_row(O, stop):
 
 
 def test_a_stop_classs_failed_connection_carries_no_id_past_the_stop_rules():
-    """The check soundness needs. The stop rule reads a stop class's egress row to its n-th id, so the ids past n
-    are whatever the server committed. A connection the network certifier failed after more cells than n is
+    """A check soundness needs. The stop word is the same whatever a stop class's egress row holds past its n-th
+    id, so the ids past n are held by nothing. A connection the network certifier failed after more cells than n is
     refused, and one it failed after at most n carries the first `at` ids, none of them past n. Under an `END` the
     row carries the first n whatever `at` is: there the signed row holds the count."""
     sh = RT.Shape(16, True)
