@@ -72,3 +72,17 @@ GROW, Thu 12 Nov, 1:27 PM PST.
 
 The route's `plan`, `step` and `build`, and the plain-torch reference that copies, zeroes and trains. One more item, INFERRED: the program decays its rate over its 7,688 arm steps, while a config of 7,713 steps decays over 7,713. That is the same as other configs on main that count their records this way. It touches only the schedule, which of_record doesn't compare.
 
+[2026-11-12T21:28Z] 58909d3939b2
+BACKWARD2, Thu 12 Nov 1:27 PM PST
+
+**Pushed `1178eb5439` (musts 1 to 3, shoulds 7 to 10) and launched its suites and circuit-check; I had also already launched the every-word run at it, which I would keep: shoulds 4 and 5 change only the test file and the fixture, not one line of the Definitions, so this run is the one run on the fixed Definitions unless you tell me to cancel it.**
+
+- Pushed: `cursor/fa2-train-backward-d232` at `1178eb5439` (RAN `git push`), over `3d50ca603a` (the stand-in test) and `84e7fc9161`. The generator writes the tracked fixture byte for byte at this head (RAN: the capture fetched from the store, `cmp` equal).
+- Runs at `1178eb5439`, all `--on auto` (RAN):
+  - `r20261112-212535-7f3f`: suites, `--changed 6d95fcc68d --quick`, 8 CPUs, 26 GB (the old head's run peaked at 16.0 GB summed PSS so far), vy-nebius-cpu-7, about 8 min of line at launch.
+  - `r20261112-212601-33d9`: circuit-check on both sidecars, `-j 8`, 8 CPUs, 16 GB (the reviewer measured about 15 GB summed at `-j 23`), vy-nebius-cpu-7.
+  - `r20261112-212456-3c41`: every word, 64 heads, 16 processes, 16 CPUs, 26 GB (the old head's run: 2.06 GB a head, 16.4 GB summed RSS so far), vy-nebius-cpu-14, about 15 min of line at launch. When the final head lands I will show `git diff 1178eb5439 HEAD -- verity/definitions/registry` empty, so its record stands for the final head's Definitions.
+- The old head's every-word run `r20261112-194241-5573`: the first 4 heads (H 16, deterministic) give every word of dQ, dK and dV, 65,536 each; 1,087 to 1,123 s a head (RAN: fetched `out/fit.txt`).
+- Should 5: the twin over the 32 deterministic heads (RAN on the VM, `count_exact.py`'s functions): the last key block of `bwd/l16/det/unit` pair 3 tells the query blocks ascending on 3 dK and 1 dV words and the k16 steps reversed on 1 dK and 1 dV word; today's fixture block (pair 1) tells 1 and 0. Same case and shape, so I move the fixture's block to pair 3 (a new `art:` id) for Friday.
+- Next: the probe's count, the job and its venv step on a CPU node, a line to you by 3 PM.
+
