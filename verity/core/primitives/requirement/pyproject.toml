@@ -11,7 +11,7 @@ untraced = ["tests/test_census_and_memory_map.py", "tests/test_requirement_difft
 # builder (`verity_vllm.protocols.remote_bandwidth.commit_map`) on request Programs `verity_vllm.program.predict.build`
 # builds, whose imports reach most of
 # `verity_vllm` and, through it and the builder, PoUB's record (`Replay`, `codec`), PoUW's
-# circuits, the commitments and the hashes; `lake` builds this package against the difftest harness's Lean and these
+# circuits, SPOT's service (`pipeline.serving_rows` resolves a rate law by it), the commitments and the hashes; `lake` builds this package against the difftest harness's Lean and these
 # files of Flock's verifier (`Flock.Canon` and what it imports, and the package's configuration), both required by
 # path.
 inputs = ["verity/ml/circuits", "verity/ml/kernels/__init__.py", "verity/ml/kernels/tc.py", "verity/__init__.py", "verity/settings.py",
@@ -23,6 +23,8 @@ inputs = ["verity/ml/circuits", "verity/ml/kernels/__init__.py", "verity/ml/kern
           "verity/ml/protocols/__init__.py", "verity/ml/protocols/pouw",
           "verity/core/protocols/spot/__init__.py", "verity/core/protocols/spot/challenger.py",
           "verity/core/protocols/spot/remote.py", "verity/core/protocols/spot/one_stage",
+          "verity/core/protocols/spot/service.py", "verity/core/protocols/spot/coins.py",
+          "verity/core/protocols/spot/second_stage.py",
           "verity/ml/windows", "verity/ml/commitments",
           "verity/ml/crypto", "verity/ml/randomness",
           "verity/core/service/flock/lakefile.toml", "verity/core/service/flock/lake-manifest.json",

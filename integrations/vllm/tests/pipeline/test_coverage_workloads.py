@@ -1,4 +1,5 @@
-"""Coverage campaign harness (D87): seeded workload samples, the step-indexed arrival loop, the control-run step expectation."""
+"""Coverage campaign harness (D87): seeded workload samples, the step-indexed arrival loop, the control-run step expectation.
+The generated B0 workloads are `test_coverage_workloads_of_record`."""
 from __future__ import annotations
 
 import json
@@ -43,24 +44,6 @@ def test_draws_are_seeded_and_model_independent():
     assert gw.draw_lengths("B8-static", "C256", 0) != gw.draw_lengths("B8-static", "C256", 1)
     a = gw.draw_lengths("B8-static", "C256", 0)
     assert len({r["prompt_len"] for r in a}) > 1, "heterogeneous lengths within the batch"
-
-
-def test_generated_b0_workloads_match_their_draws():
-    for prof in gw.PROFILES:
-        for ctx in sorted(gw.CTX):
-            p = REPO / "verity_vllm" / "engine" / "profiles" / f"workload_cov_b0_{prof.lower()}_{ctx.lower()}.json"
-            if not p.exists():
-                pytest.skip(f"{p.name} not generated in this checkout")
-            doc = json.loads(p.read_text())
-            draws = gw.draw_lengths(prof, ctx, doc["length_seed"])
-            assert [(r["prompt_len"], r["max_tokens"], r["arrive_step"]) for r in doc["requests"]] == \
-                   [(d["prompt_len"], d["max_tokens"], d["arrive_step"]) for d in draws]
-            for r in doc["requests"]:
-                assert len(r["prompt_token_ids"]) == r["prompt_len"]
-            assert doc["expected_engine_steps"] == gw.simulate_schedule(draws)["expected_engine_steps"]
-            assert doc["serving_profile"] == prof and doc["context_class"] == ctx
-            if prof != "B1":
-                assert doc["engine"]["args"]["max_num_batched_tokens"] >= 8 * gw.CTX[ctx]["cap"]
 
 
 # ---------------------------------------------------------------------------------------------------------

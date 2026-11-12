@@ -27,6 +27,10 @@ RANGES = {
         "N=4096", "N=131072",
         "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024",
     ),
+    "DsaTopKMaskCounted_v2{N=4096..131072 step 2048,TOPK=2048}": (
+        "N=4096", "N=131072",
+        "N=6144", "N=10240", "N=18432", "N=34816", "N=67584", "N=8192", "N=129024", "N=40960", "N=43008",
+    ),
     # `dsa_topk_mask`'s sidecar's RANGES on bits, over the same rows below their size class and at the same spots, each held to its
     # word Definition there by its word view (``circuit-check --as-call --ranges DsaButterflyRowsPad_v2``)
     "DsaButterflyRowsPad_v2{T=2049..131071,N=4096..131072 step 2048,K=2048,W=1..576,E=16}": (

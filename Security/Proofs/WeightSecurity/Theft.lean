@@ -1,6 +1,6 @@
 module
 
-public import Definitions.WeightSecurity.Guarantees
+public import Proofs.WeightSecurity.Lemmas
 public import Proofs.Pouw.Prob
 
 /-! `WeightSecurity.SecurityProofs.Theft : WeightSecurity.Guarantees.Theft`, the leakage lemma. For each covert string
@@ -9,9 +9,9 @@ outsider has against the datacenter deviating through the channel with `s` (`reb
 model (`withString_model`). Outside `LeaksThrough`'s `ε`, the real view is one of those, so the outsider steals only
 where some honest-use party `O.withString ch s` does: at most `|S| · p` by the union bound and `HonestUseHard`.
 
-The witnesses (`TheftHonest`, `TheftNontrivial`, `TheftTight`) are proved at the toy instance: honest use reveals the
-first weight bit and nothing of the second, so any output built from the first bit is the weights on at most half the
-coins (`Toy.guess_le`). -/
+The witnesses (`TheftHonest`, `TheftNontrivial`) and the tightness lemma (`TheftTight`) are proved at the toy instance:
+honest use reveals the first weight bit and nothing of the second, so any output built from the first bit is the weights
+on at most half the coins (`Toy.guess_le`). -/
 
 @[expose] public section
 

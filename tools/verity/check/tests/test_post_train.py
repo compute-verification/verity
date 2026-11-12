@@ -175,13 +175,18 @@ def test_check_starts_it_after_each_landing():
 
 SHA = "f" * 40
 PREV = "r20261003-120000-0001"
+LLAMA = "llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+QWEN = "qwen3-06b__bf16__rtxpro6000__tp1__b1__i256__o32__mixed__greedy__bi-eager"
+NEUTRAL = {LLAMA: True, QWEN: True}
+THREAD = "1790000000.000001"
 
 
-def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=False, polls=0, cut=None):
+def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=False, polls=0, cut=None, r39="fail", rows=NEUTRAL):
     """A landing ``SHA`` admitted on ``attempt``, after a landing admitted on PREV that carries ``prev_label``; every call to
-    `research` is recorded, and a run (launched with the lock held: jobs run one at a time) fails r39, its records showing its end
-    after ``polls`` fetches (at launch for 0, never for -1), or ends with the runner's status ``cut`` and no junit.  Returns the
-    calls and the sleeps between fetches."""
+    `research` is recorded, and a run (launched with the lock held: jobs run one at a time) gives r39 ``r39`` and a neutrality
+    report of ``rows`` (each row: neutral or not; None: the tier ran and wrote none), its records showing its end after ``polls``
+    fetches (at launch for 0, never for -1), or ends with the runner's status ``cut`` and nothing written.  Returns the calls and
+    the sleeps between fetches."""
     runs = tmp_path / "runs"
     tmp_path.mkdir(parents=True, exist_ok=True)
     monkeypatch.setattr(PT, "LOCK", tmp_path / "post-train.lock")
@@ -191,10 +196,15 @@ def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=Fal
     left = [polls]
 
     def end(rid):
-        (runs / rid / "out").mkdir(parents=True, exist_ok=True)
+        out = runs / rid / "out"
+        (out / "neutrality").mkdir(parents=True, exist_ok=True)
         if not cut:
-            _junit(runs / rid / "out", {"test_reproduces[T0-manifest_digest-r39]": "fail"})
-        (runs / rid / "status.json").write_text(json.dumps(cut or {"state": "done", "rc": 1}))
+            _junit(out, {"test_reproduces[T0-manifest_digest-r39]": r39})
+            (out / "neutrality.log").write_text("[neutrality] ...\n")
+            if rows is not None:
+                (out / PT.NEUTRALITY).write_text(json.dumps({"rows": {r: {"neutral": n} for r, n in rows.items()}}))
+        ok = r39 == "pass" and rows is not None and all(rows.values())
+        (runs / rid / "status.json").write_text(json.dumps(cut or {"state": "done", "rc": 0 if ok else 1}))
 
     def research(*args, cwd=None):
         calls.append(args)
@@ -218,6 +228,7 @@ def _fake_landing(tmp_path, monkeypatch, attempt, prev_label=None, untouched=Fal
     monkeypatch.setattr(PT, "git", lambda *a, **k: SHA if a[0] == "rev-parse" else "")
     monkeypatch.setattr(PT, "check_attempt", lambda sha, cwd=PT.ROOT, **_k: {SHA: attempt, f"{SHA}^1": PREV}.get(sha))
     monkeypatch.setattr(PT, "untouched", lambda tree, rev: untouched and rev == f"{SHA}^1")
+    monkeypatch.setattr(PT, "merge_thread", lambda: THREAD)
     import research.runs
     monkeypatch.setattr(research.runs, "runs_root", lambda: runs)
     return calls, sleeps
@@ -246,6 +257,55 @@ def test_a_landing_gets_its_label_and_a_dry_run_writes_none(tmp_path, monkeypatc
     assert PT.main(["HEAD", "--dry-run"]) == 1
     assert [c[0] for c in calls] == ["run", "fetch"], "a dry run reads no label and writes none"
     assert PT.main(["HEAD"]) == 2, "without --dry-run, a commit that is no landing has nothing to label"
+
+
+def test_the_neutrality_tier_names_each_fast_row_that_moved_after_the_rebuilds_rows(tmp_path):
+    report = tmp_path / "neutrality.json"
+    report.write_text(json.dumps({"rows": {QWEN: {"neutral": False}, LLAMA: {"neutral": False}, "tp2": {"neutral": True}}}))
+    j = _junit(tmp_path, {"test_reproduces[T0-manifest_digest-r57]": "fail", "test_reproduces[T0-manifest_digest-r23]": "pass"})
+    assert PT.verdict(j, 1, report=report) == f"regression fail:r57,{LLAMA},{QWEN}"
+    j = _junit(tmp_path, {"test_reproduces[T0-manifest_digest-r23]": "pass"})
+    assert PT.verdict(j, 1, report=tmp_path / "absent.json") == "regression fail:no neutrality report (run rc=1)"
+    report.write_text(json.dumps({"rows": {LLAMA: {"neutral": True}}}))
+    assert PT.verdict(j, 0, report=report) == "regression pass"
+
+
+def test_a_moved_fast_row_fails_its_landing_and_rings_vllm_at_once_and_a_neutral_tier_passes(tmp_path, monkeypatch):
+    """A landing that moves a fast row of record's Program without re-pinning it is labelled with the row, and @vllm, which owns
+    the rows of record, is rung in the merge thread as ci with the run, not left to the daily sweep; a tier whose every row
+    reproduced its pins passes and rings no one."""
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", r39="pass", rows={LLAMA: False, QWEN: True})
+    assert PT.main([]) == 1
+    rid = _launched(calls)
+    assert ("data", "label", "r20261003-145201-e806", "note", f"regression fail:{LLAMA}", "--by", "regression", "--ref", rid) in calls
+    (ring,) = [c for c in calls if c[0] == "msg"]
+    assert ring[:-1] == ("msg", "send", "--as", "ci", "--thread", THREAD, "--to", "@vllm", "--quiet", "--report", "--text")
+    assert ring[-1].startswith(f"@vllm post-train: the fast neutrality tier at landing {SHA[:12]} (check r20261003-145201-e806) "
+                               f"moved {LLAMA}. Run {rid}:") and QWEN not in ring[-1]
+    calls, _ = _fake_landing(tmp_path / "neutral", monkeypatch, "r20261003-145201-e806", r39="pass")
+    assert PT.main([]) == 0
+    assert calls[-1] == ("data", "label", "r20261003-145201-e806", "note", "regression pass", "--by", "regression",
+                         "--ref", _launched(calls))
+    assert not any(c[0] == "msg" for c in calls)
+
+
+def test_vllm_is_rung_for_its_own_tier_once_and_a_dry_run_rings_no_one(tmp_path, monkeypatch, capsys):
+    """A tier that ran and wrote no report compared nothing: its label says so and @vllm is rung.  A rebuild's failure alone is
+    the regression's, read by the daily sweep; a carried verdict rings no one (the run it carries from rang); a dry run prints
+    the ring instead."""
+    calls, _ = _fake_landing(tmp_path, monkeypatch, "r20261003-145201-e806", r39="pass", rows=None)
+    assert PT.main([]) == 1
+    assert calls[-2][4] == "regression fail:no neutrality report (run rc=1)"
+    assert [c[0] for c in calls[-2:]] == ["data", "msg"] and "ran and left no report" in calls[-1][-1]
+    calls, _ = _fake_landing(tmp_path / "rebuild", monkeypatch, "r20261003-145201-e806")
+    assert PT.main([]) == 1 and calls[-1][4] == "regression fail:r39" and not any(c[0] == "msg" for c in calls)
+    prev = {"key": "note", "value": f"regression fail:{LLAMA}", "by": "regression", "ref": "r20261003-120500-beef"}
+    calls, _ = _fake_landing(tmp_path / "carried", monkeypatch, "r20261003-145201-e806", prev, untouched=True)
+    assert PT.main([]) == 1 and not any(c[0] in ("run", "msg") for c in calls)
+    calls, _ = _fake_landing(tmp_path / "dry", monkeypatch, None, r39="pass", rows={LLAMA: False})
+    capsys.readouterr()
+    assert PT.main(["HEAD", "--dry-run"]) == 1 and [c[0] for c in calls] == ["run", "fetch"]
+    assert f"--dry-run, so @vllm is not rung: @vllm post-train: the fast neutrality tier at landing {SHA[:12]}" in capsys.readouterr().out
 
 
 def test_a_landing_that_touches_none_of_the_inputs_carries_the_verdict_before_it(tmp_path, monkeypatch):
@@ -401,3 +461,8 @@ def test_the_job_pins_the_rebuilds_to_the_cores_it_is_given_at_nice_19():
     assert "nice -n 19 ../../.venv/bin/python -m pytest" in free
     assert "-m 'regression and rebuild' -n 12" in pinned and "-n 4" in free
     assert "VERITY_REGRESSION_REBUILD=1 VERITY_STORE_REQUIRED=1" in pinned and "fetch-fixtures" in pinned
+    tier = 'bash ../../tools/verity/check/neutrality_tier.sh fast "$out/neutrality"'
+    assert f"nice -n 19 taskset -c 96-127 {tier}" in pinned and f"nice -n 19 {tier}" in free
+    assert pinned.index("pytest.log") < pinned.index(tier), "after the rebuilds, whatever they found"
+    assert (ROOT / "integrations" / "vllm" / "../../tools/verity/check/neutrality_tier.sh").is_file(), "run from integrations/vllm"
+    assert str(PT.NEUTRALITY) == "neutrality/neutrality.json"

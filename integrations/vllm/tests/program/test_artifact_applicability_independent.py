@@ -20,6 +20,7 @@ Run (pod, venv with the pinned vLLM, SmolLM2 snapshot under $HF_HOME):
       python -m pytest tests/program/test_artifact_applicability_independent.py -q -rA
 Env: CBTEST_OUT (build outputs; default a tmp dir), CBTEST_REUSE=1 (reuse finished builds under CBTEST_OUT), CBTEST_JOBS (parallel
 builds, default 6), CBTEST_GPU_HOST=1 (also run the GPU-visible host-mismatch build), CBTEST_SKIP_BUILDS=1 (static tests only).
+The reference hosts' recorded manifests are `test_artifact_applicability_independent_of_record`.
 """
 
 from __future__ import annotations
@@ -177,20 +178,6 @@ def test_static_manifest_declared_capability_is_not_a_string_literal():
         for m in re.finditer(r"compute capability[\"']\s*,\s*[\"']value[\"']\s*:\s*([\"'][^\"']*[\"'])", code):
             bad.append((str(p.relative_to(REPO)), m.group(1)))
     assert not bad, f"manifest 'compute capability' value is a string literal (stale-manifest bug, a1): {bad}"
-
-
-def test_static_reference_hosts_share_the_program_digest():
-    """(iii)/(v) on the recorded artefacts (laptop-runnable): every construction host that built B0 request 8/4 for the sm_89
-    profile — a 4090 with its GPU visible, a host without a GPU, an L40S with it hidden — recorded the same Program digest."""
-    seen = []
-    for p in R9_REFERENCE_MANIFESTS:
-        if p.exists():
-            m = json.load(open(p))
-            seen.append((str(p.relative_to(REPO)), (m.get("program") or {}).get("digest"), (m.get("construction") or {}).get("cuda_available")))
-    if not seen:
-        pytest.skip("reference manifests not in this checkout (sparse tree without out/gen)")
-    assert all(d == B0_REQUEST_8_4_DIGEST for _p, d, _c in seen), seen
-    print(f"\n[cb-test] reference hosts: {seen}")
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------

@@ -830,8 +830,8 @@ def changed_base(rev: str) -> str:
                 return sha
     tried = f", nor could it be fetched from {remote}" if branch and remote in remotes else ""
     raise Unresolved(f"--changed {rev}: {ROOT} has no commit {rev}{tried} (a tree `research run` ships may hold no {rev}). "
-                     f"Pass main's SHA: `--changed $(git rev-parse origin/main)`, expanded in your own checkout, outside the job's "
-                     f"quotes")
+                     f"Pass where your branch left a fetched main: `--changed $(git fetch -q origin main && git merge-base HEAD "
+                     f"FETCH_HEAD)`, expanded in your own checkout, outside the job's quotes")
 
 
 def merge_base(rev: str) -> str:

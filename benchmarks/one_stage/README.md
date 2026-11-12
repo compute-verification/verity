@@ -174,7 +174,8 @@ input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
   source, so M3's reserved window doesn't spend time on the build.
 - `server_rate.py`: SPOT's proof server's steady rate on one GPU, run inside a one-GPU `gpu-lease` with the GPU build of
   `flock-circuit`. Each staged type (`served_units/stage.py TYPE full`, every unit drawn) is proved by
-  `ProofServer(provers=K)` at each K of `--provers`, K streaming provers on the one device. Every prover finishes its
+  `ProofServer(provers=K)` at each K of `--provers`, K streaming provers on the one device, each with a K-th of the job's
+  threads (the proof server splits them). Every prover finishes its
   warm sessions before any timed one starts. Each K's row (`rate.json`) gives the statements a second over the steady
   window, timed by each session's filing by its verifier, since a prover reports a session only once it collects its
   verdict, `verify_ahead` sessions later. It also gives the device's busy share (nvidia-smi's utilization over that window) and memory

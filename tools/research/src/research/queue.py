@@ -3550,7 +3550,7 @@ SPILL_CPUS, SPILL_MEM_GB = 4, 16
 POOL_SLOTS = "/workspace/research/locks/{pool}/slots"
 #: a lane's own test run, which no landing needs (a PR lands on `checked` on a review; the full check after decides `main`)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
-            'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
+            'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 
 
 class NotStarted(str):

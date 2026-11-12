@@ -108,7 +108,7 @@ def test_each_fields_codewords_are_prefix_free_with_kraft_at_most_one(book):
                 for b in (False, True):
                     e = V.Encoder(book)
                     if state is not None:
-                        e.kt.n[V._key(name, ctx)] = list(state)
+                        e.kt.n[V.context_key(name, ctx)] = list(state)
                     e.window()
                     e.bit(name, b, ctx)
                     words.append(_s(e.finish().bitlist()))
@@ -194,11 +194,11 @@ class _Plain(V.Decoder):
 
 def _plain(bits: list[int], n: int):
     try:
-        d, st = _Plain(*V.pack(bits), BOOK), V._State()
+        d, st = _Plain(*V.pack(bits), BOOK), V.CoderState()
         out = []
         for _ in range(n):
             d.window()
-            out.append(V._window(d, None, st))
+            out.append(V.code_window(d, None, st))
         d.finish()
         return out
     except ValueError:

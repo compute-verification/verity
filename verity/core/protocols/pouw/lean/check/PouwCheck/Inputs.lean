@@ -3,7 +3,7 @@ module
 public import CoreProtocol.Profile
 public import CoreProtocol.Protocol
 public import Flock.WindowRecord
-public import Identity.Domains
+public import Identity.Domains.Pouw
 public import PouwCheck.Json
 public import PouwCheck.Tile
 public import PouwWindow.Length

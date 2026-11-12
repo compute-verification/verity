@@ -63,8 +63,8 @@ commitments and never published.
    - The advice can only choose among Programs the compiler emits. Every unit's values are still committed under hiding leaves
      and opened only inside the proof.
 7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
-   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` sampling design samples every unit of theirs beside
-   K of the rest, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
+   transfer gates (the I/O shell's), and its digest covers the list. The window's work sampling design (`work-rate:NUM/DEN`, the
+   stream's rule) samples every unit of theirs beside the rest's share, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
    of them, a sample trading one away, and a registration sampling them as the rest. Until the compiler lists the I/O shell's
    units, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 

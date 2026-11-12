@@ -10,7 +10,7 @@ before an earlier-released one. So the counterfactual add of the k-th request in
     hold:     max(origin + (a_k + 1) tau, max over j <= k of ready_j)
     aligned:  that, rounded up to the next bucket boundary (every add on a boundary)
 
-`simulate` runs the replay's scheduler model (`replay._Sched` under the engine core's loop, `replay._drive`) on a clock:
+`simulate` runs the replay's scheduler model (`replay.Scheduler` under the engine core's loop, `replay.drive`) on a clock:
 before each `schedule` the requests whose add time has passed are added; each executed step takes the recorded step's
 time at the same index (output to output, the engine being busy throughout), corrected by a fitted per-token and per-row
 cost for any change in the batch; step k is scheduled the recorded lag after step k-2's output (async scheduling, one
@@ -154,7 +154,7 @@ def simulate(rp: Any, engine: Any, requests: list[Any], order: list[int], ready:
         raise ValueError("the clock models async scheduling (step k scheduled after step k-2's output) only")
     if any(ready[k] > ready[k + 1] for k in range(len(ready) - 1)):
         raise ValueError("add times must be nondecreasing in add order")
-    s = rp._Sched(engine, requests)
+    s = rp.Scheduler(engine, requests)
     q: deque = deque()
     n = len(order)
     out = Sim([], [], [], [None] * len(requests), [None] * len(requests), [None] * len(requests))
@@ -206,7 +206,7 @@ def simulate(rp: Any, engine: Any, requests: list[Any], order: list[int], ready:
                         out.first[i] = step._end
             out.emitted.append(got)
 
-    rp._drive(s, q, top=top, schedule=schedule, executed=executed)
+    rp.drive(s, q, top=top, schedule=schedule, executed=executed)
     if st["nxt"] < n or any(f is None for f in out.done):
         raise RuntimeError("the simulation ended with requests unfinished")
     return out

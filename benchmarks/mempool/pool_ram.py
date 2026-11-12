@@ -1,6 +1,6 @@
-"""A prototype of `CacheStep_v3`'s reference: vLLM's block pool (`BlockPool`, as the replay's `_KV` and the vLLM
-integration's `pool.py` model it) as a machine over word-addressed memories, every read and write of which is one access
-under offline memory checking.
+"""A prototype of `CacheStep_v3`'s reference: vLLM's block pool (the vLLM integration's `advice_code.pool.BlockPool`,
+which the replay runs) as a machine over word-addressed memories, every read and write of which is one access under
+offline memory checking.
 
 Memories (address → value; an address starts at its initial value, a public function of NB):
 - B[b], b < NB: block b's free-queue links (prev, next), its links among the blocks cached under its key (cprev, cnext),
@@ -38,6 +38,8 @@ from typing import Any, Callable, NamedTuple, Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "network_e2e" / "encodings"))
 import replay as RP
+
+from verity_vllm.pipeline.advice_code.schedule import PREEMPTED, WAITING
 
 #: accesses per operation in the circuit's fixed shape
 SHAPE = {"lookup": 2, "take": 4, "alloc": 8, "cache": 5, "free": 5}
@@ -209,7 +211,7 @@ def fingerprint(ms: Counter, alpha: int, gamma: int, S: Widths = GLM) -> int:
 
 
 class RamPool:
-    """vLLM's block pool over `Ram` (the module's docstring), with `_KV`'s calls."""
+    """vLLM's block pool over `Ram` (the module's docstring), with `BlockPool`'s calls."""
 
     def __init__(self, B: int, L: int, caching: bool, watermark_blocks: int, NB: int, keep: bool = True) -> None:
         self.B, self.L, self.caching, self.watermark_blocks, self.NB = B, L, caching, watermark_blocks, NB
@@ -257,7 +259,7 @@ class RamPool:
             assert seen == hit, (seen, hit)
         held = self.held.get(r.i, 0)
         total = min(r.num_computed + len(hit) * self.B, self.L)
-        wm = self.watermark_blocks if has_scheduled_reqs and r.status in (RP._W, RP._P) else 0
+        wm = self.watermark_blocks if has_scheduled_reqs and r.status in (WAITING, PREEMPTED) else 0
 
         def need(tokens: int) -> int:
             return max(cdiv(tokens, self.B) - len(hit) - held, 0) + ev
@@ -398,7 +400,7 @@ class RamPool:
 
 
 def disagreement(kv: Any, pool: RamPool) -> str | None:
-    """Where the RAM pool's state differs from `_KV`'s (or `BlockPool`'s), or None."""
+    """Where the RAM pool's state differs from `BlockPool`'s, or None."""
     if pool.queue() != list(kv.free.d):
         return "free queue"
     if pool.nf != len(kv.free):
@@ -490,7 +492,7 @@ class Mirror:
         units = min(h + 1, (r.num_tokens - 1) // p.B)
         x = self.last_walk.get(r.i)
         held = p.held.get(r.i, 0)
-        wm = p.watermark_blocks if kw["has_scheduled_reqs"] and r.status in (RP._W, RP._P) else 0
+        wm = p.watermark_blocks if kw["has_scheduled_reqs"] and r.status in (WAITING, PREEMPTED) else 0
         total = min(r.num_computed + h * p.B, p.L)
 
         def need_lb(tokens: int) -> int:
@@ -517,7 +519,7 @@ class Mirror:
 
 
 @contextmanager
-def mirrored(m: Mirror, K: type = RP._KV, S: type = RP._Sched):
+def mirrored(m: Mirror, K: type = RP.BlockPool, S: type = RP.Scheduler):
     names = ("hit", "allocate_slots", "cache_blocks", "free_request")
     orig = {n: getattr(K, n) for n in names}
     sched = S.schedule

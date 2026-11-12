@@ -18,21 +18,3 @@ off_gate = ["circuit-check", "ratchet-gate"]
 # and drive's ring names it and rings its owner. `id`: `suite NAME` (every failure of that suite), `suite NAME::TEST` (one test:
 # its suite then fails for nothing but allowed tests), or `circuit-check CHECK/CODE FAMILY` (one circuit-check failure, the
 # Definition without its statics). Drop an entry once its failure is fixed.
-
-[[allow]]
-id = "suite repository::tests/lint/test_repo_silent_excepts.py::test_no_new_silent_excepts"
-owner = "ci"
-expires = "2026-11-02T18:00:00Z"
-reason = "red on main and checked; its fix is landing"
-
-[[allow]]
-id = "suite verity-check::tests/test_settings.py::test_direct_reads_only_shrink"
-owner = "ci"
-expires = "2026-11-02T18:00:00Z"
-reason = "red on main and checked; its fix is landing"
-
-[[allow]]
-id = "suite verity-check::tests/test_suite_parts.py::test_the_parts_run_their_files_once_and_join_to_the_whole_suites_verdict"
-owner = "ci"
-expires = "2026-11-02T18:00:00Z"
-reason = "red on main and checked; its fix is landing"

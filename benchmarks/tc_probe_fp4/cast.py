@@ -23,13 +23,23 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 import k32
 import probe as P
-from verity.ml.circuits.silicon.cast import f32_to_e2m1_sat_word, f32_to_e4m3_sat_word
+
+# isort: split
+# verity_config is importable once probe has put tools/config on sys.path
 from verity_config.settings import SHARED
+
+from verity.ml.circuits.silicon.cast import f32_to_e2m1_sat_word, f32_to_e4m3_sat_word
+
+if TYPE_CHECKING:
+    import argparse
+
+    from numpy.typing import ArrayLike
 
 HERE = Path(__file__).resolve().parent
 OPS = {"cvt_e2m1x2_f32": 0, "cvt_f16x2_e2m1x2": 1, "cvt_ue8m0x2_f32_rz": 2, "cvt_ue8m0x2_f32_rp": 3, "cvt_bf16x2_ue8m0x2": 4,
@@ -116,7 +126,7 @@ def reference(op: int, inp: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         return ((ra << 8) | rb).astype(np.uint32), gated
     if op == 4:
         h = inp & 0xFFFF
-        def bf(c):
+        def bf(c: np.ndarray) -> np.ndarray:
             v = np.exp2(c.astype(np.float64) - 127).astype(np.float32).view(np.uint32) >> 16
             return np.where(c == 0, 0x0040, v).astype(np.uint32)
         lo, hi = h & 0xFF, h >> 8
@@ -131,18 +141,18 @@ def reference(op: int, inp: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
 # --- inputs ----------------------------------------------------------------------------------------------------------------------
 
 
-def _f32w(x) -> np.ndarray:
+def _f32w(x: ArrayLike) -> np.ndarray:
     return np.asarray(x, np.float32).view(np.uint32)
 
 
-def _neighbours(values) -> np.ndarray:
+def _neighbours(values: ArrayLike) -> np.ndarray:
     """Every value, its FP32 neighbours one ulp either side, both signs."""
     v = np.asarray(values, np.float32)
     out = np.concatenate([v, np.nextafter(v, np.float32(np.inf)), np.nextafter(v, np.float32(-np.inf))])
     return _f32w(np.concatenate([out, -out]))
 
 
-def inputs(op: int, rng, n: int) -> dict[str, np.ndarray]:
+def inputs(op: int, rng: np.random.Generator, n: int) -> dict[str, np.ndarray]:
     """Named input sets, each a flat array of input words (a multiple of the op's inputs per output)."""
     per = PER_OUT[op]
     sets: dict[str, np.ndarray] = {}
@@ -185,7 +195,7 @@ def inputs(op: int, rng, n: int) -> dict[str, np.ndarray]:
 
 
 class CastDevice:
-    def __init__(self, so: Path):
+    def __init__(self, so: Path) -> None:
         self.lib = ctypes.CDLL(str(so))
         self.lib.cvt_run.restype = ctypes.c_int
         self.lib.cvt_run.argtypes = [ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int]
@@ -219,14 +229,14 @@ class FakeCast:
         return {"device": "FAKE SILICON (reference)", "compute_capability": "fake", "driver": None, "gpu_uuid": "GPU-fake",
                 "backend": "fake", "cuda_visible_devices": SHARED.CUDA_VISIBLE_DEVICES}
 
-    def clocks(self, uuid):
+    def clocks(self, uuid: str | None) -> None:
         return None
 
     def run(self, op: int, inp: np.ndarray) -> np.ndarray:
         return reference(op, inp)[0]
 
 
-def main(args) -> int:
+def main(args: argparse.Namespace) -> int:
     out = Path(os.path.expandvars(args.out))
     out.mkdir(parents=True, exist_ok=True)
     t_all = time.time()

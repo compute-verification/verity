@@ -842,13 +842,15 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     schemas = {p: sz.BitRowLeaf.hiding_schema for p in want}
     spec, units, counts = sz.spec_of(pg, members, want, schemas, k, root)
     assert units == [ING, EG] and counts == {sz.PA.template_id(ING): 2 * T, sz.PA.template_id(EG): 2 * T}
-    assert spec.context == bytes.fromhex(root) and spec.selection.to_json() == {"rule": "law", "law": f"stratified:{k}"}
+    rule = f"stratified-rate:{k}/{4 * T}"
+    assert sz.rule_of(k, 4 * T) == rule and sz.rule_of(8 * T, 4 * T) == "stratified-rate:128/128"
+    assert spec.context == bytes.fromhex(root) and spec.selection.to_json() == {"rule": "law", "law": rule}
     assert spec.check.proof_deadline == 4 * sz.MEMBER_DEADLINE_S
 
     def record(ports: dict) -> dict:
         roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
-        return R.record(program, query, sz.DR.parse_design(f"stratified:{k}"), sz.S.SCHEME, roots,
-                        {"kind": "stand-in"}, leaf_layer="ee" * 64)
+        law, table = sz.S.params_law(rule, program, query, None)
+        return R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer="ee" * 64, work_table=table)
 
     assert sz.S.check_public(spec, record(want)).ok
     v = sz.S.check_public(spec, record({**want, "scan/other": {"leaves": 1, "domain": "ff" * 64}}))

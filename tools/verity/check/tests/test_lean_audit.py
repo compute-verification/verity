@@ -90,6 +90,7 @@ def _tree(tmp: Path, monkeypatch, extra: dict[str, str] | None = None) -> Path:
     monkeypatch.setattr(LA, "ROOT", root)
     monkeypatch.setattr(LA.COMMON, "tracked_files", lambda r=None: sorted(files))
     monkeypatch.setattr(LA.COMMON, "cores", lambda: 2)
+    monkeypatch.setattr(LA, "sandboxed", lambda: True)
     return root
 
 
@@ -443,6 +444,31 @@ def test_a_passing_audit_keeps_its_build(tmp_path, monkeypatch):
     assert _run(tmp_path, 4)[0] == 1 and not (store / ka).exists()     # a failed: its build is dropped, not kept
     (root / "pkg/a/lean-toolchain").write_text("v2\n")
     assert LA.build_key("pkg/a", root) != ka
+
+
+def test_without_the_sandbox_nothing_is_restored_and_nothing_kept(tmp_path, monkeypatch):
+    """Outside the sandbox a build's compile-time code may leave any output, and the sampled recompile that binds a
+    restored module to its source doesn't run. So on such a node, with a kept build of each package and an artifact cache
+    present, a run takes neither, nor a bundle, gives check.py no `--artifacts`, and keeps nothing it built."""
+    root = _tree(tmp_path, monkeypatch)
+    (root / "pkg/b/lean-audit.json").write_text("{}")
+    store = tmp_path / "cache" / "lean-builds"
+    assert _run(tmp_path, 1)[0] == 0 and sorted(p.name for p in store.iterdir() if p.is_dir())
+    kept = {p: p.stat().st_mtime_ns for p in store.rglob("*")}
+    (tmp_path / "cache" / "lean-artifacts").mkdir(exist_ok=True)
+    (root / "tools/verity/lean/check.py").write_text(FAKE_AUDIT + "\n# the auditor changed: every package runs again\n")
+    monkeypatch.setattr(LA, "sandboxed", lambda: False)
+    calls = []
+    monkeypatch.setattr(LA.LakeArtifacts, "take", lambda self, urls, log=print: calls.append("take") or 0)
+    monkeypatch.setattr(LA.LakeArtifacts, "put", lambda self, reports, since=None, log=print: calls.append("put") or 0)
+    logged = []
+    out = tmp_path / "out2"
+    rc = LA.run(out, tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps", log=logged.append,
+                urls={"bundle": "file:///nowhere"})
+    assert rc == 0 and sorted((out / "builds.txt").read_text().split("\n")[:-1]) == ["pkg/a cold", "pkg/b cold"]
+    assert "--artifacts" not in json.loads((out / "argv.json").read_text()) and calls == []
+    assert {p: p.stat().st_mtime_ns for p in store.rglob("*")} == kept, "nothing it built is kept"
+    assert any("builds without the sandbox" in ln for ln in logged)
 
 
 def _built(pkg: Path, mod: str, outputs: dict[str, str], imports: tuple[str, ...] = ()) -> None:
@@ -1181,6 +1207,20 @@ def test_a_bundle_leaves_out_what_mathlibs_cache_supplies_and_restores_only_when
     assert sorted(p.name for p in store.iterdir()) == ["k1"]                                        # no part file left
 
 
+def test_a_bundle_lists_what_it_holds_built_of_each_package_mathlibs_cache_does_not_supply(tmp_path):
+    """`modules`, which `--export` lists beside each bundle and `--pin` pins: the built modules (`.olean`, not `.ilean` or a
+    module's server part) and the roots of each package outside Mathlib's cache, a package nothing was built of included,
+    and nothing of Mathlib's or of what its manifest pins."""
+    src = _packages_dir(tmp_path / "deps" / "k1")
+    for f in ("Arklib/.lake/build/lib/lean/ArkLib/Data/Code.olean", "Arklib/.lake/build/lib/lean/ArkLib/Data/Code.ilean",
+              "Arklib/.lake/build/lib/lean/ArkLib/Data/Code.olean.server", "Arklib/lakefile.lean", "VCVio/VCVio.lean",
+              "VCVio/ToMathlib/Control.lean"):
+        (src / f).parent.mkdir(parents=True, exist_ok=True)
+        (src / f).write_text("")
+    assert LA.modules(src) == {"Arklib": {"roots": ["ArkLib"], "built": ["ArkLib", "ArkLib.Data.Code"]},
+                               "VCVio": {"roots": ["VCVio"], "built": []}}
+
+
 def test_a_cold_machine_takes_the_pinned_bundle_from_the_store(tmp_path, monkeypatch):
     root = _tree(tmp_path, monkeypatch)
     (root / "pkg/b/lean-audit.json").write_text("{}")
@@ -1227,7 +1267,7 @@ def test_pinning_takes_only_bundles_on_the_remote_for_this_trees_manifests(tmp_p
     root = _tree(tmp_path, monkeypatch)
     k = LA.deps_key(root / "pkg/a")
     (tmp_path / "rec" / "lean-deps").mkdir(parents=True)
-    entry = {"package": "pkg/a", "sha256": "ab" * 32, "bytes": 5}
+    entry = {"package": "pkg/a", "sha256": "ab" * 32, "bytes": 5, "modules": {"Arklib": {"roots": ["ArkLib"], "built": []}}}
     (tmp_path / "rec" / "lean-deps" / "lean-deps.json").write_text(json.dumps({"deps": {k: entry}}))
     heads = {f"objects/sha256/{'ab' * 32}": {"bytes": 5}}
     tree = [types.SimpleNamespace(path="out/audit/tool/lean-deps.json", sha256="12" * 32, bytes=7),     # the audit's copy of the pins
@@ -1253,6 +1293,10 @@ def test_pinning_takes_only_bundles_on_the_remote_for_this_trees_manifests(tmp_p
     (root / LA.PIN).write_text(json.dumps({"schema": "lean-deps-pin/v1", "deps": stale}))
     assert LA.pin("r20260929-000000-abcd") == 0
     assert LA.pins() == {k: {**entry, "run": "r20260929-000000-abcd"}}                  # the stale manifest's pin is gone
+    (tmp_path / "rec" / "lean-deps" / "lean-deps.json").write_text(
+        json.dumps({"deps": {k: {x: v for x, v in entry.items() if x != "modules"}}}))
+    assert LA.pin("r20260929-000000-abcd") == 1 and "lists no modules" in capsys.readouterr().err
+    (tmp_path / "rec" / "lean-deps" / "lean-deps.json").write_text(json.dumps({"deps": {k: entry}}))
     heads.clear()
     assert LA.pin("r20260929-000000-abcd") == 1 and "not on the remote" in capsys.readouterr().err
     tree += [types.SimpleNamespace(path=f"again/{k}.tar.gz", sha256="ab" * 32, bytes=5),

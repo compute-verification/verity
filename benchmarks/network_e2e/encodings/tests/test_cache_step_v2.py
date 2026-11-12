@@ -1,5 +1,5 @@
 """CacheStep_v2's specification (`verity.ml.protocols.certifier.cache_step_v2.reference`) against vLLM's block pool as
-the replay models it (`replay._KV`) over whole async traces, through `cache_pool_vectors.drive`: the unit's pool after
+the replay models it (`replay.BlockPool`) over whole async traces, through `cache_pool_vectors.drive`: the unit's pool after
 every pool operation, the refused witnesses beside each call, the N = NB − 1 bound, and the certifier's difftest
 vectors as `cache_pool_vectors` makes them now."""
 from __future__ import annotations
@@ -29,7 +29,7 @@ V = _load("enc_cache_pool_vectors", HERE.parent / "cache_pool_vectors.py")
 
 @pytest.mark.parametrize("name", ["async-prefix-cache.jsonl", pytest.param("async-crush.json.gz", marks=pytest.mark.slow)])
 def test_the_pool_is_vllm_s_over_a_whole_trace(name) -> None:
-    """Every operation the replay's pool makes is the unit's call, accepted, and leaves the unit's pool equal to `_KV`'s
+    """Every operation the replay's pool makes is the unit's call, accepted, and leaves the unit's pool equal to `BlockPool`'s
     (the same hashes cached with their blocks held by the same slots, the same free-queue order, the same hashless
     count), each eviction removing the blocks vLLM evicts. Beside each call, a made-up eviction, a wrong threshold,
     returns a block either side and a hit or an evictable count a step either side are refused, and so is the hit a

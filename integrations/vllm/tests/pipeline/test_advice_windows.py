@@ -353,9 +353,11 @@ class _Coins:
 
 
 def _draw(rec: dict, law: dict) -> dict:
-    from verity.core.protocols.spot import service as S
+    """A challenger's sample under the registration's expanded `law` (`service.select_draw` past its rule)."""
+    from verity.core.protocols.spot import coins as T
 
-    return S.select_draw(S.Law(f"work:{law['k']}"), law, rec["population"], _Coins())
+    n = rec["population"]
+    return {**law, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), law, n)["units"])}
 
 
 def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
@@ -421,10 +423,14 @@ def test_a_partition_that_leaves_out_or_samples_a_transfer_gate_template_is_refu
     comp, opening = c["gated"]["compiler"], c["gated"]["opening"]
     for doc, why in (({"templates": [SILU], "law": "work:2"}, "would be left out of the proved set"),
                      ({"templates": [ROPE, SILU], "law": "stratified:2"}, r"work law's draw \(law work:K\)"),
+                     ({"templates": [ROPE, SILU], "law": "stratified-rate:1/4"}, r"work law's draw \(law work:K\)"),
                      ({"templates": [ROPE], "law": "work:2"}, "its selection is all")):
         (pf := tmp_path / "partition.json").write_text(json.dumps(doc))
         with pytest.raises(ValueError, match=why):
             AW.window_of_advice(c["commit"], 0, pf, comp, *AW.of_opening(comp, opening))
+    (pf := tmp_path / "partition.json").write_text(json.dumps({**json.loads(Path(c["partition"]).read_text()), "law": "work-rate:1/4"}))
+    mine, _held = AW.window_of_advice(c["commit"], 0, pf, comp, *AW.of_opening(comp, opening))
+    assert mine.law == {"law": "work", "k": 10} and mine.work_table == {ROPE: {"work": 0, "floor": 32}, SILU: {"work": 1, "floor": 2}}
     assert SRW.work_table_of({"law": "work", "k": 2}, {ROPE: 32, SILU: 8}) == {ROPE: {"work": 1, "floor": 1}, SILU: {"work": 1, "floor": 1}}
     assert SRW.work_table_of({"law": "subset", "k": 2}, {ROPE: 32, SILU: 8}) is None
 

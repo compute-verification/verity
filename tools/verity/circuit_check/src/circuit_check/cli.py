@@ -1027,12 +1027,18 @@ def _joined(a: dict | None, b: dict) -> dict:
     return out
 
 
+def _probed(d: dict) -> dict:
+    """Read set ``d`` with its probes as `cache.probed` declares them now, but those its files hold."""
+    return {**d, "probes": sorted(CC.probed(REPO, d.get("probes", ())) - set(d.get("files", ())))}
+
+
 def update_reads(rep: dict, every: bool) -> list[str]:
     """`READS` with what each catalog binding ``rep`` (`run`'s, with ``reads``) has an entry of every target for read, added to
     what it declares, and ``registries`` and ``loaded`` as declared and as now, both: what a binding's run reads depends on
     how it runs (``--binding`` makes only its own binding's roots, so a target reads what making another binding's roots
     reads where it makes them), so a declaration holds every way it ran.  With ``every`` (a run of every binding) a binding
-    the catalog no longer has is dropped.  Remove `READS` to start over.  The bindings left as they were (``incomplete``)."""
+    the catalog no longer has is dropped.  Each probe is written as `cache.probed` declares it now, those `READS` held already
+    too.  Remove `READS` to start over.  The bindings left as they were (``incomplete``)."""
     new, have = rep["reads"], _reads_file()
     incomplete = sorted(new.get("incomplete", {}))
     done = {n: _joined(have["bindings"].get(n), d) for n, d in new["bindings"].items() if n not in incomplete}
@@ -1040,8 +1046,9 @@ def update_reads(rep: dict, every: bool) -> list[str]:
         bindings = {n: d for n in new["bindings"] if (d := done.get(n, have["bindings"].get(n))) is not None}
     else:
         bindings = {**have["bindings"], **done}
-    regs = {k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED}
-    loaded = sorted({*have["loaded"], *new["loaded"]})
+    bindings = {n: _probed(d) for n, d in bindings.items()}
+    regs = _probed({k: sorted({*have["registries"].get(k, ()), *new["registries"].get(k, ())}) for k in CC.DECLARED})
+    loaded = sorted(CC.probed(REPO, {*have["loaded"], *new["loaded"]}))
     READS.mkdir(parents=True, exist_ok=True)
     for part, got in (("registries.json", {"registries": regs}), ("loaded.json", {"loaded": loaded}),
                       ("bindings.json", grouped(bindings))):

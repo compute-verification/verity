@@ -1360,9 +1360,9 @@ def test_an_unwitnessed_entry_both_sides_changed_is_the_side_at_its_merged_recor
 
 
 def test_an_unwitnessed_entry_neither_side_has_at_its_merged_record_is_ours_named(tmp_path, capsys):
-    """A merge into a proofs branch (`f7be331`) took theirs' SampledKSLiveV5 entry, a value theirs' own record no longer
-    holds. Neither side's entry holds the merged record's hashes, so the entry is ours', named on stderr: where the merged
-    tree doesn't state it, the Lean check fails it as a witness failure."""
+    """A merge whose incoming side's SampledKSLiveV5 entry is a value theirs' own record no longer holds. Neither
+    side's entry holds the merged record's hashes, so the entry is ours', named on stderr: where the merged tree
+    doesn't state it, the Lean check fails it as a witness failure."""
     sides = json.loads((FIXTURES / "unwitnessed-stale-on-the-incoming-side.json").read_text())
     assert sides["theirs"]["unwitnessed"][V5]["unfolded_hash"] != sides["theirs"]["guarantees"][V5]["unfolded_hash"]
     for n in ("base", "ours", "theirs"):

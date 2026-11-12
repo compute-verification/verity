@@ -24,7 +24,7 @@ failure message carries its fix.
  - P15: no versioned twins;
  - P16: every CLI command has a caller.
 - **Typed records** (`test_typed_records.py`, allowlist `allowlists/typed_records.json`): a `.get(k) or []` or `or {}`,
- counted per package, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
+ counted per file, and a schema id literal (`<namespace>/<name>/vN`) outside `verity_vllm/records/`. Read the record
  through its type in `verity_vllm/records/` instead, whose `load` refuses a missing or unknown field by name. A hash's
  domain-separation tag reads like one but names no record: a module-level constant named `*_TAG` or `*_DOMAIN` holds it as
  a plain literal, which the rule skips.
@@ -50,8 +50,8 @@ failure message carries its fix.
 exception or raises a recorded count: against the commit below it (on `checked`, its `Queue: #N` merge against the merge
 below; a branch, against its merge base with `main`, or the merge of its merge bases when a branch that merged both `main`
 and a since-landed branch has several), no ratchet holds more entries and no entry's `count` is higher. An entry may move with the violation it allows. A kind whose entries record counts (typed_records' or-empty per
-package, P07's) is held by its total instead: a key may rise, or a new one appear, when the same kind's other keys fall by
-at least as much, so a move from one package to another passes, but the kind's total may not grow. P10's count is a size,
+file, P07's) is held by its total instead: a key may rise, or a new one appear, when the same kind's other keys fall by
+at least as much, so a move from one file to another passes, but the kind's total may not grow. P10's count is a size,
 not a number of findings, so it is never pooled. A change to a lint's own code or thresholds is judged like source: the base's lint code, run on the PR's tree, must find nothing the PR's allowlists don't cover, so loosening a
 lint to drop entries fails. Ruff's lint code is `test_ruff.py`, `integrations/vllm/ruff.toml`, the root `ruff.toml` it
 extends and the root `dev` group's ruff pin, so the gate reruns it with the base's configs at the base's pin. The gate holds

@@ -8,15 +8,13 @@ kernels' constexpr (`Const32[S]`).  CPU, torch-free:
   2. the keep word is total: an S the pipeline never launches (0, 3, 64, 2^31, -1) keeps no lane (word 0, a word no launched S gives);
   3. `GumbelTopPTokenSelect_v1{V}` with the splits operand == the difftest composite with the same S as a static (the static-S body), token
      and masked row, at every S -- the numerics did not move, only where S enters;
-  4. the B8 record rows (kernel-consumed bf16 logits at S = 16, V = 128256) through the operand form: masked row bit-exact
-     to the kernel (the fixed model behind the operand);
-  5. the codec materialises `TopPMaskWordx{V}_v1` by name (the static-S `TopPMaskWordx{V}s{S}_v1` name does not decode: one form);
-  6. `splits_for_v1` (the relation the Match checks the operand against) is the registry's `splits_for` on 1..64 x {132, 142} SMs.
+  4. the codec materialises `TopPMaskWordx{V}_v1` by name (the static-S `TopPMaskWordx{V}s{S}_v1` name does not decode: one form);
+  5. `splits_for_v1` (the relation the Match checks the operand against) is the registry's `splits_for` on 1..64 x {132, 142} SMs.
+
+The B8 record rows through the operand form are `test_topp_splits_operand_of_record`.
 """
 from __future__ import annotations
 
-import json
-import os
 import struct
 
 import numpy as np
@@ -29,9 +27,6 @@ from verity.ml.definitions.registry import topp_split as TS
 from verity.ml.definitions.registry import topp_geometry
 
 f32 = np.float32
-HERE = os.path.dirname(os.path.abspath(__file__))
-FIX = os.path.join(HERE, "data", "topp_split_fixture")
-RECORD = os.path.join(FIX, "fstoch01_rows.npz")
 NEG_INF_BITS = 0xFF800000
 
 
@@ -78,19 +73,6 @@ def test_topp_mask_operand_form_equals_topp_keep_row_at_every_s(S):
     # the keep word primitive itself
     word = _eval(SM.topp_mask_word(V), [x.view(np.uint32), _u32(_bits(p)), _u32(S)])[0]
     assert word == int.from_bytes(np.packbits(keep, bitorder="little").tobytes(), "little")
-
-
-def test_the_operand_changes_the_result_where_the_geometry_matters():
-    """S is not decorative: the same row masks differently under two split counts (the tie quota is per split)."""
-    V, p = 128256, 0.95
-    z = np.load(RECORD)
-    meta = json.load(open(RECORD + ".json"))
-    key = "step37_row4"
-    bf = (z[key + "_bf16_logits_bits"].astype(np.uint32) << 16).view(f32)
-    x = TS.tl_div(bf, f32(meta[key]["device"]["temperature"]), TS.Cfg())
-    k16 = TS.topp_keep_row(x, p, 16)
-    k32 = TS.topp_keep_row(x, p, 32)
-    assert k16.tolist() != k32.tolist(), "the record row masks the same at S = 16 and 32 -- not a geometry-sensitive row"
 
 
 # ------------------------------------------------------------------------------------------------ 2. total over every splits word
@@ -147,26 +129,7 @@ def test_select_signature_has_splits_as_the_sixth_operand():
     assert [n for n, _ in params] == ["logits", "top_p", "splits"]
 
 
-# ------------------------------------------------------------------------------------------- 4. the record rows through the operand form
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("key", ["step37_row4", "step82_row3", "step92_row3"])
-def test_fstoch01_record_rows_are_bit_exact_through_the_operand_form(key):
-    z = np.load(RECORD)
-    meta = json.load(open(RECORD + ".json"))
-    d = meta[key]["device"]
-    S, V = int(meta[key]["S"]), int(meta[key]["V"])
-    assert S == 16 and V == 128256
-    bf = (z[key + "_bf16_logits_bits"].astype(np.uint32) << 16).view(f32)
-    x_in = TS.tl_div(bf, f32(d["temperature"]), TS.Cfg())
-    out = _u32s(_eval(bind(SM.TopPMask, V=V), [x_in.view(np.uint32), _u32(_bits(d["top_p"])), _u32(S)]))
-    obs = z[key + "_masked_f32_bits"]
-    diff = np.nonzero(out != obs)[0]
-    assert diff.size == 0, f"{key}: {diff.size} lanes differ from the kernel-consumed masked row at S = 16 (operand): {diff[:8].tolist()}"
-
-
-# ------------------------------------------------------------------------------------------------ 5. codec name
+# ------------------------------------------------------------------------------------------------ 4. codec name
 
 
 def test_codec_materialises_the_operand_form_by_name():
@@ -179,7 +142,7 @@ def test_codec_materialises_the_operand_form_by_name():
     assert not any(rx.match("TopPMaskWordx128256s16_v1") for rx, _ in fams), "the static-S name must not decode: one form"
 
 
-# ------------------------------------------------------------------------------------------------ 6. the relation
+# ------------------------------------------------------------------------------------------------ 5. the relation
 
 
 @pytest.mark.parametrize("nsm", [132, 142])

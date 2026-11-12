@@ -7,6 +7,7 @@ refusals; and its profile at the footprint."""
 
 from __future__ import annotations
 
+import dataclasses
 import random
 from fractions import Fraction
 from math import comb
@@ -60,11 +61,16 @@ def _values(boundary: tuple[str, ...]) -> tuple[S.Value, ...]:
 
 
 PUBLIC, VALUES = _public(BOUNDARY), _values(BOUNDARY)
-RULE = S.TwoStage(GRAIN, f"subset:{Q}", K)
+RULE = S.TwoStage(GRAIN, "rate:1/2", K)
 TEMPLATE, = (t for t, _ in P.strata(P.population_program(PAIR, Q * N_RHO), QUERY))
 #: The reference header of an honest statement in these streams, fixed before the run: PAIR's part's, its ports' schemas
 #: and the set it was staged in, none of the run's fields (`fake_challenger.reference_header`).
 REFERENCE = FC.reference_header(TEMPLATE, 0, Q * N_RHO, dict.fromkeys(INTERIOR, SCHEMA))
+#: The registered reads of an honest statement's session in these streams, fixed before the run: PAIR's linked `x` and
+#: `o0`, each the boundary port its link names, and none of the run's fields (`second_stage.blank_reads`).
+READS = {"ports": {"x": {"value": BX}, "o0": {"value": BOUT}}}
+#: `READS` and the interior's own `out`.
+READS_OUT = {"ports": {**READS["ports"], "out": {"value": "out"}}}
 
 
 def _spec(selection=RULE, values=VALUES, proof_deadline=60.0) -> S.Spec:
@@ -96,9 +102,9 @@ def _record(program: Program, query, names, n: int, law, window, previous) -> di
     return R.record(program, query, law, S.SCHEME, roots, window, previous=previous)
 
 
-def _boundary(n=N, row=0, previous=None) -> tuple[dict, dict]:
+def _boundary(n=N, row=0, previous=None, q=Q) -> tuple[dict, dict]:
     program = P.population_program(BLOCK, n)
-    return (_record(program, GRAIN, BOUNDARY, n, {"law": "subset", "k": Q}, {"kind": "served", "run": RUN, "row": row},
+    return (_record(program, GRAIN, BOUNDARY, n, {"law": "subset", "k": q}, {"kind": "served", "run": RUN, "row": row},
                     previous), _ports(program, GRAIN, BOUNDARY, n))
 
 
@@ -225,6 +231,50 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
         assert p.accept(m) == 1 - Fraction(Q, N) + Fraction(Q, N) * Fraction(comb(N_RHO - m, K), comb(N_RHO, K))
 
 
+def test_a_rate_first_stage_keeps_one_wrong_proof_blocks_escape_however_the_prover_pads_the_replay_blocks():
+    """`rate:1/2` samples Q = ⌈N/2⌉ of each registration's N replay blocks, so a registration padded tenfold (N = 40 for
+    4) samples Q = 20, and a wrong proof block escapes the profile an accepted outcome carries (its footprint) with
+    probability 1 − (Q/N)·(k/n_rho) = 5/6 at both sizes. The second stage's k/n_rho is the replay Definition's, which the
+    registration can't pad. A fixed `subset:2` first stage, under which the same padding raises that escape from 5/6 to
+    59/60 (the same profile at Q = 2), is refused when the rule is made."""
+    def run(n, q):
+        stream = _stream(_spec(RULE))
+        assert S.selection_law(stream.spec.selection, n) == {"law": "subset", "k": q}
+        reg = stream.register(*_boundary(n, q=q))
+        first = stream.select(reg)
+        assert len(first.units) == q
+        stream.register_interiors(first, *_interior(q * N_RHO, reg.digest, D.proved(first.draw)))
+        second = stream.select(stream._entries[reg.order].interior)
+        assert len(second.units) == q * K
+        p = stream._footprint(stream._entries[reg.order])
+        assert p.draws == {S.REPLAY: Bernoulli(Fraction(q, n)), "unit": Subset(K)}
+        return p
+
+    small, padded = run(4, 2), run(40, 20)
+    assert small.accept(1) == padded.accept(1) == 1 - Fraction(1, 2) * Fraction(K, N_RHO) == Fraction(5, 6)
+    fixed = {n: dataclasses.replace(p, draws={**p.draws, S.REPLAY: Bernoulli(Fraction(2, n))}) for n, p in ((4, small),
+                                                                                                    (40, padded))}
+    assert fixed[4].accept(1) == Fraction(5, 6) and fixed[40].accept(1) == Fraction(59, 60)
+    with pytest.raises(ValueError, match="rate law"):
+        S.TwoStage(GRAIN, "subset:2", K)
+
+
+@pytest.mark.parametrize("port", BOUNDARY)
+def test_a_replay_block_is_held_to_the_boundary_values_committed_while_serving(port):
+    """A replay block's starting state (`bx`) and its far edge (`bout`) are boundary values, committed in the registration
+    before the first stage's coins. An outcome whose sessions opened either at another root rejects, the registration's
+    audit record failing `roots` on that port, so a replay can't start from, or end at, a state other than the
+    one committed while serving."""
+    stream = _stream()
+    _, second = _stages(stream)
+    assert stream.deliver(second, [SESSION]) is None
+    swapped = {**_roots(BOUNDARY), port: "ee" * 64, **_roots(INTERIOR)}
+    out = stream.outcome(second, _lean(), {"statement": "stub"}, session_roots=swapped)
+    assert not out.accepted and out.verdict.codes == ("reject",)
+    assert "roots" in out.verdict.detail["reject"]["replay_sample"] and "roots" not in out.verdict.detail["reject"]["checks"]
+    assert stream.records[0]["replay_sample"]["audit"]["checks"]["roots"]["detail"]["ports"] == [port]
+
+
 def test_the_run_of_record_holds_the_form_switch(monkeypatch):
     """`second_stage.FORM` is the Lean's `SecondStage.FORM`, which the run of record reads: flipped in the Python alone,
     round 2's check passes and the Python would accept, and the run of record, still refusing the form, disagrees."""
@@ -265,7 +315,7 @@ def _frame(key: str, f):
 
 @pytest.mark.parametrize("statements, codes", [
     (lambda s, second: [s], ["two-stage-form"]),
-    (lambda s, second: [{**s, "registered": _linked(s, out=_own(second))}], ["two-stage-form"]),
+    (lambda s, second: [{**s, "registered": _linked(s, out=_own(second))}], ["second-values"]),
     (None, ["second-statements"]),
     ([], ["second-cover"]),
     (lambda s, second: [s, s], ["second-template"]),
@@ -291,16 +341,19 @@ def _frame(key: str, f):
     (_restated(draw=lambda d: {**d, "units": [0, 3] if d["units"] != [0, 3] else [1, 4]}), ["second-sample"]),
     (_restated(draw=lambda d: {**d, "population": N * N_RHO}), ["second-sample"]),
     (lambda s, second: [{**s, "registered": _linked(s, shift=1)}], ["second-read"]),
-    (lambda s, second: [{**s, "registered": _linked(s, out=_own(second, shift=1))}], ["second-read"]),
-    (lambda s, second: [{**s, "registered": _linked(s, out=s["registered"]["ports"]["x"])}], ["second-read"]),
-    (lambda s, second: [{**s, "registered": _linked(s, y=_own(second))}], ["second-read"]),
-    (lambda s, second: [{**s, "registered": _linked(s, x=_own(second, port="x"))}], ["second-read"]),
-    (lambda s, second: [{**s, "registered": {"ports": {"x": s["registered"]["ports"]["x"]}}}], ["second-read"]),
-    (_restated(registered=None), ["second-read"]),
+    (lambda s, second: [{**s, "registered": _linked(s, out=_own(second, shift=1))}], ["second-read", "second-values"]),
+    (lambda s, second: [{**s, "registered": _linked(s, out=s["registered"]["ports"]["x"])}],
+     ["second-read", "second-values"]),
+    (lambda s, second: [{**s, "registered": _linked(s, y=_own(second))}], ["second-read", "second-values"]),
+    (lambda s, second: [{**s, "registered": _linked(s, x=_own(second, port="x"))}], ["second-read", "second-values"]),
+    (lambda s, second: [{**s, "registered": {"ports": {"x": s["registered"]["ports"]["x"]}}}],
+     ["second-read", "second-values"]),
+    (_restated(registered=None), ["second-read", "second-values"]),
 ])
 def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     """Round 2, by both verifiers, passes the run's own statements, its linked ports reading the boundary at each slot's
-    cell's replay block, and its own `out` reading each slot's own rows or not (the form's refusal their one failure),
+    cell's replay block (the form's refusal their one failure), under the auditor's params whose reference statement
+    reads those ports (`fake_challenger.Stream.proofs`), so one reading its own `out` too is refused (`second-values`),
     and refuses, each statement's session checked as it states by a verifier of record: none (`second-statements`), none
     for a part's template (`second-cover`), a template twice or one of no part (`second-template`), one that isn't a
     statement (`second-statement`, and `second-reported` when its session's reads are reported, since no statement makes
@@ -310,8 +363,10 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     not the header's), and one that isn't the run's: another population of slots (`second-population`), a scheme, root
     or domain the interior registration's isn't or a port of it it neither roots nor reads (`second-roots`), another
     sample (`second-sample`), or a read of another cell's replay block, another slot's rows, a boundary port by a port
-    no link names, another port's own, or a linked port's own, or a linked port not read (`second-read`). Neither audit
-    record refuses the reads of its own ports at their own roots, which round 2 holds."""
+    no link names, another port's own, or a linked port's own, or a linked port not read (`second-read`), and
+    `second-values` beside it where the reads differ from the reference's but for the run's fields: a port more or
+    fewer, another value, or none. Neither audit record refuses the reads of its own ports at their own roots, which
+    round 2 holds."""
     stream = _stream()
     out = _two_stage_outcome(stream, statements)
     checks = stream.records[0]["audit"]["checks"]
@@ -392,7 +447,7 @@ FV = REFERENCE["frame_v3"]
     ({**REFERENCE, "frame_v3": {**FV, "schemas": {**FV["schemas"], "y": SCHEMA}}}, ["second-header"]),
     ({**REFERENCE, "frame_v3": {k: v for k, v in FV.items() if k != "schemas"}}, ["second-header"]),
     ({"scheme": S.SCHEME}, ["second-header"]),
-    (None, ["second-header"]),
+    (None, ["second-header", "second-values"]),
 ])
 def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
     """`second-header`, by both verifiers: each statement's header is the reference header the auditor's params give its
@@ -403,7 +458,8 @@ def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
     under a reference fixed before the run that names none of the run's fields or names them otherwise, or was staged at
     other slots, or names another set and bindings, which the verifier replaces; a reference with another scheme, another
     `units.units_per_vu`, another schema, a port the interior record lacks or none of the ports, or a key the header
-    lacks, is refused by name, and so is the statement when the params give no reference."""
+    lacks, is refused by name, and so is the statement when the params give no reference (and no reference reads,
+    `second-values`)."""
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s], proofs=None if header is None else _circuits((PAIR,), header=header))
     checks = stream.records[0]["audit"]["checks"]
@@ -423,21 +479,23 @@ def _sharing(registered=None):
 
 @pytest.mark.parametrize("statements, codes", [
     (_sharing(lambda s, second: _linked(s, out=_own(second))), ["two-stage-form"]),
-    (_sharing(), ["second-refs"]),
-    (_sharing(lambda s, second: None), ["second-read", "second-refs"]),
+    (_sharing(), ["second-refs", "second-values"]),
+    (_sharing(lambda s, second: None), ["second-read", "second-refs", "second-values"]),
     (_sharing(lambda s, second: _linked(s, out=_own(second, shift=1))), ["second-read"]),
     (lambda s, second: [{**s, "registered": _linked(s, out=_own(second))}], ["second-header"]),
 ])
 def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(statements, codes):
     """`second-refs`, by both verifiers, under a reference whose sessions share rows at the interior's ports
-    (``shared_rows``: tables whose rows an instance reads by the refs in its public file's body). The run's statement
-    reading its linked `x` at the boundary and its own `out` at each slot's own rows passes, refused only on the form.
-    One leaving the shared `out` unread is refused: the session's verifier would only bound its refs by their table, so
-    one could point a drawn unit at another unit's rows. So is one reading nothing registered. A shared port read at
-    another slot's rows, where the verifier would hold the ref, is `second-read`'s, and a header sharing no rows where
-    its reference does is `second-header`'s."""
+    (``shared_rows``: tables whose rows an instance reads by the refs in its public file's body) and read the
+    interior's own `out` (`READS_OUT`). The run's statement reading its linked `x` at the boundary and its own `out` at
+    each slot's own rows passes, refused only on the form. One leaving the shared `out` unread is refused: the session's
+    verifier would only bound its refs by their table, so one could point a drawn unit at another unit's rows; its
+    reads are then not its reference's either (`second-values`). So is one reading nothing registered. A shared port
+    read at another slot's rows, where the verifier would hold the ref, is `second-read`'s, and a header sharing no rows
+    where its reference does is `second-header`'s."""
     stream = _stream()
-    out = _two_stage_outcome(stream, statements, proofs=_circuits((PAIR,), header={**REFERENCE, "shared_rows": SHARED}))
+    out = _two_stage_outcome(stream, statements, proofs=_circuits((PAIR,), header={**REFERENCE, "shared_rows": SHARED},
+                                                                  reads=(READS_OUT,)))
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
 
@@ -520,9 +578,57 @@ def test_an_own_read_at_another_root_fails_the_interior_audit():
     fails beside round 2's (`second-read`)."""
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [{**s, "registered": _linked(s, out={
-        **_own(second), "root": "ee" * 64})}])
+        **_own(second), "root": "ee" * 64})}], proofs=_circuits((PAIR,), reads=(READS_OUT,)))
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and not checks["registered"]["ok"] and checks["statements"]["codes"] == ["second-read"]
+
+
+def _registered_codes(monkeypatch):
+    """Round 2's codes over what the verifier holds of a run (`second_stage.Own`) with its interior record registering
+    values `w1` and `w2`, as a function of the value the run's statement reads at a port `w` no link names (slot 0 its
+    row 0), the one its template's reference statement reads there (None: no `w`) and its rows, ``(reads_from,
+    reads)``, and the reference's reads of the linked ports (`READS`'s when None)."""
+    seen = []
+    check = SS.check
+    monkeypatch.setattr(SS, "check", lambda allow, own, ss: seen.append((own, ss)) or check(allow, own, ss))
+    _two_stage_outcome(_stream(), lambda s, second: [s])
+    (own, (s,)), = seen
+    entries = {v: {"value": v, "root": f"{i:02x}" * 64, "domain": f"{i + 1:02x}" * 64, "leaves": 8}
+               for i, v in ((0x70, "w1"), (0x72, "w2"))}
+
+    def codes(value: str, named: str | None, rows=(0, [0]), linked=None) -> list[str]:
+        ports = {**s["registered"]["ports"], "w": {**entries[value], "reads_from": 0, "reads": [0]}}
+        stmt = {**s, "registered": {**s["registered"], "ports": ports}}
+        w = {} if named is None else {"w": {"value": named, "reads_from": rows[0], "reads": rows[1]}}
+        ref = {"ports": {**(READS["ports"] if linked is None else linked), **w}}
+        o = dataclasses.replace(own, interior={**own.interior, "registered": list(entries.values())},
+                                reported=SS.statement_reads([stmt]), verified=SS.verified_of(_lean(checked=stmt)),
+                                ref_reads=((TEMPLATE, ref),))
+        return list(SS.check(True, o, [stmt]).codes)
+    return codes
+
+
+def test_round_two_holds_a_port_to_the_registered_value_its_reference_reads(monkeypatch):
+    """`second-values`: at a port `w` no link names, `second-read` lets a session read either value the interior record
+    registers, `w1` or `w2`, at its own root, domain and leaves, so which one the port reads would be the run's choice,
+    and no frame fixed before the run could name it. Round 2 holds it to the one its template's reference statement
+    reads there: the run's statement reading `w1` passes where its reference reads `w1`, and is refused where it reads
+    `w2` or no `w`; reading `w2`, the reverse."""
+    codes = _registered_codes(monkeypatch)
+    assert codes("w1", "w1") == codes("w2", "w2") == []
+    assert codes("w1", "w2") == codes("w1", None) == codes("w2", "w1") == codes("w2", None) == ["second-values"]
+
+
+def test_round_two_holds_a_registered_value_to_the_rows_its_reference_reads(monkeypatch):
+    """`second-values` at a value a registration registers: `second-read` holds such a read only to the value's root,
+    domain and leaves, so the rows at which a session reads it would be the run's choice. Round 2 holds them to the
+    reference statement's (`second_stage.READ_ROW_FIELDS`): the run's statement reading `w1` at slot 0's row 0 is
+    refused where its reference reads `w1` at row 1, from slot 1, or at no row. A linked port's rows, which
+    `second-read` holds to the run, are the run's to place: a reference naming other rows there still passes."""
+    codes = _registered_codes(monkeypatch)
+    assert codes("w1", "w1", (0, [0])) == []
+    assert codes("w1", "w1", (0, [1])) == codes("w1", "w1", (1, [0])) == codes("w1", "w1", (0, [])) == ["second-values"]
+    assert codes("w1", "w1", linked={p: {**e, "reads_from": 3, "reads": [7]} for p, e in READS["ports"].items()}) == []
 
 
 def test_a_rejected_verdict_rejects_and_names_both_records():
@@ -570,7 +676,7 @@ def test_each_stage_is_once_and_in_order():
 
 
 def test_a_one_stage_stream_has_no_interior_registration():
-    spec = S.Spec(VALUES[:2], S.Law("subset:2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN, proof_deadline=60.0),
+    spec = S.Spec(VALUES[:2], S.Law("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN, proof_deadline=60.0),
                   PUBLIC, b"two-stage-test")
     stream = FC.Stream(spec, BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock())
     reg = stream.register(*_boundary())
@@ -587,29 +693,30 @@ def test_the_stream_holds_the_design_to_its_replay_block():
     with pytest.raises(ValueError, match="replay="):
         _stream(replay=None)
     with pytest.raises(ValueError, match="its rule is 'law'"):
-        _stream(spec=_spec(S.TwoStage(P.template_instance_query(one), f"subset:{Q}", K)), replay=one)
+        _stream(spec=_spec(S.TwoStage(P.template_instance_query(one), "rate:1/2", K)), replay=one)
     with pytest.raises(ValueError, match="grain is not the template query"):
-        _stream(spec=_spec(S.TwoStage(QUERY, f"subset:{Q}", K)))
+        _stream(spec=_spec(S.TwoStage(QUERY, "rate:1/2", K)))
     for k in (N_RHO, N_RHO + 1, {PAIR.id: N_RHO}):
         with pytest.raises(ValueError, match="whole replay blocks"):
-            _stream(spec=_spec(S.TwoStage(GRAIN, f"subset:{Q}", k)))
+            _stream(spec=_spec(S.TwoStage(GRAIN, "rate:1/2", k)))
     with pytest.raises(ValueError, match="name each of the check's templates once"):
-        _stream(spec=_spec(S.TwoStage(GRAIN, f"subset:{Q}", {BLOCK.id: 1})))
+        _stream(spec=_spec(S.TwoStage(GRAIN, "rate:1/2", {BLOCK.id: 1})))
     with pytest.raises(ValueError, match="one round"):
         _stream(rounds=2)
     with pytest.raises(ValueError, match="only a two-stage stream"):
-        FC.Stream(S.Spec(VALUES[:2], S.Law("subset:2"), _spec().check, PUBLIC, b"t"), PAIR, replay=BLOCK, budget=2,
+        FC.Stream(S.Spec(VALUES[:2], S.Law("rate:1/2"), _spec().check, PUBLIC, b"t"), PAIR, replay=BLOCK, budget=2,
                   delta=DELTA, challenger="challenger-test", clock=Clock())
 
 
 def test_the_rule_and_the_spec_state_one_form():
-    assert RULE.to_json() == {"rule": "two-stage", "grain": GRAIN, "replay": f"subset:{Q}", "k": K}
-    assert S.TwoStage(GRAIN, "rate:1/2", 2).replay == "rate:1/2"
-    assert S.TwoStage(GRAIN, "subset:2", {PAIR.id: 2}).to_json()["k"] == {PAIR.id: 2}
-    for bad, match in (((dict(GRAIN, version=1), "subset:2", 1), "grain"), ((GRAIN, "stratified:2", 1), "replay law"),
-                       ((GRAIN, "subset:2", 0), "k >= 1"), ((GRAIN, "subset:2", True), "k >= 1"),
-                       ((GRAIN, "subset:2", {}), "k >= 1"), ((GRAIN, "subset:2", {PAIR.id: 0}), "k >= 1"),
-                       ((GRAIN, "subset:2", {PAIR.id: True}), "k >= 1")):
+    assert RULE.to_json() == {"rule": "two-stage", "grain": GRAIN, "replay": "rate:1/2", "k": K}
+    assert S.TwoStage(GRAIN, "rate:1/3:2", 2).replay == "rate:1/3:2"
+    assert S.TwoStage(GRAIN, "rate:1/2", {PAIR.id: 2}).to_json()["k"] == {PAIR.id: 2}
+    for bad, match in (((dict(GRAIN, version=1), "rate:1/2", 1), "grain"), ((GRAIN, "stratified:2", 1), "replay law"),
+                       ((GRAIN, "subset:2", 1), "replay law"), ((GRAIN, "stratified-rate:1/2", 1), "replay law"),
+                       ((GRAIN, "work-rate:1/2", 1), "replay law"), ((GRAIN, "rate:1/2", 0), "k >= 1"),
+                       ((GRAIN, "rate:1/2", True), "k >= 1"), ((GRAIN, "rate:1/2", {}), "k >= 1"),
+                       ((GRAIN, "rate:1/2", {PAIR.id: 0}), "k >= 1"), ((GRAIN, "rate:1/2", {PAIR.id: True}), "k >= 1")):
         with pytest.raises(ValueError, match=match):
             S.TwoStage(*bad)
     for retired in (RULE.to_json(), {"rule": "two-stage", "replay": "subset:4", "check": "all"}, "two-stage:subset:4"):
@@ -618,7 +725,7 @@ def test_the_rule_and_the_spec_state_one_form():
     with pytest.raises(ValueError, match="interior values"):
         _spec(values=VALUES[:2])
     with pytest.raises(ValueError, match="one-stage selection has none"):
-        _spec(selection=S.Law("subset:2"))
+        _spec(selection=S.Law("rate:1/2"))
     assert S.selection_law(RULE, N) == {"law": "subset", "k": Q}
     assert S.boundary_values(VALUES) == VALUES[:2] and S.interior_values(VALUES) == VALUES[2:]
 
@@ -695,7 +802,7 @@ MIXED_BOUNDARY = tuple(f"{codec.descriptor_id(MIXED)}/{p}" for p in ("x", "y", "
 
 
 def _window_spec(k=K, query=WINDOW_QUERY, window=WINDOW) -> S.Spec:
-    return S.Spec(_values(MIXED_BOUNDARY), S.TwoStage(MIXED_GRAIN, f"subset:{Q}", k),
+    return S.Spec(_values(MIXED_BOUNDARY), S.TwoStage(MIXED_GRAIN, "rate:1/2", k),
                   S.Check(tuple(P.program_digest(Program(t)) for t in window), query, proof_deadline=60.0),
                   _public(MIXED_BOUNDARY), b"two-stage-window-test")
 
@@ -811,18 +918,21 @@ def test_a_replay_block_of_two_templates_fits_the_check_in_order():
     assert not P.in_order(blocks, WINDOW_QUERY, 3 * Q)
 
 
-def _circuits(window=WINDOW, files=("ab" * 64, "cd" * 64), header=REFERENCE) -> dict:
-    return {"templates": [{"template": P.template_id(t), "circuit": c, "header": header} for t, c in zip(window, files)]}
+def _circuits(window=WINDOW, files=("ab" * 64, "cd" * 64), header=REFERENCE, reads=(READS, READS)) -> dict:
+    return {"templates": [{"template": P.template_id(t), "circuit": c, "header": header, "registered": r}
+                          for t, c, r in zip(window, files, reads)]}
 
 
 def test_the_params_name_each_templates_circuit_file_in_the_checks_order():
     """`template_circuits`: the auditor's params name each of the check's templates' circuit files by SHA-512 and its
-    statements' reference header, in the check's order, as (template, circuit, header) triples, for one template's
-    check and a window's; none names no file; any other form, a header that isn't an object, and a list that isn't the
-    check's templates once each in its order, is refused."""
+    statements' reference header and registered reads, in the check's order, as (template, circuit, header,
+    registered), for one template's check and a window's, the reads null for none; none names no file; any other form,
+    a header that isn't an object, registered reads neither an object nor null or none given, and a list that isn't
+    the check's templates once each in its order, is refused."""
     ids = [P.template_id(t) for t in WINDOW]
-    assert S.template_circuits(_circuits(), WINDOW_QUERY) == ((ids[0], "ab" * 64, REFERENCE), (ids[1], "cd" * 64, REFERENCE))
-    assert S.template_circuits(_circuits((PAIR,)), QUERY) == ((ids[0], "ab" * 64, REFERENCE),)
+    assert S.template_circuits(_circuits(reads=(READS, None)), WINDOW_QUERY) == (
+        (ids[0], "ab" * 64, REFERENCE, READS), (ids[1], "cd" * 64, REFERENCE, None))
+    assert S.template_circuits(_circuits((PAIR,)), QUERY) == ((ids[0], "ab" * 64, REFERENCE, READS),)
     assert S.template_circuits(None, WINDOW_QUERY) == ()
     entries = _circuits()["templates"]
     for proofs, match in (({"templates": entries[::-1]}, "not the check's templates"),
@@ -835,6 +945,12 @@ def test_the_params_name_each_templates_circuit_file_in_the_checks_order():
                           ({"templates": [{**entries[0], "header": []}, entries[1]]}, "each header an object"),
                           ({"templates": [{k: v for k, v in entries[0].items() if k != "header"}, entries[1]]},
                            "each header an object"),
+                          ({"templates": [{**entries[0], "registered": []}, entries[1]]},
+                           "each registered an object or null"),
+                          ({"templates": [{**entries[0], "registered": "r"}, entries[1]]},
+                           "each registered an object or null"),
+                          ({"templates": [{k: v for k, v in entries[0].items() if k != "registered"}, entries[1]]},
+                           "each registered an object or null"),
                           ({"templates": entries, "circuit": "ab" * 64}, "proofs are"), ({}, "proofs are")):
         with pytest.raises(ValueError, match=match):
             S.template_circuits(proofs, WINDOW_QUERY)
@@ -871,7 +987,7 @@ def test_an_outcome_carries_the_params_to_the_run_of_record(monkeypatch):
                              proofs=_circuits())
         assert runs.pop()["interior"]["params"]["proofs"] == (tampered if tamper else _circuits()) and not runs
         assert not out.accepted and ("run" in stream.records[0]["audit"]["checks"]) is tamper
-    stream = FC.Stream(S.Spec(VALUES[:2], S.Law("subset:2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN,
+    stream = FC.Stream(S.Spec(VALUES[:2], S.Law("rate:1/2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN,
                                                                       proof_deadline=60.0), PUBLIC, b"two-stage-test"),
                        BLOCK, budget=2, delta=DELTA, challenger="challenger-test", clock=Clock())
     draw = stream.select(stream.register(*_boundary()))

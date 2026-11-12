@@ -13,7 +13,7 @@ public import Proofs.WeightSecurity.Served
 /-!
 # Weight security at a two-stage audit
 
-`TheftServed` over windows each audited by a two-stage sampled proof (`CompiledTwo`), each window's verifier knowledge
+`TheftServed` over windows each audited by SPOT's two-stage verifier (`CompiledTwo`), each window's verifier knowledge
 sound at the footprint (`CompiledTwo.KS`). A window (`twoGame`): the datacenter commits what leaves on the egress slots,
 its timing bucket and its advice, then sends the window's statement and prover, and the verifier flips the run's live
 coins. Its record (`twoRec`): accepted when the run accepts; sampled incorrect when it rejects or no extraction is in

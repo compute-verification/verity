@@ -12,6 +12,10 @@
 
 # the whole-tree invariants: each test exported when everything it needs is public
 when_closed = ["tests"]
+# fetched fixtures (entries of fixtures/artifacts.json git doesn't track) the export ships as tracked files, so the public
+# tree's tests read them with no store: each public, and each of its files at most a tracked file's limit
+# (tests/test_repository.py). vLLM's stored workloads: every row file the integration's tests and stages read
+fixtures = ["integrations/vllm/workloads"]
 
 [public]
 # SPOT: the generic sampling claim, its proofs, and sampled proofs' protocol and service
@@ -108,11 +112,16 @@ protocols = [
     "verity/ml/protocols/{pous,certifier}",
     "Security/*/{Nci,NciDesc}{,.lean}",
     "Security/Proofs/Properties/Nci{,.lean}",
-    "verity/core/primitives/identity",
+    # the table of domain separators' own entries: the other protocols' (its PoUW and shared parts are `needed`)
+    "verity/core/primitives/identity/Identity/Domains.lean",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
     # vLLM's PoUB session tests run PoUB's verifier side in process
     "integrations/vllm/tests/protocols/remote_bandwidth/{test_remote_session,test_in_place_gpu}.py",
     "integrations/vllm/tests/pipeline/test_registration_log.py",
+    # the network certifier's advice code (advice v1), private with its protocol: the public compiler reads it only through
+    # a registration's `decode`, and its test of that is private with it
+    "integrations/vllm/verity_vllm/pipeline/advice_code",
+    "integrations/vllm/tests/program/predict/test_steps_advice_code.py",
     # vLLM's PoUS option test runs the memory challenger's party in process
     "integrations/vllm/tests/protocols/test_pous_option.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
@@ -122,7 +131,7 @@ protocols = [
 ]
 # vLLM's tests that read a private protocol (the network certifier, NCI, the bandwidth audit, PoUS)
 protocol_tests = [
-    "integrations/vllm/tests/pipeline/test_{advice,advice_commit,advice_windows,serve_advice,window_advice,memory_map}.py",
+    "integrations/vllm/tests/pipeline/test_{advice,advice_commit,advice_windows,serve_advice,memory_map}.py",
     "integrations/vllm/tests/program/predict/test_{batch,block_counts,node_registration}.py",
     "integrations/vllm/tests/program/test_io_shell.py",
     "integrations/vllm/tests/commit/test_memory_map.py",
@@ -134,6 +143,8 @@ protocol_tests = [
 # blocks, compile slice, served rows and ids protocol), and the tests that import them
 served_window = [
     "integrations/vllm/verity_vllm/pipeline/serve_{commit,learn,loop,openai,protocol}.py",
+    # the server's seal process, its disk guard and watchdog, and its remote store's options, which only it runs
+    "integrations/vllm/verity_vllm/pipeline/{seal_process,serve_guard,serve_remote}.py",
     "integrations/vllm/verity_vllm/program/predict/{scan_state,window_circuit,window_class,window_rows,window_weights}.py",
     "integrations/vllm/tests/pipeline/test_serve_{admit,admit_tick,async,h1,learn,offloop,openai,release,row,seal,tie}.py",
     "integrations/vllm/tests/pipeline/test_serving_rows_weights.py",
@@ -141,6 +152,8 @@ served_window = [
     "integrations/vllm/tests/program/predict/test_window_circuit{,_fa3,_int8,_tables}.py",
     "integrations/vllm/tests/program/test_{dead_free,fa3_check_inf}.py",
     "integrations/vllm/tests/protocols/test_pouw_h1_drawn.py",
+    # GLM-5.3's served templates at TP 8, as `benchmarks/one_stage`'s served window records them
+    "integrations/vllm/tests/pipeline/test_served_unit_rows.py",
 ]
 # vLLM's test of its int8 attention kernels' PTX and SASS, which runs the PoUW kernels' SASS gate (`benchmarks/pouw/harness`)
 kernel_gates = ["integrations/vllm/tests/engine/{int8_attention_sass,test_int8_attention_sass}.py"]
@@ -169,6 +182,36 @@ oracle_tests = [
 run_store_tests = [
     "integrations/vllm/tests/pipeline/test_{boundary_plan,commit_tree_of_record,experiment_index,hot_commit}.py",
 ]
+# vLLM's test of the vLLM demo's workload (`examples/vllm/workloads`), which the public tree doesn't hold
+demo_tests = ["integrations/vllm/tests/pipeline/test_demo_workload_file.py"]
+# vLLM's records a tracked file can't hold (each over `tests/test_repository.py`'s limit: the top-p split's GPU rows, the M1
+# and M6 logs, the regression's larger frozen references and its files' digests, the H1 challenger's periods), and the tests
+# that read them or a run fetched from the evidence store, each `*_of_record.py` beside the public test it shares helpers with
+records = [
+    "integrations/vllm/tests/program/data/topp_split_fixture/{fstoch01_rows.npz,fixture.npz}",
+    "integrations/vllm/data/logs",
+    "integrations/vllm/tests/regression/expected/{gemma2-2b,mistral-7b,qwen25-15b,qwen3-4b,qwen3-4b-fp8}__*.json",
+    "integrations/vllm/tests/regression/expected/{olmoe-1b-7b__bf16__l40s__tp1__b32,llama32-1b__bf16__l40s__tp1__b1__i4096}__*.json",
+    "integrations/vllm/tests/regression/files.toml",
+    "integrations/vllm/tests/protocols/fixtures/challenger_periods",
+    "integrations/vllm/tests/program/test_{topp_split_geometry,topp_splits_operand,sampling_rows}_of_record.py",
+    "integrations/vllm/tests/check/test_{fold_sampler_construction,g4_addressed_instances}_of_record.py",
+    "integrations/vllm/tests/pipeline/test_single_request_build_path_of_record.py",
+    "integrations/vllm/tests/properties/test_golden_of_record.py",
+    "integrations/vllm/tests/observe/test_{m1_log,resolve_m1}.py",
+]
+# vLLM's tests that read what a GPU pod or host recorded and no tracked file or registry fixture holds (`out/gen`, `fixtures/`,
+# `vllm-poc/bundles`, a host's archive), so the public tree could only skip them: each `*_of_record.py` beside the public test it
+# shares helpers with, or the whole file where none of it runs without them
+pod_records = [
+    "integrations/vllm/tests/acquire/test_compiled_manifest.py",
+    "integrations/vllm/tests/pipeline/test_compiled_merge_identity.py",
+    "integrations/vllm/tests/check/test_stoch_draw_ledger_of_record.py",
+    "integrations/vllm/tests/engine/test_gen_{dense2,ov_moe,ov_sampling}_of_record.py",
+    "integrations/vllm/tests/pipeline/test_{admission_telemetry,coverage_workloads,run_config_dry_run}_of_record.py",
+    "integrations/vllm/tests/program/test_{artifact_applicability_independent,composition,fa3_launch_context}_of_record.py",
+    "integrations/vllm/tests/program/test_{harden_guards,rmsnorm_fused}_of_record.py",
+]
 team = [
     "infra",
     "tools/{research,agent-guard}",
@@ -182,8 +225,8 @@ team = [
     "integrations/vllm/tools/topp_pin_gpu.sh",
     "integrations/vllm/tests/ops/test_{epoch_row,pod_bootstrap}.py",
     "integrations/vllm/tests/lint/test_merge_allowlist.py",
-    "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools,workload_fetch}.py",
-    "integrations/vllm/tests/regression/test_attempt_resolution.py",
+    "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools,workload_fetch,row_setup}.py",
+    "integrations/vllm/tests/regression/test_{attempt_resolution,store_io}.py",
     # a row's stages as research Attempts (`row stage|chain|shed`), which `config.run_store` loads by name, and its test
     "integrations/vllm/verity_vllm/pipeline/research.py",
     "integrations/vllm/tests/pipeline/test_row_chain.py",
@@ -223,6 +266,12 @@ from = "*"
 why = "the challenger and service code SPOT needs"
 paths = ["verity/core", "Security/{Properties,Proofs/Properties}/{Spot,Challenger}{,.lean}"]
 from = ["spot"]
+
+[[needed]]
+why = "the identity hash, and the parts of the table of domain separators PoUW's Lean reads: PoUW's and the shared ones"
+paths = ["verity/core/primitives/identity/Identity/{Sha512,Tagged}.lean",
+         "verity/core/primitives/identity/Identity/Domains/{Pouw,Shared}.lean"]
+from = "*"
 
 [[needed]]
 why = "the accounting PoUW needs"

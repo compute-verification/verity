@@ -44,7 +44,7 @@ structure Builder where
   b : Array (Array Nat) := #[]
 
 /-- The constant's column is only known at the end: forms carry `none` for it until then. -/
-def KONST : Nat := 0xFFFFFFFFFFFF
+@[noinline] def KONST : Nat := 0xFFFFFFFFFFFF
 
 def cols (f : Form) : Array Nat := if f.2 then f.1.push KONST else f.1
 

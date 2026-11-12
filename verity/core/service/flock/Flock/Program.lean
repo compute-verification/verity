@@ -29,7 +29,7 @@ namespace Flock.Program
 open Lean (Json JsonNumber)
 
 def SCHEMA : String := "verity-ir/descriptor/v1"
-def MAX_SAFE_INT : Nat := 2 ^ 53 - 1
+@[noinline] def MAX_SAFE_INT : Nat := 2 ^ 53 - 1
 
 private def natJ? : Json → Option Nat
   | .num n => if n.exponent == 0 && n.mantissa ≥ 0 then some n.mantissa.toNat else none

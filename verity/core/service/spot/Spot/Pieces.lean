@@ -27,6 +27,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `second_statements`: round 2's statement check of second-stage sessions' statements against the interior
   registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.check`);
 * `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
+* `replay_wires`: the design's wires, from the replay block's Definition in a program (`SecondStage.replayWires`);
 * `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
   (`Slots.select`);
 * `fits`: what of v2's inputs and of a session's draw a session's statement would hold at a given number of bytes or
@@ -48,7 +49,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
 * `template_circuits`: a two-stage run's params naming each template's circuit file by SHA-512 and its statements'
-  reference header, as triples in the check's order (`Run.templateCircuits`);
+  reference header and registered reads, in the check's order (`Run.templateCircuits`);
 * `stream`: the proof system stream's own rules, one op's decision on what they hold of the stream (`Stream.run`);
 * `fleet`: the fleet's rules over its streams' operators, one op's decision on what they hold of the fleet (`Fleet.run`);
 * `hello`: the run's Hello on its record, its coin tree at run scope (`Hello.check`).
@@ -291,6 +292,7 @@ def select (j : Json) : V Json := do
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
+  let table ← rule.tableOver p (getD j "query") table
   let rule ← Select.resolve rule p (getD j "query")
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
@@ -320,6 +322,7 @@ def slots (j : Json) : V Json := do
   let cm ← match getD j "closure" with
     | .null => pure none
     | c => some <$> Select.closureMap? c
+  let table ← rule.tableOver p (getD j "query") table
   let rule ← Select.resolve rule p (getD j "query")
   let (l, checked) ← Slots.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the slots"))
   return Json.mkObj [("classes", l.toJson),
@@ -581,7 +584,8 @@ with the proved units and instances null for the sample's own, and the coins' ev
 that read coins must carry); under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
 "record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots", "statements"}` in the
 same forms, `replay` one replay block's program object, its params' `proofs` the auditor's naming each template's
-circuit file and reference header (`Run.templateCircuits`), and no `links`, which the verifier derives; null otherwise.
+circuit file, reference header and registered reads (`Run.templateCircuits`), and no `links` or `wires`, which the
+verifier derives; null otherwise.
 The verifier flips no coins of its own: an input whose `coin_source` is not the challenger's is refused. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
@@ -639,6 +643,8 @@ def run (j : Json) : V Json := do
         | _ => throw "an interior's statements is a list"
       if (field? it "links").isSome then
         throw "an interior names no links: the verifier derives them from the replay block's Definition"
+      if (field? it "wires").isSome then
+        throw "an interior names no wires: the verifier derives them from the replay block's Definition"
       pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
                     provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
                     statements, circuits } : Run.Interior))
@@ -649,10 +655,12 @@ def run (j : Json) : V Json := do
 
 /-- `second_stage.check`'s input to its verdict (`SecondStage.check`): the two-stage form allowed or not (`allow`), the
 first stage's replay sample, the interior program and query, whose strata make the parts, the interior and boundary
-registrations' records, the second stage's units (`drawn`), the design's links (`replayLinks`'), null for none, the
-verdicts, whose verifiers of record report the sessions' reads (`Record.sessionRegistered`) and name the header,
-registered reads and sample each checked (`SecondStage.verifiedOf`), the reference header of each template's
-statement (`refs`, `{template: header}`, null for none), and the statements, null for none. -/
+registrations' records, the second stage's units (`drawn`), the design's links (`replayLinks`') and wires
+(`replayWires`'), each null for none, the verdicts, whose verifiers of record report the sessions' reads
+(`Record.sessionRegistered`) and name the header, registered reads and sample each checked (`SecondStage.verifiedOf`),
+the reference header of each template's statement (`refs`, `{template: header}`, null for none) and the registered
+reads it reads (`ref_reads`, `{template: registered}`, each null for none, null for no template's), and the
+statements, null for none. -/
 def secondStatements (j : Json) : V Json := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"
@@ -666,6 +674,11 @@ def secondStatements (j : Json) : V Json := do
     | ls => match SecondStage.linksOf? ls with
       | some ls => pure (some ls)
       | none => throw "links is null or a list of {template, port, value}, strings"
+  let wires ← match getD j "wires" with
+    | .null => pure none
+    | ws => match SecondStage.wiresOf? ws with
+      | some ws => pure (some ws)
+      | none => throw "wires is null or a list of {template, port, writer, wport}, strings"
   let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
   let verdicts := entries (getD j "verdicts")
   unless verdicts.all fun (_, v) => (v matches .obj _) && (!(truthy (getD v "of_record") &&
@@ -681,10 +694,14 @@ def secondStatements (j : Json) : V Json := do
     | .null => pure #[]
     | rs@(.obj _) => pure (entries rs)
     | _ => throw "refs is not an object"
+  let refReads : Array (String × Json) ← match getD j "ref_reads" with
+    | .null => pure #[]
+    | rs@(.obj _) => pure (entries rs)
+    | _ => throw "ref_reads is not an object"
   let own : SecondStage.Own :=
     { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
       boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts,
-      verified := SecondStage.verifiedOf verdicts, refs }
+      verified := SecondStage.verifiedOf verdicts, refs, refReads, wires }
   return (SecondStage.check allow own stmts).toJson
 
 /-- `second_stage.replay_links`' input to the design's links (`SecondStage.replayLinks`): a program object, the replay
@@ -695,6 +712,16 @@ def replayLinks (j : Json) : V Json := do
   let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
   return match SecondStage.replayLinks p.prog key (getD j "boundary") with
     | some ls => Json.arr (ls.map SecondStage.Link.toJson)
+    | none => .null
+
+/-- `second_stage.replay_wires`' input to the design's wires (`SecondStage.replayWires`): a program object and the
+replay block's descriptor id in it (`replay`); null for none. -/
+def replayWires (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .str key := getD j "replay" | throw "replay is not a string"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  return match SecondStage.replayWires p.prog key with
+    | some ws => Json.arr (ws.map SecondStage.Wire.toJson)
     | none => .null
 
 /-- `{"limit", "circuit", "public", "tables", "program", "partition", "registered", "draw"}` to `{"inputs", "draw"}`: what
@@ -721,12 +748,12 @@ def fits (j : Json) : V Json := do
     ("inputs", why (OneStageZk.fitsWhy limit circuit pub tables program (given "partition") (given "registered"))),
     ("draw", why (OneStageZk.drawFitsWhy limit (given "draw")))]
 
-/-- `{"proofs", "query"}` to `{"circuits": [[template, circuit, header], ...]}`: a two-stage run's params naming each
-template's circuit file and its statements' reference header, in the order the check's template query names the
-templates (`Run.templateCircuits`); refused where the Python raises. -/
+/-- `{"proofs", "query"}` to `{"circuits": [[template, circuit, header, registered], ...]}`: a two-stage run's params
+naming each template's circuit file and its statements' reference header and registered reads, in the order the check's
+template query names the templates (`Run.templateCircuits`); refused where the Python raises. -/
 def templateCircuits (j : Json) : V Json := do
   let named ← Run.templateCircuits (getD j "proofs") (getD j "query")
-  return Json.mkObj [("circuits", Json.arr (named.map fun (t, c, h) => Json.arr #[Json.str t, Json.str c, h]))]
+  return Json.mkObj [("circuits", Json.arr (named.map fun (t, c, h, r) => Json.arr #[Json.str t, Json.str c, h, r]))]
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
@@ -736,6 +763,7 @@ def table : List (String × (Json → V Json)) :=
    ("file_population", FilePart.piece),
    ("check_proved", checkProved),
    ("select_second", selectSecond), ("second_statements", secondStatements), ("replay_links", replayLinks),
+   ("replay_wires", replayWires),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),

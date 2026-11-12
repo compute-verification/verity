@@ -119,6 +119,29 @@ def test_inside_the_sandbox_a_symlinked_rw_dir_is_writable_and_the_rest_is_not(t
 
 
 @needs_unshare
+def test_inside_the_sandbox_an_overlaid_dir_takes_writes_in_its_upper_layer_and_outside_is_never_written(tmp_path):
+    """`--overlay DIR TOP`, as `check.sampled_recompile` runs it: inside, DIR is writable and removing a file hides it; the
+    writes land in TOP/upper, and the processes outside, which read DIR meanwhile, see its files as they were."""
+    lower, top = tmp_path / "pkg" / ".lake", tmp_path / "work" / "sampled" / "0"
+    (lower / "build").mkdir(parents=True)
+    (lower / "build" / "M.olean").write_bytes(b"old")
+    r = subprocess.run([*UNSHARE, "--", "bash", str(SANDBOX), "--overlay", str(lower), str(top), "--", "bash", "-c",
+                        'rm "$1/build/M.olean" && ! test -e "$1/build/M.olean" && printf new > "$1/build/N.olean"',
+                        "_", str(lower)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert [p.name for p in (lower / "build").iterdir()] == ["M.olean"]
+    assert (lower / "build" / "M.olean").read_bytes() == b"old"
+    assert (top / "upper" / "build" / "N.olean").read_bytes() == b"new"
+    assert not (top / "upper" / "build" / "M.olean").is_file(), "a removed file is a whiteout in the upper layer"
+
+
+def test_an_overlay_path_mount_would_misparse_is_refused(tmp_path):
+    r = subprocess.run(["bash", str(SANDBOX), "--overlay", str(tmp_path / "a,b"), str(tmp_path / "t"), "--", "true"],
+                       capture_output=True, text=True)
+    assert r.returncode == 2 and "overlay" in r.stderr, r.stderr
+
+
+@needs_unshare
 @pytest.mark.parametrize("ro", [[], ["--ro", "/tmp/lean-artifacts-that-need-not-exist"]], ids=["as-called", "host-tmp"])
 def test_inside_the_sandbox_a_read_only_tmpdir_is_replaced_by_a_private_writable_one(tmp_path, ro):
     rw, job = tmp_path / "rw" / ".lake", tmp_path / "jobtmp"

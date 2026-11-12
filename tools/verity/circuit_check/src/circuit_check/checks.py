@@ -1504,6 +1504,18 @@ def _traced(build: Callable[[], Any]) -> tuple[Any, Any]:
     return BE.trace(build)
 
 
+def _traced_owner_names(build: Callable[[], Any], n: int) -> Callable[[int], str]:
+    """`_owner_names` of a traced ``build()``, built when a bit's owner is first asked for: a unit circuit the lowering built
+    already is built again only to name where a redundant AND is."""
+    got: list[Callable[[int], str]] = []
+
+    def owner(v: int) -> str:
+        if not got:
+            got.append(_owner_names(_traced(build)[1], n))
+        return got[0](v)
+    return owner
+
+
 def _export_counts(build: Callable[[], Any], name: str, C: Any = None) -> dict:
     """The Boolean export of one proof block's circuit (`boolean_export.CircuitTypeTable.type_of`): its circuit types' AND/XOR/NOT counts, each
     distinct sub-circuit once, every type validated and the root evaluated against the circuit (``C``, one ``build`` made
@@ -1559,20 +1571,25 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
         if pin != digest:
             F.fail("lowering", "digest-mismatch", sub.id, f"[{name}]: {digest[:16]} != pinned {pin[:16]}", pinned=pin, digest=digest)
     if isinstance(low, IL.Lowering):
-        build = low.units.circuit
+        build, C = low.units.circuit, low.circuit
     else:
         from verity_flock import ir_sampling as S
 
         def build():
             return S.lane_circuit(int(sub.params["V"]))
-    C, root = _traced(build)
+        C = None
+    if C is None:
+        C, root = _traced(build)
+        owner = _owner_names(root, len(C.kind))
+    else:
+        owner = _traced_owner_names(build, len(C.kind))
     typ = lowering_type(C)
     counts = _export_counts(build, f"{name} unit", C)
     rec["export"] = counts
     if counts["flat_ands"] != rec["ands"]:
         F.fail("lowering", "export-count", sub.id, f"[{name}]: the export's circuit has {counts['flat_ands']} ANDs, the layout {rec['ands']}")
     rec["pin"] = _counts_against_pin("units", sub.id, {**{k: counts[k] for k in ("and", "xor", "not")}, "type": typ}, pins, F, sub.id)
-    red, by = redundant_ands(C, _owner_names(root, len(C.kind)))
+    red, by = redundant_ands(C, owner)
     rec["redundant_ands"] = {"count": red, "where": dict(by.most_common())}
     if red:
         F.warn("redundant-gates", "boolean", sub.id, red, f"ANDs on identical operands in the {name} unit", where=dict(by.most_common()))

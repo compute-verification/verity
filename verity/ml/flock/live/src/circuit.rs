@@ -2614,10 +2614,10 @@ fn lanes_into(v: &[u64], n: usize, dst: &mut [u64], stride: usize, off: usize, l
 
 /// Circuit `ni`'s slots (`net`, not a lookup's) from their input words `ins`, as mapped host slots hold them (`HostSlots`
 /// with a, b per slot): slot x's a words then its b words, `uw` F128 words each as (lo, hi) u64 pairs, at `out[4 * uw * x..]`,
-/// written straight from each lane group's bit-sliced rows, [`unit_wide`] groups a pass. Whether every slot's z is a & b word
+/// written straight from each lane group's bit-sliced rows, [`unit_width`] groups a pass. Whether every slot's z is a & b word
 /// for word, which that layout requires (if not, `out` holds no layout).
 pub fn unit_ab_into(net: &IrUnitNet, ni: usize, uw: usize, ins: &[Vec<F128>], out: &mut [u64]) -> bool {
-    unit_ab_into_wide(net, ni, uw, ins, out, unit_wide())
+    unit_ab_into_wide(net, ni, uw, ins, out, unit_width(ins.len(), rayon::current_num_threads()))
 }
 
 /// [`unit_ab_into`] at `n` lane groups a pass.
@@ -2835,15 +2835,23 @@ pub fn unit_flat() -> bool {
     *ON.get_or_init(|| std::env::var("FC_UNIT_FLAT").as_deref() != Ok("0"))
 }
 
-/// Lane groups of 64 host unit slots evaluated in one pass of [`IrUnitNet::eval_wide`] (`FC_UNIT_WIDE`, 1 to 8; default 8). A
-/// pass reads the net's rows once, whatever its groups, so a wider pass reads them fewer times, on fewer threads: the default
-/// spends the least CPU and memory bandwidth a slot, and 1, a pass a group, the least wall time where cores are idle.
-pub fn unit_wide() -> usize {
-    static N: OnceLock<usize> = OnceLock::new();
-    *N.get_or_init(|| match std::env::var("FC_UNIT_WIDE") {
-        Err(_) => 8,
-        Ok(v) => v.parse().ok().filter(|n| (1..=8).contains(n)).unwrap_or_else(|| panic!("FC_UNIT_WIDE={v}: 1 to 8 lane groups a pass")),
-    })
+/// Lane groups of 64 host unit slots evaluated in one pass of [`IrUnitNet::eval_wide`] by a walk over `slots` slots on a pool of
+/// `threads`: `FC_UNIT_WIDE` (1 to 8) for every walk when set, else [`width_for`] the walk's lane groups.
+pub fn unit_width(slots: usize, threads: usize) -> usize {
+    static N: OnceLock<Option<usize>> = OnceLock::new();
+    let fixed = *N.get_or_init(|| std::env::var("FC_UNIT_WIDE").ok().map(|v| {
+        v.parse().ok().filter(|n| (1..=8).contains(n)).unwrap_or_else(|| panic!("FC_UNIT_WIDE={v}: 1 to 8 lane groups a pass"))
+    }));
+    fixed.unwrap_or_else(|| width_for(slots.div_ceil(64), threads))
+}
+
+/// The widest of 8, 4 and 2 lane groups a pass that still leaves `groups` at least `threads` passes, else 1, a pass a group. A
+/// pass reads the net's rows once, whatever its groups, so a wider pass spends less CPU and memory bandwidth a slot, but fewer
+/// passes than threads leave cores idle. A pass of 3 or of 5 to 7 groups costs what its row word's full width does, so those
+/// widths are never taken. A wide pass holds its groups' rows at once, so the width stops at 8; and since a narrower width is
+/// taken only where 8 would leave a thread idle, a walk of wide passes never holds more row words at once than it would at 8.
+fn width_for(groups: usize, threads: usize) -> usize {
+    [8, 4, 2].into_iter().find(|&w| groups.div_ceil(w) >= threads).unwrap_or(1)
 }
 
 /// `FC_UNIT_PROFILE=1`: the host witness's parts as `UNITPROF` lines on stderr.
@@ -3404,7 +3412,7 @@ impl Stmt {
                     (x, f(zz), f(aa), f(bq))
                 }).collect()
             } else {
-                unit_zab(net, ni, uw, ins, unit_wide())
+                unit_zab(net, ni, uw, ins, unit_width(ins.len(), rayon::current_num_threads()))
             };
             items
         }
@@ -3811,6 +3819,62 @@ mod tests {
                 assert!(unit_zab(net, 0, uw, &ins, wide) == want_zab, "{slots} slots, {wide} groups a pass: the slots' z, a, b words");
             }
         }
+    }
+
+    #[test]
+    fn every_width_and_pool_size_walks_the_same_bytes() {
+        let mut s = 0x5eed_0f1a_7e5d_0b0eu64;
+        let mut r = || { s ^= s << 13; s ^= s >> 7; s ^= s << 17; s };
+        let n = 10;
+        let table: &'static [u32] = Box::leak((0..1u32 << n).map(|_| r() as u32 & 0x7fff_ffff).collect::<Vec<_>>().into_boxed_slice());
+        let (net, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
+        assert!(net.one_pass(), "a one-pass net, so several groups take one wide pass");
+        let uw = 1usize << (net.unit_log - 7);
+        // 14 lane groups, the last partial: without FC_UNIT_WIDE, pools of 1, 3, 5 and 8 threads walk at widths 8, 4, 2 and 1
+        let slots = 64 * 13 + 5;
+        let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|_| F128::new(r(), r())).collect()).collect();
+        let walk = |wide: usize| {
+            let mut out = vec![!0u64; 4 * uw * slots];
+            assert!(unit_ab_into_wide(&net, 0, uw, &ins, &mut out, wide), "{wide} groups a pass: z = a & b");
+            (out, unit_zab(&net, 0, uw, &ins, wide))
+        };
+        let want = walk(1);
+        for wide in 2..=8 {
+            assert!(walk(wide) == want, "{wide} groups a pass: width 1's packed a, b words and slots' z, a, b words");
+        }
+        for threads in [1, 2, 3, 5, 8, 16] {
+            let pool = rayon::ThreadPoolBuilder::new().num_threads(threads).stack_size(crate::THREAD_STACK).build().expect("a pool");
+            let (wide, got) = pool.install(|| {
+                let mut out = vec![!0u64; 4 * uw * slots];
+                assert!(unit_ab_into(&net, 0, uw, &ins, &mut out), "{threads} threads: z = a & b");
+                let wide = unit_width(slots, rayon::current_num_threads());
+                (wide, (out, unit_zab(&net, 0, uw, &ins, wide)))
+            });
+            assert!(got == want, "{threads} threads, {wide} groups a pass: width 1's words");
+        }
+    }
+
+    #[test]
+    fn the_width_leaves_every_thread_a_pass_and_holds_no_more_than_8() {
+        // the row words a walk of wide passes holds at once at most: its `threads` largest passes, a pass of n groups in a
+        // row word of n.next_power_of_two() lanes
+        let held = |groups: usize, w: usize, threads: usize| {
+            let mut passes: Vec<usize> = (0..groups).step_by(w).map(|g| w.min(groups - g).next_power_of_two()).collect();
+            passes.sort_unstable_by(|a, b| b.cmp(a));
+            passes.into_iter().take(threads).sum::<usize>()
+        };
+        for threads in 1..=40 {
+            for groups in 0..=320 {
+                let w = width_for(groups, threads);
+                let passes = groups.div_ceil(w);
+                let at = format!("{groups} lane groups on {threads} threads, {w} a pass");
+                assert!([1, 2, 4, 8].contains(&w), "{at}");
+                assert!(passes >= threads.min(groups), "{at}: {passes} passes leave a thread idle");
+                assert!(w == 8 || groups.div_ceil(2 * w) < threads, "{at}: {} a pass also leaves every thread a pass", 2 * w);
+                assert!(held(groups, w, threads) <= held(groups, 8, threads), "{at}: holds more row words at once than 8 a pass");
+            }
+        }
+        assert_eq!([width_for(32, 4), width_for(32, 16), width_for(32, 96), width_for(1024, 96)], [8, 2, 1, 8]);
     }
 
     #[test]

@@ -265,13 +265,14 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
     `coin_outcomes`' other cases (a prover picking the window among them). A sampler beside the challenger's coins, and
     evidence for a sample that read none, are refused."""
     import test_remote
-    from test_service import SESSION, _lean, _ports, _record, _stream
+    from test_service import SESSION, _lean, _ports, _rated, _record, _stream
 
     def register(coins, i, window_root):
         stream = _stream(coins=coins)
-        return stream, stream.register(_record(6 + i), _ports(6 + i), window_root=window_root)
+        rec = _rated(stream.spec.selection.text, 6 + i)
+        return stream, stream.register(rec, _ports(6 + i), window_root=window_root)
 
-    outcomes, segments = coin_outcomes(tmp_path, signer, monkeypatch, register)
+    outcomes, segments = coin_outcomes(tmp_path, signer, monkeypatch, register, positions=32)
     assert_only_honest_coins_accepted(outcomes)
     coins = T.ChallengerCoins(C.LiveRecord(C.LiveChallenger(test_remote.SCHEME, 0, test_remote.FAMILIES,
                                                             entropy("x")), "positions", itertools.count().__next__))

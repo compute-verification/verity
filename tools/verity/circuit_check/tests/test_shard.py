@@ -318,7 +318,8 @@ def test_the_modules_whose_source_inspect_looked_for_are_every_binding_s_loaded_
 def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, monkeypatch):
     """`cli.update_reads` adds what a run read to each binding's declared set, and to ``registries`` and ``loaded``: a
     binding's runs read otherwise by how they ran (``--binding`` makes only its own binding's roots), so its declaration holds
-    each way.  A run of every binding drops a binding the catalog no longer has."""
+    each way.  A run of every binding drops a binding the catalog no longer has.  A probe is written as `cache.probed`
+    declares it, one `READS` held already too."""
     monkeypatch.setattr(cli, "READS", tmp_path / "reads")
 
     def rep(bindings: dict, loaded: list[str], files: tuple[str, ...] = ("r.py",)) -> dict:
@@ -335,6 +336,9 @@ def test_update_reads_adds_what_each_run_read_to_what_reads_declares(tmp_path, m
     assert got["loaded"] == ["m", "n"] and got["registries"]["files"] == ["r.py", "s.py"]
     cli.update_reads(rep({"a": a1}, []), every=True)
     assert set(cli._reads_file()["bindings"]) == {"a"}
+    under = {**b, "probes": ["no-such-dir/pins/X_v1.json", "no-such-dir/pins/Y_v1.json"]}
+    cli.update_reads(rep({"b": under}, []), every=False)
+    assert cli._reads_file()["bindings"]["b"]["probes"] == ["no-such-dir"]
 
 
 def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_entry():
@@ -345,6 +349,17 @@ def test_a_binding_s_name_is_its_root_function_its_files_models_or_its_template_
                                     ("TEMPLATE_PARAMS:rmsnorm-cuda-vec8",), ("<registered>",))] == [
         f"{m}_gf2k_roots", f"{m}_x_roots", "_kernel_roots", "_vocabulary_roots", f"{m}_model_roots", "_model_roots",
         f"{m}TEMPLATE_PARAMS:token-select-combine", "TEMPLATE_PARAMS", "<registered>"]
+
+
+def test_a_template_entry_at_a_name_is_a_binding_of_its_instances_alone():
+    """``<template>@<name>`` entries (`targets.template_params`) split one template's instances into bindings of their own:
+    each GLM-5.3 RMSNorm launch is one."""
+    m = "verity_flock.subcircuit_templates.circuit-check#TEMPLATE_PARAMS:"
+    got = {label: sorted(TG.BINDINGS[label]) for label, sub, _ in TG.templates() if sub.template.id == "rmsnorm-cuda-vec8"}
+    assert got == {"rmsnorm-cuda-vec8/n6144-b768-eps1e-05/bf16": [f"{m}rmsnorm-cuda-vec8@b768"],
+                   "rmsnorm-cuda-vec8/n6144-b256-eps1e-05/bf16": [f"{m}rmsnorm-cuda-vec8@b256"]}
+    assert [SH.binding((u,)) for (u,) in got.values()] == [f"{m}rmsnorm-cuda-vec8@b768", f"{m}rmsnorm-cuda-vec8@b256"]
+    assert TG.template_of("rmsnorm-cuda-vec8@b256") == TG.template_of("rmsnorm-cuda-vec8") == "rmsnorm-cuda-vec8"
 
 
 def test_the_shard_module_is_outside_the_checker_s_version(tmp_path, monkeypatch):

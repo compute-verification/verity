@@ -15,10 +15,14 @@ numpy arrays, so that 10^8 captured outputs can be scored, and generalises it in
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from verity.ml.circuits.silicon.term import FORMATS, PRODUCT_WIDTH
+
+if TYPE_CHECKING:
+    from typing import Any
 
 FP32_MIN_NORMAL_EXPONENT = -126
 FP32_MAX_EXPONENT = 127
@@ -83,7 +87,8 @@ def _rshift(x: np.ndarray, s: np.ndarray) -> np.ndarray:
     return x >> np.clip(s, 0, 63)
 
 
-def group_sum(neg: np.ndarray, exp: np.ndarray, mag: np.ndarray, *, width: int, zero_exponent: int):
+def group_sum(neg: np.ndarray, exp: np.ndarray, mag: np.ndarray, *, width: int,
+              zero_exponent: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """``models.group_sum`` over the last axis of (n, t) term arrays: returns the (n,) result terms ``(neg, exp, mag)``."""
 
     live = mag != 0
@@ -126,7 +131,8 @@ class Candidate:
     width: int = 26
     zero_exponent: int = -133
 
-    def step(self, c: np.ndarray, a: np.ndarray, b: np.ndarray, sa: np.ndarray | None = None, sb: np.ndarray | None = None):
+    def step(self, c: np.ndarray, a: np.ndarray, b: np.ndarray, sa: np.ndarray | None = None,
+             sb: np.ndarray | None = None) -> tuple[np.ndarray, np.ndarray]:
         """One step on arrays: ``c`` (n,) FP32 words, ``a``/``b`` (n, 32) codes, ``sa``/``sb`` (n,) UE8M0 codes or None.
         Returns ``(words (n,) uint32, in_domain (n,) bool)``: outside the domain (a non-finite operand or accumulator, or a NaN
         scale) the word is meaningless."""
@@ -159,7 +165,8 @@ class Candidate:
         return np.where(inf, inf_word, pack(cn, ce, cm)), dom
 
 
-def chain(cand: Candidate, c, a, b, sa=None, sb=None, steps: int = 1):
+def chain(cand: Candidate, c: np.ndarray, a: np.ndarray, b: np.ndarray, sa: np.ndarray | None = None,
+          sb: np.ndarray | None = None, steps: int = 1) -> tuple[np.ndarray, np.ndarray]:
     """``steps`` steps of ``cand`` folded over K = 32 * steps codes (``a``/``b`` (n, 32 steps), ``sa``/``sb`` (n, steps))."""
 
     dom = np.ones(c.shape, bool)
@@ -175,7 +182,7 @@ def candidates(fa: str, fb: str, scaled: bool) -> dict[str, Candidate]:
 
     out: dict[str, Candidate] = {}
 
-    def add(name, **kw):
+    def add(name: str, **kw: Any) -> None:
         out[name] = Candidate(name, fa, fb, **kw)
 
     add("sm120_gs32_w26_f133")

@@ -193,23 +193,11 @@ class Stream(S.Stream):
                                                          for p, r in self._roots(second.registration.record, t).items()}))
                 for t, ((lo, hi),) in P.strata(e.interior_program, self.spec.check.query)]
 
-    def proofs(self, second: S.Draw) -> dict[str, Any]:
-        """The auditor's params for the second-stage sessions (`service.template_circuits`), each template of the
-        interior program in the check's order: a stand-in for its circuit file's SHA-512, which nothing in this stream
-        reads, and the header of its reference statement, fixed before the run (`reference_header`), which an honest
-        statement's header is placed in the run (`second_stage.at_run`) but for the run's fields
-        (`second_stage.RUN_FIELDS`)."""
-        return {"templates": [{"template": t, "circuit": h["circuit_sha512"], "header": h}
-                              for t, _lo, _hi, h in self._references(second)]}
-
-    def statements(self, second: S.Draw) -> list[dict[str, Any]]:
-        """The statements of the second-stage sessions an honest prover runs (`second_stage`): one for each template of
-        the interior program, its header the one the served path writes for the template's slots of the interior
-        registration (`served_header`: the run's input set, the slots' indices, and its ports' roots, domains and
-        bindings there), its sample the second stage's units among them, counted from its first, and its registered
-        reads: each port the replay block's Definition links (`second_stage.replay_links`) of the boundary port its
-        link names, each slot the first row of its cell's replay block, and each value the interior registration
-        registers, under a port of its name (None when it reads none)."""
+    def _reads(self, second: S.Draw) -> list[dict[str, Any] | None]:
+        """Each template's registered reads in the check's order, as an honest session reads them: each port the replay
+        block's Definition links (`second_stage.replay_links`) of the boundary port its link names, each slot the first
+        row of its cell's replay block, and each value the interior registration registers, under a port of its name
+        (None when it reads none)."""
         e = self._entries[second.registration.order]
         rec, boundary = second.registration.record, second.replay_sample.registration.record
         values = {x["value"]: {k: x[k] for k in ("value", "root", "domain", "leaves")}
@@ -218,14 +206,36 @@ class Stream(S.Stream):
         links = SS.replay_links(e.program, descriptor_id(self.replay), boundary) or ()
         sample = D.proved(second.replay_sample.draw)
         out = []
-        for m, (t, lo, hi, ref) in enumerate(self._references(second)):
-            units = [u - lo for u in D.proved(second.draw) if lo <= u < hi]
+        for t, lo, hi, _ref in self._references(second):
             n = (hi - lo) // len(sample)
             reads = {**values, **{x.port: {
                 "value": x.value, **{k: at[x.value][k] for k in ("root", "domain", "leaves")}, "reads_from": lo,
                 "reads": [at[x.value]["leaves"] // boundary["population"] * sample[u // n] for u in range(hi - lo)]}
                 for x in links if x.template == t and x.value in at}}
-            out.append({"template": t, "registered": {"ports": reads} if reads else None,
+            out.append({"ports": reads} if reads else None)
+        return out
+
+    def proofs(self, second: S.Draw) -> dict[str, Any]:
+        """The auditor's params for the second-stage sessions (`service.template_circuits`), each template of the
+        interior program in the check's order: a stand-in for its circuit file's SHA-512, which nothing in this stream
+        reads, the header of its reference statement, fixed before the run (`reference_header`), which an honest
+        statement's header is placed in the run (`second_stage.at_run`) but for the run's fields
+        (`second_stage.RUN_FIELDS`), and the registered reads it reads: an honest session's, which round 2 holds a
+        statement's to but for the run's fields (`second_stage.blank_reads`)."""
+        return {"templates": [{"template": t, "circuit": h["circuit_sha512"], "header": h, "registered": r}
+                              for (t, _lo, _hi, h), r in zip(self._references(second), self._reads(second))]}
+
+    def statements(self, second: S.Draw) -> list[dict[str, Any]]:
+        """The statements of the second-stage sessions an honest prover runs (`second_stage`): one for each template of
+        the interior program, its header the one the served path writes for the template's slots of the interior
+        registration (`served_header`: the run's input set, the slots' indices, and its ports' roots, domains and
+        bindings there), its sample the second stage's units among them, counted from its first, and its registered
+        reads (`_reads`)."""
+        rec = second.registration.record
+        out = []
+        for m, ((t, lo, hi, ref), reads) in enumerate(zip(self._references(second), self._reads(second))):
+            units = [u - lo for u in D.proved(second.draw) if lo <= u < hi]
+            out.append({"template": t, "registered": reads,
                         "header": served_header(ref, rec, m, lo, hi, self._roots(rec, t)),
                         "draw": {"law": "subset", "population": hi - lo, "k": len(units), "units": units}})
         return out

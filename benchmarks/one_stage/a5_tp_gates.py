@@ -22,7 +22,7 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   its domain binding the TP run root (`ROOT`) and the TP step (`PROGRAM`). Rank r's registration names each of its partials'
   entries (``of.partials``) and each peer partial's it reads (``of.peers``), by value, before any rank's coin. Synthetic:
   each rank's f32 activations, rounded to bf16.
-* **The window** (`window`), one a rank under ``<ROOT>/rank<r>`` and the sampling design ``work:2``: Q·K·T units of the transfer-gate
+* **The window** (`window`), one a rank under ``<ROOT>/rank<r>`` and the sampling design ``work-rate:1/8``: Q·K·T units of the transfer-gate
   template, the registered `AllReduce2_v1{H}` itself (`b1_tp2.AllReduce2`), its input ``parts`` staged as two ports,
   ``part0`` and ``part1``, its rows ``parts[0]`` and ``parts[1]``: the ranks' partials in rank order (`PORT_PARAMS`), a
   chunk ``q<q>c<k>`` a request's collective, unit i
@@ -85,7 +85,8 @@ from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as W  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.certifier import warden_rows as WR  # noqa: E402
-from verity.core.protocols.spot.one_stage import draw as D, partition as P, produced, registration as R  # noqa: E402
+from verity.core.protocols.spot import service as S  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P, produced, registration as R  # noqa: E402
 from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
@@ -97,7 +98,7 @@ from verity_vllm.commit import index as IX  # noqa: E402
 ROOT = hashlib.sha512(b"verity/a5/tp2-gates-stand-in/v1").hexdigest()
 #: the TP step the partials are values of, which their domains bind
 PROGRAM = "a5_tp_gates/llama32-1b-tp2/step0"
-RULE = "work:2"
+RULE = "work-rate:1/8"
 RANKS = (0, 1)
 #: the step's cross-rank reductions, each AllReduce2_v1{H} in the registered compiler's TP2 rank Programs (`b1_tp2`)
 COLLECTIVES = ("model.embed_tokens", "model.layers.0.self_attn.o_proj", "model.layers.0.mlp.down_proj")
@@ -212,15 +213,14 @@ def window(r: int, hidden: int, tokens: int, requests: int, rest: int) -> CS.Bin
     units = len(sites(requests)) * tokens
     program, query = CS.population_program([(tg, units), (other, rest)])
     (tid, _, _), (rid, _, _) = P.ranges(program, query)
-    law = D.parse_design(RULE)
     ports = tuple(f"part{j}" for j in RANKS)
     gates = tuple(CS.Member(tid, rows=tuple((p, hidden) for p in ports), outs=(("o0", hidden),), n=tokens, base=u * tokens,
                             tables=tuple((p, tokens) for p in ports), name=f"{tid}/q{q}c{k}",
                             schemas=tuple((p, V2) for p in (*ports, "o0"))) for u, (q, k) in enumerate(sites(requests)))
     w = REST_BYTES // 2
     others = (CS.Member(rid, rows=(("row", w),), outs=(("o0", w),), n=rest, base=units, schemas=(("row", V2), ("o0", V2))),)
-    return CS.Binding(program, query, law, f"{ROOT}/rank{r}", gates + others,
-                     work_table=SRW.work_table_of(law, {tid: units, rid: rest}, [tid]))
+    law, table = S.params_law(RULE, program, query, SRW.work_table_of(SRW.law_of(RULE), {tid: units, rid: rest}, [tid]))
+    return CS.Binding(program, query, law, f"{ROOT}/rank{r}", gates + others, work_table=table)
 
 
 def chunks(mine: CS.Binding) -> list[tuple[int, int, CS.Member]]:

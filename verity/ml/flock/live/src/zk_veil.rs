@@ -1477,7 +1477,7 @@ mod tests {
             } else {
                 z0::lane_codeword(&mu[l], Some(&r[l - W]), LOG_MSG, 1)
             }).collect();
-            let z = Level0Zk { queries0: 0, t_pad, rep: 0, extra: std::array::from_fn(|j| r[j].clone()), pads: mu.clone(), tamper: 0 };
+            let z = Level0Zk { queries0: 0, t_pad, rep: 0, extra: r.clone().into(), pads: mu.clone(), tamper: 0 };
             let mut positions: Vec<usize> = c.q.concat();
             positions.sort();
             positions.dedup();

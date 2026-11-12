@@ -77,6 +77,9 @@
 #   --transfer-gate`, a5.py --transfer-gate and its transfer-gate negatives). The stand-in's partition holds them before its
 #   SiluMul_v2{I} (served_tp --template), e.g. STANDIN=256:work:2 A5_TRANSFER_GATES='RoPEHead_v1{D=64}'
 #   A5_SETS='256 rope-head/d64/bf16': the toy's 32 RoPE heads a rank proved whole beside 2 of its 8 SiluMul rows.
+# A5_PLAIN=1 (with A5_CHALLENGER): plain sessions (a5.py --plain), not --zk: each rank's window is one member drawn by its stream
+#   under the partition's stratified rate, inside PLAIN_SCOPE, e.g. STANDIN=256:stratified-rate:1/2 A5_SETS=256 A5_CHALLENGER=local
+#   A5_JOBS=2.
 # ZK_SERVER=1: every session's prover runs behind the Lean ZK server's send check (--firewall to a5.py and each STANDIN
 #   script, the core protocols' path); by default each runs `prove --zk` itself, as SPOT[Flock]'s proof server does (Figure
 #   1's dev arm).
@@ -134,6 +137,7 @@ BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 $O/build-lean.log; exit 7; }
 LEAN=$REPO/verity/core/service/flock/.lake/build/bin/flock-verify; FWL=${LEAN%/*}/flock-firewall
 ZKS=(); if [ "${ZK_SERVER:-0}" = 1 ]; then ZKS=(--firewall $FWL); fi
+PLAINS=(); if [ "${A5_PLAIN:-0}" = 1 ]; then PLAINS=(--plain); fi
 (cd verity/core/service/spot && lake build sampled-proofs-verifier) > $O/build-sampled-proofs.log 2>&1 || { tail -40 $O/build-sampled-proofs.log; exit 7; }
 sha256sum $BIN $LEAN $FWL | tee $O/binaries.sha256
 
@@ -162,7 +166,7 @@ TIME=$([ -x /usr/bin/time ] && echo "/usr/bin/time -v")
 audit() {  # NAME TP_COMMIT BUILD WORKLOAD WINDOWS PARTITION [A5 ARGS...]: WORKLOAD empty under --advice
   mkdir -p $O/$1
   $TIME $PY benchmarks/one_stage/a5.py --tp-commit $2 --build-root $3 ${4:+--workload $4} --windows $5 --partition $6 "${@:7}" \
-    ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" --out $W/$1 \
+    ${A5_RANKS:+--ranks $A5_RANKS} ${A5_JOBS:+--jobs $A5_JOBS} ${A5_SESSION_TIMEOUT:+--session-timeout $A5_SESSION_TIMEOUT} --template-sets $W/sets --m0-pythonpath $M0PATH --bin $BIN --lean $LEAN "${ZKS[@]}" "${PLAINS[@]}" --out $W/$1 \
     ${A5_CHALLENGER:+--challenger $A5_CHALLENGER} ${A5_PEER:+--peer $A5_PEER} ${A5_CHALLENGER_KEY:+--challenger-key $A5_CHALLENGER_KEY} ${A5_GATE_KEY:+--gate-key $A5_GATE_KEY} \
     ${MAIN:+--main $MAIN} ${A5_COMPOSE_CACHE:+--compose-cache $A5_COMPOSE_CACHE} > $O/$1/a5.log 2> $O/$1/a5.err
   local rc=$?

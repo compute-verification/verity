@@ -7,6 +7,7 @@
     "build": "benchmarks/stacked_share/job.sh",
     "epoch": "examples/vllm/commit.sh",
     "int8-checkpoint": "benchmarks/hash/dither/pin_glm53.sh",
+    "properties-admission": "integrations/vllm/tools/migrate/superseded_quarantine.py",
     "row": "tools/research/src/research/pods/nebius/n2_commit.sh",
     "serve-openai": "examples/vllm/serve.sh",
     "served-match": "benchmarks/hash/maxtput/build_job.sh",

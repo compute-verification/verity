@@ -148,8 +148,27 @@ def test_a_map_outside_tools_move_or_of_both_kinds_or_neither_is_refused(tmp_pat
     assert "a map is a file directly in tools/move/" in capsys.readouterr().err
     with pytest.raises(ST.Refused, match=r"both \[words\] and \[paths\]"):
         ST.kind_of("m.toml", WORDS + PATHS.replace("[rewrite]", "[rewrite2]"))
-    with pytest.raises(ST.Refused, match=r"neither \[words\] nor \[paths\]"):
+    with pytest.raises(ST.Refused, match=r"neither \[words\], \[\[words_in\]\] nor \[paths\]"):
         ST.kind_of("m.toml", '[rewrite]\nexclude = []\n')
+
+
+def test_a_word_map_whose_words_are_all_scoped_stages_under_an_empty_words_table(tmp_path, monkeypatch):
+    """A name two modules declare is renamed only where its own module reads it, by a `[[words_in]]` entry under an
+    empty `[words]`: staged and certified, the other module's left as it was. A map without the `[words]` table is
+    refused, naming it, since `rename.py` and `move_check.py` read it."""
+    scoped = ('[words]\n\n[[words_in]]\nfiles = ["Z.lean"]\nwords = { "zorble_le" = "quux_le" }\n\n'
+              '[rewrite]\nexclude = ["tools/**"]\n')
+    lean = {"Z.lean": "namespace Z\ntheorem zorble_le : True := trivial\nexample : True := zorble_le\nend Z\n",
+            "W.lean": "namespace W\ntheorem zorble_le : True := trivial\nend W\n"}
+    repo, base = _repo(tmp_path, {**TREE, **lean, "tools/move/zorble_map.toml": scoped})
+    cert = tmp_path / "cert.json"
+    assert _stage(monkeypatch, repo, "tools/move/zorble_map.toml", "--base", base, "--certificate", str(cert)) == 0
+    [m] = json.loads(cert.read_text())["moves"]
+    assert m["report"]["certified"] and MC.certify(m["parent"], m["commit"], cwd=str(repo))["certified"]
+    assert _show(repo, m["commit"], "Z.lean") == lean["Z.lean"].replace("zorble_le", "quux_le").strip()
+    assert _show(repo, m["commit"], "W.lean") == lean["W.lean"].strip()
+    with pytest.raises(ST.Refused, match=r"\[\[words_in\]\] but no \[words\]: give it an empty \[words\]"):
+        ST.kind_of("m.toml", scoped.removeprefix("[words]\n\n"))
 
 
 def test_the_scripts_are_the_bases_so_a_base_whose_move_check_refuses_refuses_the_move(tmp_path, monkeypatch, capsys):

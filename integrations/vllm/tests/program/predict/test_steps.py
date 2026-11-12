@@ -28,7 +28,7 @@ from verity_vllm.program.predict.common import _arr
 from verity_vllm.program.predict.domain import check_phi
 from verity_vllm.program.predict.dsa import Net
 from verity_vllm.program.predict.phi import Phi
-from verity_vllm.program.frontend import stop_rule as SR
+from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
 from verity_vllm.program.frontend.targets import parse_launch_context
 from verity_vllm.program.predict.steps import (
     Registered,
@@ -64,7 +64,8 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 4}
 STOCH = {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "seed": 11, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
 SALT = bytes(range(64))
-STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": registered_splits(188)}
+STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": registered_splits(188),
+                "rid": 2}
 SERVED = "served-model"
 GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
 CLASS_G_ENGINE = {"max_model_len": 131072, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256, "max_num_seqs": 256,
@@ -166,13 +167,13 @@ def test_a_plan_is_the_compilation_before_its_programs_are_built():
 def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_top_p():
     """Top-p takes the registered split count registered_splits(num_SMs) at any top_p, the S serving pins (`engine.topp_pin`), never
     the batch's; a greedy body's top_p is never read."""
-    assert policy_of(0, {**STOCH, "seed": 123}, 188) == (STOCH_POLICY, 123)
-    assert policy_of(0, {**STOCH, "top_p": 0.95}, 188) == ({**STOCH_POLICY, "top_p": 0.95}, 11)
+    assert policy_of(0, {**STOCH, "seed": 123}, 188, request_id="q1") == (STOCH_POLICY, 123)
+    assert policy_of(0, {**STOCH, "top_p": 0.95}, 188, request_id="q1") == ({**STOCH_POLICY, "top_p": 0.95}, 11)
     assert registered_splits(188) == 32
-    assert policy_of(0, {**STOCH, "top_k": -1, "top_p": None}, 188) == (STOCH_POLICY, 11)
-    assert policy_of(0, {**GREEDY, "top_p": 0.5, "stop": ["\n"], "ignore_eos": False}, None) == ({"kind": "greedy"}, None)
+    assert policy_of(0, {**STOCH, "top_k": -1, "top_p": None}, 188, request_id="q1") == (STOCH_POLICY, 11)
+    assert policy_of(0, {**GREEDY, "top_p": 0.5, "stop": ["\n"], "ignore_eos": False}, None, request_id="q1") == ({"kind": "greedy"}, None)
     with pytest.raises(Unexpressible, match="top-p on a target that declares no num_sms"):
-        policy_of(0, STOCH, None)
+        policy_of(0, STOCH, None, request_id="q1")
 
 
 def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_window_seed_salt_or_refused_by_name():
@@ -217,7 +218,7 @@ def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_win
 ])
 def test_sampling_v0_cannot_express_is_refused_by_name(sampling, fact):
     with pytest.raises(Unexpressible, match=f"request 0: .*{fact}".replace("(", r"\(").replace(")", r"\)").replace("[", r"\[")):
-        policy_of(0, sampling, 188)
+        policy_of(0, sampling, 188, request_id="q1")
 
 
 def test_sampling_is_the_bodys_never_the_advices():
@@ -939,7 +940,7 @@ def test_class_g_samples_by_the_selects_circuit_check_binds_at_its_vocabulary(tm
 
     reg = _class_g(tmp_path)
     V = reg.phi.hf_config["vocab_size"]
-    policy, _ = policy_of(0, {"temperature": 1.0, "top_p": 0.95, "seed": 1}, reg.phi.target_profile().num_sms)
+    policy, _ = policy_of(0, {"temperature": 1.0, "top_p": 0.95, "seed": 1}, reg.phi.target_profile().num_sms, request_id="q1")
     table = dead_free_versions()
     compiled = {bind(table[f.base_id], **f.bindings).id
                 for f in (kind("token_select_stochastic_split", V=V, S=policy["splits"]), kind("token_select", V=V))}
@@ -1154,15 +1155,15 @@ def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(b
     in one window is, call for call in the registered compiler's form, its Program in the window that leaves it after two outputs,
     then its Program in the next, which carries it in at position 4 with its 4 rows of every layer (latent rows and indexer keys and
     scales) and its last token as Inputs; so is A prefilled in chunks of 2 and 1, split inside its prompt at position 2 (its 2 rows
-    its history, no last token). Each Program but for its length rule over its own outputs: A's 4 there to its max_tokens, 2 in
+    its history, no last token). Each Program but for its seed rule, which each window's checks, and its length rule over its own outputs: A's 4 there to its max_tokens, 2 in
     the first window running on and 2 in the next from its third on, to its max_tokens; split inside its prompt, none in the first
     window and all 4 in the next. Each window's batch rules pass, R1 holding that history A's own, and its GP-01 carries the edge:
     the window that leaves A returns its latent rows so far (and past its prompt its last sample) as out-ports after its samples,
     and the next takes ports of those types as registered parameters, A's history reading them; the indexer's keys and scales,
     which no row reads below INDEX_TOPK keys, stay A's own unread Inputs. What no cheaper test can: that carrying a request across
     a Commit window neither drops nor repeats nor adds a call, nor moves a sample's position. The seeded case takes about
-    two minutes, GLM-5.3's top-p sampler over its whole vocabulary, and is the only one that carries sampler state (the seed,
-    each sample's position) across the window."""
+    two minutes, GLM-5.3's top-p sampler over its whole vocabulary, and is the only one that carries sampler state (the seed
+    and its seed rule's Inputs, each sample's position) across the window."""
     from verity.ml.circuits.types import field_types
     reg = _class_g(tmp_path, engine=CACHE_ON, layers=4)
     ingress = {"a": {**body, "prompt": [1, 2, 3]}}
@@ -1175,7 +1176,7 @@ def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(b
         params.append(_history_params(p))
         wls.append(c.workload)
     C = split[2].carried[0].computed
-    own = [("prompt", 3)] + [("seed", 1)] * (body is not GREEDY)
+    own = [("prompt", 3)] + [("seed", 1), ("seeded", 1), ("body_seed", 64), ("seed_salt", 512), ("user", 8)] * (body is not GREEDY)
     assert params == [own, own, own + [("prefix", 4 * C * 576), ("prefix_ik", 3 * C * 128), ("prefix_iks", 3 * C)] + [("last_token", 1)] * (C >= 3)]
     stop, M = SR.stop_ids(reg.phi.hf_config), min(int(reg.phi.hf_config["max_position_embeddings"]), reg.phi.engine["max_model_len"])
 
@@ -1183,6 +1184,8 @@ def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(b
         return bind(SC.StopCheck, T=T, STOP=stop, MAX_TOKENS=m, PROMPT_LEN=p, MAX_MODEL_LEN=M, FINISH=f).id
     rules = [rule(4, 4, 3, 2), rule(2, 4, 3, 0), rule(2, 2, 5, 2)] if C >= 3 else [rule(4, 4, 3, 2), None, rule(4, 4, 3, 2)]
     assert [ids.pop() if ids[-1].startswith("StopCheck_v1") else None for ids in calls_of] == rules
+    seed_rule = None if body is GREEDY else bind(SEED.SeedCheckWord, COIN=SEED.COIN, RID=SEED.rid_of("a")).id
+    assert [ids.pop() if ids[-1].startswith("SeedCheck_") else None for ids in calls_of] == [seed_rule] * 3
     assert calls_of[0] == calls_of[1] + calls_of[2]
     sig = [w.fn.signature() for w in wls]
     assert wls[0].edge is None and wls[1].edge.outs == wls[2].edge.ins and wls[2].ports == wls[2].registered[-len(wls[2].ports):]
@@ -1278,9 +1281,9 @@ def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
     s = compile_steps(reg, *_mixed()).summary()
     cmds = trace_commands(s, reg, str(tmp_path))
     names = [c[c.index("--out") + 1].rsplit("/", 1)[1] for c in cmds]
-    assert [n.rpartition("_s")[0] for n in names] == ["build_request_LP8_T3_greedy", "build_request_LP5_T2_t0.8-p1"]
+    assert [n.rpartition("_s")[0] for n in names] == ["build_request_LP8_T3_greedy", "build_request_LP5_T2_t0.8-p1-r2"]
     assert [json.loads(c[c.index("--stop") + 1]) for c in cmds] == [_spec(8, 3, 4), _spec(5, 2, 3)]
-    assert json.loads(cmds[1][cmds[1].index("--sampling") + 1]) == {"temperature": 0.8, "top_p": 1.0, "top_k": 0}
+    assert json.loads(cmds[1][cmds[1].index("--sampling") + 1]) == {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "rid": 2}
     assert json.loads(cmds[0][cmds[0].index("--target") + 1]) == RTXPRO6000
     (tmp_path / trace_dir(s["requests"][0])).mkdir()
     (tmp_path / trace_dir(s["requests"][0]) / "result.json").write_text(json.dumps({"program": {"digest": s["requests"][0]["digest"]}}))

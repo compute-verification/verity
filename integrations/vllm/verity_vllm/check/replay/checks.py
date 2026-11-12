@@ -1,11 +1,12 @@
 """The Program's checks (`program.predict.common.with_checks`): bits it computes from its inputs that the verifier requires to be
-`accept`, a DSA row's DsaTopKLongRow_v1 past INDEX_TOPK and a request's length rule (StopCheck_v1, in its last step) among them.
-The instances header names them (`checks`: what each checks, its accept value, and under `at` the row and output leaf that
-computes it, `pipeline.build_instances.check_rows`).
+`accept`, a DSA row's DsaTopKLongRow_v1 past INDEX_TOPK, a stochastic request's seed rule (`SeedCheck_v2`) and its length rule
+(StopCheck_v1, in its last step) among them.  The instances header names them (`checks`: what each checks, its accept value, and
+under `at` the row and output leaf that computes it, `pipeline.build_instances.check_rows`).
 
 The checks are the Program's output, not a sample: `checks_of` evaluates every check of every executed step of every request from
 its committed inputs, the run's values included, serially in the replay's process.  One that is not `accept` refuses the replay by
-name (`fold`); one it can't evaluate leaves the replay partial, never a pass."""
+name (`fold`); one it can't evaluate leaves the replay partial, never a pass.  The seed rule reads the request's certified inputs,
+which no committed word holds: its body's seed, its id and the window's seed salt (`checks_of`'s ``certified``, `_seed_check`)."""
 from __future__ import annotations
 
 from functools import partial
@@ -15,9 +16,10 @@ import numpy as np
 
 from verity_vllm.check.replay.compare import _interior_slice
 from verity_vllm.check.replay.evaluate import evaluated
-from verity_vllm.check.replay.index import ProgramIndex
+from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM, ProgramIndex, row_args
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit.opened import opened_check
+from verity_vllm.query.manifest import format as RM
 
 RULE = ("every check of every request's Program (instances header `checks`), evaluated from its committed inputs at every executed "
         "step, is its `accept` value")
@@ -35,30 +37,63 @@ def check_rows(pi: ProgramIndex) -> list[tuple[str, int, int, int]]:
     return [(str(w), int(i), int(lo), int(hi)) for w, (i, lo, hi) in zip(c["of"], c["at"])]
 
 
+def _seed_check(pi: ProgramIndex, store: CommittedStore, r: dict, rid: str, at: int, certified: dict[str, Any] | None,
+                inputs: list) -> tuple[int | None, str | None]:
+    """Row ``r``, request ``rid``'s seed rule (`frontend.seed_rule.check`), at engine step ``at`` -> (its value, None), else (None,
+    why): `seed_rule.check_reference` of the sampler's seed word committed there and the request's ``certified`` inputs (``seed``,
+    its body's or None; ``request_id``; ``seed_salt``, the window's bytes or None), the function the rule's tests hold its
+    Definition to. A client-seeded request's rule doesn't read the salt; an unseeded one's without it isn't evaluated."""
+    from verity_vllm.program.frontend import seed_rule as SEED
+    names = [pi.pnames[int(g[0][1])] if len(g) == 1 and g[0][0] == "p" and int(g[0][2]) == 0 else None for g in row_args(r)]
+    if names != [SEED_PARAM, *SEED.PARAMS]:
+        return None, f"the seed rule's row reads {names}, not the Program's {SEED_PARAM} and {', '.join(SEED.PARAMS)}"
+    if certified is None:
+        return None, f"request {rid}'s certified seed and id aren't given to the replay"
+    seed, uid, salt = certified.get("seed"), str(certified.get("request_id")), certified.get("seed_salt")
+    if (want := int(RM.spec_statics(r["spec"]).get("RID", 0))) != len(uid.encode()):
+        return None, f"the seed rule reads an id of {want} bytes, and request {rid}'s certified id {uid!r} is {len(uid.encode())}"
+    if seed is None and salt is None:
+        return None, f"request {rid} is unseeded, and the replay has no window seed salt to derive its seed from"
+    w, why = store.words(rid, at, SAMPLER_OP, SEED_PARAM, 0, 1)
+    if w is None:
+        return None, why
+    inputs += [{"kind": "committed", "identity": [rid, at, SAMPLER_OP, SEED_PARAM, [0, 1]]},
+               {"kind": "certified", "seed": seed, "request_id": uid, "seed_salt": None if salt is None else bytes(salt).hex()}]
+    return SEED.check_reference(int(np.asarray(w).reshape(-1)[0]), seed is not None, seed or 0, salt or b"", uid.encode()), None
+
+
 def _check(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], rid: str, arrive: int,
-           what: str, i: int, lo: int, hi: int, accept: int, rec: dict[str, Any]) -> dict[str, Any]:
+           certified: dict[str, Any] | None, what: str, i: int, lo: int, hi: int, accept: int, rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[i]
     step = pi.step_of(i)
     rec.update({"check": what, "request_id": rid, "step": step, "engine_step": arrive + step, "i": i, "spec": r["spec"], "inputs": []})
-    got, why = evaluated(pi, store, weights, r, rid, arrive, rec["inputs"])
-    if why is not None:
-        return rec | {"result": None, "why": why}
-    bit = _interior_slice(got, lo, hi)
-    if bit is None or bit.size != 1:
-        return rec | {"result": None, "why": f"leaf [{lo}, {hi}) is not one leaf of row {i}'s output"}
-    rec["value"] = int(bit[0])
+    from verity_vllm.program.frontend.seed_rule import SeedCheckWord
+    if RM.spec_family(r["spec"]) == SeedCheckWord.id:
+        rec["value"], why = _seed_check(pi, store, r, rid, arrive + step, certified, rec["inputs"])
+        if why is not None:
+            return rec | {"result": None, "why": why}
+    else:
+        got, why = evaluated(pi, store, weights, r, rid, arrive, rec["inputs"])
+        if why is not None:
+            return rec | {"result": None, "why": why}
+        bit = _interior_slice(got, lo, hi)
+        if bit is None or bit.size != 1:
+            return rec | {"result": None, "why": f"leaf [{lo}, {hi}) is not one leaf of row {i}'s output"}
+        rec["value"] = int(bit[0])
     if rec["value"] != accept:
         return rec | {"result": False, "why": f"check is {rec['value']}, not {accept}: {what} ({rid}, step {step}, row {i})"}
     return rec | {"result": True}
 
 
 def checks_of(indices: dict[str, ProgramIndex], store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None],
-              arrivals: dict[str, int] | None = None, executed_prefix: dict[str, dict] | None = None) -> dict[str, Any] | None:
+              arrivals: dict[str, int] | None = None, executed_prefix: dict[str, dict] | None = None,
+              certified: dict[str, dict] | None = None) -> dict[str, Any] | None:
     """Every check of every request (`check_rows`), evaluated from its committed inputs -> None when no request's Program has
     checks, else the record: `result` False when one is not its `accept` value (named under `refused`), None when one couldn't be
     evaluated (named under `not_evaluated`), True when every one is accepted.  A check at a request-relative step at or past its
-    request's executed prefix (`executed_prefix`'s `n_exec`) was never served: counted under `not_executed`, not evaluated."""
-    arrivals, executed_prefix = arrivals or {}, executed_prefix or {}
+    request's executed prefix (`executed_prefix`'s `n_exec`) was never served: counted under `not_executed`, not evaluated.
+    ``certified``: request -> its seed rule's certified inputs (`_seed_check`)."""
+    arrivals, executed_prefix, certified = arrivals or {}, executed_prefix or {}, certified or {}
     n, accepted, not_exec, refused, not_ev = 0, 0, 0, [], []
     for rid in sorted(indices):
         pi = indices[rid]
@@ -73,7 +108,8 @@ def checks_of(indices: dict[str, ProgramIndex], store: CommittedStore, weights: 
                 not_exec += 1
                 continue
             rec = opened_check(getattr(store, "committed", None),
-                               partial(_check, pi, store, weights, rid, int(arrivals.get(rid, 0)), what, i, lo, hi, accept))
+                               partial(_check, pi, store, weights, rid, int(arrivals.get(rid, 0)), certified.get(rid), what, i, lo,
+                                       hi, accept))
             rec.pop("_opened", None)
             if rec["result"] is True:
                 accepted += 1

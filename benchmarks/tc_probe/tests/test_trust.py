@@ -12,8 +12,17 @@ import hashlib
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+    from types import ModuleType
+
+    import numpy as np
+
+    from trust import Criterion
 
 pytest.importorskip("research.store.local")
 from research.store.local import LocalStore
@@ -24,8 +33,18 @@ if str(TC_PROBE) not in sys.path:
 
 import trust  # noqa: E402
 from trust import (  # noqa: E402
-    DOSSIER_KIND, HONEST_MIN, INVALIDATION_TRIGGERS, N_MIN, NEGATIVES_MIN, REGRESSION_TILES, RELITIGATION_PROCEDURE, Level, TrustReport,
-    assess, publish, render_markdown,
+    DOSSIER_KIND,
+    HONEST_MIN,
+    INVALIDATION_TRIGGERS,
+    N_MIN,
+    NEGATIVES_MIN,
+    REGRESSION_TILES,
+    RELITIGATION_PROCEDURE,
+    Level,
+    TrustReport,
+    assess,
+    publish,
+    render_markdown,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -39,14 +58,14 @@ FAMILIES = ("randn_zero_acc", "randn_random_acc", "uniform_bits", "adder_width_c
 
 
 @pytest.fixture(autouse=True)
-def _isolated(monkeypatch, tmp_path):
+def _isolated(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
     monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent-store.toml"))
     monkeypatch.setenv("RESEARCH_REPO", str(tmp_path / "repo"))
 
 
 @pytest.fixture
-def repo(tmp_path) -> Path:
+def repo(tmp_path: Path) -> Path:
     """A synthetic repository: a discrepancy log with one resolved entry naming the target, the reference files the catalogue
     expects (presence only), and one frozen input set with an edge family and a negative tier."""
     root = tmp_path / "repo"
@@ -64,7 +83,7 @@ def repo(tmp_path) -> Path:
     return root
 
 
-def dlog(did: str, status: str, **over) -> dict:
+def dlog(did: str, status: str, **over: object) -> dict:
     e = {"id": did, "profile": TARGET, "issue": f"{did} issue", "status": status, "resolution": "hardware decided" if status == "resolved" else None,
          "evidence_refs": [], "owner": "test", "to_resolve": "measure it" if status == "open" else None}
     e.update(over)
@@ -78,12 +97,12 @@ def write_log(root: Path, entries: list[dict]) -> None:
 
 
 @pytest.fixture
-def store(tmp_path, repo) -> LocalStore:
+def store(tmp_path: Path, repo: Path) -> LocalStore:
     return LocalStore(tmp_path / "store", repo=repo)
 
 
-def hw(store: LocalStore, *, hardware: str = ANCHOR, elements: int = N_MIN, mismatches: int = 0, families=FAMILIES, replay: str | None = GOLDEN,
-       sass: bool = True, host: str = "gpu-0", driver: str = "550.90", nvcc: str = "12.4", agrees_label: bool | None = None, extra_labels=(), canary: bool = False) -> str:
+def hw(store: LocalStore, *, hardware: str = ANCHOR, elements: int = N_MIN, mismatches: int = 0, families: Sequence[str] = FAMILIES, replay: str | None = GOLDEN,
+       sass: bool = True, host: str = "gpu-0", driver: str = "550.90", nvcc: str = "12.4", agrees_label: bool | None = None, extra_labels: Iterable[tuple[str, str]] = (), canary: bool = False) -> str:
     """One synthetic ``tc-evidence/v1`` in tc-probe-fp8's nested shape, labelled with the contract keys."""
     asserted = [f for f in families if f != "specials"]
     per = -(-elements // max(1, len(asserted)))  # ceil: the asserted families sum to >= elements
@@ -141,14 +160,14 @@ def relation(store: LocalStore, *, honest: int = 4096, negatives: int = 128, ver
     return art
 
 
-def crit(rep: TrustReport, cid: str):
+def crit(rep: TrustReport, cid: str) -> Criterion:
     return rep.criterion(cid)
 
 
 # --- levels --------------------------------------------------------------------------------------------------------------------
 
 
-def test_empty_store_is_unprobed(store, repo):
+def test_empty_store_is_unprobed(store: LocalStore, repo: Path) -> None:
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.level == "UNPROBED"
     assert rep.subject == TARGET and rep.instruction == INSTRUCTION and rep.anchor_family == ANCHOR
@@ -157,7 +176,7 @@ def test_empty_store_is_unprobed(store, repo):
     assert any("no hardware record" in m for m in rep.missing_to_next)
 
 
-def test_agreement_off_anchor_is_a_hypothesis(store, repo):
+def test_agreement_off_anchor_is_a_hypothesis(store: LocalStore, repo: Path) -> None:
     art = hw(store, hardware="h100", elements=1000)
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.level == "HYPOTHESIS"
@@ -166,7 +185,7 @@ def test_agreement_off_anchor_is_a_hypothesis(store, repo):
     assert any(ANCHOR in m and "h100" in m for m in rep.missing_to_next)
 
 
-def test_partial_agreement_on_the_anchor_is_a_hypothesis_not_a_pin(store, repo):
+def test_partial_agreement_on_the_anchor_is_a_hypothesis_not_a_pin(store: LocalStore, repo: Path) -> None:
     fams = {f: {"elements": 100_000, "asserted": True, "mismatches": {MODEL: 0 if f == "randn_zero_acc" else 7}} for f in FAMILIES[:3]}
     meta = {"kind": "tc-evidence/v1", "workload_fingerprint": {"instruction": INSTRUCTION}, "validation": {"status": "failed"},
             "tc_evidence": {"instruction": INSTRUCTION, "sku": "NVIDIA GeForce RTX 4090", "families": fams, "total_mismatches_by_model": {MODEL: 14}}}
@@ -179,7 +198,7 @@ def test_partial_agreement_on_the_anchor_is_a_hypothesis_not_a_pin(store, repo):
     assert not crit(rep, "P1").passed and any("14 mismatches" in m for m in crit(rep, "P1").missing)
 
 
-def test_full_anchor_sweep_pins(store, repo):
+def test_full_anchor_sweep_pins(store: LocalStore, repo: Path) -> None:
     art = hw(store)
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.level == "PINNED", rep.missing_to_next
@@ -198,7 +217,7 @@ def test_full_anchor_sweep_pins(store, repo):
     assert "independently_verified=true" in joined
 
 
-def test_a_disagreeing_record_cited_by_a_resolved_d_entry_is_superseded(store, repo):
+def test_a_disagreeing_record_cited_by_a_resolved_d_entry_is_superseded(store: LocalStore, repo: Path) -> None:
     """fp4-re's situation: the sweep that *found* the discrepancy disagrees with the model as it stood; once the D-entry citing that run
     is resolved and a fresh sweep reproduces every word, the old record no longer blocks PINNED (it stays in the evidence as SUPERSEDED)."""
     bad = hw(store, mismatches=29_118, elements=N_MIN // 4, host="gpu-old")
@@ -218,7 +237,8 @@ def test_a_disagreeing_record_cited_by_a_resolved_d_entry_is_superseded(store, r
     assert any("SUPERSEDED" in e.note for e in crit(rep, "P1").evidence)
 
 
-def test_fp4_probe_envelope_attributes_the_primary_model_and_ignores_the_control(store, repo, monkeypatch):
+def test_fp4_probe_envelope_attributes_the_primary_model_and_ignores_the_control(store: LocalStore, repo: Path,
+                                                                                 monkeypatch: pytest.MonkeyPatch) -> None:
     """tc_probe_fp4 scores the registry model ("verity") and autoproof's refuted model5 side by side; the record's mismatches for the
     registry model come from the primary key, model5's count is not attributed, and a model5-only sweep is evidence about nothing here."""
     ins = "sm120.mma.m16n8k64.e2m1.nvf4"
@@ -246,7 +266,7 @@ def test_fp4_probe_envelope_attributes_the_primary_model_and_ignores_the_control
     assert not recs[art_old].agrees(names) and recs[art_old].partially_agrees(names) is None  # the autoproof replay does not vouch for the new model
 
 
-def test_too_few_elements_or_a_missing_family_blocks_pinned(store, repo):
+def test_too_few_elements_or_a_missing_family_blocks_pinned(store: LocalStore, repo: Path) -> None:
     hw(store, elements=N_MIN // 10, families=FAMILIES[:-2])
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.level == "HYPOTHESIS"
@@ -254,7 +274,7 @@ def test_too_few_elements_or_a_missing_family_blocks_pinned(store, repo):
     assert not crit(rep, "P3").passed and any("accumulator-lsb-walk" in m for m in rep.missing_to_next)
 
 
-def test_trusted_needs_relation_instances_reference_and_verifier(store, repo):
+def test_trusted_needs_relation_instances_reference_and_verifier(store: LocalStore, repo: Path) -> None:
     hw(store)
     relation(store)                                                   # Tc: honest 4096 / negatives 128 from the checker sweep detail
     rep = assess("FP8_ADA_MMA", store, repo=repo)
@@ -269,7 +289,7 @@ def test_trusted_needs_relation_instances_reference_and_verifier(store, repo):
     assert rep.next_level == "TRUSTED_STABLE" and any("second" in m for m in rep.missing_to_next)
 
 
-def test_second_device_makes_it_stable(store, repo):
+def test_second_device_makes_it_stable(store: LocalStore, repo: Path) -> None:
     hw(store)
     relation(store)
     instances_hw(store)
@@ -286,7 +306,7 @@ def test_second_device_makes_it_stable(store, repo):
     assert rep.next_level is None and rep.missing_to_next == []
 
 
-def test_second_driver_environment_makes_it_stable(store, repo):
+def test_second_driver_environment_makes_it_stable(store: LocalStore, repo: Path) -> None:
     trusted(store)
     hw(store, elements=6656, canary=True, driver="580.126.16", nvcc="12.6")
     rep = assess("FP8_ADA_MMA", store, repo=repo)
@@ -294,7 +314,7 @@ def test_second_driver_environment_makes_it_stable(store, repo):
     assert len(crit(rep, "S1").details["environments"]) == 2
 
 
-def test_instances_replay_off_anchor_does_not_count(store, repo):
+def test_instances_replay_off_anchor_does_not_count(store: LocalStore, repo: Path) -> None:
     hw(store)
     relation(store)
     relation(store, verified=True, proof_class="COMPLETE_ZK_BACKEND")
@@ -307,14 +327,14 @@ def test_instances_replay_off_anchor_does_not_count(store, repo):
 # --- blockers and re-opening ---------------------------------------------------------------------------------------------------
 
 
-def trusted(store):
+def trusted(store: LocalStore) -> None:
     hw(store)
     relation(store)
     instances_hw(store)
     relation(store, verified=True, proof_class="COMPLETE_ZK_BACKEND")
 
 
-def test_open_d_entry_blocks_trusted(store, repo):
+def test_open_d_entry_blocks_trusted(store: LocalStore, repo: Path) -> None:
     trusted(store)
     write_log(repo, [dlog("D10", "resolved", evidence_refs=[GOLDEN]), dlog("D99", "open")])
     rep = assess("FP8_ADA_MMA", store, repo=repo)
@@ -324,7 +344,7 @@ def test_open_d_entry_blocks_trusted(store, repo):
     assert [e["id"] for e in rep.d_entries] == ["D10", "D99"]
 
 
-def test_red_team_downgrade_label_blocks_trusted(store, repo):
+def test_red_team_downgrade_label_blocks_trusted(store: LocalStore, repo: Path) -> None:
     trusted(store)
     art = hw(store, elements=1000, extra_labels=(("trust_downgrade", "verifier rejected an honest run"),))
     rep = assess("FP8_ADA_MMA", store, repo=repo)
@@ -334,7 +354,7 @@ def test_red_team_downgrade_label_blocks_trusted(store, repo):
     assert assess("FP8_ADA_MMA", store, repo=repo).level == "TRUSTED"
 
 
-def test_failing_canary_on_the_anchor_reopens_trust(store, repo):
+def test_failing_canary_on_the_anchor_reopens_trust(store: LocalStore, repo: Path) -> None:
     trusted(store)
     assert assess("FP8_ADA_MMA", store, repo=repo).level == "TRUSTED"
     bad = hw(store, elements=6656, mismatches=3, canary=True)
@@ -346,7 +366,7 @@ def test_failing_canary_on_the_anchor_reopens_trust(store, repo):
     assert any("canary" in m and "D-entry" in m for m in crit(rep, "P1").missing)
 
 
-def test_passing_canary_is_a_verdict_not_coverage(store, repo):
+def test_passing_canary_is_a_verdict_not_coverage(store: LocalStore, repo: Path) -> None:
     good = hw(store, elements=6656, canary=True)                      # a canary alone cannot pin: its tiles are not N_min coverage
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.level == "HYPOTHESIS"
@@ -355,7 +375,7 @@ def test_passing_canary_is_a_verdict_not_coverage(store, repo):
     assert rep.canaries == [dict(rep.canaries[0])] and rep.canaries[0]["id"] == good and rep.canaries[0]["passed"] is True
 
 
-def test_registry_ahead_of_evidence_is_noted(store, repo):
+def test_registry_ahead_of_evidence_is_noted(store: LocalStore, repo: Path) -> None:
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.registry_status == "pinned"
     assert any("ahead of the evidence" in n.lower() and "downgrade" in n for n in rep.notes)
@@ -364,7 +384,7 @@ def test_registry_ahead_of_evidence_is_noted(store, repo):
         trust.registry_level("trusted-by-fiat")
 
 
-def test_registry_status_values_are_trust_ladder_members_and_never_above_pinned():
+def test_registry_status_values_are_trust_ladder_members_and_never_above_pinned() -> None:
     """No store: the registry may assert at most PINNED (TRUSTED and above are computed), every status is a ladder level, and a
     dossier reference, when set, is a store artifact id."""
     from verity.ml.circuits.silicon.instructions import INSTRUCTIONS
@@ -380,7 +400,7 @@ def test_registry_status_values_are_trust_ladder_members_and_never_above_pinned(
         assert t.dossier is None or t.dossier.startswith("art:"), f"{t.name}: dossier {t.dossier!r} is not a store artifact id"
 
 
-def test_binding_class_entries_are_deployment_caveats_not_gates(store, repo):
+def test_binding_class_entries_are_deployment_caveats_not_gates(store: LocalStore, repo: Path) -> None:
     trusted(store)
     write_log(repo, [dlog("D10", "resolved", evidence_refs=[GOLDEN]), dlog("D6", "open", **{"class": "binding", "owner": "integration"}),
                      dlog("D98", "open", **{"class": "numerics"})])
@@ -399,7 +419,8 @@ def test_binding_class_entries_are_deployment_caveats_not_gates(store, repo):
         assess("FP8_ADA_MMA", store, repo=repo)
 
 
-def test_td_accepts_a_contract_pinned_recipe_digest(store, repo, monkeypatch):
+def test_td_accepts_a_contract_pinned_recipe_digest(store: LocalStore, repo: Path,
+                                                    monkeypatch: pytest.MonkeyPatch) -> None:
     """The FP8 Ada input set is seeded, not a fixture: its identity is the recipe digest pinned in the bench contract."""
     import functools
     import shutil
@@ -465,7 +486,7 @@ def test_td_accepts_a_contract_pinned_recipe_digest(store, repo, monkeypatch):
 # --- constants, dossier, publish -------------------------------------------------------------------------------------------------
 
 
-def test_triggers_and_procedure_are_frozen_into_the_report(store, repo):
+def test_triggers_and_procedure_are_frozen_into_the_report(store: LocalStore, repo: Path) -> None:
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     assert rep.invalidation_triggers == [dict(t) for t in INVALIDATION_TRIGGERS]
     assert rep.relitigation_procedure == list(RELITIGATION_PROCEDURE)
@@ -476,7 +497,7 @@ def test_triggers_and_procedure_are_frozen_into_the_report(store, repo):
     assert rep.constants["N_MIN"] == N_MIN == 10_000_000
 
 
-def test_dossier_json_round_trip_and_markdown(store, repo):
+def test_dossier_json_round_trip_and_markdown(store: LocalStore, repo: Path) -> None:
     trusted(store)
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     doc = json.loads(json.dumps({"schema": trust.DOSSIER_SCHEMA, **rep.to_dict()}))
@@ -491,7 +512,7 @@ def test_dossier_json_round_trip_and_markdown(store, repo):
             assert e.id in md
 
 
-def test_publish_writes_a_dossier_artifact_with_refs_and_labels(store, repo):
+def test_publish_writes_a_dossier_artifact_with_refs_and_labels(store: LocalStore, repo: Path) -> None:
     trusted(store)
     rep = assess("FP8_ADA_MMA", store, repo=repo)
     res = publish(rep, store, push=False)
@@ -508,7 +529,7 @@ def test_publish_writes_a_dossier_artifact_with_refs_and_labels(store, repo):
     assert store.get_manifest(res2["id"]).refs["previous"] == [res["id"]]
 
 
-def test_cli_json_and_md(store, repo, tmp_path, capsys):
+def test_cli_json_and_md(store: LocalStore, repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     trusted(store)
     out = tmp_path / "dossiers"
     assert trust.main(["FP8_ADA_MMA", "--root", str(store.root), "--repo", str(repo), "--format", "json", "--out", str(out)]) == 0
@@ -520,7 +541,7 @@ def test_cli_json_and_md(store, repo, tmp_path, capsys):
     assert "**Level: TRUSTED**" in capsys.readouterr().out
 
 
-def test_subject_resolution_covers_constants_names_and_instructions():
+def test_subject_resolution_covers_constants_names_and_instructions() -> None:
     for name in ("FIRST", "first-campaign-target/2026-09-21", "sm80.mma.m16n8k16.bf16"):
         s = trust.subjects(name)
         assert s.instruction == "sm80.mma.m16n8k16.bf16" and s.anchor_family == "a100"
@@ -530,7 +551,7 @@ def test_subject_resolution_covers_constants_names_and_instructions():
     assert Level.UNPROBED < Level.HYPOTHESIS < Level.PINNED < Level.TRUSTED < Level.TRUSTED_STABLE
 
 
-def test_the_real_discrepancy_log_has_a_regression_tile_decision_for_every_entry():
+def test_the_real_discrepancy_log_has_a_regression_tile_decision_for_every_entry() -> None:
     log = json.loads((REPO_ROOT / "verity" / "ml" / "circuits" / "silicon" / "discrepancy_log.json").read_text())
     for e in log["entries"]:
         assert e["id"] in REGRESSION_TILES, f"{e['id']}: decide its regression tiles (possibly none) in REGRESSION_TILES"
@@ -542,13 +563,13 @@ def test_the_real_discrepancy_log_has_a_regression_tile_decision_for_every_entry
 
 
 @pytest.fixture
-def canary():
+def canary() -> ModuleType:
     import canary as C
 
     return C
 
 
-def test_canary_plan_is_deterministic_and_covers_families_and_resolved_d_entries(canary):
+def test_canary_plan_is_deterministic_and_covers_families_and_resolved_d_entries(canary: ModuleType) -> None:
     P = canary.P
     plan1 = canary.canary_plan(INSTRUCTION, REPO_ROOT)
     plan2 = canary.canary_plan(INSTRUCTION, REPO_ROOT)
@@ -566,7 +587,7 @@ def test_canary_plan_is_deterministic_and_covers_families_and_resolved_d_entries
     assert all(t[1].shape[0] == plan1.tiles_per_family for t in tiles)
 
 
-def test_canary_seed_changes_the_tiles_but_the_plan_shape_stays(canary):
+def test_canary_seed_changes_the_tiles_but_the_plan_shape_stays(canary: ModuleType) -> None:
     P = canary.P
     ins = P.INSTRUCTIONS[INSTRUCTION]
     plan = canary.canary_plan(INSTRUCTION, REPO_ROOT)
@@ -574,7 +595,7 @@ def test_canary_seed_changes_the_tiles_but_the_plan_shape_stays(canary):
     assert canary.canary_digest(plan, ins.fmt, ins.m, ins.k) != canary.canary_digest(other, ins.fmt, ins.m, ins.k)
 
 
-def test_canary_bf16_anchor_prefers_its_own_capture_directory(canary):
+def test_canary_bf16_anchor_prefers_its_own_capture_directory(canary: ModuleType) -> None:
     plan = canary.canary_plan("sm80.mma.m16n8k16.bf16", REPO_ROOT)
     assert "D2" in plan.regression
     assert plan.replays == ("verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz",)
@@ -582,18 +603,18 @@ def test_canary_bf16_anchor_prefers_its_own_capture_directory(canary):
     assert "fp8_floor_probe" not in plan.families                                             # the D15(b) probe is FP8-only
 
 
-def test_run_canary_bookkeeping_without_a_device(canary, tmp_path):
+def test_run_canary_bookkeeping_without_a_device(canary: ModuleType, tmp_path: Path) -> None:
     import numpy as np
 
     P = canary.P
     ins = P.INSTRUCTIONS[INSTRUCTION]
     plan = canary.canary_plan(INSTRUCTION, REPO_ROOT)
 
-    def fake_model(A, Bt, C):
+    def fake_model(A: np.ndarray, Bt: np.ndarray, C: np.ndarray) -> list[tuple[np.ndarray, np.ndarray]]:
         words = (A.sum(axis=2, dtype=np.uint32)[:, :, None] + Bt.sum(axis=2, dtype=np.uint32)[:, None, :] + C).astype(np.uint32)
         return [(words, np.zeros(words.shape, np.bool_))]
 
-    def replay_ok(path):
+    def replay_ok(path: Path) -> dict:
         assert path == REPO_ROOT / GOLDEN
         return {"pipeline": MODEL, "records": 360, "mismatches": 0, "other_positions_nonzero": 0, "first_mismatches": []}
 
@@ -607,7 +628,7 @@ def test_run_canary_bookkeeping_without_a_device(canary, tmp_path):
     assert sweep_labels == {"instruction": INSTRUCTION, "hardware": ANCHOR, "model": MODEL, "model_agrees": "false", "evidence": "sweep", "device": None}
     assert all("device" not in cmd for cmd in canary.label_commands("art:x", canary.evidence_labels(ins, good, {"device": "x"}, evidence="sweep"), "lane"))  # no UUID: no label
 
-    def flipped(A, Bt, C):
+    def flipped(A: np.ndarray, Bt: np.ndarray, C: np.ndarray) -> np.ndarray:
         D = fake_model(A, Bt, C)[0][0].copy()
         D[0, 0, 0] ^= 1
         return D
@@ -619,7 +640,7 @@ def test_run_canary_bookkeeping_without_a_device(canary, tmp_path):
     assert all(f["first_mismatches"][0]["tile"] == 0 for f in bad["families"].values() if f["asserted"])
 
 
-def _tc_probe_tool():
+def _tc_probe_tool() -> ModuleType:
     """tc_probe's tool declaration, by path: a bare `import tool` takes whichever of the repo's many `tool.py` is first on
     sys.path or already in sys.modules, which depends on what the suite ran before this test."""
     import importlib.util
@@ -633,7 +654,7 @@ def _tc_probe_tool():
     return sys.modules[name]
 
 
-def test_tc_probe_tool_declaration_keys_the_canary_flag():
+def test_tc_probe_tool_declaration_keys_the_canary_flag() -> None:
     T = _tc_probe_tool()
 
     with_flag = T.parse(["python", "benchmarks/tc_probe/tc_probe.py", "--instruction", INSTRUCTION, "--out", "x", "--canary"])
@@ -655,7 +676,7 @@ def test_a_capture_replay_counts_the_model_and_the_other_tile_positions() -> Non
     assert all((REPO_ROOT / p).is_file() for p in ref.paths)
 
 
-def test_the_sm120_fp8_steps_are_anchored_on_the_pro_6000_and_the_arch_default_is_unchanged():
+def test_the_sm120_fp8_steps_are_anchored_on_the_pro_6000_and_the_arch_default_is_unchanged() -> None:
     """The target names its conformance device, and trust matches evidence to it by SKU family, whether asked by target or by
     instruction id.  The e5m2 id has no target: its registry entry names the device, and the sm_120 default anchor (the RTX
     5090) stays for every other sm_120 instruction."""

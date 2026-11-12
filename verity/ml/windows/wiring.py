@@ -37,14 +37,15 @@ def _writers(members: Sequence[Any], ws: Sequence[int], bases: np.ndarray) -> li
 
 def validate(members: Sequence[Any]) -> None:
     """Refuse a wiring that is not one row per unit of a reader port, each another member's output row of its words and schema,
-    and each port wired at most once. A shared-row member's wired port is a table of its units' own rows, one a unit."""
+    and each port wired at most once. A shared-row member's wired port is a table of its units' own rows, one a unit, or,
+    with no tree of its own (``rows.Member.wired_trees``), its writer's output rows, which `rows.Binding` holds."""
     total, at = sum(m.n for m in members), bases(members)
     for m in members:
         if len({p for p, _o, _ws in m.wired}) != len(m.wired):
             raise ValueError(f"{m.key}: ports {[p for p, _o, _ws in m.wired]} are wired more than once")
         for p, o, ws in m.wired:
-            if (dict(m.tables).get(p, m.n) != m.n or p not in dict(m.rows) or len(ws) != m.n or min(ws) < 0
-                    or max(ws) >= total):
+            if ((getattr(m, "wired_trees", True) and dict(m.tables).get(p, m.n) != m.n) or p not in dict(m.rows)
+                    or len(ws) != m.n or min(ws) < 0 or max(ws) >= total):
                 raise ValueError(f"{m.key}: wiring {p!r} is not one writer in [0, {total}) per unit of an input port of its own rows")
             for wm, _mine, _theirs in _writers(members, ws, at):
                 if dict(wm.out_rows).get(o) != dict(m.rows)[p] or wm.schema(o) != m.schema(p):

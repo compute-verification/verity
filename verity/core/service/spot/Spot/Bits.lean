@@ -30,6 +30,8 @@ describes, where each of its gates sits, and each unit's gates and inputs. The s
   constants `κ` fix it to `b`. Gate `g` sits at `posOf`, its last lowered gate.
 * `unitOf`, `unitGates`, `owner`, `insOf`, `blockOf`: unit `u`'s lowered gates, the input gates it owns (the unfixed
   inputs whose first reader it is) and its proof block, the first then the second's positions.
+* `offs`, `offAt`, `posAt`, `lowerAt`, `unitGatesAt`, `blockOfAt`, `progFast`, `blockOfFast`: every gate's `off` from
+  one pass and `prog` and `blockOf` reading it, equal to them (`offAt_offs`) and compiled in their place (`@[csimp]`).
 * `inBit`, `outBit`: the claims position of a bit of an instance's input port or returned output leaf, the instance
   `(u, k)` being unit `u`'s template instance `k < upv`.
 * `RowPos`, `rowBit`, `outRowBit`: a commitment position (a registered row, its leaf and a bit), where a source gate
@@ -300,6 +302,114 @@ def insOf (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) : List Nat :=
 /-- **Unit `u`'s proof block**: its lowered gates, then the position of each input it owns. -/
 def blockOf (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) : List Nat :=
   unitGates kp u ++ (insOf kp κ u).map (posOf kp)
+
+/-! ## The offsets in one pass
+
+`off kp g` sums the lowered sizes of the gates before `g` at every call, so `prog` and `blockOf` as stated take time
+quadratic in the program's gates. `offs kp` holds every gate's `off` from one pass (`offAt_offs`); `progFast` and
+`blockOfFast` are `prog` and `blockOf` reading it, built once. `@[csimp]` compiles them in `prog`'s and `blockOf`'s
+place, so evaluation runs them while every theorem reads `prog` and `blockOf`, and `off` stays their specification. -/
+
+/-- One step of `offs`: entry `g + 1`, where gate `g + 1`'s lowered gates start, is entry `g` plus gate `g`'s size. -/
+def offsStep (kp : KeyProg) (t : Array Nat) (g : Nat) : Array Nat := t.push (t.getD g 0 + gateSize kp g)
+
+/-- **Every gate's `off`, in one pass**: entry `g` is `off kp g` for each `g ≤ kp.size` (`offAt_offs`). -/
+def offs (kp : KeyProg) : Array Nat := (List.range kp.size).foldl (offsStep kp) #[0]
+
+/-- **`off kp g` read from the table `t`**: its entry `g`, its last past the program's gates. -/
+def offAt (t : Array Nat) (kp : KeyProg) (g : Nat) : Nat := t.getD (min g kp.size) 0
+
+/-- `posOf kp g` read from the table `t`. -/
+def posAt (t : Array Nat) (kp : KeyProg) (g : Nat) : Nat := offAt t kp g + gateSize kp g - 1
+
+/-- `lower kp κ g` read from the table `t`: a row's gates at its positions there, an input as `lower` lowers it. -/
+def lowerAt (t : Array Nat) (kp : KeyProg) (κ : Nat → Option Bool) (g : Nat) : List LGate :=
+  match kp.row? g with
+  | some (a, b) => [.xor (a.map (posAt t kp)), .xor (b.map (posAt t kp)), .and [offAt t kp g, offAt t kp g + 1]]
+  | none => lower kp κ g
+
+/-- `unitGates kp u` read from the table `t`. -/
+def unitGatesAt (t : Array Nat) (kp : KeyProg) (u : Nat) : List Nat :=
+  (List.range kp.size).flatMap fun g =>
+    if unitOf kp g == some u then (List.range (gateSize kp g)).map (offAt t kp g + ·) else []
+
+/-- `blockOf kp κ u` read from the table `t`, which a caller builds once for all of `kp`'s units. -/
+def blockOfAt (t : Array Nat) (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) : List Nat :=
+  unitGatesAt t kp u ++ (insOf kp κ u).map (posAt t kp)
+
+/-- `prog`, its offsets built once (`prog_eq_progFast`). -/
+def progFast (kp : KeyProg) (κ : Nat → Option Bool) : List LGate × List Nat :=
+  let t := offs kp
+  ((List.range kp.size).flatMap (lowerAt t kp κ), kp.outs.map (posAt t kp))
+
+/-- `blockOf`, its offsets built once (`blockOf_eq_blockOfFast`). -/
+def blockOfFast (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) : List Nat := blockOfAt (offs kp) kp κ u
+
+theorem filter_range_lt (n g : Nat) : (List.range n).filter (· < g) = List.range (min g n) := by
+  induction n with
+  | zero => simp
+  | succ n ih =>
+    rw [List.range_succ, List.filter_append, ih]
+    by_cases h : n < g
+    · rw [Nat.min_eq_right (show n ≤ g by omega), Nat.min_eq_right (show n + 1 ≤ g by omega), List.range_succ]
+      simp [h]
+    · rw [Nat.min_eq_left (show g ≤ n by omega), Nat.min_eq_left (show g ≤ n + 1 by omega)]
+      simp [h]
+
+/-- `off kp g` is the lowered sizes of the gates below `g`, the program's when `g` is past it. -/
+theorem off_eq (kp : KeyProg) (g : Nat) : off kp g = ((List.range (min g kp.size)).map (gateSize kp)).sum := by
+  rw [off, filter_range_lt]
+
+theorem offs_fold (kp : KeyProg) (n : Nat) :
+    ((List.range n).foldl (offsStep kp) #[0]).size = n + 1 ∧
+      ∀ i ≤ n, ((List.range n).foldl (offsStep kp) #[0]).getD i 0 = ((List.range i).map (gateSize kp)).sum := by
+  induction n with
+  | zero =>
+    refine ⟨rfl, fun i hi => ?_⟩
+    obtain rfl : i = 0 := by omega
+    rfl
+  | succ n ih =>
+    rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil]
+    obtain ⟨hs, hg⟩ := ih
+    refine ⟨by rw [offsStep, Array.size_push, hs], fun i hi => ?_⟩
+    rw [offsStep, Array.getD_eq_getD_getElem?, Array.getElem?_push, hs]
+    by_cases h : i = n + 1
+    · subst h
+      rw [ite_eq_left rfl, Option.getD_some, hg n (Nat.le_refl n), List.range_succ, List.map_append, List.sum_append]
+      simp
+    · rw [ite_eq_right h, ← Array.getD_eq_getD_getElem?]
+      exact hg i (by omega)
+
+/-- **The table is `off`**: entry `g` of `offs kp` is `off kp g`, at every `g`. -/
+theorem offAt_offs (kp : KeyProg) (g : Nat) : offAt (offs kp) kp g = off kp g := by
+  rw [offAt, off_eq]
+  exact (offs_fold kp kp.size).2 _ (Nat.min_le_right _ _)
+
+theorem posAt_offs (kp : KeyProg) : posAt (offs kp) kp = posOf kp := by
+  funext g
+  rw [posAt, posOf, offAt_offs]
+
+theorem lowerAt_offs (kp : KeyProg) (κ : Nat → Option Bool) : lowerAt (offs kp) kp κ = lower kp κ := by
+  funext g
+  unfold lowerAt
+  rcases h : kp.row? g with _ | ⟨a, b⟩
+  · rfl
+  · simp only [lower, h, posAt_offs, offAt_offs]
+
+theorem unitGatesAt_offs (kp : KeyProg) (u : Nat) : unitGatesAt (offs kp) kp u = unitGates kp u := by
+  simp only [unitGatesAt, unitGates, offAt_offs]
+
+theorem blockOfAt_offs (kp : KeyProg) (κ : Nat → Option Bool) (u : Nat) :
+    blockOfAt (offs kp) kp κ u = blockOf kp κ u := by
+  rw [blockOfAt, blockOf, unitGatesAt_offs, posAt_offs]
+
+@[csimp] theorem prog_eq_progFast : @prog = @progFast := by
+  funext kp κ
+  simp only [prog, progFast, lowerAt_offs, posAt_offs]
+
+@[csimp] theorem blockOf_eq_blockOfFast : @blockOf = @blockOfFast := by
+  funext kp κ u
+  exact (blockOfAt_offs kp κ u).symm
 
 /-! ## Leaf bits -/
 
@@ -610,6 +720,8 @@ private def toy : KeyProg :=
 private def toyκ (g : Nat) : Option Bool := if g == 0 then some true else if g == 1 then some false else none
 
 #guard (List.range toy.size).map (posOf toy) == [0, 1, 2, 3, 6, 9, 12, 15]
+#guard offs toy == #[0, 1, 2, 3, 4, 7, 10, 13, 16]
+#guard (List.range (toy.size + 2)).all fun g => offAt (offs toy) toy g == off toy g
 #guard (prog toy toyκ).1.length == (List.range toy.size).foldl (fun s g => s + gateSize toy g) 0
 #guard lower toy toyκ 0 == [.const true]
 #guard lower toy toyκ 2 == [.input]

@@ -17,7 +17,7 @@ public import Spot.ChallengerCoins
 public import Spot.ChallengerSession
 public import Spot.PyJson
 public import Spot.Registered
-public import Identity.Domains
+public import Identity.Domains.Pouw
 
 /-!
 # A served window's credited set, its sampled proof blocks and their outcome, its A rows and its period (`credit.py`)

@@ -11,7 +11,7 @@ or its Lean mirror (`VStar.In`, `core_vstar`) needs `lean-suites` passed, whose 
 `research run --on` refuses a machine that fails `preflight.py` (the pod setup, the Lean dependencies, a store read, AVX-512
 when needed, free disk) before the run is claimed.  Once `research merge --push`
 has pushed a landing, it starts `post_train.py` on it, detached (`after_land`): the vLLM reference regression's manifest rebuilds,
-which check leaves out, and their label on the attempt.  Nothing here imports anything but `research.store.tool`.
+which check leaves out, and the fast rows of record's neutrality, and their label on the attempt.  Nothing here imports anything but `research.store.tool`.
 """
 from __future__ import annotations
 

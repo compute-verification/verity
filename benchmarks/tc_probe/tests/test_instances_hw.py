@@ -13,16 +13,21 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
+
+if TYPE_CHECKING:
+    from types import ModuleType
+    from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 TC_PROBE = ROOT / "benchmarks" / "tc_probe"
 FIXTURE = ROOT / "fixtures" / "bench-instances" / "v1"
 
 
-def _load(name: str, path: Path):
+def _load(name: str, path: Path) -> ModuleType:
     if str(TC_PROBE) not in sys.path:
         sys.path.insert(0, str(TC_PROBE))
     spec = importlib.util.spec_from_file_location(name, path)
@@ -44,7 +49,7 @@ class FakeProbe:
 
     descriptor = None
 
-    def __init__(self, ins: P.Instruction):
+    def __init__(self, ins: P.Instruction) -> None:
         self.ins = ins
         from verity.ml.circuits.silicon.total import tc_dot_total
 
@@ -52,7 +57,7 @@ class FakeProbe:
         self.step = (lambda c, a, b: tc_dot_total(pipe, c, a, b)) if ins.fmt is P.BF16 else (lambda c, a, b: S.tc_dot(pipe, c, a, b))
         self.calls = 0
 
-    def tiles(self, A, Bt, C):
+    def tiles(self, A: np.ndarray, Bt: np.ndarray, C: np.ndarray) -> np.ndarray:
         n, M, _ = A.shape
         D = np.zeros((n, M, IH.N), np.uint32)
         live_rows = A.any(axis=2)
@@ -68,7 +73,7 @@ class FakeProbe:
         return D
 
 
-def _args(**kw):
+def _args(**kw: object) -> Any:
     ns = type("A", (), {})()
     for k, v in {"range": None, "only_ids": None, "root": None, "manifest": None, "procs": 1}.items():
         setattr(ns, k, kw.get(k, v))
@@ -78,7 +83,7 @@ def _args(**kw):
 # --- the store declaration --------------------------------------------------------------------------------------------------------------
 
 
-def test_store_declaration_registered_and_parses_flags():
+def test_store_declaration_registered_and_parses_flags() -> None:
     tools_registry = pytest.importorskip("research.store.tools_registry")  # the pod venvs have numpy but not tools/research
 
     tool = tools_registry.load("instances_hw", ROOT)
@@ -100,12 +105,12 @@ def test_store_declaration_registered_and_parses_flags():
 # --- the FP8 Ada synthetic set ----------------------------------------------------------------------------------------------------------
 
 
-def test_fp8_digest_is_the_recipe_digest():
+def test_fp8_digest_is_the_recipe_digest() -> None:
     assert IH.fp8_instances_digest(4096) == hashlib.sha256(b"fp8-ada synthetic|seed=20260922|n=4096|K=1536").hexdigest()
     assert IH.fp8_instances_digest(4096) == "3d1b3e6b4d4e8fb7bd6c9b4a5c9b3a1f0f8b0d5e7c2a1b6f4e3d2c1b0a9f8e7d"[:0] + IH.fp8_instances_digest(4096)  # stable across calls
 
 
-def test_fp8_set_loads_with_range_and_only_ids():
+def test_fp8_set_loads_with_range_and_only_ids() -> None:
     inst = IH.load_fp8_ada(2, 5)
     assert inst.dataset == IH.FP8_ADA_DATASET and inst.tier == "vu-k1536-fp8" and inst.instruction == "sm89.mma.m16n8k32.e4m3"
     assert inst.n == 3 and inst.steps == 48 and inst.k == 32 and inst.a.dtype == np.uint8 and inst.epilogue is None
@@ -118,7 +123,7 @@ def test_fp8_set_loads_with_range_and_only_ids():
     assert only.ids.tolist() == [1, 7] and only.a[1].reshape(-1).tolist() == IH.fp8_instance(7)[0].tolist()
 
 
-def test_fp8_replay_reproduces_every_word_and_locates_an_injected_mismatch():
+def test_fp8_replay_reproduces_every_word_and_locates_an_injected_mismatch() -> None:
     ins = P.INSTRUCTIONS["sm89.mma.m16n8k32.e4m3"]
     inst = IH.load_fp8_ada(0, 3)
     rep = IH.replay(FakeProbe(ins), ins, inst)
@@ -144,7 +149,7 @@ def test_fp8_replay_reproduces_every_word_and_locates_an_injected_mismatch():
 # --- the Hopper synthetic sets ----------------------------------------------------------------------------------------------------------
 
 
-def test_hopper_sets_are_declared_with_their_targets_and_digests():
+def test_hopper_sets_are_declared_with_their_targets_and_digests() -> None:
     bf, f8 = IH.BF16_HOPPER_SYNTHETIC, IH.FP8_HOPPER_SYNTHETIC
     assert bf.spec == "bench-instances-bf16-hopper/v1/vu-k1536-bf16-hopper" and bf.instruction == "sm90.mma.m16n8k16.bf16"
     assert bf.k == 16 and bf.steps == 96 and bf.epilogue == "f32_to_bf16" and bf.model.name == "hopper_bf16_m16n8k16"
@@ -161,7 +166,7 @@ def test_hopper_sets_are_declared_with_their_targets_and_digests():
     assert e.max() < 160 and ((e == 0) | (e >= 96)).all() and (e == 0).sum() > 500  # zeros and subnormals are ~1/5 of the words
 
 
-def test_hopper_bf16_set_replays_through_the_hopper_pipeline():
+def test_hopper_bf16_set_replays_through_the_hopper_pipeline() -> None:
     ins = P.INSTRUCTIONS["sm90.mma.m16n8k16.bf16"]
     inst = IH.load_synthetic(IH.BF16_HOPPER_SYNTHETIC, 0, 2)
     assert inst.a.dtype == np.uint16 and inst.steps == 96 and inst.epilogue == "f32_to_bf16" and inst.instruction == ins.id
@@ -172,7 +177,7 @@ def test_hopper_bf16_set_replays_through_the_hopper_pipeline():
     assert np.array_equal(rep["_y_hw"], IH.epilogue_words("f32_to_bf16", inst.acc[:, -1]))
 
 
-def test_hopper_fp8_set_replays_through_the_wgmma_shape():
+def test_hopper_fp8_set_replays_through_the_wgmma_shape() -> None:
     ins = P.INSTRUCTIONS["sm90.wgmma.m64n8k32.e4m3"]
     inst = IH.load_synthetic(IH.FP8_HOPPER_SYNTHETIC, 5, 7)
     assert ins.m == 64 and inst.a.dtype == np.uint8 and inst.steps == 48 and inst.ids.tolist() == [5, 6]
@@ -183,7 +188,7 @@ def test_hopper_fp8_set_replays_through_the_wgmma_shape():
 # --- bench-instances/v1 -----------------------------------------------------------------------------------------------------------------
 
 
-def test_negative_tier_loads_from_the_committed_arrays_and_checks_digests(tmp_path):
+def test_negative_tier_loads_from_the_committed_arrays_and_checks_digests(tmp_path: Path) -> None:
     inst = IH.load_bench_instances("vu-k1536-neg", None, FIXTURE / "manifest.json")
     assert inst.dataset == "bench-instances/v1" and inst.instruction == "sm80.mma.m16n8k16.bf16" and inst.model == "ampere_bf16_m16n8k16"
     assert inst.n == 52 and inst.steps == 96 and inst.k == 16 and inst.a.dtype == np.uint16 and inst.epilogue == "f32_to_bf16"
@@ -203,7 +208,7 @@ def test_negative_tier_loads_from_the_committed_arrays_and_checks_digests(tmp_pa
         IH.load_bench_instances("vu-k1536", tmp_path, FIXTURE / "manifest.json")
 
 
-def test_negative_tier_every_claimed_word_is_detected():
+def test_negative_tier_every_claimed_word_is_detected() -> None:
     ins = P.INSTRUCTIONS["sm80.mma.m16n8k16.bf16"]
     inst = IH.load_bench_instances("vu-k1536-neg", None, FIXTURE / "manifest.json")
     rep = IH.replay(FakeProbe(ins), ins, inst)
@@ -233,7 +238,7 @@ def test_negative_tier_every_claimed_word_is_detected():
     assert sum(r["hardware_equals_claimed"] for r in rejects) >= 6 and all(r["detected"] for r in rejects)
 
 
-def test_epilogue_words_are_the_targets_cast():
+def test_epilogue_words_are_the_targets_cast() -> None:
     from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 
     acc = np.array([0x3F800000, 0x3F808000, 0x3F818000, 0x7F7FFFFF, 0xFF800000, 0x7FC00001, 0x80000000, 0x00000001], np.uint32)
@@ -244,7 +249,7 @@ def test_epilogue_words_are_the_targets_cast():
         IH.epilogue_words("rtz", acc)
 
 
-def test_unknown_set_and_bad_range_are_refused():
+def test_unknown_set_and_bad_range_are_refused() -> None:
     with pytest.raises(SystemExit):
         IH.load_instances("bench-instances/v1/nope", _args())
     with pytest.raises(ValueError, match="range"):
@@ -270,7 +275,7 @@ def _gpu_compute_capability() -> str | None:
     return smi.stdout.strip().splitlines()[0].strip()
 
 
-def test_on_the_device(tmp_path):
+def test_on_the_device(tmp_path: Path) -> None:
     """Ampere / Ada: the FIRST negative tier on the BF16 mma (the Ada pipeline is the Ampere one: hardware == correct word); Hopper: a
     few instances of the Hopper BF16 synthetic set on its own instruction (the FIRST set's correct words are Ampere words, not Hopper's)."""
     cc = _gpu_compute_capability()

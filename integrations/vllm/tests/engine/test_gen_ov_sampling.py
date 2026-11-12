@@ -1,5 +1,6 @@
 """[ov-sampling] the B1 (Qwen2.5-1.5B) sampling workloads and the per-request variant (mixed batch) of the SHARED-CODE
-`load_workload` / `sampling_params` change.  The adapter imports torch, so the pure functions are exec'd from source."""
+`load_workload` / `sampling_params` change.  The adapter imports torch, so the pure functions are exec'd from source.  The GPU
+probe's noise is `test_gen_ov_sampling_of_record`."""
 
 from __future__ import annotations
 
@@ -146,31 +147,6 @@ def test_gumbel_argmax_definition_is_a_function_of_the_seed_and_position():
     a, b, c = (_evaluate_gumbel(32, s, p, words) for s, p in [(1, 0), (2, 0), (1, 1)])
     assert a == _oracle(32, 1, 0, words) and b == _oracle(32, 2, 0, words) and c == _oracle(32, 1, 1, words)
     assert len({a, b, c}) > 1
-
-
-def test_gumbel_lane_noise_is_bit_exact_against_the_gpu_probe():
-    """The pod probe dumped `_gumbel_sample_kernel`'s noise (tl.rand -> log1pf/logf) for seeds/positions of the B1 runs;
-    the lane's NumPy transcription and the Definition's per-lane primitive must reproduce every word."""
-    import numpy as np
-    from verity_vllm.program.libdevice_sampling import gumbel_noise_exact
-    from verity.ml.definitions.registry.sampling import GumbelNoiseLane, GumbelStreamKey
-    probe = Path(__file__).resolve().parents[2] / "out/gen/lanes/ov-sampling/runs/probe"
-    cmp = probe / "compare.json"
-    if not cmp.exists():
-        pytest.skip("probe artifacts not fetched")
-    rep = json.loads(cmp.read_text())
-    assert rep["all_bit_exact"] is True, rep
-    dumps = sorted(probe.glob("*.npz"))
-    if not dumps:
-        pytest.skip("probe .npz not fetched (compare.json is the recorded verdict)")
-    d = np.load(dumps[0])
-    seed, pos = int(d["seed"]), int(d["pos"])
-    gpu = np.asarray(d["gumbel"], dtype=np.float32)
-    ours = gumbel_noise_exact(seed, pos, gpu.shape[0])
-    assert np.array_equal(gpu.view(np.uint32), ours.view(np.uint32))
-    key = GumbelStreamKey.evaluate(seed & ((1 << 64) - 1), pos & ((1 << 64) - 1))
-    for v in (0, 1, 7, gpu.shape[0] - 1):
-        assert GumbelNoiseLane.evaluate(key, v) == int(gpu.view(np.uint32)[v])
 
 
 # ---------------------------------------------------------------------------------------------------------

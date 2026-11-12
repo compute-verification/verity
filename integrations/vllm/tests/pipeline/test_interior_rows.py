@@ -161,7 +161,7 @@ def _spec(member: CS.Member, unit=UNIT, block=BLOCK, n_rho: int = N_RHO) -> S.Sp
               S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
               *(S.Public(f"{k}:{p}", "structure", f"{p}'s layout") for p in sorted(names) for k in ("leaves", "domain")))
     return S.Spec(tuple(S.Value(p, s, phase) for p, (s, phase) in sorted(names.items())),
-                  S.TwoStage(P.template_instance_query(block), f"subset:{Q}", K),
+                  S.TwoStage(P.template_instance_query(block), f"rate:{Q}/{len(PROMPTS)}", K),
                   S.Check(P.program_digest(Program(unit)), P.template_instance_query(unit), proof_deadline=60.0),
                   public, b"interior-rows-test")
 

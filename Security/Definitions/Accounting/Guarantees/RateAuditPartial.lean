@@ -15,8 +15,8 @@ on `Accounting.Assumptions.RateComputeAdditive` (W: the compute account's work a
 work).
 
 * `RateAuditPartial`: `RateAudit`'s bound, at its floor with `c_enc = rounds · c_root` and its error, for a device that
-  may keep part of a word and complete the rest.
-* `RatePartialHonest`: the honest device of `RateHonest`, accepted on every coin, completing nothing.
+  may keep part of a word and complete the rest; its honest device is a lemma, `RatePartialHonest`
+  (`Security/Proofs/Accounting/Lemmas/RateAudit.lean`).
 * `RatePartialRebuild`: on every run, the bits completed cost `c_word / b` each (the remote audit's route
   `Accounting.Remote.Run.Rebuild` at `δ = 0`).
 * `RateOfAuditPartial`: in a joint run, the bandwidth account's reads, with the completions charged as compute through
@@ -82,20 +82,6 @@ def RateAuditPartial : Prop :=
         A.Accepts x.1 x.2.1 x.2.2.1 x.2.2.2 ∧ A.compute cTag cost x.1 x.2.1 x.2.2.1 ≤ F ∧
           A.footprint x.1 x.2.1 x.2.2.1 * (rounds * cRoot) < floor b ρ S L F cTag (rounds * cRoot) k lam)
       ≤ (((k - 1 : ℕ) : ℝ≥0∞) / N) ^ s + (s : ℝ≥0∞) / 2 ^ h + (q.choose k : ℝ≥0∞) / 2 ^ lam
-
-/-- **Completeness of `RateAuditPartial`: an honest device that reads every word once is accepted on every coin.** For
-every `N`, `b`, `h` and `ρ` there is a partial device with no on-chip state and no free side sources, whose link
-carries exactly the certified stream (`L = ρ`) and which makes `N` oracle queries, that is accepted on every store,
-stream, oracle and sample; its footprint and its ingress are exactly the store, `N·b` bits, it completes nothing, and
-its compute is `N·c_tag` at every price of a completion. It is `RateHonest`'s device. Proof:
-`Accounting.SecurityProofs.RatePartialHonest`.
-
-Frozen (completeness): the honest device's acceptance, which shows that `RateAuditPartial`'s event is not vacuous. -/
-def RatePartialHonest : Prop :=
-  ∀ N b h ρ : ℕ, ∃ A : Rate.PartialDevice N b h ρ 0 ρ N,
-    ∀ (cTag : ℕ) (cost : ℕ → ℕ) (E : Store N b) (R : Bits ρ) (O : Oracle N b h ρ) (s : ℕ) (I : Fin s → Fin N),
-      A.Accepts E R O I ∧ A.footprint E R O = N * b ∧ A.ingress E R O = N * b ∧ A.completed E R O = 0 ∧
-        A.compute cTag cost E R O = N * cTag
 
 /-- **The rebuild route: a partial device pays `c_word / b` per bit it completes.** For every partial device, if
 completions are as hard as `WorkHardness b rounds c_root cost` says, then on every store, stream and oracle the bits

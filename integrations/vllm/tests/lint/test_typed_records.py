@@ -2,8 +2,8 @@
 
 Checked today, against ``allowlists/typed_records.json``:
 
-* ``or-empty``: ``x.get(k) or []`` and ``x.get(k) or {}``, counted per package (a directory of ``verity_vllm``), which reads
-  a missing field and an empty one alike.  A record's ``load()`` refuses a missing field by name and types an absent
+* ``or-empty``: ``x.get(k) or []`` and ``x.get(k) or {}``, counted per file, which reads a missing field and an empty one
+  alike.  A record's ``load()`` refuses a missing field by name and types an absent
   optional one, so its readers need neither.
 * ``schema-literal``: a schema id (``verity-vllm/workload/v2``, ``cb-a/global-match/v1``) written as a string literal
   outside ``verity_vllm/records/``, where each record's ``SCHEMA`` is its one owner.  A module-level constant named
@@ -20,7 +20,6 @@ import ast
 import re
 from collections import Counter
 from functools import lru_cache
-from pathlib import PurePosixPath
 
 from . import _ratchet as R
 
@@ -40,10 +39,6 @@ def _is_empty(node: ast.AST) -> bool:
     return (isinstance(node, ast.List) and not node.elts) or (isinstance(node, ast.Dict) and not node.keys)
 
 
-def package(rel: str) -> str:
-    return PurePosixPath(rel).parent.as_posix()
-
-
 def tag_ids(tree: ast.Module) -> frozenset[int]:
     """ids of the strings that module-level constants named ``*_TAG`` or ``*_DOMAIN`` hold: domain-separation tags."""
     return frozenset(id(s.value) for s in tree.body if isinstance(s, (ast.Assign, ast.AnnAssign)) and R.is_str(s.value)
@@ -58,7 +53,7 @@ def file_violations(src: str, rel: str, tags: bool = False) -> list[R.Violation]
     out: list[R.Violation] = []
     for node, symbol in R.walk(tree):
         if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
-            out += [R.Violation(package(rel), "or-empty", "<package>", OR_EMPTY)
+            out += [R.Violation(rel, "or-empty", "<module>", OR_EMPTY)
                     for a, b in zip(node.values, node.values[1:]) if _is_get(a) and _is_empty(b)]
         elif R.is_str(node) and id(node) not in skip and SCHEMA_ID.match(node.value) and not rel.startswith(OWNER):
             out.append(R.Violation(rel, "schema-literal", symbol, node.value, node.lineno))
@@ -77,7 +72,7 @@ def test_no_new_violations() -> None:
     R.assert_no_new(NAME, scan(), RULE,
                     "Read the record through its type in verity_vllm/records/ (load() refuses a missing field by name; an "
                     "optional field is typed `X | None`), and take its schema id from the record's SCHEMA.  An or-empty "
-                    "entry counts a package: the new one is in the lines this change adds there.")
+                    "entry counts a file: the new one is in the lines this change adds there.")
 
 
 def test_allowlist_has_no_stale_entries() -> None:
@@ -94,7 +89,7 @@ def test_detectors_on_examples() -> None:
         "    return doc.get('a') or other.get('b') or []\n"
     )
     got = Counter((v.file, v.kind, v.symbol, v.detail) for v in file_violations(bad, "verity_vllm/check/match/x.py"))
-    assert got == Counter({("verity_vllm/check/match", "or-empty", "<package>", OR_EMPTY): 3,
+    assert got == Counter({("verity_vllm/check/match/x.py", "or-empty", "<module>", OR_EMPTY): 3,
                            ("verity_vllm/check/match/x.py", "schema-literal", "<module>", "verity-vllm/workload/v2"): 1,
                            ("verity_vllm/check/match/x.py", "schema-literal", "f", "cb-a/global-match/v1"): 1}), got
     good = ("def f(doc):\n"
