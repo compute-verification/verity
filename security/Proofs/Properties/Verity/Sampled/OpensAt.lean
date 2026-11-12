@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Properties.Verity.Sampled.Instance
+public import Proofs.Properties.Verity.Sampled.OpensRecorded
 public import Proofs.Properties.Verity.Sampled.Place
 public import Proofs.Properties.Verity.Sampled.SessionAt
 public import Proofs.Flock.Bridge.V5.Accepted
@@ -43,7 +44,8 @@ it is from the code's side (`Flock.Bridge.Spec`), at:
 * `remote_soundness_deployedReady_honest`, `remote_soundness_deployedReady_nontrivial`: its premises hold at the idle
   deployment's instance that runs no session, and its conclusion fails for a verifier that accepts everything.
 * `remote_soundness_deployedReady`: **`remote_soundness_deployedAt` with `OpensAt` discharged** at `SessionsReady`,
-  and `SessionAt` by `sessionAt_of_registered` at the deployment's session on the registered files.
+  `SessionAt` by `sessionAt_of_registered` at the deployment's session on the registered files, and the device's log
+  opening only the record's rounds by v2's record check (`Instance.logOpensRecorded`).
 -/
 
 @[expose] public section
@@ -329,18 +331,18 @@ theorem opensAt_of_sessions (I : Instance d α) (h : I.SessionsReady) : I.OpensA
 end Instance
 
 /-- **`remote_soundness_deployedAt` at sessions `OpensReady`**: its openings premise `OpensAt` discharged by
-`opensAt_of_sessions`, and its session premise `SessionAt` by `sessionAt_of_registered` from `SessionRegistered`; of
-the coupling, `couplingTarget_at`'s, what is left is the device's log opening only the record's rounds
-(`LogOpensRecorded`). -/
+`opensAt_of_sessions`, its session premise `SessionAt` by `sessionAt_of_registered` from `SessionRegistered`, and the
+coupling's, the device's log opening only the record's rounds (`LogOpensRecorded`), by v2's record check, which
+refuses a session whose coin tree opens a round its record doesn't give (`Instance.logOpensRecorded`). -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hready : I.SessionsReady) (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered .remote)
-    (hOR : I.LogOpensRecorded .remote) (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
+    (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
   remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) hRg
-    (I.sessionAt_of_registered .remote hSr) hOR hW hI
+    (I.sessionAt_of_registered .remote hSr) (I.logOpensRecorded .remote) hW hI
 
 open scoped ENNReal in
 /-- **`remote_soundness_deployedReady`'s honest lemma**: its premises hold at the idle deployment's instance at v2's
@@ -349,11 +351,10 @@ premise speaks of the sessions the deployment runs, and the base's PoUW and infe
 theorem remote_soundness_deployedReady_honest :
     (Instance.Honest.inst ⊤ fun _ => none).SessionsReady ∧ (Instance.Honest.inst ⊤ fun _ => none).RegisteredFiles ∧
       (Instance.Honest.inst ⊤ fun _ => none).SessionRegistered .remote ∧
-      (Instance.Honest.inst ⊤ fun _ => none).LogOpensRecorded .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.PouwSound .remote ∧
       (Instance.Honest.inst ⊤ fun _ => none).base.InferenceOnlySound .remote :=
   ⟨fun _ _ _ h => by simp [Instance.Honest.inst] at h, Instance.Honest.registeredFiles ⊤ _,
-    Instance.Honest.sessionRegistered_none ⊤ .remote, Instance.Honest.logOpensRecorded_none ⊤ .remote,
+    Instance.Honest.sessionRegistered_none ⊤ .remote,
     Instance.Honest.target_top .remote .pouw, Instance.Honest.target_top .remote .inferenceOnly⟩
 
 /-- **`remote_soundness_deployedReady`'s nontrivial lemma**: its conclusion, soundness at remote's compiled verifier,
