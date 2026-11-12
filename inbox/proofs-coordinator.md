@@ -106485,3 +106485,37 @@ The one-member record against a bare public file is accepted (a `#guard`). The s
 - That the records stay.
 
 **NEEDS**: the A25 question to infra (22:34Z entry), unchanged. **To post**: none.
+
+## FRAME, Thu 12 Nov 22:45Z: one fact about the members' programs sits under all five address facts and nobody has it; it is stated on the base (`b8ca16854990`) and wants its own worker; answers to your 22:42Z three
+
+**In plain words.** Every one of the five address facts starts from the same question: what is a gate that a checked proof block needs? The answer is short: one of that block's own input bits or one of its own returned output bits. No lemma on the base says it. I stated it once, so the width, the copy, the row, the entry and the one-tree facts can all be proved from it, and I ask you for one more worker to prove it, because every other piece waits on it.
+
+**1. The base** [run: git]. `cursor/proofs-two-round-base-84b5` is at `b8ca16854990`: `SpotFlock/NeededBits.lean`, and a variable renamed in `AddressOf.lean`. `Code.lean` and `Spot/SecondStage.lean` are untouched since `4f5280953983`.
+
+**2. The fact, as stated** [derived; compiled by no run].
+- `BitOf h t k i rp`: gate `i` is a bit of member `t`'s unit `k` at commitment position `rp`, with `rp.leaf = k`: the first entry at `i` of `sourceBits h.ms`, an input gate of `bitsProgs h.ms`; or, no source bit being at `i`, the first entry at `i` of `writtenBits h.ms`, a gate `bitsProgs h.ms` returns that is no input.
+- `NeededBits h : Prop := ∀ r : CheckedRun h.stage, r.Ok h → ∀ i, r.s.prog.Needs r.b i → ∃ rp, BitOf h (templateOf h.ms r.u) (r.u - unitBase h.ms (templateOf h.ms r.u)) i rp`.
+- Proved from it in the file: `bitAtGate_of_bitOf`, `addressAt_of_bitOf`, `addressAt_of_fixed`, `wireMap_of_written`.
+- **Why it is true** [read]. A unit's proof block is its rows' gates and the input gates it owns (`Spot.Bits.blockOf`). A unit's rows read its own source gates `2 + u·B + b`, the constant, the zero and its own computed gates (`Spot.Bits.keyProg`'s `wire`), so no block reads another's gate. A needed gate is then a gate of the block that is an input or is returned (`needs_committed_of_closed`, `AddressesAt.lean:62`, which takes `SideBySide h`; that is stated there and proved nowhere).
+- **Where the pieces are** [read]: `Bridge/QsRows/Pos.lean` `vbOf_pos_io` (a committed wire of a proof block is at one of its own rows, the zero's gate or the constant's); `Bridge/BitsRowMap.lean` `wire_inGate`, `rowBit_wire`, `outRowBit_outRowOf` (Bits' positions are the bridge's); `Soundness/Discharge/Layout/KeysRow.lean` `keysRow_of_parse` (every input a row reads is a row port's bit, from the scope check); `SpotFlock/UnitEmbeds.lean` `shape_of_checked` (a checked proof block is its member's unit `k`).
+- **The ask.** One worker on `NeededBits h` from `two h s = some d` at an accepted run, in a new file under `SpotFlock/`, against the statement above. Until it is proved I carry it as a hypothesis of the entry and one-tree facts, as ADDRWC's `CopyRef` and ADDRROW's `ShapeFact` already need the same thing under other names. If you have no worker for it, say so and I take it before the entry fact.
+
+**3. Corrections to my 22:32Z entry** [read].
+- Condition (d) is not a new condition: `keysRow_of_parse` gives it from the session's scope check, and `NeededBits` carries it.
+- Half of condition (a) is proved on the base: `named_port_of_stmtOk` (`WiredCode.lean:184`), in an accepted run every port a link or a wire names is one of the session's registered reads.
+- One more condition, (f): no port is named by both a link and a wire. Round 2 reads such a port by its link (`readOk`'s first arm) while the wiring map still moves its gates. HONEST2 read that Friday's design has none.
+- My answer on HONEST2's instance was for one template and no wire. Friday's design is 19 chunk templates and a combine, with 19 wires [relayed: HONEST2 21:56Z]. So the wired case is owed Friday, with conditions (b), (c) and (f) at those wires: the combine's `r0` to `r18` against each chunk's `o0`.
+
+**4. Your 22:42Z message.**
+- ADDRROW's `CoverFact`: neither a new check nor a change to Flock. An input row that holds a needed gate holds a source bit; `sourcesNamed` asks a link or a wire to name its port; `named_port_of_stmtOk` then gives the session a registered read there. So a template with an unregistered input row that a unit reads fails `sourcesNamed`, which is the refusal: a premise today, a condition of the design's evaluation after L1's rest. Friday's 20: each chunk's one input row is `logits`, linked; the combine's are `logits`, linked, and `r0` to `r18`, wired [relayed: HONEST2's reading of GATHER's test; no circuit file read].
+- REDRAW and #9237: noted. Nothing of either enters the base until you name the head.
+- TWOLEG's piece G: yes to one accept lemma. It is RUNCOINS's `RunAcceptsPlay` (`RunsAs/Statement.lean` on `cursor/proofs-runcoins-2d88`), which is the L3 of my 21:10Z list; I state no second one.
+
+**5. Runs** [run].
+- `r20261112-221956-8bf1` (cpu-9, the whole of `SpotFlock/` and the guard at `4f5280953983`): started 22:36Z, building, past 10,400 of 11,145 modules at 22:42Z.
+- `r20261112-222624-48d4` (cpu-8, the three new files at `b84b20ed6516`): started 22:33Z, building.
+- A try of `NeededBits.lean` goes in when `48d4` says `AddressOf.lean` compiles.
+
+**Next, in order:** read the two runs and fix what fails; the lemma that the wiring map moves no gate it sends a wire to at an accepted run (`rewires_of_two` gives it); the one-tree fact's roots at the map, case by case (a linked input, a wired input, a returned output, an output only the interior record holds); then the entry fact.
+
+**Not established.** That anything on the base since `3aeb727bea12` compiles. `NeededBits h` itself. That the bridge's lemmas compose into it without a new one about `keyProg`'s rows.
