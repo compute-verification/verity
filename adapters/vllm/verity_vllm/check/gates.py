@@ -213,8 +213,9 @@ class GateResult:
 
     @classmethod
     def from_json(cls, d: dict) -> GateResult:
+        gid, name, status = d["id"], d.get("name", GATE_NAMES.get(d["id"], "")), d["status"]   # read first: an entry that is no object is refused here
         evidence, detail = d.get("evidence"), d.get("detail")   # a result written without either consulted no artifact and details nothing
-        return cls(id=d["id"], name=d.get("name", GATE_NAMES.get(d["id"], "")), status=d["status"],
+        return cls(id=gid, name=name, status=status,
                    evidence=list(evidence) if evidence else [], detail=dict(detail) if detail else {}, reason=d.get("reason"))
 
     def result(self) -> CheckResult:
@@ -660,7 +661,8 @@ def gate_semantic_closure(run: RunArtifacts) -> GateResult:
                     {"unsupported": unsupported, "fold_unresolved": fold_unresolved})
     if amb:
         problems.append(f"{amb} ambiguous pattern matches ({amb_src})")
-    totals = res["totals"]   # stated: the counts above were read from it
+    stated = res.get("totals")
+    totals = stated if stated else {}
     detail = {"unsupported": unsupported, "resolution_errors": res_errors, "fold_unsupported": fold_unsupported,
               "fold_unresolved": fold_unresolved, "fold_errors": fold_errors, "fold_error_classes": fs.get("error_classes"),
               "ambiguous": amb, "ambiguity_source": amb_src, "steps": steps, "expected_steps": exp,

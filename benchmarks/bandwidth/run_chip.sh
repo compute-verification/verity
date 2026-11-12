@@ -70,11 +70,11 @@ for f in $(ls "$S"/ptx/*_*.cubin | sort -t_ -k1,1 -k2n); do
 done
 rm -f "$S"/ptx/*.ptx "$S/sass.txt"
 
-# Uniform registers: how often each URn appears in bwchip's kernels, and three instructions naming URZ with their
-# encodings (URZ is the register field's all-ones value).
+# Uniform registers: how often each URn appears in bwchip's kernels, and up to three instructions naming URZ with their
+# encodings (URZ is the register field's all-ones value), where a kernel has one.
 "$CUDA/bin/cuobjdump" -sass "$S/bwchip" > "$S/all.sass"
-{ grep -oE '\bUR[0-9]+\b' "$S/all.sass" | sort -t R -k2 -n | uniq -c; grep -m3 -E 'UMOV UR[0-9]+, URZ' "$S/all.sass"; } \
-  > "$O/uniform.txt"
+{ grep -oE '\bUR[0-9]+\b' "$S/all.sass" | sort -t R -k2 -n | uniq -c
+  grep -m3 -E 'UMOV UR[0-9]+, URZ' "$S/all.sass" || true; } > "$O/uniform.txt"
 for p in $PAIRS; do
   python3 chip_ur.py "$CUDA/bin/cuobjdump" "$S/ptx/urt.cubin" "${p%:*}" "${p#*:}" "$S/ur/urt_${p%:*}_${p#*:}.cubin" >> "$O/uniform.txt"
 done

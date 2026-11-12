@@ -3,13 +3,11 @@
 sit on the module's kernel globals, record (kernel, grid, S) per launch and launch the original unchanged."""
 from __future__ import annotations
 
-import sys
-import types
-
 import pytest
 
 pytest.importorskip("torch")
 
+from tests import fake_vllm
 from verity_vllm.commit.committer import topp_splits as NC
 
 
@@ -29,10 +27,10 @@ class _FakeKernel:
 
 @pytest.fixture
 def fake_vllm_module(monkeypatch):
-    mod = types.ModuleType(NC.TOPP_SPLIT_MODULE)
+    """vLLM's top-p module in the stand-in (`tests.fake_vllm`), with a fake kernel under each split kernel's name."""
+    mod = fake_vllm.install(monkeypatch)[NC.TOPP_SPLIT_MODULE]
     for nm in NC.TOPP_SPLIT_KERNELS:
         setattr(mod, nm, _FakeKernel(nm))
-    monkeypatch.setitem(sys.modules, NC.TOPP_SPLIT_MODULE, mod)
     return mod
 
 
@@ -57,17 +55,17 @@ def test_launch_proxy_records_the_kernels_constexpr_s_and_launches_the_original(
     assert len(originals["_topp_sb_stats_kernel"].launches) == 1 and originals["_topp_sb_stats_kernel"].launches[0][2]["S"] == S
     assert len(originals["_topp_sb_step_kernel"].launches) == 4 and len(originals["_topp_sb_mask_kernel"].launches) == 1
     assert originals["_topp_sb_mask_kernel"].launches[0][0] == (B * S,)
-    # attribute fall-through, then uninstall restores the module namespace exactly
+    # attribute fall-through, then uninstalling each patch restores the module namespace exactly
     assert mod._topp_sb_mask_kernel.name == "_topp_sb_mask_kernel"
-    NC.uninstall_split_kernel_proxies(orig)
+    for p in orig.values():
+        p.uninstall()
     assert {nm: getattr(mod, nm) for nm in NC.TOPP_SPLIT_KERNELS} == originals
 
 
 def test_install_without_the_split_pipeline_binds_nothing(monkeypatch):
     """An older vLLM without `_apply_topp_split`: no proxies, so no launch S is read."""
-    monkeypatch.setitem(sys.modules, NC.TOPP_SPLIT_MODULE, types.ModuleType(NC.TOPP_SPLIT_MODULE))
+    fake_vllm.install(monkeypatch)                                         # the top-p module, with no kernel on it
     assert NC.install_split_kernel_proxies([]) == {}
-    NC.uninstall_split_kernel_proxies({})                                  # no-op
 
 
 def test_a_grid_the_proxy_cannot_read_is_recorded_as_none_and_still_launched(fake_vllm_module):
@@ -80,7 +78,8 @@ def test_a_grid_the_proxy_cannot_read_is_recorded_as_none_and_still_launched(fak
     for grid in (meta_grid, (), ("x",), "x", 8, [6, 2]):
         assert kernel[grid](S=2) == "_topp_sb_stats_kernel-ran"
     assert [g for _n, g, _s in sink] == [None, None, None, None, 8, 6]
-    NC.uninstall_split_kernel_proxies(patches)
+    for p in patches.values():
+        p.uninstall()
 
 
 def test_install_without_the_module_is_an_import_error(monkeypatch):
