@@ -130,6 +130,13 @@ def index_key(*, prefix: str | None = None, attention_paths: list[str] | None = 
     return (prefix, tuple(attention_paths or ()), t and (t["rank"], t["world"]), program_dir, query or DEFAULT_QUERY, bool(norm_scales))
 
 
+def plane_copies(d: dict) -> list[dict]:
+    """The second names a described row's output is committed under (`ProgramIndex.describe`: a MoeSum's plane beside its
+    module's own output).  A description states `copies` only for such a row; every other row has none."""
+    copies = d.get("copies")
+    return [] if copies is None else copies
+
+
 def described(pi: ProgramIndex, r: dict) -> dict:
     """`pi.describe(r)` of a row the caller took from the population (a picked VU, a row a request's replay needs), which holds
     only modelled rows."""
@@ -370,7 +377,7 @@ class ProgramIndex:
         `[k]` name index when the Program names one; a violation yields members [] + `plane_error` -> counted by NAME as a mapping failure
         (population), never a silent read of another pair's words."""
         s = self.step_of(i)
-        g = self._moe_geo[s].get(mod) or {}
+        g = self._moe_geo[s][mod]                 # there: the kind that sends the row here put its module in its step's geometry
         layer = RM.layer_of(mod)
         M, TOPK = int(g.get("M", 0) or 0), int(g.get("TOPK", 0) or 0)
         ord_ = int(self._moe_ord.get(i, -1))

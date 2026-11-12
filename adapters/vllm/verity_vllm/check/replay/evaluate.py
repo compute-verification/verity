@@ -24,6 +24,7 @@ from verity_vllm.check.replay.index import (
     ProgramIndex,
     const_word,
     described,
+    plane_copies,
     row_args,
 )
 from verity_vllm.check.replay.opening import _ITEMSIZE, WordStore
@@ -365,7 +366,7 @@ def plan_vu(pi: ProgramIndex, store: WordStore, vu: dict, *, arrive: int) -> str
     for m in d["members"]:
         width = int(m[1])
         store.words(vu["request_id"], arrive + d["step"], d["op_path"], m[0], d["row"] * width, (d["row"] + 1) * width)
-    for c in d.get("copies") or []:
+    for c in plane_copies(d):
         width = int(c["width"])
         store.words(vu["request_id"], arrive + d["step"], c["op_path"], c["member"], int(c["row"]) * width, (int(c["row"]) + 1) * width)
     return why
@@ -475,7 +476,7 @@ def _replay_vu(pi: ProgramIndex, store: WordStore, weights: Callable[[str, int, 
         if not eq:
             mism.append(member)
         dump_row_words(fam, rid, arrive + d["step"], d["op_path"], d["row"], member, have, want, eq, store=store, elo=elo, ehi=ehi)
-    for c in d.get("copies") or []:
+    for c in plane_copies(d):
         # [MOE-TP-02] the same output committed under its second required name (the TP rank's moe/L<k>/sum plane beside part_rank<r>):
         # read back at the plane address and compared against the SAME evaluated words -- a plane copy that disagrees is a mismatch by name
         want = np.asarray(got[c["of"]]).reshape(-1)

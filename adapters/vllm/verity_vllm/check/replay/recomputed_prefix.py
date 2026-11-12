@@ -22,7 +22,7 @@ from typing import Any
 import numpy as np
 
 from verity_vllm.check.replay import evaluate as EV
-from verity_vllm.check.replay.index import IDS_MEMBER, ProgramIndex
+from verity_vllm.check.replay.index import IDS_MEMBER, ProgramIndex, plane_copies
 from verity_vllm.check.replay.request_replay import Replay
 
 
@@ -36,7 +36,7 @@ def positions(pi: ProgramIndex) -> dict[tuple[str, str], int]:
         if d is None or int(d["step"]) != 0:
             continue
         for op, member, w in [(d["op_path"], m[0], int(m[1])) for m in d["members"]] + \
-                             [(c["op_path"], c["member"], int(c["width"])) for c in d.get("copies") or ()]:
+                             [(c["op_path"], c["member"], int(c["width"])) for c in plane_copies(d)]:
             rows[(op, member)] += 1
             width[(op, member)] = w
     embed = pi.embed_op_path()
