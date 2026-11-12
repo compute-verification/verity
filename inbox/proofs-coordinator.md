@@ -86248,3 +86248,67 @@ So ρ's charge direction enters `rows` in two places only: the period's end, onc
 **Compiled since 11:32Z.** [run `r20261112-113457-eb2f`, exit 0] v2's Site with the follow-up's `Account.lean` in one file: the tie, the head's key, the period's heads and origins, on rates a second and `Site.over`. `rows` there reads the tick from the Site and takes `(S) (digest) (A) (period) (accounts) (answers)`. Four places differed between the two texts, each resolved by hand; every guard of both passes. That removes the first line of "Not established" in the 11:32Z entry. Scratch at `/tmp/acc/v23` on my VM, unpushed.
 
 **Next.** I write the reading above into that scratch `rows` (a device named by the series' origin, the three rows of the table) with guards at ρ above 0, and say the run id when it compiles. Still waiting on the four rulings named at the end of the 11:32Z entry.
+
+## REFUSE, Thu 12 Nov 11:40Z: READY LINE for #9091 at `6227b8397518`, with one thing no run covers, said first: `main` gained a Lean module that imports this change's files, and the run that builds the two together (`ff1e`) has not started; every run you named is read and the fixes hold, no conflict with `main` (`33866d93e66e`), the pin alone beyond `main`'s stops, and my read agrees with the close `01dea4d2566f`
+
+**READY LINE.** #9091, head `6227b8397518` [read: `gh pr view 9091 --json headRefOid`, 11:40Z; it did not move this turn]. Records `e39d` pass, no record regenerated; suites `4d1b` 5 of 5 and `8e14` 7 of 7; `07a8`'s one failed suite passed in `8e14`; evaluation `a4c0` and the try on lean's merge `9eb8` exit 0; `main` `33866d93e66e`: no conflict; beyond `main`'s stops against lean's `f3837f57d113`: the PoUS pin, close `01dea4d2566f`; locks: one root added, no record. Each line below says where it is from.
+
+**0. Said first: what no run covers. It is not a conflict, so I did not merge and the head stands.**
+
+- [read: `git log origin/main -- security/Proofs/Flock/SpotFlock/OffClassAt.lean`] `main` gained that file with #9097 (`37e166841a`), after `19fb19a21e40`, the `main` my branch holds. `security/Proofs/Flock.lean` on `main` imports it.
+- [read: the import lists on `main` merged with the head] It imports three Lean files of this change: `Select/Second.lean` (changed), `SecondUnits.lean` and `SecondFirst.lean` (new), through `SpotFlock/FirstHitClassAt` and, at the end, the import list `Claims/Sampling/Select.lean`.
+- [derived] No run built it with this change. `e39d` and `6346` ran on trees that hold `main` at `19fb19a21e40`; `9eb8` ran on lean's tip, which lacks the file.
+- [read: `git cat-file -e 33faab2be81c:…`] **My 10:27Z entry missed it.** The file was already on `main` then. I wrote that `main` had changed none of the change's 19 files, which was so, and took that as "nothing to rerun". I had compared files, not imports.
+- [read: the four files and my diff] By reading, it builds: `OffClassAt.lean`, `main`'s two other new files under `SamplingGeneric` and `Flock.lean` name none of the 56 declarations of the three files they reach; `flockLaw_second` keeps its statement (the diff proves it from a new `flockLaw_second_strata`); the change adds no simp lemma, instance or notation; none of the 115 names it declares is declared in the 8 Lean files `main` changed since. [guess] So the risk is small. It is still not a run.
+- [run] `r20261112-113130-ff1e`, launched 11:31Z on vy-nebius-cpu-2: the records run (`lean_changed.py --records security/Proofs --update`) on `main` `33866d93e66e` merged with `6227b8397518`. Its tree is `3cef1e05f743` (what `git merge-tree --write-tree origin/main 6227b8397518` writes); the merge commit `c7b2bcba9a39` is local, pushed nowhere, and lands nothing.
+- [read: `research inspect`, 11:40Z] Its slot: waiting in the check line since 2026-11-12T11:33:17Z, not started: 1 check(s) ahead in line. [guess: `e39d` took 33 min from its slot] It ends about 12:15Z to 12:30Z.
+- Whether the mark waits for it is yours. The queue's records run on its candidate checks the same thing; `ff1e` only says it sooner. I know of nothing else that stops the mark.
+
+**1. The four runs, each read from its own record** (`research fetch --all`; `job.json`, `status.json`, `result.json`, stdout).
+
+- [run `r20261112-101858-e39d`: `result.json`] The records run at `29f65ec21e58` (`lean_changed.py --records security/Proofs --update`), 10:20Z to 10:53Z: rc 0, `kind` `lean-fast/v1`, `outcome` `pass`, `validation.status` `passed`.
+  - [run `e39d`: stdout lines 11, 594, 1181, 1206, 1211, 1805] `security/Proofs` PASS: 195,675 declarations in 3,883 modules, axioms `propext`, `Classical.choice`, `Quot.sound`, 0 guarantees. `security` PASS, 1,103 guarantees. `security/Properties` PASS, 465 guarantees. `check.py` exit 0 on each.
+  - [run `e39d`: the three `audit.json` and `report.json`] `failures` and `failure_codes` are empty in each. The three `orphan.file` findings of `6346` are gone. One note, not this change's: `Pouw.Dimension.Lifting.grid` is read by no guarantee.
+  - [run `e39d`: `audit.json`'s `regenerated`; `cmp`] **It regenerated no lock record**: `regenerated` is `{}` in each of the three audits, the run kept no `record/` directory, and the lock it kept for `security/Proofs` is the head's file byte for byte. So I have nothing to commit and the head did not move.
+  - [run `e39d`: `validation.detail`] It is the slot path, "without the kernel replay or the tests: not a Lean verdict, and no merge accepts it".
+  - [derived] It ran one commit behind the head; `6227b8397518` adds only an input in `benchmarks/network_traces/pyproject.toml`, which no Lean check reads.
+- [run `r20261112-101920-4d1b`: `job.json`, stdout] `suites.py --changed d8afb6b2724c --quick` at `29f65ec21e58`, ended 10:36Z: rc 0, "5 suites: 5 passed (0 cached), 0 failed". `verity-check` 910 passed, `repository` 340, `verity-graph` 208, `verity/definitions/ops` 949 passed and 2 skipped, `verity/protocols/pouw/verifier` 1,873.
+- [run `r20261112-102306-8e14`: `job.json`, stdout] `suites.py --changed 29f65ec21e58 --quick` at the head `6227b8397518`, ended 10:36Z: rc 0, "7 suites: 7 passed (0 cached), 0 failed". `verity-network-traces` 540 passed, `verity-network-e2e` 70, `verity-network-sim` 21, `benchmarks/one_stage` 559, `repository` 340, `research` 4,444 passed and 3 skipped, `verity-graph` 208.
+- [run `r20261112-084251-07a8`: `job.json`, stdout] `suites.py --changed 19fb19a21e40 --quick` at `d8afb6b2724c`, ended 10:44Z: rc 1, "58 suites: 57 passed (1 cached), 1 failed". The five that were out at 10:27Z passed: `verity-flock` 1,448 passed and 30 skipped, `verity/definitions/ops` 949, `research` 4,444, `verity-numerical` 639, `verity/commitments` 543.
+- **`07a8`'s failed suite, by name: `verity-network-traces`. It passed in `8e14` at the head.** [run `07a8`: stdout line 77] There: 540 passed, then "its tests read 1 files outside its inputs, for example benchmarks/spot_figures/second_stage.py". [run `8e14`: stdout] Here: "passed  verity-network-traces  540 passed in 414 s", and no "outside its inputs" line in the run. `4d1b` did not run that suite.
+- [read at 10:27Z, unchanged] `r20261112-084251-a4c0` (the evaluation at `d8afb6b2724c`) and `r20261112-091325-9eb8` (the try on lean's merge, scratch `7f4de5fc7679`): rc 0, as in my 10:27Z entry.
+
+**2. The locks: the notice line.**
+
+- [read: each lock on `main` `33866d93e66e` against the same file in `main` merged with the head, key by key] One key of one lock differs: `roots` in `security/Proofs/lean-audit.json`, 161 to 162, adding `Proofs.Properties.Spot.SecondRefused`. Nothing is removed.
+- [read: the same] It is not a guarantee's own record, statement, premise or constant. That lock's `guarantees` is empty on both sides. `security/lean-audit.json`, `security/Properties/lean-audit.json` and `tools/verity/lean/unread-caps.json` differ in no key.
+- [read: `unread_gate.py origin/main HEAD`] "0 seed file(s) changed, 0 area(s) above the cap".
+- [derived] `e39d` says no record moves on the tree with `main` at `19fb19a21e40`. Whether one moves on `main`'s tip is `ff1e`'s to say.
+
+**3. Both merge-trees at `6227b8397518`** [read: after `git fetch`, 11:38Z, drivers installed].
+
+- Against `main` (`33866d93e66e`): `git merge-tree --write-tree --name-only origin/main HEAD` exits 0 and names no file. The merged tree differs from `main` in exactly the change's 19 files.
+- [read: `git diff 19fb19a21e40 origin/main`] `main` moved under one of the 19 since the merge: `benchmarks/harness/pyproject.toml` (#9152: one more untraced test file, one more input). Other lines than mine; the merge keeps both.
+- [read: local, on that merged tree] `pins.py --stale` prints nothing; `tests/test_lean_packages.py` and `tests/test_public_boundary.py`: 85 passed. Every `pyproject.toml` there that lists `total_cost.py` lists `second_stage.py` (two: the harness's and the network traces').
+- Against `origin/cursor/lean-remote-merge-landing-fc8d` (`f3837f57d113`), less `main`'s own stops: one file, `verity/protocols/pous/lean/TRUSTED.sha256`. The head stops in 13 files, `main` in 23.
+
+**4. The close: my read agrees with CROSSCLOSE's.**
+
+- [read: a trial merge of lean's tip with `6227b8397518`, removed after] With lean's own pin in place `pins.py --stale` names the pin stale on `security/Proofs/lakefile.toml`; `pins.py --regen` then writes blob `42fdc26ab089`, byte for byte the file at `01dea4d2566f`; `--stale` then prints nothing.
+- [read: `git merge-base --is-ancestor`] `01dea4d2566f` is on `cursor/proofs-landing-closes-99d1` (tip `b58ece80e982`).
+- [read: the pin's 64 inputs] None of the 12 other files that stop there is an input of the pin, and neither commit since `d8afb6b2724c` touches one. [relayed: CROSSCLOSE, 10:54Z, through you] The same blob on its closed merge; I did not build that merge.
+
+**5. The body** [read: `research queue edit 9091`, 11:38Z: "body replaced (19025 bytes)"; the head is still `6227b8397518`].
+
+- It carries the notice line (item 2) under **Lock**, each run above with its commit and verdict, the merge-trees, the close, item 0 with `ff1e` as "launched, verdict not in", and what was not run. `Lane proofs`, the goal and the `Issue:` line are kept.
+- I also changed one sentence that was wrong since `29f65ec21e58`: "no lock entry" now reads "no guarantee's statement or record ...; in the locks it adds the one root".
+
+**6. Not run.**
+
+- The Lean check with the kernel replay (the queue's); `e39d` and `ff1e` are the records path.
+- Any Lean of `main`'s tip with this change in, until `ff1e` ends (item 0).
+- The suites on `main`'s tip merged with the head. [derived] The suites the change touches ran at heads that hold `main` at `19fb19a21e40`.
+- A try on lean's line at the new head. [derived] No Lean source changed since `9eb8`.
+- The grader README's `bash check.sh`.
+
+Nothing is marked. When `ff1e` ends I read it and add its verdict to the body and here.
