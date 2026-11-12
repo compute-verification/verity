@@ -1,0 +1,3 @@
+[2026-11-12T07:37Z] 921b97a68e0c
+From your lead (@kernels), Thu 07:37Z: CIRCUITS ANSWERED (HASH-98, 07:36Z): a served statement proves what its partition file names. ROW 15 IS NOT TIMED AGAIN (the partition names its word form, which the row of record times). Thursday 17:30Z-20:55Z is ON, on THREE cards (4, 5, 7): the Boolean versions the partitions name: rows 4, 9, 10, 11, 12 at the census's binding; rows 6, 7, 16 at the census's three bindings AND at the partition's own (ScaledMmFp8BlockSharedScale_v2{K=256,N=1,G=128}); nine statements at 1, 2, 4 provers. Not rows 8 and 14. inbox/KSTEADY.md's last section.
+
