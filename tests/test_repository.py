@@ -368,6 +368,31 @@ def test_tracked_data_within_budget() -> None:
                                   f"fixtures in {REGISTRY} rather than tracking them")
 
 
+#: Tracked files an ignore line covers, each added on purpose (`git add -f`): a fixture whose name a pattern for run
+#: outputs or archives matches.
+IGNORED_TRACKED = frozenset({
+    "adapters/vllm/tests/acquire/fixtures/served_llama.tar.gz",
+    "tools/research/tests/fixtures/run_v0.2/out/proof.bin",
+    "tools/research/tests/fixtures/run_v0.2/out/verify.jsonl",
+})
+
+
+def test_no_ignore_line_covers_a_tracked_file() -> None:
+    """A `.gitignore` merges as a union of both sides' lines (`.gitattributes`), so a merge can bring back a line one branch
+    deleted, or leave a re-include (`!`) above the pattern it re-includes.  Either one that matters shows here: a tracked
+    file an ignore line covers, beside which `git add` skips a new file without a word."""
+    if not (ROOT / ".git").exists():
+        return
+    out = subprocess.run(["git", "ls-files", "-z", "--cached", "--ignored", "--exclude-per-directory=.gitignore"], cwd=ROOT,
+                         check=True, capture_output=True).stdout
+    covered = {p.decode() for p in out.split(b"\0") if p}
+    new, stale = sorted(covered - IGNORED_TRACKED), sorted(IGNORED_TRACKED - covered)
+    assert not new, ("tracked files that a `.gitignore` line covers (`git check-ignore -v --no-index PATH` names the line): "
+                     "delete the line if a merge brought it back, move a `!` re-include below its pattern, or list a file "
+                     "added on purpose in IGNORED_TRACKED:\n" + "\n".join(new))
+    assert not stale, "IGNORED_TRACKED lists files no ignore line covers any more; drop them:\n" + "\n".join(stale)
+
+
 def test_fetched_fixtures_are_gitignored() -> None:
     """An entry of the fixture registry that git does not track is fetched (`research data fetch-fixtures`), so its path must be
     ignored: a fetched copy must never be committed back."""

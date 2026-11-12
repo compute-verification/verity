@@ -161,4 +161,4 @@ def call_args(node) -> dict:
             **node.kwargs}
 
 
-__all__ = ["rows_of", "from_rows", "dtype_is", "shape", "known", "call_args"]
+__all__ = ["rows_of", "from_rows", "dtype_is", "shape", "known", "call_args", "norm_kind"]
