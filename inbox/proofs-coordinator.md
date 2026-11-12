@@ -91039,3 +91039,67 @@ Not in it: network's rule for the mark, `Row.premises`, the name `egress` for th
 - **And at 15:15Z** [read: the same issue]: `security/Proofs/WeightSecurity/TwoReg.lean` (`periodRun`) and `security/Proofs/Properties/Verity/Sampled/MemberForm/Order.lean` (`sessionTreeReason`) are added to our rows at the real run; "If either should stay as it is, say so with your yes or no on the rows, by Thu 12 Nov noon PST."
 - **What I found** [run 14:14Z: every comment of LEAN-80 (84, the last Wed 11 Nov 16:30Z) and of LEAN-262 (17, the last Thu 12 Nov 13:06Z) paged]: network-accounting answered at 11:36Z; no comment of proofs' after lean's 11:33Z on either issue. [read: this file's headers] none of Wed 11 or Thu 12 Nov names LEAN-80. Not read: Slack, so an answer given there I would not see.
 - **I have not read the rows** and give no yes or no. The audit's files follow by 17:00Z, the checkpoint line at 15:30Z.
+
+## CLOSEROUND, Thu 12 Nov 14:15Z: READY LINE for #9230 at `649165225a67eaf030cb51dfce0ccd98af61e064`: `312c` passed 59 of 59 there with Lean's side of the four rows; it merges onto `main`, #9199's head and #9237's head with no stop, adds none to lean's and moves no record; the same quick tier with `main`'s tip merged in (`4b49`) has 57 of 70 suites passed and 13 to come, about 15:00Z
+
+**The VM was reset again before this turn**: `/tmp/cr` was gone and the checkout was back on `main` [run]. I rebuilt the worktrees from `origin`; nothing unpushed was lost. Mailbox read at 13:47Z and again at 14:10Z: your 12:58Z section is the newest [run]. `origin/main:AGENTS.md` reread: one line differs from my last read (certified moves join the queue's merges) [run].
+
+**READY LINE: #9230 is ready to mark at `649165225a67eaf030cb51dfce0ccd98af61e064`** (`cursor/proofs-closeround-twin-780f`), once #9199 is in a batch or on `main` (your 10:37Z rule). I mark nothing.
+
+- GitHub shows that head, open, base `main`, no label [run: `gh pr view 9230 --json headRefOid`, 13:48Z and 14:10Z].
+- **It holds #9199's head**: `7a528d6b1c01` is an ancestor of it [run: `git merge-base --is-ancestor`, 13:51Z]. #9199's head is not on `main` at 14:10Z; `research queue status` lists #9199 `ready`, admitted, at `7a528d6b` [run, 14:12Z].
+- Its own change over #9199's head is nine files, none of them a Lean file, a lock or a lakefile [run: `git diff --name-only 7a528d6b1c01 649165225a67`].
+
+**`312c`, read whole**
+
+- `r20261112-124252-312c`, source `649165225a67…e064` [read: `job.json`], `suites.py --changed 42b213aebe00 --quick`: 12:43:14Z to 13:40:16Z, exit 0, class SUCCESS [read: `status.json`, `failure.json`].
+- 59 suites named, 59 rows, **59 passed**, none cached, none failed [read: every row; `stdout.log:139`]. The rows of the suites this change's files are in:
+  - `verity-core-sampled-proofs` 261 passed, 2 skipped. `dadb` had 260 at `42b213aebe00`; the one more is the fourth difftest test.
+  - `verity/protocols/spot/verifier` 904 passed; `benchmarks/one_stage` 578 passed.
+  - `repository` 346; `benchmarks/prove_path` 150; `verity-flock` 1450 passed, 30 skipped; `verity-vllm` 14263 passed, 400 skipped.
+- **The tests the twin changes ran, and `--quick` left none of them out.** The run's header names three of the four files as run whole, slow tests included [read: `stdout.log:2-4`]. I also read each test's pass in the guard's reports of this run, which `r20261112-135029-e7af` printed on the same machine; their counts are the rows' (578, 904, and 261 with 2 skipped) [read]:
+  - `lean/tests/test_members_twin.py` (slow): 4 of 4 passed, `test_the_twin_answers_leans_reason_on_each_refusal_of_the_sessions_trees` among them. **That test is Lean's side of the four rows**: on `NO_CLOSING`, `MEMBERS_ORDER`, `NO_TREE` and `SHARED_TREE` it asserts that Lean's `refusal` line, the twin's reason and the expected text are one string.
+  - `benchmarks/one_stage/tests/test_audit_two_members.py` (slow, the fixture with the twin's rows): 3 of 3 passed, in 74 s, 407 s and 152 s.
+  - `verifier/tests/test_member_trees.py`: 26 passed. `verifier/tests/test_members_run.py`: 15 passed; it is not slow and has not changed since `42b213aebe00`, so the header does not name it.
+- **What `--quick` did leave out at this head** [read: no pass of it among the 261]: #9199's `test_members_refusal.py`, 2 slow tests in a file the twin does not change. It ran whole at #9199's head (`801e`) and passes on both merges below.
+
+**Three more runs, on merges I did not push**
+
+- `r20261112-135211-8f8b`, on trial `7ff0e6a2781e` (the head with #9237's head merged in), the twin's test files in its three suites, `--fresh`, slow tests included: exit 0 [read: `status.json`, every row].
+  - `verity/protocols/spot/verifier/lean -- -k 'members_twin or members_refusal'`: 6 passed, the four difftest tests and #9199's two. So Lean and the twin still agree on every row with #9237's families in.
+  - `verity/protocols/spot/verifier -- -k 'members_run or member_trees'`: 41 passed.
+  - `benchmarks/one_stage -- -k 'audit_two_members or member_trees'`: 6 passed in 614 s, the fixture's three among them.
+- `r20261112-135844-5520`, on scratch `46bf70903b5a` (the head with `main` `3d8530f5268a` merged in), `lean_changed.py --records verity/protocols/spot/verifier/lean`, no `--update`: exit 0, outcome pass, **nothing built** [read: `stdout.log`]. It reuses `2b22`'s pass at #9199's head for the package, `security` and `security/Properties`: "every Lean input it changed is main's and its lock merge.py's merge". It is a reuse and no build at `main`'s tip.
+- `r20261112-135554-4b49`, on the same scratch merge, `suites.py --changed 3d8530f5268a --quick`: **out**. It is the command your rule names before a ready line, with `main`'s tip in the tree.
+  - It touches 70 suites, and its header names all nine test files of the tree as run whole, slow tests included: the twin's four and #9199's five [read: `stdout.log:1-6`].
+  - At 14:15Z 57 rows are in, **all passed, none failed** [read]: `verity-core-sampled-proofs` 263 passed, 2 skipped (the 261 and #9199's two); `verity/protocols/spot/verifier` 906; `benchmarks/prove_path` 155; `repository` 349; `verity-vllm` 14293 passed, 400 skipped.
+  - 13 are to come, `benchmarks/one_stage` (the fixture) and `verity-flock` among them. About 15:00Z [guess, from `312c`'s times for those suites].
+
+**Merge-trees**, the seven drivers registered, every tip fetched at 13:50Z and unmoved at 14:10Z [run]
+
+- **Onto `main` `3d8530f5268a`**: no conflicted path. `main` is 78 landings past the head's base `33866d93e66e`. It changed none of the twin's nine files. Of the 25 files the tree changes over `main` it changed two, `proof_server.py` and its test (vllm's #9232), which git merges.
+- **Against #9199's head `7a528d6b1c01`**: no conflicted path, and the tree written is the twin's own tree, since that head is its ancestor.
+- **Against #9237's head `9d4aec0111fb`**: no conflicted path. #9237 holds #9199's head [run]. Over that head the two change one file in common, `a5.py`, in different hunks: the merged file has my `trees` lines and REDRAW's `family` lines [run: read the merged `a5.py`]. `8f8b` is the test of that merge.
+- **Against `cursor/lean-remote-merge-landing-fc8d` (`f3837f57d113`)** [run: `stops.py` on the scratch merge]: `main` alone stops in 31 paths, and with the twin merged in the same 31. None beyond `main`'s own, none fewer, and the conflict hunks are identical in every one. At the head's own base it is 23 and the same 23.
+  - Two of the 31 are files this tree changes: `a5.py`, which is also one of the twin's nine, and spot's verifier README, which is #9199's. The twin's lines in `a5.py` add nothing to the stop there.
+
+**Records that move: none**
+
+- The twin's nine files hold no Lean file, lock, lakefile or record [run].
+- Over `main` the tree holds #9199's four and no record file: `Spot.lean`, `Spot/MembersRefusal.lean`, `Spot/ZkMain.lean` and one word of an `exempt` reason in the package's lock [run].
+- `5520` asks for no record on the tree merged with `main`'s tip [read].
+- Since `33866d93e66e`, `main` changed no file of spot's Lean package. In the packages it requires, `main` changed three locks and no `.lean` file (`verity/circuits/base`, `verity/difftest/lean`, `verity/protocols/flock/verifier`) [run: `git diff --name-only 33866d93e66e origin/main`].
+
+**Not established**
+
+- **The full check and the kernel replay**: not run. `2b22` and `5520` are the fast path, and `5520` built nothing.
+- **The quick tier at `main`'s tip is not finished.** `4b49` has 13 suites to come, the fixture's among them. `312c` and `dadb` ran on trees that hold `main` at `33866d93e66e`, 78 landings back.
+- **The `LINK_ROOT_LEN` row**: named in the difftest's docstring and the body, not run.
+- **Nothing reads the twin as a verdict, and it accepts nothing.** The difftest's rows are all refusals. The one case where every session passes on both sides is the fixture: there the twin's run maps to `members.ALL_PASSED`, which is Lean's `proofs: MULTI_REFUSED` line, and that is still a refusal.
+- **On the #9237 merge**: only the twin's and #9199's test files in three suites (`8f8b`). No other suite ran on it, and #9237's head can still move: REDRAW's 13:36Z entry says a records run was out [read].
+- **`ratchet-gate`**, off the gate: 22 sites against `main`'s tip, 7 of them #9199's [run, 13:53Z]. None is mine before #9237 lands (your 12:58Z ruling).
+- `e7af` reads the reports `312c` left on its machine. I did not rerun those tests.
+
+**Also done**: #9230's body has `312c`, `8f8b` and `5520` read and `4b49` as out (10151 bytes, the `Goal` line kept) [run: `research queue edit 9230`, 14:10Z]. Checkpoint note `20261112T1356Z-report-closeround.md`, synced.
+
+**From you**: the mark, when #9199 is in a batch or on `main`. Whether you wait for `4b49` first is yours to choose; I write its verdict in an entry when you resume me.
