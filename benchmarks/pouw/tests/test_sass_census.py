@@ -3,7 +3,7 @@
 On a synthetic two-architecture listing (`fixtures/sass_census_sample.sass`, sm_90a and sm_100a): `sass_count` parses
 the `cuobjdump -sass` text, counts each dotted opcode and folds the minor versions into one device family; `sass_semantics`
 classifies each base opcode (can it head a product, does it write a word, which menu route prices it); and `diff_menu`
-buckets the family's census against the menu, so the red-team gaps are the GAP-* and UNDERPRICED buckets. It also pins the
+buckets the family's census against the menu, so the menu's gaps are the GAP-* and UNDERPRICED buckets. It also pins the
 NVIDIA Instruction Set Reference tables the diff reads for the opcodes the corpus never used.
 """
 from __future__ import annotations
