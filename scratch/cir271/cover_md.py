@@ -56,5 +56,39 @@ for i, r in enumerate(rows, 1):
     tag = "" if r["in_list"] else " *(Friday's binding, not in the list)*"
     out.append(f"| {i} | {code(r['template'])}{tag} | {d} | {'' if r['instances'] is None else format(r['instances'], ',')} | {pin} | {cut} | "
                f"{code(r['staged']) if r['staged'] else 'none'} | {accd} | {r['run'] or ''} | {r['source'] or ''} |")
+if "blocks" in c:
+    kb = k["blocks"]
+    out += ["", "## By block type (main's card)", "",
+            f"Block run `{c['block_run']}`. Card: {kb['types']} block types, {kb['blocks']:,} blocks ({kb['prefill']:,} prefill, "
+            f"{kb['decode']:,} decode); {kb['extra_units']} rows more for units of list templates the card does not cut.", "",
+            "| column | state | block types | blocks |", "|---|---|---:|---:|"]
+    for col, states in kb["counts"].items():
+        for s, (t, n) in states.items():
+            out.append(f"| {col} | {s} | {t} | {n:,} |")
+    fc = c["first_cut"]
+    out += ["", "First cut (the coordinator's join by exact name): " + "; ".join(f"{s} {t} types, {n:,} blocks" for s, (t, n) in fc.items()) + ".",
+            "", "## Unaccepted block types over 3,000,000 blocks", "", "| block | blocks | lacks |", "|---|---:|---|"]
+    for x in c["lacks_over_3m"]:
+        out.append(f"| {code(x['block'])} | {x['blocks']:,} | {'; '.join(x['lacks'])} |")
+    out += ["", "## The card's five places", ""]
+    for t in c["card_places"]["templates"]:
+        out.append(f"- {code(t['template'])}: {t['instances_rank0']:,} instances at rank 0; the card's names {code(t['card_names'])} "
+                   f"({t['card_blocks']:,} blocks); whole, it would add {t['whole_would_add']:,} (8 ranks × instances)")
+        for u in t["registered_cuts"]:
+            out.append(f"  - {code(u['unit'])} ×{u['per_instance']}: registered {u['registered']}, file {code(u['owner_file'])}, "
+                       f"pinned {u['pinned']}, staged {code(u['staged'])}, would add {u['would_add']:,}")
+    out += ["", "The card's last three commits on main:", ""] + [f"    {x}" for x in c["card_places"]["card_log"] if x]
+    out += ["", "## Every block type", "",
+            "| # | block | blocks | list templates | pinned | staged | staging run (GiB) | accepted | form | run | units | device | tree |",
+            "|---:|---|---:|---|---|---|---|---|---|---|---:|---|---|"]
+    for i, b in enumerate(sorted(c["blocks"], key=lambda b: (-b["blocks"], b["block"])), 1):
+        lt = b["list_templates"] or []
+        lts = "none" if not lt else f"{code(lt[0][0].partition('{')[0])} ({lt[0][1]:,})" + (f" +{len(lt) - 1}" if len(lt) > 1 else "")
+        sr = b["staging_run"]
+        srs = f"{sr['run']} ({sr['peak_gib']})" if sr else ("failed: " + ", ".join(f"{a['run']} rc {a['rc']} ({a['peak_gib']})" for a in b["staging_attempts"]) if b["staging_attempts"] else "none")
+        ar = b["accepted_run"] or {}
+        tag = "" if b["on_card"] else " *(not on the card)*"
+        out.append(f"| {i} | {code(b['block'])}{tag} | {b['blocks']:,} | {lts} | {b['pinned']} | {code(b['staged']) if b['staged'] else 'none'} | "
+                   f"{srs} | {b['accepted']} | {b['form'] or ''} | {ar.get('run', '')} | {ar.get('units', '')} | {ar.get('device', '')} | {ar.get('tree', '')} |")
 (HERE / "cover.md").write_text("\n".join(out) + "\n")
-print(f"cover.md: {len(rows)} rows")
+print(f"cover.md: {len(rows)} rows" + (f", {len(c['blocks'])} block types" if "blocks" in c else ""))

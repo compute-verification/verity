@@ -1,0 +1,332 @@
+[
+ {
+  "run": "r20261112-131550-d4e3",
+  "tag": "gemmw",
+  "name": "census:MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 1.47,
+  "definition": "MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}",
+  "word": "MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}"
+ },
+ {
+  "run": "r20261112-131550-d4e3",
+  "tag": "chunk",
+  "name": "census:MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"},FIRST=false,LAST=false}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 2.02,
+  "definition": "MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}",
+  "word": "MoeExpertFp8CoordinateChunk_v1{E=256,K=512,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"},FIRST=false,LAST=false}"
+ },
+ {
+  "run": "r20261112-125410-8aa4",
+  "tag": "w13c",
+  "name": "census:MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=true}",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 2.2,
+  "definition": "MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}",
+  "word": "MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=true}"
+ },
+ {
+  "run": "r20261112-125410-8aa4",
+  "tag": "w2c",
+  "name": "census:MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=true}",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 1.08,
+  "definition": "MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}",
+  "word": "MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=true}"
+ },
+ {
+  "run": "r20261112-125410-8aa4",
+  "tag": "w13a",
+  "name": "census:MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 2.2,
+  "definition": "MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}",
+  "word": "MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}"
+ },
+ {
+  "run": "r20261112-125410-8aa4",
+  "tag": "w13b",
+  "name": "census:MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v1\"}}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 3.02,
+  "definition": "MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=False,DOT=HopperE4m3MmaV2Dot32_v1}",
+  "word": "MoeExpertFp8BlockGemm_v3{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v1\"}}"
+ },
+ {
+  "run": "r20261112-125410-8aa4",
+  "tag": "w2g",
+  "name": "census:MoeExpertFp8BlockGemmW_v4{K=256,N=32,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v2\"}}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 2.73,
+  "definition": "MoeExpertFp8BlockGemmW_v4{K=256,N=32,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v2}",
+  "word": "MoeExpertFp8BlockGemmW_v3{K=256,N=32,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v1\"}}"
+ },
+ {
+  "run": "r20261112-125410-8aa4",
+  "tag": "krow",
+  "name": "census:DsaIndexerKRow_v1{D=128,ROPE=64,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 4.5,
+  "definition": "DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}",
+  "word": "DsaIndexerKRow_v1{D=128,ROPE=64,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}"
+ },
+ {
+  "run": "r20261112-125410-8aa4",
+  "tag": "headend",
+  "name": "census:SparseMlaHeadEnd_v1{DV=512,INV={\"fn\":\"Fa3InvSum_v1\"}}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 2.33,
+  "definition": "SparseMlaHeadEnd_v1{DV=512,INV=Fa3InvSum_v1}",
+  "word": "SparseMlaHeadEnd_v1{DV=512,INV={\"fn\":\"Fa3InvSum_v1\"}}"
+ },
+ {
+  "run": "r20261112-125341-11a8",
+  "tag": "silu2",
+  "name": "census:SiluMul_v2{I=256}",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 1.2,
+  "definition": "SiluMul_v2{I=256}",
+  "word": "SiluMul_v2{I=256}"
+ },
+ {
+  "run": "r20261112-125341-11a8",
+  "tag": "rope2",
+  "name": "census:RoPEHeadGptJ_v2{D=64}",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 1.12,
+  "definition": "RoPEHeadGptJ_v2{D=64}",
+  "word": "RoPEHeadGptJ_v2{D=64}"
+ },
+ {
+  "run": "r20261112-125341-11a8",
+  "tag": "moesum1",
+  "name": "census:MoeSum_v1{TOPK=8,H=96}",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 1.3,
+  "definition": "MoeSum_v1{TOPK=8,H=96}",
+  "word": "MoeSum_v1{TOPK=8,H=96}"
+ },
+ {
+  "run": "r20261112-125341-11a8",
+  "tag": "topk",
+  "name": "census:DsaTopKShortRow_v1{TOPK=2048}",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 1.1,
+  "definition": "DsaTopKShortRow_v1{TOPK=2048}",
+  "word": "DsaTopKShortRow_v1{TOPK=2048}"
+ },
+ {
+  "run": "r20261112-125341-11a8",
+  "tag": "logits3",
+  "name": "census:DsaMqaLogits_v3{N=1,H=32,D=128}",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 1.58,
+  "definition": "DsaMqaLogits_v3{N=1,H=32,D=128}",
+  "word": "DsaMqaLogits_v3{N=1,H=32,D=128}"
+ },
+ {
+  "run": "r20261112-125341-11a8",
+  "tag": "logit1",
+  "name": "census:DsaMqaLogit_v1{H=32,D=128}",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 1.58,
+  "definition": "DsaMqaLogit_v1{H=32,D=128}",
+  "word": "DsaMqaLogit_v1{H=32,D=128}"
+ },
+ {
+  "run": "r20261112-125341-11a8",
+  "tag": "s8",
+  "name": "s8-coord",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 1.56,
+  "definition": "ScaledMmS8Coordinate_v2{K=2048,DOT=BlackwellS8ImmaDot32_v2}",
+  "word": null
+ },
+ {
+  "run": "r20261112-133834-1a08",
+  "tag": "router-row",
+  "name": "router-row",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 15.54,
+  "definition": "MoeRouterSigmoidBias_v2{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}",
+  "word": "MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}"
+ },
+ {
+  "run": "r20261112-133834-1a08",
+  "tag": "router-slots",
+  "name": "router-slots",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 15.55,
+  "definition": "MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}",
+  "word": "MoeRouterSigmoidBiasSlots_v1{E=256,TOPK=8,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}"
+ },
+ {
+  "run": "r20261112-143157-9dd0",
+  "tag": "dsa-q-row",
+  "name": "dsa-q-row",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 235.39,
+  "definition": "DsaIndexerQ_v2{H=32,D=128,ROPE=64}",
+  "word": "DsaIndexerQ_v1{H=32,D=128,ROPE=64}"
+ },
+ {
+  "run": "r20261112-143157-9dd0",
+  "tag": "rmsnorm-v8",
+  "name": "rmsnorm-v8",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 31.63,
+  "definition": "RMSNormFusedCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=256}",
+  "word": "RMSNormFusedCudaVector8_v1{N=6144,EPS={\"f64\":\"0x1.4f8b588e368f1p-17\"},BLOCK=256}"
+ },
+ {
+  "run": "r20261112-143157-9dd0",
+  "tag": "head64",
+  "name": "census:SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 65.85,
+  "definition": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=False,BN=64,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.0625}",
+  "word": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}"
+ },
+ {
+  "run": "r20261112-143157-9dd0",
+  "tag": "tokensel",
+  "name": "census:TokenSelect_v1{V=154880}",
+  "n": 1,
+  "rc": 143,
+  "peak_gib": 256.53,
+  "definition": null,
+  "word": null
+ },
+ {
+  "run": "r20261112-140245-1147",
+  "tag": "greedychunk",
+  "name": "census:GreedyChunk_v1{N=16384,FIRST=false}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 2.34,
+  "definition": "GreedyChunk_v1{N=16384,FIRST=False}",
+  "word": "GreedyChunk_v1{N=16384,FIRST=false}"
+ },
+ {
+  "run": "r20261112-140245-1147",
+  "tag": "greedycombine",
+  "name": "census:GreedyCombine_v1{V=154880,N=16384}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 1.72,
+  "definition": "GreedyCombine_v1{V=154880,N=16384}",
+  "word": "GreedyCombine_v1{V=154880,N=16384}"
+ },
+ {
+  "run": "r20261112-165754-75c2",
+  "tag": "head1w",
+  "name": "census:SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 2.05,
+  "definition": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=1,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v1,SCALE=0.0625}",
+  "word": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}"
+ },
+ {
+  "run": "r20261112-165754-75c2",
+  "tag": "head1b",
+  "name": "census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 3.28,
+  "definition": "SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=1,FIRST=True,BN=64,DOT=HopperBF16WgmmaDot16_v2,SCALE=0.0625}",
+  "word": "SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=1,FIRST=true,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}"
+ },
+ {
+  "run": "r20261112-165636-a739",
+  "tag": "router-word",
+  "name": "census:MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}",
+  "n": 1,
+  "rc": 143,
+  "peak_gib": 105.75,
+  "definition": null,
+  "word": null
+ },
+ {
+  "run": "r20261112-165636-a739",
+  "tag": "dsa-q-word",
+  "name": "census:DsaIndexerQ_v1{H=32,D=128,ROPE=64}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 43.0,
+  "definition": "DsaIndexerQ_v1{H=32,D=128,ROPE=64}",
+  "word": "DsaIndexerQ_v1{H=32,D=128,ROPE=64}"
+ },
+ {
+  "run": "r20261112-075712-ee77",
+  "tag": "hb2_64/B",
+  "name": "census:SparseMlaHeadBlock_v2{DR=64,DV=512,NVIS=64,FIRST=false,BN=64,DOT={\"fn\":\"HopperBF16WgmmaDot16_v2\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "n": 256,
+  "rc": 0,
+  "peak_gib": 202.64,
+  "definition": null,
+  "word": null
+ },
+ {
+  "run": "r20261112-040916-b4c6",
+  "tag": "slots16/B",
+  "name": "census:SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=16,FIRST=true,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 15.59,
+  "definition": null,
+  "word": null
+ },
+ {
+  "run": "r20261112-040916-b4c6",
+  "tag": "slots16/U",
+  "name": "census:SparseMlaHeadBlock_v1{DR=64,DV=512,NVIS=16,FIRST=true,BN=16,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"},SCALE={\"f64\":\"0x1.0000000000000p-4\"}}",
+  "n": 1,
+  "rc": 0,
+  "peak_gib": 15.59,
+  "definition": null,
+  "word": null
+ },
+ {
+  "run": "r20261112-040916-b4c6",
+  "tag": "readfull/B",
+  "name": "table-read",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 5.73,
+  "definition": null,
+  "word": null
+ },
+ {
+  "run": "r20261112-040916-b4c6",
+  "tag": "readfull/U",
+  "name": "table-read",
+  "n": 2,
+  "rc": 0,
+  "peak_gib": 5.74,
+  "definition": null,
+  "word": null
+ }
+]
