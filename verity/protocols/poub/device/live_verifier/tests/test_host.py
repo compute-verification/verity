@@ -9,6 +9,7 @@ and `replay` replays it through both verifiers."""
 from __future__ import annotations
 
 import argparse
+import ast
 import fcntl
 import gzip
 import hashlib
@@ -520,7 +521,6 @@ def test_publish_puts_the_runs_directory_with_its_request_as_meta(svc):
     "sys.argv = ['auditor_line.py', '--help']; "
     "runpy.run_path(str(host.TREE / 'benchmarks' / 'remote_session' / 'auditor_line.py'), "
     "run_name='__main__')",
-    "sys.path.insert(0, str(host.ONE_STAGE)); import served_verdicts; print(served_verdicts.__file__)",
 ])
 def test_the_hosts_code_runs_on_a_python_with_no_site_packages(code, tmp_path):
     """The host runs its units with its own python3 (`-I`), where neither `verity` nor any other package is installed:
@@ -934,6 +934,29 @@ def test_receive_writes_no_witness_byte_and_holds_the_sums_to_every_file(tmp_pat
     assert got == {**{f: hashlib.sha256(b).hexdigest() for f, b in HANDED.items()},
                    H.COMPOSE_SUMS: hashlib.sha256((tmp_path / "ok" / H.COMPOSE_SUMS).read_bytes()).hexdigest()}
     assert oct((tmp_path / "ok").stat().st_mode & 0o777) == "0o700"
+
+
+def witness_rule(source: str) -> tuple[dict[str, list], str]:
+    """A module's witness tables, each in the order it is written, and its `witness` without the docstring, as syntax."""
+    body = ast.parse(source).body
+    tables = {t.id: list(ast.literal_eval(s.value).items()) for s in body if isinstance(s, ast.Assign)
+              for t in s.targets if isinstance(t, ast.Name) and t.id.startswith("WITNESS_")}
+    (rule,) = (s for s in body if isinstance(s, ast.FunctionDef) and s.name == "witness")
+    return tables, ast.dump(ast.Module(body=[rule.args, rule.returns, *rule.body[1:]], type_ignores=[]))
+
+
+def test_the_gate_calls_a_witness_what_the_sender_does():
+    """The gate's `witness` and its three tables are the sender's (`served_verdicts.py witness`, which the served node
+    holds its list to before it sends), entry for entry in the same order and statement for statement: the rule is
+    written in both files, so one edited alone fails here, and the gate takes no name the sender's rule refuses."""
+    ours = witness_rule(Path(H.__file__).read_text())
+    sender = witness_rule((ROOT / "benchmarks" / "one_stage" / "served_verdicts.py").read_text())
+    assert set(ours[0]) == {"WITNESS_DIRS", "WITNESS_TOPS", "WITNESS_NAMES"}
+    assert ours == sender, ("host.py's witness rule and benchmarks/one_stage/served_verdicts.py's differ: make the same "
+                            "edit in both, or have served_verdicts.py read host.py's and delete this test")
+    assert H.witness(["h1/log.jsonl", "", "windows", "a/values/x", "windows/7/rows", "private/h1/key", "h1/x.key"]) == [
+        ("a/values/x", "a committed value file"), ("windows/7/rows", "a sealed row dir (the window's rows)"),
+        ("private/h1/key", "H1's prover state (its key)"), ("h1/x.key", "a key")]
 
 
 def test_the_compose_runs_the_pinned_trees_build_and_answers_its_out_within_its_cap(composer, tmp_path):

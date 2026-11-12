@@ -33,5 +33,5 @@ inputs = ["verity/__init__.py", "verity/errors.py",
           "verity/hardware/__init__.py", "verity/protocols/__init__.py", "verity/protocols/poub/__init__.py",
           "verity/protocols/poub/device/__init__.py",
           "verity/composite/__init__.py", "verity/composite/device/__init__.py", "verity/composite/device/live_challenger/__init__.py",
-          # the compose gate's receive, which holds a hand-off's names to served_verdicts' witness
+          # the sender's witness rule, which the compose gate's own (host.py's `witness`) is held to
           "benchmarks/one_stage/served_verdicts.py"]

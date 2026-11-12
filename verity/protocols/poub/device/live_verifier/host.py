@@ -93,8 +93,9 @@ It composes a served run's final record and composite off the served node (`benc
 `private/compose/inputs.txt` lists, `private/compose/inputs.sha256` among them, and nothing else. As `auditor`, in a
 scratch directory of its own under the root's scratch, which it removes however it ends, it takes each regular file of the
 tar (`receive`), refusing the hand-off by a member's name before writing its bytes where the name is a served run's witness
-(`served_verdicts.py witness`) and refusing any member that isn't a regular file at a relative path, a second copy, a file
-the sums don't list, a listed file it lacks, and a file whose SHA-256 isn't the one the served node wrote. Then it runs
+(`witness`, the rule its sender holds its list to) and refusing any member that isn't a regular file at a relative path,
+a second copy, a file the sums don't list, a listed file it lacks, and a file whose SHA-256 isn't the one the served node
+wrote. Then it runs
 `served_verdicts.sh compose` in the pinned tree on that copy (`compose_env`: the tree built at its pin, `COMPOSE_BUILT`, its
 prebuilt sampled proofs Lean `SAMPLED_EXE` where pin time built it, at this tree's commit and whatever tree served,
 `FOLLOW_ANY_TREE`, the pin line's `on` as the record's `tree_on`) within `COMPOSE_MINUTES`, and answers one JSON line: the
@@ -109,6 +110,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import fcntl
+import fnmatch
 import gzip
 import hashlib
 import json
@@ -126,7 +128,7 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, BinaryIO, Callable, Iterator
+from typing import Any, BinaryIO, Callable, Iterator, Sequence
 
 HERE = Path(__file__).resolve().parent
 TREE = Path(__file__).resolve().parents[5]
@@ -176,7 +178,6 @@ connection dropped, never holds its port and lock."""
 UNIT = "vy-verifier@{}.service"
 REPLAY_UNIT = "vy-verifier-replay@{}.service"
 LOG_LINES = 20
-ONE_STAGE = TREE / "benchmarks" / "one_stage"
 COMPOSE_SUMS = "private/compose/inputs.sha256"
 COMPOSE_MINUTES = 180
 COMPOSE_BYTES = 64 << 30
@@ -186,6 +187,21 @@ COMPOSE_ANSWER_BYTES = 64 << 20
 SAMPLED_EXE = Path("verity/protocols/recursion/verifier/recursive/.lake/build/bin/vstar-recursive")
 """Sampled proofs' Lean verifier in the pinned tree, as its pin built it: the record runs it rather than building one."""
 SUM_LINE = re.compile(r"([0-9a-f]{64})  (\S.*)")
+WITNESS_DIRS = {"values": "a committed value file", "prover": "a prover's input file (its rows and salts)",
+                "served_rows": "a window's committed rows and salts", "certifier-front": "the certifier front's group (its prompts)"}
+"""A served run's witness, by a directory part of its path (`witness`): what the compose gate takes from no hand-off, each
+with why. The three tables and `witness` are the rule the sender holds its list to (`served_verdicts.py witness`), in the
+same order and word for word, which `tests/test_host.py` holds them to."""
+WITNESS_TOPS = {"windows": "a sealed row dir (the window's rows)", "advice": "the advice and its opening"}
+"""... by the serve dir's top directory."""
+WITNESS_NAMES = {"inst*.bin": "a prover's instance file (its rows)", "*-private.bin": "a private file (prover only)",
+                 "*salt*.bin": "a commitment's salts (prover only)", "*.key": "a key", "requests.jsonl": "the requests' prompt and served ids, rows and seeds",
+                 "request_users.jsonl": "the requests' users", "step_trace.jsonl": "the step trace (each request's rows)",
+                 "advice_trace*.jsonl": "the advice trace (each request's rows)", "load*.jsonl": "the load's requests",
+                 "tokens*.json": "the requests' token ids", "match_stoch.json": "the sampler's rows",
+                 "sampled_replay*.json": "the replay's executed prefixes", "*.npy": "a value array",
+                 "*.npz": "a value array", "*.pt": "a tensor", "*.safetensors": "a checkpoint's weights"}
+"""... by a file's name (`fnmatch`), the first pattern that matches."""
 
 
 class Refused(Exception):
@@ -840,14 +856,28 @@ def _member_name(m: tarfile.TarInfo) -> str:
     return name
 
 
+def witness(paths: Sequence[str]) -> list[tuple[str, str]]:
+    """Each of `paths` (relative to a serve dir) that is a served run's witness, with why (`WITNESS_DIRS`, `WITNESS_TOPS`,
+    `WITNESS_NAMES`, and H1's prover state under ``private/h1``)."""
+    out = []
+    for p in paths:
+        parts = Path(p).parts
+        if not parts:
+            continue
+        why = next((WITNESS_DIRS[x] for x in parts[:-1] if x in WITNESS_DIRS), None)
+        why = why or (WITNESS_TOPS.get(parts[0]) if len(parts) > 1 else None)
+        why = why or ("H1's prover state (its key)" if parts[:2] == ("private", "h1") else None)
+        why = why or next((w for pat, w in WITNESS_NAMES.items() if fnmatch.fnmatchcase(parts[-1], pat)), None)
+        if why:
+            out.append((p, why))
+    return out
+
+
 def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, str]:
     """The hand-off's tar from `src` written under `d` (0700, each file 0600), each file's SHA-256 by its path, held to
     the sums the served node wrote (`COMPOSE_SUMS`): refused, before a member's bytes are written, when its name is a
-    served run's witness (`served_verdicts.witness`) or it isn't a regular file at a relative path, or a second copy, or
+    served run's witness (`witness`) or it isn't a regular file at a relative path, or a second copy, or
     past `cap` in all; and after, when a file the sums list is missing, one isn't listed, or one isn't its listed sum."""
-    sys.path.insert(0, str(ONE_STAGE))
-    import served_verdicts as SV
-
     d.mkdir(mode=0o700, parents=True)
     got: dict[str, str] = {}
     total = 0
@@ -857,7 +887,7 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
                 if m.isdir():
                     continue
                 name = _member_name(m)
-                if held := SV.witness([name]):
+                if held := witness([name]):
                     raise Refused(f"the hand-off carries the served run's witness: {name} ({held[0][1]}); a hand-off is "
                                   "verifier-side files alone, and its sender refuses one too (served_verdicts.sh)")
                 if not m.isreg():
@@ -885,7 +915,7 @@ def receive(src: BinaryIO, d: Path, *, cap: int = COMPOSE_BYTES) -> dict[str, st
         if not (s := SUM_LINE.fullmatch(ln)):
             raise Refused(f"{COMPOSE_SUMS} has a line that isn't sha256sum's: {ln[:200]!r}")
         listed[posixpath.normpath(s.group(2))] = s.group(1)
-    if held := SV.witness(list(listed)):
+    if held := witness(list(listed)):
         raise Refused(f"the hand-off's sums list the served run's witness: {held[0][0]} ({held[0][1]})")
     if extra := sorted(set(got) - set(listed) - {COMPOSE_SUMS}):
         raise Refused(f"the hand-off carries {extra[0]}, which its sums don't list ({len(extra)} such)")
