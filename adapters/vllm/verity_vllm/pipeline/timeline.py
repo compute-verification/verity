@@ -32,6 +32,8 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import option
 
+__all__ = ["COMMANDS", "Timeline", "main"]
+
 SCHEMA = "verity-sweep/timeline/v1"
 
 # stage categories <- stage-name prefixes (first match wins; the row-level `row`/`stage.*` wrappers are the envelope, not a category)

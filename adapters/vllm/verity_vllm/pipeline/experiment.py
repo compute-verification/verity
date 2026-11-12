@@ -35,6 +35,8 @@ from pathlib import Path
 from verity_vllm.config import RowEngine
 from verity_vllm.pipeline import research_tools
 
+__all__ = ["build_spec", "code_version", "write_experiment", "write_spec"]
+
 SPEC_SCHEMA = "verity-gen/spec/v1"
 EXPERIMENT_SCHEMA = "verity-gen/experiment/v1"
 SMALL_FILE_SHA_LIMIT = 64 << 20  # sha256 only for files up to 64 MiB (program.json, reports); bigger ones carry size only

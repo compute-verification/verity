@@ -48,6 +48,8 @@ from verity_vllm.config import (
 from verity_vllm.engine import served as SV
 from verity_vllm.pipeline.research_outputs import verdicts
 
+__all__ = ["INDEX", "KIND", "NAME", "TIERS", "aot_of", "index_refusal", "load_index", "record", "write_index"]
+
 SCHEMA = "verity-vllm/config-record/v1"
 NAME = "config_record.json"
 #: The evidence store's kind of a published record (`verity_vllm.records`).

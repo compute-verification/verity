@@ -33,6 +33,8 @@ from verity.protocols.spot.verifier.one_stage import registration as REG
 
 from verity_vllm.commit import registered_rows as RR
 
+__all__ = ["lower", "record", "word_bits"]
+
 
 def lower(t: Type) -> list[tuple[int, int]]:
     """The input nodes a parameter of type `t` lowers to, `(width, leaves)` each (PROTOCOL.md §5.1, as nci-check lowers

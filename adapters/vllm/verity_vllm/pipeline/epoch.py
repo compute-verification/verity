@@ -32,6 +32,8 @@ from typing import Any
 
 from verity_vllm.config import ROOT, option, row_file
 
+__all__ = ["COMMANDS", "build_programs", "main", "resolve", "row_digests"]
+
 WORD_LINE = re.compile(r"Q_word_v1\{X=16,W=32[^}]*\}: (\d+) calls -> (\d+) units over (\d+) gates")
 ROLE_RANGE = re.compile(r"([A-Z]+)(\d+)-(?:[A-Z]+)?(\d+)")
 ROLE = re.compile(r"([A-Z]+)(\d+)")

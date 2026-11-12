@@ -24,6 +24,8 @@ from verity_vllm.pipeline import program_cache as PC
 from verity_vllm.pipeline import row_records as R
 from verity_vllm.pipeline.row_driver import Stop
 
+__all__ = ["REPLAY_TIMEOUT", "commit_verdict", "config_record", "word_check"]
+
 WORD_CHECK_TIMEOUT = 14400
 REPLAY_TIMEOUT = 14400
 

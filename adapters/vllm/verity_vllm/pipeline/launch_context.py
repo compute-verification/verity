@@ -35,6 +35,9 @@ from verity_vllm.config import option, workload_arg
 from verity_vllm.engine.arrivals import realized_arrive_steps
 from verity_vllm.program.prefix_plan import cached_of, shape, shape_name
 
+__all__ = ["Options", "bad_chunks", "batch_dispatch", "batch_dispatch_of", "main", "missing_batch", "rows_at",
+           "shape_contexts"]
+
 
 def rows_at(req: dict[str, Any], e: int) -> int:
     a, L, c = int(req["arrive_step"]), int(req["prompt_len"]), int(req["max_tokens"])
