@@ -203,6 +203,102 @@ def collect(hours: float = 72.0, known: dict | None = None) -> dict:
     return doc
 
 
+def cut(doc: dict, hours: float) -> dict:
+    """``doc`` cut to its last ``hours`` and to what the replay reads of it, small enough to keep as a test's fixture: the
+    loop's lines of those hours, the shards of their candidates, the labels of their changes with who set each replaced by
+    a number, for each change the few of its files that decide its kind and the suites it reruns, and of each suite the
+    inputs those files are under."""
+    day = doc["now"] - hours * 3600
+    rep = doc.get("replay") or {}
+
+    def since(when: str) -> bool:
+        return qt.ts(when) >= day
+
+    def short(head: str) -> str:
+        return head[:10]
+
+    def line(r: dict, built: set[str]) -> dict:
+        keep = {"build": ("base", "members", "heads", "why", "done"), "advance": ("members", "heads", "done"),
+                "slim": ("ids", "verdict", "why"), "drop": ("why", "failed"), "conflict": ("number", "heads"),
+                "eject": ("number", "heads", "why")}[r["action"]]
+        if (r.get("sha") or "")[:12] not in built:
+            keep += ("members", "heads")
+        out = {k: r[k] for k in ("action", "at", *keep) if r.get(k) not in (None, [], "", False)}
+        out.update({k: r[k][:12] for k in ("sha", "base") if k in out or (k == "sha" and r.get(k))})
+        if "heads" in out:
+            out["heads"] = [short(h) for h in out["heads"]]
+        if "why" in out:
+            # the reason as its readers read it, without the run or the role it names
+            out["why"] = re.sub(r"\br\d{8}-\d{6}-[0-9a-f]{4}\b", "a run", re.sub(r"withdrawn by \S+", "withdrawn by another", out["why"]))[:160]
+            assert qt.drop_cause(out["why"]) == qt.drop_cause(r["why"]), r["why"]
+        return out
+
+    def steps(shard: dict) -> list[dict]:
+        """A shard's steps that say how it went: each that failed, was stopped or has no end, and the last to end on the gate."""
+        off = tuple(doc.get("off_gate") or qt.OFF_GATE)
+        on = [st for st in shard.get("steps") or [] if st.get("step") not in off]
+        odd = [st for st in on if st.get("state") in ("failed", "stopped") or not st.get("end")]
+        last = max((st for st in on if st.get("end")), key=lambda st: st["end"], default=None)
+        return [{x: st.get(x) for x in ("step", "state", "end")} for st in ([*odd, last] if last is not None and last not in odd else odd)]
+
+    raw = [r for r in doc["control"].get("decisions") or []
+           if since(r["at"]) and not r.get("shadow") and r["action"] in ("build", "slim", "drop", "advance", "conflict", "eject")]
+    shas = {(r.get("sha") or "")[:12] for r in raw if r["action"] == "build"}
+    lines = [line(r, shas) for r in raw if r["action"] != "slim" or r.get("ids") or r.get("verdict")
+             or (r.get("why") or "").startswith(("judged", "started"))]
+    ids = {i for r in lines for i in r.get("ids") or ()}
+    members = {str(m) for r in raw for m in [*(r.get("members") or ()), r.get("number")] if m}
+    who: dict = {}
+    labels = {f"{t.partition('@')[0]}@{short(t.partition('@')[2])}": [dict(lab, by=who.setdefault(lab.get("by"), len(who) + 1)) for lab in labs]
+              for t, labs in doc["labels"].items() if t.partition("@")[0] in members}
+    prs = members
+    heads = {h for r in lines for h in r.get("heads") or ()} | {t.partition("@")[2] for t in labels}
+    restacks = {short(a): short(b) for a, b in (doc.get("restacks") or {}).items()}
+    for _ in range(4):
+        heads |= {x for a, b in restacks.items() if a in heads or b in heads for x in (a, b)}
+    was = Suites(rep, 0.0, 0.0)
+    sound, locks = rep.get("soundness") or [], rep.get("locks") or ["."]
+
+    def few(files: list[str]) -> list[str]:
+        files = sorted(files)
+        want, got = was.touched(frozenset(files)), set(was.whole)
+        tests = [lambda f: f in was.runner, lambda f: lean_compiles([f, "x.lean"], locks), lambda f: f.endswith(LEAN_SOURCES),
+                 lambda f: bool(qt.LEAN_FILE.search(f)), lambda f: _under(f, sound), lambda f: not f.endswith(".md"),
+                 lambda f: "/tests/" not in f"/{f}"]
+        out = {next(f for f in files if test(f)) for test in tests if any(test(f) for f in files)}
+        for f in files:
+            if not want <= (got := got | was.touched(frozenset({*out})) if out else got):
+                if was.touched(frozenset({f})) - got:
+                    out.add(f)
+        return sorted(out or files[:1])
+
+    files = {}
+    for k, v in (rep.get("files") or {}).items():
+        pr, _, h = k.partition("@")
+        if v and pr in prs and (not h or short(h) in heads):
+            files[f"{pr}@{short(h)}" if h else pr] = few(v)
+            assert was.touched(frozenset(files[f"{pr}@{short(h)}" if h else pr])) == was.touched(frozenset(v)), k
+    kept = [f for v in files.values() for f in v]
+    suites = {path: {"name": s["name"], "prose": s["prose"], "inputs": [q for q in s["inputs"] if q == "." or any(_under(f, [q]) for f in kept)],
+                     "cut": [c for c in s["cut"] if any(_under(f, [c]) for f in kept)]} for path, s in (rep.get("suites") or {}).items()}
+    runs = {n: {"runs": [{k: (steps(r) if k == "steps" else v)
+                          for k, v in r.items() if k in ("id", "kind", "sha", "shard", "took", "end", "state", "failed", "steps")}
+                         for r in d["runs"] if r["id"] in ids or (r.get("kind") == "shard" and r.get("sha") in shas)]}
+            for n, d in doc["nodes"].items()}
+    flags = sorted(rep.get("flags") or [], key=lambda x: x[0])
+    return {"now": doc["now"], "day": f"{datetime.fromtimestamp(day, UTC):%Y-%m-%dT%H:%M:%SZ}", "errors": [], "off_gate": doc.get("off_gate"),
+            "control": {"decisions": lines, "ticks": [t for t in doc["control"].get("ticks") or [] if since(t)]},
+            "nodes": {n: d for n, d in runs.items() if d["runs"]}, "labels": labels,
+            "open": {pr: short(h) for pr, h in doc["open"].items() if pr in prs},
+            "restacks": {a: b for a, b in restacks.items() if a in heads},
+            "lean": {k: v for k, v in (doc.get("lean") or {}).items() if k in shas},
+            "replay": {"lines": [{k: v for k, v in r.items() if v not in (None, [], False)} for r in rep.get("lines") or [] if since(r["at"])],
+                       "flags": [f for f in flags if f[0] < day][-1:] + [f for f in flags if f[0] >= day],
+                       "wide": rep.get("wide") or [], "pins": rep.get("pins") or [], "files": files, "locks": locks,
+                       "suites": suites, "runner": rep.get("runner") or [], "soundness": sound,
+                       "seconds": {s["name"]: (rep.get("seconds") or {}).get(s["name"]) for s in suites.values()}}}
+
+
 # ---- the trace --------------------------------------------------------------------------------------------------------------
 
 
@@ -1315,11 +1411,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seeds", type=int, default=5, help="runs of each rule, each with its own draws")
     ap.add_argument("--rules", default="", help="the rows to print, by the start of their names, comma-separated (default: all)")
     ap.add_argument("--json", action="store_true", help="print the rows as JSON")
+    ap.add_argument("--cut", type=Path, help="write the document cut to its last `--hours`, small, to this file and stop")
     a = ap.parse_args(argv)
     doc = json.loads(a.doc.read_text()) if a.doc else collect(
         a.hours, json.loads(a.save.read_text()) if a.save and a.save.exists() else None)
     if a.save:
         a.save.write_text(json.dumps(doc, default=str))
+    if a.cut:
+        a.cut.write_text(json.dumps(cut(doc, a.hours), separators=(",", ":"), sort_keys=True) + "\n")
+        return 0
     tr = trace(doc)
     want = [w.strip() for w in a.rules.split(",") if w.strip()]
     rows = [row(tr, rule, a.seeds) for rule in RULES if not want or any(rule.name.startswith(w) for w in want)]
