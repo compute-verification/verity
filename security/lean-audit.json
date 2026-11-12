@@ -3525,6 +3525,7 @@
   "PouwCheck.Protocol",
   "PouwCheck.Pass",
   "PouwCheck.Credit",
+  "PouwCheck.InputNode",
   "PouwCheck.Chunks",
   "PouwCheck.Opening",
   "PouwCheck.Period",
