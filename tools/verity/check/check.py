@@ -1741,6 +1741,7 @@ OPT_IN = {
         "tests/test_composition_difftest.py::test_remote_agrees",
         "tests/test_composition_difftest.py::test_onsite_agrees",
         "tests/test_composition_difftest.py::test_product_over_remotes_subprotocols_is_remote",
+        "tests/test_composition_difftest.py::test_product_over_onsites_subprotocols_is_onsite_at_200",
         "tests/test_composition_difftest.py::test_a_reference_without_reject_dominance_is_caught")},
     "adapters/vllm": {
         "VERITY_VLLM_INTERIOR_TABLE": (
