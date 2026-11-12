@@ -537,3 +537,37 @@ def test_a_move_whose_map_doesnt_parse_on_its_tip_is_refused_before_anything_run
     recs = env.loop(policy).tick()
     (skip,) = [r for r in recs if r["action"] == "skip"]
     assert f"its map {MAP} at " in skip["why"] and " doesn't parse (" in skip["why"] and m.calls() == [], skip
+
+
+def test_a_move_isnt_taken_on_its_mark_alone_with_the_low_risk_lane_off(env):
+    """drive.toml's `lowrisk_lane = false` takes no PR without a land verdict: a certified move neither, while one with a land
+    verdict is still built, regenerated."""
+    m = Moved(env)
+    _main_to(env, {Q.DRIVE_FLAGS: "lowrisk_lane = false\n"})
+    alone = m.move(1, verdict=False)
+    m.move(2, verdict=True)
+    loop = env.loop(policy)
+    (built,) = _builds(loop.tick())
+    assert built["members"] == [2] and built["moves"][0]["on_mark"] is False, built
+    assert loop.world.left[1] == (alone, "no land verdict, and drive.toml's `lowrisk_lane` is off, so a move lands only with one")
+
+
+@pytest.mark.parametrize("guarded", [True, False])
+def test_under_signed_verdicts_a_move_changing_a_signed_guard_needs_a_land_verdict(env, guarded):
+    """Under drive.toml's `signed_verdicts`, a move whose change meets `SIGNED_GUARDS` (here, the map's word rewritten in `labelauth.py`) isn't
+    taken on its mark alone, however certified; one that meets none is."""
+    Moved(env)
+    guard = "tools/research/src/research/labelauth.py"
+    flags = 'signed_verdicts = true\nlowrisk_excludes = ["*.py", "*.json"]\n'
+    _main_to(env, {Q.DRIVE_FLAGS: flags, guard: "old/ judges labels\n"})
+    files = {"old/a.txt": None, "new/a.txt": "newword in new/a.txt\n", **({guard: "new/ judges labels\n"} if guarded else {})}
+    head = _move(env, 1, files)
+    env.labels.verdicts[1, head] = []
+    loop = env.loop(policy)
+    builds = _builds(loop.tick())
+    if guarded:
+        assert not builds and loop.world.left[1] == (head, f"no land verdict, and it changes {guard}, and under drive.toml's "
+                                                            "`signed_verdicts` a move changing `SIGNED_GUARDS` lands only with "
+                                                            "one"), loop.world.left
+    else:
+        assert [(b["members"], b["moves"][0]["on_mark"]) for b in builds] == [([1], True)], builds

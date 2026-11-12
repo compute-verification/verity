@@ -16,7 +16,8 @@ mapping runs its tree's code: `Queue.mapped_change`, which the end of a tick sta
 out, `--move-carry-jobs` heads at once on threads no tick waits on), with a land verdict by a non-owner (its head's, or with
 drive.toml's `verdict_carry` "on" at `main` one the verdict carry takes from another of its heads whose commits since only
 merge trusted ones, `Landing._carried_from`, each decision logged once a head: `carry`) or under the low-risk rule (drive.toml's
-`lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by its merge), not on
+`lowrisk_lane` and `lowrisk_excludes` at `main`; a move PR on its mark alone while that lane is on and its move is certified
+on `main`, `World._uncertified` and `_off_mark`), not on
 `main` yet, ranked by drive's priority file then mark time, each after the ready PRs it contains, and held by no candidate
 on `main`'s chain it isn't a member of (one that is reaches `main` with that candidate: it is logged once a head and
 candidate, `riding`, and nobody is told); `files` is its change against its merge base with `main`, `lean` drive's
@@ -186,10 +187,10 @@ from . import carry, policy, vqueue, vqueue_records
 from .landing import CI, JOB_OF_KIND, SLIM_STEPS, SUITES_KIND, Landing, authed, cancel_runs, gating, merge_thread_post
 from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
-from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, WORKDIR, Entry, Member, Queue, QueueError, StoreLabels, _git,
-                    _out, _who, base_drivers, conflicting_files, flags_at, forces_cold, label_verifier, lean_change, lowrisk,
-                    merged_tree, move_of, moves_between, priority_list, queue_commit, queue_log, review_owners, rules_at,
-                    touched_by, unreviewed)
+from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, WORKDIR, DriveFlags, Entry, Member, Queue,
+                    QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
+                    label_verifier, lean_change, lowrisk, merged_tree, move_of, moves_between, priority_list, queue_commit,
+                    queue_log, review_owners, rules_at, touched_by, unreviewed)
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
@@ -601,6 +602,18 @@ class Judged:
     tasks: tuple[int, int] | None = None
 
 
+def _off_mark(files: Iterable[str], flags: DriveFlags) -> str:
+    """Why drive.toml (``flags``, `DriveFlags`) keeps a move PR changing ``files`` off its ready mark alone, however certified
+    its move: "" when it doesn't.  With `lowrisk_lane` off no PR lands without a land verdict, and under `signed_verdicts` a
+    change to `SIGNED_GUARDS`, a move's renames too, could change who holds a handle or how a label is judged."""
+    if not flags.lowrisk_lane:
+        return "drive.toml's `lowrisk_lane` is off, so a move lands only with one"
+    if flags.signed_verdicts and (guarded := sorted(f for f in files if vqueue.meets((f,), SIGNED_GUARDS))):
+        return (f"it changes {', '.join(guarded)}, and under drive.toml's `signed_verdicts` a move changing `SIGNED_GUARDS` "
+                "lands only with one")
+    return ""
+
+
 @dataclass(frozen=True)
 class Skip:
     """A PR a build left out (`World.build`) and why: ``held`` names what of the build holds its head already (the member
@@ -835,6 +848,7 @@ class World:
             files = dict(zip(admitted, pool.map(lambda n: self._changed(main, entries[n].pr.head), admitted)))
             took, self.on_mark = [], set()
             uncertified = {n: self._uncertified(entries[n].pr, main) for n in admitted if entries[n].pr.move}
+            off_mark = {n: _off_mark(files[n], flags) or uncertified[n] for n in uncertified}
             for n in admitted:
                 p, held = entries[n].pr, (why[n] or "").startswith("held")
                 if why[n] is None or n in carried or not p.move and not held and lowrisk(files[n], excludes):
@@ -843,11 +857,11 @@ class World:
                     left[n] = (p.head, why[n])
                     if (unreviewed([r for r in reviews[n] if self._another(n, r.by)], ()) or "").startswith("held"):
                         pulled.add(n)
-                elif p.move and not uncertified[n]:
+                elif p.move and not off_mark[n]:
                     took.append(n)
                     self.on_mark.add(n)
                 else:
-                    left[n] = (p.head, f"{why[n]}, and " + (uncertified[n] if p.move else "it isn't low-risk"))
+                    left[n] = (p.head, f"{why[n]}, and " + (off_mark[n] if p.move else "it isn't low-risk"))
             specs, clears = self._frozen()
             if specs:
                 below = self._frozen_base(main)
