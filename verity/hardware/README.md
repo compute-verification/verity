@@ -77,8 +77,9 @@ table.
 ## The node files (`verity.hardware.nodes`)
 
 One TOML file per kind of node in `nodes/`, beside their loader (`nodes/__init__.py`): what a node's registration
-states that no card does. A node is a host and the GPUs it carries. Its kind is the GPU card and its count, never a
-host's name, and each number is an entry under the cards' rules above.
+states that no card does. A node is a host and the GPUs it carries. Its kind is the GPU card and its count, and each
+number is an entry under the cards' rules above. A node file names no machine, no address and no provider: it is the
+kind's, read on one node of it, and its sources cite what read it by `art:` id.
 
 | Node | file | GPU card | host card | the host's own leaves |
 |---|---|---|---|---|
