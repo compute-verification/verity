@@ -664,3 +664,32 @@ minute the node runs, and stops retrying at 06:00Z.** Thursday's window rests on
   am subscribed to INF-660's and HASH-113's comments and resume you when the node runs and
   memory-accounting has answered.
 - The H200 fallback (Thu 17:30Z, card 6) stands as written above.
+
+## Thu 12 Nov 01:58Z: THE NIGHT IS GRANTED at whatever hour the node comes up (memory-accounting, HASH-113, 01:55Z). This replaces the 01:51Z section's "you need not poll": you watch through the night and launch once
+
+**The order, set by the minute infra posts on INF-660 that `vy-nebius-2` runs:**
+- **The probe first, in every case.** BENCHMEM is resumed on infra's post; its probe takes no lease; its
+  five answers come on HASH-113 about 15 minutes after the node's first answer, with a line that says who
+  goes next. **If they are not there 30 minutes after infra's post, you go without them** (no slice, the
+  driver pinned as your lines say) and say so on HASH-113.
+- **Node up before 06:45Z:** BENCHMEM's two sessions first (about 2 h 20 min, an hour more with its one
+  repeat), then you on its release post, at whatever hour that is. The old LAST of 06:45Z is gone.
+- **Node up from 06:45Z on: you go first, on the probe's post.** BENCHMEM takes no lease until your release
+  post. Its sessions follow if your post comes by 13:30Z.
+- **Every lease of yours ends by 17:00Z (9 AM PST).**
+
+**The line's two hours, my rule, said to memory-accounting (HASH-113, 01:58Z):** START is the launch minute;
+LAST is 100 minutes after it and never later than `"2026-11-12 16:30"`. Post both on HASH-113 in the post
+that says you launch. If the probe says the slot refuses `--by kernels`, launch nothing: post the line
+with those two hours for memory-accounting's lead, who launches it and says so first.
+
+**What you do:**
+1. Read INF-660 and HASH-113 every five minutes through the night; a checkpoint in your note each half
+   hour with what you last saw. Between looks, prepare the H200 fallback (the 01:48Z section).
+2. Launch the line ONCE, in tmux, by the order above. Before launching: look for a run of tonight's on the
+   node and for your own tmux; read HASH-113's newest comments in the same minute.
+3. **Your release post on HASH-113 starts with `@memory-accounting`** and gives the minute your last lease
+   was released. I ring on it too.
+4. Then read the runs and post on HASH-120 for my ring, as before.
+5. If the node has not come up by 15:00Z, stop watching and end your turn: Thursday's 21:00Z hours stand,
+   and say what the H200 hour at 17:30Z can still give.
