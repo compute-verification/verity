@@ -4,8 +4,8 @@ Scratch notes for PRF-490, on `cursor/soundness-multileg-8fb2` only. This file n
 
 Base: `cursor/soundness-remote-deployed-8fb2` (#8569, `remote_soundness_deployedReady`, the one-member form). Everything
 is in namespace `Verity.Sampled`, package `security_proofs`, under
-`Security/Proofs/Properties/Verity/Sampled/` (`Window.lean` and `Window/*.lean`), registered in
-`Security/Proofs/lakefile.toml` and `Security/Proofs/lean-audit.json`. One worker (LEG).
+`security/Proofs/Properties/Verity/Sampled/` (`Window.lean` and `Window/*.lean`), registered in
+`security/Proofs/lakefile.toml` and `security/Proofs/lean-audit.json`. One worker (LEG).
 
 ## The statement
 
@@ -95,7 +95,7 @@ LmsUnforgeable remote only. Nothing else is introduced.
 
 1. **The claim's transfer (`ClaimTransfers`).** Soundness ruled shape (i), one circuit for the window (04:43Z
    Nov 11): the claim stays what it is at one member, over a bigger circuit. The pieces:
-   - **The read's statement (LEG, written):** `Security/Properties/Verity/WindowFiles.lean`. `Circuit.beside` (two
+   - **The read's statement (LEG, written):** `security/Properties/Verity/WindowFiles.lean`. `Circuit.beside` (two
      circuits side by side: `C`'s gates then `D`'s, no wire between them, reducible), `Partition.beside` (`P`'s
      units then `Q`'s), `FileRead.circuitWith`/`unitsWith`/`partsWith`/`constsWith` (a first member and the rest,
      so a window has at least one member), `WindowFiles` (`first`, `rest`; `circuit`, `units`, `parts`, `consts`,
@@ -104,7 +104,7 @@ LmsUnforgeable remote only. Nothing else is introduced.
      (posted on PRF-490). Open in the statement: how `programDigest`/`publicDigest`/`Registered` read at a window
      (soundness: the window's, from the record's `window.circuit` binding); whether `beside` belongs in
      `Definitions/Core` (it is in the one Properties file so the lock's `layers` stay as they are).
-   - **Its lemmas (LEG, written):** `Security/Proofs/Properties/Verity/WindowFiles.lean`. `run_beside_left/right`,
+   - **Its lemmas (LEG, written):** `security/Proofs/Properties/Verity/WindowFiles.lean`. `run_beside_left/right`,
      `localEval_beside_left/right`, `mem_committed_beside_left/right`, `mem_io_beside_left/right`,
      `correct_beside_left/right`, `wrong_beside`, `unbound_beside`, `card_unbound_beside`: the units a trace of two
      circuits side by side doesn't bind are `C`'s at `C`'s part of the trace (`traceLeft`), then `D`'s at `D`'s, so
@@ -125,7 +125,7 @@ LmsUnforgeable remote only. Nothing else is introduced.
    roots, and at `ad6e765e05` still refuses a window with row tables and two-stage's shared rows; the rows link
    (Flock's several-member `EndToEndRegisteredRows`, proofs' piece (1)) is named open. Nothing changes in
    `MemberSteps`.
-4. **Records.** `Security/Proofs` passes at `a1f057c487`; `Security/Properties` and `Security` fail on the base's
+4. **Records.** `security/Proofs` passes at `a1f057c487`; `security/Properties` and `security` fail on the base's
    own guarantees (the runs table), which the port fixes when the one-member guarantee's definitions move to the
    definitions tree and its records are regenerated. Nothing of this branch is in a lock: the window's guarantee
    enters with the port.
@@ -167,12 +167,12 @@ LmsUnforgeable remote only. Nothing else is introduced.
 | `r20261111-052756-c92d` | `Proofs/Properties/Verity/WindowFiles.lean` | `55b900da74` | 2 | infra: no dependencies on the node, nothing ran |
 | `r20261111-053108-072a` | `Proofs/Properties/Verity/WindowFiles.lean` | `a1f057c487` | 0 | 34 theorems, standard axioms |
 
-Records (`lean_changed.py --records Security/Properties --update`, the fast path: no kernel replay):
+Records (`lean_changed.py --records security/Properties --update`, the fast path: no kernel replay):
 
 | Run | Tree | rc | Per package |
 |---|---|---|---|
-| `r20261110-191204-f7c8` | `ece623c082` | 1 | `Security/Proofs` pass; the base's own failures elsewhere |
-| `r20261111-053739-8e18` | `a1f057c487` | 1 | `Security/Proofs` **pass** (193583 declarations in 3823 modules, standard axioms, the package's roots built: no name clash). `Security/Properties` fail: its build passes; the 4 findings are `trees:` on the base's `remote_soundness_deployedReady` and `_honest`, whose statements read `Proofs.Properties.Verity.Sampled*` definitions. `Security` fail: the base's `Flock.SecurityProofs.SampledKSLive*` records (`guarantees:` restated, `witnesses:`). No finding names a module of this branch; against the base branch this branch changes only `Properties/Verity/WindowFiles.lean` and the two root lists outside `Security/Proofs`. No record was kept, so there is none to commit. |
+| `r20261110-191204-f7c8` | `ece623c082` | 1 | `security/Proofs` pass; the base's own failures elsewhere |
+| `r20261111-053739-8e18` | `a1f057c487` | 1 | `security/Proofs` **pass** (193583 declarations in 3823 modules, standard axioms, the package's roots built: no name clash). `security/Properties` fail: its build passes; the 4 findings are `trees:` on the base's `remote_soundness_deployedReady` and `_honest`, whose statements read `Proofs.Properties.Verity.Sampled*` definitions. `security` fail: the base's `Flock.SecurityProofs.SampledKSLive*` records (`guarantees:` restated, `witnesses:`). No finding names a module of this branch; against the base branch this branch changes only `Properties/Verity/WindowFiles.lean` and the two root lists outside `security/Proofs`. No record was kept, so there is none to commit. |
 
 Earlier rows (the layers up to `Window/Assembled.lean`, and the failed tries fixed forward) are in the git history of
 this file.
