@@ -104,6 +104,36 @@ def test_probe_follows_a_spawned_publisher_from_both_sides(tmp_path, mod):
                                         "close": [1.0, 0.5]}
 
 
+def test_a_probe_given_no_clock_reads_the_wardens_own(tmp_path, mod, monkeypatch):
+    """A probe's times are laid against the warden's origin, a reading of its host's raw clock: with no clock given,
+    the warden's probe, its collections and the publisher's keeps each read that clock, by its clock id."""
+    probe_mod = mod("warden_probe")
+    from verity.protocols.certifier.verifier import pacer
+
+    read = []
+
+    def raw(clock_id: int) -> float:
+        read.append(clock_id)
+        return 12.5
+
+    monkeypatch.setattr(pacer.time, "clock_gettime", raw)
+    probe = probe_mod.Probe()
+    assert probe.clock is probe.collections.clock is probe_mod.Collections().clock is pacer.raw_clock
+    assert probe.clock() == 12.5 and read == [pacer.time.CLOCK_MONOTONIC_RAW]
+
+    class Publisher:
+        def __init__(self, out) -> None:
+            self.out = out
+
+        def keep(self, record, grid) -> None:
+            pass
+
+    probe_mod.time_keeps(Publisher)
+    Publisher(tmp_path).keep(NS(link="requests", window=0), None)
+    assert json.loads((tmp_path / probe_mod.PUBLISHER_KEEPS).read_text()) == [12.5, 0.0, "requests", 0]
+    assert read == [pacer.time.CLOCK_MONOTONIC_RAW] * 3
+
+
 def test_collections_sees_the_interpreters_own_collections(mod):
     ticks = itertools.count()
     c = mod("warden_probe").Collections(clock=lambda: next(ticks))

@@ -29,6 +29,9 @@ inputs = [
     "verity/__init__.py",
     "verity/protocols/certifier/verifier/__init__.py",
     "verity/protocols/certifier/verifier/release.py",
+    # `verity.protocols.certifier.verifier.pacer` (tests/test_warden_probes.py): the network certifier's clock, which
+    # the warden's probes read
+    "verity/protocols/certifier/verifier/pacer.py",
           "verity/protocols/__init__.py", "verity/protocols/certifier/__init__.py"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
