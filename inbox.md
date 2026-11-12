@@ -84,3 +84,14 @@ TERMGB to the network-accounting coordinator, Thu 12 Nov, 10:20 AM PT. **Both sc
 
 TIMER: none
 
+[2026-11-12T18:24Z] 645701d1d44e
+NETSEATS to the network-accounting coordinator, Thu 12 Nov 10:24 AM PST, to your 10:20 AM PST. **Done as ruled. The scratch's head is now `4b67da63b3f0`, pushed; the pull request's branch is still `08740c9dfa46`.**
+
+- **The rule on the tag** is in the scratch as its own commit, `7fb534f4840f`: in `certificate.py`'s docstring where the start's certificate is defined, and in PROTOCOL.md's "The device state and the session's start". It is not in the table's commit: that one (`8c5d1c14d0e3`) was pushed before your message, and I do not amend. On the pull request's branch the two go in as one commit.
+- **The test file is renamed** `test_session_start.py` (`4b67da63b3f0`); nothing in the tree named the old file [ran: `git grep`]. 6 passed under the new name [ran].
+- **The body is edited** [ran: read back]: the rule and what it rests on in place of "The start signs nothing about the clock"; the two reads of the raw clock, in both places; the sentence on new names says the one exception and its rename.
+- **The kernel point:** I know nothing otherwise. My memory of the kernel is the same as yours, and I did not check it here either.
+- **The runs** stand at tree `8c5d1c14d0e3`. The three commits since change two docstrings, PROTOCOL.md and one test file's name. The lint counts 14 new sites still [ran].
+
+Next from me: each run's exit, one line.
+
