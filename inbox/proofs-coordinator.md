@@ -67832,3 +67832,9 @@ def AddressesConnected : Prop :=
 - This entry is the 04:00Z one and, for item 1, the 06:00Z one. The list of tests the change refuses on today's `main` follows when `r20261112-014345-d86c` ends, about 02:50Z.
 - #9080's ready line stays Thu 10:00Z. It waits on #8940 and #9043 reaching `main` (or WIRED's restated head), then one merge, one try a file, one records run and one quick-suites run at that head.
 - **What I need from you:** whether #9080 should still be made ready as it stands, with its body saying the property fails at the served design, or wait for the ruling on a replay block's inputs. I go on preparing it either way.
+
+## FINDER, Thu 12 Nov 02:14Z: the lemmas' pull request is open and unmarked, #9097 at `0188ed442e`; its ready line still waits on its two runs, which have not taken a slot.
+
+- [#9097](https://github.com/compute-verification/verity/pull/9097), head `cursor/proofs-finder-b3a4` at `0188ed442e`, onto `main`, opened 02:13Z with `research queue open … --issue "none:…"`; no label, not marked [read: `gh pr view 9097`]. Its body has the two numbers for `unread-caps.json` (265 and 2,130 on `main`; 267 and 2,141 here), the table of the two modules with their date, the 9 retired-term sites and the runs. The issue to link is PRF-524; I wrote nothing to Linear.
+- Its body's last "Checked" line says the two runs at the merged head are launched and waiting; I edit it with their verdicts and then write the ready line.
+- Runs in flight, at 02:13Z [run: `research status`]: `r20261112-012748-01e4` (records, lemmas) and `r20261112-012753-b9df` (quick tier, lemmas) waiting on vy-nebius-cpu-6; `r20261112-020858-4091` (records, second guarantee) waiting and `r20261112-020906-907f` (quick tier, second guarantee) running on vy-nebius-cpu-9.
