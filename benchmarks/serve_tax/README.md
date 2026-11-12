@@ -316,6 +316,21 @@ user gets at the P90 time a token, and the share of its draft tokens the model a
 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record prod-again" --loads agentic=4 --reps 6
 ~~~
 
+A node drifts over a job's hours, and the passes of one server lifetime share whatever that server had of its own.
+`LIFETIMES=L` serves the arms `L` times, each time a server of its own, in the arms' order and then that order turned
+round, and so on, so that the two arms' lifetimes of one number are neighbours in time and the order's effect falls
+on both alike. `LEAVE_OUT=N` leaves each lifetime's first `N` passes out of every figure: a lifetime's first pass
+after its warm-up is still warming (compiled graphs, the prefix cache's first fill), so it is served and recorded like
+the rest and not counted, and the table and the cost say how many were left out. The cost then pairs pass `r` of
+lifetime `k` of its two arms (`serve_tax.lifetimes`), prints each lifetime's own cost beside the cost over all of
+them, and takes its noise floor from stock's own lifetimes, each second one over the one before it, where no twin of
+stock was served. The interval is over the counted passes of all the lifetimes; where the lifetimes' own costs spread
+more than a lifetime's passes do, it is too narrow, and the lifetimes' costs say so.
+
+~~~text
+LIFETIMES=6 LEAVE_OUT=1 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record" --loads agentic=4 --reps 6
+~~~
+
 ## Running it
 
 On a node with the pinned vLLM venv, under `research run`, the C4 shard `benchmarks/ppl/datasets.json` pins sent with

@@ -1590,6 +1590,7 @@ def serve(a: argparse.Namespace, private: Path | None) -> int:
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "front_end": front,
             "plugin": list(arm.plugin), "env": arm.env, "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
+            "lifetime": a.lifetime, "left_out": a.leave_out,
             "general": entry_points(arm),
             "boundary_rows": ({"window_s": a.window_s, "check": model.check, **(a.boundary_rows or arm.rows)}
                               if "boundary_rows" in arm.plugin else None),
@@ -1906,6 +1907,7 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
             "run_id": meta.get("run_id"), "commit": meta.get("commit"), "vllm": (meta.get("versions") or {}).get("vllm"),
             "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
             "startup_s": meta.get("startup_s"), "error": meta.get("error"), "tick": meta.get("tick"), "loads": loads,
+            "lifetime": meta.get("lifetime"), "left_out": meta.get("left_out") or 0, "reps": meta.get("reps"),
             "edges": edge_summary(edges), "boundary_rows": meta.get("boundary_rows"),
             "boundary_commits": meta.get("boundary_commits"), "planned": meta.get("planned")}
 
@@ -1934,6 +1936,8 @@ def table(arms: list[dict]) -> dict:
     for a in arms:
         for load, reps in a["loads"].items():
             row = {"arm": a["arm"], "load": load, "run_id": a["run_id"], "reps": len(reps),
+                   "lifetimes": len(a["lifetimes"]) if "lifetimes" in a else None,
+                   "left_out": len((a.get("warm") or {}).get(load, ())),
                    "rate": reps[0]["rate"] if reps else None,
                    "concurrency": reps[0].get("concurrency") if reps else None, "sent": sum(r["sent"] for r in reps),
                    "unserved": sum(r["sent"] - r["ok"] for r in reps), **{k: summary([r.get(k) for r in reps]) for k in KEYS}}
@@ -2200,13 +2204,61 @@ def commitment(arm: dict) -> dict | None:
             "tables_asked": bool(rows.get("tables")), "window_s": rows.get("window_s")}
 
 
+def lifetimes(arms: list[dict]) -> list[dict]:
+    """Arms' metrics with one arm's server lifetimes made one arm's (`run --lifetime`: run.sh's LIFETIMES serves a
+    job's arms that many times, in an order that turns round each time, so that two arms' lifetimes are neighbours in
+    time). Lifetime k's pass r is the arm's rep (k - 1) * R + r, R the most reps a lifetime given was to serve, so a
+    cost pairs the same pass of the same lifetime of its two arms; each rep keeps its ``lifetime`` and its ``pass``.
+    The passes a lifetime leaves out (`run --leave-out`: its first, its warm-up, served and recorded like the rest)
+    are in no load's reps and so in no figure: they are the arm's ``warm``, by load. An arm with one directory, no
+    lifetime and nothing left out is returned as it is. Refused where two directories of an arm name one lifetime, or
+    one names none, or they leave out different passes."""
+    stride = max((a.get("reps") or 0 for a in arms if a.get("lifetime") is not None), default=0)
+    out: list[dict] = []
+    by: dict[str, dict] = {}
+    for a in arms:
+        k, skip = a.get("lifetime"), a.get("left_out") or 0
+        if "lifetimes" in a or (k is None and not skip):
+            out.append(a)
+            continue
+        b = by.get(a["arm"])
+        if b is None:
+            b = by[a["arm"]] = {**a, "loads": {}, "warm": {}, "lifetimes": [], "lifetime": None}
+            out.append(b)
+        elif k is None or k in b["lifetimes"] or None in b["lifetimes"] or skip != b["left_out"]:
+            raise SystemExit(f"cost: two directories of arm {a['arm']} are "
+                             + ("lifetimes of which one names no number" if k is None or None in b["lifetimes"] else
+                                f"both its lifetime {k}" if k in b["lifetimes"] else
+                                f"lifetimes that leave out {b['left_out']} and {skip} passes") + ": give one of them")
+        elif differ := [key for key in ("model_id", "slo", "vllm", "planned") if a.get(key) != b.get(key)]:
+            raise SystemExit(f"cost: two lifetimes of arm {a['arm']} differ in {', '.join(differ)}: they are not one "
+                             "arm's")
+        else:
+            x, y = b.get("boundary_commits"), a.get("boundary_commits")
+            if x and y:
+                b["boundary_commits"] = {key: x.get(key, 0) + y.get(key, 0) for key in ("spans", "finished", "failed", "tables")}
+            b["error"] = b.get("error") or a.get("error")
+        b["lifetimes"].append(k)
+        for name, reps in a["loads"].items():
+            for r in reps:
+                rep = {**r, "lifetime": k or 1, "pass": r["rep"], "rep": ((k or 1) - 1) * stride + r["rep"]}
+                (b["warm"] if r["rep"] <= skip else b["loads"]).setdefault(name, []).append(rep)
+    for b in by.values():
+        b["lifetimes"] = sorted(k or 1 for k in b["lifetimes"])
+        for held in (b["loads"], b["warm"]):
+            for reps in held.values():
+                reps.sort(key=lambda r: r["rep"])
+    return out
+
+
 def joined(arms: list[dict]) -> dict[str, dict]:
     """Arms' metrics by arm, the directories of one arm joined: an arm that two jobs served, each a load of its own,
     has both loads' passes, each load with its own job's commit and run (``of``), and its boundary commitment's counts
-    are the two jobs' sums. Two directories of one arm that served the same load, where a rung's reps would be of two
-    server lifetimes, or that differ in the model, the SLO or vLLM, are refused."""
+    are the two jobs' sums. An arm's server lifetimes are one arm's first (`lifetimes`). Two other directories of one
+    arm that served the same load, where a rung's reps would be of two server lifetimes paired by nothing, or that
+    differ in the model, the SLO or vLLM, are refused."""
     by: dict[str, dict] = {}
-    for a in arms:
+    for a in lifetimes(arms):
         of = {n: {"commit": a.get("commit"), "run": a.get("run_id")} for n in bench_loads(a)}
         b = by.get(a["arm"])
         if b is None:
@@ -2338,12 +2390,34 @@ SESSION_TARGET = 1.0
 SESSION_COST = "session_cost"
 
 
+def own_noise(reps: dict[int, dict]) -> dict | None:
+    """The noise floor of a cost from the stock arm's own server lifetimes (`lifetimes`), where it has two at least:
+    the cost of each second lifetime over the one before it, the same pass of the two paired (`paired_cost`), which
+    is stock over stock a lifetime apart, as far apart as a cost's own pairs or further. ``reps``: the arm's reps at
+    one rung of a load, by rep. None for an arm served in fewer than two lifetimes."""
+    of: dict[int, dict[int, float]] = {}
+    for r in reps.values():
+        if "lifetime" in r:
+            of.setdefault(r["lifetime"], {})[r["pass"]] = r.get("output_tok_per_s") or 0.0
+    order = sorted(of)
+    pairs = [(of[x][n], of[y][n]) for x, y in zip(order[::2], order[1::2], strict=False) for n in sorted(set(of[x]) & set(of[y]))]
+    if not pairs:
+        return None
+    return {**paired_cost([x for x, _ in pairs], [y for _, y in pairs]), "reps": len(pairs),
+            "lifetimes": [[x, y] for x, y in zip(order[::2], order[1::2], strict=False)]}
+
+
 def session_cost(arms: list[dict], arm: str, reference: str, target: float | None = None) -> dict | None:
     """The cost of ``arm`` over ``reference`` on the sessions load both served (`Load.sessions`), from arms' metrics
     (one arm's directories joined: `joined`), every figure in percent: the reference's output tokens a second over
     the arm's, less one, at the users both served, with its 95% interval over reps (`serving_cost`). Its verdict is
     against ``target`` (`SESSION_TARGET` where none is given), the interval widened by the noise floor: the size of
-    the cost of another arm that starts the reference's engine (`same_engine`), where one served the load. Beside
+    the cost of another arm that starts the reference's engine (`same_engine`), where one served the load, and else
+    of the reference's own lifetimes, each second one over the one before it (`own_noise`). Where the arms were
+    served in lifetimes (`lifetimes`) the reps are the passes both sides counted, each lifetime's first ones left out
+    (``left_out`` an arm, ``warm`` how many were served), and ``by_lifetime`` has each lifetime's own cost: passes of
+    one lifetime share whatever its server had of its own, so the interval over all of them is too narrow where the
+    lifetimes' costs spread more than a lifetime's passes do. Beside
     them: the share of its prompt tokens the load plans to repeat (`planned`), the share each side's prefix cache
     served in fact, from the engine's own counters, and whether each side served every request of every rep.
     ``same_work`` says whether both did and their caches served the same share of the same prompts in every rep:
@@ -2376,10 +2450,15 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
                          + ", ".join(f"{n}: {v}" for n, v in built.items()) + "): a cost is over stock from the same "
                          "environment (run.sh: VENV)")
     gpus = tp_size(MODELS[by[arm]["model_id"]])
-    noise = serving_cost(ref, twin, load, rung) if twin else None
-    floor = abs(noise["value"]) if noise and noise["value"] is not None else 0.0
     a, b = ({r["rep"]: r for r in bench_rungs(x, load)[rung]} for x in (ref, by[arm]))
     reps = sorted(set(a) & set(b))
+    noise = serving_cost(ref, twin, load, rung) if twin else own_noise(a)
+    floor = abs(noise["value"]) if noise and noise["value"] is not None else 0.0
+    lives = sorted({a[k]["lifetime"] for k in reps if "lifetime" in a[k]})
+    by_lifetime = [{"lifetime": n, **_cost(paired_cost(*([x[k].get("output_tok_per_s") or 0.0 for k in reps
+                                                          if a[k].get("lifetime") == n] for x in (a, b)))),
+                    "reps": sum(a[k].get("lifetime") == n for k in reps)} for n in lives]
+    warm = [len((x.get("warm") or {}).get(pass_name(load, rung), ())) for x in (ref, by[arm])]
     sent = rung * plan["requests"] // plan["users"]
 
     def side(rs: dict[int, dict], of: dict) -> dict:
@@ -2405,8 +2484,11 @@ def session_cost(arms: list[dict], arm: str, reference: str, target: float | Non
             "ci95": _cost(c)["ci95"], "verdict": verdict(c, target / 100, floor) if same else "cannot tell",
             "same_work": same, "model": MODELS[by[arm]["model_id"]].served, "arm": arm, "reference": reference,
             "load": load, "what": LOADS[load].what, "users": rung, "reps": c["reps"],
+            "by_lifetime": by_lifetime or None,
+            "left_out": {"passes": by[arm].get("left_out") or 0, "warm": warm} if any(warm) else None,
             "planned": {**plan, "repeated_share": _pct(plan["repeated_tokens"] / plan["prompt_tokens"])},
-            "noise_floor": {"arm": twin["arm"], **_cost(noise), "reps": noise["reps"]} if noise else None,
+            "noise_floor": {"arm": twin["arm"] if twin else reference, **_cost(noise), "reps": noise["reps"],
+                            **({} if twin else {"lifetimes": noise["lifetimes"]})} if noise else None,
             "sides": {"reference": sa, "arm": sb}, "vllm": by[arm].get("vllm"), "gpus": gpus,
             "reference_commit": of[reference]["commit"], "reference_run": of[reference]["run"]}
 
@@ -2433,8 +2515,15 @@ def session_text(r: dict) -> str:
         f"{plan['repeated_share']:.2f}% of them planned to repeat"
         + (f"; each sampled at temperature {plan['sampled']['temperature']:g} and top-p {plan['sampled']['top_p']:g} "
            "under a seed its client sends, one a user" if plan.get("sampled") else "; each greedy"),
-        "  noise floor: " + (f"{n['arm']} over {r['reference']}: {_c(n)}, {_reps(n['reps'])}; the verdict's interval is "
-                             "widened by its size" if n else
+        *([f"  the reps are the passes both arms counted, in {_lifetimes(len(r['by_lifetime']))} an arm"
+           + (f"; the first {_passes(r['left_out']['passes'])} of each lifetime, its warm-up, served and recorded and "
+              f"left out ({r['left_out']['warm'][0]} of {r['reference']}'s, {r['left_out']['warm'][1]} of {r['arm']}'s)"
+              if r.get("left_out") else "")
+           + "; by lifetime: " + ", ".join(f"{_c(x)} ({_reps(x['reps'])})" for x in r["by_lifetime"])]
+          if r.get("by_lifetime") else []),
+        "  noise floor: " + ((f"{r['reference']}'s own lifetimes, each second one over the one before it"
+                              if n.get("lifetimes") else f"{n['arm']} over {r['reference']}")
+                             + f": {_c(n)}, {_reps(n['reps'])}; the verdict's interval is widened by its size" if n else
                              f"not measured: no second lifetime of {r['reference']}'s engine served the load"),
         *(f"  {rate(r['sides'][k])}" for k in ("reference", "arm")),
         *([] if r["same_work"] else ["  the two sides did not do the same work (a request unserved, or their prefix "
@@ -2552,6 +2641,14 @@ def _c(c: dict | None) -> str:
 
 def _reps(n: int) -> str:
     return f"{n} rep{'s' if n != 1 else ''}"
+
+
+def _passes(n: int) -> str:
+    return "pass" if n == 1 else f"{n} passes"
+
+
+def _lifetimes(n: int) -> str:
+    return f"{n} server lifetime{'s' if n != 1 else ''}"
 
 
 def _in_target(xs: list[dict] | None) -> str:
@@ -2829,6 +2926,11 @@ def markdown(t: dict) -> str:
              "at its median and longest.",
              "A pass of vLLM's client (a load at a rung, load@rung) holds its concurrency in place of a rate, or sends "
              "each request of a planned file as it arrives (load@0), and its figures are the client's own.",
+             *(["An arm served in server lifetimes has their passes as its reps, less the passes each lifetime leaves "
+                "out (its first ones, its warm-up), which are served and recorded and in no figure here: "
+                + "; ".join(f"{r['arm']} {r['load']}: {_lifetimes(r['lifetimes'] or 1)}, {r['left_out']} left out"
+                            for r in t["rows"] if r.get("lifetimes") or r.get("left_out")) + "."]
+               if any(r.get("lifetimes") or r.get("left_out") for r in t["rows"]) else []),
              "", "| arm | load | rate (req/s) | unserved | out tok/s | req/s | goodput req/s | SLO met | TTFT p50 / p99 (ms) | "
              "ITL p50 / p99 (ms) | steps | tokens / rows a step | busy GPU-s (per 1k tok) | edges (stall p50 / max, s) | "
              "tax vs compiled (tok/s) | tax vs compiled (goodput) | tax vs parent (tok/s) | run |",
@@ -2940,6 +3042,12 @@ def main(argv: list[str] | None = None) -> int:
                    help="vLLM's client: each request sampled at the recipe's temperature and top-p (SAMPLED) in place "
                         "of greedy, naming its user and under that user's seed (user_seed)")
     r.add_argument("--reps", type=int, default=3)
+    r.add_argument("--lifetime", type=int, metavar="K",
+                   help="this server lifetime's number among the arm's in the job, from 1 (run.sh's LIFETIMES): a cost "
+                        "pairs lifetime K's passes of its two arms (lifetimes)")
+    r.add_argument("--leave-out", type=int, default=0, metavar="N",
+                   help="the first N reps of each load are the lifetime's warm-up: served and recorded like the "
+                        "rest, and left out of every figure (lifetimes)")
     r.add_argument("--stop-at", metavar="TIME",
                    help="the time the arm stops by, with its zone (2030-01-01T00:00:00Z): it starts no pass that it "
                         "can't expect to finish by then, and keeps the passes it served (stop_before)")
@@ -3117,7 +3225,7 @@ def main(argv: list[str] | None = None) -> int:
     if a.cmd == "metrics":
         print("\n".join(json.dumps(x) for x in arms))
         return 0
-    t = table(arms)
+    t = table(lifetimes(arms))
     md = markdown(t)
     if a.out:
         a.out.mkdir(parents=True, exist_ok=True)

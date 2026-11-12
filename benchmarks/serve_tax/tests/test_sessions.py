@@ -343,6 +343,86 @@ def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work
         S.session_cost([evicted], "prod-record", "prod")
 
 
+def lifetime(name: str, k: int | None, rates: list[float], left_out: int = 1) -> dict:
+    """One server lifetime of an arm (`served`): its number in the job, the reps it was to serve and how many of its
+    first ones it leaves out."""
+    return served(name, rates) | {"lifetime": k, "left_out": left_out, "reps": len(rates)}
+
+
+#: stock's two lifetimes, pass by pass, each with a warm-up first that is far off the rest; ours costs 0.5% in every
+#: pass of every lifetime, so any other pairing than the same pass of the same lifetime gives another figure
+STOCK = {1: [1.0, 2.0, 2.1, 2.2], 2: [1.2, 2.002, 2.102, 2.202]}
+
+
+def in_lifetimes() -> list[dict]:
+    """A job's directories in the order it served them: stock, ours, ours, stock."""
+    ours = {k: [0.75 * rates[0], *(x / 1.005 for x in rates[1:])] for k, rates in STOCK.items()}
+    return [lifetime("prod", 1, STOCK[1]), lifetime("prod-record", 1, ours[1]), lifetime("prod-record", 2, ours[2]),
+            lifetime("prod", 2, STOCK[2])]
+
+
+def test_a_cost_over_server_lifetimes_pairs_the_same_pass_of_the_same_lifetime_and_leaves_the_warm_up_out():
+    stock, ours = S.lifetimes(in_lifetimes())
+    assert (stock["arm"], stock["lifetimes"], ours["arm"], ours["lifetimes"]) == ("prod", [1, 2], "prod-record", [1, 2])
+    # lifetime k's pass r is rep (k - 1) * 4 + r; each lifetime's first pass is kept apart from the reps
+    assert [(r["rep"], r["lifetime"], r["pass"]) for r in stock["loads"]["agentic@4"]] == [
+        (2, 1, 2), (3, 1, 3), (4, 1, 4), (6, 2, 2), (7, 2, 3), (8, 2, 4)]
+    assert [(r["rep"], r["output_tok_per_s"]) for r in stock["warm"]["agentic@4"]] == [(1, 1000.0), (5, 1200.0)]
+    assert S.lifetimes([stock, ours]) == [stock, ours]                      # read once
+    r = S.session_cost(in_lifetimes(), "prod-record", "prod")
+    assert (r["value"], r["ci95"], r["reps"]) == (0.5, [0.5, 0.5], 6)
+    assert r["by_lifetime"] == [{"lifetime": 1, "value": 0.5, "ci95": None, "reps": 3},
+                                {"lifetime": 2, "value": 0.5, "ci95": None, "reps": 3}]
+    assert r["left_out"] == {"passes": 1, "warm": [2, 2]}
+    # no twin of stock was served: the noise floor is stock's second lifetime over its first, pass by pass
+    assert r["noise_floor"] == {"arm": "prod", "value": -0.1, "ci95": None, "reps": 3, "lifetimes": [[1, 2]]}
+    assert r["verdict"] == "meets" and S.session_cost(in_lifetimes(), "prod-record", "prod", target=0.55)["verdict"] == "cannot tell"
+    text = S.session_text(r)
+    assert ("  the reps are the passes both arms counted, in 2 server lifetimes an arm; the first pass of each lifetime, "
+            "its warm-up, served and recorded and left out (2 of prod's, 2 of prod-record's); by lifetime: 0.50% (3 reps), "
+            "0.50% (3 reps)\n") in text
+    assert ("  noise floor: prod's own lifetimes, each second one over the one before it: -0.10%, 3 reps; the verdict's "
+            "interval is widened by its size\n") in text
+    # a twin of stock, where one served, is still the floor
+    twin = [*in_lifetimes(), *(lifetime("prod-again", k, [x / 1.002 for x in STOCK[k]]) for k in (1, 2))]
+    assert S.session_cost(twin, "prod-record", "prod")["noise_floor"] == {"arm": "prod-again", "value": 0.2,
+                                                                          "ci95": [0.2, 0.2], "reps": 6}
+    # the table has the lifetimes' counted passes as the arm's reps, and says what it left out
+    t = S.table(S.lifetimes(in_lifetimes()))
+    assert [(x["arm"], x["reps"], x["lifetimes"], x["left_out"]) for x in t["rows"]] == [("prod", 6, 2, 2), ("prod-record", 6, 2, 2)]
+    assert ("which are served and recorded and in no figure here: prod agentic@4: 2 server lifetimes, 2 left out; "
+            "prod-record agentic@4: 2 server lifetimes, 2 left out.") in S.markdown(t)
+    assert "left out" not in S.markdown(S.table(arms()))
+
+
+def test_one_lifetime_can_leave_its_warm_up_out_and_lifetimes_that_are_not_one_arms_are_refused():
+    # a job of one lifetime an arm: the first pass left out, five reps counted, which have no interval
+    one = S.session_cost([lifetime("prod", None, [1.0] + [2.0] * 5), lifetime("prod-record", None, [1.5] + OURS[1:])],
+                         "prod-record", "prod")
+    assert (one["reps"], one["ci95"], one["verdict"]) == (5, None, "cannot tell")
+    assert one["left_out"] == {"passes": 1, "warm": [1, 1]} and one["noise_floor"] is None
+    assert "in 1 server lifetime an arm; the first pass of each lifetime" in S.session_text(one)
+    two = S.session_cost([lifetime("prod", 1, [2.0] * 3, 2), lifetime("prod-record", 1, OURS[:3], 2)], "prod-record", "prod")
+    assert two["reps"] == 1 and "the first 2 passes of each lifetime" in S.session_text(two)
+    a, b = in_lifetimes()[:2]
+    with pytest.raises(SystemExit, match="two directories of arm prod are both its lifetime 1: give one of them"):
+        S.session_cost([a, a, b], "prod-record", "prod")
+    with pytest.raises(SystemExit, match="two directories of arm prod are lifetimes that leave out 1 and 2 passes"):
+        S.session_cost([a, lifetime("prod", 2, STOCK[2], 2), b], "prod-record", "prod")
+    with pytest.raises(SystemExit, match="two directories of arm prod are lifetimes of which one names no number"):
+        S.session_cost([a, lifetime("prod", None, STOCK[2]), b], "prod-record", "prod")
+    with pytest.raises(SystemExit, match="two lifetimes of arm prod differ in vllm: they are not one arm's"):
+        S.session_cost([a, lifetime("prod", 2, STOCK[2]) | {"vllm": "0.2"}, b], "prod-record", "prod")
+    # two directories of an arm that are no lifetimes of it are refused as before: nothing pairs their reps
+    with pytest.raises(SystemExit, match="two directories of arm prod both served agentic: give one of them"):
+        S.session_cost([served("prod", [2.0] * 6), served("prod", [2.0] * 6), served("prod-record", OURS)], "prod-record", "prod")
+    # a lifetime the job cut short pairs the passes both arms have
+    cut = in_lifetimes()
+    cut[3]["loads"]["agentic@4"] = cut[3]["loads"]["agentic@4"][:3]
+    short = S.session_cost(cut, "prod-record", "prod")
+    assert short["reps"] == 5 and [x["reps"] for x in short["by_lifetime"]] == [3, 2]
+
+
 def test_cost_prints_a_sessions_loads_cost_over_the_arms_own_stock(tmp_path: Path, capsys: pytest.CaptureFixture):
     files = []
     for a in arms():
