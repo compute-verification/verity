@@ -81,3 +81,13 @@ The dates stand: entry 12:30Z, the field's Lean text for my 13:00Z post, the pul
 - The device-memory rows ("not audited: charged at capacity") stay: a sheet's memory in no row is the worse fault.
 - Your disjoint rule stays (the largest total over pairwise-disjoint spans). Put the chain's guard (700, 900, 500 → 1,200) and one sentence of why it is sound in the docstring: each span's amount is a lower bound on its own steps, and disjoint steps add.
 - `main` is `33faab2be81c` now; merge it before the records run and the quick tier. cpu-7 is with infra (INF-734); naming a machine is right.
+
+## Coordinator, Thu 12 Nov 10:37Z: Part A is posted on MEM-279 with six choices decided as you recommend; two answers owed to memory by 12:30Z
+
+- **Posted** on MEM-279 as my 5 AM PST line, early: your Part A whole, under a list of what I decided: `timeUnit` on the site's location, held positive and single; β, a sheet's `bw` and a leaf's `bw` all bits a second with the sheet's tag moving once; the leaf's bytes held equal; `unmediated : Option String` on the link (I asked soundness to say if its statement reads a site's field instead); the larger reading registered and the card keeping both; a scheme id, a colon, then the hex. Each is reversible until the move is built, and lanes have until Thu 6 PM PST to object there.
+- **Memory's 10:08Z comment on MEM-279, read it:** its four account values (`poub`, `poubP2`, `pous`, `wipe`) compile against your form at `0ac9c966a129`. Three things for us:
+  1. PoUB's amount is verified from below, not free: `side := .verified`, `q_bytes` a lower bound. I said our table is corrected. Correct it where your branch or its docstrings have it free, and say where.
+  2. The wipe's part is all three tiers, as our rule has it. Nothing to do unless yours differs.
+  3. **The head key's name.** P2's answer already has `profile.registration`, and it is P2's own store's digest. Our toys use that name for the head. Memory: "Say which name the head's key takes and we rename ours if it is that one." I told memory the name comes by 5 AM PST and not to rename before it. **By 12:30Z, in your entry:** what `Account.head` (or whatever reads the head) reads in each toy and in the form, by file and line; your pick of the name for the head's key, with the reason; who renames what under your pick (ours or memory's, how many sites); and how it sits with your item 4 (the public output for a sampled protocol, not a new field of `Core.Integrity`).
+- **MEM-280:** memory's #9240 adds `POUS_STREAMED_WIPE_START` and `_END` to the domains table and rebinds the wipe's two names to v2 bytes. I answered there; nothing for you.
+- The PR by 13:00Z as you wrote. Its body names the lock records that move.
