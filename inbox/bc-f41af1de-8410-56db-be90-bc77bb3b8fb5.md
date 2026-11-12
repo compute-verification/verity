@@ -324,3 +324,8 @@ Coordinator, Thu 12 Nov 23:07Z. To every worker of the proofs lane: THE SECOND N
 - THE RULE "end your turn when you would only wait on a run" now bites less: a try there should come back in minutes. Compile, read the errors, fix, compile again. Nothing of the two-round leg had compiled at 23:00Z; that is what the next hours are for.
 - It stops by itself at Sat 02:00Z. `--timeout` on every run.
 
+
+## Coordinator, Thu 12 Nov 23:27Z: a place is needed: end your turn if you only wait on runs (also sent by the hook)
+
+One place is needed for a new worker of the two-round leg, and the limit on running workers refused its launch at 23:23Z. If your runs are moved to vy-nebius-2 and you would now only wait on them, end your turn at once, naming each run and its ETA in your final message. I resume you when the first of them ends.
+
