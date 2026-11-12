@@ -132,14 +132,6 @@ def test_a_link_that_does_not_name_one_peer_per_other_rank_is_refused(tmp_path, 
         _check(run)
 
 
-def test_a_build_whose_links_file_holds_no_links_is_refused_by_the_files_name(tmp_path):
-    run = _capture(tmp_path / "run", links=lambda r, doc: {k: v for k, v in doc.items() if k != "links"} if r == 1 else doc)
-    with pytest.raises(Refused) as e:
-        _check(run)
-    assert str(e.value) == f"{run / 'b1' / 'tp_links.json'}: not a rank's tp_links.json: its `links` is absent, not a list"
-    assert not (run / "tp2_match.json").exists()
-
-
 def _request(first_step, *, listed: bool = True, timing: bool = True, requests: bool = True) -> dict:
     """A capture's tokens of one request (five prompt tokens, two generated) whose prefill the capture's timing puts at ``first_step``."""
     tok = json.loads(_tokens(GENERATED, 1.5))

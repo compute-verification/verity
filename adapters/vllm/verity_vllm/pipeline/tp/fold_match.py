@@ -197,12 +197,12 @@ def global_match_rank(py: str, rank_dir: Path, gprog: Path, workload: Path, with
 def links_for_rank(rank: int, build: Path, compare: dict, derived: list[str]) -> list[dict] | dict[str, list[dict]] | None:
     """B1: the rank Program's tp_links.json `links`.  B>1: {request_id: links of the request's Program} from the batch decomposition's
     per-request derived dir (each derived dir of a rank carries its own tp_links.json), read off the rank's compare record
-    (`compare_rank`, which lists `per_request` for every rank with further Programs)."""
+    (`compare_rank`'s `per_request`; a record that lists none has no links)."""
     if not derived:
         doc = _load_links(build / "tp_links.json")
-        return list(doc["links"]) if doc else None
+        return list(doc["links"]) if doc and isinstance(doc.get("links"), list) else None
     out: dict[str, list[dict]] = {}
-    for r in compare["per_request"]:
+    for r in _listed(compare, "per_request"):
         d = r.get("derived")
         if not d:
             return None
@@ -256,8 +256,8 @@ class Options:
 
 
 def _stage(per_rank: dict[str, dict], r: int, name: str) -> dict:
-    """Rank r's record of its `compare` or its `global_match`; empty for a rank whose fold failed, which ran neither, and for the
-    `global_match` of a rank given no GP-01 Program or no workload."""
+    """Rank r's record of its `fold`, its `compare` or its `global_match`; empty for a rank whose fold failed, which ran neither of
+    the last two, and for the `global_match` of a rank given no GP-01 Program or no workload."""
     return _block(per_rank[str(r)], name)
 
 
@@ -377,7 +377,7 @@ def main(a: Options) -> int:
         res["problems"].extend(problems)
 
     # ---- cross-rank check
-    folded = [r for r in ranks if res["per_rank"][str(r)]["fold"]["ok"]]
+    folded = [r for r in ranks if _stage(res["per_rank"], r, "fold").get("ok")]
     xr: dict[str, Any]
     if folded != ranks:
         xr = {"verdict": "FAIL", "failed": ["partner_rank"], "why": f"ranks folded {folded} of {ranks}: the cross-rank check needs every rank's fold"}
@@ -395,7 +395,7 @@ def main(a: Options) -> int:
                 rec_sha[rank] = hashlib.sha256(p.read_bytes()).hexdigest()      # binds the provenance record to THESE rows
             else:
                 res["problems"].append(f"rank {rank}: no collective recorder rows ({p}); the value check cannot run")
-            lk = links_for_rank(rank, builds[rank], res["per_rank"][str(rank)]["compare"], derived[rank])
+            lk = links_for_rank(rank, builds[rank], _stage(res["per_rank"], rank, "compare"), derived[rank])
             if lk is None:
                 res["problems"].append(f"rank {rank}: no tp_links.json for the rank Program(s); the link check cannot run")
             else:
@@ -425,16 +425,16 @@ def main(a: Options) -> int:
             _fails_too(xr, "provenance_missing")
         (out / "tp2_rank_match.json").write_text(json.dumps(xr, indent=1, default=str) + "\n")
         logger.info("[tp2foldmatch] cross-rank check: %s failed=%s collectives=%s checks=%s", xr["verdict"], xr.get("failed"), xr.get("n_collectives"),
-                    [(c["name"], c["pass"]) for c in xr["checks"]])
+                    [(c["name"], c["pass"]) for c in _listed(xr, "checks")])
     res["cross_rank"] = {k: v for k, v in xr.items() if k not in ("peer_binding",)}
     res["cross_rank"]["peer_binding_n"] = len(_block(xr, "peer_binding"))        # a check that did not reach its peer binding bound none
     res["cross_rank"]["artifact"] = str(out / "tp2_rank_match.json")
 
-    ok_ranks = all(res["per_rank"][str(r)]["fold"]["ok"] and _stage(res["per_rank"], r, "compare").get("verdict") == "PASS"
+    ok_ranks = all(_stage(res["per_rank"], r, "fold").get("ok") and _stage(res["per_rank"], r, "compare").get("verdict") == "PASS"
                    and (_stage(res["per_rank"], r, "global_match").get("ok") is True) for r in ranks)     # GM-01 None = not PASS
     res["pass"] = bool(ok_ranks and xr.get("verdict") == "PASS" and not res["problems"])
     res["seconds"] = round(time.time() - t_start, 1)
-    res["legs"] = {"fold_per_rank": {str(r): res["per_rank"][str(r)]["fold"]["ok"] for r in ranks},
+    res["legs"] = {"fold_per_rank": {str(r): _stage(res["per_rank"], r, "fold").get("ok") for r in ranks},
                    "compare_per_rank": {str(r): _stage(res["per_rank"], r, "compare").get("verdict") for r in ranks},
                    "global_match_per_rank": {str(r): _stage(res["per_rank"], r, "global_match").get("verdict") for r in ranks},
                    "cross_rank": xr.get("verdict")}

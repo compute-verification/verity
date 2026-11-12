@@ -96,7 +96,8 @@ def _of_record(out: Path, dd: dict[str, Any], b: dict[str, Any], pair: int, rank
     ``awaiting=False`` (a reader of the committed values, `tp.serving_rows.from_bundle`): the rank's replay was deferred to this
     bundle and is pending or passed; a rank whose replay failed is refused."""
     ctx, bdir = b["context"], Path(b["path"])
-    ent = next((x for x in dd["bundles"] if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None)
+    listed = dd.get("bundles")                         # a deferred record that lists no bundle names none of this pair and rank, refused below
+    ent = next((x for x in listed if (int(x["pair"]), int(x["rank"])) == (pair, rank)), None) if listed else None
     if ent is None or ent.get("manifest_sha256") != b["manifest_sha256"]:
         raise Refused(f"{C2.DEFERRED} names no bundle of pair {pair} rank {rank} with manifest sha256 {b['manifest_sha256'][:16]}")
     if (int(ctx["pair"]), int(ctx["tp"]["rank"]), int(ctx["tp"]["world"])) != (pair, rank, int(dd["world"])):

@@ -139,9 +139,9 @@ def test_a_request_with_no_program_dir_or_no_links_file_leaves_the_rank_without_
         assert FM.links_for_rank(1, tmp_path / "build", {"per_request": requests}, ["d1"]) is None
 
 
-def test_a_compare_record_is_asked_for_its_requests_by_name(tmp_path):
-    with pytest.raises(KeyError, match="per_request"):
-        FM.links_for_rank(1, tmp_path / "build", {}, ["d1"])
+@pytest.mark.parametrize("compare", [{}, {"per_request": None}, {"per_request": []}], ids=["no list", "a null list", "an empty list"])
+def test_a_compare_record_that_lists_no_request_has_no_links_for_the_rank(tmp_path, compare):
+    assert FM.links_for_rank(1, tmp_path / "build", compare, ["d1"]) is None
 
 
 # the cross-rank check's record
@@ -255,6 +255,15 @@ def test_a_rank_given_no_global_program_fails_the_match_with_no_global_match_rec
 def test_a_log_whose_header_states_no_rank_is_no_ranks_log(tmp_path, monkeypatch, states):
     rc, doc, _, _ = _main(tmp_path, monkeypatch, states={} if states is None else states, summary={"errors": 0} if states is None else None)
     assert rc == 1 and doc["problems"] == [f"rank {r}: the log's RunHeader.notes.tp2 states rank None / world None (swapped or mislabelled rank)" for r in (0, 1)]
+
+
+@pytest.mark.parametrize("listed", [{}, {"checks": None}, {"checks": []}], ids=["no list", "a null list", "an empty list"])
+def test_a_cross_rank_check_that_lists_no_check_is_logged_with_none(tmp_path, monkeypatch, caplog, listed):
+    checked = {k: v for k, v in CHECKED.items() if k != "checks"} | listed
+    with caplog.at_level("INFO", logger=FM.logger.name):
+        rc, doc, _, _ = _main(tmp_path, monkeypatch, checked=checked)
+    assert rc == 0 and doc["cross_rank"]["verdict"] == "PASS"
+    assert [m for m in caplog.messages if "cross-rank check" in m] == ["[tp2foldmatch] cross-rank check: PASS failed=[] collectives={'0': 2, '1': 2} checks=[]"]
 
 
 STOPPED = {"verdict": "FAIL", "checks": [{"name": "count", "pass": False, "fails": ["rank 1: duplicate (step, k) among its collectives"]}]}

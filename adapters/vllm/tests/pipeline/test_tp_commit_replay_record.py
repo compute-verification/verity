@@ -26,14 +26,11 @@ def _record(out: Path, *rows: dict) -> Path:
     return out
 
 
-def test_a_deferred_record_is_asked_for_its_bundles_by_name(tmp_path):
-    with pytest.raises(KeyError, match="bundles"):
-        TPR._of_record(tmp_path, {"world": 2}, BUNDLE, 0, 1)
-
-
-def test_a_bundle_the_deferred_record_does_not_name_is_refused(tmp_path):
+@pytest.mark.parametrize("listed", [{}, {"bundles": None}, {"bundles": []}, {"bundles": [{"pair": 0, "rank": 0, "manifest_sha256": "5e" * 32}]}],
+                         ids=["no list", "a null list", "an empty list", "another rank's bundle"])
+def test_a_bundle_the_deferred_record_does_not_name_is_refused(tmp_path, listed):
     with pytest.raises(Refused, match="names no bundle of pair 0 rank 1 with manifest sha256 5e5e5e5e5e5e5e5e"):
-        TPR._of_record(tmp_path, {"world": 2, "bundles": []}, BUNDLE, 0, 1)
+        TPR._of_record(tmp_path, {"world": 2, **listed}, BUNDLE, 0, 1)
 
 
 @pytest.mark.parametrize("row", [{"pair": 0, "arm": "instrumented"}, {"pair": 0, "arm": "instrumented", "commit": None},

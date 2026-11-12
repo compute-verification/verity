@@ -1,6 +1,5 @@
-"""`verity_vllm.pipeline.tp.links.read_tp_links` on a document that is not a rank's links, and what its two readers make of one:
-the check arm of `verity_vllm.pipeline.tp.match` refuses it by name, and `verity_vllm.pipeline.tp.fold_match` has no links for
-the rank."""
+"""`verity_vllm.pipeline.tp.links.read_tp_links` on a document that lists no link, and what `verity_vllm.pipeline.tp.fold_match`
+makes of one: the reader returns the document as it is, and the fold Match has links for the rank only where they are a list."""
 from __future__ import annotations
 
 import json
@@ -8,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from verity_vllm.errors import Refused
 from verity_vllm.pipeline.tp import fold_match as FM
 from verity_vllm.pipeline.tp.links import read_tp_links
 
@@ -20,15 +18,10 @@ def _write(tmp_path: Path, doc: dict) -> Path:
     return tmp_path / "tp_links.json"
 
 
-@pytest.mark.parametrize("doc, said", [(RANK, "its `links` is absent, not a list"),
-                                       ({**RANK, "links": None}, "its `links` is absent, not a list"),
-                                       ({**RANK, "links": {"k": 0}}, "its `links` is a dict, not a list"),
-                                       ({**RANK, "links": 0}, "its `links` is a int, not a list")])
-def test_a_document_whose_links_are_not_a_list_is_refused_by_that_name(tmp_path, doc, said):
-    path = _write(tmp_path, doc)
-    with pytest.raises(Refused) as e:
-        read_tp_links(str(path))
-    assert str(e.value) == f"{path}: not a rank's tp_links.json: {said}"
+@pytest.mark.parametrize("links", [{}, {"links": None}, {"links": {}}, {"links": 0}, {"links": ""}], ids=["absent", "null", "{}", "0", "''"])
+def test_a_document_that_lists_no_link_is_returned_as_it_is_and_is_no_links_for_the_rank(tmp_path, links):
+    doc = read_tp_links(str(_write(tmp_path, {**RANK, **links})))
+    assert doc == {**RANK, **links, "peer_ranks": [0]}
     assert FM.links_for_rank(1, tmp_path, {}, []) is None
 
 
