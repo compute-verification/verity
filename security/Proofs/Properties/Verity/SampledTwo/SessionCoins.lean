@@ -36,7 +36,9 @@ is the device's release for that round (`coinsRead_sessions`), and that the stat
   opening without its coins, so the statement here is that wherever the check read a coin it is the device's release,
   which is what `projection_of` uses of `CoinsRead`.
 
-That the coin read is the session's own tree's round, the coin its record gives the round, is `located_own`.
+That the coin read is the session's own tree's round, the coin its record gives the round, is `located_own`, from the
+members' check on the read (`MembersAccepted`, through `Verity.Sampled.MemberForm.members_read`); that the locator puts at
+most one release on a round is `located_one`.
 
 **The earlier signature.** Nothing here reads a signature. `InteriorLogged` comes from the cut's `LogIsDevice`, whose
 forger term holds the hole of a history of one play (soundness's finding): a strategy replaying an earlier period's
@@ -508,6 +510,38 @@ theorem find?_of_first {α : Type} {p : α → Bool} : ∀ {l : List α} {t : �
     rw [List.find?_cons, hx]
     exact find?_of_first (by simpa using h) hp fun u b hu hub => hb (u + 1) b (by omega) (by simpa using hub)
 
+theorem mem_located {loc : List Release → Frame → Option ℕ} {n : ℕ} :
+    ∀ {pre l : List Release} {x : Frame × List Bool}, x ∈ located loc n pre l →
+      ∃ a r b, l = a ++ r :: b ∧ loc (pre ++ a) r.frame = some n ∧ x = (r.frame, r.coins)
+  | _, [], _, h => by simp [located] at h
+  | pre, r :: l, x, h => by
+    simp only [located, List.mem_append] at h
+    rcases h with h | h
+    · split_ifs at h with hl
+      · exact ⟨[], r, l, rfl, by simpa using hl, by simpa using h⟩
+      · simp at h
+    · obtain ⟨a, r', b, rfl, hl, rfl⟩ := mem_located h
+      exact ⟨r :: a, r', b, rfl, by simpa using hl, rfl⟩
+
+theorem located_two {loc : List Release → Frame → Option ℕ} {n : ℕ} :
+    ∀ {pre l : List Release}, 2 ≤ (located loc n pre l).length →
+      ∃ a r b r' c, l = a ++ r :: (b ++ r' :: c) ∧ loc (pre ++ a) r.frame = some n ∧
+        loc (pre ++ a ++ r :: b) r'.frame = some n
+  | _, [], h => by simp [located] at h
+  | pre, r :: l, h => by
+    simp only [located, List.length_append] at h
+    by_cases hr : loc pre r.frame = some n
+    · rw [if_pos hr] at h
+      obtain ⟨y, hy⟩ : ∃ y, y ∈ located loc n (pre ++ [r]) l := by
+        cases hl : located loc n (pre ++ [r]) l with
+        | nil => rw [hl] at h; simp at h
+        | cons y _ => exact ⟨y, by simp⟩
+      obtain ⟨b, r', c, rfl, hl, -⟩ := mem_located hy
+      exact ⟨[], r, b, r', c, rfl, by simpa using hr, by simpa using hl⟩
+    · rw [if_neg hr] at h
+      obtain ⟨a, r₁, b, r₂, c, rfl, h1, h2⟩ := located_two (by simpa using h)
+      exact ⟨r :: a, r₁, b, r₂, c, rfl, by simpa using h1, by simpa using h2⟩
+
 /-- **What the members' check gives of the read `log`**, at a numbering `tree` of the sessions' trees as the read
 numbers trees (`Verity.Sampled.MemberForm.members_read`): no tree two sessions', the lines' rounds in the sessions'
 order, each session's tree the `tree j`-th, each record naming its tree's root, each session's tree opened, and an
@@ -749,20 +783,65 @@ theorem MembersHeld.own (H : MembersHeld lines trees log records tree)
     unfold Verity.Sampled.Lines.openCoins
     simp only [hfind]
 
-end Held
+/-- **What a located release opens, and where**: an opening of session `t`'s tree, at its round `j`, of the stream
+and the round the session's layout gives `j`, named so in the specs before it. -/
+theorem MembersHeld.key (H : MembersHeld lines trees log records tree)
+    (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
+    (hR : Verity.Sampled.readLog label after recs ξ lines = some log) {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String}
+    {pre : List Release} {x : Release} {post : List Release} (he : log = pre ++ x :: post) {n₀ : ℕ}
+    (hloc : sessLoc off K M tab pre x.frame = some n₀) :
+    ∃ t j s c, t < records.size ∧ x.frame = .opening (tree t) s c ∧ j < K t ∧ n₀ = off t + j ∧
+      ((helloSpecs pre)[tree t]?.bind fun sp => sp.streams[s]?) = some (slotStream (tab t) j).1 ∧
+      openedOf pre (tree t) s = (slotStream (tab t) j).2 := by
+  cases hx : x.frame with
+  | fresh _ => rw [hx] at hloc; simp [sessLoc] at hloc
+  | hello _ => rw [hx] at hloc; simp [sessLoc] at hloc
+  | opening i s c =>
+    rw [hx] at hloc
+    simp only [sessLoc] at hloc
+    obtain ⟨j, hj, hif⟩ := Option.bind_eq_some_iff.1 hloc
+    have hc : (treesOpened pre).idxOf i < M ∧ j < K ((treesOpened pre).idxOf i) := by
+      by_contra hc
+      rw [if_neg hc] at hif
+      cases hif
+    rw [if_pos hc] at hif
+    obtain ⟨-, hjK⟩ := hc
+    obtain ⟨t, ht, rfl⟩ := H.opening hT hR he hx
+    have hplace := H.place hT hR he ht hx
+    rw [hplace] at hjK hif hj
+    obtain ⟨hn, hkk⟩ := roundOf_slot hj
+    exact ⟨t, j, s, c, ht, rfl, hjK, (Option.some.inj hif).symm, hn, hkk⟩
 
-theorem mem_located {loc : List Release → Frame → Option ℕ} {n : ℕ} :
-    ∀ {pre l : List Release} {x : Frame × List Bool}, x ∈ located loc n pre l →
-      ∃ a r b, l = a ++ r :: b ∧ loc (pre ++ a) r.frame = some n ∧ x = (r.frame, r.coins)
-  | _, [], _, h => by simp [located] at h
-  | pre, r :: l, x, h => by
-    simp only [located, List.mem_append] at h
-    rcases h with h | h
-    · split_ifs at h with hl
-      · exact ⟨[], r, l, rfl, by simpa using hl, by simpa using h⟩
-      · simp at h
-    · obtain ⟨a, r', b, rfl, hl, rfl⟩ := mem_located h
-      exact ⟨r :: a, r', b, rfl, by simpa using hl, rfl⟩
+/-- **The session-round locator puts at most one release of the read on each round**: two on one round would be
+openings of one stream of one tree at one count of its earlier openings. -/
+theorem MembersHeld.one (H : MembersHeld lines trees log records tree)
+    (hT : Spot.Challenger.coinTreesOf lines = .ok trees)
+    (hR : Verity.Sampled.readLog label after recs ξ lines = some log) {off K : ℕ → ℕ} {M : ℕ} {tab : ℕ → String}
+    (hs : ∀ t, off (t + 1) = off t + K t) (n : ℕ) : (located (sessLoc off K M tab) n [] log).length ≤ 1 := by
+  by_contra hlen
+  obtain ⟨a, r, b, r', c, he, h1, h2⟩ := located_two (show 2 ≤ (located (sessLoc off K M tab) n [] log).length by omega)
+  rw [List.nil_append] at h1 h2
+  have he2 : log = (a ++ r :: b) ++ r' :: c := by rw [he]; simp
+  obtain ⟨t₁, j₁, s₁, c₁, -, hf₁, hj₁, hn₁, hname₁, hk₁⟩ := H.key hT hR he h1
+  obtain ⟨t₂, j₂, s₂, c₂, -, -, hj₂, hn₂, hname₂, hk₂⟩ := H.key hT hR he2 h2
+  obtain ⟨e1, e2⟩ := off_sep hs hj₁ hj₂ (hn₁.symm.trans hn₂)
+  rw [← e1, ← e2] at hname₂ hk₂
+  obtain ⟨sp, hsp, hs₁⟩ := Option.bind_eq_some_iff.1 hname₁
+  have hsp₂ : (helloSpecs (a ++ r :: b))[tree t₁]? = some sp := by
+    rw [Verity.Sampled.helloSpecs_append, List.getElem?_append_left (List.getElem?_eq_some_iff.1 hsp).1, hsp]
+  rw [hsp₂, Option.bind_some] at hname₂
+  have hmem : sp ∈ helloSpecs log := by
+    rw [he, Verity.Sampled.helloSpecs_append]
+    exact List.mem_append_left _ (List.mem_of_getElem? hsp)
+  have hss : s₁ = s₂ := Verity.Sampled.MemberForm.nodup_idx (Verity.Sampled.readLog_nodup hT hR sp hmem)
+    (by rw [Array.getElem?_toList]; exact hs₁) (by rw [Array.getElem?_toList]; exact hname₂)
+  rw [← hss] at hk₂
+  have hcount : openedOf (a ++ r :: b) (tree t₁) s₁ = openedOf a (tree t₁) s₁ + (openedOf b (tree t₁) s₁ + 1) := by
+    unfold openedOf
+    rw [List.countP_append, List.countP_cons, if_pos (by simp [hf₁, Verity.Frame.opensAt])]
+  omega
+
+end Held
 
 /-- **Each session's coins are its own tree's**, where the form's acceptance gives the members' check on the log the
 check read (`MembersAccepted`). -/
@@ -776,5 +855,15 @@ theorem located_own (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hM : Memb
   obtain ⟨t', j', i, s, c, rec, -, hj', hn, hrf, hrec, hcoins⟩ := H.own hT hR rfl he hloc
   obtain ⟨rfl, rfl⟩ := off_sep (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h) (fun u => rfl) hj hj' hn
   exact ⟨_, rec, hS, hrec, ⟨i, s, c, hrf⟩, hcoins⟩
+
+/-- **One release a round**: where the form's acceptance gives the members' check on the log the check read, the
+session-round locator puts at most one of its releases on each round. -/
+theorem located_one (A : Live₂) (C : CaseOf) (tab : ℕ → String) (hM : MembersAccepted C) :
+    ∀ o, FormAccepts C o → ∀ l, interiorRead C o = some l → ∀ n, (located (locOf A tab) n [] l).length ≤ 1 := by
+  intro o hacc l hl n
+  obtain ⟨label, after, ξ, lines, trees, records, hT, hR, hMR, -⟩ := hM o hacc l hl
+  obtain ⟨tree, H⟩ := membersHeld_of hT hR hMR
+  unfold locOf
+  exact H.one hT hR (off := SpotFlock.off A.h) (K := SpotFlock.k₀ A.h) (fun u => rfl) n
 
 end Verity.SampledTwo.SessionCoins
