@@ -8,8 +8,10 @@ size and seed 0)."""
 
 from __future__ import annotations
 
+import dataclasses
 import importlib.util
 import json
+import math
 import os
 import random
 import sys
@@ -396,6 +398,35 @@ def test_residual_decodes_to_the_trace_with_a_draft(name, contexts):
     assert all(len(b) <= code.ideal[w] + 2 for w, b in code.bits.items())
 
 
+@pytest.mark.parametrize("name", DRAFT_CASES)
+def test_kept_count_is_charged_at_its_entropy_or_derived(name):
+    """The kept count's class, both ways: charged, each row that verified drafts and emitted sends its count at the
+    counts' measured entropy, which is at most log2(K + 1) a row; derived, nothing is sent."""
+    t = trace(name, DRAFT)
+    K = t.engine.num_speculative_tokens
+    # the trace's own record: a row's `drafts`, and `emitted` less the row's own token
+    kept = [em[i] - 1 for st, em in zip(t.steps, t.emitted) for i, d in st.drafts.items() if d and em.get(i)]
+    b = R.kept_bits(t)
+    assert (b["K"], b["rows"], b["counts"]) == (K, len(kept), [kept.count(k) for k in range(K + 1)])
+    assert b["derived"] == 0 and b["max"] == math.log2(K + 1)
+    assert b["entropy"] == pytest.approx(-sum(c / len(kept) * math.log2(c / len(kept)) for c in b["counts"] if c))
+    assert 0 < b["entropy"] <= b["max"] and b["charged"] == pytest.approx(b["rows"] * b["entropy"])
+    d = R.draft_table(t, contexts=R.CONTEXTS)
+    assert d["kept_count"] == b and not d["tick"] and (d["requests"], d["steps"]) == (len(t.requests), len(t.steps))
+    assert d["arrivals"] == {c: sum(len(x) for x in R.encode(t, contexts=c).bits.values()) for c in R.CONTEXTS}
+
+
+def test_kept_count_refuses_a_trace_it_cannot_read_it_from():
+    t = trace(DRAFT_CASES[0], DRAFT)
+    with pytest.raises(ValueError, match="no draft"):
+        R.kept_bits(trace(CASES[0]))
+    with pytest.raises(ValueError, match="emitted"):
+        R.kept_bits(dataclasses.replace(t, emitted=None))
+    other = dataclasses.replace(t, steps=[dataclasses.replace(t.steps[0], rows=t.steps[0].rows[:-1]), *t.steps[1:]])
+    with pytest.raises(ValueError, match="the replay diverges from the trace at step 0"):
+        R.kept_bits(other)
+
+
 def test_a_draft_needs_what_each_row_kept():
     """The kept counts are an input the replay checks: without them, with a count over K, with counts that are not the
     request's outputs, and with a count over the drafts the row it schedules there carries, it refuses by name."""
@@ -449,7 +480,6 @@ def test_refuses_the_drafts_it_does_not_model():
 def test_an_engine_without_a_draft_is_the_engine_class_it_was():
     """The certifier's engine class is `Engine`'s fields: a draft's settings are `DraftEngine`'s, so they join none of
     them."""
-    import dataclasses
     e = R.Engine(max_num_seqs=4, max_num_batched_tokens=64, max_model_len=256, num_gpu_blocks=64)
     assert sorted(dataclasses.asdict(e)) == sorted([
         "async_scheduling", "block_size", "enable_chunked_prefill", "enable_prefix_caching", "long_prefill_token_threshold",

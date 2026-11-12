@@ -17,6 +17,10 @@ now or a step later and nothing after it, says which of its steps emit its outpu
 each of those steps says which bucket it left in (`_Egress`). `decode` replays from that advice and the certified I/O
 alone, and
 `table` counts the bits per certifier window against I1 v0's (`advice.bits_by_window`, else `v0_widths`).
+
+**With a draft** the replay takes one more input, the drafts each row kept, and `draft_table` reports a trace's two
+classes of advice: the arrivals (the residual advice above) and the kept count (`kept_bits`: charged at its measured
+entropy, or 0 where the audited block derives it).
 """
 
 from __future__ import annotations
@@ -690,7 +694,7 @@ def v0_advice(trace: Trace, v0: Any, *, bucket_s: float = 0.1) -> Any:
     """The trace as advice v0, built with its module `v0` (`verity.protocols.certifier.verifier.advice`): the
     trace's rows in its batch order, each hit's sources from the replay's block map, and each kept output released in its
     step's release bucket. v0 validates it as it builds it."""
-    rp = replay(trace.engine, trace.requests, admit=trace.before_step)
+    rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
     m = compare(rp.steps, trace.steps)
     if m.first_mismatch is not None:
         raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch}, so it has no sources to give")
@@ -739,7 +743,7 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
     """Per certifier window: I1 v0's bits (`advice.bits_by_window` when the module is given as `v0`, else
     `v0_widths`), the steps the replay matched, and the residual advice's bits under each code (Elias gamma; the adaptive
     code, unclocked and clocked), each code checked by decoding it back to the trace's steps."""
-    truth = replay(trace.engine, trace.requests, admit=trace.before_step)
+    truth = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
     adv = v0_advice(trace, v0, bucket_s=bucket_s) if v0 is not None else None
     charge = v0.bits_by_window(adv, window_buckets) if adv is not None else None
     ds, rp = decisions(trace)
@@ -771,6 +775,50 @@ def table(trace: Trace, *, bucket_s: float = 0.1, window_buckets: int = 600, v0:
             "v0_parts": v0_parts(v0, adv) if adv is not None else None, "bucket_s": bucket_s,
             "window_buckets": window_buckets, "windows": rows, "order_bits": round(order_bits(trace), 2),
             "passed": [x for x in g if x is not None]}
+
+
+def kept_bits(trace: Trace) -> dict[str, Any]:
+    """With a draft, what the drafts each row kept (`RequestIO.kept`) cost as advice, both ways. `charged`: the count
+    sent for every row that verified drafts and emitted, at its measured entropy over those rows (`entropy`, bits a
+    row, at most `max`, log2(K + 1)). `derived`: 0, where the audited block computes the count from committed values and
+    nothing is sent. `counts[k]` is the rows that kept k. The rows and the drafts each carried are the replay's, so it
+    refuses a trace the replay doesn't reproduce."""
+    K = trace.engine.num_speculative_tokens
+    if not K:
+        raise ValueError("the trace's engine serves with no draft, so no row keeps one")
+    if trace.emitted is None:
+        raise ValueError("the drafts a row kept are the trace's `emitted` less one, which this trace does not record")
+    rp = replay(trace.engine, trace.requests, admit=trace.before_step, passed=trace.passed)
+    m = compare(rp.steps, trace.steps)
+    if m.first_mismatch is not None:
+        raise ValueError(f"the replay diverges from the trace at step {m.first_mismatch} ({m.matched}/{m.steps} steps match)")
+    counts = [0] * (K + 1)
+    for st, em in zip(rp.steps, trace.emitted):
+        for i, d in st.drafts.items():
+            if d and em.get(i):
+                counts[em[i] - 1] += 1
+    rows = sum(counts)
+    entropy = -sum(c / rows * math.log2(c / rows) for c in counts if c) if rows else 0.0
+    return {"K": K, "rows": rows, "counts": counts, "entropy": entropy, "max": math.log2(K + 1), "charged": rows * entropy,
+            "derived": 0}
+
+
+def draft_table(trace: Trace, *, contexts: Sequence[str] = ("plain",), bucket_s: float = 0.1,
+                window_buckets: int = 600) -> dict[str, Any]:
+    """A trace served with a draft, as the two classes of advice its replay takes, in bits over the trace: `arrivals`,
+    the residual advice under each of `contexts` (`encode`, each decoded back to the trace's steps), which a serve under
+    the certified tick does not send; and `kept_count` (`kept_bits`). Refuses a trace the replay doesn't reproduce."""
+    kept = kept_bits(trace)
+    cert = trace.certified(bucket_s)
+    arrivals = {}
+    for c in contexts:
+        code = encode(trace, contexts=c, bucket_s=bucket_s, window_buckets=window_buckets)
+        back = compare(decode(cert, code).steps, trace.steps)
+        if back.first_mismatch is not None:
+            raise ValueError(f"the residual advice ({c}) decodes to another schedule from step {back.first_mismatch}")
+        arrivals[c] = sum(len(b) for b in code.bits.values())
+    return {"requests": len(trace.requests), "steps": len(trace.steps), "tick": trace.releases is not None,
+            "arrivals": arrivals, "kept_count": kept}
 
 
 #: advice v0's module (`verity.protocols.certifier.verifier.advice`)
@@ -823,16 +871,32 @@ def main(argv: Sequence[str] | None = None) -> None:
     v0 = load_v0(a.v0)
     out: dict[str, Any] = {}
     per_window = []
+    drafted = []
     print("| trace | requests | steps | replay matched | I1 v0 bits | v0 step records | gamma | adaptive | adaptive clocked "
           "| adaptive egress | best bits/request | order bits |\n|---|---|---|---|---|---|---|---|---|---|---|---|")
     for p in a.traces:
         name = p.stem if p.is_file() else f"{p.resolve().parent.name}/{p.name}"
         tr = read_any(p, egress=a.egress, ingress=a.ingress)
+        if tr.engine.num_speculative_tokens:
+            # I1 v0 has no row for a draft's, so a trace served with one has its own table
+            try:
+                d = out[name] = draft_table(tr, contexts=[c for c in CONTEXTS if c == "plain" or tr.clocked()],
+                                            bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets)
+            except (ValueError, RuntimeError) as e:
+                out[name] = {"error": str(e), "requests": len(tr.requests), "steps": len(tr.steps)}
+                drafted.append(f"| {name} | {len(tr.requests)} | {len(tr.steps)} | {e} |" + " |" * 7)
+                continue
+            k, n = d["kept_count"], max(d["requests"], 1)
+            drafted.append(f"| {name} | {d['requests']} | {d['steps']} | {k['K']} | "
+                           f"{' / '.join(str(d['arrivals'].get(c, '-')) for c in CONTEXTS)} | {k['rows']} | "
+                           f"{k['entropy']:.3f} | {k['max']:.3f} | {k['charged']:.0f} | {k['charged'] / n:.2f} | "
+                           f"{k['derived']} |")
+            continue
         try:
             tb = out[name] = table(tr, bucket_s=a.bucket_ms / 1000, window_buckets=a.window_buckets, v0=v0)
         except (ValueError, RuntimeError) as e:
             try:
-                m = compare(replay(tr.engine, tr.requests, admit=tr.before_step).steps, tr.steps)
+                m = compare(replay(tr.engine, tr.requests, admit=tr.before_step, passed=tr.passed).steps, tr.steps)
                 where = f"{m.matched}/{m.steps} (first mismatch {m.first_mismatch})"
                 match: dict[str, Any] = m.__dict__
             except (ValueError, RuntimeError) as e2:
@@ -854,6 +918,11 @@ def main(argv: Sequence[str] | None = None) -> None:
     print("\n| trace | window | requests | steps | replay matched | decisions | forced | I1 v0 bits | residual bits "
           "| residual framed |\n|---|---|---|---|---|---|---|---|---|---|")
     print("\n".join(per_window))
+    if drafted:
+        print("\n| trace, served with a draft | requests | steps | K | arrivals: bits (" + " / ".join(CONTEXTS) + ") "
+              "| rows that verified drafts | kept count: entropy, bits a row | at most | charged, bits | a request "
+              "| derived, bits |\n|---|---|---|---|---|---|---|---|---|---|---|")
+        print("\n".join(drafted))
     if a.out:
         a.out.write_text(json.dumps(out, indent=1))
 
