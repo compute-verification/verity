@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from verity_vllm.pipeline import commit_plan as CP
+import verity_vllm.pipeline.commit_plan as CP
 from verity_vllm.query.required import QUERIES
 
 Record = dict[str, Any]

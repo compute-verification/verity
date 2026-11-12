@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from verity_vllm.pipeline.telemetry import admission as A
+import verity_vllm.pipeline.telemetry.admission as A
 
 Record = dict[str, Any]
 ABSENT = object()

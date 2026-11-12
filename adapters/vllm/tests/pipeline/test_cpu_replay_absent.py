@@ -12,9 +12,9 @@ from typing import Any
 import numpy as np
 import pytest
 
+import verity_vllm.pipeline.cpu_replay as CPU
+import verity_vllm.pipeline.replay_bundle as RB
 from tests.pipeline import test_cpu_replay as OF_RECORD
-from verity_vllm.pipeline import cpu_replay as CPU
-from verity_vllm.pipeline import replay_bundle as RB
 
 Record = dict[str, Any]
 Lines = Callable[[], list[tuple[str, str]]]
