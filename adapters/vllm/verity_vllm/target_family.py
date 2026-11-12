@@ -36,7 +36,7 @@ from typing import Any
 from verity_vllm import settings
 from verity_vllm.config import TARGET_NUM_SMS, TARGETS, RowEngine, option, workload_arg
 
-#: The names other modules and the tests read here; ``Options`` and ``main`` are the ``target-family`` command.
+#: The names the library's other modules read here; ``Options`` and ``main`` are the ``target-family`` command.
 __all__ = ["Options", "declared_profile", "device_token_of_row", "main"]
 
 FAIL_CLASS = "PRECHECK_FAIL_TARGET_FAMILY"
