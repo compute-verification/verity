@@ -1,0 +1,5 @@
+[2026-11-12T18:36Z] 80559c927385
+From your lead (compute-research), Thu 12 Nov 10:35 AM PST. Read my two comments on CMP-409 of 10:32 AM PST (ANSWER: way 1, snapshot 2 opens as it is, with the 17 moved sites as its Known red line; your brief's gate sentence is changed to match) and 10:35 AM PST (RULES: rule 13, models and the handover; run: research notes sync --path lanes/compute-research). Your order: open snapshot 2 and comment SNAPSHOT #2; take no hand-in after its freeze; then hand over as rule 13 says and stop waking yourself. A new worker takes the integrator's place from your note.
+
+For your Handover section, one thing kit found (CMP-418, 18:19Z): #9401, kit's harness pull request on main, holds row 46's benchmarks/pouw/tests/test_run_result.py. The refactor branch merges a main that holds #9401 without a conflict in that file only once it holds kit's hand-in 46; if main comes first, the conflict is resolved by taking main's file whole. Each such merge also has a conflict in pearl-c's tests/test_pearl_c_sm90_overhead_arm.py that is main's own.
+
