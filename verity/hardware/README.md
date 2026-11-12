@@ -215,13 +215,16 @@ whose interfaces has a rate is refused. A file that states no interface gives no
 how the node reaches the outside. Each message says what to read or state.
 
 An auditor's host has no node file: `clock_drift(host, cards.load(sku))`, beside `node_entry`, reads the card of the
-time base its device's clock reads (`kind = "timebase"`) and gives, by `drift.max`'s mark, the host's premise
+time base its clock runs on (`kind = "timebase"`) and gives, by `drift.max`'s mark, the host's premise
 (`ClockPremise`: `ClockRateWithin(<host>, <drift.max>)`, the number, its mark and its source) or, for a `ceiling`, the
-figure `Auditor.drift` takes. A number marked `premise` never becomes that figure, so a row that reads a drift the
-auditor registered names no premise. A `measurement` or a `placeholder` bounds no clock and is refused. A certifier
-`node_entry` adds states the drift of its host's clock (`clock=`, through `device_drift`: the figure, or none for a
-premise), `Auditor.of_files(..., clocks={device: clock})` holds the same, and `ClockPremise.premised(device)` is the
-device's `Account.Premised` (device, drift, premise).
+figure the host states and `Auditor.drift` holds it to. A number marked `premise` never becomes that figure, so a row
+that reads a drift the auditor registered names no premise. A `measurement` or a `placeholder` bounds no clock and is
+refused. `auditor_host(host, key, scheme, cards.load(sku))` is the host's location (kind `auditor-host`, at the site):
+it states the card's SKU as its time base and the figure as its drift, or no drift for a premise.
+`node_entry(..., certifier=..., certifier_host=that location)` registers the certifier in the host, so the clock the
+certifier reads is the host's (`Site.clock`, `Site.drift`); a certifier under the site reads none and times nothing.
+`Auditor.of_files(..., timebases={host: card})` holds the host's time base and drift, and `ClockPremise.premised()` is
+the host's `Account.Premised` (host, drift, premise), the drift of every device of the auditor's in the host.
 
 ~~~python
 from verity.hardware import cards, nodes

@@ -6,7 +6,8 @@ The Site is a tree of locations, each with its owner: the site at the root, stat
 (`Site.time_unit`), its hosts, a host's devices, memory leaves by tier and bytes under a device or a host, and at the
 site the auditor's own: its devices, the network certifiers and memory challengers, and its hosts, each a machine a
 device of its may run in and one that holds none of the prover's hardware (`PARENTS`), each with its key, the key's
-scheme (`SCHEMES`) and how far its clock may drift. A host states its on-chip state and the rate its leaves of a tier
+scheme (`SCHEMES`). An auditor's host states its time base and how far its clock may drift, which is the drift of
+every device of the auditor's in it (`Site.drift`). A host states its on-chip state and the rate its leaves of a tier
 share, and a leaf under a host the rate it is read at. Links join two ends, each a location or `OUTSIDE`, with a
 capacity `beta` in bits a second each way and a latency in the site's units of time (`LINKS`). A boundary link no
 certifier splits may say why none does (`unmediated`), and a link states no capacity only where it does; a site is
@@ -22,10 +23,10 @@ auditor's figures for each host and each leaf under one (`HostFigures`, `MemoryF
 (`verity.hardware.nodes.leaves`) and its ways out (`verity.hardware.nodes.ways_out`). `Registration.node_entry` reads
 the same and its GPU card's, states those figures on the node's locations, and registers each way out, an interface or
 the storage path, as a boundary link that no certifier splits. `clock_drift` reads an auditor's host's time base card
-(`kind = "timebase"`): by its `drift.max` mark, the host's premise (`ClockPremise`) or the figure `Auditor.drift`
-takes, never both; `device_drift` is the drift an auditor's device in that host states, which `node_entry`'s
-certifier and `Auditor.of_files`' `clocks` take, and a premise gives the device's `Account.Premised`
-(`ClockPremise.premised`).
+(`kind = "timebase"`): by its `drift.max` mark, the host's premise (`ClockPremise`) or the figure the host states
+and `Auditor.drift` holds it to, never both. `auditor_host` is the host's location as that card gives it, which
+`node_entry` registers a certifier in (`certifier_host`); `Auditor.of_files`' `timebases` hold the same, and a premise
+gives the host's `Account.Premised` (`ClockPremise.premised`).
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -43,13 +44,13 @@ end (`incomplete`):
 | `sheet-digest` | each new sheet's SKU is one the auditor has a data sheet for, and each new device names a registered sheet |
 | `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.accepted`), and its memory figures are the auditor's; each new memory leaf directly under a host states the auditor's figures for it (its host, a rate above 0, its bytes), and no other new location a rate; each new site states the site's unit of time, above 0, and no other new location one; each new host states the auditor's figures for it (its on-chip state and each tier's shared rate, none 0), and no other new location either |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
-| `owner` | each new certifier, challenger or auditor's host is the auditor's own, with its key, its key's scheme, one of `SCHEMES`, and the auditor's figure for its clock's drift, below 1 where there is one; every other new location is the prover's and states no scheme and no drift; each new auditor's host states its time base, the auditor's for it, and no other new location one |
+| `owner` | each new certifier, challenger or auditor's host is the auditor's own, with its key and its key's scheme, one of `SCHEMES`; every other new location is the prover's and states no scheme; each new auditor's host states its time base, the auditor's for it, and the auditor's figure for its clock's drift, below 1 where there is one, and no other new location states a time base or a drift |
 | `inventory` | the log, at its end: under each host, every memory leaf the auditor has figures for, at least its count of devices of each SKU it lists, and each way out it lists, as a link under that id with an end at the host at its rate |
 | `uncertified` | onsite: every boundary link is certified or says why no certifier splits it |
 | `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
 
 The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `held`, `read_rate`, `over`, `time_unit`,
-`mediated`, `boundary`, `units`, `registered`) are functions of the site alone, but `device`, which reads the
+`clock`, `drift`, `mediated`, `boundary`, `units`, `registered`) are functions of the site alone, but `device`, which reads the
 auditor's sheet too. Digests are SHA-512 over canonical JSON
 (`verity.configuration.wire.canonical`) under the registration log's tags; a rational is the string `n` or `n/d` in lowest terms.
 Stdlib and the wire only.
@@ -345,11 +346,11 @@ def node_figures(node: Mapping[str, Any], host_card: Mapping[str, Any], host: st
 
 @dataclass(frozen=True)
 class ClockPremise:
-    """**A host's clock drift taken on a premise**: how far the clock of the auditor's device in host `host` may run
-    from real time, as a share of it, where no data sheet bounds it, with the premise that says so (`name`, as a row
-    that rests on it prints it), the time base card's mark (`premise`) and its source. It is the Lean's
-    `Account.Premised`, and never the auditor's figure for a device (`Auditor.drift`): a row that reads it names
-    `name` among its premises, and none of record does."""
+    """**A host's clock drift taken on a premise**: how far the clock of the auditor's host `host` may run from real
+    time, as a share of it, where no data sheet bounds it, with the premise that says so (`name`, as a row that rests
+    on it prints it), the time base card's mark (`premise`) and its source. It is the Lean's `Account.Premised`, the
+    drift of every device of the auditor's in the host, and never the auditor's figure for the host (`Auditor.drift`):
+    a row that reads it names `name` among its premises, and none of record does."""
 
     host: str
     name: str
@@ -357,21 +358,10 @@ class ClockPremise:
     mark: str
     source: str
 
-    def premised(self, device: str) -> tuple[str, Fraction, str]:
-        """The drift of the auditor's device `device`, which runs in the host, taken on this premise: the Lean's
-        `Account.Premised`, its device, drift and premise's name, in that order."""
-        return _str(device, "the device's id"), self.drift, self.name
-
-
-def device_drift(clock: ClockPremise | Fraction | None) -> Fraction | None:
-    """**The drift an auditor's device states** (`Loc.drift`, and its entry in `Auditor.drift`, which `owner` holds
-    it to), from the clock of the host it runs in as `clock_drift` gives it: the figure, or None for a premise or no
-    clock. A number taken on a premise is never the device's figure."""
-    if clock is None or isinstance(clock, ClockPremise):
-        return None
-    if isinstance(clock, bool) or not isinstance(clock, (int, Fraction)):
-        raise Malformed(f"a host's clock is `clock_drift`'s, a premise or a figure, not {clock!r}")
-    return _rat(clock, "a host's clock drift")
+    def premised(self) -> tuple[str, Fraction, str]:
+        """The host's drift taken on this premise: the Lean's `Account.Premised`, its host, drift and premise's
+        name, in that order. The host is the id the auditor's host is registered under."""
+        return self.host, self.drift, self.name
 
 
 def _timebase(host: str, card: Mapping[str, Any]) -> str:
@@ -393,8 +383,8 @@ def clock_drift(host: str, card: Mapping[str, Any]) -> ClockPremise | Fraction:
     """**The drift of the clock in host `host`**, as its time base's card (`verity.hardware.cards.load(sku)`, a card
     of kind `timebase`) states it in `drift.max`: by the entry's mark, a premise or the auditor's figure, never both.
     Marked `premise`, it is the host's premise, `ClockRateWithin(<host>, <drift.max>)` with the number as the card
-    writes it in scientific notation; marked `ceiling`, it is the figure `Auditor.drift` takes for the auditor's
-    devices in the host, with no premise. A `measurement` is only a lower bound on the ceiling and a `placeholder`
+    writes it in scientific notation; marked `ceiling`, it is the figure the host states and `Auditor.drift` takes
+    for it, with no premise. A `measurement` is only a lower bound on the ceiling and a `placeholder`
     no bound, so either is refused, as are a card of another kind and a drift that is not a share below 1 in `s/s`."""
     sku = _timebase(host, card)
     try:
@@ -414,6 +404,17 @@ def clock_drift(host: str, card: Mapping[str, Any]) -> ClockPremise | Fraction:
                         "where a page bounds it, or \"premise\" with the premise its source states")
     number = format(Decimal(str(value)).normalize(), "e")
     return ClockPremise(host, f"ClockRateWithin({host}, {number})", drift, mark, _str(source, f"{sku}'s source"))
+
+
+def auditor_host(host: str, key: str, scheme: str, card: Mapping[str, Any], site: str = "site") -> Loc:
+    """**An auditor's host's location**: host `host` of the auditor's at site `site`, with its key and the key's
+    scheme, as its time base's card (`verity.hardware.cards.load(sku)`) gives its clock: it states the card's SKU as
+    its time base and, where `clock_drift` gives a figure, that figure as its drift; a premise gives none, since a
+    number taken on a premise is never the host's figure, and is the row's to name (`ClockPremise.premised`).
+    `Auditor.of_files(..., timebases={host: card})` holds the same, so `owner` takes the location."""
+    clock = clock_drift(host, card)
+    return Loc(host, "auditor-host", site, "auditor", key=key, scheme=scheme,
+               drift=None if isinstance(clock, ClockPremise) else clock, timebase=_timebase(host, card))
 
 
 def within_tolerance(tau: Fraction, e: Fraction, x: Fraction) -> bool:
@@ -582,8 +583,9 @@ class Loc:
     host's leaves of that tier together, where one ceiling holds them all; empty on every other location. `key` is the
     public key one of the auditor's devices or hosts is registered under, and `scheme` the id of the signature scheme
     that key is of (`SCHEMES`), which says how many levels of keys stand under it; both empty on every other location.
-    `drift` is how far the clock of one of the auditor's devices may run from real time, as a share of it; None on
-    every other location, and a device that states none times nothing. `time_unit` is the site's unit of time in
+    `drift` is how far the clock of an auditor's host may run from real time, as a share of it, and it is the drift
+    of every device of the auditor's in that host, which reads that clock (`Site.drift`); None on every other
+    location, and a device at the site, or in a host that states none, times nothing. `time_unit` is the site's unit of time in
     seconds, on a location of kind `site` and None on every other (`Site.time_unit`). `timebase` is the SKU of the
     time base the clock of an auditor's host runs on, the card the auditor reads the clock's drift from
     (`clock_drift`); None on every other location."""
@@ -776,7 +778,7 @@ class Registration:
     def node_entry(self, node: Mapping[str, Any], card: Mapping[str, Any], host: str, site: str = "site",
                    certifier: tuple[str, str, str] | None = None, *, host_card: Mapping[str, Any],
                    ways: Iterable[tuple[str, int | None, bool]], leaves: Any,
-                   time_unit: Fraction = TIME_UNIT, clock: ClockPremise | Fraction | None = None) -> Entry:
+                   time_unit: Fraction = TIME_UNIT, certifier_host: Loc | None = None) -> Entry:
         """**A node's entry**, following this log's head: what a node file's table (`verity.hardware.nodes.load(kind)`),
         the tables of the GPU card and the host card it names (`verity.hardware.cards.load(sku)` each), the file's ways
         out (`ways`: `verity.hardware.nodes.ways_out(node, host)`, the one reader of their rates) and its leaves
@@ -808,21 +810,29 @@ class Registration:
 
         `certifier` is the id, the key and the key's scheme of a network certifier of the auditor's that stands in
         front of the node without splitting its interface (a process on another machine, say). It adds the certifier
-        under the site, stating the drift of the clock of the host it runs in (`clock`, `clock_drift`'s: the figure,
-        or no drift for a premise or no clock given; `device_drift`), and the two links of a certified way out, host to certifier (`host/ID`) and
-        certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
+        and the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
         stay. The storage path's rate is not in that sum and no certifier is linked to the path: a certifier's links
         say nothing of it. A certifier on a node none of whose interfaces has a rate is refused, since its links would
         have none. A certifier splits one host's way out, so each node names its own, and the key and scheme are the
         ones the auditor holds for the id or `owner` refuses the entry. None of the auditor's other devices is added.
 
+        `certifier_host` is the auditor's host the certifier runs in (`auditor_host`'s location, which states its
+        time base and its clock's drift): the entry adds it where the log has none, at `site`, and the certifier in
+        it, whose clock is then that host's (`Site.clock`, `Site.drift`). With none the certifier is under the site,
+        where it reads no clock and times nothing.
+
         A file that states no `dram` leaf or no `disk` leaf is refused: its entry would pass `check` for `remote` with
         a host that holds less memory than the node has, and whatever reads the site would take the node for smaller
         than it is."""
         n = _Node.read(node, host_card, host, ways, leaves)
-        if clock is not None and certifier is None:
-            raise Malformed("`clock` is the clock of the host a network certifier runs in, and no certifier is given; "
-                            "register the node without one, or name the certifier")
+        if certifier_host is not None:
+            if certifier is None:
+                raise Malformed("`certifier_host` is the auditor's host a network certifier runs in, and no certifier "
+                                "is given; register the node without one, or name the certifier")
+            if not isinstance(certifier_host, Loc) or (certifier_host.kind, certifier_host.parent) != (
+                    "auditor-host", site):
+                raise Malformed(f"`certifier_host` is an auditor's host at site {site} (`auditor_host`'s location), "
+                                f"not {certifier_host!r}")
         rates = [bw for _, bw, split in n.ways if split and bw is not None]
         if certifier is not None and not rates:
             raise Malformed(f"no interface the node file states has a rate ({[i for i, _, split in n.ways if split]})"
@@ -846,7 +856,10 @@ class Registration:
                                 f"{certifier!r}")
             device, key, scheme = certifier
             beta = sum(rates)
-            locs.append(Loc(device, "certifier", site, "auditor", key=key, scheme=scheme, drift=device_drift(clock)))
+            if certifier_host is not None and not before.known(certifier_host.id):
+                locs.append(certifier_host)
+            locs.append(Loc(device, "certifier", site if certifier_host is None else certifier_host.id, "auditor",
+                            key=key, scheme=scheme))
             links += [Link(f"{host}/{device}", (host, device), beta, 0),
                       Link(f"{device}/{OUTSIDE}", (device, OUTSIDE), beta, 0)]
         return self.entry(() if any(k.digest() == digest for k in before.sheets) else (sheet,), locs, links)
@@ -871,10 +884,10 @@ class Auditor:
     SKU's; the relative tolerance registration allows around an estimate; the key of each of its own devices and hosts
     and the scheme it is of, by its id (`keys`, each `(id, key, scheme)`); its figures for each memory leaf directly
     under a host, by the leaf's id (`memory`); its figures for each host of the prover's, by the host's id (`hosts`);
-    how far each of its own devices' clocks may run from real time, by the device's id (`drift`); and the time base of
-    each of its own hosts, its SKU by the host's id (`timebases`). The first under an SKU or an id is the one the check
-    reads. That these figures are the hardware is a public input: no check holds
-    it and no premise says it, and a result is over the registered hardware."""
+    and for each of its own hosts, by the host's id, how far its clock may run from real time (`drift`) and its time
+    base's SKU (`timebases`). The first under an SKU or an id is the one the check reads. That these figures are the
+    hardware is a public input: no check holds it and no premise says it, and a result is over the registered
+    hardware."""
 
     sheets: tuple[Sheet, ...] = ()
     tolerance: Fraction = Fraction(0)
@@ -897,7 +910,7 @@ class Auditor:
             if not all(isinstance(v, cls) for _, v in pairs):
                 raise Malformed(f"the auditor's {f}: each is an id and its {cls.__name__}")
             object.__setattr__(self, f, pairs)
-        object.__setattr__(self, "drift", tuple((_str(i, "a device"), _rat(q, f"{i}'s drift"))
+        object.__setattr__(self, "drift", tuple((_str(i, "a host"), _rat(q, f"{i}'s drift"))
                                                 for i, q in _pairs(self.drift, "the auditor's drift")))
         object.__setattr__(self, "timebases", tuple((_str(i, "a host"), _str(k, f"{i}'s time base"))
                                                     for i, k in _pairs(self.timebases, "the auditor's time bases")))
@@ -907,19 +920,19 @@ class Auditor:
                  keys: Mapping[str, tuple[str, str]] | None = None, *,
                  memory: Iterable[tuple[str, MemoryFigures]] = (), hosts: Iterable[tuple[str, HostFigures]] = (),
                  drift: Iterable[tuple[str, Fraction]] = (),
-                 clocks: Mapping[str, ClockPremise | Fraction] | None = None,
                  timebases: Mapping[str, Mapping[str, Any]] | None = None) -> Auditor:
         """The auditor whose data sheets come from these card files (`verity.hardware.cards.load(sku)` each), at this
         tolerance, with its devices' keys, each a key and its scheme by the device's id, and these figures
-        (`Registration.node_figures` gives a node's). `clocks` gives, by the id of each of its devices, the clock of
-        the host it runs in, `clock_drift`'s: a figure is the device's drift, after `drift`'s; a premise gives none
-        (`device_drift`), and is the row's to name (`ClockPremise.premised`). `timebases` gives, by the id of each of
-        its hosts, the card of the time base its clock runs on (a card of kind `timebase`), whose SKU is the host's
-        time base."""
-        clocked = [(d, q) for d, c in (clocks or {}).items() if (q := device_drift(c)) is not None]
+        (`Registration.node_figures` gives a node's). `timebases` gives, by the id of each of its hosts, the card of
+        the time base its clock runs on (a card of kind `timebase`): the card's SKU is the host's time base, and
+        where `clock_drift` gives a figure for the host it is the host's drift, after `drift`'s. A premise gives no
+        drift, and is the row's to name (`ClockPremise.premised`). `auditor_host` states the same on the host's
+        location."""
+        clocks = {h: clock_drift(h, card) for h, card in (timebases or {}).items()}
         return cls(tuple(Sheet.of_file(c) for c in cards), tolerance,
                    tuple((d, k, c) for d, (k, c) in (keys or {}).items()), tuple(memory), tuple(hosts),
-                   (*drift, *clocked), tuple((h, _timebase(h, card)) for h, card in (timebases or {}).items()))
+                   (*drift, *((h, q) for h, q in clocks.items() if not isinstance(q, ClockPremise))),
+                   tuple((h, _timebase(h, card)) for h, card in (timebases or {}).items()))
 
     def sheet(self, sku: str) -> Sheet | None:
         """The data sheet for `sku`: the first under it."""
@@ -951,7 +964,7 @@ class Auditor:
     def of_json(cls, j: Any) -> Auditor:
         j = _exactly(j, ("drift", "hosts", "keys", "memory", "sheets", "timebases", "tolerance"), "the auditor")
         timebases = [_exactly(t, ("id", "sku"), "a host's time base") for t in _list(j["timebases"], "timebases")]
-        drift = [_exactly(d, ("drift", "id"), "a device's drift") for d in _list(j["drift"], "drift")]
+        drift = [_exactly(d, ("drift", "id"), "a host's drift") for d in _list(j["drift"], "drift")]
         keys = [_exactly(k, ("id", "key", "scheme"), "a key") for k in _list(j["keys"], "keys")]
         memory = [_exactly(m, ("bw", "bytes", "host", "id"), "a memory leaf's figures")
                   for m in _list(j["memory"], "memory")]
@@ -969,7 +982,7 @@ class Auditor:
                    tuple((k["id"], k["key"], k["scheme"]) for k in keys),
                    tuple((m["id"], MemoryFigures(m["host"], m["bw"], m["bytes"])) for m in memory),
                    tuple((h["id"], host(h)) for h in hosts),
-                   tuple((d["id"], _rat_json(d["drift"], "a device's drift")) for d in drift),
+                   tuple((d["id"], _rat_json(d["drift"], "a host's drift")) for d in drift),
                    tuple((t["id"], t["sku"]) for t in timebases))
 
 
@@ -1109,6 +1122,20 @@ class Site:
             return x.id
         h = self.host_of(x)
         return h if h is not None and self.kind(h) == "host" else None
+
+    def clock(self, d: str) -> str | None:
+        """The auditor's host whose clock device `d` of the auditor's reads: the one it is in. None for a device at
+        the site."""
+        x = self.loc(d)
+        p = None if x is None else x.parent
+        return p if p is not None and self.kind(p) == "auditor-host" else None
+
+    def drift(self, d: str) -> Fraction | None:
+        """How far the clock device `d` of the auditor's reads may run from real time, as a share of it: what the
+        auditor's host it is in states. None for a device at the site or in a host that states none."""
+        h = self.clock(d)
+        x = None if h is None else self.loc(h)
+        return None if x is None else x.drift
 
     def _within(self, x: Loc, i: str) -> bool:
         """`x` is `i` or lies under it: `i` is on its chain of parents, followed at most once per location."""
@@ -1312,28 +1339,28 @@ def _capacity(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
 
 
 def _owners(c: str, a: Auditor, s: Site, e: Entry) -> str | None:
-    """Each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key, its key's
-    scheme, one of `SCHEMES`, and the auditor's figure for its clock, below 1 where there is one; every other new
-    location is the prover's and states no scheme and no clock; and each new auditor's host states its time base, the
-    auditor's for it, held as its key is, and no other new location states one."""
+    """Each new certifier, challenger or auditor's host is the auditor's own, owned by it, with its key and its key's
+    scheme, one of `SCHEMES`; every other new location is the prover's and states no scheme; and each new auditor's
+    host states its time base, the auditor's for it, held as its key is, and the auditor's figure for its clock, below
+    1 where there is one, and no other new location states a time base or a clock."""
     for x in e.locs:
-        if x.kind == "auditor-host":
-            if x.timebase is None or x.timebase != _lookup(a.timebases, x.id):
-                return (f"auditor-host {x.id} states the time base {x.timebase!r}, and the auditor's for it is "
-                        f"{_lookup(a.timebases, x.id)!r}; it must state that one")
-        elif x.timebase is not None:
-            return f"{x.kind} {x.id} states a time base, which only an auditor's host does"
         if x.kind in AUDITOR_KINDS:
             if x.owner != "auditor" or a.key(x.id) != x.key or a.scheme(x.id) != x.scheme:
                 return f"{x.kind} {x.id} isn't the auditor's own, with its key and scheme"
             if x.scheme not in SCHEMES:
                 return f"{x.kind} {x.id}'s key is of scheme {x.scheme!r}, not one of {list(SCHEMES)}"
+        elif x.owner != "prover" or x.scheme != "":
+            return f"{x.kind} {x.id} is a prover's location, registered as the {x.owner}'s, or states a scheme"
+        if x.kind == "auditor-host":
+            if x.timebase is None or x.timebase != _lookup(a.timebases, x.id):
+                return (f"auditor-host {x.id} states the time base {x.timebase!r}, and the auditor's for it is "
+                        f"{_lookup(a.timebases, x.id)!r}; it must state that one")
             if x.drift != _lookup(a.drift, x.id) or (x.drift is not None and x.drift >= 1):
-                return (f"{x.kind} {x.id} states the drift {x.drift}, and the auditor's figure is "
+                return (f"auditor-host {x.id} states the drift {x.drift}, and the auditor's figure is "
                         f"{_lookup(a.drift, x.id)}; it must be that, below 1")
-        elif x.owner != "prover" or x.scheme != "" or x.drift is not None:
-            return (f"{x.kind} {x.id} is a prover's location, registered as the {x.owner}'s, or states a scheme or a "
-                    "drift")
+        elif x.timebase is not None or x.drift is not None:
+            return (f"{x.kind} {x.id} states a time base or a drift, which only an auditor's host does: a device of "
+                    "the auditor's reads the clock of the host it is in")
     return None
 
 

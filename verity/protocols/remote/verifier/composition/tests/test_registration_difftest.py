@@ -73,9 +73,19 @@ VM0 = S.Loc("vm0", "auditor-host", "site0", owner="auditor", key="k2", scheme=LM
 WITH_VM = dataclasses.replace(AUDITOR, keys=(*AUDITOR.keys, ("vm0", "k2", LMS)), timebases=(("vm0", "tb0"),))
 
 
-def in_vm(host: S.Loc = VM0) -> list:
-    """The example's site with its certifier in the auditor's host `host`, registered after it (the Lean's `inVm`)."""
-    locs = tuple(dataclasses.replace(x, parent="vm0") if x.id == "cert0" else x for x in LOCS)
+TENTH = Fraction(1, 10)
+SLOW = dataclasses.replace(VM0, drift=TENTH)
+"""`vm0` stating the drift a tenth, which `drifted` holds."""
+
+
+def drifted(*drift: tuple[str, Fraction]) -> G.Auditor:
+    return dataclasses.replace(WITH_VM, drift=drift)
+
+
+def in_vm(host: S.Loc = VM0, drift: Fraction | None = None) -> list:
+    """The example's site with its certifier in the auditor's host `host`, registered after it (the Lean's `inVm`),
+    the certifier stating the drift `drift`."""
+    locs = tuple(dataclasses.replace(x, parent="vm0", drift=drift) if x.id == "cert0" else x for x in LOCS)
     return [G.site((SHEET,), (*locs, host), LINKS)]
 
 
@@ -281,6 +291,7 @@ def cases(draw) -> dict:
                                          dataclasses.replace(AUDITOR, keys=(("cert0", "k0", S.SCHEMES[1]),
                                                                             ("chal0", "k1", LMS))),
                                          dataclasses.replace(AUDITOR, drift=(("cert0", Fraction(1, 10)),)),
+                                         drifted(("vm0", TENTH)),
                                          dataclasses.replace(AUDITOR, hosts=(("node0", S.HostFigures(1 << 25, (
                                              ("sim-a", 2),))),)),
                                          dataclasses.replace(AUDITOR, hosts=(("node0", S.HostFigures(1 << 25, ways=(
@@ -375,7 +386,12 @@ def test_the_example_and_its_refusals_agree_with_the_lean_guards() -> None:
               (case("onsite", chain("onsite", in_vm()), dataclasses.replace(WITH_VM, timebases=(("vm0", "tb1"),))),
                "entry 0: owner"),
               (case("onsite", chain("onsite", in_vm(dataclasses.replace(VM0, parent="node0"))), WITH_VM),
-               "entry 0: kind")]
+               "entry 0: kind"),
+              (case("onsite", chain("onsite", in_vm(SLOW)), drifted(("vm0", TENTH))), None),
+              (case("onsite", chain("onsite", in_vm(SLOW)), WITH_VM), "entry 0: owner"),
+              (case("onsite", chain("onsite", in_vm()), drifted(("vm0", TENTH))), "entry 0: owner"),
+              (case("onsite", chain("onsite", in_vm(SLOW, TENTH)), drifted(("vm0", TENTH), ("cert0", TENTH))),
+               "entry 0: owner")]
     with D.Server(PORT.argv()) as server:
         for c, reason in expect:
             out = reference(c)
