@@ -7,6 +7,7 @@ The rules decide from the structured codes the sampled replay stamps on its reco
 every not-evaluable reason, the classes of every unevaluated stratum, the seed form), never from its message texts."""
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from verity_vllm.check.commit_rules import (
@@ -328,7 +329,6 @@ def _replay_seed_of_record(sr: dict, run_root_hex: str | None) -> tuple[bool | N
             return False, "sampled replay seed source claims a verifier challenge but the challenge is not on the record (sample.challenge): unverifiable"
         if not run_root_hex or seed is None:
             return False, f"sampled replay seed source says '{src[:40]}...' but the record carries no run root / seed to recompute it from"
-        import hashlib
         try:
             root = bytes.fromhex(str(run_root_hex))
         except ValueError:

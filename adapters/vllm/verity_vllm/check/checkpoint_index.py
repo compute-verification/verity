@@ -17,6 +17,8 @@ from typing import Any
 
 import numpy as np
 
+from verity_vllm.config import checkpoint_entries
+
 #: safetensors dtype -> (numpy view dtype, element bytes)
 _ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32, 4), "F64": (np.float64, 8),
              "I64": (np.int64, 8), "I32": (np.int32, 4), "I16": (np.int16, 2), "I8": (np.int8, 1), "U8": (np.uint8, 1),
@@ -90,8 +92,6 @@ def manifest_entry(manifest: str | None, ckpt_dir: str, model: str | None, revis
     """The checkpoints.json entry of `ckpt_dir` (it and its siblings, `config.checkpoint_entries`): the one whose local_path is the dir, else the one of `model` at `revision`."""
     if not (manifest and os.path.exists(manifest)):
         return None
-    from verity_vllm.config import checkpoint_entries
-
     for c in checkpoint_entries(manifest):
         lp = str(c.get("local_path") or "")
         if (lp and os.path.realpath(lp) == os.path.realpath(ckpt_dir)) or \

@@ -6,6 +6,7 @@ sides.  The required classes close that gap: every required class must be declar
 every declared class that binds leaves (`bound-as-leaf` / `registered-input`) must have `tensors > 0`."""
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from typing import Any
 
@@ -48,8 +49,6 @@ def hidden_classes_required(manifest: Mapping[str, Any] | None) -> bool | None:
 
 
 def json_short(v: dict, n: int = 160) -> str:
-    import json
-
     return json.dumps({k: x for k, x in v.items() if x and k != "step"}, default=str)[:n]
 
 

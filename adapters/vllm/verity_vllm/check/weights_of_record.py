@@ -39,6 +39,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 from collections.abc import Callable
@@ -48,17 +49,20 @@ from typing import Any
 
 import numpy as np
 
+from verity_vllm import config
 from verity_vllm.check import derived_weights, fp8_moe_scales, fp8_ue8m0
-from verity_vllm.check.checkpoint_index import CheckpointIndex, sha256_file  # noqa: F401  (sha256_file: the record's shard hash)
+from verity_vllm.check.checkpoint_index import CheckpointIndex, sha256_file, shard_pin  # noqa: F401  (sha256_file: the record's shard hash)
 from verity_vllm.check.component_programs import (
     component_program_dirs,
     load_program_head,
 )
+from verity_vllm.check.param_digests import param_digests
 from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, rows_of
 from verity_vllm.check.tp_shards import shard_dim as _shard_dim
 from verity_vllm.check.tp_shards import shard_dim0 as _shard_dim0
 from verity_vllm.config import UsageError, option
 from verity_vllm.log import init_logger
+from verity_vllm.query.manifest import format as MF
 
 logger = init_logger(__name__)
 
@@ -518,7 +522,6 @@ def weights_of_record(program: dict[str, Any], ck: CheckpointIndex, *, prefix: s
     world, rank = int(tp.get("world") or 1), int(tp.get("rank") or 0)
     fields = program_weight_fields(inst) if fields is None else fields
     if prefix is None:
-        from verity_vllm.query.manifest import format as MF
         named = MF.wrapper_prefix_of(inst.get("rows", []), res.get("attention_impls_observed") or [])
         # the rows' answer when it is the checkpoint's, else the prefix (up to two segments: GLM-5.3's `inner.model.`) under which the
         # most fields are checkpoint tensors 1:1 -- determined from the checkpoint, not assumed
@@ -588,7 +591,6 @@ def live_param_digests(model, *, include_buffers: bool = True, raw_for: re.Patte
     weights root covers (register_weights), hashed as raw contiguous bytes (bf16 words row-major).  Tensors whose name matches `raw_for`
     (default: the rotary cos_sin table) also keep their raw words under `raw[name]` (numpy uint16, in memory only -- not for the row
     record) so `check` can run the analytic bound on them.  Hashed a chunk at a time on a thread pool (`param_digests`)."""
-    from verity_vllm.check.param_digests import param_digests
     return param_digests(model, include_buffers=include_buffers, raw_for=raw_for)
 
 
@@ -755,15 +757,13 @@ def check(record: dict[str, Any], live: dict[str, Any], *, program_digests_of_re
 
 def _default_manifest() -> str | None:
     """The tree's checkpoint pins (`config.CHECKPOINTS`); None on a tree that holds none."""
-    from verity_vllm.config import CHECKPOINTS
-    return str(CHECKPOINTS) if CHECKPOINTS.exists() else None
+    return str(config.CHECKPOINTS) if config.CHECKPOINTS.exists() else None
 
 
 def record_shard_pin(checkpoint_dir: str, *, checkpoints_manifest: str | None = None, model: str | None = None,
                      revision: str | None = None) -> dict[str, Any] | None:
     """The shard pin `build_record` takes with the same arguments: taken once by a TP driver, passed to every rank as `shard_pin`.
     None when the checkpoint or manifest can't be read: each rank then takes the pin itself and its record names what failed."""
-    from verity_vllm.check.checkpoint_index import shard_pin
     try:
         return shard_pin(checkpoint_dir, checkpoints_manifest=checkpoints_manifest or _default_manifest(), model=model, revision=revision)
     except (OSError, ValueError) as e:
@@ -821,7 +821,6 @@ def stamp_of_record_set(record: dict[str, Any], programs_root: str, *, manifest:
     workload_program.json) + the manifest's program / component digests.  Each component's weights struct must EQUAL the record's
     (field list, shapes, bits): a component whose struct differs is named and the record is not of record (a record derived from one
     shape never silently stands for a Program of another struct).  `check()` then requires the run's of-record set to equal the stamp."""
-    from verity_vllm.query.manifest import format as MF
     my_struct = [[f["field"], list(f["shape"]), int(f["bits"])] for f in record.get("fields", [])]
     # the manifest's digests first: they define which Program dirs under the root are OF RECORD (a default-shape build_request that is
     # not a workload component is struct-checked but its digest does not join the set -- the run's set never carries it)
@@ -892,18 +891,14 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
     ran it (the repo's HEAD when this file sits in a git tree, else null, with `code_source` naming what failed), the SOURCE FILES the derivation read (the Program's instances.json.gz
     + result.json, the checkpoint dir + checkpoints.json) and the time; `supersedes` names the record this one replaces (row_pod moves a
     stale / older record aside before re-deriving).  Informational: never read by check() -- the digests are the evidence."""
-    import subprocess
-    import time as _t
-
     code = None
     code_source = None
     unread: list[str] = []
     try:
         # the release tree on a pod has no .git: ship.sh's EXPORT.json names the shipped commit (experiment.code_version reads it first,
         # then git); the first pod records carried code null for that reason
-        from verity_vllm.config import ROOT
         from verity_vllm.pipeline.experiment import code_version
-        cv = code_version(ROOT)
+        cv = code_version(config.ROOT)
         code, code_source = cv.get("commit") or None, cv.get("source")
         if code and cv.get("dirty_patch_sha256"):
             code_source = f"{code_source} (dirty patch {str(cv['dirty_patch_sha256'])[:12]})"
@@ -920,7 +915,7 @@ def derivation_provenance(program_dir: str, checkpoint_dir: str, checkpoints_man
             unread.append(f"git rev-parse raised {type(e).__name__}: {e}")
     if unread:
         code_source = (f"git ({'; '.join(unread)})" if code else f"unreadable: {'; '.join(unread)}")[:240]
-    return {"tool": "verity_vllm.check.weights_of_record", "code": code, "code_source": code_source, "at": _t.strftime("%Y-%m-%dT%H:%M:%SZ", _t.gmtime()),
+    return {"tool": "verity_vllm.check.weights_of_record", "code": code, "code_source": code_source, "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "sources": {"program_dir": os.path.abspath(program_dir), "program_files": ["instances.json.gz", "result.json"],
                         "checkpoint_dir": os.path.abspath(checkpoint_dir), "checkpoints_manifest": os.path.abspath(checkpoints_manifest) if checkpoints_manifest else "repo default"},
             "argv": list(argv) if argv is not None else sys.argv[1:], "supersedes": os.path.abspath(supersedes) if supersedes else None}
