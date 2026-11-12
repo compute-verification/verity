@@ -40,7 +40,7 @@ from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 from verity_vllm import settings
-from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA, LATE_READ_CHECK_SCHEMA
+from verity_vllm.records.schema_ids import CENSUS_RANK_SCHEMA, ENGINE_PROFILE_SCHEMA, LATE_READ_CHECK_SCHEMA
 
 __all__ = ["EXTENSION"]
 
@@ -1304,7 +1304,7 @@ class TP2CaptureWorkerExtension:
             with open(tr, "rb") as fi, gzip.open(str(tr) + ".gz", "wb") as fo:
                 shutil.copyfileobj(fi, fo)
         tr.unlink()
-        doc = {"schema": "verity-capture/census-rank/v0", "rank": rank, "pid": os.getpid(), "n_kernels": len(ks),
+        doc = {"schema": CENSUS_RANK_SCHEMA, "rank": rank, "pid": os.getpid(), "n_kernels": len(ks),
                "device_us": round(sum(float(e.get("dur", 0.0) or 0.0) for e in ks), 1), "kernels": summary,
                "cpu_ops": dict(sorted(cpu_ops.items(), key=lambda kv: -kv[1])[:200]),
                "method": "one torch.profiler.profile(activities=[CPU, CUDA]) session in this rank's process over the whole observed-free "
