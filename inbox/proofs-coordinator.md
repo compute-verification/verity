@@ -102881,3 +102881,37 @@ Your message to end the turn is headed 21:50Z; my clock read 21:32Z when it reac
 3. Write the `FOR NET-329` entry, with the one measurement that would split the 24 s. Build nothing.
 
 **Waiting on:** you, to resume me. Friday's launch is by 15:39Z for the row at 15:45Z on card 7.
+
+## RUNSAS, Thu 21:33Z: started; round 2's check covers the model's per-statement code check and the interior order, but not the clauses on the session statement's own bytes (`pinOk`, `sessionOk`, its round count), which round 2 never sees
+
+**In plain words.** I am the worker proving that when round 2's check of the running verifier finds no failure, the proved (modeled) verifier's statement checks hold. A first read says most of it is reuse: the model's statement check already calls round 2's own per-statement code (`SecondStage.stmtCodes`), and the base already proves what a passing check says (`SecondStage.check_ok`, `stmtCodes_nil`). The model also asks things of each session statement's bytes (its circuit, tables, flags and round count, `pinOk` and `sessionOk`) that round 2 cannot check, because round 2 reads only a JSON statement and the digests a verdict of record names. Those clauses must come from somewhere else in the run (the sessions' verdicts) or they are a real gap; I report it as a candidate GAP below and will confirm it in my table.
+
+Agent `bc-6b562a40-d85b-538d-9805-f87f05365e9b`; branch `cursor/proofs-runsas-7e3a`, from `origin/cursor/proofs-two-round-base-84b5` at `bb527fd2e2d2`, nothing pushed yet.
+
+**Plan, five lines.**
+1. By 23:00Z: the table, each code of `SecondStage.failures` against the model clause it gives (follows / follows with a lemma / GAP).
+2. By 23:30Z: signatures that elaborate in `security/Proofs/Flock/SpotFlock/RunsAs/Round2.lean`: one lemma per model clause (`interiorOrderOk_of_check`, `codesOk_of_check`, and the rest), then `stmtOk_of_check`, their conjunction, with every clause round 2 does not give taken as a named `Prop` hypothesis.
+3. The agreement between the running `Own` (`Run.lean:239-249`) and the model's `ownOf h st rec draw c₀` (`Code.lean:463`) as one named `Prop` (`OwnAgrees`), which RUNCOINS discharges when it builds `h`.
+4. Proofs file by file through `research run`, `verity lean try` per file.
+5. Re-state against FRAME's new clauses (`namesOk`, `recordsOk`, L1) as each lands in the base, one lemma per clause.
+
+**Proposed statement for RUNCOINS** (please answer in your entry; I will match its shape to yours) [derived, not yet elaborated]:
+```
+theorem SpotFlock.RunsAs.stmtOk_of_check (h : Held) {own : Spot.SecondStage.Own} {ss : Array Json}
+    {x m₁ m₂ : Msg} {c₀ : FlockDeploy.Coin} {c₁ : Stage h} {st : Roots} {rec draw : Json}
+    (hx : decode x = some st) (hm₁ : jsonMsg m₁ = some rec) (hd : secondDraw h c₀ c₁ = some draw)
+    (hown : OwnAgrees h own st rec draw c₀)      -- the running Own is the model's on what round 2 reads
+    (hss : StmtsAre h m₂ ss)                      -- m₂ states one session statement per template, ss[t] its JSON
+    (hreg : RegHolds h x)                         -- parse, partition, two: the registration's, not round 2's
+    (hsess : SessionsHeld h m₂)                   -- k, sessionOk, pinOk at each template: candidate GAP
+    (hc : (Spot.SecondStage.check true own (some ss)).codes = #[]) :
+    stmtOk h x m₁ m₂ c₀ c₁ = true
+```
+
+**Findings so far.**
+- [read `Code.lean:483-489`] The model's `readsOk` is `interiorOrderOk own && codesOk own t S && pinOk h t w`, and `codesOk` is `stmtCodes` with `verified := S.checked.toArray` at `partAt h q t`. [read `SecondStage.lean:1489-1497`] `check_ok` gives `interiorOrderOk own` and `stmtCodes own named (posOf ps s.template) p s = []` with `p` the first part of `s`'s template. [derived] So `codesOk` follows with a lemma, given: the running parts are `partsAt h q`, the templates' names are distinct (else `ps.find?` picks an earlier part than `partAt h q t`), and `stmtCodes` reads `own.verified` only in `second-verified` and `second-tables`.
+- [read `Code.lean:420-425`, `DeployInputs.lean:82-98`] `pinOk` asks the session statement's whole `Raw` (circuit bytes, tables, `zk`, `count`, partition, program, closure, public inputs, statement id) be the reference's but for its sample, registered reads and public file. [read `SecondStage.lean:1064-1077`, `Run.lean:239-250`] Round 2 reads only `Stmt` (template, header, draw, registered) and what verdicts of record name (header and registered digests, sample, `session_tables`). [read `Run.lean:244`] the circuit digest the params name (`templateCircuits`) is read and dropped: `refs := it.circuits.map fun (t, _, h, _) => (t, h)`. [guess] The header's `circuit_sha512` is not a run field (`RUN_FIELDS`, `SecondStage.lean:778`), so `second-header` holds it to the reference header's, which binds the circuit up to a SHA-512 collision only if Flock's verifier holds the header's digest to the circuit bytes; I have not read that.
+- **GAP (candidate, not yet confirmed):** no check of round 2, and none I have found in `Run.run`, holds a session's `Raw` fields other than the header and the registered reads to its template's reference statement (`pinOk`), nor its masked scope, table shapes, hidden outputs and round count to the reference's (`sessionOk`, the `k₀ t` clause), except `second-tables` (one table). They would have to come from how the verifier of record is invoked, which `Run.run` takes as input (`i.verdicts`).
+- [read] The registration clauses of `stmtOkAt` (`parse`, `partition`, `two`: `scopeOk`, `filesOk`, `templateOk`) read only `h` and the run's statement; round 2 makes none of them. They are RUNCOINS's (the registration), or the auditor's params'.
+
+**Not established.** Nothing is built or elaborated. The table is not done: `headerOk`, `rootsOk`, `readOk` and `valuesOk` may read `Own` fields the model sets differently (`returns`, `supplied`, `fixed`, `reported`); I have not checked. Whether Flock's verifier holds `circuit_sha512` to the circuit. My mailbox does not exist yet.
