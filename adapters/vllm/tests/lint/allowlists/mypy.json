@@ -850,7 +850,6 @@
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "name-defined", "symbol": "main", "detail": ""},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "type-var", "symbol": "main", "detail": "", "count": 3},
     {"file": "verity_vllm/pipeline/compiled_merge.py", "kind": "union-attr", "symbol": "main", "detail": "", "count": 32},
-    {"file": "verity_vllm/pipeline/cpu_replay.py", "kind": "attr-defined", "symbol": "of_record", "detail": ""},
     {"file": "verity_vllm/pipeline/deferred_rows.py", "kind": "arg-type", "symbol": "of_record", "detail": "", "count": 3},
     {"file": "verity_vllm/pipeline/edge.py", "kind": "operator", "symbol": "fields.holds", "detail": ""},
     {"file": "verity_vllm/pipeline/expert_rows.py", "kind": "arg-type", "symbol": "Plan.tables", "detail": ""},
