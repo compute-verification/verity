@@ -37,8 +37,6 @@ from typing import Any
 
 import numpy as np
 
-FAMILY = {"all_reduce": "AllReduce2_v1", "all_gather": "AllGather2_v1"}           # the two-rank identities (world 2)
-
 
 def collective_family(kind: str, world: int) -> str:
     """The received-output Definition family of a `kind` collective in a `world`-rank communicator, from the registry's own
