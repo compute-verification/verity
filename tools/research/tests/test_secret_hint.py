@@ -52,6 +52,34 @@ def test_research_takes_a_lost_secret_from_the_tmux_server_and_leaves_the_rest(t
     assert secret_hint.recover() == []                                                # no tmux at all
 
 
+def test_research_asks_the_tmux_server_what_it_holds_and_whether_its_kept_session_is_there(tmp_path, monkeypatch):
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    (bin_ / "tmux").write_text('#!/bin/sh\necho "$@" >> "$0.calls"\n'
+                               '[ -f "$0.down" ] && { echo "no server running on /tmp/tmux-0/default" >&2; exit 1; }\n'
+                               'case "$1" in\n'
+                               '  show-environment) printf "%s\\n" "R2_BUCKET=bucket" "NEBIUS_SA_ID=line one" "line two" \\\n'
+                               '                      "-RUNPOD_SSH_KEY_B64" "R2_ENDPOINT=" "ELSE=x" ;;\n'
+                               '  has-session) [ "$3" = "=vm-secrets" ] && [ -f "$0.kept" ] ;;\nesac\n')
+    (bin_ / "tmux").chmod(0o755)
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+    monkeypatch.setenv("CLOUD_AGENT_INJECTED_SECRET_NAMES", INJECTED)
+    assert secret_hint.server() is None and not (bin_ / "tmux.calls").exists()        # under a test: no server is asked
+    monkeypatch.delenv("PYTEST_CURRENT_TEST")
+    assert secret_hint.server() == (["R2_BUCKET", "NEBIUS_SA_ID"], False)             # set there, by name; no kept session
+    assert (bin_ / "tmux.calls").read_text() == "show-environment -g\nhas-session -t =vm-secrets\n"
+    (bin_ / "tmux.kept").write_text("")
+    assert secret_hint.server() == (["R2_BUCKET", "NEBIUS_SA_ID"], True)
+    (bin_ / "tmux.down").write_text("")
+    assert secret_hint.server() == (None, False)                                      # no server answers
+    monkeypatch.setenv("PATH", str(tmp_path / "no-tmux"))
+    assert secret_hint.server() is None                                               # no tmux at all: nothing to ask or start
+    monkeypatch.setenv("PATH", str(bin_), prepend=os.pathsep)
+    monkeypatch.delenv("CLOUD_AGENT_INJECTED_SECRET_NAMES")
+    assert secret_hint.server() is None                                               # a laptop, a pod, a node
+    assert secret_hint.START_KEPT == f"tmux new-session -d -s {secret_hint.KEPT_SESSION}"
+
+
 def test_every_research_command_recovers_lost_secrets_first(monkeypatch):
     from research import cli
 

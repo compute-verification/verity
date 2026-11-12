@@ -5,7 +5,9 @@
 Each check is `ok`, `skip` (it does not apply here) or a `finding`, which says what failed and how to fix it:
 
   secrets     every name the role needs (`SECRETS`) and every name this VM injects ($CLOUD_AGENT_INJECTED_SECRET_NAMES) is set;
-              a name `research` took back from the tmux server (`secret_hint.recover`) counts, and is named
+              a name `research` took back from the tmux server (`secret_hint.recover`) counts, and is named. On a VM that
+              injects secrets it is a finding too when no tmux server holds them, or the one that does has no kept session
+              (`secret_hint.server`): its fix is the one command that starts that session
   github      `gh auth status` exits 0
   git-push    `git push --dry-run --no-verify` of HEAD to a branch nobody has (`PROBE_REF`) on the checkout's origin: GitHub
               accepts the credential git pushes with
@@ -135,6 +137,7 @@ def check_secrets(role: str) -> Check:
     named = {n for alts in want for n in alts}
     want += [(n,) for n in injected if n not in named]
     missing = ["|".join(alts) for alts in want if not any(os.environ.get(n) for n in alts)]
+    held, kept = secret_hint.server() or (injected, True)       # nothing asked of a tmux server: nothing to say of one
     lost = [m for m in missing if any(n in injected for n in m.split("|"))]
     unset = [m for m in missing if m not in lost]
     if missing:
@@ -144,11 +147,23 @@ def check_secrets(role: str) -> Check:
                          f"server has {'it' if len(lost) == 1 else 'them'}: {secret_hint.FRESH_SHELL} (`tmux new-session`, then "
                          "`research doctor` there); if that shell lacks them too, the VM lost its secrets (an exec-daemon restart) "
                          "and a new agent VM gets them at boot")
+            if held is None:
+                fixes.append("no tmux server runs on this VM to take a lost secret back from: a shell that still has them starts "
+                             f"the kept session with `{secret_hint.START_KEPT}`")
         if unset:
             fixes.append(f"{', '.join(unset)}: add {'it' if len(unset) == 1 else 'them'} in {DASHBOARD}; a new agent VM gets them")
         return Check("secrets", FINDING, f"not set here: {', '.join(missing)}", "; ".join(fixes))
+    if held is None:
+        return Check("secrets", FINDING, "no tmux server holds this VM's secrets: a shell that loses them has nowhere to take them "
+                     "back from", f"start the kept session from this shell, which has them: `{secret_hint.START_KEPT}`")
+    if not kept:
+        return Check("secrets", FINDING, f"the tmux server that holds this VM's secrets has no `{secret_hint.KEPT_SESSION}` session: "
+                     "it ends with its last session, and its copy of them with it", f"start the kept session: `{secret_hint.START_KEPT}`")
     took = [n for n in secret_hint.RECOVERED if os.environ.get(n)]
     detail = f"the {len(needs(role))} names the {role} role needs" + (f" and the {len(injected)} this VM injects" if injected else "") + " are set"
+    if lacks := [n for n in injected if n not in held]:
+        detail += (f"; the tmux server lacks {len(lacks)} of them ({', '.join(lacks[:4])}{f' and {len(lacks) - 4} more' if len(lacks) > 4 else ''}), "
+                   "which a shell that loses them can't take back")
     if took:
         shown = ", ".join(took[:4]) + (f" and {len(took) - 4} more" if len(took) > 4 else "")
         detail += (f"; {len(took)} taken back from the tmux server because this shell had lost them ({shown}): run tools other than "
