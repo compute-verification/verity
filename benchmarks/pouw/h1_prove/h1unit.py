@@ -280,12 +280,12 @@ def unit_reads(program, tp, u: int) -> dict[str, tuple[str, int]]:
 # -- the registered values: each call's tables and the weights' b/<K> -------------------------------------------------------
 
 
-def value_words(name: str, tile: tuple[int, int] = TILE) -> int:
+def value_words(name: str) -> int:
     """A registered value's row width in 16-bit leaves: an A table ``a/<K>@<c>`` and ``b/<K>`` K/2 + 2 (`h1zy.ROW`), a z
     table ``zy@<c>`` 3 R C (`h1zy.RECORD`), ``ok`` one (`OK`)."""
     if name == OK_VALUE:
         return len(OK)
-    return 3 * tile[0] * tile[1] if name.startswith("zy") else int(name.split("/")[1].split("@")[0]) // 2 + 2
+    return 3 * TILE[0] * TILE[1] if name.startswith("zy") else int(name.split("/")[1].split("@")[0]) // 2 + 2
 
 
 def bound_root(name: str, window_root: str) -> str | None:
