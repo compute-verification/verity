@@ -12,9 +12,14 @@ import os
 import re
 import struct
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 import numpy as np
+
+from verity_vllm.config import checkpoint_entries
+
+__all__ = ["CheckpointIndex", "manifest_entry"]
 
 #: safetensors dtype -> (numpy view dtype, element bytes)
 _ST_DTYPE = {"BF16": (np.uint16, 2), "F16": (np.float16, 2), "F32": (np.float32, 4), "F64": (np.float64, 8),
@@ -89,8 +94,6 @@ def manifest_entry(manifest: str | None, ckpt_dir: str, model: str | None, revis
     """The checkpoints.json entry of `ckpt_dir` (it and its siblings, `config.checkpoint_entries`): the one whose local_path is the dir, else the one of `model` at `revision`."""
     if not (manifest and os.path.exists(manifest)):
         return None
-    from verity_vllm.config import checkpoint_entries
-
     for c in checkpoint_entries(manifest):
         lp = str(c.get("local_path") or "")
         if (lp and os.path.realpath(lp) == os.path.realpath(ckpt_dir)) or \
@@ -110,9 +113,12 @@ def shard_pin(ckpt_dir: str, *, checkpoints_manifest: str | None, model: str | N
         shas = list(ex.map(lambda fn: sha256_file(os.path.join(ckpt_dir, fn)), shards))
     pin: dict[str, Any] = {"manifest": checkpoints_manifest, "entry": None if entry is None else {"repo": entry.get("repo"), "revision": entry.get("revision")},
                            "shards": {}}
+    # the entry states a shard's sha256 under its files by name, else in its table of sha256 by name; no entry, or one with neither, pins none
+    files = entry.get("files") if entry else None
+    by_name = entry.get("safetensors_sha256") if entry else None
     for fn, sha in zip(shards, shas):
-        files = (entry or {}).get("files")
-        pinned = ((files.get(fn) or {}).get("sha256") if isinstance(files, dict) else None) or ((entry or {}).get("safetensors_sha256") or {}).get(fn)
+        of_file = files.get(fn) if isinstance(files, dict) else None
+        pinned = (of_file.get("sha256") if of_file else None) or (by_name.get(fn) if by_name else None)
         pin["shards"][fn] = {"sha256": sha, "pinned_sha256": pinned, "pinned": (sha == pinned) if pinned else None}
     return pin
 
@@ -131,13 +137,16 @@ class CheckpointIndex:
         self.config = {}
         cfg = os.path.join(ckpt_dir, "config.json")
         if os.path.exists(cfg):
-            self.config = json.load(open(cfg))
+            self.config = json.loads(Path(cfg).read_text())
         rules = renames(self.config)
         for fn in shard_names(ckpt_dir):
             hdr, base = read_safetensors_header(os.path.join(ckpt_dir, fn))
             self.shards.append(fn)
-            for name, meta in hdr.items():
-                if name == "__metadata__" or (rules and (name := renamed(name, rules)) is None):
+            for key, meta in hdr.items():
+                if key == "__metadata__":
+                    continue
+                name = renamed(key, rules) if rules else key
+                if name is None:
                     continue
                 lo, hi = meta["data_offsets"]
                 self.tensors[name] = (fn, meta["dtype"], [int(x) for x in meta["shape"]], base + int(lo), base + int(hi))
@@ -145,9 +154,11 @@ class CheckpointIndex:
             raise FileNotFoundError(f"no *.safetensors shard under {ckpt_dir}")
         self.pin: dict[str, Any] = {"manifest": checkpoints_manifest, "entry": None, "shards": {}}
         if pin is not None:
-            if sorted(pin.get("shards") or {}) != self.shards:
-                raise ValueError(f"{ckpt_dir}: the pin covers shards {sorted(pin.get('shards') or {})[:4]}, the checkpoint has {self.shards[:4]} "
-                                 f"({len(pin.get('shards') or {})} vs {len(self.shards)})")
+            pinned = pin.get("shards")   # the other process's shards by name; a pin that states none covers none, refused here as any other cover
+            covered = sorted(pinned) if pinned else []
+            if covered != self.shards:
+                raise ValueError(f"{ckpt_dir}: the pin covers shards {covered[:4]}, the checkpoint has {self.shards[:4]} "
+                                 f"({len(covered)} vs {len(self.shards)})")
             if pin.get("manifest") != checkpoints_manifest:
                 raise ValueError(f"{ckpt_dir}: the pin was taken against manifest {pin.get('manifest')}, this index reads {checkpoints_manifest}")
             self.pin = {"manifest": checkpoints_manifest, "entry": pin.get("entry"), "shards": {fn: dict(pin["shards"][fn]) for fn in self.shards}}

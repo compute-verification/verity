@@ -47,22 +47,15 @@ from verity_vllm.engine import vllm_adapter as va
 from verity_vllm.pipeline.tp import target as TT
 from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 
+__all__ = ["Options", "main", "parse_engine_args"]
+
 # The engine's pins, in the environment before `main` imports vLLM.  The imports above bring in torch first; the one pin
 # Inductor reads at its own import is checked before the engine is built (`engine_env.require_inductor`).
 prof.apply_env()
 
 
-def parse_engine_args(items: list[str]) -> dict[str, Any]:
-    out: dict[str, Any] = {}
-    for it in items:
-        if "=" not in it:
-            raise SystemExit(f"--engine-arg expects key=value, got {it!r}")
-        k, v = it.split("=", 1)
-        try:
-            out[k] = json.loads(v)
-        except json.JSONDecodeError:
-            out[k] = v
-    return out
+#: the engine's `--engine-arg` parser, under the name the TP Commit, the Match arms and two benchmarks import from here
+parse_engine_args = va.parse_engine_args
 
 
 def parse_steps(s: str | None, max_tokens: int | None) -> list[int]:
@@ -75,7 +68,7 @@ def parse_steps(s: str | None, max_tokens: int | None) -> list[int]:
 
 @dataclass(frozen=True, kw_only=True)
 class Options:
-    workload: str = option("--workload", type=workload_arg, default="workloads/workload_qwen15_32x16_1req.json")
+    workload: str = option("--workload", type=workload_arg)
     out: str = option("--out")
     checkpoints: str = option("--checkpoints", default="manifests/checkpoints.json")
     case: str | None = option("--case", default=None)
@@ -112,6 +105,13 @@ class Options:
     rpc_timeout: float = option("--rpc-timeout", type=float, default=1800.0)
 
 
+def rank_line(probe: dict[str, Any]) -> tuple[Any, Any, Any]:
+    """(pid, TP rank, CUDA device) of one rank's probe (`tp2_probe`), for the line that reports the engine built; None for the TP
+    rank or the device of a rank that could not read it (the probe then holds `tp_error` or `device_error` in the block's place)."""
+    tp, device = probe.get("tp"), probe.get("device")
+    return probe.get("pid"), tp.get("rank") if tp else None, device.get("current") if device else None
+
+
 def main(args: Options) -> None:
     from vllm import LLM
 
@@ -132,7 +132,7 @@ def main(args: Options) -> None:
     if revision is None:
         try:
             revision = json.loads(Path("EXPORT.json").read_text()).get("commit", "unknown")
-        except Exception:  # noqa: BLE001
+        except (OSError, ValueError, AttributeError):
             revision = "unknown"
     env_flags = {**prof.apply_env(), **target_env}
     engine_env.step_timeout(args.rpc_timeout)
@@ -177,7 +177,7 @@ def main(args: Options) -> None:
         topo["ranks"] = llm.collective_rpc("tp2_probe", timeout=args.rpc_timeout)
     (out / "topology.json").write_text(json.dumps(topo, indent=1, default=str) + "\n")
     print(f"[tp2] engine built in {build_s:.1f}s; executor={topo['executor_class']}; in-process runner: {topo['in_process_runner']}; "
-          f"ranks={[(r.get('pid'), (r.get('tp') or {}).get('rank'), (r.get('device') or {}).get('current')) for r in (topo['ranks'] or [])]}", flush=True)
+          f"ranks={[rank_line(r) for r in (topo['ranks'] or [])]}", flush=True)
     if args.inventory_out:
         from verity_vllm.engine.meta_inventory import write_live
 
@@ -249,7 +249,7 @@ def main(args: Options) -> None:
         all_equal = all_equal and bool(eq)
         doc["requests"].append({"request_id": rid, "prompt_token_ids": r["prompt_token_ids"], "max_tokens": r["max_tokens"],
                                 "generated_token_ids": gen, "accepted_record_token_ids": acc, "equals_accepted": eq})
-        print(f"[tp2] {rid}: generated {gen}\n[tp2]   accepted (TP=1 RTX 4090 record) {acc}  equal={eq}", flush=True)
+        print(f"[tp2] {rid}: generated {gen}\n[tp2]   accepted (the workload's record) {acc}  equal={eq}", flush=True)
     doc["all_equal_accepted"] = all_equal
     (out / "tokens.json").write_text(json.dumps(doc, indent=1) + "\n")
     print(f"[tp2] done -> {out}", flush=True)

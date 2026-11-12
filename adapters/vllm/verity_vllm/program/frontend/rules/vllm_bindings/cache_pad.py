@@ -49,7 +49,10 @@ class CachePadRule(StateRule):
         return True
 
     def emit(self, node, ctx):
-        from verity_vllm.program.frontend.rules.padding import _materialize_bits, _scalar_of
+        from verity_vllm.program.frontend.rules.padding import (
+            _materialize_bits,
+            _scalar_of,
+        )
         live, zero, slot = node.args[:3]
         mp = ctx.module_path(node)
         hist = ctx.state["kv_history"]

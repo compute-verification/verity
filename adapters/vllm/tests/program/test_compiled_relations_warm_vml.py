@@ -2,8 +2,8 @@
 
 torch's statically linked MKL races on its first VML call when several intra-op threads make it at once (one chunk at 1771 ulp);
 the helper's single-threaded `exp` initialises every VML function.  CPU: without torch it does nothing; with torch it makes one
-`exp` call at one intra-op thread and restores the thread count, and a second call makes none.  `commit-replay` and the compiled
-kernel check call it before their first torch op."""
+`exp` call at one intra-op thread and restores the thread count, and a second call makes none.  `commit-replay` calls it before
+its first torch op."""
 from __future__ import annotations
 
 import sys
@@ -70,12 +70,3 @@ def test_commit_replay_warms_before_it_replays(monkeypatch):
     assert cpu_replay.main(object()) == 0
     assert calls == ["warm", "replay"]
 
-
-def test_the_compiled_kernel_check_warms_when_it_is_made(monkeypatch):
-    torch = pytest.importorskip("torch")
-    from verity_vllm.check.replay import compiled_kernel_check as mod
-
-    calls: list[str] = []
-    monkeypatch.setattr(mod, "warm_vml", lambda: calls.append("warm"))
-    mod.CompiledKernelCheck(None, torch.nn.Linear(1, 1), None, seed=0, seed_source=None)
-    assert calls == ["warm"]

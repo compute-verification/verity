@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 
+from verity_vllm.records.schema_ids import TP_LINKS_SCHEMA
+
 
 def module_in_model_vocabulary(module_path: str | None, model_root: str | None) -> str | None:
     """A derive module path (`<model_root>.<path> (<Class>)`, the traced wrapper's `named_modules()` spelling) in the
@@ -56,7 +58,7 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
         if tp == 2:   # the v1 fields, kept verbatim for the two-rank readers (one peer)
             ln.update({"peer_input": peers[0]["input"], "peer_rank": peers[0]["rank"], "peer_operand": peers[0]["operand"]})
         links.append(ln)
-    doc = {"schema": "cb-a/tp_links/v2", "world": tp, "rank": rank, "peer_ranks": peer_ranks, "program_digest": res["program"]["digest"], "user_inputs": user,
+    doc = {"schema": TP_LINKS_SCHEMA, "world": tp, "rank": rank, "peer_ranks": peer_ranks, "program_digest": res["program"]["digest"], "user_inputs": user,
            "model_root": model_root,
            "module_vocabulary": "link.module_path: the traced wrapper's named_modules() path + ' (Class)'; link.module: the same module in the "
                                 "recorder's model.named_modules() vocabulary = module_path minus model_root (recorded by object identity)",
@@ -76,13 +78,15 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
 def read_tp_links(path: str) -> dict:
     """Load a `tp_links.json` of schema v1 (world 2, one `peer_input`/`peer_rank` per link) or v2 (`peers` per link), returning
     the v2 shape: every link carries `peers = [{rank, input, operand, collective_k}]` and the doc `peer_ranks`.  A v1 file is upgraded in
-    memory (world 2: the single peer is rank 1-r); nothing is rewritten on disk."""
+    memory (world 2: the single peer is rank 1-r); nothing is rewritten on disk.  A document that lists no link (both schemas'
+    writer writes the list, empty for a rank with no collective) is returned as it is: no link is upgraded."""
     with open(path) as f:
         doc = json.load(f)
+    links = doc.get("links")
     world, rank = int(doc.get("world") or 2), int(doc.get("rank") or 0)
     doc.setdefault("peer_ranks", [r for r in range(world) if r != rank])
     root = doc.get("model_root")
-    for ln in doc.get("links") or []:
+    for ln in links if links else []:
         if "module" not in ln:    # v1 / early v2: no recorded model root -> the path as spelled (class dropped); readers use same_module_path
             ln["module"] = module_in_model_vocabulary(ln.get("module_path"), root)
         if "peers" not in ln:

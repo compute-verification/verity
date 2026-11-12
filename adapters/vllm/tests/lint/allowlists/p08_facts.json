@@ -70,8 +70,6 @@
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "layer-class", "symbol": "per_token_bytes_of", "detail": "RotaryEmbedding", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "Options", "detail": "llama", "count": 2},
     {"file": "verity_vllm/pipeline/commit.py", "kind": "model", "symbol": "c2_programs_forecast", "detail": "qwen"},
-    {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "gpu", "symbol": "main", "detail": "rtx4090"},
-    {"file": "verity_vllm/pipeline/tp/capture.py", "kind": "model", "symbol": "Options", "detail": "qwen"},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "layer-class", "symbol": "<module>", "detail": "LayerNorm", "count": 3},
     {"file": "verity_vllm/program/frontend/derive.py", "kind": "layer-class", "symbol": "<module>", "detail": "RMSNorm", "count": 3},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "layer-class", "symbol": "<module>", "detail": "GPT2Attention"},

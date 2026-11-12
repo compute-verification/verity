@@ -76,7 +76,8 @@ def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:
 
 def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
     """The registration's tensor-parallel world at ``rank`` and its engine args (`REGISTERED_ENGINE`), from the run's engine record
-    (`LLM.engine_record`'s ``engine_kwargs``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
+    (`LLM.engine_record`'s ``engine_kwargs``; where the launch left ``max_model_len`` to vLLM, -1, the length the built engine
+    reads back, ``effective``), and, from a record of the environment its build set (``env_flags``), the DSA top-k's
     (`engine_classes.DSA_TOPK_ENV`) as set or not, so `predict.dsa` refuses a row past INDEX_TOPK the engine served in the kernels'
     own order; a ValueError for a rank the world doesn't have."""
     rec = meta.get("engine_record") or {}
@@ -85,6 +86,8 @@ def engine_of(meta: dict, rank: int) -> tuple[dict, dict]:
     if not 0 <= rank < world:
         raise ValueError(f"rank {rank}: the run's engine has tensor-parallel world {world}")
     engine = {k: kw[k] for k in REGISTERED_ENGINE if k in kw}
+    if engine.get("max_model_len") == -1:
+        engine["max_model_len"] = (rec.get("effective") or {}).get("max_model_len")
     if "env_flags" in rec:
         flags = rec["env_flags"] or {}
         engine["env"] = {k: flags[k] for k in DSA_TOPK_ENV if k in flags}

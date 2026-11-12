@@ -13,6 +13,7 @@ import gzip
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -21,8 +22,9 @@ from tests.check.test_weights_of_record import write_safetensors
 from verity_vllm import config
 from verity_vllm.check import checkpoint_index as CI
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.query.manifest import format as MF
 
-H, I, HQ, HKV, D, V, E, G = 128, 128, 4, 2, 16, 16, 2, 64
+H, INTER, HQ, HKV, D, V, E, G = 128, 128, 4, 2, 16, 16, 2, 64
 WORLDS = ((1, 0), (2, 0), (2, 1), (4, 0), (4, 1), (4, 2), (4, 3))
 
 GOLDEN = {(1, 0): "f4518f5eda3988dd4aa3b171af0ce98af5dfa1251128015f06ffacdf386619b2", (2, 0): "36bd25a3de1c951cf97321842d36c757bc11a53a601117f0761c50988de41a78",
@@ -59,9 +61,9 @@ def tensors() -> dict[str, tuple[str, np.ndarray]]:
     for p, n in (("q", HQ), ("k", HKV), ("v", HKV)):
         t[L0 + f"self_attn.{p}_proj.weight"] = ("BF16", _bf16(rng, n * D, H))
     t[L0 + "self_attn.o_proj.weight"] = ("BF16", _bf16(rng, H, HQ * D))
-    t[L0 + "mlp.gate_proj.weight"] = ("F32", _f32(rng, I, H))
-    t[L0 + "mlp.up_proj.weight"] = ("F32", _f32(rng, I, H))
-    t[L0 + "mlp.down_proj.weight"] = ("BF16", _bf16(rng, H, I))
+    t[L0 + "mlp.gate_proj.weight"] = ("F32", _f32(rng, INTER, H))
+    t[L0 + "mlp.up_proj.weight"] = ("F32", _f32(rng, INTER, H))
+    t[L0 + "mlp.down_proj.weight"] = ("BF16", _bf16(rng, H, INTER))
     t[L0 + "input_layernorm.weight"] = ("F32", _f32(rng, H))
     t[L0 + "self_attn.q_a_proj.weight"] = ("BF16", _bf16(rng, 32, H))
     t[L0 + "self_attn.kv_a_proj_with_mqa.weight"] = ("BF16", _bf16(rng, 16, H))
@@ -70,18 +72,18 @@ def tensors() -> dict[str, tuple[str, np.ndarray]]:
     t[L0 + "indexer.wk.weight"] = ("BF16", _bf16(rng, 3, H))
     t[L0 + "indexer.weights_proj.weight"] = ("BF16", _bf16(rng, 5, H))
     t[L1 + "mlp.gate.weight"] = ("BF16", _bf16(rng, E, H))
-    t[L1 + "mlp.shared_experts.gate_proj.weight"] = ("BF16", _bf16(rng, I, H))
-    t[L1 + "mlp.shared_experts.up_proj.weight"] = ("BF16", _bf16(rng, I, H))
+    t[L1 + "mlp.shared_experts.gate_proj.weight"] = ("BF16", _bf16(rng, INTER, H))
+    t[L1 + "mlp.shared_experts.up_proj.weight"] = ("BF16", _bf16(rng, INTER, H))
     for e in range(E):
         for p in ("gate_proj", "up_proj"):
-            t[L1 + f"mlp.experts.{e}.{p}.weight"] = ("BF16", _bf16(rng, I, H))
-        t[L1 + f"mlp.experts.{e}.down_proj.weight"] = ("BF16", _bf16(rng, H, I))
+            t[L1 + f"mlp.experts.{e}.{p}.weight"] = ("BF16", _bf16(rng, INTER, H))
+        t[L1 + f"mlp.experts.{e}.down_proj.weight"] = ("BF16", _bf16(rng, H, INTER))
         for p in ("gate_proj", "up_proj"):
-            t[L2 + f"mlp.experts.{e}.{p}.weight"] = ("F8_E4M3", _e4m3(rng, I, H))
-            t[L2 + f"mlp.experts.{e}.{p}.weight_scale_inv"] = ("F32", _f32(rng, I // G, H // G))
-        t[L2 + f"mlp.experts.{e}.down_proj.weight"] = ("F8_E4M3", _e4m3(rng, H, I))
-        t[L2 + f"mlp.experts.{e}.down_proj.weight_scale_inv"] = ("F32", _f32(rng, H // G, I // G))
-    t[L2 + "mlp.gate_up_proj.weight"] = ("BF16", _bf16(rng, 2 * I, H))          # stored pre-fused (Phi-3): split gate|up per rank
+            t[L2 + f"mlp.experts.{e}.{p}.weight"] = ("F8_E4M3", _e4m3(rng, INTER, H))
+            t[L2 + f"mlp.experts.{e}.{p}.weight_scale_inv"] = ("F32", _f32(rng, INTER // G, H // G))
+        t[L2 + f"mlp.experts.{e}.down_proj.weight"] = ("F8_E4M3", _e4m3(rng, H, INTER))
+        t[L2 + f"mlp.experts.{e}.down_proj.weight_scale_inv"] = ("F32", _f32(rng, H // G, INTER // G))
+    t[L2 + "mlp.gate_up_proj.weight"] = ("BF16", _bf16(rng, 2 * INTER, H))          # stored pre-fused (Phi-3): split gate|up per rank
     return t
 
 
@@ -96,8 +98,8 @@ def write_checkpoint(d, *, truncate: int = 0) -> None:
     write_safetensors(second, {n: t[n] for n in names[len(names) // 2:] + ["lm_head.weight"]})
     if truncate:
         os.truncate(second, os.path.getsize(second) - truncate)
-    json.dump({"tie_word_embeddings": False, "num_attention_heads": HQ, "num_key_value_heads": HKV, "hidden_size": H, "head_dim": D,
-               "quantization_config": {"weight_block_size": [G, G]}}, open(os.path.join(d, "config.json"), "w"))
+    Path(os.path.join(d, "config.json")).write_text(json.dumps({"tie_word_embeddings": False, "num_attention_heads": HQ, "num_key_value_heads": HKV, "hidden_size": H, "head_dim": D,
+                                                                "quantization_config": {"weight_block_size": [G, G]}}))
 
 
 @pytest.fixture
@@ -106,28 +108,28 @@ def ckpt(tmp_path):
     write_checkpoint(d)
     man = tmp_path / "checkpoints.json"
     files = {fn: {"sha256": WR.sha256_file(os.path.join(d, fn))} for fn in sorted(os.listdir(d)) if fn.endswith(".safetensors")}
-    json.dump({"checkpoints": [{"repo": "test/reads", "revision": "abc", "local_path": d, "files": files}]}, open(man, "w"))
+    Path(man).write_text(json.dumps({"checkpoints": [{"repo": "test/reads", "revision": "abc", "local_path": d, "files": files}]}))
     return d, str(man)
 
 
 def fields(world: int) -> list[tuple[str, list[int], int]]:
     from verity_vllm.program.model import fp8_moe_block
     w = world
-    g = fp8_moe_block(G, I // w, H)
-    hkv_r = HKV // w if HKV >= w else 1
+    g = fp8_moe_block(G, INTER // w, H)
+    hkv_r = HKV // w if w <= HKV else 1
     M = "model.model."
     L0, L1, L2 = M + "layers.0.", M + "layers.1.", M + "layers.2."
     return [(M + "embed_tokens.weight", [V // w, H], 16), ("model.lm_head.weight", [V // w, H], 16), (M + "norm.weight", [H], 16),
             (L0 + "self_attn.qkv_proj.weight", [(HQ // w + 2 * hkv_r) * D, H], 16), (L0 + "self_attn.o_proj.weight", [H, HQ * D // w], 16),
-            (L0 + "mlp.gate_up_proj.weight", [2 * I // w, H], 16), (L0 + "mlp.down_proj.weight", [H, I // w], 16),
+            (L0 + "mlp.gate_up_proj.weight", [2 * INTER // w, H], 16), (L0 + "mlp.down_proj.weight", [H, INTER // w], 16),
             (L0 + "input_layernorm.weight", [H], 16), (L0 + "self_attn.fused_qkv_a_proj.weight", [48, H], 16),
             (L0 + "self_attn.q_b_proj.weight", [2 * G // w, H], 8), (L0 + "self_attn.q_b_proj.weight_scale_inv", [2 // w if w <= 2 else 1, H // G], 32),
             (L0 + "indexer.wk_weights_proj.weight", [8 // w, H], 16), (L0 + "self_attn.attn._k_scale", [], 32),
-            (L1 + "mlp.gate.weight", [E, H], 16), (L1 + "mlp.shared_experts.gate_up_proj.weight", [2 * I // w, H], 16),
-            (L1 + "mlp.experts.w13_weight", [E, 2 * I // w, H], 16), (L1 + "mlp.experts.w2_weight", [E, H, I // w], 16),
-            (L2 + "mlp.experts.w13_weight", [E, 2 * I // w, H], 8), (L2 + "mlp.experts.w13_weight_scale_inv", [E, 2 * I // (w * g), H // g], 32),
-            (L2 + "mlp.experts.w2_weight", [E, H, I // w], 8), (L2 + "mlp.experts.w2_weight_scale_inv", [E, H // g, I // (w * g)], 32),
-            (L2 + "mlp.experts.routed_experts.w13_weight", [E, 2 * I // w, H], 8), (L2 + "mlp.gate_up_proj.weight", [2 * I // w, H], 16)]
+            (L1 + "mlp.gate.weight", [E, H], 16), (L1 + "mlp.shared_experts.gate_up_proj.weight", [2 * INTER // w, H], 16),
+            (L1 + "mlp.experts.w13_weight", [E, 2 * INTER // w, H], 16), (L1 + "mlp.experts.w2_weight", [E, H, INTER // w], 16),
+            (L2 + "mlp.experts.w13_weight", [E, 2 * INTER // w, H], 8), (L2 + "mlp.experts.w13_weight_scale_inv", [E, 2 * INTER // (w * g), H // g], 32),
+            (L2 + "mlp.experts.w2_weight", [E, H, INTER // w], 8), (L2 + "mlp.experts.w2_weight_scale_inv", [E, H // g, INTER // (w * g)], 32),
+            (L2 + "mlp.experts.routed_experts.w13_weight", [E, 2 * INTER // w, H], 8), (L2 + "mlp.gate_up_proj.weight", [2 * INTER // w, H], 16)]
 
 
 def _ty(shape, bits) -> str:
@@ -160,8 +162,7 @@ def write_program_dir(root, world: int, rank: int) -> str:
     with gzip.open(os.path.join(d, "instances.json.gz"), "wt") as f:
         json.dump({"schema": "cb-a/instance-sequence/v2", "digest": "e" * 128, "params": [weights_param(world), ["prompt", "Array<4,Value<32>>"]],
                    "rows": rows}, f)
-    json.dump({"program_digest": "e" * 128, "attention_impls_observed": {"model.layers.0.self_attn.attn": "FLASH_ATTN"}, **({"tp": tp} if tp else {})},
-              open(os.path.join(d, "result.json"), "w"))
+    Path(os.path.join(d, "result.json")).write_text(json.dumps({"program_digest": "e" * 128, "attention_impls_observed": {"model.layers.0.self_attn.attn": "FLASH_ATTN"}, **({"tp": tp} if tp else {})}))
     return d
 
 
@@ -256,7 +257,6 @@ def test_the_default_manifest_is_the_trees_pins_whatever_the_working_directory(t
 
 
 def test_program_head_is_the_loaded_program_with_its_rows_as_stored(tmp_path):
-    from verity_vllm.query.manifest import format as MF
     pdir = write_program_dir(tmp_path, 2, 1)
     full, head = MF.load_program(pdir), WR.load_program_head(pdir)
     assert {k: v for k, v in head["instances"].items() if k != "rows"} == {k: v for k, v in full["instances"].items() if k != "rows"}

@@ -266,7 +266,7 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
     scale = b1.scale_log2_bits(D)
     nb = -(-T // BN)
     m = 0
-    l = [0] * 4
+    sums = [0] * 4
     o = [0] * D
     for b in range(nb - 1, -1, -1):
         first = b == nb - 1
@@ -292,7 +292,7 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
         for ln in range(4):
             cols = [c for c in range(nvis) if b1._lane(c) == ln]
             first_p = p[cols[0]] if cols else 0
-            acc = first_p if first else E(P.F32FmaFtz, sc, l[ln], first_p)
+            acc = first_p if first else E(P.F32FmaFtz, sc, sums[ln], first_p)
             for c in cols[1:]:
                 acc = E(P.F32AddFtz, acc, p[c])
             lanes.append(acc)
@@ -306,8 +306,8 @@ def _fa2_check_inf_head(q: list[int], k: np.ndarray, v: np.ndarray, BN: int, gfr
             for d in range(D):
                 vcol = [int(v[lo + k0 + j, d]) if k0 + j < nvis else 0 for j in range(16)]
                 o[d] = E(DOT, o[d], prow, vcol)
-        m, l = m_new, lanes
-    total = E(P.F32AddFtz, E(P.F32AddFtz, l[0], l[2]), E(P.F32AddFtz, l[1], l[3]))
+        m, sums = m_new, lanes
+    total = E(P.F32AddFtz, E(P.F32AddFtz, sums[0], sums[2]), E(P.F32AddFtz, sums[1], sums[3]))
     inv = E(P.Fa2InvSum, total)
     return [E(P.F2fpBf16, E(P.F32MulFtz, o[d], inv)) for d in range(D)]
 
