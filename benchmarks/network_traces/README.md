@@ -256,7 +256,9 @@ whole; a SIGKILL leaves the hold where it is, out of the record.
 `warden-rehearse`, its witness under `witness/`; `warden_chain.py`), and a proxy rehearsal's run, whose records come
 through `active.Proxy` in front of the endpoint, is refused by name wherever it is given. The certificates step reruns
 the relay's own offline check on its witness (`warden_serve.check`) and holds the public `certificates.jsonl` to the
-certified lines. The relay signs no clock certificate, so none is read. The endpoint step binds the endpoint's own
+certified lines. That check requires the session's certified start, so a gate run made by a device that certifies no
+start is refused here: such a run is read by the chain of the tree its gate ran. The relay signs no clock certificate,
+so none is read. The endpoint step binds the endpoint's own
 advice to the certified I/O read off the relay's cells (`chain_record.py endpoint`, with `CR_EOS_IDS` the model's EOS
 ids). N2 is the plain proof block on the relay's link (`n2_zk.py prove --warden-run`: both heads at the relay's grid and
 parameters digest, no sync declared or charged). The I/O tie is proved on the relay's ingress (`n2_tie_zk.py prove
