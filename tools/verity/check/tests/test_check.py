@@ -1061,10 +1061,61 @@ def test_the_agreement_is_not_required_for_docs_alone():
     assert rule_touches(rule, docs) == []
     assert rule_touches(rule, [*docs, "verity/protocols/flock/agreement/ci.py"]) == ["verity/protocols/flock/agreement/"]
     assert rule_touches(rule, ["verity/protocols/flock/agreement/DESIGN.md"]) == ["verity/protocols/flock/agreement/"]  # only the two names are left out
-    for f in ("ci.py", "agree.py", "fuzz.py", "redigest.py", "transcript_check.py", "selftest_records.py"):   # cited, never read
-        reads = [line for line in (ROOT / "verity" / "protocols" / "flock" / "agreement" / f).read_text().splitlines()
-                 if any(r in line for r in ("open(", "read_text", "read_bytes")) and any(d in line for d in ("README", "PROTOCOL"))]
-        assert not reads, f"{f} reads a doc the agreement trigger leaves out: {reads}"
+
+
+def _lean_code(text: str) -> str:
+    """A Lean file's text without its comments (`--` lines, nested `/- -/` blocks), its string literals kept whole."""
+    out, i, depth = [], 0, 0
+    while i < len(text):
+        if text.startswith("/-", i):
+            depth, i = depth + 1, i + 2
+        elif depth:
+            depth, i = (depth - 1, i + 2) if text.startswith("-/", i) else (depth, i + 1)
+        elif text.startswith("--", i):
+            i = text.find("\n", i) if "\n" in text[i:] else len(text)
+        elif text[i] == '"' and text[i - 1:i] != "'":
+            j = i + 1
+            while j < len(text) and text[j] != '"':
+                j += 2 if text[j] == "\\" else 1
+            out.append(text[i:j + 1])
+            i = j + 1
+        else:
+            out.append(text[i])
+            i += 1
+    return "".join(out)
+
+
+def test_nothing_the_agreements_key_covers_reads_the_markdown_it_leaves_out():
+    """`agreement_closure` leaves out every `.md` of the agreement's directory and the verifier's packages, so no file it keeps
+    may read one: no Python string but a docstring, no shell text but a comment and no lakefile names a doc, and the Lean
+    code, comments aside, has no `include_str` (the one way a Lake build reads a file it doesn't compile) and names a doc
+    only to cite a section of it (`PROTOCOL.md §1` in an error message)."""
+    import ast
+
+    files = CHECK.tracked_files()
+    kept = CHECK.agreement_closure(files)
+    dirs = {f.rsplit("/", 1)[0] + "/" for f in kept}
+    dropped = [f for f in files if f.endswith(".md") and f.rsplit("/", 1)[0] + "/" in dirs]
+    assert "verity/protocols/flock/agreement/README.md" in dropped and not any(f.endswith(".md") for f in kept)
+    doc = re.compile(r"\.md\b|README|PROTOCOL")
+    reads = []
+    for f in kept:
+        text = (ROOT / f).read_text(errors="replace")
+        if f.endswith(".py"):
+            tree = ast.parse(text)
+            docs = {id(n.body[0].value) for n in ast.walk(tree)
+                    if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.body
+                    and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant)}
+            reads += [f"{f}: {n.value[:80]!r}" for n in ast.walk(tree) if isinstance(n, ast.Constant)
+                      and isinstance(n.value, str) and id(n) not in docs and doc.search(n.value)]
+        elif f.endswith(".sh"):
+            reads += [f"{f}: {line}" for line in text.splitlines() if doc.search(re.sub(r"(^|\s)#.*", "", line))]
+        elif f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean"):
+            reads += [f"{f}: names a doc"] if doc.search(text) else []
+        elif f.endswith(".lean"):
+            code = _lean_code(text)
+            reads += [f"{f}: {m.group(0)!r}" for m in re.finditer(r"include_str|\S*(\.md\b(?! §)|README|PROTOCOL(?!\.md §))", code)]
+    assert not reads, f"a file the agreement's key covers reads Markdown the key leaves out; key it in agreement_closure: {reads}"
 
 
 def test_the_agreement_scripts_import_only_the_standard_library_and_each_other():

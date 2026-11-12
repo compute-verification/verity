@@ -2585,7 +2585,8 @@ def agreement_closure(files: list[str]) -> list[str]:
     package requires nothing (a `require` in its lakefile keeps them all in), less each of those packages'
     `lean-audit.json`, which only `tools/verity/lean/check.py` reads (a test fails if the agreement's scripts or the
     verifier's lakefile mention it), and less their Markdown, which neither Lake nor a script of the agreement reads (a
-    test fails if one of those scripts opens a README or a PROTOCOL), so a doc edit keeps the agreement's pass."""
+    test fails if a file this keeps names a doc but to cite it, or a Lean file of it has an `include_str`), so a doc edit
+    keeps the agreement's pass."""
     pre, lean = "verity/protocols/flock/agreement/", "verity/protocols/flock/verifier/"
     lakefiles = [f for f in files if f.startswith(lean) and f.rsplit("/", 1)[-1] in ("lakefile.toml", "lakefile.lean")]
     root = [f for f in lakefiles if f.count("/") == lean.count("/")]
