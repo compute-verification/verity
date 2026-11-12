@@ -39,8 +39,9 @@ import re
 import shutil
 import subprocess
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Callable
+from typing import Any
 
 from verity_vllm.config import BuildConfig, CommitConfig, MatchConfig, RunEnv
 from verity_vllm.pipeline import gpu_lease as GL
@@ -71,7 +72,8 @@ class SingleRow(Row):
         self.trap = False
         self.config_run = commit.config_run == "1"
         self.replay_pending = False
-        self.tgt, self.tgt_args = "", []      # the declared target (`shape`)
+        self.tgt = ""                         # the declared target (`shape`)
+        self.tgt_args: list[str] = []
 
     def run(self) -> int:
         try:
@@ -253,7 +255,8 @@ class SingleRow(Row):
 
         def job(st: str, lf: str, cmd: list[str], out: str) -> None:
             rc = RC.derive_cached(self, st, to, lf, cmd, out, ("par", "true"))
-            open(f"{lf}.rc", "w").write(f"{rc}\n")
+            with open(f"{lf}.rc", "w") as f:
+                f.write(f"{rc}\n")
 
         def rc_of(lf: str) -> int:
             try:
@@ -334,7 +337,7 @@ class SingleRow(Row):
                 self.verdict("build-target", "FAIL", line)
             elif line.startswith("TARGET-FAMILY-WAIVED"):
                 self.verdict("build-target", "WAIVED", line, quiet=True)
-        mrc = 0
+        mrc: int | None = 0
         if ok == "PASS" and os.path.isfile(f"{self.d}/build_request/instances.json.gz"):
             mrc = self.required_manifest("build") if early is None else early
             if mrc == 3:

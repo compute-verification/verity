@@ -172,6 +172,7 @@ def test_a_rows_stages_get_the_names(tmp_path, monkeypatch, capsys):
     with pytest.raises(Stop) as e:
         _row(tmp_path, "--py", py).setup({})
     assert e.value.rc == 3 and "PRECHECK_FAIL_CUBLAS_NAMES" in capsys.readouterr().err
+    assert isinstance(e.value.__cause__, ValueError) and "not one cuBLAS of each name" in str(e.value.__cause__)
 
 
 # ---------------------------------------------------------------------------------------------------------------- the release line
