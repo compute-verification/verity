@@ -39,6 +39,9 @@ inputs = ["verity", "adapters/vllm/verity_vllm/__init__.py", "adapters/vllm/veri
           "tools/research/src/research/store", "tools/research/src/research/telemetry",
           "verity/protocols/flock/prover/tests/data/captured-101/slices/silumul-v1-i8192",
           "verity/protocols/flock/prover/tests/data/captured-101/slices/rope-head-d64",
-          "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/regression/__init__.py"]
+          "adapters/vllm/tests/__init__.py", "adapters/vllm/tests/regression/__init__.py",
+          # the difftest harness: `verity_difftest`, which builds and drives the evaluator, and its Lake package, which the
+          # evaluator's requires by path
+          "tools/difftest/python/verity_difftest", "tools/difftest/lean"]
 # Each xdist worker starts its own evaluator; `verity_difftest.build` takes its lock, so the workers build one at a time.
 parallel = true

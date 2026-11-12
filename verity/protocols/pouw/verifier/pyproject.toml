@@ -7,7 +7,10 @@
 # and the work law, a reference tool's.
 inputs = ["verity", "security", "verity/protocols/pouw/verifier/README.md", "verity/definitions/silicon/captures/vectors/fp8-hopper-wgmma-k1536.json", "verity/definitions/silicon/captures/vectors/fp8-hopper-wgmma-k32.json",
           "verity/definitions/ops/tests/fixtures/golden/ada_e4m3_m16n8k32.json", "verity/circuits", "verity/definitions/kernels",
-          "verity/protocols/pouw/clear"]
+          "verity/protocols/pouw/clear",
+          # the difftest harness's Lake package: the Lean executables these tests run are built under the lock in
+          # its `.lake`
+          "tools/difftest/lean"]
 parallel = true
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = ["tests/test_pouw_credit_statements.py"]
