@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 from test_retention import NOW, REPO, UNIT, Disk, by_path, clock, kept, never_in_use, run_dir
 
+from research import clone as CL
 from research import retention as R
 from research import runs
 from research.cli import main as research_main
@@ -549,6 +550,72 @@ def test_an_unpreserved_run_this_user_cannot_remove_is_left_and_takes_none_of_th
         (stuck / "out").chmod(0o755)
 
 
+def clone(root: Path, name: str = RUN) -> Path:
+    """The clone `research run --cwd clone` made for the run `name` on a machine, where `clone.home` puts it: beside runs/."""
+    c = CL.home(root / RUNS, name, machine=True)
+    (c / "verity").mkdir()
+    (c / "verity/module.py").write_bytes(b"c" * UNIT)
+    return written(c)
+
+
+CLONE_FIRST = ("its clone {c} still stands, and the clone goes first: what removes a run's clone decides that its run is over from this "
+               "directory's launch.json and status.json, so this directory goes at a pass after the clone has gone")
+
+
+def test_gc_never_takes_an_unpreserved_run_whose_clone_still_stands_and_says_that_the_clone_goes_first(tmp_path, monkeypatch, capsys):
+    root = tmp_path / "ws"
+    waits, free, linked = ended(root, status=RUNNING), ended(root, RUN2, when=WRITTEN + timedelta(hours=1)), ended(root, RUN3)
+    c = clone(root)
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (c.parent / RUN3).symlink_to(elsewhere, target_is_directory=True)
+    assert c == root / "research" / R.CLONES / RUN and c.is_dir(), "gc looks for a clone where `clone.home` makes a machine's"
+    assert R.expired(record(waits, root).record, NOW), "the run keeps its record: it is ended, unpreserved and past its 7 days"
+    reason, taken = CLONE_FIRST.format(c=c) + KEEP.format(d=waits, run=RUN), nbytes(free, linked)
+
+    plan = collect(root, [waits, free, linked], apply=True, unpreserved=True, max_paths=2)
+    acts = by_path(plan)
+    assert waits.exists() and c.exists(), "neither the run nor its clone went"
+    assert not free.exists() and not linked.exists() and plan["capped"] == 0, "a link in scratch/ is no clone, and the run left for its " \
+                                                                             "clone used none of the pass's paths"
+    assert (acts[f"{RUNS}/{RUN}"]["action"], acts[f"{RUNS}/{RUN}"]["reason"], acts[f"{RUNS}/{RUN}"]["error"]) == ("skip", reason, None)
+    assert plan["unpreserved"]["expired"]["paths"] == 3 and plan["unpreserved"]["deleted"] == {"paths": 2, "bytes": taken, "inodes": 12}
+
+    flagless = by_path(collect(root, [waits], apply=True))
+    assert flagless[f"{RUNS}/{RUN}"]["reason"] == reason, "the pass the timer runs says it too, so a first reading shows what waits"
+    through_research(monkeypatch, [waits])
+    assert research_main(["retention", "gc", "--root", str(root), "--force", "--low-pct", "0", "--unpreserved-runs"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert line("skip", waits, root, reason) in out[out.index(R.UNPRESERVED_HEAD) + 1:]
+    assert out[-1] == (f"unpreserved runs, of the paths above: {counted(waits)} expired, of which this pass would delete "
+                       f"{counted()}; {counted()} not yet expired")
+
+
+def test_a_run_goes_at_the_next_pass_once_its_clone_is_gone(tmp_path):
+    root = tmp_path / "ws"
+    d, c = ended(root), clone(root)
+    first = collect(root, [d], apply=True, unpreserved=True)
+    assert d.exists() and by_path(first)[f"{RUNS}/{RUN}"]["action"] == "skip" and first["unpreserved"]["deleted"]["paths"] == 0
+    assert CL.remove(c) is None and c.parent.is_dir(), "the clone went, as what removes a clone takes it; scratch/ itself stays"
+    second = collect(root, [d], apply=True, unpreserved=True)
+    assert not d.exists() and by_path(second)[f"{RUNS}/{RUN}"]["reason"] == f"deleted: {ONLY_COPY}"
+    assert second["unpreserved"]["deleted"] == {"paths": 1, "bytes": by_path(first)[f"{RUNS}/{RUN}"]["bytes"], "inodes": 6}
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root reads every directory")
+def test_an_unpreserved_run_stays_while_whether_its_clone_stands_cannot_be_read(tmp_path):
+    root = tmp_path / "ws"
+    d, c = ended(root), clone(root)
+    c.parent.chmod(0o000)
+    try:
+        plan = collect(root, [d], apply=True, unpreserved=True)
+        reason = by_path(plan)[f"{RUNS}/{RUN}"]["reason"]
+    finally:
+        c.parent.chmod(0o755)
+    assert d.exists() and reason.startswith(f"whether its clone {c} still stands can't be read ([Errno 13] Permission denied: ")
+    assert reason.endswith("), and a clone goes before its run's directory" + KEEP.format(d=d, run=RUN))
+
+
 # ---- 5: the constant ------------------------------------------------------------------------------------------------------------------
 
 def test_the_readme_states_the_rule_with_the_constants_value_and_both_ways_to_keep_a_run():
@@ -562,3 +629,4 @@ def test_the_readme_states_the_rule_with_the_constants_value_and_both_ways_to_ke
     for needed in ("`research keep RUNDIR ...`", "`research data custody RUN --publish`", "`--unpreserved-runs`", "[--unpreserved-runs]"):
         assert needed in section, f"the retention section names {needed}"
     assert f"{days} d after its last write" in R.UNPRESERVED_HEAD and f"expires {R.UNPRESERVED_RUN_EXPIRY.days} days" in rule
+    assert f"nor one whose clone stands (`{R.CLONES}/<run id>` goes first)" in " ".join(section.split())

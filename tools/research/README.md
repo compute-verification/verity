@@ -456,10 +456,10 @@ campaign, else `runner`; `preserved` its run record; `expires` 48 h after `verif
 is written for it, and a sidecar wins.
 
 A finished or runner-dead run that custody did not preserve gets a low-priority retention record that expires 7 days after the run
-directory's last write, so the collector takes it (`UNPRESERVED_RUN_EXPIRY`). The whole directory goes: it is the run's only copy.
-A run still running, queued or in a slot line never goes, nor anything under a `research keep` record. To keep a run:
-`research keep RUNDIR ...` before the 7 days are over, or preserve it: `research data custody RUN --publish`. gc takes these runs
-only with `--unpreserved-runs`; otherwise it and the report list them apart, with their count, bytes and inodes.
+directory's last write, so the collector takes it (`UNPRESERVED_RUN_EXPIRY`). The whole directory goes: it is the only copy.
+A run still running, queued or in a slot line never goes, nor anything under a `research keep` record, nor one whose clone
+stands (`scratch/<run id>` goes first). To keep one: `research keep RUNDIR ...` before the 7 days are over, or preserve it:
+`research data custody RUN --publish`. gc takes them only with `--unpreserved-runs`; it and the report list them apart.
 
 ~~~text
 research keep PATH --owner @LANE --expires DATE|never|7d --priority P [--regenerate CMD] [--art ART | --preserve] [--why T] [--by URL]

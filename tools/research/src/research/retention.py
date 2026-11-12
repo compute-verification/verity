@@ -23,7 +23,7 @@ UNPRESERVED_RUN_EXPIRY (7 days) after the run directory's last write, so the col
 copy. A directory has it only when all of these hold. It is a run directory: named as a run id, holding the job.json of that id
 whose `run.runs_root` is the directory it lies in, and neither a launcher's `remote.json` nor the `preserved.json` of a fetched
 copy (`custody.has_custody`). Its run has ended (`evict._run_state`): its status.json is final, or it was refused, or its status
-is `running` and the pid it records, at the start time it records, is gone from this host's process table (`evict._gone`), read
+is `running` and the pid it records, at the start time it records, is gone from this host's process table, read
 only for a run its job.json places on this host and from a table that shows pid 1, so one that hides other users' processes
 shows nobody dead. Custody did not preserve it: it has no `.custody`, or one that says `preserved: false`; a marker that can't be
 read gives no record. Neither it nor a directory above it has a sidecar: an explicit record always wins, whatever its priority
@@ -35,7 +35,10 @@ does after the status is final. A run that waits in a slot line is `running`, an
 has a record. A run directory whose status, files or custody key can't be read has no record either: it is listed as invalid
 with what could not be read, since whether it may go is unknown, and is never deleted.
 gc deletes these runs only with --unpreserved-runs: without it a pass lists them apart and leaves them, so a machine's first pass
-can be read before anything goes. `research keep RUNDIR ...` before the 7 days are over keeps a run, and so does preserving it
+can be read before anything goes. It never takes one whose clone still stands (CLONES: `<runs root>/../scratch/<run id>`, where
+`research run --cwd clone` ran it on a machine): what removes a run's clone decides that its run is over from the run directory's
+launch.json and status.json, so the clone goes first and the run directory at a pass after; until then gc lists the run with that
+reason. `research keep RUNDIR ...` before the 7 days are over keeps a run, and so does preserving it
 (`research data custody RUN --publish`).
 
 Policy `default` (POLICY) acts when the root's filesystem is over high-pct (or with --force) and deletes, lowest priority first and
@@ -44,9 +47,9 @@ a disk out of inodes refuses every write as one out of blocks does, even with mo
 --max-paths paths (MAX_PATHS; 0 lifts the cap), and the next takes the rest. A path qualifies only with a valid record (explicit or
 implicit) recorded on this node that is expired, `low` or `normal`, and preserved or regenerable, or an unpreserved run's under
 --unpreserved-runs; and no file in the job-script directories may name it (`JobScripts`). A preserved run's implicit record also
-needs its marker to still vouch for the run dir (`custody.marker_problem`), and an unpreserved run goes only when this user can
-write into every directory in it: one it can't is left and named, and takes none of the pass's --max-paths. A path holding a
-nested record is left whole. A dry run (the default) reads no remote.
+needs its marker to still vouch for the run dir (`custody.marker_problem`), and an unpreserved run goes only when no clone of
+it stands and this user can write into every directory in it: one that can't go is left and named, and takes none of the pass's
+--max-paths. A path holding a nested record is left whole. A dry run (the default) reads no remote.
 
 A record's expiry is its owner's word that the data may go. The remote check (`store_check`, just before each deletion of a
 preserved path) is there so that gc never deletes the only copy of data somebody still promises to keep. Its answer is one of
@@ -113,6 +116,8 @@ UNPRESERVED_RUN_EXPIRY = timedelta(days=7)
 UNPRESERVED = "unpreserved"
 #: What the report calls an implicit record, by its source.
 IMPLICIT = {"custody": ".custody", UNPRESERVED: "unpreserved run"}
+#: The directory beside a machine's runs root that holds its runs' clones, `<CLONES>/<run id>` (`clone.home`).
+CLONES = "scratch"
 #: The line the report and gc print above the unpreserved runs, which they list after every other path.
 UNPRESERVED_HEAD = (f"unpreserved runs (ended, and custody did not preserve them: each directory is its run's only copy, and expires "
                     f"{UNPRESERVED_RUN_EXPIRY // timedelta(days=1)} d after its last write):")
@@ -309,8 +314,8 @@ def _last_write(path: Path) -> float:
 
 def _ended(run_dir: Path, host: Any) -> str | None:
     """The state the run of `run_dir` ended in (one of `evict.ENDED`), or None while nothing shows that it ended: a state that is
-    not final, or a `running` whose runner is not known gone. A recorded runner is gone as `evict._gone` decides it, and only
-    where this host's process table can say (module docstring); `host` is job.json's. `evict.Unestablished` when its status
+    not final, or a `running` whose runner is not known gone. A recorded runner is gone as `evict._run_state` decides it, and
+    only where this host's process table can say (module docstring); `host` is job.json's. `evict.Unestablished` when its status
     can't be read."""
     state = EV._run_state(run_dir, PROC)
     if state == EV.LOST and (host != socket.gethostname() or not (PROC / "1" / "stat").is_file()):
@@ -846,6 +851,20 @@ def keeping(run_dir: Path) -> str:
             f"{run_dir.name} --publish`")
 
 
+def _clone_first(run_dir: Path) -> str | None:
+    """Why gc leaves the unpreserved run of `run_dir` for now: its clone still stands (module docstring; a directory, never a
+    link to one), or whether it does can't be read. None when it has no clone."""
+    clone = run_dir.parent.parent / CLONES / run_dir.name
+    try:
+        st = EV._quiet(lambda: os.lstat(clone))
+    except OSError as e:
+        return f"whether its clone {clone} still stands can't be read ({e}), and a clone goes before its run's directory"
+    if st is None or not stat.S_ISDIR(st.st_mode):
+        return None
+    return (f"its clone {clone} still stands, and the clone goes first: what removes a run's clone decides that its run is over from "
+            f"this directory's launch.json and status.json, so this directory goes at a pass after the clone has gone")
+
+
 def _read_only_dir(path: Path) -> str | None:
     for base, _dirs, _files in os.walk(path, onerror=_raise):
         if not os.access(base, os.W_OK | os.X_OK):
@@ -1012,6 +1031,8 @@ def gc(root: Path | str = DEFAULT_ROOT, *, policy: str = "default", high_pct: fl
             why = f"its custody marker no longer vouches for it: {problem}"
         if why is None and (u := in_use(root / row.path)):
             why = f"in use: {u}"
+        if why is None and row.source == UNPRESERVED:
+            why = _clone_first(root / row.path)
         if why is None and row.source == UNPRESERVED and not unpreserved:
             why = f"left: {_why_deletable(row, None)}, which only --unpreserved-runs deletes"
         if why:
