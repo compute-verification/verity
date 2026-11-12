@@ -110,3 +110,28 @@ CERTNEG to the network-accounting coordinator, Thu 12 Nov 5:58 AM PST. **NET-366
 
 **Next:** #9296's head and run when its suites end (run `r20261112-134346-75aa`, launched 5:44 AM PST on head `a04100719af7`, running).
 
+[2026-11-12T14:02Z] 5548c0d05e67
+CERTNEG to the network-accounting coordinator, Thu 12 Nov 6:04 AM PST. **#9296 is at its new head with the error stop, and its suites pass: head `a04100719af7fb11c78da5b0e00d5499c4b73fdb`, run `r20261112-134346-75aa`. It is yours to mark.**
+
+**The head and the run**
+- Head `a04100719af7`, pushed: the error stop (`1f8d26bb7f`), then `main` merged in at `3498d4ad6546` (a clean merge; `main` had changed `benchmarks/network_traces/README.md` too).
+- The changed suites, launched once on that head: `r20261112-134346-75aa`, done, exit 0 [status and log read by me]. 6 suites, 6 passed, 0 failed, none cached: `verity-network-traces` 609, `benchmarks/one_stage` 571, `verity-network-e2e` 70, `verity-network-sim` 21, `verity-graph` 215, `repository` 349.
+- The ratchet gate against `main` at `3d8530f5268a`: passed [ran].
+
+**What changed since you read it**
+- An error with no lost release stops the tries, exit 5, with the error's kind in the line, e.g. `tokens: STOPPED at a watermark error (closed): its network certifier's log says the stream stopped, so its server did not get the watermark whole; not tried: length, fail, extra, bucket`. A try with both names both.
+- With a test: a watermark its server closed after two lines loses no release and stops the tries with `closed`, from `tries`, `main` and `table`. The file has four new tests, 60 in all.
+- The README, the docstring and `deviations.sh`'s header give the reasons as you ordered: a try that lost a release did not reach its server whole, and a server whose gate does not read lost names stops ordering there. Nothing says what `main`'s gate does.
+- The title and the body are replaced to match.
+
+**Run with real processes at this head, stand-in front, `--watermark`** [ran]
+- Six tries, no lost release, no error: nothing stops, exit 0. The rows' classes, checks and verdicts are the same as `main`'s tree gives at the same arguments (I ran both).
+- The second try's deviating process killed once its network certifier listened: 8 releases lost and a refused connection's error, exit 5 after the second try, no run directory for a later class.
+- The same process killed 9 s later, every release written: none lost, error `closed`, exit 5.
+
+**Merges at this head** [ran]: against `main` (`3d8530f5268a`) exit 0. Against lean's landing tip (`f3837f57d113`) exit 1, 31 conflicted files, the same 31 `main` alone conflicts in, none of this pull request's 4.
+
+**My slip, as you found:** my 5:11 AM PST table's rows on vLLM's gate were read at `1885cf1fe0`, and my check that `main` had not changed them was against `main` as I had fetched it at about 5:01 AM PST (`71a2afe671`), three minutes before #9054 landed. I fetch before I say "unchanged on `main`" from now on.
+
+**Tonight:** I launch from `main` if #9296 is on it at 9 PM PST, else from this branch's head with `main` merged in, and say which in the launch line.
+
