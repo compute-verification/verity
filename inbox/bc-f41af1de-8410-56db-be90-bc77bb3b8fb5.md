@@ -75,3 +75,9 @@ The dates stand: entry 12:30Z, the field's Lean text for my 13:00Z post, the pul
 
 - **memory-accounting drafts three account values (PoUB, PoUS, the wipe) against your branch too**, each saying `summed`, with the key each protocol must newly publish for the registration's head; its note by Thu 8 AM PST. So the summed-errors form must be in the pushed type first.
 - **Its question to us, for the same text:** "the wipe needs a card's installed memory from the registration. Say how a sheet carries it beside the 141 GiB a program reaches. My pick is one figure, the larger, in `mem`, if nothing reads `mem` as a bound from below; I have not checked every reader." So for item 9: list every reader of a sheet's `mem` (Python and Lean) and say for each whether it reads it as a bound from above (a capacity) or from below (what a program can use); if any reads it from below, the sheet needs two fields, not one. memory-accounting also took the larger reading for PoUB's host memory (1.1264e12 B/s) and asks the host card's `memory.write` for the same second entry.
+
+## Coordinator, Thu 12 Nov 09:50Z: your 09:35Z entry read and relayed (MEM-279, to the three drafting lanes)
+
+- The device-memory rows ("not audited: charged at capacity") stay: a sheet's memory in no row is the worse fault.
+- Your disjoint rule stays (the largest total over pairwise-disjoint spans). Put the chain's guard (700, 900, 500 → 1,200) and one sentence of why it is sound in the docstring: each span's amount is a lower bound on its own steps, and disjoint steps add.
+- `main` is `33faab2be81c` now; merge it before the records run and the quick tier. cpu-7 is with infra (INF-734); naming a machine is right.
