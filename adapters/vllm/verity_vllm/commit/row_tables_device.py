@@ -14,7 +14,8 @@ the hm96 leaf and the frame's leaf, pad and node with the GPU's one row commitme
 computes the domain ids, the rows' rank order and the tables' layout (`plan`).  `host_step` runs the same functions on the CPU
 (`row_table_host.cpp`, built with the system C++ compiler), the twin the CPU tests hold to `row_tables.step_roots` on machines
 without a GPU.  Builds are keyed by what they compile (sources, the shared headers, flags and the compiler's version) under
-``~/.cache/verity/row_table``; nvcc is the one on the path.
+``~/.cache/verity/row_table``, and compile a flat copy of those files, so the compiler is handed no path in the tree; nvcc is
+the one on the path.
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ import hashlib
 import os
 import shutil
 import subprocess
+import tempfile
 from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
@@ -47,7 +49,7 @@ CUDA_DIR = Path(__file__).resolve().parents[1] / "protocols" / "pouw" / "pouw_cu
 DEVICE_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table.cu")
 HOST_SOURCES = ("ncp2.cuh", "row_table.cuh", "row_table_host.cpp")
 #: the headers `ncp2.cuh` and `row_table.cuh` include by name from outside CUDA_DIR (the GPU's one SHA-512 and row commitment):
-#: every build reads them from their directory and is keyed by their bytes
+#: every build compiles a copy of them beside a copy of its sources (`built`) and is keyed by their bytes
 SHARED = (SHA512, ROW_COMMIT)
 NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared")
 CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
@@ -63,8 +65,16 @@ class Args(ctypes.Structure):
 
 def built(tool: str, sources: Sequence[str], flags: Sequence[str], name: str, headers: Sequence[Path] = ()) -> Path:
     """``sources``' last (of `CUDA_DIR`) compiled by ``tool`` with ``flags`` into ``name``, keyed by the sources, the
-    ``headers`` it includes from elsewhere, the flags and the compiler's version; each header's directory is on the include
-    path, after ``flags`` unless they already name it."""
+    ``headers`` it includes from elsewhere, the flags and the compiler's version.  It compiles a flat copy of the sources and
+    headers in a fresh directory of the system's temporary one, each file under its base name and the last source named by it, so
+    the compiler is handed no path in the tree, and ``sources`` and ``headers`` are every file the build reads: an include
+    they leave out isn't found.  Two different files with one base name are refused (a file named twice is one file)."""
+    files: dict[str, Path] = {}
+    for p in (*(CUDA_DIR / s for s in sources), *headers):
+        other = files.setdefault(p.name, p)
+        if other.resolve() != p.resolve():
+            raise ValueError(f"two files named {p.name} among a build's sources and headers, {other} and {p}: the copy it "
+                             f"compiles holds one file of each name")
     h = hashlib.sha256()
     for s in sources:
         h.update(s.encode() + b"\0" + (CUDA_DIR / s).read_bytes() + b"\0")
@@ -76,8 +86,13 @@ def built(tool: str, sources: Sequence[str], flags: Sequence[str], name: str, he
     if not lib.exists():
         lib.parent.mkdir(parents=True, exist_ok=True)
         tmp = lib.with_suffix(f".{os.getpid()}.tmp")
-        includes = sorted({f"-I{p.parent}" for p in headers} - set(flags))
-        subprocess.run([tool, *flags, *includes, "-o", str(tmp), str(CUDA_DIR / sources[-1])], check=True)
+        stage = Path(tempfile.mkdtemp(prefix="verity-build."))
+        try:
+            for p in files.values():
+                shutil.copy(p, stage)
+            subprocess.run([tool, *flags, "-o", str(tmp), Path(sources[-1]).name], check=True, cwd=stage)
+        finally:
+            shutil.rmtree(stage, ignore_errors=True)
         tmp.replace(lib)
     return lib
 

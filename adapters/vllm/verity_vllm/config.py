@@ -47,15 +47,6 @@ WORKLOADS = ROOT / "workloads"
 CHECKPOINTS = MANIFESTS / "checkpoints.json"
 #: The circuit database's index (`pipeline.config_record`, `verity-vllm records`); the rows it lists are the rows of record.
 RECORDS = MANIFESTS / "records.json"
-#: The PoUB session's processes (not a package), whose prover runs in the Commit's (`store.remote`).
-REMOTE_SESSION = ROOT.parent.parent / "benchmarks" / "remote_session"
-#: kv.cu's launchers over torch (``paged.py``, with ``word_codec/kv_bench.py``), the remote session's device encode.
-VLLM_ENCODED = ROOT.parent.parent / "benchmarks" / "vllm_encoded"
-#: The directory holding ``p2_v1``, P2's encoded weights store (``p2_v1/store.py``) and its CUDA library's wrapper, which
-#: POUS encodes with (`protocols.pous`).
-P2_POUS = ROOT.parent.parent / "benchmarks" / "pous"
-#: The staging decode's directory (``stage.py``, loaded as the package ``p2_stage``), POUS's decode at use on the GPU.
-P2_STAGE = ROOT.parent.parent / "benchmarks" / "torch_gpu" / "p2_stage"
 
 
 def checkpoints_hf_home() -> str | None:
@@ -177,10 +168,6 @@ class RowId:
     def __str__(self) -> str:
         return "__".join((self.model, self.dtype, self.target, f"tp{self.world}", f"b{self.batch}", f"i{self.max_input}",
                           f"o{self.max_output}", self.arrivals, self.sampling, self.execution))
-
-
-#: A row id inside text (a workload path, a log line): ten ``__``-separated fields, the four integer ones by their prefix.
-ROW_ID_PATTERN = r"[\w\-]+__[\w\-]+__[\w\-]+__tp\d+__b\d+__i\d+__o\d+__\w+__\w+__[\w\-]+"
 
 
 def row_tokens(row: str) -> list[str]:

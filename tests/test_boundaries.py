@@ -281,6 +281,17 @@ CERTIFIER_LEAN = ("verity/protocols/certifier/device/program/lean", "verity/prot
                   "verity/protocols/certifier/verifier/lean", "security/*/NetworkCertifier", "security/*/NetworkCertifier.lean")
 SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which composes with it only above both and whose "
                       "stamp SPOT reads as a certified input")
+#: Flock's Lean verifier, by its Lake package's name, and the Lake packages that may require it: those whose Lean reads the
+#: proof system's verifier itself.  The list only shrinks.  A package that reads only the circuit format, the commitments or
+#: the bytes, hashes and parsing below them requires a base package (``BASE_LEAN``) instead.
+FLOCK_VERIFIER = "flock_verifier"
+REQUIRES_FLOCK_VERIFIER = {
+    "core_firewall", "core_memory_challenger", "core_onsite", "core_remote", "core_sigma", "core_spot", "core_vstar",
+    "core_vstar_recursive", "network_check", "pous_check", "pouw_commit", "remote_audit", "security_proofs",
+    "security_properties",
+}
+#: The base packages below Flock's verifier, each with every package it may require: nothing above it.
+BASE_LEAN = {"core_base": (), "core_circuits": ("core_base",), "core_commitments": ("core_base",)}
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
     "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
@@ -292,13 +303,12 @@ INFRA_IMPORTERS = {
 #: uses it.  It only shrinks.
 BENCHMARKS_IMPORTERS = {
     # the served path: verity_vllm runs benchmarks' code
-    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store (`benchmarks/pous/p2_v1`) and the "
-                                                       "staging decode (`benchmarks/torch_gpu/p2_stage`), through "
-                                                       "`config.P2_POUS` and `config.P2_STAGE`",
+    "adapters/vllm/verity_vllm/protocols/pous.py": "memory-accounting: P2's store and its load "
+                                                       "(`benchmarks/pous/p2_v1`), through its `P2_V1`",
     "adapters/vllm/verity_vllm/protocols/remote_bandwidth/remote.py": "circuits (vllm): the remote session's processes "
                                                                           "(`benchmarks/remote_session`, "
-                                                                          "`config.REMOTE_SESSION`) and `paged.py` "
-                                                                          "(`benchmarks/vllm_encoded`)",
+                                                                          "its `REMOTE_SESSION`) and `paged.py` "
+                                                                          "(`benchmarks/vllm_encoded`, its `VLLM_ENCODED`)",
     # Flock's measurement campaign, its tests, and the frozen instance sets `instances` reads
     **dict.fromkeys((
         "verity/protocols/flock/pod/gemm_hill.py", "verity/protocols/flock/pod/read_gadget.py",
@@ -737,6 +747,60 @@ def test_a_spot_import_of_the_certifier_is_found() -> None:
                        "Flock.Bytes": ["verity/protocols/flock/verifier/Flock/Bytes.lean"]}, modules
 
 
+def _lake_requires() -> dict[str, list[str]]:
+    """Each tracked lakefile's package with the packages it requires, by name; fixtures are left out."""
+    out: dict[str, list[str]] = {}
+    for lake in _tracked("*lakefile.toml"):
+        if "fixtures" not in Path(lake).parts:
+            doc = tomllib.loads((ROOT / lake).read_text())
+            out[doc["name"]] = [r["name"] for r in doc.get("require", [])]
+    return out
+
+
+def _base_line_offenders(requires: dict[str, list[str]]) -> list[str]:
+    """What crosses the base packages' line in ``requires`` ({package: the packages it requires}): a package outside
+    ``REQUIRES_FLOCK_VERIFIER`` that requires Flock's verifier, an entry of that list that no longer does, and a base package
+    (``BASE_LEAN``) that no lakefile declares or that requires more than its entry allows."""
+    out = [f"{pkg} requires {FLOCK_VERIFIER} and REQUIRES_FLOCK_VERIFIER, which only shrinks, doesn't list it: require the "
+           f"base package that holds what it reads ({', '.join(BASE_LEAN)}), or move what it reads into one"
+           for pkg, needs in sorted(requires.items()) if FLOCK_VERIFIER in needs and pkg not in REQUIRES_FLOCK_VERIFIER]
+    out += [f"{pkg} no longer requires {FLOCK_VERIFIER}: remove it from REQUIRES_FLOCK_VERIFIER"
+            for pkg in sorted(REQUIRES_FLOCK_VERIFIER) if FLOCK_VERIFIER not in requires.get(pkg, ())]
+    for base, allowed in BASE_LEAN.items():
+        if base not in requires:
+            out.append(f"BASE_LEAN names {base}, which no lakefile declares")
+        elif extra := sorted(set(requires[base]) - set(allowed)):
+            out.append(f"{base} is a base package and requires {', '.join(extra)}: it may require "
+                       f"{', '.join(allowed) or 'nothing'} alone, so what needs more goes in a package above it")
+    return out
+
+
+def test_only_the_listed_lean_packages_require_flocks_verifier() -> None:
+    """Over every lakefile's requirements: Flock's verifier is required only by the packages whose Lean reads the verifier
+    itself (``REQUIRES_FLOCK_VERIFIER``, which only shrinks), and the base packages below it (``BASE_LEAN``) require nothing
+    above them, so the circuit format, the commitments and the bytes below them reach a package without the proof system."""
+    requires = _lake_requires()
+    assert FLOCK_VERIFIER in requires, f"no lakefile declares {FLOCK_VERIFIER}: FLOCK_VERIFIER names the wrong package"
+    offenders = _base_line_offenders(requires)
+    assert not offenders, "\n".join(offenders)
+
+
+def test_a_requirement_across_the_base_line_is_found() -> None:
+    """The check above isn't vacuous: a new requirer of Flock's verifier, a listed one that stopped, and a base package
+    that requires a package above it or one outside the tree are each found, and the lists as they stand cross nothing."""
+    held = {FLOCK_VERIFIER: list(BASE_LEAN), **{pkg: [FLOCK_VERIFIER] for pkg in REQUIRES_FLOCK_VERIFIER},
+            **{base: list(allowed) for base, allowed in BASE_LEAN.items()}}
+    assert _base_line_offenders(held) == []
+    listed = min(REQUIRES_FLOCK_VERIFIER)
+    crossed = {**held, "core_identity": ["core_base", FLOCK_VERIFIER], listed: ["core_base"], "core_base": ["mathlib"],
+               "core_circuits": ["core_base", FLOCK_VERIFIER]}
+    found = _base_line_offenders(crossed)
+    assert [line.split(" ", 1)[0] for line in found] == ["core_circuits", "core_identity", listed, "core_base",
+                                                         "core_circuits"], found
+    assert _base_line_offenders({pkg: needs for pkg, needs in held.items() if pkg != "core_commitments"}) == [
+        "BASE_LEAN names core_commitments, which no lakefile declares"]
+
+
 def _infra_packages() -> set[str]:
     """The import packages of ``infra/``'s distributions, from each one's wheel configuration.  A project with no wheel (the
     Slack events service's suite, whose code Vercel deploys) has no package to import."""
@@ -926,7 +990,7 @@ def _benchmarks_importers(texts: dict[str, str], packages: Set[str]) -> dict[str
     own) that imports a module of ``benchmarks/``, with where: an import of one of ``packages`` (a statement, an
     import-call string or a ``"module:attr"`` string), or a path into ``benchmarks/`` (``_into_benchmarks``) put on
     ``sys.path`` or loaded by file.  A path is traced through the file's own names and parameter defaults, through other
-    files' upper-case module constants read as attributes (``config.REMOTE_SESSION``), and through any function, wherever it
+    files' upper-case module constants read as attributes (``remote.REMOTE_SESSION``), and through any function, wherever it
     is defined, that hands a parameter to such a load (``remote.session_module``).  Nothing is executed (AST only), and
     only files a text search can't rule out are parsed."""
     alt = "|".join(map(re.escape, sorted(packages)))

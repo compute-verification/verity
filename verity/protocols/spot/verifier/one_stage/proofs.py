@@ -30,6 +30,7 @@ object, the registered reads or a session's draw as `printed` prints them, at ``
 
 The verifier reads the whole circuit file once a call, in time and memory linear in it (about six times the file at
 peak), then O(proof) a session: so a protocol verifies one statement a stratum, every sampled proof block of it an instance.
+It runs in `verifier_env`: its caller's environment over `VERIFIER_ENV`, the verifier's allocator setting.
 
 The one-stage audit's v2 (`V2`, `Spot.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
@@ -53,6 +54,7 @@ import functools
 import hashlib
 import json
 import math
+import os
 import re
 import subprocess
 import tempfile
@@ -69,6 +71,10 @@ from .verifier import PACKAGE as V2_PACKAGE
 
 PACKAGE = ROOT / "verity/protocols/flock/verifier"
 EXE = "flock-verify"
+#: what the Lean verifier's `verify` runs under where its caller's environment sets no value of its own. The Lean runtime's
+#: allocator (mimalloc) returns freed pages to the kernel after a delay and faults them in again when it reuses them; -1
+#: keeps them, trading peak memory for the faults. No byte the verifier reads or prints depends on it.
+VERIFIER_ENV = {"MIMALLOC_PURGE_DELAY": "-1"}
 #: the statement every sampled proof block's session proves
 STATEMENT = "verity/flock-circuit"
 _DIGEST = re.compile(r"[0-9a-f]{128}")
@@ -120,6 +126,12 @@ class Finding:
     registered: dict
     units: tuple[int, ...]
     openings: Any = None
+
+
+def verifier_env(environ: Mapping[str, str] | None = None) -> dict[str, str]:
+    """The environment `verify` starts the Lean verifier in: ``environ`` (this process's when None) over `VERIFIER_ENV`, so
+    a variable the caller sets keeps the caller's value. `verifier_env.sh` is the same for a shell job."""
+    return {**VERIFIER_ENV, **(os.environ if environ is None else environ)}
 
 
 @functools.cache
@@ -425,7 +437,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
         p = subprocess.run([str(executable()), "verify", "--zk", "--statement", STATEMENT, "--circuit", str(proof.circuit),
                             "--public", str(proof.public), "--partition", str(files["partition"]),
                             "--program", str(files["program"]), *reads,
-                            "--session", *map(str, proof.sessions)], capture_output=True, text=True)
+                            "--session", *map(str, proof.sessions)], capture_output=True, text=True, env=verifier_env())
     lines = [json.loads(x[len("VERDICT "):]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
     if [v.get("session") for v in lines] != [str(s) for s in proof.sessions]:
         return None, ("proof", f"the verifier answered no verdict for each session in order (exit {p.returncode}): "
