@@ -19,8 +19,8 @@ first of sections 1 to 4 that applies. Four habits:
 - **What you learn goes where the next agent meets it:** a check, else a tool's default or message, else a skill.
 - **Look ahead:** rehearse what will stall next, before it does.
 
-Two gotchas. A `research` command or node ssh that fails for missing credentials: rerun it from a fresh tmux login shell,
-since a long-lived tool shell can lose the injected secrets. A `git push` refused for a lapsed GitHub token: hand over a
+Two gotchas. A `research` command or node ssh that fails for missing credentials: rerun it from a fresh tmux login shell;
+a tool shell can lose secrets the tmux server keeps (`research doctor`). A `git push` refused for a lapsed GitHub token: hand over a
 bundle (`git bundle create B origin/BASE..BRANCH`, `research data put --kind evidence/v1 --file B --preserve`) with the
 art id, the branch and its head sha.
 

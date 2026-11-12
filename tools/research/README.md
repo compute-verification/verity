@@ -60,16 +60,17 @@ secrets) the environment stands in:
 
 No value is ever printed.
 
-On a cloud VM a long-lived shell can lose the injected secrets that a fresh
-tmux login shell still has. Every `research` command first sets each secret
-named in `$CLOUD_AGENT_INJECTED_SECRET_NAMES` and missing from the shell from
-the tmux server's global environment, where that login shell gets them
-(`secret_hint.recover`); one run under a test doesn't, so a secret the test
-unset stays unset. If one is still missing, the store, `research queue
-ready`, node ssh and the Nebius scripts fail and say `rerun from a fresh tmux
-login shell` (`secret_hint.py`). A shell can lose that list too, so a store
-that has used the remote and now finds none configured fails `research data
-label` and `put` the same way (`LocalStore.remote_lost`).
+On a cloud VM a long-lived shell can lose the injected secrets, which the
+tmux server's global environment keeps while its session `vm-secrets` lives
+(`tools/agent-guard/kept_session.py`; `research doctor` says when it is gone).
+Every `research` command first sets from it each secret the shell lacks of
+those `$CLOUD_AGENT_INJECTED_SECRET_NAMES` names (`secret_hint.recover`; not
+under a test, so a secret a test unset stays unset). If one is still missing,
+the store, `research queue ready`, node ssh and the Nebius scripts fail and
+say `rerun from a fresh tmux login shell` (`secret_hint.py`). A shell can
+lose that list too, so a store that has used the remote and now finds none
+configured fails `research data label` and `put` the same way
+(`LocalStore.remote_lost`).
 
 `research doctor [--role lane|coordinator|infra] [--json]`: can this VM do its job (secret names, status-only
 probes, ssh, `uv sync --check`, disk, clock); each finding names its fix (exit 1); it never prints a value.
