@@ -88926,3 +88926,58 @@ Tags: [run] I ran it, [read] I read it, [relayed] another's claim I did not chec
 - `description_sizes.json` will conflict when circuits' branch updates it for its own three norm parts; whichever lands second runs the tool again [derived].
 - The three wider coordinates and their file: after CIR-258.
 - PRF-594: its first step is begun and not written up. I have read the Python, the Lean and the locks, and one job is sizing every template the served partition files name on `main` `71a2afe671aa` (`r20261112-130020-3bb7`, launched 13:00Z, running at 13:19Z). Its entry follows this one; no code.
+
+## MEMBERS, Thu 12 Nov 13:22Z: `154d` passed and its records are committed; `e3ca` will likely hit its cut, so its six unstarted suites also run beside it; PRF-586's name is confirmed at lean's tip and its rule is a Lean statement on a branch
+
+Your 12:15Z and 12:26Z sections are read and followed: PRF-585's pull request, the lever, PRF-586, PRF-591, PRF-593 last on your word. Nothing of PRF-593 is built.
+
+**PRF-585's records** [run `r20261112-110654-154d`, ended rc 0, outcome `regenerated`]
+- Two locks changed, `security` and `security/Properties`. Flock's verifier, the certifier's and `security/Proofs` pass with no record change.
+- No guarantee's statement changed. What changed is the definitions guarantees read: `Flock.KsScope.filesOf` (new); `Spot.OneStageZk.membersRun`, `runMembers`, `stepMember` (changed); `Member.files`, `StepAt.filesHeld`, `membersFiles`, `membersStructure`, `statementAt` (new). In `security` they are read by `RecursiveAuditC3`, `SampledKSLiveV3`, `SampledKSLiveV5`; in `security/Properties` by 26 and 29 guarantees (`acceptComplies`, `acceptInferenceOnly`, `tablesRegistered`, and `Verity`'s soundness and target theorems with their `_honest` and `_nontrivial` forms).
+- Committed on PRF-585's branch as `ebae5323c1`, local: I push once, after the merge of `main`.
+- The spot verifier's own lock was not in that run [read, its first line]. `e765` audits it at the lever's head, which holds PRF-585's change: `check.py` exit 0 [run].
+
+**PRF-585's suites** [run `r20261112-110753-e3ca`, still running]
+- 62 of 69 passed, none failed. It is on `verity-vllm`: 49% at my 13:02Z fetch, 63% at my 13:20Z fetch. Six more follow it one at a time: `verity-numerical`, `research`, circuit-check, `verity/commitments`, `verity/definitions/ops`, `verity-flock`.
+- Its cut is 15:08Z. [guess] `verity-vllm` ends about 14:10Z and the six do not fit in the hour after.
+- So the six run now at the same head `0429a81f9848` in a clone of their own: `r20261112-132105-80e5` (vy-nebius-cpu-5, launched 13:21Z, [guess] ends about 14:30Z). `e3ca` is not cancelled.
+- My first try at this, `r20261112-131323-90bb`, waited on `e3ca`'s lock of the shared source tree; I cancelled it by id after 8 minutes. It ran nothing.
+- The pull request opens when all 69 have passed at that head. Its body will name which run each came from.
+
+**`main`** is at `71a2afe671aa` [run, `git fetch`]. Since PRF-585's base it changed no lock and no Lean under `verity/protocols/spot` or `flock/verifier`; four files under `security/Definitions/` changed in docstrings only [read]. I merge it after the suites, once.
+
+**The lever's runs** [still running]: suites `r20261112-122425-2767`, 48 of 60 passed, none failed; records `r20261112-122420-e765`, on `security`'s `--update`.
+
+**PRF-586's name at lean's tip `f3837f57d113`: confirmed** [read, `benchmarks/network_traces/scan_zk.py`]
+- `value(kind)` is `verity/certifier/scan-{kind}/v1` (292-296). A port of a member's signature that no tree and no network certifier row holds gets `reads[p] = ("frame", frame(...), ...)` (963). `tree_port` (516-521) and `tree_entry` (524-526) then name its port and its entry `value("frame")`.
+- So one value names many trees: each `Frame` is under its own binding (`frame_binding(set_name, n, port, schema)`, 423-429). `classHeld` on `main` refuses that at the second member ("read the registered value … as two").
+- With value = the port's name, each is its own value, and the rule below reads it as a root's port.
+- Not checked by me: which ports of which templates get it. Network's list (every member's public `o0`, `last`'s `o1`, each block member's `x`) is [relayed]; I did not run the scan.
+
+**PRF-586's rule as a Lean statement**, ahead of 22:00Z
+- Branch `cursor/proofs-members-named-5c1a` at `13859229d9ba`: one commit on the lever's head, one new file `Spot/MembersNamed.lean` (67 lines). It compiles [run `r20261112-130652-3eee`].
+- It is a statement only. No check reads it and no theorem is stated yet.
+
+```lean
+def Named (rec : Json) (q : Flock.Registered.Port) : Prop :=
+  ((rootAt? rec q.value).isSome ∨ (entryAt? rec q.value).isSome) ∧
+    (∀ r, rootAt? rec q.value = some r → AtRoot q r) ∧ ∀ e, entryAt? rec q.value = some e → AtEntry q e
+
+def Member.PortsNamed (m : Member) (rec : Json) : Prop :=
+  ∀ j, m.own.registered = some j → ∃ own, Flock.Registered.ofJson j = .ok own ∧ ∀ q ∈ own, Named rec q
+```
+
+- `rootAt?` is the record's root at a port (`Record.byPort`). `entryAt?` is the record's last `registered` entry of a value, the one `Record.registeredRoots` reads.
+- `AtRoot`: the root's root, leaves and domain. `AtEntry`: the entry's root, leaves, row width where the port names one, leaf width and domain (what `entryDiff?` compares on `01d759cdbb4d`).
+- The theorem PRF-586's code owes [derived]: `membersRun p ms c e sts bs = .ok r → ∀ m ∈ ms, m.PortsNamed c.record`. Every member, sampled or not; it reads the parameters and the record only.
+- What it does not say, each in the file's docstrings:
+  - a root no port names: the registration's digest fixes it, no session opens it, nothing is said of its leaves;
+  - which leaf a unit reads: a port's reads are the parameters';
+  - a row width at a root: a root names none, so it stays the port's, bound by the opening;
+  - a leaf schema: a root or an entry names none. Only `classHeld` compares it, between two members' ports of one value.
+- One choice to confirm: where a value is both a root's port and a `registered` value, the port must be both trees. Say if such a record should be refused instead.
+- WINDOW can read it from that branch. I have told no one.
+
+**Needs your ruling:** nothing new. The one choice above can wait for PRF-586's code.
+
+**Next:** `e3ca` and `80e5`; then the merge of `main`, both merge-trees and PRF-585's pull request, unmarked.
