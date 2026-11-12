@@ -1119,6 +1119,29 @@ def test_the_agreement_reads_the_verifier_package_not_the_proof_packages_nested_
     assert CHECK.agreement_closure(nested) == nested
 
 
+def test_a_doc_edit_keeps_the_agreements_key_and_a_script_or_source_edit_moves_it(tmp_path, monkeypatch):
+    """Neither Lake nor a script of the agreement reads Markdown (`test_the_agreement_is_not_required_for_docs_alone` holds
+    the scripts to it), so `agreement_key` leaves it out: a README edit keeps the stored pass, which a recorded check then
+    reuses, while an edit to a script or to the verifier's Lean moves the key."""
+    agree, lean = "verity/protocols/flock/agreement/", "verity/protocols/flock/verifier/"
+    files = {agree + "README.md": "# the job\n", agree + "ci.py": "x = 1\n", lean + "lakefile.toml": "",
+             lean + "README.md": "# the verifier\n", lean + "PROTOCOL.md": "# its wire\n", lean + "Flock.lean": "def a := 1\n"}
+    for f, text in files.items():
+        (tmp_path / f).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / f).write_text(text)
+    monkeypatch.setattr(CHECK, "ROOT", tmp_path)
+    monkeypatch.setattr(CHECK, "tracked_files", lambda *_: sorted(files))
+    assert CHECK.agreement_closure(sorted(files)) == [agree + "ci.py", lean + "Flock.lean", lean + "lakefile.toml"]
+    key = CHECK.agreement_key({})
+    for doc in (agree + "README.md", lean + "README.md", lean + "PROTOCOL.md"):
+        (tmp_path / doc).write_text("# rewritten\n")
+        assert CHECK.agreement_key({}) == key, f"{doc}: a doc edit keeps the agreement's pass"
+    for code in (agree + "ci.py", lean + "Flock.lean"):
+        (tmp_path / code).write_text("changed\n")
+        assert CHECK.agreement_key({}) != key, f"{code}: what the job runs moves its key"
+        key = CHECK.agreement_key({})
+
+
 def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, monkeypatch):
     """Train E2's agreement disagreed on every session for an hour: the pinned binaries needed GLIBC_2.39 and the machine had 2.35.
     Too little memory, an older glibc than the pin names, and a binary the loader refuses each fail the step at once, by name."""
