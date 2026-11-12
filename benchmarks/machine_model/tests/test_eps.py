@@ -224,7 +224,7 @@ def test_luck_and_the_total():
     assert e.total() == pytest.approx(1 - (1 - e.skip - e.machine_eps - e.luck) * (1 - e.clock))
 
 
-def test_adapt_is_a_proof_units_term():
+def test_adapt_is_a_proof_blocks_term():
     """ε_adapt (Theorem D) sits in the first factor beside ε_skip, ε_machine and ε_luck, and is the proof block's."""
     assert set(E.adapts()) == {"segment", "whole", "whole-recompute", "per-stage"}
     assert E.adapt("segment").eps == 0.21 and E.adapt("whole").eps == 0.0035
@@ -252,7 +252,7 @@ def test_two_bit_entries_on_the_indexed_operand(tmp_path):
     two = E.eps(b2, pi, 8, operands="floor", credit="floor", table=t)
     assert one.core() > closed.core() + 0.01 and two.core() == pytest.approx(closed.core(), abs=1e-9)
     data = tmp_path / "data"
-    shutil.copytree(E.DATA, data)
+    shutil.copytree(DATA, data)
     f = data / "designs" / "dither-c.toml"
     f.write_text(f.read_text() + "\n[table]\nbits = 2\n")
     assert E.design("dither-c", data).index_bits == 2 and E.design("dither-c-peel", data).index_bits == 2
@@ -367,7 +367,7 @@ def test_a_design_reads_its_base_and_the_defaults(tmp_path):
         E.design("x", data)
     bad.write_text('base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n'
                    '[filler]\nper_word = 4\nmix = { ALU = 1 }\nroute = "uniform"\n')
-    with pytest.raises(SystemExit, match="decision 73"):
+    with pytest.raises(SystemExit, match="no design fills the uniform datapath"):
         E.design("x", data)
     head = 'base = "dither-2s"\nname = "x"\ntitle = "Dither-X"\nsummary = "x"\n[filler]\nper_word = 4\nmix = { ALU = 1 }\n'
     for luck in ("", "p = 0.854\n", "p = 1.5\nluck = \"x\"\n"):
@@ -682,7 +682,10 @@ def _worst_core_under_margin(data, pi, d, m):
     for r in near:
         small = min(pi.c[k][r] for k in pi.c if r in pi.c[k])
         hit = [k for k in pi.c if r in pi.c[k] and abs(pi.c[k][r] - small) < 1e-9]
-        scaled = lambda f: replace(pi, c={k: ({**v, r: v[r] * f} if k in hit else v) for k, v in cc.items()})
+
+        def scaled(f, r=r, hit=hit):
+            return replace(pi, c={k: ({**v, r: v[r] * f} if k in hit else v) for k, v in cc.items()})
+
         f = (1 - m) if core(scaled(1 - m)) >= core(scaled(1 + m)) else (1 + m)
         for k in hit:
             cc[k][r] *= f
@@ -745,19 +748,19 @@ def test_cli_device(capsys):
 QPIN = "VF3q-16"                   # the per-form numbers below were read on it (its JI3q rows)
 QPI = E.machine(QPIN)
 FORMS = E.forms()
-I = next(f for f in FORMS if f.kind == "IMMA16832")
+IMMA_FORM = next(f for f in FORMS if f.kind == "IMMA16832")
 DESIGNS = ("dither-duo", "dither-two-sided", "dither-two-sided-pv", "co-dither", "co-dither-pv")
 
 
 def test_the_form_table():
     """data/forms.toml: tensor_kinds' 19 native forms as the census's 14 per-form kinds, each with its word yield."""
-    t = tomllib.loads((E.DATA / "forms.toml").read_text())
+    t = tomllib.loads((DATA / "forms.toml").read_text())
     assert sum(len(v["ptx"]) for v in t.values() if isinstance(v, dict)) == 19
     c = census(model(), vector(QPIN).epoch)
     assert {f.kind for f in FORMS} == {k for k in c if k != "MMA" and "MMA" in k}
     assert all(set(c[f.kind]) >= {r for r in c["MMA"] if r.startswith("JI3q")} for f in FORMS)
     by = {f.kind: f for f in FORMS}
-    assert (I.words, I.depth, I.split, I.per_word(32)) == (128, 32, 1, 1 / 128)
+    assert (IMMA_FORM.words, IMMA_FORM.depth, IMMA_FORM.split, IMMA_FORM.per_word(32)) == (128, 32, 1, 1 / 128)
     assert by["IMMA8816"].words == 64 and by["IMMASP16864"].depth == 32 and by["IMMASP16832"].depth == 16
     assert by["HMMA16816F16"].depth == 4 and by["QMMA16832"].depth == pytest.approx(32 / 3)
     assert by["OMMASF16864"].depth == pytest.approx(64 / 3) and all(f.split >= 1 and f.exact for f in FORMS)
@@ -776,7 +779,7 @@ def test_honest_is_credited_at_its_own_form():
     s = E.setup(E.design("dither-two-sided"), QPI, operands="floor", credit="floor")
     assert s.baseline.T * 128 == pytest.approx(19.183, abs=1e-3) and s.baseline.binding == ("JI3q_10",)
     assert s.baseline.forms == {"IMMA16832": 1.0} and "MMA" not in s.baseline.n
-    assert s.forms == (I,)   # every other form `undominated` drops
+    assert s.forms == (IMMA_FORM,)   # every other form `undominated` drops
 
 
 def test_t1_every_form_is_dominated():
@@ -786,13 +789,13 @@ def test_t1_every_form_is_dominated():
     OMMASF16864 below split 2."""
     tie = {}
     for f in FORMS:
-        ratio = {r: QPI.c[f.kind][r] * f.per_word(32) / (QPI.c[I.kind][r] * I.per_word(32))
-                 for r, v in QPI.c[I.kind].items() if v}
+        ratio = {r: QPI.c[f.kind][r] * f.per_word(32) / (QPI.c[IMMA_FORM.kind][r] * IMMA_FORM.per_word(32))
+                 for r, v in QPI.c[IMMA_FORM.kind].items() if v}
         assert min(ratio.values()) >= 1 - 1e-12, f.kind
         tie[f.kind] = f.split / min(ratio.values())
     assert tie["QMMA16832"] == pytest.approx(1.0083, abs=1e-4) and tie["OMMASF16864"] == pytest.approx(2)
     assert max(v for k, v in tie.items() if k not in ("IMMA16832", "IMMASP16864", "QMMA16832", "OMMASF16864")) <= 1 + 1e-9
-    assert E.undominated(list(FORMS), QPI) == (I,)
+    assert E.undominated(list(FORMS), QPI) == (IMMA_FORM,)
     for n in DESIGNS:
         for operands, credit in (("floor", "floor"), ("honest", "H")):
             s = E.setup(E.design(n), QPI, operands=operands, credit=credit)
@@ -864,7 +867,10 @@ def test_a_filler_mix():
     two IMADs row I."""
     assert E.lane_fill(1.0, {"IMAD": 1.0}).mix == {"IMAD": 1.0} and E.lane_fill(1.0).mix == {"ALU": 1.0, "IMAD": 1.0}
     d = E.design("dither-c-peel")
-    bind = lambda x, mix: E.setup(d.with_fill(x, mix), RPI, operands="floor", credit="floor").baseline.binding
+
+    def bind(x, mix):
+        return E.setup(d.with_fill(x, mix), RPI, operands="floor", credit="floor").baseline.binding
+
     assert bind(1.0, {"ALU": 1.0}) == ("A",) and bind(1.0, {"IMAD": 1.0}) == ("JI3s_0",)
     assert bind(2.0, {"IMAD": 1.0}) == ("I",) and bind(2.0, {"IMAD": 2.0, "ALU": 1.0}) == ("JI3s_0",)
 
