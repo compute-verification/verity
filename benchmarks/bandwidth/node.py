@@ -1,6 +1,6 @@
 """What a node reports of itself, for its node file (`verity/hardware/nodes/`): the interfaces that carry traffic off
-it, with their line rates, and what each NVIDIA card's firmware says it gives a program. One Attempt on the node (cwd =
-the source tree), which writes nothing to a device:
+it, with their line rates, the interface each disk is behind, and what each NVIDIA card's firmware says it gives a
+program. One Attempt on the node (cwd = the source tree), which writes nothing to a device:
 
     research run --on NODE --project verity --source . --cwd source -- \
       bash -c 'python3 benchmarks/bandwidth/node.py --out "$OUT"'
@@ -12,6 +12,14 @@ the node (`leaves`) when it is a device's (`/sys/class/net/IF/device` exists: th
 tunnel are the node's own software and have none) and a route of the main table, of either family, names it: such a
 route sends packets out of the node through it, and an interface no route names carries none. `net.json` holds no
 address.
+
+**Disks** (`disks.json`, and `lsblk`'s own text in `disks.txt`). For every block device under `/sys/block` that is a
+device's (a loop device, a ramdisk and a mapper's volume are the node's own software and have none): its bytes, its
+block sizes, its driver and bus, the model and transport it reports, and the PCI Express link of the PCI device it
+is behind, as that device reports it (`max_link_speed`, `max_link_width`, and the current ones). A drive of the
+node's own is behind its own link, whose lanes at their rate bound its read. A `virtio_blk` device is a disk the
+hypervisor gives the guest: no interface of the disk is behind it, and a link its PCI device reports is the
+hypervisor's emulation.
 
 **Registers** (`regs.json`, with `nvidia-smi -q` in `nvidia-smi.txt`). Over each NVIDIA card's BAR0, mapped read-only
 (`/sys/bus/pci/devices/BDF/resource0`, which only root may map: without it the script asks `sudo -n` and, refused,
@@ -30,7 +38,7 @@ records the refusal), at the addresses NVIDIA's open kernel modules give at the 
   (`pascal/gp102/dev_fb.h`), which the driver reads up to GA100 (`kmemsysReadUsableFbSize_GP102`).
 
 `--regs must` exits 3 unless every card was read; the default records a refusal and goes on. Outputs under `--out`,
-the run's `$OUT`: `net.txt`, `net.json`, `regs.json`, `nvidia-smi.txt`.
+the run's `$OUT`: `net.txt`, `net.json`, `disks.txt`, `disks.json`, `regs.json`, `nvidia-smi.txt`.
 """
 
 from __future__ import annotations
@@ -121,6 +129,34 @@ def interfaces() -> tuple[dict, str]:
     for port in sorted(Path("/sys/class/infiniband").glob("*/ports/*")):
         ports[f"{port.parent.parent.name}/{port.name}"] = {k: read(port / k) for k in ("rate", "state", "link_layer")}
     return {"interfaces": rows, "infiniband": ports}, "\n".join(text)
+
+
+LINK = ("max_link_speed", "max_link_width", "current_link_speed", "current_link_width")
+
+
+def disks() -> tuple[dict, str]:
+    """Each disk's own report of what it is behind, with `lsblk`'s text."""
+    columns = "NAME,TYPE,SIZE,TRAN,VENDOR,MODEL,SERIAL,ROTA,SUBSYSTEMS"
+    rows = {}
+    for path in sorted(Path("/sys/block").iterdir()):
+        device = path / "device"
+        if not device.exists():
+            continue
+        real = device.resolve()
+        pci = next((d for d in (real, *real.parents) if (d / "max_link_speed").exists()), None)
+        row = {
+            "bytes": 512 * int((path / "size").read_text()),
+            "logical_block": read(path / "queue" / "logical_block_size"),
+            "physical_block": read(path / "queue" / "physical_block_size"),
+            "rotational": read(path / "queue" / "rotational"),
+            "driver": (device / "driver").resolve().name if (device / "driver").exists() else None,
+            "bus": (device / "subsystem").resolve().name if (device / "subsystem").exists() else None,
+            "model": read(device / "model") if (device / "model").exists() else None,
+            "transport": read(device / "transport") if (device / "transport").exists() else None,
+            "pci": None if pci is None else {"bdf": pci.name} | {k: read(pci / k) for k in LINK},
+        }
+        rows[path.name] = row
+    return rows, f"$ lsblk -d -b -o {columns}\n" + run("lsblk", "-d", "-b", "-o", columns)
 
 
 def cards() -> list[Path]:
@@ -220,6 +256,10 @@ def main() -> int:
     leaving = {name: row for name, row in net["interfaces"].items() if row["leaves"]}
     print(json.dumps({"leaves": {n: {k: r[k] for k in ("operstate", "speed", "ethtool_speed", "driver")}
                                  for n, r in leaving.items()}, "infiniband": net["infiniband"]}))
+    found, text = disks()
+    (out / "disks.txt").write_text(text, encoding="utf-8")
+    (out / "disks.json").write_text(json.dumps(found, indent=1) + "\n", encoding="utf-8")
+    print(json.dumps({"disks": found}))
     if args.regs == "no":
         return 0
     (out / "nvidia-smi.txt").write_text(run("nvidia-smi", "-q"), encoding="utf-8")
