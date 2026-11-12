@@ -119,12 +119,14 @@ def test_the_command_line(fresh, steps, tmp_path, capsys, unit_prices) -> None:
 @pytest.mark.parametrize("step", ["f32", "bf16", "bf16-cublas"])
 def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch, request) -> None:
     """The slowdown code's capture of the same tiny step (`capture_step`, its product rows with each GEMM at its operands'
-    dtype) beside what the grader reads of the step's circuit: the same products, N, O and token dims at every (phase, op,
-    dims), and the same operand widths but at the bf16 steps' attention products, which the circuit wires at the 32 bits
-    torch's math path computes them in and the trace takes at the 16 bits their operands were passed at. On sm_120, priced at
-    the tensor-core dot alone (`dot_alone`), the linears' |C| is the trace's (its gates a bf16 MAC that dot's over 16) times
-    their routes' factor (`route_factor`: the zeros grid.z slices pad their residue tiles with are dots the trace doesn't
-    count)."""
+    dtype) beside what the grader reads of the step's circuit: the same products, N and token dims at every (phase, op,
+    dims), and at the f32 step the same O and operand widths too. At the bf16 steps the two differ at attention's products
+    (`bmm`) and at no other row. The circuit wires them at 32 bits, operands and outputs, as torch's math path computes
+    them from upcast operands. The trace takes them at 16: its capture runs the math path in its operands' dtype
+    (`capture.trace._math_attention`), so each output is at the bf16 Definition's 16 bits. There the widths differ, the
+    circuit's O is twice the trace's, and the totals' O differ by exactly that. On sm_120, priced at the tensor-core dot
+    alone (`dot_alone`), the linears' |C| is the trace's (its gates a bf16 MAC that dot's over 16) times their routes'
+    factor (`route_factor`: the zeros grid.z slices pad their residue tiles with are dots the trace doesn't count)."""
     dtype, cc = {"f32": (None, None), "bf16": (torch.bfloat16, None), "bf16-cublas": (torch.bfloat16, CC)}[step]
     directory, _, commit = SLOWDOWN_CODE.rpartition("@")
     code = G.load_slowdown_code(Path(directory), commit)
@@ -141,8 +143,15 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
     h = G.load_handover(s.path)
     out = G.read(h, code)
     a = G.against(out, code.products.rows(g), code)
-    assert a["agree"] == {"count": True, "N": True, "O": True, "widths": dtype is None, "token_dims": True}, a["rows"]
-    assert all(a["totals"]["circuit"][x] == a["totals"]["trace"][x] for x in ("count", "N", "O"))
+    same = dtype is None
+    assert a["agree"] == {"count": True, "N": True, "O": same, "widths": same, "token_dims": True}, a["rows"]
+    attention = [r for r in a["rows"] if r["op"] == "bmm"]
+    apart = [r for r in a["rows"] if r["circuit"]["O"] != r["trace"]["O"]]
+    assert attention and apart == ([] if same else attention), apart
+    assert all(r["circuit"]["O"] == 2 * r["trace"]["O"] and r["circuit"]["widths"] != r["trace"]["widths"] for r in apart)
+    totals = a["totals"]
+    assert all(totals["circuit"][x] == totals["trace"][x] for x in ("count", "N"))
+    assert totals["circuit"]["O"] - totals["trace"]["O"] == sum(r["trace"]["O"] for r in apart)
     if cc:
         factor = route_factor(k16_steps(h), out["products"])
         assert a["C"]["mm"]["trace"] > 0 and a["C"]["mm"]["ratio"] == pytest.approx(factor), a["C"]
