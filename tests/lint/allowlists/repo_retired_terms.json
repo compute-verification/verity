@@ -3184,7 +3184,7 @@
     {"file": "benchmarks/pouw/served_zk/replay_window.py", "count": 5},
     {"file": "benchmarks/pouw/served_zk/served_commit.py", "count": 145},
     {"file": "benchmarks/pouw/settings.py", "count": 3},
-    {"file": "benchmarks/pouw/tests/test_budget.py", "count": 6},
+    {"file": "benchmarks/pouw/tests/test_budget.py", "count": 3},
     {"file": "benchmarks/pouw/tests/test_compact_stage.py", "count": 1},
     {"file": "benchmarks/pouw/tests/test_h1_prove_live.py", "count": 15},
     {"file": "benchmarks/pouw/tests/test_hidden_zk_summarize.py", "count": 2},
