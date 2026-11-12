@@ -17,10 +17,13 @@ both:
   the model's linears), under one `β_x` with its own best threshold.
 
 Every row is scaled: the blocks are a fleet's at its data sheet's rate (`policy.fleet_periods`), and a node's bound on
-its untied words is one execution phase's, scaled by the blocks the node serves in a phase.
+its untied words is one execution phase's, scaled by the blocks the node serves in a phase. That bound doesn't grow
+with the period, so the figure does: each fleet's one execution phase, where a block's untied words are the most, is
+priced first, beside its periods.
 """
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import policy as P
@@ -28,6 +31,8 @@ from rho import min_cut
 
 #: the fourth reading's name: `Charged.reading` at the `k` that holds the uncredited words, and this
 IN_K = "the uncredited words as fresh input"
+#: the span that is one execution phase, beside the monitoring periods
+PHASE = "execution phase"
 
 
 def output_words(p: P.Policy, sh: P.Shape) -> int:
@@ -35,9 +40,21 @@ def output_words(p: P.Policy, sh: P.Shape) -> int:
     return P.class_of(p.cls).positions * sh.layers * sum(n for _, n, _ in sh.linears)
 
 
+def spans(t: P.Tied, work: float) -> Iterator[dict[str, Any]]:
+    """`policy.fleet_periods`' rows, each fleet's one execution phase before its monitoring periods."""
+    seen = set()
+    for r in P.fleet_periods(work):
+        if r["where"] not in seen:
+            seen.add(r["where"])
+            yield {**r, "period": PHASE, "seconds": t.phase_seconds,
+                   "blocks": r["blocks"] * t.phase_seconds / r["seconds"]}
+        yield r
+
+
 def priced(t: P.Tied, sh: P.Shape, s: float) -> dict[str, Any]:
-    """The tied policy's figures at the uncredited share ``s``: one block's, then each of the calculator's fleets and
-    monitoring periods under each reading, every figure with its limit at ``s`` and the pooled total in gates."""
+    """The tied policy's figures at the uncredited share ``s``: one block's, then each of the calculator's fleets over
+    one execution phase and over each monitoring period under each reading, every figure with its limit at ``s`` and
+    the pooled total in gates."""
     p, N = t.policy, t.policy.work[P.TOTAL]
     work = {"N": N, "O": N * sh.outputs * min_cut.BF16 / sh.macs, "size": p.c}
     most, fan_in = output_words(p, sh), min(k for _, _, k in sh.linears)
@@ -45,7 +62,7 @@ def priced(t: P.Tied, sh: P.Shape, s: float) -> dict[str, Any]:
     k_words = p.k + t.word_bits * words
     one, with_words = min_cut.bound(p.c, p.k, p.n, **work), min_cut.bound(p.c, k_words, p.n, **work)
     rows = []
-    for r in P.fleet_periods(N):
+    for r in spans(t, N):
         untied = t.untied(r["blocks"], r["seconds"])
         terms = {"blocks": r["blocks"], "untied": untied, "untied_macs": t.macs_a_word * untied, "most": most,
                  "word": t.word_bits, **work}

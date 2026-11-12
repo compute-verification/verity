@@ -194,7 +194,8 @@ def _table(head: Sequence[str], rows: Sequence[Sequence[str]], left: int, indent
 
 def tied_lines(d: dict[str, Any], file: str) -> list[str]:
     """The tied policy's section (`tied.priced`): the label, what the policy and its work are, the untied words and the
-    uncredited share, one block's figures, and each fleet and monitoring period under each reading."""
+    uncredited share, one block's figures, and each fleet's execution phase and monitoring periods under each
+    reading."""
     u, un, block = d["uncredited"], d["untied"], d["block"]
     s, N, k = u["share"], d["work"]["N"], d["k"]
     width = max(len(f"{x['bits']:,}") for x in d["k_by_kind"])
@@ -219,7 +220,7 @@ def tied_lines(d: dict[str, Any], file: str) -> list[str]:
         f"  uncredited  s N = {_n(round(u['macs_a_block']))} MACs a block, which feed at most {_n(round(u['words_a_block']))} "
         f"output words of the linears, a word being fed by at least {u['least_fan_in']:,} MACs (the least fan-in): with "
         f"those words as fresh input a block reads k + {un['word_bits']} × {_n(round(u['words_a_block']))} = "
-        f"{_n(round(u['k_with_words']))} bits",
+        f"{_n(round(u['k_with_words']))} bits, and every limit at s charges the share's MACs whole",
         "",
         "  One block (min_cut.bound), each number with its limit at s, 1 / (s + 1 / number) (min_cut.capped): a "
         "developer gets the uncredited share whole",
@@ -227,17 +228,17 @@ def tied_lines(d: dict[str, Any], file: str) -> list[str]:
         f"    {T.IN_K}, k = {_n(round(words['k']))}: number {words['number']:,.1f}, limit at s "
         f"{words['limit']:,.1f}",
         "",
-        "  Over a monitoring period, all of a fleet's compute in the policy's blocks at capacity (min_cut.bound_charged; "
-        "the slowdown calculator's fleets and periods)",
+        "  Over one execution phase and over a monitoring period, all of a fleet's compute in the policy's blocks at "
+        "capacity (min_cut.bound_charged; the slowdown calculator's fleets and periods). A node's bound on its untied "
+        "words doesn't grow with the period, so one phase's figure is the weakest, and is not a period's",
     ]
     seen = {(r["where"], r["period"]): r for r in d["periods"]}
-    out += _table(("where", "period", "blocks", "the blocks' gates", "untied words at most", "a block"),
+    out += _table(("where", "over one", "blocks", "the blocks' gates", "untied words at most", "a block"),
                   [(r["where"], r["period"], _g(r["blocks"]), _g(r["gates"]["blocks"]), _g(r["untied"]),
                     _g(r["untied_a_block"])) for r in seen.values()], 2, "    ")
     out += ["", f"  Each figure under its reading's name, which holds its threshold, with its limit at s = {_g(100 * s)}% "
-            "and the pooled total in gates (the gates c counts): the training the period's blocks hold at most, at the "
-            "limit"]
-    out += _table(("where", "period", "reading", "blocks charged at most", "number", "limit at s",
+            "and the pooled total in gates (the gates c counts): the training the blocks hold at most, at the limit"]
+    out += _table(("where", "over one", "reading", "blocks charged at most", "number", "limit at s",
                    "training's gates at most", "of the blocks' gates"),
                   [(r["where"], r["period"], r["reading"], _g(r["charged"]), f"{r['number']:,.1f}",
                     f"{r['limit']:,.1f}", _g(r["gates"]["training_at_the_limit"]), _g(100 * r["share"]) + "%")

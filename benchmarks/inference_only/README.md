@@ -55,11 +55,11 @@ A policy is `(c, k, n)`: blocks of at most `c` Boolean gates, each reading at mo
 them. `c` counts two-input Boolean gates, as the Lean count counts a block Definition's by the gate table; the
 integration's `inference_blocks.budgets` also calls a number c, the block's gates at their widths, which is not this
 one. The number is `min_cut.bound`'s slowdown on one block: `max(1, N / limit)`, where `N` is the block's own work in
-MACs and `limit` is the most training work the count lets one block of the policy finish (`Bound.macs_a_block`). The benchmark
-passes the bound `N`, the output wires `O = N × o × b` (`o` the output values a MAC of the model's own forward matmuls,
-`b` a BF16 value's 16 wires) and the circuit's size `c`. With the circuit's size `c`, `c` cancels: the number is the blocks the count needs for one
-block's work. A number of 1 says the bound shows no slowdown: one block's `k` lets it hold all of its own work as
-training.
+MACs and `limit` is the most training work the count lets one block of the policy finish (`Bound.macs_a_block`). The
+benchmark passes the bound `N`, the output wires `O = N × o × b` (`o` the output values a MAC of the model's own forward
+matmuls, `b` a BF16 value's 16 wires) and the circuit's size `c`. With the circuit's size `c`, `c` cancels: the number
+is the blocks the count needs for one block's work. A number of 1 says the bound shows no slowdown: one block's `k` lets
+it hold all of its own work as training.
 
 The served class leaves the layers' linears outside the circuit, so a block reads their outputs as fresh input and its
 `k` is large; the class with the linears inside reads only its scan state row. `k` is the lever.
@@ -88,13 +88,14 @@ serves it and this tree builds no circuit of it. Its number with every word tied
   `u` the most words the share's MACs feed (a word of a linear's output is fed by at least the least fan-in of the
   model's linears).
 
-It prints one block, then one week, one month and one year on one datacenter and on the world's compute: the blocks,
-their gates and the untied words; then under each reading the blocks charged at most, the number, its limit at
-`s`, and the training the period's blocks hold at most at that limit, in gates (the gates `c` counts) and as a share
-of the blocks' gates. Three lines say what is proved (each count's statement with the standing the locks give it,
-`rho.lean.status`; a `β_x` a block is no Lean statement, and no limit is proved, being arithmetic on the typed share),
-what is a premise (the share, the tie, the bound on the untied words, (H) and (E)), and what is scaled (every row).
-`--policy tied.toml` is refused: it would print the number alone.
+It prints one block, then one execution phase, one week, one month and one year on one datacenter and on the world's
+compute: the blocks, their gates and the untied words; then under each reading the blocks charged at most, the number,
+its limit at `s`, and the training the blocks hold at most at that limit, in gates (the gates `c` counts) and as a share
+of the blocks' gates. A node's bound on its untied words doesn't grow with the period, so one phase's figure is the
+weakest, and is printed beside the periods', which are the result. Three lines say what is proved (each count's
+statement with the standing the locks give it, `rho.lean.status`; a `β_x` a block is no Lean statement, and no limit is
+proved, being arithmetic on the typed share), what is a premise (the share, the tie, the bound on the untied words, (H)
+and (E)), and what is scaled (every row). `--policy tied.toml` is refused: it would print the number alone.
 
 ## What it does not mean
 
@@ -124,8 +125,8 @@ outputs that a block reads as fresh input; and optionally `[fresh]`, what else a
 what it is and its value the bits. The tests hold `served.toml`'s work and its `k` by kind to what the tree
 computes for its class; its `c` is held to nothing here, and the number does not read it.
 
-`tied.toml` has the same keys, with no `[outside]` and the salt under `[fresh]`, and one table more, `[untied]`: `words`,
-a node's bound on the untied words of its accepted execution phases for a phase of `blocks` blocks; `phase_seconds`;
-`macs_a_word`, the MACs that feed one untied word at most; and `word_bits`, its fresh bits in the block that reads it.
-The tests hold its `c`, `n` and work to the served policy's and its `k` to the scan state row and the salt. The
-uncredited share is never in a file: it is the command line's.
+`tied.toml` has the same keys, with no `[outside]` and the salt under `[fresh]`, and one table more, `[untied]`:
+`words`, a node's bound on the untied words of its accepted execution phases for a phase of `blocks` blocks;
+`phase_seconds`; `macs_a_word`, the MACs that feed one untied word at most; and `word_bits`, its fresh bits in the block
+that reads it. The tests hold its `c`, `n` and work to the served policy's and its `k` to the scan state row and the
+salt. The uncredited share is never in a file: it is the command line's.

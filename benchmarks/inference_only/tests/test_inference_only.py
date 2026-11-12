@@ -202,11 +202,13 @@ def test_a_class_the_integration_refuses_is_an_error_that_says_why(monkeypatch, 
     assert "the integration lowers no circuit of class 2,8,2" in err and "a template the composer wouldn't prove" in err
 
 
-#: the execution phases of a week, a month of 30 days and a year of 365, at the tied policy's 600 s a phase
-PHASES = {"week": 1_008, "month": 4_320, "year": 52_560}
-#: the tied class's figures at a fleet's rate, by period: one β_x with the best threshold, one β_x at the top budget
-#: with no block charged, and a β_x a block, as the calculator's own test holds `bound_charged` to them
-FLEET = {"week": (1_614.1, 52.8, 53.2), "month": (4_787.8, 202.2, 209.6), "year": (20_422.0, 1_336.6, 1_844.3)}
+#: the execution phases of one phase, a week, a month of 30 days and a year of 365, at the tied policy's 600 s a phase
+PHASES = {T.PHASE: 1, "week": 1_008, "month": 4_320, "year": 52_560}
+#: the tied class's figures at a fleet's rate, by span: one β_x with the best threshold, one β_x at the top budget
+#: with no block charged, and a β_x a block. The periods' are what the calculator's own test holds `bound_charged` to;
+#: one phase's, where a block has the most untied words, is the weakest
+FLEET = {T.PHASE: (2.05, 1.0, 1.0), "week": (1_614.1, 52.8, 53.2), "month": (4_787.8, 202.2, 209.6),
+         "year": (20_422.0, 1_336.6, 1_844.3)}
 
 
 def test_the_tied_file_is_the_served_class_reading_its_scan_state_row_and_a_salt(tmp_path) -> None:
@@ -263,10 +265,10 @@ def test_a_share_is_a_number_from_zero_to_one_or_a_percentage(text, capsys) -> N
 def test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_limit(capsys) -> None:
     """The command at a typed share. The served policy's 1 is still first and still the JSON's value. The tied section
     opens with its label, says the share was typed and which work the figures are for, and prints each of the
-    calculator's fleets and periods under four readings, each row the function's own figure at the inputs the file
-    states (`min_cut.bound_charged`, recomputed here), its limit at the share (`min_cut.capped`) and the pooled total
-    in gates at that limit. No number of the tied policy is printed without its limit. The fourth reading counts the uncredited words
-    as fresh input, so it is never above the first."""
+    calculator's fleets over one execution phase and over each period under four readings, each row the function's own
+    figure at the inputs the file states (`min_cut.bound_charged`, recomputed here), its limit at the share
+    (`min_cut.capped`) and the pooled total in gates at that limit. No number of the tied policy is printed without
+    its limit. The fourth reading counts the uncredited words as fresh input, so it is never above the first."""
     s = 0.002315
     doc = report.main(["--stated-only", "--uncredited-share", "0.2315%"], commit=lambda: None)
     out = capsys.readouterr().out
@@ -296,7 +298,10 @@ def test_a_typed_share_prints_the_tied_figures_under_their_label_each_with_its_l
     assert k_words == pytest.approx(146_080 + 32 * words)
     assert tied["block"]["with_words"]["number"] == min_cut.bound(p.c, k_words, **work).slowdown < one
     rows = tied["periods"]
-    assert len(rows) == 2 * 3 * 4 and {r["where"] for r in rows} == {"one datacenter", "the world"}
+    assert len(rows) == 2 * 4 * 4 and {r["where"] for r in rows} == {"one datacenter", "the world"}
+    assert [r["period"] for r in rows[:16:4]] == [T.PHASE, "week", "month", "year"]
+    # a fleet's phase is its week's blocks over the week's phases, and its untied words are the week's
+    assert rows[0]["blocks"] == pytest.approx(rows[4]["blocks"] / 1_008) and rows[0]["untied"] == pytest.approx(rows[4]["untied"])
     for i in range(0, len(rows), 4):
         best, top, each, in_k = rows[i:i + 4]
         blocks, phases = best["blocks"], PHASES[best["period"]]
