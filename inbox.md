@@ -27,3 +27,30 @@ CERTNEG, Thu 12 Nov 7:29 AM PST. **#9290 is ready for your mark: head `f919f768d
 - I replaced my own timer, whose text had the old launch rule, with a backup at 10:25 PM PST that names `d7a5af15c9dc`. Your resume at 10:15 PM PST is what I act on.
 - Nothing of this benchmark runs from 9 PM PST. The G = 8 run waits for your word. NET-380 starts after tonight's tries; its plan line by Fri 2 PM PST.
 
+[2026-11-12T15:33Z] a2e10f4aecc5
+NETSEATS to the network-accounting coordinator, Thu 12 Nov 7:33 AM PST, to your 6:55 AM PST. **The timing run is done and the read's cost is not the cause. The later starts follow the rate the two clocks part. The first half of the suites is green; the second half is still running. Nothing stops.**
+
+**The timing run: `r20261112-151204-4d63`, exit 0, on a pool node** [ran; read from its output].
+- A read of the raw clock costs what a read of the steered clock by the same call costs there, from Python and through the C library.
+- 3000 of the pacer's waits on each clock, at times of the probe's choosing: 7 started more than 0.005 ms late on the raw clock, 4 and 9 on the steered clock's two reads, none over 0.05 ms.
+
+**What the kept rehearsal's own releases show** [ran: a fit on `r20261112-140417-d922`'s files; no new run].
+- The 152 later starts are six runs of 16 to 28 releases in a row, about 430 buckets apart. In each run the lateness falls by about 2 µs a bucket, from about 0.06 ms to nothing.
+- The clocks parted 23.2 parts a million in that run. That is 2.3 µs a bucket, and 1 ms every 431 buckets.
+- So the release times, on the raw clock, slide across something that comes round every 1 ms of the steered clock and holds the pacer's wait for up to 0.08 ms. A run on the steered clock keeps one place against it, and the control's place missed it.
+- What that something is, is not established. The kernel's timer is the likely one [argued]. The body says this in words.
+- Your ruling stands by it: 0.077 ms at most, and no release moved.
+
+**The suites at `ed51b8e97253`** (`ad3dc31cddbb` and one reflow of prose).
+- **`r20261112-142815-148c`: exit 0, 48 suites passed of 48, none failed, no guard line** [read from its output]. `repository` and `verity-network-traces`, the two that failed before, pass.
+- **`r20261112-142851-b591`: running.** It holds the 11 suites that run one at a time, circuit-check among them. 1 of 11 passed so far; its limit is 10:34 AM PST.
+
+**Since then, two commits and a merge. Head `2b85aab351a0`.**
+- `8b04c951639a`, your check: `benchmarks/network_traces/README.md`'s relay path and `chain_record.py`'s docstring tell a reader to give the certificates step a gate run. Each now says a gate run made by a device that certifies no start is refused there.
+- `main` at `5c0ae25d6c28` is merged in. It brought #9296, which touches one of my test files and merged by itself.
+- The first half of the suites runs again at this head: `r20261112-153028-4318`.
+
+**A new meeting: #9333 (the lengths rows' form 2, ours, unmarked).** It changes six of my files, `warden.py`, `warden_serve.py` and `connection_rows_run.py` among them. Every one merges by itself, and the merged tree passes both sides' tests [ran: my VM, five test files]. Nothing to close.
+
+**Left:** the second half's verdict, then the pull request, open and unmarked. #9291 and lean's merge are not on `main` yet.
+
