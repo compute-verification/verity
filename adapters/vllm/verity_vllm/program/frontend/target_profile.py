@@ -527,7 +527,9 @@ class TargetProfile:
     def tuned_gemm_arch_family(self) -> str | None:
         """vLLM's tuned-GEMM arch family for the declared capability (`gemm_targets.vllm_tuned_gemm_arch_family`: vLLM's own function
         when importable, else its pinned rule). Selects vLLM's tuned table — and therefore the launch geometry — on the target."""
-        from verity_vllm.program.frontend.gemm_targets import vllm_tuned_gemm_arch_family  # lazy: keeps this module light
+        from verity_vllm.program.frontend.gemm_targets import (
+            vllm_tuned_gemm_arch_family,  # lazy: keeps this module light
+        )
         return vllm_tuned_gemm_arch_family(self.compute_capability)
 
     def gemm_target(self, arch_family: Any = ...) -> GemmTarget:

@@ -469,7 +469,6 @@
     {"file": "verity_vllm/program/frontend/seed_rule.circuit-check.py", "kind": "I001", "symbol": "_model_roots", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/frontend/seed_rule.circuit-check.py", "kind": "UP035", "symbol": "<module>", "detail": "Import from `collections.abc` instead: `Callable`"},
     {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
-    {"file": "verity_vllm/program/frontend/target_profile.py", "kind": "I001", "symbol": "TargetProfile.tuned_gemm_arch_family", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "B023", "symbol": "capture", "detail": "Function definition does not bind loop variable `bias`"},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "B023", "symbol": "capture", "detail": "Function definition does not bind loop variable `w`"},
     {"file": "verity_vllm/program/gemm_target_correspondence.py", "kind": "B023", "symbol": "capture", "detail": "Function definition does not bind loop variable `x`"},
