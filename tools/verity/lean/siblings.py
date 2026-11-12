@@ -29,26 +29,26 @@ built (`plan`) only when every `.olean` a stub loads for it is of its source as 
 it imports, directly or through others, in its package or in any package its package requires by path (`workspace`).
 Each of those has its `.olean` and the trace Lake wrote for it, that trace, or Lake where the trace can't, says the
 module is of the source as it is now (`current`), and none of them is a name some package of the workspace holds a
-product of with no source. One that isn't is listed as unchecked, with the count. An `.olean` built from a module's source names that source's imports, so the
-modules loaded are the ones the sources name, each built from its source, and no name is there twice because a product
-of another text declares it.
+product of with no source. One that isn't is listed as unchecked, with the count. An `.olean` built from a module's
+source names that source's imports, so the modules loaded are the ones the sources name, each built from its source,
+and no name is there twice because a product of another text declares it.
 
 A sibling is checked as it is built. Of a module Lake built, `plan` reads in its trace that its build is of its source
 as it is, and not that it was made against the builds of its imports that are there now, which the trace states too,
-each by Lake's own hash. A tree holds builds that weren't, since
-Lake rebuilds a module only for a target that imports it. Lean loads
-such a build, and the names its source declares are the same in it. The names Lean makes are not: a theorem it derives
-where it is first used (a definition's equation lemma, `f.eq_1`, under `simp [f]`) is in the build of every module that
-uses it, which Lean takes from all of them while they state one type, and refuses once an import changed that type under
-a module left as it was built, in the stub as in a root elaborated on those builds. So the stub's first refusal that
-names a sibling is not the verdict (`check`): the caller's `rebuild` has Lake build the siblings it names, once, with a
-line that says which of them Lake rebuilt and in how long, and the stub is elaborated once more. What that says is the
-verdict, a second refusal too. Between builds Lake holds current, FILE's own being this try's, it is one a root that
-imports both gets; of a sibling this try did not rebuild, its line says that it may be such a build as well, which a
-second try rebuilds. A rebuild that fails is the verdict, with Lake's last line. A build made against an older build of
-an import is rebuilt when a refusal names it, and not otherwise: that is this step's limit, which the full check, where
-Lake builds every module, doesn't have. Without `rebuild` nothing is rebuilt, and the line of a refusal between two
-siblings says how to.
+each by Lake's own hash. A tree holds builds that weren't, since Lake rebuilds a module only for a target that imports
+it. Lean loads such a build, and the names its source declares are the same in it. The names Lean makes are not: a
+theorem it derives where it is first used (a definition's equation lemma, `f.eq_1`, under `simp [f]`) is in the build
+of every module that uses it, which Lean takes from all of them while they state one type, and refuses once an import
+changed that type under a module left as it was built, in the stub as in a root elaborated on those builds. So the
+stub's first refusal that names a sibling is not the verdict (`check`): the caller's `rebuild` has Lake build the
+siblings it names, once, with a line that says which of them Lake rebuilt and in how long, the caller's `again` makes
+the plan once more, Lake asked again, since the rebuild changed builds the first plan read, and the stub of that plan
+is elaborated. What that says is the verdict, a second refusal too. Between builds Lake holds current, FILE's own being
+this try's, it is one a root that imports both gets; of a sibling this try did not rebuild, its line says that it may
+be such a build as well, which a second try rebuilds. A rebuild that fails is the verdict, with Lake's last line. A
+build made against an older build of an import is rebuilt when a refusal names it, and not otherwise: that is this
+step's limit, which the full check, where Lake builds every module, doesn't have. Without `rebuild` nothing is rebuilt,
+and the line of a refusal between two siblings says how to.
 
 What a trace says depends on how Lake came by the module. One it built states the hash of the source it built from
 (`built_from`), which is compared with the hash of the source as it is (`lake_hash`). That says what a modification time
@@ -57,17 +57,22 @@ same text, which Lake never rebuilds, and a product the artifact cache links is 
 Lake took rather than built has a trace that states the hash of all its inputs (`depHash`) and none of them: Lake's own
 for outputs it found in its artifact cache (`synthetic`), or `leantar`'s for a module unpacked from its `.ltar` archive.
 Either was written when Lake found the module's outputs under the hash of its inputs as they were then, its source
-among them. That one hash can't be compared with the source, and the trace's time says nothing: a source written again
-as it was is newer than every build of it. So Lake is asked (`plan`'s ``lake``): `lake build --no-build` of the modules
-that could be siblings (`WORD`) does all a build does short of compiling. It hashes each module's inputs as they are
-now, its source's text and its imports' builds among them, puts in place the outputs it holds under that hash packed
-or in its cache, and says on a line of its own which modules it then holds (`held`). A module Lake took counts on that
-line alone, and is unchecked where Lake would compile it, where Lake says nothing of it because a module it imports
-would be compiled, and where Lake isn't asked. That errs only towards unchecked: Lake's hash covers the builds of a
-module's imports, so one it took against an older build of an import is unchecked where one it built counts. Any other
-trace (one cut short, another schema's) says nothing, so its module
-is unchecked, never taken as built. A module of a fetched dependency (`.lake/packages`) is taken as built: its sources
-change only with the manifest, and its products with them.
+among them. That one hash can't be compared with the source, and no time decides for it: a source written again as it
+was is newer than every build of it, and one whose text changed can be older than a trace. So Lake is asked, once a
+plan and before any product is read (`plan`'s ``lake``), since `lake build --no-build` of the modules that could be
+siblings (`WORD`) does all a build does short of compiling: it hashes each module's inputs as they are now, its
+source's text and its imports' builds among them, compares that hash with the trace's (a time only under `--old`),
+puts in place the outputs it holds under that hash, in an archive or in its cache, and says on the line of the job
+that makes each module's `.olean`, captioned with the module's name, whether it then holds it: `Replayed`, `Reused` or
+`Unpacked` (`held`). A module Lake took counts on that word alone. It is unchecked where Lake would compile it, where
+its line has another verb (one that imports a module Lake would compile only ran), and wherever Lake's word isn't
+taken: Lake isn't asked, its exit is neither 0 nor 3, it printed a line `held` doesn't know, or, in a try's sandbox, it
+wanted to write where the sandbox refuses (`lean_changed.refused_write`). That errs only towards unchecked: Lake's hash
+covers the builds of a module's imports, so one it took against an older build of an import is unchecked where one it
+built counts. The pass writes in the tree what Lake puts in place, and a `.trace.nobuild` beside the trace of each
+module it would compile, which nothing reads. Any other trace (one cut short, another schema's) says nothing, so its
+module is unchecked, never taken as built. A module of a fetched dependency (`.lake/packages`) is taken as built: its
+sources change only with the manifest, and its products with them.
 
 It is opt-in because of what it costs: on security/Proofs' warm tree its stub imports some 3,200 modules in under 20 s
 at a peak near 8 GB, past the 1 GB a try on an agent VM has. So it runs only with `--siblings`, on Security on a node
@@ -134,6 +139,9 @@ class Plan(NamedTuple):
     #: the package's other modules that don't import FILE, each without a build of its source as it is or importing, in
     #: any package of the workspace, a module without one or a product with no source; the same modules aside
     unchecked: list[str]
+    #: what Lake's pass said, the try's line for it: how many of the modules asked about it holds, or why its word isn't
+    #: taken; empty where Lake wasn't asked
+    word: str = ""
 
 
 def source_dir(pkg: Path) -> tuple[Path, dict] | None:
@@ -283,33 +291,101 @@ def built_from(trace: Path, name: str) -> tuple[str | None, bool]:
     return (got[0] if len(got) == 1 else None), took
 
 
-#: the `lake` arguments, module targets after them, of the build that compiles nothing: all else a build does, with a
+#: the `lake` arguments, module targets after them, of the pass that compiles nothing: all else a build does, with a
 #: line for every job (`-v`) and none of a terminal's control codes
 WORD = ["build", "--no-build", "-v", "--no-ansi"]
-#: Lake's line for a job that ended without an error and without compiling: it replayed the build the tree holds, reused
-#: its cache's, or unpacked its archive. The caption is the job's, and of the job that makes a module's `.olean` it is
-#: the module's name alone
-HELD = re.compile(r"^\S+ \[\d+/\d+\] (?:\(Optional\) )?(?:Replayed|Reused|Unpacked) (\S+?)(?: \((?:\d+(?:\.\d+)?s|\d+ms)\))?$",
-                  re.M)
+#: the verbs of a job that ended without an error and without compiling, having replayed the build the tree holds,
+#: reused its artifact cache's or unpacked its archive, each found under the hash of the job's inputs as they are now
+HELD = ("Replayed", "Reused", "Unpacked")
+#: a job's line as Lake prints it with `-v` and no control codes (`reportJob` in Lake's `Build/Run.lean`): its icon (✔
+#: when no log follows), its number and the count of jobs so far, the mark of an optional job, the verb of what it did,
+#: or of what it tried where it failed, its caption, and its time
+JOB = re.compile(r"([✔ℹ⚠✖]) \[(\d+)/(\d+)\](?: \(Optional\))? (Ran|Running|Reused|Reusing|Replayed|Replaying|Unpacked|"
+                 r"Unpacking|Fetched|Fetching|Built|Building) (.+?)(?: \((?:\d+(?:\.\d)?s|\d+ms)\))?")
+#: the error `--no-build` logs on the job of a module Lake would compile, the one error a known output holds
+REBUILD = "error: target is out-of-date and needs to be rebuilt"
+#: what Lake logs while it loads the workspace, before its first job
+PREAMBLE = re.compile(r"(?:info|warning|trace): .*")
+#: Lake's last line where every job ended without an error, with the count of jobs; the line before the captions of the
+#: jobs that failed
+DONE, FAILED = re.compile(r"All targets up-to-date \((\d+) jobs?\)\."), "Some required targets logged failures:"
 
 
-def held(output: str) -> set[str]:
-    """The modules that Lake's ``output`` (`lake` with `WORD` and module targets) says it holds under the hash of their
-    inputs as they are now, their sources' texts and their imports' builds among them, each on the line of the job that
-    makes its `.olean`. A module Lake would compile has a line that says so, on which that job fails, and one that
-    imports such a module has a line with none of these words, or no line: neither is here. Nor is anything when Lake
-    says nothing this reads."""
-    return set(HELD.findall(output.replace("«", "").replace("»", "")))
+def held(rc: int, output: str, asked: list[str]) -> set[str] | str:
+    """The modules that Lake's ``output`` of `WORD` with the targets ``asked`` (module names), which ended ``rc``, says
+    it holds under the hash of their inputs as they are now: each caption that is a module's name (no space, colon or
+    slash; the other jobs of a module have a colon in theirs, and Lake's own jobs a space or a slash), with « and »
+    dropped, every line of which says `HELD`. A module Lake would compile has a line on which its job fails, and one
+    that imports such a module a line that says it ran: neither is here.
+
+    Or why the output is not taken: an exit other than 0 (every job ended without an error) or 3 (a job wanted to
+    compile), or an output other than this: Lake's log of the workspace; every job's line, numbered from 0 one by one up
+    to the count of jobs, each one whose icon is not ✔ followed by its job's log, in which no line is an error but
+    `REBUILD`, and a line for each module asked; then, ending 0, the count, of jobs none of which failed, or, ending 3,
+    the captions of the jobs that failed, at least one. A line of a log that has a job's shape breaks the numbering, or
+    is one more line of a module that has its own, so a module's log can't add to what this returns: every module whose
+    word a plan reads is one asked or one such a module imports, and has a line of its own."""
+    if rc not in (0, 3):
+        return f"its exit is {rc}, not 0 or 3"
+    lines = output.splitlines()
+
+    def unknown(line: str) -> str:
+        return f"it printed a line this doesn't read: {line[:120]!r}"
+
+    first = next((i for i, s in enumerate(lines) if JOB.fullmatch(s)), len(lines))
+    if (bad := next((s for s in lines[:first] if not PREAMBLE.fullmatch(s)), None)) is not None:
+        return unknown(bad)
+    if first == len(lines):
+        return "it printed no job's line"
+    if rc == 0:
+        if not (done := DONE.fullmatch(lines[-1])):
+            return unknown(lines[-1])
+        end, listed = len(lines) - 1, []
+    else:
+        if (end := next((i for i in range(len(lines) - 1, first - 1, -1) if lines[i] == FAILED), None)) is None:
+            return "it ended 3 with no line of the jobs that failed"
+        listed = lines[end + 1:]
+    verbs: dict[str, set[str]] = {}
+    failed: set[str] = set()
+    n, count, logs = -1, 0, False
+    for line in lines[first:end]:
+        if m := JOB.fullmatch(line):
+            icon, k, total, verb, caption = m.group(1), int(m.group(2)), int(m.group(3)), m.group(4), m.group(5)
+            if k != n + 1 or k > total or total < count:
+                return f"its jobs' lines are not numbered one by one: {line[:120]!r}"
+            n, count, logs = k, total, icon != "✔"
+            verbs.setdefault(caption, set()).add(verb)
+            if verb.endswith("ing"):
+                failed.add(caption)
+        elif not logs or (line.startswith("error:") and line != REBUILD):
+            return unknown(line)
+    if n != count:
+        return f"its last job's number is {n}, of {count} jobs"
+    if rc == 0 and (failed or int(done.group(1)) != count):
+        return unknown(lines[-1])
+    if rc == 3 and not listed:
+        return "it ended 3 and named no job that failed"
+    if (bad := next((s for s in listed if not (s.startswith("- ") and s[2:] in failed)), None)) is not None:
+        return unknown(bad)
+    mods: dict[str, set[str]] = {}
+    for c, said in verbs.items():
+        if not any(ch in c for ch in " :/"):
+            mods.setdefault(c.replace("«", "").replace("»", ""), set()).update(said)
+    if (lost := next((m for m in asked if m not in mods), None)) is not None:
+        return f"it printed no line for {lost}"
+    return {m for m, said in mods.items() if said <= set(HELD)}
 
 
-def plan(pkg: Path, rel: str, lake: Callable[[list[str]], str] | None = None) -> Plan | str:
+def plan(pkg: Path, rel: str, lake: Callable[[list[str]], tuple[int, str, float, int]] | None = None) -> Plan | str:
     """What the stub imports for FILE (``rel``, from ``pkg``), or why there is no check. A sibling is built, and so
     imported, only when every `.olean` a stub loads for it is of its source as it is (the module's docstring); the others
     are unchecked.
 
-    ``lake`` runs `lake ARGS` in ``pkg`` and returns what it printed. It is called once, with `WORD` and the modules that
-    could be siblings, before any product is read, since Lake puts in place the outputs it holds packed. A module Lake
-    took rather than built counts only where that output says Lake holds it (`held`); without ``lake`` none does."""
+    ``lake`` runs `lake ARGS` in ``pkg`` and returns its (exit status, output, seconds, peak resident memory in MB), as
+    `run` does. It is called once, with `WORD` and the modules that could be siblings, before any product is read, since
+    Lake puts in place the outputs it holds in an archive or its cache. A module Lake took rather than built counts only
+    where that output says Lake holds it (`held`); without ``lake``, or where its word isn't taken, none does. The plan's
+    `word` says which, with the pass's seconds."""
     mods, root = modules(pkg), pkg.resolve()
     path = (pkg / rel).resolve()
     if (mod := next((m for m, f in mods.items() if f == path), None)) is None:
@@ -342,7 +418,17 @@ def plan(pkg: Path, rel: str, lake: Callable[[list[str]], str] | None = None) ->
     prefixes = exempt(pkg)
     aside = (executables(pkg) | {m for m in mods if _audit().under(prefixes, m)}) - {mod}
     asked = sorted(set(mods) - above - aside)
-    holds = held(lake([*WORD, *(f"+{m}" for m in asked)])) if lake is not None and asked else set()
+    holds: set[str] = set()
+    word = ""
+    if lake is not None and asked:
+        rc, said, seconds, peak = lake([*WORD, *(f"+{m}" for m in asked)])
+        got, ran = held(rc, said, asked), f"lake {' '.join(WORD)}: exit {rc} in {seconds:.0f} s, peak {peak} MB"
+        if isinstance(got, str):
+            word = f"Lake's word isn't taken, so every build Lake took rather than made is unchecked: {got} ({ran})"
+        else:
+            holds = got
+            word = (f"Lake holds {len(got & set(asked))} of the {len(asked)} modules that could be siblings as their "
+                    f"inputs are now ({ran})")
     #: the modules some package of the workspace holds a product of and no source for
     lost: set[str] = set()
     have: dict[Path, dict[str, bool]] = {}
@@ -390,7 +476,7 @@ def plan(pkg: Path, rel: str, lake: Callable[[list[str]], str] | None = None) ->
     built, unchecked = [], []
     for m in asked:
         (built if loads(m) else unchecked).append(m)
-    return Plan(mod, all(headers[m] is not None and headers[m].module for m in [mod, *built]), built, unchecked)
+    return Plan(mod, all(headers[m] is not None and headers[m].module for m in [mod, *built]), built, unchecked, word)
 
 
 @contextlib.contextmanager
@@ -499,16 +585,20 @@ def verdict(p: Plan, rc: int, output: str, seconds: float, peak_mb: int,
 
 
 def check(p: Plan, work: Path, lean: Callable[[list[str]], tuple[int, str, float, int]],
-          rebuild: Callable[[str], tuple[int, str, float]] | None = None) -> tuple[int, str, str]:
+          rebuild: Callable[[str], tuple[int, str, float]] | None = None,
+          again: Callable[[], Plan | str] | None = None) -> tuple[int, str, str]:
     """(the try's status, the stub's last output, the check's line), the stub elaborated by ``lean`` (`lake env lean ARGS`
     in FILE's package, as `run` reports it).
 
     ``rebuild``, given a stub's output, has Lake build the siblings its refusal names (`named`), each of which Lake
     then holds current, and returns Lake's exit status, its output and the seconds it took. With it, a refusal that
-    names a sibling is not yet the verdict: those it names are rebuilt, once, and the stub is elaborated once more, whose
-    result is, a second refusal too, whichever modules it names. The rebuild's line then comes before the verdict's, two
-    lines; a rebuild that fails is the verdict, and its line gives Lake's last. Without ``rebuild``, and wherever the
-    first stub names no sibling in a refusal, nothing is rebuilt and the result is that stub's."""
+    names a sibling is not yet the verdict: those it names are rebuilt, once, ``again`` makes FILE's plan once more (as
+    the caller made ``p``, Lake asked again), and the stub of that plan is elaborated, whose result is the verdict, a
+    second refusal too, whichever modules it names. Nothing Lake held before the rebuild is carried over: a build it took
+    may import one the rebuild changed. The rebuild's line then comes before the new plan's `word` and the verdict's;
+    a rebuild that fails is the verdict, and its line gives Lake's last. Without ``again`` the stub is elaborated once
+    more on ``p``. Without ``rebuild``, and wherever the first stub names no sibling in a refusal, nothing is rebuilt and
+    the result is that stub's."""
     args = stub(p, work)
     rc, output, seconds, peak = lean(args)
     mods = named(p, output) if rc else []
@@ -524,6 +614,10 @@ def check(p: Plan, work: Path, lean: Callable[[list[str]], tuple[int, str, float
     built = [m for m in mods if re.search(rf"\] Built {re.escape(m)}(?: \(.*\))?$", made, re.M)]
     first = (f"siblings: {_pair(p, output)} as they are built here: Lake rebuilt {' and '.join(built) or 'nothing'} in "
              f"{took:.0f} s, and the stub is elaborated once more")
+    if again is not None:
+        if isinstance(q := again(), str):
+            return 1, output, f"{first}\nsiblings: no plan once more: {q}; {p.module}'s own names are unchecked"
+        first, p, args = f"{first}\n{q.word}" if q.word else first, q, stub(q, work)
     rc, output, seconds, peak = lean(args)
     rc, line = verdict(p, rc, output, seconds, peak, rebuilt=mods)
     return rc, output, f"{first}\n{line}"

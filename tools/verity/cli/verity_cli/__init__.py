@@ -132,10 +132,7 @@ def _lean_here(file: str, siblings: bool = False) -> int:
     its Lean options (`siblings.options`), on a copy of FILE with the axiom probe appended (`axiom_probe.py`), whose line is
     the last; lean's status on FILE's own lines.
     With ``siblings``, the copy's build then goes through the sibling check (`siblings.py`), whose status it takes; where
-    its stub is refused over a sibling, `lake build` of the siblings the refusal names comes first, once (`siblings.check`).
-    Before FILE is elaborated, Lake says which of the modules that could be siblings it holds as their inputs are now
-    (`lake` with `siblings.WORD`, which compiles nothing; a line gives the count and the seconds), which decides for a
-    build Lake took rather than made (`siblings.plan`)."""
+    its stub is refused over a sibling, `lake build` of the siblings the refusal names comes first, once (`siblings.check`)."""
     path = (Path(file) if Path(file).is_file() else _tree(file) / file).resolve()
     pkg = next((d for d in path.parents if any((d / name).is_file() for name in LAKEFILES)), None)
     if not path.is_file() or path.suffix != ".lean" or pkg is None:
@@ -148,15 +145,7 @@ def _lean_here(file: str, siblings: bool = False) -> int:
                          "toolchain and the package's dependencies, then `lake build` there builds its imports")
     rel, probe, sib = os.path.relpath(path, pkg), _probe(), _siblings()
     opts = sib.options(pkg)
-
-    def word(args: list[str]) -> str:
-        _, said, seconds, _ = sib.run([lake, *args], pkg)
-        asked = {a[1:] for a in args if a.startswith("+")}
-        print(f"verity lean try: {rel}: Lake holds {len(sib.held(said) & asked)} of the {len(asked)} modules that could be "
-              f"siblings as their inputs are now (lake {' '.join(sib.WORD)}, {seconds:.0f} s)", flush=True)
-        return said
-
-    plan = sib.plan(pkg, rel, word) if siblings else None
+    plan = sib.plan(pkg, rel) if siblings else None
     if isinstance(plan, str):
         print(f"verity lean try: {rel}: no sibling check: {plan}", flush=True)
         plan = None

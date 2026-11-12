@@ -1379,68 +1379,102 @@ def test_try_with_siblings_compiles_the_file_then_imports_it_beside_its_built_si
     ran = []
 
     def run(argv, cwd):
-        ran.append(argv)
+        ran.append((len(calls["build"]), argv))
         return 1, "error: import Proofs.Y failed, environment already contains 'f' from Proofs.Flock.X\n", 2.0, 700
 
     monkeypatch.setattr(LC.SIBLINGS, "run", run)
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 1
-    assert calls["build"][1] == ("Sec/Proofs", tree, None, False, [*LC.SIBLINGS.WORD, "+Proofs.Y"]), \
-        "Lake is asked about the module that could be a sibling, where the build ran and before lean reads FILE"
-    lean = calls["build"][2][4]
+    assert ran[0] == (1, [str(tmp_path / "lake"), *LC.SIBLINGS.WORD, "+Proofs.Y"]), \
+        "Lake is asked about the module that could be a sibling, after the build and before lean reads FILE"
+    lean = calls["build"][1][4]
     assert lean[:3] == ["env", "lean", "-R"] and lean[3].startswith(".lake/axiom-probe/siblings-") and lean[4] == "-o"
     assert lean[5].endswith("/Proofs/Flock/X.olean") and lean[6] == f"{lean[3]}/Proofs/Flock/X.lean", \
         "the probed copy, at its module's path under -R"
-    assert ran[0][1:4] == ["env", "lean", "--setup"]
+    assert ran[1][1][1:4] == ["env", "lean", "--setup"]
     assert any("siblings: Proofs.Flock.X and Proofs.Y both declare 'f'" in s for s in said), said
     assert not list((tree / "Sec" / "Proofs" / LC.SIBLINGS.COPIES).iterdir()), "the scratch build is removed"
-    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0 and len(ran) == 2, \
+    assert [argv[1] for _, argv in ran[2:]] == ["build", "env"], "after Lake rebuilt Proofs.Y, it is asked again"
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=lambda _: None) == 0 and len(ran) == 4, \
         "no check without --siblings"
     with pytest.raises(SystemExit):
         LC.main(["--records", "Sec", "--siblings"])
 
 
-def test_try_with_siblings_counts_a_build_lake_took_only_where_lake_says_it_holds_it(trying, tmp_path, monkeypatch, capsys):
-    """`Proofs.Y` and `Proofs.Z` are builds Lake took from an archive, as a records run leaves most of a slot tree: their
-    traces state no source. The try has Lake say which it holds as their inputs are now, with a build that compiles
-    nothing: `Proofs.Y`, which Lake replays, is a sibling, and `Proofs.Z`, which Lake would compile, is unchecked. None
-    of what Lake prints is echoed, and a line of the try gives the count."""
-    tree, calls = trying
+#: what `lake build --no-build -v --no-ansi +Proofs.Y +Proofs.Z` prints where Lake replays `Proofs.Y` and would compile
+#: `Proofs.Z`, which ends it 3
+WORD_YZ = ("✔ [0/3] Ran job computation\n✔ [1/3] Ran p:extraDep\nℹ [2/3] Replayed Proofs.Y\n"
+           "info: Y.lean:1:0: said while it compiled\n✖ [3/3] Building Proofs.Z\n"
+           "error: target is out-of-date and needs to be rebuilt\nSome required targets logged failures:\n- Proofs.Z\n")
+#: a trace as `leantar` writes it for a module it unpacked from its archive: one hash of all its inputs, and no source
+TAKEN = '{"schemaVersion":"2025-09-10","depHash":"255a6a20482e9767","outputs":{}}'
+
+
+def taken_siblings(tree: Path, pass_: tuple[int, str]) -> list:
+    """`Sec/Proofs` with FILE and two siblings, `Proofs.Y` and `Proofs.Z`, builds Lake took from an archive, as a records
+    run leaves most of a slot tree: their traces state no source. `SIBLINGS.run` answers Lake's pass with ``pass_`` and
+    passes every stub, whose text it lists."""
     proofs = tree / "Sec" / "Proofs"
     (proofs / "Flock").mkdir(parents=True)
     (proofs / "lakefile.toml").write_text('name = "p"\nsrcDir = ".."\n\n[[lean_lib]]\nname = "Proofs"\n')
     for rel in ("Flock/X.lean", "Y.lean", "Z.lean"):
         (proofs / rel).write_text("module\n")
     for name in ("Y", "Z"):
-        module(proofs / LC.SIBLINGS.LIB, f"Proofs/{name}", trace='{"schemaVersion":"2025-09-10","depHash":"255a6a20482e9767","outputs":{}}')
-    recorded, stubs = LC.build, []
-
-    def build(pkg, t, lake, targets=None, sandbox=True, cmd=None, echo=None):
-        got = recorded(pkg, t, lake, targets, sandbox, cmd, echo)
-        if cmd and cmd[:len(LC.SIBLINGS.WORD)] == LC.SIBLINGS.WORD:
-            word = ("ℹ [1/2] Replayed Proofs.Y\ninfo: Y.lean:1:0: said while it compiled\n✖ [2/2] Building Proofs.Z\n"
-                    "error: target is out-of-date and needs to be rebuilt\n")
-            for line in word.splitlines(keepends=True):
-                echo(line)
-            return 3, word
-        return got
+        module(proofs / LC.SIBLINGS.LIB, f"Proofs/{name}", trace=TAKEN)
+    stubs: list = []
 
     def run(argv, cwd):
+        if "--no-build" in argv:
+            stubs.append(argv)
+            return *pass_, 12.4, 1100
         stubs.append(Path(argv[-1]).read_text())
         return 0, "", 2.0, 700
 
-    monkeypatch.setattr(LC, "build", build)
+    return stubs, run
+
+
+def test_try_with_siblings_counts_a_build_lake_took_only_where_lake_says_it_holds_it(trying, tmp_path, monkeypatch, capsys):
+    """The try has Lake say which of the modules that could be siblings it holds as their inputs are now, with a pass
+    that compiles nothing: `Proofs.Y`, which Lake replays, is a sibling, and `Proofs.Z`, which Lake would compile, is
+    unchecked. None of what Lake prints is echoed; a line of the try gives the count, the pass's exit, seconds and
+    peak."""
+    tree, calls = trying
+    stubs, run = taken_siblings(tree, (3, WORD_YZ))
     monkeypatch.setattr(LC.SIBLINGS, "run", run)
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 0, said
-    assert [c[4][:2] if c[4] else c[2] for c in calls["build"]] == [["+Proofs.Flock.X:deps"], ["build", "--no-build"], ["env", "lean"]]
-    assert calls["build"][1][4] == ["build", "--no-build", "-v", "--no-ansi", "+Proofs.Y", "+Proofs.Z"]
-    assert stubs == ["module\n\npublic import Proofs.Flock.X\npublic import Proofs.Y\n"]
+    assert stubs == [[str(tmp_path / "lake"), "build", "--no-build", "-v", "--no-ansi", "+Proofs.Y", "+Proofs.Z"],
+                     "module\n\npublic import Proofs.Flock.X\npublic import Proofs.Y\n"]
     assert capsys.readouterr().out == "", "Lake's lines stay out of the try's output"
-    assert any(s.startswith("lean-try: Sec/Proofs/Flock/X.lean: Lake holds 1 of the 2 modules that could be siblings as their "
-                            "inputs are now (lake build --no-build -v --no-ansi, ") for s in said), said
+    assert "lean-try: Sec/Proofs/Flock/X.lean: Lake holds 1 of the 2 modules that could be siblings as their inputs are " \
+        "now (lake build --no-build -v --no-ansi: exit 3 in 12 s, peak 1100 MB)" in said, said
     assert any("(1 imported in 2 s, peak 700 MB); 1 unchecked, with no build of their source as it is or importing a "
                "module with none, in their package or one it requires: Proofs.Z" in s for s in said), said
+
+
+def test_try_with_siblings_takes_no_word_from_a_pass_the_sandbox_refused_a_write(trying, tmp_path, monkeypatch):
+    """Lake's pass wanted to write in the dependencies the tree fetched, which the try's sandbox mounts read-only: it
+    may have stopped part way through what it puts in place, so its word is not taken, whatever its exit (3 here, which
+    a module Lake would compile gives beside the refusal), and every build Lake took is unchecked, on lines that say
+    why. So is it for a pass whose exit is neither 0 nor 3, or whose lines are none Lake's pass prints."""
+    tree, _ = trying
+    refused = (f"error: read-only file system (error code: 30)\n  file: {tree.resolve()}/Sec/.lake/packages/dep/.lake\n"
+               + WORD_YZ.replace("info: Y.lean:1:0: said while it compiled\n", ""))
+    for pass_, why in (((3, refused), "its exit is 2, not 0 or 3"), ((1, WORD_YZ), "its exit is 1, not 0 or 3"),
+                       ((0, "Build completed\n"), "it printed a line this doesn't read: 'Build completed'")):
+        shutil.rmtree(tree / "Sec" / "Proofs", ignore_errors=True)
+        stubs, run = taken_siblings(tree, pass_)
+        monkeypatch.setattr(LC.SIBLINGS, "run", run)
+        said = []
+        assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 0, said
+        assert stubs[1] == "module\n\npublic import Proofs.Flock.X\n", "neither is a sibling"
+        assert f"lean-try: Sec/Proofs/Flock/X.lean: Lake's word isn't taken, so every build Lake took rather than made is " \
+            f"unchecked: {why} (lake build --no-build -v --no-ansi: exit {2 if pass_[1] == refused else pass_[0]} in 12 s, " \
+            "peak 1100 MB)" in said, said
+        assert any("0 imported" in s and "2 unchecked" in s for s in said), said
+        assert (f"lean-try: Sec/Proofs/Flock/X.lean: Lake's pass for the sibling check wanted to write {tree.resolve()}/Sec/"
+                ".lake/packages/dep/.lake, in the dependencies this tree fetched, which a try mounts read-only: taken as "
+                "exit 2" in said) == (pass_[1] == refused), said
 
 
 def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_and_elaborates_the_stub_once_more(
@@ -1465,22 +1499,46 @@ def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_and_ela
     refusal = "error: import Proofs.Z failed, environment already contains 'Defs.step.eq_1' from Proofs.Y\n"
     own = "error: import Proofs.Y failed, environment already contains 'f' from Proofs.Flock.X\n"
     stubs: list[str] = []
-    monkeypatch.setattr(LC.SIBLINGS, "run", lambda argv, cwd: (1 if stubs[0] else 0, stubs.pop(0), 2.0, 700))
+    asked: list[list[str]] = []
+
+    def run(argv: list[str], cwd: Path) -> tuple[int, str, float, int]:
+        if "--no-build" in argv:
+            asked.append(argv[1:])
+            return 0, "", 0.5, 300
+        return 1 if stubs[0] else 0, stubs.pop(0), 2.0, 700
+
+    monkeypatch.setattr(LC.SIBLINGS, "run", run)
 
     def tried() -> tuple[int, list[str], list[list[str]]]:
         """A try: (its status, the check's lines, the targets of each `lake build` it ran)."""
         said, before = [], len(calls["build"])
+        asked.clear()
         rc = LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True)
         assert not stubs, "each stub's answer was read"
         return rc, [s for s in said if "siblings:" in s], [c[2] for c in calls["build"][before:] if c[4] is None]
 
+    building, held = LC.build, []
+
+    def rebuilt(pkg, t, lake, targets=None, sandbox=True, cmd=None, echo=None):
+        """Lake's rebuild of the modules a refusal names, which writes their builds; `held` gets which of FILE, `Proofs.Y`
+        and `Proofs.Z` had a trace when it began, then whether `Proofs.Y` and `Proofs.Z` had hash files."""
+        got = building(pkg, t, lake, targets, sandbox, cmd, echo)
+        if not cmd and targets and not targets[0].endswith(":deps"):
+            held[:] = [p.exists() for p in (x, y, z)] + [any(y.parent.glob(f"{n}.*.hash")) for n in ("Y", "Z")]
+        for target in [] if cmd else targets or []:
+            if not target.endswith(":deps"):
+                name = target[1:].replace(".", "/")
+                module(proofs / LC.SIBLINGS.LIB, name, trace=of(tree / "Sec" / f"{name}.lean"))
+        return got
+
+    monkeypatch.setattr(LC, "build", rebuilt)
     x, y, z = products()
     stubs[:] = [refusal, ""]
     calls["deps_text"] = "✔ [2/3] Built Proofs.Y (1.0s)\n⚠ [3/3] Replayed Proofs.Z\n"
     rc, lines, built = tried()
     assert rc == 0 and built == [["+Proofs.Flock.X:deps"], ["+Proofs.Z", "+Proofs.Y"]], (lines, built)
-    assert x.exists() and not y.exists() and not z.exists(), "both lose their traces, as `clashed` leaves them for Lake"
-    assert not list(y.parent.glob("Y.*.hash")) and not list(z.parent.glob("Z.*.hash"))
+    assert asked == [[*LC.SIBLINGS.WORD, "+Proofs.Y", "+Proofs.Z"]] * 2, "Lake asked again after the rebuild"
+    assert held == [True, False, False, False, False], "both lose their traces, as `clashed` leaves them for Lake"
     assert len(lines) == 2 and lines[0].startswith(
         "lean-try: Sec/Proofs/Flock/X.lean: siblings: Proofs.Z and Proofs.Y both declare 'Defs.step.eq_1' as they are built "
         "here: Lake rebuilt Proofs.Y in ") and lines[0].endswith(" s, and the stub is elaborated once more"), lines
@@ -1491,7 +1549,7 @@ def test_try_with_siblings_has_lake_rebuild_the_siblings_a_refusal_names_and_ela
     stubs[:] = [own, own]
     rc, lines, built = tried()
     assert rc == 1 and built == [["+Proofs.Flock.X:deps"], ["+Proofs.Y"]], (lines, built)
-    assert x.exists() and not y.exists() and z.exists(), "FILE's own product in the tree is not the build that clashed"
+    assert held == [True, False, True, False, True], "FILE's own product in the tree is not the build that clashed"
     assert len(lines) == 2 and "Proofs.Flock.X and Proofs.Y both declare 'f' as they are built here: Lake rebuilt Proofs.Y" in lines[0]
     assert lines[1].endswith(
         "siblings: Proofs.Flock.X and Proofs.Y both declare 'f', which Lean refuses when it imports both, as the package's "
@@ -1533,10 +1591,22 @@ def test_try_with_siblings_on_a_tree_synced_across_a_move_leaves_out_what_was_bu
     stubs, clash = [], []
 
     def run(argv, cwd):
+        if "--no-build" in argv:
+            return 0, "", 0.5, 300
         stubs.append(Path(argv[-1]).read_text())
         return (1, clash[0], 2.0, 700) if clash else (0, "", 2.0, 700)
 
+    building = LC.build
+
+    def rebuilt(pkg, t, lake, targets=None, sandbox=True, cmd=None, echo=None):
+        """Lake's rebuild of the modules a refusal names writes their builds."""
+        got = building(pkg, t, lake, targets, sandbox, cmd, echo)
+        for target in [] if cmd else [t for t in targets or [] if not t.endswith(":deps")]:
+            module(proofs / LC.SIBLINGS.LIB, target[1:].replace(".", "/"), trace=of(sec / f"{target[1:].replace('.', '/')}.lean"))
+        return got
+
     monkeypatch.setattr(LC.SIBLINGS, "run", run)
+    monkeypatch.setattr(LC, "build", rebuilt)
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append, siblings=True) == 0, said
     assert stubs == ["module\n\npublic import Proofs.Flock.X\npublic import Proofs.Z\n"], "Proofs.Y is not imported"

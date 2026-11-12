@@ -1690,9 +1690,12 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     """`--try`: on the tree of the `build` slot it takes (as `--records` does), with the closure of the package that owns
     ``file`` synced from this checkout and its fetched dependencies taken, `lake build +MODULE:deps` (its imports, of which
     Lake rebuilds only what changed) then `lake env lean` with the package's Lean options (`SIBLINGS.options`) on FILE's
-    probed copy in that package's directory (`PROBE.probe`, whose line is the last), and with ``siblings`` the sibling check (`siblings.py`) on that copy's build,
-    for which Lake first says which of the modules that could be siblings it holds as their inputs are now (`lake` with
-    `SIBLINGS.WORD`, which compiles nothing, in the build's sandbox; a line gives the count and the seconds); lean's exit
+    probed copy in that package's directory (`PROBE.probe`, whose line is the last), and with ``siblings`` the sibling
+    check (`siblings.py`) on that copy's build, for which Lake first says, after the build and before `lean` reads FILE,
+    which of the modules that could be siblings it holds as their inputs are now (`lake` with `SIBLINGS.WORD`, which
+    compiles nothing, in the build's sandbox, where a write it is refused (`refused_write`) is taken as exit 2, and so
+    leaves every build Lake took unchecked; the plan's `word` is a line, with the seconds), and once more after a rebuild
+    (`SIBLINGS.check`'s ``again``); lean's exit
     status on FILE's own lines (the check's when it runs), or 2 when ``file`` is in no package, no `build` slot is granted,
     the tree's dependencies can't be had, or Lake wanted to write in them (`refused_write`: its line names the path and the
     records run that builds them writable). Never check.py. What the build compiled in the sandbox goes into the node's
@@ -1761,17 +1764,20 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
             step, (rc, text) = f"lake build +{mod}:deps", build(pkg, tree, lake, [f"+{mod}:deps"], sandbox)
             if storing:                                 # before `lean` reads the file itself, whose code then runs
                 put_built(artifacts, {tree / pkg: {"sandbox": True, "compiled": compiled(text)}}, since, log, f"lean-try: {pkg}")
-            def word(args: list[str]) -> str:
-                began = time.monotonic()
-                said = build(pkg, tree, lake, sandbox=sandbox, cmd=args, echo=lambda _: None)[1]
-                asked = {a[1:] for a in args if a.startswith("+")}
-                log(f"lean-try: {file}: Lake holds {len(SIBLINGS.held(said) & asked)} of the {len(asked)} modules that could be "
-                    f"siblings as their inputs are now (lake {' '.join(SIBLINGS.WORD)}, {time.monotonic() - began:.0f} s)")
-                return said
+            def ask(args: list[str]) -> tuple[int, str, float, int]:
+                argv = [lake, *args]
+                status, said, seconds, peak = SIBLINGS.run(in_sandbox(pkg, tree, argv) if sandbox else argv, tree / pkg)
+                if path := refused_write(said, pkg, tree):
+                    log(f"lean-try: {file}: Lake's pass for the sibling check wanted to write {path}, in the dependencies "
+                        "this tree fetched, which a try mounts read-only: taken as exit 2")
+                    status = 2
+                return status, said, seconds, peak
 
-            plan = SIBLINGS.plan(tree / pkg, rel, word) if siblings and rc == 0 else None
+            plan = SIBLINGS.plan(tree / pkg, rel, ask) if siblings and rc == 0 else None
             if isinstance(plan, str):
                 log(f"lean-try: {file}: no sibling check: {plan}")
+            elif plan is not None and plan.word:
+                log(f"lean-try: {file}: {plan.word}")
             checked, said = isinstance(plan, SIBLINGS.Plan), ""
             with SIBLINGS.scratch(tree / pkg) if checked else contextlib.nullcontext() as work:
                 args = opts + (SIBLINGS.lean_args(tree / pkg, plan, work) if checked else [])
@@ -1803,7 +1809,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
                         status, built = build(pkg, tree, lake, [f"+{m}" for m in SIBLINGS.named(plan, refusal)], sandbox)
                         return status, built, time.monotonic() - began
 
-                    rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild)
+                    rc, output, lines = SIBLINGS.check(plan, work, lean, rebuild, lambda: SIBLINGS.plan(tree / pkg, rel, ask))
                     if output:
                         log(output.rstrip("\n"))
                     for line in lines.splitlines():
