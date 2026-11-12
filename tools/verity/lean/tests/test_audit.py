@@ -7165,6 +7165,39 @@ def test_a_batch_whose_modules_and_their_closure_all_passed_runs_no_replay(tmp_p
     assert calls == [["P.A", "P.B"]] and p.batches[-1]["checked"] == 0 and "error" not in p.batches[-1]
 
 
+def test_a_batch_leaves_a_listed_module_and_what_imports_it_to_the_final_replay(tmp_path, monkeypatch):
+    """A batch runs at the batch's threads, and with `--closure` checks what its modules import: so a module the replay
+    is to check in a step of its own (`replay_first`) is in no batch, and neither is a module that imports it, until that
+    step has stored it. The batch's facts are then those of the modules left, closed under their imports."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean", "P/Heavy.lean", "P/Uses.lean", "P/Top.lean"])
+    p.closure = True
+    imports = {"D": [], "P.A": ["D"], "P.Heavy": ["D"], "P.Uses": ["P.Heavy"], "P.Top": ["P.Uses", "P.A"]}
+    for m in imports:
+        (tmp_path / f"{m}.olean").write_text(m)
+    facts = {"graph": {m: {"olean": str(tmp_path / f"{m}.olean"), "imports": i} for m, i in imports.items()},
+             "modules": ["P.A", "P.Heavy", "P.Uses", "P.Top"], "axioms": []}
+    monkeypatch.setattr(A.Pipeline, "copied", lambda self, mods, work: (facts, []))
+    monkeypatch.setattr(A, "replay_first", lambda pkg: [{"module": "P.Heavy", "threads": 1, "why": "w"},
+                                                        {"module": "P.Elsewhere", "threads": 1, "why": "w"}])
+    calls = []
+    monkeypatch.setattr(A, "replay_step", lambda *a, **k: calls.append((a[2]["modules"], sorted(a[2]["graph"]))) or
+                        ([], {"checked": len(a[2]["modules"]), "phases": {}, "peak_gib": 0}))
+    p.replay_cache.mkdir()
+    p._replay(list(facts["modules"]))
+    assert calls == [(["P.A"], ["D", "P.A"])] and p.batches[-1]["left"] == 3 and p.batches[-1]["modules"] == 4
+    p._replay(["P.Heavy", "P.Uses"])
+    assert len(calls) == 1 and p.batches[-1] | {"seconds": 0} == {"modules": 2, "left": 2, "checked": 0, "seconds": 0}
+    A.store_replay(p.replay_cache, A.replay_keys(facts, "t")["P.Heavy"], "P.Heavy")
+    p._replay(list(facts["modules"]))
+    assert calls[1:] == [(facts["modules"], sorted(imports))] and "left" not in p.batches[-1]
+
+    def unreadable(pkg):
+        raise RuntimeError("the list does not read")
+    monkeypatch.setattr(A, "replay_first", unreadable)
+    p._replay(["P.A"])
+    assert len(calls) == 2 and "the list does not read" in p.batches[-1]["error"], "the final replay reports it"
+
+
 def test_a_batch_reads_copies_of_the_files_the_build_can_write_keyed_as_those_bytes_in_place(tmp_path, monkeypatch):
     """A batch's `.olean` files under a `.lake` the build writes (the package's, a fetched package's) are copied once into
     the snapshot, every part, and named there, the search path too; the toolchain's stay where they are. Their keys are
