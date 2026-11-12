@@ -18,6 +18,13 @@ not the log's; 3 when those hold and the earlier stream's audit record is missin
 
 The order is read from one coin family of one session, the later sample's own: both registrations' receipts are roots
 of that family.
+
+`acrossAll` takes a list of such reads beside the digest of one record, a class's boundary record, and runs `across` on
+each. A read reaches that record when its `previous` is it, or is the later registration of a read of the list that
+reaches it (`reached`). Its `case` is the list's: 1 when every read reaches the boundary record and is case 1; 2 when one
+does not reach it or is case 2; 3 when neither and a read's earlier stream's audit record is missing or did not accept.
+It holds nothing about a record the list leaves out: that the list is every record that reads the class is the
+caller's.
 -/
 module
 
@@ -121,24 +128,86 @@ def acrossCase (logged order audit : AcrossVerdict) : Nat :=
   else if audit.accepted != some true then 3
   else 1
 
-/-- The verdicts on one read across streams (module docstring): `{"logged", "received", "order", "audit", "case",
-"earlier", "later"}`, `received` the earlier record's index in the log (null when it holds none), `earlier` and
-`later` the two registrations' digests in hex. Refused: a later registration that names no previous record in hex, or
+/-- What `across` finds on one read: its three verdicts, the earlier record's index in the earlier stream's log (none
+when it holds none) and the two registrations' digests in hex. -/
+structure AcrossFound where
+  logged : AcrossVerdict
+  received : Option Nat
+  order : AcrossVerdict
+  audit : AcrossVerdict
+  earlier : String
+  later : String
+
+def AcrossFound.caseOf (f : AcrossFound) : Nat := acrossCase f.logged f.order f.audit
+
+def AcrossFound.fields (f : AcrossFound) : List (String × Json) :=
+  [("logged", f.logged.toJson), ("received", match f.received with | some k => Lean.toJson k | none => Json.null),
+   ("order", f.order.toJson), ("audit", f.audit.toJson), ("case", Lean.toJson f.caseOf),
+   ("earlier", Json.str f.earlier), ("later", Json.str f.later)]
+
+/-- One read across streams (module docstring). Refused: a later registration that names no previous record in hex, or
 whose digest is not defined. -/
-def across (i : Across) : V Json := do
+def acrossFound (i : Across) : V AcrossFound := do
   let .str previous := getD i.later "previous" | throw "the later registration names no previous record"
   let earlier ← Flock.unhex previous
   let later ← Flock.WindowRecord.digest i.later
   let received := loggedAt i.log previous
-  let logged : AcrossVerdict := .ofReason (if received.isSome then none else some UNLOGGED)
-  let order : AcrossVerdict := .ofReason (orderReason i.window earlier later i.coins i.read)
-  let audit : AcrossVerdict := match i.audit with
-    | .null => { accepted := none }
-    | a => .ofReason (auditReason a previous)
-  return Json.mkObj [("logged", logged.toJson),
-    ("received", match received with | some k => Lean.toJson k | none => Json.null),
-    ("order", order.toJson), ("audit", audit.toJson), ("case", Lean.toJson (acrossCase logged order audit)),
-    ("earlier", Json.str previous), ("later", Json.str (Flock.hexOf later))]
+  return { logged := .ofReason (if received.isSome then none else some UNLOGGED), received,
+           order := .ofReason (orderReason i.window earlier later i.coins i.read),
+           audit := (match i.audit with
+             | .null => { accepted := none }
+             | a => .ofReason (auditReason a previous)),
+           earlier := previous, later := Flock.hexOf later }
+
+/-- The verdicts on one read across streams (`acrossFound`): `{"logged", "received", "order", "audit", "case",
+"earlier", "later"}`, `received` the earlier record's index in the log (null when it holds none), `earlier` and
+`later` the two registrations' digests in hex. -/
+def across (i : Across) : V Json := return Json.mkObj (← acrossFound i).fields
+
+/-- `got` with the later record of every read of `links` (each its earlier and later records' digests) whose earlier
+record is in it, until a pass adds none or `fuel` passes ran. -/
+def reachedFrom (links : Array (String × String)) : Nat → Std.HashMap String Unit → Std.HashMap String Unit
+  | 0, got => got
+  | fuel + 1, got =>
+    let more := links.foldl (init := got) fun got (earlier, later) =>
+      if got.contains earlier then got.insert later () else got
+    if more.size == got.size then got else reachedFrom links fuel more
+
+/-- The records `links` reach from `boundary`: `boundary`, and the later record of every read whose earlier record is
+reached. A pass that adds a record adds one of at most `links.size`, so `links.size + 1` passes end it. -/
+def reached (boundary : String) (links : Array (String × String)) : Std.HashMap String Unit :=
+  reachedFrom links (links.size + 1) ((∅ : Std.HashMap String Unit).insert boundary ())
+
+/-- A list's case from each read's own case and whether it reaches the boundary record: 2 when a read does not reach it
+or is case 2, else 3 when a read is case 3, else 1. -/
+def acrossAllCase (links : Array (Nat × Bool)) : Nat :=
+  if links.any fun (c, reaches) => !reaches || (c != 1 && c != 3) then 2
+  else if links.any fun (c, _) => c != 1 then 3
+  else 1
+
+/-- What `acrossAll` reads: the digest (hex) of a class's boundary record, and the reads across streams that rest on
+it, each as `across` reads one. -/
+structure AcrossAll where
+  boundary : String
+  links : Array Across
+
+/-- The verdicts on a list of reads across streams (module docstring): `{"boundary", "links", "case"}`, `links` each
+read's `across` in the list's order with `reaches`, whether its earlier record is reached from `boundary` through reads
+of the list. Refused: a list with no read, a `boundary` that is not hex, or a read `across` refuses, named by its
+index. -/
+def acrossAll (i : AcrossAll) : V Json := do
+  if i.links.isEmpty then throw "the list holds no read across streams"
+  if let .error why := Flock.unhex i.boundary then throw s!"boundary: {why}"
+  let mut found : Array AcrossFound := #[]
+  for l in i.links do
+    match acrossFound l with
+    | .ok f => found := found.push f
+    | .error why => throw s!"link {found.size}: {why}"
+  let got := reached i.boundary (found.map fun f => (f.earlier, f.later))
+  let links := found.map fun f => (f, got.contains f.earlier)
+  return Json.mkObj [("boundary", Json.str i.boundary),
+    ("links", Json.arr (links.map fun (f, reaches) => Json.mkObj (f.fields ++ [("reaches", Json.bool reaches)]))),
+    ("case", Lean.toJson (acrossAllCase (links.map fun (f, reaches) => (f.caseOf, reaches))))]
 
 /-! ## The cases -/
 
@@ -184,5 +253,29 @@ private def digestOf (r : Json) : String := (Flock.WindowRecord.digestHex r).toO
 #guard acrossCase ⟨some true, none⟩ ⟨some false, none⟩ ⟨none, none⟩ == 2
 #guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨none, none⟩ == 3
 #guard acrossCase ⟨some true, none⟩ ⟨some true, none⟩ ⟨some false, none⟩ == 3
+
+private def reaches (boundary : String) (links : Array (String × String)) : Array Bool :=
+  links.map fun l => (reached boundary links).contains l.1
+
+-- a chain of three records, in order and out of order
+#guard reaches "a" #[("a", "b"), ("b", "c")] == #[true, true]
+#guard reaches "a" #[("b", "c"), ("a", "b")] == #[true, true]
+#guard reaches "a" #[("c", "d"), ("b", "c"), ("a", "b")] == #[true, true, true]
+-- two records on the boundary record
+#guard reaches "a" #[("a", "b"), ("a", "c")] == #[true, true]
+-- a read whose earlier record no read of the list gives, and one behind it
+#guard reaches "a" #[("a", "b"), ("x", "c"), ("c", "d")] == #[true, false, false]
+-- a read of the boundary record's own previous does not reach it
+#guard reaches "a" #[("z", "a"), ("a", "b")] == #[false, true]
+-- a ring that the boundary record is not on
+#guard reaches "a" #[("b", "c"), ("c", "b")] == #[false, false]
+#guard reaches "a" #[] == #[]
+
+#guard acrossAllCase #[(1, true), (1, true)] == 1
+#guard acrossAllCase #[(1, true), (3, true)] == 3
+#guard acrossAllCase #[(3, true), (2, true)] == 2
+#guard acrossAllCase #[(1, true), (1, false)] == 2
+#guard acrossAllCase #[(3, false)] == 2
+#guard acrossAllCase #[(1, true), (0, true)] == 2
 
 end Spot.Record

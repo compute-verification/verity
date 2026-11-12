@@ -56,6 +56,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `record`: the whole audit record (`Record.record`), as the text of Python's `canonical_json`;
 * `across`: the verdicts on one read across streams (`Record.across`): the later registration's previous record in the
   earlier stream's log, the order the challenger's signed log shows, and the earlier stream's audit record;
+* `across_all`: those verdicts on each read of a list, whether each reaches a class's boundary record through reads of
+  the list, and the list's case (`Record.acrossAll`);
 * `check_public`: the proof system's public-items rule on a registration record (`Service.checkPublic`);
 * `check_verdicts`: the verdicts' share of a proof system outcome (`Service.checkVerdicts`);
 * `run`: the stream's run of one registration from its public check through its verdict (`Run.run`);
@@ -100,7 +102,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 `sampled-proofs-verifier` serves those the verifier runs (`verifier`): `registration`, `matches_public`,
 `select` (the sample of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
 two-stage rule's second stage, on the coins after the interior registration), `check_draw`,
-`check_proved`, `record`, `across`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its outcome to it),
+`check_proved`, `record`, `across`, `across_all`, `check_public`, `check_verdicts`, `run` (`Stream.outcome` holds its
+outcome to it),
 `hello`,
 `stream` (each of `service.Stream`'s ops) and `fleet` (each of `service.Fleet`'s).
 -/
@@ -581,17 +584,33 @@ def sessionRegistered (j : Json) : V Json := do
 def record (j : Json) : V Json := do
   return Json.str (← PyJson.canonical (← Record.record (← Record.inputOf j)))
 
-/-- `{"window", "log", "audit", "later", "coins", "read"}` to `Record.across`'s verdicts on one read across streams: the
-window's open root, the earlier stream's log (a list of registrations), its audit record or null, the later stream's
-registration, and the later sample's coin evidence and the bytes it read, in lowercase hex. -/
-def across (j : Json) : V Json := do
+/-- One read across streams from `{"window", "log", "audit", "later", "coins", "read"}`: the window's open root, the
+earlier stream's log (a list of registrations), its audit record or null, the later stream's registration, and the later
+sample's coin evidence and the bytes it read, in lowercase hex. -/
+def acrossOf (j : Json) : V Record.Across := do
   if keys? j != some #["audit", "coins", "later", "log", "read", "window"] then
     throw "exactly {window, log, audit, later, coins, read}"
   let .str window := getD j "window" | throw "window is not a string"
   let .arr log := getD j "log" | throw "log is not a list"
   let .str read := getD j "read" | throw "read is not lowercase hex"
-  Record.across { window, log, audit := getD j "audit", later := getD j "later", coins := getD j "coins",
-                  read := ← Flock.unhex read }
+  return { window, log, audit := getD j "audit", later := getD j "later", coins := getD j "coins",
+           read := ← Flock.unhex read }
+
+/-- One read across streams (`acrossOf`) to `Record.across`'s verdicts on it. -/
+def across (j : Json) : V Json := do Record.across (← acrossOf j)
+
+/-- `{"boundary", "links"}` to `Record.acrossAll`'s verdicts on a list of reads across streams: a class's boundary
+record's digest in lowercase hex, and the reads, each as `across` takes one. -/
+def acrossAll (j : Json) : V Json := do
+  if keys? j != some #["boundary", "links"] then throw "exactly {boundary, links}"
+  let .str boundary := getD j "boundary" | throw "boundary is not lowercase hex"
+  let .arr given := getD j "links" | throw "links is not a list"
+  let mut links : Array Record.Across := #[]
+  for l in given do
+    match acrossOf l with
+    | .ok a => links := links.push a
+    | .error why => throw s!"link {links.size}: {why}"
+  Record.acrossAll { boundary, links }
 
 /-- `{"record", "scheme", "query", "values": [{"name", "registered"}], "public": [item]}` to the service's public-items
 rule's `{"ok", "codes", "detail"}` (`Service.checkPublic`), the query's digest computed here: a string scheme, the check's query
@@ -865,7 +884,8 @@ def table : List (String × (Json → V Json)) :=
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),
-   ("session_registered", sessionRegistered), ("record", record), ("across", across), ("check_public", checkPublic),
+   ("session_registered", sessionRegistered), ("record", record), ("across", across), ("across_all", acrossAll),
+   ("check_public", checkPublic),
    ("check_verdicts", checkVerdicts), ("run", run), ("template_circuits", templateCircuits), ("hello", Hello.check),
    ("fits", fits),
    ("challenger_commitment", Challenger.commitmentPiece),
@@ -891,6 +911,6 @@ def table : List (String × (Json → V Json)) :=
 /-- The verifier's pieces: `table`'s, by name. -/
 def verifier : List (String × (Json → V Json)) :=
   table.filter fun p => ["registration", "matches_public", "select", "select_second", "check_draw", "check_proved",
-    "record", "across", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
+    "record", "across", "across_all", "check_public", "check_verdicts", "run", "hello", "stream", "fleet"].contains p.1
 
 end Spot.Pieces
