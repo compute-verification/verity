@@ -30,9 +30,9 @@ from verity.protocols.certifier.verifier.warden import LENGTHS_FORMS, Warden, Wa
 TWO = dataclasses.replace(LEN, lengths=2)
 TWO_CON = dataclasses.replace(CON, lengths=2)
 SPAN = TWO.span
-#: the content tables tests' schedule's digest at form 1, and `leaves` of two runs at form 1, as each was before
-#: form 2 was a value: the content tables tests' traffic, and the lengths tests' with its fourth tick of the second
-#: execution phase late
+#: pinned, as `LEN_DIGEST` is: the content tables tests' schedule's digest at form 1, and `leaves` of two runs at
+#: form 1, the content tables tests' traffic and the lengths tests' with its fourth tick of the second execution
+#: phase late. Form 1 leaves these whatever other forms there are
 CON_DIGEST = ("515a1584b683fde5d5af88641e5e894e51168b5726d6d261bedcfd0d741f9e97"
               "c79a0fe6e593b3984b5890d1c7f49d405736444f5a71ad15fadbdc8167ab8280")
 CON_RUN = ("e654968a5568465737c2286818ecfc3a171f856ef0c44c67eecbed14c266f9fd"

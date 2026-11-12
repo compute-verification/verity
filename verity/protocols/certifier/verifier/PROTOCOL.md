@@ -2055,9 +2055,10 @@ certified response holds at most its request's `max_tokens` tokens, hence at mos
 them; an uncapped schedule hashes neither and keeps its digest. The period check (`NetworkCheck.Period`) reads the cap
 with the schedule, binds it in the schedule's digest and publishes it (`max_tokens_cap`).
 
-**The lengths rows** (`WardenParams.lengths`, id form only, none by default) are what the network certifier signs of the
-requests it released, beside its cells: each one's place in the release order, its request's bytes, its response's
-outputs (its `DATA` cells) and whether it ended in a `FAIL`. With them the network certifier:
+**The lengths rows** (`WardenParams.lengths`, id form only, none by default; 1 and 2 are their forms) are what the
+network certifier signs of the requests it released, beside its cells: each one's place in the release order, its
+request's bytes, its response's outputs (its `DATA` cells) and whether it ended in a `FAIL`. With them the network
+certifier:
 - releases no connection whose client has failed (no `END`, no place in the release order, nothing for the server), so
   every released connection ends at an egress slot, in its `END` or a server's `FAIL`;
 - fails such a connection at its first egress slot, bucket s + D, with padding both ways until then, so every
@@ -2071,14 +2072,41 @@ outputs (its `DATA` cells) and whether it ended in a `FAIL`. With them the netwo
   `WardenParams.stride_releases` slots a row whatever the load, commits each as it commits its cells' rows, and signs
   one head for the link's execution phase, once, that lists both, and after them the content rows' tables where the
   schedule has them (`connection_rows`, whose docstring has the slots, the head and the registration). It signs
-  execution phase w's head at the close of execution phase w + 1, where every connection released in w has ended,
-  so a period's last execution phase needs the one after it. An execution phase whose records, or the next one's,
-  weren't published complete has no head.
+  execution phase w's head at the close of execution phase w + 1, where every connection released in w has ended.
+
+Which execution phases have a head is the form's:
+- **Form 1** signs execution phase w's head where its records and the next one's were published complete, and says
+  nothing of any other: an execution phase whose records, or the next one's, weren't, and a run's last execution
+  phase, which has no next, have no head and no certificate that says so. A release's request cells may have left in
+  the execution phase before its `END`'s, so a head may hold bytes of an execution phase that wasn't published
+  complete.
+- **Form 2** ends every execution phase of a run, once and in order, in exactly one of two certificates of the link's
+  egress in it: its head's, or the network certifier's word that it has no head.
+  - **The rule.** Execution phase w has its head where w, the one before it and the one after it (each where the run
+    has one) were published complete, their three records, none withheld. Every cell of a release of w left in those
+    three, so no head holds a byte of an execution phase that wasn't published complete. Every other execution phase
+    of the run has the word, and so has each one a run that ends early has not ended.
+  - **The run's last execution phase** ends at the run's last close, with the one before it. The network certifier
+    admits a connection only at a bucket s with s + `WardenParams.span` inside the run, `span` = D +
+    ⌊(`egress_cells` − 1)/r⌋ buckets being the longest a connection lasts, so every release of the last execution
+    phase has ended by then: the run admits nothing in its last `span` buckets. A connection that arrives in them
+    waits in the queue and is cut at the run's end; the queue's bound holds there as anywhere, so arrivals past it
+    are refused and that execution phase's records withheld.
+  - **The word** is one certificate over SHA-512 of the link, the execution phase and the parameters' digest under a
+    tag of its own (`connection_rows.no_head_digest`), for the session and under the key every certificate is. A
+    reader tells the three cases apart from public values: a certificate over that digest is the word, a certificate
+    over a head that lists the tables is the head, and neither can pass as the other. An execution phase with
+    neither gives no verdict: it has not ended, or its signature was refused, and it fails closed as a record without
+    a certificate does. Which of the two an execution phase has is a function of which execution phases' records were
+    published complete, which their certificates already say, so the word makes nothing else public. That an
+    execution phase has one of the two and never both rests on the network certifier's own code (`trusted-host`).
 
 The tables say what the same execution phases' records say, in another order: the network certifier writes both from
-the cells it cut and released, and that they agree rests on its own code (`trusted-host`), not on a proof. The form
-enters the parameters' digest; a schedule without lengths rows hashes nothing of it and keeps its digest, records, heads
-and certificates.
+the cells it cut and released, and that they agree rests on its own code (`trusted-host`), not on a proof. A reader
+who lays the tables from the records needs each release's place in the release order, which the records count from
+their `END` cells only up to an execution phase that isn't complete (`connection_rows.of_records`). The form enters
+the parameters' digest, so form 1's schedule and form 2's are two; a schedule without lengths rows hashes nothing of
+it and keeps its digest, records, heads and certificates.
 
 **The lengths row's proof block** (`verity.protocols.certifier.prover.lengths_row`, `LengthsRow`, in no Spec) is one a link,
 execution phase and slot stride. It reads the compute side's committed row of the stride's K request slots (each
@@ -2122,12 +2150,13 @@ prompt ids and a size of ids released, each a power of two.
   ended before any id have the same response row and the same end row, and only the request row tells them apart.
 - **Where they are built.** The network certifier keeps each released connection's request bytes and its `DATA`
   cells' ids, as it cut and released them and never from the server's report, four bytes an id, from the release to
-  the hand that carries it: the lengths rows' hand, at the close of the next execution phase. On its tick the device
-  only hands. Whoever takes the hand lays the tables, commits them and signs the head
-  (`benchmarks/network_traces/warden_serve.py`: its publisher process, which holds the key). A connection whose
-  client goes away after its release ends as its server does, in its `END` or a server's `FAIL`, and has its rows.
-- **An execution phase that is not handed**, because its records or the next one's weren't published complete, has
-  no content rows and no head: no read of a row of it opens.
+  the hand that carries it: the lengths rows' hand, at the close of the next execution phase, or under form 2 at
+  the run's last close for its last. On its tick the device only hands. Whoever takes the hand lays the tables,
+  commits them and signs the head (`benchmarks/network_traces/warden_serve.py`: its publisher process, which holds
+  the key). A connection whose client goes away after its release ends as its server does, in its `END` or a
+  server's `FAIL`, and has its rows.
+- **An execution phase that is not handed** (the lengths rows' forms say which) has no content rows and no head: no
+  read of a row of it opens. Under form 2 it has the network certifier's word that it has none.
 - **What is public.** The head and the registration hold each table's name, rows, row size, domain and root. The
   classes, their order and their rows are the schedule's, in the parameters' digest, and the roots are hiding.
   Nothing in them is a function of the load: not how many rows are held, in which class, or any length.
@@ -2135,7 +2164,8 @@ prompt ids and a size of ids released, each a power of two.
 The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
 digest, records, heads and certificates. As for the lengths rows, that the tables say what the records say rests on
 the network certifier's own code (`trusted-host`). The head of execution phase w exists from the close of execution
-phase w + 1. Nothing here orders its signature or its registration against the compute audit's coins.
+phase w + 1, and that of a run's last, under form 2, from its own close. Nothing here orders its signature or its
+registration against the compute audit's coins.
 
 **The response tie's proof block** (`verity.protocols.certifier.prover.response_tie`, in no Spec) is one a
 connection, of one of two Definitions by the kind of its class: `ResponseTieStop` in a stop class and
