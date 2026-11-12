@@ -1,6 +1,6 @@
 """The registration log's Lean (`core-registration serve`: `Core.Registration.protocol`,
 `verity/registration/log/v1`, in the core interface's package) against its Python (`verity.hardware.registration`). Hypothesis generates a log for
-either composite, from the honest example site, its information and its declaration of day 0 (`EXAMPLE`, the Lean's
+any composite, from the honest example site, its information and its declaration of day 0 (`EXAMPLE`, the Lean's
 `Core.Registration.Example`) with a few changes (among them a declaration added or changed, so a day is sometimes declared
 twice), or from small random entries, chained or with a broken `previous`; it checks it under the
 example's auditor or a changed one, and sometimes breaks the JSON of the log, the params or the evidence. The two must

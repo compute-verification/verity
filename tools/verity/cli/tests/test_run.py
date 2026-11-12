@@ -1,5 +1,5 @@
 """`verity config` and `verity run` (`verity_cli.run`, `verity.configuration.deploy.config`): the configuration's refusals by name,
-a list of subprotocols that is neither composite's among them, its hash, the example reproduced by `config new`, and
+a list of subprotocols that is no composite's among them, its hash, the example reproduced by `config new`, and
 runs of a step-0 table (`step0.py`) for onsite and remote: its entries in this process, and core's sampled-proofs
 parties in the deployment layer's live run, on a machine with stand-in capabilities and a stand-in product executable,
 every party on in-memory channels, so no build, GPU, network or clock is involved."""
@@ -109,7 +109,7 @@ def test_a_configuration_is_refused_by_name(name):
 @pytest.mark.parametrize("protocols", [("sampled-proofs",), ("sampled-proofs", "certifier"), ("pouw",), ONSITE[:-1],
                                        ("sampled-proofs", "certifier", "pouw"), ("sampled-proofs", "wipe"),
                                        ("sampled-proofs", "pouw"), ONSITE[:-2]])
-def test_a_set_of_subprotocols_that_is_neither_composite_is_refused(protocols):
+def test_a_set_of_subprotocols_that_is_no_composite_is_refused(protocols):
     assert refused(edit(lambda c: c.update(protocols=list(protocols)))) == "composite"
     with pytest.raises(K.Refused) as e:
         K.new("toy", list(protocols), REG.components, REG.workloads, COMMIT)

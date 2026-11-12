@@ -348,7 +348,7 @@ open Site (Sheet)
 
 /-- **A composite**: the ids of the protocols it composes, in the order of their ids. Any list is one; onsite and remote
 are two (`Composite.onsite`, `Composite.remote`). A site's log is registered for a composite. The code's
-`Core.Site.Registration.Composite` is this type, `List String`, and its two lists are these two. -/
+`Core.Site.Registration.Composite` is this type, `List String`, and its `onsite` and `remote` are these two. -/
 abbrev Composite : Type := List String
 
 /-- **Onsite**, the composite of an auditor with devices at the datacenter: network certification, the inference-only
