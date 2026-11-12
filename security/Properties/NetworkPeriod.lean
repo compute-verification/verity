@@ -56,7 +56,7 @@ member's proof blocks' count, and the frame domain and the root of that many ok 
 every `roots` entry whose port ends `/o0` is some member's constant. So the root a member's `o0` is registered at is
 one the check computed from `T`, never one the registration states. It is stated in the constants' own terms
 (`ScanOk.domain`, `ScanOk.root`), not as `ScanOk.held` being true; `RowsOkHeldOf` is its property of any period
-check, false at `acceptAllRows` too, and `pairPeriod 1` with `unnamedCommitment` is a period it is false of.
+check, false at `acceptAllRows` too, and `pairParams 1` with `unnamedCommitment` is a period it is false of.
 -/
 
 @[expose] public section
@@ -266,12 +266,12 @@ def RowsOkHeld : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Profile),
     check p c e = .accept pub prof → RowsOkHeldAt p c
 
-/-- A rows-form schedule of one slot, one lane and two ticks (`T = 2`), with no response cap. -/
+/-- A rows-form schedule of one slot, one lane and two ticks (`T = 2`). -/
 def pairSchedule : Schedule := ⟨0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 2, none⟩
 
 /-- The rows-form period of `n` execution phases and no audit under `pairSchedule`, at the deployed LMS parameters:
 the periods `RowsOkHeld`'s witnesses are stated at. -/
-def pairPeriod (n : ℕ) : Params :=
+def pairParams (n : ℕ) : Params :=
   ⟨#[], #[], 0, 1, "", Lms.deployed, .empty, .empty, "", .rows pairSchedule .empty ⟨0, 0, 0, 0, 0⟩, n⟩
 
 /-- A commitment of one execution phase whose scan's registration names no root, so no member's ok bits. -/
