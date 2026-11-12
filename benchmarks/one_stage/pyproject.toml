@@ -66,6 +66,8 @@ worker_gb = 6
 # `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures,
 # and the match gate's a11, which imports a6's `benchmarks/served_units/stage.py` and its circuit-check targets.
 inputs = ["verity", "verity/protocols/spot/verifier/lean/lakefile.toml", "verity/composite/device/live_challenger",
+          # `verity_difftest`, through which the verifiers these tests run speak to their Lean executables
+          "verity/difftest/python/verity_difftest",
           "benchmarks/spot_proved/stage.py", "benchmarks/served_units/stage.py",
           "tools/verity/circuit_check/src/circuit_check/__init__.py", "tools/verity/circuit_check/src/circuit_check/cache.py",
           "tools/verity/circuit_check/src/circuit_check/entries.py", "tools/verity/circuit_check/src/circuit_check/targets.py",
