@@ -88,8 +88,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
-from verity.definitions.silicon.instructions import INSTRUCTIONS
 from verity.definitions.circuits.targets.target import FIRST, TARGETS, Target
+from verity.definitions.silicon.instructions import INSTRUCTIONS
 from verity_numerical.bench import census
 
 __all__ = [
@@ -541,8 +541,7 @@ def non_gemm_subcircuit(fp: Any) -> str | None:
     sid = fp.get("subcircuit") if isinstance(fp, Mapping) else None
     if not isinstance(sid, str):
         return None
-    from . import census          # data only: the renderer's environment (the steward) has no numpy for bench.templates
-
+    # the templates' names are read from the census, which is data only: what renders a result has no numpy for bench.templates
     template = sid.split("/", 1)[0]
     return sid if template in census.SUBCIRCUIT_TEMPLATES and template != "gemm-coordinate" and "/" in sid else None
 

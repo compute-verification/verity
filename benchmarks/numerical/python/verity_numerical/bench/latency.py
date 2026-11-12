@@ -341,12 +341,12 @@ def a_depth_options(n_r16: int, layers: Sequence[tuple[int, int]], committed: fl
     base_l, base_c = lookup_chain(n_r16), checker_chain(layers)
     base = 1 + max(base_l, base_c) + 2
 
-    def row(option: str, l: int, ch: int, work_sum: float, extra_committed: float, note: str, work_other: float = 1.0) -> dict[str, Any]:
-        depth = 1 + max(l, ch) + 2
+    def row(option: str, lookup: int, ch: int, work_sum: float, extra_committed: float, note: str, work_other: float = 1.0) -> dict[str, Any]:
+        depth = 1 + max(lookup, ch) + 2
         commit_frac = extra_committed / committed
         w_gpu = 1 + sumcheck_share_gpu * (work_sum - 1) + commit_share_gpu * commit_frac + (work_other - 1)
         w_cpu = 1 + 0.86 * (work_sum - 1) + 0.13 * commit_frac + (work_other - 1)  # CPU: lookup+arith 86%, commit+open 13% of 261 s
-        out = {"option": option, "depth": depth, "lookup_chain": l, "checker_chain": ch, "prover_work_x": round(w_gpu, 3), "prover_work_x_cpu": round(w_cpu, 3),
+        out = {"option": option, "depth": depth, "lookup_chain": lookup, "checker_chain": ch, "prover_work_x": round(w_gpu, 3), "prover_work_x_cpu": round(w_cpu, 3),
                "committed_pct": 100 * commit_frac, "note": note}
         for tag, d, w in (("cpu", cpu, w_cpu), ("gpu", gpu, w_gpu)):
             dd = replace(d, prove_s=d.prove_s * w, depth=depth)
