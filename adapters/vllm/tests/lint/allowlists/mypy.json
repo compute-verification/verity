@@ -1024,7 +1024,6 @@
     {"file": "verity_vllm/program/predict/batch.py", "kind": "assignment", "symbol": "_solo", "detail": ""},
     {"file": "verity_vllm/program/predict/batch.py", "kind": "index", "symbol": "_solo", "detail": ""},
     {"file": "verity_vllm/program/predict/batch.py", "kind": "misc", "symbol": "check_compiled", "detail": "", "count": 2},
-    {"file": "verity_vllm/program/predict/build.py", "kind": "arg-type", "symbol": "build_program", "detail": "", "count": 3},
     {"file": "verity_vllm/program/predict/common.py", "kind": "arg-type", "symbol": "drive", "detail": ""},
     {"file": "verity_vllm/program/predict/common.py", "kind": "arg-type", "symbol": "request_passes", "detail": "", "count": 7},
     {"file": "verity_vllm/program/predict/common.py", "kind": "assignment", "symbol": "_Launch.keys", "detail": ""},

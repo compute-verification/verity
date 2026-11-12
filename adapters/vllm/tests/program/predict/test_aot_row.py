@@ -17,16 +17,21 @@ from verity_vllm.records.predicted_row import FILE, PredictedRow
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
 
-@pytest.mark.parametrize("n", [1, 2])
-def test_predict_row_writes_the_rows_manifest_by_the_query_path(tmp_path, monkeypatch, n):
-    """One request takes `manifest.build` over its Build, two take `manifest.build_global` over the row: each accepts the
-    policies `write_row` passes, and the manifest is complete, with the word check run and its sha256 in `predicted.json`."""
+def _tiny(tmp_path, monkeypatch, n: int) -> None:
+    """The row `tiny` is TINY serving `n` greedy requests, its workload file under `tmp_path`."""
     reqs = [{"request_id": f"u{i}", "index": i, "prompt_len": 5 + 2 * i, "max_tokens": 3, "arrive_step": i} for i in range(n)]
     phi = Phi.from_json({**_registered().phi.to_json(), "sampling": {"kind": "greedy"}, "workload": {"requests": reqs}})
     (wl := tmp_path / "workload.json").write_text(json.dumps({"model": "org/m", "requests": reqs}))
     monkeypatch.setattr(A, "row_file", lambda row: row)
     monkeypatch.setattr(A, "workload_file", lambda _row: wl)
     monkeypatch.setattr(S, "phi_of", lambda *_a, **_k: phi)
+
+
+@pytest.mark.parametrize("n", [1, 2])
+def test_predict_row_writes_the_rows_manifest_by_the_query_path(tmp_path, monkeypatch, n):
+    """One request takes `manifest.build` over its Build, two take `manifest.build_global` over the row: each accepts the
+    policies `write_row` passes, and the manifest is complete, with the word check run and its sha256 in `predicted.json`."""
+    _tiny(tmp_path, monkeypatch, n)
     rec = A.write_row("tiny", str(out := tmp_path / "row"), config="config.json")
     raw = (out / "manifest.json").read_bytes()
     man = json.loads(raw)
@@ -36,3 +41,18 @@ def test_predict_row_writes_the_rows_manifest_by_the_query_path(tmp_path, monkey
     assert man["program_digest"] == (next(iter(rec.requests.values())) if n == 1 else rec.workload_digest)
     assert ("global" in man) is (n > 1)
     assert PredictedRow.of(json.loads((out / FILE).read_text()), str(out / FILE)).manifest_digest == man["manifest_digest"]
+
+
+def test_the_row_command_prints_six_fields_of_its_record_and_says_on_stderr_what_it_wrote(tmp_path, monkeypatch, capsys):
+    """`predict row`'s stdout is one JSON line, six fields of the record it wrote beside the Build (a caller keeps the line as a
+    file); what it wrote on the way is on stderr, the request's Build first and the manifest's lines after it."""
+    _tiny(tmp_path, monkeypatch, 1)
+    assert A.main(A.RowOptions(row="tiny", out=str(out := tmp_path / "row"), config="config.json", jobs=1)) == 0
+    rec = PredictedRow.of(json.loads((out / FILE).read_text()), str(out / FILE))
+    got = capsys.readouterr()
+    assert json.loads(got.out) == {"row": "tiny", "workload_digest": rec.workload_digest, "manifest_digest": rec.manifest_digest,
+                                   "program_digest": rec.program_digest, "identities": rec.identities, "secs": rec.secs}
+    ((name, digest),) = rec.requests.items()
+    said = got.err.splitlines()
+    first = next(i for i, line in enumerate(said) if line.startswith(f"[predict] {name}: {digest[:16]}… ("))
+    assert said[first + 1].startswith("  ")
