@@ -182,10 +182,21 @@ def test_a_pinned_verifier_with_no_line_for_a_session_has_no_number(tmp_path):
     ({"bound": 1}, "execution phase 0's public part is not public.json's for test in bound"),
     ({"proved": list(range(31))}, "execution phase 0's public part is not public.json's for test in proved"),
     ({"rests_on_period_check": []}, "execution phase 0's public part is not public.json's for test in rests_on_period_check"),
+    ({"complete": False}, "execution phase 0's public part is not public.json's for test in complete"),
 ])
 def test_the_guard_refuses_another_public_part(tmp_path, change, why):
     doc = R.document(kept(tmp_path / "a", public={**R.pinned("test", 1), **change}), 0, RUN)
     assert doc["guard"] == {"holds": False, "scan_exit": 0, "why": [why]}
+
+
+def test_the_guard_refuses_an_answer_that_does_not_say_every_verdict_ran(tmp_path):
+    """The pinned public part says every verdict of the scan's audit ran (``complete``), so an answer without the
+    field, as a scan answered before it had one, does not stand as a measurement."""
+    assert R.pinned("test", 1)["complete"] is True
+    before = {k: v for k, v in R.pinned("test", 1).items() if k != "complete"}
+    doc = R.document(kept(tmp_path / "a", public=before), 0, RUN)
+    assert doc["guard"] == {"holds": False, "scan_exit": 0,
+                            "why": ["execution phase 0's public part is not public.json's for test in complete"]}
 
 
 def test_the_guard_refuses_a_failed_scan_a_reject_and_a_missing_answer(tmp_path):

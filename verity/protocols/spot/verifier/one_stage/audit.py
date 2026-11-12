@@ -32,7 +32,7 @@ from verity.protocols.spot.verifier.profile import (Bernoulli, IntegrityProfile,
                                           WorkStratum)
 
 from .draw import check_draw, check_proved, law_of
-from .registration import digest as registration_digest
+from .registration import PROTOCOL, digest as registration_digest
 
 FORMAT = "verity/one-stage/audit/v0"
 PROFILE = "verity/integrity-profile/v1"
@@ -130,6 +130,38 @@ def session_registered(verdicts: Mapping[str, Mapping[str, Any]],
         return out
     named = {r["port"] for r in registration["roots"]} | {e["value"] for e in registration.get("registered", [])}
     return {k: r for k, r in out.items() if k in named}
+
+
+#: the public output of an accept that says whether every verdict ran (`answer`), read by `answer_complete`
+COMPLETE = "complete"
+
+
+def answer(record: Mapping[str, Any], delta: Fraction) -> dict[str, Any]:
+    """One-stage's answer of the accepted audit record `record`, as Lean's `OneStage.check` gives it on that record's
+    evidence (`Core.Answer.toJson`): the commitment is the registration's digest; the profile is `profile` with `delta`
+    an exact ratio; and the public outputs are the sampled proof blocks and the proved ones, the bound on incorrect
+    proof blocks at `delta` with each template's own under a stratified or work sampling design, and `COMPLETE`, the
+    record's own ``complete``: whether every verdict ran, those that are not of record too. A record without one says
+    it of none."""
+    if record.get("accepted") is not True:
+        raise ValueError("only an accepted audit record has an accept's answer")
+    registration, draw = record["registration"], record["draw"]
+    p = profile(registration, draw, delta).to_json()
+    p["delta"] = str(delta)
+    wrong = wrong_units(registration, draw, delta)
+    return {"commitment": registration_digest(registration), "profile": p, "protocol": PROTOCOL,
+            "public": {"bound": wrong["bound"], COMPLETE: record.get("complete") is True,
+                       "drawn": sorted(draw["units"]), "per_template": wrong.get("per_template"),
+                       "proved": sorted(record["proved_units"])},
+            "reason": None, "verdict": "accept"}
+
+
+def answer_complete(answer: Any) -> bool:
+    """Whether `answer` is an accept that says every verdict ran: its verdict is ``accept`` and its public `COMPLETE`
+    is true. An answer without the field, as one written before the field was, is not complete, and neither is a
+    reject or an undecided, which has no public outputs."""
+    public = answer.get("public") if isinstance(answer, Mapping) else None
+    return isinstance(public, Mapping) and answer.get("verdict") == "accept" and public.get(COMPLETE) is True
 
 
 def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], draw: Mapping[str, Any],
