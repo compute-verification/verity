@@ -408,7 +408,10 @@ def moe_sum_alternatives() -> dict[str, Callable]:
 
 # ------------------------------------------------------------------------------------------------------------------- selection
 def _keys():
-    from vllm.model_executor.layers.quantization.utils.quant_utils import GroupShape, create_fp8_quant_key
+    from vllm.model_executor.layers.quantization.utils.quant_utils import (
+        GroupShape,
+        create_fp8_quant_key,
+    )
 
     return (create_fp8_quant_key(static=True, group_shape=GroupShape(GROUP, GROUP)),
             create_fp8_quant_key(static=False, group_shape=GroupShape(1, GROUP)))
@@ -418,7 +421,11 @@ def moe_config(inter: int):
     """`FusedMoEConfig` as GLM-5.3's `FusedMoE` layer makes it on one TP rank without EP, its intermediate size the rank's shard."""
     import torch
     from vllm.model_executor.layers.fused_moe.activation import MoEActivation
-    from vllm.model_executor.layers.fused_moe.config import FusedMoEConfig, FusedMoEParallelConfig, RoutingMethodType
+    from vllm.model_executor.layers.fused_moe.config import (
+        FusedMoEConfig,
+        FusedMoEParallelConfig,
+        RoutingMethodType,
+    )
 
     return FusedMoEConfig(num_experts=NUM_EXPERTS, experts_per_token=TOP_K, hidden_dim=HIDDEN, intermediate_size=inter,
                           num_local_experts=NUM_EXPERTS, num_logical_experts=NUM_EXPERTS, activation=MoEActivation.SILU, device="cuda",
@@ -439,8 +446,11 @@ def selection() -> dict[str, Any]:
 def served_kernel(inter: int, s1, s2):
     """The FusedMoEKernel `Fp8MoEMethod` builds for the layer: the selected backend's quant config over the block scales, then
     `make_fp8_moe_kernel`."""
-    from vllm.model_executor.layers.fused_moe.oracle.fp8 import (make_fp8_moe_kernel, make_fp8_moe_quant_config,
-                                                                  select_fp8_moe_backend)
+    from vllm.model_executor.layers.fused_moe.oracle.fp8 import (
+        make_fp8_moe_kernel,
+        make_fp8_moe_quant_config,
+        select_fp8_moe_backend,
+    )
 
     cfg = moe_config(inter)
     wkey, akey = _keys()

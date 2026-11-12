@@ -1,9 +1,8 @@
 """Levers on Figure 1's request-grain lines, computed with the figure's own planner path (total_cost._point):
 each lever rewrites the priced strata, the replay per sampled request or the scope's budget, and the bound and the
 break-even beta follow from optimize.two_stage_design."""
-import re
 from dataclasses import replace
-from math import log, sqrt
+from math import sqrt
 
 from common import SCOPES, c, computed, confs, f1, inputs, lines, sc, tc
 
@@ -54,20 +53,9 @@ def fuse_reads(strata, fixed="read"):
         out.append(g | {"block": f"Fused[{r['block']} + {g['block']}]", "kind": "fused", "k_log": k_log,
                         "seconds_per_block": r["seconds_per_block"] + g["seconds_per_block"],
                         "fixed_seconds": r["fixed_seconds"] + (g["fixed_seconds"] if fixed == "sum" else 0.0),
-                        "statement_blocks": max(1, tc.STATEMENT_BITS >> k_log), "priced": "modeled"})
+                        "statement_blocks": max(1, tc.STATEMENT_BITS >> k_log),
+                        "table_blocks": tc.table_blocks(k_log), "priced": "modeled"})
     return out
-
-
-def split_cols(strata, pattern, n):
-    """Each block of the types `pattern` matches cut into `n` column blocks: n times the blocks a token, each with 1/n
-    of its outputs, MACs and ANDs, 2^-Δk its seconds a block and 2^Δk its statement's cap, as total_cost.priced
-    scales a Definition measured at another size; a stratum that says what priced it (`basis`) then says it was cut."""
-    dk = log(n, 2)
-    return [x | {"per_token": x["per_token"] * n, "out_bits": x["out_bits"] / n, "macs": x["macs"] / n,
-                 "ands": x["ands"] / n, "in_bits": x["in_bits"] / n, "k_log": x["k_log"] - dk,
-                 "seconds_per_block": x["seconds_per_block"] / n, "statement_blocks": x["statement_blocks"] * n}
-            | ({"basis": f"{x['basis']}, cut into {n} column blocks"} if "basis" in x else {})
-            if re.match(pattern, x["block"]) else x for x in strata]
 
 
 def set_bits(strata, prefix, bits):

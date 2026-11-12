@@ -145,6 +145,14 @@ def request_steps_of_record(epr: dict[str, Any], arrivals: dict[str, int]) -> di
     return {rid: list(range(int(arrivals.get(rid, 0)), int(arrivals.get(rid, 0)) + int(rec["executed_prefix_len"]))) for rid, rec in epr["requests"].items()}
 
 
+def _linked_steps(linkage: dict[str, Any] | None, rid: str) -> Any:
+    """How many of the request's steps the C2 boundary linkage ran over (`horizon[rid].linked_steps`); None where there is no linkage,
+    or it states no horizon, or none for the request."""
+    horizon = linkage.get("horizon") if linkage else None
+    at = horizon.get(rid) if horizon else None
+    return at.get("linked_steps") if at else None
+
+
 def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[str, Any] | None, linkage: dict[str, Any] | None, arrivals: dict[str, int],
                            stop: dict[str, Any], served_tokens: dict[str, list[int]] | None = None) -> dict[str, dict[str, Any]]:
     """The per-request FACTS OF RECORD `sampled_replay.executed_prefix_of_record`
@@ -169,18 +177,21 @@ def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[
     cl = None if cov is None else cov.commit_account_link
     by_commit = cl is not None and not (link is not None and link.match_dir)
     with_commit = by_commit or (cl is not None and cl.required)
-    horizon = (linkage or {}).get("horizon") or {}
     # the account files that are NOT beside the Commit, named: a Commit whose match/capture/ moved away while it was queued has no
     # tokens.json (a_r per request, the lag attestation), the link falls to G6 for a_r, and the class would fault 'a_r is not linked
     # (linked=False)' + 'LAG rule not attested' -- a MISSING INPUT read as a verdict on the Program.  The fact names the missing file(s);
     # the consumer faults on it by name.
     account_missing = [] if by_commit else [leg for leg, present in (("tokens.json", tj is not None), ("global_match.json", g6 is not None)) if not present]
     past = {} if cov is None or cov.rows_past_the_stop is None else cov.rows_past_the_stop.steps_past_by_request
-    eos_set = {int(x) for x in (stop.get("eos") or [])} if stop.get("eos") is not None else None
+    eos = stop.get("eos")   # the Program's declared EOS ids: None where it declares no stop rule; a declared empty list is no id
+    eos_set = None if eos is None else ({int(x) for x in eos} if eos else set())
     decl_lag = stop.get("declared_lag")
     lk_ok = bool(linkage and linkage.get("result") is True)
     out: dict[str, dict[str, Any]] = {}
-    for rid, rec in (epr.get("requests") or {}).items():
+    requests = epr.get("requests")   # executed_prefix_of_record's record of each request; a record of no request gives no fact
+    if not requests:
+        return out
+    for rid, rec in requests.items():
         served_commit = rec.get("served_output_len")
         m_served = None if tj is None else tj.served_by_request.get(rid)
         g_len = None if g6 is None or g6.served_by_request is None else g6.served_by_request.get(rid)
@@ -203,7 +214,7 @@ def executed_prefix_facts(epr: dict[str, Any], binding: CommitBinding | Mapping[
         if cl is not None and with_commit:
             # the boundary linkage must have run over exactly this executed prefix: the committed tokens are the ones the next step consumed
             linked_c = bool(cl.ok is True and cl.tokens_committed is not None and cl.tokens_committed.get(rid) is True and lk_ok
-                            and (horizon.get(rid) or {}).get("linked_steps") == rec.get("executed_prefix_len"))
+                            and _linked_steps(linkage, rid) == rec.get("executed_prefix_len"))
             linked = linked_c if by_commit else (linked and linked_c)
             lag_attested = bool(cl.lag_attested) and (by_commit or lag_attested)
         out[rid] = {"a_r": a_r, "a_r_source": src, "lag": (int(decl_lag) if decl_lag is not None else -1), "cap": int(rec["cap"]), "arrive": int(arrivals.get(rid, 0)),
@@ -246,10 +257,11 @@ def rows_past_the_stop(bmap: dict[str, Any], request_steps: dict[str, Iterable[i
     past: dict[str, set[int]] = {}
     inside: dict[str, set[int]] = {}
     n = n_pad = n_inside = 0
-    for e in bmap.get("entries") or []:
-        if e.get("kind") != "leaf":
+    entries = bmap.get("entries")   # the binding map's entries; a map without them commits no row
+    for e in entries if entries else ():
+        i = e.get("identity")
+        if e.get("kind") != "leaf" or not i:   # a leaf without an identity is no request's row
             continue
-        i = e.get("identity") or {}
         rid = str(i.get("request_id"))
         if rid not in allowed or i.get("step") is None:
             continue
@@ -289,8 +301,9 @@ def restrict_engine_steps(engine_steps: list[dict[str, Any]], request_steps: dic
     dropped_m = dropped_s = changed = 0
     for es in engine_steps or []:
         e = int(es["engine_step"])
-        mem = [m for m in (es.get("members") or []) if str(m.get("request_id")) not in allowed or e in allowed[str(m.get("request_id"))]]
-        d = len(es.get("members") or []) - len(mem)
+        declared = es.get("members")   # the step's members as declared; a step that declares none has no executing request
+        mem = [m for m in declared if str(m.get("request_id")) not in allowed or e in allowed[str(m.get("request_id"))]] if declared else []
+        d = len(declared) - len(mem) if declared else 0
         dropped_m += d
         if not mem:
             dropped_s += 1
@@ -371,13 +384,33 @@ def restrict_manifest_identities(identities: list[dict[str, Any]], request_steps
     return out, dropped
 
 
+def _by_request(population: dict[str, Any]) -> dict[str, Any]:
+    """The population's facts per request (`by_request`: n_exec, arrive); none where it states no request."""
+    by_req = population.get("by_request")
+    return by_req if by_req else {}
+
+
+def _by_family(counts: dict[str, Any] | None) -> dict[str, Any]:
+    """A classification's counts per family (`by_family`: the Commit's, the population's totals); none where there is no classification
+    or it counts no family."""
+    by_family = counts.get("by_family") if counts else None
+    return by_family if by_family else {}
+
+
+def _cells_not_executed(batch_level: dict[str, Any] | None, fam: str) -> int | None:
+    """The cells past the stop the population states for a batch-level family (`batch_level[fam].cells_not_executed`); None where it
+    has no such block, or none for the family."""
+    level = batch_level.get(fam) if batch_level else None
+    return int(level["cells_not_executed"]) if isinstance(level, dict) and level.get("cells_not_executed") is not None else None
+
+
 def expected_cells_from_population(manifest_identities: list[dict[str, Any]] | None, population: dict[str, Any]) -> dict[str, dict[str, int]]:
     """For the families the population's ROW split does not classify, the count the population's OWN facts imply:
     per batch-level row (a plane identity, `*` + requests) the (request, plane) CELLS of listed requests at engine_step - arrive(q) >= n_exec(q);
     per named-input identity (request r, step) one cell when its request-relative step >= n_exec(r).  n_exec / arrive are read from
     population.not_executed_by_rule.by_request -- never from the Commit's own prefix, so the arithmetic is a cross-check."""
     out: dict[str, dict[str, int]] = {}
-    by_req = population.get("by_request") or {}
+    by_req = _by_request(population)
     nex = {str(k): int(v["n_exec"]) for k, v in by_req.items() if isinstance(v, dict) and v.get("n_exec") is not None}
     arr = {str(k): int(v.get("arrive", 0) or 0) for k, v in by_req.items() if isinstance(v, dict)}
     for x in manifest_identities or []:
@@ -430,25 +463,28 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
     if not population.get("applied", False) and (epr or {}).get("any_eos_stop"):
         out["ok"] = False
         out["problems"].append("population.not_executed_by_rule not applied on a record with an EOS-stopped request")
-    by_req = population.get("by_request") or {}
-    for rid, r in sorted(((epr or {}).get("requests") or {}).items()):
+    by_req = _by_request(population)
+    prefixes = epr.get("requests") if epr else None   # the Commit's executed prefix per request; none without its record
+    for rid, r in sorted(prefixes.items()) if prefixes else ():
         want = r.get("executed_prefix_len")
-        got = (by_req.get(rid) or {}).get("n_exec") if isinstance(by_req.get(rid), dict) else None
+        stated = by_req.get(rid)
+        got = stated.get("n_exec") if isinstance(stated, dict) else None
         out["n_exec"][rid] = {"commit": want, "population": got, "equal": (want is not None and got is not None and int(want) == int(got))}
         if not out["n_exec"][rid]["equal"]:
             out["ok"] = False
             out["problems"].append(f"{rid}: executed prefix of record {want} != the population's n_exec {got} (two prefixes on one record)")
-    totals = ((population.get("totals") or {}).get("by_family")) or {}
-    cc = commit_class or {}
+    totals = _by_family(population.get("totals"))
     expected = expected_cells_from_population(manifest_identities, population) if manifest_identities is not None else None
-    pop_kind = population.get("kind_by_family") or {}                                      # the population names each family's kind
-    pop_batch = population.get("batch_level") or {}                                        # batch_level[fam].cells_not_executed
-    fams = set(cc.get("by_family") or {}) | set(totals)
-    for fam in sorted(fams):
-        mine = int((cc.get("by_family") or {}).get(fam, 0))
-        theirs = totals.get(fam) or {}
+    # the population names each family's kind and each batch-level family's cells; an older population tree states neither, and
+    # then reaches no family that is not a row family
+    pop_kind, pop_batch = population.get("kind_by_family"), population.get("batch_level")
+    classified = _by_family(commit_class)
+    kinds = commit_class.get("kind_by_family") if commit_class else None   # the Commit names the kind of each family that is not a row family
+    for fam in sorted(set(classified) | set(totals)):
+        mine = int(classified.get(fam, 0))
+        theirs = totals.get(fam)   # a family the population's totals do not name excluded none
         n_ex = int(theirs.get("N_excluded", 0)) if isinstance(theirs, dict) else 0
-        kind = (cc.get("kind_by_family") or {}).get(fam, KIND_ROW)
+        kind = kinds.get(fam, KIND_ROW) if kinds else KIND_ROW
         cells = int(expected[fam]["cells"]) if expected is not None and fam in expected else None
         if kind == KIND_ROW:
             out["by_family"][fam] = {"commit": mine, "population": n_ex, "equal": mine == n_ex}
@@ -460,13 +496,12 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
         if kind == KIND_BATCH:
             # the population's statement of the (plane, request) cells past the stop -- the unit the Commit counts
             pc = theirs.get("plane_cells_not_executed") if isinstance(theirs, dict) else None
-            pop_val = (int(pc["cells"]) if isinstance(pc, dict) and pc.get("cells") is not None
-                       else int(pop_batch[fam]["cells_not_executed"]) if isinstance(pop_batch.get(fam), dict) and pop_batch[fam].get("cells_not_executed") is not None
-                       else None)
+            pop_val = int(pc["cells"]) if isinstance(pc, dict) and pc.get("cells") is not None else _cells_not_executed(pop_batch, fam)
             reaches = pop_val is not None
         else:
             # a per-request family by the executed-prefix rule -> N_excluded, exactly as for rows, once the population names it
-            reaches = (pop_kind.get(fam) is not None and pop_kind.get(fam) != "row") or (cells is not None and n_ex == cells and n_ex > 0)
+            named = pop_kind.get(fam) if pop_kind else None
+            reaches = (named is not None and named != "row") or (cells is not None and n_ex == cells and n_ex > 0)
             pop_val = n_ex if reaches else None
         if reaches:
             ent = {"commit": mine, "population": pop_val, "equal": mine == pop_val, "kind": kind, "unit": unit,
