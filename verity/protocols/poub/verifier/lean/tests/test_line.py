@@ -18,10 +18,10 @@ import shutil
 from fractions import Fraction
 
 import pytest
-from hypothesis import strategies as st
-
 import ra_cases as M
 import verity_difftest as D
+from hypothesis import strategies as st
+
 from verity.protocols.poub.verifier import audit, line, receipts
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -207,13 +207,13 @@ def test_each_refusal_of_the_node_is_the_leans_word_for_word(server, over, why) 
     (3, dict(passes=0, hbm=0, weights=0), "group 3 has no pass"),
     (3, dict(last_ns=29), "group 3's last root came before its coin"),
     (3, dict(released_ns=15, last_ns=40), "group 3's coin left before group 2's"),
-    (2, dict(least=990), "group 2's least pass read 990 of the 1000 registered blocks: the paced line needs every "
-                         "pass to read every registered block, since a block a pass leaves out can be absent across "
-                         "it with neither a wrong read nor a rebuild"),
+    (2, dict(least=990), ("group 2's least pass read 990 of the 1000 registered blocks: the paced line needs every "
+                          "pass to read every registered block, since a block a pass leaves out can be absent across "
+                          "it with neither a wrong read nor a rebuild")),
     (2, dict(hbm=1999), "group 2's 2 passes read 1999 registered blocks in all, not 2000"),
     (2, dict(weights=2001, hbm=1999, host=1), "group 2's passes read more weights than HBM, which holds them"),
-    (8, dict(released_ns=40, last_ns=80), "stretch 1's span is empty: group 8's coin left no later than group 4's "
-                                          "coin"),
+    (8, dict(released_ns=40, last_ns=80), ("stretch 1's span is empty: group 8's coin left no later than group 4's "
+                                           "coin")),
 ])
 def test_each_refusal_of_a_group_is_the_leans_word_for_word(server, g, over, why) -> None:
     v = session()
