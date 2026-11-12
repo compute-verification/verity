@@ -44,7 +44,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import lru_cache
 
-from verity.circuits.defs import REGISTRY, CompositeDefinition, SpecializedDefinition, bind
+from verity.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.circuits.refs import Coll, array_of, concat, tuple_of
 from verity.circuits.types import Array, Tuple, Value
 
