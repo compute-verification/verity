@@ -1,27 +1,39 @@
 #!/usr/bin/env python3
 """`tools/move/resolve_check.py PARENT COMMIT [--no-imports] [--json] [--root DIR]`: whether a move left every Lean name
-resolving to what it resolved to before, renamed as the move renames it.
+and import resolving to what it resolved to before, renamed as the move renames it.
 
-A word map's `[[words_in]]` row renames a word only in the files it lists. Where the word is a Lean declaration and a file
-outside the row spells it too, the move renames the declaration and leaves that file naming nothing. Such a move is still
-a pure move: `move_check.py` judges each file's text against the map, never what a name resolves to, and the file is
-found only when it is built. This check reads the two commits and reports each such name, so a stage that runs it after
-a move stops there, before the move's records run. Exit 0 when it finds none, 1 naming each (`--json`: as JSON).
+A word map's `[[words_in]]` row renames a word only in the files it lists. Where the word is a Lean declaration or a
+module and a file outside the row spells it too, the move renames the declaration and leaves that file naming nothing.
+Such a move is still a pure move: `move_check.py` judges each file's text against the map, never what a name resolves
+to, and the file is found only when it is built. This check reads the two commits and reports each such name. It reads
+source text and elaborates nothing, so it reports some names that are fine and misses others (below): an issue is where
+to look before the build, and the Lean build stays the authority. Exit 0 when it finds none, 1 naming each (`--json`:
+as JSON).
 
 What it reads, from git's objects alone (no checkout, no build, no Lean):
 - every tracked `.lean` file at PARENT and at COMMIT, a file paired with itself across git's rename detection, and each
   `lakefile.toml`'s `srcDir`, from which a file's module name follows;
-- in a file, outside comments and strings: its imports; where they start a line, its `namespace`, `section`, `end` and
-  `open` commands and the name each `def`, `theorem`, `lemma`, `abbrev`, `structure`, `inductive`, `class`, `instance`,
-  `opaque` or `axiom` declares; and every other identifier.
+- in a file, outside comments and strings: its imports; where they start a line, its `namespace`, `section`, `mutual`,
+  `end` and `open` commands and the name each `def`, `theorem`, `lemma`, `abbrev`, `structure`, `inductive`, `class`,
+  `instance`, `opaque` or `axiom` declares; and every other identifier.
+
+Its scopes are Lean's. `namespace A.B` and `section A.B` open one scope a component; a `section` that names none and a
+`mutual` open one with no name. `end A.B` closes one scope for each component it names and `end` alone closes one with
+no name, so the `end` of a `section` or a `mutual` takes nothing of the namespace around it. An `end` that doesn't name
+what the scan holds open closes nothing.
 
 It resolves an identifier in the order Lean resolves a global name: under the innermost enclosing namespace that declares
 it, then as written, then under an opened namespace, then with trailing components dropped as projections; a declaration
 counts where the file's imports reach its file (`--no-imports`: anywhere in the tree, which reports more). A file's
-declarations are paired between the commits in order, which gives each name's new name. Then, in each file the move
-changed or that spells a component of a name only one commit declares, the identifiers are paired in order, and one whose
-resolution at COMMIT is not its resolution at PARENT under its new name is an issue: `FILE:LINE: OLD -> NEW in
-NAMESPACE: want NAME, got NAME`. A file whose declarations or identifiers can't be paired is an issue too.
+declarations are paired between the commits in order, which gives each name's new name. An issue is then:
+- an import, each file's being paired in order, that resolved to a file at PARENT and at COMMIT doesn't resolve to that
+  file where the move put it: `FILE:LINE: import OLD -> NEW: want FILE, got FILE`;
+- in a file the move changed or that spells a component of a name only one commit declares, an identifier, the file's
+  being paired in order, whose resolution at COMMIT is not its resolution at PARENT under its new name: `FILE:LINE:
+  OLD -> NEW in NAMESPACE: want NAME, got NAME`;
+- in such a file, an `end` that closed nothing: the scan has lost the file's namespaces, and its names with them;
+- a Lean file at one commit with none paired to it at the other, and a file whose imports, declarations or identifiers
+  can't be paired in order.
 
 What it cannot see:
 - anything Lean elaborates. A local (a binder, a `variable`, a pattern's name) is read as a global of its spelling, so a
@@ -29,8 +41,10 @@ What it cannot see:
 - a name no such line declares: a structure's field, a constructor, a `where` function, an indented declaration, what
   `deriving`, a macro or an attribute makes, an `export` or an alias. A rename of one of those that misses a file is
   not reported;
-- an `open` inside a term or a tactic block, and what `hiding`, `renaming` or a parenthesised list leaves out of one;
-- a declaration outside the tree (Lean's, Mathlib's): a name that resolves to one resolves to nothing at both commits;
+- a scope command that doesn't start its line, an `open` inside a term or a tactic block, and what `hiding`, `renaming`
+  or a parenthesised list leaves out of one;
+- a declaration or a module outside the tree (Lean's, Mathlib's): a name or an import that resolves to one resolves to
+  nothing at both commits;
 - two declarations of one full name in two packages, which are one name to it;
 - a name in a comment, a docstring or a string, and every file that is not Lean. `move_check.py` and the map hold those.
 """
@@ -52,7 +66,8 @@ TOKEN = re.compile(rf"(?<![\w.'!?]){NAME}")
 DECL = re.compile(
     r"^(?:@\[[^\]]*\]\s*)*(?:(?:private|protected|public|noncomputable|partial|unsafe|nonrec|scoped|local|meta)\s+)*"
     rf"(def|theorem|lemma|abbrev|structure|inductive|class(?:\s+inductive)?|instance|opaque|axiom)\s+({NAME})", re.M)
-SCOPE = re.compile(rf"^(?:noncomputable\s+)?(?:public\s+)?(namespace|section|end)\b\s*({NAME})?")
+SCOPE = re.compile(
+    rf"^(?:@\[[^\]]*\]\s*)?(?:(?:public|noncomputable|meta)\s+)*(namespace|section|mutual|end)\b\s*({NAME})?$")
 IMPORT = re.compile(rf"^(?:public\s+)?(?:meta\s+)?import\s+(?:all\s+)?({NAME})", re.M)
 KEYWORDS = frozenset("""def theorem lemma abbrev structure inductive class instance opaque axiom where with fun let in if then
 else match do have show from by at only for return namespace section end open import public private protected module
@@ -146,38 +161,48 @@ def strip(text: str) -> str:
 
 
 class Scan:
-    """One file: its imports and the full names it declares; with ``tokens``, each identifier as (line, text, context,
-    whether it is the name a declaration declares), a context being the namespace and the opens in force there; without,
-    the words it spells."""
+    """One file: its imports as (line, module), the full names it declares and the line of each `end` that closed nothing;
+    with ``tokens``, each identifier as (line, text, context, whether it is the name a declaration declares), a context
+    being the namespace and the opens in force there; without, the words it spells."""
 
     def __init__(self, text: str, tokens: bool = False):
         code = strip(text)
-        self.imports = IMPORT.findall(code)
+        self.imports = [(code.count("\n", 0, m.start()) + 1, m.group(1)) for m in IMPORT.finditer(code)]
         self.decls: list[str] = []
+        self.stray: list[int] = []
         self.ctxs: list[tuple[tuple[str, ...], tuple]] = []
         self.tokens: list[tuple[int, str, int, bool]] = []
         self._scan(code, tokens)
         self.words = None if tokens else set(re.findall(IDENT, code))
 
     def _scan(self, code: str, tokens: bool) -> None:
-        scopes: list[tuple[list[str], int]] = []    # each open scope: the namespace components and the opens it added
+        # each open scope, one a name component as Lean opens them: its name (None: a `section` that names none, a
+        # `mutual`), whether it is a namespace, and how many opens were made in it
+        scopes: list[tuple[str | None, bool, int]] = []
         ns: list[str] = []
         opens: list[tuple[tuple[str, ...], str]] = []   # each open: the namespace it stands in and the name it opens
         for ln, line in enumerate(code.split("\n")):
             s, top = line.strip(), line[:1] not in (" ", "\t")
             m = SCOPE.match(s)
             if m and (top or m.group(1) == "end"):
-                kind, name = m.group(1), m.group(2)
-                if kind == "namespace" and name:
-                    scopes.append((name.split("."), 0))
-                    ns.extend(name.split("."))
+                kind, parts = m.group(1), m.group(2).split(".") if m.group(2) else [None]
+                if kind == "namespace" and parts != [None]:
+                    scopes.extend((part, True, 0) for part in parts)
+                    ns.extend(parts)
                 elif kind == "section":
-                    scopes.append(([], 0))
-                elif kind == "end" and top and scopes:
-                    parts, added = scopes.pop()
-                    del ns[len(ns) - len(parts):]
-                    if added:
-                        del opens[len(opens) - added:]
+                    scopes.extend((part, False, 0) for part in parts)
+                elif kind == "mutual":
+                    scopes.append((None, False, 0))
+                elif kind == "end" and top:
+                    if [name for name, _, _ in scopes[len(scopes) - len(parts):]] != parts:
+                        self.stray.append(ln + 1)   # it names no scope this scan saw open: it closes none
+                        continue
+                    for _ in parts:
+                        _, namespace, added = scopes.pop()
+                        if namespace:
+                            ns.pop()
+                        if added:
+                            del opens[len(opens) - added:]
                 continue
             mo = re.match(r"^open\s+(.*)$", s)
             if mo and top:
@@ -186,7 +211,7 @@ class Scan:
                 names = re.findall(NAME, body)
                 opens.extend((tuple(ns), nm) for nm in names)
                 if scopes:
-                    scopes[-1] = (scopes[-1][0], scopes[-1][1] + len(names))
+                    scopes[-1] = (*scopes[-1][:2], scopes[-1][2] + len(names))
                 continue
             if re.match(r"^(?:public\s+)?(?:meta\s+)?import\b", s):
                 continue
@@ -234,15 +259,17 @@ class Tree:
                 parts = d.split(".")
                 self.namespaces.update(".".join(parts[:i]) for i in range(1, len(parts) + 1))
 
+    def module(self, p: str, name: str) -> list[str]:
+        """The files ``p``'s import of the module ``name`` reads (none: no file of the tree is that module): a module two
+        packages define is the one of ``p``'s own package where there is one."""
+        files = self.module_of.get(name, [])
+        if len(files) > 1:
+            files = [f for f in files if self.root_of[f] == self.root_of[p]] or files
+        return files
+
     def imported(self, p: str) -> list[str]:
-        """The files ``p`` imports: a module two packages define is the one of ``p``'s own package where there is one."""
-        out = []
-        for m in self.scans[p].imports:
-            files = self.module_of.get(m, [])
-            if len(files) > 1:
-                files = [f for f in files if self.root_of[f] == self.root_of[p]] or files
-            out.extend(files)
-        return out
+        """The files ``p`` imports."""
+        return [f for _, name in self.scans[p].imports for f in self.module(p, name)]
 
     def reach(self, p: str) -> frozenset[str]:
         """``p`` and every file its imports reach."""
@@ -291,10 +318,19 @@ def check(root: Path, base: str, head: str, everywhere: bool = False) -> tuple[l
     B, H = Tree(root, base, everywhere), Tree(root, head, everywhere)
     issues: list[dict] = []
     new_name: dict[str, str] = {}
-    for bp, bs in B.scans.items():
-        hp = renames.get(bp, bp)
-        if (hs := H.scans.get(hp)) is None:
-            continue
+    paired = {bp: hp for bp in B.scans if (hp := renames.get(bp, bp)) in H.scans}
+    issues += [{"file": bp, "kind": "file", "at": "parent"} for bp in B.scans if bp not in paired]
+    issues += [{"file": hp, "kind": "file", "at": "commit"} for hp in H.scans.keys() - set(paired.values())]
+    for bp, hp in paired.items():
+        bs, hs = B.scans[bp], H.scans[hp]
+        if len(bs.imports) != len(hs.imports):
+            issues.append({"file": hp, "kind": "imports", "base": len(bs.imports), "head": len(hs.imports)})
+        else:
+            for (_, was), (line, now) in zip(bs.imports, hs.imports):
+                want, got = sorted(renames.get(f, f) for f in B.module(bp, was)), sorted(H.module(hp, now))
+                if want and got != want:
+                    issues.append({"file": hp, "line": line, "kind": "import", "base_import": was, "head_import": now,
+                                   "want": want, "got": got, "changed_file": hp in changed})
         if len(bs.decls) != len(hs.decls):
             issues.append({"file": hp, "kind": "declarations", "base": len(bs.decls), "head": len(hs.decls)})
             continue
@@ -306,13 +342,13 @@ def check(root: Path, base: str, head: str, everywhere: bool = False) -> tuple[l
     # only a file the move changed, or one that spells a component of a name only one commit declares, can resolve otherwise
     one_side = {d for s in B.scans.values() for d in s.decls} ^ {d for s in H.scans.values() for d in s.decls}
     parts = {c for d in one_side for c in d.split(".")}
-    chosen = sorted(bp for bp in B.scans if (hp := renames.get(bp, bp)) in H.scans
-                    and (hp in changed or not parts.isdisjoint(H.scans[hp].words)))
+    chosen = sorted(bp for bp, hp in paired.items() if hp in changed or not parts.isdisjoint(H.scans[hp].words))
     btexts = texts(root, base, chosen)
-    htexts = texts(root, head, [renames.get(bp, bp) for bp in chosen])
+    htexts = texts(root, head, [paired[bp] for bp in chosen])
     for bp in chosen:
-        hp = renames.get(bp, bp)
+        hp = paired[bp]
         bs, hs = Scan(btexts.pop(bp), tokens=True), Scan(htexts.pop(hp), tokens=True)
+        issues += [{"file": hp, "line": line, "kind": "end"} for line in hs.stray]
         if len(bs.tokens) != len(hs.tokens):
             issues.append({"file": hp, "kind": "identifiers", "base": len(bs.tokens), "head": len(hs.tokens)})
             continue
@@ -327,14 +363,25 @@ def check(root: Path, base: str, head: str, everywhere: bool = False) -> tuple[l
                 issues.append({"file": hp, "line": hl + 1, "base_tok": bt, "head_tok": ht, "ns": ".".join(hs.ctxs[hci][0]),
                                "base": was[0], "want": want[0], "got": now[0], "projs": list(now[1]),
                                "changed_file": hp in changed})
+    issues.sort(key=lambda issue: (issue["file"], issue.get("line", 0)))
     return issues, len(chosen), len(B.scans)
 
 
 def said(issue: dict) -> str:
-    if kind := issue.get("kind"):
+    kind, where = issue.get("kind"), f"{issue['file']}:{issue.get('line')}"
+    unchanged = "" if issue.get("changed_file", True) else " (unchanged file)"
+    if kind == "file":
+        other = "commit" if issue["at"] == "parent" else "parent"
+        return f"{issue['file']}: a Lean file at the {issue['at']} with none paired to it at the {other}"
+    if kind == "end":
+        return f"{where}: an `end` that closes no scope the scan holds open: it has lost this file's namespaces"
+    if kind == "import":
+        return (f"{where}: import {issue['base_import']} -> {issue['head_import']}: want {' '.join(issue['want'])}, "
+                f"got {' '.join(issue['got']) or None}{unchanged}")
+    if kind:
         return f"{issue['file']}: {issue['base']} {kind} at the parent, {issue['head']} at the commit: they can't be paired"
-    return (f"{issue['file']}:{issue['line']}: {issue['base_tok']} -> {issue['head_tok']} in {issue['ns'] or '<root>'}: "
-            f"want {issue['want']}, got {issue['got']}{'' if issue['changed_file'] else ' (unchanged file)'}")
+    return (f"{where}: {issue['base_tok']} -> {issue['head_tok']} in {issue['ns'] or '<root>'}: "
+            f"want {issue['want']}, got {issue['got']}{unchanged}")
 
 
 def main(argv: list[str] | None = None) -> int:
