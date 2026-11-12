@@ -72,6 +72,14 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from . import census
+from verity.circuits.boolean.forms import Circuit
+from verity.circuits.cut import separable
+from verity.circuits.evaluation.reference import resolve, signature_of
+from verity.definitions.ops.boolean import attention as AT
+from verity.definitions.registry import sampling_boolean as SB
+from verity.protocols.pouw.prover.circuit.plan import record_k
+from verity_flock import ir_lower, lowerings
+from verity_flock import subcircuit_templates as TM
 
 METRICS = ("inputs", "ands", "output_copies", "committed", "nnz_AB", "lookups")
 EPSILON = Fraction(1, 1000)
@@ -110,12 +118,6 @@ BLOCK_CHECKS = (1, 2)
 
 def build(template: str, params: Mapping[str, Any], statics: Mapping[str, int] | None = None) -> dict[str, Any]:
     """The subcircuit's Definition lowered whole into a CSE'd forms Circuit: ``counts()`` plus the live table reads by table."""
-    from verity.circuits.evaluation.reference import resolve, signature_of
-    from verity_flock import ir_lower
-    from verity_flock.gf2 import Circuit
-
-    from verity_flock import subcircuit_templates as TM
-
     d = resolve(TM.subcircuit(template, **params).definition(**dict(statics or {})))
     sig, _ = signature_of(d)
     C = Circuit(cse=True)
@@ -170,9 +172,6 @@ def registered(template: str, params: Mapping[str, Any], T: int | None = None) -
     """The template's registered Flock lowering (``verity_flock.lowerings``): its units per subcircuit and the unit's
     ``flock-ir-unit/v2`` layout counts, the matrix a session evaluates per unit with the intermediates the lowering commits.
     The native tail (``tail_gates``) is evaluated by the verifier and has no rows. ``{"none": why}`` without one."""
-    from verity_flock import lowerings
-    from verity_flock import subcircuit_templates as TM
-
     mod = lowerings.registry("C-Flock").module(template)
     if mod is None:
         return {"none": "no registered C-Flock lowering"}
@@ -234,12 +233,6 @@ def registered_costs(types: Sequence[UnitType], n_jobs: int, log: Callable[[str]
 def argmax_step() -> dict[str, Any]:
     """token-select has no registered lowering. Its scan's middle ArgmaxStep as one unit, the carry (best, best_i, i) as cut
     words like gumbel's registered lane: the layout a cut lowering would give per step (the first and last steps differ)."""
-    from verity.circuits.evaluation.reference import resolve
-    from verity_flock import ir_lower
-    from verity_flock.gf2 import Circuit
-
-    from verity_flock import subcircuit_templates as TM
-
     _p, call = ir_lower.standalone(resolve(TM.subcircuit("token-select-greedy", V=8).definition()))
     gates = ir_lower.live_gates(call)
     gt = sorted((g for g in gates if g.prim.id == "Bf16GtStrict_v1"), key=lambda g: g.index)[3]
@@ -261,10 +254,6 @@ def argmax_step() -> dict[str, Any]:
 
 def _layout(d: Any) -> dict[str, int]:
     """A Boolean Definition laid out whole as one unit (CSE'd forms Circuit): rows, ANDs, nnz_a, nnz_b."""
-    from verity.circuits.evaluation.reference import resolve, signature_of
-    from verity_flock import ir_lower
-    from verity_flock.gf2 import Circuit
-
     d = resolve(d)
     sig, _ = signature_of(d)
     C = Circuit(cse=True)
@@ -284,10 +273,6 @@ def argmax_tree(V: int, stage: str = "TokenSelectStage") -> dict[str, Any]:
     """The argmax tree over V logits (``sampling_boolean.stages``): each stage is separable
     (``verity.circuits.cut.separable``), so it costs its members' own layouts times their multiplicities, each member
     laid out as one unit (nnz = nnz_a + nnz_b + rows, C = I over rows)."""
-    from verity.circuits.cut import separable
-    from verity.circuits.evaluation.reference import resolve
-    from verity.definitions.registry import sampling_boolean as SB
-
     members: list[dict[str, Any]] = []
     memo: dict[str, dict[str, int]] = {}
     for st in SB.stages(V, getattr(SB, stage)):
@@ -345,10 +330,6 @@ CIRCUITS_F3 = {"rope-pair": 156_755, "tc-step-k2048": 254_460, "silu-element": 3
 
 
 def _f32mul() -> dict[str, Any]:
-    from verity.circuits.boolean.forms import Circuit
-    from verity.definitions.ops.boolean import attention as AT
-    from verity_flock import ir_lower
-
     out: dict[str, Any] = {}
     for cse in (False, True):
         C = Circuit(cse=cse)
@@ -463,8 +444,6 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
 # --- the sample --------------------------------------------------------------------------------------------------------------
 
 def sample_size(epsilon: Fraction = EPSILON, delta: Fraction = DELTA) -> int:
-    from verity.protocols.pouw.prover.circuit.plan import record_k
-
     return record_k(epsilon, delta)
 
 

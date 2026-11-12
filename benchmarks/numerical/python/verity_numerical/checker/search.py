@@ -473,14 +473,12 @@ def single_hint_search(p: Params, cases: Iterable[tuple[int, list[int], list[int
                        seed: int = 0) -> SingleHintResult:
     """For each input, each hint of the honest witness is replaced by every other value of its contract range
     (or ``sample`` values when the range is large); the checker must reject, or accept with the same output."""
-    from .reference import dot
-
     rng = random.Random(seed)
     res = SingleHintResult(repr(p))
     t0 = time.perf_counter()
     ctx = IntCtx()
     for c, a, b in cases:
-        y = dot(p, c, a, b)
+        y = reference.dot(p, c, a, b)
         h = gen_step(p, c, a, b)
         assert check_step_expr(ctx, p, c, a, b, h) == y
         res.inputs += 1

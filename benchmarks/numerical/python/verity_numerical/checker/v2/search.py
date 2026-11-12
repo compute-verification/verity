@@ -19,6 +19,7 @@ import time
 from collections.abc import Iterable
 from dataclasses import asdict
 
+from .. import search as S
 from ..ctx import Reject, Table, Z3Ctx
 from ..gadgets import Epilogue
 from ..params import REAL, Params
@@ -48,6 +49,7 @@ from .gadgets import (
     StateShift,
 )
 from .params import V2
+from .step import _group
 from .tables import all_tables, leadnorm_table
 
 __all__ = ["SPECS_V2", "main", "modular_queries_v2", "table_selfcheck", "z3_group_step_v2"]
@@ -331,7 +333,6 @@ class ModZ3CtxV2(ModZ3Ctx):
 
 
 def _z3_gadget_mod(spec: Spec, p: Params, modulus: int, *, timeout_ms: int, label: str) -> QueryResult:
-    import verity_numerical.checker.search as S
     saved = S.ModZ3Ctx
     S.ModZ3Ctx = ModZ3CtxV2
     try:
@@ -369,7 +370,6 @@ def z3_gadget_wrapfree(spec: Spec, p: Params, modulus: int, *, timeout_ms: int, 
     integer 'differs-from-reference' UNSAT is also the field result.  This is a linear query when every key is a
     linear function of range-checked quantities (the v2 shape), which is why it closes what the direct product
     query leaves UNKNOWN."""
-    import verity_numerical.checker.search as S
     ctx = WrapFreeZ3CtxV2(modulus)
     z3 = ctx.z3
     contract = spec.contract(p)
@@ -442,8 +442,6 @@ def z3_group_step_v2(p: Params = REAL, *, timeout_ms: int = 60_000, concrete: di
     if concrete:
         for k, v in concrete.items():
             ctx.solver.add(x[k] == v)
-
-    from .step import _group
 
     def copy_(tag):
         h = {"E": ctx.fresh(f"{tag}.E"), "acc_split": {"M_hi": ctx.fresh(f"{tag}.M_hi"), "M_lo": ctx.fresh(f"{tag}.M_lo")},
