@@ -2,7 +2,9 @@
 is a port an earlier record committed, so the state one window leaves is the state a later one reads, under the earlier
 record's root, domain and hiding leaves. The stream hands R7 the record each output value names however long its log, and
 the run of record (`Run.run`) checks the output values the registration did, in one stage and in a two-stage design's
-interior registration."""
+interior registration. And a stream's certified entries (`registration.check`'s `certified`): a registered value that is
+none of the program's parameters, which the stream's check and its run of record hold to the entry the verifier built
+for it, and an interior registration takes none."""
 
 from __future__ import annotations
 
@@ -44,26 +46,33 @@ PORTS = ("x", "out", "next")
 BOUNDARY, INTERIOR = ("bx", "bout", "carry"), ("x", "out")
 N_RHO, NB, Q, K = 3, 4, 2, 1
 STATE = S.Value("state", None, "serve", registered=True)
+#: A link's certified rows: a registered value that is none of the program's parameters, with the entry and root the
+#: verifier built for it from the registration it read under the deployment's key.
+ROWS = S.Value("link-0/in/7", None, "serve", registered=True)
+CERTIFIED = {ROWS.name: {"root": "c5" * 64, "leaves": 3, "words": 64, "domain": "c4" * 64}}
+ROWS_ENTRY = {"value": ROWS.name, **CERTIFIED[ROWS.name]}
 
 
-def _public(ports) -> tuple[S.Public, ...]:
+def _public(ports, registered=(STATE,)) -> tuple[S.Public, ...]:
     return (S.Public("population", "structure", "N, the sample's range"),
             S.Public("window", "structure", "provenance: served, on test prompts"),
             *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}") for v in ports for k in ("leaves", "domain")),
-            *(S.Public(f"{k}:state", "structure", f"the state's {k}") for k in ("leaves", "words", "domain")))
+            *(S.Public(f"{k}:{v.name}", "structure", f"the {v.name}'s {k}") for v in registered
+              for k in ("leaves", "words", "domain")))
 
 
-def _spec() -> S.Spec:
-    return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), STATE), S.Law("rate:1/3"),
-                  S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0), _public(PORTS),
+def _spec(registered=(STATE,)) -> S.Spec:
+    return S.Spec((*(S.Value(v, SCHEMA, "serve") for v in PORTS), *registered), S.Law("rate:1/3"),
+                  S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0), _public(PORTS, registered),
                   b"outputs-test")
 
 
-def _two_stage_spec() -> S.Spec:
-    values = (*(S.Value(v, SCHEMA, "serve") for v in BOUNDARY), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR), STATE)
+def _two_stage_spec(registered=(STATE,)) -> S.Spec:
+    values = (*(S.Value(v, SCHEMA, "serve") for v in BOUNDARY), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR),
+              *registered)
     return S.Spec(values, S.TwoStage(GRAIN, "rate:1/2", K),
-                  S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0), _public(BOUNDARY + INTERIOR),
-                  b"outputs-two-stage-test")
+                  S.Check(P.program_digest(Program(CARRY)), QUERY, proof_deadline=60.0),
+                  _public(BOUNDARY + INTERIOR, registered), b"outputs-two-stage-test")
 
 
 def _stream(spec: S.Spec | None = None, **kwargs) -> S.Stream:
@@ -170,6 +179,76 @@ def test_the_run_of_record_reads_the_output_values(monkeypatch):
     assert not outcome.accepted and stream.records[-1]["audit"]["checks"]["run"]["codes"] == [V.DISAGREE]
 
 
+def test_a_stream_takes_the_verifiers_certified_entries():
+    """A window's record registers a link's certified rows, a value that is none of the program's parameters, and no
+    other: the stream refuses it without the verifier's certified entries (`keys`: expecting nothing registered, it
+    expects a v1 record), and with an entry at another root (`R7-certified`) or of other leaves (`R7-leaves`). With the
+    entries it accepts the record and keeps them, its run of record reads them again, and the outcome is accepted. A
+    later window registers the state an earlier one left beside the rows: its registered values are the verifier's own
+    and the certified one, and without the entries it is refused (`R7-values`)."""
+    stream = _stream(_spec((STATE, ROWS)))
+    rows = CERTIFIED[ROWS.name]
+    cand, ports = _window(0, None, [ROWS_ENTRY])
+    assert _refused(lambda: stream.register(cand, ports)) == ("keys",)
+    assert _refused(lambda: stream.register(cand, ports, certified={ROWS.name: {**rows, "root": "c6" * 64}})) == (
+        "R7-certified",)
+    assert _refused(lambda: stream.register(cand, ports, certified={ROWS.name: {**rows, "leaves": 4}})) == ("R7-leaves",)
+    reg = stream.register(cand, ports, certified=CERTIFIED)
+    assert stream._entries[-1].certified == CERTIFIED
+    outcome = _close(stream, reg, {ROWS.name: rows["root"]})
+    assert outcome.accepted and outcome.verdict.codes == () and stream.records[-1]["audit"]["accepted"]
+
+    w0 = stream.log[0]
+    out = {"state": {"record": R.digest(w0), "port": "next"}}
+    later, ports = _window(1, reg.digest, [_left(w0), ROWS_ENTRY])
+    assert _refused(lambda: stream.register(later, ports, registered={"state": 2}, outputs=out)) == ("R7-values",)
+    reg = stream.register(later, ports, registered={"state": 2}, outputs=out, certified=CERTIFIED)
+    outcome = _close(stream, reg, {"state": _left(w0)["root"], ROWS.name: rows["root"]})
+    assert outcome.accepted and outcome.verdict.codes == () and stream.records[-1]["audit"]["accepted"]
+
+
+def test_the_run_of_record_reads_the_certified_entries(monkeypatch):
+    """The stream's run of record gets the certified entries R7 took (`verifier.run`'s `certified`, in the Lean's
+    params): a run that drops them refuses the registration the stream accepted, and the outcome with it."""
+    stream = _stream(_spec((STATE, ROWS)))
+    cand, ports = _window(0, None, [ROWS_ENTRY])
+    reg = stream.register(cand, ports, certified=CERTIFIED)
+    run = V.run
+    monkeypatch.setattr(S.V, "run", lambda *a, certified=None, **kw: run(*a, **kw))
+    outcome = _close(stream, reg, {ROWS.name: CERTIFIED[ROWS.name]["root"]})
+    assert not outcome.accepted and stream.records[-1]["audit"]["checks"]["run"]["codes"] == [V.DISAGREE]
+
+
+def _two_stage(spec: S.Spec):
+    """A two-stage stream of `spec` past its first-stage sample: the stream, its boundary record, which leaves its replay
+    blocks' state at port `carry`, that registration, the sample, the interior's `outputs` naming that port, and the
+    interior's record and ports registering the entries it is given."""
+    stream = _stream(spec, replay=BLOCK)
+    m = Q * N_RHO
+    boundary, bports = _record(P.population_program(BLOCK, NB), GRAIN, {"bx": NB, "bout": NB, "carry": m},
+                               {"law": "subset", "k": Q}, 0, None)
+    reg = stream.register(boundary, bports)
+    first = stream.select(reg)
+
+    def interior(registered):
+        return _record(P.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
+                       0, reg.digest, registered, interior=True, replay_sample=D.proved(first.draw))
+    return stream, boundary, reg, first, {"state": {"record": reg.digest, "port": "carry"}}, interior
+
+
+def test_an_interior_registration_takes_no_certified_entries():
+    """`register_interiors` takes no certified entries: an interior record that registers a link's certified rows beside
+    the state its boundary left is refused (`R7-values`), where the same record without the rows is accepted."""
+    stream, boundary, _, first, out, interior = _two_stage(_two_stage_spec((STATE, ROWS)))
+    with_rows, iports = interior([_left(boundary, "carry"), ROWS_ENTRY])
+    assert _refused(lambda: stream.register_interiors(first, with_rows, iports, registered={"state": 2},
+                                                      outputs=out)) == ("R7-values",)
+    with pytest.raises(TypeError):
+        stream.register_interiors(first, with_rows, iports, registered={"state": 2}, outputs=out, certified=CERTIFIED)
+    own, iports = interior([_left(boundary, "carry")])
+    assert stream.register_interiors(first, own, iports, registered={"state": 2}, outputs=out).digest == R.digest(own)
+
+
 def test_an_interior_registration_reads_a_port_of_its_boundary():
     """Under a two-stage design the interior registration's registered `state` is the boundary registration's port
     `carry`, the state its replay blocks leave: R7 takes it in the interior registration, the interior's copies carry
@@ -178,17 +257,9 @@ def test_an_interior_registration_reads_a_port_of_its_boundary():
     them, which this boundary doesn't register, and its session, which the verdict of record names as it checked it,
     reads `state` from the registered value instead. Registered with no output named, it is refused under its own
     domain."""
-    stream = _stream(_two_stage_spec(), replay=BLOCK)
+    stream, boundary, reg, first, out, record = _two_stage(_two_stage_spec())
     assert stream.n_rho == N_RHO
-    m = Q * N_RHO
-    boundary, bports = _record(P.population_program(BLOCK, NB), GRAIN, {"bx": NB, "bout": NB, "carry": m},
-                               {"law": "subset", "k": Q}, 0, None)
-    reg = stream.register(boundary, bports)
-    first = stream.select(reg)
-    out = {"state": {"record": reg.digest, "port": "carry"}}
-    interior, iports = _record(P.population_program(CARRY, m), QUERY, dict.fromkeys(INTERIOR, m), {"law": "subset", "k": m},
-                               0, reg.digest, [_left(boundary, "carry")], interior=True,
-                               replay_sample=D.proved(first.draw))
+    interior, iports = record([_left(boundary, "carry")])
     assert "R7-domain" in _refused(lambda: stream.register_interiors(first, interior, iports, registered={"state": 2}))
     ireg = stream.register_interiors(first, interior, iports, registered={"state": 2}, outputs=out)
     assert stream._entries[reg.order].interior_copies[-1] == out

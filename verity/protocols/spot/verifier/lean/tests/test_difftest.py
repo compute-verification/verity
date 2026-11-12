@@ -523,7 +523,7 @@ def decode_params(j) -> dict:
     keys = keys | {"supplied"} if isinstance(j, dict) and "supplied" in j else keys
     keys = keys | {"pinned"} if isinstance(j, dict) and "pinned" in j else keys
     keys = keys | {"outputs"} if isinstance(j, dict) and "outputs" in j else keys
-    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool")
+    keys = keys | {k for k in ("row_schemas", "window_root", "held", "challenger", "seed_salt", "pool", "certified")
                    if isinstance(j, dict) and k in j}
     _exactly(j, keys | {"binding"} if isinstance(j, dict) and "binding" in j else keys, "the parameters")
     desc = _obj(j["program"], "program")
@@ -607,6 +607,13 @@ def decode_params(j) -> dict:
             R._binding(j["binding"])
         except ValueError as e:
             raise D.Reject(str(e)) from None
+    if "certified" in j:
+        if not isinstance(j["certified"], dict):
+            raise D.Reject("certified entries are not an object")
+        try:
+            R._certified(j["certified"], j["registered"] or {}, G.sources(j.get("supplied", {})))
+        except ValueError as e:
+            raise D.Reject(str(e)) from None
     try:
         window, fixed = R._window(j.get("window_root"), j.get("held"), j["registered"] or {},
                                   G.sources(j.get("supplied", {})), j.get("pinned") or {}, j.get("outputs") or {})
@@ -674,7 +681,8 @@ def _registration_verdict(p: dict, rec) -> Verdict:
     return R.check(rec, p["program"], p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                    p["partition"], p["work_table"], p["registered"], p.get("supplied"), p.get("pinned"),
                    p.get("binding"), p.get("outputs"), p.get("row_schemas"), p.get("window_root"), p.get("held"),
-                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"))
+                   p.get("link_members", ()), seed_salt=p.get("seed_salt"), pool=p.get("pool"), tied=p.get("tied"),
+                   certified=p.get("certified"))
 
 
 def _registration(p: dict, rec) -> tuple[str, ...]:
@@ -762,7 +770,9 @@ def _ran_out(p: dict, rec: dict, src: bytes) -> bool:
 
 def covered_params(j) -> dict:
     """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli law refused, at any p
-    (`service.bernoulli`)."""
+    (`service.bernoulli`), as are parameters that name certified entries."""
+    if isinstance(j, dict) and "certified" in j:
+        raise D.Reject("the parameters name certified entries: the sampled audit takes none")
     p = decode_params(j)
     if service.bernoulli(p["law"]):
         raise D.Reject(service.BERNOULLI)
@@ -1657,6 +1667,8 @@ def _interior_of(it) -> dict:
         raise D.Reject("an interior names no rows: the verifier derives them from the replay block's Definition")
     if "returns" in it:
         raise D.Reject("an interior names no returns: the verifier derives them from the replay block's Definition")
+    if "certified" in params:
+        raise D.Reject("an interior's params name no certified entries: its registered values are its program's own")
     return {**it, "decoded": decoded, "replay_program": PROGRAMS[sha], "values": values, "proved_units": proved,
             "instances": instances, "served": it.get("served"), "session_roots": it.get("session_roots"),
             "record": it.get("record"), "coins": it.get("coins"), "statements": it.get("statements"),
@@ -2348,6 +2360,55 @@ def _tied(a: dict, x: int) -> None:
 
 #: One change each to the run Inputs the verifier names tied (`_tied`), or its program's parameters left out.
 TIED = [_tied, _tied, lambda a, x: (_tied(a, x), a["params"].pop("parameters"))]
+#: A value a verifier holds a certified entry for, none of these programs' parameters (a link's certified rows), and the
+#: entry it built from the registration it read under the deployment's key.
+CERTIFIED_VALUE = "link-0/in/7"
+CERTIFIED_ENTRY = {"domain": "c4" * 64, "leaves": 3, "root": "c5" * 64, "words": 64}
+
+
+def _certify(mine=None, entry=None):
+    """The verifier holding a certified entry for `CERTIFIED_VALUE` (`mine`: its change to the parameter) and the
+    record, as a v2 record, registering the value beside its others (`entry`: its change to that entry, None for no
+    entry)."""
+    def change(a, x):
+        held = {CERTIFIED_VALUE: dict(CERTIFIED_ENTRY)}
+        a["params"]["certified"] = mine(held, x) if mine else held
+        e = {"value": CERTIFIED_VALUE, **CERTIFIED_ENTRY}
+        e = entry(e, x) if entry else e
+        if e is not None:
+            a["record"]["registered"] = [*a["record"].get("registered", []), e]
+            a["record"]["format"] = R.FORMAT_V2
+    return change
+
+
+def _uncertified(a: dict, x: int) -> None:
+    """The record registers the certified value, and the verifier holds no entry for it."""
+    _certify()(a, x)
+    del a["params"]["certified"]
+
+
+#: One change each to the certified entries a verifier holds and the record's entry for the certified value: held and
+#: registered alike, at 16 bits and at 32; the record's entry changed or left out; the verifier's entry in another form;
+#: its entries in another form or of other values, a parameter it expects registered among them; and an entry the
+#: record registers that the verifier holds none for.
+CERTIFIED = [
+    _certify(),
+    _certify(entry=lambda e, x: [None, {**e, "root": "c6" * 64}, {**e, "leaves": 4}, {**e, "words": 32},
+                                 {**e, "domain": "c7" * 64}, {**e, "word_bits": 32}, {**e, "word_bits": 16},
+                                 {**e, "root": "xy"}, {**e, "leaves": "3"}, {**e, "extra": 1}, {**e, "value": "W"},
+                                 {k: v for k, v in e.items() if k != "root"}][x % 12]),
+    _certify(mine=lambda c, x: {CERTIFIED_VALUE: {**c[CERTIFIED_VALUE], **[
+        {"root": "c6" * 64}, {"leaves": 4}, {"word_bits": 32}, {"word_bits": 16}, {"word_bits": 8}, {"word_bits": "16"},
+        {"root": "C5" * 64}, {"root": "c5"}, {"root": 5}, {"leaves": -1}, {"leaves": True}, {"leaves": "3"},
+        {"words": "64"}, {"domain": 5}, {"extra": 1}][x % 15]}}),
+    _certify(mine=lambda c, x: [{}, {"W": c[CERTIFIED_VALUE]}, {"x": c[CERTIFIED_VALUE]}, {"S": c[CERTIFIED_VALUE]},
+                                {**c, "link-0/out/7": c[CERTIFIED_VALUE]}, None, [], "x", {CERTIFIED_VALUE: None},
+                                {CERTIFIED_VALUE: []},
+                                {CERTIFIED_VALUE: {k: v for k, v in c[CERTIFIED_VALUE].items() if k != "root"}}][x % 11]),
+    _certify(mine=lambda c, x: {CERTIFIED_VALUE: {**c[CERTIFIED_VALUE], "word_bits": 32}},
+             entry=lambda e, x: {**e, "word_bits": 32}),
+    _uncertified,
+]
 GROUPS = [RECORD, PARAMS, DRAW, EVIDENCE, VERDICTS_OF, ENTRIES, REGISTERED_PARAMS, REGISTERED_EVIDENCE, SUPPLIED, BINDINGS,
           WINDOWS, SEED_SALTS]
 
@@ -3116,6 +3177,8 @@ REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
     changed_audits([SEED_SALTS], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     changed_audits([REGISTERED_PARAMS], 1, 1, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     changed_audits([ENTRIES, RECORD], 2, 2, REGISTERED_SETUPS).map(_REGISTRATION_OF),
+    changed_audits([CERTIFIED], 1, 1).map(_REGISTRATION_OF),
+    changed_audits([CERTIFIED, ENTRIES, REGISTERED_PARAMS, SUPPLIED], 2, 2, REGISTERED_SETUPS).map(_REGISTRATION_OF),
     st.builds(lambda a, r: {"params": a["params"], "record": r}, changed_audits(most=0), JSON)), package=PACKAGE)
 
 
@@ -5984,7 +6047,7 @@ def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused(
 
 
 R7_CODES = {"R7-registered", "R7-values", "R7-root", "R7-leaves", "R7-words", "R7-domain", "R7-word_bits", "R7-held",
-            "R7-supplied"}
+            "R7-supplied", "R7-certified"}
 
 
 def _v2_audit(s: RegisteredSetup, values: dict) -> dict:
@@ -6016,7 +6079,7 @@ def test_every_r7_code_is_reached(pieces):
             honest = registration(_REGISTRATION_OF(a))
             assert honest["codes"] == []
             assert D.replay(REGISTRATION, _REGISTRATION_OF(a), pieces) == ("output", D.canonical(honest))
-            for change, x in ((c, x) for c in ENTRIES + REGISTERED_PARAMS + SUPPLIED for x in range(8)):
+            for change, x in ((c, x) for c in ENTRIES + REGISTERED_PARAMS + SUPPLIED + CERTIFIED for x in range(8)):
                 b = copy.deepcopy(a)
                 try:
                     change(b, x)
@@ -6025,6 +6088,73 @@ def test_every_r7_code_is_reached(pieces):
                 kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
                 seen |= set(json.loads(out)["codes"]) if kind == "output" else set()
     assert R7_CODES <= seen, sorted(R7_CODES - seen)
+
+
+def test_r7_takes_the_verifiers_certified_entries(pieces, server):
+    """Lean and Python agreeing, on a program none of whose parameters is registered and on one with a value registered:
+    a record that registers a certified value beside the verifier's own is accepted by a verifier holding the entry for
+    it, at 16 bits and at 32, and refused by one holding none (by its keys where it expects nothing registered, else
+    `R7-values`); the verifier's entry with no entry in the record is refused (by the record's keys, else `R7-values`
+    and `R7-certified`), an entry at another root is `R7-certified`, and one of other leaves, words, domain or width
+    R7's code for that key. A certified value the verifier expects a parameter registered under, or an entry in
+    another form, refuses its inputs. The sampled audit refuses parameters that name certified entries, on an audit
+    its own checks would accept. A run of record whose parameters name the entry accepts the record that registers the
+    certified value and refuses it at its register step without (`R7-values`), and a two-stage run whose interior's
+    parameters name certified entries, even none, is no run's."""
+    def codes(a, change, x=0):
+        b = copy.deepcopy(a)
+        change(b, x)
+        kind, out = D.replay(REGISTRATION, _json(_REGISTRATION_OF(b)), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    alike, entry, mine, forms, wide, uncertified = CERTIFIED
+    lone, own = _v1_audit("all", SETUPS[0]), _v2_audit(REGISTERED_SETUPS[0], {"W": 2})
+    for a, unheld, unregistered in ((lone, ["keys"], ["keys"]), (own, ["R7-values"], ["R7-values", "R7-certified"])):
+        assert codes(a, lambda b, x: None) == []
+        assert codes(a, alike) == [] and codes(a, wide) == []
+        assert codes(a, uncertified) == unheld and codes(a, forms, 0) == unheld
+        assert codes(a, entry, 0) == unregistered
+        for x, want in ((1, ["R7-certified"]), (2, ["R7-leaves"]), (3, ["R7-words"]), (4, ["R7-domain"]),
+                        (5, ["R7-word_bits"]), (6, ["R7-word_bits"]), (7, ["R7-root", "R7-certified"]),
+                        (8, ["R7-leaves"]), (9, ["R7-registered"]), (11, ["R7-registered", "R7-certified"])):
+            assert codes(a, entry, x) == want, x
+        for x, want in ((0, ["R7-certified"]), (1, ["R7-leaves"]), (2, ["R7-word_bits"]), (3, [])):
+            assert codes(a, mine, x) == want, x
+        for x in range(4, 15):
+            assert codes(a, mine, x) == "reject", x
+        for x in range(5, 11):
+            assert codes(a, forms, x) == "reject", x
+    assert codes(own, forms, 1) == "reject" and codes(lone, forms, 1) == ["R7-values", "R7-certified"]
+
+    full = copy.deepcopy(own)
+    alike(full, 0)
+    full["evidence"].update(receipt=R.receipt(full["record"], "v", received=RECEIVED), verdicts={
+        "lean": {"accepted": True, "of_record": True, "registered": reads(full["record"])}})
+    case = _json(_case(full))
+    parsed = (decode_params(case["params"]), decode_commitment(PR.unhex(case["commitment"])),
+              decode_evidence(PR.unhex(case["evidence"])))
+    assert check(*parsed)[0] == "accept"
+    assert D.replay(ONE_STAGE, case, server)[0] == "reject"
+    assert D.replay(ONE_STAGE, _json(_case(own)), server)[0] == "accept"
+
+    ran = _v2_audit(REGISTERED_SETUPS[0], REGISTERED_SETUPS[0].values[1])
+    alike(ran, 0)
+    ran["evidence"]["verdicts"] = {"lean": {"accepted": True, "of_record": True, "registered": reads(ran["record"])},
+                                   "upstream": {"accepted": True, "of_record": False}}
+    _, case = _from_challenger(_run_case(ran, "", 2, ["credited"]), random.Random("run/certified"))
+    case = {**case, "values": [*case["values"], {"name": CERTIFIED_VALUE, "registered": True}],
+            "public": [*case["public"], *(f"{k}:{CERTIFIED_VALUE}" for k in ("leaves", "domain", "words", "word_bits"))]}
+    bare = {**case, "params": {k: v for k, v in case["params"].items() if k != "certified"}}
+    for c, want in ((case, ("accept", None, None)), (bare, (None, "register", ["R7-values"]))):
+        out = run(copy.deepcopy(c))
+        assert (out.get("symbol"), out.get("step"), out.get("codes")) == want, out
+        assert D.replay(RUN, c, pieces) == ("output", D.canonical(out)), out
+    two = _two_stage_case()
+    for held in ({}, {CERTIFIED_VALUE: CERTIFIED_ENTRY}):
+        named = _inner_params(certified=held)(two, 0)
+        assert D.replay(RUN, named, pieces)[0] == "reject"
+        with pytest.raises(D.Reject):
+            run(copy.deepcopy(named))
 
 
 def test_every_produced_code_is_reached(pieces):

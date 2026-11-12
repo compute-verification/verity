@@ -689,8 +689,8 @@ with the proved units and instances null for the sample's own, and the coins' ev
 that read coins must carry); under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
 "record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots", "statements"}` in the
 same forms, `replay` one replay block's program object, its params' `proofs` the auditor's naming each template's
-circuit file, reference header and registered reads (`Run.templateCircuits`), and no `links` or `wires`, which the
-verifier derives; null otherwise.
+circuit file, reference header and registered reads (`Run.templateCircuits`) and never `certified` entries, and no
+`links` or `wires`, which the verifier derives; null otherwise.
 The verifier flips no coins of its own: an input whose `coin_source` is not the challenger's is refused. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
@@ -754,6 +754,8 @@ def run (j : Json) : V Json := do
         throw "an interior names no rows: the verifier derives them from the replay block's Definition"
       if (field? it "returns").isSome then
         throw "an interior names no returns: the verifier derives them from the replay block's Definition"
+      if (field? ipj "certified").isSome then
+        throw "an interior's params name no certified entries: its registered values are its program's own"
       pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
                     provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
                     statements, circuits } : Run.Interior))

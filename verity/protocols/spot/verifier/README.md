@@ -195,7 +195,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
   `statements`; `one_stage.proofs.members_v2` writes it), which the audit parses and refuses. The executable's
   `members PARAMS EVIDENCE` (`Spot/MembersParse.lean`, `proofs.members_parsed`) prints what its parsers read of the two
-  files, with the words `parsed, not checked` and no verdict.
+  files, with the words `parsed, not checked` and no verdict. Its `refusal PARAMS COMMITMENT EVIDENCE [BLOB ...]`
+  (`Spot/MembersRefusal.lean`, `one_stage.members.refusal`) runs the audit's check on a case of that form and prints
+  why it is refused, `MULTI_REFUSED` exactly where every check before the refusal passed; it accepts nothing and never
+  exits 0 (`refusal_exit`). A window's sessions run on its challenger's session, each closed there after its evidence
+  (`one_stage.closing`, `challenger.members_tree_reason`).
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).
@@ -372,6 +376,10 @@ A program's weights, constants and tables are values: committed once, under hidi
   its run's seed salt (bound to its stream and prover) and its own bytes. They are committed under public salts, and R7
   recomputes their root (`R7-supplied`). PoUW's seed inputs are such values
   (`verity/protocols/pouw/verifier/tests/test_pouw_supplied_inputs.py`).
+- **Certified values.** `certified` holds the verifier's entry for each registered value that is none of its
+  program's parameters (a link's certified rows). R7 holds the record's values to the program's and those, and each
+  such entry to the verifier's on every key, its root included (`R7-certified`). `Stream.register` takes them;
+  `register_interiors` and the audits that read `OneStage.paramsOfJson` take none.
 - **Reads.** Every port of a statement is either a registered port of the `--registered` file
   (`Registered.checkComplete`) or bound to the window's committed values: the file's `bound` names its rows' root and
   domain as the registration holds them, and the public header's must be the same (`bind_ports`; `Flock.RegBound`). No

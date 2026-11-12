@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from eps_profile import SCALE, by_class, first, raw_metrics, sass_counts  # noqa: E402
+from eps_profile import SCALE, by_class, first, raw_metrics, sass_counts
 
 ARMS = ("vedit", "vsum", "vpair", "vfold", "vfold_x")
 
