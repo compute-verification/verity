@@ -474,8 +474,7 @@ def _with_ip_options(packet: bytes, n: int = 8) -> bytes:
      r"capture\.pcap's packet 0 is kept too short for its headers: this reads its first 48 bytes \(14 of its frame "
      r"header, 20 of its IP header and TCP's first 14\) and 40 are kept\. Capture again keeping at least that many of "
      r"each packet; a packet with longer headers needs more\. No one length suits every capture, since a length past "
-     r"a packet's headers keeps the first bytes of its content: see \"Taking the capture\" \(a link\) and \"On the "
-     r"server's loopback\" in benchmarks/network_traces/README\.md$"),
+     r"a packet's headers keeps the first bytes of its content: see benchmarks/network_traces/README\.md$"),
     ("IPv6 kept at 54 bytes a packet",
      [fx.ethernet(fx.ip(fx.CERTIFIER6, fx.SERVER6[0], fx.TCP, fx.tcp(40001, 8000, 1, fx.SYN)))], {"snapshot": 54},
      r"packet 0 is kept too short for its headers: this reads its first 68 bytes \(14 of its frame header, 40 of its "
@@ -488,7 +487,7 @@ def _with_ip_options(packet: bytes, n: int = 8) -> bytes:
      r"capture\.pcap's packet 0 is kept too short for its headers: the 30 bytes kept of it end before its IPv4 header "
      r"is whole, so this can't tell how many it reads\. Capture again keeping more of each packet\. No one length "
      r"suits every capture, since a length past a packet's headers keeps the first bytes of its content: see "
-     r"\"Taking the capture\" \(a link\) and \"On the server's loopback\" in benchmarks/network_traces/README\.md$"),
+     r"benchmarks/network_traces/README\.md$"),
     ("another link type", [fx.ethernet(p) for p in fx.first()], {"link": 105},
      r"capture\.pcap has link type 105: this reads Ethernet \(1\), raw IP \(101\) and Linux cooked \(113, 276\)"),
 ])

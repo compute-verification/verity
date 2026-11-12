@@ -127,9 +127,8 @@ class _Unread(Exception):
 
 
 #: how the refusal of a packet kept too short ends: it names no length for every capture
-LENGTHS = ('No one length suits every capture, since a length past a packet\'s headers keeps the first bytes of its '
-           'content: see "Taking the capture" (a link) and "On the server\'s loopback" in '
-           'benchmarks/network_traces/README.md')
+LENGTHS = ("No one length suits every capture, since a length past a packet's headers keeps the first bytes of its "
+           "content: see benchmarks/network_traces/README.md")
 
 
 def _cut(kept: int, header: str) -> _Unread:
