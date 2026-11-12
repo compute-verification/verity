@@ -1,7 +1,7 @@
 """`verity bench memory`: the share of a node's memory read rate that one accepted PoUB session leaves uncertified, at
 the data sheet's read bandwidth: the session's γ in its verifier's ledger at the specification's rate, as text and as
 one line of JSON (`value`, `unit`, `commit`, `run`). A session that wasn't accepted prints no number and exits 1.
-The text says how the number's error reads (`ERROR`): the ledger's δ for that γ, and the term no δ holds.
+The text says how the number's error reads (`ERROR_FORM`): the ledger's δ for that γ, and the term no δ holds.
 
     verity bench memory PERIOD [--dry-run]        the node run: a gate run under the challenger's period PERIOD
     verity bench memory --from RUN [--session K]  a recorded run
@@ -58,6 +58,9 @@ SETTINGS = of(__file__)
 #: openings a window
 UNPACED = re.compile(r"([1-9]\d*):(\d+(?:\.\d{1,3})?):([1-9]\d*)")
 UNIT = "share of the node's memory read rate left uncertified, at the data sheet's read bandwidth"
+#: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
+#: ledger, and the windows' PRF advantages are in no δ
+ERROR_FORM = "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
 ROLE = "LLAMA32_1B_BF16"
 REFERENCES = HERE / "references.json"
 #: a block of PoUB's store, in bytes
@@ -67,9 +70,6 @@ RECORDS = ["out/verifier.json", "out/host-run.txt", "out/host/*/out/verifier.jso
 LOOPBACK = ("loopback: both processes ran on this machine, the prover the CPU reference over a test store; it "
             "certifies nothing")
 NOTHING = "a share of 1 or more certifies nothing of the node's read rate"
-#: how the number's error reads, in PoUB's ledger's words (its `DELTA_FORM`): δ is the session's, in its verifier's
-#: ledger, and the windows' PRF advantages are in no δ
-ERROR = "δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed)"
 #: the wipe run's label states its bound in words
 WIPE = re.compile(r"foreign <= ([\d,]+) bits\b.*\bM = ([\d,]+) B\b")
 #: minutes the node run waits for a launched run's record: the fire run's own bound and its publish
@@ -353,7 +353,7 @@ def text(doc: dict) -> str:
     rate = doc.get("rate_bytes_per_s")
     lines = [f"memory: {doc['value']:.3f} of the node's memory read rate is left uncertified by this session, at the "
              f"data sheet's read bandwidth" + (f" ({rate / 1e12:,.4f} TB/s)" if rate else "")
-             + f"; its error reads {ERROR}, δ in the verifier's ledger"]
+             + f"; its error reads {ERROR_FORM}, δ in the verifier's ledger"]
     if doc["loopback"]:
         lines.append(f"  {LOOPBACK}")
     elif doc["value"] >= 1:
