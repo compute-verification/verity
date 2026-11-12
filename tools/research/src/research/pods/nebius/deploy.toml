@@ -78,8 +78,8 @@ admin = true
 record = "/data/infra/deploy/record.jsonl"
 managed = ["/data/infra/vy-control-*", "/usr/local/sbin/vy-control-*", "/etc/sudoers.d/*vy*"]
 
-# cpu-2 and cpu-3 (train slots): only the OOM order, the memory drop-ins and the user-namespace setting are deploy's there so
-# far; the rest is set by hand until they are full deploy.toml nodes, so `managed` names just those files
+# cpu-2 and cpu-3 (train slots): `managed` names just the OOM order, the memory drop-ins and the user-namespace setting, so
+# only those can be strays there. Each entry that lists a node is read on it whatever its `managed` names
 [nodes.vy-nebius-cpu-2]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*",
@@ -121,9 +121,8 @@ managed = ["/usr/local/bin/vy-*", "/usr/local/sbin/vy-*", "/usr/local/lib/vy-mon
            "/etc/systemd/system/*.d/*vy*", "/etc/systemd/system.control/*/*",
            "/etc/sysctl.d/61-vy-userns*"]
 
-# cpu-7 to cpu-12 (cpu-7, cpu-9, cpu-11 and cpu-12 hold the soundness, research and train pools): `managed` names just the
-# OOM order, the memory drop-ins and the user-namespace setting. On cpu-8 and cpu-10 those, the retention collector and the
-# unattended upgrades are all that is deploy's so far
+# cpu-7 to cpu-12 (cpu-7, cpu-9, cpu-11 and cpu-12 hold the soundness, research and train pools; the nightly check runs in
+# cpu-8's nightly pool): `managed` names just the OOM order, the memory drop-ins and the user-namespace setting
 [nodes.vy-nebius-cpu-7]
 record = "/workspace/research/deploy/record.jsonl"
 managed = ["/usr/local/lib/vy-monitoring/oom_order.py", "/etc/systemd/system/vy-oom-order.*",
@@ -878,12 +877,17 @@ nodes = ["vy-nebius-1", "vy-nebius-2"]
 run = ["systemd:vy-store-evict.timer", "systemd:vy-store-evict-research.timer"]
 owner = "infra"
 
-[[file]]  # cpu-1 runs only research's pass (no job-pod store there)
+# Research's store eviction, on every node that holds research runs: both nodes and every CPU node, whose research pool
+# `--on auto` places runs in. Its four files go together: the script, the service, the timer and src.conf, without which a
+# pass deletes no `research run` source tree and they fill /workspace's blocks and inodes. A CPU node runs only research's
+# pass (no job-pod store there). After a node's first install,
+# `sudo systemctl daemon-reload && sudo systemctl enable --now vy-store-evict-research.timer`.
+[[file]]
 path = "/usr/local/bin/vy-store-evict"
 src = "tools/research/src/research/pods/nebius/sky/store_evict.sh"
 mode = "755"
-nodes = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
-         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12",
+nodes = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
@@ -905,8 +909,8 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/vy-store-evict-research.service"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_research.service"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
-         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12",
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
@@ -914,8 +918,8 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/vy-store-evict-research.timer"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_research.timer"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
-         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12",
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
@@ -1143,8 +1147,8 @@ owner = "infra"
 [[file]]
 path = "/etc/systemd/system/vy-store-evict-research.service.d/src.conf"
 src = "tools/research/src/research/pods/nebius/sky/store_evict_src.conf"
-nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
-         "vy-nebius-cpu-7", "vy-nebius-cpu-9", "vy-nebius-cpu-11", "vy-nebius-cpu-12",
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-3", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6",
+         "vy-nebius-cpu-7", "vy-nebius-cpu-8", "vy-nebius-cpu-9", "vy-nebius-cpu-10", "vy-nebius-cpu-11", "vy-nebius-cpu-12", "vy-nebius-cpu-13",
          "vy-nebius-cpu-14", "vy-nebius-cpu-15", "vy-nebius-cpu-16", "vy-nebius-cpu-17"]
 run = ["systemd:vy-store-evict-research.timer"]
 owner = "infra"
