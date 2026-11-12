@@ -195,9 +195,8 @@ def unlike(argv, command) -> str | None:
 SHARD_KIND = "check-shard/v1"
 
 
-def declared(repo: Path, commit: str) -> list[dict] | None:
-    """The `[[job]]` tables of ``commit``'s own `tools/verity/check/ci.toml`, in its order (each a name, an owner, a group, and
-    `after` when it has one; `gate` where it sets one), or None when it can't be read."""
+def _ci_toml(repo: Path, commit: str) -> dict | None:
+    """``commit``'s own `tools/verity/check/ci.toml`, parsed, or None when it can't be read."""
     import tomllib
 
     from .store import tools_registry
@@ -206,12 +205,33 @@ def declared(repo: Path, commit: str) -> list[dict] | None:
                                   lambda p: _git(repo, "cat-file", "-e", f"{commit}:{p}", check=False).returncode == 0)
     r = _git(repo, "show", f"{commit}:{path or 'tools/verity/check/ci.toml'}", check=False)
     try:
-        jobs = tomllib.loads(r.stdout).get("job", []) if r.returncode == 0 else None
-    except (tomllib.TOMLDecodeError, TypeError, AttributeError):
-        jobs = None
+        return tomllib.loads(r.stdout) if r.returncode == 0 else None
+    except (tomllib.TOMLDecodeError, TypeError):
+        return None
+
+
+def declared(repo: Path, commit: str) -> list[dict] | None:
+    """The `[[job]]` tables of ``commit``'s own `tools/verity/check/ci.toml`, in its order (each a name, an owner, a group, and
+    `after` when it has one; `gate` where it sets one), or None when it can't be read."""
+    jobs = doc.get("job", []) if (doc := _ci_toml(repo, commit)) is not None else None
     if not isinstance(jobs, list) or not all(isinstance(t, dict) and isinstance(t.get("name"), str) for t in jobs):
         return None
     return jobs
+
+
+def shard_plans(repo: Path, commit: str) -> dict[int, list[list[str]]] | None:
+    """The `[[plan]]` tables of ``commit``'s own `tools/verity/check/ci.toml` by their number of shards, as check.py's
+    `--shard K/N` takes them: {N: each shard's parts}, or None when it can't be read."""
+    plans = doc.get("plan", []) if (doc := _ci_toml(repo, commit)) is not None else None
+    if not isinstance(plans, list):
+        return None
+    out = {}
+    for p in plans:
+        shards = p.get("shards") if isinstance(p, dict) else None
+        if not (isinstance(shards, list) and all(isinstance(s, list) and all(isinstance(x, str) for x in s) for s in shards)):
+            return None
+        out.setdefault(len(shards), shards)
+    return out
 
 
 def declared_jobs(repo: Path, commit: str) -> list[str] | str:

@@ -4003,6 +4003,56 @@ def _key(repo: Path, commit: str, pkg: str = "pkg") -> str:
     return json.loads(r.stdout)[pkg]
 
 
+#: a commit's own `lean_changed.py` whose `--ask` prints what the data file beside it (`ASKS`) gives its packages, or fails
+ASK_TOOL = """import json, pathlib, sys
+if sys.argv[1] == "--ask":
+    asks = json.loads((pathlib.Path(__file__).parent / "asks.json").read_text())
+    if "fail" in asks:
+        sys.stderr.write("no ask for these\\n")
+        sys.exit(asks["fail"])
+    print(sum(asks[p] for p in sys.argv[2:]))
+"""
+ASKS = "tools/verity/lean/asks.json"
+
+
+@pytest.mark.parametrize("files, gb, why", [
+    ({KEY_FILES[0]: ASK_TOOL, ASKS: '{"pkg": 140, "lib": 9}'}, 149, None),
+    ({KEY_FILES[0]: ASK_TOOL, ASKS: '{"fail": 3}'}, 93, "`tools/verity/lean/lean_changed.py --ask` at {c} exited 3: no ask for these"),
+    ({KEY_FILES[0]: ASK_TOOL, ASKS: '{"pkg": 0, "lib": 0}'}, 93,
+     "`tools/verity/lean/lean_changed.py --ask` at {c} printed no whole number of GB: '0'"),
+    ({KEY_FILES[0]: "import sys\nprint(7)\n"}, 93, "{c} has no `tools/verity/lean/lean_changed.py --ask`"),
+    ({}, 93, "{c} has no `tools/verity/lean/lean_changed.py --ask`"),
+], ids=["ask", "fails", "not-a-number", "no-ask", "no-tool"])
+def test_a_records_run_asks_the_memory_its_commit_s_own_ask_prints_and_93_where_it_has_none_or_it_fails(world, files, gb, why):
+    """`records_mem_gb` runs the commit's own `lean_changed.py --ask PKG...`, with the files beside it at that commit, and
+    takes the one whole number it prints; a commit whose tool has no `--ask`, or none, and an `--ask` that fails or prints
+    anything else, get `RECORDS_MEM_GB`.  Each says which in its log line."""
+    from research.queue import records_mem_gb
+
+    c, logs = world.change({"asked.txt": f"{files}\n", **files}), []
+    assert records_mem_gb(world.dev, c, ["pkg", "lib"], logs.append) == gb
+    said = ("--mem-gb 149, its own `tools/verity/lean/lean_changed.py --ask`'s" if why is None else
+            f"--mem-gb 93, as {why.format(c=c[:12])}")
+    assert logs == [f"research queue: records run at {c[:12]}: {said}"]
+
+
+def test_an_ask_that_runs_over_its_timeout_gets_93_and_says_so(world, monkeypatch):
+    from research import queue as Q
+
+    c, logs, run = world.change({KEY_FILES[0]: ASK_TOOL, ASKS: '{"pkg": 140}'}), [], subprocess.run
+
+    def over(argv, **kw):
+        if "--ask" in argv:
+            assert kw["timeout"] == Q.ASK_TIMEOUT_S
+            raise subprocess.TimeoutExpired(argv, kw["timeout"])
+        return run(argv, **kw)
+
+    monkeypatch.setattr(Q.subprocess, "run", over)
+    assert Q.records_mem_gb(world.dev, c, ["pkg"], logs.append) == 93
+    assert logs == [f"research queue: records run at {c[:12]}: --mem-gb 93, as `tools/verity/lean/lean_changed.py --ask` at "
+                    f"{c[:12]} ran over 60 s"]
+
+
 def _published(world: World, commit: str, *, pkg: str = "pkg", passed: bool = True, passes: dict[str, str] | None = None,
                records: dict | None = None, steps: list | None = None, kind: str | None = None, at: float | None = None,
                argv: list[str] | None = None, state: str | None = None, rc: int | None = None, rid: str | None = None) -> str:
@@ -4063,7 +4113,7 @@ def test_a_head_that_changes_a_lock_is_vouched_for_only_by_a_pass_on_its_lean_in
     """A records run that failed a package still writes a record, which reads as a pass, and vouches for nothing.  Only a
     result's `passes`, the Lean inputs key of each package it passed, vouches: with no run the warning names the command to
     start; with a failing one, that run too."""
-    from research.queue import RECORDS_COMMAND, StoreLabels
+    from research.queue import RECORDS_COMMAND, RECORDS_MEM_GB, StoreLabels
 
     world.with_store_remote()
     _keyed(world, {LOCK: _lock()})
@@ -4073,14 +4123,15 @@ def test_a_head_that_changes_a_lock_is_vouched_for_only_by_a_pass_on_its_lean_in
     err = capsys.readouterr().err
     assert f"research queue ready: warning: #1 at {h[:12]}: it changes the Lean lock of pkg against `main`" in err
     assert f"the store holds no pass of it on {h[:12]}'s Lean inputs" in err
-    assert f"start `{RECORDS_COMMAND.format(pkg='pkg')}`" in err
-    assert ("research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone --declared-output "
+    assert f"start `{RECORDS_COMMAND.format(pkg='pkg', gb=RECORDS_MEM_GB)}`" in err
+    assert f"--mem-gb 93, as {h[:12]} has no `tools/verity/lean/lean_changed.py --ask`" in world.logs[-1]
+    assert ("research run --on auto --mem-gb 93 --max-min 120 --project verity --source . --cwd clone --declared-output "
             "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records pkg --update") in err
     failed = _published(world, h, passed=False)
     assert _mark(world, 1, h) == 1
     err = capsys.readouterr().err
     assert f"records run {failed} of {h[:12]} failed pkg (`research status {failed}`" in err
-    assert RECORDS_COMMAND.format(pkg="pkg") in err
+    assert RECORDS_COMMAND.format(pkg="pkg", gb=RECORDS_MEM_GB) in err
     assert StoreLabels(world.store, log=world.logs.append).ready(1, h) is True
 
     key = _key(world.dev, h)
@@ -4110,7 +4161,7 @@ def test_a_head_that_changes_a_lock_no_records_run_passed_is_marked_and_the_warn
                           f"and the store holds no pass of each on {h[:12]}'s Lean inputs"), err
     assert f": {RECORDS_AFTER_LANDING}:\n  - " in err
     for pkg in ("lib", "pkg"):
-        assert f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg)}`" in err
+        assert f"to record {pkg} before it lands, start `{RECORDS_COMMAND.format(pkg=pkg, gb=93)}`" in err
     assert "is not marked" not in err and f"#1 at {h[:12]}: marked on lane-1's word, with no quick tier" in out
     assert StoreLabels(world.store, log=world.logs.append).ready(1, h) is True
 
@@ -4705,6 +4756,51 @@ def _move_main(world: World, files: dict[str, str]) -> str:
     moved = world.change(files)
     _git(world.dev, "push", "-q", "origin", f"{moved}:refs/heads/main")
     return moved
+
+
+def _landed_move(world: World, rows: str, files: dict[str, str | None]) -> tuple[str, str]:
+    """`main` moved by a layout move: its map `tools/move/x_map.toml` (``rows``) lands, then the move writing ``files`` on it,
+    with its `Layout-move:` line, as `tools/move/stage.py` commits one.  Returns (the move's base, the move)."""
+    base = _move_main(world, {"tools/move/x_map.toml": rows})
+    tree = _git(world.dev, "rev-parse", f"{world.change(files)}^{{tree}}")
+    move = _git(world.dev, "commit-tree", tree, "-p", base, "-m", "Move\n\nLayout-move: tools/move/x_map.toml")
+    _git(world.dev, "push", "-q", "origin", f"{move}:refs/heads/main")
+    return base, move
+
+
+def test_a_move_map_retires_its_rows_old_paths_and_dotted_modules_and_a_word_map_its_words_in_any_case(world, capsys):
+    """`map_retires` reads a map as `layout.py` and `rename.py` take it: a row that keeps its path and a one-word module retire
+    nothing, and a map missing at the base or that doesn't parse can't be read, the one that doesn't parse said on stderr."""
+    main = _move_main(world, {"tools/move/l_map.toml": '[paths]\n"old/" = "new/"\n"kept.py" = "kept.py"\n'
+                                                       '[retired]\npaths = ["gone/"]\n[drop]\npaths = ["x.toml"]\n'
+                                                       '[modules]\n"old" = "new"\n"pkg.old" = "pkg.new"\n',
+                              "tools/move/w_map.toml": '[words]\n"Warden" = "NetworkCertifier"\n'
+                                                       '[[words_in]]\nfiles = ["a/*"]\nwords = { tap = "certifier" }\n',
+                              "tools/move/bad_map.toml": "[paths\n"})
+    layout, words = (Q.map_retires(world.origin, main, f"tools/move/{m}_map.toml") for m in ("l", "w"))
+    assert layout == Q.Retired(frozenset({"old", "gone", "x.toml", "pkg.old"})), layout
+    assert words == Q.Retired(words=frozenset({"warden", "tap"})), words
+    assert words.named("a NETWORK WARDEN, pkg.old") == ["warden"] and layout.named("from pkg.old import y; Old") == ["old", "pkg.old"]
+    capsys.readouterr()
+    assert Q.map_retires(world.origin, main, "tools/move/bad_map.toml") is None
+    assert f"tools/move/bad_map.toml at {main[:12]} doesn't parse" in capsys.readouterr().err
+    assert Q.map_retires(world.origin, main, "tools/move/none_map.toml") is None
+    assert not capsys.readouterr().err
+
+
+def test_the_status_command_refuses_a_head_lacking_a_move_whose_change_names_what_it_retires_and_admits_the_rest(world):
+    """`status --loop` says what `World.ready` decides of a head below a move `main` landed: one whose own change names none of
+    the move's retired names is admitted, and one that names one, in a path or an added line, is refused with the move and
+    the fix."""
+    base, move = _landed_move(world, '[paths]\n"c.txt" = "moved/c.txt"\n', {"c.txt": None, "moved/c.txt": "c\n"})
+    world.gh.put(1, world.change({"b.txt": "1\n"}, base=base))
+    world.gh.put(2, world.change({"e.txt": "reads c.txt\n"}, base=base))
+    loop = world.queue(land_into="checked").status(loop=True)
+    assert [loop[n].state for n in (1, 2)] == ["ready", "refused"], loop
+    assert loop[1].why.startswith("admitted: "), loop[1]
+    assert loop[2].why == (f"it lacks the move {move[:12]} `main` landed (tools/move/x_map.toml), whose retired names its own "
+                           "change names (`c.txt`): merge `main` into it and rename them, or cross it with "
+                           "`tools/move/restack.py`, and mark the new head ready"), loop[2]
 
 
 def _merge_main(world: World, head: str) -> str:

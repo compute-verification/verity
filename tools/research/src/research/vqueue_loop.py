@@ -26,7 +26,9 @@ Lean-change test (`queue.lean_change`) of a change that compiles (a lock's alone
 `Queue._merge` merges it onto `main`, kept by (head, `main`).  The owner of one that doesn't is told once a head the files it
 conflicts in, to rebase it onto `main` and mark the new head (`Loop._conflicts`), unless `main` fetched again holds that
 head; its mark stays.  `left` is why each other open PR into `main` isn't ready (`World.ready`: the queue's word on it, a
-withdrawn mark's author, a hold and by whom, no land verdict, the freeze), which a candidate's drop for a member no longer
+withdrawn mark's author, a hold and by whom, no land verdict, the freeze, a move `main` landed that it lacks whose retired
+names its own change names, its owner told once a head and move: `queue.lacked_moves`, `Loop._lacking`), which a
+candidate's drop for a member no longer
 ready names (`vqueue._stale`); `pulled` those of them others than their owners took (a red's eject, any other eject or a
 mark withdrawn by another, a hold by a reviewer or a `hold` label, the freeze, the shadow's eject, or a PR holding one of
 them), at its head or at the head a candidate in flight holds it at (`World.taken`), the only ones that drop a candidate in
@@ -35,8 +37,9 @@ flight; and `flying` each member of the chain not ready at its head as built, wi
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
 the command's (`--lean`, `--pending-hours`), and `wide` and `pinned` the PRs `--wide-file` and `--pins-file` name, read each
-tick as the priority file is (`World.wide`, `World.pinned`); a tick that builds nothing while a Lean PR waits for a chain
-it may go on logs why, once a why (`wait`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
+tick as the priority file is (`World.wide`, `World.pinned`), `wide` with the PRs `--heavy-file` names while `--heavy-on` names
+machines (`World.heavy`; its `*` makes none wide); a tick that builds nothing while a Lean PR waits for a chain it may go on
+logs why, once a why (`wait`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
 no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`reds.RATCHET_STEP`: it judges
@@ -134,6 +137,10 @@ its batch of PRs with no Lean change too, on the same base.  One after a Commit 
 on the candidate that Commit put on main's chain, whose check's record, as started, it reads as its base's; it is built
 nowhere, and nothing is logged, when the Commit put none there.  Every check starts at one seam (`Loop._enqueue`: the
 enqueue, its line and the run beside it).
+A candidate holding a heavy PR (`World.heavy`), or every candidate and `main`'s own check while the heavy file holds `*`,
+runs its records run, and, where the check gates, the shard of its check that audits `vqueue_slim.HEAVY_PART`, on
+`--heavy-on`'s machines alone, its other shards on theirs (`Loop._heavy_on`); a records run's resend after a machine's fault
+stays on them, as a check started again does.
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what follows `main` moving
 (`Landing._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.  Outside
 --shadow and --dry-run those steps run detached from the tick, one advance's at a time (`--after-landing`, `Loop._moved`),
@@ -210,8 +217,9 @@ from .landing import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (LEAN_SOURCES, MOVE_CHECK, MOVE_SCRIPTS, PR, SIGNED_GUARDS, WORKDIR, DriveFlags, Entry, Member, Queue,
                     QueueError, StoreLabels, _git, _out, _who, base_drivers, conflicting_files, flags_at, forces_cold,
-                    label_verifier, lands_on_mark, lean_change, merged_tree, move_of, moves_between, own_files,
+                    label_verifier, lands_on_mark, lean_change, listed, merged_tree, move_of, own_files,
                     priority_list, queue_commit, queue_log, review_owners, rules_at, touched_by, unreviewed)
+from .queue import Retired, lacked_moves, lacks_why
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .store.fixtures import UNSOURCED
@@ -253,6 +261,10 @@ KEEP_RUNS = Path("/data/vqueue/live/keep-runs")
 #: the PRs whose Lean change is wide, its build expensive, one number a line as the priority file holds them: a candidate
 #: taking one takes no other Lean member, and one on a candidate holding one takes none until it is on `main` (`vqueue._wide`)
 WIDE = Path("/data/vqueue/live/wide")
+#: the PRs whose Lean change is heavy, its audit's replay more memory than a check slot holds, one number a line as the wide
+#: file holds them: wide too, and a candidate holding one runs its records run and the shard of its check that audits
+#: `vqueue_slim.HEAVY_PART` on `--heavy-on`'s machines alone (`Loop._heavy_on`); `*`, every candidate, none of them wide
+HEAVY = Path("/data/vqueue/live/heavy")
 #: the pinned PRs, one number a line (`#` comments and blank lines allowed): while a pinned Lean PR waits, a Lean batch holds
 #: pinned Lean PRs only, under no `LEAN` cap: a pin orders a Lean batch or cuts it, and at `--lean 0` only a pinned Lean PR
 #: opens one; it puts no batch ahead of a PR changing a Lean input, which goes first (`vqueue._next`)
@@ -649,12 +661,13 @@ class Past:
         return {(r["sha"], r.get("why")) for r in self.of("ring") if r.get("done") or r.get("shadow")} | self._posting(
             "ring", lambda r: {(r.get("sha"), r.get("why"))})
 
-    def told(self) -> set[str]:
-        """Each `head@base` a skip told its owner of; for a fixtures' failed export, `head@ids`, told once whatever the base."""
+    def told(self, kind: str = "skip") -> set[str]:
+        """Each `head@base` a message of ``kind`` told its owner of: a skip's (`Loop._merged`; for a fixtures' failed export,
+        `head@ids`, told once whatever the base), or a move a head lacks (`lacks`, `Loop._lacking`)."""
         def heads(r: dict) -> set[str]:
             return {f"{h}@{_told_at(r.get('base'), r.get('fixtures'))}" for h in r.get("heads") or ()}
 
-        return {k for r in self.of("skip") if r.get("done") or r.get("shadow") for k in heads(r)} | self._posting("skip", heads)
+        return {k for r in self.of(kind) if r.get("done") or r.get("shadow") for k in heads(r)} | self._posting(kind, heads)
 
     def conflicted(self) -> set[str]:
         """The heads whose owners were told they don't merge onto `main` (`Loop._conflicts`)."""
@@ -901,8 +914,9 @@ class World:
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
                  labels_at: Callable[[], StoreLabels] | None = None, cache: Path | None = None, on: str = "",
                  frozen_file: Path | None = None, deselect_file: Path | None = None, wide_file: Path | None = None,
-                 pins_file: Path | None = None, keep_file: Path | None = None, clock: Callable[[], float] = time.monotonic,
-                 export: tuple[str, ...] = (), export_lock: str = "", export_lock_s: int = EXPORT_LOCK_S):
+                 pins_file: Path | None = None, keep_file: Path | None = None, heavy_file: Path | None = None,
+                 heavy_on: str = "", clock: Callable[[], float] = time.monotonic, export: tuple[str, ...] = (),
+                 export_lock: str = "", export_lock_s: int = EXPORT_LOCK_S):
         self.q, self.labels, self.tasks, self.graph2, self.on = q, labels, tasks, tuple(graph2), on
         #: `research data export`'s argv before its flags (`export_fixtures`); none: a build exports nothing
         self.export = tuple(export)
@@ -918,6 +932,8 @@ class World:
         self.clock, self.g2 = clock, {"reads": 0, "bytes": 0, "s": 0.0}
         self.frozen_file, self._frozen_told, self.wide_file = frozen_file, set(), wide_file
         self.pins_file, self.keep_file = pins_file, keep_file
+        #: the heavy PRs' file (`HEAVY`) and the machines their candidates' heavy runs take (`heavy`); "" turns it off
+        self.heavy_file, self.heavy_on = heavy_file, heavy_on
         #: the tests each candidate's check leaves out (`DESELECT`, `vqueue_slim.deselection`)
         self.deselect_file = deselect_file
         self.keys = cache / "issuer-keys.json" if cache is not None else None
@@ -934,6 +950,9 @@ class World:
         #: by (head, `main`): its files (`_changed`), and (lean, conflict) (`_judge`)
         self._files: dict[tuple[str, str], frozenset[str]] = {}
         self._judged: dict[tuple[str, str], tuple[bool, bool]] = {}
+        #: by (head, `main`), the moves it lacks that its change names (`_lacks`); by (base, map), what a move's map retires
+        self._lacked: dict[tuple[str, str], list[tuple[str, str, list[str] | None]]] = {}
+        self._retires: dict[tuple[str, str], Retired | None] = {}
         #: each `carry.delta` judged, by its arguments (`_delta`)
         self._deltas: dict[tuple[str, str, tuple[str, ...], frozenset[str]], carry.Delta] = {}
         #: what the last `ready` decided of the verdict carry (`_carry`): {number: its head, the older head, why, whether it
@@ -952,6 +971,8 @@ class World:
         self.prs: dict[int, PR] = {}
         self.left: dict[int, tuple[str, str]] = {}
         self.pulled: set[int] = set()
+        #: of those left out for a move they lack whose names their change names: {number: (head, the last such move, why)}
+        self.lacking: dict[int, tuple[str, str, str]] = {}
         #: the move PRs the last `ready` took on their ready marks alone (`_uncertified`), and {number: what the last `build`
         #: regenerated of each move PR: its map, tip, commit and `move_check.py --json` report} (`_move`)
         self.on_mark: set[int] = set()
@@ -1024,7 +1045,8 @@ class World:
         `lowrisk_lane` is on, on its mark alone once its move is certified on `main` (`_uncertified`, `_off_mark`), never under
         the low-risk rule (`queue.lands_on_mark`).  Why each other open PR into `main` isn't one goes to `left`:
         the queue's word on one it doesn't admit (`Entry.why`; a withdrawn mark's author), else a hold and by whom, no land
-        verdict, the freeze, or an untaken PR whose head it holds; those others than their owners took go to `pulled`."""
+        verdict, the freeze, a move it lacks whose retired names its own change names (`lacked_moves`, also to `lacking`), or
+        an untaken PR whose head it holds; those others than their owners took go to `pulled`."""
         q, labels = self.q, self.labels
         prs = [p for p in self.open().values() if p.base == "main"]
         if missing := [p for p in prs if p.head in self._missing(p.head for p in prs)]:
@@ -1047,6 +1069,7 @@ class World:
         pulled = {n for n, e in entries.items() if e.state != "ready" and self._pulled(e, state["ejected"].get(str(n)))}
         flags = flags_at(self.repo, main)
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
+        self._lacked = {k: v for k, v in self._lacked.items() if k[1] == main}
         self._judged = {k: v for k, v in self._judged.items() if k[1] == main}
         self._deltas = {k: v for k, v in self._deltas.items() if k[2] == landed}
         admitted = [n for n, e in entries.items() if e.state == "ready"]
@@ -1084,11 +1107,11 @@ class World:
                           and self._frozen_out(below, n, entries[n].pr.head, specs)]
                 left.update((n, (entries[n].pr.head, f"it waits for the freeze to end ({self.frozen_file})")) for n in frozen)
                 took, pulled = [n for n in took if n not in frozen], pulled | set(frozen)
-            # a plain merge of a head below a move leaves its own lines naming the paths the move retired: it lands crossed
-            lacks = dict(zip(took, pool.map(lambda n: moves_between(self.repo, main, entries[n].pr.head), took)))
-            left.update((n, (entries[n].pr.head, f"it lacks the move {m[-1][0][:12]} `main` landed: cross it with "
-                                                 "`tools/move/restack.py` and push the crossed head, as a merge of `main` "
-                                                 "doesn't rewrite its own lines")) for n, m in lacks.items() if m)
+            # a plain merge of a head below a move leaves its own lines naming what the move retired: such a head lands
+            # crossed, and one whose own change names none of it crosses by that merge (`lacked_moves`)
+            lacks = dict(zip(took, pool.map(lambda n: self._lacks(main, entries[n].pr.head, files[n]), took)))
+            left.update((n, (entries[n].pr.head, lacks_why(m))) for n, m in lacks.items() if m)
+            self.lacking = {n: (entries[n].pr.head, m[-1][0], lacks_why(m)) for n, m in lacks.items() if m}
             took = [n for n in took if not lacks[n]]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
@@ -1219,6 +1242,14 @@ class World:
         missing or empty."""
         return frozenset(priority_list(self.pins_file, "--pins-file", comments=True)) if self.pins_file else frozenset()
 
+    def heavy(self) -> tuple[frozenset[int], bool]:
+        """(the PRs the heavy file names, `HEAVY`, parsed and refused as the wide file is; whether it names every candidate,
+        `queue.EVERY`): none while it is missing or empty, or while no machines take their runs (``heavy_on`` "")."""
+        if not (self.heavy_file and self.heavy_on):
+            return frozenset(), False
+        prs, every = listed(self.heavy_file, "--heavy-file", every=True)
+        return frozenset(prs), every
+
     def _another(self, n: int, by: str | None) -> bool:
         """Whether ``by`` is someone other than PR ``n``'s owner and its handle (`_owners`), compared as `unreviewed` does."""
         return bool(by) and _who(by) not in {_who(o) for o in self._owners(n) if o}
@@ -1303,6 +1334,12 @@ class World:
         if (key := (head, main)) not in self._files:
             self._files[key] = own_files(self.repo, main, head)
         return self._files[key]
+
+    def _lacks(self, main: str, head: str, files: frozenset[str]) -> list[tuple[str, str, list[str] | None]]:
+        """`lacked_moves` of ``head`` on ``main``, kept by (head, main), each map read once."""
+        if (key := (head, main)) not in self._lacked:
+            self._lacked[key] = lacked_moves(self.repo, main, head, files, self._retires)
+        return self._lacked[key]
 
     def _tree(self, sha: str) -> list[str]:
         """The files of ``sha``'s tree, as `_changed` names them."""
@@ -2459,7 +2496,7 @@ class Loop:
         origin = w.fetch()
         main = self._shadow_main(past, origin) if self.shadow else origin
         steps.lap("fetch")
-        wide, pinned = w.wide(), w.pinned()
+        wide, pinned = w.wide() | w.heavy()[0], w.pinned()
         ejected = {(r.get("number"), (r.get("heads") or [None])[0]): r.get("at") for r in past.of("eject") if r.get("shadow")}
         ready, out = [], {}
         for x in w.ready(main):
@@ -2746,7 +2783,7 @@ class Loop:
         steps.lap("notices")
         new += self._followed(t)
         steps.lap("followed")
-        new += self._conflicts(t) + self._riding(t) + self._launched(t)
+        new += self._conflicts(t) + self._lacking(t) + self._riding(t) + self._launched(t)
         steps.lap("notices")
         new += self._moved(t)
         steps.lap("on_main")
@@ -3046,9 +3083,10 @@ class Loop:
         if self.records is None:
             raise QueueError(f"{line['sha'][:12]}: no records run starts without research.vqueue_records")
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick
+        heavy = self._heavy_on(line)
         try:
             with self.steps("launch"):
-                rec, error = self.records.start(d, line["sha"]), None
+                rec, error = self.records.start(d, line["sha"], **({"on": heavy} if heavy else {})), None
         except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
             rec, error = None, f"{type(e).__name__}: {e}"[-600:]
         return [self.record(t, "regenerate", sha=line["sha"], base=line["base"], members=line["members"], heads=line["heads"],
@@ -3143,6 +3181,7 @@ class Loop:
     def _started(self, n: int, main: str, origin: str, line: dict, why: str = "started", below: dict | None = None,
                  lent: Lent | None = None) -> dict:
         d = self.world.slim_driver()                       # drive.toml naming no machines stops the tick: no run is infra
+        heavy = self._heavy_on(line) if self.gate == CHECK_GATE else ""
         try:
             audit = self._audit_from(d, main, line, below, lent)
             after = self.slim.replaced(Past.read(self.log_path, self.now() - self.slim.CARRY_WAIT_S).lines,
@@ -3152,11 +3191,21 @@ class Loop:
                                              **({"shards": self.shards} if self.gate == CHECK_GATE else {}),
                                              **({"audit_from": audit} if audit else {}),
                                              **({"deselect": f} if (f := getattr(self.world, "deselect_file", None)) else {}),
-                                             **({"after": after} if after else {})), None
+                                             **({"after": after} if after else {}),
+                                             **({"heavy_on": heavy} if heavy else {})), None
         except (QueueError, ValueError, OSError, subprocess.SubprocessError) as e:
             rec, error = None, f"{type(e).__name__}: {e}"[-600:]
         return self._line(n, main, origin, "slim", **line, why=why, record=rec, done=True,
                           **({"start_error": error} if error else {}))
+
+    def _heavy_on(self, line: dict) -> str:
+        """The machines the heavy runs of the candidate of ``line`` take, `World.heavy_on`, when a member of it is a heavy PR or
+        the heavy file names every candidate (`World.heavy`, read at each launch), `main`'s own check then too; "" else, and
+        when no machines are named."""
+        if not (on := getattr(self.world, "heavy_on", "")):
+            return ""
+        prs, every = self.world.heavy()
+        return on if every or set(line.get("members") or ()) & prs else ""
 
     def _audit_from(self, d: Landing, main: str, line: dict, below: dict | None, lent: Lent | None) -> str | None:
         """The candidate whose check's verdict on lean-audit the check of ``line`` takes in place of running it
@@ -3682,6 +3731,26 @@ class Loop:
                 recs.append(self.record(t, "conflict", **line, done=True, posted=True))
         return recs
 
+    def _lacking(self, t: Tick) -> list[dict]:
+        """Tell the owner of each PR `ready` left out for a move it lacks whose retired names its own change names
+        (`World.lacking`) the move and the fix: once a head and base, the base the last such move (`Past.told`, as a skip
+        is told).  A post that fails is told again by the next tick; with --shadow it is only logged."""
+        recs, told = [], t.past.told("lacks")
+        for n, (head, move, why) in sorted(self.world.lacking.items()):
+            if f"{head}@{move}" in told:
+                continue
+            text = (f"#{n} at {head[:12]} isn't taken into the verified queue's candidates on `main` {t.main[:12]}: {why} "
+                    f"(`research queue ready {n}`)")
+            line = dict(base=move, members=[n], heads=[head], number=n, why=why, text=text, to=list(to := self.owner(n)))
+            if self.shadow:
+                recs.append(self.record(t, "lacks", **line, done=False))
+            elif not self._say(t, "lacks", text, to, base=move, heads=[head], number=n):
+                recs.append(self.record(t, "lacks", **line, done=False, posted=False,
+                                        error=f"telling #{n}'s owner of the move it lacks failed: the next tick tells again"))
+            else:
+                recs.append(self.record(t, "lacks", **line, done=True, posted=True))
+        return recs
+
     def _riding(self, t: Tick) -> list[dict]:
         """A line for each ready PR a candidate on `main`'s chain holds without it as a member (`Tick.riding`), once a head and
         candidate: it reaches `main` with that candidate, so nobody is told."""
@@ -3956,6 +4025,15 @@ def main(argv: list[str]) -> int:
                          f"only, under no --lean cap, so a pin orders a Lean candidate or cuts it, and with --lean 0 it is the "
                          f"only way into one; it puts none ahead of a PR changing a Lean input, which goes first; none while "
                          f"the file is missing or empty (default {PINS})")
+    ap.add_argument("--heavy-file", type=Path, default=HEAVY,
+                    help=f"the PRs whose Lean change is heavy, one number a line, read each tick as --wide-file is: each is "
+                         f"wide too, and a candidate holding one runs its records run, and the shard of its check that audits "
+                         f"security/Proofs, on --heavy-on's machines alone, a resend after a machine's fault too; none while "
+                         f"the file is missing or empty, or --heavy-on is empty; a line '*' makes every candidate's runs so, "
+                         f"main's own check's too, and no PR wide (default {HEAVY})")
+    ap.add_argument("--heavy-on", default="", help="the machines a heavy PR's candidate's heavy runs take, a comma list, each "
+                                                   "run the first free of them (--heavy-file); empty, the default, turns heavy "
+                                                   "PRs off")
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")
@@ -4047,7 +4125,8 @@ def main(argv: list[str]) -> int:
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent, on=a.on,
                       frozen_file=a.frozen, deselect_file=a.deselect, wide_file=a.wide_file, pins_file=a.pins_file,
-                      keep_file=a.keep_runs, export=tuple(shlex.split(a.export_fixtures)), export_lock=a.export_lock)
+                      keep_file=a.keep_runs, heavy_file=a.heavy_file, heavy_on=a.heavy_on,
+                      export=tuple(shlex.split(a.export_fixtures)), export_lock=a.export_lock)
         if a.after_landing:
             return _after_landing(world, a.after_landing)
         after = None if a.shadow or a.dry_run else [sys.executable, "-m", "research", "queue", "vqueue", *argv]
