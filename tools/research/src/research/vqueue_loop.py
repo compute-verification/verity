@@ -12,8 +12,8 @@ its refs are left as drive keeps them.  `ready` is the open PRs drive would land
 (`Queue.entries`, reading drive's state, the labels read afresh each tick as drive reads them: `marked_after`,
 `signed_verdicts`, a mark carried to a head with the same own change, or with an older head's own change mapped across the moves
 `main` landed since, as `tools/move/restack.py` carries a branch, from an older head with a land verdict of its own only, since
-mapping runs its tree's code: `Queue.mapped_change`, which the end of a tick starts working
-out, `--move-carry-jobs` heads at once on threads no tick waits on), with a land verdict by a non-owner (its head's, or with
+mapping runs its tree's code: `Queue.mapped_change`, which the end of a tick starts working out, `--move-carry-jobs` heads
+at once in jobs detached from the tick, which outlive it), with a land verdict by a non-owner (its head's, or with
 drive.toml's `verdict_carry` "on" at `main` one the verdict carry takes from another of its heads whose commits since only
 merge trusted ones, `Landing._carried_from`, each decision logged once a head: `carry`) or under the low-risk rule (drive.toml's
 `lowrisk_lane` and `lowrisk_excludes` at `main`; never a move PR's, which is otherwise any PR, built by its merge), not on
@@ -73,10 +73,11 @@ only when both pass.  One more runs beside `main`'s own check: the candidate's `
 starts at startup and each time `main` moves (and once more after infra).  A step a candidate's run failed is inherited when
 `main`'s failed it too, and its own when `main`'s passed it (`vqueue_slim.based`); while `main`'s runs, at most `pending_s`
 after it started, a fail whose every other failure is inherited is pending.  With ``records`` (`research.vqueue_records`), a
-candidate built with its records run first (its build line's `records_first`, while no line enqueued its check) waits: its
-check is pending, no listing of it is read and no run beside it starts, and its records run is judged each tick
-(`vqueue_records.judge`), its record logged whenever it changes (`regenerate`).  A records commit's build line names the
-candidate it `repairs`, and the walk of a candidate's members steps over a records commit at its tip (`World._walk`).
+candidate built with its records run first (its build line's `records_first`, while no line enqueued its check) is staged,
+off main's chain (`vqueue.decide`): its check is pending, no listing of it is read and no run beside it starts, and its
+records run is judged each tick (`vqueue_records.judge`), its record logged whenever it changes (`regenerate`).  A records
+commit's build line, and a staged batch's built again on another base, names the staged batch it `repairs`, and the walk of a
+candidate's members steps over a records commit at its tip (`World._walk`).
 
 The gate (`--gate`).  With `graph2`, the default, a candidate's verdict is the two combined, as above.  With `check`, drive's
 after-landing check gates in graph2's place: the run beside each candidate, and beside `main`, is every after-landing step
@@ -111,23 +112,28 @@ what it failed of one that the run beside its base's check didn't is rung, once 
 lane of each member whose merge ratchet-gate fails, the owner of each circuit-check target's pins (`Loop._off_gate`); a red
 its base shares rings nobody.
 
-The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
-owner told once per head and base, a conflict with members merged above `main` naming them where it merges onto `main`;
+The actions.  Build merges its members in order onto its base (`Queue._merge`), or, for a base a build of the same tick
+rebuilt (`vqueue.Build.replaces`, logged as its line's `replaces`), onto what that build pushed (`Tick.rebuilds`), leaving
+out one that doesn't merge (`skip`, its owner told once per head and base, a conflict with members merged above `main`
+naming them where it merges onto `main`;
 nobody is told of a head what it merges onto holds, `held`, or `main` fetched again does), pushes `queue/<sha12>` (or takes
 as its own one no line names that is the same build made before, as a tick cut off after its push leaves: `adopted`), logs
 it, enqueues `ready:<sha>` as graph/v2 at its priority and starts the run beside its check; with `records` (a member changes
 Lean, a lock or a spec) it starts the candidate's records run instead (`vqueue_records.start`: drive's lock run, on drive's
-machines, on its tree), logged (`regenerate`), and its check waits.  Every check starts at one seam (`Loop._enqueue`: the
-enqueue, its line and the run beside it).
+machines, on its tree), logged (`regenerate`), and the candidate is staged, its check waiting.  Every check starts at one
+seam (`Loop._enqueue`: the enqueue, its line and the run beside it).
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what follows `main` moving
 (`Landing._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
-Regenerate starts the candidate's records run again and logs it.  Commit starts the check of a candidate whose records run
-passed: on it as built when the run regenerated nothing (`vqueue_records.commit`); else on the records commit of what it
-regenerated, made on top of it in drive's lock commit's form, which the merge gate vouches for, and pushed: a candidate on the
-same base with the same members, which `repairs` the one beneath it, dropped for it the next tick.  The bookkeeping its records
-run repaired is told as drive tells it, to `lean` and each owner a warning names, once a records commit (`bookkeeping`); a
-records commit that can't be made or vouched for is held, logged (`commit`) and rung to `CI` once, and its candidate is dropped
-once it is held `pending_s` (`vqueue.decide`).
+Regenerate starts the candidate's records run again and logs it.  Commit puts a staged batch whose records run passed onto
+main's chain's top (its base) and starts its check (`Loop._commit`).  On its own base: on it as built when the run
+regenerated nothing (`vqueue_records.commit`); else on the records commit of what it regenerated, made on top of it in drive's
+lock commit's form, which the merge gate vouches for, and pushed: a candidate on the same base with the same members, which
+`repairs` the one beneath it, dropped for it the next tick.  On another base, its members are merged onto it again; with every
+member merged and the same Lean inputs (`vqueue_records.same_inputs`), that records commit is carried onto the merge and
+checked in its place (the merge itself when there is none), else the merge is staged again, its records run first, and with no
+member merged it is dropped.  The bookkeeping its records run repaired is told as drive tells it, to `lean` and each owner a
+warning names, once a records commit (`bookkeeping`); a records commit that can't be made or vouched for is held, logged
+(`commit`) and rung to `CI` once, and its candidate is dropped once it is held `pending_s` (`vqueue.decide`).
 Drop cancels the check (graph2's `cancel`, where it has one), and the run beside it and its records run while they run (one
 still launching once it printed its run ids, a later tick), deletes the branch and logs its outcome, with its base and its
 inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the PR's ready mark at its head
@@ -272,7 +278,7 @@ FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 JOBS = 8
 #: the most failures of a step off the gate a ring quotes (`Loop._off_gate`)
 OFF_SAID = 10
-#: the old heads mapped across `main`'s moves at once, each on a thread the end of a tick starts and no tick waits on
+#: the old heads mapped across `main`'s moves at once, each in a job the end of a tick detaches and no tick waits on
 #: (`Queue.work_out_mapped`; `--move-carry-jobs`): each runs every move's script on a whole tree, so few, leaving the control
 #: pod's few cores room for the loop
 MAPPED_JOBS = 2
@@ -876,7 +882,17 @@ class World:
         for n in order:
             place(n)
         self.prs, self.left, self.pulled = {n: entries[n].pr for n in chosen}, left, pulled
-        return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
+        inputs = self._lean_inputs(main, (f for v in chosen.values() for f in v[0])) if chosen else frozenset()
+        return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2],
+                      lean_input=vqueue.meets(chosen[n][0], inputs)) for i, n in enumerate(placed)]
+
+    def _lean_inputs(self, main: str, files: Iterable[str]) -> frozenset[str]:
+        """The Lean inputs (`vqueue_slim.lean_inputs`) of ``main``'s tree with ``files``, the ready PRs' changed files, in it, so
+        a Lean package a ready PR adds is one: a PR whose own change meets them changes the Lean key (`vqueue_slim.lean_key`)
+        of a tree it is merged into (`Ready.lean_input`)."""
+        from .vqueue_slim import lean_inputs
+
+        return frozenset(lean_inputs({*self._tree(main), *files}))
 
     def _carry(self, landed: list[str], entries: dict[int, Entry], why: dict[int, str | None], mode: str) -> set[int]:
         """The verdict carry (`carry`), as drive.toml's `verdict_carry` at `main` says: an admitted PR with no land verdict at
@@ -1087,14 +1103,18 @@ class World:
         walked = [queue_commit(*r.split("\x00", 2)) for r in reversed(recs)]
         return walked if all(walked) else None
 
-    def recommitted(self, sha: str, tip: str, parent: str) -> bool:
+    def recommitted(self, sha: str, tip: str, parent: str, base: str = "", members: list[Member] | None = None) -> bool:
         """Whether ``sha`` is records commit ``tip`` made before on ``parent`` (pushed with no line in the log, as a tick cut off
-        leaves): a records commit (`records_commit`) whose one parent is ``parent``, with ``tip``'s tree."""
+        leaves): a records commit (`records_commit`) with ``tip``'s tree whose one parent is ``parent``, or, given ``members``
+        merged onto ``base`` as ``parent``, that merge built before (`rebuilt`)."""
         if self._missing([sha]):
             return False
         commit, parents, body = _out(self.repo, "log", "-1", "--format=%H%x00%P%x00%B", sha).split("\x00", 2)
-        return parents == parent and records_commit(commit, parents, body) and \
-            _out(self.repo, "rev-parse", f"{sha}^{{tree}}") == _out(self.repo, "rev-parse", f"{tip}^{{tree}}")
+        if not records_commit(commit, parents, body) or \
+                _out(self.repo, "rev-parse", f"{sha}^{{tree}}") != _out(self.repo, "rev-parse", f"{tip}^{{tree}}"):
+            return False
+        return parents == parent or (members is not None and " " not in parents and
+                                     self.rebuilt(parents, parent, base, members))
 
     def rebuilt(self, sha: str, tip: str, base: str, members: list[Member]) -> bool:
         """Whether ``sha`` is ``tip``, ``members`` merged onto ``base``, built before: its tree, and their merges at their
@@ -1941,6 +1961,9 @@ class Tick:
     riding: dict[int, tuple[str, str]] = field(default_factory=dict)
     #: the candidate this tick advanced `main` to, what its build reads as `main`
     advanced: str | None = None
+    #: each candidate a build this tick rebuilt (`vqueue.Build.replaces`): what that build pushed, or what it went on when
+    #: no member merged, which a later build naming the candidate as its base goes on
+    rebuilds: dict[str, str] = field(default_factory=dict)
     #: `main` fetched again, the first time this tick a notice needed it (`Loop._landed`)
     fetched: str | None = None
 
@@ -2020,7 +2043,8 @@ class Loop:
                     if self.slim is not None and (self.gate == CHECK_GATE or not w._ancestor(sha, main)):
                         j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha),
                                          below if base == main else ((judged[base].record if base in judged else None)
-                                                                     or p.slim(base)[1], p.slim_started(base)[1]), lent)
+                                                                     or p.slim(base)[1], p.slim_started(base)[1]), lent,
+                                         on_main=below[0])
                 judged[sha] = j
                 cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
                                        enqueued=p.enqueued(sha),
@@ -2109,7 +2133,8 @@ class Loop:
 
     def _beside(self, past: Past, n: int, main: str, origin: str, sha: str, base: str, prs: tuple[int, ...],
                 heads: tuple[str, ...], j: Judged, wrote: list[dict], chained: bool,
-                below: tuple[dict | None, float | None] = (None, None), lent: Lent | None = None) -> Judged:
+                below: tuple[dict | None, float | None] = (None, None), lent: Lent | None = None,
+                on_main: dict | None = None) -> Judged:
         """``j`` combined with the verdict of the run beside candidate ``sha``'s check (`vqueue_slim`), which its build starts
         beside each candidate's check, and here, once, one on ``main``'s chain (``chained``) the log holds no start of (its
         build's tick stopped first); again by a retry of its infra or a rerun of its failure.  Judged each tick, its record
@@ -2119,7 +2144,9 @@ class Loop:
         and start, `_below` for ``main``, a base candidate's as judged this tick), which `vqueue.decide` takes as inherited
         when that run failed it too, a base candidate's still running by what it failed so far (`vqueue_slim.based`); a fail
         whose every other failure is inherited waits (pending) while the run beside ``main``, started at most `pending_s`
-        ago, hasn't said, and one on a candidate stays a fail, which `vqueue.decide` holds until its base's says.  Where the
+        ago, hasn't said, and one on a candidate stays a fail, which `vqueue.decide` holds until its base's says, or, where
+        only its own members meet the step, until the run beside ``main``'s check says (``on_main``, its record, read as a
+        base's into `vqueue.Failed.main_tests`).  Where the
         check gates (`CHECK_GATE`), the run's verdict alone is the candidate's, graph2's kept beside it (`Judged.shadow`, its
         note marked so), a run started while graph2 gated counts as none started, and a check that took lean-audit's verdict
         from the check of a candidate below reads lean-audit as pending while that candidate is in flight, and, once it has
@@ -2146,6 +2173,10 @@ class Loop:
         if gates and j.verdict.state == LIST_FAILED and v.state == PENDING:
             return replace(j, slim=v, record=rec)
         v = self.slim.based(v, below[0], so_far=base != main)
+        if base != main and on_main is not None and v.failed:
+            unsaid = replace(v, failed=tuple(replace(f, base_tests=None) for f in v.failed))
+            v = replace(v, failed=tuple(replace(f, main_tests=m.base_tests)
+                                        for f, m in zip(v.failed, self.slim.based(unsaid, on_main).failed)))
         both = self.slim.combine(j.verdict, v) if gates else v
         if not gates:
             j = replace(j, shadow=j.verdict, note=f"graph2, in shadow, reads {j.verdict.state}: {j.note}" if j.note else "")
@@ -2327,20 +2358,41 @@ class Loop:
             return self._regenerate(t, {"sha": c.sha, "base": c.base, "members": list(c.members), "heads": list(c.heads)},
                                     "started again" if c.records is not None else "started")
         if isinstance(a, Commit):
-            return self._commit(c, t)
+            return self._commit(a, c, t)
         raise QueueError(f"{a}: no such action")
 
     def _build(self, a: Build, t: Tick) -> list[dict]:
         w = self.world
-        if unknown := [n for n in a.members if n not in w.prs]:
-            raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
         if self.slim is not None or a.records:
             w.slim_driver()                                 # before anything is pushed
-        tip, merged, left = w.build([w.prs[n] for n in a.members], a.base, t.advanced or t.main)
+        base = t.rebuilds.get(a.base, a.base)
+        again = {"replaces": a.replaces} if a.replaces is not None else {}
+        tip, merged, recs = self._merged(t, a.members, base)
+        if not merged:
+            if a.replaces is not None:
+                t.rebuilds[a.replaces] = base
+            recs.append(self.record(t, "build", base=base, priority=a.priority, why="no member merges onto its base", **again))
+            return recs
+        tip, adopted = self._pushed(t, tip, base, merged)
+        if a.replaces is not None:
+            t.rebuilds[a.replaces] = tip
+        line = {"sha": tip, "base": base, "members": [m.pr for m in merged], "heads": [m.head for m in merged],
+                "priority": a.priority, **({"adopted": True} if adopted else {}), **again}
+        if a.records:
+            return [*recs, *self._staged(t, line, "its records run first: its check waits for it")]
+        return self._enqueue(t, recs, line)
+
+    def _merged(self, t: Tick, members: Iterable[int], base: str) -> tuple[str, list[Member], list[dict]]:
+        """PRs ``members`` merged in order onto ``base`` (`World.build`): (the tip, the members merged, the skip records of
+        those left out, each owner told once a head and base)."""
+        w = self.world
+        if unknown := [n for n in members if n not in w.prs]:
+            raise QueueError(f"build: {', '.join(f'#{n}' for n in unknown)} not ready")
+        tip, merged, left = w.build([w.prs[n] for n in members], base, t.advanced or t.main)
         recs = []
         for s in left:
-            p, key = s.pr, f"{s.pr.head}@{a.base}"
-            line = dict(base=a.base, members=[p.number], heads=[p.head], number=p.number)
+            p, key = s.pr, f"{s.pr.head}@{base}"
+            line = dict(base=base, members=[p.number], heads=[p.head], number=p.number)
             if s.held:                                      # it reaches `main` with what holds it
                 recs.append(self.record(t, "skip", **line, why=s.why, held=True, done=False))
                 continue
@@ -2351,28 +2403,31 @@ class Loop:
             names = ", ".join(f"#{n}" for n in s.by)
             fix = f"merge `main` into it once {names} {'is' if len(s.by) == 1 else 'are'} on it" if s.by else "merge `main` into it"
             text = None if key in t.told else (
-                f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {a.base[:12]}: {s.why}. "
+                f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {base[:12]}: {s.why}. "
                 f"It is left out until it merges: {fix}")
             posts = text is not None and not self.shadow
-            done = posts and self._say(t, "skip", text, self.owner(p.number), base=a.base, heads=[p.head], number=p.number)
+            done = posts and self._say(t, "skip", text, self.owner(p.number), base=base, heads=[p.head], number=p.number)
             if done or (text and self.shadow):
                 t.told.add(key)
             recs.append(self.record(t, "skip", **line, why=s.why, text=text, done=done, **({"by": list(s.by)} if s.by else {}),
                                     **({"posted": done} if posts else {})))
-        if not merged:
-            recs.append(self.record(t, "build", base=a.base, priority=a.priority, why="no member merges onto its base"))
-            return recs
+        return tip, merged, recs
+
+    def _pushed(self, t: Tick, tip: str, base: str, merged: list[Member]) -> tuple[str, bool]:
+        """Build ``tip`` of ``merged`` onto ``base`` pushed, or one pushed before by a build whose line the log never got
+        adopted in its place (`World.rebuilt`): (the candidate, whether it was adopted)."""
+        w = self.world
         if adopted := next((sha for name, sha in sorted(t.foreign.items())
-                            if name == sha[:12] and w.rebuilt(sha, tip, a.base, merged)), None):
-            tip = adopted                                   # pushed before by a build whose line the log never got
-        else:
-            w.push(tip, branch(tip))
-        line = {"sha": tip, "base": a.base, "members": [m.pr for m in merged], "heads": [m.head for m in merged],
-                "priority": a.priority, **({"adopted": True} if adopted else {})}
-        if a.records:
-            return [*recs, self.record(t, "build", **line, why="its records run first: its check waits for it", enqueued=False,
-                                       records_first=True, done=True), *self._regenerate(t, line)]
-        return self._enqueue(t, recs, line)
+                            if name == sha[:12] and w.rebuilt(sha, tip, base, merged)), None):
+            return adopted, True
+        w.push(tip, branch(tip))
+        return tip, False
+
+    def _staged(self, t: Tick, line: dict, why: str) -> list[dict]:
+        """Pushed build ``line`` staged off main's chain: its build line logged with ``records_first``, its records run
+        started and its check not, so the planner builds nothing on it (`vqueue.decide`)."""
+        return [self.record(t, "build", **line, why=why, enqueued=False, records_first=True, done=True),
+                *self._regenerate(t, line)]
 
     def _enqueue(self, t: Tick, recs: list[dict], line: dict) -> list[dict]:
         """Start pushed candidate ``line["sha"]``'s check: enqueued, its build line (``line``) logged after ``recs``, and the run
@@ -2398,37 +2453,64 @@ class Loop:
         return [self.record(t, "regenerate", sha=line["sha"], base=line["base"], members=line["members"], heads=line["heads"],
                             why=why, record=rec, done=True, **({"start_error": error} if error else {}))]
 
-    def _commit(self, c: Candidate, t: Tick) -> list[dict]:
-        """Start the check of ``c``, whose records run passed: on ``c`` as built when the run regenerated nothing
-        (`vqueue_records.commit` makes no commit), else on the records commit of what it regenerated on top of ``c``, pushed
-        (one pushed before, with no line in the log, is adopted: `World.recommitted`) and checked in ``c``'s place, a candidate
-        on ``c``'s base with ``c``'s members, which it `repairs`: the next tick drops ``c`` for it (`vqueue.decide`), so a tick
-        cut off after the push still finds ``c`` and adopts it.  The bookkeeping its records run repaired is told to `lean`
-        and each owner a warning names (`_bookkeeping`).  A records commit that can't be made, or that the merge gate won't
-        vouch for, is held: logged, and rung to `CI` once, and ``c`` is dropped once it is held `pending_s` (`vqueue.decide`)."""
+    def _commit(self, a: Commit, c: Candidate, t: Tick) -> list[dict]:
+        """Put staged batch ``c``, whose records run passed, onto main's chain at ``a.base``, its top, and start its check.
+
+        On ``c``'s own base: on ``c`` as built when the run regenerated nothing (`vqueue_records.commit` makes no commit),
+        else on the records commit of what it regenerated on top of ``c``, pushed (one pushed before, with no line in the
+        log, is adopted: `World.recommitted`) and checked in ``c``'s place, a candidate on ``c``'s base with ``c``'s members,
+        which it `repairs`: the next tick drops ``c`` for it (`vqueue.decide`), so a tick cut off after the push still finds
+        ``c`` and adopts it.  On another base, ``c``'s members are merged again onto it; when every member merges and the
+        merge's Lean inputs are ``c``'s (`vqueue_records.same_inputs`), the records commit made on ``c`` is carried onto the
+        merge and checked in ``c``'s place as above (the merge itself when there is none); else the merge is staged again
+        in ``c``'s place, its records run first; and when no member merges, ``c`` is dropped and its members built again.
+        The bookkeeping its records run repaired is told to `lean` and each owner a warning names (`_bookkeeping`).  A
+        records commit that can't be made, or that the merge gate won't vouch for, is held: logged, and rung to `CI` once,
+        and ``c`` is dropped once it is held `pending_s` (`vqueue.decide`)."""
         w = self.world
         rid = ((t.records.get(c.sha) or {}).get("verdict") or {}).get("run")
-        got = self.records.commit(w.slim_driver(), c.sha, rid, c.members) if self.records is not None and rid else \
-            "its records run passed, but its record names no run"
-        built = t.past.built(c.sha) or {}
-        line = {"sha": c.sha, "base": c.base, "members": list(c.members), "heads": list(c.heads),
-                "priority": built.get("priority") if isinstance(built.get("priority"), int) else 0, "run": rid}
-        if got is None:
+        line = {"sha": c.sha, "base": c.base, "members": list(c.members), "heads": list(c.heads), "priority": a.priority,
+                "run": rid}
+        recs, onto, merged = [], None, []
+        if a.base != c.base:
+            tip, merged, recs = self._merged(t, c.members, a.base)
+            if not merged:
+                why = f"no member of it merges onto {a.base[:12]}, main's chain's top: its members are built again"
+                return [*recs, self._drop(Drop(c.sha, why), c, t)]
+            moved = {"base": a.base, "members": [m.pr for m in merged], "heads": [m.head for m in merged], "repairs": c.sha}
+            if moved["members"] != list(c.members) or not self.records.same_inputs(w.repo, c.sha, tip):
+                tip, adopted = self._pushed(t, tip, a.base, merged)
+                differ = "not every member merges onto it" if moved["members"] != list(c.members) else \
+                    "its Lean inputs aren't that tree's"
+                return [*recs, *self._staged(t, {**line, "sha": tip, **moved, **({"adopted": True} if adopted else {})},
+                                             f"{c.sha[:12]}'s records were regenerated on {c.base[:12]}, and {differ}: "
+                                             "staged again, its records run first")]
+            onto, line = tip, {**line, **moved}
+        got = self.records.commit(w.slim_driver(), c.sha, rid, c.members, **({"onto": onto} if onto else {})) \
+            if self.records is not None and rid else "its records run passed, but its record names no run"
+        if got is None and onto is None:
             return self._enqueue(t, [], {**line, "why": f"its records run {rid} regenerated nothing: checked as built"})
+        if got is None:
+            tip, adopted = self._pushed(t, onto, a.base, merged)
+            return self._enqueue(t, recs, {**line, "sha": tip, **({"adopted": True} if adopted else {}),
+                                           "why": f"its records run {rid} regenerated nothing, and {c.sha[:12]}'s Lean inputs "
+                                                  "are its: checked as built"})
         if isinstance(got, str):
             bound = (f"; it is dropped, its members built again, once it is held {self.pending_s / 3600:g} h after it was "
                      "first")
-            return [self.record(t, "commit", **line, why=got, done=False),
+            return [*recs, self.record(t, "commit", **{**line, "sha": c.sha}, why=got, done=False),
                     *self._ring(Ring(c.sha, f"{c.sha[:12]}'s records commit is held: {got}{bound}", to=(CI,)), c, t)]
         tip, files, told = got
         if adopted := next((sha for name, sha in sorted(t.foreign.items())
-                            if name == sha[:12] and w.recommitted(sha, tip, c.sha)), None):
+                            if name == sha[:12] and w.recommitted(sha, tip, onto or c.sha, a.base, merged)), None):
             tip = adopted
         else:
             w.push(tip, branch(tip))
-        return self._enqueue(t, self._bookkeeping(t, c, tip, told),
-                             {**line, "sha": tip, "why": f"{c.sha[:12]}'s records, which {rid} regenerated, committed on it",
-                              "repairs": c.sha, "files": files, **({"adopted": True} if adopted else {})})
+        why = f"{c.sha[:12]}'s records, which {rid} regenerated, committed on it" if onto is None else \
+            f"{c.sha[:12]}'s records, which {rid} regenerated, carried onto its members merged again onto {a.base[:12]}"
+        return self._enqueue(t, [*recs, *self._bookkeeping(t, c, tip, told)],
+                             {**line, "sha": tip, "why": why, "repairs": c.sha, "files": files,
+                              **({"adopted": True} if adopted else {})})
 
     def _bookkeeping(self, t: Tick, c: Candidate, tip: str, told: tuple[str, tuple[str, ...]] | None) -> list[dict]:
         """Tell the bookkeeping ``c``'s records run repaired in its records commit ``tip`` (``told``:
@@ -3172,8 +3254,9 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--once", action="store_true", help="one tick")
     ap.add_argument("--interval", type=float, default=INTERVAL_S, help=f"seconds between ticks (default {INTERVAL_S})")
     ap.add_argument("--move-carry-jobs", type=int, default=MAPPED_JOBS, metavar="N",
-                    help=f"old heads mapped across `main`'s moves at once, each on a thread the end of a tick starts and none "
-                         f"waits on, running every move's script on a scratch worktree under --merged-root, so an old head's "
+                    help=f"old heads mapped across `main`'s moves at once, each in a job the end of a tick detaches and none "
+                         f"waits on, running every move's script on a scratch worktree under --merged-root and writing the "
+                         f"mapping, or its refusal, into mapped-changes.d/ beside the log, so an old head's "
                          f"land verdict and mark carry to a head whose own change is theirs mapped (`Queue.mapped_change`), "
                          f"from a head with a land verdict of its own only (`StoreLabels.lands`); those "
                          f"`research queue map-moves` mapped elsewhere count once copied into mapped-changes.d/ beside the "
