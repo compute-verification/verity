@@ -72,7 +72,7 @@ def test_a_tp_rows_stages_have_nccl_p2p_disable_only_when_its_workload_requires_
     os.makedirs(t.d, exist_ok=True)
     stage = [sys.executable, "-c", "import os; print('NCCL_P2P_DISABLE=' + os.environ.get('NCCL_P2P_DISABLE', 'unset'))"]
     assert t.run_to(0, f"{t.d}/stage.log", stage) == 0
-    assert open(f"{t.d}/stage.log").read().splitlines()[-1] == f"NCCL_P2P_DISABLE={p2p or 'unset'}"
+    assert Path(f"{t.d}/stage.log").read_text().splitlines()[-1] == f"NCCL_P2P_DISABLE={p2p or 'unset'}"
 
 
 def test_a_single_and_a_tp_rows_folds_store_the_instances_form_of_record(tmp_path, monkeypatch):
@@ -98,7 +98,7 @@ def test_a_tensor_parallel_row_declaring_prefix_caching_is_refused_before_any_st
     monkeypatch.setattr(tp, "release_line", lambda *a: pytest.fail("a stage after the precheck"))
     with pytest.raises(Stop) as e:
         tp.prepare()
-    last = open(f"{tp.d}/stages.txt").read().splitlines()[-1].split(" ", 3)
+    last = Path(f"{tp.d}/stages.txt").read_text().splitlines()[-1].split(" ", 3)
     assert e.value.rc == 3 and last[:2] == ["precheck", "FAIL"] and "enable_prefix_caching" in last[3]
     single = _row(tmp_path, row="llama32-1b__bf16__h200__tp1__b2__i168__o10__prefix__greedy__bi-eager")
 

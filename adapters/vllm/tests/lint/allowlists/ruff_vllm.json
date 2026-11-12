@@ -568,8 +568,6 @@
     {"file": "tests/pipeline/test_row.py", "kind": "SIM115", "symbol": "test_a_tp_fold_match_too_big_for_its_memory_runs_one_rank_at_a_time_and_the_flags_override_the_sizing", "detail": "Use a context manager for opening files", "count": 2},
     {"file": "tests/pipeline/test_row.py", "kind": "SIM115", "symbol": "test_a_tp_match_splits_into_its_gpu_legs_before_the_build_and_the_cpu_rest_after", "detail": "Use a context manager for opening files", "count": 3},
     {"file": "tests/pipeline/test_row.py", "kind": "SIM115", "symbol": "test_killpg_on_the_row_takes_the_stage_and_its_grandchild", "detail": "Use a context manager for opening files"},
-    {"file": "tests/pipeline/test_row_setup.py", "kind": "SIM115", "symbol": "test_a_tensor_parallel_row_declaring_prefix_caching_is_refused_before_any_stage", "detail": "Use a context manager for opening files"},
-    {"file": "tests/pipeline/test_row_setup.py", "kind": "SIM115", "symbol": "test_a_tp_rows_stages_have_nccl_p2p_disable_only_when_its_workload_requires_it", "detail": "Use a context manager for opening files"},
     {"file": "tests/pipeline/test_row_tables.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_row_tables_stream.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/pipeline/test_run_config_load_stages.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
