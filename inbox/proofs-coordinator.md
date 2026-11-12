@@ -105217,3 +105217,84 @@ Clock: `date -u` read 22:21Z before the push. Mailbox read at `9edca491c1`: 3 me
 **Not established:** the difftest and the stream tests with the real Lean; which lock records move; whether the scan keeps a reading session for each certified value.
 
 For the table: R7 with the refusal | `cursor/proofs-r7-certified-b6a0` at `8b4ce503e1a7` | Lean elaborates, axioms clean (`e3a2`) | records `d08f`, suites `de56`, tries `9b45` out | ready line by Fri 06:00Z | nothing needed.
+
+## FIXEDCOST, Thu 12 Nov 22:25Z: FOR NET-329: the 23 to 26 s are the Lean session loop setting the statement up before it answers the prover's `finish`; about 22 s of them follow neither the circuit file nor the sample, and the loop reads the 81 MB program twice at every sample; they are not the seconds of my one-prover result
+
+Nothing here runs on the served engine. The run read is network's `r20261112-135528-7404`: commit `4d784714a84d`, vy-nebius-cpu-4, a CPU prover on 21 cores, no card, exit 0. I built and ran nothing for this entry. Each line ends with its source: [run] a figure from that run's files, [read] code at that commit, [derived] arithmetic on [run] figures, [relayed] another lane's result, [guess].
+
+**The answer**
+
+1. **What fills the gap.** The prover sends `finish` with the sample to the Lean session loop and blocks on one line, `ok 0`. Before it answers, the loop sets the session's statement up at that sample. [read]
+   - This run times one step inside the gap, the witness build: 0.15 to 0.75 s a session. [run]
+   - Network's later run timed the wait itself: 98.69 s of the round's 101.39 s. [relayed: NET-396, `r20261112-195057-ab2e`]
+2. **About 22 s a session follow neither the circuit file nor the sample.** Over the four sessions the gap fits 22.2 s + 15.7 ms a MB of circuit file, for circuit files of 58.8 to 226.8 MB. Thirty proof blocks against one, at the same circuit size, add 0.50 s. [derived]
+3. **What the four sessions share is the program file, 81.0 MB, and the loop's setup reads it twice at every sample**: as JSON, then its canonical form hashed, each time. [run: the file sizes on the machine; read]
+   - That the 22 s are those two readings is a guess. Nothing in this run times them.
+4. **Not the seconds of my one-prover result.** Mine is one packing call inside the witness build, with no ZK server and so no Lean loop. Section 5.
+
+**1. What the run says** [run: `out/scan_cost.json`, each session's `prove.log` and `lean-verify.log`; the circuit files' sizes read on the machine]
+
+| member | proof blocks | circuit file | Register to the repetitions | witness build, inside it | Lean verifier, inputs | Lean verifier, setup |
+|---|---|---|---|---|---|---|
+| `first` | 1 | 165.7 MB | 24.605 s | 0.391 s | 9.828 s | 10.514 s |
+| `ingress-0` | 30 | 226.8 MB | 26.079 s | 0.748 s | 10.329 s | 10.966 s |
+| `last` | 1 | 226.8 MB | 25.580 s | 0.632 s | 10.374 s | 10.603 s |
+| `egress-0` | 32 | 58.8 MB | 23.204 s | 0.148 s | 8.597 s | 10.395 s |
+| a round | | | 99.468 s | 1.919 s | 39.128 s | 42.478 s |
+
+- "Register to the repetitions" is the prover's `e2e_s − tp_s`. One clock starts just before `Register`, the other just before `Hello`. [read: `benchmarks/scan_cost/result.py` 115; `flock-circuit.rs` 4070 and 4266]
+- Each session is its own prover process (`prove … --runs 1 --warm 0`), so each starts its own Lean loop. [run: the first line of each `prove.log`; read: `session_addr` and `lean_loop`, `flock-circuit.rs` 1617 to 1654]
+- This run's `t.lean_finish` (0.011 to 0.033 s a repetition) is another timer: each repetition's request at its end, not the connect. So this run alone cannot say the connect is the gap; the later run's timer does. [read: `flock-circuit.rs` 2515 to 2531; run]
+- The last two columns are the Lean verifier's own process on the same sessions, after the session, pinned to one core. They are in the table because that process does the same setup. [run; read: `FlockVerify.lean` 1150 and 1168]
+
+**2. What grows with what** [derived, from the table: two numbers fitted to four sessions of one round, three circuit sizes, no repeat]
+
+| | fixed | a MB of circuit file | 30 proof blocks against 1, same circuit size |
+|---|---|---|---|
+| the gap in the prover | 22.2 s | 15.7 ms | +0.50 s (0.12 s of it the witness build) |
+| Lean verifier, inputs | 8.0 s | 10.4 ms | −0.05 s |
+| Lean verifier, setup | 10.2 s | 2.3 ms | +0.36 s |
+
+- So the circuit file accounts for 0.9 s (`egress-0`) to 3.6 s (`ingress-0`, `last`) of the gap, and the sample for about half a second at 30 proof blocks. The rest, about 22 s, is the same in all four.
+- The four sessions prove different circuits. They share the partition object (494 bytes) and the program file (81,019,256 bytes). [run: the files' sizes]
+
+**3. The Lean session loop between `finish` and `ok 0`** [read, all of it; files under `verity/protocols/flock/verifier/Flock/` at `4d784714a84d`]
+
+The prover's side: it connects to the loop's frames port, writes `finish LEN` and the sample, and reads one line (`firewall.rs` 353 to 366, called at `flock-circuit.rs` 4097). The loop, in order:
+
+1. **Reads the sample and parses its JSON** (`Firewall/Finish.lean` 1114 to 1118; `Hello.drawOf`, `Firewall/Hello.lean` 50). Grows with the sample's text, which is small.
+2. **Looks the sample up** in the process's table of statements set up so far, keyed by the sample's canonical text (`Setup.setupAt`, `Hello.lean` 147 to 154; `drawKey`, 132). A hit costs nothing.
+3. **On a miss, sets the statement up** (`Setup.setup`, `Hello.lean` 119 to 121):
+   - **Parses the circuit file**, each net's rows in tasks, the file hashed in a task beside them (`HmOut.parseCommitFast`, `HmRow.lean` 1829 to 1830; `parseFastFrom`, 930). Grows with the circuit file. It reads nothing of the sample, yet it runs at every miss.
+   - **Loads the population from the public file and takes the sample's units from it** (`Stmt.setupHiddenOf`, `HmRow.lean` 2526 to 2545: `HmIn.loadPublic`, `HmIn.drawn`, `HmOut.checkPublic`). Grows with the public file and the sample.
+   - **Derives the units from the program** (`deriveTemplateUnits`, `HmRow.lean` 1197 to 1218, called at 2551). It reads the whole program as JSON and hashes its canonical form (`TemplateQuery.Desc.parse`, `TemplateQuery.lean` 58 to 91). Grows with the program file, plus one lookup a sampled unit.
+   - **Checks the links between units** (`HmLinks.check`, `HmRow.lean` 2344 to 2348, called at 2552). It reads the same program bytes as JSON a second time, with its own hash (`Program.decode`, 2346). Grows with the program file and with the sampled units.
+   - **Regions, the pin, the statement's digest, Σ and the `Hello` text** (2562 to 2588). Read as small; not timed.
+4. **Answers `ok 0`** (`Finish.lean` 1123), then serves the repetitions.
+
+The two readings of the program run only where the loop is given `--partition` and `--program` and the partition is a template query. The scan's is (`Q_template_instances`) [run: `partition.json`], and its driver passes both flags [read: `benchmarks/one_stage/a0.py` 287 to 291]. The loop's own command line is not in the run's files.
+
+**4. Does it repeat work a kept process already did?** [read]
+
+- **Within one session: no.** The loop's own `Hello` for the session asks the same table (`Firewall/Session.lean` 656) and finds the statement the `finish` set up.
+- **Across sessions of one loop: yes, at every new sample.** The loop reads its files' bytes once, at start (`Session.lean` 930; `Setup.ofArgs`, `Hello.lean` 99 to 115), and keeps them. It keeps no reading of them. At each sample it has not seen, it parses the circuit file again and reads the program twice again, though neither depends on the sample.
+- **This is the shape of the find on a kept verifier process**, whose later members read and hash the 2.77 GB program again, about 8 s [relayed: the coordinator's 21:12Z message; KEPT's find], one layer down: here the bytes are held and the readings redone.
+- **The Lean verifier's own process already avoids it.** It parses the circuit once for every setup (`FlockVerify.lean` 1107 to 1108) and holds one reading of the program for all of them (`ProgramRead.lean`, its header; `FlockVerify.lean` 1116). The loop calls the setup without that: `Stmt.setupTablesOf`, not its `…By` form.
+- **`main` is the same** at `783b526ab6f5` (`Hello.lean` 120 to 121).
+- **In this run no process is kept at all**: one prover process and one loop a session. So here the cost is paid once a session whatever the loop keeps.
+- Not checked: whether two sessions that sample every unit send the same sample text. If they do, a kept loop serves the second from its table.
+
+**The one measurement that would split the 24 s.** Three clock readings on the loop's stderr inside `Setup.setup`, on one round of the same four sessions: after the circuit's parse, after the units are derived from the program, after the link check. It needs a build of `flock-firewall` with those lines, which I did not make. With no build, the nearest split is the Lean verifier's two stage lines in the table: the same setup in another process on one core, the program read once.
+
+**5. The same seconds as my one-prover result? No.**
+
+- **Mine:** `r20261112-110333-4c33`, the head block, a GPU prover, one prover on the card, at commit `c6cadd0e325f`. The fixed 1.93 s a statement is one call, `HostSlots::pack_units`, inside the witness build. [run, this morning]
+- **That run had no ZK server** (`FC_FIREWALL=0`), so its prover opened no Lean finish: it connects only for a zero-knowledge statement with the ZK server asked for. [read: `flock-circuit.rs` 4095 to 4099 and 1585 to 1588; the driver's setting, `benchmarks/one_stage/server_rate.py` 214 at `c6cadd0e325f`]
+- **Theirs:** the witness build is 0.15 to 0.75 s a session, and the rest of the gap is the loop. [run]
+- **Behind the ZK server on the GPU prover both would be paid, one after the other:** the wait for `ok 0` comes before the witness build. [read: `flock-circuit.rs` 4097, then 4218] Nobody has run that, as far as I know.
+
+**What is not known**
+
+- That the 22 s are the two readings of the program. The reason for the guess: it is the one large input the four sessions share, and the code reads it twice at each setup.
+- The wait at another program size. The served model's program is 2.77 GB [relayed: the same message]. A session behind the ZK server that gives the loop that program has it read twice at every new sample. Nobody has timed that.
+- One round of four sessions; no session was repeated.
