@@ -68,11 +68,17 @@ class Codec(Protocol):
 class Receipt(Protocol):
     """A receipt construction (the driver's receipt kinds, with the optional bound input ``z``).  ``binds`` names what a
     receipt reads beside the block: ``()`` for sketch-then-hash, ``("z",)`` for one bound to the prior tile's output.
-    The driver's leaves are of 64-byte receipts."""
+    The driver's leaves are of 64-byte receipts.  The three attributes are read and never set, so a frozen dataclass
+    is a receipt."""
 
-    name: str
-    receipt_bytes: int
-    binds: tuple[str, ...]
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def receipt_bytes(self) -> int: ...
+
+    @property
+    def binds(self) -> tuple[str, ...]: ...
 
     def keyed(self, seed: bytes) -> Keyed: ...
 
