@@ -91252,3 +91252,31 @@ Each log's first line is `HEAD_AT a2f8506cf865...`. The whole quick tier was not
 **Body** updated at 14:29Z: an Order paragraph (holds #9116 at its marked head, lands after it, the codes' order), the lock paragraph, and the third merge with its runs [run: `research queue edit`, 11,224 bytes].
 
 **Next, in this order:** #9212 takes this head (six files by hand, then its records run and the same suites); #9229 takes it (no stop; its records run builds #9043's modules over the new `readsOk`); #9080 takes #9274's head `2b77dc50d89f` (merged here already, not pushed: `RevealsWired.lean:620` passes the agreement, the cap is #9274's 273 / 2,309 plus 2 and 64) and this head, then its records run and quick tier, then its ready line. Each once.
+
+## REFUSE, Thu 12 Nov 14:35Z: the Lean run on `main` merged with #9091's head is `r20261112-142735-c6d3` on vy-nebius-cpu-3; it holds its check slot since 14:32Z and waits for a Lean `build` slot; it ends about 15:30Z by my guess and at 16:32Z at the latest
+
+- [run] `r20261112-142735-c6d3`, launched 14:27:35Z on vy-nebius-cpu-3, pool `research`, `--as proofs`:
+  `python3 tools/verity/lean/lean_changed.py --records security/Proofs --rebuild` (no `--update`), `--cwd clone`,
+  `--mem-gb 32`, `--timeout 7200`. One run, launched once.
+- [run] Its tree: the local commit `d6fde415d9867dfc4c0efccd3439aaa7b0d3f373` (tree `ab62c627e617`), parents `main` at
+  `8252fe8dff65` and the head `675dea740d6a`; on no branch and pushed nowhere (`research run` shipped it to the node).
+  On it: `git merge-tree` exit 0 with no file, drivers registered; one lock differs from `main`'s, in `roots` only
+  (161 to 162); #9043's three modules are `main`'s bytes; `pins.py --stale` empty.
+- [read] (`lean_changed.py`, the run's first line) Why the records path: it builds the whole of `security/Proofs`,
+  so #9043's three modules and everything that imports them with this change's Lean, restoring what the node's
+  cache holds, then audits `security` and `security/Properties`; its outcome is `pass` or `regenerated`, which is
+  your "nothing regenerated". `--build` and `--try` restore nothing from that cache and say nothing of records.
+  `--rebuild` only keeps a kept pass from skipping a package.
+- [run] Why cpu-3 by name: `--on auto` cannot leave nodes out, and its rule chose cpu-10 at 14:27Z; the same rule
+  without cpu-2, cpu-9, cpu-10 and cpu-13 chose cpu-3's research pool.
+- [read] (the run's `slot.json` and stderr, 14:34Z) It took check slot b4 at 14:32:07Z. All 5 Lean `build` slots of
+  the node were taken then (three records runs, two tries); it retries every 20 s with no time limit. Its timeout is
+  7200 s from the slot: 16:32Z at the latest.
+- [guess] It ends about 15:30Z: `r20261112-113130-ff1e` (the same command with `--update`, on cpu-2) ended 49 min
+  after its slot [read]; this one also waits for a Lean slot, and cpu-3's cache may hold less of the package.
+- [run] 14:34Z: `main` is `7d296de0f3e9`, 10 files past the run's tree: no Lean file, Lake file, lock, pin or file of
+  `tools/verity/lean`, none of this change's files; the head merges with it, exit 0, no file. [read] (`gh`, 14:34Z)
+  #9091's head is `675dea740d6a5d1789ea5a3894d6218333791726`, OPEN.
+- Nothing marked, nothing posted, nothing pushed but this entry; the body is as sent at 13:50Z [run: compared].
+  Checkpoint 16 is in the notes (`1dfab71f42`). When you resume me: the run read whole, its verdict here and in the
+  body's Lean item.
