@@ -8,11 +8,11 @@ import json
 import os
 import subprocess
 from pathlib import Path
-from typing import Callable
 
 import research.merge as M
 from research.cli import main as research_main
 from test_merge_gate import CHECK_FILES, CHECKED
+from test_queue import _worktree_locks
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -327,27 +327,6 @@ def test_the_after_landing_tree_goes_under_train_trees_when_set_else_in_the_temp
     assert (other := M._own_tree(repo, head)) is not None and other.parent == tmp
 
 
-def _locks(repo: Path) -> Callable[[], tuple[bool, bool, bool]]:
-    """Whether train.lock is held, whether the worktree lock is held so that a shared hold waits (a worktree added), and whether
-    it is held so that only an exclusive one does (a fetch), in ``repo``'s git directory, asked as another process would."""
-    import fcntl
-
-    from research.gates import WORKTREES_LOCK
-
-    common = Path(_git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
-
-    def held(name: str, op: int) -> bool:
-        with open(common / name, "a") as f:
-            try:
-                fcntl.flock(f, op | fcntl.LOCK_NB)
-            except BlockingIOError:
-                return True
-            fcntl.flock(f, fcntl.LOCK_UN)
-            return False
-
-    return lambda: (held("train.lock", fcntl.LOCK_EX), held(WORKTREES_LOCK, fcntl.LOCK_SH), held(WORKTREES_LOCK, fcntl.LOCK_EX))
-
-
 def test_the_steps_after_a_landing_fetch_under_the_worktree_lock_and_add_their_tree_under_both_locks(tmp_path, monkeypatch):
     """Drive's steps after a landing run in the queue's clone, where the loop adds worktrees (a move's regeneration) under
     train.lock and the worktree lock.  A fetch reads every worktree's HEAD, which a worktree half added has as a placeholder:
@@ -364,7 +343,7 @@ def test_the_steps_after_a_landing_fetch_under_the_worktree_lock_and_add_their_t
     tip = _git(repo, "rev-parse", "HEAD")
     _git(repo, "push", "-q", "origin", "HEAD:main")
     monkeypatch.setenv("TRAIN_TREES", str(tmp_path / "trees"))
-    locks, real, seen = _locks(repo), subprocess.run, []
+    locks, real, seen = _worktree_locks(repo), subprocess.run, []
 
     def probed(argv, *args, **kw):
         if argv[:2] in (["git", "fetch"], ["git", "worktree"]):

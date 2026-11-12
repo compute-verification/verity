@@ -1727,17 +1727,16 @@ def _own_tree(repo: Path, commit: str) -> Path | None:
     its own in that clone.  None when ``repo`` can't make one."""
     import shutil
 
-    from .queue import QueueError, worktrees_locked
+    from .queue import worktrees_locked
     from .settings import train_trees
 
+    if _git(repo, "rev-parse", "--git-common-dir", check=False).returncode:
+        return None
     if root := train_trees():
         os.makedirs(root, exist_ok=True)
     tree = Path(tempfile.mkdtemp(prefix=f"research-after-land-{commit[:12]}-", dir=root))
-    try:
-        with worktrees_locked(repo):
-            added = _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode == 0
-    except QueueError:                      # no repository: its git directory, where the locks are, can't be read
-        added = False
+    with worktrees_locked(repo):
+        added = _git(repo, "worktree", "add", "-q", "--detach", str(tree), commit, check=False).returncode == 0
     if not added:
         shutil.rmtree(tree, ignore_errors=True)
         return None

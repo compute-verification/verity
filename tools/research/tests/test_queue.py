@@ -852,9 +852,10 @@ def test_a_moves_regeneration_checks_its_tip_out_under_merged_root_not_tmpdir(wo
     assert _git(q.workdir, "worktree", "list", "--porcelain").count("worktree ") == 1
 
 
-def _worktree_locks(repo: Path) -> Callable[[], tuple[bool, bool]]:
-    """Whether train.lock is held, and whether the worktree lock is held so that a fetch's shared hold would wait, in ``repo``'s
-    git directory, asked from a file of their own as another process would."""
+def _worktree_locks(repo: Path) -> Callable[[], tuple[bool, bool, bool]]:
+    """Whether train.lock is held, whether the worktree lock is held so that a shared hold waits (a worktree added), and whether
+    it is held so that an exclusive one does (a fetch, or a worktree added), in ``repo``'s git directory, each asked from a file
+    of its own as another process would."""
     import fcntl
 
     common = Path(_git(repo, "rev-parse", "--path-format=absolute", "--git-common-dir"))
@@ -864,11 +865,14 @@ def _worktree_locks(repo: Path) -> Callable[[], tuple[bool, bool]]:
             try:
                 fcntl.flock(f, op | fcntl.LOCK_NB)
             except BlockingIOError:
-                return True
-            fcntl.flock(f, fcntl.LOCK_UN)
-            return False
+                probe = "held"
+            else:
+                fcntl.flock(f, fcntl.LOCK_UN)
+                probe = "free"
+        return probe == "held"
 
-    return lambda: (held("train.lock", fcntl.LOCK_EX), held(Q.WORKTREES_LOCK, fcntl.LOCK_SH))
+    return lambda: (held("train.lock", fcntl.LOCK_EX), held(Q.WORKTREES_LOCK, fcntl.LOCK_SH),
+                    held(Q.WORKTREES_LOCK, fcntl.LOCK_EX))
 
 
 def test_a_moves_regeneration_adds_and_removes_its_worktree_under_train_lock_and_the_worktree_lock(world, monkeypatch):
@@ -890,8 +894,8 @@ def test_a_moves_regeneration_adds_and_removes_its_worktree_under_train_lock_and
     monkeypatch.setattr(queue, "_git", git)
     commit, why, _ = q._regenerated(main, pr, main)
     assert commit and why == "", why
-    assert held == [("add", True, True), ("remove", True, True), ("prune", True, True)], held
-    assert locks() == (False, False)
+    assert held == [("add", True, True, True), ("remove", True, True, True), ("prune", True, True, True)], held
+    assert locks() == (False, False, False)
 
 
 def test_a_pr_a_landing_gate_at_main_refuses_is_left_out_with_its_fix_and_only_the_members_a_sync_merges_are_judged(world, monkeypatch):
