@@ -72697,3 +72697,130 @@ The same up to 200 tables (19 designs):
 - The run record's `art:` id for run `e68a`: the run is preserved, and I did not look its id up.
 
 Files: `/opt/cursor/artifacts/sessions-under-300/` (`wires_sessions2.py`, its job, `entry_tables2.py`, the run's `out/`). No repository file changed; nothing posted; no Lean.
+
+## SESSREAD, Thu 12 Nov 05:47Z: CACHE's reading of the hypothesis and its three uses is right and no use is missed; the lemma without the hypothesis compiles beside the present one (`r20261112-052746-8213`, exit 0, the file at `c6c9d7c417`); the plan check's lemma without `hreq.1` is written at `fd8e4f58af` and its run `r20261112-054602-bc5b` is out
+
+### Step 1: CACHE's reading of the hypothesis and its three uses is right, and no use is missed
+
+- [read] `security/Definitions/Claims/SamplingTwoRankin.lean:79-88`: the hypothesis is line 84,
+  `∀ r, ∃ ρ, ∀ v ∈ blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r, replayOf Pt d.part v = some ρ`: every
+  proof block a request's served outputs read is in one replay block. As CACHE reads it.
+- [read] `security/Proofs/Flock/SamplingGeneric/TwoRankin.lean:267-372`: the hypothesis enters once, as
+  `choose ρr hρr using hal` (line 270), and the proof reads `ρr` in the three places CACHE names:
+  1. **The pattern fixes the tuple.** `ψ` (274-275) builds the tuple from the pattern with `ρr`, and `hpat` (282-288,
+     through `blocksTo_inter_blocksIn`, 240-261) says the piece `T ∩ ρ`'s pattern is `ψ (pat T) ρ`. `hpi` (353-359)
+     and `key` (329) read `hpat`.
+  2. **The tuple fixes the pattern.** `hinj` (344-352).
+  3. **The bits add.** `hwt` (295-309), an equality, read in `key` (318).
+- [read] the same file, 289-294: one more fact comes from the hypothesis, `hnone` (a request whose `ρr r` is past the
+  last replay block reads nothing). Only `hwt` (309) and `hinj` (352) read it, so it is inside uses 2 and 3, and the
+  proof without the hypothesis needs nothing in its place.
+- [run] `rg -n "ρr|hρr|hpat|hnone|hwt|hinj|hpi\b"` on that file, now: lines 241-247 (the helper) and 270-368, each one
+  of the places above. Rankin's step (`weight_le_rankin`, 145) and the last `calc` (360-372) name none of them.
+- [read] `security/Proofs/Properties/Spot/TwoStageCheck.lean:243-263`: the clause is used once more, as CACHE says:
+  `hreq.1` (252) goes to `admissibleTwo_rankin_patterns`. `hreq.2.2` (260) and `hreq.2.1` (262) are the other two
+  clauses and go to `factorUpperPatternsSound`.
+- [read] `security/Properties/Spot/FactorUpper.lean:59-69`: `FactorUpperPatternsSound` takes no one-replay-block
+  clause. CACHE's "the right side ... the check already bounds, without the clause" holds at the statement.
+- [read] Two places **state** the clause without using it, which CACHE's note does not list. They are not uses, and
+  both change in the real change (step 5): the honest witness `rankinTwoPatterns_honest` concludes it as its third
+  conjunct (`security/Proofs/Flock/Claims/Witnesses/SamplingTwoRankin.lean:58-66`), and `pair_requestsCover` proves
+  it as `RequestsCover`'s first clause (`security/Proofs/Properties/Spot/TwoStageCheck.lean:343-354`).
+- [derived] One step of CACHE's four needs a choice the note does not make. With the hypothesis the tuple is a
+  function of the pattern. Without it two sets with one pattern can have different tuples, so the map from patterns
+  to tuples takes one chosen set a pattern (`choose!`), and CACHE's step 2 (the tuple fixes the pattern) is what makes
+  that map injective. The sum over patterns is then a sum over distinct tuples, as before.
+- [derived] What the lemma gives is what CACHE modeled: today's product of the replay blocks' factors, so with step 4
+  the plan check's number at a point whose `S` is the session's served bits and whose `N` is the sessions reading in
+  a replay block (1 when a replay block is inside one session). It is looser than the count for a request that reads
+  several replay blocks: the product charges it `min(b(T_r ∩ ρ), |r|)` in each replay block ρ, so a session heavy in k
+  of its replay blocks is charged k times its served bits where the count charges it once. K wrong replay blocks cost
+  K caps on the right side whether they sit in K sessions or in one. At a request in one replay block it is the
+  present lemma.
+
+### Step 2: the statement as tried
+
+[read] `security/Proofs/Flock/SamplingGeneric/TwoRankinRequests.lean` at `c6c9d7c417`, on `cursor/proofs-sessread-1b22`:
+
+```lean
+theorem admissibleTwo_rankin_patterns_requests (s : AuditStatement) (Pt : Partition) (d : Design.Two) (q : ℕ → ℝ)
+    (δ θ : ℝ) (R : Type) [Fintype R] [DecidableEq R] (req : Fin s.prog.outs.length → R) (hs : InScopeTwo Pt d s)
+    (hq : ∀ T ⊆ Finset.range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ ρ ∈ T, (1 - q ρ)) (hq1 : ∀ ρ, q ρ ≤ 1)
+    (hδ : 0 < δ) (hθ : 0 ≤ θ) :
+    ((∑ p ∈ (admissibleTwo Pt d δ).image
+          (fun T r => lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req T r)),
+        2 ^ ∑ r, lightBits s Pt (servedBits req r) (p r) : ℕ) : ℝ) ≤
+      δ ^ (-θ) * ∏ ρ ∈ Finset.range d.part.blocks.length, rankinFactorPatterns s Pt d req (q ρ) θ ρ
+
+theorem admissibleTwoRankinPatterns_of_requests : AdmissibleTwoRankinPatterns :=
+  fun s Pt d q δ θ R _ _ req hs hq hq1 hδ hθ _ =>
+    admissibleTwo_rankin_patterns_requests s Pt d q δ θ R req hs hq hq1 hδ hθ
+```
+
+- [read] It is `AdmissibleTwoRankinPatterns`, binder for binder, with line 84 gone. The second theorem derives the
+  listed statement from it with the hypothesis unread (`_`), which is the check that the two conclusions are one term.
+- [read] The file is new and beside the present proof; `AdmissibleTwoRankinPatterns`, `RequestsCover` and every listed
+  statement are untouched, no lock is touched, and no root imports the file.
+- [read] Its name is `TwoRankinRequests.lean`, not the brief's `TwoRankinSessions.lean`: in that directory `Session.lean`
+  and `SessCount.lean` are about proof sessions, and every statement here calls the split's unit a request (`req`).
+  Say if you want the other name.
+- [read] Six lemmas carry it, each stated in the file: `blocksTo_inter` (`(T ∩ B)_r = T_r ∩ B`, for any `B`),
+  `lightOf_eq_some_none_iff`, `lightOf_some_none_of_inter` (a heavy piece makes the set heavy), `eq_of_lightOf_eq`
+  (a class that is not the heavy one fixes its set), `lightOf_eq_of_inter` (CACHE's step 2) and
+  `lightBits_le_sum_inter` (step 3, from `bitsOf_eq_sum` and `min_sum_le_sum_min`).
+
+**It compiles.** [run] `r20261112-052746-8213` on vy-nebius-cpu-1, source `c6c9d7c417`, state done, rc 0:
+`python3 tools/verity/lean/lean_changed.py --try security/Proofs/Flock/SamplingGeneric/TwoRankinRequests.lean`, launched
+with `research run --on auto --project verity --source . --cwd clone --max-min 60`. Its log, fetched now:
+
+```text
+Build completed successfully (10364 jobs).
+'Claims.Sampling.admissibleTwo_rankin_patterns_requests' depends on axioms: [propext, Classical.choice, Quot.sound]
+'Claims.Sampling.admissibleTwoRankinPatterns_of_requests' depends on axioms: [propext, Classical.choice, Quot.sound]
+lean-try: security/Proofs/Flock/SamplingGeneric/TwoRankinRequests.lean: lean exit 0 in 971 s
+lean-try: security/Proofs/Flock/SamplingGeneric/TwoRankinRequests.lean: axiom probe: none of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound
+```
+
+- [run] the same log: no warning and no error on the file's own lines; the warnings it holds are other files'.
+- [read] No `sorry` in the file. What that run does not cover: the file is not in a root's closure, so no check
+  builds it yet, and it has not been through the sibling check (`r20261112-054644-631b`, out) or check.py's replay.
+- [run] `r20261112-052426-7bae`, the first draft at `44f20cc030`, I cancelled while it waited for a slot: two tactic
+  errors found on this VM first. It never elaborated anything.
+
+### Where the four steps stand
+
+1. **Answered** above.
+2. **Compiled**: the statement, in `TwoRankinRequests.lean` at `c6c9d7c417` [run `-8213`].
+3. **Compiled**: its proof, the same run. No step is open.
+4. **Written, not compiled**: `security/Proofs/Properties/Spot/TwoStageCheckRequests.lean` at `fd8e4f58af` [read].
+   `twoStageCheckPatternsSound_form_requests` is `twoStageCheckPatternsSound_form` with `RequestsCover`'s other two
+   clauses as its hypotheses `hdisj` and `hreads` in place of `hreq`, its proof the present one over
+   `admissibleTwo_rankin_patterns_requests`. `twoStageCheckPatternsSound_requests` is the same in
+   `TwoStageCheckPatternsSound`'s shape, and `twoStageCheckPatternsSound_of_requests : TwoStageCheckPatternsSound`
+   derives the listed statement from it with `hreq.1` unread. Run `r20261112-054602-bc5b`, launched 05:46Z on
+   vy-nebius-cpu-9.
+5. **Read, not written up**: the definition, the property, the proofs and witnesses that name either, the two locks'
+   records and the Python that states the clause are found; the list comes with the next entry.
+
+### One thing CACHE's note already has, confirmed
+
+- [read] `security/Properties/Spot/TwoStageCheck.lean:61-64` and
+  `security/Proofs/Properties/Spot/FactorUpper/Patterns.lean:1345`: `RequestsCover`'s last clause wants
+  `servedBits req r = D.S`, an equality, of every request that reads in a replay block, and the factor's proof reads
+  it as an equality (`pat_mem_all`, `pat_touch`, `first_le`, `all_le`, `touch_le`). With a session as the request,
+  every session serves exactly the point's `S` bits or the clause is false. CACHE's note says it ("One cap"); the lemma
+  here does not touch it, and step 4 keeps the clause as it is.
+
+### Runs
+
+| run | what | exit |
+|---|---|---|
+| `r20261112-052426-7bae` | try of `TwoRankinRequests.lean`, first draft `44f20cc030` | cancelled by me before its slot |
+| `r20261112-052746-8213` | try of `TwoRankinRequests.lean` at `c6c9d7c417` | 0 |
+| `r20261112-054602-bc5b` | try of `TwoStageCheckRequests.lean` at `fd8e4f58af` | launched 05:46Z; the last took 17 min |
+| `r20261112-054644-631b` | try of `TwoRankinRequests.lean` with `--siblings` at `fd8e4f58af` | launched 05:46Z |
+
+Mailbox read 05:47Z: `inbox/sessread.md` does not exist on `cursor/proofs-inbox`.
+
+Next: the two runs; then step 5's list and the sentence on Fri 13 Nov 17:00Z. My branch `cursor/proofs-sessread-1b22` is at
+`fd8e4f58af`, pushed.
