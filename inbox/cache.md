@@ -352,7 +352,7 @@ the audit).
 **Runs cancelled as duplicates, never started:** `r20261112-024202-2e5d`, `r20261112-030122-ede5`,
 `r20261112-024625-487a`. Nothing of mine is running.
 
-## Entry 5, 03:58Z: your 03:17Z section read; the line for 07:00Z; the published serve; REPLAY's two figures
+## Entry 5, 03:49Z: your 03:17Z section read; the line for 07:00Z; the published serve; REPLAY's two figures
 
 The note is synced (notes commit `437b610c1d`); it opens with the line below and has a new section, "Under vLLM's
 published serve for eight H200s". No tree code changed.
@@ -418,3 +418,60 @@ times `LAMBDA`), and it charges serving 4.34% of compute at the plan, of which 2
 **Running:** `r20261112-032526-949b` and `r20261112-033048-7551`, the same job twice (the routes at week, month and
 year, world and datacenter), both still queued. They fill cells the note marks "not run" and change no answer. I
 cancel both before my final if neither has started.
+
+## Entry 6 and final, 04:08Z: the line for 07:00Z made exact; the routes at six scopes; nothing of mine is running
+
+Your inbox is unchanged since `1cdc71f2b7`. The note is synced at notes commit `e850c70417`. No tree code changed.
+Entry 5's header said 03:58Z; it was pushed at 03:49Z.
+
+**The line for 07:00Z, with what entry 5 left out.** The statement is `AdmissibleTwoRankinPatterns` without its
+one-replay-block hypothesis, read with a session as its request. `RequestsCover` loses only its first clause
+(`security/Properties/Spot/TwoStageCheck.lean:58`). Its other two stay, and they bind the serve:
+- **No two sessions read one proof block** (lines 59-60). So the cache is keyed by session, and a prefix that
+  sessions share is recomputed in each or registered; it is not a block that all of them read.
+- **Every session that reads a replay block serves the point's one cap** (lines 61-64). One cap for every session,
+  or a cap a class, is undecided.
+
+**The proof, step by step** [my argument, checked against the definitions and each step of the present proof; not
+compiled]. Write T_r for the proof blocks of a set T that session r reads. The present proof
+(`security/Proofs/Flock/SamplingGeneric/TwoRankin.lean:267-372`) uses the hypothesis three times; each has a
+replacement in the same file.
+1. Take the tuple of per-replay-block patterns from the set, ρ ↦ the pattern of T ∩ ρ, and not from the pattern.
+2. The tuple fixes the pattern. If T_r is heavy in some replay block it is heavy, since `bitsOf` is a sum. If in
+   none, the tuple records every part and T_r is their union (`biUnion_inter_blocksIn`, line 83).
+3. The pattern's bits are at most the tuple's: `lightBits |r| (lightOf |r| U)` is `min(b(U), |r|)`; `b(T_r)` is
+   the sum over replay blocks (`bitsOf_eq_sum`, line 96); and `min(Σ a, c) ≤ Σ min(a, c)` (`min_sum_le_sum_min`,
+   line 374).
+4. Rankin's step, the supremum over a pattern's sets and the sum over tuples stand as written. The right side is
+   the same product, which the check already bounds without the hypothesis.
+
+**The routes at week, month and year, world and datacenter** [modeled, run `r20261112-033048-7551`]. GB, the
+headline's column "GB@10% x1.05":
+
+| | World: week | month | year | Datacenter: week | month | year |
+|---|---|---|---|---|---|---|
+| Today's bound (the plan, recompute) | 13,962 | 14,060 | 14,229 | 13,430 | 13,528 | 13,698 |
+| The plan with no repeats | 12,318 | 12,404 | 12,552 | 11,851 | 11,938 | 12,086 |
+| Read, a replay block the plan's request, a session's cap of 220,500 served tokens | 24,573 | 24,687 | 24,882 | 23,932 | 24,045 | 24,240 |
+| The same at a cap of 2,000,000 served tokens | 43,952 | 44,088 | 44,327 | 43,188 | 43,316 | 43,551 |
+| Read, AgentX's mean session one replay block | 24,490 | 24,586 | 24,753 | 23,940 | 24,037 | 24,205 |
+| The same, AgentX's median session | 18,277 | 18,375 | 18,543 | 17,723 | 17,821 | 17,989 |
+| Read, Copilot's session of 31 calls one replay block | 15,813 | 15,911 | 16,080 | 15,257 | 15,356 | 15,524 |
+| Recompute at AgentX's ratio, 45 | 541,073 | 545,096 | 552,003 | 318,360 at every budget up to 6% | 524,460 | 529,244 |
+
+A week's figure is 1 to 2% under a year's, and a datacenter's 2 to 4% under the world's. The datacenter's size is
+the census's and the execution phase 600 s, as the headline has them. All of it is the model's scaling from one
+plan; none is measured.
+
+**Read in the tree since entry 5:** GLM-5.3's config has one draft layer (`num_nextn_predict_layers` 1) and asks
+the draft to reuse its first step's indexer top-k (`index_share_for_mtp_iteration` true):
+`adapters/vllm/verity_vllm/engine/profiles/hf_configs/GLM53.config.json:20, 202`.
+
+**What I would ask, and of whom** (I messaged no one):
+- **lean:** one attempt at the restated lemma, to say whether it fits Fri 13 Nov 9 AM PST.
+- **vllm:** which accept method and temperature production uses; what an FP8 page is for GLM-5.3 at the pin
+  (which elements, at what scale); tokens served a GPU-second at five draft tokens on AgentX.
+- **Daniel, as an ask:** the count across an execution phase's edge, since it changes what the guarantee says.
+
+**Runs.** `r20261112-033048-7551` is done and preserved. `r20261112-032526-949b`, its duplicate, I cancelled
+before it started. Nothing of mine is running or queued.
