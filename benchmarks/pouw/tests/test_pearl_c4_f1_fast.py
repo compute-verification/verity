@@ -22,13 +22,13 @@ from verity.protocols.pouw.prover.schemes import pearl_c_work as W
 import clear_work as CW
 
 
-def test_row_law_is_the_reference_law():
+def test_row_pmf_is_the_reference_distribution():
     for i in range(16):
         e = tuple(F.line(bytes([i]) * 32, F.ROLE_EA, i))
         lo, pmf = F.noise_law(e)
-        lo2, pmf2 = Q.row_law(e)
+        lo2, pmf2 = Q.row_pmf(e)
         assert lo == lo2 and len(pmf) == len(pmf2) and np.abs(np.array(pmf) - pmf2).max() < 1e-15
-    assert Q.row_law((0,) * 32) == (0, pytest.approx(np.ones(1)))
+    assert Q.row_pmf((0,) * 32) == (0, pytest.approx(np.ones(1)))
 
 
 def _side(rows, k=1024):
