@@ -58,6 +58,10 @@ content and order. Conventions follow POUS's package (`verity/protocols/pous/lea
 ../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean  trusted: the leak through the network certifier over a
     monitoring period of sampled audits, conditional on two per-window inputs
     (PooledLeakAccepted)
+../../Definitions/NetworkCertifier/PooledReg.lean  trusted: that bound at the trace with the registered openings: the
+    trace, its incorrect sets and the named premises (regValR, WregR, RateAt, PhasesAdaptive, PhaseErrors)
+../../Definitions/NetworkCertifier/Guarantees/PooledReg.lean  trusted: it with both inputs proved
+    (PooledLeakRegistered)
 ../../Definitions/NetworkCertifier/Checked.lean  trusted: the sequences accepted with a run a check passes
     (AcceptedChecked, AccSeqsChecked, LeakAtChecked, RLeakChecked), a check that pins its
     inputs (CheckedUnique) and misses at most εchk on given runs (CheckedWitness, traceRun),
@@ -141,6 +145,11 @@ PooledLeak.lean  the leak through the network certifier over a monitoring period
     before the period), each over any per-window event
     (encard_pooledFam_le, pr_pooled_le), the count also over any event on the
     whole period (encard_pooledJoint_le)
+PooledRegSample.lean  the sample's term at the registered openings: the rate (rateAt_subset, rateAt_all) and the
+    bound on each phase's verdict (pr_acc_of_event, phasesMiss_of_event)
+PooledRegEvent.lean  the event that term is paid against, from the sessions' bound and binding (ksRegR_of_sessionKS)
+PooledRegLeak.lean  the leak relation there, with no probability (leakAt_regR, phaseLeaks_regR)
+PooledReg.lean  the pooled bound there (pooled_of_event, pooledLeakRegistered)
 Checked.lean    the leak bound with checked inputs: a sequence accepted with a valid run is fixed by its
     inputs off the registered and checked ones, the held bits and its jitter
     (encard_acceptedChecked_le, through rows_full), and RAcc gives the leak
@@ -175,6 +184,7 @@ WitnessesChecked.lean  the nontrivial lemma of SampledLeakChecked; its honest le
 WitnessesCarried.lean  SampledLeakCarried's honest lemma, at the toy code with a run that opens its row
     at its input gates, and the nontrivial lemmas of SampledLeakCarried and
     PooledLeakCarried; PooledLeakCarried's honest lemma waits on a deployed check
+WitnessesPooledReg.lean  PooledLeakRegistered's honest and nontrivial lemmas
 WitnessToys.lean  what holds at those instances, which the count and period witnesses conclude from
 CountWitnesses.lean  the thirteen counts' pairs, seven egress and six ingress: the honest run is accepted at
     `fxRate` or at `sampProg`, or has every status complete, and each bound is
@@ -280,10 +290,11 @@ that bound exactly, below the 27 of `r = S` (`allocated_witness_tight`), so `All
 The lock (`lean-audit.json`'s `guarantees`) holds the 18 statements of `Guarantees.lean`, the sampled audit's charge
 (`../../Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`), the monitoring period's leak through the network certifier
 (`Guarantees/Period.lean`), the monitoring period's incorrect proof blocks
-(`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`) and the leak over a monitoring period
-(`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`), each listed as
+(`../../Definitions/NetworkCertifier/Guarantees/Pooled.lean`), the leak over a monitoring period
+(`../../Definitions/NetworkCertifier/Guarantees/PooledLeak.lean`) and it at the registered openings
+(`Guarantees/PooledReg.lean`), each listed as
 `NetTiming.SecurityProofs.G` and proved by the lemma of the same statement whose name it spells in UpperCamelCase (the
-last two by `pooledIncorrectBlocks` and `pooledLeak`). All 28 are under `shape.frozen` as
+last three by `pooledIncorrectBlocks`, `pooledLeak` and `pooledLeakRegistered`). All 29 are under `shape.frozen` as
 `frozen (no-function)`: each is stated over the model (an arbitrary `Interaction`, an abstract `EgressPrediction`'s `AccSeqs`,
 `expectedRow`, or the grids themselves; the sampled charge over the sequences the circuit's Program accepts with a
 possible incorrect set; the period's also over the network certifier's code as `Definitions` states it, which no compiled
@@ -304,7 +315,7 @@ forms give only the `W`-window total, `EncardAcceptedObservationsLe`'s, so the f
 hand ticks, which a window's sync moves only at or after the window's start (`ExpectedGridCausal`). A window's bits
 given the run before it have no Lean statement for the check: the queue and the hand ticks carry across windows.
 
-The other 25 are the rest of the Capacity table's bounds and the schedule's causality rule:
+The other 26 are the rest of the Capacity table's bounds and the schedule's causality rule:
 
 - **Proposition 2** (`NetTiming.SecurityProofs.Occupancy`): `CardFree`, `CardLeftPacked`, `CardCountsEqLe`,
   `EncardFifoGridsLeOfAvailable`, `EncardFifoGrids`.
@@ -390,6 +401,9 @@ The other 25 are the rest of the Capacity table's bounds and the schedule's caus
   assumption is `trusted-host`. Over live audits the two inputs are `Flock.Guarantees.SampledKSLive` at each window's
   history and the live `SampledLeakAccepted` (P2), neither discharged, so it is not the deployed system's bound over a
   monitoring period until they are.
+- **That leak at the trace with the registered openings** (`PooledReg.lean`): `PooledLeakRegistered` is
+  `PooledLeakAccepted`'s first conclusion with both inputs proved, at one trace's incorrect sets (`WregR`). Its rate
+  (`RateAt`) and the phases' order (`PhasesAdaptive`) are premises that no check derives.
 - **The leak bounds with checked inputs** (`Checked.lean`, `Carried.lean`): inputs a check pins cost no advice bits. A
   check `valid` over a run's values pins the inputs `chk` where a valid run's values there are a function of the
   ingress, the other inputs and the incorrect proof blocks' held values (`CheckedUnique`), and misses an invalid

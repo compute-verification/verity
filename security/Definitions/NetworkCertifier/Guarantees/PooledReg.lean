@@ -27,7 +27,7 @@ outside the bound.
 
 What it takes. The sampled proof system's premises (`Arg.KS`, and `CommitmentScheme.Binds` and `Compiled.Sessions`
 at every statement's verifier). The verifier is a function of the statement, `D y` the compiled verifier that judges
-`y`, so the statement reads at one verifier a statement as at one verifier of every statement, the constant function;
+`y`, and one verifier that judges every statement is the constant function;
 the phases' verifiers have at most `kV` rounds at their statements (`PhaseRounds`), and a phase's verifier reads the
 first of its `kV` coins. A rate `q` that every execution phase's sample met (`RateAt`), a hypothesis here: nothing in
 this statement derives it from what the verifier accepts. That each phase reads only the phases before it
