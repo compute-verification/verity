@@ -1,8 +1,8 @@
 # The NVIDIA B200 SXM 180 GB (HGX B200, 1000 W): the one source of its numbers (verity/hardware/README.md).
-# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU and firmware exceeds it, what the
-# model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or "placeholder"
-# (neither, open). Per-SM rates are a SM-clock's. No Lean card table is held to this file yet: the B200's numbers in Lean
-# are security/Definitions/Accounting/Sheets/B200.lean's. The host the card sits in is its own card.
+# Each number is { value, unit, mark, source }. mark: "ceiling" (no program on this SKU exceeds it, whatever firmware it
+# runs: what the model's premises need), "measurement" (a measured value, so only a lower bound on the ceiling) or
+# "placeholder" (neither, open). Per-SM rates are a SM-clock's. No Lean card table is held to this file yet: the B200's
+# numbers in Lean are security/Definitions/Accounting/Sheets/B200.lean's. The host the card sits in is its own card.
 
 kind = "gpu"
 sku = "b200-sxm-180gb"
@@ -24,14 +24,16 @@ tensor = { value = 1965, unit = "MHz", mark = "ceiling", source = "clock.sm: the
 memory = { value = 3996, unit = "MHz", mark = "ceiling", source = "art:a597e0beaf00 (max, application and default application memory clock 3996 MHz; supported memory clocks top at 3996; memory VF offset range [0, 0], a +500 MHz offset refused)" }
 
 # The stores. Registers in 32-bit words an SM; the rest in bytes. smem is the pool of L1 and shared memory, and
-# smem_carveout the most of that pool a kernel can make shared memory: a part of smem, not a store of its own.
+# smem_carveout the most of that pool a kernel can make shared memory: a part of smem, not a store of its own. dram is
+# the device memory a program gets and dram_installed the memory on the board, a second reading of the same store.
 [store]
 reg = { value = 65536, unit = "word/SM", mark = "ceiling", source = "Blackwell Tuning Guide section 1.4.1.1: 'The register file size is 64K 32-bit registers per SM'" }
-reg_extra = { value = 70030, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and the uniform predicates (7 bits a warp, 14 words), as the H200's at the Tuning Guide's 64 warps an SM; and the tensor memory, 256 KiB an SM (65536 words: PTX ISA 9.0 'Tensor Memory', 128 lanes of 512 32-bit columns), which Isa.lean has no Store for" }
+reg_extra = { value = 70030, unit = "word/SM", mark = "ceiling", source = "the uniform registers (63 a warp at 64 warps, 4032 words), the predicates (7 bits a thread at 2048 threads, 448 words) and the uniform predicates (7 bits a warp, 14 words), as the H200's at the Tuning Guide's 64 warps an SM; and the tensor memory, 256 KiB an SM (65536 words: PTX ISA 9.0 'Tensor Memory', 128 lanes of 512 32-bit columns), which Isa.lean has no Store for; no run has swept this card's uniform registers, and a run on the RTX PRO 6000 found 80 a warp hold values (that card's store.reg_extra)" }
 smem = { value = 262144, unit = "B/SM", mark = "ceiling", source = "Blackwell Tuning Guide section 1.4.2.3: the B200's 'combined L1 cache, texture cache, and shared memory of 256 KB' (shared memory alone is configurable to 228 KB, so the pool is the larger)" }
 smem_carveout = { value = 233472, unit = "B/SM", mark = "ceiling", source = "shared memory alone, the most of store.smem's pool a kernel can configure as shared memory, inside the pool and not added to it: CUDA C++ Programming Guide 12.9 section 18.2 Table 28, CC 10.x, 'Maximum amount of shared memory per SM 228 KB' (the table's KB is 1024 bytes); Blackwell Tuning Guide section 1.4.2.3, the B200 supports 'shared memory capacities of 0, 8, 16, 32, 64, 100, 132, 164, 196 and 228 KB per SM'" }
 l2 = { value = 132120576, unit = "B", mark = "placeholder", source = "126 MiB: Blackwell Tuning Guide section 1.4.2.2, 'The NVIDIA GB200 GPU increases the L2 cache capacity to 126 MB', taken as MiB; no document gives the HGX B200's, and the device's L2 size isn't on record" }
 dram = { value = 193273528320, unit = "B", mark = "ceiling", source = "Lenovo HGX B200 180GB 1000W GPU Product Guide Table 2: 'GPU Memory 180 GB HBM3e', taken as 180 GiB, above the 183,359 MiB the driver reports (art:a597e0beaf00)" }
+dram_installed = { value = 206158430208, unit = "B", mark = "ceiling", source = "192 GiB, the memory on the board, eight HBM3e stacks (memory.bus) of 24 GB, of which store.dram is what a program gets: NVIDIA Blackwell Architecture Technical Brief, Table 3, a GPU of the HGX B200, 'Up to 192 GB HBM3e' (read in V1.1; memory.bus cites V2.1's table for the same line), taken as 192 GiB; the brief counts no stacks, and no document read says what the 180 GB board holds back" }
 
 # The resources' rates, each a SM-clock (a Lean table's rho would be SMs x this x clock.sm, the tensor's x clock.tensor).
 [rate]
@@ -49,6 +51,7 @@ l2 = { value = 512, unit = "word/SM-clock", mark = "placeholder", source = "the 
 bus = { value = 8192, unit = "bit", mark = "ceiling", source = "eight HBM3e stacks of 1024 bits (Technical Brief V2.1 Table 3: 'Up to 192 GB HBM3e', eight 24 GB stacks); no data-sheet figure" }
 transfers = { value = 2, unit = "transfer/clock", mark = "ceiling", source = "HBM3e is double data rate: two transfers a clock of the 3996 MHz nvidia-smi reports" }
 bandwidth = { value = 8.183808e12, unit = "B/s", mark = "ceiling", source = "clock.memory x memory.transfers x memory.bus / 8, above NVIDIA's 'Up to 8TB/s' (HGX AI Factory reference architecture, Table 1, B200 SXM) and the Lenovo Product Guide's 'GPU Memory Bandwidth 7.7 TB/s' (Table 2); not measured on the B200" }
+read = { value = 8.183808e12, unit = "B/s", mark = "placeholder", source = "no read measured on the B200: memory.bandwidth until a measured read (the H200's streaming loads, or an encoded store's bare read as on the RTX PRO 6000) replaces it" }
 
 # The tensor units a MAC of each operand format uses (rate.tensor counts s8 MACs).
 [weight]

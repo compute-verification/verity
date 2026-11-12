@@ -249,7 +249,7 @@ def test_the_command_resolves_a_definition_id(tmp_path):
 # --- the structural lowering ---------------------------------------------------------------------------------------
 
 def test_the_structural_lowering_is_its_definitions_lowering():
-    """`verity_flock.struct_lower` (TMPL1) emits each specialized Definition once and keeps its calls as calls: its template
+    """`verity_flock.struct_lower` emits each specialized Definition once and keeps its calls as calls: its template
     of a GEMM scan is the flat lowering by construction."""
     S = pytest.importorskip("verity_flock.struct_lower")
     from verity.circuits.defs import bind

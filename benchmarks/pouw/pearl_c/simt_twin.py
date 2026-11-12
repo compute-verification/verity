@@ -4,8 +4,9 @@ without a GPU.
 Every CUDA thread of a block is a context on the launching thread (`host_threads.h`); `__syncthreads` and `__syncwarp` are one
 barrier over the block (stronger than a warp's, which the kernels here allow: every thread of a block reaches the same syncs),
 which a thread leaves when it returns. Blocks run one after another, and a block whose threads all wait at a barrier no
-thread reaches fails its launch. `build()` compiles it with g++ (C++20) and returns the library; `launch()` runs a
-kernel over a grid with `Args` built from host buffers.
+thread reaches fails its launch. `build()` compiles it with g++ (C++20) and returns the library, whose
+``run_<kernel>(&args, grid, block, smem)`` runs one of `KERNELS` over a grid: 0 when every block finished, 2 when a
+block's threads wait at a barrier none reaches, 3 when its threads' stacks can't be mapped.
 """
 from __future__ import annotations
 
@@ -15,6 +16,8 @@ import subprocess
 import tempfile
 from functools import lru_cache
 from pathlib import Path
+
+__all__ = ["Args", "KERNELS", "build"]
 
 HERE = Path(__file__).parent
 KERNELS = ("s512_rows", "s512_seeds", "s512_tickets", "s512_tile_leaves", "s512_pads", "s512_nodes", "s512_tree_small", "hm_leaves",
@@ -123,19 +126,3 @@ def build() -> C.CDLL:
     subprocess.run([cxx, "-O1", "-std=c++20", "-pthread", "-shared", "-fPIC", "-I", str(HERE), "-o", str(out / "twin.so"),
                     str(out / "twin.cpp")], check=True, capture_output=True, text=True)
     return C.CDLL(str(out / "twin.so"))
-
-
-def buffer(data: bytes | int):
-    return C.create_string_buffer(data, len(data)) if isinstance(data, bytes) else C.create_string_buffer(max(data, 16))
-
-
-def launch(kernel: str, grid: int, block: int, ptrs, ints, smem: int = 0) -> None:
-    a = Args()
-    for j, p in enumerate(ptrs):
-        a.p[j] = 0 if p is None else C.addressof(p)
-    for j, v in enumerate(ints):
-        a.i[j] = v
-    rc = getattr(build(), f"run_{kernel}")(C.byref(a), grid, block, smem)
-    if rc:
-        raise RuntimeError(f"{kernel}'s launch of {grid} blocks of {block} threads failed (host_threads.h's run: {rc}): "
-                           + ("its threads wait at a barrier none reaches" if rc == 2 else "no stacks for its threads"))
