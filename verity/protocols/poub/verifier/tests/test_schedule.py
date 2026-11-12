@@ -11,9 +11,9 @@ import itertools
 
 import pytest
 from test_appends import (
-    SCHEDULE_CAP,
     HONEST_SCHEDULE,
     P512,
+    SCHEDULE_CAP,
     N,
     Run,
     Verdict,
