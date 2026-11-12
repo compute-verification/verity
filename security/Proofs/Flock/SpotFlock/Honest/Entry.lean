@@ -129,4 +129,29 @@ theorem entryFact_held (hR : RefPorts R) (hN : NeededBits (held R B desc q c₀)
     rw [hrn]
     exact beq_iff_eq.2 (beq_iff_eq.1 (List.find?_some hp)).symm
 
+/-! ## The width at the instance -/
+
+/-- **Each bit's position is inside its port's row**, on `R`'s statement circuit: every source and written bit's
+position is one of the `16 w` bits of the first port of its row's name. -/
+def RefWidths (R : Ref) : Prop :=
+  ∀ y ∈ sourceBits (ms2 R.x) ++ writtenBits (ms2 R.x),
+    y.2.2.bit < 16 * ((stmtOf R.x).ports[((List.range (stmtOf R.x).ports.size).find? fun q =>
+      (stmtOf R.x).ports[q]!.name == y.2.2.row).getD 0]!).words
+
+/-- **Every wired row has one width at the instance** (the address facts' `RowWidths`, written out): the wiring map
+moves nothing, so each bit's gate is its own and only its position's range is asked (`RefWidths`). -/
+theorem rowWidths_held (hW : RefWidths R) :
+    ∀ i t k rp, BitOf (held R B desc q c₀) t k i rp → ∃ tw rq,
+      bitAtGate (held R B desc q c₀) (wireMap (held R B desc q c₀) i) = some (tw, rq) ∧
+      rq.bit < 16 * ((memberCircuit (held R B desc q c₀) tw).ports[portNamed (held R B desc q c₀) tw rq.row]!).words ∧
+      ((memberCircuit (held R B desc q c₀) tw).ports[portNamed (held R B desc q c₀) tw rq.row]!).words =
+        ((memberCircuit (held R B desc q c₀) t).ports[portNamed (held R B desc q c₀) t rp.row]!).words := by
+  intro i t k rp hb
+  refine ⟨t, rp, by rw [wireMap_held]; exact bitAtGate_of_bitOf hb, ?_, rfl⟩
+  have hmem : (i, t, rp) ∈ sourceBits (ms2 R.x) ++ writtenBits (ms2 R.x) := by
+    rcases hb.2 with ⟨hs, -⟩ | ⟨-, hw, -, -⟩
+    · exact List.mem_append_left _ (List.mem_of_find?_eq_some hs)
+    · exact List.mem_append_right _ (List.mem_of_find?_eq_some hw)
+  exact hW _ hmem
+
 end SpotFlock.Honest
