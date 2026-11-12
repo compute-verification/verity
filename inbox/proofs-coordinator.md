@@ -73700,3 +73700,64 @@ Other owners' uses that sit in files of our prefix are the seven lines of my 06:
 - Row 7's cost is my reading of what the proved uniform-key bound would need; nobody has designed it.
 
 No further entry is planned unless the mailbox asks for one; I will read it again at 07:05Z.
+
+## WIDEZK, Thu 12 Nov 06:07Z: `8ffd` exit 0: all 438 files build with every proof in place, on exactly the merge that is now my branch's head `f3a84fd990`; that head still merges onto `main` `d6075b75d289` with no conflict; the records run `r20261112-060033-ad5b` is out, verdict about 09:00Z. By read it will move many more records than my table names, so at its verdict expect the counted list and a stop, not a ready line
+
+Agent `bc-101c8b05-0fee-5e1d-a07b-a2b6e0c84131`. Sixth entry. Times are from `date -u`. Mailbox read at 06:05Z: seven sections, the newest 06:01Z (answered in 5).
+
+**1. `r20261112-044931-8ffd`, read by me**
+
+- [run: `research status`, its `summary.json`] Done, exit 0, on vy-nebius-cpu-13, in its slot from 05:03:45Z to 05:40:53Z.
+- [run: its `stdout.log` and `out/logs/iter-01.log.gz`] It built 438 files in one `lake build`: the base's 201 and my 237. Its lines: "iter 1: lean_changed --build exit 0 in 2228 s; 1987 modules built, 0 failed, 0 errors", "built after 1 iterations, 37.1 min; 0 bodies -> sorry, 0 declarations blanked", "Build completed successfully (11963 jobs)". No proof was replaced: every proof is in place.
+- [run: its `job.json`; `git write-tree` on my VM] Its source is the commit `1011d257b9`, a scratch commit of mine that was never pushed, with tree `b4e883eb642e`. I rebuilt that tree today in a temporary index: the tree of `f3a84fd990` plus the two scratch files (`scratch-widezk/stubloop.py`, `scratch-widezk/targets.txt`) hashes to `b4e883eb642e`. So it built the merge of `4e658a66c7` (mine) and `e39cc8aa6e` (#9108's head), which holds `main` at `62bf29346f76`, and nothing else.
+- [run: the same log] Its 3,284 warnings are linter and deprecation lines. The only two `declaration uses sorry` lines are in ArkLib, a pinned dependency (`ArkLib/Data/Fin/Basic.lean:327`, `ArkLib/Data/MvPolynomial/Interpolation.lean:250`).
+- [run: the same log] The two places of your 05:05Z section built: `Proofs.Flock.SessionLoop.PcsRank` (17 s) and `Proofs.Flock.SessionLoop.RoundSwitchRank` (15 s).
+- [read] It is a build. It ran no kernel replay, no axiom check and wrote no record.
+
+**2. The head, and `main`**
+
+- [run: `git push`, 05:58Z] `cursor/proofs-widezk-3e4d` is at `f3a84fd990`. It is the merge of #9108's head `e39cc8aa6e` into my branch (parents `4e658a66c7` and `e39cc8aa6e`), pushed as a fast-forward of my own branch. It differs from `e39cc8aa6e` in my 17 files only (79 lines added, 43 removed), all under `SessionLoop/` and `ZkAny/`.
+- [read] Why I merged: the records run needs one pushed head that holds both, and `8ffd` is the passing build your 03:17Z section told me to wait for. #9108's branch is untouched. If WIDELEAF merges my branch into it, that is a fast-forward to this same commit.
+- [run: `git merge-tree --write-tree f3a84fd990 origin/main`, `main` at `d6075b75d289`] Exit 0, no conflict. So I did not merge `main` in; the head holds `main` at `62bf29346f76`.
+- [run: `git diff --name-only 62bf29346f76 origin/main`] `8ffd`'s verdict covers the merge with `main`: the 236 commits change 167 files, none of them a `.lean` file, a `lean-audit.json`, `unread-caps.json`, or anything under `tools/verity/lean/` or `tools/verity/check/`. One file is changed on both sides, `tests/lint/allowlists/repo_retired_terms.json`, and it merges clean. No file needs building again.
+
+**3. The records run**
+
+- [run: its launch, `job.json`, `slot.json`] `r20261112-060033-ad5b`, launched 06:00:33Z at `f3a84fd990`, placed by `--on auto` on vy-nebius-cpu-12. At 06:05Z it waits for a slot with 5 checks ahead.
+- [read: `tools/verity/lean/README.md`] The command is the README's fast-path line: `research run --on auto --mem-gb 32 --max-min 180 --project verity --source . --cwd clone --as proofs --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records verity/protocols/flock/verifier --update`. It is `--cwd clone`, not `--cwd source` as your message has it: `check.py` refuses `--update` in a shipped tree and names `--cwd clone` (`check.py:6190`).
+- [run on my VM: the branch's files against each package's directory] The branch changes files in four Lean packages: `security/Proofs` (274 files), the verifier's package (19), `security` (1, `Definitions/Flock/Accounting/Schedule.lean`) and the spot verifier's Lean (1, `Spot/OneStageZk.lean`, a package that lists no guarantee).
+- [read: `lean_changed.py`, `requirers`] The run checks the verifier's package and every package whose guarantees read its build: the certifier's Lean, `security` with `security/Proofs`, and `security/Properties`. These are the four locks that list guarantees and can move.
+- [read: `lean_changed.py`'s docstring; relayed: KEPT's 05:40Z entry shows the line it prints] It is a fast result: per package, the build, the axioms the build recorded (each package's line names them) and the records. It runs no kernel replay and no tests. So it stands for the axiom probes of my 237 files as far as the axioms go; the replay is the queue's check.
+- [read] No `--moved`: no lock names a declaration the branch renames (my 05:10Z entry, for the 23). If a listed guarantee is gone, the run fails and names it.
+- [guess] Verdict about 09:00Z: 5 checks ahead; KEPT's `277b` took 92 minutes for the same four packages with little to build; `8ffd` took 37 minutes to build what the verifier's change reaches. Its limit is 180 minutes from its slot.
+
+**4. Said before the run, by read: far more records will move than my table names**
+
+- [read] The five replacement names in my 05:10Z entry were a floor. My table answers "what became of #9040's 23 names"; it does not list what #9108's own change moves.
+- [run on my VM: each lock's `reads` against the branch's changed files] `security/lean-audit.json` reads 1,467 definitions in 64 modules that the branch changes: 598 in 15 modules of the verifier (`Flock.RecCoins` 110, `Flock.Tags` 85, `Flock.Firewall.Session` 75, `Flock.Zk` 73, `Flock.Statement` 53, `Flock.ProvedScope` 47), 154 in `Spot.OneStageZk`, 20 in `Definitions.Flock.Accounting.Schedule`, and 695 in 47 modules of `security/Proofs` (`Claims.Recursion.Deploy` 114, `SpotFlock.Code` 81). Three of those 47 are under my directories: `SessionLoop.Statement` (26), `SessionLoop.RepSrcSat` (6), `SessionLoop.Level0SrcSat` (3).
+- [run on my VM: the same] `security/Properties/lean-audit.json` reads 533 definitions in 8 changed modules. The verifier's own lock and the certifier's read none from a changed module.
+- [guess] These are upper bounds: a digest moves only where the definition's own term changed. I expect hundreds to move, and some guarantees' own hashes with them, since `Stmt`, `Setup` and `Tags` gain the leaf's version and `Zk.schedule` and `Zk.queries0` take it as an argument.
+- [read: your 05:48Z message] Your rule is that no record may change that my table does not name, and that I stop and write an entry if one does. I expect it to apply. At `ad5b`'s verdict I will write the counted list from the run's `--update` review: each guarantee whose own statement hash moves, named one by one with both texts, and the read definitions grouped by what changed in them. I will write no ready line and commit no record until you say that list is what the body carries. If you want another shape for it, say so before 09:00Z.
+
+**5. Your 06:01Z check (lean, CI-489), by read at `f3a84fd990`**
+
+- [run on my VM: `git rev-parse` of each blob] The branch changes no lock file: each lock is `main`'s blob (`security/lean-audit.json` is `86a90df308` at my head and at `d6075b75d289`). The records run writes hashes and carries each `why` as it is.
+- [read: `security/lean-audit.json:5327` and `:5332`] Two `why`s it will carry have the bracket lean named. They are `unwitnessed[Flock.SecurityProofs.SpotExfilTwo]` and `unwitnessed[Flock.SecurityProofs.SpotKSTwo]`, both "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)". They are on `main` today, not from this branch. The mend is to end each at "frame". The file is outside my two directories, so I have not changed it: say whether the mend goes into my records commit or is another's.
+- [read] Two more strings that are not a `why` hold a bracket with an id and a date, also `main`'s: `shape.frozen[Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod]` in `security/lean-audit.json` ("(ASK-64 = A, 19 Oct)"), and `exempt[Flock.Test.RecCap]` in the verifier's lock ("(top 06:18Z 26 Oct, … proofs' PRF-190 …)"). [guess] Whether the export refuses those I can't tell from the relayed line.
+- [run on my VM: a scan of every string] The locks of `security/Properties`, `security/Proofs`, the certifier's Lean and the spot verifier's Lean hold no such bracket.
+
+**6. Which pull request carries it: #9108 itself**
+
+- [run: `git diff --stat e39cc8aa6e f3a84fd990`] My head is #9108's head plus 17 files, all in my two directories.
+- [read: `e39cc8aa6e:security/Proofs/Flock/SessionLoop/PcsRank.lean:370-372` and `:474`; run: `r20261111-215355-91d6` for the 17] #9108 alone cannot pass a records run of `security`: its copy of those 17 files is the scripted one, which did not build in my first run, and the two shapes of your 05:05Z section are still in it.
+- [read] A second pull request on top would be one that cannot land apart from a base that cannot land without it. So one pull request: on your word WIDELEAF moves `cursor/proofs-wideleaf-masked-782c` to `f3a84fd990`, or to the records commit after it, by a fast-forward. I can edit no pull request's body, so the body's lines will be in my entry for whoever holds it.
+
+**7. What is out, and what comes next**
+
+| Run | What | State at 06:05Z |
+|---|---|---|
+| `r20261112-060033-ad5b` | the records run at `f3a84fd990`, vy-nebius-cpu-12 | waiting, 5 checks ahead; verdict about 09:00Z [guess] |
+| `r20261112-044640-bec0` | #9108's own build at `e39cc8aa6e`, not mine | done, exit 0 on vy-nebius-cpu-11 [run: `research status`, 05:59Z]; I did not read its log |
+
+- [read] The quick suites are not out. They go at the head that carries the records, after `ad5b`'s verdict and your word on the list, as your order has them: `research run --on auto --cwd source --project verity --source . --as proofs -- bash -lc 'uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py --changed origin/main --quick'`.
+- [guess] The ready line is still about 11:00Z if the list is accepted as it comes.
