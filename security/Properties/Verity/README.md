@@ -19,7 +19,7 @@ properties, never a proof. Their proofs (`security/Proofs/Properties/Verity/`) i
 | `Verity.remote_soundness_of_subprotocols : Verity.RemoteSoundness` | at remote, from its three targets | the same file |
 
 The statements are in `Soundness.lean` (this directory). **Remote's**: for any device and any names `V` the subprotocols
-define (`Vocab`), if sampled proofs, PoUW and the inference-only policy each meet their target at remote, then at all
+define (`Vocab`), if SPOT, PoUW and the inference-only policy each meet their target at remote, then at all
 parameters `θ`, committed files `F` and commitments `c` and for every prover strategy, the probability that remote's
 compiled verifier (`Core.Remote.protocol`, `verity/remote/v0`) accepts files that passed the commit phase's check while
 one of the three claims fails is at most the three errors at that strategy summed. Onsite's is the same statement over
@@ -56,7 +56,7 @@ In this order:
 3. **`Vocab`**: the names each subprotocol defines, given until it defines them: v2's reading of the committed files, the
    positions, the coin families, the fixed extractor, each subprotocol's fixed collision finders and LMS forger, the gates
    computed, the world, and the published certificates, `δ`s, `ε_forge` and losses.
-4. **The claims and errors**: `Vocab.Holds k θ F c σ a` is subprotocol `a`'s claim (sampled proofs' on the extractor's
+4. **The claims and errors**: `Vocab.Holds k θ F c σ a` is subprotocol `a`'s claim (SPOT's on the extractor's
    transcript, the five period claims as `Accounting.PeriodLive.Holds`, the policy's as `Properties.Remote.PolicyHeld` of its own
    case in the play's messages (`PolicyCase`), the Program its check judges and no field of `Vocab`, the wipe's as
    `Verity.Wipe.OfRun.Kept`'s negation); `Vocab.Verdict` is `a` accepting its own case inside the composite's acceptance;
@@ -71,10 +71,10 @@ In this order:
 
 ## Where each target is discharged
 
-- **The five period subprotocols** (sampled proofs, PoUW, PoUS, PoUB-P2, the network certifier): a target is the
+- **The five period subprotocols** (SPOT, PoUW, PoUS, PoUB-P2, the network certifier): a target is the
   per-period guarantee `Accounting.PeriodLive.Sound` at `Vocab.live` (`Vocab.target_audit`;
   `security/Definitions/Accounting/JointLive.lean`), so each discharges its target by proving that guarantee.
-- **Sampled proofs** at the recursive configuration: `Verity.Recursive.spotRecursive`
+- **SPOT** at the recursive configuration: `Verity.Recursive.spotRecursive`
   (`security/Proofs/Properties/Verity/Recursive/Target.lean`) proves the target's bound at the recursive configuration's
   verdict (`RecVerdict`) and its own error, under hypotheses that include `live-verifier`; `spotRecursive_of_ks`
   (`security/Proofs/Properties/Verity/Recursive/Audit.lean`) states it at the deployment from

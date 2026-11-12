@@ -1,6 +1,13 @@
 {
  "format": 1,
  "roots": ["Base"],
+ "layers": {
+  "Base": {
+   "imports": ["Base", "Lean.Data.Json", "Std.Data.TreeMap"],
+   "except": [],
+   "why": "the bytes, hashes and parsing are code: Lean core, its JSON and its tree maps only, no Mathlib and nothing of Security"
+  }
+ },
  "guarantees": {},
  "dependencies": {
   "toolchain": "1efe7aefd37af8682255d67bc7aeb32378d6650322729009305da53183dab0a0"

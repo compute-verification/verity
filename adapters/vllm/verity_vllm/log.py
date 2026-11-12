@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import sys
 import time
-from collections.abc import Hashable
+from collections.abc import Callable, Hashable
 from functools import cache
 from types import MethodType
 from typing import TextIO, cast
@@ -36,7 +36,7 @@ DEFAULT_LEVEL = logging.INFO
 class Formatter(logging.Formatter):
     """vLLM's ``NewLineFormatter``: ``HEAD``, then the message, with the head again on each further line; the time in UTC."""
 
-    converter = time.gmtime
+    converter: Callable[[float | None], time.struct_time] = time.gmtime
 
     def __init__(self) -> None:
         super().__init__(HEAD + "%(message)s", DATE_FORMAT)
