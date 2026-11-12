@@ -791,7 +791,8 @@ def test_a_traces_products_at_each_k_of_the_dial_give_the_term_there():
 @pytest.mark.parametrize("name", ("dense_blocks", "lora_blocks", "wildcard_adapter"))
 def test_a_fixtures_trace_keeps_its_product_rows_and_their_products_term(name):
     """Each fixture's product rows (the `.products.json` beside its circuit, training_slowdown.capture.products of the
-    step the circuit traces): the capture's version, the console's k, the circuit's tokens and |C|, P-match holding,
+    step the circuit traces): the version of the capture that took them, which traced the stored records and is
+    read still, the console's k, the circuit's tokens and |C|, P-match holding,
     and by kind every product the op log places. On the tiny start no product is fresh: every counted candidate has an
     operand read through a repeating view or a broadcast below its width (each view read at its own value's rate), so
     the products term is measured and far below 1, where the bound says nothing: M's operands are read far below
@@ -801,7 +802,7 @@ def test_a_fixtures_trace_keeps_its_product_rows_and_their_products_term(name):
 
     block = json.loads((FIXTURES / f"{name}.products.json").read_text())
     f = measure(StepCircuit.load(FIXTURES / f"{name}.npz"))
-    assert (block["capture"], block["k"]) == (products.CAPTURE, policy.CONSOLE[1])
+    assert (block["capture"], block["k"]) == (products.READS[0], policy.CONSOLE[1])
     assert (block["tokens"], block["gates"]) == (f["tokens"], f["gates"]) and block["p_match"] == []
     got = work.products_of_trace(block)
     ops = json.loads((FIXTURES / f"{name}.ops.json").read_text())

@@ -481,7 +481,7 @@ KNOWN: dict[str, str] = {
     "security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Store":
         "duplicate of `CircuitRequirement.Store`, stated in Accounting: becomes Core's, moved into security/Definitions/Core/ (memory-accounting)",
     "security/Definitions/Accounting/Requirement.lean::Accounting.Requirement.Store.Placement":
-        "duplicate of the Site (`Verity.Site`, not yet in Core: LEAN-93): becomes a reading of it: values placed on the Site's memory leaves (memory-accounting)",
+        "duplicate of the Site (`Verity.Site`, not yet in Core): becomes a reading of it: values placed on the Site's memory leaves (memory-accounting)",
     "security/Definitions/Accounting/TS/J10R.lean::Accounting.TS.J10R.Layout":
         "homonym, a tile shape: rename (compute-accounting)",
     "security/Definitions/Accounting/TS/Machine.lean::Accounting.TS.Machine":
@@ -676,9 +676,9 @@ KNOWN: dict[str, str] = {
         "homonym, one operand set's call in a kernel chain: rename (compute-accounting)",
     "benchmarks/pouw/harness/native.py::Device": "homonym, one CUDA device handle: rename (compute-accounting)",
     "benchmarks/pouw/harness/sass_gate.py::Gate": "homonym, a run's SASS gate: rename (compute-accounting)",
-    "benchmarks/pouw/machine_model/verity_machine_model/capacity.py::Window":
+    "benchmarks/machine_model/verity_machine_model/capacity.py::Window":
         "homonym, a capacity model's window and node cell: rename (compute-accounting)",
-    "benchmarks/pouw/machine_model/verity_machine_model/eps.py::Machine":
+    "benchmarks/machine_model/verity_machine_model/eps.py::Machine":
         "homonym, a machine model's Π: rename (compute-accounting)",
     "benchmarks/pouw/pearl_c_vllm/e2e.py::Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a client of it (compute-accounting)",
@@ -687,7 +687,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/pouw/served_h1/coins.py::Session":
         "homonym, the old word for a run, here a gate session: rename (compute-accounting)",
     "benchmarks/pouw/served_h1/partials.py::Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (compute-accounting)",
+        "duplicate of the execution block (no canonical yet): becomes a client of it (compute-accounting)",
     "benchmarks/pouw/served_h1/serve.py::Record":
         "homonym, a served request's benchmark row: rename (compute-accounting)",
     "benchmarks/pouw/served_zk/of_record.py::Record":
@@ -724,7 +724,7 @@ KNOWN: dict[str, str] = {
     "benchmarks/one_stage/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
         "duplicate of `merkle.Commitment`: becomes a client of it (the run's step commitments) (compute-accounting)",
     "demos/lifecycle/lifecycle.py::Block":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (top)",
+        "duplicate of the execution block (no canonical yet): becomes a client of it (top)",
     "demos/lifecycle/lifecycle.py::Card": "duplicate of `Verity.Accel.Card`: becomes a client of it (top)",
     "demos/lifecycle/lifecycle.py::Layout":
         "duplicate of the Site (`Verity.Site`): becomes a client of it (top)",
@@ -754,13 +754,13 @@ KNOWN: dict[str, str] = {
     "adapters/vllm/verity_vllm/protocols/pouw/h1/challenger.py::Ledger":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes it (deleted) (vllm)",
     "adapters/vllm/verity_vllm/protocols/pouw/h1/window.py::Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a client of it (vllm)",
+        "duplicate of the execution block (no canonical yet): becomes a client of it (vllm)",
     "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Layout":
         "duplicate of the Site (`Verity.Site`): becomes its memory leaves by tier (vllm)",
     "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes a client of it (vllm)",
     "adapters/vllm/verity_vllm/protocols/remote_bandwidth/interface.py::Registration":
-        "duplicate of the registration log (`Verity.Registration`, not yet in Core: LEAN-93): becomes a view of its head (vllm)",
+        "duplicate of the registration log (`Verity.Registration`, not yet in Core): becomes a view of its head (vllm)",
     "adapters/vllm/verity_vllm/query/units.py::Program": "homonym, what a query reads: rename (circuits)",
     # tools/
     "verity/configuration/config/verity_config/settings.py::Registry":
@@ -848,7 +848,7 @@ KNOWN: dict[str, str] = {
     "verity/protocols/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Law":
         "duplicate of `Flock.Draw.Law`: becomes it (deleted) (compute-accounting)",
     "verity/protocols/pouw/verifier/lean/check/PouwCheck/Inputs.lean::PouwCheck.Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes a reading of it: the execution block's record (compute-accounting)",
+        "duplicate of the execution block (no canonical yet): becomes a reading of it: the execution block's record (compute-accounting)",
     "verity/protocols/pouw/verifier/lean/check/PouwCheck/Pass.lean::PouwCheck.Coins":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (compute-accounting)",
     "verity/protocols/pouw/verifier/lean/commit/PouwCommit/Frame.lean::PouwCommit.Hash":
@@ -888,15 +888,15 @@ KNOWN: dict[str, str] = {
     "verity/protocols/poub/verifier/opening.py::Draw":
         "homonym, a PoUB position draw: rename (memory-accounting)",
     "verity/protocols/poub/verifier/opening.py::Session":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
+        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
     "verity/protocols/poub/verifier/opening.py::Store":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
+        "duplicate of `remote_bandwidth`'s own type: becomes `audit.Session`, `audit.Store` (folded) (memory-accounting)",
     "verity/protocols/poub/verifier/p2.py::Opening":
         "duplicate of `Hash.RowLeaf.Opening` (`merkle.Opening` in Python): becomes it (one opening type, parameterised by codec) (memory-accounting)",
     "verity/protocols/poub/verifier/p2.py::Registration":
         "duplicate of the registration log (`Verity.Registration`): becomes the one store entry (memory-accounting)",
     "verity/protocols/poub/verifier/p2.py::Session":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes one type per concept, parameterised by codec (memory-accounting)",
+        "duplicate of `remote_bandwidth`'s own type: becomes one type per concept, parameterised by codec (memory-accounting)",
     "verity/protocols/poub/verifier/p2.py::Store":
         "duplicate of `CircuitRequirement.Store`: becomes a reading of it (memory-accounting)",
     "verity/protocols/poub/verifier/period.py::Period":
@@ -963,7 +963,7 @@ KNOWN: dict[str, str] = {
         "duplicate of `Flock.Circuit`: becomes a reading of it in proof blocks (proofs)",
     "verity/commitments/windows/interface.py::Opening": "homonym, a template's open read of a table row: rename (proofs)",
     "verity/commitments/windows/interface.py::Window":
-        "duplicate of the execution block (no canonical yet: LEAN-93): becomes the builder's output for it (proofs)",
+        "duplicate of the execution block (no canonical yet): becomes the builder's output for it (proofs)",
     # verity/
     "verity/settings.py::Registry": "homonym, one distribution's settings from the environment: rename (proofs)",
 }

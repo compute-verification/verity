@@ -46,7 +46,10 @@ The reference shapes are the lf model's (`adapters/vllm/tests/program/train_step
 `formalism.bound`) and the library's table call it, and `tests/test_one_calculator.py` fails on a second one. `policy`
 is a block's `c_gates` and `k_bits`; `step` is a step's record, a job's trace (`run.trace_step`'s) or the products
 stated from one (`work.products_of_trace`'s); `run` adds the run's `gates` (|C|; else the trace's own circuit's),
-`tau_bits` and `code_bits`. It returns `slowdown`, the calculator's bound of record on the work the record states (at
+`tau_bits` and `code_bits`. The work and the circuit it is divided by have one price: a trace's products are priced
+in the dtype its circuit counts them in, and a trace whose capture prices some in another (`work.repriced`: one of a
+capture before `capture.products.PRICED_AS_TRACED_FROM`, with float32 attention products) has no slowdown over its own
+circuit, with the row and the fix in `why`. It returns `slowdown`, the calculator's bound of record on the work the record states (at
 least 1; None, with the reason in `why`, where the record gives none); `binds` (`products`, `none` or `unmeasured`);
 `term`, the count before the floor; `bound`, the calculator's bound with its theorem, least blocks, premises and the
 work it read; `figure`, the choice of that work; and `read`, what the record says of itself.
@@ -99,7 +102,9 @@ weight at its width.
 
 The command prints one row an entry (every entry, or the ones named): the share of the start's parameters its step
 trains, its slowdown under its policy and what binds. It trains nothing. It builds the entry's model at the start's
-shape, traces its step on a CPU as a job does after its last step (`traced.traced_step`, on fake tensors), and reads the
+shape, traces its step on a CPU as a job does after its last step (`traced.traced_step`, on fake tensors: the job's
+program, since a route's step runs under bf16 autocast on a CPU as on a GPU), prints the dtypes that step's circuit
+prices its matrix products in (`priced in`), and reads the
 slowdown on the traced step from the one entry point (`calculator.slowdown`): the least slowdown of any partition of
 that step into the policy's blocks, on the products whose two operands both depend on the update. `trains` is read from
 the trace, the parameters the step writes over the start's: an entry that trains less charges fewer products, so its
@@ -132,8 +137,9 @@ reads operand shapes and which weights have left θ, never a value, so it is the
 wherever that step is one fixed graph: the step is traced too, and an entry whose trace the capture refuses, or
 whose step reads a value back, is refused. It prints, an entry:
 
-- `updated`: the uses of an updated weight, each by its MACs a token and the updated MACs upstream of it, which must
-  be the record's; this list is the entry's update structure;
+- `updated`: the uses of an updated weight, each by its MACs a token, the updated MACs upstream of it and the bits
+  it reads its weight at, which must be the record's (a route casts to bf16 on a CPU as on CUDA); this list is the
+  entry's update structure;
 - `log`: the step's products, each by phase, kind, op, operand shapes, count and MACs, which must be the record's;
 - `attention`, for a record that holds attention's fused kernel as one row: the counter writes the kernel as the
   ops the math kernel computes attention by, so the record's rows are rewritten the same way before they are
@@ -146,9 +152,8 @@ whose step reads a value back, is refused. It prints, an entry:
   record's format's (`E_KINDS`), with its size after the two steps beside the record's last checkpoint's, and how a
   codec packs the same encoding another way than the record's program did (`E_PACKING`);
 - `expected`: a difference named by the rule that covers it, with the MACs on each side. A rule fires on its exact
-  case alone. The device's: weights read at 32 bits where the record's are read at 16 (`width`), and the norm as
-  elementwise ops where CUDA's fused kernel is counted at an updated gain alone, and not at all in a step that
-  trains no gain (`norm`). The program's own
+  case alone. The device's: the norm as elementwise ops where CUDA's fused kernel is counted at an updated gain
+  alone, and not at all in a step that trains no gain (`norm`). The program's own
   arrangement of a computation the route takes too: the loss (`loss`), where the record's program means each row
   and divides the rows' sum by the rows kept and a route means over the tokens, one value and one gradient where
   the run drops no row, which the rule checks in the record's program's arguments; and the average of the weights
@@ -238,7 +243,9 @@ where the config asks, so a config that doesn't is the job it was, under the sam
 A job trains the config's start along its route and scores each checkpoint on its split. A route is a module of
 `routes/` with `VERSION`, `DIALS`, `build`, `step` and `plan` (the route contract, `routes/__init__.py`; a dial its
 `LATER` names is out of a config's digest while at its default, so a route gains a dial and no digest moves, and a
-config writes one dial of a group its `EITHER` names); the harness
+config writes one dial of a group its `EITHER` names); the routes here run their forward under bf16 autocast on every
+device (`routes/subset.py`'s `step` and `routes/qat.py`'s), so a job on a CPU runs the program a job on a GPU does; the
+harness
 owns the loop, the batches, the checkpoints and each checkpoint's E, the weights that differ from θ encoded by the
 route's plan. A checkpoint's output model, the one scored, is what E rebuilds from θ: the trained weights under a
 plan that keeps them whole, and the model the kept bits give under one that keeps less. A route that trained a
@@ -280,7 +287,12 @@ reachable.
 After its last step a job traces its route's step once, outside the count, and its record's `trace` holds what the
 capture measures of it for the grade: the token axes, the forward's updated MAC nodes, and the product rows unpriced
 at each k of the console's dial (`capture.products.raw_on_dial`), which `capture.products.priced` prices where they
-are read. The capture takes the run's last three steps in one graph and measures the middle one (`capture_steps`),
+are read, each in the dtype it was traced in. The capture runs attention on torch's math path, so a step under
+bf16 autocast has its attention products in float32, as that path computes them from upcast operands and as the
+train-step circuit wires them; its other products are bf16. A trace of a capture before
+`capture.products.PRICED_AS_TRACED_FROM` holds the same float32 products, and that capture's rule prices them in
+bf16 (`capture.products.priced_dtype`); the rule goes when the stored records it reads are traced again. The
+capture takes the run's last three steps in one graph and measures the middle one (`capture_steps`),
 so the measured step reads what the step before it wrote and the step after it reads what it makes; where the three
 aren't the run's first steps, the first of them reads the run's own weights, not θ's (`mid_run`). That gives the
 step a circuit, which the trace keeps as the capture measures it (`circuit`: the gradient's cut and a token group's

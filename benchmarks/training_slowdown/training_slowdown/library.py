@@ -11,9 +11,14 @@ after its last step (`traced.trace_step`: on fake tensors, so it trains nothing 
 reads the slowdown on that step from the benchmark's one entry point (`calculator.slowdown`): the least slowdown of
 any partition of the traced step into the policy's blocks, by the slowdown calculator's bound of record on the work
 the theorem charges (the products whose two operands both depend on the update). It prints one row an entry: the
-share of the start's parameters its step trains (`trains`), its slowdown and what binds, and how much of the step's
-gates the capture approximates where it does (`approximated`); then the entry's planned run at that slowdown over
-each fleet and period (`periods`). With `--out` it writes the rows with what each read to `DIR/library.json`.
+share of the start's parameters its step trains (`trains`), the dtypes its circuit prices the step's matrix products
+in (`priced_in`), its slowdown and what binds, and how much of the step's gates the capture approximates where it
+does (`approximated`); then the entry's planned run at that slowdown over each fleet and period (`periods`). With
+`--out` it writes the rows with what each read to `DIR/library.json`.
+
+An entry's program is its job's: a route's step runs under bf16 autocast on a CPU as on a GPU. The row prints the
+dtypes the traced products are priced in: bf16, and float32 for attention's, which the capture traces as torch's
+math path computes them from upcast operands and as the train-step circuit wires them.
 
 A row has no slowdown, and says why, where the capture refuses the step, where the step breaks a premise the rows'
 rates take, where the trace doesn't classify the products at the policy's k, and where the entry's E keeps less than
@@ -31,6 +36,7 @@ from pathlib import Path
 import numpy as np
 
 from . import calculator, config, policy, starts, traced, work
+from .capture import products
 from .codecs import Identity
 from .grade import per_period
 from .opnames import LINALG_NAMES
@@ -44,6 +50,8 @@ FLOOR = "the floor: blocks of at most c gates cover the step's gates, and the th
 EMPTY = "the floor: no product of the step has two operands the update reaches, so the theorem charges nothing"
 TRAINS = ("trains: the share of the start's parameters the traced step updates. An entry that trains less charges "
           "fewer products, so its slowdown is not its optimizer's.")
+PRICED_IN = ("priced in: the dtypes the step's circuit prices its matrix products in, each product's own as traced, "
+             "with each one's share of the products' MACs where there is more than one.")
 PARTS = {
     "traced": "each entry's step, by the capture on fake tensors at the config's batch and the start's shape: its "
               "gates, its tokens, the parameters it updates and its products' MACs, output wires and operand "
@@ -131,11 +139,22 @@ def approximated(graph) -> dict:
     return {"macs": graph.approx_macs, "gates": g, "share": g / float(c.gates.sum())}
 
 
+def priced_in(trace: dict) -> dict:
+    """The dtypes a traced step's circuit prices its matrix products in: each product's own as traced
+    (`capture.products.traced_dtype`), with its share of the products' MACs, the largest first."""
+    macs: dict = {}
+    for r in trace["rows"]:
+        d = products.traced_dtype(r)
+        macs[d] = macs.get(d, 0) + r["count"] * math.prod(r["dims"].values())
+    total = sum(macs.values())
+    return {d: n / total for d, n in sorted(macs.items(), key=lambda x: -x[1])}
+
+
 def row(cfg: config.Config) -> dict:
     """An entry's row: its route's step traced at its start's shape and its budget's batch (`step`: its gates, its
-    tokens, the capture that took it and what that capture approximates), the parameters the step trains (`trains`),
-    and the bound of record on it at the entry's policy (`bound`). An entry whose plan keeps less than the weights
-    isn't traced: `CODED` stands in place of its slowdown."""
+    tokens, the dtypes its products are priced in, the capture that took it and what that capture approximates), the
+    parameters the step trains (`trains`), and the bound of record on it at the entry's policy (`bound`). An entry
+    whose plan keeps less than the weights isn't traced: `CODED` stands in place of its slowdown."""
     route = config.route(cfg.route)
     pol = policy.named(cfg.policy, cfg.start.shape)
     out = {"entry": cfg.name, "route": cfg.route, "dials": cfg.dials, "start": cfg.start.name, "budget": cfg.budget,
@@ -145,7 +164,8 @@ def row(cfg: config.Config) -> dict:
     model, optimizers = route.build(cfg.start.shape, cfg.dials)
     trace, graph = traced.traced_step(cfg, route, model, optimizers, "cpu")
     if graph is not None:
-        out |= {"step": {"gates": trace["circuit"]["gates"], "tokens": trace["tokens"], "capture": trace["capture"],
+        out |= {"step": {"gates": trace["circuit"]["gates"], "tokens": trace["tokens"],
+                         "priced_in": priced_in(trace), "capture": trace["capture"],
                          "capture_code": trace["capture_code"], "approximated": approximated(graph)},
                 "trains": trains(graph, cfg.start.shape["parameters"])}
     return out | bound(trace, pol["c_gates"], pol["k_bits"])
@@ -168,11 +188,14 @@ def table(head: list[str], lines: list[list[str]]) -> str:
 
 
 def line(r: dict) -> list[str]:
-    """A row's cells: `trains` as a share of the start's parameters, and after what binds, where the capture
+    """A row's cells: `trains` as a share of the start's parameters, the dtypes the step's products are priced in
+    (each with its share of their MACs where there is more than one), and after what binds, where the capture
     approximated any of the step, how much of its gates."""
     share = r.get("step", {}).get("approximated", {}).get("share")
     note = f"; approximated: {share:.2%} of the step's gates are linear algebra at n³ MACs a matrix" if share else ""
-    return [r["entry"], r["route"], f"{100 * r['trains']['share']:.3g}%" if "trains" in r else "-",
+    dtypes = r.get("step", {}).get("priced_in") or {}
+    priced = ", ".join(dtypes) if len(dtypes) < 2 else ", ".join(f"{d} {s:.2%}" for d, s in dtypes.items())
+    return [r["entry"], r["route"], f"{100 * r['trains']['share']:.3g}%" if "trains" in r else "-", priced or "-",
             "-" if r["slowdown"] is None else f"{r['slowdown']:.4g}", r["binds"] + note]
 
 
@@ -180,7 +203,8 @@ def text(rows: list[dict]) -> str:
     """The rows as the command prints them: the table and what its `trains` says, each statement's full name, the
     planned runs over each fleet and period, and which parts are traced, approximated, proved, premises and
     scaled."""
-    out = [table(["entry", "route", "trains", "slowdown", "what binds"], [line(r) for r in rows]), TRAINS]
+    out = [table(["entry", "route", "trains", "priced in", "slowdown", "what binds"], [line(r) for r in rows]),
+           TRAINS, PRICED_IN]
     for b in sorted({(r["bound"]["theorem"], r["bound"]["rests_on"]) for r in rows if "bound" in r}):
         out.append(f"\n{b[0].rsplit('.', 1)[-1]}: {b[1]}")
     over = [(r, p) for r in rows if (p := periods(r))]

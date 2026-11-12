@@ -4,7 +4,8 @@
                                               must hold, no local memory in it (ptxas's spill bytes recorded); JSON to
                                               stdout, exit 1 on a refusal
     python3 egemm80.py summary OUT            the gate's verdicts and each arm's SMSP-cycles a MMA, from the bench (median
-                                              item at its NVML clock) and from the hold (the steady clock's half)
+                                              item at its NVML clock) and from the hold (the steady clock's half); a
+                                              line of the run's that is not JSON is named in `skipped_lines`
 
 A k-stage is 128 of k: 4 atoms of 8 MMAs a warp (e16: 16, two k16 halves an atom). Its fold is duo (LOP3, IMAD, LEA.HI) on
 4 words a lane a committed MMA, with a LOP3 tie every 4th MMA, and its loads 4 LDSM.16.M88.4 an atom and 4 LDGSTS a
@@ -103,7 +104,10 @@ def gate(sass_path: Path, build_log: Path) -> dict:
         mma, _, n_mma, n_com, _ = SHAPE[arm]
         body = mainloop(ins, mma)
         c = Counter(op for _, op, _ in body)
-        fam = lambda p: sum(v for k, v in c.items() if k.startswith(p))
+
+        def fam(p: str) -> int:
+            return sum(v for k, v in c.items() if k.startswith(p))
+
         words = 4 * n_com
         v = {"function": name, "loop_insns": len(body), "loop_mma": fam(mma), "loop_lea_hi": fam("LEA.HI"),
              "loop_lop3": fam("LOP3"), "loop_imad": fam("IMAD"), "loop_ldsm4": fam("LDSM.16.M88.4"),
@@ -151,25 +155,28 @@ def profile(g: dict, arm: str, K: int) -> dict[str, float]:
     return {k: round(x / per_tile_main, 4) for k, x in sorted(n.items(), key=lambda t: -t[1]) if x}
 
 
-def _lines(p: Path) -> list[dict]:
+def _lines(p: Path, skipped: list[str]) -> list[dict]:
+    """The JSON lines of one of a run's files (none when the run wrote no such file). A line that opens a brace and is not
+    JSON (a job cut off in a write) is left out and named in ``skipped`` as FILE:LINE."""
     out = []
     if p.exists():
-        for line in p.read_text().splitlines():
+        for i, line in enumerate(p.read_text().splitlines(), 1):
             if line.startswith("{"):
                 try:
                     out.append(json.loads(line))
                 except json.JSONDecodeError:
-                    pass
+                    skipped.append(f"{p.name}:{i}")
     return out
 
 
 def summary(out: Path) -> dict:
     g = json.loads((out / "gate-sass.json").read_text())
     meta = json.loads((out / "meta.json").read_text())
-    ref = _lines(out / "ref.jsonl")
+    skipped: list[str] = []
+    ref = _lines(out / "ref.jsonl", skipped)
     res: dict = {"run": meta.get("run_id"), "M": meta["M"], "N": meta["N"], "K": meta["K"], "sass_gate": g["ok"],
-                 "poison_gate": _lines(out / "gate.jsonl"), "ref": ref[0] if ref else None, "arms": {}}
-    bench = _lines(out / "bench.jsonl")
+                 "poison_gate": _lines(out / "gate.jsonl", skipped), "ref": ref[0] if ref else None, "arms": {}}
+    bench = _lines(out / "bench.jsonl", skipped)
     for arm in SHAPE:
         r: dict = {"refused": g["arms"].get(arm, {}).get("refused")}
         info = next((x for x in bench if x.get("arm") == arm and "mmas" in x), None)
@@ -181,7 +188,7 @@ def summary(out: Path) -> dict:
                           "throttle": sorted({x["throttle"] for x in items})}
             mma_main = info["mmas"] - (meta["M"] // 128) * (meta["N"] // 128) * 16 * 8 * 2
             r["bench"]["cycles_per_main_mma"] = round(ms * 1e-3 * mhz * 1e6 * SMSPS * info["sms"] / mma_main, 4)
-        hold = _lines(out / f"hold-{arm}.jsonl")
+        hold = _lines(out / f"hold-{arm}.jsonl", skipped)
         if hold:
             tail = hold[len(hold) // 2:]
             ms = statistics.median(x["ms_per_call"] for x in tail)
@@ -194,6 +201,8 @@ def summary(out: Path) -> dict:
         if arm in g["arms"]:
             r["per_mma"] = profile(g, arm, meta["K"])
         res["arms"][arm] = r
+    if skipped:
+        res["skipped_lines"] = skipped
     return res
 
 
