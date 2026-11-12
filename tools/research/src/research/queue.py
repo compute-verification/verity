@@ -59,7 +59,9 @@ candidate and those above it are built again without them in the same tick.
                                                    drops from a Lean lock it changes a shape.inline premise or shape.frozen
                                                    key the merged tree's statements still need (naming each); the vLLM
                                                    integration's ratchet gate, on a change that reaches what it judges,
-                                                   prints what it fails as a warning and refuses nothing; a check it
+                                                   prints what it fails as a warning and refuses nothing; each marked PR
+                                                   the head doesn't merge with is a warning too (its lane, the files and the
+                                                   fix: the queue refuses whichever of the two it merges second); a check it
                                                    couldn't run it names under "checks skipped";
                                                    --no-preflight skips it
     research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--json]
@@ -205,6 +207,12 @@ ported, is merged as a candidate's merge takes it (`merged_tree`), the merged tr
 clone defines them (`base_drivers`): a branch's older checkout would run its own `tools/verity/lean/merge.py`, and one from
 before `--caps` reports a conflict in `tests/test_lean_packages.py` a candidate's merge never sees.  `--no-preflight` skips it.
 The verified queue reads none of it: the mark admits the PR, and its candidate's check is the next check of it.
+Two marked heads that change the same lines each merge onto `main`, so neither mark is refused, and the queue refuses
+whichever it merges second, hours later, for its conflict with `main` by then.  The preflight says it at the mark, as a warning
+that refuses nothing (`Preflight._collisions`): it merges each marked head that shares a changed path with the head, a stack
+aside, onto `main` and the head onto that, as a candidate holding both merges them, and names each PR that leaves a conflict,
+its lane, the files and the fix (`COLLIDE_SAYS`).  The read comes before the merged tree's checks, in a budget of its own
+(`PREFLIGHT_COLLIDE_S`), and names the marked PRs it didn't get to.
 
 Records gate.  A candidate's records run regenerates the records of the locks its PRs changed, and what it can't regenerate
 fails it, ejecting its Lean PRs; so the gate refuses nothing.  `ready` (and `judge`) warn, naming each package and the run that
@@ -979,6 +987,11 @@ WARN_GATE_SAYS = "A warn gate refuses nothing: the PR lands, and its owner fixes
 RATCHET_SAYS = ("The ratchet gate refuses nothing here, since it can read a violation whose line moved, or an import cycle through a "
                 "module the PR adds, as new: check's `ratchet-gate` step, off the merge gate, judges the PR's merge again in its "
                 "candidate")
+#: what the ready mark's preflight says after the marked PRs a head doesn't merge with (`Preflight._collisions`)
+COLLIDE_SAYS = ("Nothing is refused for it: the verified queue refuses whichever of the two it merges second, for its conflict "
+                "with `main` by then. To be the second without that refusal, wait for the PR named to land, merge `main` and mark "
+                "the new head; or, where the PR named is your own, merge its head (`git merge SHA`), say in the body that this PR "
+                "is stacked on it, and mark the new head, which lands after it")
 #: the most merges' records the queue's state keeps (`Queue._merge`), the most recently used: a few hundred bytes each, and a
 #: sync merges a few hundred times
 MERGES = 2000
@@ -4516,6 +4529,13 @@ PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-
 #: collection but circuit-check's takes about 18 s on 4 workers of a 4-core VM; `PREFLIGHT_LINTS` add up to a minute, and the
 #: ratchet gate (`PREFLIGHT_RATCHET`), last, gets what is left
 PREFLIGHT_CHECKS_S = 120.0
+#: what the preflight's read of the marked heads (`Preflight._collisions`) may take: a budget of its own, which ends before
+#: `PREFLIGHT_CHECKS_S` starts, so the read never costs a lint its time.  The read is one pull of the open PRs' marks, one
+#: fetch of the marked heads not here and two merges for each marked head that shares a changed path with the head, a few
+#: seconds in all: the budget is what a slow store, remote or disk may take of a mark before the read gives up and says so
+PREFLIGHT_COLLIDE_S = 30.0
+#: how many of a collision's files its warning names before "and N more" (the PRs the read didn't get to are all named)
+PREFLIGHT_COLLIDE_NAMED = 5
 #: collections at once: four torch-importing `--collect-only` runs reach about 8 GB, half of a marker's 16 GB VM
 PREFLIGHT_JOBS = 2
 #: below this share of memory available, no suite is collected, so a mark never OOMs the VM's other agents (the shell hook's `AGENT_GUARD_MIN_AVAIL`)
@@ -5199,7 +5219,9 @@ class Preflight:
     ``python`` stands in for its interpreter), under `budget_s` together (`math.inf`: unbounded), and the worktree is
     removed whatever happens.  Last, after the run on the base below, with what is left of the budget, the vLLM integration's
     ratchet gate judges the merge when the change reaches what it judges (`PREFLIGHT_RATCHET`, `_ratchet`): what it fails is
-    logged as a warning and refuses nothing, so the time it takes never costs a refusing check its comparison.  Before
+    logged as a warning and refuses nothing, so the time it takes never costs a refusing check its comparison.  First of all,
+    once the head merges onto `next`, and in a budget of its own that ends before theirs starts (`collide_s`), the marked PRs
+    whose heads it doesn't merge with are logged as a warning too, with the fix (`_collisions`).  Before
     (b), the fetched fixtures under the collected suites' inputs come into it (``fetch``, by default `_fetch_fixtures`: through
     ``store``, within `PREFLIGHT_FETCH_S` of the budget); a suite whose fixtures can't be fetched (no credentials, no source) is
     named once and not judged.  A failure that `next` has too (a pin already stale there, a module two PRs on `next` already
@@ -5218,11 +5240,13 @@ class Preflight:
                  free: Callable[[], float | None] = free_memory,
                  fetch: Callable[[Path, list[str], float], tuple[set[str], str]] | None = None,
                  lean: Callable[[Path, list[str], float], LeanBuilt | str] | None = None,
-                 lean_s: float = PREFLIGHT_LEAN_S, lean_modules: int = PREFLIGHT_LEAN_MODULES):
+                 lean_s: float = PREFLIGHT_LEAN_S, lean_modules: int = PREFLIGHT_LEAN_MODULES,
+                 collide_s: float = PREFLIGHT_COLLIDE_S, collide_jobs: int | None = None):
         self.repo, self.remote, self.store, self.sync, self.python = Path(repo), remote, store, sync, python
         self.budget_s, self.jobs, self.clock, self.log, self.free = budget_s, jobs, clock, log, free
         self.fetch = fetch or self._fetch_fixtures
         self.lean, self.lean_s, self.lean_modules = lean, lean_s, lean_modules
+        self.collide_s, self.collide_jobs = collide_s, max(1, collide_jobs or os.cpu_count() or 1)
         self.root = Path(root or tempfile.gettempdir())
 
     def __call__(self, pr: PR, prs: list[PR]) -> str | None:
@@ -5242,6 +5266,8 @@ class Preflight:
         tree, files, r = None, [], None
         if not pr.move:
             tree, files, r = merged_tree(self.repo, base, pr.head)
+            if tree is not None:
+                self._collisions(pr, prs, base, onto)
         if pr.move:
             notes.append(f"the merged tree's checks: a move ({pr.move}), which its candidate's check checks")
         elif tree is None and files and (moves := self._only_moved(base, files)):
@@ -5410,6 +5436,90 @@ class Preflight:
         for why in gate_refusal(self.repo, main, pr.head, warns, kind="warn gate")[0]:
             self.log(f"research queue: preflight: warning: #{pr.number} at {pr.head[:12]}: {why}. {WARN_GATE_SAYS}")
         return refused
+
+    def _collisions(self, pr: PR, prs: list[PR], base: str, onto: str) -> None:
+        """A warning, never a refusal: each marked PR among ``prs``, the open ones, whose head doesn't merge with this head
+        (`_collide`), with its lane, the files in conflict and the fix (`COLLIDE_SAYS`).  The queue refuses whichever of two
+        such heads it merges second, for a conflict with `main` that its own mark, made before the other landed, couldn't see;
+        this says it at the mark.  The PRs the read didn't get to are named, every one, with why, and a read that fails is said
+        in its place: it never costs the mark."""
+        say = lambda what: self.log(f"research queue: preflight: warning: #{pr.number} at {pr.head[:12]}: {what}")  # noqa: E731
+        some = lambda xs: ", ".join(xs[:PREFLIGHT_COLLIDE_NAMED]) + (                                              # noqa: E731
+            f" and {len(xs) - PREFLIGHT_COLLIDE_NAMED} more" if len(xs) > PREFLIGHT_COLLIDE_NAMED else "")
+        try:
+            found, unread = self._collide(pr, prs, base)
+        except Exception as e:  # noqa: BLE001  (a read that only warns never costs the mark)
+            say(f"the marked PRs it doesn't merge with weren't read ({type(e).__name__}: {e}); the queue's merge judges each")
+            return
+        if found:
+            say(f"it doesn't merge with {len(found)} marked PR(s), each merged onto {onto} and this head onto that, as a "
+                "candidate holding both merges them:\n    "
+                + "\n    ".join(f"#{p.number} ({p.owner or 'no lane named'}) at {p.head[:12]}, in {some(files)}" for p, files in found)
+                + f"\n  {COLLIDE_SAYS}")
+        if unread:
+            say("whether it merges with these PRs wasn't read: "
+                + "; ".join(f"{', '.join(f'#{p.number}' for p in ps)} ({why})" for why, ps in unread.items())
+                + f". The read has {self.collide_s:g} s of its own and refuses nothing; the queue's merge judges each")
+
+    def _collide(self, pr: PR, prs: list[PR], base: str) -> tuple[list[tuple[PR, list[str]]], dict[str, list[PR]]]:
+        """(Each marked PR this head doesn't merge with and the files in conflict, the PRs not read by why), within `collide_s`
+        from now.  The marked PRs are the open ones onto `main`, a move aside (its head is only its request), with a ready
+        mark at their head that counts (`StoreLabels`, pulled at once; a mark that an older head of the same change carries
+        isn't read, since this repository needn't hold that head): every one, not only those marked earlier, since the
+        queue's order (its priority file, its pins) isn't here to read.  Their heads not here are fetched once, by their pull
+        refs.  Only one that shares a changed path with this head (each side's from its merge base with ``base``) is merged,
+        and none that this head contains or that contains it (a stack): it is merged onto ``base`` as the queue merges it
+        (`merged_tree`), then this head onto that merge (`conflicting_files`), as a candidate that holds both has them.  One
+        that doesn't merge onto ``base`` itself is the queue's to refuse, and its next head's mark reads this one.
+        `collide_jobs` of them are merged at once, and the clock is read before each such group: past the budget the rest are
+        named and not merged."""
+        deadline = self.clock() + self.collide_s
+        spent = lambda: self.clock() >= deadline                                                                  # noqa: E731
+        absent = lambda p: _git(self.repo, "cat-file", "-e", f"{p.head}^{{commit}}", check=False).returncode      # noqa: E731
+        rules = rules_at(self.repo, "refs/queue/preflight/main") or Rules()
+        labels = StoreLabels(self.store, log=lambda s: print(s, file=sys.stderr), since=rules.marked_after)
+        others = [p for p in prs if p.number != pr.number and p.base == "main" and not p.move]
+        labels.prefetch([(p.number, p.head) for p in others])
+        marked: list[PR] = []
+        unread: dict[str, list[PR]] = {}
+        for p in others:                    # each alone when the one pull failed, so the clock is read before each
+            if spent():
+                unread.setdefault("their marks not read in time", []).append(p)
+            elif labels.ready(p.number, p.head):
+                marked.append(p)
+        if marked and spent():
+            return [], {**unread, "not merged in time": marked}
+        if fetch := [p for p in marked if absent(p)]:
+            _git(self.repo, *STALL, "fetch", "-q", self.remote,
+                 *(f"+refs/pull/{p.number}/head:refs/queue/preflight/marked/{p.number}" for p in fetch), check=False)
+            if gone := [p for p in fetch if absent(p)]:
+                unread["their heads not fetched"] = gone
+                marked = [p for p in marked if p not in gone]
+
+        def paths(head: str) -> set[str]:
+            mb = _git(self.repo, "merge-base", base, head, check=False).stdout.strip()
+            return changed(self.repo, mb, head) if mb else set()
+
+        def files(o: PR) -> list[str]:
+            if any(not _git(self.repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
+                   for a, b in ((o.head, pr.head), (pr.head, o.head))):
+                return []
+            if (tree := merged_tree(self.repo, base, o.head)[0]) is None:
+                return []
+            below = _out(self.repo, "commit-tree", tree, "-p", base, "-p", o.head, "-m", f"preflight: #{o.number} onto {base[:12]}")
+            return conflicting_files(self.repo, below, pr.head)
+
+        found: list[tuple[PR, list[str]]] = []
+        with concurrent.futures.ThreadPoolExecutor(self.collide_jobs) as pool:
+            mine = paths(pr.head)
+            todo = [o for o, theirs in zip(marked, pool.map(lambda o: paths(o.head), marked)) if mine & theirs]
+            for i in range(0, len(todo), self.collide_jobs):
+                if spent():
+                    unread["not merged in time"] = todo[i:]
+                    break
+                group = todo[i:i + self.collide_jobs]
+                found += [(o, fs) for o, fs in zip(group, pool.map(files, group)) if fs]
+        return found, unread
 
     def _merged(self, pr: PR, base: str, tree: str, onto: str, notes: list[str], members: list[Member] | None = None) -> list[str]:
         """(b) and (e), in a temporary worktree at the merge of the head onto ``base``, ``tree`` (`merged_tree`)."""
@@ -6813,7 +6923,9 @@ def main(argv: list[str]) -> int:
                          f"changes (at most {PREFLIGHT_LEAN_MODULES}, in {PREFLIGHT_LEAN_S:g} s, on a warm Lean tree: here on a "
                          f"node, else on the first of {', '.join(PREFLIGHT_LEAN_ON)} that starts the build, whatever the tier; "
                          "one no node can build refuses the mark, one not "
-                         "built in time is a skipped check); the records gate (which warns of a changed Lean lock with no records "
+                         "built in time is a skipped check), and its warnings with it (the vLLM ratchet gate's, and the marked PRs "
+                         f"the head doesn't merge with, read in {PREFLIGHT_COLLIDE_S:g} s of their own before those checks); "
+                         "the records gate (which warns of a changed Lean lock with no records "
                          "run or Lean check, of any commit, that passed its package on the head's Lean inputs, by their key "
                          "`tools/verity/lean/lean_changed.py --inputs-key`) still runs")
     ap.add_argument("--marked-after", metavar="YYYY-MM-DDTHH:MM:SSZ", help="status/sync: admit only ready marks written at "
