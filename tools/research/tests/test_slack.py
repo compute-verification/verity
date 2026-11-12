@@ -2028,8 +2028,8 @@ def test_resolve_records_a_thread_answer_and_says_clearly_when_there_is_no_such_
 
 
 def test_resolve_records_a_decision_outside_the_cards_options_as_daniels_and_where_he_said_it(route, registry, capsys):
-    """Daniel's page decided something no option names (card ee27f7dd): `otherwise` records it, with his words and
-    `page`, and never as the lane's own provisional decision."""
+    """A page that decided something no option names: `otherwise` records it with the note and `page`, never as the
+    lane's own provisional decision."""
     route.resolve = True
     run(capsys, "ask-daniel", "resolve", "42", "--choice", "otherwise", "--note", "both, in order", "--on-page")
     assert route.requests[-1] == ("POST", "/api/agent-approvals/42/resolve",
@@ -2836,6 +2836,32 @@ def test_retract_blanks_only_the_names_own_post(fake, registry, capsys):
     assert rc == 2 and "was posted by @ci, not @infra" in err and other["text"] == "mine"
     rc, _, err = run(capsys, "retract", "--as", "infra", "--ts", "1700000999.000001")
     assert rc == 2 and "a reply needs --thread ROOT" in err
+
+
+def test_retract_goes_through_the_broker_and_its_refusal_says_who_may(broker, registry, capsys, monkeypatch):
+    rc, out, _ = run(capsys, "send", "--as", "infra", "--text", "x")
+    ts = out.split()[0]
+    assert run(capsys, "retract", "--as", "infra", "--ts", ts)[0] == 0
+    assert {"method": "chat.update", "args": {"channel": COORD, "ts": ts, "text": "_retracted by @infra_"}} in [r for _, r, _ in broker.requests]
+    assert next(m for m in broker.state.messages[COORD] if m["ts"] == ts)["text"] == "_retracted by @infra_"
+
+    def refuse_edits(url, data, headers):
+        if json.loads(data)["method"] == "chat.update":
+            raise http_error(403, {"error": "forbidden_caller"})
+        return broker(url, data, headers)
+
+    monkeypatch.setattr(slack, "post", refuse_edits)
+    rc, _, err = run(capsys, "retract", "--as", "infra", "--ts", ts)
+    assert rc == 2 and "forbidden_caller): only an edit to a post made as a name this agent holds or posts as" in err
+
+
+def test_chat_open_goes_through_the_broker(broker, registry, people_d, capsys):
+    chat_users(broker.state)
+    rc, _, err = run(capsys, "chat", "open", "luke", "--user", LUKE)
+    assert rc == 0, err
+    sent = [r["method"] for _, r, _ in broker.requests]
+    assert {"conversations.create", "conversations.invite", "pins.add"} <= set(sent)
+    assert broker.identities == [slack.BROKER] and broker.state.channels
 
 
 def argparse_ns(**kw):
