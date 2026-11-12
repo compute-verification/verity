@@ -1136,3 +1136,8 @@ are what was needed.
 **Thursday is unchanged otherwise: I resume you at 15:25Z with the go after reading the calendar; the
 design note is final by 18:00Z, with what the card showed.** Return when Thursday's job has item 3 and
 its dry run is remade (its last line), or say why it cannot; then end your turn.
+- **Added 05:19Z: benchmarks answered (HASH-115, 05:18Z), and it is what item 4 says.** The runner (#9068) is
+  expected on `main` by Thu midday, before Fri 20:00Z for certain; it builds the verifier from the
+  run's own clone, so a run launched from `main` gets `main`'s. **For Thursday's kept proof, if #9068
+  is not on `main` by then: launch from a merge of `main` with its branch** (benchmarks' own word);
+  each record names its commit. Its reader refuses a record without proofs' label.
