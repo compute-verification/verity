@@ -122,7 +122,11 @@ four bytes an id, and hands them with the release (`Released.request`, `Released
 three more tables a class under the same head. Under form 2 those tables hold a row a release filed in the class and
 no other, at most `WardenParams.phase_releases`, a bound on an execution phase's releases. The hand copies an
 execution phase's ids and makes nothing else: the tables are laid, committed and signed by whoever takes the hand,
-never on the tick.
+never on the tick. A schedule with **request words** (`WardenParams.request_words`, none by default, with content
+rows under form 2 and a response cap only) has a fourth table a class, of three words of each released request: its
+`max_tokens`, its `ignore_eos` and the count of its prompt's ids, read from the request's bytes in the hand
+(`content_rows.request_words`) by the form every cell of a released request was held to at ingress, and from nothing
+more of the device or of a server.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries
 it, or to where that hand would have been for a release it never hands (the lengths rows' hand, under either form),
 and no longer; of a connection it never released it keeps nothing. The classes enter the parameters' digest; a
@@ -235,6 +239,7 @@ class WardenParams:
     max_tokens_cap: int | None = None  # the response cap (the module docstring's), or none
     lengths: int | None = None  # the lengths rows' form (the module docstring's "The lengths rows"): 1 or 2, or none
     content: tuple[tuple[int, ...], ...] | None = None  # the content rows' classes (`content_rows.classes`), or none
+    request_words: bool | None = None  # the request words (the module docstring's "The content rows"): True, or none
 
 
     def __post_init__(self) -> None:
@@ -272,6 +277,15 @@ class WardenParams:
                                  f"at most the window ({self.window}) and egress_cells at most {1 << 16}")
             _request_form().layout(self.cell_bytes)
             _connection_rows().check_slots(self.stride_releases, self._stride_that_fits)
+        if self.request_words is not None:
+            if self.request_words is not True:
+                raise ValueError(f"request_words is true, for a schedule with request words, or unset, not "
+                                 f"{self.request_words!r}")
+            if self.content is None or not self.closes or cap is None:
+                raise ValueError("a words row is a release's in its class, one for each the class holds, and its "
+                                 "max_tokens the one its response is held to, so a schedule with request words has "
+                                 "content rows under the lengths rows' form 2 and a response cap (lengths is 2, "
+                                 "content its classes, each (P, O), and max_tokens_cap set)")
         if self.content is not None:
             object.__setattr__(self, "content", _content_rows().classes(self))
 
@@ -348,15 +362,16 @@ class WardenParams:
     @cached_property
     def digest(self) -> bytes:
         """The 64 bytes each record head's `parameters` carries. A schedule without a response cap has neither the
-        cap nor its reason in what it hashes, one without lengths rows not their form and one without content rows
-        not their classes, so its digest is the one it had before any of them was a parameter."""
+        cap nor its reason in what it hashes, one without lengths rows not their form, one without content rows not
+        their classes and one without request words not that it has none, so its digest is the one it had before
+        any of them was a parameter."""
         values = {k: v for k, v in asdict(self).items() if k not in OPTIONAL_FIELDS or v is not None}
         return tagged_sha512(PARAMETERS_TAG, canonical_json_bytes(values | {"kinds": sorted(KIND_NAMES),
                                                                             "reasons": list(self.reasons)}))
 
 
 #: `WardenParams`' fields that are unset by default, each left out of the digest of a schedule that leaves it unset
-OPTIONAL_FIELDS = ("max_tokens_cap", "lengths", "content")
+OPTIONAL_FIELDS = ("max_tokens_cap", "lengths", "content", "request_words")
 #: the lengths rows' forms (the module docstring's "The lengths rows"): which execution phases are handed, and whether
 #: one that isn't is ended without releases
 LENGTHS_FORMS = (1, 2)

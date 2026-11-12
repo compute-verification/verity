@@ -109,7 +109,9 @@ session (`check_load`) at the relay's roots.
 
 **The connection rows** (`connection_rows_run`). `serve` and `rehearse` take `--lengths 1|2 [--content P,O[,ROWS] ...]`,
 the schedule's lengths rows and its content rows' classes (`P,O,ROWS` under `--lengths 1`, `P,O` under `--lengths 2`,
-where a class's tables hold a row a release filed in it), which `rehearse` passes to its `serve`; without them a
+where a class's tables hold a row a release filed in it), and with `--lengths 2`, `--content` and `--max-tokens-cap`
+`--request-words`, a fourth table a class of what the network certifier reads of each released request (its
+`max_tokens`, `ignore_eos` and count of prompt ids), which `rehearse` passes to its `serve`; without them a
 run is what it was. With them the network certifier hands each execution phase's releases once the next one's records
 are published, and the publisher process lays that execution phase's tables, commits them and signs their one head:
 `rows.jsonl` (the registration and the cost) and `rows.salts` (witness). `check` holds every execution phase that has

@@ -5,8 +5,9 @@ inline and in `serve`'s process, lays, commits and signs each handed execution p
 check holds to the records' own reading of the same cells and refuses when a registration, a salt, a kept line or a
 record isn't the run's; an execution phase that isn't handed has no line; under the lengths rows' form 2 every
 execution phase has one line, its registration or the network certifier's word that it has no head, the run's last
-included, and the check holds each to the one that is due, also past an execution phase that isn't complete; and
-the cost's load and its measurement at a small schedule."""
+included, and the check holds each to the one that is due, also past an execution phase that isn't complete; the
+request words as a schedule flag, a run's kept words tables, which the check holds to the records, and their cost;
+and the cost's load and its measurement at a small schedule."""
 
 from __future__ import annotations
 
@@ -29,6 +30,8 @@ CLASSES = ((4, 4, 2), (128, 8, 3), (128, 8, 1))
 ROWS = dataclasses.replace(PLAIN, lengths=1, content=CLASSES)
 #: the same schedule at the lengths rows' form 2, each class its two sizes
 ENDS = dataclasses.replace(ROWS, lengths=2, content=tuple(c[:2] for c in CLASSES))
+#: and with request words, under the response cap they need
+WORDED = dataclasses.replace(ENDS, max_tokens_cap=8, request_words=True)
 T = PLAIN.window
 SERVE = ["serve", "--upstream", "h:1", "--listen", "h:0", "--out", "o", "--key", "k", "--session", "00", "--windows", "1"]
 REHEARSE = ["rehearse", "--fake", "--out", "o", "--ids"]
@@ -79,6 +82,27 @@ def test_the_connection_rows_are_schedule_flags_rehearse_passes_to_serve():
     # a request sent in bucket b is admitted by bucket b + 2, which is at most the run's last bucket less the span
     assert ENDS.span == 9 and T == 16
     assert [ws.closing_windows(ENDS, at) for at in (0.05, 0.45, 0.55, 2.0, 2.1)] == [1, 1, 2, 2, 3]
+
+
+def test_the_request_words_are_a_schedule_flag_rehearse_passes_to_serve():
+    """`--request-words` with `--lengths 2`, `--content P,O ...` and `--max-tokens-cap N` gives the schedule request
+    words, another schedule than the one without the flag, and `rehearse` passes it to `serve` with the cap, which
+    reads the same schedule. Without the flag the schedule is the one it was, and the flag without the response
+    cap, under form 1 or without content rows is refused by the schedule, which says what it needs."""
+    pairs = ["--lengths", "2", "--content", *(",".join(map(str, c[:2])) for c in CLASSES)]
+    capped = ["--max-tokens-cap", "8"]
+    got = schedule_of(REHEARSE + SCHEDULE + capped + pairs + ["--request-words"])
+    assert got == WORDED and got.digest not in (ENDS.digest, dataclasses.replace(ENDS, max_tokens_cap=8).digest)
+    assert crr.flags_of(got) == [*pairs, "--request-words"]
+    assert schedule_of(SERVE + SCHEDULE + capped + crr.flags_of(got)) == got
+    without = schedule_of(REHEARSE + SCHEDULE + capped + pairs)
+    assert without == dataclasses.replace(ENDS, max_tokens_cap=8) and without.request_words is None
+    assert crr.flags_of(without) == pairs and schedule_of(REHEARSE + SCHEDULE + pairs) == ENDS
+    rows = ["--lengths", "1", "--content", *(",".join(map(str, c)) for c in CLASSES)]
+    for bad in (pairs, capped + rows, capped + ["--lengths", "2"], capped):
+        with pytest.raises(ValueError, match="a schedule with request words has content rows under the lengths rows' "
+                                             "form 2 and a response cap"):
+            schedule_of(REHEARSE + SCHEDULE + bad + ["--request-words"])
 
 
 def test_a_hand_is_queued_a_slot_stride_an_item_and_kept_whole():
@@ -283,6 +307,47 @@ def test_under_form_2_every_execution_phase_has_one_line_and_the_runs_last_its_h
     s = result["summary"]["connection_rows"]
     assert (s["registered"], s["of"], s[crr.NO_HEAD]) == (4, 4, {"signed": 0, "of": 0})
     assert s["sign_ms"]["n"] == 4 and result["summary"]["certified_windows"] == 12
+
+
+@pytest.mark.parametrize("process", [False, True])
+def test_a_run_with_request_words_keeps_each_classes_words_table_and_the_check_holds_it_to_the_records(tmp_path, process):
+    """The six connections at a schedule with request words, inline and in the publisher process: each execution
+    phase's line lists a fourth table a class, `words.i`, after the class's other three and at their count, with a
+    salt a row, and its rows are what the network certifier reads of each request the records hold: the `max_tokens`
+    it was sent with, an `ignore_eos` of 0 and its prompt's ids. The check accepts the run, and refuses a words
+    table's root that isn't the records', by its execution phase."""
+    out = tmp_path / "run"
+    device, requests = served(out, tmp_path / "key", process=process, params=WORDED)
+    assert len(device.log) == len(PROMPTS) and all(c["failed"] is None and not c["cut"] for c in device.log)
+    assert phases_of(out, WORDED) == [(w, "registration") for w in range(4)]
+    records = ws.read_records(out, WORDED)
+    held = CR.of_records(WORDED, records["requests"], records["responses"])
+    words = {request: (8, 0, len(prompt)) for request, prompt in zip(requests, PROMPTS)}
+    seen = 0
+    for w, (doc, salts) in enumerate(crr.read(out, WORDED)):
+        releases = [r for stride in held[w] for r in stride]
+        filed = [CT.file(WORDED, r) for r in releases]
+        entries = {t["name"]: t for t in doc["registration"]["tables"]}
+        assert list(entries) == [CR.LENGTHS, CR.FAILS, *(n for i in range(3) for n in CT.names_of(WORDED, i))]
+        laid = CR.tables(WORDED, held[w])
+        for i in range(3):
+            name = CT.words_name(i)
+            assert name == f"words.{i}" == list(entries)[2 + 4 * i + 3]
+            assert entries[name]["rows"] == entries[CT.names(i)[2]]["rows"] == filed.count(i) == len(salts[name])
+            assert entries[name]["words"] == 6
+            assert [CT.words_of(row) for row in laid[name]] == [words[r.request] for r, f in zip(releases, filed)
+                                                                if f == i]
+            seen += len(laid[name])
+    assert seen == len(PROMPTS)
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    assert result["summary"]["connection_rows"]["registered"] == 4
+
+    def other_words(lines, salts) -> None:
+        entry = next(t for t in lines[0]["registration"]["tables"] if t["name"].startswith("words.") and t["rows"])
+        entry["root"] = "00" * 64
+
+    assert "execution phase 0's connection rows aren't registered" in refused(out, lambda: edit_rows(out, other_words))
 
 
 @pytest.mark.parametrize("process", [False, True])
@@ -577,3 +642,33 @@ def test_the_cost_is_of_form_1_by_default_and_of_form_2_a_classes_rows_are_the_e
                                ("1", "4,4", "give the rows of each of its tables")):
         with pytest.raises(ValueError, match=fix):
             crr.main(["cost", "--out", str(out), "--lengths", form, "--classes", numbers, *SMALL_COST])
+
+
+def test_the_cost_with_request_words_hands_canonical_id_requests_and_lays_each_classes_words_table(tmp_path):
+    """`cost --request-words` under `--lengths 2` measures a schedule with request words, under a response cap of its
+    most ids. Each release of its load is handed with the canonical id request of its class's prompt ids, as long
+    as the class's longest, whose words the publisher's build reads, so the close lays a fourth table a class: R
+    rows more than without the flag. A class whose longest canonical request the schedule's ingress doesn't take
+    is refused, naming the class; so is the flag under `--lengths 1`."""
+    argv = ["cost", "--out", "x", "--lengths", "2", "--classes", "4,4", "128,8", *SMALL_COST]
+    small = crr.costed(crr.parser().parse_args(argv))
+    worded = crr.costed(crr.parser().parse_args([*argv, "--request-words"]))
+    assert worded == dataclasses.replace(small, max_tokens_cap=8, request_words=True)
+    R, load = worded.phase_releases, crr.loaded(worded, "rows")
+    assert load == crr.loaded(small, "rows") == [(CT.request_room(512, 128), 8)] * R
+    request = crr._request(worded, 5, *load[0])
+    assert (len(request), CT.request_words(request, 512)) == (load[0][0], (8, 0, 128))
+    assert crr._request(small, 5, *load[0]) == bytes([6]) * load[0][0]
+    out = tmp_path / "cost.json"
+    assert crr.main([*argv[:1], "--out", str(out), *argv[3:], "--request-words", "--load", "rows", "--phases", "2",
+                     "--height", "4"]) == 0
+    got = json.loads(out.read_text())
+    slots = sum(n for _, n, _ in CR.tables_of(worded)[:2])
+    assert (got["parameters"], got["releases"], got["tables"], got["rows"]) == (worded.digest.hex(), R, 10, slots + 4 * R)
+    wide = [*argv[:5], "--classes", "4,4", "1024,8", *SMALL_COST, "--request-words"]
+    with pytest.raises(ValueError, match="class 1's of 1024 prompt ids is [0-9]+ bytes, past the [0-9]+ the "
+                                         "schedule's ingress takes"):
+        crr.loaded(crr.costed(crr.parser().parse_args(wide)), "grid")
+    with pytest.raises(ValueError, match="a schedule with request words has content rows under the lengths rows' "
+                                         "form 2 and a response cap"):
+        crr.costed(crr.parser().parse_args(["cost", "--out", "x", "--classes", "4,4,2", *SMALL_COST, "--request-words"]))

@@ -2177,8 +2177,8 @@ prompt ids and a size of ids released, each a power of two.
   response row it reads as no ids, and as an end row as an `END` after no `DATA` cell. So an unheld row and a held
   connection that ended before any id have the same response row and the same end row, and only the request row
   tells them apart. Under form 2 no table has an unheld row.
-- **The count under form 2.** A class's three tables have one count of rows, the execution phase's releases filed
-  in the class. Its three entries in the head hold that count as their rows, and each one's domain binds it. A table
+- **The count under form 2.** A class's tables have one count of rows, the execution phase's releases filed
+  in the class. Its entries in the head hold that count as their rows, and each one's domain binds it. A table
   of no row has no leaf: its domain is the one of 0 rows and its root is 64 zero bytes
   (`connection_rows.NO_ROWS_ROOT`), which no read opens.
   - **The bound.** A count is at most R = `WardenParams.phase_releases` = `lanes` · ⌈(T + `ingress_buckets` −
@@ -2188,11 +2188,30 @@ prompt ids and a size of ids released, each a power of two.
     hold a lane each at once. R is the schedule's own number and a bound: at some schedules a load releases R in an
     execution phase, and at others none does.
   - **The verifier's read** (`connection_rows.check_registration`) takes a class's count from the registration:
-    from 0 to R, the same in the class's three entries, and at 0 only with the zero root. It derives each domain at
+    from 0 to R, the same in each of the class's entries, and at 0 only with the zero root. It derives each domain at
     the count it read, and the certificate over the head holds the counts as it holds the roots. A registration of
     another schedule, of either form, has that schedule's digest for its parameters and is refused by it.
   - **The port** (`connection_rows.port`) of a class's table has a population of its count, proof block j reading
     held row j, so a proof block is one a held row. A table of no row has no port.
+- **The request words** (`WardenParams.request_words`, none by default, with content rows under form 2 and a
+  response cap only). A schedule with them has a fourth table a class, `words.i`, which the head lists after
+  `end.i`. Its row r is three u32 words of the release whose request is row r of `request.i`: its `max_tokens`, its
+  `ignore_eos` and the count of its prompt's ids, 12 bytes. Its count is the class's, held with the other three's,
+  a class of no release has it with no row, and its port is `connection_rows.port`'s by its name.
+  - **The parse rule** is public and stated once (`content_rows.request_words`, under "A request's words" there).
+    The words are the network certifier's own reading of the request's bytes as it cut them, cell by cell, as it
+    reads each cell before it releases it (`io_request.read`). Nothing a server or a prover says enters them.
+  - **It applies no default.** With lengths rows the device holds every request cell to the canonical id request's
+    form and fails the connection as `malformed` at the first that doesn't read. So a released request has
+    `max_tokens` at its place, the number its response is held to under the cap, and no key but the canonical
+    ones: `ignore_eos` is 0 for every release. A request without `max_tokens` at its place, or with an `ignore_eos`
+    key, is never released and has no row.
+  - **A hand the rule doesn't read** is no execution phase's of the schedule: `content_rows.tables` refuses it,
+    naming the release, and no head is signed over it. So is one with a `max_tokens` past the response cap or with
+    more ids released than its `max_tokens`: under every signed head a words row's `max_tokens` is at most the cap
+    and at least its response row's count.
+  - **Nothing more is public** than without them: the table's rows are the class's count and its row size is the
+    schedule's.
 - **Where they are built.** The network certifier keeps each released connection's request bytes and its `DATA`
   cells' ids, as it cut and released them and never from the server's report, four bytes an id, from the release to
   the hand that carries it: the lengths rows' hand, at the close of the next execution phase, or under form 2 at
@@ -2215,7 +2234,8 @@ prompt ids and a size of ids released, each a power of two.
     the time its head is signed and published. Nothing here charges the counts or that time to a bound.
 
 The classes enter the parameters' digest; a schedule without content rows hashes nothing of them and keeps its
-digest, records, heads and certificates. As for the lengths rows, that the tables say what the records say rests on
+digest, records, heads and certificates. So do the request words, where a schedule has them: one without them
+hashes nothing of them and keeps its digest, its tables and its heads. As for the lengths rows, that the tables say what the records say rests on
 the network certifier's own code (`trusted-host`). The head of execution phase w exists from the close of execution
 phase w + 1, and that of a run's last, under form 2, from its own close. Nothing here orders its signature or its
 registration against the compute audit's coins.
