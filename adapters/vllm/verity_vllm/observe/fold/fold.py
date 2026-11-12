@@ -424,7 +424,7 @@ class _Fold:
         # prompts and the weights; the sampler instance reads it through a `Param("seed", ...)` operand (resolver).  Layout:
         # prompts..., seeds..., weights (weights stay the LAST input node: cb_a.compare / batch_decomp rely on that).
         samp = h.workload.get("sampling")
-        self.seed_param: dict[int, int] = {}      # request index -> parameter index
+        self.seed_param = {}      # request index -> parameter index
         if not samp or samp.get("greedy") is not True:
             for i, r in enumerate(reqs):
                 if r.get("seed") is not None:
@@ -1275,8 +1275,8 @@ class _Fold:
                 self._problem("ValuesEmpty", msg, {})
             self.params = self.B.params = self.supplied_inputs.finalise(self.params)
         body = self.B.finish(out)
-        params, ret_type = self.params, out.type
-        defn = CompositeDefinition("Captured", 1, ("PROFILE", "WORKLOAD"), lambda S, _p=params, _r=ret_type: (_p, _r), replayer(body),
+        all_params, ret_type = self.params, out.type
+        defn = CompositeDefinition("Captured", 1, ("PROFILE", "WORKLOAD"), lambda S, _p=all_params, _r=ret_type: (_p, _r), replayer(body),
                                    doc=f"captured from a raw observation log under profile {h.profile_id}",
                                    conformance="derived: capture fold", register=False)
         spec = bind(defn, PROFILE=h.profile_id, WORKLOAD=workload_digest(h.workload))

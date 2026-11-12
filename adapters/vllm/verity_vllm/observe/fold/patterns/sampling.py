@@ -563,6 +563,9 @@ class TokenSelectGumbelTopP:
         kernels = (*s2["kernels"], "ArgMaxOps", "gather_kernel")
         parts = []
         run = getattr(ctx.profile, "registered_values", False)
+        top_p: Supplied | Const
+        phi: Supplied | Const
+        temp: Supplied | Const
         for r, (rid, pos, seed, T, p) in enumerate(s2["specs"]):
             pos_bits = int(pos) & 0xFFFFFFFFFFFFFFFF
             if run:     # the request's sampling values are inputs of its run, the Philox position one per sampled position

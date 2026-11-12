@@ -388,7 +388,7 @@ def resolve_node(node: TreeNode, ctx: StepContext) -> Resolution:
     return Unsupported(node.id, node.op, "no pattern", {"phase": node.phase, "children": [c.op for c in node.children]})
 
 
-def _with_pattern(r: Resolution, name: str) -> Resolution:
+def _with_pattern(r: Compute | Transparent | Group, name: str) -> Resolution:
     return dataclasses.replace(r, pattern=name)
 
 

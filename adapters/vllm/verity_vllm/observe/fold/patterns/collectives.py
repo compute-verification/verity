@@ -211,7 +211,7 @@ class TpFusedAllReduceRmsNorm:
         site = node.enter.module
         if not site:
             return unsupported(node, f"{FUSED_KIND}: no issuing module recorded (site unknown; fail closed)")
-        M, N = x.shape if x.rank == 2 else (None, None)
+        M, N = x.shape if x.rank == 2 else (0, 0)
         views_ok = all(v.rank == 2 and v.shape == (M, N) and v.dtype == "bfloat16" and is_row_major(v) for v in (x, res, out))
         if not views_ok or w.shape != (N,) or w.dtype != "bfloat16" or len({x.alloc, res.alloc, out.alloc}) != 3:
             return unsupported(node, "expected distinct row-major bf16 [M,N] allreduce_in / residual / norm_out and a [N] gamma",

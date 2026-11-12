@@ -65,12 +65,13 @@ class WeightOnlyCalls:
 
     def emit(self, c, rows: list, emit, root) -> list:
         """`emit(c, rows, root)`'s `(output, meta)` rows, or the first issue's outputs (with a meta nothing reads) when `c` was issued before."""
-        key = self.key(c, rows)
-        if key is not None and key in self.issued:
-            return [(out, {"output_views": []}) for out in self.issued[key]]
+        issued, key = self.issued, self.key(c, rows)
+        if issued is None or key is None:
+            return emit(c, rows, root)
+        if key in issued:
+            return [(out, {"output_views": []}) for out in issued[key]]
         outs = emit(c, rows, root)
-        if key is not None:
-            self.issued[key] = [out for out, _ in outs]
+        issued[key] = [out for out, _ in outs]
         return outs
 
 

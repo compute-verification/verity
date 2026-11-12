@@ -128,7 +128,8 @@ def state_block(cache: ViewDesc, block: int, W: int) -> tuple[ViewDesc, ViewDesc
     if cache.dtype != "float32" or cache.rank != 3 or cache.shape[2] != 2 * W or cache.strides[2] != 1 or not 0 <= block < cache.shape[0]:
         raise GeometryError(f"block {block} of a state cache of rows of 2 x {W} f32 words: {cache!r}")
     base, bs = cache.offset + block * cache.strides[0], cache.shape[1]
-    return tuple(ViewDesc(cache.alloc, base + k * W, (bs, W), (cache.strides[1], 1), "float32", cache.device) for k in (0, 1))
+    kv, score = (ViewDesc(cache.alloc, base + k * W, (bs, W), (cache.strides[1], 1), "float32", cache.device) for k in (0, 1))
+    return kv, score
 
 
 def state_row(state: ViewDesc, slot: int, k: int, W: int, at: int, D: int) -> ViewDesc:
