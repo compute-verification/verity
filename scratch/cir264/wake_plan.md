@@ -35,10 +35,12 @@ minutes, `date -u` after each: the tool sometimes returns early).
     git -C $R worktree add --detach /tmp/cir264/tree 903c545eb3d34a50eccbf66352a19a805efa0aeb
     git -C /tmp/cir264/tree rev-parse HEAD && git -C /tmp/cir264/tree status --short | head
 
+(If `/tmp/cir264/tree` is already there, the machine is the old one: read its `HEAD` instead of adding it again.)
 The files are then in `S=/tmp/cir264/scratch/cir264` and the tree in `/tmp/cir264/tree` (a worktree: the checkout stays on
 `main`, and `research run --source /tmp/cir264/tree` ships that commit). `research` is
 `cd /agent/repos/verity && uv run -q --project tools/research research ...`.
 
+The timer that starts this turn carries the same steps in its prompt (`timer_prompt.md` is its text).
 The off-card rehearsal of all of this (`rehearse_all.sh`; its header has the launch line) last ran from these files and
 that tree with every step ending as it should: the capture's Python without a card, the card script's shell path with
 its lease and the quota's refusal, and the replay. It needs no rerun unless `accept_capture.sh` changes.
