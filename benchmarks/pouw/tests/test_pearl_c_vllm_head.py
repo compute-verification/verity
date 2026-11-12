@@ -8,7 +8,8 @@ the call's first, a middle and its last column tile (``clear_work.draw`` patched
 opens beside them. Every other transcript leaf and y word is +0, which no opened tile reads. The Lean verifier draws from
 its own record of the coins, so this pass is the Python's alone; a fully proved one is `head_pass`'s with ``prove=None``.
 
-The module's weight is 525 MB of BF16 and its tree about 45 s of SHA-512, once a module. What it catches that the
+The module's weight is 525 MB of BF16, built and committed once a module (about 85 s), and the two verdicts take about
+70 s more. What it catches that the
 128-word test instances of `test_pearl_c_vllm` can't: a verifier or y check that assumes a call's n fits a smaller row
 (a 64-row tile grid, y's segments, W's weight entry at 128,256 leaves), and the head's credit at the linears' rate."""
 from __future__ import annotations
@@ -143,7 +144,8 @@ def verdict(path: Path, **kw) -> dict:
 def test_the_verifier_accepts_the_heads_call_opens_its_last_column_tile_and_credits_it_at_the_linears_rate(head, fixed_draw):
     """An honest head call is accepted, tied to a W that registers its A, its y of 4 rows of 128,256 words and its weight
     of 128,256 rows; it opens the drawn tiles and the +0 row's exclusion tile, holds y's words in the last column tile to
-    its U, and credits the call's 4 x 128,255 cells at |K|, less ε and ρ, the +0 row's cells credited nothing. The first
+    its U, and credits the call's 4 real rows at |K| over every column but the +0 row's block of 64 (the band rule,
+    `UnitRecord.credited`: its tile credits nothing), less ε and ρ. The first
     and the last column tile are replayed on the scalar reference too, whose verdict the batch forms' must be."""
     got = verdict(head, window=T.window_record(head), cross_check=2)
     assert got["answer"]["verdict"] == "accept", got["line"]
@@ -154,7 +156,7 @@ def test_the_verifier_accepts_the_heads_call_opens_its_last_column_tile_and_cred
     assert public["tie"]["tables"] == 3 and "weights" not in public["tie"]
     work = public["work"]
     eps, rho = Fraction(work["epsilon"]), T.PPD.scheme_of(SCHEME).cap
-    assert work["macs"] == REAL * (N - 1) * K and work["credited_tiles"] == 2_004
+    assert work["macs"] == REAL * (N - 64) * K and work["credited_tiles"] == 2_003
     assert work["credited"] == int((1 - rho) * (1 - eps) * work["macs"]) and eps == T.VR.epsilon(DRAWS, T.VR.DELTA)
     entry = next(e for e in T.window_record(head)["registered"] if e["value"] == f"pearl-b/{WEIGHT}")
     assert entry["leaves"] == N and entry["words"] == K
