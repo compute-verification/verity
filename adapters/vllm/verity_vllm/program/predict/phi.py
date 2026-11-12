@@ -90,7 +90,8 @@ class Phi:
 def _prompt_len(r: dict) -> int:
     if r.get("prompt_token_ids") is not None:
         return len(r["prompt_token_ids"])
-    return int(r.get("prompt_len") or r["input_len"])
+    stated: Any = r.get("prompt_len") or r.get("input_len")   # a request that states neither has no length: `int`'s TypeError
+    return int(stated)
 
 
 def _cap(r: dict) -> int:

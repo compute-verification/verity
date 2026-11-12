@@ -234,6 +234,22 @@ def test_a_phi_that_leaves_a_block_out_declares_nothing_in_it():
     assert Phi(workload={"requests": reqs}).request_shapes() == [(3, -1), (3, 4), (3, 6)]
 
 
+def test_a_request_states_its_prompt_length_one_of_three_ways_and_one_that_states_none_has_no_length():
+    """A request's prompt length is the count of its `prompt_token_ids`, else its `prompt_len`, else its `input_len`: an empty or
+    absent `prompt_len` gives way to `input_len`.  A request that states none of the three is `int`'s TypeError on None, and
+    names no field."""
+    def shapes(*requests: dict) -> list[tuple[int, int]]:
+        return Phi(workload={"requests": [{"max_tokens": 2, **r} for r in requests]}).request_shapes()
+
+    stated = [{"prompt_token_ids": [7, 8, 9], "prompt_len": 5, "input_len": 6}, {"prompt_len": 5, "input_len": 6}, {"input_len": 6}]
+    assert shapes(*stated) == [(3, 1), (5, 1), (6, 1)]
+    for empty in (None, 0, "", [], {}, False):
+        assert shapes({"prompt_len": empty, "input_len": 6}) == [(6, 1)], empty
+    for none in ({}, {"prompt_len": None}, {"prompt_len": 0, "input_len": None}, {"prompt_token_ids": None}):
+        with pytest.raises(TypeError, match="NoneType"):
+            shapes(none)
+
+
 def test_a_workload_manifest_without_requests_gives_a_phi_of_none():
     """`score.phi_of` on a row whose declared manifest states no `requests`: φ's workload holds none, and the rest of φ is the
     row's as with them."""
