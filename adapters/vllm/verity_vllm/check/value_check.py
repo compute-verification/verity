@@ -135,7 +135,7 @@ class ValueChecker:
                 metas_by.setdefault(m.name, []).append(m)            # repeated calls of one module -> several metas, in call order
 
             def meta_at(key: str, call_idx: int, metas_by: dict[str, list] = metas_by):
-                lst = metas_by.get(key) or []
+                lst = metas_by.get(key, [])
                 return lst[call_idx] if call_idx < len(lst) else None
             for name, d in taps.items():
                 mc = LC.SAMPLER if name == "runner.sampler" else _cls(self.modules[name])
