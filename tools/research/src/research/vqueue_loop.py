@@ -38,7 +38,9 @@ flight; and `flying` each member of the chain not ready at its head as built, wi
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
 the command's (`--lean`, `--pending-hours`), and `wide` and `pinned` the PRs `--wide-file` and `--pins-file` name, read each
 tick as the priority file is (`World.wide`, `World.pinned`); a tick that builds nothing while a Lean PR waits for a chain
-it may go on logs why, once a why (`wait`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
+it may go on logs why, once a why (`wait`).  A tick that applied every action logs why each PR marked ready waits in no
+candidate, once for each PR, head and cause (`leave`): the policy's reason for a PR it read (`vqueue.left_out`), or why
+`World.ready` doesn't take one the queue admits (`World.held_out`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
 the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
 task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
 no result for, included), on the merge gate's tasks: none `"gate": false`, of ratchet-gate (`reds.RATCHET_STEP`: it judges
@@ -215,7 +217,8 @@ from .queue import Retired, lacked_moves, lacks_why
 from .reds import CIRCUIT_KILLED, CIRCUIT_STEP, RATCHET_STEP, red_owners
 from .store import vocab
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Commit, Drop, Eject, Failed,
-                     Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait, _inherited)
+                     Leave, Outcome, Ready, RecordsRun, Red, Regenerate, Rerun, Retry, Ring, Snapshot, Verdict, Wait,
+                     _inherited)
 from .vqueue_records import LOCK_SUBJECT
 
 #: graph2, infra's executor on the control pod: its argv before the subcommand
@@ -920,6 +923,9 @@ class World:
         self.prs: dict[int, PR] = {}
         self.left: dict[int, tuple[str, str]] = {}
         self.pulled: set[int] = set()
+        #: of those, the ones the queue admits at their ready marks: {number: (head, cause, why)}, where the cause stays the same
+        #: while the reason does (`vqueue.Leave`)
+        self.held_out: dict[int, tuple[str, str, str]] = {}
         #: of those left out for a move they lack whose names their change names: {number: (head, the last such move, why)}
         self.lacking: dict[int, tuple[str, str, str]] = {}
         #: the move PRs the last `ready` took on their ready marks alone (`_uncertified`), and {number: what the last `build`
@@ -1036,12 +1042,13 @@ class World:
             took, self.on_mark = [], set()
             uncertified = {n: self._uncertified(entries[n].pr, main) for n in admitted if entries[n].pr.move}
             off_mark = {n: _off_mark(files[n], flags) or uncertified[n] for n in uncertified}
+            cause: dict[int, str] = {}
             for n in admitted:
                 p, held = entries[n].pr, (why[n] or "").startswith("held")
                 if why[n] is None or n in carried or lands_on_mark(flags, p, why[n], files[n]):
                     took.append(n)
                 elif held:
-                    left[n] = (p.head, why[n])
+                    left[n], cause[n] = (p.head, why[n]), "held"
                     if (unreviewed([r for r in reviews[n] if self._another(n, r.by)], ()) or "").startswith("held"):
                         pulled.add(n)
                 elif p.move and not off_mark[n]:
@@ -1049,17 +1056,20 @@ class World:
                     self.on_mark.add(n)
                 else:
                     left[n] = (p.head, f"{why[n]}, and " + (off_mark[n] if p.move else "it isn't low-risk"))
+                    cause[n] = "no land verdict"
             specs, clears = self._frozen()
             if specs:
                 below = self._frozen_base(main)
                 frozen = [n for n in took if not self._cleared(n, entries[n].pr.head, clears)
                           and self._frozen_out(below, n, entries[n].pr.head, specs)]
                 left.update((n, (entries[n].pr.head, f"it waits for the freeze to end ({self.frozen_file})")) for n in frozen)
+                cause.update((n, "freeze") for n in frozen)
                 took, pulled = [n for n in took if n not in frozen], pulled | set(frozen)
             # a plain merge of a head below a move leaves its own lines naming what the move retired: such a head lands
             # crossed, and one whose own change names none of it crosses by that merge (`lacked_moves`)
             lacks = dict(zip(took, pool.map(lambda n: self._lacks(main, entries[n].pr.head, files[n]), took)))
             left.update((n, (entries[n].pr.head, lacks_why(m))) for n, m in lacks.items() if m)
+            cause.update((n, "lacks a move") for n, m in lacks.items() if m)
             self.lacking = {n: (entries[n].pr.head, m[-1][0], lacks_why(m)) for n, m in lacks.items() if m}
             took = [n for n in took if not lacks[n]]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
@@ -1072,6 +1082,7 @@ class World:
                       and a not in chosen and not (old and self._ancestor(entries[n].held[a], old))}:
             left.update((n, (entries[n].pr.head, f"it holds {entries[n].holds(a)}, which isn't taken"
                                                  + (f": {left[a][1]}" if a in left else ""))) for n, a in out.items())
+            cause.update((n, "stacked") for n in out)
             chosen = {n: v for n, v in chosen.items() if n not in out}
         while more := {n for n, e in entries.items() if n not in chosen and n not in pulled and pulled & set(e.after)}:
             pulled |= more
@@ -1092,6 +1103,7 @@ class World:
         for n in order:
             place(n)
         self.prs, self.left, self.pulled = {n: entries[n].pr for n in chosen}, left, pulled
+        self.held_out = {n: (left[n][0], c, left[n][1]) for n, c in cause.items()}
         inputs = self._lean_inputs(main, (f for v in chosen.values() for f in v[0])) if chosen else frozenset()
         # a move regenerated on its batch's tip doesn't merge its head, so whether that merges is moot
         return [Ready(n, (p := entries[n].pr).head, *chosen[n][:2], rank=i, conflict=chosen[n][2] and uncertified.get(n) != "",
@@ -2336,7 +2348,8 @@ class Loop:
                  gate: str = GRAPH2_GATE, shards: int | str = SHARDS, records=None, graph2_shadow: bool = True,
                  g2_read_s: float = G2_READ_S, g2_fresh: int = G2_FRESH, after: list[str] | None = None,
                  clock: Callable[[], float] = time.monotonic,
-                 peak: Callable[[], float] = _peak_gb, timing: Callable[[str], None] = print):
+                 peak: Callable[[], float] = _peak_gb, timing: Callable[[str], None] = print,
+                 left_out: Callable[[Snapshot], list[Leave]] | None = vqueue.left_out):
         if gate not in GATES or gate == CHECK_GATE and (slim is None or not _sharded(slim, shards)):
             raise ValueError(f"gate {gate!r} with {shards} shard(s){'' if slim is not None else ' and no run beside a check'}: "
                              f"a gate is one of {', '.join(GATES)}, and `{CHECK_GATE}` is the run beside each check "
@@ -2349,6 +2362,7 @@ class Loop:
         self.graph2_shadow = graph2_shadow or gate != CHECK_GATE
         self.now, self.out, self.state, self.tree_ejects, self.records = now, out, state, tree_ejects, records
         self.after, self.clock, self.peak, self.timing, self.steps = after, clock, peak, timing, Steps(clock, peak)
+        self.left_out = left_out
         self.reads = Shadow(self.log_path.parent / G2_READS, now, g2_read_s, out) \
             if gate == CHECK_GATE and graph2_shadow else None
         if world is not None:
@@ -2660,6 +2674,7 @@ class Loop:
         for rec in new:
             self.write(rec)
         logged = [*t.wrote, *new]
+        stopped = False
         for a in actions:
             try:
                 recs = self.apply(a, t)
@@ -2670,6 +2685,7 @@ class Loop:
                 self.write(rec)
                 logged.append(rec)
                 self.out(f"research queue vqueue: tick {t.n}: {_name(a)} failed, the tick stops: {e}")
+                stopped = True
                 break
             finally:
                 steps.lap(_name(a))
@@ -2678,12 +2694,18 @@ class Loop:
             logged += recs
             if failed := next((r["error"] for r in recs if r.get("error")), None):
                 self.out(f"research queue vqueue: tick {t.n}: {_name(a)} failed, the tick stops: {failed}")
+                stopped = True
                 break
             if isinstance(a, Advance) and not self.shadow:
                 for rec in self._landing(t, recs[0], []):
                     self.write(rec)
                     logged.append(rec)
                 steps.lap("on_main")
+        if not stopped and self.left_out is not None:
+            for rec in self._leaves(t):
+                self.write(rec)
+                logged.append(rec)
+            steps.lap("leave")
         for sha, j in t.judged.items():
             if j.note:
                 self.out(f"research queue vqueue: tick {t.n}: {sha[:12]} {j.verdict.state}: {j.note}")
@@ -2771,6 +2793,18 @@ class Loop:
             end = f.seek(0, 2)
             torn = end > 0 and (f.seek(end - 1), f.read(1))[1] != b"\n"     # a crash's torn line stays a line of its own
             f.write((("\n" if torn else "") + json.dumps(rec, sort_keys=True) + "\n").encode())
+
+    def _leaves(self, t: Tick) -> list[dict]:
+        """A `leave` line for each PR marked ready that this tick's candidates leave out: of those `World.ready` admits and
+        takes no further (`World.held_out`), then of the PRs it took (`left_out`), each (PR, head, cause) once."""
+        seen = {(r.get("number"), h, r.get("cause")) for r in t.past.of("leave") for h in r.get("heads") or ()}
+        out = []
+        for n, head, cause, why in [*((n, *x) for n, x in sorted(self.world.held_out.items())),
+                                    *((x.number, x.head, x.cause, x.why) for x in self.left_out(t.snap))]:
+            if (n, head, cause) not in seen:
+                seen.add((n, head, cause))
+                out.append(self.record(t, "leave", number=n, heads=[head], why=why, cause=cause))
+        return out
 
     def apply(self, a: Action, t: Tick) -> list[dict]:
         if isinstance(a, Build):

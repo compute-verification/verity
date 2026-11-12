@@ -104,6 +104,7 @@ class Env:
         self.graph2.list_graph(f"ready:{self.main()}", {"schema": GRAPH_V2, "commit": self.main(), "tasks": []})
 
     def loop(self, decide, clone: str = "clone", **kw) -> Loop:
+        kw.setdefault("left_out", None)         # most tests count the lines a tick logs, which `leave` lines would add to
         path = self.tmp / clone
         if not path.exists():
             _git(self.tmp, "clone", "-q", str(self.o.origin), str(path))
@@ -1884,6 +1885,33 @@ def test_with_no_records_run_a_lean_pr_waits_for_a_candidate_with_no_lean_change
     assert lines[1]["why"] == (f"nothing built: with a Lean change, #2 waits while the newest candidate, "
                                f"{lines[0]['sha'][:12]}, holds #1's Lean change, and no PR with no Lean change is ready to take")
     assert [r["base"] for r in lines[2:]] == [lines[0]["sha"], lines[2]["sha"]]
+
+
+def test_a_ready_pr_left_out_of_the_ticks_builds_is_logged_once_for_each_head_and_cause(env):
+    """End to end at `--batch` 1 and `--depth` 1: the first tick builds #1 alone and logs why #2 waits (`leave`: its number,
+    head, cause and why) and why #3, marked and held by a reviewer, isn't among the PRs the policy reads; the next logs #2's
+    new cause, the chain full, and nothing of #3, whose reason holds; a third logs nothing; a new head of #3 is logged
+    again.  A PR with no ready mark is none of them."""
+    env.put(1, {"a.txt": "1\n"})
+    h2 = env.put(2, {"b.txt": "2\n"})
+    h3 = env.put(3, {"c.txt": "3\n"})
+    env.o.gh.put(4, env.o.change({"d.txt": "4\n"}), ready=False)
+    env.labels.held.add(3)
+    loop = env.loop(vqueue.decide, batch=1, depth=1, left_out=vqueue.left_out)
+
+    def leaves() -> list[tuple]:
+        return [(r["number"], r["heads"], r["cause"]) for r in env.lines() if r["action"] == "leave"]
+
+    loop.tick()
+    assert leaves() == [(3, [h3], "held"), (2, [h2], "batch full")]
+    assert next(r for r in env.lines() if r["action"] == "leave" and r["number"] == 2)["why"] == (
+        "behind the PRs ranked before it: a batch holds at most 1 (--batch)")
+    loop.tick()
+    loop.tick()
+    assert leaves() == [(3, [h3], "held"), (2, [h2], "batch full"), (2, [h2], "chain full")]
+    h3b = env.put(3, {"c.txt": "3b\n"})
+    loop.tick()
+    assert leaves()[3:] == [(3, [h3b], "held")]
 
 
 def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_base_fails_too_is_inherited(env):
