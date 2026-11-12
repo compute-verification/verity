@@ -7,7 +7,7 @@ its scans' δ. It is the one calculator of K, and it scales K in two ways:
   (At a scope's load, below);
 * by links (`per_link`, `datacenter`, `at_link_rate`): one link at the rate a run certified, and as many of them
   summed, whatever the scope they stand for serves. `chain_record.py leak` reads it on a network certifier run, and
-  the slowdown ρ is derived from both bounds.
+  the slowdown is derived from both bounds.
 
 A link is one network certifier on one uplink (its load a `LinkLoad`, made by `link`), certifying ``rate`` requests a
 second of one scan class (`ingress_scan.Class`, or a window class's `scan`). Its sampling blocks are each 2T transfer
