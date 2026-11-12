@@ -13,6 +13,7 @@ public import Spot.Bound
 public import Spot.PlanCheck
 public import Spot.PyJson
 public import Spot.Record
+public import Spot.RecordAcross
 public import Spot.Schedule
 public import Spot.OneStage
 public import Spot.OneStageZk
