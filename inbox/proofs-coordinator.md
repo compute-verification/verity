@@ -108339,3 +108339,92 @@ Clock: `date -u` read 23:20Z. Mailbox read through the 23:09Z hook message. Bran
 **To post.** Nothing.
 
 **Not established.** That `Projection`, `Reading`, `Claim`, `Refused`, `Steps` and `SampledTwo.lean` elaborate past the two fixed errors (`491a`). That the difftest's Lean side agrees with the twin on the 61 cases, and refuses the base (`8d5f`). That `DevAgrees` holds at `formReading`, which is my next proof. That `V h` reads only the prefix the run's bytes carry [guess, from 22:49Z].
+
+## MEMBERS, Thu 12 Nov 23:22Z: A14, first entry: the refusal is written and pushed on `cursor/proofs-members-subset-391b` (`9eae385b624c`), its two tries are out on vy-nebius-2; it merges clean with FIRSTACCEPT's and WINDOWAT's branches; no guarantee's statement or named assumption changes; ONE COLLISION: FIRSTACCEPT's accept test runs under `stratified:1`, which this refuses
+
+**In plain words.** The compiled check for a one-statement audit now turns away a sampling design by strata or by work, with a message that names the design, because the theorem covers only a plain random subset. A sampling rate still passes, since a rate becomes a plain subset once the population is known. The form for several statements is untouched and keeps every design. One thing needs a decision today: the test that shows the first accept samples by strata, so it and this change cannot both land as they stand.
+
+Clock: `date -u` read 23:22Z. `origin/main` is `417526501974`, AGENTS.md there is the copy I hold (no difference) [run]. Mailbox read at `80e325954c21`, newest section 22:26Z. PROVED's 22:15Z and 22:40Z entries and TWOLEG's 22:49Z section 4 read whole; each claim below that I build on I checked on `main`.
+
+### 1. The branch and the Lean, exactly [run: committed and pushed]
+
+`cursor/proofs-members-subset-391b`, cut from `origin/main` `417526501974`, one commit `9eae385b624c`, two files: `verity/protocols/spot/verifier/lean/Spot/OneStageZk.lean` (+55 −5) and `security/Proofs/Properties/Challenger/Limits.lean` (+2 −1).
+
+```lean
+def SUBSET_ONLY (kind : String) : String :=
+  s!"the law is {kind}, which the one-statement audit's soundness statement doesn't cover: it covers a subset law"
+
+def paramsParsed (j : Json) : V Params := do
+  … the body `paramsOfJson` had, unchanged …
+
+def paramsOfJson (j : Json) : V Params := do
+  let p ← paramsParsed j
+  let kind := match getD p.base.verifier.law "law" with | .str s => s | _ => ""
+  if kind != "subset" then throw (SUBSET_ONLY kind)
+  pure p
+
+def membersParamsOfJson (j : Json) : V Params := do
+  …
+  let p ← paramsParsed (Json.mkObj (without j "proofs" ++ [("proofs", one)]))   -- was paramsOfJson
+```
+
+- [read] **It tests the design the check draws with, after a rate is resolved.** `p.base.verifier.law` is what v1's parser stores after `OneStage.design` has turned a rate's text into its law object (`Spot/OneStage.lean:254`, `:153-160`). The check derives its sample from that same field (`Draw.derive v.program v.query v.law v.workTable`, `Spot/OneStage.lean:516`), and `Draw.deriveLaw` reads the kind by the same expression (`Spot/Draw.lean:25`). So `rate:2/8` over 8 passes as `subset`, and `stratified-rate:` and `work-rate:` are refused as `stratified` and `work`.
+- [read] The kind that reaches the test is always one of `subset`, `stratified`, `work`: v1 refuses any other at `rule` (`:137-147`) and Bernoulli at its own `paramsOfJson` (`:401-404`).
+- [read] It is last, after every refusal `paramsParsed` makes, so those keep their words at any law.
+- [read] `paramsEitherOfJson` still reads the wrapper for the one statement's keys and `membersParamsOfJson` for `{"members"}`. So the executable's `members` and `refusal` commands refuse a one-statement case under strata at its parameters too, and a per-member case keeps any law. TWOLEG's interior audit (work law, k = 1) parses through `membersParamsOfJson` and is not refused.
+- New lemmas, in the same file: `paramsOfJson_ok` (what it returns, `paramsParsed` returned, and its law's kind is `subset`), `paramsOfJson_parsed`, and **`paramsOfJson_subset : paramsOfJson j = .ok p → getD p.base.verifier.law "law" = .str "subset"`**, the lemma PROVED's premise 4 asks for.
+- **Proofs that unfold `paramsOfJson`** [run: `git grep -E "(unfold|simp|rw|delta|dsimp|show|change).*paramsOfJson"`], two, both now go through `paramsOfJson_parsed` and unfold `paramsParsed`:
+  - `Spot.OneStageZk.paramsOfJson_members` (`Spot/OneStageZk.lean`, this file).
+  - `Limits.paramsOfJson_deployed` (`security/Proofs/Properties/Challenger/Limits.lean:38`, in the lock of `security/Proofs`; one line changed, its statement is the same).
+  - The other uses name `VStar.Recursive.Sampled.paramsOfJson` and unfold only that (`Sampled/Binding.lean:555`, `RecursiveRefused.lean:30`), or take the parse as a hypothesis.
+- Tries out, on vy-nebius-2's `proofs` pool: `r20261112-231741-26e5` (`Spot/OneStageZk.lean --siblings`) and `r20261112-231742-9c17` (`Limits.lean`). Nothing has compiled yet.
+
+### 2. Merges [run: `git merge-tree --write-tree`, exit 0 each, no file stops]
+
+- With FIRSTACCEPT's `cursor/proofs-firstaccept-5a1c` at `55978f017b17`: clean.
+- With WINDOWAT's `cursor/proofs-windowat-undrawn-5e4b` at `cc35d5892178`: clean.
+- With my own two heads (`ce41e7c92e8e`, `7d4e96a5fa07`): clean.
+- [read] Neither of the two adds a line that names `paramsOfJson` or `paramsParsed`, so a merge has nothing of theirs to re-prove against the split. All three of us change `tests/test_difftest.py`; I run both merge-trees again when my test changes are in.
+
+### 3. THE COLLISION, to settle today [read]
+
+FIRSTACCEPT's accept test, `benchmarks/one_stage/tests/test_audit_one_member.py::test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compiled_check` (on its branch), builds its window with `D.parse_design(T.DESIGN)` and runs the audit through `T._audit`, which passes `--law T.DESIGN` (`test_audit_two_members.py:128`); `T.DESIGN` is `"stratified:1"` (`:75`). It runs `sampled-proofs-one-stage-zk check` and asserts `accept`. With this refusal the answer is `params: the law is stratified, …`. A candidate that holds both fails that test.
+- What it needs: the one-member window and its audit's `--law` under `subset:1`, so `_audit` takes the law as an argument. Over one unit the sample is the same unit 0. [not run] I have not run its audit at a subset design.
+- It is on FIRSTACCEPT's branch, which I do not push to. Either FIRSTACCEPT moves its test before either is marked, or I change it in this pull request once FIRSTACCEPT's has landed. Say which.
+
+### 4. Tests that change [read on `main`; none edited yet]
+
+| test | today | after |
+|---|---|---|
+| `test_the_audit_refuses_what_soundness_does_not_cover` (`spot/verifier/lean/tests/test_difftest.py:7339`), its last loop | v2's reason at `subset`, `stratified`, `work`, `all` does not begin `params:` | at `stratified` and `work`: `reject`, reason exactly `params: ` + the new text; `subset` and `all` as today |
+| `test_v2_reads_its_draw_from_the_challengers_coins` (`:2683`) | every case at `{"k": 3, "law": "stratified"}` (`:2697`) | moves to `{"k": 3, "law": "subset"}`; one case added: the same audit under the stratified law is `params` in Python and Lean, by the new text |
+| `decode_params_v2` (`:2386`), the Python twin | no test of the law | refuses a law of another kind than `subset`, after the key test, with the same text |
+| `_one_stage_params` (`remote/verifier/composition/tests/reference.py:181`), the composite's twin | calls `decode_params_v2`, then its own null-partition test | the law's test moves after the partition test, Lean's order |
+| new, in `test_composition_difftest.py` | none | one one-stage case under a stratified law, refused by both with the new text (its cases today are all `{"k": 1, "law": "subset"}`, `:94`, `:619`) |
+| FIRSTACCEPT's accept test (section 3) | `stratified:1`, accept | must move to a subset design; not mine to push |
+
+Not changed, checked:
+- the other v2 tests of the difftest (`:2429`, `:2550`, `:2570`, `:2644`) are at `{"k": 2, "law": "subset"}`;
+- `test_audit_two_members.py` is the per-member form, which keeps strata;
+- `a0.lean_verify` and its callers run `flock-verify`, not this parser;
+- the `#guard`s at `OneStageZk.lean:1523-1532` compare refusals on parameters that hold `proofs` alone, which v1 refuses before any law is read.
+- Not checked: `benchmarks/one_stage/kept_composite.sh`'s kept audits (PROVED relays that one is `stratified:1`); a driver, not a test. I read it next.
+
+### 5. STOP RULE CHECK: nothing stops it
+
+- **No guarantee's statement and no named assumption changes.** [read] I edit no file under `security/Definitions` or `security/Properties`, no statement, no premise; the one line under `security/Proofs` is inside a proof.
+- **It refuses more and accepts nothing new** [derived]: `paramsOfJson j = .ok p` now implies `paramsParsed j = .ok p`, which is what it was.
+- **Records I expect to move** [derived from the locks' `reads` sections; the records run gives the list]: `Spot.OneStageZk.paramsOfJson` is a definition the locks of `security` and `security/Properties` both record as read. Its digest moves, `paramsParsed` and `SUBSET_ONLY` are new beside it, and the module's digest moves. The guarantees whose unfolded statement reads it move with it: in `security`, `Flock.SecurityProofs.RecursiveAuditC3` and `Verity.Sampled.remote_soundness_deployedReady` with its `_honest` and `_nontrivial`; in `security/Properties`, `Properties.Remote.SecurityProofs.acceptComplies` and `acceptInferenceOnly`, and those of `Verity`'s that read the remote check (`remote_soundness_of_subprotocols`, `soundness_of_subprotocols` and the others my earlier records run listed as reading `Spot.OneStageZk`). `security/Proofs`: a pass, no record. The spot verifier's own lock: a pass.
+- [guess] Every one is a notice line: the statement's text and type are the same, only a definition under it refuses more.
+
+### 6. Friday 14:00Z
+
+[guess] It can be open and ready by 05:00Z. Whether it is on `main` by Fri 14:00Z is the queue's: a candidate with a Lean change runs its records alone first. Nine hours is enough if it is marked by about 06:00Z and nothing ahead of it is ejected. **The thing to know now:** once it is on `main`, an audit under `stratified:1` is refused at its parameters, so Friday's one-statement accept must sample by `subset:` or `rate:`; under the tie to the weights' window (`served_verdicts.sh:286`, `stratified:1`) it cannot pass. PROVED said the same at 22:15Z.
+
+### 7. My other work, one line
+
+The every-member files change (#9441, `ce41e7c92e8e`) waits on my commit of its records at the merged head and its ready line (its four runs of 19:30Z ended while I was idle; I read them after this try is in); the one-parse change waits on that; the names rule (PRF-586), PRF-591 and the several-member form wait on #9441 and on WINDOWAT's refusal, which is cut from #9441's head.
+
+### Next
+
+The Python twins and the tests of section 4; then the tries' answers by 01:30Z.
