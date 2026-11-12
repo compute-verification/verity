@@ -42,8 +42,8 @@ about so many minutes behind the line it joins, or that nothing read gives an es
 START_WITHIN_MIN is late. Its launch says so in one line; under REFUSE it is refused at once instead, with the ways on:
 `research run --accept-wait` queues it anyway, and `smaller` names the smaller request that starts now.
 
-A machine that can start no run takes no job: its idle slots are idle because nothing starts there, so they would draw every
-launch to it. The probe tries what a launch needs whatever the job (`no_start`): NULL_DEVICE is a character device its user
+A machine that can start no run takes no job: its idle slots are idle because nothing starts there, so every launch would
+be sent to it. The probe tries what a launch needs whatever the job (`no_start`): NULL_DEVICE is a character device its user
 opens to read and write, as the runner's start does, and GIT answers. A machine that fails is shut out with the reason
 (NO_START), as one under a disk floor is, and node 2 is then `closed`. What the probe can't see, the launch finds: a
 machine that refuses a launch as one that can start no run (remote.CannotStart) is passed over, and the job is placed again

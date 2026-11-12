@@ -1235,9 +1235,9 @@ def _on_auto(monkeypatch, tmp_path: Path, docs: dict, answers: dict) -> tuple[li
     ids=["its-runner-not-started", "as-an-older-shipped-package-says-it", "its-launch-not-prepared", "no-git-for-a-checkout"])
 def test_a_launch_the_first_choice_refuses_as_one_that_can_start_no_run_lands_on_the_second_and_says_so(
         refusal, tmp_path, monkeypatch, capsys):
-    """A machine whose places look free because nothing starts there draws every launch, and no launcher sees another's
-    refusal. A launch it refuses as a machine that can start no run goes on to the machine it would have chosen next, from
-    the read it already has, and says which machine it passed over and why."""
+    """A machine whose places look free because nothing starts there is chosen by every launch, and no launcher sees
+    another's refusal. A launch it refuses as a machine that can start no run goes on to the machine it would have chosen
+    next, from the read it already has, and says which machine it passed over and why."""
     docs = {N2: share(waiters=56), CPU1: pool(slot("r0"), slot("r1")), CPU5: pool(slot("r0"))}
     launched, asked = _on_auto(monkeypatch, tmp_path, docs, {CPU1: refusal, CPU5: None})
     assert main(RUN) == 0
