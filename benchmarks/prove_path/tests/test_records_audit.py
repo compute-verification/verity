@@ -447,7 +447,7 @@ def test_class_circuit_from_phi_alone_is_window_circuits_record_and_serve_phi_na
 
     s, circuit, seen = _served(tmp_path, monkeypatch), _registered_circuit(), []
 
-    def lower(registered, cls, programs=None, grain=None, name=None, provable=True, tables=None):
+    def lower(registered, cls, programs=None, grain=None, provable=True, tables=None):
         seen.append((registered, cls, tables))
         return circuit
 
