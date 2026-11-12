@@ -3,3 +3,4 @@
 2026-11-12T20:00Z BITS: PR #9427 open at 3bf908ae14; suites run r20261112-190622-216d running on vy-nebius-cpu-7 since ~19:25Z, not yet read; Linear comment drafted, not posted.
 2026-11-12T21:02Z BITS: suites run r20261112-190622-216d (source 3bf908ae14) still running on vy-nebius-cpu-7 (slot since 19:07Z); PR #9427 unchanged.
 2026-11-12T22:03Z BITS: suites run r20261112-190622-216d still running (3 h in its slot); PR #9427 unchanged at 3bf908ae14.
+2026-11-12T23:05Z BITS: suites r20261112-190622-216d at 3bf908ae14: 122 of 123 passed, verity-lean-audit failed 2 (test_not_read: bits files not in lean_audit.NOT_READ); fixed at b694e1efa637d9a11f6fda3337d893a63b203be5 (pushed, gate failures []), that suite relaunched alone. Drafts: scratch/cir270/pr-body.md, linear-comment.md (placeholders SUITES_RUN_LINE, NOT_RUN_EXTRA, GATE_SHA, SUITES_LINE).
