@@ -83553,3 +83553,62 @@ Mailbox read at 10:29Z: nothing after your 09:12Z section. [read]
 - [derived] `cursor/proofs-widezk-3e4d` stays at `6160c59e6c22`, the control's head. If `main` moves again in Lean before the mark, I say so in the ready line and launch nothing on my own.
 
 **Other.** [relayed: your 10:12Z message] vy-nebius-cpu-7 takes sources again since 09:29Z. [run] My VM was reset again before this turn; the checkout, tools and run lists came back from the notes.
+
+## CLOSEROUND, Thu 12 Nov 10:33Z: READY LINE for #9199 at `ce7dab0ab39c`: `e724`'s one failure was this change's (a `prove_path` test the `--deployed-key` flag broke); it is mended, and the two suites the mend reaches pass with `main` at `33faab2be81c` merged in
+
+Mailbox read to the 09:34Z section. I mark nothing.
+
+**What failed in `r20261112-092520-e724`** (`suites.py --changed 19fb19a21e40 --quick` on `af94d6411979` with `main` at `19fb19a21e40` merged in; exit 1, ended 09:59:16Z [read: `status.json`]).
+
+- 68 suites: 67 passed, 1 failed [read: stdout's last line]. The one is `benchmarks/prove_path`: 148 passed, 1 failed [read: line 34].
+- The test: `tests/test_records_audit.py::test_the_gates_coins_take_the_peer_and_key_record_to_the_challengers_session`. Its last lines: `tests/test_records_audit.py:999: AssertionError`, "Left contains 1 more item: `{'deployed': False}`" [read].
+- **It is this change's.** My commit `9ca44762f8` made `records_audit.audit` hand `deployed=a.deployed_key` to `a5_coins.start`, and that test holds the keyword arguments to an exact dictionary [read: the test, `records_audit.py`'s call].
+  - On `main` at `33faab2be81c` the test passes: 1 passed [run: `pytest tests/test_records_audit.py -k gates_coins_take_the_peer` in `benchmarks/prove_path`, this VM].
+  - `8df4`, on the branch before the flag, passed the suite, 148 passed [read: its stdout line 77].
+  - So it is not the `test_nebius` lease flake, not `test_pous_wipe_monitoring.py`, not vllm's two.
+- Why I missed it: after the flag's commit I ran the two lints and the driver's own unit files on the VM, and not `benchmarks/prove_path`.
+
+**The mend: `ce7dab0ab39c`**, one commit over `af94d6411979`, one file, `benchmarks/prove_path/tests/test_records_audit.py` [run: `git diff --name-only af94d6411979 ce7dab0ab39c`]. The test now expects `deployed` false with a gate, true with `--challenger local --deployed-key`, and the flag refused with a gate (exit 2, no session started). No driver, device or Lean line changes.
+
+**READY LINE: #9199 is ready to mark at `ce7dab0ab39c`** (`cursor/proofs-closeround-780f`). GitHub shows that head, mergeable, no label [run: `gh pr view 9199`].
+
+Each run and what I read in it:
+
+- `r20261112-101800-a5fd`: the head with `main` at `33faab2be81c` merged in (scratch merge `4845efcfc0ae`, not pushed), `suites.py --changed 33faab2be81c --quick --fresh benchmarks/prove_path repository`. Exit 0, ended 10:23:30Z [read: `status.json`]. `benchmarks/prove_path` 150 passed, `test_records_audit.py` run whole with its slow tests; `repository` 346 passed; "2 suites: 2 passed (0 cached), 0 failed" [read: stdout lines 1 to 6 and 21].
+- `r20261112-092520-e724`: on `af94d6411979`, the head less the mend, with `main` at `19fb19a21e40`: the other 67 suites passed [read]. Among them [read, each its line]:
+  - `repository` 340 passed, so the two lints `8df4` failed pass.
+  - `benchmarks/one_stage` 566 passed, with `test_audit_two_members.py`, `test_member_trees.py` and `test_a0_session_challenger.py` run whole, slow tests included: the fixture ran there.
+  - `verity-core-sampled-proofs` 259 passed, 2 skipped, with `test_members_refusal.py` run whole: the Lean package built with `Spot/MembersRefusal.lean` on that merge.
+  - `verity/protocols/spot/verifier` 889 passed; `verity-flock` 1448 passed, 30 skipped; `verity-vllm` 14252 passed, 420 skipped.
+  - The 2 skipped are not this PR's tests [derived]: `8df4` on the branch alone shows the same "2 skipped" [read], and the suite's one skip that is not "no Lean toolchain" is the two rows of `test_the_unit_gates_by_range_are_the_walks_on_real_templates`, off unless `VERITY_SPOT_REAL_TEMPLATES=1` [read: `lean/tests/test_difftest.py` 5521, 5552]. I did not read the suite's own log; it stayed on the node.
+- `r20261112-091150-e637`: on `af94d6411979`, the fixture under `--deployed-key`: 1 passed in 269 s, and Lean's `refusal` on its case answers `proofs: MULTI_REFUSED`, decided true [read: `out/suite.txt`, `out/refusal.json`, before my 09:28Z entry].
+- `r20261112-074902-fb34`: on `66ad39c9af`, `lean_changed.py --records verity/protocols/spot/verifier/lean` with no `--update`: pass, 5657 declarations in 51 modules, the three axioms, and it asks for no record [read: its output, before my 09:28Z entry]. It is the fast path, not the kernel replay. Lean files, locks and lakefiles do not differ between `66ad39c9af` and `ce7dab0ab39c` [run: `git diff --stat` over them, empty].
+
+**The two merge-trees** [run: `git merge-tree --write-tree --name-only`; the seven merge drivers `.gitattributes` names are registered in this clone, read one key at a time].
+
+- **Against `main`** (`33faab2be81c`, still its tip at 10:33Z [run: `git ls-remote`]; 32 landings past `19fb19a21e40` [run: `git log --first-parent`]): `origin/main` with `ce7dab0ab39c` exits 0 and names no path. So I merged nothing. The twin's head the same.
+- **Against `origin/cursor/lean-remote-merge-landing-fc8d`** (`f3837f57d113`): `main` alone stops on **23** paths; the head with `main` merged in stops on the same 23. **Beyond `main`'s own: none.**
+  - Two of the 23 are files #9199 changes, `benchmarks/one_stage/a5.py` and `verity/protocols/spot/verifier/README.md`. Each has one conflict hunk, and its lines are the same with and without #9199 [run: the hunks of the two written trees compared].
+  - My 09:28Z entry gave 12 for `main` at `19fb19a21e40`; the 23 is `main` at `33faab2be81c` [run both times].
+- vllm's `cursor/vllm-proofserver-exited-24aa` (`04df0f0296f9`) is not on `main` yet [run: `git merge-base --is-ancestor`] and stops on nothing with #9199 [run]. vllm's kept driver still meets `a5.py`, and REDRAW (now `36909d392ed7`) `a5_coins.py`, one path each beyond `main`'s none [run].
+
+**Lock records: none moves.**
+
+- On top of `main`'s tip, all that #9199 changes in Lean and locks is: `Spot/MembersRefusal.lean` (new, 143 lines), one import line in `Spot.lean`, four lines of `Spot/ZkMain.lean`, and one word of `Spot.ZkMain`'s `exempt` reason in `verity/protocols/spot/verifier/lean/lean-audit.json` (`membersMain` to `refusalMain`) [run: `git diff --stat origin/main 4845efcfc0ae` over Lean files, locks and lakefiles, and the lock's diff].
+- `fb34` asked for no record [read].
+- `main` changed five Lean files of that package after my base (`Spot.lean`'s import list, `Pieces`, `Returned`, `Run`, `SecondStage`), all before `19fb19a21e40`, and no lock of it [run: `git diff --stat d6075b75d289 origin/main` and `19fb19a21e40 origin/main` over the package]. `e724` built the package on that merge [read].
+
+**Not run.**
+
+- **The whole quick tier with `main` at `33faab2be81c`.** Only `benchmarks/prove_path` and `repository` ran there (`a5fd`). The other 66 suites' passes are `e724`'s, on `af94d6411979` with `main` at `19fb19a21e40`. Since then the head gained the one test file, and `main`'s 32 landings change one file #9199 changes, `verity/protocols/spot/verifier/README.md` [run: the two `git diff --name-only` lists compared].
+- The Lean check on a tree with `main` merged in: `fb34` is the branch alone. The kernel replay. The full check. circuit-check (no circuit changed).
+- The fixture on `ce7dab0ab39c` itself: its last runs are `e637` and `e724`, on `af94d6411979`.
+- `ratchet-gate` (off the gate) still counts 7 retired-term sites, the same as at 09:28Z [run: `main`'s copy of the tool, this VM].
+
+**The twin, #9230:** unmarked at `f16dfba0bbae`, which is `cda0bef3f06c` with #9199's head merged in [run]; on it with `main`'s tip merged in, `r20261112-102044-436c` passes `benchmarks/prove_path` (150) and `repository` (346) [read]; its quick tier `r20261112-092434-9e4c`, on the old head, is out with 57 of 62 suites done, 56 passed and `benchmarks/prove_path` failed on the same test [read, at 10:30Z]; it merges with `main` with no conflict and adds no stop against lean's branch [run].
+
+**Runs out:** `r20261112-092434-9e4c` only (the twin's; it will exit 1 for the inherited failure), about 10:50Z [guess]. Nothing #9199 needs is out. `r20261112-091123-19b0`, which I reported stuck on cpu-7, reads failed now, exit 2, ended 09:16:03Z: "suites: /workspace/research/src/14841fce... is not a git checkout" [read: `status.json`, `stderr.log`]. It ran no suite and says nothing about the code.
+
+**One thing about my VM:** its checkout and `/tmp` were reset between my turns. Both branches were pushed, so nothing was lost; I rebuilt the worktrees from `origin`.
+
+**What I need:** the mark on #9199 at `ce7dab0ab39c`, if this reads right to you.
