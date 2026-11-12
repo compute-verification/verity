@@ -231,16 +231,17 @@ def test_a_reading_now_saves_the_page_and_starts_from_the_newest_known_dump_at_t
     assert goals(st.fetch(saved["art"])) == goals(B) and st.get_manifest(saved["art"]).meta["taken"] == "20261110T0200Z"
     assert r["agents"]["lanes"] == {"top": 1} and r["asks"] == {"open": 0, "off_track": 0, "kinds": {}, "issues": []}
     assert any("the sweep's dumps not read" in n for n in r["notes"])
-    # the queue table's cells as the landing row and in the chat line
+    # a count in place of the listing, and the queue table's cells as the landing row and in the chat line
     monkeypatch.setattr(V, "landing", lambda since, until, live: {
         "share": "7 of 10 landed (70%); counting the 2 marked in the window and waiting over 2 h as misses, 58%",
         "mark_to_main": "p50 95, p90 200 min (n=10)", "unread": []})
-    assert V.main(["--agents", str(listing), "--no-save"], now=NOW) == 0
+    assert V.main(["--agents", "93", "--no-save"], now=NOW) == 0
     out = capsys.readouterr().out
+    assert "AGENTS    93 running of 100 (the count --agents gave)\n" in out
     assert ("LANDING   within 2 h of the mark, 7 of 10 landed (70%); counting the 2 marked in the window and waiting over 2 h as "
             "misses, 58%; mark to `main` p50 95, p90 200 min (n=10) (`research queue stats`, the 6 h to Mon 9 Nov 6:00 PM PST)\n") in out
-    assert V.main(["--agents", str(listing), "--no-save", "--line"], now=NOW) == 0
-    assert "Landing within 2 h of the mark: 7 of 10 landed (70%); 1 of 100 agents running; " in capsys.readouterr().out
+    assert V.main(["--agents", "93", "--no-save", "--line"], now=NOW) == 0
+    assert "Landing within 2 h of the mark: 7 of 10 landed (70%); 93 of 100 agents running; " in capsys.readouterr().out
     # a window that ended: the newest known dump at or before each end, and nothing saved
     assert V.main(["--since", "2026-11-09T06:00-08:00", "--until", "2026-11-09T12:05-08:00", "--json"], now=NOW) == 0
     r = json.loads(capsys.readouterr().out)

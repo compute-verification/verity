@@ -1,7 +1,7 @@
 """`research velocity`: how fast the plan moves, read from records. A reading, never a gate: it exits 0, and a row it can't
 read says `not read` and what it needs, never a guess.
 
-  research velocity [--since TIME] [--until TIME] [--from DUMP] [--to DUMP] [--baseline DUMP] [--agents FILE.json]
+  research velocity [--since TIME] [--until TIME] [--from DUMP] [--to DUMP] [--baseline DUMP] [--agents FILE.json|N]
                     [--no-save] [--line | --json]
 
 The window is the WINDOW_H hours to now; --since and --until, times with their offsets, give another. One table, each row
@@ -19,7 +19,8 @@ with its source:
             minute, and a window longer than its own is not read.
   AGENTS    the agents running against LIMIT, by lane, from --agents FILE.json, the saved output of the cursor-cloud
             `list-cloud-agents` tool: a worker's name starts with its issue key, whose team's lane it is, a coordinator's
-            is its handle, and the rest are `unnamed`.
+            is its handle, and the rest are `unnamed`. --agents N is their count alone, printed with no lanes: the
+            tool gives it as `totalMatched` when asked for one agent at an offset past the last.
   MACHINES  the dollars spent and the idle dollars in the window, from the fleet's samples (pods/nebius/fleet.py's report).
   ASKS      people's asks off track now (`research msg linear audit --asks`).
 
@@ -391,7 +392,10 @@ def read(ns: argparse.Namespace, since: datetime | None, until: datetime | None,
 
         if not ns.agents:
             raise Unread("give --agents FILE.json, the saved output of the cursor-cloud `list-cloud-agents` tool with statuses "
-                         "RUNNING (the agent watch's status file counts only the agents registered with it)")
+                         "RUNNING, or --agents N, their count (the agent watch's status file counts only the agents "
+                         "registered with it)")
+        if ns.agents.isdigit():
+            return {"running": int(ns.agents), "limit": LIMIT, "lanes": {}, "more": False, "source": "the count --agents gave"}
         return agents(Path(ns.agents).read_text(), slack.load_registry(slack.registry_path(), people=False)) | {"source": ns.agents}
 
     def asks_row() -> dict:
@@ -431,8 +435,9 @@ def _rest(r: dict) -> list[tuple[str, str]]:
         ("LANDING", cell("landing", lambda x: f"within 2 h of the mark, {x['share']}; mark to `main` {x['mark_to_main']} "
                                               f"(`research queue stats`, {hours})"
                                               + (f"; it didn't read: {'; '.join(x['unread'])}" if x["unread"] else ""))),
-        ("AGENTS", cell("agents", lambda x: f"{x['running']}{' or more' if x['more'] else ''} running of {x['limit']}: "
-                                            + ", ".join(f"{k} {n}" for k, n in x["lanes"].items()) + f" ({x['source']})")),
+        ("AGENTS", cell("agents", lambda x: f"{x['running']}{' or more' if x['more'] else ''} running of {x['limit']}"
+                                            + (": " + ", ".join(f"{k} {n}" for k, n in x["lanes"].items()) if x["lanes"] else "")
+                                            + f" ({x['source']})")),
         ("MACHINES", cell("machines", lambda x: f"${x['usd']:,} spent, ${x['idle_usd']:,} of it on idle hours, {x['vms']} VMs, {hours}"
                                                 + (f"; no rate registered for {', '.join(x['no_rate'])}" if x["no_rate"] else "")
                                                 + f" (the fleet's samples on {CONTROL})")),
@@ -500,7 +505,8 @@ def main(argv: list[str], now: datetime | None = None) -> int:
     p.add_argument("--from", dest="earlier", metavar="DUMP", help="the earlier dump of the Goals page: a file or an art: id")
     p.add_argument("--to", dest="later", metavar="DUMP", help="the later dump (default: the page now, or the newest known at --until)")
     p.add_argument("--baseline", metavar="DUMP", help="the dump the second column starts from (default: velocity.json's)")
-    p.add_argument("--agents", metavar="FILE.json", help="the saved output of the cursor-cloud `list-cloud-agents` tool")
+    p.add_argument("--agents", metavar="FILE.json|N", help="the saved output of the cursor-cloud `list-cloud-agents` tool, "
+                                                           "or the count of agents running")
     p.add_argument("--no-save", action="store_true", help="don't put the page read now in the store")
     form = p.add_mutually_exclusive_group()
     form.add_argument("--line", action="store_true", help="one line for a chat")
