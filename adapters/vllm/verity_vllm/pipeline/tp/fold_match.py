@@ -9,7 +9,7 @@ cross-rank check; the record is assembled in rank order.
 
     verity-vllm tp-fold-match --capture <tp2_capture --record-collectives out> --profile derived_LLAMA32_1B_tp2 \\
         --build-rank0 <build_request_r0> --build-rank1 <build_request_r1> [--gprog-rank0 <build_workload_r0/workload_program.json> --gprog-rank1 ...] \\
-        [--derived-rank0 DIR ... --derived-rank1 DIR ...] --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
+        --workload WL [--tp2-match <run>/tp2_match.json] --out <D/fold_match> [--python PY]
 
 Verdict (`<out>/tp2_fold_match.json`): PASS iff BOTH ranks fold with 0 errors / 0 unresolved, BOTH rank compares PASS (the TP1 rule:
 canonical-equal, same steps, no differing operand; X-09 verdict at B>1), GM-01 PASS on EVERY rank (required: no --gprog = FAIL), and the cross-rank check PASSes.  A
@@ -201,9 +201,6 @@ class Options:
                           help="rank profile module (verity_vllm.observe.fold.profiles.<name>), e.g. derived_<ROLE>_tp<W> (profiles.generic, world = W)")
     build_rank0: str | None = option("--build-rank0", default=None)
     build_rank1: str | None = option("--build-rank1", default=None)
-    derived_rank0: list[str] = option("--derived-rank0", action="append", default=[],
-                                      help="B>1: further request Programs of rank 0 (per served (LP, T))")
-    derived_rank1: list[str] = option("--derived-rank1", action="append", default=[])
     gprog_rank0: str | None = option("--gprog-rank0", default=None, help="rank 0's GP-01 workload_program.json (GM-01 stage)")
     gprog_rank1: str | None = option("--gprog-rank1", default=None)
     build_rank: list[str] = option("--build-rank", action="append", default=[],
@@ -290,7 +287,7 @@ def main(a: Options) -> int:
         if not (a.build_rank0 and a.build_rank1):
             raise UsageError("--build-rank DIR (repeated, rank order) or --build-rank0 and --build-rank1 required")
         builds = {0: Path(a.build_rank0), 1: Path(a.build_rank1)}
-        derived = {0: a.derived_rank0, 1: a.derived_rank1}
+        derived = {0: [], 1: []}
         gprog = {0: a.gprog_rank0, 1: a.gprog_rank1}
     if a.world < 2 or a.world != len(builds):
         raise UsageError(f"world {a.world} vs {len(builds)} rank Builds")
