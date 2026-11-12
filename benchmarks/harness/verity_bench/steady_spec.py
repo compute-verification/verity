@@ -22,7 +22,8 @@ Standard library and `verity_config` only: the node side reads it too.
     provers = [1, 2, 4]   # a point a count
     warm = 2              # warm sessions a prover, before any timed one
     period = 4            # optional: the sessions a prover's filings repeat over, where they file in bursts
-    staged = "/..."       # optional: a statement already on the node, proved from a copy checked against `pin`
+    staged = "/..."       # optional: a statement staged already, proved from a copy checked against `pin`: a directory
+                          # on the node, or one of an artifact in the store (`art:ID/DIR`)
 
 **A point's timed sessions** (`timed_sessions`) are the spec's `sessions`, at least the eight a prover the timing script
 times whatever it is told (`FLOOR`), and for a row with a `period` the next count whose rated window holds a whole
@@ -40,6 +41,11 @@ toolkit are the spec's because the node can't be asked before the run: the node 
 node whose versions aren't the spec's, and writes them in the row (`VERSIONS`). The toolkit's is `cuda_toolkit`, in the
 spec and in the row: `cuda` is the harness kit's name for the newest CUDA the driver serves (`kit.host_stamp`), another
 number.
+
+**A row's `staged`** names a statement staged before the run, for a type whose staging takes longer than a point: a
+directory on the node, which the node side copies, or a directory of an artifact in the store (`stored`), which it
+fetches into its scratch with the read-only key the launch gives such a point's run. Either copy is held to the row's
+`pin` and `n` like a statement staged in the run, and goes with the scratch.
 
 **A passed point** (`point_why`): a row whose `pin`, `provers` and `cores.count` are the point's and its spec's, and
 that passes `steady`'s ten checks against the files of the run that measured it. A row of a run of the point itself
@@ -72,6 +78,8 @@ NOT_SOURCE = re.compile(r"(^|/)(tests|__pycache__)/|\.(md|pyc)$")
 VERSIONS = "versions"
 STAGER = "benchmarks/served_units/stage.py"
 TIMER = "benchmarks/one_stage/server_rate.py"
+#: a row's `staged` in the store: an artifact's whole id, then the directory in it that holds the statement
+STORED = re.compile(r"(art:[0-9a-f]{64})/([A-Za-z0-9_.-]+(?:/[A-Za-z0-9_.-]+)*)")
 #: the node side's exit code for a point that was timed and whose row isn't a passed point; 0 is a passed point's
 NOT_PASSED = 3
 #: the sessions a prover the timing script times at least, whatever its `--sessions` says
@@ -102,6 +110,13 @@ class SteadyRow:
         other than letters, digits and `_` as one `_`."""
 
         return re.sub(r"[^A-Za-z0-9_]+", "_", self.type).strip("_")
+
+    @property
+    def stored(self) -> tuple[str, str] | None:
+        """The artifact and the directory in it that hold the row's statement, where its `staged` names the store."""
+
+        found = STORED.fullmatch(self.staged or "")
+        return None if found is None or ".." in found[2].split("/") else (found[1], found[2])
 
 
 @dataclass(frozen=True)
@@ -229,8 +244,10 @@ def load_spec(source: str | Path, *, root: Path = SOURCE_ROOT) -> SteadySpec:
         if spec.sessions < 8 * max(row.provers):
             raise ConfigError(f"{where}: `sessions` is {spec.sessions}, under 8 a prover at {max(row.provers)} provers, "
                               f"where {TIMER} times 8 a prover instead: say the count it times")
-        if row.staged is not None and not PurePosixPath(row.staged).is_absolute():
-            raise ConfigError(f"{where}: `staged` {row.staged!r} isn't an absolute path on the node")
+        if row.staged is not None and row.stored is None and not PurePosixPath(row.staged).is_absolute():
+            raise ConfigError(f"{where}: `staged` {row.staged!r} isn't an absolute path on the node, nor a directory "
+                              "of an artifact in the store (`art:` and the artifact's 64 hexadecimal digits, `/`, the "
+                              "directory)")
     names = [row.name for row in spec.row]
     if twice := sorted({name for name in names if names.count(name) > 1}):
         raise ConfigError(f"{path}: two rows are named {', '.join(twice)} in the rate file: a block type is one row")

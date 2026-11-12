@@ -217,8 +217,9 @@ the `workload` whose steady-state record its rows belong to, the `card`, the `co
 sessions a prover runs `ahead`, the GPU `driver`'s version and the CUDA toolkit's (`cuda_toolkit`), a `setup` script,
 `[env]` and `[admission]` (`max_minutes`, `mem_gb`); each `[[row]]` is a block type: the stager's `type`
 (`benchmarks/served_units/stage.py`), its units `n`, the `pin` (the SHA-512 of the statement's circuit), the `provers`
-counts (a point each), the `warm` sessions a prover and, optionally, `period` and `staged`, a statement already on the
-node. Loading is as strict as a vLLM spec's.
+counts (a point each), the `warm` sessions a prover and, optionally, `period` and `staged`, a statement staged
+already: a directory on the node, or one of an artifact in the store (`art:ID/DIR`). Loading is as strict as a vLLM
+spec's.
 
 **Timed sessions.** A point times the spec's `sessions`, and at least eight a prover, the fewest the timing script
 times. Where a row's sessions file in bursts, its `period` says the
@@ -263,11 +264,15 @@ through one of its GPU slots, which gives the run its cores, by the harness's on
 `benchmarks/harness/steady_point.sh`, which sources the spec's `setup` in the source tree and runs
 `python -m verity_bench.steady_node` under the Python the setup names. The setup builds the prover and exports
 `VERITY_BENCH_STEADY_BIN` (the prover) and `VERITY_BENCH_STEADY_PY` (a Python the stager, the timing script and the
-harness run under), with the CUDA toolkit the prover was built with first on `PATH`. The node side:
+harness run under), with the CUDA toolkit the prover was built with first on `PATH`. A point whose row names its
+statement in the store is launched with a read-only key to it (`research run --store-read`). The node side:
 
 1. before any card is asked for, refuses a tree that gives the point another identity than the one it was launched with,
    an environment that isn't the spec's, a run whose CPUs aren't exactly the spec's `cores`, and a statement (staged
-   there, or copied from `staged`) whose circuit isn't the row's `pin` or whose units aren't its `n`;
+   there, copied from `staged` on the node, or fetched from `staged` in the store) whose circuit isn't the row's `pin`
+   or whose units aren't its `n`. A statement from the store is fetched into the scratch, on the node's disk: a scratch
+   in its memory (`/dev/shm`, the default of `VERITY_BENCH_STEADY_SCRATCH`, which the setup then exports) is refused,
+   as is a disk with less free than the statement twice, and the node's own store keeps no copy;
 2. takes one lease of one card for the spec's `max_minutes`, the kit's (`kit.lease`), preemptible and with the spec's
    `mem_gb`, and inside it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and the toolkit's version
    from the node's nvcc, refuses a card that isn't the spec's or a driver or toolkit version that isn't, records what

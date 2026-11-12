@@ -8,8 +8,9 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
    tree gives the point (`steady_spec.point_identity`: a changed file of the closure is another point); the run's
    environment is the spec's; the prover is the one the setup built (`VERITY_BENCH_STEADY_BIN`); and the run's CPUs are
    exactly the spec's `cores`, which the node's slot gives. It stages the row's statement with
-   `benchmarks/served_units/stage.py`, or copies the one the row names as `staged`, and refuses a statement whose
-   circuit isn't the row's `pin` or whose units aren't its `n`.
+   `benchmarks/served_units/stage.py`, or takes the one the row names as `staged`: a copy of a directory on the node,
+   or a directory of an artifact fetched from the store (`fetched`), onto the node's disk and never into its memory.
+   It refuses a statement whose circuit isn't the row's `pin` or whose units aren't its `n`.
 2. **One lease of one card** (the harness kit's, `kit.lease`: `gpu-lease 1 --wait --max-min M`), and inside it the
    timed step (this module again, with `--inside`): it reads the card and the driver's version from the kit's host
    stamp (`kit.host_stamp`, the lease's card) and the toolkit's from the node's nvcc, and refuses a card or a version
@@ -60,6 +61,10 @@ STOPPED = 128 + signal.SIGTERM
 STOP_S = 30
 #: the files of a staged statement the node side reads; the prover reads the rest
 STAGED = ("stage.json", "circuit.txt", "pin.txt")
+#: the store's fetch, from the shipped tree (`steady_point.sh` puts its package on the path)
+FETCH = ("-m", "research", "data", "fetch")
+#: where a node keeps files in its memory: no statement fetched from the store goes there
+MEMORY = Path("/dev/shm")
 #: the bytes kept of each of the server's logs, from its end
 KEPT_LOG_BYTES = 200_000
 
@@ -97,7 +102,7 @@ def _ask(argv: Sequence[str]) -> tuple[int, str]:
         process = subprocess.run(list(argv), capture_output=True, text=True, check=False)
     except OSError as error:
         return 127, f"{type(error).__name__}: {error}"
-    return process.returncode, process.stdout
+    return process.returncode, process.stdout if process.returncode == 0 else process.stdout + process.stderr
 
 
 def _write(path: Path, doc: Any) -> None:
@@ -145,13 +150,53 @@ def _spans(cpus: Sequence[int]) -> str:
     return ",".join(str(a) if a == b else f"{a}-{b}" for a, b in spans)
 
 
-def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner) -> dict[str, Any]:
-    """The row's statement where `server_rate.py` looks for it (`SCRATCH/z/NAME/cN/stage`): staged here, or a copy of
-    the one the row names. Its circuit's SHA-512 is computed on that copy, never taken from a file beside it."""
+def fetched(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner, ask: Asker) -> Path:
+    """The statement a row names in the store (`SteadyRow.stored`), fetched into the scratch: the artifact's directory,
+    read with the key `research run --store-read` puts in the run's environment. The fetch keeps what it reads in a
+    store of its own under the scratch, removed once the files are out of it, so the node's store holds no copy and
+    nothing stays on the node after the scratch. Before any byte is fetched it refuses a scratch in the node's memory,
+    and one whose disk has less free than the statement twice, which the fetch holds until its store is removed."""
+
+    art, directory = row.stored
+    if MEMORY in scratch.resolve().parents:
+        raise Refused(f"the `staged` of row {row.type!r} is fetched from the store onto the node's disk, and the scratch "
+                      f"({scratch}) is in its memory: the spec's setup exports VERITY_BENCH_STEADY_SCRATCH, a directory "
+                      "on the node's disk")
+    store, got = scratch / "store", scratch / "fetched"
+    fetch = [sys.executable, *FETCH, art, "--store", str(store), "--path", directory]
+    rc, text = ask([*fetch, "--list", "--json"])
+    try:
+        size = sum(file["bytes"] for file in json.loads(text)) if rc == 0 else None
+    except (ValueError, TypeError, KeyError):
+        size = None
+    if not size:
+        raise Refused(f"the store lists no file of the `staged` of row {row.type!r}, {row.staged} (exit {rc}: "
+                      f"{text.strip()[-300:]!r}): a run reads the store with the key `research run --store-read` gives "
+                      "it, which `verity-bench run SPEC --direct NODE` passes for a row whose `staged` names the store")
+    free = shutil.disk_usage(scratch).free
+    if free < 2 * size:
+        raise Refused(f"the `staged` of row {row.type!r} is {size} bytes, held twice while it is fetched, and the disk "
+                      f"of the scratch ({scratch}) has {free} free")
+    rc = run([*fetch, "--to", str(got)], out / "fetch.log")
+    shutil.rmtree(store, ignore_errors=True)
+    if rc or not (got / directory).is_dir():
+        raise Refused(f"fetching the `staged` of row {row.type!r}, {row.staged}, failed (exit {rc}): out/fetch.log")
+    return got / directory
+
+
+def statement(row: steady_spec.SteadyRow, scratch: Path, out: Path, run: Runner, ask: Asker = _ask) -> dict[str, Any]:
+    """The row's statement where `server_rate.py` looks for it (`SCRATCH/z/NAME/cN/stage`): staged here, a copy of the
+    one the row names on the node, or the one it names in the store (`fetched`). Its circuit's SHA-512 is computed on
+    that copy, never taken from a file beside it."""
 
     stage = scratch / "z" / row.name / f"c{row.n}" / "stage"
     stage.parent.mkdir(parents=True)
-    if row.staged is not None:
+    if row.stored is not None:
+        fetched(row, scratch, out, run, ask).rename(stage)
+        if not all((stage / name).is_file() for name in STAGED):
+            raise Refused(f"the `staged` of row {row.type!r}, {row.staged}, holds no staged statement in the store "
+                          f"({', '.join(STAGED)})")
+    elif row.staged is not None:
         given = Path(row.staged)
         if not all((given / name).is_file() for name in STAGED):
             raise Refused(f"the `staged` of row {row.type!r}, {row.staged}, holds no staged statement on this node "
@@ -370,7 +415,7 @@ def point(a: argparse.Namespace, *, run: Runner = _run, ask: Asker = _ask, now: 
         scratch = Path(tempfile.mkdtemp(prefix="verity-bench-steady-", dir=settings.VERITY_BENCH_STEADY_SCRATCH))
         lease = lease_argv(spec, [sys.executable, "-m", "verity_bench.steady_node", "--spec", a.spec, "--point", a.point,
                                   "--identity", a.identity, "--inside", str(scratch)])
-        record["statement"] = statement(item.row, scratch, out, run)
+        record["statement"] = statement(item.row, scratch, out, run, ask)
         record["lease_exit"] = run(lease, out / "lease.log")
         step = json.loads((run_dir / TIMED_FILE).read_text()) if (run_dir / TIMED_FILE).is_file() else {}
         record["timed"] = step

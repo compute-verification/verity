@@ -344,10 +344,11 @@ def direct_minutes(spec: ResolvedSpec | SteadySpec, node: str) -> float:
 
 
 def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign: str, tool: str,
-             env: Sequence[str], job: Sequence[str]) -> list[str]:
+             env: Sequence[str], job: Sequence[str], store_read: bool = False) -> list[str]:
     """`job` as a recorded `research run --on NODE` through one of the node's GPU slots, for a node whose launcher takes
     only slot runs: the one form of a direct point's launch, whatever the point's spec. The spec's admission
-    `max_minutes` bounds the run and its slot; `tool` records it; `env` is its `--env` flags."""
+    `max_minutes` bounds the run and its slot; `tool` records it; `env` is its `--env` flags; `store_read` gives the
+    job a read-only key to the store for the run's length (`research run --store-read`), for a job that fetches from it."""
 
     minutes = direct_minutes(spec, node)
     return [
@@ -360,6 +361,7 @@ def slot_run(spec: ResolvedSpec | SteadySpec, root: Path, node: str, *, campaign
         "--timeout", f"{minutes:g}m",
         "--require-result",
         "--tool", tool,
+        *(["--store-read"] if store_read else []),
         *env,
         "--",
         "env", f"CHECK_SLOTS={GPU_SLOTS}", "python3", "tools/verity/check/slot.py", "--by", "benchmarks",

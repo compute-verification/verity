@@ -370,11 +370,13 @@ def make_plan(source: str | Path, *, root: Path | None = None, lookup: Lookup | 
 def direct_command(plan: jobs.Plan, source: str | Path, item: jobs.PlannedPoint, root: Path, node: str) -> list[str]:
     """The point as a `research run --on NODE` through one of the node's GPU slots, which gives it its cores. The node
     side takes the card itself, in one lease, so that the lease has ended and left its usage line among the run's
-    files before the run's verdict is computed."""
+    files before the run's verdict is computed. A point whose row names its statement in the store runs with a
+    read-only key to it."""
 
     spec = plan.spec
     return jobs.slot_run(
         spec, root, node, campaign="steady-point", tool="verity_bench.tool:STEADY_POINT",
+        store_read=item.point.row.stored is not None,
         env=[flag for name, setting in jobs.point_environment(spec).items() for flag in ("--env", f"{name}={setting}")],
         job=["bash", "benchmarks/harness/steady_point.sh", "--spec", jobs._relative_spec(source, root),
              "--point", item.point.id, "--identity", item.identity])

@@ -31,6 +31,8 @@ PIN = hashlib.sha512(CIRCUIT.encode()).hexdigest()
 DRIVER, CUDA = "570.86.15", "12.8.93"
 SETUP = "benchmarks/specs/steady-setup.sh"
 RECORD = "prove-glm53-flock-steady"
+#: a made-up artifact of the store, and the directory in it that holds a staged statement
+ART, IN_ART = "art:" + "5" * 64, "out/row1"
 #: the made-up run of `test_steady.made`: two provers of `gemm64` on GPU 3, in the run `r-own`
 POINT, RUN = "gemm64-k2", "r-own"
 #: what a row of a run of the point holds beyond the script's own fields
@@ -165,6 +167,10 @@ REFUSED_SPECS = [
     ({"spec": {"row0": {"provers": [0]}}}, r"`provers \(0\)` is 0"),
     ({"spec": {"row0": {"provers": [1, 4]}}}, "`sessions` is 16, under 8 a prover at 4 provers"),
     ({"spec": {"row0": {"staged": "z/gemm64"}}}, "`staged` 'z/gemm64' isn't an absolute path on the node"),
+    ({"spec": {"row0": {"staged": "art:" + "1" * 63 + "/row"}}}, "nor a directory of an artifact in the store"),
+    ({"spec": {"row0": {"staged": ART}}}, "nor a directory of an artifact in the store"),
+    ({"spec": {"row0": {"staged": f"{ART}/out/../row"}}}, "nor a directory of an artifact in the store"),
+    ({"spec": {"row0": {"staged": f"{ART}/out/*"}}}, "nor a directory of an artifact in the store"),
     ({"spec": {"row0": {"type": "head block"}}}, "two rows are named head_block in the rate file"),
 ]
 
@@ -849,6 +855,22 @@ def test_run_launches_each_point_without_a_passing_run_through_a_gpu_slot_of_the
         assert STEADY_POINT.parse(command) == {"spec": path, "point": item.point.id, "identity": item.identity}
 
 
+def test_a_point_whose_statement_is_in_the_store_is_launched_with_a_read_only_key_to_it(tmp_path):
+    """Only that point's run reads the store: a row staged in the run, or from a directory on the node, gets no key."""
+
+    root, path = tree(tmp_path)
+    spec = root / path
+    spec.write_text(spec.read_text().replace('staged = "/dev/shm/head"', f'staged = "{ART}/{IN_ART}"'))
+    plan = P.make_plan(spec, root=root, lookup=lambda spec, item, identity: (None, None))
+    assert [point.point.row.stored for point in plan.points] == [None, None, (ART, IN_ART)]
+    commands = []
+    assert P.dispatch(plan, spec, root=root, direct="vy-dc-h200",
+                      execute=lambda command, cwd: commands.append(command) or 0) == 0
+    flags = [command[:command.index("--")] for command in commands]
+    assert ["--store-read" in f for f in flags] == [False, False, True]
+    assert STEADY_POINT.parse(commands[2])["point"] == plan.points[2].point.id
+
+
 def test_a_launch_that_fails_stops_the_launches_after_it(tmp_path):
     root, path = tree(tmp_path)
     plan = P.make_plan(root / path, root=root, lookup=lambda spec, item, identity: (None, None))
@@ -930,6 +952,9 @@ class Node:
         self.answers = ANSWERS | (answers or {})
         self.circuit, self.said, self.units, self.cpus, self.lease_exit = circuit, said, units, cpus, lease_exit
         self.ran: list[list[str]] = []
+        #: the store's stand-in (`stored`): the files a fetch gives, what its listing answers, the fetch's exit code, the
+        #: listings asked, and what the timed step saw of the scratch
+        self.fetch, self.listed, self.fetch_exit, self.asked, self.seen = {}, None, 0, [], None
         spec = SP.load_spec(self.root / self.spec, root=self.root)
         self.identity = SP.point_identity(spec, SP.point(spec, POINT), sha256_of(SP.closure(self.root, spec)))
 
@@ -937,6 +962,9 @@ class Node:
         return N.parse(["--spec", self.spec, "--point", POINT, "--identity", changes.get("identity", self.identity)])
 
     def ask(self, argv):
+        if list(argv[1:5]) == list(N.FETCH):
+            self.asked.append(list(argv))
+            return (0, self.listed) if self.listed else (1, "no remote configured")
         answer = self.answers.get(" ".join(argv))
         return (1, "") if answer is None else (0, answer)
 
@@ -951,6 +979,15 @@ class Node:
             (stage / "pin.txt").write_text(self.said + "\n")
             (stage / "stage.json").write_text(json.dumps({"n": self.units, "definition": "Gemm_v1{K=64}", "k_log": 20}))
             return 0
+        if argv[1:5] == list(N.FETCH):
+            store, to = (Path(argv[argv.index(flag) + 1]) for flag in ("--store", "--to"))
+            (store / "objects").mkdir(parents=True)
+            (store / "objects" / "blob").write_text("the fetch's own copy\n")
+            (to / IN_ART).mkdir(parents=True)
+            for name, text in self.fetch.items():
+                if text is not None:
+                    (to / IN_ART / name).write_text(text)
+            return self.fetch_exit
         if argv[0] == "gpu-lease":
             if self.lease_exit is not None:
                 return self.lease_exit
@@ -967,6 +1004,8 @@ class Node:
         out = Path(argv[argv.index("--out") + 1])
         (step := out / f"gemm64-k{argv[argv.index('--provers') + 1]}").mkdir(parents=True)
         self.timed = argv
+        [stage] = Path(argv[argv.index("--staged") + 1]).glob("*/c*/stage")
+        self.seen = {"store": (out.parent / "store").exists(), "files": sorted(path.name for path in stage.iterdir())}
         (out / "rate.json").write_text(json.dumps([self.row]))
         if (sessions := self.files(SESSIONS)) is not None:
             (step / "sessions.jsonl").write_text(sessions)
@@ -1091,6 +1130,75 @@ def test_a_statement_already_on_the_node_is_proved_from_a_copy_checked_against_t
     node.ran.clear()
     assert node.point() == N.REFUSED and node.ran == []
     assert "another circuit takes no GPU time" in node.read("result.json")["validation"]["detail"]
+
+
+def stored(node: Node, listed: str | None = None, **files) -> None:
+    """The first row's `staged` names the store, and the node's stand-in fetches `files` for it (the staged statement's,
+    unless replaced or left out with None); `listed`: what the store's listing answers instead."""
+
+    path = node.root / node.spec
+    path.write_text(path.read_text().replace("warm = 2\n", f'warm = 2\nstaged = "{ART}/{IN_ART}"\n', 1))
+    node.fetch = {"circuit.txt": CIRCUIT, "pin.txt": PIN, "stage.json": json.dumps({"n": 1}), "inst.bin": "inst"} | files
+    size = sum(len(text) for text in node.fetch.values() if text is not None)
+    node.listed = json.dumps([{"path": f"{IN_ART}/x", "bytes": size}]) if listed is None else listed
+    # wherever the suite keeps its temporary files, the stand-in's scratch counts as disk
+    node.monkeypatch.setattr(N, "MEMORY", node.root / "memory")
+
+
+def test_a_statement_in_the_store_is_fetched_into_the_scratch_and_leaves_no_copy_on_the_node(tmp_path, monkeypatch):
+    """The fetch reads the artifact's one directory through a store of its own under the scratch, which is removed
+    before the statement is hashed; the statement is then held to the pin like any other, and goes with the scratch."""
+
+    node = Node(tmp_path, monkeypatch)
+    stored(node)
+    assert node.point() == 0, "`staged` is no part of the identity"
+    fetch, lease_argv, timer = node.ran
+    scratch = Path(lease_argv[-1])
+    assert fetch == [sys.executable, "-m", "research", "data", "fetch", ART, "--store", str(scratch / "store"),
+                     "--path", IN_ART, "--to", str(scratch / "fetched")]
+    assert node.asked[0] == [*fetch[:-2], "--list", "--json"], "the listing is asked of the same store, before the fetch"
+    assert node.seen == {"store": False, "files": ["circuit.txt", "inst.bin", "pin.txt", "stage.json"]}, (
+        "at the timed step the fetch's store is gone and the statement is where the timing script looks for it")
+    assert not scratch.exists() and list(node.scratch_root.iterdir()) == []
+    statement = node.read(N.POINT_FILE)["statement"]
+    assert (statement["from"], statement["pin"], statement["n"]) == (f"{ART}/{IN_ART}", PIN, 1)
+    assert "out/fetch.log" in node.read("result.json")["artifacts"]
+
+
+#: a statement in the store that is refused: how the stand-in differs, and what the refusal says
+NOT_FETCHED = [
+    ({"listed": ""}, "the store lists no file of the `staged` of row 'gemm64'.*`research run --store-read`"),
+    ({"listed": "[]"}, "the store lists no file of the `staged` of row 'gemm64'"),
+    ({"listed": json.dumps([{"path": "out/row1/x", "bytes": 1 << 62}])}, "held twice while it is fetched, and the disk"),
+    ({"fetch_exit": 1}, r"fetching the `staged` of row 'gemm64', art:5+/out/row1, failed \(exit 1\): out/fetch.log"),
+    ({"pin.txt": None}, "holds no staged statement in the store"),
+    ({"circuit.txt": "another circuit\n"}, "another circuit takes no GPU time"),
+    ({"stage.json": json.dumps({"n": 2})}, "the statement holds 2 units"),
+]
+
+
+@pytest.mark.parametrize("change, says", NOT_FETCHED, ids=[says[:40] for _, says in NOT_FETCHED])
+def test_a_statement_the_store_does_not_give_whole_is_refused_before_any_card(tmp_path, monkeypatch, change, says):
+    node = Node(tmp_path, monkeypatch)
+    node.fetch_exit = change.get("fetch_exit", 0)
+    stored(node, **{key: value for key, value in change.items() if key != "fetch_exit"})
+    assert node.point() == N.REFUSED and not any(argv[0] == "gpu-lease" for argv in node.ran)
+    assert re.search(says, node.read("result.json")["validation"]["detail"])
+    assert list(node.scratch_root.iterdir()) == [], "what was fetched goes with the scratch"
+
+
+def test_a_statement_from_the_store_is_never_fetched_into_the_nodes_memory(tmp_path, monkeypatch):
+    """The scratch's default is the node's memory, where a statement staged in the run may be: one from the store is
+    refused there before the store is asked anything."""
+
+    assert settings.REGISTRY.setting("VERITY_BENCH_STEADY_SCRATCH").default == str(N.MEMORY)
+    node = Node(tmp_path, monkeypatch)
+    stored(node)
+    monkeypatch.setattr(N, "MEMORY", node.scratch_root.resolve())
+    assert node.point() == N.REFUSED and node.ran == [] and node.asked == []
+    assert re.search("is fetched from the store onto the node's disk, and the scratch .* is in its memory: the spec's "
+                     "setup exports VERITY_BENCH_STEADY_SCRATCH", node.read("result.json")["validation"]["detail"])
+    assert list(node.scratch_root.iterdir()) == []
 
 
 #: the node side refusing before any card is asked for: the stand-in's change and what the refusal says
