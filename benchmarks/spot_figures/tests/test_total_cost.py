@@ -136,7 +136,9 @@ def test_a_partition_card_cuts_the_circuit_and_keeps_its_macs():
 def test_every_line_prices_its_blocks_one_way():
     """Both cuts price a block at its measured type's seconds (its name's, else its Definition and K's) and an
     unmeasured type at its staged witness bits, by one rule; each stratum's price keeps a token's MACs, so the line's
-    overhead is its blocks' seconds over its MACs at the card's peak; a block neither measured nor staged is refused."""
+    overhead is its blocks' seconds over its MACs at the card's peak; a block neither measured nor staged is refused.
+    A table holds a measured block's proof blocks at the staging the card measured it at, whatever the strata estimate,
+    so the card's statement is as many tables on every line as on the card."""
     c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
     card = next(x for x in cards.load_all("partition", "GLM-5.3") if x["value"]["name"] == "per-expert")
     blocks, peak = po["value"]["blocks"], po["value"]["peak_mac_s"]
@@ -148,9 +150,12 @@ def test_every_line_prices_its_blocks_one_way():
         for x in strata:
             if x["block"] in by_name:
                 assert x["priced"] == "measured" and x["seconds_per_block"] == by_name[x["block"]]["seconds_per_block"]
+                assert x["table_blocks"] == t.STATEMENT_BITS >> by_name[x["block"]]["k_log"]
             if x["priced"] == "computed":
                 rates.setdefault(x["seconds_per_block"] / 2 ** x["k_log"], x["block"])
-                assert x["statement_blocks"] == t.STATEMENT_BITS >> x["k_log"]
+                assert x["statement_blocks"] == t.STATEMENT_BITS >> x["k_log"] == x["table_blocks"]
+        other = [x for x in strata if x["block"] in by_name and x["k_log"] != by_name[x["block"]]["k_log"]]
+        assert other and all(x["table_blocks"] != t.STATEMENT_BITS >> x["k_log"] for x in other)
         variant = next(x for x in strata if x["priced"] == "measured" and x["block"] not in by_name)
         assert t._definition(variant["block"]) in {t._definition(b) for b in by_name}
         macs = sum(x["per_token"] * x["macs"] for x in strata)
@@ -169,7 +174,8 @@ def test_every_line_prices_its_blocks_one_way():
 
 def test_a_block_measured_at_another_size_of_its_definition_scales_with_its_k_log():
     """A residual add of 384 columns, which the card measures only at 6144, 2^4 times smaller as the strata size both:
-    the card's seconds a block over 2^4 and its cap times 2^4, its statement's fixed seconds unchanged."""
+    the card's seconds a block over 2^4 and its cap and a table's blocks times 2^4, its statement's fixed seconds
+    unchanged."""
     c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
     b = next(b for b in po["value"]["blocks"] if b["block"] == "ResidualAdd_v1{N=6144}")
     strata = c["partition"].value["strata"]
@@ -180,6 +186,7 @@ def test_a_block_measured_at_another_size_of_its_definition_scales_with_its_k_lo
     got = next(x for x in p["partition"].value["strata"] if x["block"] == narrow["block"])
     assert (got["priced"], got["seconds_per_block"]) == ("measured", b["seconds_per_block"] / 16)
     assert (got["fixed_seconds"], got["statement_blocks"]) == (b["fixed_seconds"], b["statement_blocks"] * 16)
+    assert got["table_blocks"] == t.table_blocks(b["k_log"]) * 16
 
 
 def test_the_kept_priced_taxes_are_the_generators():

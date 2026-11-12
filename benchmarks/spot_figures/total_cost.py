@@ -352,7 +352,10 @@ def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     strata estimate them, the card's block's from the strata where they hold one of its type.  A type the card doesn't
     measure is `computed` from its staged witness bits: the measured types' median seconds a witness bit, a statement's
     fixed seconds on their least-squares line in k_log, and as many blocks as a full statement holds.  Each stratum's
-    `price` is the MACs that cost its seconds at that overhead, so the planner's cells and grains prove it at them."""
+    `price` is the MACs that cost its seconds at that overhead, so the planner's cells and grains prove it at them.
+    `table_blocks` is the stratum's proof blocks one table holds, by the witness bits its price is of: the card's
+    k_log of the block that prices it, moved by the same Δk, never the strata's own estimate, which the card's
+    measured staging can differ from; a computed type's by its own k_log."""
     v, part = card["value"], c["partition"]
     if abs(c["peak_flops"].value / (2 * v["peak_mac_s"]) - 1) > 1e-3:
         raise ValueError(f"the planner's peak, {c['peak_flops'].value:.6g} FLOP/s, isn't twice the proof_overhead "
@@ -368,14 +371,14 @@ def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     for x in part.value["strata"]:
         if b := by_name.get(x["block"]):
             strata.append(x | {k: b[k] for k in ("seconds_per_block", "fixed_seconds", "statement_blocks")}
-                          | {"priced": "measured", "table_blocks": table_blocks(x.get("k_log", b["k_log"]))})
+                          | {"priced": "measured", "table_blocks": table_blocks(b["k_log"])})
         elif b := types.get(_definition(x["block"])):
             b, k = held.get(_definition(x["block"]), (b, b["k_log"]))
             dk = x["k_log"] - k if "k_log" in x else 0
             cap = b["statement_blocks"] << -dk if dk < 0 else max(1, b["statement_blocks"] >> dk)
             strata.append(x | {"seconds_per_block": b["seconds_per_block"] * 2.0 ** dk, "fixed_seconds": b["fixed_seconds"],
                                "statement_blocks": cap, "priced": "measured",
-                               "table_blocks": table_blocks(x.get("k_log", k))})
+                               "table_blocks": table_blocks(b["k_log"] + dk)})
         elif "k_log" in x:
             strata.append(x | {"seconds_per_block": rate * 2 ** x["k_log"],
                                "fixed_seconds": max(0.0, intercept + slope * x["k_log"]),
