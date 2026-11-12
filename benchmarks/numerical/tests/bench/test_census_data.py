@@ -3,7 +3,11 @@ and the directory holds nothing but data (nothing imports it; it can move to its
 
 from __future__ import annotations
 
+import ast
+import collections
 import json
+import operator
+import pathlib
 import re
 
 import pytest
@@ -196,9 +200,6 @@ def test_workloads_are_the_regression_rows_template_mix() -> None:
     """Each workload is a served vLLM configuration with its template mix: the proof blocks per family and bound
     parameters, read from its regression row's replay partition (the counts the coverage audit cites).  The file is kept equal
     to those expectations, and only families the census has a template for name one."""
-    import collections
-    import pathlib
-
     repo = pathlib.Path(census.ROOT).parents[1]
     assert census.WORKLOADS, "no workloads"
     for w in census.WORKLOADS.values():
@@ -276,9 +277,6 @@ def test_every_templates_bound_ids_validate() -> None:
 
 def _ops(expr: str, env: dict) -> int:
     """An integer work-model expression (+ - * // and parentheses over names) evaluated without eval."""
-    import ast
-    import operator
-
     ops = {ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul, ast.FloorDiv: operator.floordiv}
 
     def ev(n: ast.AST) -> int:

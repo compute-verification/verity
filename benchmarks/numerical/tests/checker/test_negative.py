@@ -9,9 +9,13 @@ from collections.abc import Callable
 import pytest
 from conftest import bf16, f32
 
-from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16, tc_dot
+from verity.definitions.silicon.cast import f32_to_bf16_word
+from verity.definitions.silicon.models import AMPERE_BF16_M16N8K16, tc_dot, tc_dot_chain
 from verity_numerical.checker import REAL, Reject, check_step, check_vu, gen_step, gen_vu
-from verity_numerical.checker.gadgets import Epilogue
+from verity_numerical.checker.gadgets import (
+    AlignProduct, AlignState, Bf16Decode, Epilogue, Fp32Decode, GroupMax, LeadingBit, Normalise, Pack, Product,
+    SignedSum, StateOut,
+)
 from verity_numerical.checker.tables import align_table, norm_table
 
 P = REAL
@@ -80,7 +84,6 @@ def test_bf16_decode_rejects_non_finite_operands() -> None:
 
 def gen_step_unchecked(c, a, b, h):
     """The honest hints with the operand decode of a[0] recomputed for a non-finite word (t = 255)."""
-    from verity_numerical.checker.gadgets import Bf16Decode
     bad = copy.deepcopy(h)
     bad["a"][0] = Bf16Decode.gen(P, a[0])
     return bad
@@ -354,8 +357,6 @@ def test_epilogue_mutations_are_rejected() -> None:
     a = [bf16(0, 127, 0x40)] * 16
     b = [bf16(0, 127, 0x01)] * 16
     h = gen_vu(P, a, b)
-    from verity.definitions.silicon.cast import f32_to_bf16_word
-    from verity.definitions.silicon.models import tc_dot_chain
     y16 = f32_to_bf16_word(tc_dot_chain(AMPERE_BF16_M16N8K16, 0, a, b))
     check_vu(P, a, b, y16, h)
 
@@ -411,10 +412,6 @@ def test_missing_or_misshapen_witness_is_rejected() -> None:
 
 def test_every_hint_is_range_checked_against_the_contract() -> None:
     """Any single hint pushed just outside its contract range is rejected (the checker enforces the contract)."""
-    from verity_numerical.checker.gadgets import (
-        AlignProduct, AlignState, Bf16Decode, Fp32Decode, GroupMax, LeadingBit, Normalise, Pack, Product,
-        SignedSum, StateOut,
-    )
     c, a, b, y, h = NONZERO
     places = [
         (Fp32Decode.contract(P), lambda hh: hh["acc"]),

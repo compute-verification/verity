@@ -6,6 +6,7 @@ import copy
 import json
 import socket
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -286,8 +287,6 @@ def test_the_sessions_rtt_does_not_stand_in_for_the_tcp_connects(tmp_path, probe
 def _stub_connects(monkeypatch, refused=()) -> list:
     """Sockets whose k-th connect (from 1) takes k ms on a stub clock, or is refused when k is in ``refused``: real loopback
     connects on a loaded node sometimes fail or stall, so the bookkeeping is checked without them."""
-    import time
-
     now, calls = [0.0], []
 
     class Sock:
@@ -436,7 +435,6 @@ def test_the_co_resident_pair_is_still_refused():
 
 
 def test_pod_env_falls_back_to_the_container_init_environment(monkeypatch, tmp_path):
-    from verity_numerical.bench import placement as PL
     monkeypatch.delenv("RUNPOD_POD_ID", raising=False)
     env = tmp_path / "environ"
     env.write_bytes(b"PATH=/bin\0RUNPOD_POD_ID=abc123\0")
