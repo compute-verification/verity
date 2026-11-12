@@ -1319,3 +1319,6 @@ Also for your Thursday screen: #9077 is on `main`, so the screen's tree can be `
   `probe.sh`, `pyproject.toml`, `tensor_util.py`, `tests/test_tensor_util.py`, `zybench.py`. If
   #8671 needs any of them (the suite's `pyproject.toml` above all), say so before you rebuild. lean
   writes its last merge after 16:00Z today (LEAN-249); I name the head at the 15:25Z go or after.
+- **Added 12:07Z: the fix-forward of #9077's eleven retired-term sites is KSTEADY's now, not yours**
+  (the section above this one is withdrawn for you): you are on cards until this evening and it
+  knows `server_rate.py`. Push nothing to those four files today.

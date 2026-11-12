@@ -2106,3 +2106,37 @@ does, and saying what the accept does not show, is what makes it worth more than
 Your `CARDS=7` for launching one card's chain again is the right guard for proofs' run on card 7
 (it took the first window: 15:45Z to 17:15Z; see the lines above). Return when the six have their
 verdicts, or at 15:00Z with where they are.
+
+## Thu 12 Nov 12:07Z: your 11:50Z return is read (all eight accepted, rung on HASH-98); one small job before the go: #9077's eleven retired-term sites
+
+Read: your return and the table; the six Lean runs read as done, rc 0, by me. Rung: benchmarks and
+proofs on HASH-98 with the six accepts. All eight kinds proved and accepted by Lean before a card is
+spent on them: that is the rehearsal I wanted, finished three hours early.
+
+**A small job that is yours because you know the file, due before 16:30Z:** #9077 (the wide-leaf
+option of `server_rate.py`, KMOVE's, on `main` since 11:01Z in `5a6330f1a4`) added 11 uses of retired
+terms to the files it changed; ci's queue says "fix it forward". KMOVE is on a card until this
+evening. Counted by me on `main` `5a6330f1a4` against its base `afa939410f6f` with the lint's own
+`sites(text, path)` (`tests/lint/test_repo_retired_terms.py`):
+
+| file | base | now | the term |
+|---|---|---|---|
+| `benchmarks/one_stage/README.md` | 19 | 20 | `flock-verify` (about line 199) |
+| `benchmarks/one_stage/server_rate.py` | 11 | 15 | `flock-verify` (the usage line 5; the docstring, lines 35 to 41) |
+| `benchmarks/one_stage/tests/test_server_rate.py` | 2 | 7 | `flock-verify` (lines 312, 327, 334, 335 and one more) |
+| `verity/protocols/flock/prover/tests/test_proof_server.py` | 22 | 23 | `draw` (a helper near line 88, or a use of it) |
+
+The lint's words: "'flock-verify' is retired; say `verity verify proof`, `verity verify remote`";
+"'draw' is retired; say the sample, a sampled proof block; to sample".
+
+- **One pull request on today's `main`** that brings the four counts back to the base's (19, 11, 2,
+  22) and changes nothing else: the prose says the Lean verifier without the retired name, the usage
+  line names a placeholder for the binary, the tests hand `--lean` a stand-in path and not the name,
+  the helper is not called `draw`. No behaviour moves: the wide-leaf option, its refusals and every
+  test's meaning stay.
+- **Show it:** the four files' counts by the lint's `sites`, base against head, in the body; the
+  changed suites at the head in one named run on a CPU node.
+- `Lane kernels`, `Refs HASH-119`, `Goal kernels/wide-leaf-measured`; unmarked; I mark after reading.
+- **Tonight's rows are not touched by it:** they ship `62bf29346f76`. Change nothing in your kit.
+
+Return when it is open, or at 16:30Z; the go is still 17:20Z.
