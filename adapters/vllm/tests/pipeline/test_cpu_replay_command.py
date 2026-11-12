@@ -127,10 +127,10 @@ def test_a_failed_replay_ends_on_the_reason_and_returns_false(tmp_path: Path, mo
     assert capsys.readouterr().out.splitlines() == ["[replay] COMMIT FAIL (pair 3): the sampled replay failed; verdict commit_pass False"]
 
 
-def test_a_slim_keep_is_held_to_its_draw_and_written_no_second_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_slim_keep_is_held_to_its_sample_and_written_no_second_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     r = Replay(tmp_path, monkeypatch, kept=True)
     assert CPU.replay(OPTIONS) is True
-    assert r.calls == [*ORDER[:7], "kept_draw", *ORDER[7:11], "record"], "the draw is checked before the replay; no keep is cut from a keep"
+    assert r.calls == [*ORDER[:7], "kept_draw", *ORDER[7:11], "record"], "the sample is checked before the replay; no keep is cut from a keep"
     site, keep = r.seen["kept_draw"][0]
     assert site is r.seen["run"][0][0] and keep == {"picks": []}
 

@@ -51,11 +51,11 @@ class Record:
 
 class Coins:
     def __init__(self) -> None:
-        self.drawn = 0
+        self.flipped = 0
 
     def record(self) -> dict[str, int]:
-        self.drawn += 1
-        return {"coin": self.drawn}
+        self.flipped += 1
+        return {"coin": self.flipped}
 
 
 def windows(tmp_path: Path, com: Committer, record: Record | None = None, steps: int = 2) -> CA.Windows:

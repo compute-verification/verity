@@ -27,7 +27,7 @@ Lines = Callable[[], list[str]]
 FA2, FA3 = "fa2_hidden_m1_stream", "fa3_hidden_m1_stream"
 CLASSES = ("module_outputs", FA2)
 TAP = "/taps/verity_fa2_matReq.so"
-SERVED = object()          # a served source: the committer wraps nothing, so no acquisition plan is drawn
+SERVED = object()          # a served source: the committer wraps nothing, so no acquisition plan is made
 ENGINE = SimpleNamespace(runner="runner")
 PLAN = SimpleNamespace(digest="d" * 16)
 
@@ -206,7 +206,7 @@ def test_the_hidden_source_takes_the_committer_s_own_classes_and_the_namespace_g
     steps, com = Acquisition(monkeypatch, source=UnboundedSource), committer()
     com.hidden_source_cls, com.hidden_source_cls_fa3 = "the native FA2 source", "the native FA3 source"
     attach(com, options(hidden_so=TAP, hidden_ns="ns"), None, tmp_path, cli=True, fa=3)
-    assert steps.named("setting") == [], "no cap was given, so none is set"
+    assert steps.named("setting") == [], "no bound was given, so none is set"
     assert steps.named("hidden") == [("hidden", com, TAP, {"ns": "ns", "flash_attn_version": 3, "fa2_cls": "the native FA2 source",
                                                            "fa3_cls": "the native FA3 source", "manifest": None})]
     assert com.sources[0].telemetry_path == "unset", "with no out dir the telemetry path is left as built"

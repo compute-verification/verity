@@ -1,5 +1,5 @@
 """`replay_bundle.defer` at the C2 site of a deferred run: the slim bundle of a planned replay's reads, a plan that fails, a store
-over the cap and a write that was started beside the checks, with the line each logs.  CPU only; sealing and opening a
+over its bound and a write that was started beside the checks, with the line each logs.  CPU only; sealing and opening a
 bundle are `test_replay_bundle.py`."""
 from __future__ import annotations
 
@@ -87,7 +87,7 @@ def test_a_plan_that_fails_defers_nothing_and_the_replay_runs_in_process(tmp_pat
     assert logged() == ["[delta] REPLAY BUNDLE (pair 1): no plan (RuntimeError('no Programs of record')); the C2 replay runs in this process"]
 
 
-def test_a_store_over_the_cap_defers_nothing_and_the_replay_runs_in_process(tmp_path: Path, logged: Lines) -> None:
+def test_a_store_over_its_bound_defers_nothing_and_the_replay_runs_in_process(tmp_path: Path, logged: Lines) -> None:
     site = Site(tmp_path, replay_deferred="full", replay_bundle_cap_gb=0)
     assert site.defer() is False and site.nothing_deferred()
     assert logged() == [("[delta] REPLAY BUNDLE (pair 1): REFUSED -- 0.0 GB is over the 0 GB cap (--replay-bundle-cap-gb); the C2 replay runs "

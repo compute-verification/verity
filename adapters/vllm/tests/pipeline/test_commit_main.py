@@ -45,7 +45,7 @@ VOCAB = 16
 PROGRAM = hashlib.sha256(b"the stand-in engine's Program").digest()
 PLUGIN = f"plugin:{__name__}:committer"
 PLUGIN_2 = f"plugin:{__name__}:committer_2"
-#: Two requests of unequal caps: three engine steps a run, the last with one request.
+#: Two requests of unequal `max_tokens`: three engine steps a run, the last with one request.
 WORKLOAD: Record = {"schema": "verity-vllm/workload/v2", "model": "org/model", "variants": {}, "engine": {},
                     "requests": [{"request_id": "a", "prompt_token_ids": [5, 6, 7], "max_tokens": 3},
                                  {"request_id": "b", "prompt_token_ids": [9, 2], "max_tokens": 2}]}
@@ -157,7 +157,8 @@ class Model(torch.nn.Module):
 
 class Core:
     """`llm.llm_engine`: a step gives every live request one token, the model's argmax for its last one, and ends a request
-    at its cap.  It has no `engine_core` and no `model_executor`, so `arrivals.ForwardCounter` counts every step a forward."""
+    at its `max_tokens`.  It has no `engine_core` and no `model_executor`, so `arrivals.ForwardCounter` counts every step a
+    forward."""
 
     def __init__(self, model: Model, clock: Clock) -> None:
         self.model, self.clock = model, clock
@@ -178,9 +179,9 @@ class Core:
         self.clock.take(1.0)
         outs = []
         for i, token in zip(ids, scores.argmax(-1).tolist()):
-            _, tokens, cap = self.live[i]
+            _, tokens, most = self.live[i]
             tokens.append(int(token))
-            done = len(tokens) >= cap
+            done = len(tokens) >= most
             outs.append(SimpleNamespace(request_id=i, finished=done,
                                         outputs=[SimpleNamespace(token_ids=list(tokens), finish_reason="length" if done else None)]))
             if done:
