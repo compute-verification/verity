@@ -141,7 +141,8 @@ runs its records run, and, where the check gates, the shard of its check that au
 `--heavy-on`'s machines alone, its other shards on theirs (`Loop._heavy_on`); a records run's resend after a machine's fault
 stays on them, as a check started again does.
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what follows `main` moving
-(`Landing._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.  Outside
+(`Landing._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.  A push that
+took but raised logs no advance done: the drop of a passed candidate as on `main` logs it then (`Loop._reached`).  Outside
 --shadow and --dry-run those steps run detached from the tick, one advance's at a time (`--after-landing`, `Loop._moved`),
 their output in `AFTER_LOG` beside the log; the first tick after they ended logs how, and a failure is printed and run again.
 Regenerate starts the candidate's records run again and logs it.  Commit puts a staged batch whose records run passed onto
@@ -2710,8 +2711,8 @@ class Loop:
             if failed := next((r["error"] for r in recs if r.get("error")), None):
                 self.out(f"research queue vqueue: tick {t.n}: {_name(a)} failed, the tick stops: {failed}")
                 break
-            if isinstance(a, Advance) and not self.shadow:
-                for rec in self._landing(t, recs[0], []):
+            for adv in [r for r in recs if r.get("action") == "advance" and r.get("on_main")]:
+                for rec in self._landing(t, adv, []):
                     self.write(rec)
                     logged.append(rec)
                 steps.lap("on_main")
@@ -2816,7 +2817,7 @@ class Loop:
         if isinstance(a, Advance):
             return [self._advance(c, t)]
         if isinstance(a, Drop):
-            return [self._drop(a, c, t)]
+            return [self._drop(a, c, t), *self._reached(a, c, t)]
         if isinstance(a, Retry):
             return self._retry(c, t)
         if isinstance(a, Rerun):
@@ -3101,6 +3102,18 @@ class Loop:
         return self.record(t, "advance", sha=c.sha, base=c.base, members=c.members, heads=c.heads,
                            why=f"`main` {c.base[:12]} fast-forwarded to it", done=not self.shadow,
                            **({} if self.shadow else {"on_main": True}))
+
+    def _reached(self, a: Drop, c: Candidate, t: Tick) -> list[dict]:
+        """The advance of ``c``, dropped as on `main` with a pass (`vqueue.ON_MAIN`), where no line logs one done and this tick
+        made none: a push of `main` that took but raised (a timeout) logged only its error, so `Past.moved` never ran the
+        steps after its members reached `main`, and no stacked PR's owner was told.  Logged done with `on_main`, as `_advance`
+        logs one, so those steps run as an advance's do (`_landing`, then `Past.moved` until done).  Outside --shadow only."""
+        if (self.shadow or a.why != vqueue.ON_MAIN or a.outcome is None or a.outcome.state != PASS or t.advanced == c.sha
+                or any(r.get("done") for r in t.past.of("advance", c.sha))):
+            return []
+        return [self.record(t, "advance", sha=c.sha, base=c.base, members=c.members, heads=c.heads,
+                            why="`main` holds it and no advance of it is logged done: the push that took it failed after",
+                            done=True, on_main=True, reached=True)]
 
     def _on_main(self, t: Tick, adv: dict, told: list[str]) -> dict:
         """What follows advance ``adv``'s members reaching `main` (`World.on_main`), logged as its own step: one that fails

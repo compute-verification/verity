@@ -2582,6 +2582,37 @@ def test_an_advance_is_logged_once_pushed_and_drive_s_steps_after_it_are_a_step_
     assert loop.tick() == [] and len(calls) == 2
 
 
+def test_a_push_of_main_that_took_but_raised_gets_its_advance_logged_at_its_drop_and_its_steps_run_once(env):
+    """A push of `main` that lands but whose call raises (a timeout) logs only its error: no advance done, so `Past.moved`
+    never lists it, and the next tick only drops the candidate as on `main`, and the owners of PRs stacked on its members were
+    never told.  That drop logs the advance done with its steps after it (`on_main`), which run once, from its base."""
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy)
+    (built,) = loop.tick()
+    keys = env.listed(sha := built["sha"], {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    calls, advance = [], loop.world.advance
+
+    def on_main(sha: str, base: str, members, told: list[str]) -> None:
+        calls.append((sha, base, [m.pr for m in members]))
+
+    def timed_out(sha: str, base: str) -> None:
+        advance(sha, base)
+        raise subprocess.TimeoutExpired(["git", "push"], 120)
+
+    loop.world.on_main, loop.world.advance = on_main, timed_out
+    (failed,) = loop.tick()
+    assert (failed["action"], failed.get("done"), failed.get("on_main"), env.main()) == ("advance", None, None, sha)
+    loop.world.advance = advance
+    drop, reached, steps = loop.tick()
+    assert (drop["action"], drop["why"], drop["outcome"]["state"]) == ("drop", "on main", PASS)
+    assert (reached["action"], reached["done"], reached["on_main"], reached["base"], reached["members"]) == (
+        "advance", True, True, built["base"], [1])
+    assert (steps["action"], steps["done"]) == ("on_main", True)
+    assert calls == [(sha, built["base"], [1])]
+    assert loop.tick() == [] and loop.tick() == [] and len(calls) == 1
+
+
 def test_a_tick_advancing_through_stacked_passed_candidates_pushes_each_with_its_lease_and_runs_its_steps_once(env):
     """Each candidate passed on the one below lands in the tick its base does, in order: a push of `main` leased on its base,
     then drive's steps on its members from that base, then its drop.  A push refused part-way (here a stale lease) stops the
