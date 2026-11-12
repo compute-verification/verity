@@ -17,7 +17,7 @@ does (`approximated`); then the entry's planned run at that slowdown over each f
 `--out` it writes the rows with what each read to `DIR/library.json`.
 
 An entry's program is its job's: a route's step runs under bf16 autocast on a CPU as on a GPU. The row prints the
-dtypes the traced products are priced in. Attention's are priced at the dtype of the call's query, the width the
+dtypes the traced products are priced in. Attention's are priced at the dtype the call computes in, the width the
 card's kernel computes them at: the capture traces a call as torch's math path computes it, in float32 from operands
 it casts up, and those products stand in for the kernel's (`capture.products.priced_dtype`, with the premise).
 
@@ -52,8 +52,8 @@ EMPTY = "the floor: no product of the step has two operands the update reaches, 
 TRAINS = ("trains: the share of the start's parameters the traced step updates. An entry that trains less charges "
           "fewer products, so its slowdown is not its optimizer's.")
 PRICED_IN = ("priced in: the dtypes the step's matrix products are priced in, with each one's share of the products' "
-             "MACs where there is more than one: each product's own as traced, and an attention call's at its "
-             f"query's, on the premise that {products.ATTENTION_PREMISE}.")
+             "MACs where there is more than one: each product's own as traced, and an attention call's at the "
+             f"dtype the call computes in, on the premise that {products.ATTENTION_PREMISE}.")
 PARTS = {
     "traced": "each entry's step, by the capture on fake tensors at the config's batch and the start's shape: its "
               "gates, its tokens, the parameters it updates and its products' MACs, output wires and operand "
@@ -144,7 +144,8 @@ def approximated(graph) -> dict:
 
 def priced_in(trace: dict) -> dict:
     """The dtypes a traced step's matrix products are priced in (`capture.products.priced_dtype`: each product's own
-    as traced, an attention call's at its query's), with its share of the products' MACs, the largest first."""
+    as traced, an attention call's at the dtype the call computes in), with its share of the products' MACs, the
+    largest first."""
     macs: dict = {}
     for r in trace["rows"]:
         d = products.priced_dtype(r, trace.get("capture"))

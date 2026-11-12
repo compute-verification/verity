@@ -130,7 +130,8 @@ def test_a_row_says_what_share_of_the_start_its_step_trains_and_what_the_capture
 
 def test_a_row_prints_the_dtypes_the_steps_products_are_priced_in():
     """The cell is the trace's own: the dtype each product is priced in (its own as traced, an attention call's at
-    its query's), with its share of the products' MACs where the step has more than one, the largest first."""
+    the dtype the call computes in), with its share of the products' MACs where the step has more than one, the
+    largest first."""
     wide = raw("optimizer", [], 1024, 1024, 1024) | {"dtypes": ["float32", "float32"]}
     assert library.priced_in(trace()) == {"bfloat16": 1.0}
     assert library.priced_in(trace([*STEP, wide])) == {"bfloat16": 6 / 7, "float32": 1 / 7}

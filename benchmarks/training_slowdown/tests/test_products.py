@@ -56,10 +56,10 @@ def test_the_capture_and_the_stored_records_capture_are_the_two_that_are_read():
 
 def test_a_product_is_priced_in_its_traced_dtype_and_an_earlier_captures_wider_one_in_bf16():
     """One rule: a product's price is the Definition of the dtype the trace's |C| counts it in: its traced dtype's,
-    and for a product of an attention call the call's query's (`attention`), whatever it was traced in. The rule of
-    the captures before `PRICED_AS_TRACED_FROM` stays for their traces alone: a forward or backward product they
-    traced wider than bf16 (attention's, which every capture traces in float32) is priced in bf16, an optimizer's in
-    its own, and a trace that states no capture is read as theirs."""
+    and for a product of an attention call the dtype the call computes in (`attention`), whatever it was traced in.
+    The rule of the captures before `PRICED_AS_TRACED_FROM` stays for their traces alone: a forward or backward
+    product they traced wider than bf16 (attention's, which every capture traces in float32) is priced in bf16, an
+    optimizer's in its own, and a trace that states no capture is read as theirs."""
     from training_slowdown import gates
 
     def row(phase: str, dtype: str, attention: str | None = None) -> dict:
