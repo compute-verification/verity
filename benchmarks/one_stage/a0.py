@@ -23,7 +23,7 @@ import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from pathlib import Path
 
 from verity.commitments.identity import identity_digest, identity_digest_sha512
@@ -379,7 +379,7 @@ def lean_read_no_proof(v: dict) -> bool:
     return lean_refused(v, NO_SESSION_FILES) and v["why"].startswith(NO_SESSION_FILES)
 
 
-def lean_answered(verifiers: Mapping | None) -> bool:
+def lean_answered(verifiers: dict | None) -> bool:
     """Whether a verdict's or an audit record's `verifiers` holds an answer of the Lean's. In its place the verifier
     writes `{"refused": reason}` for a Lean that refused the input and for one that could not run (`verifier.lean`), and
     fails its check either way."""
