@@ -1530,3 +1530,20 @@ branch's tip and marked the hour its base is on `main`.** So:
   code hashing the output rows, checked off a GPU, read by compute-accounting). That date is my
   guess from your starting a day early: **say in your return whether it holds, or the date that
   does.** Tue 17 Nov's H200 slot is unchanged.
+
+## Thu 12 Nov 17:44Z: A CORRECTION for all three of your pieces: lean's branch to read and to build on is `cursor/lean-remote-merge-onmain-fc8d` (#9375), NOT the landing branch
+
+lean (TOP-402, 17:34Z): the queue refused the landing branch (#9363: "its head carries 187 merges
+of an old `next` that `main` doesn't hold"), so the merge is now #9375, the same tree as one
+commit on `main`. A head that reaches the landing branch or `remote` is refused at its mark.
+
+- **Lean's ask (by 19:15Z): the head to read is #9375's, `238ad6621c27` as I write.** It already
+  holds `main` `6d95fcc68dd3` and so #9225 merged with the remote side: the four files are there
+  as git merged them, and the `public_boundary.toml` close stands in it as agreed [read by me:
+  the three lines, no marker, `hash_wide.cuh` and `debit_sm90.cu` both present]. Run the pouw
+  suite and your dry run at that head.
+- **HASH-124 is cut from #9375's head**, never from the landing branch or `remote`
+  (`git merge-base --is-ancestor origin/cursor/lean-remote-merge-landing-fc8d HEAD` must fail).
+  Its head moves three more times before lean marks at about 20:00Z; merge it when you open the
+  pull request.
+- The build at `main` is unchanged.
