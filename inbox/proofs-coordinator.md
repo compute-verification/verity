@@ -100151,3 +100151,65 @@ Next: the build, on my branch, starting with the Definition and its tests; the f
 - **Two more levers, neither a test change:**
   - Under the profile, one test builds the partition object 30 times, the program's digest 38 times and the program's text for Lean 16 times. [run] Keeping each once is a change in the verifier's Python. [derived]
   - Narrower table rows need the row width as a parameter of the layout, where `boundary_tables.WORDS` is a constant read in four places. [read] It would about halve the read's circuit. [guess] The served width is what the test's docstring says a cheaper test cannot show. [read]
+
+## GATHER, Thu 12 Nov 20:26Z: the small rehearsal of the tree holds to the last withheld accept (`r20261112-193700-5a5c`, exit 0: 20 sessions, every Lean verdict true, round 2 with no code, refused by `two-stage-form` alone, `held` true); vllm's five commits read: its defaults keep the tables, its on-device layout equals the Definition's twin on 112,640 unit outputs, four things I would change and none stops tonight's serve
+
+Mailbox read at 20:25Z (no section newer than 19:47Z); your two messages by the hook, stamped 20:11Z and 20:23Z, are read [run]. Times from `date -u`.
+
+**1. The small rehearsal, V = 2,560.** [run: `r20261112-193700-5a5c`, vy-nebius-cpu-8, tree `08528b27dcc8`, `bash benchmarks/one_stage/two_stage_small.sh` with `SMALL_ARGS="--inline --units 20 --v 2560"`, done exit 0, read 20:19Z; files in `/opt/cursor/artifacts/served-select/5a5c/`, the table by `run-table.py`]
+
+- `expect.txt`: `SMALL {"before_draw": true, "pins": true, "lean_verdicts": true, "negatives": true, "round_two": true, "outcome": true}`; `second rc=0`.
+- First stage: spans 1 and 2 of 6 (`rate:2/6`). Second stage: law `work`, k = 1, 40 strata (20 templates in each of the two sampled spans, 4 units each), 40 units of a population of 160.
+- The 20 sessions, one a template:
+
+| template | k_log | units a block | population | units proved | m | session, s | Lean's verify, s |
+|---|---|---|---|---|---|---|---|
+| each of the 19 `GreedyChunk_v2{N=128,OFF}` | 22 | 4 | 8 | 2 | 25 | 9.3 to 41.5 | 5.4 to 7.8 |
+| `GreedyCombine_v2{V=2560,N=128}` | 24 | 1 | 8 | 2 | 27 | 40.3 | 7.4 |
+
+  [run] k_log is `audit.circuits`, units a block the statement header's `vus_per_block`, population its `instances`. [derived] m is k_log + max(3, ⌈log2(⌈population / units a block⌉)⌉); the run prints no m.
+- Lean's verdicts: `lean-draw` 20 of 20 true, `lean-verify` 20 of 20 true; `m0-verifier` 20 of 20 true. Checks before the sample 22 of 22 true; each session's circuit file its template's (`pins`) 20 of 20; negatives refused 18 of 18.
+- Round 2: `{"ok": true, "codes": [], "detail": {}}`.
+- The stream's outcome: not accepted, its interior record failing `statements` alone with the one code `two-stage-form`; its replay sample's record fails nothing; `held` true, `unlinked` false.
+- One line a reader of `summary.json` will see and should not misread [run; read: `verity/protocols/spot/verifier/one_stage/audit.py:139-146`, `two_stage.py`'s `outcome_of`]: `"record": {"failed": ["registered"]}`. That is the one-stage audit's own record, which wants the sessions' registered reads to be exactly the interior registration's `registered` list (`logits`) and sees 20, the 19 more being the chunks' outputs that the combine's sessions read; none is wrong (`"wrong": []`). The stream's two records, which take a session's read of the registration's own values as such, have no `registered` failure (`"registered": {"interior": null, "replay_sample": null}`), and they are the outcome. `17b9` had the same line. [guess] It will be there in every run of a class with wires inside its interior until the one-stage record learns the same; I have not looked at whose that is.
+- [relayed: `research fetch`, 20:18Z] STOPS' `r20261112-191810-df04` also ended exit 0; STOPS reports it. [derived] So two independent trees have now taken an inlined class of the 20 units to the last withheld accept at V = 2,560. Which ended first I did not read.
+- Not yet: V = 154,880. `86b4` (STOPS') was running at 20:18Z; `c30d` (mine) waiting. The block sizes and units a block at the served vocabulary wait on the first of them; I now know where the second is read (`statements.json`, `header.units.vus_per_block`). Note what this run shows for the sums of my 20:05Z entry: at V = 2,560 a chunk's block holds 4 units, so "one unit a block" at 154,880 is a derivation until a run says it.
+
+**2. The read of vllm's five commits** (`origin/cursor/vllm-select20-5b1e` at `cfd26a2b842f`, on my `08528b27dcc8`; 7 files, +211 −14) [read: `git diff 08528b27dcc8 cfd26a2b842f`, 20:13Z to 20:23Z].
+
+What they do, one line each:
+- `sampler_capture.piece_rows` takes a `template` and lays `GreedySelect_v1{V,N}`'s units out on the logits' device (`_greedy_rows`, about 50 lines), with a test that holds it word for word to `pieces`.
+- `replay.py`: a capture is labelled with the check the served arm committed under (its `meta.json`'s `boundary_rows.check`), else the model's; `--capture-template` still wins.
+- `serve_tax.py`: `ROWS` gains `"ids": true` and GLM-5.3's check is `GreedySelect_v1{V=154880,N=7744}`.
+- `test_two_stage_second.py`: a test that drives the serve's hook (`BoundaryWindows.of`) and the sampler's wrapper over a small greedy engine's steps and holds the committed class to the stand-in's layout (same program, partition digest, ports, provenance), the capture to the driver's `spans_of`, and the design to 20 links, 19 wires and the held return.
+
+**Do its defaults keep the arm's tables? Yes.** [read: `serve_tax.py:216`, `:260`; `tests/test_serve_tax.py:105-110` at `cfd26a2b842f`] The `two-stage` arm's object is still `{**ROWS, "tables": TABLES}`, and the test asserts the plugin's configuration as `{"window_s", "check": "GreedySelect_v1{V=154880,N=7744}", "inline": true, "per_prompt": 0, "per_output": 1, "drained": true, "ids": true, "tables": {"layers": 1, "private": …}}`. So the point of my 20:05Z entry is met by the defaults; it stays true for anyone who passes `BOUNDARY_ROWS` by hand.
+
+**What I checked beyond its tests.** [run: a probe on the VM, 20:23Z, `device-layout-against-twin.py` and `.log`] `_greedy_rows` against `greedy_stages.twin` on rows drawn from 16 chosen words (quiet and signalling NaNs of both signs, ±0, ±inf, the largest and smallest finite, a few ordinary values), with later chunks that have nothing above −inf, at (V, K) = (160, 20), (64, 4), (40, 20): 112,640 unit outputs compared, 0 differ, and every token agrees (the function refuses otherwise). Its logic for chunk 0, a NaN at lane 0 and a chunk with no lane above −inf reads the same as the twin's [read].
+
+**What I would change**, in order of weight:
+
+1. **A test with `ids` beside history tables through the second stage.** [read] The two-stage arm commits both, and no test or run has taken an inlined class with both through `replayed` and round 2: the driver's tests, the stand-in and the new hook test configure no tables. [run: probe, 20:17Z, `tables-beside-ids-probe.log`] With one table layer the layout and the design do derive (19 wires, 20 links, the return held, its value then named `TemplateInlined_v1{…}/o0` and the logits `TemplateInlined_v1{…}/logits`), and #9082's own test covers that name. [guess] So I expect it to pass, and tonight's GPU serve is the first thing that says so. If it does not, the stop is in `two_stage.py` or `interior_links.py`, ours, and I take it.
+2. **`ROWS` is shared.** [read: `serve_tax.py:254`] The `boundary-rows` arm takes `ROWS` too, so for GLM-5.3 that arm now also commits ids, under the greedy select. If a serving cost of that arm is quoted anywhere, it now measures another commitment. Either say so in the body, or put `"ids": true` in the two-stage arm's object only.
+3. **The second way a capture is written.** [read: `benchmarks/serve_tax/rebuild.py:1639-1641`] `rebuild.py --capture TEMPLATE` takes its template by hand, and its help still gives `TokenSelect_v4{V=154880}` as the example. The replay now takes the serve's check by default; the rebuild does not. A question for vllm: which of the two writes Friday's capture? If the rebuild, it should take the serve's check the same way, or the dry line must name the template.
+4. **The refusal's text.** [read: `_greedy_rows`] Where the units select other ids than the sampler's it raises with the first eight ids of each in the message. `interior_rows.pieces` names how many differ and no id, because a refusal's text is kept in a run's log and ids are a request's values. The line copies `TokenSelect_v4`'s, which has the same; I would change both to a count. Nothing on Friday's path calls `piece_rows`, so this can follow.
+5. **The test you agreed with vllm.** [read] I find the test of the defaults (`test_serve_tax.py`) and of the replay's default (`test_replay.py`), not one that says a `BOUNDARY_ROWS` with the three settings gives the same configuration as the defaults. It is three lines in `test_serve_tax.py`.
+
+Nothing in the five changes a file of our pieces or of the driver. [run: `git merge-tree f461ac0edeb2 cfd26a2b842f`, 20:18Z] Merged into the tree at `f461ac0edeb2` it stops in two places, both where the tree's newer `main` and #9082 added lines at the same spot: `benchmarks/serve_tax/replay.py` (the tree's `--private` argument beside its `--capture-template` help) and `benchmarks/serve_tax/tests/test_replay.py` (a test each). Both are resolved by keeping both sides; I make that merge when `r20261112-195705-2196` exits 0, at the head the branch then has, and rehearse it. [run: `research fetch`, 20:22Z] `2196` is on vy-nebius-cpu-9, waiting.
+
+**3. The runs, moved to our own pool as you said.**
+
+| run | what | tree | machine, pool | state [run: `research fetch`] |
+|---|---|---|---|---|
+| `r20261112-193700-5a5c` | V = 2,560 | `08528b27dcc8` | cpu-8, research | done exit 0 (item 1) |
+| `r20261112-193819-8a02` | the suite of `benchmarks/one_stage`, `-k two_stage`, uncached | `08528b27dcc8` | cpu-5, research | done exit 0, read 20:13Z |
+| `r20261112-193739-c30d` | V = 154,880, 2 outputs | `08528b27dcc8` | cpu-7, research | waiting at 20:24Z, 47 minutes |
+| `r20261112-201344-2e7a` | V = 2,560, after the merge of `main` | `f461ac0edeb2` | cpu-12, proofs | waiting at 20:18Z |
+| `r20261112-201421-4978` | V = 154,880, 256 outputs, 4 spans: 512 sampled tokens | `f461ac0edeb2` | cpu-8, proofs, 128 GB, 4 h at most | waiting at 20:18Z |
+
+- [run: `research cancel`, 20:15Z] I cancelled two of mine that waited in the research line with no slot, each replaced by the same command in our pool at the newer head: `r20261112-201105-2608` (by `2e7a`) and `r20261112-200647-be5a` (by `4978`). Neither had started.
+- [run] One launch of mine printed no run id: `research run --on vy-nebius-cpu-12 --pool proofs` with `--cpus` and `--max-min`, which that pool says mean nothing without `--queue`; I repeated it with `--timeout` (`2e7a`). [guess] It launched nothing; if you see an unnamed run of mine on cpu-12, that is it.
+
+- **vy-nebius-cpu-13 has no room now.** [run: `research run --on vy-nebius-cpu-13 … --mem-gb 96`, 20:25Z] I tried to move `c30d` there as your 20:23Z message says (it has waited more than 20 minutes): refused, `MemoryNotAvailable`, 10.6 GB free of 754.7, 727.4 GB held by 5 live reservations. So `c30d` stays in its line; I try cpu-13 again at my next look and move `2e7a` and `4978` there too if they have then waited 20 minutes. The script's header asks `--cwd clone` (it builds in the tree), so that is what I send, with `--source`.
+
+**Next.** I end my turn on `c30d`, `2e7a`, `4978` (mine), `86b4` (STOPS') and `2196` (vllm's). On each end, an entry; on `2196`'s exit 0, the merge of vllm's branch, its probe, its local tests and a small rehearsal in our pool. Friday's head and what was rehearsed at it by Fri 11:00Z.
