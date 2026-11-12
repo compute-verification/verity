@@ -38,6 +38,7 @@ steps, every leg in one shape, the Lean verdict with the JointPooledLive error s
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
   core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointPooledLive's union bound over them at this
   block's errors (``error_sum`` × blocks), and the per-block error each δ of `DELTAS` needs over the period (δ / blocks).
+  Each reads with the block's ``joint_horizon.named_terms`` beside it, once a block.
 
 `check` recomputes every derived field from the legs and the answer. `from_period` builds a record from a runner report,
 the Lean answer and extra legs.
@@ -64,6 +65,8 @@ RUNNER_KEYS = {"integrity": "integrity", "pouw": "work", "pous": "space", "bandw
 PRODUCTS = {"onsite": LEGS, "remote": ("integrity", "pouw")}
 #: the subprotocols whose error leaves terms out: each one's row names them (``answer.profile.named_terms``), or is refused
 NAMES_TERMS = ("bandwidth",)
+#: what puts a refused one right: its piece's answer names the terms
+NAMES_TERMS_FIX = "its piece writes them in its answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)"
 #: what a named term says: its claim, how it is written, that it has no number and is in no total, and why
 NAMED_TERM = ("claim", "term", "value", "in_total", "status")
 #: the protocol each product's Lean check (`onsite check`, `remote check`) names in its answer, and `Core.Verdict`'s names
@@ -189,7 +192,7 @@ def leg(name: str, row: Mapping[str, Any], *, server: str, runs: Sequence[str], 
     if placement is not None:
         answer["profile"] = {"placement": placement}
     if named is None and name in NAMES_TERMS:
-        raise ValueError(f"{name}: its answer's profile names no term its error leaves out (named_terms)")
+        raise ValueError(f"{name}: its answer's profile names no term its error leaves out; {NAMES_TERMS_FIX}")
     if named is not None and (why := named_terms_bad(named)):
         raise ValueError(f"{name}: its answer's profile's named_terms: {why}")
     return {"protocol": a["protocol"], "owner": row.get("owner"), "server": server, "source": source,
@@ -247,7 +250,9 @@ def dropped_ran(legs: Mapping[str, Any], product: str) -> list[str]:
 
 
 def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dict[str, Any]:
-    """The monitoring period over all compute (module docstring), a block being one of a machine's ``window_s`` windows."""
+    """The monitoring period over all compute (module docstring), a block being one of a machine's ``window_s`` windows.
+    Each period's sum is ``error_sum`` over its blocks and leaves out what ``error_sum`` does: it reads with the block's
+    ``joint_horizon.named_terms`` beside it, once a block."""
     periods = {}
     for name, seconds in PERIODS:
         per_machine = seconds // int(deployment["window_s"])
@@ -312,7 +317,7 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
             bad[key] = "its certificates at the deltas are not its quantity's at its error"
         if "named_terms" not in lg:
             if name in NAMES_TERMS:
-                bad[key] = "it names no term its error leaves out (named_terms)"
+                bad[key] = f"it names no term its error leaves out; {NAMES_TERMS_FIX}, and the record is built from that"
         elif why := named_terms_bad(lg["named_terms"]):
             bad[key] = f"its named_terms: {why}"
     product = record["composed"].get("product", "onsite")

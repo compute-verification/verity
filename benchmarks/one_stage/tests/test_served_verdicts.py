@@ -679,7 +679,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         report = json.loads((tmp_path / "record" / "verdicts.json").read_text())
         row = next(r for k, r in report["protocols"].items() if S.NAMES[k] == name)
         why = {"malformed": "KeyError", "unnamed": "ValueError: bandwidth: its answer's profile names no term its error "
-                                                   "leaves out (named_terms)"}
+                                                   "leaves out; its piece writes them in its answer's profile as named_terms"}
         assert case == "reject" or row["reason"].startswith(f"its answer is not the block record's {leg} leg: {why[case]}")
         return
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())

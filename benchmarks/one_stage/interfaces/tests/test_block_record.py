@@ -7,6 +7,7 @@ from __future__ import annotations
 import copy
 import functools
 import json
+import re
 from fractions import Fraction
 from pathlib import Path
 
@@ -278,7 +279,8 @@ def test_bandwidth_names_the_term_its_error_leaves_out_beside_it_and_beside_the_
     terms out, and an error reads with them in the ledger's own words (`ledger.DELTA_FORM`). The terms move no number: an
     entry with them is the entry without them and the terms, and the fixtures' sums are the ones the tests above hold.
     A bandwidth row that names none is refused, and so is a record whose bandwidth entry or whose sum doesn't carry them,
-    by `check` and by the schema; a term with a value, in a total or of another shape is no named term."""
+    by `check` and by the schema, the refusal saying what puts it right; a term with a value, in a total or of another
+    shape is no named term."""
     report, wipe = _accepting_report()
     rows = report["protocols"]
     row, other = rows[R.RUNNER_KEYS["bandwidth"]], rows[R.RUNNER_KEYS["pous"]]
@@ -307,7 +309,8 @@ def test_bandwidth_names_the_term_its_error_leaves_out_beside_it_and_beside_the_
     assert "named_terms" not in plain
     assert entry("pous", named(other, ledger.NAMED_TERMS)) == plain | {"named_terms": ledger.NAMED_TERMS}
     silent = {**row, "answer": {**row["answer"], "profile": {}}}
-    with pytest.raises(ValueError, match=r"bandwidth: its answer's profile names no term its error leaves out \(named_terms\)"):
+    fix = "its piece writes them in its answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)"
+    with pytest.raises(ValueError, match=re.escape(f"bandwidth: its answer's profile names no term its error leaves out; {fix}")):
         entry("bandwidth", silent)
     with pytest.raises(ValueError, match="bandwidth: its answer's profile names no term"):
         R.from_period({**report, "protocols": {**rows, R.RUNNER_KEYS["bandwidth"]: silent}}, steps=(4, 6), deployment=R.REFERENCE)
@@ -334,7 +337,8 @@ def test_bandwidth_names_the_term_its_error_leaves_out_beside_it_and_beside_the_
         mine = with_bandwidth(entries["bandwidth"] | {"named_terms": terms})
         assert f"its named_terms: {why}" in R.check(mine).values() and not validator.is_valid(mine)
     mine = with_bandwidth({k: v for k, v in entries["bandwidth"].items() if k != "named_terms"})
-    assert "it names no term its error leaves out (named_terms)" in R.check(mine).values() and not validator.is_valid(mine)
+    assert f"it names no term its error leaves out; {fix}, and the record is built from that" in R.check(mine).values()
+    assert not validator.is_valid(mine)
     for forged in ({}, {"bandwidth": ledger.NAMED_TERMS, "pous": ledger.NAMED_TERMS}):
         mine = copy.deepcopy(rec)
         mine["composed"]["joint_horizon"]["named_terms"] = forged
