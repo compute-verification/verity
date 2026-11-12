@@ -23,8 +23,9 @@ registered branch (`CheckedRun.addressHolds_reads`), so the registered branch is
 * **The row round 2 holds a slot to** (`placedRow`, `ReadFact`). At a port a link or a wire names, and at a template's
   own port of the interior record, `second-read` holds each slot's read to one row (`SecondStage.readOk`). At a port
   reading a value a registration registers (`ReadKind.registered`) it holds the read only to the value's root, domain
-  and leaves, and `second-values` holds its rows to the reference statement's slot by slot; nothing holds them to a
-  row fixed for the unit across runs, so `FallbackRows` is a hypothesis.
+  and leaves, and `second-values` holds its rows to the reference statement's slot by slot, the same in every run
+  (`FallbackFact`). Nothing holds the reference's rows to repeat from cell to cell, so that a slot fixed for the unit
+  reads them: `RefRows`, a property of the auditor's copies alone, is a hypothesis.
 * **The header's position is the read's** (`PositionFact`): at any slot map that labels the session's instances
   (`LabelledAt σ`), the position the header gives instance `n`'s row is the registered read's at label `σ n`
   (`rows_open`). The slot map is a parameter: `drawSlot` at a staging of every slot of the part, another at a staging
@@ -37,8 +38,9 @@ registered branch (`CheckedRun.addressHolds_reads`), so the registered branch is
 * `RowFact`: the four together, in the shape `CheckedRun.ReadsRegistered` asks: the unit's instance is counted, and
   where the address's slot has the read's shape its leaf is the header's position.
 
-The read's kind is the run's (`kindAt`: it reads the interior record's names), as the entry the address reads a value
-off is (`readKeyAt`). That it is the same at every accepted run is the entry fact's, not this file's.
+The read's kind is the run's (`kindAt`: it reads the interior record's names); at an accepted run it is the auditor's
+(`KindFact`, `kindHeld`), since the run's records name their registrations' names (`recordsOk`). The entry the address
+reads a value off (`readKeyAt`) is the entry fact's, not this file's.
 -/
 
 @[expose] public section
@@ -215,16 +217,52 @@ def rowShape (R : ℕ → String → ℕ → ℕ) (u : ℕ) (port : String) (k :
   | .ownPort => ⟨j, h.reg.ns.getD t 0, 0⟩
   | .registered => ⟨R t port j, 0, 0⟩
 
-/-- **A read of a registered value reads a row fixed for the unit** (the row fact's one premise round 2 doesn't give):
-at an accepted run's checked unit, each registered read of its session that reads a value a registration registers
-(`ReadKind.registered`) reads at the instance's label the row `R t port j` of the unit's template `t`, the port and the
-unit's place `j` in its cell, `R` fixed before the run. `second-values` holds those rows to the reference statement's
-slot by slot, so they may differ from cell to cell and from run to run. -/
+/-- **A read of a registered value reads a row fixed for the unit**: at an accepted run's checked unit, each registered
+read of its session that reads a value a registration registers (`ReadKind.registered`) reads at the instance's label
+the row `R t port j` of the unit's template `t`, the port and the unit's place `j` in its cell, `R` fixed before the
+run. It follows from the reference reads' rows (`RefRows`, `FallbackFact`). -/
 def FallbackRows (R : ℕ → String → ℕ → ℕ) : Prop :=
   ∀ r : CheckedRun h.stage, r.Ok h → ∀ q reg, regNamed r.ins r.sts q = some reg →
     kindAt h r.x r.m₁ r.c₀ r.c₁ (templateOf h.ms r.u) reg.name reg.value = .registered →
       ∀ idx, _root_.Flock.Registered.unitIndices r.sts[0]!.pub = .ok idx →
         reg.readAt (idx.getD (r.n h) 0) = some (some (R (templateOf h.ms r.u) reg.name (cellPos h r.u)))
+
+/-- **The kind of template `t`'s read of value `v` at port `port`, by the auditor's copies**: `kindOf` with the interior
+record's ports and registered values read off the names its registration must name (`Held.interiorNames`). -/
+def kindHeld (t : ℕ) (port v : String) : ReadKind :=
+  let own := heldOwn h
+  let name := h.names.getD t ""
+  match Spot.SecondStage.linkOf own name port, Spot.SecondStage.wireOf own name port with
+  | some _, _ => if h.interiorNames.values.contains v then .innerLink else .boundaryLink
+  | none, some _ => .wired
+  | none, none => if h.interiorNames.ports.contains v then .ownPort else .registered
+
+/-- **The read's kind is the auditor's**: at an accepted run, round 2 tells each read's kind as the auditor's copies do,
+since the run's records name their registrations' names (`recordsOk`). -/
+def KindFact : Prop :=
+  ∀ r : CheckedRun h.stage, r.Ok h → ∀ t port v, kindAt h r.x r.m₁ r.c₀ r.c₁ t port v = kindHeld h t port v
+
+/-- **Template `t`'s reference entry for port `port`**: the registered reads `second-values` holds each statement's to
+(`Held.refReads`, `SecondStage.valuesOk`). -/
+def refEntry (t : ℕ) (port : String) : Json := Spot.getD (Spot.getD (h.refReads t) "ports") port
+
+/-- **The reference rows of a registered value are fixed for each place in a cell** (the row fact's one premise round
+2 doesn't give, a property of the auditor's copies alone): at template `t`'s port `port` reading a value a registration
+registers (`kindHeld`), in any replay sample, the reference entry reads at each slot `u` of the template's part the row
+`R t port j` at the slot's place `j` in its cell. `second-values` holds a run's rows there to the reference entry's
+(`blankReads` keeps a `registered` port's `reads` and `reads_from`), the same in every run; no check holds the
+reference entry's rows to repeat from cell to cell, which a positional table's don't. -/
+def RefRows (R : ℕ → String → ℕ → ℕ) : Prop :=
+  ∀ t < h.ms.length, ∀ port v, Spot.getD (refEntry h t port) "value" = .str v → kindHeld h t port v = .registered →
+    ∀ c u, (partAt h (h.reg.sample c).size t).lo ≤ u →
+      u < (partAt h (h.reg.sample c).size t).lo + (h.reg.sample c).size * (partAt h (h.reg.sample c).size t).n →
+        readsAt (refEntry h t port) u =
+          some (R t port ((u - (partAt h (h.reg.sample c).size t).lo) % (partAt h (h.reg.sample c).size t).n))
+
+/-- **The reference rows give a run's**: with no proof block always checked, `RefRows` gives `FallbackRows`
+(`second-values`, `ParsedFact`, `KindFact`, `InstanceFact`). -/
+def FallbackFact (R : ℕ → String → ℕ → ℕ) : Prop :=
+  (∀ v, h.reg.always v = false) → RefRows h R → FallbackRows h R
 
 /-- **The slot's leaf is round 2's row** at the unit's slot: at an accepted run's checked unit with no proof block
 always checked, for each registered read `reg` of its session of a kind other than `registered`, round 2 holds the
@@ -245,12 +283,13 @@ def LeafFact (R : ℕ → String → ℕ → ℕ) : Prop :=
 /-! ## The row fact -/
 
 /-- **The row fact**, in the shape `CheckedRun.ReadsRegistered` asks: with no proof block always checked and the
-registered values' rows fixed for each unit (`FallbackRows`), at every accepted run's checked unit, the unit's instance
+reference rows of registered values fixed for each place in a cell (`RefRows`), at every accepted run's checked unit,
+the unit's instance
 is one of its session's (`Counted`), and for each address whose port reads registered read `reg` under the roots round 2
 reads its value under (`readRoots`), at a slot of the read's shape (`rowShape`), the slot's leaf at an entry of the
 read's leaf count is the position the session header gives the instance's row. -/
 def RowFact (R : ℕ → String → ℕ → ℕ) : Prop :=
-  (∀ v, h.reg.always v = false) → FallbackRows h R → ∀ r : CheckedRun h.stage, r.Ok h →
+  (∀ v, h.reg.always v = false) → RefRows h R → ∀ r : CheckedRun h.stage, r.Ok h →
     r.Counted h ∧ ∀ (S : Address) (g : ℕ) reg, regNamed r.ins r.sts (S.port r.u) = some reg →
       r.roots h g = readRoots h r.x r.m₁ r.c₀ r.c₁ r.ρ (templateOf h.ms r.u) reg.name reg.value →
       (rowShape h R r.u reg.name (kindAt h r.x r.m₁ r.c₀ r.c₁ (templateOf h.ms r.u) reg.name reg.value)).Fits S.slot →
