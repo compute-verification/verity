@@ -421,8 +421,6 @@ def main() -> None:
 
     from verity_vllm.engine import engine_profile as prof
     prof.apply_env()
-    from vllm import LLM
-
     from verity_vllm import protocols as PO
     from verity_vllm.engine import served as SV
     from verity_vllm.engine import vllm_adapter as va
@@ -431,6 +429,7 @@ def main() -> None:
     from verity_vllm.pipeline.tp import target as TT
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.pipeline.tp.rank_worker import EXTENSION
+    from vllm import LLM
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
