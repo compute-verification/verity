@@ -90496,3 +90496,181 @@ These decide when step 2 can be marked, not whether the key stands. My 13:17Z en
 - L's `served_table.py` beyond its one changed hunk (the `DEVELOPMENT` hook), and `test_onsite_served.py`.
 
 For the table: LEAN-238 step 2's key, read done, no code and no run. "No day" stands, no exemption: onsite's Lean cases are refused before the day, the certifier scan's tied audit does not go through the component, the benchmarks' stand-ins never reach it. Same pull request: `CoreRemote.lean`'s two accept guards, the difftest's generators and reference, `served_cases.py`'s tie. The mark waits on a writer that carries the day (ours) and on the per-member form, since the day's own window has no v2 case.
+
+## KEPT, Thu 12 Nov 14:01Z: the measurement is in: the read's peak is the list of characters (32 bytes a character, which with the file, the text and a 4-byte array gives the served program's 102.9 GB to 0.2%), and one canonical form with its hash is 96.6% of the description phase; the finding note is synced; Friday's kept proofs can be checked as members of a kept process, a proof of the same statement is in the store today, and six things are missing
+
+Answers your 13:22Z section. Nothing is pushed to any branch; nothing marked or posted; no run is out. Tags: [run] a
+command I ran and read, [read], [relayed], [derived], [guess]. GB is 10^6 kB.
+
+**1. The measurement (`r20261112-133207-a025`, exit 0, vy-nebius-cpu-6, 13:35Z to 13:43Z)**
+
+- **The note:** `note:proofs/20261112T1348Z-finding-kept-program-read-where-it-goes` (synced, `faf687c2c3`): the run's
+  table, what it settles, and both sizings (the read; one kept process on many cores) as revised by it, with "none is
+  ordered" and when they come back, in your words of 13:22Z.
+- **What ran** [run]: the scratch reader on the 141.2 MB program at #9190's head, the digest's steps one at a time
+  with the resident memory after each and a sampler ten times a second; two reads under each allocator setting, each
+  also through the kept structure whole. Node load 22 to 39 for six processes, 55 for the last two.
+- **The list of characters is the peak** [run]. Making it (`String.toList`) takes the process to 5,217 MiB, 38.7 bytes
+  for every byte of the file, before the parse starts; nothing later goes higher in any of the eight processes.
+- **A list cell costs 32 bytes resident, not 24** [derived from the run: 4,329 MiB for 141.2 M characters]. So the
+  served program's text is 86.4 GB as a list. **My 13:15Z figure of 64.8 GB was low.**
+- **The parts give the served program's peak** [derived]: the file, its text, an array of 4 bytes a character that is
+  gone when the list is complete, and the list at 32: 38 bytes a byte. At 2,765,984,170 bytes that is 100,319 MiB,
+  102.7 GB, against `e495`'s 102.9 GB under the default, which its phase lines put inside the digest phase [run: read
+  again on the node]. Under the setting later steps go 3.7 to 5.5 GB higher; why is not established.
+- **The list is released as it is read** [run]: under the default the resident memory falls from 4,544 to 3,096 MiB
+  over the parse; under the setting the JSON fits in what the list frees.
+- **One canonical form with its SHA-512 is 96.6 to 96.7% of the description phase** [run: 4.06, 4.36, 4.42 s against
+  4.21, 4.51, 4.57 s in three processes; the one at load 55 reads 5.55 against 4.53 s]. So at the served program one
+  is 81 to 88 s and making it once of three saves 163 to 176 s [derived]: the read would be about 427 and 441 s on
+  `e495`'s two samples. My 13:15Z guess of 420 to 520 s stands.
+- **The digest's 229 to 235 s at the served program, by the small program's shares** [derived]: the text 5 s, the list
+  42 to 45 s, the parse 91 to 96 s, the canonical form with its hash 81 to 88 s.
+- **Without the list** [guess]: the peak would be about 55 to 57 GB under the default (the 46.3 GB resident after the
+  description plus the decoded program as it is built). **My 13:15Z guess of 45 to 50 GB was low.**
+- **Not shown by it:** why the parts sum to 7 to 13% less than the whole digest phase in the same run; anything with
+  a second thread; anything at the served program beyond scaling by the files' ratio.
+
+**2. Friday's kept proofs as members of a kept process (read only: I ran two record fetches, one `ssh` read of
+`e495`'s log, and `git merge-tree`; nothing built, nothing launched)**
+
+**2a. What the job leaves, and where**
+
+- **The proofs** [read: kernels' `friday-plan.md` and `launch-lean.sh` in their notes; HASH-112's comments]. Each run
+  keeps two sessions: the first timed session of its first own step and of its first kernel step (`p4-own1`, `p4-walk1`
+  on card 6; `p2-own1`, `p2-walk1` on card 2, keyed). They sit in the run's record at
+  `out/rate/NAME-TAG/kept-session` (both repetitions' proof files, `session.json`, `verifier.json`; about 3 MB).
+  The plan says four in the line that records your approval to put them (two a card) and six in another (two a run).
+- **As store entries:** only after kernels run `PUT=1 bash launch-lean.sh RUN`, once a run after it ends. It puts each
+  as an art of kind `flock-proof/v1` (the session under `proof/session`, `pub.bin`, `pin.txt`, `stage.json`, the
+  step's row) and writes the art and the Lean run to `lean-runs.tsv` in their notes.
+- **Today's card run** (15:45Z to 17:15Z) keeps one proof the same way, of a look step with the switch on.
+- **The public files** [run: the records of `r20261112-033326-ef6c` and `r20261112-053815-a07c`, fetched]:
+  - the circuit file, 12,191,652,715 bytes, SHA-512 `4b31e7caba011398…`, at `out/row1/circuit.txt` of
+    `art:860142a5a87de2cbc17b60c00781de6f4648ef78f0d85530010965400cfd0430`;
+  - the public file `pub.bin`, 335,406 bytes, in each proof's tree;
+  - the word Program, 216,458 bytes, digest `6d62c27f14e482d2…`, at `out/head/program-word.json` of
+    `art:84d25bec6b8619a5e9ef4e2dcdbe015c14d5c61879537966fd98f6c33e37154a`;
+  - no registered reads file, no lookup tables, no partition file.
+- **A proof of this statement is in the store now** [run]: KSTEADY's,
+  `art:75593450aae30f7caf09fc82bda7f83157ecea32e9f7da2afa968a7b3f965b0a`, which `main`'s Lean verifier accepted in
+  kernels' trial `a07c` and benchmarks' `ef6c`.
+
+**2b. What these members are, which decides what the measurement can say**
+
+- **The statement** [run: the two records]: `SparseMlaHeadBlock_v2` at `NVIS=64, FIRST=false`, blocks of 2^27, all
+  256 sampled; proof 2 × 1,204,162 bytes. The circuit binds the provisional unit cover
+  (`flock-circuit/unit-cover/v0`) and a `program_sha512` that is no program file's digest.
+- **It is not a member of the served window.** The served partition file names eleven templates, the head block at
+  `FIRST=true` among them and this one not [read: `glm53_sparse_mla_tp8_step16.json`; run: `e495`'s summary]. The
+  proofs are of a staged statement, not from the served engine.
+- **Under the provisional cover the verifier accepts any Program that parses and names no registered input, and reads
+  nothing else of it** [relayed: `note:20261112T0242Z-finding-provisional-cover-program-not-held`, its runs].
+- **So such a member reads the kept program's digest and description and never its decoded program** [read:
+  `FlockVerify.lean:1066-1076, 1095`; `Flock/ProgramRead.lean:329-362, 510-545`]. Two consequences:
+  - The three readings share one reading of the bytes as JSON, released when the third is made [read:
+    `Flock/ProgramRead.lean:106-111`]. With only these members the process keeps the JSON: 46.3 GB resident after
+    the description under the default, not the 11.7 GB a served window's member leaves [run: `e495`'s phase lines].
+  - The checks that read the kept program for a member (its units from the description under a template query, the
+    Linking check and the registered reads' cover on the decoded program) are not run. Their seconds at a served
+    statement stay unmeasured after Friday. They need a proof under a template query whose program is the served one,
+    which this job does not make.
+- **What it does measure:** the session's check and the circuit file's read at the served block's size, in a process
+  that holds the served program. That is the term the planner takes from stand-ins.
+
+**2c. The command**
+
+- **The tree** [run: `git merge-tree`, text only, nothing built]: `main` `3d8530f526` with #9253's head `cf5587e216`
+  merges clean (tree `c23bb39344`); with #9209's head `4c8742d0d4` on top, clean (`951192e362`); with #9234's head
+  `95fe2956f9` on top, clean (`5863e5c1c2`). Until each is on `main` the job runs from such a merge, pushed nowhere,
+  and its figures are "on a branch, not on `main`". #9209 has no flag: a verifier built from a tree that holds it runs
+  the fold.
+- **The process**, with no `MIMALLOC_` variable in its environment (the allocator's default):
+
+~~~text
+flock-verify archive-put A circuit.txt pub.bin PROGRAM          # prints each file's key, its SHA-512
+flock-verify verify-members --archive A --program PROGRAM_KEY < members.txt
+# members.txt, a line a member; the same line again is another member:
+["--statement","verity/flock-circuit","--archive","A","--circuit","CIRCUIT_KEY","--public","PUB_KEY","--program","PROGRAM_KEY","--zk","--session","OWN/proof/session"]
+["--statement","verity/flock-circuit","--archive","A","--circuit","CIRCUIT_KEY","--public","PUB_KEY","--program","PROGRAM_KEY","--zk","--session","KERNEL/proof/session"]
+~~~
+
+- **Members:** own, kernel, own, kernel. The first pays the circuit file's read and whatever of the kept program it
+  asks for; the other three have both kept, so their lines are a member's own.
+- **Two processes, because of 2b:**
+  - **PROGRAM = the word Program**, benchmarks' call unchanged: a member's own seconds and memory with nothing else
+    held.
+  - **PROGRAM = the served program** (2.77 GB), each member handing those bytes: the same members beside 46.3 GB of
+    the served program. Accepted only if the served program names no registered input (not established: 2f), and
+    after #9234 its verdict carries `program_handed_sha512` and a note, not `program_sha512`. Each member also reads
+    its own 2.77 GB `--program` file again, hashes it and compares it with the kept bytes in full [read:
+    `FlockVerify.lean:297-301, 978`]; that cost is a served member's too.
+  - A member handing the word Program to a process kept on the served program makes nothing of the kept program
+    [read: the readings are made when first asked for], so it would measure the first case again.
+- **The two bracket the served case** [derived]: a served window's member runs beside 11.7 GB, between nothing and
+  46.3 GB. If a later member's seconds agree in both, the kept program's presence does not move them.
+
+**2d. What it prints**
+
+- **Seconds** [read: `FlockVerify.lean:1099, 1117, 1190`; `flock_members.py`]: on standard error, for each member,
+  `verify`'s stage lines: `inputs: N ms` (the files), `setup (drawn): N ms`, and `DIR: N ms` for each session, its
+  setup inside it. The first member pays the kept program's readings inside those lines. A driver that writes a
+  member's line when the `MEMBER` line before it arrives also has each member's wall. A member's own seconds apart
+  from every read are those of the second and later members.
+- **Memory:** the process's resident memory when each `MEMBER` line arrives (`flock_members.py` records it as
+  `rss_kb`) is what is held between members. A member's own peak is not printed, and the process's peak is the
+  read's. It needs the sampler `a025` used (the greatest sample between two `MEMBER` lines) [run: it worked there];
+  the member's own is that less what was resident before its line was written.
+- **For comparison, `verify` alone on this statement, `main`'s verifier, the default** [run: the two records]: 316 to
+  376 s a process on loaded nodes: the files 84 to 89 s, the session 231 to 287 s (its setup's 2.3 to 2.4 s inside
+  it); peak 40.9 GiB.
+  With the fold, the session's own line is 39 s under the setting and 45 s under the default on one idle core
+  [relayed: #9209's body].
+
+**2e. The node and the memory**
+
+- **A CPU node; no card.** `--mem-gb 128` for the process on the served program [derived and guess]: the read peaks
+  at 102.9 GB; after it about 46 GB of program and a member of at most 44 GB (its peak alone), so about 93 GB, under
+  the read's peak. `--mem-gb 64` for the process on the word Program. Kernels' Lean runs use 48 on vy-nebius-cpu-12.
+- **Scratch:** about 30 GB (the circuit file fetched and again in the archive, the program twice).
+- **Time** [derived and guess]: a build of the verifier; `archive-put` 37 s; on the served program about 320 s of
+  readings, then 85 to 89 s for the circuit file, then four sessions of 39 to 45 s with the fold (231 to 287 s
+  without). Under 25 minutes a process with the fold, under 40 without.
+- **A loaded node moves these figures by a tenth and more** [run: today's]. `flock_members.py --core` pins one core;
+  a scratch driver should do the same and record the load.
+
+**2f. What is missing for it to run the hour the proofs exist**
+
+1. **The served program as a file in the store.** `d29f` and `e495` each built it (48 minutes, 151 GB peak) and
+   removed it [run: `e495`'s summary]. Without it the job needs `--mem-gb 160` and an hour before its first member.
+2. **Whether the served program names a registered input** (`RegisteredInput<w>_v1` among its 35 callees). If it
+   does, `verify` refuses every such member without `--registered` [read: `Flock/ProgramRead.lean:510-524`] and the
+   second process cannot be run with these proofs. One search of the file settles it.
+3. **The verifier.** `verify-members` is not on `main` (#9190 marked, in the queue); the kept circuit file is #9253,
+   unmarked; the fold is #9209, open. The scratch merge above stands in.
+4. **A driver.** `flock_members.py` is on #9253's branch, takes the kept program from the first member's call, has
+   no member's own peak, runs every process under the setting unless the job sets a value [read: `verifier_env`], and
+   its "alone" way would start a process a member, each paying the served read. My branches are held, so a scratch
+   job as `a025`'s was: about 80 lines, the sampler reused.
+5. **The proofs' art ids.** They exist only after kernels' `PUT=1` step, and I read them in kernels' notes after a
+   sync. A line from kernels on HASH-112 with the two ids a run would save the wait; I hold no handle there.
+6. **The default's own value.** I use "no `MIMALLOC_` variable set", as benchmarks' runner does [read:
+   `lean_verify.py` starts the verifier in its parent's environment]. The value mimalloc then takes I have not read.
+
+**2g. An offer, yours to say**
+
+- Items 1, 2 and 4 and the whole measurement can be run today on KSTEADY's proof, which is this statement: one run
+  that builds the served program, searches it for a registered input and puts it in the store (about an hour,
+  `--mem-gb 160`), then one run of the two processes from the scratch merge. Friday then changes only the proofs' art
+  ids. The verifier's seconds should not depend on which prover made a proof of the same statement [guess]; card 2's
+  keyed proofs are the case I would not assume.
+- I launch neither without your word: you said read only.
+
+**3. What I need from you, and what is not established**
+
+- **Your word on 2g**, and whether the served program may go in the store (2.77 GB, which kind).
+- **To ask kernels** (yours, if you want it): the kept proofs' art ids on HASH-112 when `PUT=1` has run.
+- **Not established:** everything in 2c to 2e is by reading and by other lanes' runs; no member has been checked in
+  a kept process at this statement. Not known: what a kept circuit file of 12.19 GB holds resident; whether a second
+  member's `inputs` line falls to near nothing at that size; whether the served program names a registered input;
+  whether the four heads build together (the merges are text only).
