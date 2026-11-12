@@ -148,9 +148,10 @@ A flow has one row for the period. Its answers' amounts add only over spans show
 of its span (`Account.Steps`) and, where its steps are numbered within a session, the series they are numbered in; a
 verified amount is the largest total over answers of one series whose named spans share no step, or the largest amount
 of an answer that names none, and a tick's cover counts once. An amount at a moment has one row for each accepted
-answer and one for the period, at its sessions' errors summed. An error of 1 or more prints "no bound at this period",
-and what no accepted answer covers is "not audited: charged at capacity", as is the memory of a device's sheet that
-none of its leaves holds.
+answer and one for the period. The period's error, of a flow and of a moment alike, is its answers' errors summed, or
+the one answer's where the amount's error is stated once for the period, which two answers cannot both do. An error of
+1 or more prints "no bound at this period", and what no accepted answer covers is "not audited: charged at capacity",
+as is the memory of a device's sheet that none of its leaves holds.
 `Account.Example.account` is the example protocol's value; every other protocol's is written with that
 protocol. A caller that holds the Site as JSON, as the registration's view does under `site`, decodes it with
 `Core.Site.ofJson`, which reads exactly what `Site.toJson` writes.
