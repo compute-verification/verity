@@ -63,7 +63,8 @@ group = 3
 needs = ["lean-build"]
 # parts named apart from their directory: a move that sends one elsewhere keeps it under the gate
 merge_requires = ["verity/protocols/flock/prover/", "verity/protocols/flock/pod/", "verity/protocols/flock/agreement/", "verity/protocols/flock/tool.py",
-                  "verity/protocols/flock/verifier/", "!README.md", "!PROTOCOL.md"]
+                  "verity/protocols/flock/verifier/", "verity/circuits/base/", "verity/circuits/lean/",
+                  "verity/commitments/lean/", "!README.md", "!PROTOCOL.md"]
 
 # Group 4: every Lake package's audit. It builds only in scratch trees of its own, so nothing in group 3 waits on it.
 [[job]]

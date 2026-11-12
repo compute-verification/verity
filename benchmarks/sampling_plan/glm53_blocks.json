@@ -1,6 +1,6 @@
 {
  "model": "GLM-5.3 as served: vLLM eager, H200, TP8, block FP8, greedy",
- "source": "art:471350fa6bf26f5e2e149c4f084b195ba03fdf8018d02960b9ad6a5e4bf5a138",
+ "source": "art:4bb214110ad9bc7f64d35ee82e700930073e51d3b0d14f2c568935e818b8c391",
  "build": "art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35",
  "prompt_len": 256,
  "decode_steps": 31,
@@ -3206,6 +3206,23 @@
     "DsaMqaLogits_v3"
    ]
   },
+  "GreedyChunk_v1{N=16384,FIRST=false}": {
+   "family": "GreedyChunk_v1",
+   "prefill": 64,
+   "decode": 1984,
+   "out_bits": 32,
+   "ands": 2080752,
+   "macs": 0,
+   "rows": [
+    32768,
+    2,
+    2
+   ],
+   "k_log": 25,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
   "DsaMqaLogits_v3{N=23,H=32,D=128}": {
    "family": "DsaMqaLogits_v3",
    "prefill": 168,
@@ -3622,6 +3639,23 @@
     "DsaMqaLogits_v3"
    ]
   },
+  "GreedyChunk_v1{N=16384,FIRST=true}": {
+   "family": "GreedyChunk_v1",
+   "prefill": 8,
+   "decode": 248,
+   "out_bits": 32,
+   "ands": 2080641,
+   "macs": 0,
+   "rows": [
+    32768,
+    2,
+    2
+   ],
+   "k_log": 25,
+   "of": [
+    "TokenSelect_v1"
+   ]
+  },
   "DsaMqaLogits_v3{N=2,H=32,D=128}": {
    "family": "DsaMqaLogits_v3",
    "prefill": 168,
@@ -3640,15 +3674,42 @@
    "of": [
     "DsaMqaLogits_v3"
    ]
-  }
- },
- "gaps": {
-  "TokenSelect_v1": {
-   "definitions": 1,
+  },
+  "GreedyCombine_v1{V=154880,N=16384}": {
+   "family": "GreedyCombine_v1",
    "prefill": 8,
    "decode": 248,
-   "ands": 6898930176,
-   "why": "its rows alone need a 2^28 block"
+   "out_bits": 32,
+   "ands": 944208,
+   "macs": 0,
+   "rows": [
+    14848,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "k_log": 25,
+   "of": [
+    "TokenSelect_v1"
+   ]
   }
- }
+ },
+ "gaps": {}
 }

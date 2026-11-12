@@ -97,10 +97,14 @@ candidate is built again without them.
                                                    `open` does, keeping only the Cursor PR tool's markers and footer (`edit_pr`);
                                                    refuses a body that drops or changes the PR's `Lane NAME` owner; --dry-run
                                                    prints the body it would write
-    research queue stats [--json] [--short]        the queue's core numbers as one table, read live in under two minutes: mark to
-                                                   `main`, the review wait, the quick tier's wait for a slot, a candidate's check
-                                                   by shard, a red's cost, the executor, cores and slots (`research.queue_table`);
-                                                   --short leaves out the column saying how each number is measured
+    research queue stats [--json] [--short] [--rounds] [--until TS]
+                                                   the queue's core numbers as one table, read live in under two minutes: mark to
+                                                   `main`, the heads the loop leaves out, the review wait, the quick tier's wait
+                                                   for a slot, a candidate's check by shard, a red's cost, the executor, cores and
+                                                   slots (`research.queue_table`); --short leaves out the column saying how each
+                                                   number is measured; --rounds prints one row a candidate instead: the Lean it
+                                                   changed and was checked on top of, its first shard, its steps and its verdict;
+                                                   --until ends the windows at a past time, for a day that is over
     research queue stats --log FILE [--hours H] [--until TS] [--json]
                                                    where landed PRs' time went, from drive's log (`research.queue_stats`)
     research queue checked-heads [--tip REV] [--json] [--out FILE]
@@ -125,6 +129,18 @@ candidate is built again without them.
                                                    (`map_moves`), N heads at a time, as JSON by `mapped_key`: copied into
                                                    `mapped-changes.d/` beside the verified queue's loop's cache, it spares the
                                                    loop's threads the work, each head running every move's script on a whole tree
+    research queue cross [--main REF] [--move-commit SHA]... [--only N...] [--jobs N] [--out DIR] [--push [--from DIR]]
+                                                   each open PR into `main` marked ready at a head that lacks the moves REF
+                                                   (default origin/main) has, with a land verdict (one without is its owner's
+                                                   to restack: `CROSS_UNLANDED`), crossed by REF's `tools/move/restack.py` as
+                                                   `map_one` runs it, a stack lowest first onto the crossing below it: clean
+                                                   when restack.py is, the crossed head's own change is the old one mapped
+                                                   across the moves, the equality the loop carries its mark and verdict by,
+                                                   and the root suite passes on its tree;
+                                                   the report, a bundle of the crossings and their mapped changes into DIR
+                                                   (`cross_plan`, `cross_all`, `cross_write`); --push pushes each clean one to
+                                                   its PR's branch with a lease on its old head (`cross_push`), --from DIR what
+                                                   a run there left
     common flags: [--shadow] [--workdir DIR] [--rules FILE] [--repo OWNER/NAME] [--remote URL]
 
 Admission.  A PR is admitted while it is open against `main`, has an owner, carries no hold label, and is marked ready at its head;
@@ -615,6 +631,21 @@ class GitHub:
             raise QueueError(f"gh pr close {number}: {(r.stderr or r.stdout).strip()[-300:]}")
 
 
+class PublicGitHub(GitHub):
+    """`GitHub`'s listing of a public repository's open PRs, from its API without credentials: where `gh` isn't, as on a node."""
+
+    def _page(self, n: int) -> list[dict]:
+        import urllib.request
+        url = f"https://api.github.com/repos/{self.repo}/pulls?state=open&per_page={GH_PER_PAGE}&page={n}"
+        try:
+            with urllib.request.urlopen(urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"}),
+                                        timeout=GH_TIMEOUT_S) as r:
+                page = json.load(r)
+        except (OSError, ValueError) as e:
+            raise QueueError(f"{url}: {e}") from None
+        return page if isinstance(page, list) else [page]
+
+
 def landing_waiter(repo: str | None = None, store_root: str | None = None) -> Callable[[list[int]], bool]:
     """Whether PRs wait only on landing: each is open, not held (the rules' hold label) and marked ready at its current head
     (`StoreLabels.ready`), as the Linear audit asks of an issue In Review.  The open PRs are read once, on the first call;
@@ -905,11 +936,12 @@ class DriveFlags:
                         for k, v in dataclasses.asdict(self).items())
 
 
-def priority_list(path: Path, flag: str = "--priority-file") -> tuple[int, ...]:
+def priority_list(path: Path, flag: str = "--priority-file", comments: bool = False) -> tuple[int, ...]:
     """Drive's priority list (`--priority-file`, `Queue.priority`), the landing order: the PR numbers ``path`` holds, separated
     by spaces or commas, in its order, first to land first, each once (a number repeated keeps its first place); empty when
-    there is no such file.  QueueError, with the fix, when it can't be read or holds anything else, naming it as ``flag``:
-    the verified queue reads its `--wide-file` so too."""
+    there is no such file.  With ``comments``, a `#` starts a comment that runs to the end of its line.  QueueError, with the
+    fix, when it can't be read or holds anything else, naming it as ``flag``: the verified queue reads its `--wide-file` so
+    too, and its `--pins-file` with ``comments``."""
     try:
         if not path.exists():
             return ()
@@ -917,7 +949,7 @@ def priority_list(path: Path, flag: str = "--priority-file") -> tuple[int, ...]:
     except (OSError, UnicodeDecodeError) as e:
         raise QueueError(f"{flag} {path} can't be read ({getattr(e, 'strerror', None) or e}): make it a text file of "
                          "PR numbers separated by spaces or commas, or remove it") from None
-    words = [w for w in re.split(r"[\s,]+", text) if w]
+    words = [w for w in re.split(r"[\s,]+", re.sub(r"#.*", "", text) if comments else text) if w]
     if bad := [w for w in words if not re.fullmatch(r"[1-9][0-9]*", w)]:
         raise QueueError(f"{flag} {path} holds {', '.join(map(repr, bad[:5]))}, which "
                          f"{'is not a PR number' if len(bad) == 1 else 'are not PR numbers'}: write PR numbers separated by "
@@ -3381,10 +3413,7 @@ def restack_end(job: dict, now: float) -> tuple[dict | None, str, bool] | None:
     unread = ""
     try:
         (x,) = json.loads(Path(job["out"], RESTACK_OUT).read_text())
-        said = ({"result": x["result"]} if x["status"] in ("clean", "up-to-date") else
-                {"why": f"{RESTACK} conflicts at its {x.get('step')} merge in {', '.join(x.get('files') or [])}"}
-                if x["status"] == "conflicted" else
-                {"why": f"{RESTACK}: {x['status']}: {((x.get('error') or '').splitlines() or [''])[0][:300]}"})
+        said = {"result": x["result"]} if x["status"] in ("clean", "up-to-date") else {"why": restack_why(x)}
     except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
         said, unread = None, f"; its results don't read ({type(e).__name__}: {e})"
     shutil.rmtree(job["out"], ignore_errors=True)
@@ -3875,26 +3904,30 @@ def _own_onto(repo: Path, onto: str, commit: str) -> str | None:
     return own_change(repo, mb, commit) if mb else None
 
 
-def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]], restack: Path) -> tuple[str | None, str]:
+def mapped_change(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]], restack: Path,
+                  env: dict[str, str] | None = None) -> tuple[str | None, str]:
     """(``head``'s own change once it has crossed ``moves`` (`moves_between`: those ``onto`` has and it lacks) as
     `tools/move/restack.py` carries a branch, from its merge base with ``onto``, ''), or (None, why it can't): it refuses a head
-    with a commit of ``onto``'s that came after a move's parent, as the restack does (`based-after`); before each move it merges
-    the move's parent when it lacks it, a merge that must leave its own change as it was (as a merge of `main` must, to keep a
-    mark: `StoreLabels`), then the move's script runs on it (`mapped_tree`, ``restack`` the directory holding main's
-    `restack.py`), and the result takes the move as a second parent.  What a restack of ``head`` gives for its own change, when
-    `main` since the last move touched none of it."""
+    with a commit of ``onto``'s that came after the last move's parent, as the restack does (`based-after`), and skips an
+    earlier move such a head is based after, as a restack naming only the moves after it crosses; before each move it merges
+    the move's parent when it lacks it (with ``env`` in that git's environment: `cross_drivers`), a merge that must leave its
+    own change as it was (as a merge of `main` must, to keep a mark: `StoreLabels`), then the move's script runs on it
+    (`mapped_tree`, ``restack`` the directory holding main's `restack.py`), and the result takes the move as a second parent.
+    What a restack of ``head`` gives for its own change, when `main` since the last move touched none of it."""
     x = head
-    for move, parents in moves:
+    for i, (move, parents) in enumerate(moves):
         if len(parents) != 1:
             return None, f"the move {move[:12]} has {len(parents)} parents"
         base = parents[0]
         if late := next((mb for mb in _git(repo, "merge-base", "--all", x, onto, check=False).stdout.split()
                          if _git(repo, "merge-base", "--is-ancestor", mb, base, check=False).returncode), None):
+            if i < len(moves) - 1:
+                continue
             return None, (f"it has {late[:12]}, which came after {base[:12]}, the base of the move {move[:12]}: restack.py "
                           "refuses it (based-after)")
         if _git(repo, "merge-base", "--is-ancestor", base, x, check=False).returncode:
             before = _own_onto(repo, onto, x)
-            r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", x, base, check=False)
+            r = _git(repo, "merge-tree", "--write-tree", "--name-only", "--no-messages", "-z", x, base, check=False, env=env)
             got = [s for s in r.stdout.split("\0") if s]
             if r.returncode or not got:
                 return None, (f"it doesn't merge with {base[:12]}, the base of the move {move[:12]}: "
@@ -3930,13 +3963,14 @@ def mapped_key(head: str, moves: list[tuple[str, list[str]]]) -> str:
     return f"{head} {hashlib.sha512(' '.join(m for m, _ in moves).encode()).hexdigest()}"
 
 
-def map_one(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]]) -> tuple[str | None, str]:
+def map_one(repo: Path, head: str, onto: str, moves: list[tuple[str, list[str]]],
+            env: dict[str, str] | None = None) -> tuple[str | None, str]:
     """`mapped_change` with ``onto``'s `tools/move/restack.py` (`main` as the restack found it), written to a `scratch`
-    directory, or (None, why) for what it raised."""
+    directory, and ``env`` for its merges, or (None, why) for what it raised."""
     try:
         with scratch() as d:
             restack = write_scripts(repo, scripts_at(repo, onto, [RESTACK]), Path(d)) / MOVE_DIR
-            return mapped_change(repo, head, onto, moves, restack)
+            return mapped_change(repo, head, onto, moves, restack, env)
     except (QueueError, OSError, subprocess.SubprocessError) as e:
         return None, f"{type(e).__name__}: {e}"
 
@@ -3952,6 +3986,327 @@ def map_moves(repo: Path, heads: Iterable[str], main: str, jobs: int,
     with concurrent.futures.ThreadPoolExecutor(max(1, jobs)) as pool:
         got = {h: pool.submit(map_one, repo, h, main, moves) for h, moves in todo.items() if h not in refused}
     return {h: (mapped_key(h, todo[h]), *(got[h].result() if h in got else (None, refused[h]))) for h in todo}
+
+
+#: what `research queue cross` writes in its --out directory: its report (`cross_table` prints it), the crossed heads as refs
+#: `CROSS_NEW` + N in a bundle of the commits `main` and the old heads lack, which `--push --from` fetches, and the crossed heads'
+#: own changes mapped across the moves by `mapped_key`, `map_moves`'s JSON, for the loop's `mapped-changes.d/`
+CROSS_REPORT, CROSS_BUNDLE, CROSS_MAPPED, CROSS_PUSHED = "cross.json", "crossed.bundle", "mapped-changes.json", "pushed.json"
+CROSS_NEW, CROSS_PR = "refs/cross/new/", "refs/cross/pr/"
+#: why `research queue cross` never crosses a head with no land verdict of its own: `restack.py` runs a head's own code (its
+#: `pins.py --regen`, `uv lock` of its workspace) and the root suite its tests, as the run's user, in worktrees of the clone
+#: `--push` pushes from with that clone's hooks and credential config.  Code no reviewer passed could plant a hook or config
+#: there, or forge another head's crossing in the same run, or a mapping that carries a passed head's verdict (`UNLANDED`)
+CROSS_UNLANDED = ("no land verdict of its own counts, so its mark wouldn't carry, and restack.py runs a head's own code, which "
+                  "runs only on a head a reviewer passed: its owner restacks it")
+#: what a push says when its lease on the old head fails: the branch moved since the crossing read it
+LEASE_RE = re.compile(r"\(stale info\)")
+#: the branches `research queue cross --push` never pushes, whatever a PR names as its own
+CROSS_NEVER = ("main", "checked", "next")
+#: what `research queue cross` keeps from restack.py besides `SCRIPT_UNSET`, as it runs each head's own code: the store's keys
+#: (a node's run reads the store with them), which a restack never needs
+CROSS_UNSET = ("AWS_", "RESEARCH_STORE")
+#: whether `research queue cross` passes restack.py `--kept`, which keeps each move's check on the machine (restack.py's
+#: `KEEP`), so the run's restacks check each move once; tests keep nothing
+CROSS_KEPT = True
+
+
+def _commit(repo: Path, sha: str) -> bool:
+    return not _git(repo, "cat-file", "-e", f"{sha}^{{commit}}", check=False).returncode
+
+
+def cross_drivers(repo: Path, main: str, into: Path) -> dict[str, str]:
+    """The environment (`GIT_CONFIG_PARAMETERS`) that runs each merge driver git would run as `python3 PATH ...`, PATH in the
+    worktree, from ``main``'s copy of PATH written under ``into``, which `cross_one` gives each git that merges a crossing
+    (restack.py's, and its carry check's merge): a crossing merges trees from before a move, where the path ``main``'s drivers
+    name may not be, and a driver that isn't found leaves its file conflicted.  Git reads these settings after every
+    `GIT_CONFIG_COUNT` one, `git_env`'s drivers included; they replace any `GIT_CONFIG_PARAMETERS` the caller had."""
+    drivers: dict[str, str] = {}
+    for line in _git(repo, "config", "--get-regexp", r"^merge\..*\.driver$", check=False).stdout.splitlines():
+        key, _, cmd = line.partition(" ")
+        drivers[key] = cmd
+    got = []
+    for i, (key, cmd) in enumerate(drivers.items()):
+        words = cmd.split(" ")
+        if len(words) < 2 or words[0] != "python3" or os.path.isabs(words[1]):
+            continue
+        if (src := _git(repo, "show", f"{main}:{words[1]}", check=False)).returncode:
+            continue
+        (f := into / str(i) / Path(words[1]).name).parent.mkdir(parents=True)
+        f.write_text(src.stdout, errors="surrogateescape")
+        got.append((key, " ".join(["python3", str(f), *words[2:]])))
+    quote = lambda s: "'" + s.replace("'", "'\\''") + "'"  # noqa: E731
+    return {"GIT_CONFIG_PARAMETERS": " ".join(f"{quote(k)}={quote(v)}" for k, v in got)} if got else {}
+
+
+def restack_why(x: dict) -> str:
+    """Why `tools/move/restack.py`'s result ``x`` (one branch's, of `--json`) isn't clean: the merge it conflicts at and the
+    files, else its status and the first line of its error."""
+    if x.get("status") == "conflicted":
+        return f"{RESTACK} conflicts at its {x.get('step')} merge in {', '.join(x.get('files') or [])}"
+    return f"{RESTACK}: {x.get('status')}: {((x.get('error') or '').splitlines() or [''])[0][:300]}"
+
+
+def cross_one(repo: Path, head: str, main: str, moves: list[tuple[str, list[str]]], onto: str | None = None,
+              kept: bool = False, src: str | None = None, drivers: dict[str, str] | None = None) -> dict:
+    """``head`` carried across ``moves`` by ``main``'s own `tools/move/restack.py`, run from a `scratch` directory as `map_one`
+    runs it and as `mapped_tree` runs a move's script, without the queue's credentials (`SCRIPT_UNSET`): `--move-commit` each
+    move, `--onto` ``onto`` (the crossed head of the PR below it in its stack), else ``main``, `--main` ``main``, and `--kept`
+    with ``kept``.  restack.py and the carry check's merge run with ``drivers`` in their environment (`cross_drivers`).
+    {"new": the crossed head, "own": its own change, "key": `mapped_key` of ``src``} when restack.py says clean
+    and the crossed head's own change from its merge base with ``main`` is the own change of ``src`` (the head whose labels
+    would carry, default ``head``) mapped across the moves that base has and it lacks (`map_one`): the equality the loop
+    carries a mark and verdict across by (`StoreLabels`'s ``moved``, `Queue.mapped_change`); else {"why": ...}, restack.py's
+    word or the two changes, with "new" when restack.py was clean."""
+    with scratch() as d:
+        try:
+            restack = write_scripts(repo, scripts_at(repo, main, [RESTACK]), Path(d)) / RESTACK
+        except (QueueError, OSError) as e:
+            return {"why": f"{type(e).__name__}: {e}"}
+        if not restack.is_file():
+            return {"why": f"{main[:12]} has no {RESTACK}"}
+        env = {k: v for k, v in _script_env().items() if k not in SCRIPT_UNSET and not k.startswith(CROSS_UNSET)}
+        argv = [sys.executable, str(restack), head, *(a for m, _ in moves for a in ("--move-commit", m)), "--onto", onto or main,
+                "--main", main, "--json", *(("--kept",) if kept else ())]
+        rc, out = run_group(argv, repo, RESTACK_WAIT_S,
+                            env={**env, **(drivers or {}), "TMPDIR": d, "GH_CONFIG_DIR": str(Path(d, "no-gh"))})
+    if rc is None:
+        return {"why": f"{RESTACK} ran over {RESTACK_WAIT_S // 60} min"}
+    try:
+        (x,) = json.JSONDecoder().raw_decode(out.lstrip())[0]       # its --json on stdout, before what it said on stderr
+        status = x["status"]
+    except (ValueError, TypeError, KeyError):
+        return {"why": f"{RESTACK} exit {rc}: {' | '.join(out.strip().splitlines()[-3:])}"}
+    if status != "clean" or rc:
+        return {"why": restack_why(x) if status != "clean" else f"{RESTACK} said clean, but exited {rc}", "status": status}
+    new, src = x["result"], src or head
+    base = _git(repo, "merge-base", main, new, check=False).stdout.strip()
+    crossed = moves_between(repo, base, src) if base else []
+    own = own_change(repo, base, new) if base else None
+    mapped, why = map_one(repo, src, base, crossed, drivers) if crossed else (None, f"{new[:12]} crosses no move of {main[:12]}")
+    if own is None or own != mapped:
+        whose = "its old one" if src == head else f"that of {src[:12]}, whose verdict it takes,"
+        return {"new": new, "why": f"{RESTACK} crossed it clean as {new[:12]}, but its own change there ({(own or 'none')[:12]}) "
+                                   f"isn't {whose} mapped across the moves ({(mapped or why)[:300]}), so no mark or verdict "
+                                   "would carry"}
+    return {"new": new, "own": own, "key": mapped_key(src, crossed)}
+
+
+def cross_plan(repo: Path, prs: Iterable[PR], main: str, named: list[str], ready: Callable[[int, str], bool],
+               verdict: Callable[[int, str], str | None], only: Collection[int] = (),
+               slug: str = REPO) -> tuple[dict[int, dict], list[dict]]:
+    """Which open PRs into `main` ``prs`` (``only`` these numbers, when given) `research queue cross` carries across the moves
+    ``main`` has and their heads lack: ({number: {"pr", "branch", "old", "src", "moves", "below"}} of each to cross, [each
+    skipped, with its `kind` and why]).  A head crosses the moves ``named`` names that it lacks (none named: every move
+    `moves_between` finds), whatever other moves it lacks, as `restack.py --move-commit` crosses a branch: restack.py judges
+    whether it crosses them, and `cross_one` whether its mark would carry.  It crosses once marked ready at its head
+    (``ready``, as the loop reads marks), and only with a land verdict (``verdict``: the head of the PR whose own verdict counts
+    for it, `src`, that one or one whose labels it takes; `CROSS_UNLANDED`).  A PR whose head holds another open PR's head off
+    `main` crosses only with that PR, onto its crossed head (`below`, the highest of those it holds), and is skipped as a
+    `stack` when that one doesn't cross here or those it holds aren't one stack."""
+    def has(a: str, b: str) -> bool:
+        return not _git(repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
+
+    opened = {p.number: p for p in prs if p.base == "main"}
+    todo: dict[int, dict] = {}
+    skipped: list[dict] = []
+    off: dict[int, str] = {}                            # why each open PR this run doesn't cross isn't crossed
+
+    def skip(p: PR, kind: str, why: str) -> None:
+        off[p.number] = why
+        if not only or p.number in only:
+            skipped.append({"pr": p.number, "head": p.head, "kind": kind, "why": why})
+
+    for n, p in sorted(opened.items()):
+        found = [] if p.outside(slug) or not _commit(repo, p.head) else moves_between(repo, main, p.head)
+        moves = [mv for mv in found if mv[0] in named] if named else found
+        if (why := p.outside(slug)) is not None:
+            skip(p, "outside", why)
+        elif not _commit(repo, p.head):
+            skip(p, "missing", "its head can't be fetched")
+        elif not moves:
+            skip(p, "already crossed" if named else "no moves to cross",
+                 "it has the moves" if named else f"it lacks no move {main[:12]} has")
+        elif only and n not in only:
+            off[n] = "not asked for (--only)"
+        elif not ready(n, p.head):
+            skip(p, "not marked", "not marked ready at its head")
+        elif (src := verdict(n, p.head)) is None:
+            skip(p, "no land verdict", CROSS_UNLANDED)
+        else:
+            todo[n] = {"pr": n, "branch": p.branch, "old": p.head, "src": src, "moves": moves, "below": None}
+    off_main = {n: set(_out(repo, "rev-list", t["old"], "--not", main).split()) for n, t in todo.items()}
+    holds = {n: [m for m, q in opened.items() if m != n and q.head != todo[n]["old"] and q.head in off_main[n]] for n in todo}
+    while gone := [n for n in todo if any(m not in todo for m in holds[n])]:
+        for n in gone:
+            m = next(m for m in holds[n] if m not in todo)
+            skip(opened[n], "stack", f"it holds #{m}'s head, which this run doesn't cross: {off.get(m, 'refused')}")
+            del todo[n]
+    for n in list(todo):
+        if below := holds[n]:
+            top = [m for m in below if all(has(opened[k].head, opened[m].head) for k in below)]
+            if top:
+                todo[n]["below"] = top[0]
+            else:
+                skip(opened[n], "stack", f"it holds the heads of {', '.join(f'#{m}' for m in sorted(below))}, which aren't one "
+                                         "stack")
+                del todo[n]
+    while gone := [n for n, t in todo.items() if t["below"] is not None and t["below"] not in todo]:
+        for n in gone:
+            skip(opened[n], "stack", f"it holds #{todo[n]['below']}'s head, which this run doesn't cross: "
+                                     f"{off.get(todo[n]['below'], 'refused')}")
+            del todo[n]
+    return todo, skipped
+
+
+def cross_all(repo: Path, todo: dict[int, dict], main: str, jobs: int, kept: bool = False,
+              log: Callable[[str], None] = print, root: Callable[[str], dict[str, str] | str] | None = None,
+              drivers: dict[str, str] | None = None) -> tuple[list[dict], list[dict], list[dict]]:
+    """Each PR of ``todo`` (`cross_plan`'s) crossed by `cross_one` with ``drivers``, ``jobs`` stacks at once, each stack
+    lowest first and each member onto the crossed head of the one below it: ([each crossed], [each refused, with why], [each
+    skipped as a `stack`: above a member of its stack that doesn't cross, or one restack.py won't cross onto the crossing below
+    it, as it refuses a head sharing a commit after the move's base with `--onto` (`based-after`), so its owners restack the
+    stack]).  With ``kept`` and more than one job, one restack of the first move's base checks each move (restack.py's
+    `check_generated`, kept on the machine) before the rest start, so they read it.  With ``root`` (`root_failures` of a
+    commit), a crossing that is clean and carries counts only once the root suite passes on its tree, in the same job: one whose
+    tree fails a test that ``main``'s passes, or where the suite doesn't run, is refused, with its failing tests under
+    "root"."""
+    above: dict[int | None, list[int]] = {}
+    for n, t in sorted(todo.items()):
+        above.setdefault(t["below"], []).append(n)
+    if kept and jobs > 1 and todo:
+        moves = max((t["moves"] for t in todo.values()), key=len)
+        got = cross_one(repo, moves[0][1][0], main, moves, kept=True, drivers=drivers)
+        log(f"research queue cross: the moves' checks kept, restacking their base {moves[0][1][0][:12]}: "
+            f"{got.get('why', 'clean')}")
+    base: dict[str, concurrent.futures.Future] = {}
+
+    def gate(n: int, got: dict) -> dict:
+        if root is None or "own" not in got:
+            return got
+        new = got["new"]
+        if isinstance(fails := root(new), str):
+            got = {"why": f"crossed clean as {new[:12]}, but the root suite didn't run on the crossed tree: {fails}", "new": new}
+        elif bad := [t for t in fails if t not in (b if isinstance(b := base["main"].result(), dict) else {})]:
+            got = {"why": f"crossed clean as {new[:12]}, but the root suite fails on the crossed tree: {bad[0]}"
+                          + (f" (and {len(bad) - 1} more)" if len(bad) > 1 else ""), "new": new, "root": bad}
+        log(f"research queue cross: #{n}: the root suite on {new[:12]}: {got.get('why', 'passes')}")
+        return got
+
+    def stack(n: int, onto: str | None = None) -> list[tuple[int, dict]]:
+        got = cross_one(repo, todo[n]["old"], main, todo[n]["moves"], onto=onto, kept=kept, src=todo[n].get("src"),
+                        drivers=drivers)
+        log(f"research queue cross: #{n} at {todo[n]['old'][:12]}: " + (f"crossed as {got['new'][:12]}" if "own" in got
+                                                                         else got["why"]))
+        got = gate(n, got)
+        if onto is not None and got.get("status") == "based-after":
+            got = {"stack": f"{RESTACK} won't cross it onto #{todo[n]['below']}'s crossing, whose old head it holds (based-after), "
+                            "so its owners restack the stack"}
+        out = [(n, got)]
+        for m in above.get(n, []):
+            out += stack(m, got["new"]) if "own" in got else [(k, {"under": n}) for k in _stacked(above, m)]
+        return out
+
+    with concurrent.futures.ThreadPoolExecutor(max(1, jobs)) as pool:
+        if root is not None and todo:
+            base["main"] = pool.submit(root, main)
+            base["main"].add_done_callback(lambda f: log(
+                f"research queue cross: the root suite on main {main[:12]}: " + (
+                    f"didn't run ({r}), so every failure on a crossed tree counts" if isinstance(r := f.result(), str)
+                    else f"fails {', '.join(r)}, which no crossing is refused for" if r else "passes")))
+        done = [x for f in [pool.submit(stack, n) for n in above.get(None, [])] for x in f.result()]
+    crossed, refused, skipped = [], [], []
+    for n, got in sorted(done, key=lambda x: x[0]):
+        t = {k: todo[n].get(k) for k in ("pr", "branch", "old", "src", "below")}
+        if "own" in got:
+            crossed.append({**t, "new": got["new"], "own": got["own"], "key": got["key"]})
+        elif "under" in got or "stack" in got:
+            skipped.append({"pr": n, "head": t["old"], "kind": "stack",
+                            "why": got.get("stack") or f"#{got['under']} below it in its stack doesn't cross"})
+        else:
+            refused.append({"pr": n, "old": t["old"], "why": got["why"], **({"new": got["new"]} if "new" in got else {}),
+                            **({"root": got["root"]} if "root" in got else {})})
+    return crossed, refused, skipped
+
+
+def _stacked(above: dict[int | None, list[int]], n: int) -> list[int]:
+    """``n`` and each PR stacked on it, by `above` (the PRs each is the one below of)."""
+    return [n, *(k for m in above.get(n, []) for k in _stacked(above, m))]
+
+
+def cross_table(report: dict) -> str:
+    """`research queue cross`'s report, short: a line of counts, each crossed PR (its old head and the new head its land
+    verdict carries its mark and verdict to), each refused with why, the skipped by kind, and each stack skipped."""
+    kinds: dict[str, int] = {}
+    for s in report["skipped"]:
+        kinds[s["kind"]] = kinds.get(s["kind"], 0) + 1
+    lines = [f"research queue cross: main {report['main'][:12]}, moves {' '.join(m[:12] for m in report['moves']) or 'none'}",
+             f"crossed {len(report['crossed'])}, refused {len(report['refused'])}, skipped {len(report['skipped'])}"
+             + (f" ({', '.join(f'{k} {v}' for k, v in sorted(kinds.items()))})" if kinds else "")]
+    lines += [f"  crossed #{c['pr']} {c['old'][:12]} -> {c['new'][:12]}"
+              + (f" onto #{c['below']}'s" if c.get("below") else "") + "  carries its mark and verdict"
+              for c in report["crossed"]]
+    lines += [f"  refused #{r['pr']} {r['old'][:12]}: {r['why']}" for r in report["refused"]]
+    lines += [f"  skipped #{s['pr']} {s['head'][:12]}: {s['why']}" for s in report["skipped"] if s["kind"] == "stack"]
+    lines += [f"  pushed #{n}: {said}" for n, said in sorted(report.get("pushed", {}).items(), key=lambda x: int(x[0]))]
+    return "\n".join(lines)
+
+
+def cross_write(repo: Path, out: Path, report: dict) -> None:
+    """``report`` into ``out``: `CROSS_REPORT`, `CROSS_BUNDLE` of its crossed heads as `CROSS_NEW` + N (what `main` and the old
+    heads lack; none when nothing crossed), and `CROSS_MAPPED` of their own changes mapped across the moves."""
+    out.mkdir(parents=True, exist_ok=True)
+    (out / CROSS_REPORT).write_text(json.dumps(report, indent=1) + "\n")
+    (out / CROSS_MAPPED).write_text(json.dumps({c["key"]: c["own"] for c in report["crossed"]}) + "\n")
+    if report["crossed"]:
+        for c in report["crossed"]:
+            _git(repo, "update-ref", f"{CROSS_NEW}{c['pr']}", c["new"])
+        _git(repo, "bundle", "create", "-q", str(out / CROSS_BUNDLE), *(f"{CROSS_NEW}{c['pr']}" for c in report["crossed"]),
+             "--not", report["main"], *(c["old"] for c in report["crossed"]))
+
+
+def cross_push(repo: Path, report: dict, remote: str, opened: dict[int, PR] | None = None,
+               log: Callable[[str], None] = print) -> dict[str, str]:
+    """Push each crossed head of ``report`` to its PR's own branch, a stack lowest first, with a lease on the old head
+    (`git push --force-with-lease=refs/heads/BRANCH:OLD REMOTE NEW:refs/heads/BRANCH`), so an owner's push since wins
+    (`owner pushed since`); never anything else.  A head that no longer descends from its old head and the report's `main`, or
+    lacks a move, or whose own change from `main` isn't the report's, is refused unpushed, and so is one whose PR ``opened``
+    (the open PRs, when given) no longer has open into `main` at its old head, or whose stack's lower member wasn't pushed.
+    By PR number, what each push did."""
+    def has(a: str, b: str) -> bool:
+        return not _git(repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
+
+    said: dict[str, str] = {}
+    for c in sorted(report["crossed"], key=lambda c: _depth(report["crossed"], c)):
+        n, old, new, branch = c["pr"], c["old"], c["new"], c["branch"]
+        p = (opened or {}).get(n)
+        if opened is not None and (p is None or p.base != "main"):
+            said[str(n)] = "not pushed: it isn't open into `main` any more"
+        elif p is not None and p.head != old:
+            said[str(n)] = f"not pushed: owner pushed since ({p.head[:12]})"
+        elif c.get("below") is not None and not said.get(str(c["below"]), "").startswith("pushed"):
+            said[str(n)] = f"not pushed: #{c['below']} below it in its stack wasn't"
+        elif not branch or branch in CROSS_NEVER or branch.startswith("refs/"):
+            said[str(n)] = f"not pushed: its PR names {f'the branch {branch}' if branch else 'no branch'}, never pushed"
+        elif not (has(old, new) and has(report["main"], new) and all(has(m, new) for m in report["moves"])) or own_change(
+                repo, _git(repo, "merge-base", report["main"], new, check=False).stdout.strip() or report["main"], new) != c["own"]:
+            said[str(n)] = f"not pushed: {new[:12]} isn't the crossing the report describes"
+        else:
+            r = _git(repo, *STALL, "push", f"--force-with-lease=refs/heads/{branch}:{old}", remote, f"{new}:refs/heads/{branch}",
+                     check=False)
+            said[str(n)] = (f"pushed {new[:12]} to {branch}" if not r.returncode else "not pushed: owner pushed since"
+                            if LEASE_RE.search(r.stderr) else f"not pushed: {(r.stderr or r.stdout).strip()[-300:]}")
+        log(f"research queue cross: #{n}: {said[str(n)]}")
+    return said
+
+
+def _depth(crossed: list[dict], c: dict) -> int:
+    """How many members of its stack are below ``c`` among ``crossed``."""
+    by = {x["pr"]: x for x in crossed}
+    d, below = 0, c.get("below")
+    while below is not None and below in by:
+        d, below = d + 1, by[below].get("below")
+    return d
 
 
 #: the invariant tests the preflight runs on the merged tree, from the root, each a common way a train breaks: a module string
@@ -4108,6 +4463,42 @@ def merged_worktree(repo: Path, commit: str, root: Path | None = None):
             _git(repo, "worktree", "remove", "--force", str(wt), check=False)
             shutil.rmtree(tmp, ignore_errors=True)
             _git(repo, "worktree", "prune", check=False)
+
+
+#: the repository's root suite as the quick tier runs it (`suites.py --quick`): `tests/` without the tests marked slow, here
+#: on 4 workers; how long `research queue cross` lets its sync and its run take on a crossed tree; the sync that makes the
+#: tree's environment, as the preflight makes a merged tree's (None: none); and the interpreter (None: the tree's `.venv`'s)
+CROSS_ROOT_SUITE = ["tests", "-m", "not slow", "-n", "4"]
+CROSS_ROOT_WAIT_S = 30 * 60
+CROSS_ROOT_SYNC: tuple[str, ...] | None = PREFLIGHT_SYNC
+CROSS_ROOT_PYTHON: str | None = None
+
+
+def root_failures(repo: Path, commit: str, sync: tuple[str, ...] | None = None,
+                  python: str | None = None) -> dict[str, str] | str:
+    """{node id: its summary line} of what fails in the repository's root suite (`CROSS_ROOT_SUITE`) on ``commit``'s tree, in a
+    `merged_worktree` made ready by ``sync`` and run by ``python`` (None: the tree's own `.venv`), without the queue's
+    credentials or the store's keys, as it runs the tree's own code: empty when it passes or the tree has no `tests/`, else
+    why it didn't run."""
+    env = {k: v for k, v in git_env().items() if k not in SCRIPT_UNSET and not k.startswith(CROSS_UNSET)}
+
+    def run(argv: list[str], cwd: Path) -> tuple[subprocess.CompletedProcess | None, str]:
+        rc, out = run_group(argv, cwd, CROSS_ROOT_WAIT_S, env=env)
+        if rc is None:
+            return None, f"`{' '.join(argv[:4])}` ran over {CROSS_ROOT_WAIT_S // 60} min"
+        return subprocess.CompletedProcess(argv, rc, out, ""), ""
+
+    try:
+        with merged_worktree(repo, commit) as wt:
+            if not (wt / "tests").is_dir():
+                return {}
+            if sync is not None:
+                r, why = run(list(sync), wt)
+                if r is None or r.returncode:
+                    return why or f"`{' '.join(sync)}` exited {r.returncode}: {r.stdout.strip()[-300:]}"
+            return pytest_failures(run, python or str(wt / ".venv" / "bin" / "python"), wt, CROSS_ROOT_SUITE)
+    except (QueueError, OSError, subprocess.SubprocessError) as e:
+        return f"{type(e).__name__}: {e}"
 
 
 @dataclass
@@ -4626,7 +5017,8 @@ class Preflight:
 
     The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
     first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
-    ``python`` stands in for its interpreter), under `budget_s` together, and the worktree is removed whatever happens.  Before
+    ``python`` stands in for its interpreter), under `budget_s` together (`math.inf`: unbounded), and the worktree is
+    removed whatever happens.  Before
     (b), the fetched fixtures under the collected suites' inputs come into it (``fetch``, by default `_fetch_fixtures`: through
     ``store``, within `PREFLIGHT_FETCH_S` of the budget); a suite whose fixtures can't be fetched (no credentials, no source) is
     named once and not judged.  A failure that `next` has too (a pin already stale there, a module two PRs on `next` already
@@ -4937,15 +5329,16 @@ class Preflight:
                 f"changes or what only an unlanded PR adds; make it read what `main` and `next` hold, or wait for that PR")
 
     def _run(self, argv: list[str], cwd: Path, deadline: float) -> tuple[subprocess.CompletedProcess | None, str]:
-        """``argv`` in ``cwd`` with what's left of the budget, outside the caller's environment (`quick_tier.CALLER_ENV`,
-        pytest's own variables); and why it didn't finish."""
+        """``argv`` in ``cwd`` with what's left of the budget (no timeout under an unbounded one), outside the caller's
+        environment (`quick_tier.CALLER_ENV`, pytest's own variables); and why it didn't finish."""
         left = deadline - self.clock()
         if left <= 0:
             return None, "the budget was spent before it started"
         env = {k: v for k, v in os.environ.items() if k not in quick_tier.CALLER_ENV and not k.startswith("PYTEST_")}
         env["COLUMNS"] = "300"                                         # pytest's summary lines, whole
         try:
-            return subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, errors="replace", timeout=left), ""
+            return subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, errors="replace",
+                                  timeout=left if math.isfinite(left) else None), ""
         except subprocess.TimeoutExpired:
             return None, f"still running when the {self.budget_s:g} s budget ran out"
         except OSError as e:
@@ -6040,6 +6433,102 @@ def _map_moves(a: argparse.Namespace) -> int:
     return 0
 
 
+def _cross(a: argparse.Namespace) -> int:
+    """`research queue cross`, in this checkout: the open PRs into `main` marked ready at heads that lack the moves --main has
+    (`cross_plan`), with marks and land verdicts read from the evidence store as the loop reads them (`World._relabel`), each
+    crossed by --main's `tools/move/restack.py`, --jobs stacks at once (`cross_all`), into --out (`cross_write`), and with --push
+    pushed to its branch (`cross_push`); `--push --from DIR` pushes what a run left in DIR, from its bundle.  The open PRs come
+    from GitHub's API through `gh`, else without credentials (`PublicGitHub`: a node has no `gh`), and their heads from
+    --remote's pull refs."""
+    from .clone import Refused, set_drivers
+    from .store.local import LocalStore
+
+    top = Path(_out(Path.cwd(), "rev-parse", "--show-toplevel"))
+    remote, slug_ = remote_and_repo(a.remote, a.repo, top)
+    push_to = "origin" if a.remote is None and a.repo is None else remote
+    log = lambda s: print(s, file=sys.stderr)  # noqa: E731
+    gh = GitHub(slug_) if shutil.which("gh") else PublicGitHub(slug_)
+
+    def fetch(*shas: str) -> None:
+        if (want := [s for s in shas if not _commit(top, s)]) and _git(top, *STALL, "fetch", "-q", "--no-tags", remote, *want,
+                                                                         check=False).returncode:
+            for s in want:
+                _git(top, *STALL, "fetch", "-q", "--no-tags", remote, s, check=False)
+
+    _git(top, *STALL, "fetch", "-q", "--no-tags", remote, "+refs/heads/main:refs/remotes/origin/main", check=False)
+    if a.from_dir is not None:
+        report = json.loads((a.from_dir / CROSS_REPORT).read_text())
+        fetch(report["main"], *(c["old"] for c in report["crossed"]))
+        if report["crossed"] and (r := _git(top, "fetch", "-q", str(a.from_dir / CROSS_BUNDLE), f"+{CROSS_NEW}*:{CROSS_NEW}*",
+                                            check=False)).returncode:
+            raise SystemExit(f"research queue cross: {a.from_dir / CROSS_BUNDLE} doesn't fetch: {r.stderr.strip()[-300:]}")
+        report["pushed"] = cross_push(top, report, push_to, {p.number: p for p in gh.open_prs()}, log)
+        (a.from_dir / CROSS_PUSHED).write_text(json.dumps(report["pushed"], indent=1) + "\n")
+        print(cross_table(report))
+        return 0
+    if _git(top, "rev-parse", "--verify", "-q", f"{a.main}^{{commit}}", check=False).returncode:
+        fetch(a.main)
+    main = _out(top, "rev-parse", "--verify", f"{a.main}^{{commit}}")
+    fetch(*a.move_commit)
+    named = [_out(top, "rev-parse", "--verify", f"{m}^{{commit}}") for m in a.move_commit]
+    for m in named:
+        if _git(top, "merge-base", "--is-ancestor", m, main, check=False).returncode:
+            raise SystemExit(f"research queue cross: --move-commit {m[:12]} isn't on --main {main[:12]}")
+        if not MOVE_LINE_RE.search(_out(top, "log", "-1", "--format=%B", m)):
+            raise SystemExit(f"research queue cross: --move-commit {m[:12]} has no `Move:` or `Layout-move:` line")
+    prs = [p for p in gh.open_prs() if p.base == "main"]
+    _git(top, *STALL, "fetch", "-q", "--no-tags", remote, *(f"+refs/pull/{p.number}/head:{CROSS_PR}{p.number}" for p in prs),
+         check=False)
+    fetch(*(p.head for p in prs))
+    store = LocalStore(a.store)
+    labels = StoreLabels(store, log=log)
+    q = Queue(top, remote=remote, github=gh, ready=labels.ready, store=store, log=log, marked_by=labels.marked_by)
+    opened = {p.number: p for p in prs}
+    owns: dict[str, str | None] = {}
+
+    def change(h: str) -> str | None:
+        if h not in owns:
+            fetch(h)
+            mb = _git(top, "merge-base", main, h, check=False).stdout.strip() if _commit(top, h) else ""
+            owns[h] = own_change(top, mb, h) if mb else None
+        return owns[h]
+
+    flags = flags_at(top, main)
+    labels.since = flags.marked_after or ((rules_at(top, main) or Rules()).marked_after)
+    labels.change, labels.owners = change, lambda n: {opened[n].owner, q.handle(opened[n])} if n in opened else set()
+    if flags.signed_verdicts:
+        labels.verify = label_verifier(top, main, Path.home() / ".research" / "cache" / "issuer-keys.json", log)
+    labels.prefetch([(p.number, p.head) for p in prs])
+
+    def verdict(n: int, head: str) -> str | None:
+        if labels.lands(n, head):
+            return head
+        own = change(head)
+        return next((o for o in labels._other_heads(n, head, vocab.REVIEWED) if own and change(o) == own and labels.lands(n, o)),
+                    None)
+
+    try:
+        set_drivers(top)
+    except Refused as e:
+        raise SystemExit(f"research queue cross: the merge drivers restack.py merges with can't be set here: {e}") from None
+    todo, skipped = cross_plan(top, prs, main, named, labels.ready, verdict, set(a.only or ()), slug_)
+    log(f"research queue cross: {len(todo)} to cross, {len(skipped)} skipped; crossing {a.jobs} at once")
+    with scratch() as d:
+        crossed, refused, stacked = cross_all(top, todo, main, a.jobs, kept=CROSS_KEPT, log=log,
+                                              root=lambda c: root_failures(top, c, CROSS_ROOT_SYNC, CROSS_ROOT_PYTHON),
+                                              drivers=cross_drivers(top, main, Path(d)))
+    report = {"main": main, "moves": named or list(dict.fromkeys(m for t in todo.values() for m, _ in t["moves"])),
+              "crossed": crossed, "refused": refused, "skipped": skipped + stacked}
+    out = a.out or Path("cross")
+    cross_write(top, out, report)
+    if a.push:
+        report["pushed"] = cross_push(top, report, push_to, {p.number: p for p in gh.open_prs()}, log)
+        (out / CROSS_PUSHED).write_text(json.dumps(report["pushed"], indent=1) + "\n")
+    print(cross_table(report))
+    log(f"research queue cross: the report and the bundle are in {out}")
+    return 0
+
+
 def main(argv: list[str]) -> int:
     if argv[:1] == ["vqueue"]:                  # the verified queue's loop, with options of its own (`vqueue_loop.main`)
         from .vqueue_loop import main as vqueue_main
@@ -6047,12 +6536,25 @@ def main(argv: list[str]) -> int:
         return vqueue_main(argv[1:])
     ap = argparse.ArgumentParser(prog="research queue", description=__doc__.split("\n\n")[0])
     ap.add_argument("command", choices=["status", "sync", "eject", "ready", "judge", "open", "edit", "link", "stats",
-                                            "checked-heads", "review", "delegate", "shadow-report", "vqueue", "map-moves"])
+                                            "checked-heads", "review", "delegate", "shadow-report", "vqueue", "map-moves",
+                                            "cross"])
     ap.add_argument("pr", nargs="?", help="eject, ready, review, edit, link: the PR number; judge: the quick tier's run id; "
                     "delegate: the Cursor agent id to delegate --by's handle to; map-moves: the first old head, as N@HEAD")
     ap.add_argument("shard_run", nargs="*", metavar="N@HEAD", help="map-moves: the other old heads")
     ap.add_argument("--jobs", type=int, default=1, metavar="N", help="map-moves: the heads mapped at once, each running a move's "
-                    "script on a whole tree in a worktree of its own under --preflight-root (default 1)")
+                    "script on a whole tree in a worktree of its own under --preflight-root; cross: the stacks crossed at once "
+                    "(default 1)")
+    ap.add_argument("--main", default="origin/main", metavar="REF", help="cross: the moved `main` whose moves the heads cross "
+                    "and whose tools/move/restack.py crosses them (default origin/main)")
+    ap.add_argument("--move-commit", action="append", default=[], metavar="SHA", help="cross: a move to cross, a commit of "
+                    "--main with a `Move:` or `Layout-move:` line, repeated (default: every move --main has and a head lacks); "
+                    "a head lacking others besides crosses the named ones, as restack.py --move-commit crosses it")
+    ap.add_argument("--only", type=int, nargs="+", metavar="N", help="cross: only these PRs; one stacked on a PR it doesn't name "
+                    "is skipped, as its stack doesn't cross")
+    ap.add_argument("--push", action="store_true", help="cross: push each crossing that is clean to its PR's own branch, with a "
+                    "lease on its old head (default: a dry run, which pushes nothing)")
+    ap.add_argument("--from", dest="from_dir", type=Path, metavar="DIR", help="cross --push: push what a run left in DIR (its "
+                    f"{CROSS_REPORT} and {CROSS_BUNDLE}, from `research fetch RUN --all`) instead of crossing anew")
     ap.add_argument("--reason", help="eject: why, for the owner's notice")
     ap.add_argument("--by", default=os.environ.get("RESEARCH_LANE"),
                     help="eject, ready, judge: who ejects it, the handle its notice is posted as (default merge-queue, which no "
@@ -6126,16 +6628,19 @@ def main(argv: list[str]) -> int:
                     "whose moves the heads cross (default origin/main)")
     ap.add_argument("--out", type=Path, metavar="FILE", help="checked-heads: write the checked train heads newest first "
                     "to FILE (an optional source for the verifier's --main file) instead of listing them on stdout; map-moves: "
-                    "write the JSON there instead")
+                    f"write the JSON there instead; cross: the directory for {CROSS_REPORT}, {CROSS_BUNDLE} and {CROSS_MAPPED} "
+                    "(default ./cross; in a `research run`, give it \"$OUT\")")
     ap.add_argument("--draft", action="store_true", help="open: as a draft (default: ready for review)")
     ap.add_argument("--log", type=Path, help="stats: a log drive wrote (its stdout, every tick's), for the split of drive's "
                     "landings; without it, the queue's table")
     ap.add_argument("--tips", type=int, default=10, metavar="N", help="shadow-report: the newest N tips whose shadow records "
                     "compare a check with the executor's verdicts (default 10)")
     ap.add_argument("--short", action="store_true", help="stats: the table without the column saying how each number is measured")
+    ap.add_argument("--rounds", action="store_true", help="stats: one row for each candidate built in the window, instead of the table")
     ap.add_argument("--hours", type=float, default=24.0, help="stats: the window's length (default 24)")
     ap.add_argument("--days", type=int, default=7, help="delegate: how long the delegation lasts (default 7, at most 14)")
-    ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now)")
+    ap.add_argument("--until", metavar="YYYY-MM-DDTHH:MM:SSZ", help="stats: the window's end (default now); for the table, a past "
+                    "time with its UTC offset")
     a = ap.parse_args(argv)
     if a.command == "vqueue":
         ap.error("vqueue comes first, its options after it: research queue vqueue --help")
@@ -6147,12 +6652,16 @@ def main(argv: list[str]) -> int:
         if a.log is None:
             from . import queue_table
 
-            return queue_table.main(a.store, a.json, short=a.short)
+            return queue_table.main(a.store, a.json, short=a.short, until=a.until, by_round=a.rounds)
         return _stats(a)
     if a.command == "checked-heads":
         return _checked_heads(a)
     if a.command == "map-moves":
         return _map_moves(a)
+    if a.command == "cross":
+        if a.from_dir is not None and not a.push:
+            ap.error("cross: --from DIR goes with --push: it pushes what a dry run left in DIR")
+        return _cross(a)
     if a.command == "shadow-report":
         from .executor import shadow_records, shadow_report
         from .store.local import LocalStore
