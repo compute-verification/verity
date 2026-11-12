@@ -590,3 +590,22 @@ def test_under_signed_verdicts_a_move_changing_a_signed_guard_needs_a_land_verdi
                                                             "one"), loop.world.left
     else:
         assert [(b["members"], b["moves"][0]["on_mark"]) for b in builds] == [([1], True)], builds
+
+
+def test_under_signed_verdicts_a_move_on_its_mark_whose_regeneration_rewrites_a_signed_guard_is_left_out(env):
+    """`ready` takes a move on its mark by its head's files; the regenerated commit can change more (here, the map's word in
+    the handle registry, which the head leaves alone), so the build judges that commit's files too and leaves the move out,
+    told to get a land verdict, when one meets `SIGNED_GUARDS`."""
+    Moved(env)
+    guard = Q.REGISTRY.as_posix()
+    flags = 'signed_verdicts = true\nlowrisk_excludes = ["*.py", "*.json"]\n'
+    _main_to(env, {Q.DRIVE_FLAGS: flags, guard: json.dumps({"handles": [], "note": "old/ judges labels"}) + "\n"})
+    head = _move(env, 1, {"old/a.txt": None, "new/a.txt": "newword in new/a.txt\n"})
+    env.labels.verdicts[1, head] = []
+    loop = env.loop(policy)
+    recs = loop.tick()
+    assert not _builds(recs), recs
+    (skip,) = [r for r in recs if r["action"] == "skip" and r.get("number") == 1]
+    assert skip["why"].startswith("it came on its mark alone, and its move regenerated on ") and (
+        f"it changes {guard}, and under drive.toml's `signed_verdicts`" in skip["why"]), skip
+    assert skip["text"].endswith("It lands with a land verdict."), skip

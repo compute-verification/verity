@@ -1530,13 +1530,18 @@ class World:
     def _move(self, p: PR, tip: str, main: str) -> tuple[str | None, Skip | None]:
         """Move PR ``p`` regenerated last in a build on ``tip``, landing tip ``main`` (`Queue._regenerate`, with ``main``'s
         `tools/move/rename.py` and `move_check.py`, kept in the loop's cache): (its certified commit, None), its certificate in
-        `certified`; or (None, why it's left out) while members below it change `tools/move/`'s scripts, or when its move isn't
-        certified and it came on its mark alone (`on_mark`); or (None, None) when it isn't certified and has a land verdict,
-        which covers its head: merged as any PR."""
+        `certified`; or (None, why it's left out) while members below it change `tools/move/`'s scripts, or when it came on its
+        mark alone (`on_mark`) and its move isn't certified or drive.toml keeps what the regenerated commit changes off the
+        mark (`_off_mark`, which `ready` judged on its head's files only); or (None, None) when it isn't certified and has a
+        land verdict, which covers its head: merged as any PR."""
         if below := self.q._scripts_below(tip, main):
             return None, Skip(p, f"the members below it change {', '.join(below)}, which its move and the restacks across "
                                  "it run: it waits until they land", waits=True)
         commit, why = self.q._regenerate(tip, p, main)
+        if commit is not None and p.number in self.on_mark and (off := _off_mark(
+                _out(self.repo, "diff", "--name-only", "--no-renames", tip, commit).splitlines(), flags_at(self.repo, main))):
+            return None, Skip(p, f"it came on its mark alone, and its move regenerated on {tip[:12]}: {off}",
+                              fix="It lands with a land verdict.")
         if commit is not None:
             self.certified[p.number] = {"map": p.move, "tip": tip, "commit": commit, "on_mark": p.number in self.on_mark,
                                         "certificate": self.q._made[Queue._move_key(tip, p, main)].get("certificate")}
