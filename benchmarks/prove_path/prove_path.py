@@ -41,7 +41,8 @@ Two kinds of committed run:
     prove_path.py advice --workload F --out FILE
     prove_path.py commit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F] \\
         | --serve-run DIR --window K --row-dir DIR [--hf-config F] [--target F]) [--advice FILE] [--opening FILE] --partition F \\
-        --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...]
+        --out WINDOWS [--cap-bits L] [--ranks 0,1] [--jobs N] [--forge MEMBER:UNIT] [--transfer-gate T ...] \\
+        [--serving-rows-tables REGISTRATION --serving-rows-tables-key KEY] [--checkpoint-dir DIR]
     prove_path.py audit (the same committed run) [--opening FILE] --windows WINDOWS --partition F --template-sets DIR \\
         --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall --out DIR [--cap-bits L] \\
         [--ranks 0,1] [--jobs N] [--forged] [--plain] [--transfer-gate T ...] --challenger local|gate:USER@HOST --main FILE
@@ -71,6 +72,10 @@ Two kinds of committed run:
   ``--opening``, the prover's private file, never under the run's out/; then each window from its bundle over the compiler's
   Programs for it, ``WINDOWS/rank<r>/``. ``--forge MEMBER:UNIT`` commits that unit with bit 0 of its first output word flipped
   (`forging`): its rows, commit strings and roots all agree with the flipped word, so only the proof can refuse it.
+  ``--serving-rows-tables`` (with its key) gives each window the committer's registration of the per-expert cut's tables
+  (`tables_of`), without which a partition of table reads or fused blocks is refused, and ``--checkpoint-dir`` the checkpoint
+  it composes the registered weights its rows read from (`checkpoint_of`): a bundle carries none a checkpoint holds, so
+  without one a row reading such a weight is refused by the weight's name.
 * **audit** (the verifier): each window from the record, the opened advice and its own compiler (`open_advice`, `window_of`;
   a single-GPU or served window's Programs from its own Builds, written into ``--builds``, default ``OUT/builds``),
   audited by a5 on the verifier's coins with the advice negatives beside it (`more_negatives`), then `advice_before_draw` on the
@@ -240,9 +245,10 @@ class I2Compiler:
     Its digest, a single-GPU window's and a served one's alike, names its name, its code (``code``: a single-GPU window's
     I2 runs this tree's, `code_identity`; a served window's, the server's registered compiler, `served_identity`; both the
     verifier's `interface.compiler_digest` over the integration's import closure as git lists it), everything
-    ``registered`` holds that I2 reads (φ: the model, its revision and config, the target and the execution; the default
-    seed; ℓ; the served model name, where it names one) and that list. So a served window's ``serve.json`` is bound before
-    the sample with the code: one that differs from the one its advice was registered under names another compiler."""
+    ``registered`` holds that I2 reads (φ: the model, its revision and config, the target, the execution, and a served
+    engine's world and engine args; the default seed; ℓ; the served model name, where it names one) and that list. So a
+    served window's ``serve.json`` is bound before the sample with the code: one that differs from the one its advice was
+    registered under names another compiler."""
 
     registered: Any
     ingress: Mapping[str, Mapping[str, Any]]
@@ -530,13 +536,16 @@ def serve_ingress(requests: list[Mapping[str, Any]]) -> dict[str, dict]:
 
 
 def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target: str | None = None) -> Any:
-    """φ of a served engine as vllm's registered compiler registers it (the formula its Build compiles the request Programs under):
-    the pinned model (``serve.json``'s ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the
-    pin's config of record, as `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins
-    unsloth/Llama-3.2-1B's), the serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran
-    included, else the file ``target``) and the engine's execution label (``execution``, else ``engine.execution``); no workload."""
+    """φ of a served engine as vllm's registered compiler registers it (`predict.phi.served_phi`, the one formula: `advice_compile`
+    compiles the row dir's Builds under it too, so they hold the Programs I2 compiles): the pinned model (``serve.json``'s
+    ``model`` and ``revision``, and the checkpoint's ``config.json``: ``hf_config``, else the pin's config of record, as
+    `advice_compile` reads it (`dense_generic.pinned_hf_config`), else for a model no manifest pins unsloth/Llama-3.2-1B's), the
+    serving device's target profile (``serve.json``'s ``target``, the int8 scope its layers ran included, else the file
+    ``target``), the engine's execution label (``execution``, else ``engine.execution``), and from its engine record
+    (``engine``) its tensor-parallel world and the engine args class G states, ``max_model_len`` among them, which each
+    request Program's length rule reads; no workload. A ``serve.json`` with no engine record states none of those args."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
-    from verity_vllm.program.predict.phi import Phi
+    from verity_vllm.program.predict.phi import served_phi
 
     prof = json.loads(Path(target).read_text()) if target else serve.get("target")
     if not isinstance(prof, Mapping):
@@ -546,7 +555,9 @@ def phi_of_serve(serve: Mapping[str, Any], hf_config: str | None = None, target:
     if not isinstance(execution, str) or not execution:
         raise ValueError("serve.json records no execution label (execution, engine.execution), so φ can't be read")
     hf = json.loads(Path(hf_config or pinned_hf_config(serve["model"], serve["revision"]) or LLAMA32_1B_CONFIG).read_text())
-    return Phi(model={"repo": serve["model"], "revision": serve["revision"], "hf_config": hf}, target=dict(prof), execution=execution)
+    engine = serve.get("engine")
+    return served_phi({"model": serve["model"], "revision": serve["revision"], "target": prof, "execution": execution,
+                       "engine_record": engine if isinstance(engine, Mapping) else None}, hf)
 
 
 def registered_seed(serve: Mapping[str, Any]) -> int:
@@ -846,30 +857,53 @@ def window_of(a: argparse.Namespace, r: int, compiler: Capped, requests: list[di
     return AW.window_of_advice(a.tp_commit, r, a.partition, compiler, requests, bound)
 
 
+def tables_of(a: argparse.Namespace) -> dict[str, str] | None:
+    """The per-expert cut's tables as a serving-rows request names them (`expert_tables.of_request`): the committer's registration
+    ``--serving-rows-tables`` (``{rank}`` in its path its rank's) and the key file it is read under; None without one."""
+    return {"key": a.serving_rows_tables_key, "registration": a.serving_rows_tables} if a.serving_rows_tables else None
+
+
+def checkpoint_of(a: argparse.Namespace) -> Any:
+    """The checkpoint ``--checkpoint-dir`` a window composes the registered weights its rows read from: its bundle carries the
+    registered buffers and engine constants alone (`replay_bundle.weights_extra`). Its shards aren't hashed: each tensor read
+    is held to its committed tensor root, or refused by name (`cpu_replay.OnRead`). None without one."""
+    if not a.checkpoint_dir:
+        return None
+    from verity_vllm.check import weights_of_record as WR
+
+    return WR.CheckpointIndex(a.checkpoint_dir, verify_shards=False)
+
+
 def commit1(a: argparse.Namespace, compiler: Capped, requests: list[dict], bound: Mapping[str, Any], out: Path) -> dict:
     """A single-GPU Commit's stand-in window into ``out`` (`serving_rows.after_commit`, as `deferred_rows.from_bundle` writes one)
     over ``compiler``'s Programs for the advice's ``requests``, ``bound`` in its provenance: every value read through an opening
     verified against the record's run root, the weights (none for an activation template) each opened on its first read
-    against the committed weights root (`cpu_replay.OnRead`)."""
+    against the committed weights root (`cpu_replay.OnRead`), from the bundle's tensors and the checkpoint (`checkpoint_of`,
+    composed as the Build's weight roles say, `cpu_replay.registered_roles`), and the per-expert cut's tables committed under
+    the committer's key and registration (`tables_of`), read before the bundle is opened."""
     from verity_vllm.check.oracle_compare import OpenedReader
     from verity_vllm.check.replay.index import ProgramIndex
     from verity_vllm.pipeline import cpu_replay as CPU
+    from verity_vllm.pipeline import expert_tables as XT
     from verity_vllm.pipeline import serving_rows as SRW
 
+    tables = XT.of_request(tables_of(a))
     r = record1(str(a.bundle), str(a.row_dir))
     if r.store.commit_scheme != SRT.ROWS_SCHEME:
         raise ValueError(f"the Commit's store commits under {r.store.commit_scheme}, not {SRT.ROWS_SCHEME}: no stand-in names a SHA-512 root")
     p = compiler.load(0, 1, requests)
     k0 = next(iter(p.progs))
     tree = json.loads((r.bdir / "weights" / "tree.json").read_text())
-    words = CPU.OnRead(r.bdir, tree, (r.row["commit"].get("weight_registration") or {}).get("root"), None)
+    prefix, ck = ProgramIndex(p.progs[k0], program_dir=p.dirs[k0]).prefix, checkpoint_of(a)
+    words = CPU.OnRead(r.bdir, tree, (r.row["commit"].get("weight_registration") or {}).get("root"), ck,
+                       roles=CPU.registered_roles(p.dirs.values(), prefix) if ck is not None else None)
     bmap = json.loads((r.out / f"binding_map_p{r.pair}.json").read_text())
     res = SRW.after_commit(str(out), partition_file=str(a.partition), programs=p.progs, bmap=bmap, committed=OpenedReader(r.store, r.run),
-                           weights=CPU.provider(words, ProgramIndex(p.progs[k0], program_dir=p.dirs[k0]).prefix, set()),
+                           weights=CPU.provider(words, prefix, set()),
                            manifest=r.manifest if isinstance(r.manifest, dict) else None, run_root=r.run.run_root,
                            row=r.row.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": r.pair, "source": r.ctx.get("code")}, workers=a.workers,
-                           stand_in=stand_in1(r), binding=dict(bound), transfer_gates=compiler.transfer_gates)
+                           stand_in=stand_in1(r), binding=dict(bound), transfer_gates=compiler.transfer_gates, tables=tables)
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -953,7 +987,8 @@ def commit_rank(job: tuple[argparse.Namespace, int, list[dict], dict]) -> dict:
         if single(a):
             got = commit1(a, compiler, requests, bound, out)
         else:
-            got = AW.commit_window(a.tp_commit, r, a.partition, out, compiler, requests, bound, workers=a.workers)
+            got = AW.commit_window(a.tp_commit, r, a.partition, out, compiler, requests, bound, workers=a.workers, tables=tables_of(a),
+                                   checkpoint=checkpoint_of(a))
     return {**got, "forged": {"member": forge[0], "unit": forge[1]} if forge else None}
 
 
@@ -1842,6 +1877,11 @@ def main(argv: list[str] | None = None) -> int:
                    "server's (advice/w<K>/private/advice.bin)")
     p.add_argument("--forge", help="MEMBER:UNIT: commit that unit with bit 0 of its first output word flipped")
     p.add_argument("--workers", type=int, default=None, help="commit workers per rank (default min(16, CPUs))")
+    p.add_argument("--serving-rows-tables", metavar="REGISTRATION_JSON", help="the per-expert cut's tables registration (verity-vllm "
+                   "tp-register-tables --out; {rank} in its path its rank's): each window commits the tables its reads read under it")
+    p.add_argument("--serving-rows-tables-key", metavar="KEY", help="the committer's key file --serving-rows-tables is registered under")
+    p.add_argument("--checkpoint-dir", help="the checkpoint the registered weights a window's rows read are composed from, each "
+                   "held to its committed tensor root (default none: only the tensors the bundle carries open)")
     p = sub.choices["audit"]
     p.add_argument("--windows", required=True, help="the prover's windows, rank<r>/ each (prove_path.py commit --out)")
     p.add_argument("--template-sets", required=True, help="one input set per member template, for the lowering")
