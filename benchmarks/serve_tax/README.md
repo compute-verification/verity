@@ -27,7 +27,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`) | `boundary-rows` |
 | `prod` | nothing: `published`'s server, as the stock arm the arms made from it are costed over | `published` |
 | `prod-again` | nothing: `prod` in a second server lifetime, the noise floor of a cost over `prod` | `prod` |
-| `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`; each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with; and the canonical DSA top-k, as `two-stage` has it (its counters kept on the node), which that replay runs under too | `prod` |
+| `prod-record` | the scheduler's step trace on that server, as `record` is on `compiled`; each request's prompt ids and served ids, which a replay of a pass sent by vLLM's client is given and compared with; the seed the server gives a sampled request that sends none (`ServedSeeds`); and the canonical DSA top-k, as `two-stage` has it (its counters kept on the node), which that replay runs under too | `prod` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -290,11 +290,15 @@ different builds of vLLM served. Where `prod`'s server and its requests differ f
 | no seed, uvicorn's access log on | `--seed 0`, `--disable-uvicorn-access-log` | every arm's (`serve_tax.BASE_ARGS`): the same engine seed on both sides, and no line a request in the server's log |
 | requests as an agent's client sends them: the chat endpoint, tools, sampled as the model's own configuration says, no seed | `/v1/completions` with token ids, each request decoding to its recorded length; greedy, or under `SAMPLED=1` sampled at temperature 1.0 and top-p 0.95, each request naming its `user` and carrying no seed | every arm then serves the same number of tokens whatever it generates; the parsers are loaded and parse nothing |
 
-Under `SAMPLED=1` the client sends `prod-record`, as it sends every arm that keeps the record, each user's seed with
-the request (`serve_tax.user_seed`, `sends_seed`): its replay samples the request again under that seed. `prod` is
-sent none, so vLLM samples its requests as it samples any without a seed, and what a seed changes in vLLM's sampling
-is in `prod-record`'s cost over `prod`, a change of ours like the record and the top-k. The seed is the client's; a
-served request need not send one.
+Under `SAMPLED=1` every request of `prod-record` is sampled under a seed its server gives it
+(`servetax_plugin.ServedSeeds`, on vLLM's Python server, where a request's sampling parameters are made): the seed
+`verity_vllm.engine.served_seed` derives from the body's `user` and a coin the server takes once in its lifetime
+(`server/seed_coin.PID.json`). The step trace then holds the seed of every sample, and the replay samples each request
+again under it. An arm that keeps the record without that change, or behind the Rust front end, is sent each user's
+seed by the client instead (`serve_tax.user_seed`, `seed_from`). `prod` is sent none, so vLLM samples its requests as
+it samples any without a seed, and what a seed changes in vLLM's sampling is in `prod-record`'s cost over `prod`, a
+change of ours like the record and the top-k. A sampled request to `prod-record` that names no `user` and sends no
+seed is refused.
 
 The loads `agentic`, `agentic-full` and `agentic-256k` are a coding agent's recorded sessions: SemiAnalysis's AgentX
 traces (`serve_tax.AGENTX`, Apache-2.0), a line a session, each request its prompt's and its output's tokens and an id

@@ -18,7 +18,7 @@ GLM = S.MODELS["glm53"]
 def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod():
     prod, again, record = (S.ARMS[n] for n in ("prod", "prod-again", "prod-record"))
     assert prod.parent == "published" and again.parent == record.parent == "prod"
-    assert prod.args == again.args == record.args == () and record.plugin == ("record", "ids") and not prod.plugin
+    assert prod.args == again.args == record.args == () and record.plugin == ("record", "ids", "seed") and not prod.plugin
     # ours serves on the canonical top-k, as the two-stage serve does: stock loads no plugin and sets nothing
     assert (record.env, record.general) == (S.TOPK_ENV, S.TOPK) == (S.ARMS["two-stage"].env, S.ARMS["two-stage"].general)
     assert S.entry_points(record) == ["verity_serve_tax = servetax_plugin:register", "verity_dsa_topk = dsa_topk:register"]
@@ -39,7 +39,7 @@ def test_the_prod_arms_start_the_published_arms_server_and_are_costed_over_prod(
     assert S.same_engine("prod", "prod-again") and S.same_engine("prod", "published")
     assert not S.same_engine("prod", "prod-record") and not S.same_engine("prod-again", "compiled-again")
     assert S.changes_of("prod") == S.changes_of("prod-again") == []
-    assert S.changes_of("prod-record") == ["the step record", "the served ids", "the canonical top-k"]
+    assert S.changes_of("prod-record") == ["the step record", "the served ids", "the served seed", "the canonical top-k"]
     # an arm is costed over the nearest stock arm above it: at the recipe's settings, stock at those settings
     assert [S.stock_of(a) for a in ("prod-again", "prod-record", "prod", "published")] == ["prod", "prod", "published", "compiled"]
     assert {S.stock_of(a) for a in S.ARMS if a not in ("prod", "prod-again", "prod-record")} == {"compiled"}
@@ -242,11 +242,15 @@ def test_a_sampled_pass_sends_the_recipes_sampling_and_each_users_name_and_ours_
     assert greedy[at:at + 2] == ["--temperature", "0"] and not {"--extra-body", "--top-p"} & set(greedy)
     assert argv[at:at + 5] == ["--temperature", "1.0", "--top-p", "0.95", "--extra-body"]
     assert json.loads(argv[at + 5]) == {"user": user, "seed": S.user_seed(user)}
-    # a stock arm's requests name their user and carry no seed, as a served request carries none; the arms that keep
-    # the record, which a replay samples again from, are sent one
+    # a stock arm's requests name their user and carry no seed, as a served request carries none; an arm that keeps
+    # the record, which a replay samples again from, has one: its server's where the arm has the served seed on and
+    # vLLM's Python server, which makes the sampling parameters, is its front end; else the client's
     assert json.loads(stock[at + 5]) == {"user": user} and stock[:at + 5] == argv[:at + 5] and stock[at + 6:] == argv[at + 6:]
-    assert [S.sends_seed(S.ARMS[a]) for a in ("prod", "prod-again", "published", "compiled", "prod-record", "record")] == [
-        False, False, False, False, True, True]
+    arms = ("prod", "prod-again", "published", "compiled", "prod-record", "record")
+    assert [S.seed_from(S.ARMS[a]) for a in arms] == [None, None, None, None, "server", "client"]
+    assert [S.sends_seed(S.ARMS[a]) for a in arms] == [False, False, False, False, False, True]
+    assert S.seed_from(S.ARMS["prod-record"], S.RUST) == "client" and S.sends_seed(S.ARMS["prod-record"], S.RUST)
+    assert S.seed_from(S.ARMS["prod"], S.RUST) is None and (S.CLIENT, S.SERVER) == ("client", "server")
     # the rest of the pass is the greedy one's: its requests, their lengths, its ids
     assert argv[:at] == greedy[:at] and argv[at + 6:] == greedy[at + 2:] and "--ignore-eos" in argv
     # a seed is its user's own, 63 bits of SHA-512 over the user's name
@@ -393,9 +397,14 @@ def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work
         S.session_cost([ref, served("prod-record", OURS, plan=sampled)], "prod-record", "prod")
     both = [served("prod", [2.0] * 6, plan=sampled), served("prod-record", OURS, plan=sampled) | {"seeded": True}]
     cost = S.session_cost(both, "prod-record", "prod")
-    assert cost["seeded"] == {"reference": False, "arm": True}
+    assert cost["seeded"] == {"reference": False, "arm": True, "by": "client"}
     assert ("planned to repeat; each sampled at temperature 1 and top-p 0.95, prod-record's under a seed its client "
             "sends, one a user, and prod's under none\n") in S.session_text(cost)
+    both[1]["seed_from"] = "server"                       # the arm's server gave each request its seed
+    assert ("planned to repeat; each sampled at temperature 1 and top-p 0.95, prod-record's under a seed its server "
+            "derives from the request's user and a coin of its own lifetime, and prod's under none\n"
+            ) in S.session_text(S.session_cost(both, "prod-record", "prod"))
+    del both[1]["seed_from"]
     both[0]["seeded"] = True                              # arms served when every sampled arm was sent a seed
     assert ("planned to repeat; each sampled at temperature 1 and top-p 0.95 under a seed its client sends, one a user\n"
             in S.session_text(S.session_cost(both, "prod-record", "prod")))

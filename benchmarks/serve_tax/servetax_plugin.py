@@ -7,6 +7,11 @@ directory its files go to, ``window_s``, and a true value for each change), ever
 - ``ids``: `ServedIds`, each request's prompt ids and the ids it was served, a line a request when it finishes, written
   by a thread of its own to ``ids.PID.jsonl``: what a replay of a pass is given and compared with where the client that
   sent it keeps neither (vLLM's own);
+- ``seed``: `ServedSeeds`, each request's seed given where the server makes its sampling parameters
+  (`verity_vllm.engine.served_seed`): a sampled request that sends none is sampled under one derived from the body's
+  ``user`` and a coin of the server's lifetime (``seed_coin.PID.json``), never one the engine takes from numpy, so the
+  step trace has the seed of every sample and a replay samples again under it. Its place is vLLM's Python server; no
+  scheduler has a part in it;
 - ``release_order``: `ReleaseGate`, the requests added to the scheduler in the certifier's release order
   (`serve_admit.ReleaseOrder`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
   numbers them, standing in for the certifier's headers);
@@ -52,6 +57,9 @@ ENV = "VERITY_SERVETAX"
 POLL_S = 0.01
 #: the model runners whose ``execute_model`` the KV edge follows: V1's and Model Runner V2's, whichever the engine builds
 RUNNERS = ("vllm.v1.worker.gpu_model_runner", "vllm.v1.worker.gpu.model_runner")
+#: vLLM's requests whose ``to_sampling_params`` makes a served request's sampling parameters, by their modules
+SEEDED = {"vllm.entrypoints.openai.completion.protocol": "CompletionRequest",
+          "vllm.entrypoints.openai.chat_completion.protocol": "ChatCompletionRequest"}
 
 _PLUGIN: list[Any] = []
 
@@ -208,6 +216,47 @@ class ServedIds:
     def dropped(self, requests: Iterable[Any]) -> None:
         for r in requests or ():
             self.open.pop(r.request_id, None)
+
+
+class ServedSeeds:
+    """The seed each request is sampled under, given where vLLM's server makes its sampling parameters (`wrap`, of a
+    request class's ``to_sampling_params``), by `verity_vllm.engine.served_seed.served`: the request's own where it
+    sends one, the public default where it is greedy, whose sample reads none, and else the seed derived from the
+    body's ``user`` and this server lifetime's coin. The coin is taken at the first request (``fresh``: in this
+    process by default, a measurement's coin) and ``sink`` gets its record once. A sampled request with neither a
+    seed nor a ``user`` is refused (`served_seed.UNSEEDED`)."""
+
+    def __init__(self, sink: Callable[[dict], None], fresh: Callable[[], tuple[bytes, str]] | None = None) -> None:
+        from verity_vllm.engine.served_seed import SeedCoins
+
+        self.sink, self.coins = sink, SeedCoins(fresh)
+
+    def wrap(self, to_params: Callable[..., Any]) -> Callable[..., Any]:
+        from verity_vllm.engine.served_seed import served
+
+        def to_sampling_params(request: Any, *args: Any, **kwargs: Any) -> Any:
+            first = self.coins.coin is None
+            params, _ = served(to_params(request, *args, **kwargs), getattr(request, "user", None),
+                               self.coins.admitting(False))
+            # vLLM caches which sampler a request takes on its parameters: it is read again with the seed set
+            getattr(params, "__dict__", {}).pop("sampling_type", None)
+            if first:
+                self.sink(self.coins.record())
+            return params
+        return to_sampling_params
+
+
+def seed_requests(hooks: Any, sink: Callable[[dict], None],
+                  fresh: Callable[[], tuple[bytes, str]] | None = None) -> None:
+    """`ServedSeeds` on each of vLLM's request classes (`SEEDED`), one coin for them all: now where the class's module
+    is imported, as it is in the process that serves requests, and else when it is. Nothing is imported for it, so a
+    process that makes no request's sampling parameters (the engine core's, a worker's) is left as it is."""
+    seeds = ServedSeeds(sink, fresh)
+
+    def on(name: str) -> Callable[[Any], Any]:
+        return lambda module: hooks.wrap(getattr(module, name), "to_sampling_params", seeds.wrap)
+    for site, name in SEEDED.items():
+        hooks.at_import(site, on(name))
 
 
 def rows_root(window: int, data: bytes) -> bytes:
@@ -756,6 +805,9 @@ def register() -> None:
 
     hooks = Hooks(tag="serve-tax")
     hooks.wrap(Scheduler, "__init__", lambda init: _init(init, cfg))
+    if cfg.get("seed"):
+        coin = Path(cfg["out"]) / f"seed_coin.{os.getpid()}.json"
+        seed_requests(hooks, lambda rec: coin.write_text(json.dumps(rec) + "\n"))
     if cfg.get("release_order"):
         hooks.wrap(EngineCoreProc, "_process_input_queue", _input)
     if cfg.get("kv"):
