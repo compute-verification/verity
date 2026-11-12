@@ -87649,3 +87649,48 @@ The last sentence is what is true now. When the code has the clause it becomes: 
 **One figure to correct in my 12:20Z entry:** pull request (2)'s scratch is +237 −66 over two files, not +226 −63: I counted before the premise covered moments.
 
 **Next, in this order:** ρ inside `rows` in the v2 scratch (your 11:38Z reading), `Loc.scheme`, the view's first head. Pull request (2) opens when #9249 is on `main`. The release log's clock waits on your word on when.
+
+## FOLD, Thu 12 Nov 12:25Z: #9264's head row is not pinned down: five rounds read 39.45 s before and 39.42 s after at the median, on a node other jobs were using; do not book a head figure for #9264 from it; MoE's (11.27 to 10.13 s) and GEMM's (3.35 to 3.29 s) are clean, the quick tier passed 60 of 60 on the final tree, the buckets are 16% slower on the head too; a third head run is in line
+
+**The head at #9264's head** (`1997812848a4`, before = #9209's head's `Flock/Statement.lean`) [run
+`r20261112-114224-9b5c`, `cpu-4`, core 122, 5 rounds, same verdict bytes in every call]:
+
+| round | before: read s, session s | after: read s, session s |
+|---|---|---|
+| 1 | 103.8, 37.755 | 103.6, 34.956 |
+| 2 | 112.9, 37.566 | 108.2, 42.610 |
+| 3 | 116.4, 39.454 | 104.4, 39.424 |
+| 4 | 111.7, 40.195 | 123.6, 40.054 |
+| 5 | 112.8, 41.864 | 107.7, 38.299 |
+| median | 39.454 | 39.424 |
+| best | 37.566 | 34.956 |
+
+- The read of the circuit file takes 103 s on a quiet node and my change cannot touch it; here it took 103 to 124 s,
+  so other jobs were on the node in every round but the first. The pinned core itself read 0 to 4% busy at the six
+  samples [run, `core.txt`]: the disturbance is the node's memory, not the core.
+- **So this run says nothing either way**, and I have no clean head measurement of the array's order. What I have
+  [run]: the quiet first round here, 37.76 to 34.96 s (−2.80 s); the quiet first round of `5c71`, 37.88 to 35.83 s
+  (−2.05 s); and the clean run of the blocks variant, 42.278 to 40.220 s (−2.06 s, `0566`). From the twins alone the
+  bench gives −2.0 to −2.4 s a session [derived: 2 × (0.64 + 0.37 to 0.54) s].
+- **For SESSIONS: book no head figure for #9264 yet.** If you need one now, 2 s less on the head is [derived], not
+  [run]. A third run is in line: `r20261112-121258-2efb` (`cpu-3`, 5 rounds), waiting for a slot since 12:13Z. If it is
+  disturbed too I will ask you for a quiet hour on one node rather than launch a fourth.
+- This does not reopen the choice of loop: your rule was applied as written, and MoE's clean comparison stands.
+
+**Clean at the final head** [run]: MoE 11.266 to 10.128 s (×1.112, `r20261112-111136-ee57`); GEMM K=512 3.346 to
+3.292 s (×1.016, `r20261112-114309-6609`). Both are in #9264's body, with the head's row marked disturbed.
+
+**The quick tier on #9264's tree:** 60 suites, 60 passed (6 cached), 0 failed [run `r20261112-113824-3c48`].
+
+**The buckets on the head:** 2.454 s a call (73.1 ns an element) against the twin's shape 2.110 s (62.9 ns), 16%
+slower, equal result [run `r20261112-114546-2e9d`, `cpu-9` core 33, 2 repeats]. It agrees with MoE's 18%. Withdrawn, as
+I wrote at 11:56Z.
+
+**#9209:** `r20261112-073043-f29b` is still running at 12:24Z [run, `research fetch`]; it took its slot at 08:15:46Z.
+
+**What I wait on.**
+
+| run | what | ETA |
+|---|---|---|
+| `r20261112-121258-2efb` | the head's before and after for #9264, third try | about 35 minutes after it gets its slot [guess]; in line at 12:24Z |
+| `r20261112-073043-f29b` | #9209's recorded check: then the lock sentence, `verifier.allow`, the merge of `main`, the quick tier on the merged head, the `comm -23` step | unknown |
