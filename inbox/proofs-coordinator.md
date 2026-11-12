@@ -87804,3 +87804,39 @@ What I did not run on a merge with today's `main`:
 - [run] **Out**: `r20261112-121044-e063`, `suites.py --changed 8b536f5c1d62 --quick` at the head, 68 suites (this change's and #9087's), vy-nebius-cpu-1, check slot r2 since 12:11Z; 6 passed, none failed at 12:31Z. [guess] It ends 13:25Z to 13:45Z (`07a8`: 58 suites in 73 minutes after its slot). [derived] The ready line waits on it alone; every other item above is in.
 - [read] **Named, not done**: `total_cost.draw_width` and `DRAW_BYTES` (#9112) state `second_stage.width` and the product in `second_stage.fits` a second time ([run] equal on 1 to 65,535 and around each power of two to 2^63). One definition means editing `main`'s lines, so I left it out of a merge; say if you want it in #9091.
 - [run] Body replaced at 12:30Z (26,104 bytes): the base and #9087's head, the lock notice, the figures from `375d`, what moved, the files (20), the checks. Checkpoint 14 synced (`20261112T1224Z-report-refuse-checkpoint.md`). Not run: the Lean check with the kernel replay; the grader README's audit. I marked nothing.
+
+## MEMBERS, Thu 12 Nov 12:35Z: your 12:15Z and 12:26Z are read; PRF-585's `membersRun` returned on #9199's fixture (`4366` passed); the lever is committed and pushed, its files pass is one parse a member, measured; `e3ca` and `154d` still run, so no pull request yet
+
+Clock read: 12:35Z. Mailbox read at 12:34Z: PRF-593 is last and waits for lean's merge; nothing of it is built. Tags: [run], [read], [relayed], [derived], [guess].
+
+**1. PRF-585 on a real case** [run]
+- `r20261112-120029-4366`: #9199's fixture test on PRF-585's head merged with #9199's head: 1 passed in 478 s, 589 deselected. The test asserts Lean's answer is `MULTI_REFUSED` alone, so PRF-585's `membersRun` returned with every session accepted, on two members with a challenger.
+- The executable was built from the merged tree in that run [read: `proofs.v2_executable` runs `lake build` in the run's own tree].
+- The corrected sentences are in PRF-585's body draft, as you said.
+
+**2. The lever** [run]
+- Branch `cursor/proofs-members-oneparse-7b3e` at `408e4ab6c75e`, pushed: one commit on `0429a81f9848`, one file, +102 −36. More than the 25 lines I guessed: two lemmas and the `#guard`s are most of it.
+- Try: exit 0, 17 theorems, no axiom beyond the three, no name clash (`r20261112-120826-85b3`). A first try failed on one lemma of mine (`992a`); mended.
+- Timing, the same case as `d081`, on vy-nebius-cpu-1 (`r20261112-121104-b4ad`):
+
+| | before (`d081`) | after (`b4ad`) |
+|---|---|---|
+| parses of a member's circuit in its files pass | 4 | 1 |
+| `Member.statement`, K=128 and K=256 | 2.97 s, 3.40 s | 0.90 s, 1.03 s |
+| `StepAt.filesHeld` | 0.99 s, 1.15 s | 0 ms |
+| `membersFiles`, both members | 8.63 s | 1.99 s |
+| `runMembers`, both sampled | 16.51 s | 9.20 s |
+| `runMembers`, the K=256 member's statement left out | 13.24 s | 5.68 s |
+| the K=256 member with the other's public file: refused, naming it | 7.4 s | 2.03 s |
+
+- One parse took about a second in both runs (0.94 s and 1.01 s after). The two runs were on two machines of one kind.
+- Against `main` [derived]: both changes together cost one parse for a member the sample missed and save two for a sampled one. `main`'s run of the two sampled members is about 14.4 s; it is 9.2 s now.
+- On #9199's fixture, the lever's head merged with #9199's head: 1 passed in 199 s (`r20261112-122420-cd8f`). So `membersRun` returns on the real case with the lever too. The 199 s against 478 s is two machines and a key each; I claim nothing from it.
+- What a session still parses [read]: its setup and `KsScope.checkOf` at its sample, once each a session. Not touched: `verdictOf` is read by the proofs under `security/`.
+- The second lever is not in it, as my 12:08Z entry says.
+
+**3. Runs out**
+- PRF-585's head: `r20261112-110753-e3ca`, 62 of 69 passed, none failed, at 12:34Z [read]. `r20261112-110654-154d`: `security`'s update passed and wrote its regenerated lock; it is on the other requirers now [read]. I commit the regenerated records on PRF-585's branch when it ends, merge `main` once, run the two merge-trees and open the pull request.
+- The lever's head: suites, whole, `r20261112-122425-2767` (vy-nebius-cpu-11), by about 14:30Z [guess]; records `r20261112-122420-e765` (vy-nebius-cpu-11), by about 14:00Z [guess]. Its pull request opens after PRF-585's, on those two.
+
+**4. Next, while they run:** PRF-586's name checked at lean's tip `f3837f57d113`, read only, as your 12:26Z says.
