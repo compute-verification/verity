@@ -15,8 +15,7 @@ from pathlib import Path
 
 from verity.commitments.windows.population import population_program
 from verity.protocols.spot.verifier import service as S
-from verity_vllm.pipeline import window_law as WL
-from verity_vllm.pipeline.serving_templates import template
+from verity_vllm.pipeline import serving_rows as SRW
 
 BENCH = Path(__file__).resolve().parents[1]
 REPO = BENCH.parents[1]
@@ -82,20 +81,20 @@ def test_each_rule_the_stand_in_states_is_a_rate_whose_design_its_window_registe
     """`prove_path.py audit` states its partition file's text as the stream's rule, so a fixed design there ends the audit
     at the rule check, before any session opens. Each of the stand-in's four rules is a rate, and over a rank's window the
     sampling design the stream names for it, which its `register` holds the registration to, is the one the window
-    registers: the adapter reads the partition file's text as a rate of that kind and resolves it over the window's
-    program, as `serving_rows.population` does. The honest run samples half a rank's proof blocks and the forged run every
-    one, so its forged unit is sampled; a plain session's design is stratified."""
+    registers: the serving rows read the partition file's text as a rate of that kind and resolve it over the window's
+    program, by the steps of `serving_rows.population`. The honest run samples half a rank's proof blocks and the forged
+    run every one, so its forged unit is sampled; a plain session's design is stratified."""
     rules = stated()
     refusals = {text: why for _plain, _forged, text in rules if (why := rule_of(text)[1])}
     assert not refusals, (f"{RUN_SH.name}'s stand-in states a rule a stream refuses, so its audit ends at the rule check: "
                           f"state {RATE} instead ({refusals})")
-    program, query = population_program([(template(STANDIN).fn, UNITS)])
+    program, query = population_program([(SRW.template(STANDIN).fn, UNITS)])
     for plain, forged, text in rules:
         rule, _why = rule_of(text)
         names = S.selection_law(rule, UNITS, S.selection_sizes(rule, program, query))
-        read = WL.law_of(text)
+        read = SRW.law_of(text)
         assert read == {KEY: names[KEY], "rate": text}, (text, read)
-        registers, table = S.params_law(read["rate"], program, query, WL.work_table_of(read, {STANDIN: UNITS}))
+        registers, table = S.params_law(read["rate"], program, query, SRW.work_table_of(read, {STANDIN: UNITS}))
         assert registers == names and table is None, (text, registers, names, table)
         assert names["k"] == (UNITS if forged else UNITS // 2), (text, names)
         assert not plain or names[KEY] == "stratified", (text, names)
