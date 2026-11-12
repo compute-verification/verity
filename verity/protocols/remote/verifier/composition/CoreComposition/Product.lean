@@ -21,7 +21,7 @@ module
 
 public import CoreProtocol.Protocol
 public import CoreProtocol.Protocol.Canonical
-public import Flock.Hash
+public import Base.Hash
 
 @[expose] public section
 set_option backward.privateInPublic true

@@ -49,6 +49,10 @@ second is the first at L·T and L·c, where the longest call is L compressions (
 premise counted in compressions gives when every call may be that long (`converted`). A design by position that
 also states its classes is printed in four columns: by gates and by classes, each in calls and in compressions.
 
+K_s and K_m as given are means over the verifier's coins. A count of the sample bounds them by less: the blocks it
+checks times the most gates one block needs (`as_counted`). A design that states that largest block (`largest`, and
+`largest_classes` by classes) is printed in two more columns for each, beside the mean.
+
 Beside the bound, per run: the term of the cap on the extractor's waits, (2·k/K + e^(−k/8)) at the outer waits plus
 c times that at the inner, K = 2^cap·k and c = 2^(1/1024), at each cap of `CAPS` (`waits`). It is no term of the
 first-hit bound and is in no sum.
@@ -61,10 +65,13 @@ square root (`root_up`), and what is printed is ⌊−log₂⌋ in hundredths of
 
     uv run python benchmarks/spot_figures/binding.py --K 2^41.81 --classes 2^26.24 --sessions 15694 --symbols 2^23 \
         --first-stage 6                                                                 # by gates and by classes
+    uv run python benchmarks/spot_figures/binding.py --K 2^41.81 --sessions 10046500 --largest 632128 \
+        --symbols 2^23 --first-stage 6                                    # the gates a mean, and as a count gives them
     uv run python benchmarks/spot_figures/binding.py --card GLM-5.3 --symbols 2^10          # by gate, K from the card
     uv run python benchmarks/spot_figures/binding.py --K 2^40.23 --k 12343986 --d 167       # by gate, K, k and d given
                             # [--T 2^80] [--longest-call 65536] [--Km K] [--units N --open-calls C] [--rounds R]
                             # [--gamma G] [--kappa P] [--waits-k 2^10] [--p-ref P] [--opens N --M N]
+                            # [--largest M] [--largest-classes M] [--checked C]
                             # [--first-stage K0] [--phase-seconds 600] [--machines N] [--target 100] [--json]
 """
 from __future__ import annotations
@@ -255,6 +262,17 @@ def by_classes(design: Design, classes: int, Km: int | None = None) -> Design:
     return replace(design, K=classes, Km=Km, by_class=True)
 
 
+def as_counted(design: Design, largest: int, checked: int | None = None) -> Design:
+    """The design by position with K_s and K_m as a count of the sample gives them: its `checked` blocks (its
+    sessions unless stated, one session a checked block) times `largest`, the most gates, or classes, one block
+    needs."""
+    if design.sessions is None:
+        raise ValueError("a count of the sample's checked blocks is of a design by position: state its sessions")
+    if largest < 1 or (checked is not None and checked < 1):
+        raise ValueError("the checked blocks and the largest block's needs are positive integers")
+    return replace(design, K=(design.sessions if checked is None else checked) * largest, Km=None)
+
+
 def waits(cap: int, k_out: int = WAITS_K, k_in: int = WAITS_K) -> Fraction:
     """A rational at or above the term of the cap on the extractor's waits at K = 2^`cap`·k:
     (2·k_out/K_out + e^(−k_out/8)) + c·(2·k_in/K_in + e^(−k_in/8)), with e^(−k/8) taken at ⌊k/8⌋ and e at `E_LOW`,
@@ -396,15 +414,24 @@ def probability(text: str) -> Fraction:
 
 
 def report(design: Design, phase: int = PHASE, machines: int = 1, target: int = 100, first_stage: int = 1,
-           longest: int = LONGEST, classes: int | None = None, waits_k: int = WAITS_K) -> dict:
+           longest: int = LONGEST, classes: int | None = None, waits_k: int = WAITS_K, largest: int | None = None,
+           largest_classes: int | None = None, checked: int | None = None) -> dict:
     """The bound per sampled replay block, term by term with each term's premise, per run at a padded first stage of
     `first_stage` replay blocks and over each monitoring period. Each figure is given in each of `columns`: by gates
     in calls and in compressions (`converted` at a longest call of `longest` bytes) and, where a design by position
-    states its `classes`, by classes in both, with whether it is at most 2^-`target`. By position each sum is given
-    under each premise at B (`READINGS`), which its `at_B` names. `waits` is the waits' term at each cap, per run."""
+    states its `classes`, by classes in both, with whether it is at most 2^-`target`. Where it states the `largest`
+    block's gates, or its `largest_classes`, the same with that count `as_counted` over the `checked` blocks, beside
+    the count as given. By position each sum is given under each premise at B (`READINGS`), which its `at_B` names.
+    `waits` is the waits' term at each cap, per run."""
     goal = Fraction(1, 2 ** target)
     readings = READINGS if design.sessions is not None else (None,)
-    counts = {"gates": design} if classes is None else {"gates": design, "classes": by_classes(design, classes)}
+    counts = {"gates": design}
+    if largest is not None:
+        counts["gates as counted"] = as_counted(design, largest, checked)
+    if classes is not None:
+        counts["classes"] = by_classes(design, classes)
+    if largest_classes is not None:
+        counts["classes as counted"] = by_classes(design, as_counted(design, largest_classes, checked).K)
     columns = {f"{count}, {unit}": d for count, counted in counts.items()
                for unit, d in (("calls", counted), ("compressions", converted(counted, longest)))}
     run = run_unit(first_stage)
@@ -433,7 +460,12 @@ def report(design: Design, phase: int = PHASE, machines: int = 1, target: int = 
         return {"block": most_gates(d, target), "run": most_gates(d, target, 1, first_stage),
                 **{name: most_gates(d, target, n, first_stage) for name, n in spans.items()}}
 
-    return {"design": {"form": design.form, "K": design.K, "Km": design.Km, "classes": classes, "k": design.k,
+    counted = {count: {"checked": design.sessions if checked is None else checked, "largest": most_of,
+                       "K": counts[count].K}
+               for count, most_of in (("gates as counted", largest), ("classes as counted", largest_classes))
+               if most_of is not None}
+    return {"design": {"form": design.form, "K": design.K, "Km": design.Km, "classes": classes, "counted": counted,
+                       "k": design.k,
                        "d": design.d, "T": design.T, "sessions": design.sessions, "units": design.units,
                        "open_calls": design.open_calls, "own_calls": design.own, "rounds": design.rewinds,
                        "gamma": design.gamma, "kappa": None if design.kappa is None else str(design.kappa),
@@ -443,7 +475,7 @@ def report(design: Design, phase: int = PHASE, machines: int = 1, target: int = 
             "terms": rows, "block": sums(1, 1, BLOCK_UNIT), "run": sums(1, first_stage, run),
             "periods": {name: sums(n, first_stage, run, runs=n) for name, n in spans.items()},
             "waits": [{"cap": cap, "k": waits_k, "unit": run, **cell(waits(cap, waits_k, waits_k))} for cap in CAPS],
-            "most_gates": {column: most(d) for column, d in columns.items()}}
+            "most_gates": {column: most(d) for column, d in columns.items() if "as counted" not in column}}
 
 
 def render(out: dict) -> str:
@@ -476,6 +508,10 @@ def render(out: dict) -> str:
         own = f"c = n_PU·openCalls = {d['units']}·{d['open_calls']} = {d['own_calls']}"
         lines = [f"by {d['form']}, {BLOCK_UNIT}: N_s = {d['sessions']} sessions, K_s = {count(d['K'], of)}, "
                  f"K_m = {count(d['K'] if d['Km'] is None else d['Km'], of)}{classes}, {own}, {budget}"]
+    for name, c in d["counted"].items():
+        of = name.split()[0]
+        lines.append(f"{name}, {BLOCK_UNIT}: K_s = K_m = {c['checked']} checked blocks times the {c['largest']} {of} "
+                     f"the largest block needs = {count(c['K'], of)}; as given, K_s and K_m are means over the coins")
     lines.append(f"each figure {BLOCK_UNIT} or {run}, in {len(out['columns'])} columns: "
                  f"{'; '.join(f'by {column}' for column in out['columns'])}. Calls are as the Lean says; compressions "
                  f"are converted at the longest call ({longest['bytes']} bytes, {longest['compressions']} "
@@ -512,6 +548,13 @@ def main(argv=None) -> None:
     ap.add_argument("--sessions", type=natural, help="the sample's sessions, in the mean: evaluate by position")
     ap.add_argument("--classes", type=natural, metavar="K_CLS",
                     help="by position, the classes of gates one reveal opens whole: print by classes beside by gates")
+    ap.add_argument("--largest", type=natural, metavar="M",
+                    help="by position, the most gates one block needs: print the gates as a count of the checked "
+                         "blocks gives them, beside the mean")
+    ap.add_argument("--largest-classes", type=natural, metavar="M",
+                    help="by position, the most classes one block needs: the same by classes")
+    ap.add_argument("--checked", type=natural, metavar="C",
+                    help="the blocks a sampled replay block's sample checks, with --largest (default --sessions)")
     ap.add_argument("--Km", type=natural, help="by position, the gates counted session by session (default --K)")
     ap.add_argument("--units", type=natural, default=1, help="by position, n_PU: own calls are units·open-calls")
     ap.add_argument("--open-calls", type=natural, default=0, help="the calls of the opening checks")
@@ -542,9 +585,15 @@ def main(argv=None) -> None:
     design = Design(K=gates, k=a.k if a.k else queries(a.tables * a.symbols), d=a.d, T=a.T, sessions=a.sessions,
                     Km=a.Km, units=a.units, open_calls=a.open_calls, rounds=a.rounds, gamma=a.gamma, kappa=a.kappa,
                     p_ref=a.p_ref, opens=a.opens, M=a.M)
-    if a.classes is not None and a.sessions is None:
-        ap.error("--classes counts a design by position: state --sessions")
-    out = report(design, a.phase_seconds, a.machines, a.target, a.first_stage, a.longest_call, a.classes, a.waits_k)
+    stated = [flag for flag, value in (("--classes", a.classes), ("--largest", a.largest),
+                                       ("--largest-classes", a.largest_classes), ("--checked", a.checked))
+              if value is not None]
+    if stated and a.sessions is None:
+        ap.error(f"{', '.join(stated)} counts a design by position: state --sessions")
+    if a.checked is not None and a.largest is None and a.largest_classes is None:
+        ap.error("--checked is the count --largest or --largest-classes multiplies: state one")
+    out = report(design, a.phase_seconds, a.machines, a.target, a.first_stage, a.longest_call, a.classes, a.waits_k,
+                 a.largest, a.largest_classes, a.checked)
     print(json.dumps(out, indent=1) if a.json else render(out))
 
 
