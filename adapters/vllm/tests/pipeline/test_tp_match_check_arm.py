@@ -117,6 +117,34 @@ def test_a_link_that_does_not_name_one_peer_per_other_rank_is_refused(tmp_path, 
         _check(run)
 
 
+def test_a_build_whose_links_file_holds_no_links_is_refused_by_the_files_name(tmp_path):
+    run = _capture(tmp_path / "run", links=lambda r, doc: {k: v for k, v in doc.items() if k != "links"} if r == 1 else doc)
+    with pytest.raises(Refused) as e:
+        _check(run)
+    assert str(e.value) == f"{run / 'b1' / 'tp_links.json'}: not a rank's tp_links.json: its `links` is absent, not a list"
+    assert not (run / "tp2_match.json").exists()
+
+
+def _request(first_step, *, listed: bool = True, timing: bool = True, requests: bool = True) -> dict:
+    """A capture's tokens of one request (five prompt tokens, two generated) whose prefill the capture's timing puts at ``first_step``."""
+    tok = json.loads(_tokens(GENERATED, 1.5))
+    if timing:
+        tok["timing"] = {"requests": {"r0" if listed else "other": {"first_step": first_step}}} if requests else {"engine_steps": 2}
+    return tok
+
+
+@pytest.mark.parametrize("tok", [_request(0), _request(None), _request(3, listed=False), _request(3, requests=False), _request(3, timing=False),
+                                 {**_request(3, timing=False), "timing": None}],
+                         ids=["at forward 0", "a step the engine did not report", "a request the timing does not list",
+                              "a timing without its requests", "no timing", "a null timing"])
+def test_a_request_whose_capture_names_no_first_step_is_scheduled_from_forward_0(tok):
+    assert M.step_rows(tok) == {0: (5, 1), 1: (1, 1)}
+
+
+def test_a_request_is_scheduled_from_the_forward_its_capture_says_ran_its_prefill():
+    assert M.step_rows(_request(3)) == {0: (0, 0), 1: (0, 0), 2: (0, 0), 3: (5, 1), 4: (1, 1)}
+
+
 def test_a_step_whose_collectives_are_not_the_builds_signature_is_named(tmp_path):
     def widen(r: int, rows: list[dict]) -> list[dict]:
         return [{**x, "shape": [1, 16]} if (r, x["step"], x["k"]) == (0, 1, 1) else x for x in rows]

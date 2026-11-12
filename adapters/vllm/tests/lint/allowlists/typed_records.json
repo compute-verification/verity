@@ -262,8 +262,6 @@
     {"file": "verity_vllm/pipeline/tp/import_path.py", "kind": "schema-literal", "symbol": "write_import_path_runtime", "detail": "verity/tp2/import-path-runtime/v1", "count": 2},
     {"file": "verity_vllm/pipeline/tp/import_path.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
     {"file": "verity_vllm/pipeline/tp/links.py", "kind": "schema-literal", "symbol": "write_tp_links", "detail": "cb-a/tp_links/v2"},
-    {"file": "verity_vllm/pipeline/tp/links.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}"},
-    {"file": "verity_vllm/pipeline/tp/match.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 3},
     {"file": "verity_vllm/pipeline/tp/negatives.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 2},
     {"file": "verity_vllm/pipeline/tp/rank_replay.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/tp-sampled-replay/v1"},
     {"file": "verity_vllm/pipeline/tp/rank_replay.py", "kind": "schema-literal", "symbol": "not_run", "detail": "verity-sweep/boundary-linkage/v1"},

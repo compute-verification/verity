@@ -180,7 +180,7 @@ def links_for_rank(rank: int, build: Path, compare: dict, derived: list[str]) ->
     per-request derived dir (each derived dir of a rank carries its own tp_links.json)."""
     if not derived:
         doc = _load_links(build / "tp_links.json")
-        return list(doc["links"]) if doc and isinstance(doc.get("links"), list) else None
+        return list(doc["links"]) if doc else None
     out: dict[str, list[dict]] = {}
     for r in compare.get("per_request") or []:
         d = r.get("derived")

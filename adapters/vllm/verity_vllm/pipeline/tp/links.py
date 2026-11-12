@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 
+from verity_vllm.errors import Refused
+
 
 def module_in_model_vocabulary(module_path: str | None, model_root: str | None) -> str | None:
     """A derive module path (`<model_root>.<path> (<Class>)`, the traced wrapper's `named_modules()` spelling) in the
@@ -76,13 +78,17 @@ def write_tp_links(out: str, res: dict, program, rep, tp: int, rank: int, model_
 def read_tp_links(path: str) -> dict:
     """Load a `tp_links.json` of schema v1 (world 2, one `peer_input`/`peer_rank` per link) or v2 (`peers` per link), returning
     the v2 shape: every link carries `peers = [{rank, input, operand, collective_k}]` and the doc `peer_ranks`.  A v1 file is upgraded in
-    memory (world 2: the single peer is rank 1-r); nothing is rewritten on disk."""
+    memory (world 2: the single peer is rank 1-r); nothing is rewritten on disk.  A document whose `links` is not a list (both
+    schemas' writer writes one, empty for a rank with no collective) is not a rank's links, and is refused by that name."""
     with open(path) as f:
         doc = json.load(f)
+    links = doc.get("links")
+    if not isinstance(links, list):
+        raise Refused(f"{path}: not a rank's tp_links.json: its `links` is {'absent' if links is None else 'a ' + type(links).__name__}, not a list")
     world, rank = int(doc.get("world") or 2), int(doc.get("rank") or 0)
     doc.setdefault("peer_ranks", [r for r in range(world) if r != rank])
     root = doc.get("model_root")
-    for ln in doc.get("links") or []:
+    for ln in links:
         if "module" not in ln:    # v1 / early v2: no recorded model root -> the path as spelled (class dropped); readers use same_module_path
             ln["module"] = module_in_model_vocabulary(ln.get("module_path"), root)
         if "peers" not in ln:
