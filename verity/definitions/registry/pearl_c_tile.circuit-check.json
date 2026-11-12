@@ -1,13 +1,5 @@
 {
  "definitions": {
-  "PearlCChain_v2{K=128,DOT=BlackwellE4m3QmmaDot32_v2,G=4}": {
-   "and": 36933,
-   "type": "9f65226edfdd42f043a19414d6d9fc3305becdbf2a7eb4e08477fc8af60532dd64f5fe446b336d8a2e74596787f463b2bcfc67a121a87ced6973e90fc7f973ff"
-  },
-  "PearlCChain_v2{K=160,DOT=HopperE4m3QgmmaDot32_v2,G=4}": {
-   "and": 34910,
-   "type": "92e9bacff38b9b5bab508e2cd1629e89a94be16fefc4be8ef976e19926454e07f4f5514b974a508f69833f0658f4a4851fd131764c28c349acd547c2b28034c9"
-  },
   "PearlCUnscale_v2{TM=2,TN=2,BIAS=False}": {
    "and": 28460,
    "type": "52ff838f268b39e94f8f1702be7d29f30d2eb0a2e4a197530de5dccb321923c5691ebdeea5f7269d76cf771f5e71a4753c2fc03bb2e5fac572d1cb60dc737d7d"
