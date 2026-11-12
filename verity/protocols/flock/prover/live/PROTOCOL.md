@@ -735,8 +735,11 @@ The release side admits each registration once, oldest first (the record's rule 
 key (`core-firewall session --salt-key FILE`; `FC_FIREWALL_SALT_KEY` for `flock-circuit --firewall-state`), every hm96
 tree of a statement's public file must be a table of a registration on the record, at its domain, leaf count, schema and
 root, whose record tag is the server's for its number, session count and table refs, under `k` or, for an interior
-registration, under its `ks` once `ks`'s tag is the server's (`Salts.readsOf`); a statement that isn't is its recursive
-session's stop, before anything of it reaches the auditor. At its admission a statement admits
+registration, under its `ks` once `ks`'s tag is the server's (`Salts.readsOf`), unless the verifier lists it as known
+content (below); a statement that isn't is its recursive session's stop. The trees are held to the record once the
+auditor has answered the session's `Register` and before the prover receives that answer (`Core.Firewall.seatReads`,
+`Session.Hold`'s `known`): `Register`, one constant byte that carries nothing of the statement, has left by then, and
+nothing else of a refused statement reaches the auditor. There a statement admits
 each registration it reads that is not yet admitted, and passes over (`skip`) each older one it doesn't read: a
 registration passed over is never admitted, a statement that reads one is a stop, and each skip is a failure on the
 stream's budget (§10.5). A statement that reads only registrations already admitted admits none. `flock-firewall
@@ -752,9 +755,19 @@ read: across a stream of `r` registrations with at most `b` passed over, at most
 **Known content.** A row the verifier registers itself at known content (`Flock.RegKnown`) commits no value and is none
 of the service's. Its words and its salt are a function, fixed by the protocol under a tag of its own, of what is public
 before the row is made, and the verifier computes that function itself and takes the row from no file of the stack's
-(`Salts`'s header has the rule). The release side knows no known content: given the key it refuses a statement that has
-such a row, as it does every statement one of whose trees no registration holds, so that statement passes only a loop
-run without `--salt-key`.
+(`Salts`'s header has the rule). The release side computes no known content: it takes a statement's known trees from
+the verifier. After the draw, the verifier's answer to the session's `Register` lists each tree of the statement that it
+computed itself: `be32 K`, then `K` entries of a tree's 64-byte domain, `be64` row count, schema byte and 64-byte root
+(`flock-verify known-trees` writes the list from the verifier's own `--registered` file and the statement's public
+file's header, `Registered.knownTrees`; `flock-circuit serve --known-trees LIST` sends it; an answer that ends at the
+draw lists none). The loop cuts the list off the answer, so the prover receives the draw alone, and holds the
+statement's trees to it before `Hello` leaves (`Salts.readsKnown`): a tree that equals an entry reads no registration
+and is recorded (a `known` event, no failure), and every other tree must be a registration's table as above. A list that does not
+parse, an entry whose root is a registration's table's, two entries of one domain, an entry at whose domain the
+statement has no tree, and a tree of the statement that differs from the entry at its domain are each the session's
+stop. So a session that passes holds exactly the listed trees as known content, and the stack chooses neither which
+trees pass so nor a bit of them. The list is the verifier's word only where the answer to `Register` is the auditor's:
+nothing of the stack's reaches the auditor but through a release side run with the key.
 
 Three limits. Without `--salt-key` the loop checks no statement's value commitments and admits no registration: nothing
 yet requires the key of a deployment's loop. The ZK server numbers one sequence of registrations for all its
@@ -1249,7 +1262,9 @@ starts it as its Lean session loop (§10.4's `flock-firewall session` with a hol
 `test_firewall_release_agreement.py` run. Like the relay, the
 loop answers a session's `Ping`s itself, and at its first other request takes the slot, then records the slot and the
 admission in one read of the record (`Core.Firewall.seat`: the statements' order is enforced there), before anything of
-the session reaches the challenger. It relays the session's rounds as §10.4 says, holds its `Finish` and the loop's own
+the session reaches the challenger. Given the salt key, it admits the statement's registrations at the challenger's
+answer to `Register` (`Core.Firewall.seatReads`, §10.2), before the worker receives the draw. It relays the session's
+rounds as §10.4 says, holds its `Finish` and the loop's own
 proofs, and at `Finish` decides (`Decision.after`, at the wall clock's time): the loop's own refusal of the session is a
 stop, as is a `Finish` with fewer than the session's proofs (two a table, the loop's finish's: where a check refused, the
 finish computed none) and a missed release time. A session that goes waits for its release time; its proofs, then `Finish`,
@@ -1326,7 +1341,7 @@ sessions ever have a statement not released: each is unended, or stopped and so 
 of a recursive session opened (`card_unrel_le_budget`, `Proofs.Flock.Recursive.StopCountBudget`, at every order of the
 record's ops `openSession`, `finish`, `stop`, `release`, `slot`, `admit` and `wait`, and `card_unreleased_le_budget` at
 every run of `StopCount.run`; rule 5's `register` and `admitReads` are not yet among the ops the proof runs: they open
-nothing, and their stops and skips are failures like any other). A recursive session the worker
+nothing, their stops and skips are failures like any other, and a `known` event is none). A recursive session the worker
 abandons, asking for no statement after some release, ends where it stands for the challenger (its next proof never
 comes, `late`); the ZK server records no stop until a request comes, but the session stays unended and holds one of the
 b. b is the challenger's stream's `budget` (`Stream(budget=...)`,

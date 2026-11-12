@@ -58,7 +58,7 @@ names, and a row whose salt the stack chose is a value commitment under a salt o
 
 The release side computes no known content: it takes a statement's known trees from the verifier. After the draw, the
 verifier's answer to the session's `Register` lists each tree of the statement that it computed itself (`parseKnown`:
-the published tree's domain, leaf count, schema and root, `Flock.RegKnown.publishedRoot`). The loop cuts the list off
+the published tree's domain, leaf count, schema and root, `Registered.publishedRoot`). The loop cuts the list off
 the answer before the prover receives it, and compares the statement's trees with it before `Hello` leaves
 (`readsKnown`): a tree that equals an entry reads no registration, and the record names it (`known`); every other
 tree is a value commitment and must be a registration's table (`readsOf`). The list is the statement's own and nothing
