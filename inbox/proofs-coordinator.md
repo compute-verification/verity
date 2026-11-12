@@ -83177,3 +83177,38 @@ index 0000000000..b71510de52
 - `r20261112-101506-02ef`, trial `4ed6a1055e64`: #8950, #9091 with its pin, #9075. Waiting on cpu-10.
 - I cancelled `12e3` (#9173) and `09dc` (#9075), both on the old `main`: each had 6 suites passed, none failed.
 - `aa34`, `fc27`, `7348`, `d64d` running. ETA for `aa34`'s last line: about 11:15Z.
+
+## SESSREAD, Thu 12 Nov 10:23Z: READY LINE: #9173 at `54c9370d08e5`: both runs on it are rc 0 and no record moved, `main` at `33faab2be81c` merges with no file named, no stop beyond `main`'s against lean's branch; close: none owed
+
+Mailbox read 10:23Z: its last section is still yours of 07:59Z. Not marked; nothing pushed to the branch since 09:26Z.
+
+- [run] **Head.** `54c9370d08e51bac8a33d7123089f0f9455bbb11` on `cursor/proofs-requests-c632`, as at 09:26Z (the remote branch and the pull request's head both read back as it at 10:20Z). `research queue status` at 10:22Z: "#9173 54c9370d waiting proofs: not marked ready at 54c9370d".
+- **The suites, `r20261112-091833-b8e5`** (`suites.py --changed origin/main --quick`, at `54c9370d08e5` by its `job.json`).
+  - [read] `stdout.log`, last line: "60 suites: 60 passed (2 cached), 0 failed; 121.4 min of test time". 58 lines "passed", 2 "cached" (`verity/commitments`, `verity/definitions/private_circuits`), no line "failed"; no failed test to name.
+  - [read] Among them `verity/protocols/spot/verifier`: 863 passed, with "2 test modules the change reaches run whole, slow tests included: test_optimize.py, test_plancheck.py"; `benchmarks/spot_figures`: 218 passed; `repository`: 340 passed.
+  - [read] Its first line says "the change from origin/main touches 60"; the log does not say which commit `origin/main` was in that machine's checkout.
+- **The records run, `r20261112-091148-b1a8`** (`lean_changed.py --records security --update`, `--cwd clone`). **No record regenerated: nothing to commit.**
+  - [read] Its last line: outcome `pass` for the run and for each of `security`, `security/Proofs`, `security/Properties` (`regenerated` is the word it would have used); `result.json` has `update: True`. No `lean-audit/record/` directory exists in the run.
+  - [run] The one lock under its declared output is `lean-audit/audit-security/lean-audit.json`, what `--update` wrote: `cmp` with `security/lean-audit.json` at `54c9370d08e5` finds no difference (sha256 `cbf24048...a737` both). `security/Properties` passed check.py as a requirer with `failures: []` in its report, so no `--update` ran on it and no lock of it was kept: its lock at the head (sha256 `74cd45fc...da6e`) stands.
+  - [read] Verdicts, a `lean-fast/v1` result (no kernel replay, no tests): `security` PASS, 27098 declarations in 712 modules, 1102 guarantees; `security/Proofs` PASS, 195397 declarations in 3877 modules; `security/Properties` PASS, 3093 declarations in 94 modules, 465 guarantees; each "axioms propext, Classical.choice, Quot.sound".
+  - [read] Its build of `security/Proofs` compiled 45 modules ("missed: 43 reads a module not restored, 2 an output it reads"), and none of my five is among them or among the sampled recompiles. [derived] So my five modules were taken from the node's artifact cache under their keys (a module's source and what its compile read), not compiled again on the merged head; the packages' root builds and the audit ran over them.
+- **`main` at `33faab2be81c`** (fetched 10:20Z).
+  - [run] `git merge-tree --write-tree --name-only origin/main HEAD`: exit 0, no file named (tree `e8e04e7a2714`). **So I did not merge**, and launched nothing.
+  - [run] Since `19fb19a21e40`, `main` changed two of my eleven files, neither where I change it: `security/lean-audit.json` (16 entries of `unwitnessed` gone) and `test_optimize.py` (the `SHA512_ROWS` test). The merged tree differs from `main` in my eleven files only.
+  - [run] `main`'s Lean since `19fb19a21e40` is ten files, eight of them new or roots under `security/Proofs`. None names any of the 121 declarations of my five files (either version), and `git grep` on the merged tree finds my six new names in `TwoRankin.lean` alone and no use of the two I deleted. [derived] None of them is in my five files' imports, so what my five files read is as `b1a8` built it; the roots `Proofs.Flock` and `Proofs.WeightSecurity` with `main`'s new modules beside mine have not been built.
+- **Lean's branch**, `origin/cursor/lean-remote-merge-landing-fc8d` at `f3837f57d113`, drivers installed (`merge.py --install`), `git merge-tree --write-tree --name-only`:
+  - [run] `main` alone: stops in 23 files. The head: stops in 12, each among those 23. **Stops of the head beyond `main`'s own: none.**
+  - [run] `main` merged with the head (a scratch commit of tree `e8e04e7a2714`, which no ref names): stops in the same 23 files with the same number of conflicts in each (0 to 3). The two results differ only in my eleven files and, in 18 others, in the name on a conflict's closing line.
+  - [run] One of the 23 is mine to touch, `verity/protocols/spot/verifier/tests/test_optimize.py`: its one conflict is lines 24-30, the imports, `main`'s; my docstring line (909) merges outside it.
+  - [run] The driver prints 22 "taken without regenerating" notes for `main` with the head and 12 for `main` alone: the same ten entries of `reads["NetworkCheck.Period"]` as at 09:26Z, lean's removals; no other note differs.
+- **Lock records against `main`.**
+  - [run] Nine keys and no other, in the head's locks against `main`'s at `19fb19a21e40` and in the merged tree's against `main`'s at `33faab2be81c` alike (a walk of the parsed files). In `security/lean-audit.json`: the `unfolded_hash` of `Claims.Sampling.admissibleTwo_rankin_patterns`, its `witnesses` entry's `honest`, the record of `Claims.Witness.SamplingGeneric.rankinTwoPatterns_honest` (gone), and under `reads["Definitions.Claims.SamplingTwoRankin"]` the digest and `AdmissibleTwoRankinPatterns`' hash. In `security/Properties/lean-audit.json`: the digest and the `why` of `domain["Properties.Spot.RequestsCover"]`, and under `reads["Properties.Spot.TwoStageCheck"]` the digest and `RequestsCover`'s hash.
+  - [run] The body carries them: its section "What this moves in the locks" (the notice, both statements before and after) and now one paragraph naming those nine keys. Body replaced at 10:20Z (`research queue edit 9173 --body-file`; read back, it is the file): the two run lines filled in, the bullet on `main` at `33faab2be81c`, lean's branch at 23 and 12 files. `Lane proofs` first, `Refs PRF-580` last.
+  - [read] It has no `Goal <id>` line: PRF-580's only label is still `from:proofs` (Linear, read 10:22Z). [read] The ready mark warns of that and goes on (`queue.py`, `goal_gate`). I do not know the goal's id, so I wrote none.
+- **Not run.**
+  - [derived] Nothing on the head merged with `main` at `33faab2be81c`: both runs are on `54c9370d08e5`, whose `main` is `19fb19a21e40`, 32 pull requests back by your count. The candidate's own check is the first to build and test that tree.
+  - [run] `check.py`'s kernel replay, on any head of this change; the whole `check`; `circuit-check` (no circuit changes).
+  - [run] The one-file try with its axiom probe ran before the merge only (`r20261112-064532-1b54`, at `93922d4416e7`). On the merged head the evidence is `b1a8`'s package verdicts.
+  - [run] Locally on the merged tree, of the two test modules, only `test_plancheck.py -k served_cap_is_held` (1 passed, 09:26Z); the rest ran in `b8e5`.
+  - [derived] No other agent has red-teamed the two statements: compiled, not proved.
+- **Close: none owed.** `Refs PRF-580` stays open for the planner's pull request, which waits for this to land.
