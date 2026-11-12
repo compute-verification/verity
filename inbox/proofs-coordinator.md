@@ -93550,3 +93550,197 @@ Every try's axioms are `propext`, `Classical.choice`, `Quot.sound` or fewer [run
 - [run] The first three joined rows are tried: spot's difftest suite, spot's verifier suite and the repository's pass on each tree, 3 of 3: `r20261112-165403-0008` (`82a48d3a8dda`), `r20261112-165435-3219` (`4952287ca89a`), `r20261112-165506-2980` (`b47c0b4fb02e`).
 - [run] `r20261112-161131-8a97`: all 7 of #9080's Lean tries exit 0 on the merged tree (`Flock.lean` too); its two suites still run.
 - [run] `r20261112-165928-8a96`, every head in, the 18 Lean files of the verifiers' code the heads change: 18 tries exit 0. `benchmarks/verifier_cost/whole_run/Main.lean` got no verdict (exit 2: not in a Lake package with a lock; the tool cannot try it).
+
+## FIXEDCOST, Thu 12 Nov 17:17Z: PRF-589 ran, rc 0 (`r20261112-110333-4c33`, node A, card 7): at one prover the head's quarter statement takes 2.089 GPU-s against 2.569 for the full one, at the 2.07 s line (0.81 of the full statement, the line 0.73); the four-prover cells read 1.134 against 2.417 (0.47) but are no four-prover measurement: in each, three provers filed while the fourth was still starting; the card was free at 16:44:29Z
+
+**The answer.** On node A (`vy-spot-glm53`), card 7 (an H200) with cores 82-91, in one lease of run
+`r20261112-110333-4c33` [run]: with one prover on the card the head block's statement took 2.0888 GPU-seconds a
+statement at 64 blocks (a quarter statement) and 2.5685 at all 256, so against the 2.07 s line the quarter statement
+is at the line (2.0888 s, and 0.813 of this lease's full statement where the line is 0.726); with four prover
+processes on the card the cells read 1.1342 at 64 blocks and 2.4174 at 256 (0.469, under the line), but every one of
+those steady windows holds only three provers' filings, the fourth building its statement beside them, so the run has
+**no four-prover measurement**.
+
+**Two things of mine to say first.**
+
+- **My prediction was wrong.** My 10:26Z entry predicted 0.74 to 0.77 s for the quarter statement at one prover, from
+  the kept run's timers and my reading that every step of the host's witness build loops over the blocks. It measured
+  2.0888 s: about 1.9 s of the host's witness build does not follow the block count (section 2).
+- **The four-prover cells are flawed, and the job's own checks did not say so.** All seven steps exited 0 and no cell
+  was marked void, yet `server_rate.py`'s own record at four provers says `idle_provers` 1 [run: `out/rate/rate.json`].
+  I found it by reading which prover filed each session (section 3).
+
+Mailbox read at 16:56Z, 17:06Z and 17:17Z: its newest section is yours of 10:42Z; this entry follows your resume of 16:56Z.
+Nothing was relaunched. Nothing was marked, and nothing was posted on Linear or Slack. Nothing here ran on the served
+engine, and the proof server timed is a branch's, not `main`'s (section 4). **The stray agent** (`bc-a787dc35-…`): at
+17:03Z this inbox and the notes held no entry and no commit of it that names this run or this job [run: `git log`
+since 16:40Z, a search of the file after my 11:11Z entry]. If one appears, this entry is mine and the only one.
+
+### 1. The cells
+
+Every number below is from run `r20261112-110333-4c33`: node A, card 7 (GPU-2a9a0af1, 143,771 MiB), cores 82-91 (NUMA
+node 3), the staged statement `/dev/shm/proofs-prf502-row1-4b31e7caba011398` (256 units of
+`SparseMlaHeadBlock_v2_NVIS_64_FIRST_false`, `k_log` 27), the kept prover binary (sha256 7350f82ecf41…) built at
+`c6cadd0e325f` [run: `out/host.json`, `out/job.log`]. "GPU-s a statement" is the seconds between successive accepted
+filings on the one card over the steady window, the first and last K filings left out; each cell is 48 timed sessions,
+all 48 accepted, no error [run: `read.py`, sha256 1444a64d6752…, on the run record
+`art:d5315b644fe0b758a3274d31733aaf91f40a0712e800513c9f1e77889f62a861`]. The drivers' own rates say the same (0.4788,
+0.3893, 0.8817, 0.4137 statements a second from `session_split.py`; 0.3911 and 0.4173 from `server_rate.py`) [run].
+"Busy" is the card's share of time in use over the cell, `nvidia-smi`'s utilization as the driver recorded it [run].
+
+| prover processes on card 7 | provers filing in the window | driver | blocks | GPU-s a statement | gaps | the window's two halves | card busy |
+|---|---|---|---|---|---|---|---|
+| 1 | 1 | `server_rate.py` | 256 | 2.5567 | 46 | 2.554, 2.559 | 0.20 |
+| 1 | 1 | `session_split.py` | 256 | 2.5685 | 46 | 2.503, 2.634 | 0.20 |
+| 1 | 1 | `session_split.py` | 64 | 2.0888 | 46 | 2.082, 2.095 | 0.11 |
+| 4 | 3 | `server_rate.py` | 256 | 2.3963 | 40 | 2.572, 2.221 | 0.19 |
+| 4 | 3 | `session_split.py` | 256 | 2.4174 | 40 | 2.288, 2.546 | 0.10 |
+| 4 | 3 | `session_split.py` | 64 | 1.1342 | 40 | 1.267, 1.002 | 0.05 |
+
+- **One prover, by your rule** m = (T_full − T_q) / 192 and f = (4·T_q − T_full) / 3, both points on
+  `session_split.py` [derived from the table]: a block 0.002499 s, fixed 1.9288 s, a fixed share of 0.751 of 2.5685.
+- **One prover against the line** (a fixed share of 0.634, so a quarter statement at 0.726 of a full one; 2.07 s on
+  the kept 2.8555) [relayed: SESSIONS 10:33Z; derived]: 0.813 of the full statement, over 0.726. In seconds, 2.0888
+  against 2.07: over by 0.02 s, no more than the cell's own spread (its window's four quarters run 2.065 to 2.118),
+  and over this lease's own line of 1.8634 s by 0.23 s. Pairing either half of one cell with either half of the other
+  gives a fixed share of 0.72 to 0.78 [derived].
+- **The two drivers agree at the full statement:** `session_split.py` over `server_rate.py` is 1.005 at one prover
+  [run]. The full statement at one prover, 2.5567, is inside the 2.55 to 2.85 kernels said to expect [relayed:
+  HASH-123]; it is not held to the kept 2.8555.
+- **The four-process cells, as they stand:** the same rule on 1.1342 and 2.4174 gives a block 0.006683 s, fixed
+  0.7065 s, a fixed share of 0.292 (0.19 to 0.41 by halves) [derived]. These are three provers filing on ten cores
+  beside a fourth building its statement, so they are neither a four-prover nor a clean three-prover measurement.
+
+### 2. What the one-prover seconds are: the host's witness build, on a card that is idle four fifths of the time
+
+Medians over each cell's 48 timed sessions, the proof server's own timers [run: each cell's `SPLIT` line in
+`out/job.log`]:
+
+| provers filing | blocks | `e2e_s` | `witness_s` (host) | `prove_total_s` (the two repetitions) |
+|---|---|---|---|---|
+| 1 | 64 | 2.4581 | 2.0554 | 0.3766 |
+| 1 | 256 | 3.2098 | 2.4594 | 0.7243 |
+| 3 of 4 | 64 | 4.0501 | 2.8471 | 0.8846 |
+| 3 of 4 | 256 | 9.6239 | 6.9689 | 1.9610 |
+
+- **At one prover the seconds between filings are the host's witness build plus 0.03 s (64 blocks) or 0.11 s (256)**
+  [derived: 2.0888 − 2.0554, 2.5685 − 2.4594]. The driver ran sessions two ahead (`--ahead 2`), so a session's
+  proving overlaps the next one's host build [read: `k_hook.sh`; each session's record says `front_ahead` true]. The
+  card was in use 0.11 of the time at 64 blocks and 0.20 at 256 [run].
+- **The host's build is nearly fixed in the block count.** Each session run by itself at one prover on card 7
+  (`alone`: 8 timed sessions a size, one prover process, all filed by it) [run: `out/split/k4/alone/`]:
+  - `witness_s` 2.0427, 2.0725, 2.1873 s at 64, 128, 256 blocks: fit fixed 1.990 s (se 0.013) + 0.000767 s a block;
+  - `prove_total_s` 0.3375, 0.4695, 0.6205 s: fit fixed 0.221 s (se 0.073) + 0.002052 s a block (se 0.00043);
+  - `e2e_s` 2.3824, 2.5441, 2.8293 s: fit fixed 2.198 s + 0.002918 s a block.
+- **One call is the fixed part:** `units_pack` (`HostSlots::pack_units`, `flock-circuit.rs` line 1106 at the run's
+  source) took 1.925, 1.917 and 1.988 s (medians) at 64, 128 and 256 blocks; the build's other four parts together
+  took 0.11 to 0.18 s [run: the `WITNESS` lines of the `alone` sessions].
+- **Why it is flat, from the code** [read: `gpu_circuit.rs` line 696, `circuit.rs` lines 2616 to 2646 and 2840 to
+  2852 at the run's source]: that call walks the unit's circuit bit-sliced, 64 slots to a lane group, the groups in
+  parallel on the threads, and "A pass reads the net's rows once, whatever its groups". So with ten free cores more
+  blocks cost more cores and not more seconds [guess: no cell timed CPU seconds at 64 blocks]. With provers sharing
+  the cores the same build took 2.85 s at 64 blocks and 6.97 s at 256 [run: the table above].
+- **So the "fixed 1.93 s" at one prover is host wall time in one call on ten cores; it is not the card's proving.**
+  The card's own part (`prove_total_s`) grows with the blocks, about 2 ms a block.
+
+### 3. What went wrong at four provers
+
+- **In all three four-process cells the fourth prover filed only the last four sessions, after the window** [run:
+  `provers.py` on the run record, below]. Timed sessions by prover: 14, 15, 15, 4 (64 blocks); 15, 16, 13, 4 (256
+  blocks); `server_rate.py` 18, 14, 16, 4 with its window's 15, 11, 14, 0.
+- **The fourth was still starting while the others were timed:** its process started at the first timed submit,
+  its statement build took 120.7 s and 123.3 s, and its first session was filed 239 s (64 blocks) and 252 s (256)
+  after that submit, where the windows ran 89 to 134 s and 104 to 201 s [run]. The card's memory held all four
+  (131,698 MiB at 256 blocks) [run].
+- **Why:** the cold sessions that load the provers went to provers 0, 1, 2 and 0 again; the fourth got none, and
+  started at its first timed session [run: `split.json` `cold`]. The proof server gives a session to "the prover
+  with the fewest unfinished sessions (the first such)" [read: `proof_server.py` `_pick`, line 360 at the run's
+  source]; a prover takes about 82 s to start and a cold session about 237 s, so the fourth cold session was
+  submitted after prover 0 was free again [derived: 3 × 82 > 237].
+- **The job's checks did not see it:** `fused.sh` reads no `idle_provers`, and my hook and `read.py` did not count
+  filings by prover [read]. `provers.py` (sha256 b233c976e8dd…, beside `read.py` in the notes) now prints it for any
+  run of this job. A four-prover figure taken with this proof server at this source is worth checking for
+  `idle_provers` in its `rate.json` [guess: I checked no other run].
+
+### 4. What was not measured
+
+- **Four provers.** Section 3.
+- **`main`'s proof server.** The prover and both drivers ran at `c6cadd0e325f`, a commit of the branch
+  `cursor/proofs-headprof-2b18`; it is not an ancestor of `main` (`4520abe708b0`, read 17:09Z) [run:
+  `git merge-base --is-ancestor`].
+- **A statement staged at 64 blocks.** The quarter statement is 64 units the proof server sampled out of the staged
+  256-unit statement (`session_split.py --draws 64`): each timed session's record says `instances` 64, `nbl` 6,
+  `k_log` 27, a proof of 2,215,220 bytes against 2,408,324 at 256 [run: `sessions.jsonl`].
+- **One prover with fewer or more than ten cores, or under MPS.** The job's scripts start no MPS [read: `fused.sh`,
+  `k_hook.sh`]; whether an MPS daemon ran on the card I did not check.
+- **Each cell ran once**, 48 timed sessions, in this one lease; no cell was repeated.
+- **The Lean verifier on these sessions.** "Accepted" is the proof server's own verifier process; the scripts pass
+  no `--lean` [read].
+- **A quiet node.** Other lanes held two to five other cards at every sample, never card 7 [run: each step's
+  `cotenants` files]: cards 3, 4 and 5 at 15:48Z; cards 0, 1, 3, 4 and 5 by 15:54Z; kernels' card 6 from 16:00:01Z to
+  the end (9 s after the one-prover quarter cell ended, so beside the one-prover full cell on `session_split.py`).
+  The other lanes' cores were 15.6 busy on average (28.5 at most) during the one-prover `server_rate.py` step.
+- **A memory cap:** gpu-lease said "this user's systemd can't make a scope here, so CMD runs without a memory cap"
+  [run: `stderr.log`]. At one prover the card peaked at 37,565 MiB, the prover's host memory at 42.8 GiB and the
+  verifier's at 26.6 GiB [run: the `RATE` line].
+
+### 5. The card and the calendar
+
+- **Off card 7 at 16:44:29Z, 30 minutes before 17:15Z.** The lease was held from 15:48:01Z to 16:44:29Z, 56 m 28 s of
+  its 65 minutes [run: `gpu-lease-usage.jsonl`, `stderr.log`]. At 16:44:28Z card 7 used 0 MiB and no prover process
+  of the run was left; at exit nothing else was under `/dev/shm/proofs-headprof` [run: `out/card-after.txt`,
+  `out/job.log`].
+- **Read on the node at 17:02Z** (ssh worked from my VM) [run]: the lease table says "7 free"; card 7 uses 0 MiB and
+  holds no compute process; no supervisor of the run is alive; `/dev/shm/proofs-headprof` is gone; the only two
+  `flock-circuit` processes on the node are kernels' own binary, on cores 72-81.
+- **It opened on time:** "the window is open, 87 min left" at 15:48:00Z; card 7 held no other lease and no compute
+  process; the lease was granted at 15:48:01Z [run: `out/job.log`]. One prover ran 15:48:36Z to 16:05:46Z, four
+  processes 16:05:46Z to 16:44:28Z [run: `out/split-steps.tsv`, `out/job.log`].
+- **Proofs' calendar entry is released:** `calendars/node-a.md` in the notes, commit `a48a319c91` (17:02:57Z) [run].
+
+### 6. For COUNT, one sentence
+
+COUNT: price the head from the one-prover pair only, T_q = 2.0888 and T_full = 2.5685 GPU-s a statement (node A, card
+7, ten cores, one prover, `r20261112-110333-4c33`), which your rule turns into fixed 1.9288 s + 0.002499 s a block (a
+fixed share of 0.751 where the planner's untimed 0.7115 stood), and take no four-prover split from this run: its
+four-process cells (1.1342 and 2.4174) are three provers filing beside a fourth still starting [derived from sections
+1 and 3].
+
+- What goes with it: the one-prover seconds are host wall time on ten cores with the card idle four fifths of the
+  time (section 2), so the split belongs to that core count; and a four-prover share put on a one-prover timing still
+  has no measurement under it.
+- By the line the fixed share is over 0.634 at one prover [relayed: the line; derived]. Whether a design under 300 GB
+  follows is the cost model's to price; nothing under 300 GB follows from this run alone.
+
+### 7. What a second timing would need (nothing is launched; the window is closed)
+
+- **Load every prover before the timed phase:** the cold phase must give each of the K provers a session (the line
+  that stops it is `_pick`'s "the first such" in `proof_server.py`, with the cold sessions submitted one start
+  apart), and the reader must refuse a cell whose window holds fewer than K provers (`provers.py` prints it).
+- **Then the same two points at four provers**, 64 and 256 blocks, with the cores a prover stated: about 25 minutes
+  of one card [guess: this run's four-process cells took 11 minutes each]. That is a new ask to kernels, yours to
+  make.
+
+### For Daniel
+
+- Measured today on one H200, with a branch's proof server on a staged statement, not on the served engine [run]:
+  with one prover on the GPU, shrinking the head block's table to a quarter saves little (2.09 against 2.57 seconds a
+  statement). About 1.9 seconds of each statement is CPU work on the host that takes the same time at every table
+  size, and the GPU itself sits idle four fifths of the time.
+- So the cost model's untimed figure that 71% of this block's proving time is fixed is close at one prover: 75%
+  measured [derived]. Lowering fixed seconds alone has a design under 300 GB only above 63% [relayed: the cost
+  model's reader, 10:33Z], and the 75% at one prover is above it. No design under 300 GB follows from this run alone: the cost
+  model has to be priced again with the measured pair.
+- The four-prover half of the timing did not come out: the driver timed three provers while the fourth was still
+  starting, and its own checks passed. I give no four-prover figure; it needs about 25 more minutes of one GPU
+  [guess].
+
+### Runs
+
+| run | what | result |
+|---|---|---|
+| `r20261112-110333-4c33` | PRF-589 on node A, card 7, cores 82-91 | done, rc 0, 15:48:00Z to 16:44:29Z; record `art:d5315b644fe0…`; its four-process cells are not four-prover measurements |
+
+To read it again: `research data fetch art:d5315b644fe0b758a3274d31733aaf91f40a0712e800513c9f1e77889f62a861 --to DIR`,
+then `python3 read.py DIR/out` and `python3 provers.py DIR/out`, both in the notes under
+`lanes/proofs/20261112T0450Z-fixedcost/prf589/`.
