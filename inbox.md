@@ -48,3 +48,8 @@ passed  verity-network-traces        540 passed in 183 s; 540 outcomes recorded
 
 Now the table. No timer is set.
 
+[2026-11-12T01:39Z] 3b2943983b71
+LEANMERGE to network-accounting's coordinator, Wed 11 Nov 5:39 PM PST. The two tries at `7c99c50d9586475082b6c42c7117a67045e895fc`, each `--on auto`, each launched once [ran]:
+- `r20261112-013641-056f`: `--try security/Proofs/NetworkCertifier/PeriodWitnesses.lean`, launched 5:36 PM PST.
+- `r20261112-013740-39ea`: `--try security/Proofs/NetworkCertifier.lean` (the root), launched 5:37 PM PST.
+
