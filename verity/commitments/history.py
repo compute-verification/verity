@@ -123,25 +123,27 @@ def unit_at(radix: Sequence[int], base: int, step: Sequence[int], i: int) -> int
 
 
 def _run_why(run: Mapping[str, Any], writer: str, out: str, units: int, held: Mapping[str, int]) -> str | None:
-    count = run["count"]
+    """Why a run is refused, in `Spot.HistoryTable.runWhy`'s words: the verifier names a history table's refusal
+    (`registration.HISTORY`) only where this reason is the Lean's."""
+    start, count = run["start"], run["count"]
     if "held" in run:
         n = held.get(run["held"])
         if n is None:
-            return f"a run reads {run['held']!r}, which the verifier holds no rows of"
+            return f"a run from {start}: {run['held']} is no value the verifier holds"
         if n < run["row"] + count:
-            return f"a run reads rows {run['row']}..{run['row'] + count} of {run['held']!r}, which has {n}"
+            return f"a run from {start}: past {run['held']}'s {n} rows"
         return None
     if run["writer"] != writer or run["out"] != out:
-        return f"a run reads {run['writer']}.{run['out']}, not the table's writer {writer}.{out}"
+        return f"a run of positions from {start} written by {run['writer']}'s {run['out']}, not the table's writer"
     radix, step = run["radix"], run["step"]
     if len(radix) != len(step) or 0 in radix:
-        return "a run's radix and step are one nonzero radix per step"
+        return f"a run from {start}: its radix and steps"
     if math.prod(radix) != count:
-        return f"a run's radices multiply to {math.prod(radix)}, not its {count} positions"
+        return f"a run from {start}: its radix covers no {count} positions"
     low = run["base"] + sum(min(0, s * (r - 1)) for r, s in zip(radix, step))
     high = run["base"] + sum(max(0, s * (r - 1)) for r, s in zip(radix, step))
     if low < 0 or units <= high:
-        return f"a run reads units {low}..{high}, outside the writer's {units}"
+        return f"a run from {start}: a writer unit outside {writer}'s {units}"
     return None
 
 
@@ -170,20 +172,21 @@ def parse_run(j: Any) -> dict[str, Any]:
 
 def tile(runs: Sequence[Mapping[str, Any]], length: int, writer: str, out: str, units: int,
          held: Mapping[str, int]) -> list[dict[str, Any]]:
-    """The runs in position order, refused as `order` refuses them, run by run and never position by position."""
+    """The runs in position order, refused as `order` refuses them and in `Spot.HistoryTable.order`'s words, run by run
+    and never position by position."""
     parsed = sorted((parse_run(r) for r in runs), key=lambda r: r["start"])
     at = 0
     for r in parsed:
         if r["count"] == 0:
-            raise ValueError(f"a run at {r['start']} covers no position")
+            raise ValueError(f"a run from {r['start']} of no positions")
         if r["start"] != at:
-            raise ValueError(f"a run starts at {r['start']}, not at {at}: the runs leave a gap or overlap")
+            raise ValueError(f"the runs leave position {at} unwritten or write it twice")
         why = _run_why(r, writer, out, units, held)
         if why is not None:
             raise ValueError(why)
         at += r["count"]
     if at != length:
-        raise ValueError(f"the runs cover {at} positions, not the table's {length}")
+        raise ValueError(f"the runs write {at} positions, not the table's {length}")
     return parsed
 
 
