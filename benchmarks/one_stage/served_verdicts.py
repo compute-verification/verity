@@ -98,7 +98,8 @@ on, and the wipe's the one its ``served.json`` names. They go into the window re
 with each one's server) and from it the block record (``block-record.json``, `block_record.from_period`, held by
 `block_record.check`), which composes only the answers about the record's node and carries the others as ``elsewhere``;
 an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
-(`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
+(`block_record.leg`) is its subprotocol's error, and so is a bandwidth answer whose profile names no term its error leaves
+out (``named_terms``). `block_record` carries only an accepted subprotocol's certificate, so
 where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written. Otherwise
 the verdict is the block record's, which is the Lean ``onsite check`` or ``remote check``'s answer; no Lean check runs
 here, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line name ``pending``.
@@ -107,9 +108,10 @@ product drops is ``dropped`` in the report (`dropped_row`, whatever its piece le
 ``missing``, so remote's is ``pending`` with nothing missing when sampled proofs and PoUW accepted here, whatever the
 onsite pieces. The report's ``composed`` gives that verdict with its reason (`said`), one clause
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
-(`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
-record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
-with core's refusal of the window's credit. Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
+(`terms`: when its weights were held and their share of the checkpoint, where its profile says, each δ of the block
+record's at which its quantity is not established, and the bandwidth audit's error with the term it leaves out beside
+it); PoUW's development piece reads ``development run, credits nothing`` with core's refusal of the window's credit.
+Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
 (the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
 elsewhere, and the reason. The report and the line say where they were composed (``composed_on``: the host, whether it
 is the record's node, and what it read, `COMPOSED_FROM`, or off that node `COPIED_FROM`), and with ``--deferred`` what
@@ -945,7 +947,9 @@ def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
     of the checkpoint they are, those; where it says which host ran each party, what its `trusted-host` premise rests on
     (the network certifier's ``placement``); and each δ of the block record's at which its leg's quantity is not
-    established."""
+    established. Where its error leaves terms out (the bandwidth audit's ``named_terms``) the error is said with them
+    beside it, in the terms' own words (`block_record.error_form`, which for PoUB's is its ledger's ``DELTA_FORM``): in
+    the clause that says it is not established, and in a clause of its own where it is established at every δ."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None
     place = profile.get("placement") if isinstance(profile, Mapping) else None
@@ -957,11 +961,16 @@ def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
         out.append(f"they are {float(Fraction(w['share'])):.1%} of the checkpoint ({w.get('covers', 'its weights')})"
                    + (f"; {', '.join(sorted(outside))} are outside its claim" if outside else ""))
     if leg:
-        no = [d for d, x in leg["at"].items() if not x["holds"]]
+        from verity_e2e_demo import block_record as BR
+
+        at, error, named = (leg.get(k) for k in ("at", "error", "named_terms"))
+        error = BR.error_form(_ratio(Fraction(error), BR.DELTAS), named)
+        no = [d for d, x in at.items() if not x["holds"]]
         if no:
-            from verity_e2e_demo import block_record as BR
             out.append(f"its quantity is not established at δ = {' or '.join(no)}: the run established it except with "
-                       f"{_ratio(Fraction(leg['error']), BR.DELTAS)}")
+                       f"{error}")
+        elif named:
+            out.append(f"its error reads {error}")
     return out
 
 

@@ -541,6 +541,55 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
     assert line["reason"].startswith("sampled proofs: accept; ")
 
 
+def test_a_bandwidth_accept_says_its_error_with_the_term_it_leaves_out_beside_it(tmp_path):
+    """The answer the bandwidth session's piece writes of an accepted session (`served_bandwidth.answer`) names the term
+    its eps leaves out, PoUB's ledger's object (`ledger.NAMED_TERMS`). The block record, which `block_record.check`
+    holds, carries it beside the error sum under the bandwidth audit's name, the sum's number the answer's eps, and the
+    accept's clause in the composed reason says the error with the term beside it in the ledger's own words
+    (`ledger.DELTA_FORM` with the error for δ). At an eps the record establishes at neither δ, the clause that says so
+    prints the error the same way. The same answer with the term struck from its profile is the bandwidth audit's
+    error: the composed verdict is ``reject``, with no block record."""
+    import served_bandwidth as SB
+
+    beside = ledger.DELTA_FORM.removeprefix("δ")
+    (d := tmp_path / "bandwidth").mkdir()
+    (d / S.RAN).write_text(json.dumps({"server": "vy-dc-h200", "rc": 0, "limit": "60m"}))
+    session = {"registration": {"digest": "cd" * 64},
+               "answer": {"verdict": "accept", "delta": "1/1099511627776", "span_ns": 16448, "q_bytes": 8224, "draws": [0],
+                          "receipts": 1, "unit_bytes": 8224, "units": 1, "windows": [0], "wrong_at_most": 0}}
+
+    def composed(answer: dict) -> tuple:
+        (d / "answer.json").write_text(json.dumps(answer))
+        return S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1",
+                        servers={k: S.piece_server(k, tmp_path) for k in [*S.PIECES, "wipe"]})
+
+    a = SB.answer(session, "beside the served window", 1000)
+    assert a["verdict"] == "accept" and a["profile"]["named_terms"] == ledger.NAMED_TERMS
+    report, rec, line = composed(a)
+    jsonschema.Draft202012Validator(SCHEMA).validate(rec)
+    assert BR.check(rec) == {}
+    sums = rec["composed"]["joint_horizon"]
+    assert sums["terms"]["bandwidth"] == a["public"]["eps"] == "1/1099511627776"
+    assert sums["named_terms"] == {"bandwidth": ledger.NAMED_TERMS}
+    assert all(x["not_established"] == [] for x in sums["at"].values())
+    assert f"; the bandwidth audit: accept (its error reads 1/1099511627776{beside}); " in line["reason"]
+    assert line["reason"] == report["composed"]["reason"]
+
+    weak = SB.answer({**session, "answer": {**session["answer"], "delta": "1/100", "draws": [1]}}, "beside", 1000)
+    _, rec, line = composed(weak)
+    assert BR.check(rec) == {}
+    assert all(x["not_established"] == ["bandwidth"] for x in rec["composed"]["joint_horizon"]["at"].values())
+    assert ("; the bandwidth audit: accept (its quantity is not established at δ = 1/100 or 1/1000000: the run established "
+            f"it except with 1/100 + 2^-64{beside}); ") in line["reason"]
+
+    silent = {**a, "profile": {k: v for k, v in a["profile"].items() if k != "named_terms"}}
+    report, rec, line = composed(silent)
+    assert rec is None and (line["composed"], line["by"], line["block_record"]) == ("reject", ["the bandwidth audit"], None)
+    assert "ValueError: bandwidth: its answer's profile names no term its error leaves out; its piece writes them in its " \
+           "answer's profile as named_terms (PoUB's ledger.NAMED_TERMS)" in report["protocols"]["bandwidth"]["reason"]
+    assert "; the bandwidth audit: error: " in line["reason"]
+
+
 def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
     """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, samples
     and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
@@ -639,7 +688,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
     """Every piece's answer accepted on the record's node (each piece's `RAN`, which a `SERVED` naming no server leaves it
     about, and the wipe's `SERVED`): the composed verdict is ``pending``, the block record's ``undecided``, since its
     verdict is the Lean check's answer and none ran, with nothing missing, and its reason names each subprotocol's
-    accept. One piece with no answer leaves it ``pending`` and names that piece missing with
+    accept, the bandwidth audit's with its error and the term it leaves out beside it. One piece with no answer leaves it ``pending`` and names that piece missing with
     why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
     no block record, and so does a bandwidth answer whose profile names no term its error leaves out; one about another
     server leaves it ``pending``, carried and named as elsewhere."""
@@ -690,7 +739,8 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
         assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
         late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
-                                         "except with 1/100)"}
+                                         "except with 1/100)",
+                "the bandwidth audit": f" (its error reads 1/1000000{ledger.DELTA_FORM.removeprefix('δ')})"}
         assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
