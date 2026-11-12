@@ -169,6 +169,23 @@ def test_rows_are_placed_on_the_engine_step_axis_as_the_population_is():
     assert not Binder([row(LIN, "out", rank=1)], rank=0).rows
 
 
+def test_a_row_holds_its_keys_fields_itself_or_under_identity():
+    flat = row(LIN, "out")
+    want = Binder([flat]).rows
+    assert want and Binder([{"identity": flat}]).rows == want, "the fields under `identity` read as the row's own"
+    empties: tuple[object, ...] = (None, {}, [], 0, "", False)
+    for empty in empties:
+        assert Binder([{**flat, "identity": empty}]).rows == want, "an empty `identity` adds nothing"
+    with pytest.raises(TypeError, match="is not a mapping"):
+        Binder([{**flat, "identity": ["x"]}])
+
+
+@pytest.mark.parametrize("no_mapping", [["x"], [], "x", 1, None])
+def test_a_row_that_is_no_mapping_is_refused_before_its_identity_is_read(no_mapping):
+    with pytest.raises(TypeError, match="is not a mapping"):
+        Binder([no_mapping])
+
+
 def test_two_sources_declaring_one_label_differently_are_refused():
     class S:
         def __init__(self, p):
