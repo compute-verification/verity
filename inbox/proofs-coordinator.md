@@ -99602,3 +99602,154 @@ Asked of you: the word on network's branch (19:53Z), the two choices in the read
 - vllm's `9ce5`: nothing newer than vllm's 19:43Z, which reads its exit near 21:10Z.
 - Daniel's change of 12:04 PM PST is confirmed in your own 20:07Z comment on NET-390 [read]; neither circuits nor vllm has answered there on the request Definition [read, 20:14Z]. Your 20:11Z hook message on the `proofs` pool is taken for every launch of mine from here.
 - Jobs 2 and 3 are next, in that order, behind anything you name for Friday's run.
+
+## ONSITE, Thu 12 Nov 20:19Z: the carve stages and certifies on lean's head with `main`, the world riding as a third commit (0 `__init__.py` deleted, every Lake path resolves); it is not ready to land on two counts, four pins each move leaves stale and a path map's route onto `main`; #9455 fixes both maps' `[roots]`; the pull request can be open 1 h 15 min after #9375 lands, with its pins and quick tier about 2 h 30 min after
+
+Read on `main` at `5f0c008aa040` and lean's `cursor/lean-remote-merge-onmain-fc8d` at `bafae2eaec2e` [read: `git rev-parse` after a fetch, 20:06Z]. #9375 is open at that head [read: `gh pr view`, 20:06Z]. I reread `origin/main:AGENTS.md` first [read]. My mailbox holds nothing newer than your 09:09Z section [read: 20:06Z].
+
+**Ready or not.** The move is ready: three maps, three commits, each certified a pure move by `main`'s certificate on a node, on lean's head merged with `main` [run `r20261112-193301-c004`]. The pull request is not ready to land, for two reasons that are new in this entry and that change no map: each move leaves four pins stale (item 5), and the queue's mark-only route runs a word map's script, which fails on a path map (item 6). Three runs are still waiting for a slot (the last item); none of them is the staging.
+
+### 1. The staging
+
+- **Base:** lean's `64ee10f17900` with `main` `ab3f1d53a606` merged in (no file stopped), then four ordinary commits: the `[roots]` fix (#9455), the one_stage change (`3f29ae86e4a4`), `world_map.toml`, and one line of the certifier's device's README (item 7) [read: `git log` of my scratch `cursor/proofs-scratch-carve-on-remote-main-b81c` at `fdd4cfde7240`].
+- **Command:** `main`'s `stage.py` with the three maps, `--base HEAD --no-fetch`, through `research run --on auto`, placed on `vy-nebius-cpu-1`; rc 0, 582 s [run `r20261112-193301-c004`: its `status.json`]. The staged tip is `5b07a3b63200` on my scratch `cursor/proofs-scratch-carve-staged-b81c`.
+
+| Commit | Map | Certified pure move | Renames, path-only edits | Files (renamed, in place), lines | `__init__.py` deleted that held content | Lake paths unresolved after | `resolve_check.py` |
+|---|---|---|---|---|---|---|---|
+| `bd7cc98a6aeb` | `compose_map.toml` | yes; run again changes nothing | 12, 40 | 52 (20, 32), +84 −79 | 0 (none deleted) | 0 of 397 | 0 issues |
+| `d99b5c33acba` | `configurations_map.toml` | yes; run again changes nothing | 13, 32 | 45 (18, 27), +136 −130 | 0 (none deleted) | 0 of 397 | 0 issues |
+| `5b07a3b63200` | `world_map.toml` | yes; run again changes nothing | 6, 11 | 17 (6, 11), +16 −11 | 0 (none deleted) | 0 of 397 | 0 issues |
+
+- The certificates, their counts and the second runs are the node's [run `r20261112-193301-c004`: its `cert.json` and log]. The files and lines are git's [read: `git diff --stat -M` of each commit]. The `__init__.py` count, the Lake paths (36 lakefiles and their manifests; on the base too, 0 of 397) and `resolve_check.py` I ran here on the node's three commits, fetched from its bundle [run locally].
+- The certificate's "renames" are the files moved byte for byte and its "path-only edits" every file whose text changed, moved or not; the two pairs of counts sum to the same number of files in each row [derived].
+- The first two commits together: 76 files, 38 renamed and 38 edited in place, +212 −201 [read: the diff]. This morning on lean's `a88eee998fa2` they were 76 files, +214 −203, certified at 12 and 39, and 13 and 32 [run `r20261112-083051-6186`]. With the world: 87 files, 44 renamed and 43 in place, +227 −211 [read].
+- No `__init__.py` exists under any of the three directories that move [read: `git ls-files` at the base], so the count of your fact 2 is 0 for as long as that holds [derived].
+- **Since the run both heads moved.** Lean's went to `bafae2eaec2e` (two commits; of the files the moves touch they change one, `verity/protocols/certifier/device/lean/lake-manifest.json`) and `main` to `5f0c008aa040` [read: `git diff --name-only`]. I ran the three maps again on those two heads merged (no file stopped), with the same four commits before them: every count of the table is the same, each commit certifies, 0 `__init__.py`, 0 issues, and 0 of 402 Lake paths unresolved on the base and after each commit [run locally: scratch `c3df822b64c4`, never pushed].
+- The mover run here gives the node's three trees byte for byte [run locally, on the node's base], which is why I report the rerun on the newest heads from here and did not queue a second node run for it.
+- **Not run anywhere:** a Lean build of a staged tree, the suite `verity-core-composition`, the whole check. A certificate says only that paths changed.
+
+### 2. Your fact 1: `[roots]`, and #9189
+
+- Both maps on `main` give `verity_machine_model = "benchmarks/pouw/machine_model/verity_machine_model"` on both sides (`tools/move/compose_map.toml:18-19`, `tools/move/configurations_map.toml:20-21`), and `main` has that package at `benchmarks/machine_model/verity_machine_model` [read: `main` `5f0c008aa040`].
+- **#9455** changes those four lines and nothing else: branch `cursor/proofs-carve-maps-roots-7c3e`, head `fbaf4e74e3de`, one commit on `main` `ab3f1d53a606`, open, unmarked [read: `git log`; `research queue open`'s output when I opened it this turn]. `ratchet_gate.py origin/main HEAD` passes; the two map test files pass (10 passed); the step against lean's `bafae2eaec2e` stops on no file, as `main` alone does, and it merges onto `main` `5f0c008aa040` [run locally]. Its quick tier, `r20261112-194809-b6e7`, has waited for a slot since 19:48Z, so **no ready line yet**. `tools/move/` is in `lowrisk_excludes` (`tools/verity/check/drive.toml:74`) [read], so it needs a land verdict from ci's reviewers [derived].
+- **The stale root changes nothing in either move.** Run with the stale root, with the twelve roots fixed, and with all nineteen roots the tree's `pyproject.toml` files declare, the two moves give three trees that differ only in the two map files [run locally]. So #9455 puts the record right, as top asked, and no staged tree depends on it.
+- Seven roots the tree declares are in neither map: `circuit_properties`, `exact_kit`, `verity_bench`, `verity_graph`, `verity_landq`, `verity_ops`, `verity_proof_throughput` [run locally: a script over every `pyproject.toml`]. I left the twelve as they are: these maps rename no module of those seven [derived].
+- **#9189 asks nothing of the maps.** No row of either names `benchmarks/specs/`, and every literal path in their `[rewrite]` tables exists on `main` [run locally: a script over both maps]. Three patterns match no file (`archive/**`, `**/CHANGELOG.md`, `**/lake-manifest.json.lock`) and do no harm [read].
+- The merge of lean's head with `main` did stop on #9189's account on an earlier pair of heads (lean's `e209a56847d4`, `main` `0582899c4392`): `pyproject.toml`'s members and two spec files lean had added under `benchmarks/specs/` [run locally]. From lean's `64ee10f17900` on it merges with no stop [run locally], so lean has taken #9189 in.
+- `tools/move/specs_map.toml:9-10` on `main` holds the same stale root [read]. Its move has run, so it is a record, and I did not touch it.
+
+### 3. Your fact 2: CI-533 and #9422
+
+- **The count is 0 on each of the three commits**: none deletes an `__init__.py` at all [run locally: on each commit of `r20261112-193301-c004`'s bundle, and of the rerun on the newest heads].
+- **#9422 refuses neither of our maps and asks one thing of them, the `[roots]` row.** Its body's heading is "The staged maps the new mover refuses: none"; its rows for `compose_map.toml` and `configurations_map.toml` read "scratch copy, `[roots]` rederived", refused "no", `__init__.py` deleted "none"; and it says it rederived the root in scratch copies and did not edit our maps [read: the body as it stood earlier this turn, at head `f2a35309dcd6`; `gh` refused a second read at 20:09Z, rate limit]. That differs from your line "ours among them" [read: your 19:02Z message]. #9455 is what it asks.
+- I ran its mover and its certificate on our three maps, at `f2a35309dcd6` on the base of item 1 and at its head now, `67e5dc3cb934`, on the newest heads: each map runs with rc 0, each commit certifies with the table's counts, and the trees equal `main`'s mover's apart from #9422's own eight files [run locally]. So it can land before or after our staging.
+
+### 4. Your fact 3: the two hand edits
+
+- **`tests/test_boundaries.py`** (top's) [read: `main` `5f0c008aa040`]:
+  - `PLACE` (`:134`) and `NO_UNIT` (`:178`) name nothing under the three directories that move [read: `rg`].
+  - `CORE_TREES` (`:194-196`) holds `"protocols/compose"` (#9196, on `main`) and `"protocols/remote"`, which is stale after the move and comes out in C6, as planned. The world's new place is inside `"protocols/certifier/device"`, already listed, and the world holds no Python [read: `git ls-files`].
+  - `CERTIFIER_LEAN` (`:280-281`) lists the certifier's Lean directories one by one. If the world's package is to count as the certifier's under "SPOT[Flock] never imports the network certifier", `"verity/protocols/certifier/device/world"` is added there after the move [derived; top's call].
+  - The file passes on the staged tip as it is [run locally: the named file, on `5b07a3b63200`].
+- **`tools/verity/check/public_boundary.toml`** (ci's) [read: `main` `5f0c008aa040`]:
+  - No brace list names remote, onsite or the composition package [read: `rg`]; they are private by default and stay so.
+  - The mover rewrites the one plain row that names the world, `paths = ["verity/hardware/world"]` (`:342`, a `[[needed]]` entry with `from = ["certifier"]`) [read: the third commit's diff]. The new path is inside the certifier's own tree (`"verity/protocols/certifier/device"`, `:67`), so the entry is redundant after the move and an ordinary change can delete it [derived]. `tests/test_public_boundary.py` passes on the staged tip [run locally: the named file].
+- **`tools/verity/check/drive.toml`**, `lowrisk_excludes`: the mover rewrites `"verity/hardware/world/"` to `"verity/protocols/certifier/device/world/"`, which then sits beside `"verity/protocols/certifier/device/"` and is redundant [read: the third commit's diff] [derived].
+- **So no hand edit goes before the move, and none into it.** After it: C6's line; and if the world rides, the `CERTIFIER_LEAN` line (top) and the two redundant entries (ci).
+
+### 5. New: each move leaves four pins stale
+
+- After each of the three commits `python3 tools/verity/check/pins.py --stale` exits 1 and names four files: `verity/protocols/pous/lean/TRUSTED.sha256`, `verity/protocols/flock/prover/tests/fixtures/randomness_lean.json`, and `verity/protocols/spot/verifier/tests/fixtures/exfiltration_lean.json` and `exfiltration_two_lean.json`. Each records the digest of `security/Proofs/lake-manifest.json`, which each of the three moves rewrites [run locally, on both pairs of heads].
+- `tests/test_pins.py::test_no_pin_is_stale` therefore fails on the staged tip. Of the root's 20 named test files it is the one failure the move causes: 227 passed, 2 failed, the other being `tests/test_integration_boundaries.py::test_the_scan_sees_verity`, which fails on the base too and only on this VM, whose venv holds another checkout's `verity_flock` [run locally].
+- **Why.** `tools/move/rename.py`, the word maps' script, rewrites those digests itself (`repin`, `repin_manifests`); `tools/move/layout.py`, the path maps' script, does not, and its docstring says so ("neither do the digests a path-keyed pin file records") [read]. `move_check.py` accepts such a digest's rewrite inside the commit that changes the manifest (`manifest_pin`) [read].
+- **A correction to my 09:02Z entry.** It said "nothing by hand goes into the move". I had checked the Lake paths and not the pins: the staged tree needs these four files changed.
+- **Three ways, each with what I ran:**
+  - **(A) The mover repins, as `rename.py` does.** ci's file, and a change that lands before the move. With the four digests rewritten inside the first move's commit, `main`'s certificate certifies it (12 renames, 44 path-only edits) and `pins.py --stale` is clean [run locally: scratch, the digests written by a script of mine]. Doing that by hand is no route: the commit would not be what the script writes on its base, which `restack.py` checks before any branch crosses the move (`tools/move/README.md:123-124`) [read] [derived].
+  - **(B) A fourth commit after the three, made by `pins.py --regen` on a node.** The JSON pins' commands build three modules of `security/Proofs`. It is not a pure move: the certificate refuses a pins commit on its own (4 paths), and refuses the third move and the pins as one range [run locally]. The mover's README has this shape for an index's row: a commit after the move, said first in the body, which the reviewer reads while certifying the others (`tools/move/README.md:64-67`) [read].
+  - **(C) Nothing**, and the queue's candidate fails on `test_no_pin_is_stale` [derived]. No route.
+- **My recommendation: (B) for Friday**, because it waits on nobody's change and the pull request needs a land verdict in any case (item 6); **(A) as ci's follow-up**, so that the next path map which rewrites a manifest is whole. Yours and ci's to decide.
+- `r20261112-195233-6ab1` runs `pins.py --regen` on the staged tip and keeps the patch. It is the first Lean build on a staged tree, and it has waited for a slot since 19:52Z [read: `research status`, 20:15Z]. I expect a patch of four files, one line each, equal to my script's [guess].
+
+### 6. New: a path map has no mark-only route today
+
+- The mover's README says a move's pull request whose body says `Move: tools/move/NAME.toml` lands on its mark alone, the queue running the map again (`tools/move/README.md:79-83`) [read]. The queue's rerun is `rename.py --map` (`tools/research/src/research/queue.py:395`, `:2434-2435`) [read], and `python3 tools/move/rename.py --map tools/move/compose_map.toml --dry-run` exits 1 with `KeyError: 'words'` [run locally]. The body's line is also read once, for one map (`queue.py:571-574`) [read], and ours are three.
+- What the loop then does: a pull request that came on its mark alone is left out with "It lands with a land verdict, or on its mark once a candidate on a later `main` certifies its move"; one with a land verdict is "merged as any PR's" (`tools/research/src/research/vqueue_loop.py:1782-1788`) [read].
+- #9189 landed that way: its staged commit `eb067c7c43` ("Move by tools/move/specs_map.toml") is in `main`'s history, with its two preparation commits below it [read: `git log origin/main`].
+- **So** [derived]: the carve's pull request carries its staged commits, has no `Move:` line, and lands with a land verdict from ci's reviewers, not on its mark alone. Please take ci's word on that before Friday. It changes who must be awake at the mark, and nothing in the move.
+
+### 7. The world: it can ride as the third commit, and I staged it
+
+- **Yes.** `tools/move/world_map.toml` has one row, `verity/hardware/world/` to `verity/protocols/certifier/device/world/`, the module row beside it, and `compose_map.toml`'s `[roots]` and `[rewrite]`. It is the third commit of item 1's table: certified, 6 renames and 11 path-only edits, 0 `__init__.py`, every Lake path resolving [run `r20261112-193301-c004`].
+- **What the commit is** [read: its diff]: the package's six files move byte for byte (`World.lean`, its lakefile, manifest, lock, toolchain and `.gitignore`). Eleven files are edited in place: the certifier's device's lakefile (`path = "../world"`) and manifest, the manifests of `security/Properties` and `security/Proofs`, the device's README, `public_boundary.toml` and `drive.toml` (item 4), two test logs' text (`tools/research/tests/test_landing.py`, `test_vqueue_slim.py`), the registry and `moves.json`.
+- **It needs two ordinary commits before it**, both on `cursor/proofs-world-map-3b9d` at `0a13c1c90cb3` (two commits on `main` `ab3f1d53a606`; pushed, not opened, waiting on your word) [read: `git log`]:
+  - the map;
+  - one line of `verity/protocols/certifier/device/README.md` (`:23`), which names the world's package from the root, `verity/hardware/world`, where it had `../../../hardware/world`. With the relative path the mover writes the bare name `world`, and `move_check.py` refuses that as "edit beyond moved paths and module names"; a trailing slash is refused too [run locally].
+  - The gate passes on that head, the map tests pass (10 passed) and the step stops on no file [run locally]. Its quick tier is `r20261112-194809-9cc5`, waiting since 19:48Z. Both paths are in `lowrisk_excludes` (`tools/move/`, `verity/protocols/certifier/device/`) [read: `drive.toml:74-76`], so it needs a land verdict, or it goes as preparation commits of the move's pull request [derived].
+- **Alone it certifies too**: on `main` with those two commits, 6 renames and 11 path-only edits, 0 `__init__.py`, 0 of 369 Lake paths unresolved (35 lakefiles), 0 issues, and the same four pins stale [run locally].
+- **Riding or alone** [derived]:
+  - Riding: one pull request, one land verdict, one regeneration of the pins. Alone on Wed 18 Nov it needs its own pins commit and Lean build, since its commit rewrites `security/Proofs/lake-manifest.json` again.
+  - It is the last commit and the first two do not read its map, so it can be dropped at the staging hour without changing them.
+  - **My recommendation: it rides**, unless someone has yet to agree to the place: the registry's row for it stays under proofs' `owns` at the new path (the mover rewrites the row), inside `verity/protocols/certifier/device/`, which is network-accounting's [read: `.agents/skills/using-slack/registry.json` on the staged tip]. The longest prefix decides (`tools/research/src/research/slack.py:479`) [read], so proofs still owns the package after the move. Whether it passes to network-accounting with the directory is yours to say; deleting the row does it.
+
+### 8. The two fixtures, size only
+
+- **`fixtures/typed-obligation-v0/` to `benchmarks/numerical/typed-obligation-v0/`** [read: `main` `5f0c008aa040`]:
+  - 141 tracked JSON files, 2,692,438 bytes [read: `git ls-files`].
+  - The one reader, `benchmarks/numerical/tests/checker/conftest.py:15`, reads a 142nd file the tree does not track: the K = 1536 vector, fetched by its `art:` row (`fixtures/artifacts.json:11`) and ignored at `.gitignore:88` [read].
+  - No code reads any of the 141; one docstring names one by its stem (`verity/definitions/circuits/targets/target.py:66`) [read: `rg` of all 141 stems].
+  - As a path map: one directory row, 141 renames, and five files edited in place: the reader, the `art:` row, `.gitignore`, the docstring's two paths (`target.py:35, 75`) and two comments (`tools/research/tests/test_queue.py:2895, 2939`) [guess: not staged]. The numerical suite's `inputs` name `fixtures` whole (`benchmarks/numerical/pyproject.toml:31`) [read]; that entry stays for as long as the suite reads another fixture [guess: I did not list what else it reads].
+  - Since nothing reads the 141, whether they move or go is a question before the map is written [derived].
+- **`fixtures/proof-format-v3/` deleted** [read: `main` `5f0c008aa040`]:
+  - 2 files, `README.md` and `vectors.json`, 144,035 bytes.
+  - **It has no `art:` row**: no row of `fixtures/artifacts.json` names the directory or holds either file's sha256 [run locally], so there is none to delete.
+  - Named by one docstring (`adapters/vllm/verity_vllm/check/codes.py:3`) and by two rows of `tests/test_doc_paths.py:54-55` (top's), exceptions for the README's own dead paths, which go with it [read: `rg`]. Nothing reads `vectors.json` [read: `rg`].
+  - So: two files deleted, one docstring line, two rows of top's.
+
+### 9. The changes around the move, now
+
+**Before the move** (the four of my 09:02Z entry, and what is new):
+- **C0**, #9202, the mover and the certificate follow a Lake path: on `main` (`4021a8bb4c`) [read: `git log origin/main`].
+- **C1**, #9174, the two maps: on `main` (`5bd7dee169`) [read].
+- **C2**, the one_stage change (`3f29ae86e4a4` on `cursor/proofs-one-stage-package-paths-b7e4`): **not on `main`**; it waits on #9375, and I open it the hour that lands. It cherry-picks clean onto lean's head with `main`, and its guard passes on that base (1 passed) and on the staged tip (6 passed with its two neighbours) [run locally: a `-k` selection].
+- **C3**, #9196, `"protocols/compose"` in `CORE_TREES`: on `main` (`8d5e2198e7`) [read].
+- C4, #9178, either side: on `main` (`f1b50f5a9c`) [read].
+- **N1, new:** #9455, the `[roots]` row (item 2). Open, unmarked; needs its quick tier and a land verdict.
+- **N2, new, only if the world rides:** the world's map and the README's line (item 7). Pushed, not opened.
+
+**In the move's pull request:** the three staged commits, then the pins commit under (B) of item 5.
+
+**After**, as in my 09:02Z entry: C5 (the suite parted from the package), C6 (the rule, and `"protocols/remote"` out of `CORE_TREES`), C7 (the word move). If the world rides, three small ones more: `CERTIFIER_LEAN` (top), the two redundant entries (ci), the registry's row (yours).
+
+### 10. The hour
+
+With #9375 on `main` at hour T. Every figure here is a [guess] from today's waits for a slot (10 to 33 min told at launch, and longer for the three runs below) and the staging run's 10 min:
+- **T + 0:15.** C2 is on `main`'s tip, its guard run here, its pull request open, its quick tier queued. The staging is queued: one command, three maps, from a pushed base that is `main`'s tip plus whichever of N1, N2 and C2 are not on `main` yet, as preparation commits (#9189's shape).
+- **T + 1:00.** The staging is back. The per-commit checks run here in about 5 min: the certificate, the second runs, the CI-533 count, the Lake paths, `resolve_check.py`. The branch is pushed; the pins' regeneration and the changed suites' quick tier are queued on the staged tip.
+- **T + 1:15: the pull request can be open**, unmarked, with the three certified commits, their counts and the two runs named in its body.
+- **T + 2:30: its pins commit and its quick tier's verdict are in it**, if the Lean build of the pins' three modules takes under half an hour once it has a slot. No run has timed that build; `r20261112-195233-6ab1` will, and I correct this line when it ends.
+- The Lean check of the whole staged tree is the candidate's, or a pre-mark run's in a Lean batch. I have not timed it and give no hour for it.
+- What makes it later: N1 or N2 not on `main` adds nothing to the hour, only commits to read; a pool as full as today's 19:48Z adds half an hour to each of the two waits.
+
+### 11. Still to do
+
+1. #9455: its ready line when `r20261112-194809-b6e7` passes; then ci's verdict.
+2. Your word on the world: rides or alone. If it rides, I open N2 the minute you say.
+3. Your word and ci's on the pins: (B), or (A) first.
+4. ci's word that a staged path map's pull request lands with a land verdict (item 6).
+5. At T: item 10. The CI-489 line, recounted, an hour before the move's mark. My scratch branches go once the move is staged on `main`, and I say so then.
+
+### 12. Lines for ci and infra, yours to pass on or drop
+
+- ci, `tools/move/layout.py`: it runs a map whose `[roots]` names a directory that is not there without a word [run locally]. A stop there, naming the root, would have caught your fact 1 on the day the machine model moved.
+- ci, `tools/move/layout.py`: it does not repin as `rename.py` does (item 5).
+- ci, `tools/move/layout.py` and `move_check.py`: the mover rewrites a relative Markdown path across the move into a bare name, which the certificate then refuses (item 7) [run locally].
+- ci, `tools/move/README.md:79-83`: it promises a mark-only route that a path map does not have (item 6).
+- infra: `--on auto` spilled to `vy-nebius-cpu-1`'s research pool told me "about 33 min" at 19:48Z and "about 10 min" at 19:52Z; at 20:15Z all three runs were still waiting [read: the launch lines; `research status`].
+
+### 13. Runs awaited, and my branches
+
+- `r20261112-194809-b6e7`: #9455's quick tier (`suites.py --changed ab3f1d53a606 --quick` at `fbaf4e74e3de`). Waiting for a slot since 19:48Z; a verdict by about 21:15Z [guess].
+- `r20261112-194809-9cc5`: the same for the world's branch at `0a13c1c90cb3`. The same [guess].
+- `r20261112-195233-6ab1`: the pins regenerated on the staged tip. Waiting since 19:52Z; an end by about 21:30Z [guess: its Lean build is untimed, its cap is 90 min from taking a slot].
+- Branches of mine on the remote: #9455's; `cursor/proofs-world-map-3b9d`; `cursor/proofs-one-stage-package-paths-b7e4`; and five scratch branches kept under your ruling until the move is staged on `main`: `cursor/proofs-scratch-maps-on-remote-merge-9d2b`, `cursor/proofs-scratch-maps-mover-on-main-6b1f`, `cursor/proofs-scratch-carve-on-remote-main-5e2a`, `cursor/proofs-scratch-carve-on-remote-main-b81c`, `cursor/proofs-scratch-carve-staged-b81c` [read: `git ls-remote`].
+- Nothing is marked; nothing went to Linear or Slack; I pushed only to branches I created.
