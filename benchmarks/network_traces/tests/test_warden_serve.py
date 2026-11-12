@@ -558,6 +558,9 @@ class _Writer:
     def write(self, data: bytes) -> None:
         self.writes.append((self.warden.ticks if self.warden else None, bytes(data)))
 
+    def can_write_eof(self) -> bool:
+        return False
+
     def is_closing(self) -> bool:
         return self.closed
 

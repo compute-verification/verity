@@ -115,10 +115,13 @@ call without releases, on which the network certifier signs that the execution p
   always is;
 - turns away an arrival it handles once its ticks have reached the first bucket that admits nothing. The arrival
   takes no ordinal, is never queued and is no refusal, so no record is withheld for it; `turned_away` counts it. It
-  gets one `REFUSED` cell on ordinal 0, the same bytes at every turn-away, and then the close. The cell leaves with
-  the next tick's bucket as that bucket's cells do, never at the arrival: written on the loop by that tick, or with
-  `paced` handed to the pacer as a part of that bucket for the arrival's socket, which the part closes. It is in no
-  record. Which arrivals are turned away is a function of the tick count at each one's arrival, the run's length
+  gets one `REFUSED` cell on ordinal 0, the same bytes at every turn-away, and its stream's end with it. They leave
+  with the next tick's bucket as that bucket's cells do, never at the arrival: written on the loop by that tick, or
+  with `paced` handed to the pacer as a part of that bucket for the arrival's socket, the link's last, which ends
+  the stream. The cell is in no record. The link stays open after: what the client still sends is read and dropped,
+  none of it reaching a server, and the link is closed at the client's end of stream, or at the run's end. A link
+  closed with its client's bytes unread, as a request it never read is, is reset, and a reset client may lose the
+  cell. Which arrivals are turned away is a function of the tick count at each one's arrival, the run's length
   and the schedule: nothing the queue or the lanes hold, and so nothing a server does, moves it. An arrival after
   the run's last tick has no tick left and is closed with no cell. Before those buckets a full queue refuses as it
   does (Admission), and that execution phase's records are withheld;
@@ -639,7 +642,9 @@ class Warden:
         self.refused_windows: set[int] = set()
         self.turned_away = 0
         self._away = cell(REFUSED, 0, b"", params.cell_bytes)  # every turn-away's cell, made once
-        self._turned: list[tuple[int, Any]] = []  # the arrivals turned away since the last tick: count, writer
+        #: the arrivals turned away since the last tick: each one's count, its reader and its writer
+        self._turned: list[tuple[int, asyncio.StreamReader, Any]] = []
+        self._leaving: dict[Any, asyncio.Task] = {}  # a turned-away link from its cell's tick until it is closed
         self._over = False  # the run has ended: no tick is left
         self.log: list[dict] = []
         self.lateness: list[float] = []
@@ -662,7 +667,7 @@ class Warden:
             if self._over:
                 writer.close()
             else:
-                self._turned.append((self.turned_away, writer))
+                self._turned.append((self.turned_away, reader, writer))
             self._changed.set()
             return
         if len(self.queue) >= self.params.queue:
@@ -709,9 +714,13 @@ class Warden:
             for connection in [*self.active, *self.queue]:
                 self._end(connection, cut=True)
             self.active, self.queue = [], deque()
-            for _, writer in self._turned:
+            for _, _, writer in self._turned:
                 writer.close()
             self._turned.clear()
+            for writer, leaving in self._leaving.items():
+                leaving.cancel()
+                writer.close()
+            self._leaving.clear()
             if opening is not None:
                 opening.cancel()
                 self._end_watermark()
@@ -753,14 +762,17 @@ class Warden:
                 self._write(c, b"".join(out))
             else:
                 parts.append((c.ordinal, b"".join(out), c.ended is not None))
-        for n, writer in self._turned:
-            if not writer.is_closing():
-                if self._pacer is None:
-                    writer.write(self._away)
-                else:
-                    self._pacer.add(AWAY_KEYS - n, writer.get_extra_info("socket").fileno())
-                    parts.append((AWAY_KEYS - n, self._away, True))
-            writer.close()
+        for n, reader, writer in self._turned:
+            if writer.is_closing():
+                continue
+            if self._pacer is None:
+                writer.write(self._away)
+                if writer.can_write_eof():
+                    writer.write_eof()
+            else:
+                self._pacer.add(AWAY_KEYS - n, writer.get_extra_info("socket").fileno())
+                parts.append((AWAY_KEYS - n, self._away, True))
+            self._leaving[writer] = asyncio.create_task(self._leave(reader, writer))
         self._turned.clear()
         if parts:
             self._pacer.hand(t, self.origin + t * self.params.bucket_ms / 1000 + self.paced, parts)
@@ -784,6 +796,20 @@ class Warden:
             self._held[w] = (out, records)
             if not self._unreleased[w]:
                 self._emit(w)
+
+    async def _leave(self, reader: asyncio.StreamReader, writer: Any) -> None:
+        """A turned-away link from the tick that releases its cell and its stream's end: what its client still sends is
+        read and dropped, to the client's end of stream, and the link is closed then. A link closed with its client's
+        bytes unread is reset, and a reset client may lose the cell it has not read."""
+        try:
+            while await reader.read(READ_BYTES):
+                pass
+        except OSError:
+            pass
+        finally:
+            writer.close()
+            self._leaving.pop(writer, None)
+            self._changed.set()
 
     def _emit(self, w: int, reason: Reason | None = None) -> None:
         """Window w's held records, each with `reason` as its status unless it has one: a window records its first

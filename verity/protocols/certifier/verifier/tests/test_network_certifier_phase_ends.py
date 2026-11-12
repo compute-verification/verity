@@ -14,6 +14,7 @@ import asyncio
 import dataclasses
 import hashlib
 import json
+import socket
 
 import pytest
 
@@ -184,15 +185,19 @@ def test_a_runs_last_execution_phase_holds_at_most_what_its_first_buckets_admit(
 
 
 class Stamped(Client):
-    """A client that keeps the device's clock at each write to it and at its close."""
+    """A client that keeps the device's clock at each write to it, at its stream's end and at its close."""
 
     def __init__(self, warden: Warden, data) -> None:
-        self.at, self.closed_at = [], None
+        self.at, self.ended_at, self.closed_at = [], None, None
         super().__init__(warden, data)
 
     def write(self, data: bytes) -> None:
         self.at.append(self.warden.clock())
         super().write(data)
+
+    def write_eof(self) -> None:
+        self.ended_at = self.warden.clock()
+        super().write_eof()
 
     def close(self) -> None:
         if self.closed_at is None:
@@ -228,16 +233,16 @@ def test_an_arrival_in_the_runs_last_buckets_is_turned_away_whatever_the_queue_a
     """Under form 2, at each of `STARTS`: every lane free, one or both taken, one queued, the queue full with the
     lanes held to the run's end or freed inside those buckets, and one arrival more than the queue holds. `LATE`'s
     five arrivals, and no other, are turned away in every one: the set reads the tick count and the schedule, and
-    nothing the queue or the lanes hold moves it. Each gets one cell, the same bytes every time, in its own bucket,
-    and the close; none takes an ordinal, is queued or is a refusal, so no record is withheld for them and both
-    execution phases are published complete and handed. A connection queued when those buckets begin waits, though a
-    lane frees, and is cut at the run's end with no cell. The last arrival before them with the queue full is
-    refused, as it was, and its execution phase's records are withheld."""
+    nothing the queue or the lanes hold moves it. Each gets one cell, the same bytes every time, and its stream's
+    end in its own bucket, and the close; none takes an ordinal, is queued or is a refusal, so no record is withheld
+    for them and both execution phases are published complete and handed. A connection queued when those buckets
+    begin waits, though a lane frees, and is cut at the run's end with no cell. The last arrival before them with
+    the queue full is refused, as it was, and its execution phase's records are withheld."""
     room = TWO.lanes + TWO.queue
     seen = set()
     for before, long in STARTS:
         device, early, late, server = through(TWO, before, long)
-        assert [(c.writes, c.closed) for c in late] == [([(t, AWAY)], True) for t in LATE]
+        assert [(c.writes, c.ended, c.closed) for c in late] == [([(t, AWAY)], t, True) for t in LATE]
         seen |= {data for c in late for _, data in c.writes}
         taken, held = min(before, TWO.lanes), min(before, room)
         assert (device.turned_away, device.ordinals, len(server.conns)) == (len(LATE), held, taken)
@@ -259,13 +264,14 @@ def test_an_arrival_in_the_runs_last_buckets_is_turned_away_whatever_the_queue_a
 def test_a_turn_aways_cell_leaves_on_the_next_tick_through_the_pacer_and_never_at_its_arrival():
     """An arrival is handled before its bucket's tick, while the clock still reads the tick before. A refusal is
     written and closed then. A turn-away is neither until the clock reads its bucket's boundary: the tick writes its
-    cell and closes it. With the pacer the loop writes it nothing: each turn-away's cell is a part of its bucket,
-    which the pacer writes to its socket and closes, a bucket of its own where no connection is live, and the
-    clients read what the unpaced run wrote them; one queued and cut reads nothing."""
+    cell and ends its stream, and the link, its client's stream already ended, is closed. With the pacer the loop
+    writes it nothing: each turn-away's cell is a part of its bucket, which the pacer writes to its socket, ending
+    the stream, a bucket of its own where no connection is live, and the clients read what the unpaced run wrote
+    them; one queued and cut reads nothing."""
     device, early, late, _ = through(TWO, 5, True, client=Stamped)
     refused, earlier = early[TWO.lanes + TWO.queue], (FIRST - 2) * TAU
     assert (refused.writes, refused.at, refused.closed_at) == ([(FIRST - 1, AWAY)], [earlier], earlier)
-    assert [(c.at, c.closed_at) for c in late] == [([t * TAU], t * TAU) for t in LATE]
+    assert [(c.at, c.ended_at, c.closed_at) for c in late] == [([t * TAU], t * TAU, t * TAU) for t in LATE]
     for before in (0, 4):
         _, plain_early, plain_late, _ = through(TWO, before, True)
         paced, early, late, _ = through(TWO, before, True, paced=0.05, client=SocketClient)
@@ -278,6 +284,112 @@ def test_a_turn_aways_cell_leaves_on_the_next_tick_through_the_pacer_and_never_a
         assert set(LATE) <= {r.t for r in paced.releases} and all(r.written for r in paced.releases)
         if not before:
             assert [r.t for r in paced.releases] == sorted(set(LATE))
+
+
+class Ticking:
+    """A device at form 2 for a run of one execution phase, on a clock the test drives a tick at a time."""
+
+    def __init__(self, server: Server, **hooks) -> None:
+        self.clock = VirtualClock(-TAU / 2)
+        self.device = Warden(TWO, server.connect, origin=0.0, windows=1, clock=self.clock, sleep=self.clock.sleep,
+                             **hooks)
+        self.running = asyncio.create_task(self.device.run())
+
+    async def tick(self, *buckets: int) -> None:
+        """Each of `buckets`' ticks, and with the pacer its bucket's release."""
+        for t in buckets:
+            self.clock.advance(t * TAU)
+            await self.device.until(lambda w: w.ticks > t and not any(w._unreleased.values()))
+
+
+def test_a_turned_away_link_stays_open_to_its_clients_end_of_stream_and_what_it_sends_is_dropped():
+    """The tick that releases a turn-away's cell ends the device's stream on the link and leaves the link open. The
+    device reads what the client still sends and drops it, closes the link at the client's end of stream, and
+    closes at the run's end one whose client never ends its stream. None of those bytes reaches a server, takes an
+    ordinal or is in a record, and the execution phase is published complete and handed."""
+    async def main():
+        server = Server([])
+        run = Ticking(server)
+        device, first = run.device, T - SPAN
+        await run.tick(*range(first))
+        clients = [Client(device, (cells(id_req(j, 3), B), False)) for j in (1, 2)]
+
+        def links() -> list:
+            return [(list(c.writes), c.ended, c.closed, len(c.reader._buffer)) for c in clients]
+
+        await device.until(lambda w: w.turned_away + w.ordinals + w.refused == 2)
+        seen = [links()]
+        await run.tick(first)
+        seen.append(links())
+        for c in clients:
+            c.reader.feed_data(bytes(5 * B))
+        await run.tick(first + 1)
+        seen.append(links())
+        clients[0].reader.feed_eof()
+        await run.tick(first + 2)
+        closed = [[c.closed for c in clients]]
+        await run.tick(*range(first + 3, T))
+        await run.running
+        closed.append([c.closed for c in clients])
+        return device, server, clients, seen, closed
+
+    device, server, clients, seen, closed = asyncio.run(main())
+    held = ([(T - SPAN, AWAY)], T - SPAN, False, 0)
+    assert seen == [[([], None, False, B)] * 2, [held] * 2, [held] * 2]
+    assert closed == [[True, False], [True, True]] and all(c.writes == [(T - SPAN, AWAY)] for c in clients)
+    assert (device.turned_away, device.ordinals, device.refused, len(server.conns)) == (2, 0, 0, 0)
+    assert device.withheld == [] and all(r.status.complete for link in records(device) for r in link)
+    assert ends(device) == [(0, True)] and handed(device) == CR.of_records(TWO, *records(device)[:2])
+    assert not any(frame is not None for link in records(device) for r in link for row in r.grid for frame in row)
+
+
+#: Linux's TCP states of a socket that has sent its stream's end and still reads its peer's, FIN-WAIT-1 and
+#: FIN-WAIT-2 (`tcp_info`'s first byte)
+ENDED_AND_OPEN = (4, 5)
+
+
+async def on_loopback(paced: float | None, more: bytes):
+    """A run of one execution phase behind a loopback listener. A client connects in the first bucket that admits
+    nothing and writes its whole request, which the device has not read when its tick comes; once that bucket is
+    released it reads to its stream's end, where a reset raises, then writes `more` and closes. Returns the device,
+    the TCP state of the device's end of the link at the release, and what the client read."""
+    run = Ticking(Server([]), paced=paced)
+    device, first = run.device, T - SPAN
+    listener = await asyncio.start_server(device.handle, "127.0.0.1", 0)
+    try:
+        await run.tick(*range(first))
+        reader, writer = await asyncio.open_connection(*listener.sockets[0].getsockname()[:2])
+        writer.write(cells(id_req(1, 40), B))
+        await writer.drain()
+        await device.until(lambda w: w.turned_away + w.ordinals + w.refused == 1)
+        await run.tick(first)
+        (link,) = device._leaving
+        state = link.get_extra_info("socket").getsockopt(socket.IPPROTO_TCP, socket.TCP_INFO, 1)[0]
+        got = await reader.read() if state in ENDED_AND_OPEN else None
+        writer.write(more)
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+        await run.tick(*range(first + 1, T))
+        await run.running
+    finally:
+        listener.close()
+        run.running.cancel()
+    return device, state, got
+
+
+def test_a_turned_away_client_on_a_socket_reads_its_cell_and_the_streams_end_and_never_a_reset():
+    """Over TCP, a link closed with bytes of its client's unread is reset, and the client may lose what it has not
+    read yet. The turned-away client here has written its whole request, of two cells, and the device has read
+    none of it at its tick. With the loop writing and with the pacer, the device's end of the link has sent its
+    stream's end at the bucket's release and is still open; the client reads the one cell and then the stream's
+    end, never a reset, and none either when it sends more after."""
+    assert len(cells(id_req(1, 40), B)) == 2 * B
+    for paced in (None, 0.05):
+        for more in (b"", bytes(3 * B)):
+            device, state, got = asyncio.run(on_loopback(paced, more))
+            assert state in ENDED_AND_OPEN and got == AWAY
+            assert (device.turned_away, device.ordinals, device.refused) == (1, 0, 0)
 
 
 def test_an_arrival_with_no_tick_left_is_closed_with_no_cell():

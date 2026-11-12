@@ -112,10 +112,12 @@ class ServerConn:
 
 
 class Client:
-    """One client connection: its cells in its reader, and every write with the bucket it was made in."""
+    """One client connection: its cells in its reader, every write with the bucket it was made in, and the bucket its
+    stream was ended in while the connection stayed open (`ended`), if it was."""
 
     def __init__(self, warden: Warden, data: bytes | tuple[bytes, bool]) -> None:
         self.warden, self.writes, self.closed = warden, [], False
+        self.ended: int | None = None
         self.transport = self
         data, eof = data if isinstance(data, tuple) else (data, True)
         self.reader = asyncio.StreamReader()
@@ -125,8 +127,15 @@ class Client:
         self.task = asyncio.create_task(warden.handle(self.reader, self))
 
     def write(self, data: bytes) -> None:
-        assert not self.closed
+        assert not self.closed and self.ended is None
         self.writes.append((self.warden.ticks, bytes(data)))
+
+    def can_write_eof(self) -> bool:
+        return True
+
+    def write_eof(self) -> None:
+        assert not self.closed and self.ended is None
+        self.ended = self.warden.ticks
 
     def is_closing(self) -> bool:
         return self.closed
