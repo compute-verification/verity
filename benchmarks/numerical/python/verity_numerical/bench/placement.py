@@ -274,6 +274,17 @@ def is_host_bridge(ip: str | None) -> bool:
     return a.is_loopback or a.is_link_local or (a.version == 4 and a in HOST_BRIDGE_NET)
 
 
+def is_global_net(ip: str | None) -> bool:
+    """An address of RunPod's global network (:data:`GLOBAL_NET`)."""
+    if not ip:
+        return False
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    return a in GLOBAL_NET
+
+
 def is_hypervisor_vendor(vendor: str | None) -> bool:
     return bool(vendor) and any(str(vendor).strip().lower().startswith(v.lower()) for v in HYPERVISOR_VENDORS)
 
@@ -305,11 +316,7 @@ def _nat_exception(prover: Mapping[str, Any], verifier: Mapping[str, Any], link:
     host = (link.get("peer") or "").rpartition(":")[0]
     want = f"{verifier.get('pod_id')}{RUNPOD_INTERNAL}" if verifier.get("pod_id") else None
     peer_ip = link.get("peer_ip")
-    try:
-        in_global = peer_ip is not None and ipaddress.ip_address(peer_ip) in GLOBAL_NET
-    except ValueError:
-        in_global = False
-    if not (want and host == want and in_global):
+    if not (want and host == want and is_global_net(peer_ip)):
         out.append(f"{pre}: the link must be RunPod's global network, {want or '<verifier pod id>' + RUNPOD_INTERNAL} resolving into "
                    f"{GLOBAL_NET}; it is {host or '?'} at {peer_ip}")
     rtt = link.get("rtt") or {}

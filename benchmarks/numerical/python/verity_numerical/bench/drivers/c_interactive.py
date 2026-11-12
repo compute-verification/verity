@@ -23,6 +23,7 @@ import sys
 import tarfile
 import tempfile
 from pathlib import Path
+from typing import Any
 
 __all__ = ["BACKEND", "FAMILY", "INTERACTIVE", "RESULT", "jobs", "register", "unmet"]
 
@@ -113,14 +114,20 @@ def register(cell, prover_run: Path, verifier_run: Path | None, out: Path) -> li
     return [cmd + ["--lane", cell.lane] if takes_lane() else cmd]
 
 
+def _backend_name(result: Any) -> str | None:
+    """A result's ``workload_fingerprint.software.backend.name``; None where it names none."""
+    for key in ("workload_fingerprint", "software", "backend", "name"):
+        result = result.get(key) if isinstance(result, dict) else None
+    return result if isinstance(result, str) and result else None
+
+
 def ir_binary(prover_run: Path) -> str:
-    """An IR cell's verifier binary: the prover's own (the result's ``software.backend.name``: ``flock-ir-frame``, or
-    ``flock-ir-sampling`` for the sampling statement), ``flock-ir-frame`` when the result does not say."""
+    """An IR cell's verifier binary: the prover's own (the ``software.backend.name`` of the run's first ``result.json`` that
+    names one: ``flock-ir-frame``, or ``flock-ir-sampling`` for the sampling statement), ``flock-ir-frame`` when none does.
+    A ``result.json`` that is no JSON raises."""
     for p in (Path(prover_run) / "result.json", *Path(prover_run).glob("**/result.json")):
-        try:
-            return json.loads(p.read_text())["workload_fingerprint"]["software"]["backend"]["name"] or "flock-ir-frame"
-        except (OSError, ValueError, KeyError, TypeError):
-            continue
+        if p.is_file() and (name := _backend_name(json.loads(p.read_text()))):
+            return name
     return "flock-ir-frame"
 
 

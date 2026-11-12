@@ -349,10 +349,20 @@ def _interleave_vu(n_real: int, n_corner: int) -> list[tuple[str, int]]:
 
 
 def _git_head() -> str | None:
-    try:
-        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=True, timeout=10).stdout.strip()
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+    """The commit of the checkout this file is in; None where there is no git, or the file is in no checkout."""
+    if shutil.which("git") is None:
         return None
+    r = subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True, check=False, timeout=10)
+    return r.stdout.strip() if r.returncode == 0 else None
+
+
+def _in_domain(x: Sequence[int], w: Sequence[int]) -> bool:
+    """Whether silicon computes the chain on these operands; False where it rejects them as outside its domain."""
+    try:
+        G.chain_accs(x, w)
+    except InvalidArtifact:
+        return False
+    return True
 
 
 def _source_digests() -> dict[str, str]:
@@ -705,11 +715,7 @@ def _build_negatives(results: list[dict], kinds: list[str], x: array, w: array, 
         xi, wi = list(x[i * K : (i + 1) * K]), list(w[i * K : (i + 1) * K])
         k = G.Rng("neg-nonfinite", n).below(K)
         (xi if where == "x" else wi)[k] = word
-        try:
-            G.chain_accs(xi, wi)
-        except InvalidArtifact:
-            pass
-        else:
+        if _in_domain(xi, wi):
             raise RuntimeError("a non-finite operand was not rejected by silicon")
         kind = "inf" if word & 0x7F == 0 else "nan"
         push("nonfinite-operand", i, xi, wi, claimed, None, "reject", f"{where}[{k}] = {word:#06x} ({'-' if word >> 15 else '+'}{kind}); claimed the IEEE word")
@@ -720,11 +726,7 @@ def _build_negatives(results: list[dict], kinds: list[str], x: array, w: array, 
         a, b = (K - STEP), (K - 2 * STEP)
         xi[a : a + STEP], xi[b : b + STEP] = xi[b : b + STEP], xi[a : a + STEP]
         wi[a : a + STEP], wi[b : b + STEP] = wi[b : b + STEP], wi[a : a + STEP]
-        try:
-            G.chain_accs(xi, wi)
-        except InvalidArtifact:
-            pass
-        else:
+        if _in_domain(xi, wi):
             raise RuntimeError("an intermediate saturation was not rejected by silicon")
         push("sat-intermediate", i, xi, wi, results[i]["y"], None, "reject", "steps 94 and 95 of a sat-final corner swapped: acc_94 is +-inf, step 95 is out of the domain; claimed the sticky infinity")
     return {"x": neg_x, "w": neg_w, "y": neg_y, "rows": rows, "composition": composition}
