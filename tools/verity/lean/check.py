@@ -4937,11 +4937,11 @@ _GRAPHS: dict[tuple[str, str], str | None] = {}
 _GRAPHS_LOCK = threading.Lock()
 
 
-def replay_digest(m: str, parts: list[Path], digest, og) -> str:
+def replay_digest(m: str, parts: list[Path], digest, og, mk) -> str:
     """What module ``m``'s replay key reads of its `.olean` files ``parts``: each part's ``digest``, or, when its
     `olean.server` holds its source's path (a message's file, which Lean writes as the absolute path it compiled), the
-    parts' object graph with that path left out (``og``: `olean_graph.canonical`, under `graph:`), which the module
-    compiled in another tree shares."""
+    parts' object graph with that path left out (``og``: `olean_graph.canonical`, under `graph:`; ``mk``: `module_keys`,
+    for the path), which the module compiled in another tree shares."""
     plain = ",".join(digest(p) for p in parts)
     server = next((p for p in parts if p.name.endswith(".olean.server")), None)
     if server is None:
@@ -4950,7 +4950,7 @@ def replay_digest(m: str, parts: list[Path], digest, og) -> str:
         known = (m, plain) in _GRAPHS
         graph = _GRAPHS.get((m, plain))
     if not known:
-        source = sibling("module_keys").path_of(m, ".lean").as_posix()
+        source = mk.path_of(m, ".lean").as_posix()
         graph = None
         if f"/{source}".encode() in server.read_bytes():
             graph = og.canonical({"olean" + p.name.rpartition(".olean")[2]: p for p in parts}, source)
@@ -4967,11 +4967,11 @@ def replay_keys(facts: dict, toolchain: str, digest=None) -> dict[str, str]:
     package is built, and so does one whose parts differ only in where its source was. ``digest`` hashes a file in place of
     `sha256` (`Pipeline.digest` for a batch's private copies, `Sealed.digest` for a seal's copies, which `Replay.lean` reads
     in step)."""
-    graph, digest, og = facts["graph"], digest or sha256, sibling("olean_graph")
+    graph, digest, og, mk = facts["graph"], digest or sha256, sibling("olean_graph"), sibling("module_keys")
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
     with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
-        digests = dict(zip(files, ex.map(lambda m: replay_digest(m, files[m], digest, og), files)))
+        digests = dict(zip(files, ex.map(lambda m: replay_digest(m, files[m], digest, og, mk), files)))
     head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
     keys: dict[str, str] = {}
     for root in graph:
