@@ -98845,3 +98845,99 @@ For Daniel, in plain words. Three labels of the benchmark moved today, and no GB
 - **What would stop it** (derived), in order of likelihood: (1) the Lean check of the three packages touched (sampled proofs' verifier, the properties tree, the proofs tree) not starting or not ending in time: a run waiting in a pool line, or the proofs tree's check running past 04:00Z. Then the pull request is open tonight all the same and the ready line waits on that one verdict; I name the run id and its ETA. (2) `acceptMeans_iff` no longer closing by `rfl` on the public outputs (`security/Proofs/Properties/Spot.lean:1277-1285`): one edit loop, about an hour. (3) #9375 landing in between: one merge on my side, no stop for the ready line.
 - **Not in it** (derived), as my 19:50Z entry says: the period check; `stop_audit.boundary_audit` and `Record.across` still read the boundary stream's audit record's own `complete`, which the second build changes.
 - **The second build** (read: your message; NET-390's comments of 11:51 AM and 12:00 PM PST, as data): `acrossAll` with the response tie as its caller and PRF-574's refusal of a handed record that differs, on a second branch from main, after the first pull request is open. First entry by Fri 02:00Z with what I need from network (#9378's heads, NET-386's verifier as it stands). The read-only job of your 19:40Z turn (its (ii), the sampling plan's two charges at T = 1,024, and (iii), the amended order) I fold into that entry unless you say drop it.
+
+## CLOSEROUND, Thu 12 Nov 19:58Z: #9230's head is now `737f5707134e` (`main` at `4a90174415b7` merged in, since `main` changed two of its files); its quick tier `r20261112-192909-b76f` is in its slot, about 20:40Z; it has no stop against lean's #9375 at `d1f71265b06e`; PRF-603 is #9452, opened unmarked, green on the real Lean; I run Fable, so by the team skill the rest is an Opus worker's
+
+Not the ready line for either: each is one run short. Mailbox read 19:48Z, newest section yours of 16:07Z. The VM was
+not reset since 19:08Z. Nothing marked, nothing posted on Linear or Slack. Tags: [run] a command I ran and read now;
+[read]; [derived]; [guess].
+
+**My model, first, since it changes who you resume** [read: the team skill on `main` since #9393]. A resume keeps its
+model, and a Fable worker whose task is Opus's is not resumed: it tells its launcher. I run Claude Fable 5.2. What is
+left of mine is reading two runs, two ready lines, one merge after #9375 lands and the small rename pull request:
+nothing to plan or decide, so Opus's. The brief for that worker is my note
+`lanes/proofs/20261112T1950Z-report-closeround.md` (synced), with this entry. The one question below is yours either way.
+
+**#9230 (the twin)**
+
+- **Head** `737f5707134e5fcf8787098a84874f43292dd2c4` [run: `git ls-remote`], a second plain merge, of `main` at
+  `4a90174415b7`, no conflict, pushed 19:28Z, no force. Why a second: after my 19:08Z entry `main` (#9362) changed two
+  of the twin's nine files, `a5.py` and the slow `test_audit_two_members.py`, in hunks the twin does not touch [run:
+  `git diff`]. A run at the old head would not have been a run of what lands.
+- **Its diff against `main`** is still nine files, 1,052 added and 19 removed; no Lean file, lock, lakefile or cap
+  [run]. So it does not wait behind #9375 on that ground.
+- **`main` since:** at `5f0c008aa040` at 19:48Z; none of its 21 files changed since `4a90174415b7` is one of the nine
+  [run: `comm` of the two lists]. No third merge is needed as of then.
+- **Runs:** `r20261112-190307-2302` (the old head `7528097f5ff7`) I cancelled at 19:29Z; it had waited 26 min and its
+  check never started [run: `research cancel`'s own line]. `r20261112-192909-b76f` is the run of record:
+  `suites.py --changed 4a90174415b7 --quick` at the head, 64 suites, the twin's four test files run whole with their
+  slow tests [read: its first lines]. It took slot r7 on vy-nebius-cpu-1 at about 19:50Z and was in the Lean build
+  step at 19:56Z [run]. About 20:40Z [guess: `4b49`, 70 suites, took 38 min in its slot]. Read it with
+  `research fetch r20261112-192909-b76f --all`; the last line of `stdout.log` is `64 suites: 64 passed (0 cached), 0 failed`
+  if it is green.
+- **What it merges onto** [run, 19:48Z: `git merge-tree --write-tree`]:
+  - `main` at `5f0c008aa040`: clean.
+  - lean's #9375 at `d1f71265b06e` (its head moved twice since 19:08Z; based on `main` `4a90174415b7`): **no stop**,
+    and `main` alone has none against it either. The three stops of my 19:08Z entry were against its head
+    `e209a56847d4` and are gone. Of the nine it changes `a5.py` only, which merges.
+  - #9237 at `9d4aec0111fb`: clean.
+  - #9319 at `0e7b13e39bd1`: `a5.py`, two regions, both `main`'s own against it (the same hunks without the twin).
+- **The ready line, once `b76f` reads green:** #9230 at `737f5707134e`, `b76f` passed, clean onto `main`, #9375 and
+  #9237, no Lean file or lock. Its body still describes the stack on #9199 and the runs at the older heads; whoever
+  writes the line updates it (`research queue edit 9230`), keeping its three trailer lines.
+- **Your question** is answered in my 19:08Z entry (yes, and what it waits on). Read it with the first paragraph
+  above: from Mon 16 Nov the holder would be an Opus worker briefed from my notes, not this session.
+
+**PRF-603: [#9452](https://github.com/compute-verification/verity/pull/9452)**, opened unmarked 19:56Z
+
+- **Branch** `cursor/proofs-prf603-answered-25cc`, head `378fcba9dae6d4c39f5b43c214393cb976f7f790`, three commits on
+  `main` at `4a90174415b7`, four files under `benchmarks/one_stage/`, 112 added and 18 removed [run]. No file under
+  `verity/`, no Lean file, no lock: nothing the verifier accepts changes.
+- **What it does.** A negative the verifier decides is refused only where the Lean answered
+  (`"refused" not in verifiers["lean"]`, one definition, `a0.lean_answered`). a5's eleven such rows and
+  `a0.audit_negatives`' three go through it. Before, under a Lean that could not run, each read refused, because the
+  verifier fails closed and the row's test was `not v.ok` [run on the VM with the Lean replaced: eight rows, refused
+  True under `main`'s expression, False now; the honest registration under that Lean is `disagree`].
+- **The lines of `a0.py` I changed** [run: `rg -n`]: line 38, the `Verdict` import; 382 to 407, three new functions
+  after `lean_read_no_proof` (`lean_answered`, `negative`, `history_negative`); and in `audit_negatives` its
+  docstring's last sentence and `decide`'s `refused` (line 458). REFUSE's `NO_SESSION_FILES`, `lean_refused` and
+  `lean_read_no_proof` (364 to 380) are untouched and I wrote no second copy. They answer another case: Lean's own
+  `verify` VERDICT line on a session's proof. Mine read the `verifier` module's verdicts, where what stands in the
+  Lean's place is `{"refused": reason}`. No row passes through both.
+- **The test** (`test_a5_history.py::test_a_negative_is_refused_only_where_the_lean_answered`): eight negatives of the
+  five kinds (a registration's R3 and R4, the history root, the sample, the proved count, the record's three), built
+  through the functions a5 calls. With the Lean all eight are refused, none by a disagreement. With the Lean replaced
+  by a refusal to run, none is, and the honest record is not accepted.
+- **Runs.** `r20261112-193739-ed8c`, exit 0 [run, read whole]: `suites.py benchmarks/one_stage -- -k 'a5_history or
+  a5_memo or audit_two_members'`, the real Lean: 8 passed, none skipped, which is every test the three files hold
+  (2, 3 and 3) [derived: `rg -c`], the two-member audit's three on the real prover and verifier among them. It ran
+  the first commit's tree; the head differs by one annotation in `a0.py` and the new test's local names.
+  `r20261112-194233-32d3` is the quick tier at the head (`--changed 4a90174415b7 --quick`, 5 suites, the test file
+  whole), in slot r13 on vy-nebius-cpu-14 since about 19:54Z; about 20:25Z [guess]. `r20261112-193933-83fb` (the
+  superseded head `37cbed9ac696`) I cancelled before it started.
+- **Stops, and whose** [run, 19:48Z]:
+  - #9375 at `d1f71265b06e`: `a5.py`, one region. Lean adds a control, `program-not-the-days-declared (R2)`, with the
+    old expression beside my R2 line. **#9452 lands after #9375**: then `main` is merged in and that control takes
+    `a0.negative(v)`. Mine to resolve.
+  - #9319 at `0e7b13e39bd1`: `a5.py`, three regions. Two are `main`'s own against it. The third is the negatives
+    block, which #9319 rewrote into worker tasks that carry the old expressions (`not v.ok` at four sites, the
+    history root's `v.codes == (R.HISTORY,)`). Whichever lands second resolves it; network's tasks should take the two
+    functions, or the hole reopens for those rows.
+  - #9237 at `9d4aec0111fb` and #9230 at `737f5707134e`: clean. #9199's head and REFUSE's `8fe73485fcad` are on
+    `main`, which the branch is cut from.
+- **One question, a choice in verifier code I did not make.** For a history table the Python refuses,
+  `verifier.check` returns `R7-history` whenever the Lean's place holds `{"refused": ...}`, a Lean that could not run
+  included. Its module docstring says a Lean that can't be built or run disagrees with any Python outcome [read:
+  `verifier.py`, the docstring and the history branch]. Should `check` give `disagree` there? I read around it:
+  `a0.history_negative` counts the row refused only where the Lean's reason is the Python's string, which only the
+  Lean's own check of the root gives (both say "the registered root is not the table's root over its writers' rows",
+  and nothing wraps either [read]). If you rule `disagree`, that function becomes `a0.negative` and the change to
+  `check` is a verifier change with its own pull request.
+- **Not done, and said in the body.** A negative where the Lean answered and the two disagree still counts as
+  refused; holding both sides to refuse alike is stricter than your ruling. The old expression stands at 38 more
+  sites (a0's own audit, a2, a3, a6, a7, a11), where no test in `check` runs the audit with the Lean. The archive
+  race and the fork guard: built neither.
+- **For you, on Linear:** `research queue open` warned that PRF-603 carries no label naming a live goal.
+
+**Not established:** `b76f` and `32d3` are not read; the full check and the Lean check were run for neither head;
+no suite ran on a tree merged with #9375, #9319 or #9237; a5 was not run on a pod with the change.
