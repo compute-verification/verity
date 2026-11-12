@@ -163,3 +163,26 @@ anything else says the directory is not dead (a reader you missed, a doc that pr
 **stop, delete nothing, and return with that.**
 
 Return by Fri 13 Nov 02:00Z with the pull request open, or with why not.
+
+## Thu 12 Nov 23:00Z: #9525 has its land verdict (ci's reviewer, 22:59Z), with one line of bookkeeping for a follow-up. After A's pull request, not instead of it
+
+ci's reviewer: "#9525 land verdict at `10c3daffdf23` (s8_linear, j10r_sm90 and tools/move
+suites pass on the merge with main `417526501974`; lints same). Bookkeeping, not holding:
+`tools/move/layout_one_map.toml:788` still lists `benchmarks/torch_gpu/s8_linear/build.sh:
+integrations/vllm`, a reference `build.sh` no longer makes; drop it in a follow-up."
+
+**The follow-up, one small pull request of its own** (on `main` once #9525 is on it, else
+stacked on #9525; unmarked; `Lane kernels`, `Refs HASH-127`):
+- drop that row;
+- **and, in the same block of the map (lines 780 to 792 on `main`), every other row of
+  `benchmarks/torch_gpu` whose file or whose reference is gone**: by me, the rows of
+  `s8_linear/realw.py` and `units/README.md` name files #9260 deleted; say for
+  `s8_linear/run.sh: integrations/vllm` whether `run.sh` still makes that reference after
+  #9525. Find them with the map's own scan (`layout.py --map … --dry-run`, or whatever the
+  reviewer's `tools/move` suite holds the rows to) and not by eye; say which check judges a row.
+- **`attn_bf16`'s two rows (781 and 782) go with A's pull request**, not this one.
+- Only rows of kernels' own files. A stale row of another lane's file: list it in the body
+  for its owner, change nothing.
+- The `tools/move` suite and the repository's, on a CPU node.
+
+Tell me when it is open; it changes no code, so I read it and mark it.
