@@ -3236,8 +3236,6 @@
     {"file": "benchmarks/pouw/h1_prove/served.sh", "count": 9},
     {"file": "benchmarks/pouw/h1_prove/stage.py", "count": 1},
     {"file": "benchmarks/pouw/h1_prove/window.py", "count": 1},
-    {"file": "benchmarks/pouw/harness/identity.py", "count": 3},
-    {"file": "benchmarks/pouw/harness/ieee_pin.py", "count": 2},
     {"file": "benchmarks/pouw/harness/native.py", "count": 1},
     {"file": "benchmarks/pouw/harness/native/lt.cu", "count": 19},
     {"file": "benchmarks/pouw/harness/price_twins.py", "count": 50},
