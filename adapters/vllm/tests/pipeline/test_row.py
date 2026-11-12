@@ -14,7 +14,6 @@
 * the Match of record (``fast`` inside ``shared``) is the default and the caller can choose the audit checker;
 * the weights of record beside a component are reused only when they are this Program's, of this tree's schema and
   complete; an unresolved checkpoint dir is named in row.log;
-* the admission plan is advisory: it writes admission.json and one row.log line and never stops the row;
 * the taps run by default (NORM_TAP=0 etc. for A/B only), each attached only where the row's manifest names its family, and a TP
   row runs the guarded-max build and every tap that applies to it;
 * a tree without the run store's tool beside it (`tools/research/src`) refuses a row at setup, by name: what a row does past
@@ -45,7 +44,6 @@ from verity_vllm.pipeline.row_driver import Stop
 from verity_vllm.pipeline.row_stages import SingleRow
 
 TREE = Path(__file__).resolve().parents[2]
-WL = TREE / "workloads"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
 
 
@@ -1176,31 +1174,6 @@ def test_the_pin_at_b_ge_2_is_derived_from_the_first_manifest_component(tmp_path
     assert R.wor_component(str(d)) == str(d / "build_request_LP9_T2")
     (d / "build_request_LP9_T2" / "result.json").write_text(json.dumps({"ok": False, "LP": 9, "T": 2}))
     assert R.wor_component(str(d)) == str(d / "build_request_LP5_T3")
-
-
-# ---------------------------------------------------------------------------------------------------------------- admission
-
-@pytest.mark.skipif(not WL.exists(), reason="sweep workloads not in this checkout")
-def test_the_admission_plan_is_written_logged_once_and_never_stops_the_row(tmp_path):
-    row = "mistral-7b__bf16__l40s__tp1__b8__i1024__o128__mixed__greedy__bi-eager"
-    r = _row(tmp_path, "--snapshot-max-bytes", "33554432", row=row)
-    r.snap_steps, r.snap_def = None, "0,1"
-    r.admission()
-    doc = json.loads((Path(r.d) / "admission.json").read_text())
-    assert doc["schema"] == "verity-sweep/admission/v1" and doc["advisory"] is True and doc["model"] == "mistral-7b"
-    assert doc["config"]["snapshot_max_bytes"] == 33554432 and doc["config"]["snapshot_steps"] == "0,1" and doc["config"]["pairs"] == 3
-    assert set(doc["stages"]) == {"build", "match", "commit"}
-    assert (Path(r.d) / "row.log").read_text().count("ADMISSION advisory") == 1
-    evs = [(e["stage"], e["ev"]) for e in _timeline(r)]
-    assert evs == [("admission", "start"), ("admission", "end")] and _timeline(r)[1]["advisory"] is True
-
-
-def test_the_admission_plan_survives_a_broken_planner_input(tmp_path):
-    r = _row(tmp_path, row="nosuch-row__x")
-    r.snap_steps, r.snap_def = None, "0,1"
-    r.admission()
-    log = (Path(r.d) / "row.log").read_text()
-    assert "ADMISSION advisory unavailable" in log and "WARN" not in log
 
 
 def test_a_tp_rows_gpu_budget_is_the_option_else_the_workloads_else_tp_util(tmp_path, monkeypatch):

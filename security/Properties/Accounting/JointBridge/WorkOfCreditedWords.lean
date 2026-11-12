@@ -50,9 +50,9 @@ the device outsourced at most `K/b_unit` units (`Accounting.Assumptions.HelpWith
 bound as a hypothesis over the source's own event, so it restates neither bound, and needs no time credit (Compose's
 time line): the joint period's claim is priced ops.
 
-H1's instance is `Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod`, and its H200 one at INT8
-`WorkOfH1CheckedCreditPeriodH200`. Any other source that credits words, a period of v5/v6 tiles among them, takes the
-bridge unchanged.
+H1's instance is `Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod`, and its H200 one at INT8 is stated
+beside its proof (`Accounting.SecurityProofs.Bridge.WorkOfH1CheckedCreditPeriodH200`). Any other source that credits
+words, a period of v5/v6 tiles among them, takes the bridge unchanged.
 -/
 
 @[expose] public section

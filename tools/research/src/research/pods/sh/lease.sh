@@ -3,9 +3,17 @@
 # control pod or guard process is alive.  It ends THIS pod with the pod's own key once the lease has expired and LEASE_GRACE_S has
 # passed; nothing else is needed on the pod but a shell and python3 or curl.
 #
-#   sh lease.sh                    the loop (armed over ssh by `pods create`; also from the start command with --boot-lease)
+#   sh lease.sh                    the loop (the start command with --boot-lease, a machine's own service)
+#   sh lease.sh start              the loop, detached, unless the one the pid file names runs; prints its pid (`pods create`, over ssh)
+#   sh lease.sh pid                the pid of the running loop the pid file names; exit 1 when it names none
 #   sh lease.sh extend SECONDS BY  push the expiry to at least now + SECONDS (`research pods extend`, `research run --on`); prints it
 #   sh lease.sh show               the lease line
+#
+# One loop per pod.  The pid file ($LEASE_PID) is one line, `PID BIRTH`: the loop's pid and when that process was forked
+# (lease_birth), which together name one process for its whole life.  While the process it names runs, `start` starts no other
+# and a second loop exits; a file that names no running process (none, a zombie, a later process given the pid, a pid with no
+# BIRTH) names no loop.  The command line is not read: it is empty while a process is inside execve, which a loop started through
+# setsid and nohup is three times.
 #
 # The lease file ($LEASE_FILE) is one line, `EPOCH ISO BY`.  The loop re-reads it every tick; a file that is missing or does not
 # parse keeps the last expiry read (at boot: $RESEARCH_LEASE_EXPIRES, which `pods create` puts in the pod's environment), so a failed
@@ -124,20 +132,46 @@ lease_extend() {
   cat "$LEASE_FILE" 2>/dev/null || printf '%s %s %s\n' "$cur" "$(lease_iso "$cur")" "(environment)"
 }
 
+lease_birth() {
+  # lease_birth PID: when the running process PID was forked, `TICKS@BOOT`, or nothing (no such process, or a zombie).  TICKS is
+  # field 22 of /proc/PID/stat (clock ticks since boot, set at fork and unchanged by execve), counted after the name's closing `)`
+  # since a name may hold spaces; BOOT is the boot's id, since ticks start over at each boot and a pid file can outlive one.
+  stat=$(sed -n '$s/.*) //p' "/proc/$1/stat" 2>/dev/null)
+  case $stat in ''|[ZXx]' '*) return 1;; esac
+  echo "$(echo "$stat" | cut -d' ' -f20)@$(cat /proc/sys/kernel/random/boot_id 2>/dev/null)"
+}
+
+lease_holder() {
+  # the pid of the running loop the pid file names, or nothing
+  pid=""; born=""
+  [ -r "$LEASE_PID" ] && read -r pid born _rest < "$LEASE_PID" 2>/dev/null
+  [ -n "$born" ] && [ "$(lease_birth "$pid")" = "$born" ] && echo "$pid"
+}
+
+lease_hold() {
+  # lease_hold PID: name PID in the pid file, written beside it and moved into place so that no reader finds it empty
+  { printf '%s %s\n' "$1" "$(lease_birth "$1")" > "$LEASE_PID.tmp.$$" && mv -f "$LEASE_PID.tmp.$$" "$LEASE_PID"; } 2>/dev/null
+}
+
 lease_claim() {
-  # one loop per pod: a live loop named in the pid file keeps it
-  old=$(cat "$LEASE_PID" 2>/dev/null)
-  if [ -n "$old" ] && [ "$old" != "$$" ] && kill -0 "$old" 2>/dev/null; then
-    case $(tr '\0' ' ' < "/proc/$old/cmdline" 2>/dev/null) in *lease.sh*) return 1;; esac
+  # one loop per pod: this one runs unless the pid file names another that does
+  if old=$(lease_holder); then [ "$old" = "$$" ]; else lease_hold "$$"; return 0; fi
+}
+
+lease_start() {
+  # the loop, detached and named in the pid file before this returns, unless the one the file names runs; prints its pid
+  if ! pid=$(lease_holder); then
+    setsid nohup sh "$0" loop >> "$LEASE_LOG" 2>&1 < /dev/null &
+    pid=$!
+    lease_hold "$pid"
   fi
-  echo "$$" > "$LEASE_PID" 2>/dev/null
-  return 0
+  echo "$pid"
 }
 
 lease_loop() {
   mkdir -p "$LEASE_DIR" 2>/dev/null
   if [ "${LEASE_ONCE:-0}" != 1 ] && ! lease_claim; then
-    lease_say "another lease loop ($(cat "$LEASE_PID" 2>/dev/null)) holds this pod; exiting"
+    lease_say "another lease loop ($old) holds this pod; exiting"
     return 0
   fi
   exp=${RESEARCH_LEASE_EXPIRES:-}
@@ -176,7 +210,9 @@ lease_loop() {
 
 case ${1:-loop} in
   loop) lease_loop ;;
+  start) lease_start ;;
+  pid) lease_holder ;;
   extend) shift; lease_extend "$@" ;;
   show) cat "$LEASE_FILE" 2>/dev/null || { echo "no lease file at $LEASE_FILE" >&2; exit 1; } ;;
-  *) echo "usage: lease.sh [loop | extend SECONDS BY | show]" >&2; exit 2 ;;
+  *) echo "usage: lease.sh [loop | start | pid | extend SECONDS BY | show]" >&2; exit 2 ;;
 esac
