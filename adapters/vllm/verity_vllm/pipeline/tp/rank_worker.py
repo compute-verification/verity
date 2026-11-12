@@ -40,6 +40,7 @@ from verity_vllm.engine.collectives import fused_norm as FN
 from verity_vllm.engine import hooks, moe_align, sparse_mla, topp_pin  # noqa: F401  (arms the serving switches before vLLM builds this rank's model)
 from verity_vllm.engine import int8_ranks  # noqa: F401  (registers the int8 parts the driver exported, before this rank builds its model)
 from verity_vllm import settings
+from verity_vllm.records.schema_ids import ENGINE_PROFILE_SCHEMA
 
 __all__ = ["EXTENSION"]
 
@@ -273,7 +274,7 @@ class TP2CaptureWorkerExtension:
         # engine.kwargs["tensor_parallel_size"] to build_manifest)
         man = header.profile
         pid_adapter = header.profile_id
-        if isinstance(man, dict) and man.get("schema") == "verity-vllm/profile/v1":
+        if isinstance(man, dict) and man.get("schema") == ENGINE_PROFILE_SCHEMA:
             from verity_vllm.engine import engine_profile as prof
             man.setdefault("parallelism", {})["tensor_parallel_size"] = world
             man.setdefault("engine_kwargs", {})["tensor_parallel_size"] = world
