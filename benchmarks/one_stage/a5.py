@@ -175,7 +175,7 @@ import os
 import shutil
 import sys
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from dataclasses import replace
 from fractions import Fraction
@@ -508,12 +508,18 @@ def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) 
     return neg
 
 
+def many_rows(reads: Mapping[str, Mapping[str, Any]], mm: dict) -> bool:
+    """Whether a sampled member's registered reads name a value of more than one row (`registered_negatives`' next-row case)."""
+    return any(int(e["leaves"]) > 1 for e in reads[mm["m"].key]["ports"].values())
+
+
 def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[str, dict]:
-    """A sampled chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
-    registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
-    value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
-    ports' reads as registered; and its last port committed afresh, left out of both its header's registered rows and the
-    verifier's reads (`Flock.Registered.checkComplete`)."""
+    """A sampled chunk's honest session, a chunk that reads a row table or an outside registered value, or holds a wired
+    port in its writer's tree, re-verified by Lean against registered reads it must refuse: none (its header names
+    registered reads the verifier holds no root for), its first port's value's root replaced, and (its first value of more
+    than one row) every unit reading that value's next row, each with its other ports' reads as registered; and its last
+    port committed afresh, left out of both its header's registered rows and the verifier's reads
+    (`Flock.Registered.checkComplete`)."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
     port, last = next(iter(honest["ports"])), next(reversed(honest["ports"]))
@@ -524,9 +530,12 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
 
     cases = {"chunk-without-registered-reads": (None, "holds no registered roots", None),
              "registered-read-against-another-root": (changed({"root": "00" * 64}), "does not open", None)}
-    if p["leaves"] > 1:
-        cases["registered-reads-another-row"] = (changed({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}),
-                                                 "the verifier's program reads", None)
+    many = next((q for q, e in honest["ports"].items() if e["leaves"] > 1), None)
+    if many is not None:
+        e = honest["ports"][many]
+        cases["registered-reads-another-row"] = (
+            {**honest["ports"], many: {**e, "reads": [(r + 1) % e["leaves"] for r in e["reads"]]}},
+            "the verifier's program reads", None)
     if last != port:
         d = sdir / "port-committed-afresh"
         shutil.copytree(st["dir"], d, copy_function=os.link, dirs_exist_ok=True)
@@ -965,7 +974,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         verdicts.update(got["verdicts"])
         if mm["m"].key in reads:
             row_verdicts[mm["m"].key] = got["lean_verify"]
-            linked = linked or (mm, got["sdir"])
+            if linked is None or (not many_rows(reads, linked[0]) and many_rows(reads, mm)):
+                linked = (mm, got["sdir"])
         statement[mm["m"].key] = got["statement"]
         sessions += got["sessions"]
         if got["challenger"] is not None:
