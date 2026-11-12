@@ -31,5 +31,7 @@ listed in its docstring. Its timing is diagnostic.
 
 ## Who reads it
 
-The harness's build is the only reader: nothing imports the benches, and no test runs them, since each needs the card.
-Nothing here commits, hashes or checks a proof.
+The harness reads `nvf4_plain.cu`: its build compiles it, with the mainloop, into the harness's library, and
+`../tests/test_harness.py` reads its text for its registry entries. `fp8_bench.py` imports `nvf4_bench.py` and builds
+on its bench; nothing else imports either, and no test runs them, since each needs the card. Nothing here commits,
+hashes or checks a proof.
