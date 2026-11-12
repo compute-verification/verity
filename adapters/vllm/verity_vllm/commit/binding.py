@@ -314,7 +314,7 @@ def expected_population(structure: dict[str, Any], workload: dict[str, Any]) -> 
     request_steps = workload.get("request_steps")   # a workload that states none places every request at every step
     moe_layers, moe_planes = structure.get("moe_layers"), structure.get("moe_planes")   # a structure without MoE layers names neither
     for rid in workload["requests"]:
-        rsteps = request_steps.get(rid, steps) if request_steps else steps
+        rsteps = (request_steps if request_steps else {}).get(rid, steps)     # the lookup hashes the id whether or not any is stated
         for step in rsteps:
             for rank in ranks:
                 for d in structure["modules"]:
