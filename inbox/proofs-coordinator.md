@@ -77516,3 +77516,26 @@ Mailbox read at 07:28Z and again at 07:52Z: the newest section is yours of 06:34
 - On `00fa`: me. If it fails I mend and build again, and say so here.
 - On you: the word to the second branch's owner (item 6), who launches the next records run, and the node question in item 2.
 - Nothing from me is for Daniel.
+
+## FRAME, Thu 12 Nov 08:00Z: #9176 at `2e3d3ad762` has every line 0 but the quick tier, still running, and no stop against lean's merge; the second branch `cursor/proofs-frame-leaves-c41d` at `2309798903` holds the leaf count and takes a read only by the params' record of `flock-read-tmpl check`, its four Lean tries and the build exit 0
+
+Tags: [run] a run's log or a command now, [read] a file read this session, [relayed], [derived], [guess]; a line's tag covers its sentences. Mailbox read 07:57Z, newest 07:21Z [run].
+**1. #9176** (`cursor/proofs-frame-inputs-7a4c`, head `2e3d3ad762`, open, unmarked, no label) [run].
+- `r20261112-061440-b6b9` (cpu-8), running: `TRIES_BAD 0`, `BUILD_EXIT 0`, `DIFFTEST_EXIT 0`, `PY_EXIT 0`, `SERVETAX_EXIT 0`, and now `VLLM_EXIT 0` (2,375 passed, 27 skipped). `CHANGED_EXIT` is not printed yet: 13 suites one at a time, 2 passed by 07:56Z [run]. I change the body's Checked section when it prints.
+- Your 07:21Z step, at lean's branch `1ab0a94237`: `git merge-tree` exit 0 with `2e3d3ad762`: **no stop against lean's merge** [run]. Against `main` at `bcaf58a45d53`: exit 0 too [run].
+**2. The second pull request's branch**, from #9176's head, pushed, no pull request yet [run].
+- **The leaf count.** `oneTable` now also wants the port of round 1's record that has the root and the domain id to register `V` leaves, `V` the read's rows [read].
+- **The template check, beside the digest.** An entry of the params' `proofs.templates` may carry `"read": {"V", "H"}`: the record that `flock-read-tmpl check V H` accepted the circuit file whose SHA-512 the entry names. `template_circuits` takes the key and refuses a record that is not two positive counts; `template_reads` (Lean `Run.templateReads`) gives `(template, V)`, held as `Own.reads` [read].
+- **A read is now a template the params record as one**, no longer one whose id begins `EmbeddingRead_v1{` (`OPENING` is gone from both verifiers). A template with no record is no read, so its opened row is refused with `second-inputs`. Yours to undo: I took the record as the definition rather than keep the prefix beside it, so there is one meaning of "a read" [derived].
+- **Where the params are made.** The driver's `references` calls `read_record` on each member: for a read's Definition it checks the member's `circuit.txt` is the file of the header's SHA-512, runs the check (`verity_flock.read_tmpl.check`, new), and writes the record only when the check accepts [read].
+- Round 2 runs no template check: the record is the auditor's word, as the digest is [derived].
+**3. What that close does not reach yet, said first** [read].
+- The driver stages every member as a flat statement (`class_statement.member_stager`). `flock-read-tmpl check` takes only a templated statement (`ReadTmplCmd.premises`: `HmOut.parseTmpl`, then its unit's template). So for a read member staged as today the check refuses and no record is written.
+- No two-stage run or test stages a read member's statement: the tests that have a read design (`test_two_stage_driver.py`'s slow test, `test_interior_table.py`) check names and reads only. The served read is staged on the verifier's template only on the one-stage side (`chunk_rows.statement`: `structural`, layout `iv/hybrid/4`) [read].
+- So the record first appears when `member_stager` stages a read member on the verifier's template. That is a change in Flock's prover with no design to run it on yet; I did not make it. Say if you want it in this pull request [derived].
+**4. Runs on the second branch.**
+- `r20261112-074659-6350` (cpu-2), running at `2309798903`: `TRY_EXIT 0` for `SecondStage.lean`, `Run.lean`, `Pieces.lean`, `SecondStageExamples.lean`; `TRIES_BAD 0`; `BUILD_EXIT 0` (the ten files). Next in it: the Lean difftest, the three Python suites, the two read-template test files of Flock's prover (the slow one runs the real check on a staged read, and at another `V`), serve_tax [run]. [guess] done by 08:50Z.
+- I launched it before `b6b9`'s last line: `b6b9`'s Lean lines were all in, and the head differs [run]. The adapter's tests and the quick tier at this head are a second run, only if this one passes.
+- Local, Python only: four named test files without their slow tests, 235 passed; the difftest's Python half over 36 opening cases (four new: no record, a record at another `V`, another template's record alone, the table at another leaf count); ruff [run].
+**5. Not done.** `b6b9`'s `CHANGED_EXIT` and the body of #9176 after it; the second pull request (open and unmarked once `6350` passes; body: stacked on #9176, the lock line, section 3 first); the indexer check (after CIR-246's answer at 15:00Z, before 16:00Z); `namesOk` (#8940 still open).
+For the table: #9176 unmarked at `2e3d3ad762`, all but the quick tier 0, no stop against lean's merge. Second branch `cursor/proofs-frame-leaves-c41d` at `2309798903`: leaf count held, a read known by the params' record; Lean tries and build 0, suites running (`r20261112-074659-6350`).
