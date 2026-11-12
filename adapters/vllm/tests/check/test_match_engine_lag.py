@@ -28,3 +28,18 @@ def test_a_record_that_does_not_state_the_flag_attests_no_lag():
 @pytest.mark.parametrize("stated", ["yes", 1])
 def test_a_flag_that_is_neither_a_boolean_nor_its_word_gives_no_lag(stated):
     assert GD.eos_lag_rows(GD.record_engine_facts({"engine_kwargs": {"async_scheduling": stated}})) == (None, f"async_scheduling={stated!r} is not a boolean")
+
+
+EMPTY: list[object] = [None, {}, [], 0, "", False]
+
+
+@pytest.mark.parametrize("block", EMPTY)
+def test_facts_whose_values_are_left_out_null_or_empty_attest_no_lag(block):
+    assert GD.eos_lag_rows({"sources": {}}) == GD.eos_lag_rows({"values": block, "sources": {}}) == (None, "not attested")
+
+
+@pytest.mark.parametrize("block", EMPTY)
+def test_a_flag_whose_sources_are_left_out_null_or_empty_is_read_and_names_no_location(block):
+    values = {"async_scheduling": [True]}
+    assert GD.eos_lag_rows({"values": values}) == GD.eos_lag_rows({"values": values, "sources": block}) == (1, "async_scheduling=True ()")
+    assert GD.eos_lag_rows({"values": {"async_scheduling": ["false"]}, "sources": block}) == (0, "async_scheduling='false' ()")
