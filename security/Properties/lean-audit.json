@@ -113,6 +113,36 @@
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
    "why": "The protocol accepts: the event the statement conditions on."
   },
+  "Pous.Guarantees.RoundsBound": {
+   "owner": "@memory-accounting",
+   "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
+   "why": "The parameters the bound speaks of: a per-round floor p, a bad-event mass ε₀ and k rounds with (1 − p)^k + k·ε₀ ≤ c."
+  },
+  "Pous.Period.Audits.Certified": {
+   "owner": "@memory-accounting",
+   "digest": "4da8f2178342cde3571dbf23c427e688fce47637a942f800ee8d51f81e8e2518",
+   "why": "Inside Instantiates, the capacity coins it speaks of: those on which the period is certified, the memory challenger's signed record holding every recorded answer as the challenged block of C*."
+  },
+  "Pous.Period.Audits.OnTime": {
+   "owner": "@memory-accounting",
+   "digest": "a8c4bfe5e79395886a03a986a2fc77b66507e94ea807a6f1631b609341f326f7",
+   "why": "Inside DeviceModel, the coins on which it bounds each round's program: those on which the memory challenger's signed record has every answer on time."
+  },
+  "Pous.Period.CountMeets": {
+   "owner": "@memory-accounting",
+   "digest": "2dd5770d9bba758689a23a1684b8878df4b5e70ac858cdccf9da4ee3fa831597",
+   "why": "The counts the pooled bound speaks of: M at least ((z − 1)·U·(δ + ε_max) + ln(1/δ'))/ln z."
+  },
+  "Pous.Period.Drawn": {
+   "owner": "@memory-accounting",
+   "digest": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
+   "why": "Inside DeviceModel and Instantiates, the samples they speak of: the indices and coin view the memory challenger's code reads from the coin's own streams."
+  },
+  "Pous.Period.Fits": {
+   "owner": "@memory-accounting",
+   "digest": "f5b69f5f262a32475519e72979fc884fea1602140d3d6b9a07f4b7282ab185b9",
+   "why": "The certificates the bound speaks of: S bits a tick over the capacity window, with the device's on-chip state and its side channels' capacity over a round, within the state bound S₀."
+  },
   "Properties.Spot.ClassesCover": {
    "owner": "@proofs",
    "digest": "a626c0050b97025f8ee1dcdc0e4f0e81e36d77e3e5cf55a2a2d43325a95dd547",
@@ -335,7 +365,7 @@
   "Accounting.Remote.Held.Assumptions.Covered": {
    "owner": "@memory-accounting",
    "digest": "5c608a83fe20d77e737b97d37087e1d392d1069ca7e67dd63e44bfdae48edbb0",
-   "issue": "LEAN-186",
+   "issue": "MEM-289",
    "due": "2026-11-30"
   },
   "Accounting.Remote.Held.Assumptions.Covers": {
@@ -347,7 +377,7 @@
   "Accounting.Remote.Held.Assumptions.IngressCounted": {
    "owner": "@memory-accounting",
    "digest": "7c04197d5b780f94be3bcc1dc1e3e8cc6eafc43158098fe3936eed3aa7f12c3e",
-   "issue": "LEAN-186",
+   "issue": "MEM-289",
    "due": "2026-11-30"
   },
   "Accounting.Remote.Held.Assumptions.Paced": {
@@ -506,12 +536,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Guarantees.RoundsBound": {
-   "owner": "@memory-accounting",
-   "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.P2.Assumptions.P2RingAuditSecure": {
    "owner": "@memory-accounting",
    "digest": "a22cc6653b91f423e9ec2af90439f16b13fd83a20e5f51729151ec083856ca4b",
@@ -536,46 +560,16 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Period.Audits.Certified": {
-   "owner": "@memory-accounting",
-   "digest": "4da8f2178342cde3571dbf23c427e688fce47637a942f800ee8d51f81e8e2518",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.Audits.OnTime": {
-   "owner": "@memory-accounting",
-   "digest": "a8c4bfe5e79395886a03a986a2fc77b66507e94ea807a6f1631b609341f326f7",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.CountMeets": {
-   "owner": "@memory-accounting",
-   "digest": "2dd5770d9bba758689a23a1684b8878df4b5e70ac858cdccf9da4ee3fa831597",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.Period.DeviceModel": {
    "owner": "@memory-accounting",
    "digest": "8a84184ed332dc6d1d5b4fbf8e3fdc7d57f269ce6a937933073391da51033c5e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Period.Drawn": {
-   "owner": "@memory-accounting",
-   "digest": "eeb3f88b2ff2b0c0e3c656bf05320233bde92a109500a8557445ce2dee6fd161",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Pous.Period.Fits": {
-   "owner": "@memory-accounting",
-   "digest": "f5b69f5f262a32475519e72979fc884fea1602140d3d6b9a07f4b7282ab185b9",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.Period.FixedBefore": {
    "owner": "@memory-accounting",
    "digest": "b4e82606a80cb0c46bc33a3e9b3ed881173a07dd1e60fee5fc3bb2137bb9d50c",
-   "issue": "LEAN-186",
+   "issue": "MEM-134",
    "due": "2026-11-30"
   },
   "Pous.Period.Instantiates": {
@@ -587,8 +581,8 @@
   "Pous.Period.ReadsNoPrimitive": {
    "owner": "@memory-accounting",
    "digest": "941286e788e84d808d5f58d95004d4e5cb4762a1eb9bf82b9f04d854577e552c",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
+   "issue": "MEM-245",
+   "due": "2026-11-17"
   },
   "Pous.Period.RingDeviceAt": {
    "owner": "@memory-accounting",
@@ -791,8 +785,8 @@
   "Properties.RemoteAudit.Subprotocol.HonestSchedule": {
    "owner": "@memory-accounting",
    "digest": "242b5e526e6b88d7608596f795297fbcec7301ba22e708fee38e448ac73e1fc1",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
+   "issue": "MEM-245",
+   "due": "2026-11-17"
   },
   "Properties.Spot.ExpectsV2": {
    "owner": "@proofs",
@@ -1053,7 +1047,8 @@
   "Definitions.Pouw.Dither",
   "Definitions.Pouw.Assumptions.ServedWork",
   "Properties.Firewall",
-  "Firewall"
+  "Firewall",
+  "Properties.Assumptions"
  ],
  "claims": {
   "modules": ["Properties.Accounting.Remote.Subprotocol"],
@@ -2140,10 +2135,11 @@
     "MemoryChallenger",
     "Definitions.Pous.Assumptions",
     "Properties.Hash.Identity",
-    "Definitions.Accounting"
+    "Definitions.Accounting",
+    "Properties.Assumptions"
    ],
    "except": [],
-   "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, never over a proof"
+   "why": "a period's PoUS audit is stated over the deployed check it is about and the joint run of the device model (`Definitions.Accounting`) whose capacity audit it is, and its named assumption the instantiation (Properties.Assumptions.Pous), never over a proof"
   },
   "Properties.Accounting": {
    "imports": ["Definitions.Accounting", "CircuitRequirement"],
@@ -2331,10 +2327,10 @@
     "Definitions.Pous.Assumptions",
     "Properties.Identity",
     "Definitions.Accounting",
-    "Definitions.Hash.Assumptions"
+    "Definitions.Assumptions.Hash"
    ],
    "except": [],
-   "why": "a period's PoUS audit in the shared coin game is stated over the deployed check, the memory challenger's SHA-512 derivation (Randomness, through MemoryChallenger) and the hash area's named assumption (Definitions.Hash.Assumptions), never over a proof"
+   "why": "a period's PoUS audit in the shared coin game is stated over the deployed check, the memory challenger's SHA-512 derivation (Randomness, through MemoryChallenger) and the hash area's named assumption (Definitions.Assumptions.Hash), never over a proof"
   },
   "Properties.Annot": {
    "imports": ["Flock.Annot", "Flock.AnnotExpand"],
@@ -2515,6 +2511,11 @@
    "imports": ["Spot.HistoryTable", "Definitions.Hash.HistoryTable", "Properties.Verity.Sha512"],
    "except": [],
    "why": "a history table's registered root is stated against the root check's own functions (`Spot.HistoryTable`), the hash area's history-table root (`Definitions.Hash.HistoryTable`) and the verifier's SHA-512 as a model hash (`Verity.sha512`), never a proof"
+  },
+  "Properties.Assumptions": {
+   "imports": ["Mathlib", "Properties.Pous", "Properties.Assumptions"],
+   "except": [],
+   "why": "a named assumption stated over the code reads the code's definitions it is about (PoUS's instantiation: the period's audit and the ring game, Properties.Pous.Period.Audits), never a guarantee or a proof"
   }
  },
  "reads_exempt": {

@@ -350,6 +350,11 @@
    "digest": "9c8bcfbb0db47321c5495c86cc9a12ee4c0b45b8e2569f79ae4efad3605b5f20",
    "why": "The fan-out F the bound is stated at: each unit's reach (coneEgress) holds the egress of at most F charge units, which the public wiring alone determines; the honest witness meets it at the toy population (TheftServedTiedHonest)."
   },
+  "Pous.Guarantees.RoundsBound": {
+   "owner": "@memory-accounting",
+   "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
+   "why": "The parameters the bound speaks of: a per-round floor p, a bad-event mass ε₀ and k rounds with (1 − p)^k + k·ε₀ ≤ c."
+  },
   "Pouw.Dither.CallsAtPub": {
    "owner": "@compute-research",
    "digest": "4fd27c18ca3eb07b2fbafa6e459b881abf4047e92bf2b8cf73523cc83ddf7201",
@@ -2502,12 +2507,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Pous.Guarantees.RoundsBound": {
-   "owner": "@memory-accounting",
-   "digest": "5483c9e14f6369c3172eeb633e66b867881aabbd9c8e644c852598cc3fe7dad4",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Pous.Guarantees.StateWithin": {
    "owner": "@memory-accounting",
    "digest": "ab46eea99abd01daa1f36755492c46ce754dc6fb4b5eaa35ff1fe2dbba7d8335",
@@ -3273,8 +3272,8 @@
   "Verity.Assumptions.WitnessPathPrivateOrChannelHides": {
    "owner": "@memory-accounting",
    "digest": "94e2691599abd9f3ae0894a0436659a5773bd7a143d4ad3e0659f797b0e2c895",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
+   "issue": "MEM-245",
+   "due": "2026-11-17"
   },
   "Verity.Assumptions.ZkServerOwnUser": {
    "owner": "@proofs",
@@ -5637,9 +5636,9 @@
    "why": "the relation imports no proofs and nothing of the semantics: the two definitions are independent"
   },
   "Definitions.Core.Assumptions": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Core.Assumptions"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Core.Assumptions", "Definitions.Assumptions.Transport"],
    "except": [],
-   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof",
+   "why": "a named assumption reads the protocol's definitions, never a guarantee or a proof; the transport's premises re-export its two named assumptions of the lock (ImprintPathPrivate, ChannelAuthentic), declared in the assumptions home (Definitions.Assumptions.Transport)",
    "sealed": true
   },
   "Definitions.Core.Guarantees": {
@@ -5974,18 +5973,6 @@
    "except": [],
    "why": "the lead's deployed commitment and coin stream, definitions only: range-indexed frame-v3 trees under hm96 leaves (Definitions.Hash.Tree, Definitions.Hash.Hm96) over the lead's layout, model and chunks (Definitions.Pouw.Lead.Gap)"
   },
-  "Definitions.Hash.Assumptions.Prf": {
-   "imports": [
-    "Mathlib",
-    "Definitions.Core.Digest",
-    "Definitions.Core.Game",
-    "Definitions.Hash",
-    "Definitions.Hash.Assumptions.Prf"
-   ],
-   "except": [],
-   "why": "the hash area's named assumptions (Sha512Prf, prf/sha-512) are stated over its messages and digests and core's coin probability (Definitions.Core.Game's prCoin), never over a proof",
-   "sealed": true
-  },
   "Definitions.Spot": {
    "imports": ["Mathlib", "Definitions.Core", "Definitions.Spot"],
    "except": [],
@@ -6030,7 +6017,7 @@
     "Definitions.Assumptions"
    ],
    "sealed": true,
-   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost models (Definitions.Pouw.Game.Defs and Pearl-C's Definitions.Pouw.PearlC.Game, for Definitions.Assumptions.Pouw and Definitions.Assumptions.Accounting), PoUS's timed audit (Definitions.Pous.Model.Audit, for Definitions.Assumptions.Pous) and weight security's definitions and premises, never a guarantee or a proof"
+   "why": "the named assumptions, the real ones the guarantees take without proof, read the hash, protocol and device definitions, the training formalism's definitions, PoUW's cost models (Definitions.Pouw.Game.Defs and Pearl-C's Definitions.Pouw.PearlC.Game, for Definitions.Assumptions.Pouw and Definitions.Assumptions.Accounting), PoUS's timed audit (Definitions.Pous.Model.Audit, for Definitions.Assumptions.Pous), the hash area's messages and digests with core's coin probability (Definitions.Hash.Basic, Definitions.Core.Game, for Definitions.Assumptions.Hash), the transport's channels (Definitions.Core.Transport, for Definitions.Assumptions.Transport) and weight security's definitions and premises, never a guarantee or a proof"
   },
   "Definitions.Accounting.JointBridge.CommOfPooledLeakAccepted": {
    "imports": [
@@ -27792,11 +27779,11 @@
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_n4096k14336": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pouw.SecurityProofs.PearlC.SampledSm120v1Cast8p72Rev1Cap1000_llama31_8b": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTOutTilePearlCDevRev1W1, stated over the PoUW game at the W1 machine (W1.w1Priced), whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function. At the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt) it rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and the conjecture is open there. It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Pous.SecurityProofs.P2RingAuditSecureOfReduces": "frozen (no-function,hash): It relates two statements about P2 in the ring model (security/Definitions/Pous/P2/Cost.lean), not the PoUS setup check's code, and rests on the open conjecture Pous.P2.Assumptions.P2RingReducesToM1p.",
-   "Accounting.SecurityProofs.PouwEndToEndPerRun": "frozen (conjecture,no-function,hash): It is Pouw.SecurityProofs.EndToEnd per run, a consequence of the named open conjecture TT when the cost model truncates (Accounting.BudgetAbort, security/Definitions/Accounting/PerRun.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal, not over a Lean function.",
+   "Accounting.SecurityProofs.PouwEndToEndPerRun": "frozen (conjecture,no-function,hash): It is Pouw.SecurityProofs.EndToEnd per run, a consequence of the named open conjecture TT when the cost model truncates (Accounting.BudgetAbort, security/Definitions/Assumptions/Accounting.lean), stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal, not over a Lean function.",
    "Accounting.SecurityProofs.ComputeOfPouwPerRun": "frozen (conjecture,no-function,hash): It carries PouwEndToEndPerRun, a consequence of the named open conjecture TT over PoUW's game with a uniform oracle, to the compute audit of an abstract run of the device model (security/Definitions/Accounting/Pouw.lean), not to a Lean function.",
    "Accounting.SecurityProofs.JointPerRun": "frozen (no-function): Like Joint, it composes the three audits' per-run guarantees, each a hypothesis over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
    "Accounting.SecurityProofs.CovertResidualPerRun": "frozen (no-function): Like JointPerRun, it is stated over an abstract run of the device model whose verdicts are a field of the run, not a Lean function (security/Definitions/Accounting/PerRun.lean), and bounds a Pouw.pr event, which shape.events does not list.",
-   "Accounting.SecurityProofs.PearlCEndToEndPerRun": "frozen (no-function,hash): It is Pearl-C's gap property GGap, a hypothesis (at W1 with fetches priced, compute-accounting's gGap_w1Priced gives it from W1's), audited by work-weighted tickets and made per run by truncation when the cost model truncates (Accounting.BudgetAbortPearlC, security/Definitions/Accounting/PerRun.lean), stated over Pearl-C's game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/PearlC/Game.lean), not over a Lean function.",
+   "Accounting.SecurityProofs.PearlCEndToEndPerRun": "frozen (no-function,hash): It is Pearl-C's gap property GGap, a hypothesis (at W1 with fetches priced, compute-accounting's gGap_w1Priced gives it from W1's), audited by work-weighted tickets and made per run by truncation when the cost model truncates (Accounting.BudgetAbortPearlC, security/Definitions/Assumptions/Accounting.lean), stated over Pearl-C's game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/PearlC/Game.lean), not over a Lean function.",
    "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": "frozen (no-function,hash): It carries PearlCEndToEndPerRun, from Pearl-C's gap property GGap over its game with a uniform oracle, to the compute audit of an abstract run of the device model whose cost the priced sum covers (Accounting.RealizesPearlCPriced, security/Definitions/Accounting/PerRun.lean), not to a Lean function.",
    "Accounting.SecurityProofs.PearlCStopEndToEndPerRun": "frozen (no-function,hash): It is PearlCEndToEndPerRun on the machine that stops a run at its budget (Pouw.PearlC.CostModel.withStop, security/Definitions/Pouw/PearlC/W1Stop.lean), from the gap property per coin GGapPerCoin, a hypothesis (at W1 priced, the conjecture the per-run bound rests on), stated over Pearl-C's game, whose oracle H is drawn uniformly and whose commitments are ideal (security/Definitions/Pouw/PearlC/Game.lean), not over a Lean function. At W1 priced (CM := W1.w1Priced dv salt) and the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt), its hypothesis GGapPerCoin rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and GGapPerCoin is open there (claim pouw-gamma-per-coin). It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
    "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": "frozen (no-function,hash): It carries PearlCStopEndToEndPerRun, from the gap property per coin GGapPerCoin over Pearl-C's game with a uniform oracle, to the compute audit of an abstract run of the device model whose cost on the stopping machine the priced sum covers (Accounting.RealizesPearlCPriced, security/Definitions/Accounting/PerRun.lean), not to a Lean function. At W1 priced (CM := W1.w1Priced dv salt) and the deployed noise (NoiseSha512.sha512Sem base salt rootB at the cost model's own salt), its hypothesis GGapPerCoin rests on W1's bounded text (W1.Prog.bounded, W1RT-1's fix F2): W1RT-1's tabulation by salt is not a W1 program (Proofs.Pouw.PearlC.W1Tabulate.tree_not_code), and GGapPerCoin is open there (claim pouw-gamma-per-coin). It says nothing about a strategy of unbounded text, which no machine holds, or about a semantics at a salt other than the cost model's.",
