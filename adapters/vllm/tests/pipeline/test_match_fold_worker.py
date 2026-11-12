@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from verity_vllm.pipeline import cli, gc_tuning
+from verity_vllm import gc_tuning
+from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import match as RC
 
 

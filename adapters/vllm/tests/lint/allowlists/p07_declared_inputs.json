@@ -33,7 +33,6 @@
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "_backends_probe", "detail": "os.environ.get", "count": 2},
     {"file": "verity_vllm/engine/engine_profile.py", "kind": "environ", "symbol": "gpu_info", "detail": "RUNPOD_POD_ID"},
     {"file": "verity_vllm/pipeline/m1_capture.py", "kind": "environ", "symbol": "main", "detail": "os.environ.get"},
-    {"file": "verity_vllm/program/descriptor_equivalence.py", "kind": "seed-default", "symbol": "compare", "detail": "seed"},
     {"file": "verity_vllm/program/frontend/__init__.py", "kind": "optional-import", "symbol": "<module>", "detail": "except ImportError"},
     {"file": "verity_vllm/program/frontend/derive_examples.py", "kind": "seed-default", "symbol": "StochasticServe.__init__", "detail": "literal_seed"},
     {"file": "verity_vllm/program/frontend/export_compat.py", "kind": "broad-except", "symbol": "_is_fake", "detail": "except Exception"},
@@ -69,11 +68,8 @@
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "environ", "symbol": "main", "detail": "VERITY_WINDOW_MB"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "environ", "symbol": "main", "detail": "VERITY_WINDOW_SLOTS"},
     {"file": "verity_vllm/pipeline/tp/commit.py", "kind": "environ", "symbol": "main", "detail": "os.environ.items"},
-    {"file": "verity_vllm/pipeline/tp/match.py", "kind": "environ", "symbol": "_engine_main", "detail": "os.environ.items"},
     {"file": "verity_vllm/program/sampling_topp_adapter.py", "kind": "environ", "symbol": "cases", "detail": "VERITY_REAL_LOGITS"},
     {"file": "verity_vllm/check/match/global_match_fast.py", "kind": "seed-default", "symbol": "_MemoProjection.__init__", "detail": "seed_node"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "broad-except", "symbol": "_moe_collective_modules", "detail": "except Exception"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "CUDA_VISIBLE_DEVICES"},
-    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "environ", "symbol": "_tp_facts", "detail": "os.environ.items"}
+    {"file": "verity_vllm/pipeline/tp/rank_worker.py", "kind": "broad-except", "symbol": "_moe_collective_modules", "detail": "except Exception"}
   ]
 }

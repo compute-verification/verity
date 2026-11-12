@@ -48,15 +48,18 @@ candidate and those above it are built again without them in the same tick.
                                                    the gate's fix; a warn gate's failure is printed as a warning and refuses
                                                    nothing), or, merged onto it in a temporary worktree, fails `pins.py
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
-                                                   test_repository.py, tools/research/tests/test_pythonpath.py, or `pytest
-                                                   --collect-only` in a suite
+                                                   test_repository.py, tools/research/tests/test_pythonpath.py, a lint its
+                                                   change reaches (tests/test_no_wall_clock.py, adapters/vllm/tests/lint),
+                                                   or `pytest --collect-only` in a suite
                                                    whose inputs its change touches, or breaks the build of a Lean module that
                                                    is or imports what it changes (on a warm Lean tree: here on a node, else
                                                    on the first node of PREFLIGHT_LEAN_ON that starts it, whatever the tier;
                                                    refused when none can build them),
                                                    naming the PR that owns it, or
                                                    drops from a Lean lock it changes a shape.inline premise or shape.frozen
-                                                   key the merged tree's statements still need (naming each); a check it
+                                                   key the merged tree's statements still need (naming each); the vLLM
+                                                   integration's ratchet gate, on a change that reaches what it judges,
+                                                   prints what it fails as a warning and refuses nothing; a check it
                                                    couldn't run it names under "checks skipped";
                                                    --no-preflight skips it
     research queue review [N (--land [--ref NOTE] | --hold REASON) --by LANE] [--sha SHA] [--json]
@@ -186,7 +189,9 @@ module only an unlanded PR adds, a workspace member without its REAL_ROOTS entry
 it carries that isn't admitted, a merge of an old `next` that carries a PR's head the PR no longer lands (closed, rebuilt
 without it, or withdrawn: `stale_carried`, after `old_next` for one closed unlanded), and a failure of
 `tests/test_repository.py` (a report-genre name), which the preflight runs too, as it runs the landing gates on the head; a
-warn gate's failure (a Markdown file over its cap) it prints as a warning.  A Lean change can pass its own Lean check and break
+warn gate's failure (a Markdown file over its cap) it prints as a warning, and so it prints what the vLLM integration's ratchet
+gate fails on the merged tree (`PREFLIGHT_RATCHET`), since the gate tells a new violation by its text and can take an honest
+change's violation for one.  A Lean change can pass its own Lean check and break
 a module that imports it (a changed signature, dropped premises, a dropped import), which its candidate's records run finds,
 blaming it; the preflight builds those modules (`LakeBuild`), from a machine without a warm Lean tree on the first node of
 `PREFLIGHT_LEAN_ON` that starts the build, whatever the tier, and refuses a head whose modules no node can build.  A head whose
@@ -232,8 +237,9 @@ merge driver only on a file both sides changed, so a `.lean` file either side ad
 merges onto since the port's base) would stay unported, and a module importing it wouldn't build.  A codemod that fails leaves
 the PR out with why.
 
-Moves.  A PR whose body has a `Move: tools/move/NAME.toml` line (`PR.move`) is a move PR.  The verified queue builds it by its
-merge like any other PR and takes it only on a land verdict, never on the low-risk rule (`World.ready`).  A ready PR whose head
+Moves.  A PR whose body has a `Move: tools/move/NAME.toml` line (`PR.move`) is a move PR.  The verified queue regenerates its
+move on what its batch merged below it and takes it on its ready mark alone once that is certified, never on the low-risk
+rule (`World.ready`, `World._move`).  A ready PR whose head
 doesn't merge onto `main`, as after a move it lacks, goes into no candidate, and its owner is told the files it conflicts in,
 to rebase it onto `main` and to mark the new head, once a head (`Loop._conflicts`); `tools/move/restack.py` carries a branch
 across a move, and a land verdict carries to the restacked head when its own change, mapped across the move, is the same
@@ -705,8 +711,9 @@ GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "flock-circuit-build", "lean-build",
                "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
                "ratchet-gate")
-#: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
-LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
+#: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, one file's path from the
+#: root (a `/` before its end, no glob), or a file name glob (no `/`)
+LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+(?:[\w.-]+)?|[\w.*?\[\]-]+")
 #: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
 HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
 #: drive.toml's `executor` (off, shadow beside the after-landing run, or on in its place) and `verdict_carry` (off, shadow logged
@@ -773,8 +780,8 @@ class DriveFlags:
     #: ready mark alone (`drive.Driver.land_lowrisk`); off: drive lands only on review
     lowrisk_lane: bool = True
     lowrisk_per_tick: int = 20
-    #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), or a file name glob;
-    #: none, the lane lands nothing
+    #: what keeps a change off the low-risk lane (`lowrisk`): a directory from the root (ending in `/`), one file's path from
+    #: the root, or a file name glob; none, the lane lands nothing
     lowrisk_excludes: tuple[str, ...] = ()
     #: the task executor after landing (`research.executor`, `drive.Driver`): "off"; "shadow", each tip's task graph enqueued beside
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
@@ -865,7 +872,8 @@ class DriveFlags:
             if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
                                                          and ".." not in x.split("/") for x in v)):
                 raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
-                                              "and file name globs, as [\"*.lean\", \"verity/core/\"]")
+                                              "files' paths from it and file name globs, as [\"*.lean\", \"verity/core/\", "
+                                              "\"verity/__init__.py\"]")
             got["lowrisk_excludes"] = tuple(v)
         if "bottom_ring" in doc:
             v = doc["bottom_ring"]
@@ -967,6 +975,10 @@ GATE_FIX_LINES = 15
 GATE_VERDICTS = 1000
 #: what the ready mark's preflight says after a warn gate's failure (`Preflight._gates`)
 WARN_GATE_SAYS = "A warn gate refuses nothing: the PR lands, and its owner fixes it in their next PR"
+#: what the ready mark's preflight says after the ratchet gate's failure (`Preflight._merged`)
+RATCHET_SAYS = ("The ratchet gate refuses nothing here, since it can read a violation whose line moved, or an import cycle through a "
+                "module the PR adds, as new: check's `ratchet-gate` step, off the merge gate, judges the PR's merge again in its "
+                "candidate")
 #: the most merges' records the queue's state keeps (`Queue._merge`), the most recently used: a few hundred bytes each, and a
 #: sync merges a few hundred times
 MERGES = 2000
@@ -1083,6 +1095,22 @@ def move_scripts(repo: Path, at: str) -> dict[str, str]:
     return scripts_at(repo, at, (MOVE_DIR, MOVE_CHECK, MOVE_PINS))
 
 
+#: the scripts of `tools/move/` as `vqueue.meets` reads a change's files: a member below a move that changes one holds it back
+#: (`Queue._scripts_below`)
+MOVE_SCRIPTS = (f"{MOVE_DIR}*.py",)
+
+
+def path_rows(text: str) -> list[tuple[str, str]]:
+    """The rows of word map ``text`` that rename a path, its old and new words each holding a `/`, `[[words_in]]` rows
+    included, in its order: `move_check.py` certifies a word's rename of a path only where the move itself moved it, so each
+    goes to it as `--map OLD=NEW`, as `tools/move/stage.py --map` passes it.  A map that doesn't parse raises
+    `tomllib.TOMLDecodeError`."""
+    data = tomllib.loads(text)
+    tables = [data.get("words"), *(s.get("words") for s in data.get("words_in") or [] if isinstance(s, dict))]
+    rows = [(o, n) for t in tables if isinstance(t, dict) for o, n in t.items()]
+    return list(dict.fromkeys((o, n) for o, n in rows if isinstance(n, str) and "/" in o and "/" in n))
+
+
 def write_scripts(repo: Path, scripts: dict[str, str], dest: Path) -> Path:
     """``scripts`` (`move_scripts`) written under ``dest`` at their paths, so each finds its imports beside it as in a checkout:
     ``dest``."""
@@ -1183,18 +1211,25 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
 
 
 def lowrisk(files: Iterable[str], excludes: Iterable[str]) -> bool:
-    """Whether a change to ``files`` is low-risk, so drive lands it on its ready mark alone, with no land verdict and no wait in
-    `next` (drive.toml's `lowrisk_lane`, `drive.Driver.land_lowrisk`): no file is under an ``excludes`` entry
-    that ends in `/` (a directory from the repository's root: the verifiers under `verity/core/` and the soundness-path Python
-    in `verity/ml/`) and no file's name matches an entry without one as a glob (`*.lean`, every `lean-audit.json`, the Lake
-    files, `TRUSTED.sha256`).  ``files`` are what the PR's merge onto the landing branch's tip changes against that tip, not
-    its own diff.  No excludes, nothing is low-risk; no file, nothing to land."""
-    dirs, names = [], []
+    """Whether a change to ``files`` is low-risk, so the verified queue's loop takes it on its ready mark alone, with no land
+    verdict (drive.toml's `lowrisk_lane`, `vqueue_loop.World.ready`): no file is under an ``excludes`` entry
+    that ends in `/` (a directory from the repository's root: the verifiers and the soundness-path Python), is an entry with
+    a `/` before its end (one file's path from the root: a package's `__init__.py`, which Python runs on every import below
+    it, without the rest of its directory), or has a name an entry with no `/` matches as a glob (`*.lean`, every
+    `lean-audit.json`, the Lake files, `TRUSTED.sha256`).  ``files`` are the PR's own change, against its merge base with
+    `main`.  No excludes, nothing is low-risk; no file, nothing to land."""
+    dirs, paths, names = [], set(), []
     for x in excludes:
-        (dirs if x.endswith("/") else names).append(x)
+        if x.endswith("/"):
+            dirs.append(x)
+        elif "/" in x:
+            paths.add(x)
+        else:
+            names.append(x)
     files = list(files)
-    return bool(files and (dirs or names)) and not any(
-        f.startswith(tuple(dirs)) or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names) for f in files)
+    return bool(files and (dirs or paths or names)) and not any(
+        f.startswith(tuple(dirs)) or f in paths or any(fnmatch.fnmatchcase(PurePosixPath(f).name, n) for n in names)
+        for f in files)
 
 
 #: what a row of `research queue review` says of a head the verified queue's loop takes on its ready mark alone (`lands_on_mark`)
@@ -1209,8 +1244,9 @@ def own_files(repo: Path, main: str, head: str) -> frozenset[str]:
 def lands_on_mark(flags: DriveFlags, pr: PR, why: str | None, files: Iterable[str]) -> bool:
     """Whether the verified queue's loop takes ``pr``, marked ready at its head, on that mark alone (`vqueue_loop.World.ready`,
     and `research queue review`'s rows): the low-risk lane, while ``flags`` (drive.toml's at `main`: `flags_at`) have it on,
-    when ``files`` (`own_files`) are `lowrisk` under their `lowrisk_excludes`.  Never a move PR, which lands only with a land
-    verdict, nor one ``why`` (`unreviewed`'s word on its head) says is held."""
+    when ``files`` (`own_files`) are `lowrisk` under their `lowrisk_excludes`.  Never a move PR, which the loop takes on its
+    mark alone only once its move regenerated on `main` is certified (`World._uncertified`, `vqueue_loop._off_mark`), nor one
+    ``why`` (`unreviewed`'s word on its head) says is held."""
     return (flags.lowrisk_lane and not pr.move and not (why or "").startswith("held")
             and lowrisk(files, flags.lowrisk_excludes))
 
@@ -1538,7 +1574,7 @@ def _message(pr: PR) -> str:
 
 def _move_message(pr: PR, tip: str, into: str, main: str) -> str:
     return (f"Queue: #{pr.number} {pr.title}".rstrip() + f"\n\n`python3 {RENAME} --map {pr.move}` at the root of {tip}, regenerated "
-            f"by drive for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`, both as `{into}` {main[:12]} has them."
+            f"by the queue for #{pr.number} and certified by `{MOVE_CHECK} {tip[:12]} HEAD`, both as `{into}` {main[:12]} has them."
             f"\n\nPR: #{pr.number}\nHead: {pr.head}\nOwner: {pr.owner}\nMove: {pr.move}\n")
 
 
@@ -2365,38 +2401,52 @@ class Queue:
 
     # -- moves (the module's `Moves`)
 
+    @staticmethod
+    def _move_key(tip: str, pr: PR, main: str) -> str:
+        """The key of move PR ``pr``'s regeneration on ``tip``, landing tip ``main`` (the state's `moves_made`)."""
+        return f"{tip}:{main}:{pr.move}:{pr.number}:{pr.head}"
+
     def _regenerate(self, tip: str, pr: PR, main: str) -> tuple[str | None, str]:
         """(move PR ``pr``'s move regenerated on ``tip`` and certified, "") or (None, why not), once per tip, landing tip ``main``
-        and head (`_regenerated`; the state's `moves_made`)."""
-        key = f"{tip}:{main}:{pr.move}:{pr.number}:{pr.head}"
+        and head (`_regenerated`; the state's `moves_made`, which keeps a certified move's `move_check.py --json` report as its
+        `certificate`)."""
+        key = self._move_key(tip, pr, main)
         self._used.add(key)
         got = self._made.get(key) or {}
         if not got.get("why") and not (got.get("commit") and self._has(got["commit"])):
-            commit, why = self._regenerated(tip, pr, main)
-            got = self._made[key] = {"commit": commit} if commit else {"why": why}
+            commit, why, report = self._regenerated(tip, pr, main)
+            got = self._made[key] = {"commit": commit, "certificate": report} if commit else {"why": why}
         return got.get("commit"), got.get("why", "")
 
-    def _regenerated(self, tip: str, pr: PR, main: str) -> tuple[str | None, str]:
+    def _scripts_below(self, tip: str, main: str) -> list[str]:
+        """The scripts of `tools/move/` that the members between ``main`` and ``tip`` change: a move regenerated on ``tip``
+        runs ``main``'s, and `restack.py` carries the members above it with its base's, so it waits until they land."""
+        scripts, ours = move_scripts(self.workdir, main), move_scripts(self.workdir, tip)
+        return sorted(p for p in ours.keys() | scripts.keys() if p.startswith(MOVE_DIR) and ours.get(p) != scripts.get(p))
+
+    def _regenerated(self, tip: str, pr: PR, main: str) -> tuple[str | None, str, dict | None]:
         """`rename.py --map MAP` (``pr``'s `Move:` line, ``tip``'s map) run at the root of a worktree of ``tip``, committed as one
-        commit on it with the PR's trailers and `Move: MAP` (`_move_message`), and certified by `move_check.py TIP COMMIT`;
-        the PR's head is only the request.  Both scripts are the landing branch's tip ``main``'s (`move_scripts`), as its
-        landing gates are, so a member below the move can't change what judges it; and a member below that changes
-        `tools/move/`'s scripts holds the move back, since `restack.py` carries the members above it with its base's.  A map
-        ``tip`` or a script ``main`` lacks, such a member, a script that fails, a map that renames nothing there, or a move
-        `move_check.py` refuses is the reason."""
+        commit on it with the PR's trailers and `Move: MAP` (`_move_message`), and certified by `move_check.py TIP COMMIT
+        --json`, given each of the map's path rows as `--map OLD=NEW` (`path_rows`): (the commit, "", its report).  The PR's
+        head is only the request.  Both scripts are the landing branch's tip ``main``'s (`move_scripts`), as its landing gates
+        are, so a member below the move can't change what judges it; and a member below that changes `tools/move/`'s scripts
+        holds the move back (`_scripts_below`).  A map ``tip`` or a script ``main`` lacks, such a member, a script that
+        fails, a map that renames nothing there, or a move `move_check.py` refuses is the reason: (None, why, None)."""
         scripts, into = move_scripts(self.workdir, main), self.into
         missing = [f"{p} at `{into}` {main[:12]}" for p in (RENAME, MOVE_CHECK) if p not in scripts]
         if _git(self.workdir, "cat-file", "-e", f"{tip}:{pr.move}", check=False).returncode:
             missing.insert(0, f"{pr.move} at {tip[:12]}")
         if missing:
             return None, (f"its move can't be regenerated: there's no {' or '.join(missing)}; land the map first, then mark the "
-                          "move again")
-        ours = move_scripts(self.workdir, tip)
-        if changed := sorted(p for p in ours.keys() | scripts.keys()
-                             if p.startswith(MOVE_DIR) and ours.get(p) != scripts.get(p)):
+                          "move again"), None
+        if changed := self._scripts_below(tip, main):
             return None, (f"the members below it change {', '.join(changed)} from `{into}` {main[:12]}: its move runs "
                           f"`{into}`'s scripts, and the members above it are carried across it with its base's, so it waits "
-                          f"until those members land on `{into}`")
+                          f"until those members land on `{into}`"), None
+        try:
+            rows = path_rows(_out(self.workdir, "show", f"{tip}:{pr.move}"))
+        except tomllib.TOMLDecodeError as e:
+            return None, f"its map {pr.move} at {tip[:12]} doesn't parse ({e}): fix the map, then mark the move again", None
         with tempfile.TemporaryDirectory(prefix="queue-move-", ignore_cleanup_errors=True) as tmp:
             wt = Path(tmp, "wt")
             _git(self.workdir, "worktree", "add", "-q", "--detach", str(wt), tip)
@@ -2405,24 +2455,33 @@ class Queue:
                 r = subprocess.run([sys.executable, str(rename), "--map", pr.move, "--root", str(wt)], cwd=wt,
                                    capture_output=True, text=True, env=_script_env())
                 if r.returncode:
-                    return None, f"`{RENAME} --map {pr.move}` failed on {tip[:12]} (exit {r.returncode}): {_tail(r)}"
+                    return None, f"`{RENAME} --map {pr.move}` failed on {tip[:12]} (exit {r.returncode}): {_tail(r)}", None
                 _git(wt, "add", "-A")
                 tree = _out(wt, "write-tree")
                 if tree == _out(self.workdir, "rev-parse", f"{tip}^{{tree}}"):
                     return None, (f"`{RENAME} --map {pr.move}` changes nothing on {tip[:12]}: the move is in it already, or "
-                                  "its map moves nothing there")
+                                  "its map moves nothing there"), None
                 commit = _git(self.workdir, "commit-tree", tree, "-p", tip, "-m", _move_message(pr, tip, into, main),
                               env=IDENTITY).stdout.strip()
                 # written afresh: the rename ran the tree's own pins.py, which could rewrite anything already written
                 check = write_scripts(self.workdir, scripts, Path(tmp, "check")) / MOVE_CHECK
-                c = subprocess.run([sys.executable, str(check), tip, commit], cwd=wt, capture_output=True, text=True,
-                                   env=_script_env())
-                if c.returncode:
-                    return None, (f"its move regenerated on {tip[:12]} as {commit[:12]} isn't certified (`{MOVE_CHECK} "
-                                  f"{tip[:12]} {commit[:12]}` exit {c.returncode}): {_tail(c, 4)}")
+                c = subprocess.run([sys.executable, str(check), tip, commit, *(f"--map={o}={n}" for o, n in rows), "--json"],
+                                   cwd=wt, capture_output=True, text=True, env=_script_env())
+                said = f"`{MOVE_CHECK} {tip[:12]} {commit[:12]}`" + (f" with {len(rows)} --map rows" if rows else "")
+                judge = f"{said} couldn't judge its move regenerated on {tip[:12]} (exit {c.returncode})"
+                try:
+                    report = json.loads(c.stdout)
+                except ValueError as e:
+                    return None, f"{judge}: no JSON report ({e}): {_tail(c, 4)}", None
+                if not isinstance(report, dict):
+                    return None, f"{judge}: {_tail(c, 4)}", None
+                if c.returncode or report.get("certified") is not True:
+                    refused = "; ".join(f"{f.get('path')}: {f.get('reason')}" for f in (report.get("refusals") or [])[:3])
+                    return None, (f"its move regenerated on {tip[:12]} as {commit[:12]} isn't certified ({said} exit "
+                                  f"{c.returncode}): {_tail(c, 1)}" + (f": {refused}" if refused else "")), None
                 self.log(f"research queue: #{pr.number}'s move ({pr.move}) regenerated on {tip[:12]} as {commit[:12]}: "
                          f"{_tail(c, 1)}")
-                return commit, ""
+                return commit, "", report
             finally:
                 _git(self.workdir, "worktree", "remove", "--force", str(wt), check=False)
                 _git(self.workdir, "worktree", "prune", check=False)
@@ -2926,7 +2985,7 @@ class Queue:
                                              f"re-mark it")
             elif e.state == "ready":
                 e.why = ("admitted: the verified queue merges it into a candidate on `main` once it has a land verdict"
-                         + (": a move lands only with one, never on its mark alone" if e.pr.move else
+                         + (", or on its mark alone once its move is certified on `main`, as drive.toml allows" if e.pr.move else
                             ", or on its mark alone when it is low-risk"))
         return entries
 
@@ -4431,17 +4490,31 @@ def _by_suite(paths: tuple[str, ...]) -> tuple[tuple[str, tuple[str, ...]], ...]
     return tuple((d, tuple(fs)) for d, fs in groups.items())
 
 
+def reaches(paths: Iterable[str], reach: Iterable[str]) -> bool:
+    """Whether one of ``paths`` starts with, or holds as a directory, a prefix of ``reach`` ending in `/`, or is another of
+    ``reach``, a file's path from the root: what a preflight lint judges (`PREFLIGHT_LINTS`, `PREFLIGHT_RATCHET`)."""
+    return any(f.startswith(r) or f"/{r}" in f if r.endswith("/") else f == r for f in paths for r in reach)
+
+
 #: `PREFLIGHT_TEST_PATHS` by the directory pytest runs in
 PREFLIGHT_TESTS = _by_suite(PREFLIGHT_TEST_PATHS)
-#: lints the preflight runs on the merged tree only when the change reaches what they judge (a path starting with, or holding
-#: a directory, of the prefix): they take about 20 s and 40 s, and a train that fails one of them loses its hour-long check
+#: lints the preflight runs on the merged tree only when the change reaches what they judge (`reaches`): they take about 20 s
+#: and 40 s, and a train that fails one of them loses its hour-long check
 PREFLIGHT_LINTS = (("tests/test_no_wall_clock.py", ("tests/",)), ("adapters/vllm/tests/lint", ("adapters/vllm/",)))
+#: the vLLM integration's ratchet gate, which the preflight runs after its other checks of the merged tree and their run on
+#: the base, as a lint of `PREFLIGHT_LINTS` is, when the change reaches what it judges: the integration (its lints, lists, ruff
+#: config and noqa comments), the repository's lints and lists, the root ruff.toml, and the root pyproject.toml's ruff pin.
+#: It runs as check's `ratchet-gate` step does, as the merge's base has it, on the merge, keeping no verdict (no merge is
+#: judged twice); it takes seconds on a change to the integration's code and over a minute on one to a lint or a list, which
+#: can outlast the budget.  What it finds is a warning (`Preflight._merged`)
+PREFLIGHT_RATCHET = ("adapters/vllm/tools/ratchet_gate.py", ("adapters/vllm/", "tests/lint/", "ruff.toml", "pyproject.toml"))
 #: suites whose collection is no cheap check, each with why; the preflight names them and leaves them to the train's check
 PREFLIGHT_UNCOLLECTED: dict[str, str] = {}
 #: the merged tree's environment, as the quick tier's `uv run --locked` has it (a fresh tree syncs from uv's cache in seconds)
 PREFLIGHT_SYNC = ("uv", "sync", "--locked", "--all-packages", "--extra", "torch-cpu", "-q")
 #: what the merged tree's checks may take together; what hasn't finished by then is named and refuses nothing.  Every suite's
-#: collection but circuit-check's takes about 18 s on 4 workers of a 4-core VM; `PREFLIGHT_LINTS` add up to a minute
+#: collection but circuit-check's takes about 18 s on 4 workers of a 4-core VM; `PREFLIGHT_LINTS` add up to a minute, and the
+#: ratchet gate (`PREFLIGHT_RATCHET`), last, gets what is left
 PREFLIGHT_CHECKS_S = 120.0
 #: collections at once: four torch-importing `--collect-only` runs reach about 8 GB, half of a marker's 16 GB VM
 PREFLIGHT_JOBS = 2
@@ -5124,7 +5197,9 @@ class Preflight:
     The checks of (b) and (e) run in a temporary worktree of the caller's repository at the merge (`merged_worktree`), (e)
     first, within `lean_s`, while the tree is clean (a `research run` ships it), then (b) with its own environment (`sync`;
     ``python`` stands in for its interpreter), under `budget_s` together (`math.inf`: unbounded), and the worktree is
-    removed whatever happens.  Before
+    removed whatever happens.  Last, after the run on the base below, with what is left of the budget, the vLLM integration's
+    ratchet gate judges the merge when the change reaches what it judges (`PREFLIGHT_RATCHET`, `_ratchet`): what it fails is
+    logged as a warning and refuses nothing, so the time it takes never costs a refusing check its comparison.  Before
     (b), the fetched fixtures under the collected suites' inputs come into it (``fetch``, by default `_fetch_fixtures`: through
     ``store``, within `PREFLIGHT_FETCH_S` of the budget); a suite whose fixtures can't be fetched (no credentials, no source) is
     named once and not judged.  A failure that `next` has too (a pin already stale there, a module two PRs on `next` already
@@ -5345,13 +5420,21 @@ class Preflight:
             graph, lean_failed, lean_deadline = self._lean(wt, base, tree, notes, out)
             deadline = self.clock() + self.budget_s
             failed = self._checks(wt, base, tree, None, notes, deadline, fixtures)
-            if not any(failed.values()) and not lean_failed:
-                return out
-            _git(wt, "checkout", "-q", "--detach", "--force", base)
-            _git(wt, "clean", "-qffdx", "-e", "/.venv")
-            again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
-                     if any(failed.values()) else {})
-            lean_again = self._lean_at_base(wt, lean_failed, lean_deadline) if lean_failed else {}
+            again: dict[str, dict[str, str]] = {}
+            lean_again: dict[str, str] | str = {}
+            if any(failed.values()) or lean_failed:
+                _git(wt, "checkout", "-q", "--detach", "--force", base)
+                _git(wt, "clean", "-qffdx", "-e", "/.venv")
+                again = (self._checks(wt, base, tree, {k for k, v in failed.items() if v}, [], deadline, fixtures)
+                         if any(failed.values()) else {})
+                lean_again = self._lean_at_base(wt, lean_failed, lean_deadline) if lean_failed else {}
+            # warn only: the gate compares violation texts across two trees, so a moved line, or an import of a module the PR adds (on the base, of its package: a cycle), reads as new
+            if ratchet := self._ratchet(wt, base, commit, tree, notes, deadline):
+                self.log(f"research queue: preflight: warning: #{pr.number} at {pr.head[:12]}: the ratchet gate "
+                         f"({PREFLIGHT_RATCHET[0]} as {onto} has it) fails the merge: " + "\n    ".join(ratchet)
+                         + f"\n  {RATCHET_SAYS}")
+        if not any(failed.values()) and not lean_failed:
+            return out
         for name, fails in failed.items():
             if fails and name not in again:
                 notes.append(f"{name} failed on the merged tree and couldn't run on {onto} to compare: {'; '.join(fails.values())}")
@@ -5434,14 +5517,16 @@ class Preflight:
         return (f"`pytest --collect-only` in {where} fails on the merged tree: {shown}: a test reads what another queued PR "
                 f"changes or what only an unlanded PR adds; make it read what `main` and `next` hold, or wait for that PR")
 
-    def _run(self, argv: list[str], cwd: Path, deadline: float) -> tuple[subprocess.CompletedProcess | None, str]:
+    def _run(self, argv: list[str], cwd: Path, deadline: float,
+             extra: dict[str, str] | None = None) -> tuple[subprocess.CompletedProcess | None, str]:
         """``argv`` in ``cwd`` with what's left of the budget (no timeout under an unbounded one), outside the caller's
-        environment (`quick_tier.CALLER_ENV`, pytest's own variables); and why it didn't finish."""
+        environment (`quick_tier.CALLER_ENV`, pytest's own variables), with ``extra`` set; and why it didn't finish."""
         left = deadline - self.clock()
         if left <= 0:
             return None, "the budget was spent before it started"
         env = {k: v for k, v in os.environ.items() if k not in quick_tier.CALLER_ENV and not k.startswith("PYTEST_")}
         env["COLUMNS"] = "300"                                         # pytest's summary lines, whole
+        env.update(extra or {})
         try:
             return subprocess.run(argv, cwd=cwd, env=env, capture_output=True, text=True, errors="replace",
                                   timeout=left if math.isfinite(left) else None), ""
@@ -5514,7 +5599,7 @@ class Preflight:
         lints = [(path, reach) for path, reach in PREFLIGHT_LINTS if want(f"tests:{path}") and (wt / path).exists()]
         changed = _out(self.repo, "diff", "--name-only", base, tree).split() if lints else []
         for path, reach in lints:
-            if any(f.startswith(r) or f"/{r}" in f for f in changed for r in reach):
+            if reaches(changed, reach):
                 d, _, rest = path.rpartition("tests/")
                 got(f"tests:{path}", pytest_failures(run, py, wt / (d.rstrip("/") or "."), ["tests/" + rest]))
         names = None if only is None else [n.partition(":")[2] for n in only if n.startswith("collect:")]
@@ -5527,6 +5612,29 @@ class Preflight:
         for s in res.suites:
             out[f"collect:{s}"] = failed.get(s, {})
         return out
+
+    def _ratchet(self, wt: Path, base: str, commit: str, tree: str, notes: list[str], deadline: float) -> list[str]:
+        """What `PREFLIGHT_RATCHET`'s gate, as ``base`` has it, fails on the merge ``commit`` (of ``tree``) when the change
+        reaches what it judges, run in ``wt`` as check's `ratchet-gate` step runs it (`ratchet_gate.py BASE COMMIT --json`)
+        with what the other checks of (b) left of their ``deadline``: each line it fails, none when it passed or didn't judge,
+        and then why in ``notes``.  It keeps no verdict, and its scratch (its worktrees) goes in ``wt``'s temporary directory,
+        which `merged_worktree` removes, also when the budget's end kills the gate before it cleans up."""
+        path, reach = PREFLIGHT_RATCHET
+        if (_git(self.repo, "cat-file", "-e", f"{base}:{path}", check=False).returncode
+                or not reaches(_out(self.repo, "diff", "--name-only", base, tree).split(), reach)):
+            return []
+        script = wt.parent / Path(path).name
+        script.write_text(_git(self.repo, "show", f"{base}:{path}").stdout, errors="surrogateescape")
+        r, why = self._run([self.python or str(wt / ".venv" / "bin" / "python"), str(script), base, commit, "--json"], wt,
+                           deadline, {"RATCHET_GATE_CACHE": "", "TMPDIR": str(wt.parent)})
+        if r is not None:
+            with contextlib.suppress(ValueError, TypeError, KeyError, AttributeError):
+                found = [str(x) for f in json.loads(r.stdout)["failures"] for x in (f["why"], *(f.get("fix") or []))]
+                if r.returncode in (0, 1) and bool(found) == (r.returncode == 1):
+                    return list(dict.fromkeys(found))
+            why = f"exited {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}"
+        notes.append(f"ratchet-gate not checked: {why}")
+        return []
 
 
 class MarkOnly:

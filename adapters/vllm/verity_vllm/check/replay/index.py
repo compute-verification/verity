@@ -134,7 +134,7 @@ def plane_copies(d: dict) -> list[dict]:
     """The second names a described row's output is committed under (`ProgramIndex.describe`: a MoeSum's plane beside its
     module's own output).  A description states `copies` only for such a row; every other row has none."""
     copies = d.get("copies")
-    return [] if copies is None else copies
+    return copies if copies else []
 
 
 def described(pi: ProgramIndex, r: dict) -> dict:

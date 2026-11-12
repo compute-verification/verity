@@ -450,7 +450,8 @@ def decoder(phi: Phi, M: int = 1, history: int = 0):
     Llama-family one (`_Decoder`).  Its `leaves()` are the weights record, `peer_shapes(rows)` one forward pass's peer Inputs in
     collective order, `model(B, W, peers)` the forward and the sampler."""
     family = str(phi.hf_config.get("model_type", "")).lower()
-    arch = FAMILY_FACTS[family]["arch"] if family in FAMILY_FACTS else None    # a family the table lacks is `model_shape`'s to refuse
+    entry = FAMILY_FACTS.get(family)
+    arch = entry.get("arch") if entry else None    # a family the table lacks, or one with no constructor, is `model_shape`'s to refuse
     Net: type[Any]
     if arch == "dsa-moe":
         from .dsa import Net
