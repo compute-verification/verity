@@ -128,13 +128,13 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   (`git show origin/B:inbox/<agent-id>.md`); larger changes go in when you resume it. It opens its own PR, or reports
   its branch and SHA for its launcher to.
 - **Pick a worker's model by its task**, as `Task`'s `model`, a standing request for every agent here: the strongest
-  only where a weaker one is likely wrong and no check would catch it. Tier 1, `claude-fable-5-2-xhigh`: no check
-  decides the result and an error is expensive (what a guarantee says, protocol or attack design, a proof with no known
-  route, an open root cause, a ruling, review of a verifier, lock or statement, soundness-path code, a claim to
-  Daniel). Tier 2, `claude-opus-5-5-high`: skilled work a check decides (a specified change with tests, a swarm seat, a
-  proof of a fixed statement, ordinary review). Tier 3, `claude-sonnet-5-5-medium`: procedure and reading (merges,
-  renames, tables, docs-only review). The brief names the tier; start at the lowest that fits, and go one up after two
-  failed checks.
+  only where a weaker one would err and no check would catch it. Tier 1, `claude-fable-5-2-xhigh`: no check decides it
+  and an error is expensive (what a guarantee says, protocol or attack design, a proof with no known route, an open root
+  cause, a ruling, review of a verifier, lock or statement, soundness-path code, a claim to Daniel). Tier 2,
+  `claude-opus-5-5-high`: skilled work a check decides (a specified change with tests, a swarm seat, a proof of a fixed
+  statement, a merge resolving code, ordinary review). Tier 3, `claude-sonnet-5-5-medium`: procedure and reading (clean
+  merges, renames, counts, docs-only review). The brief names the tier: the lowest that fits, one up after two failed
+  checks.
 - **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
   `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
   its shell hook delivers it within about a minute or as its turn ends (`--local`: a subagent on your VM, at once);
