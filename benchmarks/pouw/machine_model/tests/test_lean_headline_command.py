@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from verity_machine_model import lean_headline as LH
 from verity_machine_model.cli import main
 

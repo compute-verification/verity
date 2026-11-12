@@ -82,9 +82,10 @@ if Path(verity_machine_model.__file__).resolve().parents[1] != MODEL:
     raise ImportError(f"lean_headline_dc reads {MODEL}'s verity_machine_model, but {verity_machine_model.__file__} "
                       "was imported first: run it in a fresh interpreter, or put that directory first on sys.path")
 
-from verity_machine_model import lean_headline as LH, sheet as S  # noqa: E402
+from verity_machine_model import lean_headline, sheet  # noqa: E402
 from verity_machine_model.model import device  # noqa: E402
 
+LH, S = lean_headline, sheet
 E = LH.E
 exact, branches, Q = LH.exact, LH.branches, LH.Q
 
