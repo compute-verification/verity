@@ -22,7 +22,7 @@ def rows() -> dict:
 @pytest.mark.parametrize("name", sorted(K.MODELS))
 def test_every_shape_is_rhos(name):
     """A model's shape is verity/protocols/inference_only/slowdown's (`models.toml`), read through its loader: a recipe states none, and the
-    weight matrices priced here are the model's rows there, shape by shape (its MTP modules apart, which rho's rows
+    weight matrices priced here are the model's rows there, shape by shape (its MTP modules apart, which the slowdown calculator's rows
     leave out), with its width, depth, vocabulary and attention."""
     recipe, m = K.RECIPES[name], K.MODELS[name]
     assert set(recipe) == {"model", "source", "optimizer", "batch_tokens", "schedule"}
@@ -42,7 +42,7 @@ def test_every_shape_is_rhos(name):
 
 def test_the_library_models_rho_also_has_are_its_sizes():
     """`models.json` is the library's table, with the thread family's `entry_fee` and `fanout`; where the slowdown calculator has the model,
-    its sizes are rho's."""
+    its sizes are the slowdown calculator's."""
     both = {m["id"]: m for m in catalog.load("models") if m["id"] in SHAPES}
     assert set(both) == {"kimi-k2", "dense-100b"}
     for name, m in both.items():

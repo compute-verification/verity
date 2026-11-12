@@ -14,12 +14,12 @@ Nothing in `verity` reads this directory. The theorems it cites are in `security
 (`security/Definitions/Nci/Guarantees/Training.lean`).
 
 The slowdown lower bound's numbers come from [`verity/protocols/inference_only/slowdown`](../slowdown/README.md), the one slowdown calculator.
-`tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
-`rho.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`
+`tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is the slowdown calculator's
+`slowdown.theorem.multiple_bound` in Lean's form (`Nci.Dampener.remoteDampener` at the reference's MFU), which `statement.py`
 and `fit.py` read. Hosts carry no compute and no run beats the reference's efficiency (`GLOSSARY.md`), so
 `host_share` is 0 and the residual trains at MFU₀ (`tiers.evaluate`'s `residual_mfu`), while the counted
 multiplications (the inference-only policy's term, χ, the memory cap) stay at peak: at `tiers.py`'s defaults the slowdown is 3.02
-where every unit is proved (T1 to T4), and rho's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`residual` 1) both are 1.
+where every unit is proved (T1 to T4), and the slowdown calculator's remote scenario at the H200 gives 3.04. PoUW's credit sets both: with nothing credited (`residual` 1) both are 1.
 Without the reference-efficiency assumption they are 1.21 and 1.22, without the
 hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its outputs keep the older names (`bracket.py`, and `tiers.py`'s `efficiency` and `residual`;
 `GLOSSARY.md`, Older names).
@@ -40,7 +40,7 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its ou
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
 | `bracket.py` | the bracket per row; `python verity/protocols/inference_only/nci/bracket.py [--calibration ID] [--row ID]` |
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python verity/protocols/inference_only/nci/kappa.py [--model ID]` |
-| `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` rho's `multiple_bound` takes); `python verity/protocols/inference_only/nci/tiers.py [--json]` |
+| `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` the slowdown calculator's `multiple_bound` takes); `python verity/protocols/inference_only/nci/tiers.py [--json]` |
 | `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python verity/protocols/inference_only/nci/fit.py [--json]` |
 | `statement.py` | every number that the Notion page on `tiers.py`'s claims, model and tiers quotes, at the commit it runs on; `python verity/protocols/inference_only/nci/statement.py [--json]` |
@@ -57,7 +57,7 @@ it:
 
 - `verity/protocols/inference_only/slowdown` reads data files of this directory by path (the algorithm library,
   `algorithms.json`, and the calibrations, `calibrations.json`), and its tests load `tiers.py` and `bracket.py` by
-  path to hold rho's own arithmetic to theirs; rho's suite names each among its `inputs`;
+  path to hold the slowdown calculator's own arithmetic to theirs; the slowdown calculator's suite names each among its `inputs`;
 - the Lean lock (`security/lean-audit.json`) names `tests/test_tiers.py` and `tests/test_fit.py` as the tests of three
   statements it holds open (its `conjectures`), and each of those tests checks that the lock names it;
 - `fixtures/artifacts.json` registers `sources/` by this directory's path.
@@ -189,7 +189,7 @@ For each row under each calibration of its model, `bracket.py` computes a bracke
 \(\kappa\) is the thread theorem's hypothesis \(\kappa\,|\text{computed}| \le 2|M|\): twice the multiplications of an
 updated weight by an activation or an activation gradient, over every gate of the reference training algorithm's
 circuit, one gate per scalar operation (a multiply-add is two). `kappa.py` counts both from each model's shape
-(`verity/protocols/inference_only/slowdown/data/models.toml`, read through `rho.instances`) and its report's pretraining schedule (`RECIPES`). The weight gradients, the LM head's forward, attention's score and value products, softmax, norms, routing
+(`verity/protocols/inference_only/slowdown/data/models.toml`, read through `slowdown.instances`) and its report's pretraining schedule (`RECIPES`). The weight gradients, the LM head's forward, attention's score and value products, softmax, norms, routing
 and the optimizer step are in the denominator only, so \(\kappa < 2/3\). Kimi K2's schedule gives 0.60 (0.603 at 4k,
 0.40 at 32k), DeepSeek-V3's 0.56, Llama 3 405B's 0.63 and Qwen3-235B's 0.57. The adversarial 0.5 is an attention-heavy
 shape with a fifth of its tokens at 32k; reported runs put at most about 5% of their tokens above their base context
