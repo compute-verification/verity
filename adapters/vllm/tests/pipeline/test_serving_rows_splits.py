@@ -132,10 +132,10 @@ def split_end(S: dict = TOY, G: int | None = None) -> str:
 
 F16, B16, F8, E0, C2 = block(16), block(), block(8), cols(0), comb(2)
 TMPLS = [F16, B16, F8, E0, C2]
-CAPS = {F16: 3, B16: 4, F8: 4, E0: 3, C2: 4}
+PER_CHUNK = {F16: 3, B16: 4, F8: 4, E0: 3, C2: 4}
 #: ``TMPLS`` with each key block its Boolean body, what a partition names for a window proved under ``--zk``
 BITS = [block(16, boolean=True), block(boolean=True), block(8, boolean=True), E0, C2]
-BITS_PER_CHUNK = dict(zip(BITS, CAPS.values()))
+BITS_PER_CHUNK = dict(zip(BITS, PER_CHUNK.values()))
 #: TOY's places in a head's chain: split 0's blocks 1 and 0 (visit order) and its column end, split 1's block 2 and its column
 #: end, then the combine; per block place, its split, its block in the split's visit order and its keys
 PLACES = {F16: [0], B16: [1], E0: [2, 4], F8: [3], C2: [5]}
@@ -207,11 +207,11 @@ class Served:
         return self.y[lo:hi], None
 
 
-def members(s: Served, tmpls=TMPLS, per_chunk=CAPS) -> list[CS.Member]:
+def members(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK) -> list[CS.Member]:
     return CH.wire(SRW.members(tmpls, [s.rows] * len(tmpls), None, per_chunk), tmpls, [s.rows] * len(tmpls))
 
 
-def window(s: Served, tmpls=TMPLS, per_chunk=CAPS, design: dict | None = None) -> CS.Binding:
+def window(s: Served, tmpls=TMPLS, per_chunk=PER_CHUNK, design: dict | None = None) -> CS.Binding:
     """The window of ``s``'s rows over ``tmpls`` (`members`) under ``design`` (one unit of each template by default)."""
     ms = members(s, tmpls, per_chunk)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
@@ -883,7 +883,7 @@ def test_readers_whose_key_rows_are_trees_of_their_own_are_refused_at_registrati
     assert "R3-ports" not in codes(w, held_values(w, read(s, w.members, UNITS)))
 
 
-def test_a_sampled_unit_whose_key_reference_names_another_row_of_its_writer_s_table_is_refused():
+def test_a_unit_in_the_sample_whose_key_reference_names_another_row_of_its_writer_s_table_is_refused():
     """A scores or values unit's key rows are its reference into its writer member's table (its public body, which the leaf
     layer binds).  Head 0's values unit of split 0's first block, on column block 0, with its reference to the next row of
     the table, another key block's, or with its port wired to the writer of column block 1 of its own key block, a member
