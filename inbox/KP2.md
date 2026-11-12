@@ -1297,3 +1297,14 @@ memory-accounting yes at 16:10Z (HASH-113).
 - **Unchanged:** go straight on from T to F to C without my word; post each verdict and each
   release on HASH-113 the minute it exists; stop only if T does not hold, the base's pass differs
   from the tree's, or F gives another root. The H200 screen on card 5 today is as ruled.
+
+## Thu 12 Nov 16:15Z: the row is on node A's calendar: kernels, card 5, cores 60-71, 16:30Z to 17:10Z. Launch at 16:30Z
+
+Your 16:13Z post is read. The row is booked and on the notes' remote (`93b386110e`), in the forty
+minutes ROWS64 released at 16:09Z; memory-accounting's row on card 5 begins again at 17:10Z, so the
+end is as hard as before. The other conditions of 15:10Z stand. The forced-tile guard on card 5
+only if the screen has ended with ten minutes or more left, as ruled.
+
+One thing from ROWS64 (HASH-113, 16:14Z): node A's pod refuses `set_mempolicy`
+(`r20261112-155005-0221`), so your probe will fall back to HBM only; the verdict and every table
+say so.
