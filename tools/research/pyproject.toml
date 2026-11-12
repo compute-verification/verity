@@ -102,6 +102,7 @@ untraced = [
     "tests/test_run_env.py",
     "tests/test_run_launched.py",
     "tests/test_run_on_fixes.py",
+    "tests/test_run_preserve.py",
     "tests/test_scopemem.py",
     "tests/test_secret_hint.py",
     "tests/test_slack.py",
@@ -218,6 +219,7 @@ tests = [
     "tests/test_remote_version.py",
     "tests/test_run_custody.py",
     "tests/test_run_launched.py",
+    "tests/test_run_preserve.py",
     "tests/test_store_prov.py",
 ]
 paths = ["tools/research/src/research"]
