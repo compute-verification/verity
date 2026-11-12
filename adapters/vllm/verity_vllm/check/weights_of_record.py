@@ -50,16 +50,39 @@ from typing import Any
 import numpy as np
 
 from verity_vllm import config
-from verity_vllm.check import derived_weights, fp8_moe_scales, fp8_ue8m0
+from verity_vllm.check import derived_weights, fp8_ue8m0
 from verity_vllm.check.checkpoint_index import CheckpointIndex, sha256_file, shard_pin  # noqa: F401  (sha256_file: the record's shard hash)
 from verity_vllm.check.component_programs import (
     component_program_dirs,
     load_program_head,
 )
+
+# handed on: other modules and tests read the composition and the engine constants through this module
+from verity_vllm.check.composed_weights import EXPERTS as EXPERTS
+from verity_vllm.check.composed_weights import EXPERTS_MIXTRAL as EXPERTS_MIXTRAL
+from verity_vllm.check.composed_weights import EXPERTS_RE as EXPERTS_RE
+from verity_vllm.check.composed_weights import FUSED as FUSED
+from verity_vllm.check.composed_weights import FUSED_W13 as FUSED_W13
+from verity_vllm.check.composed_weights import _compose_experts as _compose_experts
+from verity_vllm.check.composed_weights import _f32_to_bf16_bits as _f32_to_bf16_bits
+from verity_vllm.check.composed_weights import _rank_rows as _rank_rows
+from verity_vllm.check.composed_weights import compose
+from verity_vllm.check.composed_weights import to_served as to_served
+from verity_vllm.check.engine_constants import (
+    ENGINE_CONSTANT_RE,
+    ENGINE_ROTARY_RE,
+    PLACEHOLDER_RE,
+    _engine_constant,
+    analytic_key,
+)
+from verity_vllm.check.engine_constants import (
+    ENGINE_KV_PLACEHOLDER_RE as ENGINE_KV_PLACEHOLDER_RE,
+)
+from verity_vllm.check.engine_constants import ENGINE_KV_SCALE_RE as ENGINE_KV_SCALE_RE
+from verity_vllm.check.engine_constants import (
+    kv_scale_remap_sources as kv_scale_remap_sources,
+)
 from verity_vllm.check.param_digests import param_digests
-from verity_vllm.check.tp_shards import kv_heads_replicated, replicated_qkv, rows_of
-from verity_vllm.check.tp_shards import shard_dim as _shard_dim
-from verity_vllm.check.tp_shards import shard_dim0 as _shard_dim0
 from verity_vllm.config import UsageError, option
 from verity_vllm.log import init_logger
 from verity_vllm.query.manifest import format as MF
@@ -80,245 +103,8 @@ def weight_param(label: str, words: int) -> str:
     return f"{PARAM}/{label}@{words}"
 
 
-#: fused (stacked along dim 0) fields of the served model <- the checkpoint's parts, in stacking order; `{s}` = the field suffix
-#: (`weight`, `bias`, `weight_scale_inv`, ...).  The rule applies only when the checkpoint has no tensor of the fused name itself
-#: (Phi-3 checkpoints store `qkv_proj` / `gate_up_proj` already fused).  DeepSeek-V4's (`stacked_params_mapping`) are `attn.fused_wqa_wkv`,
-#: `compressor.fused_wkv_wgate`, and its shared experts' gate|up from their w1|w3 (`FUSED_W13`).
-FUSED = {"self_attn.qkv_proj": ("self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj"), "mlp.gate_up_proj": ("mlp.gate_proj", "mlp.up_proj"),
-         "self_attn.wqkv": ("self_attn.wq", "self_attn.wk", "self_attn.wv"), "shared_experts.gate_up_proj": ("shared_experts.gate_proj", "shared_experts.up_proj"),
-         "self_attn.fused_qkv_a_proj": ("self_attn.q_a_proj", "self_attn.kv_a_proj_with_mqa"), "indexer.wk_weights_proj": ("indexer.wk", "indexer.weights_proj"),
-         "attn.fused_wqa_wkv": ("attn.wq_a", "attn.wkv"), "compressor.fused_wkv_wgate": ("compressor.wkv", "compressor.wgate")}
-FUSED_W13 = {"shared_experts.gate_up_proj": ("shared_experts.w1", "shared_experts.w3")}
-#: fused-MoE experts: `experts.w13_weight[e] = gate|up of expert e`, `experts.w2_weight[e] = down of expert e` (vLLM FusedMoE: RoutedExperts
-#: _load_w13 puts shard w1 = gate in the first half, w3 = up in the second; _load_w2 puts w2 = down).  The checkpoint's per-expert part
-#: names are HF's gate_proj|up_proj|down_proj (OLMoE, Qwen3-MoE, DeepSeek) or Mixtral's w1|w3|w2 (`ckpt_names=("w1","w2","w3")`):
-#: whichever the checkpoint carries for expert 0 is the composition's source set; neither -> refused by name.
-EXPERTS = {"w13": ("gate_proj", "up_proj"), "w2": ("down_proj",)}
-EXPERTS_MIXTRAL = {"w13": ("w1", "w3"), "w2": ("w2",)}
-#: the served stacks live on the FusedMoE layer (`<container>.experts.w13_weight`, vLLM <= 0.11) or
-#: on its RoutedExperts submodule (`<container>.experts.routed_experts.w13_weight`, vLLM 0.28 on the pods): the OPTIONAL `routed_experts`
-#: segment is the only extra segment accepted; the container (`mlp.experts`, Mixtral's `block_sparse_moe.experts`) is where the
-#: checkpoint's `<container>.<e>.<part>.<suffix>` tensors live.  Any other segment: no composition rule (refused by name, never guessed).
-EXPERTS_RE = re.compile(r"^(.*\.experts)(?:\.(routed_experts))?\.(w13|w2)_(\w+)$")
-#: Program weight fields that are engine constants, not checkpoint tensors (listed by name; not pinned by this module): the attention
-#: kv-cache scales (f32 1.0 without kv quantization) and the rotary cos/sin table (a function of config.json: rope_theta, rope_scaling,
-#: head_dim, max_position_embeddings -- derivable, v2).  Their effect on the served values is under the Match oracle (form B).
-#: a QUANTIZED checkpoint's attention layers also carry vLLM's loader placeholders `attn.q_scale / k_scale /
-#: v_scale / prob_scale` (no underscore): `Fp8KVCacheMethod.create_weights` -> `KVCacheScaleParameter()` = the f32 sentinel -1.0,
-#: "overwritten when loading weights" IF the checkpoint ships kv scales (then `compose` finds them 1:1: the `not ck.has(live)` guard),
-#: created by `torch.tensor(-1.0)` at the MODEL dtype (bf16 -> `Value<16>` in the Program; F-fp8-PIN2: the measured Qwen3-4B-FP8 B1/B8
-#: Programs declare them Value<16>, `_k_scale` Value<32>) -- pinned as -1.0 in the declared width,
-#: otherwise left at the sentinel; with the kv cache unquantized (kv_cache_dtype auto) `process_weights_after_loading` enforces
-#: `_k_scale = _v_scale = 1.0` and never touches the placeholders, which no kernel reads (Qwen3-4B-FP8 B1: 144 such fields, 723 - 435
-#: checkpoint - 144 `_x_scale`).  Pinned EXACTLY as the sentinel under kv_cache_dtype auto (a served value other than -1.0 means the
-#: loader wrote it from somewhere that is not the pinned checkpoint); any other kv_cache_dtype: unpinned by name (the scale is then live).
-#: vLLM d9105ea80's `BaseKVCacheMethod.process_weights_after_loading` ends every branch with `del layer.k_scale /
-#: v_scale / q_scale / prob_scale` (kv_cache.py:106-109, 209-212; the early-return branch asserts they are already gone): the placeholders
-#: exist only between `create_weights` and the end of weight loading, so the served model has NO parameter to compare the record's
-#: pinned sentinel against.  #74 (Qwen3-4B-FP8 B8, H100): 579/579 compared equal, 144 placeholders "not found among the served
-#: parameters", 3/3 pairs FAIL with every other check green.  A deleted parameter cannot reach a served value; `check_served` therefore
-#: reports a placeholder field absent from the served model as `placeholders_deleted` (by name, counted, in the result), not as
-#: `missing` -- only for fields matching PLACEHOLDER_RE, only under the record's kv_cache_dtype=auto assumption, and only when the
-#: `_x_scale` the kernels do read is itself among the compared fields.  A placeholder that IS served is compared exactly as before.
-ENGINE_CONSTANT_RE = re.compile(r"([._]attn\._?(k|v|q|prob)_scale|\.rotary_emb\.cos_sin_cache)$")
-PLACEHOLDER_RE = re.compile(r"^(.*\.attn\.)(k|v|q|prob)_scale$")
-
-
-# -------------------------------------------------------------------------------------------------------------------- composition
-
-def _f32_to_bf16_bits(x: np.ndarray) -> np.ndarray:
-    """Round-to-nearest-even f32 -> bf16 (the implementation's `.to(torch.bfloat16)`), as u16 words; NaN keeps a quiet payload."""
-    u = np.ascontiguousarray(x, dtype=np.float32).view(np.uint32)
-    nan = (u & 0x7F800000) == 0x7F800000
-    nan &= (u & 0x007FFFFF) != 0
-    lsb = (u >> 16) & 1
-    r = ((u + 0x7FFF + lsb) >> 16).astype(np.uint16)
-    r = np.where(nan, ((u >> 16) | 0x0040).astype(np.uint16), r)
-    return r
-
-
-def to_served(arr: np.ndarray, src_dtype: str, bits: int) -> tuple[np.ndarray, str | None]:
-    """The checkpoint tensor in the served element width; (array of raw words, cast note | None)."""
-    if bits == 16:
-        if src_dtype == "BF16":
-            return arr.view(np.uint16), None
-        if src_dtype in ("F16", "F32", "F64"):
-            return _f32_to_bf16_bits(arr.astype(np.float32)), f"{src_dtype}->bf16 (RNE)"
-    if bits == 32:
-        if src_dtype == "F32":
-            return arr.view(np.uint32), None
-        if src_dtype in ("BF16",):
-            return (arr.view(np.uint16).astype(np.uint32) << 16), "bf16->f32 (exact)"
-        if src_dtype in ("F16", "F64"):
-            return arr.astype(np.float32).view(np.uint32), f"{src_dtype}->f32"
-    if bits == 32 and src_dtype == "I64":
-        if arr.size and (arr.min() < -(1 << 31) or arr.max() >= 1 << 31):
-            raise ValueError("an I64 checkpoint tensor served as i32 holds a value outside int32")
-        return arr.astype(np.int32).view(np.uint32), "i64->i32 (every value in range)"
-    if bits == 8 and src_dtype in ("F8_E4M3", "F8_E5M2", "F8_E8M0", "I8", "U8", "BOOL"):
-        return arr.view(np.uint8), None
-    if bits == 64 and src_dtype in ("I64", "F64"):
-        return arr.view(np.uint64), None
-    raise ValueError(f"no served-width rule for checkpoint dtype {src_dtype} -> Value<{bits}>")
-
-
 def strip_prefix(field: str, prefix: str) -> str:
     return field[len(prefix):] if prefix and field.startswith(prefix) else field
-
-
-def _rank_rows(srcs: list[str], served, ck: CheckpointIndex, world: int, rank: int) -> list[np.ndarray]:
-    """The rank's dim-0 slice of each whole checkpoint tensor `srcs`, read as its row range.  A source whose rows do not split by the
-    world is refused after the whole read of every source, the order in which composing from whole tensors meets the two faults."""
-    rows, err = [], None
-    for s in srcs:
-        try:
-            rows.append(rows_of(ck.tensors[s][2][0], world, rank))
-        except ValueError as e:
-            err = err or e
-    if err is not None:
-        for s in srcs:
-            served(s)
-        raise err
-    return [served(s, rows=r) for s, r in zip(srcs, rows)]
-
-
-def _compose_experts(name: str, m: re.Match, shape: list[int], ck: CheckpointIndex, world: int, rank: int, note: dict[str, Any],
-                     served) -> tuple[np.ndarray, dict[str, Any]]:
-    """The fused-MoE stack `name` (EXPERTS_RE match `m`): per expert its checkpoint parts, on the rank's scale grid, the rank's slice."""
-    container, routed, which, suffix = m.group(1), m.group(2), m.group(3), m.group(4)
-    e_n = int(shape[0]) if shape else 0
-    # the checkpoint's per-expert part names, decided by expert 0 (HF gate_proj|up_proj|down_proj, else Mixtral w1|w3|w2)
-    parts_of = next((tbl for tbl in (EXPERTS, EXPERTS_MIXTRAL) if all(ck.has(f"{container}.0.{p}.{suffix}") for p in tbl[which])), None)
-    if parts_of is None and e_n:
-        raise KeyError(f"{name}: no per-expert checkpoint tensors {container}.0.{{{'|'.join(EXPERTS[which] + EXPERTS_MIXTRAL[which])}}}.{suffix} "
-                       f"(fused experts {which}: the composition needs expert 0's parts under the container the served name declares)")
-    parts_of = parts_of or EXPERTS
-    note["rule"] = (f"fused experts {which}{' (vLLM RoutedExperts submodule)' if routed else ''} <- " + "|".join(parts_of[which])
-                    + f" per expert ({container}.<e>.<part>.{suffix})")
-    # w13's rank share is a row range of each part (block scales excepted: they move onto the rank's grid first); w2's is a column
-    # range, which touches every page of the tensor, so it is read whole
-    by_rows = world > 1 and which == "w13" and suffix != "weight_scale_inv"
-    stack = []
-    for e in range(e_n):
-        srcs = [f"{container}.{e}.{p}.{suffix}" for p in parts_of[which]]
-        if not all(ck.has(s) for s in srcs):
-            raise KeyError(f"{name}: expert {e} sources missing: {[s for s in srcs if not ck.has(s)]}")
-        if by_rows and all(ck.tensors[s][2] for s in srcs):
-            ps = _rank_rows(srcs, served, ck, world, rank)
-        else:
-            ps = fp8_moe_scales.on_rank_grid([served(s) for s in srcs], srcs, which, ck, world, note)
-            if world > 1:
-                ps = [_shard_dim0(p, world, rank) for p in ps] if which == "w13" else [_shard_dim(p, 1, world, rank) for p in ps]
-        if world > 1:
-            note["shard"] = f"rank {rank}/{world} ({'per-part dim 0' if which == 'w13' else 'dim 1'})"
-        stack.append(np.concatenate(ps, axis=0) if len(ps) > 1 else ps[0])
-    out = np.stack(stack, axis=0) if stack else np.zeros(shape, dtype=np.uint16)
-    if list(out.shape) != list(shape):
-        raise ValueError(f"{name}: composed shape {list(out.shape)} != Program shape {shape}")
-    return np.ascontiguousarray(out), note
-
-
-def compose(name: str, shape: list[int], bits: int, ck: CheckpointIndex, *, world: int = 1, rank: int = 0) -> tuple[np.ndarray, dict[str, Any]]:
-    """The served model's tensor `name` (wrapper prefix already stripped) of `shape` / `bits`, composed from the checkpoint.
-    Returns (raw words row-major, note {sources, rule, cast, shard})."""
-    note: dict[str, Any] = {"sources": [], "rule": None, "cast": None, "shard": None}
-    tied = bool(ck.config.get("tie_word_embeddings", False))
-
-    def served(src: str, rows: tuple[int, int] | None = None) -> np.ndarray:
-        a, cast = fp8_ue8m0.served_words(ck, src, bits, rows) or to_served(ck.array(src, rows=rows), ck.dtype(src), bits)
-        if cast:
-            note["cast"] = cast
-        note["sources"].append(src)
-        return a
-
-    parts: list[np.ndarray] = []
-    whole: list[str] = []               # the parts are these whole checkpoint tensors, read below (a dim-0 shard: the rank's rows only)
-    if ck.has(name):
-        note["rule"] = "1:1"
-        # a checkpoint that stores the fused tensor itself (Phi-3): the rank shard is PER PART, so split it by the config's geometry
-        fused = next((k for k in FUSED if re.search(r"\." + re.escape(k) + r"\.\w+$", name)), None) if world > 1 else None
-        if not fused:
-            whole = [name]
-        elif fused.endswith("qkv_proj") or fused == "self_attn.wqkv":
-            parts = [served(name)]
-            c = ck.config
-            hq, hkv = int(c.get("num_attention_heads", 0)), int(c.get("num_key_value_heads") or c.get("num_attention_heads", 0))
-            d = int(c.get("head_dim") or (int(c.get("hidden_size", 0)) // max(hq, 1)))
-            if hq and d and parts[0].shape[0] == (hq + 2 * hkv) * d:
-                a = parts[0]
-                parts = [a[:hq * d], a[hq * d:(hq + hkv) * d], a[(hq + hkv) * d:]]
-                note["rule"] = "1:1 fused tensor split q|k|v by config geometry"
-        else:                                                                        # gate_up: two equal halves
-            a = served(name)
-            parts = [a[: a.shape[0] // 2], a[a.shape[0] // 2:]]
-            note["rule"] = "1:1 fused tensor split gate|up"
-    elif name == "lm_head.weight" and tied and ck.has("model.embed_tokens.weight"):
-        note["rule"] = "tied lm_head <- model.embed_tokens.weight"
-        whole = ["model.embed_tokens.weight"]
-    elif name == "normalizer" or name.endswith(".normalizer"):
-        # Gemma-2's embedding normalizer (on the real Gemma-2-2B Program, the ONE unresolved field of 316): a
-        # non-persistent 0-d buffer `torch.tensor(hidden_size ** 0.5)` created at the served dtype in vLLM's Gemma2Model.__init__ -- no
-        # checkpoint tensor, a function of config.json's hidden_size alone.  It is an analytic table like the rotary table
-        # (`acquire.plan.analytic_table_of_buffer`), and its value is pinned EXACTLY: the Python float sqrt(H) rounded once
-        # (nearest-even) to bf16 (analytic.normalizer_word).  Composed here from config.json, so the served buffer is compared like a
-        # weight, not left unpinned; any other declared width / shape has no rule -> unresolved (fail closed).
-        if bits != 16 or list(shape) not in ([], [1]):
-            raise ValueError(f"{name}: the config-derived normalizer is one bf16 word; the Program declares shape {list(shape)} x Value<{bits}>")
-        hidden = int(ck.config.get("hidden_size") or 0)
-        if hidden <= 0:
-            raise KeyError(f"{name}: config.json carries no hidden_size to derive the normalizer from")
-        from verity_vllm.program.model import normalizer_word
-        note["rule"] = f"config-derived: bf16(sqrt(hidden_size={hidden})) rounded once RNE (root_policy analytic-table 'normalizer', analytic.normalizer_word)"
-        note["sources"].append("config.json:hidden_size")
-        out = np.array(normalizer_word(hidden), dtype=np.uint16).reshape(shape)
-        return np.ascontiguousarray(out), note                  # replicated on every TP rank: no shard rule applies
-    else:
-        m = EXPERTS_RE.match(name)
-        if m:
-            return _compose_experts(name, m, shape, ck, world, rank, note, served)
-        for fused, srcs in (*FUSED.items(), *FUSED_W13.items()):
-            m2 = re.match(r"^(.*)\." + re.escape(fused) + r"\.(\w+)$", name)
-            names = [f"{m2.group(1)}.{s}.{m2.group(2)}" for s in srcs] if m2 else []
-            if names and all(ck.has(s) for s in names):
-                note["rule"] = f"fused {fused} <- " + "|".join(srcs) + " (dim 0)"
-                whole = names
-                break
-    shapes = [ck.tensors[s][2] for s in whole]
-    full = [int(sum(s[0] for s in shapes))] + list(shapes[0][1:]) if shapes and all(shapes) else None
-    # a DeepGEMM grouped einsum weight (`is_bmm`: DeepSeek-V4's wo_a and its scales) is the rank's g*r rows viewed as [g, r, ...]
-    rows = [shape[0] * shape[1], *shape[2:]] if full and len(shape) == len(full) + 1 else list(shape)
-    if world > 1 and full and not kv_heads_replicated(name, rows, shapes, ck.config, world) and rows != full and len(rows) >= 1 and rows[0] * world == full[0] \
-            and rows[1:] == full[1:]:
-        ps = _rank_rows(whole, served, ck, world, rank)
-        out = (np.concatenate(ps, axis=0) if len(ps) > 1 else ps[0]).reshape(shape)
-        note["shard"] = f"rank {rank}/{world}: per-part dim-0 slice" + (f" viewed as {list(shape)}" if rows != list(shape) else "")
-        if list(out.shape) != list(shape):
-            raise ValueError(f"{name}: composed shape {list(out.shape)} != Program shape {shape}")
-        return np.ascontiguousarray(out), note
-    parts = parts or [served(s) for s in whole]
-    if not parts:
-        raise KeyError(f"{name}: no checkpoint tensor and no composition rule")
-    kv = replicated_qkv(name, shape, parts, ck.config, world, rank)
-    if kv:
-        parts, note["shard"] = kv
-    elif world > 1:
-        full = [int(sum(p.shape[0] for p in parts))] + list(parts[0].shape[1:])
-        if list(shape) == full:
-            note["shard"] = f"rank {rank}/{world}: replicated"
-        elif len(shape) >= 1 and shape[0] * world == full[0] and list(shape[1:]) == full[1:]:
-            parts = [_shard_dim0(p, world, rank) for p in parts]
-            note["shard"] = f"rank {rank}/{world}: per-part dim-0 slice"
-        elif len(shape) >= 2 and shape[1] * world == full[1] and shape[0] == full[0]:
-            parts = [_shard_dim(p, 1, world, rank) for p in parts]
-            note["shard"] = f"rank {rank}/{world}: dim-1 slice"
-        else:
-            raise ValueError(f"{name}: Program shape {shape} is not a rank {rank}/{world} shard of the composed {full}")
-    out = np.concatenate(parts, axis=0) if len(parts) > 1 else parts[0]
-    if list(out.shape) == rows != list(shape):
-        out = out.reshape(shape)
-    if list(out.shape) != list(shape):
-        raise ValueError(f"{name}: composed shape {list(out.shape)} != Program shape {shape}")
-    return np.ascontiguousarray(out), note
 
 
 def rank_composer(*, checkpoint_dir: str, checkpoints_manifest: str | None = None, model: str | None = None, world: int = 1,
@@ -336,124 +122,6 @@ def program_weight_fields(inst: dict[str, Any]) -> list[tuple[str, list[int], in
     if not wparam or not str(wparam).startswith("{"):
         return []
     return [(name, shape, bits) for name, _count, shape, bits in parse_struct(str(wparam))]
-
-
-ENGINE_KV_SCALE_RE = re.compile(r"[._]attn\._(k|v|q|prob)_scale$")
-ENGINE_KV_PLACEHOLDER_RE = re.compile(r"\.attn\.(k|v|q|prob)_scale$")       # [F-fp8-PIN1] Fp8KVCacheMethod loader placeholders
-ENGINE_ROTARY_RE = re.compile(r"\.rotary_emb\.cos_sin_cache$")
-
-
-def kv_scale_remap_sources(served_name: str) -> list[str]:
-    """The checkpoint names vLLM's `weight_utils.maybe_remap_kv_scale_name` renames onto a served
-    `<layer>.attn.<x>_scale` (x in k, v, q, prob) at load: kv_cache_scheme checkpoints (`<layer>.<x>_scale`, `<layer>.<x>_proj.<x>_scale`),
-    modelopt (`<layer>.<x>_proj.output_scale`), the legacy fused `<layer>.kv_scale` (k and v).  `<layer>` = the served name up to `.attn.`.
-    Ordered; the caller pins 1:1 from the ONE source present and refuses two.  `attn._<x>_scale` (an engine constant) -> []."""
-    m = re.search(r"^(.*)\.attn\.(k|v|q|prob)_scale$", served_name)
-    if not m:
-        return []
-    layer, x = m.group(1), m.group(2)
-    out = [f"{layer}.{x}_scale", f"{layer}.{x}_proj.{x}_scale", f"{layer}.{x}_proj.output_scale"]
-    if x in ("k", "v"):
-        out.append(f"{layer}.kv_scale")
-    return out
-
-
-def _engine_constant(field: str, live: str, shape: list[int], bits: int, ck: CheckpointIndex, kv_cache_dtype: str) -> dict[str, Any] | None:
-    """The engine constants the Program declares as weights but no checkpoint carries, pinned from
-    config.json / the engine's declared configuration instead of left unpinned:
-      * attention kv-cache scales `attn._{k,v,q,prob}_scale`: without kv-cache quantization (kv_cache_dtype auto) vLLM creates them as
-        f32 1.0 -- pinned EXACTLY (digest of the f32 word); any other kv_cache_dtype has its scales in the checkpoint (then `compose`
-        finds them) or is left unpinned BY NAME with the dtype in the why (never assumed).
-      * the rotary table `rotary_emb.cos_sin_cache` [MAX_POS, ROT] bf16: an analytic table (`acquire.plan.analytic_table_of_buffer`,
-        checked by analytic.check_cos_sin, gate I9) -- the served words must round from values within the fp32
-        pipeline's error bound of the analytic function of config.json (theta, D/ROT, MAX_POS, rope_scaling); there is no byte digest
-        (CUDA libm != numpy libm at the last bf16 ulp), so the field is pinned 'analytic' and `check` runs the bound on the served
-        words.  A rope_scaling type without an analytic table stays unpinned by name.
-    Returns the field entry, or None when the field is not an engine constant."""
-    base = {"field": field, "served_name": live, "shape": shape, "bits": bits}
-    if ENGINE_KV_SCALE_RE.search(field):
-        kvd = str(kv_cache_dtype or "auto")
-        if kvd != "auto":
-            return base | {"digest": None, "pinned": False, "why": f"kv-cache scale under kv_cache_dtype={kvd} without a checkpoint tensor (no rule; not assumed 1.0)"}
-        if bits != 32 or list(shape) not in ([], [1]):
-            return base | {"digest": None, "pinned": False, "why": f"kv-cache scale declared {shape} x Value<{bits}>: the engine constant is one f32 word"}
-        arr = np.ones(shape or [], dtype=np.float32)
-        return base | {"digest": hashlib.sha256(arr.tobytes()).hexdigest(), "pinned": True, "sources": ["engine:kv_cache_dtype=auto"],
-                       "rule": "engine constant: kv-cache scale == f32 1.0 (kv_cache_dtype auto -- no kv quantization; vLLM Attention.__init__)"}
-    if ENGINE_KV_PLACEHOLDER_RE.search(field):
-        # The remap-aware compose: BEFORE the placeholder rule, look the checkpoint up under
-        # vLLM's REMAP SOURCES for this layer's scale (weight_utils.maybe_remap_kv_scale_name renames them to attn.<x>_scale at load): a
-        # shipped scale is a checkpoint tensor, written by the loader and read by the kernel -- pinned 1:1 from its source as one f32 word
-        # under ANY kv_cache_dtype; two sources for one scale, or a source that is not one word, -> unresolved (fail closed).  Only a
-        # checkpoint with NO source for this scale reaches the placeholder rule below (the sentinel, which such a checkpoint would fail by
-        # name anyway).  The exact-name `ck.has(served)` case never arrives here (compose pins it first).
-        srcs = kv_scale_remap_sources(live)
-        found = [n for n in srcs if ck.has(n)]
-        if found:
-            if len(found) > 1:
-                raise ValueError(f"{field}: {len(found)} checkpoint kv-scale sources remap onto it ({found}): ambiguous, unresolved")
-            src = found[0]
-            # [F-fp8-PIN2 on the remap branch] the loader copies the checkpoint scale INTO the placeholder Parameter, which was created at the
-            # model dtype (torch.tensor(-1.0), no dtype) -- so the served word is the scale cast to the DECLARED width (bf16 on a bf16 model,
-            # RNE by copy_; f32 where the Program declares Value<32>); composed the same way; another width has no rule -> unresolved
-            if int(bits) not in (16, 32) or list(shape) not in ([], [1]):
-                raise ValueError(f"{field}: declared {shape} x Value<{bits}> but the checkpoint kv scale {src} is one bf16/f32 word: unresolved")
-            a = ck.array(src)
-            if a.size != 1:
-                raise ValueError(f"{field}: checkpoint kv scale {src} has {a.size} elements, the served scale is one word: unresolved")
-            words, cast = to_served(a.reshape(shape or []), ck.dtype(src), int(bits))
-            return base | {"digest": hashlib.sha256(np.ascontiguousarray(words).tobytes()).hexdigest(), "pinned": True, "sources": [src],
-                           "rule": f"kv scale (remapped from checkpoint {src} -> {live}; vLLM maybe_remap_kv_scale_name; one word in the declared Value<{bits}>)",
-                           **({"cast": cast} if cast else {})}
-        # vLLM Fp8KVCacheMethod.create_weights: `KVCacheScaleParameter()` = `torch.tensor(-1.0)` with NO
-        # dtype -> the sentinel is created at the model's default dtype (bf16 under `set_default_torch_dtype(model dtype)`: the served
-        # Qwen3-4B-FP8 word is bf16 0xBF80, and the Program declares the field `Value<16>`; `_k_scale` is an explicit f32 1.0, `Value<32>`).
-        # Pinned as -1.0 IN THE DECLARED WIDTH (one word, shape [] or [1]); a declared width other than 16/32 has no rule -> unpinned by name.
-        # With no kv scale in the checkpoint and the kv cache unquantized it is never written after construction and no kernel reads it.
-        kvd = str(kv_cache_dtype or "auto")
-        if kvd != "auto":
-            return base | {"digest": None, "pinned": False, "why": f"kv-scale loader placeholder under kv_cache_dtype={kvd} without a checkpoint tensor (no rule; not assumed)"}
-        if int(bits) not in (16, 32) or list(shape) not in ([], [1]):
-            return base | {"digest": None, "pinned": False, "why": f"kv-scale loader placeholder declared {shape} x Value<{bits}>: KVCacheScaleParameter is one bf16/f32 word"}
-        word = np.array([0xBF80], dtype=np.uint16) if int(bits) == 16 else np.array([-1.0], dtype=np.float32)      # -1.0 in the declared width
-        arr = np.broadcast_to(word, (1,)).astype(word.dtype)
-        wdt = "bf16" if int(bits) == 16 else "f32"
-        return base | {"digest": hashlib.sha256(arr.tobytes()).hexdigest(), "pinned": True,
-                       "sources": [f"engine:Fp8KVCacheMethod.create_weights (KVCacheScaleParameter torch.tensor(-1.0) at the model dtype -> {wdt}), kv_cache_dtype=auto"],
-                       "rule": f"engine constant: Fp8KVCacheMethod loader placeholder == {wdt} -1.0 sentinel in the declared width (no kv scale in the checkpoint; kv_cache_dtype auto -- read by no kernel; F-fp8-PIN1/PIN2)"}
-    if ENGINE_ROTARY_RE.search(field):
-        from verity_vllm.program import model as analytic
-        try:
-            C, _prov = analytic.config_of(ck.config)
-            inv = analytic._inv_freq(C)                      # raises NotImplementedError for a rope_scaling type without a table
-            expected = [int(C["MAX_POS"]), int(analytic.rotary_dim(C))]
-        except NotImplementedError as e:
-            return base | {"digest": None, "pinned": False, "why": f"rotary table: {e}"[:300]}
-        except (KeyError, ValueError, TypeError) as e:
-            return base | {"digest": None, "pinned": False, "why": f"rotary table: config.json lacks the analytic inputs ({e})"[:300]}
-        if bits != 16 or list(shape) != expected:
-            raise ValueError(f"{field}: declared rotary table {shape} x Value<{bits}> != analytic [MAX_POS, ROT] = {expected} x bf16 from config.json")
-        keep = {k: C.get(k) for k in ("family", "H", "NH", "KVH", "D", "ROT", "ROPE_THETA", "MAX_POS", "rope_scaling") if k in C}
-        # the root's key for this field: the EXACT inputs of the analytic function (config.json values, the declared shape) -- never the
-        # fp32 inv_freq bytes numpy computes here (np.power dispatches to SVML on AVX512 hosts: 7 of 32 exponents differ by one ulp
-        # between cp-r1 and cp-a100 -> two roots for one record); inv_freq_sha256 stays on the record as the deriving host's value
-        inputs_key = analytic_key({"table": "cos_sin", "expected_shape": expected, "C": keep})
-        return base | {"digest": None, "pinned": "analytic", "sources": ["config.json:rope_theta,head_dim,max_position_embeddings,rope_scaling"],
-                       "analytic": {"table": "cos_sin", "validator": "analytic.check_cos_sin (root_policy ANALYTIC_TABLES['cos_sin'], gate I9)",
-                                    "expected_shape": expected, "inputs_sha256": inputs_key,
-                                    "inv_freq_sha256": hashlib.sha256(np.ascontiguousarray(inv, dtype=np.float32).tobytes()).hexdigest(),
-                                    "inv_freq_note": "the deriving host's numpy-fp32 inv_freq (host-dependent at the last ulp: not part of the root)",
-                                    "C": keep},
-                       "rule": "engine constant: rotary cos_sin table = analytic function of config.json, served words within the fp32 pipeline's error bound (no byte digest: CUDA libm)"}
-    return None
-
-
-def analytic_key(a: dict[str, Any]) -> str:
-    """The root's key for an analytic field: sha256 of the canonical JSON of its EXACT inputs -- table name, the declared shape, the config.json
-    values C the analytic function reads (schema v2).  Recomputable from any record's `analytic` entry, v1 included (v1 records carry
-    table / expected_shape / C; they keyed the root by the host's inv_freq bytes instead)."""
-    return hashlib.sha256(json.dumps({"table": a.get("table"), "expected_shape": a.get("expected_shape"), "C": a.get("C")},
-                                     sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def root_of_fields(fields: list[dict[str, Any]]) -> str:
