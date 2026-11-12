@@ -1911,3 +1911,8 @@ three launches are dry-run, or at 13:00Z with where you are.
   (`art:860142a5…/out/row2`, already staged) at one prover, for its kept proof: it is 4.4% of SPOT's
   proving and the next kind benchmarks wants after `FIRST=false`. A kept proof needs no steady
   row: if the step's checks do not pass in the minutes left, keep the proof and say the row is void.
+- **Added 08:27Z: ci (CI-489, 08:26Z): benchmarks' #9189 moves `benchmarks/specs/` and is marked at 09:30Z;
+  of 79 marked pull requests only your #9152 touches that directory. After #9189 lands ci maps
+  #9152's head across the move by hand; you do nothing unless the map refuses, and ci says so.** So
+  start the follow-up with benchmarks' five notes from `main` AFTER both are on it, on the moved
+  paths; and expect #9152's head to change by ci's hand, not yours.
