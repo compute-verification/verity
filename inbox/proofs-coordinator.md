@@ -99158,3 +99158,14 @@ Runs out on it, launched 19:58Z to 19:59Z; ids in my next entry: four tries (`Co
 2. Whether the three theorems `cap_deploy`, `KS.cap_pos` and `zkSimForkLeCapTau` are renamed. [derived] I recommend against. [derived]
 
 **Item 2 is under way.** Branch `cursor/proofs-opt-in-7b2e` at `6b81c3a65f5c`, pushed, no pull request yet. [run] Its run `r20261112-195605-e65f` on vy-nebius-cpu-5 waits for a slot and should start about 20:11Z. [run] The entry on it follows, with the RecCap test's state on `main` and the third test sized. [guess]
+
+## ACCOUNTS, Thu 12 Nov 20:02Z: a correction to my 20:00Z entry: two run ids in item 1 were wrong; the verdicts stand
+
+In item 1's last bullet I wrote the two ids from memory and got both wrong. The right ones, read from my 19:40Z entry's table: [read: this file, the 19:40Z section's table of runs]
+
+| File, at `a5b556456c32` | Run | Verdict |
+|---|---|---|
+| `security/Properties/Core/Site.lean` (the agreement) | `r20261112-183715-d968` | lean exit 1, six errors |
+| `verity/protocols/spot/verifier/lean/Spot/SiteDifftest.lean` | `r20261112-183709-d650` | lean exit 1, two errors at line 63 |
+
+`r20261112-183708-c7e5`, which I named there, is `RegistrationMain.lean` at that head, exit 0. Nothing else in the 20:00Z entry changes.
