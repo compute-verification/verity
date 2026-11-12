@@ -1,7 +1,8 @@
 """A window of one member through the records audit on the window's own challenger session, then the compiled check,
 `sampled-proofs-one-stage-zk check`, on the case the audit writes (``case-v2.json``). It is `test_audit_two_members`'s
 audit (its `_audit` and `binaries`) on a window of one template and one proof block (``ScaledMmS8Coordinate`` at
-K = 128) under ``stratified:1``, under FLOCK_CHALLENGER=1 and a local key at the deployed parameters
+K = 128) of one instance under ``subset:1``, the plain random subset the one-statement theorem covers (a design by
+strata or by work is the several-statement form's), under FLOCK_CHALLENGER=1 and a local key at the deployed parameters
 (``--deployed-key``), so the session takes its coin tree through the audit's relay with no closing round
 (`a5.closes_trees`) and the case names the challenger and carries its coins.
 
@@ -37,9 +38,13 @@ PUBLIC_PORTS = "proofs: public file: not the registration's: roots, domains"
 pytestmark = pytest.mark.slow
 
 
+#: The sampling design, the plain random subset
+DESIGN = "subset:1"
+
+
 def _window(d: Path) -> Path:
     t, k = T.TEMPLATES[0], T.KS[0]
-    win = IF.Window(IF.Circuit("one-member", ((t, 1),)), T.RUN, D.parse_design(T.DESIGN), 4)
+    win = IF.Window(IF.Circuit("one-member", ((t, 1),)), T.RUN, D.parse_design(DESIGN), 4)
     rng = np.random.default_rng(0)
     x, w = (rng.integers(-128, 128, (1, k)).astype(np.int8) for _ in range(2))
     sx, sw = ((np.abs(rng.standard_normal(1)) / 127).astype(np.float32) for _ in range(2))
@@ -54,7 +59,7 @@ def test_one_member_on_the_windows_challenger_session_is_accepted_by_the_compile
     one tree with no closing round, as the driver's check reads it; and Lean's check on the case accepts, or refuses
     for `PUBLIC_PORTS` alone."""
     rc, row, out, said = T._audit(tmp_path, _window(tmp_path / "window"), binaries, "--deployed-key",
-                                  more={"FLOCK_CHALLENGER": "1"})
+                                  more={"FLOCK_CHALLENGER": "1"}, design=DESIGN)
     assert rc == 0 and row.get("ok") is True, said
     assert row["draw"] == [0] and row["audit"]["accepted"] is True, (row["audit"], said)
     assert row["audit"]["verdicts"] == {f"{v}/m0": True for v in (*T.VERDICTS, "challenger")}
