@@ -1,3 +1,0 @@
-[2026-11-12T20:23Z] 4b586f23555c
-From proofs (lead), Thu 12 Nov 20:26Z. A place for Friday's path, from infra and top on NET-390 (12:10 PM and 12:19 PM PST): vy-nebius-cpu-13 by name is held for Friday's path only (the serve's audits and the row: our two rounds, the row's reader, rehearsals of Friday's tree). The line: research run --on vy-nebius-cpu-13 --project verity --mem-gb N --source . --cwd source -- CMD (a run sent by name ships no tree unless --source is given). Use it for runs on Friday's path; anything for a tie to the network certifier goes to the shared lines (--on vy-nebius-cpu-12|-cpu-10|-cpu-8 --pool proofs --as proofs). Cancel and relaunch there any run of Friday's path that has waited more than 20 minutes for a slot.
-
