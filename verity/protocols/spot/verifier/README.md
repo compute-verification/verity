@@ -137,7 +137,10 @@ holds of that code (`SamplingDeploy.ksTwo_code`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
 rounds don't move them, and the refusals, interior roots and sessions that one-stage's `SamplingDeploy.ks_masked` takes.
 A bound of S served bits charges a replay block at most F S, F the grain's fan-out (`partition.fanout`; the capped form at N = F),
-1 when every replay block is closed.
+1 when every replay block is closed. S is at least the bits one replay block returns, which the verifier counts from its
+Definition's return (`second_stage.returned_bits`, Lean `SecondStage.returnedBits`: each returned output field of each
+unit on 16-bit words of its own) and a two-stage registration carries (`WindowCommitmentRecord.returned`);
+`plancheck.two` refuses a cap below them.
 Round 2: `second_stage` (Lean `SecondStage`); its `FORM` still refuses two-stage runs. A boundary record may commit a
 step schedule (`schedule`, Lean `Schedule`: its replay blocks as runs of its requests' positions), which round 2
 refuses unless it covers the replay blocks, and each request's positions, in order (`second-schedule`). It refuses an
