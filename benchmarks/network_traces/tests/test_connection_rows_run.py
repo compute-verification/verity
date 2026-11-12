@@ -7,7 +7,10 @@ record isn't the run's; an execution phase that isn't handed has no line; under 
 execution phase has one line, its registration or the network certifier's word that it has no head, the run's last
 included, and the check holds each to the one that is due, also past an execution phase that isn't complete; the
 request words as a schedule flag, a run's kept words tables, which the check holds to the records, and their cost;
-and the cost's load and its measurement at a small schedule."""
+the head's tick as two schedule flags, under which the publisher hands each line back and the network certifier's
+tick writes it: at its due tick, at the first tick a late one is back by, or never, with a note in its place, each
+of which the check holds to the schedule; and the cost's load and its measurement at a small schedule, with the
+heads it counts as late or missed."""
 
 from __future__ import annotations
 
@@ -33,6 +36,11 @@ ENDS = dataclasses.replace(ROWS, lengths=2, content=tuple(c[:2] for c in CLASSES
 #: and with request words, under the response cap they need
 WORDED = dataclasses.replace(ENDS, max_tokens_cap=8, request_words=True)
 T = PLAIN.window
+#: form 2 with a head due 3 buckets after its hand's close and no tick to wait, then one; and the tick each of a
+#: run of four execution phases' lines is due at, the last two handed at the run's last close
+TIMED = dataclasses.replace(ENDS, head_offset=3, head_wait=0)
+PATIENT = dataclasses.replace(TIMED, head_wait=1)
+DUE = [2 * T + 2, 3 * T + 2, 4 * T + 2, 4 * T + 2]
 SERVE = ["serve", "--upstream", "h:1", "--listen", "h:0", "--out", "o", "--key", "k", "--session", "00", "--windows", "1"]
 REHEARSE = ["rehearse", "--fake", "--out", "o", "--ids"]
 SCHEDULE = [x for name in ("cell_bytes", "slots", "delay", "lanes", "queue", "window", "ingress_cells", "ingress_buckets",
@@ -103,6 +111,27 @@ def test_the_request_words_are_a_schedule_flag_rehearse_passes_to_serve():
         with pytest.raises(ValueError, match="a schedule with request words has content rows under the lengths rows' "
                                              "form 2 and a response cap"):
             schedule_of(REHEARSE + SCHEDULE + bad + ["--request-words"])
+
+
+def test_the_heads_tick_is_two_schedule_flags_rehearse_passes_to_serve():
+    """`--head-offset N --head-wait W` with the lengths rows' flags give the schedule its head's tick, another
+    schedule than the one without them and than the one at another W; `rehearse` passes the two to `serve`, which
+    reads the same schedule. One without the other, or the two without lengths rows, is refused by the schedule,
+    which names the field."""
+    pairs = ["--lengths", "2", "--content", *(",".join(map(str, c[:2])) for c in CLASSES)]
+    got = schedule_of(REHEARSE + SCHEDULE + pairs + ["--head-offset", "3", "--head-wait", "0"])
+    assert got == TIMED and (got.head_offset, got.head_wait) == (3, 0)
+    assert crr.flags_of(got) == [*pairs, "--head-offset", "3", "--head-wait", "0"]
+    assert schedule_of(SERVE + SCHEDULE + crr.flags_of(got)) == got
+    patient = schedule_of(REHEARSE + SCHEDULE + pairs + ["--head-offset", "3", "--head-wait", "1"])
+    assert patient == PATIENT and len({ENDS.digest, got.digest, patient.digest}) == 3
+    assert [TIMED.head_tick(w, 4) for w in range(4)] == DUE
+    with pytest.raises(ValueError, match=r"head_wait \(1\) is set and head_offset is not"):
+        schedule_of(REHEARSE + SCHEDULE + pairs + ["--head-wait", "1"])
+    with pytest.raises(ValueError, match=r"head_offset \(3\) is set and head_wait is not"):
+        schedule_of(REHEARSE + SCHEDULE + pairs + ["--head-offset", "3"])
+    with pytest.raises(ValueError, match="a schedule with head_offset has lengths rows"):
+        schedule_of(REHEARSE + SCHEDULE + ["--head-offset", "3", "--head-wait", "0"])
 
 
 def test_a_hand_is_queued_a_slot_stride_an_item_and_kept_whole():
@@ -380,6 +409,120 @@ def test_under_form_2_an_execution_phase_that_isnt_handed_has_the_signed_word_an
     assert not any("connection rows" in p or "no head" in p for p in result["problems"]) and not result["accepted"]
 
 
+def left(out) -> list[dict]:
+    """The lines of the run's `rows.jsonl`, in the order they were written in."""
+    return [json.loads(x) for x in (out / crr.ROWS).read_text().splitlines()]
+
+
+@pytest.mark.parametrize("process", [False, True])
+def test_with_a_head_offset_the_tick_writes_each_execution_phases_line_at_its_due_tick(tmp_path, process):
+    """The six connections under form 2 with a head offset, inline and in the publisher process, which hands each
+    line back in time: the network certifier's tick writes each execution phase's line at the tick the schedule
+    gives it, with the tick, and the run ticks on past its last window until its last two lines have left. Every
+    line is a registration, as without the offset, and no tick is late. The check accepts the run and counts four
+    of four registered, none late and none missed."""
+    out = tmp_path / "run"
+    device, _ = served(out, tmp_path / "key", process=process, params=TIMED)
+    assert device.heads == list(zip(range(4), DUE)) and device.awaited == []
+    assert device.ticks == DUE[-1] + 1 == len(device.lateness) and max(device.lateness) == 0
+    assert [(crr._phase(doc), doc[crr.TICK], "registration" in doc) for doc in left(out)] == \
+        [(w, DUE[w], True) for w in range(4)]
+    assert phases_of(out, TIMED) == [(w, "registration") for w in range(4)]
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    s = result["summary"]["connection_rows"]
+    assert (s["registered"], s["of"]) == (4, 4)
+    assert s["heads"] == {"offset": 3, "wait": 0, "late": [], "missed": []}
+
+
+@pytest.mark.parametrize("wait, at, order", [(1, DUE[0] + 1, [0, 1, 2, 3]), (T + 1, DUE[1] + 1, [1, 0, 2, 3])])
+def test_a_line_back_late_is_written_at_the_first_tick_it_is_back_by_within_the_wait(tmp_path, wait, at, order):
+    """Execution phase 0's line is handed back just before tick `at`, past its due tick and within the schedule's
+    wait: that tick writes it, one tick late at a wait of 1, and after the next execution phase's line at a wait
+    longer than an execution phase. `rows.jsonl` then holds the lines in the order they left, which `read` takes by
+    execution phase, as the salts were kept; the check accepts the run, four of four registered, and names the
+    late one."""
+    out, params = tmp_path / "run", dataclasses.replace(TIMED, head_wait=wait)
+    device, _ = served(out, tmp_path / "key", params=params, back={0: at})
+    ticks = {**dict(enumerate(DUE)), 0: at}
+    assert device.heads == [(w, ticks[w]) for w in order] and max(device.lateness) == 0
+    assert [(crr._phase(doc), doc[crr.TICK]) for doc in left(out)] == [(w, ticks[w]) for w in order]
+    assert phases_of(out, params) == [(w, "registration") for w in range(4)]
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    s = result["summary"]["connection_rows"]
+    assert (s["registered"], s["of"]) == (4, 4)
+    assert s["heads"] == {"offset": 3, "wait": wait, "late": [0], "missed": []}
+
+
+@pytest.mark.parametrize("wait, at", [(0, DUE[1] + 1), (1, DUE[1] + 2), (0, None)])
+def test_a_line_not_back_by_its_last_tick_is_never_written_and_its_execution_phase_has_no_head(tmp_path, wait, at):
+    """Execution phase 1's line is handed back one tick late at a wait of 0, two ticks late at a wait of 1, or
+    never: the network certifier refuses it (`head_back` is False) and no tick writes it. The last tick it could
+    have left at writes the network certifier's note that it missed, in its place, so the execution phase has one
+    line, one blob of salts and no head; the other lines leave at their due ticks. The check accepts the run,
+    counts three of four registered and names the one that missed."""
+    out, params = tmp_path / "run", dataclasses.replace(TIMED, head_wait=wait)
+    device, _ = served(out, tmp_path / "key", params=params, back={1: at})
+    assert device.heads == [(0, DUE[0]), (1, None), (2, DUE[2]), (3, DUE[3])] and device.awaited == []
+    lines = left(out)
+    assert lines[1] == {crr.MISSED: [ws.LINK, "egress", 1], crr.TICK: DUE[1] + wait}
+    assert [doc[crr.TICK] for doc in lines] == [DUE[0], DUE[1] + wait, DUE[2], DUE[3]]
+    kept = crr.read(out, params)
+    assert [crr._phase(doc) for doc, _ in kept] == [0, 1, 2, 3] and kept[1][1] == {}
+    assert len(ws.ar.read_blobs(out / crr.SALTS)) == 4
+    result = ws.check(out)
+    assert result["accepted"], result["problems"]
+    s = result["summary"]["connection_rows"]
+    assert (s["registered"], s["of"]) == (3, 4)
+    assert s["heads"] == {"offset": 3, "wait": wait, "late": [], "missed": [1]}
+
+
+def test_the_check_holds_each_line_to_its_tick_and_only_a_schedule_with_a_head_offset_hands_lines_back(tmp_path):
+    """A run at a wait of 1 whose lines all left at their due ticks, its lines changed: the check refuses a line
+    that left before its due tick, one past the wait, one without a tick, and a note that a line missed at a tick
+    before its last, each by its execution phase. In a schedule without a head offset the note stands for no
+    line: the execution phase isn't registered. The keeper hands lines back in a schedule with a head offset
+    and in no other, and so does the publisher process."""
+    out = tmp_path / "run"
+    served(out, tmp_path / "key", params=PATIENT)
+
+    def edited(run, change) -> list[str]:
+        def edit() -> None:
+            lines = left(run)
+            change(lines)
+            (run / crr.ROWS).write_text("".join(json.dumps(x) + "\n" for x in lines))
+
+        return [p for p in refused(run, edit) if "execution phase" in p]
+
+    assert edited(out, lambda lines: None) == []
+    left_at = "execution phase {}'s line left at tick {}, and it is due at tick {} or within the 1 after it"
+    assert edited(out, lambda lines: lines[0].update(tick=DUE[0] - 1)) == [left_at.format(0, DUE[0] - 1, DUE[0])]
+    assert edited(out, lambda lines: lines[1].update(tick=DUE[1] + 2)) == [left_at.format(1, DUE[1] + 2, DUE[1])]
+    assert edited(out, lambda lines: lines[3].pop("tick")) == [left_at.format(3, None, DUE[3])]
+    note = {crr.MISSED: [ws.LINK, "egress", 2]}
+    assert edited(out, lambda lines: lines.__setitem__(2, note | {crr.TICK: DUE[2]})) == \
+        [f"execution phase 2's line is marked missed at tick {DUE[2]}, before its last, {DUE[2] + 1}"]
+    assert edited(out, lambda lines: lines.__setitem__(2, note | {crr.TICK: DUE[2] + 1})) == []
+    plain = tmp_path / "plain"
+    served(plain, tmp_path / "key-2", params=ENDS)
+    assert edited(plain, lambda lines: lines.__setitem__(2, note | {crr.TICK: DUE[2]})) == \
+        ["execution phase 2's connection rows aren't registered"]
+    for params, back in ((TIMED, None), (ENDS, lambda window, line: None)):
+        with pytest.raises(ValueError, match="in a schedule with a head offset, and in no other, the network "
+                                             "certifier's tick writes each execution phase's line"):
+            crr.Keeper(tmp_path, None, params, ws.LINK, back=back)
+    import warden_serve  # by name, so that the spawned process finds its functions
+
+    ws.cs.load_key(tmp_path / "key-3", 5)
+    publisher = warden_serve.PublisherProcess(tmp_path, tmp_path / "key-3", bytes(32), ENDS)
+    try:
+        with pytest.raises(ValueError, match="sends lines back in a schedule with a head offset, to one taker"):
+            publisher.heads(lambda window, line: None)
+    finally:
+        publisher.close()
+
+
 def test_under_form_2_the_check_holds_each_execution_phase_to_the_one_that_is_due(tmp_path):
     """The run above, its lines changed: the check refuses an execution phase with neither a head nor the word, one
     with a head where the word is due, one with the word where a head is due, one with two lines, a word signed for
@@ -589,6 +732,7 @@ def test_the_costs_load_is_the_classes_rows_or_what_the_grids_carry_and_its_clos
     assert got["handed_bytes"] == sum(size + 4 * n for size, n in rows)
     assert {got[k]["n"] for k in ("hand_ms", "pickle_ms", "pickle_longest_item_ms", "build_ms", "commit_ms",
                                   "sign_ms")} == {2}
+    assert "heads" not in got
     out = tmp_path / "cost.json"
     assert crr.main(["cost", "--out", str(out), "--classes", "4,4,2", "128,8,3", "--load", "rows", "--phases", "1",
                      "--height", "4", *SMALL_COST]) == 0
@@ -672,3 +816,27 @@ def test_the_cost_with_request_words_hands_canonical_id_requests_and_lays_each_c
     with pytest.raises(ValueError, match="a schedule with request words has content rows under the lengths rows' "
                                          "form 2 and a response cap"):
         crr.costed(crr.parser().parse_args(["cost", "--out", "x", "--classes", "4,4,2", *SMALL_COST, "--request-words"]))
+
+
+def test_the_cost_with_a_head_offset_times_each_line_back_and_counts_the_heads_that_missed(tmp_path):
+    """`cost --head-offset N --head-wait W` measures the schedule with that head's tick: the publisher process
+    hands each execution phase's line back, the cost times it from its hand, and `heads` counts, of the execution
+    phases it ran, those back within the wait past N buckets and those later still. At a wait of 0 none is late: a
+    line is back by its tick or it missed, and none missed exactly where the least offset the run would have needed
+    is at most N. The other figures are measured as without the flags, once an execution phase."""
+    argv = ["--lengths", "2", "--classes", "4,4", "128,8", *SMALL_COST]
+    timed = crr.costed(crr.parser().parse_args(["cost", "--out", "x", *argv, "--head-offset", "7", "--head-wait", "0"]))
+    plain = crr.costed(crr.parser().parse_args(["cost", "--out", "x", *argv]))
+    assert timed == dataclasses.replace(plain, head_offset=7, head_wait=0)
+    out = tmp_path / "cost.json"
+    assert crr.main(["cost", "--out", str(out), *argv, "--head-offset", "7", "--head-wait", "0", "--load", "rows",
+                     "--phases", "3", "--height", "4"]) == 0
+    got = json.loads(out.read_text())
+    heads = got["heads"]
+    assert got["parameters"] == timed.digest.hex() != plain.digest.hex()
+    assert {k: heads[k] for k in ("offset", "wait", "bucket_ms", "of", "late")} == \
+        {"offset": 7, "wait": 0, "bucket_ms": 100, "of": 3, "late": 0}
+    assert heads["back_ms"]["n"] == 3 and 0 <= heads["missed"] <= 3 and heads["least_offset"] >= 1
+    assert (heads["missed"] == 0) == (heads["least_offset"] <= 7)
+    assert {got[k]["n"] for k in ("hand_ms", "pickle_ms", "pickle_longest_item_ms", "build_ms", "commit_ms",
+                                  "sign_ms")} == {3}
