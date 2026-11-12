@@ -52,6 +52,7 @@ from verity_vllm.observe.fold.patterns.int8 import (
     Int8RowQuant,
     Int8ScaledMm,
 )
+from verity_vllm.observe.fold.profiles.kernel_allowlist import KERNEL_ALLOWLIST
 from verity_vllm.observe.fold.resolver import Profile
 from verity_vllm.program.frontend.target_profile import DEFAULT_TARGET
 
@@ -282,10 +283,6 @@ def make_patterns(C: dict[str, Any]) -> list:
         TransparentAten(),
         TransparentTritonMetadata(),
     ]
-
-
-# the census allowlist is PROTECTED (verity_vllm/properties/kernel_allowlist.py); profiles only reference it
-from verity_vllm.properties.kernel_allowlist import KERNEL_ALLOWLIST  # noqa: E402
 
 
 def build_profile(config: dict[str, Any], *, profile_id: str, case: str, model_note: str = "") -> Profile:
