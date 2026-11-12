@@ -61,6 +61,11 @@ A move lands alone, as one commit per map on the commit it was made on. Its lead
 3. opens the move's PR from the branch, naming in its body the command `stage.py` printed for each commit, `verity check
    move PARENT COMMIT` (`move_check.py`, which exits 0 on a pure move, 1 naming what isn't).
 
+A move that makes or removes a directory an index lists (`benchmarks/README.md`, which `tests/test_benchmarks_index.py`
+holds to one row for each directory) carries the index's row as a second commit of its PR, by hand and changing the index
+alone, since no map adds a line. The PR's body says so first, and its reviewer certifies the first commit and reads the
+second.
+
 Over the whole tree `rename.py` and `move_check.py` each run for minutes, so the lead stages on a node, from a checkout at
 the window's base. The node's clone can't push and its git has no identity (`stage.py` refuses before running), so the
 run names one and bundles the branch into its outputs, and the lead pushes it from the checkout:
