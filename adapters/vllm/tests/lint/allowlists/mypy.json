@@ -9,12 +9,8 @@
   },
   "entries": [
     {"file": "tests/acquire/test_compiled_source.py", "kind": "attr-defined", "symbol": "test_a_lone_requests_replayed_kernels_are_drained_under_the_geometry_key", "detail": ""},
-    {"file": "tests/acquire/test_dsv4_moe_source.py", "kind": "attr-defined", "symbol": "test_a_launch_with_the_router_weight_on_its_input_is_refused", "detail": ""},
-    {"file": "tests/acquire/test_dsv4_moe_source.py", "kind": "attr-defined", "symbol": "test_a_scored_router_call_that_dsv4_topk_refuses_is_not_bound", "detail": ""},
     {"file": "tests/acquire/test_gate.py", "kind": "name-defined", "symbol": "Layer", "detail": ""},
     {"file": "tests/acquire/test_gate.py", "kind": "name-defined", "symbol": "Model", "detail": ""},
-    {"file": "tests/acquire/test_scale_products_source.py", "kind": "assignment", "symbol": "test_the_source_commits_only_inside_the_site_during_a_step", "detail": ""},
-    {"file": "tests/acquire/test_scale_products_source.py", "kind": "attr-defined", "symbol": "test_the_source_commits_only_inside_the_site_during_a_step", "detail": ""},
     {"file": "tests/check/adversarial.py", "kind": "arg-type", "symbol": "mutate_profile", "detail": ""},
     {"file": "tests/check/test_batch_decomp.py", "kind": "attr-defined", "symbol": "_dag_prog", "detail": "", "count": 8},
     {"file": "tests/check/test_batch_decomp.py", "kind": "attr-defined", "symbol": "_multi_weights_prog", "detail": "", "count": 11},
