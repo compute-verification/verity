@@ -2,19 +2,12 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from dataclasses import replace
-from pathlib import Path
 
+import eps_budget as E
 import pytest
 from verity_machine_model.eps import design, designs, eps, machine
 from verity_machine_model.model import device, devices
-
-spec = importlib.util.spec_from_file_location("pouw_eps_budget", Path(__file__).parents[1] / "eps_budget.py")
-E = importlib.util.module_from_spec(spec)
-sys.modules["pouw_eps_budget"] = E
-spec.loader.exec_module(E)
 
 CELLS = [(m, c, ph) for m in E.MODELS for c in E.CONTEXTS for ph in E.PHASES]
 
