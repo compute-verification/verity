@@ -100,7 +100,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   it (`Frame`, value ``frame``), committed under its statement's frame binding (`frame_binding`, over the member's
   input set), so its root is the member's frame root of the port, which the round's registration names before any
   coin; `stage` refuses a member whose frame root isn't the tree's. A scan member's input set is its template's
-  (`set_of`), naming no round and no link-window, so the frame domain of such a port is its template's and its unit
+  (`set_of`), naming no round and no execution phase, so the frame domain of such a port is its template's and its unit
   count's in every round. A public o0 is opened as before, under the salt the prover sends.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same
@@ -423,8 +423,8 @@ def block_set(heads: list, session: bytes, j: int) -> str:
 
 def set_of(template: str) -> str:
     """A scan template's statements' input set, which their frame domains bind (`frame_binding`): the template's
-    alone, naming no round and no link-window, so a member's frame domain of a port is its template's, its unit
-    count's and the port's, the same in every round and in every link-window of a group. A block member's is its
+    alone, naming no round and no execution phase, so a member's frame domain of a port is its template's, its unit
+    count's and the port's, the same in every round and in every execution phase of a group. A block member's is its
     run's (`block_set`)."""
     return f"unit-scan-{template}"
 
@@ -919,8 +919,8 @@ def member(at: SimpleNamespace, name: str, mb: SimpleNamespace) -> SimpleNamespa
     that entry, is a registered read of ``prog<j>``'s leaf b, no public word (``outputs`` None). A port no tree or
     network certifier row registration holds (each proof block's public o0, the last proof block's o1, a block member's
     x) is the member's own rows of it (`Frame`, value ``frame``), registered as its frame root in its statement's input
-    set ``set_name`` (its template's, `set_of`, which names no round and no link-window; a block member's its lane's
-    `block_set`), which the round's registration names before any coin;
+    set ``set_name`` (its template's, `set_of`, which names no round and no execution phase; a block member's its
+    lane's `block_set`), which the round's registration names before any coin;
     ``framed`` names the ports `stage` holds to their frame roots (those, and a block member's o0)."""
     ch, T, cls = at.chain, at.T, at.setup.cls
     tp, w, bs = mb.template, mb.window, list(mb.buckets)
