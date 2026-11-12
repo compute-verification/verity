@@ -111,7 +111,12 @@ plan of the case, is left out and listed under "Refused".
 - **Inputs**: every input's part, value, unit, mark and source. A mark is `measured` (a run measured it), `modeled`
   (derived from other figures) or `assumed`. The compute audit's come from its rows of record: δ, λ and the most
   bits a request's output holds; and from the row's plan, where it is read: the share of proving time each way of
-  pricing a block family covers (measured statements, computed, or both). The network certifier's are its
+  pricing a block family covers (measured statements, computed, or both). A family priced from measured statements
+  is timed alone, one session on a card, and the plan prices it with its provers sharing a GPU through the
+  planner's factor. Its share is marked `measured` only where the plan says which basis prices how much of its
+  proving (`split.basis`) and none is priced through the planner's default factor, which is assumed; else it is
+  `modeled`, the input's source says so in words, and the share of the plan's proving priced through that factor
+  is an input of its own, marked `assumed`. The network certifier's are its
   calculator's own marks. The fleet, the request counted, a request of the plan and the weights are read by both.
   The advice and the output count are listed at 0, each with what it leaves out.
 - **The compute audit's part**: each scope of record, with its run, its β at the share, its bound at λ = 1 and at the

@@ -305,7 +305,10 @@ def test_how_the_proving_is_priced_is_the_plans_account(tmp_path):
     mla = sum(s for w in ways.values() for f, s in w["families"].items() if f.startswith("SparseMla"))
     assert mla == pytest.approx(0.5826, abs=5e-4)
     by = {i["input"]: i for i in doc["inputs"]}
-    assert (by["proving priced measured"]["mark"], by["proving priced measured"]["value"]) == ("measured", ways["measured"]["share"])
+    assert (by["proving priced measured"]["mark"], by["proving priced measured"]["value"]) == ("modeled", ways["measured"]["share"])
+    assert by["proving priced measured"]["source"].endswith(
+        "; each is timed alone, one session on a card, and the rows don't say how the plan prices it with its provers "
+        "sharing a GPU (no `split.basis`)")
     assert (by["proving priced computed"]["mark"], by["proving priced measured and computed"]["mark"]) == ("modeled", "modeled")
     assert f"({PLAN}) `out/mix.json`: the row's plan at β = 5.542%" in by["proving priced computed"]["source"]
     text = E.render(doc)
@@ -363,9 +366,10 @@ def test_rows_that_hold_their_own_plans_are_read_with_them(tmp_path):
         assert sum(w["share"] for w in priced["ways"].values()) == pytest.approx(1.0, abs=1e-9)
         assert list(priced["ways"]["computed"]["families"])[0] == "SparseMlaSplitPart_v1"
     by = {i["input"]: i for i in doc["inputs"]}
-    assert (by["proving priced measured"]["mark"], by["proving priced computed"]["mark"]) == ("measured", "modeled")
+    assert (by["proving priced measured"]["mark"], by["proving priced computed"]["mark"]) == ("modeled", "modeled")
     assert (f"({PLANNED}) `split`: the row's own plan at the pinned budget nearest, β = 5.500%"
             in by["proving priced measured"]["source"])
+    assert [i["input"] for i in doc["inputs"] if i["mark"] == "measured"] == ["weights"]
     text = E.render(doc)
     assert "- **the compute audit's part: 14,229 GB** (modeled), 37.78 copies of the weights" in text
     assert (f"- of the row's proving time, by its own plan at the pinned budget nearest, β = 5.500% ({PLANNED}), the share in "
@@ -376,6 +380,45 @@ def test_rows_that_hold_their_own_plans_are_read_with_them(tmp_path):
             "518,357 | 49,395 | 468,962 |") in text
     assert "| world | week | 0 | 13,962 | 937,924 | 193.8 | 468,962 | 0 | 951,885 | 14,155 | 482,924 | 13,962 |" in text
     assert "'s plan (" not in text
+
+
+def test_a_family_timed_alone_is_measured_only_where_no_proving_rests_on_the_assumed_factor(tmp_path):
+    """A block family priced from measured statements is timed alone, and the plan prices it with its provers sharing
+    a GPU through the planner's factor. Its share of the proving is marked measured only where the plan's own account
+    by basis (`split.basis`) prices none of the proving through the planner's default factor, which is assumed. Where
+    it prices some, the share is modeled, its source says in words how much rests on the factor, the share priced
+    through it is an input marked assumed, and the print says so beside the shares; no GB moves."""
+
+    def built(basis: dict | None) -> dict:
+        s = Store(tmp_path / str(len(list(tmp_path.iterdir()))))
+        s.label(s.ran(PLANNED, [r | {"split": r["split"] | ({} if basis is None else {"basis": basis})}
+                                for r in rows(PLANNED)]))
+        return E.build(store=s.fresh(), root=REPO)
+
+    docs = {k: built(b) for k, b in (("none", None), ("timed", {"steady": 0.9, "reprice.CACHE": 0.1}),
+                                     ("assumed", {E.ASSUMED_BASIS: 0.75, "reprice.CACHE": 0.25}))}
+    assert len({d["value"] for d in docs.values()}) == 1
+    by = {k: {i["input"]: i for i in d["inputs"]} for k, d in docs.items()}
+    share = by["none"]["proving priced measured"]["value"]
+    assert share == pytest.approx(0.4717, abs=1e-4)
+    assert {k: b["proving priced measured"]["mark"] for k, b in by.items()} == {
+        "none": "modeled", "timed": "measured", "assumed": "modeled"}
+    assert by["timed"]["proving priced measured"]["source"].endswith(
+        "; each is timed alone, one session on a card, and `split.basis` prices none of the plan's proving through an "
+        "assumed factor")
+    assert by["assumed"]["proving priced measured"]["source"].endswith(
+        "; each is timed alone, one session on a card, and with its provers sharing a GPU the plan prices 75.000% of its "
+        f"proving through `reprice.DEFAULT`, an assumed factor (`split.basis`): at least {100 * (share - 0.25):.3f}% of the "
+        "proving time, in these families")
+    name = "proving priced through an assumed factor"
+    assert [name in b for b in by.values()] == [False, False, True]
+    assert (by["assumed"][name]["value"], by["assumed"][name]["mark"], by["assumed"][name]["unit"]) == (
+        0.75, "assumed", "of proving time")
+    assert {k: [i["input"] for i in d["inputs"] if i["mark"] == "measured"] for k, d in docs.items()} == {
+        "none": ["weights"], "timed": ["proving priced measured", "weights"], "assumed": ["weights"]}
+    text = E.render(docs["assumed"])
+    assert ("Of the families priced measured, each is timed alone, one session on a card, and with its provers sharing a "
+            "GPU the plan prices 75.000% of its proving through `reprice.DEFAULT`, an assumed factor") in text
 
 
 def test_the_network_certifiers_part_is_beside_it_at_the_requests_its_calculator_counts(tmp_path, monkeypatch):
@@ -617,7 +660,8 @@ def test_every_input_is_marked_measured_modeled_or_assumed_with_its_source(tmp_p
     assert "the audit budget is β = 5.243% and the compute audit's part 15,054 GB." in text
     assert f"- compute-audit: {PLAN}, {ROWS} (`{E.RECORD}`): the planner's rows, 18 of row `(i) honest`" in text
     marks = {m: sum(i["mark"] == m for i in doc["inputs"]) for m in E.MARKS}
-    assert f"of {len(doc['inputs'])} inputs, {marks['measured']} are measured, {marks['modeled']} modeled and {marks['assumed']} assumed" in text
+    assert marks == {"measured": 1, "modeled": len(doc["inputs"]) - 1 - marks["assumed"], "assumed": marks["assumed"]}
+    assert f"of {len(doc['inputs'])} inputs, 1 is measured, {marks['modeled']} modeled and {marks['assumed']} assumed" in text
     assert "| world year | " + ROWS + " | 5.542% | 13,562 | 14,240 | 37.81 | 1.778e+16 | 4.339% | 2.293% | 5.372% |" in text
     assert "| world | year | 1.182e+16 | 1.778e+16 | 14,240 | 0.006406 | 50,753,639 | 1,857,720 | " in text
     assert "| world | week | 2.268e+14 | 3.411e+14 | no rows of record | none | " in text
