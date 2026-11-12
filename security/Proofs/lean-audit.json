@@ -60,6 +60,8 @@
   "Proofs.Properties.Spot.Units",
   "Proofs.Properties.Spot.Credited",
   "Proofs.Properties.Spot.Tables",
+  "Proofs.Properties.Spot.Rate",
+  "Proofs.Flock.Bridge.RatePeriod",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.MemoryChallenger.Attest",
