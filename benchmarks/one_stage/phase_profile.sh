@@ -3,7 +3,7 @@
 # the source's build as the base; AS=new builds the source and compares it with the base. State persists under KW (default
 # /workspace/jobs/phase) between runs on the pod. STEPS (default setup,build,stage,ident,tl):
 #   setup  CUDA 13.3 (cuda-13.3.sh), Nsight Systems 2026.1.3 and a Python venv, unpacked under KW
-#   build  the source through 70-class-sweep.sh BUILD_ONLY=1, its binaries in KW/AS.env
+#   build  the source through 70-class-sweep.sh BUILD_ONLY=1 for SM (default 90, an H200's), its binaries in KW/AS.env
 #   stage  UNITS (default W13, the census's decode MoE gate-up block, whose transcripts main pins) at full with every unit drawn
 #          (zk_cost.py stage), once per KW and UNITS
 #   test   TESTS (default the hm96 trees', the arena layout's and level 0's fused folds') under pytest, slow ones included, on
@@ -72,7 +72,7 @@ if has stage && [ ! -s $Z/plan.json ]; then
     > $O/stage.txt 2>&1; echo $? > $S/stage.rc) & STAGE_PID=$!
 fi
 if has build; then
-  FLOCK_WORK=$W/fw OUT=$O/build-$AS bash verity/protocols/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=90 > $O/build-$AS.txt 2>&1
+  FLOCK_WORK=$W/fw OUT=$O/build-$AS bash verity/protocols/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM=${SM:-90} > $O/build-$AS.txt 2>&1
   log "build $AS rc=$?"
   B=$(sed -n 's/^BINARY=//p' $O/build-$AS.txt | tail -1); SB=$(sed -n 's/^SELFTEST_BINARY=//p' $O/build-$AS.txt | tail -1)
   [ -x "$B" ] && [ -x "$SB" ] || { log "build $AS: no binaries"; tail -30 $O/build-$AS.txt | tee -a $O/job.log; exit 1; }
