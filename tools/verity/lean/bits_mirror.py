@@ -39,8 +39,9 @@ class Point:
 class Mirror:
     """One error term: the Lean definition it restates (``lean``), the term as that definition writes it (``term``), the
     guarantees whose bound it is part of ({name: (lock key, hash)}), the definitions it restates ({name: `reads` hash}),
-    its budgets ({name: args}) and points, ``value``, the term at a point's and a budget's args together, and
-    ``params``, the Lean definition's arguments in order where an instance applies it to numerals."""
+    its budgets ({name: args}) and points, ``value``, the term at a point's and a budget's args together,
+    ``params``, the Lean definition's arguments in order where an instance applies it to numerals, and ``per_audit``,
+    whether the term bounds one audit, so that a period's audits add it up."""
     lean: str
     term: str
     guarantees: dict[str, tuple[str, str]]
@@ -49,6 +50,7 @@ class Mirror:
     points: tuple[Point, ...]
     value: Callable[..., Fraction | float] = field(repr=False)
     params: tuple[str, ...] = ()
+    per_audit: bool = True
 
 
 # ---- Claims.Flock.Numbers.hashBound: the by-class first-hit bound's part over 2^256 (the proofs tree) ----

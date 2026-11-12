@@ -1,11 +1,12 @@
 """Each listed guarantee and the bits of its error term, where something gives it a number, from the locks and no build.
 
-    verity lean bits [PKG ...] [--json] [--locks-only]
+    verity lean bits [PKG ...] [--facts FACTS ... | --run RUN] [--census DEPLOYMENT] [--json] [--locks-only]
 
 PKG is a Lake package with a `lean-audit.json` (a path from the repository's root); with none, the three security locks
 (`LOCKS`). It prints one line for every guarantee a lock lists under `guarantees`, and one for each point and budget a
 number is evaluated at, in the columns: the guarantee, its owner, whether its statement bounds a probability, the error
-term, the point and the budget, the bits (−log₂ of the error term there), the source of the number and the row.
+term, the point and the budget, the bits (−log₂ of the error term there), the source of the number, the row, and the
+bits left over a week, a month and a year of audits at one datacenter and at the world (`periods`, from the census).
 
 A number has one of three sources, strongest first (the README, under its commands): `proved`, a Lean row at one point
 and budget, which the locks hold none of yet; `computed`, an evaluator in Lean with a soundness property, none yet either;
@@ -19,17 +20,26 @@ its error term, are read from the statement's text, since a lock's `reads` lists
 what each one does: the signature, or the definition it names, and the definitions it applies, a few deep, looked for a
 probability definition (`probabilities`: the locks' `shape.events` and `PROBABILITY`), the error term the right side of
 the `≤` after the last one that has one. Those cells are marked `~`. A guarantee a lock lists as another's witness bounds
-nothing, from the lock. `--locks-only` reads no source and leaves the `~` cells out.
+nothing, from the lock. With a Lean check's facts (`--facts`, or `--run`, a records run the evidence store holds, whose
+lock it reads too), whether a statement bounds a probability is exact: one of the spec definitions its pin `reads` is a
+probability definition. `--locks-only` reads no source and leaves the text's cells out.
 
-Exit code 0 always: the command gates nothing.
+A period's audits add up a per-audit error term (a union bound), so the period columns give `bits − log₂ n`, n the
+audits in the period: at one datacenter, the census deployment's machines each audited once a window, and at the world,
+the census adversary resource model's GPUs (its FLOP a year at its rate per H100-equivalent) in machines of the
+deployment's size, audited alike. A figure of 0 bits or below prints as vacuous.
+
+Exit code 0 whenever it prints: the command gates nothing.
 """
 from __future__ import annotations
 
 import argparse
+import gzip
 import importlib.util
 import json
 import math
 import re
+import subprocess
 import sys
 import tomllib
 from dataclasses import dataclass
@@ -40,6 +50,8 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 POLICY = "lean-audit.json"
 LOCKS = ("security", "security/Proofs", "security/Properties")
+CENSUS = ROOT / "benchmarks" / "census"
+WEEK = 7 * 86400
 _spec = importlib.util.spec_from_file_location("lean_bits_mirror", HERE / "bits_mirror.py")
 M = importlib.util.module_from_spec(_spec)
 sys.modules.setdefault("lean_bits_mirror", M)
@@ -285,14 +297,48 @@ def bits_of(v: Fraction | float) -> float:
     return -math.log2(v) if v > 0 else math.inf
 
 
-def lines(pkgs: list[Path], text: bool = True) -> list[dict]:
-    """The table's lines for the guarantees ``pkgs``' locks list, ordered: no number, then `mirrored`, then ascending
-    bits."""
-    locks = {str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p): load(p) for p in pkgs}
+def periods(deployment: str | None = None, census: Path = CENSUS) -> dict:
+    """The audits in a week, a month (a twelfth of the year) and a year, {"a week": {"datacenter": n, "world": n}, …},
+    with the ids they are of: ``deployment`` of the census's `deployments.json` (default its reference) and the reference
+    adversary resource model of its `adversary.json`, whose year the year is."""
+    deps = json.loads((census / "deployments.json").read_text())
+    dep = next((d for d in deps if (d["id"] == deployment if deployment else d.get("role") == "reference")), None)
+    if dep is None:
+        raise SystemExit(f"bits: no deployment {deployment!r} in {census / 'deployments.json'} "
+                         f"(its ids: {', '.join(d['id'] for d in deps)})")
+    adv = next(a for a in json.loads((census / "adversary.json").read_text()) if a.get("role") == "reference")
+    year = adv["monitoring_period_s"]
+    world_gpus = adv["total_flop"] / year / adv["flop_per_s_per_h100"]
+    audits = {}
+    for name, seconds in (("a week", WEEK), ("a month", year / 12), ("a year", year)):
+        windows = seconds / dep["window_s"]
+        audits[name] = {"datacenter": dep["machines"] * windows, "world": world_gpus / dep["gpus_per_machine"] * windows}
+    return {"deployment": dep["id"], "adversary": adv["id"], "audits": audits}
+
+
+def stored_pins(path: Path) -> dict:
+    """The pins of a Lean check's facts at ``path``: its `facts.json.gz`, an older run's `facts.json`, or a facts
+    document, which holds them under `facts`. A pin decides only with its `reads`: a guarantee the package lists and
+    another proves is `missing` in its facts, and is read from the text."""
+    data = path.read_bytes()
+    doc = json.loads(gzip.decompress(data) if path.suffix == ".gz" else data)
+    return (doc.get("facts") if "facts" in doc else doc).get("pins") or {}
+
+
+def lines(pkgs: list[Path], text: bool = True, pins: dict | None = None, census: dict | None = None,
+          lock_files: dict[Path, Path] | None = None) -> list[dict]:
+    """The table's lines for the guarantees ``pkgs``' locks list (a package's lock from ``lock_files`` when it names
+    one), ordered: no number, then `mirrored`, then ascending bits. ``pins``, a Lean check's facts' pins, give whether
+    a statement bounds a probability; ``census``, `periods`, the period columns."""
+    lock_files = lock_files or {}
+    locks = {str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p):
+             json.loads(lock_files[p].read_text()) if p in lock_files else load(p) for p in pkgs}
+    prob_defs = probabilities(locks)
+    pins = pins or {}
     reader = None
     if text:
         dirs = list(dict.fromkeys(d for p in pkgs for d in requires(p)))
-        reader = Reader(Sources(dirs), probabilities(locks))
+        reader = Reader(Sources(dirs), prob_defs)
     wit = {where: witnesses(lock) for where, lock in locks.items()}
     mirrored: dict[str, list] = {}
     for mirror in M.MIRRORS:
@@ -301,14 +347,22 @@ def lines(pkgs: list[Path], text: bool = True) -> list[dict]:
     out = []
     for where, lock in locks.items():
         for g, record in sorted((lock.get("guarantees") or {}).items()):
-            base = {"guarantee": g, "lock": where, "owner": record.get("owner"), "probability": None, "error": None,
-                    "error_from": None, "point": None, "budget": None, "args": None, "bits": None, "source": None,
-                    "row": None, "note": None, "witness": False}
+            base = {"guarantee": g, "lock": where, "owner": record.get("owner"), "probability": None,
+                    "probability_from": None, "error": None, "error_from": None, "point": None, "point_about": None,
+                    "budget": None, "args": None, "bits": None, "source": None, "row": None, "periods": None,
+                    "note": None, "witness": False}
             if g in wit[where]:
-                base |= {"probability": False, "witness": True}
-            elif reader:
-                r = reader.read(record)
-                base |= {"probability": r["probability"], "error": r["error"], "error_from": r["from"]}
+                base |= {"probability": False, "probability_from": "lock", "witness": True}
+                reader_says = None
+            else:
+                reader_says = reader.read(record) if reader else None
+                if "reads" in pins.get(g, {}):
+                    base |= {"probability": any(r.get("name") in prob_defs for r in pins[g].get("reads") or []),
+                             "probability_from": "facts"}
+                elif reader_says:
+                    base |= {"probability": reader_says["probability"], "probability_from": "text"}
+            if reader_says and base["probability"]:
+                base |= {"error": reader_says["error"], "error_from": reader_says["from"]}
             numbered = False
             for mirror in mirrored.get(g, []):
                 if moved := pins_hold(mirror, {where: lock}):
@@ -318,11 +372,15 @@ def lines(pkgs: list[Path], text: bool = True) -> list[dict]:
                 for budget, bargs in mirror.budgets.items():
                     for point in mirror.points:
                         args = point.args | bargs
+                        bits = bits_of(mirror.value(**args))
+                        over = None
+                        if census and mirror.per_audit:
+                            over = {name: {where_: bits - math.log2(n) for where_, n in at.items()}
+                                    for name, at in census["audits"].items()}
                         out.append(base | {"error": mirror.term, "error_from": mirror.lean, "point": point.name,
                                            "point_about": point.about, "budget": budget,
-                                           "args": {k: str(v) for k, v in args.items()},
-                                           "bits": bits_of(mirror.value(**args)), "source": "mirrored",
-                                           "row": point.instance})
+                                           "args": {k: str(v) for k, v in args.items()}, "bits": bits,
+                                           "source": "mirrored", "row": point.instance, "periods": over})
                         numbered = True
             if not numbered:
                 out.append(base)
@@ -336,18 +394,23 @@ def fmt_bits(b: float | None) -> str:
     return "-" if b is None else "vacuous" if b <= 0 else f"{b:.1f}"
 
 
-def table(rows: list[dict], text: bool) -> str:
+def table(rows: list[dict]) -> str:
     def cell(s: str | None, mark: bool = False) -> str:
         return "-" if s is None else (("~" if mark else "") + s.replace("|", "\\|"))
 
-    out = ["| guarantee | owner | probability | error term | point | budget | bits | source | row |",
-           "|---|---|---|---|---|---|---|---|---|"]
+    def over(r: dict, where: str) -> str:
+        return "-" if not r["periods"] else " · ".join(fmt_bits(at[where]) for at in r["periods"].values())
+
+    out = ["| guarantee | owner | probability | error term | point | budget | bits | source | row "
+           "| a week · a month · a year: one datacenter | the world |",
+           "|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         prob = "no, a witness" if r["witness"] else None if r["probability"] is None else "yes" if r["probability"] else "no"
         err = r["error"] if r["error"] is None or len(r["error"]) <= 90 else r["error"][:89] + "…"
-        out.append(f"| {r['guarantee']} | {cell(r['owner'])} | {cell(prob, text and not r['witness'])} | "
-                   f"{cell(err, text and r['source'] is None)} | {cell(r['point'])} | {cell(r['budget'])} | "
-                   f"{fmt_bits(r['bits'])} | {cell(r['source'])} | {cell(r['row'])} |")
+        out.append(f"| {r['guarantee']} | {cell(r['owner'])} | {cell(prob, r['probability_from'] == 'text')} | "
+                   f"{cell(err, r['source'] is None)} | {cell(r['point'])} | {cell(r['budget'])} | "
+                   f"{fmt_bits(r['bits'])} | {cell(r['source'])} | {cell(r['row'])} | {over(r, 'datacenter')} | "
+                   f"{over(r, 'world')} |")
     return "\n".join(out)
 
 
@@ -358,8 +421,35 @@ def summary(rows: list[dict]) -> dict:
     by = {}
     for r in rows:
         by[r["source"] or "none"] = by.get(r["source"] or "none", 0) + 1
+    prob_from: dict[str, int] = {}
+    for r in {(r["lock"], r["guarantee"]): r for r in rows}.values():
+        prob_from[r["probability_from"] or "none"] = prob_from.get(r["probability_from"] or "none", 0) + 1
     return {"lines": len(rows), "guarantees": len(guarantees), "probability": len(prob), "with_a_number": len(numbered),
-            "lines_by_source": by, "pins_moved": sorted({r["guarantee"] for r in rows if r["note"]})}
+            "lines_by_source": by, "probability_from": prob_from,
+            "pins_moved": sorted({r["guarantee"] for r in rows if r["note"]})}
+
+
+def fetch_run(run: str, pkg: Path) -> tuple[Path, Path, Path]:
+    """`trusted_size.fetch_run`: ``run``'s facts, lock and report for ``pkg`` from the evidence store."""
+    spec = importlib.util.spec_from_file_location("lean_trusted_size", HERE / "trusted_size.py")
+    T = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(T)
+    return T.fetch_run(run, pkg)
+
+
+def fetch_runs(run: str, pkgs: list[Path]) -> tuple[dict, dict[Path, Path]]:
+    """The pins of ``run``'s facts and its locks, for each of ``pkgs`` it holds (`trusted_size.fetch_run`); a package it
+    holds none for is said on stderr and read from the tree."""
+    pins, lock_files = {}, {}
+    for p in pkgs:
+        try:
+            facts, lock, _ = fetch_run(run, p)
+        except (SystemExit, subprocess.CalledProcessError) as e:
+            print(f"bits: {run} gave no facts and lock for {p} ({e}); {p} read from the tree", file=sys.stderr)
+            continue
+        pins |= stored_pins(facts)
+        lock_files[p] = lock
+    return pins, lock_files
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -368,19 +458,38 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true", help="print the lines and their counts as JSON")
     ap.add_argument("--locks-only", action="store_true",
                     help="read no Lean source: leave out what the statements' text gives (the `~` cells)")
+    src = ap.add_mutually_exclusive_group()
+    src.add_argument("--facts", type=Path, action="append", default=[],
+                     help="a Lean check's facts.json.gz (or an older one's facts.json), once a package: whether each "
+                          "statement it pins bounds a probability, exactly")
+    src.add_argument("--run", help="a records run the evidence store holds: its facts and locks, for each PKG it holds")
+    ap.add_argument("--census", metavar="DEPLOYMENT",
+                    help="the census deployment the period columns count one datacenter's audits at (default its "
+                         "reference)")
     a = ap.parse_args(argv)
     pkgs = [(ROOT / p) if not Path(p).is_absolute() else Path(p) for p in (a.pkg or LOCKS)]
-    rows = lines(pkgs, text=not a.locks_only)
+    pins, lock_files = fetch_runs(a.run, pkgs) if a.run else ({}, {})
+    for f in a.facts:
+        pins |= stored_pins(f)
+    census = periods(a.census)
+    rows = lines(pkgs, text=not a.locks_only, pins=pins, census=census, lock_files=lock_files)
+    s = summary(rows) | {"census": {k: census[k] for k in ("deployment", "adversary")},
+                         "audits": census["audits"]}
     if a.json:
-        print(json.dumps({"lines": rows, "summary": summary(rows)}, indent=1, ensure_ascii=False))
+        print(json.dumps({"lines": rows, "summary": s}, indent=1, ensure_ascii=False))
         return 0
-    print(table(rows, not a.locks_only))
-    s = summary(rows)
+    print(table(rows))
     print(f"\n{s['lines']} lines, {s['guarantees']} guarantees, {s['probability']} bound a probability"
-          f"{'' if not a.locks_only else ' (not read: --locks-only)'}, {s['with_a_number']} have a number; lines by "
-          f"source: " + ", ".join(f"{k} {v}" for k, v in sorted(s["lines_by_source"].items())))
+          f"{'' if not a.locks_only or pins else ' (not read: --locks-only)'}, {s['with_a_number']} have a number; "
+          f"lines by source: " + ", ".join(f"{k} {v}" for k, v in sorted(s["lines_by_source"].items())))
+    print("whether a statement bounds a probability, from: "
+          + ", ".join(f"{k} {v}" for k, v in sorted(s["probability_from"].items())))
+    print("audits a week · a month · a year: " + "; ".join(
+        f"{where} ({census['deployment'] if where == 'datacenter' else census['adversary']}) "
+        + " · ".join(f"2^{math.log2(at[where]):.2f}" for at in census["audits"].values())
+        for where in ("datacenter", "world")))
     if not a.locks_only:
-        print("~ read from the statement's text, not from the lock")
+        print("~ read from the statement's text, not from the lock or the facts")
     for r in rows:
         if r["note"]:
             print(f"{r['guarantee']}: {r['note']}")

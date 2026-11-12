@@ -15,6 +15,7 @@ the instance check is what holds that mirror to the Lean.
 """
 from __future__ import annotations
 
+import gzip
 import importlib.util
 import json
 import re
@@ -110,7 +111,65 @@ def test_text_pass(tmp_path):
         (True, "ε + 1", "X.Sound")
     assert got["X.G.plain"]["probability"] is False and got["X.G.plain"]["error"] is None
     assert got["X.G.at"]["witness"] and got["X.G.at"]["probability"] is False
-    assert "| X.G.sound | @a | ~yes | ~ε + 1 |" in B.table(list(got.values()), True)
+    assert "| X.G.sound | @a | ~yes | ~ε + 1 |" in B.table(list(got.values()))
+    assert "| X.G.at | @a | no, a witness | - |" in B.table(list(got.values()))
+
+    (tmp_path / "facts.json.gz").write_bytes(gzip.compress(json.dumps({"facts": {"pins": {
+        "X.G.sound": {"kind": "theorem", "reads": [{"name": "X.Sound", "module": "A"}]},
+        "X.G.plain": {"kind": "theorem", "reads": [{"name": "Claims.Pr", "module": "A"}]},
+        "X.G.at": {"kind": "missing"},
+    }}}).encode()))
+    pins = B.stored_pins(tmp_path / "facts.json.gz")
+    got = {r["guarantee"]: r for r in B.lines([tmp_path], pins=pins)}
+    assert got["X.G.at"]["probability_from"] == "lock"
+    missing = {r["guarantee"]: r for r in B.lines([tmp_path], pins={"X.G.sound": {"kind": "missing"}})}
+    assert missing["X.G.sound"]["probability_from"] == "text", "a pin with no reads leaves the text's reading"
+    assert (got["X.G.sound"]["probability"], got["X.G.sound"]["probability_from"]) == (False, "facts"), \
+        "the facts' reads decide, over the text"
+    assert (got["X.G.plain"]["probability"], got["X.G.plain"]["probability_from"]) == (True, "facts")
+    assert "| X.G.plain | @a | yes |" in B.table(list(got.values()))
+
+
+def test_run_reads_its_facts_and_locks(tmp_path, monkeypatch):
+    lock = tmp_path / "lock.json"
+    lock.write_text(json.dumps({"guarantees": {"X.g": {"owner": "@run", "signature": ["X.g : True"]}}}))
+    facts = tmp_path / "facts.json"
+    facts.write_text(json.dumps({"pins": {"X.g": {"reads": [{"name": "Verity.Game.prob"}]}}}))
+    held, missing = tmp_path / "held", tmp_path / "missing"
+
+    def fetch(run, pkg):
+        if pkg != held:
+            raise SystemExit(f"{run} holds nothing for {pkg}")
+        return facts, lock, tmp_path / "report.json"
+
+    monkeypatch.setattr(B, "fetch_run", fetch)
+    pins, lock_files = B.fetch_runs("r1", [held, missing])
+    assert pins == {"X.g": {"reads": [{"name": "Verity.Game.prob"}]}} and lock_files == {held: lock}
+    [line] = B.lines([held], text=False, pins=pins, lock_files=lock_files)
+    assert (line["owner"], line["probability"], line["probability_from"]) == ("@run", True, "facts")
+
+
+def test_periods(tmp_path, rows):
+    (tmp_path / "deployments.json").write_text(json.dumps([
+        {"id": "dc", "machines": 2 ** 10, "gpus_per_machine": 8, "window_s": 600, "role": "reference"},
+        {"id": "small", "machines": 1, "gpus_per_machine": 8, "window_s": 600}]))
+    year = 600 * 2 ** 20
+    (tmp_path / "adversary.json").write_text(json.dumps([
+        {"id": "world", "role": "reference", "monitoring_period_s": year, "total_flop": 2 ** 13 * 10 * year,
+         "flop_per_s_per_h100": 10}]))
+    c = B.periods(census=tmp_path)
+    assert (c["deployment"], c["adversary"]) == ("dc", "world")
+    assert c["audits"]["a year"] == {"datacenter": 2 ** 30, "world": 2 ** 30}
+    assert c["audits"]["a month"]["datacenter"] == 2 ** 30 / 12
+    assert B.periods("small", census=tmp_path)["audits"]["a year"]["datacenter"] == 2 ** 20
+    with pytest.raises(SystemExit, match="its ids: dc, small"):
+        B.periods("nowhere", census=tmp_path)
+
+    out = B.lines([ROOT / p for p in B.LOCKS], text=False, census=c)
+    line = next(r for r in out if r["source"] == "mirrored")
+    assert line["periods"]["a year"] == {"datacenter": line["bits"] - 30, "world": line["bits"] - 30}
+    assert all(r["periods"] is None for r in out if r["source"] is None)
+    assert B.fmt_bits(-1.0) == "vacuous"
 
 
 def lean_value(src: str) -> Fraction:
@@ -202,5 +261,5 @@ def test_instance(path, theorem, rows, capsys):
     assert {k: Fraction(v) for k, v in line["args"].items()} == at
     assert line["bits"] == B.bits_of(value)
     B.main(["--locks-only"])
-    out = [s for s in capsys.readouterr().out.splitlines() if s.endswith(f"| {theorem} |")]
+    out = [s for s in capsys.readouterr().out.splitlines() if f"| {theorem} |" in s]
     assert len(out) == 1 and f"| {B.fmt_bits(B.bits_of(value))} | mirrored |" in out[0]

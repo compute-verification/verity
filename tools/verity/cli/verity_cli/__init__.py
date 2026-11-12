@@ -29,10 +29,10 @@
                                     axioms go beyond the standard three (`sorryAx` too), or none, or each that failed, when
                                     lean has an error on its own lines (on a project machine with
                                     --on auto); --siblings: then fail on a name another module of its package declares too
-    verity lean bits [PKG...] [--json] [--locks-only]
+    verity lean bits [PKG...] [--facts F... | --run RUN] [--census DEPLOYMENT] [--json] [--locks-only]
                                     every guarantee the locks list (default the three security locks), with the
-                                    bits of its error term where something gives it a number, and that number's
-                                    source (lean/bits.py)
+                                    bits of its error term where something gives it a number, that number's source,
+                                    and what is left of it over a week, a month and a year (lean/bits.py)
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ HERE = Path(__file__).resolve().parents[2]
 ROOT = HERE.parents[1]
 LAKEFILES = ("lakefile.lean", "lakefile.toml")
 USAGE = ("verity lean try FILE [--siblings] [--on auto | --on MACHINE [--pool P] [--as LANE]]\n"
-         "verity lean bits [PKG...] [--json] [--locks-only]")
+         "verity lean bits [PKG...] [--facts F... | --run RUN] [--census DEPLOYMENT] [--json] [--locks-only]")
 #: `research run --on`'s line naming the run it started (or refused) and the machine it is on, which `--on auto` chose
 LAUNCHED = re.compile(r"^research: run (\S+) (?:launched|refused) on (\S+)", re.M)
 

@@ -40,7 +40,7 @@ untraced = [
 # `lean_slot.py` and `slot.py`; `test_siblings.py` runs `verity lean try --siblings`, the CLI's. `test_moved.py` runs the
 # install command's shim, and `lean_changed.py` reads research's record of the layout moves (`moved.py`). `test_warm.py`
 # loads `warm.py`, which loads the check tool's `verdicts.py` and with it `settings.py`. `test_bits.py` reads the three
-# security locks and the Lean source of the instances it holds a printed figure to.
+# security locks, the Lean source of the instances it holds a printed figure to, and the census the period columns count.
 inputs = ["tools/verity/lean/README.md", "tools/verity/check/common.py", "tools/verity/check/lean_slot.py",
           "tools/verity/check/slot.py", "tools/verity/check/verdicts.py", "tools/verity/check/settings.py",
           "tools/verity/graph/verity_graph/contract.py",
@@ -48,7 +48,8 @@ inputs = ["tools/verity/lean/README.md", "tools/verity/check/common.py", "tools/
           "tools/lean/setup.sh", "tools/research/src/research/store/moves.json",
           "tools/research/src/research/__init__.py", "tools/verity/graph/verity_graph/__init__.py", "tools/research/src/research/store/__init__.py",
           "security/lean-audit.json", "security/Proofs/lean-audit.json", "security/Properties/lean-audit.json",
-          "security/Proofs/Flock/SamplingGeneric/TwoOneWaitNumbers.lean"]
+          "security/Proofs/Flock/SamplingGeneric/TwoOneWaitNumbers.lean",
+          "benchmarks/census/deployments.json", "benchmarks/census/adversary.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -60,4 +61,5 @@ paths = ["tools/verity/check"]
 [[tool.verity.tests.reads]]
 tests = ["tests/test_bits.py"]
 paths = ["security/lean-audit.json", "security/Proofs/lean-audit.json", "security/Properties/lean-audit.json",
-         "security/Proofs/Flock/SamplingGeneric/TwoOneWaitNumbers.lean"]
+         "security/Proofs/Flock/SamplingGeneric/TwoOneWaitNumbers.lean", "benchmarks/census/deployments.json",
+         "benchmarks/census/adversary.json"]

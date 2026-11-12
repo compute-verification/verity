@@ -50,9 +50,10 @@ python tools/verity/lean/merge.py --install
 verity lean try FILE [--siblings] [--on NODE]
   the edit loop: `lake env lean FILE` in FILE's package against its built imports, the axiom probe's line last; neither
   runs this audit nor writes a record (`verity lean try --help`, `lean_changed.py`)
-verity lean bits [PKG...] [--json] [--locks-only]
+verity lean bits [PKG...] [--facts F... | --run RUN] [--census DEPLOYMENT] [--json] [--locks-only]
   every guarantee the locks list (default the three security locks), with whether it bounds a probability, its error
-  term, and that term's bits where something gives it a number, from the locks and the sources, no build (`bits.py`)
+  term, and that term's bits where something gives it a number, at one audit and over a week, a month and a year at a
+  census deployment and at the world; from the locks and the sources, or a run's facts, no build (`bits.py`)
 research run --on auto --mem-gb 32 --max-min 120 --project verity --source . --cwd clone \
   --declared-output 'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records PKG --update
   the fast path (the lean-proofs skill): PKG's records and its requirers'
