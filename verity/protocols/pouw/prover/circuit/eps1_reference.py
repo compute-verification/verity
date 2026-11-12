@@ -82,8 +82,8 @@ TAG = domains.POUW_EPS1_SEED.encode()
 RECEIPT_TAG = domains.POUW_RECEIPT.encode()
 #: the fold H1's receipt uses and its receipt layout (`segment.PouwCallCheck`): fx1, the eight chain words a thread
 FOLD, OUT = "fx1", "chains"
-#: the per-dot work the TS conjecture credits is open until proofs link TS to EndToEnd (§5 item 3)
-LINK_OPEN = "Accounting.Guarantees.TS.* -> Pouw.Guarantees.EndToEnd (proofs; compute accounting writes the statement)"
+#: the per-dot work the TS conjecture credits is open until a theorem links TS to EndToEnd
+LINK_OPEN = "Accounting.Guarantees.TS.* -> Pouw.Guarantees.EndToEnd"
 
 M32 = SG.M32
 
