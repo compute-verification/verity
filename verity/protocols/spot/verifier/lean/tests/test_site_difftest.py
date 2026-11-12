@@ -220,7 +220,8 @@ KEYS = [("cert0", "dummy-cert0-key", SCHEME), ("cert0", "00", SCHEME), ("cert0",
 MEMORIES = [*MEMORY.items(), ("nvme1", MemoryFigures("node0", 0, 1 << 40)), ("dram9", MemoryFigures("node9", 1, 1))]
 HOST_FIGURES = [*HOSTS.items(), ("node0", HostFigures(1 << 25)), ("node0", HostFigures(1 << 23, ways=(("uplink0", None),))),
                 ("node1", HostFigures(1 << 23, (("sim-int8-a", 1),)))]
-DRIFTS = [("chal0", Fraction(1, 10 ** 6)), ("cert0", Fraction(1)), ("gpu0", Fraction(0))]
+DRIFTS = [("chal0", Fraction(1, 10 ** 6)), ("cert0", Fraction(1)), ("gpu0", Fraction(0)), ("vm0", Fraction(1, 10 ** 6)),
+          ("vm0", Fraction(1))]
 TIMEBASES = [("vm0", "tb0"), ("vm0", "tb1"), ("cert0", "tb0")]
 
 

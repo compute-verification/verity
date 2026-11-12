@@ -593,21 +593,21 @@ def test_the_encoding_round_trips_and_is_pinned() -> None:
 LEAF = Loc("dram0", "memory", "node0", tier="dram", bytes=1 << 31, bw=6554)
 ROOT = Loc("site0", "site", time_unit=Fraction(1, 10 ** 9))
 AUDITOR_JSON = {
-    "drift": [{"drift": "3/5000", "id": "cert0"}],
+    "drift": [{"drift": "3/5000", "id": "vm0"}],
     "hosts": [{"cards": [{"count": 8, "sku": "k"}], "chip": 8002732032, "id": "node0",
                "shared": [{"bw": 50, "tier": "disk"}],
                "ways": [{"beta": 400000000000, "id": "node0/eth0"}, {"beta": None, "id": "node0/eth1"}]}],
     "keys": [{"id": "cert0", "key": "k0", "scheme": "lms-sha512/n64-w1-h20/v0"}],
     "memory": [{"bw": 6554, "bytes": 2147483648, "host": "node0", "id": "dram0"}], "sheets": [],
     "timebases": [{"id": "vm0", "sku": "tb0"}], "tolerance": "0"}
-"""`SiteV2Guards.lean`'s auditor: a certifier's key, scheme and drift, a host's figures and a leaf's, and the time base
-of a host of its own."""
+"""`SiteV2Guards.lean`'s auditor: a certifier's key and scheme, a host's figures and a leaf's, and the drift and the
+time base of a host of its own."""
 
 
 def test_a_locations_and_the_auditors_encodings_are_the_leans() -> None:
     """A location writes `bw`, `chip`, `drift`, `time_unit` and `timebase` as null where it has none, `scheme` as a
     string and `shared` as a list of a rate and a tier, each; the auditor writes its keys with their schemes, its
-    leaves' and hosts' figures, its devices' drifts and its hosts' time bases. Both read back what they write, as
+    leaves' and hosts' figures, and its own hosts' drifts and time bases. Both read back what they write, as
     `SiteV2Guards.lean` pins them."""
     assert canonical(LEAF.to_json()) == (
         b'{"bw":6554,"bytes":2147483648,"chip":null,"drift":null,"id":"dram0","key":"","kind":"memory",'
@@ -617,7 +617,7 @@ def test_a_locations_and_the_auditors_encodings_are_the_leans() -> None:
         b'{"bw":null,"bytes":0,"chip":null,"drift":null,"id":"site0","key":"","kind":"site","owner":"prover",'
         b'"parent":null,"scheme":"","shared":[],"sheet":"","tier":null,"time_unit":"1/1000000000",'
         b'"timebase":null}')
-    cert = Loc("cert0", "certifier", "site0", "auditor", key="k0", scheme=SCHEMES[1], drift=Fraction(1, 10))
+    cert = Loc("cert0", "certifier", "site0", "auditor", key="k0", scheme=SCHEMES[1])
     host = Loc("node0", "host", "site0", chip=8002732032, shared=(("disk", 50),))
     for x in (LEAF, ROOT, cert, host):
         assert Loc.of_json(x.to_json()) == x
@@ -626,7 +626,7 @@ def test_a_locations_and_the_auditors_encodings_are_the_leans() -> None:
     assert a.hosts == (("node0", HostFigures(8002732032, (("k", 8),), (("disk", 50),),
                                              (("node0/eth0", 400000000000), ("node0/eth1", None)))),)
     assert (a.key("cert0"), a.scheme("cert0"), a.scheme("x"), a.drift) == (
-        "k0", "lms-sha512/n64-w1-h20/v0", None, (("cert0", Fraction(3, 5000)),))
+        "k0", "lms-sha512/n64-w1-h20/v0", None, (("vm0", Fraction(3, 5000)),))
     assert a.timebases == (("vm0", "tb0"),)
     assert a.to_json() == AUDITOR_JSON and Auditor.of_json(a.to_json()) == a
     assert SCHEMES == ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0")
@@ -909,26 +909,20 @@ def test_a_host_states_the_auditors_figures_for_it() -> None:
                      Entry("", locs=(G_ROOT, replace(G_HOST, shared=zero))))
 
 
-def test_an_auditors_device_states_its_scheme_and_drift() -> None:
-    """`Owners`: a key's scheme is the auditor's for the device and one the check knows, and a clock's drift the
-    auditor's figure, or none where it has none, below 1; a location that is not the auditor's states neither."""
-    def keyed(drift: tuple = (), scheme: str = ROOT2) -> Auditor:
-        return replace(G_AUDITOR, keys=(("cert0", "k0", scheme),), drift=drift)
+def test_an_auditors_device_states_its_scheme() -> None:
+    """`Owners`: a key's scheme is the auditor's for the device and one the check knows, and a location that is not
+    the auditor's states none."""
+    def keyed(scheme: str = ROOT2) -> Auditor:
+        return replace(G_AUDITOR, keys=(("cert0", "k0", scheme),))
 
-    def cert(drift: Fraction | None = None, scheme: str = ROOT2) -> Entry:
-        return Entry("", locs=(G_ROOT, Loc("cert0", "certifier", "site0", "auditor", key="k0", scheme=scheme,
-                                            drift=drift)))
+    def cert(scheme: str = ROOT2) -> Entry:
+        return Entry("", locs=(G_ROOT, Loc("cert0", "certifier", "site0", "auditor", key="k0", scheme=scheme)))
 
-    tenth = Fraction(1, 10)
     assert ROOT2 in SCHEMES
-    assert not holds("Owners", keyed(scheme=SCHEME), cert())
-    assert not holds("Owners", keyed(scheme="x"), cert(scheme="x"))
+    assert holds("Owners", keyed(), cert())
+    assert not holds("Owners", keyed(SCHEME), cert())
+    assert not holds("Owners", keyed("x"), cert("x"))
     assert not holds("Owners", keyed(), Entry("", locs=(G_ROOT, replace(G_HOST, scheme=ROOT2))))
-    assert holds("Owners", keyed((("cert0", tenth),)), cert(tenth)) and holds("Owners", keyed(), cert())
-    assert not holds("Owners", keyed((("cert0", tenth),)), cert())
-    assert not holds("Owners", keyed(), cert(tenth))
-    assert not holds("Owners", keyed((("cert0", Fraction(1)),)), cert(Fraction(1)))
-    assert not holds("Owners", keyed(), Entry("", locs=(G_ROOT, replace(G_HOST, drift=tenth))))
 
 
 G_CERT = Loc("cert0", "certifier", "site0", "auditor", key="k0", scheme=ROOT2)
@@ -981,6 +975,30 @@ def test_an_auditors_host_is_the_auditors_own_at_the_site() -> None:
     challenged = Site(locs=(G_ROOT, G_HOST, vm, replace(G_IN_VM, id="chal0", kind="challenger")),
                       links=(Link("mc0", ("chal0", "node0"), 1, 0),))
     assert "node0" in challenged.reached()
+
+
+def test_a_clocks_drift_is_its_auditors_hosts() -> None:
+    """`Owners`: an auditor's host states the auditor's figure for its clock, or none where the auditor has none;
+    refused with another, at 1 or more, and on any other location, the auditor's device in the host among them. The
+    clock a device of the auditor's reads is its host's, with the host's drift (`Site.clock`, `Site.drift`); a device
+    at the site reads none, and neither does the host itself."""
+    def drifts(*drift: tuple[str, Fraction]) -> Auditor:
+        return replace(VM_KEYED, drift=drift)
+
+    tenth, vm = Fraction(1, 10), g_vm()
+    slow = replace(vm, drift=tenth)
+    assert holds("Owners", drifts(("vm0", tenth)), Entry("", locs=(G_ROOT, slow, G_IN_VM)))
+    assert holds("Owners", drifts(), Entry("", locs=(G_ROOT, vm, G_IN_VM)))
+    assert not holds("Owners", drifts(("vm0", tenth)), Entry("", locs=(G_ROOT, vm)))
+    assert not holds("Owners", drifts(), Entry("", locs=(G_ROOT, slow)))
+    assert not holds("Owners", drifts(("vm0", Fraction(1))), Entry("", locs=(G_ROOT, replace(vm, drift=Fraction(1)))))
+    assert not holds("Owners", drifts(("cert0", tenth)), Entry("", locs=(G_ROOT, vm, replace(G_IN_VM, drift=tenth))))
+    assert not holds("Owners", drifts(), Entry("", locs=(G_ROOT, replace(G_HOST, drift=tenth))))
+    assert Loc.of_json(slow.to_json()) == slow
+    timed = Site(locs=(G_ROOT, G_HOST, slow, G_IN_VM), links=G_UPLINKS)
+    assert (timed.clock("cert0"), timed.drift("cert0"), timed.clock("vm0")) == ("vm0", tenth, None)
+    assert Site(locs=(G_ROOT, G_HOST, vm, G_IN_VM), links=G_UPLINKS).drift("cert0") is None
+    assert Site(locs=(G_ROOT, G_HOST, G_CERT), links=G_UPLINKS).clock("cert0") is None
 
 
 CARD = Sheet(DeviceFigures("k", 0, 0), 1, 1, 1 << 30)

@@ -24,8 +24,8 @@ from verity.errors import InvalidArtifact
 from verity.hardware import cards, nodes
 from verity.hardware.cards import MARKS
 from verity.hardware.site import (NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, ClockPremise, Entry,
-                                  HostFigures, Link, Loc, Malformed, Refused, Registration, Sheet, Site, check,
-                                  clock_drift, device_drift, node_figures, refusal)
+                                  HostFigures, Link, Loc, Malformed, Refused, Registration, Sheet, Site, auditor_host,
+                                  check, clock_drift, node_figures, refusal)
 
 HOST = "host0"
 """The id a test registers a node's host under: a node file names none."""
@@ -653,6 +653,8 @@ def test_a_storage_path_that_breaks_a_rule_is_refused(tmp_path, monkeypatch, pat
 
 TIMEBASE = "nebius-vm-monotonic-raw"
 """The time base card of the virtual machines an auditor's device runs in; its `drift.max` is marked `premise`."""
+VM = ("vy-auditor-1", "dummy-auditor-host-key", SCHEME)
+"""An auditor's host's id, key and the key's scheme, as whoever registers it gives them."""
 
 
 def _marked(mark: str, **entry: object) -> dict:
@@ -671,16 +673,16 @@ def test_a_hosts_clock_on_a_premise_is_its_premise() -> None:
 
 
 def test_a_number_marked_premise_never_becomes_the_auditors_drift() -> None:
-    """A premise is not a figure: the auditor takes none from it for its device, so a row that reads the device's
-    drift from the Site prints no premise only where the card's mark is `ceiling`, and the same number then gives the
+    """A premise is not a figure: the auditor takes none from it for its host, so a row that reads a device's drift
+    from the Site prints no premise only where the card's mark is `ceiling`, and the same number then gives the
     figure and no premise."""
     premise = clock_drift("vy-auditor-1", cards.load(TIMEBASE))
     assert isinstance(premise, ClockPremise) and not isinstance(premise, Fraction)
     with pytest.raises(Malformed, match="not a nonnegative rational"):
-        Auditor((), drift=(("challenger0", premise),))
+        Auditor((), drift=((VM[0], premise),))
     figure = clock_drift("vy-auditor-1", _marked("ceiling"))
     assert figure == Fraction(1, 2000) and not isinstance(figure, ClockPremise)
-    assert Auditor((), drift=(("challenger0", figure),)).drift == (("challenger0", Fraction(1, 2000)),)
+    assert Auditor((), drift=((VM[0], figure),)).drift == ((VM[0], Fraction(1, 2000)),)
 
 
 @pytest.mark.parametrize(("host", "card", "refusal"), [
@@ -704,57 +706,82 @@ def test_a_clock_the_card_does_not_bound_is_refused(host: str, card, refusal: st
 
 def test_an_auditor_holds_its_hosts_time_bases_by_their_cards() -> None:
     """`Auditor.of_files(timebases=)` takes, by a host's id, the card of the time base its clock runs on, and holds the
-    card's SKU for the host, which `owner` holds the host's own to; a card of another kind is refused."""
-    held = Auditor.of_files((), timebases={"vy-auditor-1": cards.load(TIMEBASE)})
-    assert held.timebases == (("vy-auditor-1", TIMEBASE),)
+    card's SKU for the host, which `owner` holds the host's own to, and the card's drift only where it is a figure,
+    after the drifts given; a card of another kind is refused."""
+    held = Auditor.of_files((), timebases={VM[0]: cards.load(TIMEBASE)})
+    assert (held.timebases, held.drift) == (((VM[0], TIMEBASE),), ())
+    held = Auditor.of_files((), drift=[("vm1", Fraction(1, 10))], timebases={VM[0]: _marked("ceiling")})
+    assert (held.timebases, held.drift) == (((VM[0], TIMEBASE),), (("vm1", Fraction(1, 10)), (VM[0], Fraction(1, 2000))))
     with pytest.raises(Malformed, match="is no time base"):
-        Auditor.of_files((), timebases={"vy-auditor-1": cards.load("xeon-6776p-2s")})
+        Auditor.of_files((), timebases={VM[0]: cards.load("xeon-6776p-2s")})
 
 
-def _clocked(kind: str, clock: object) -> tuple[Registration, Auditor]:
-    """Node `kind`'s remote log with `CERTIFIER` in front of it, its host's clock `clock`, and the auditor holding the
-    certifier's key and that clock."""
+def _clocked(kind: str, card: dict) -> tuple[Registration, Auditor]:
+    """Node `kind`'s remote log with `CERTIFIER` in front of it, in the auditor's host `VM` whose time base's card is
+    `card`, and the auditor holding the certifier's and the host's keys and the host's time base."""
     node, log = nodes.load(kind), Registration("remote")
-    log = log.append(log.node_entry(node, cards.load(node["device"]["sku"]), HOST, certifier=CERTIFIER, clock=clock,
+    log = log.append(log.node_entry(node, cards.load(node["device"]["sku"]), HOST, certifier=CERTIFIER,
+                                    certifier_host=auditor_host(*VM, card),
                                     host_card=cards.load(node["host"]["sku"]), ways=nodes.ways_out(node, HOST),
                                     leaves=nodes.leaves(node, HOST)))
-    held = auditor(kind, **{CERTIFIER[0]: CERTIFIER[1]})
-    return log, Auditor(held.sheets, held.tolerance, held.keys, held.memory, held.hosts,
-                        Auditor.of_files((), clocks={CERTIFIER[0]: clock}).drift)
+    clocked = Auditor.of_files((), timebases={VM[0]: card})
+    return log, replace(auditor(kind, **{CERTIFIER[0]: CERTIFIER[1], VM[0]: VM[1]}), drift=clocked.drift,
+                        timebases=clocked.timebases)
 
 
 @pytest.mark.parametrize("kind", WIRED)
-def test_a_certifier_states_its_hosts_clock_and_a_premise_is_no_figure(kind: str) -> None:
-    """A certifier registered in a host whose time base's drift is a premise states no drift, the auditor takes none
-    for it, the log is accepted, and the premise is the device's `Account.Premised`. Marked a ceiling, the same number
-    is the certifier's drift and the auditor's, and the log is accepted only by an auditor that holds it. Held as the
-    auditor's figure while the device states none, the premise's number is refused by `owner`."""
-    cert = CERTIFIER[0]
-    premise = clock_drift("vy-auditor-1", cards.load(TIMEBASE))
-    log, held = _clocked(kind, premise)
-    assert Site.of_log(log).loc(cert).drift is None and held.drift == ()
-    assert check(log, held) == Site.of_log(log)
-    assert premise.premised(cert) == (cert, Fraction(1, 2000), "ClockRateWithin(vy-auditor-1, 5e-4)")
-    with pytest.raises(Refused) as e:
-        check(log, replace(held, drift=((cert, premise.drift),)))
-    assert (e.value.name, e.value.entry) == ("owner", 0)
-    figure = clock_drift("vy-auditor-1", _marked("ceiling"))
-    log, held = _clocked(kind, figure)
-    assert Site.of_log(log).loc(cert).drift == figure and held.drift == ((cert, Fraction(1, 2000)),)
-    assert check(log, held) == Site.of_log(log)
+def test_a_certifier_reads_its_hosts_clock_and_a_premise_is_no_figure(kind: str) -> None:
+    """A certifier registered in an auditor's host reads that host's clock. Where the time base's drift is a premise
+    the host states its time base and no drift, the auditor takes none for it, the log is accepted, the certifier
+    reads no drift from the Site, and the premise is the host's `Account.Premised`. Marked a ceiling, the same number
+    is the host's drift and the auditor's, the certifier's as the Site reads it, and the log is accepted only by an
+    auditor that holds it. Held as the auditor's figure while the host states none, the premise's number is refused
+    by `owner`, as is another time base than the host's."""
+    cert, vm = CERTIFIER[0], VM[0]
+    premise = clock_drift(vm, cards.load(TIMEBASE))
+    log, held = _clocked(kind, cards.load(TIMEBASE))
+    site = Site.of_log(log)
+    assert (site.loc(vm).timebase, site.loc(vm).drift, held.drift) == (TIMEBASE, None, ())
+    assert (site.loc(cert).parent, site.clock(cert), site.drift(cert), site.loc(cert).drift) == (vm, vm, None, None)
+    assert check(log, held) == site
+    assert premise.premised() == (vm, Fraction(1, 2000), "ClockRateWithin(vy-auditor-1, 5e-4)")
+    for other in (replace(held, drift=((vm, premise.drift),)), replace(held, timebases=((vm, "tb1"),)),
+                  replace(held, timebases=())):
+        with pytest.raises(Refused) as e:
+            check(log, other)
+        assert (e.value.name, e.value.entry) == ("owner", 0)
+    log, held = _clocked(kind, _marked("ceiling"))
+    site = Site.of_log(log)
+    assert (site.loc(vm).drift, site.drift(cert), site.loc(cert).drift) == (Fraction(1, 2000), Fraction(1, 2000), None)
+    assert held.drift == ((vm, Fraction(1, 2000)),)
+    assert check(log, held) == site
     with pytest.raises(Refused) as e:
         check(log, replace(held, drift=()))
     assert (e.value.name, e.value.entry) == ("owner", 0)
 
 
-def test_a_clock_is_a_certifiers_and_clock_drifts_own() -> None:
-    """A clock given with no certifier, and a clock that is neither a premise nor a figure, are refused."""
-    node = nodes.load(WIRED[0])
+def test_a_certifier_at_the_site_reads_no_clock() -> None:
+    """A certifier registered with no host of the auditor's is under the site, where it reads no clock and no drift.
+    A host given with no certifier, and one that is no auditor's host at the entry's site, are refused; a host the log
+    already holds is not registered twice."""
+    kind = WIRED[0]
+    node, cert = nodes.load(kind), CERTIFIER[0]
+    site = Site.of_log(log_of(kind, "remote", CERTIFIER))
+    assert (site.loc(cert).parent, site.clock(cert), site.drift(cert)) == ("site", None, None)
+
+    def entry(log: Registration, host: str = HOST, **given: object):
+        return log.node_entry(node, cards.load(node["device"]["sku"]), host, **given,
+                              host_card=cards.load(node["host"]["sku"]), ways=nodes.ways_out(node, host),
+                              leaves=nodes.leaves(node, host))
+
+    vm = auditor_host(*VM, cards.load(TIMEBASE))
     with pytest.raises(Malformed, match="no certifier is given"):
-        Registration("remote").node_entry(node, cards.load(node["device"]["sku"]), HOST, clock=Fraction(1, 2000),
-                                          host_card=cards.load(node["host"]["sku"]), ways=nodes.ways_out(node, HOST),
-                                          leaves=nodes.leaves(node, HOST))
-    for clock in (5e-4, "5e-4", True):
-        with pytest.raises(Malformed, match="a premise or a figure"):
-            device_drift(clock)
-    assert device_drift(None) is None and device_drift(Fraction(1, 2000)) == Fraction(1, 2000)
+        entry(Registration("remote"), certifier_host=vm)
+    for other in (replace(vm, parent="site1"), replace(vm, kind="host"), VM[0]):
+        with pytest.raises(Malformed, match="an auditor's host at site site"):
+            entry(Registration("remote"), certifier=CERTIFIER, certifier_host=other)
+    log = Registration("remote")
+    log = log.append(entry(log, certifier=CERTIFIER, certifier_host=vm))
+    second = entry(log, "host1", certifier=("certifier1", "dummy-certifier1-key", SCHEME), certifier_host=vm)
+    assert [x.id for x in second.locs if x.kind == "auditor-host"] == []
+    assert Site.of_log(log.append(second)).clock("certifier1") == VM[0]
