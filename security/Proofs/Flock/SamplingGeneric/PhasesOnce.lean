@@ -23,17 +23,17 @@ spends its calls in the phases where the earlier phases' coins fell its way is c
 the period, not its largest spending in every phase. The opening checks' own calls `c` and the two terms that count
 no call of the prover's stay one a phase.
 
-* `monitoringPeriodSplit`: **a period's sample space, as one of its phases reads it.** The period's sample space is
+* `phasesSplit`: **a period's sample space, as one of its phases reads it.** The period's sample space is
   an adversary's tape and every phase's coins. Phase `i`'s prover reads the tape and the other phases' coins as its
   own tape, and phase `i`'s coins are uniform and independent of that. The theorems below take any sample space with
   such a splitting at each phase (`φ`); this is the one where every phase's coins are independent.
-* `Pr_monitoringPeriod_le`, `Ex_monitoringPeriod_sum`: an event of some phase has at most the phases' probabilities
+* `Pr_phases_le`, `Ex_phases_sum`: an event of some phase has at most the phases' probabilities
   summed, and the average of a sum over the phases is the phases' averages summed.
 * `sum_hash_le`: the phases' parts that count calls, summed, are at most that part at the summed expected calls and
   at `n` times the opening checks' own.
-* `pr_monitoringPeriod_once_le`: **the period's step**, for phases whose bounds have that shape.
-* `CompiledTwo.monitoringPeriod_oneWait_le_once`: the period's bound at two stages with one wait, each phase under
-  `eventTwoX_oneWait_le_cls_exp`'s premises. `Compiled.monitoringPeriod_eventX_le_once`: the same at one stage, each
+* `pr_phases_once_le`: **the period's step**, for phases whose bounds have that shape.
+* `CompiledTwo.phases_oneWait_le_once`: the period's bound at two stages with one wait, each phase under
+  `eventTwoX_oneWait_le_cls_exp`'s premises. `Compiled.phases_eventX_le_once`: the same at one stage, each
   phase under `Compiled.eventX_le_cls_exp`'s premises, with `κ_s + √(k·γ_s·Pr[B_i])` a phase and `2·… + 2·…` over
   `2^256`.
 
@@ -53,18 +53,19 @@ open Claims.Sampling (AuditStatement Partition InScopeTwo)
 
 /-- **A period's sample space, split at phase `i`**: an adversary's tape `Θ` and every phase's coins, as the pair of
 phase `i`'s prover's tape (the adversary's tape and the other phases' coins) and phase `i`'s own coins. -/
-def monitoringPeriodSplit (Θ : Type) {n : ℕ} (C : Fin n → Type) (i : Fin n) :
+def phasesSplit (Θ : Type) {n : ℕ} (C : Fin n → Type) (i : Fin n) :
     Θ × ((j : Fin n) → C j) ≃ (Θ × ((j : {j : Fin n // j ≠ i}) → C j)) × C i :=
   ((Equiv.refl Θ).prodCongr (Equiv.piSplitAt i C)).trans
     ⟨fun p => ((p.1, p.2.2), p.2.1), fun q => (q.1.1, (q.2, q.1.2)), fun _ => rfl, fun _ => rfl⟩
 
 /-- **Some phase's event has at most the phases' probabilities summed**, each phase's over its prover's tape and its
 own coins. -/
-theorem Pr_monitoringPeriod_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [∀ i, Fintype (Ω i)]
+theorem Pr_phases_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [∀ i, Fintype (Ω i)]
     [∀ i, Fintype (C i)] (φ : ∀ i, S ≃ Ω i × C i) (E : ∀ i, Ω i × C i → Prop) :
     Pr (fun σ : S => ∃ i, E i (φ i σ)) ≤ ∑ i, Pr (E i) := by
   have h := Claims.Sampling.Pr_exists_le (α := S) (Finset.univ : Finset (Fin n)) fun i σ => E i (φ i σ)
-  have h1 : Pr (fun σ : S => ∃ i, E i (φ i σ)) = Pr (fun σ : S => ∃ i ∈ (Finset.univ : Finset (Fin n)), E i (φ i σ)) :=
+  have h1 : Pr (fun σ : S => ∃ i, E i (φ i σ)) =
+      Pr (fun σ : S => ∃ i ∈ (Finset.univ : Finset (Fin n)), E i (φ i σ)) :=
     Pr_congr fun σ => by simp
   have h2 : ∑ i ∈ (Finset.univ : Finset (Fin n)), Pr (fun σ : S => E i (φ i σ)) = ∑ i, Pr (E i) :=
     Finset.sum_congr rfl fun i _ => Claims.Sampling.Pr_equiv (φ i) (E i)
@@ -72,7 +73,7 @@ theorem Pr_monitoringPeriod_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n �
 
 /-- **The average of a sum over the phases is the phases' averages summed**, each phase's over its prover's tape and
 its own coins. -/
-theorem Ex_monitoringPeriod_sum {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [∀ i, Fintype (Ω i)]
+theorem Ex_phases_sum {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [∀ i, Fintype (Ω i)]
     [∀ i, Fintype (C i)] (φ : ∀ i, S ≃ Ω i × C i) (f : ∀ i, Ω i × C i → ℝ) :
     Ex (fun σ : S => ∑ i, f i (φ i σ)) = ∑ i, Ex (f i) :=
   (Claims.Sampling.Ex_finsum (Finset.univ : Finset (Fin n)) fun i (σ : S) => f i (φ i σ)).trans
@@ -122,7 +123,7 @@ probability at most `b_i` plus, over `2^256`, `a` times `T_i·(1 + e_i·N_s) + c
 `T_i·(1 + e_i·N_s + K_s + e_i·K_m) + (1 + K_s)·c_i`, with `T_i` the phase's expected calls, and the period's calls
 average at most `T` in total, some phase has its event with probability at most `Σ_i b_i` plus the same expression
 at `T`, at `e ≥ e_i` and at `n·c`, `c ≥ c_i`. -/
-theorem pr_monitoringPeriod_once_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [∀ i, Fintype (Ω i)]
+theorem pr_phases_once_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin n → Type} [∀ i, Fintype (Ω i)]
     [∀ i, Fintype (C i)] (φ : ∀ i, S ≃ Ω i × C i) (E : ∀ i, Ω i × C i → Prop) (calls : ∀ i, Ω i × C i → ℝ)
     (b es c : Fin n → ℝ) {a f T e cc Ns Ks Km : ℝ} (ha : 0 ≤ a) (hf : 0 ≤ f) (hcalls : ∀ i q, 0 ≤ calls i q)
     (he0 : 0 ≤ e) (hNs0 : 0 ≤ Ns) (hKs0 : 0 ≤ Ks) (hKm0 : 0 ≤ Km) (he : ∀ i, es i ≤ e) (hc : ∀ i, c i ≤ cc)
@@ -132,7 +133,7 @@ theorem pr_monitoringPeriod_once_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin
     Pr (fun σ : S => ∃ i, E i (φ i σ)) ≤
       ∑ i, b i + (a * (T * (1 + e * Ns) + n * cc) +
         f * (T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * (n * cc))) / 2 ^ (256 : ℝ) := by
-  have hsum : ∑ i, Ex (calls i) ≤ T := (Ex_monitoringPeriod_sum φ calls).symm.le.trans hT
+  have hsum : ∑ i, Ex (calls i) ≤ T := (Ex_phases_sum φ calls).symm.le.trans hT
   have hh := sum_hash_le (fun i => Ex (calls i)) es c ha hf (fun i => Ex_nonneg (hcalls i)) he0 hNs0 hKs0 hKm0 he
     hc hsum
   have hp : (0 : ℝ) < 2 ^ (256 : ℝ) := by positivity
@@ -141,7 +142,7 @@ theorem pr_monitoringPeriod_once_le {S : Type} [Fintype S] {n : ℕ} {Ω C : Fin
       ∑ i, b i + (∑ i, (a * (Ex (calls i) * (1 + es i * Ns) + c i) +
         f * (Ex (calls i) * (1 + es i * Ns + Ks + es i * Km) + (1 + Ks) * c i))) / 2 ^ (256 : ℝ) := by
     rw [Finset.sum_add_distrib, Finset.sum_div]
-  exact (Pr_monitoringPeriod_le φ E).trans (((Finset.sum_le_sum fun i _ => hph i).trans hsplit.le).trans
+  exact (Pr_phases_le φ E).trans (((Finset.sum_le_sum fun i _ => hph i).trans hsplit.le).trans
     (add_le_add le_rfl (div_le_div_of_nonneg_right hh hp.le)))
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
@@ -156,7 +157,7 @@ most `c` at every phase. Where the period's phases call `H` at most `T` times on
 calls counted, some phase's accepted run samples a proof block of its `FregX` with probability at most
 
 `Σ_i (κ_s + √(k·γ_s·Pr[B_i])) + (2·(T·(1 + e·N_s) + n·c) + 2·(T·(1 + e·N_s + K_s + e·K_m) + (1 + K_s)·n·c))/2^256`. -/
-theorem monitoringPeriod_eventX_le_once {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
+theorem phases_eventX_le_once {H : Msg → Msg} {L : Compiled Coin A} (hbind : L.commit.Binds H)
     (hS : L.Sessions H) (hSK : L.SessionKS H) (hopen : L.OpenCallsLe H) {n : ℕ} {x : Fin n → Msg}
     {s : Fin n → AuditStatement} {Pt : Fin n → Partition} (hs : ∀ i, L.parse (x i) = some (s i))
     (hPt : ∀ i, L.partition (s i) = some (Pt i)) (hin : ∀ i, Sampling.InScope (Pt i) (s i)) {S : Type} [Fintype S]
@@ -183,7 +184,7 @@ theorem monitoringPeriod_eventX_le_once {H : Msg → Msg} {L : Compiled Coin A} 
       ∑ i, (L.κs (x i) + Real.sqrt (L.V.k (x i) * L.γs (x i) * PrB H L.V (P i) (x i))) +
         (2 * (T * (1 + e * Ns) + n * c) + 2 * (T * (1 + e * Ns + Ks + e * Km) + (1 + Ks) * (n * c))) /
           2 ^ (256 : ℝ) := by
-  have h := pr_monitoringPeriod_once_le φ
+  have h := pr_phases_once_le φ
     (fun i p => (run H (P i) L.V (x i) p.1 p.2).out = .acc ∧ ∃ u ∈ L.checked (x i) p.2, u ∈ L.FregX H (P i) (x i))
     (fun i q => (L.partiesCalls H (P i) (x i) q.1 q.2 : ℝ))
     (fun i => L.κs (x i) + Real.sqrt (L.V.k (x i) * L.γs (x i) * PrB H L.V (P i) (x i)))
@@ -210,7 +211,7 @@ accepted run samples a proof block of the one-wait compiled verifier's `FregTwoX
 
 a phase's expression at the period's expected calls and at `n` times the opening checks' own, with the two terms
 that count no call of the prover's once a phase. -/
-theorem monitoringPeriod_oneWait_le_once {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
+theorem phases_oneWait_le_once {H : Msg → Msg} {L : CompiledTwo Coin A} (hF : A.OneWaitFinds H)
     (hA : A.KS H) (hbind : L.commit.Binds H) (hS : L.Sessions H) (hopen : L.toCompiled.OpenCallsLe H) {n : ℕ}
     {x : Fin n → Msg} {s : Fin n → AuditStatement} {Pt : Fin n → Partition} {d : Fin n → Sampling.Design.Two}
     (hs : ∀ i, L.parse (x i) = some (s i)) (hPt : ∀ i, L.partition (s i) = some (Pt i))
@@ -250,7 +251,7 @@ theorem monitoringPeriod_oneWait_le_once {H : Msg → Msg} {L : CompiledTwo Coin
   have key : ∀ b u v p : ℝ, b + 2 * (2 * u + 4 * v) / p = b + (4 * u + 8 * v) / p := by
     intro b u v p
     ring
-  have h := pr_monitoringPeriod_once_le φ
+  have h := pr_phases_once_le φ
     (fun i p => (run H (P i) L.V (x i) p.1 p.2).out = .acc ∧
       ∃ u ∈ L.checked (x i) p.2, u ∈ L.oneWait.FregTwoX H (P i) (x i) p.1 p.2)
     (fun i q => (L.toCompiled.partiesCalls H (P i) (x i) q.1 q.2 : ℝ))
