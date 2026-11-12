@@ -4,3 +4,4 @@
 2026-11-12T14:28Z module sampled_accept.py written; the Definition and its numpy twin agree on a first small case (K=2, 18 tiles of 512); writing a PTX interpreter to hold the twin to the kept PTX off the card
 2026-11-12T14:55Z Definition, reference, hand vectors, test file and sidecar committed on the PR branch (7ed6ba2d46); next: circuit-check and the off-card PTX comparison in runs, then the capture job
 2026-11-12T15:22Z capture script pushed (f42a3947f2); off-card PTX comparison kept (r20261112-150909-3e43: 197,890 words, 0 differ inside the domain); circuit-check's first report has 5 block/past-range (r20261112-145717-8b39); now reading the cut's precedents for the stages module
+2026-11-12T16:02Z comment with items 1-4 posted on CIR-264; circuit-check 31 targets 0 failures (3b76); off-card PTX comparison 197,890 words 0 differ in domain (c4ae); next: suites and lint, then the capture in the card hours
