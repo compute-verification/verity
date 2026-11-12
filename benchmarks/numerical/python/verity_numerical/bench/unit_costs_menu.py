@@ -1,5 +1,5 @@
-"""Front F6's pinned menu: dp4t's buckets, each at the slots per session B that costs least at its public session count,
-fixed per model (F2's menu).
+"""The pinned menu: dp4t's buckets, each at the slots per session B that costs least at its public session count, fixed
+per model.
 
     python -m verity_numerical.bench.unit_costs_menu --inventory unit-costs.json --out DIR [--outer proofs_c3_multiblock.json]
         [--positions proofs-rows/buckets.json]
@@ -11,14 +11,15 @@ by (template class, Z), each rare type its own bucket, the body's units over the
 limit, the tail's samplers each their own bucket and its other large units one bucket at their largest Z, their units over
 the limit one bucket of pieces.
 
-**Each bucket at each B** of :data:`B_MENU`: the inner session (``shape``, or ``pieces_shape`` for pieces; F6's fit plus the
-slot sumcheck), its sessions at the mean and at the public 1 − 2⁻⁴⁰ count, and the inner prover hours. The outer proof of
-one inner session is an input (``--outer``): circuits' ``nonzero_cost.py --proofs-c3`` output, ``{"buckets": [...]}``, one
-row per (bucket, B) with its ``prove_s`` and ``rss_gib`` on the composed layout, matched by the row id in its
-``workload`` field (``WORKLOAD#BUCKET@B``). Its outer hours are sessions x ``prove_s``. ``--rows VSTAR_DIR`` writes those
-rows' input instead (``proofs-rows/buckets.json`` beside proofs' ``k2.py`` and ``units.json``): proofs' candidate-3 V* row
-for each (bucket, B), its templates by proofs' ``buckets.template`` at the limit and ``inner_m`` the inner session's
-log2 D, from proofs' ``vstar_c3.py`` and ``buckets.py`` in VSTAR_DIR.
+**Each bucket at each B** of :data:`B_MENU`: the inner session (``shape``, or ``pieces_shape`` for pieces; the prover
+column's fit plus the slot sumcheck), its sessions at the mean and at the public 1 − 2⁻⁴⁰ count, and the inner prover
+hours. The outer proof of one inner session is an input (``--outer``): the output of ``nonzero_cost.py --proofs-c3``,
+``{"buckets": [...]}``, one row per (bucket, B) with its ``prove_s`` and ``rss_gib`` on the composed layout, matched by the
+row id in its ``workload`` field (``WORKLOAD#BUCKET@B``). Its outer hours are sessions x ``prove_s``. ``--rows VSTAR_DIR``
+writes those rows' input instead (``proofs-rows/buckets.json`` beside VSTAR_DIR's ``k2.py`` and ``units.json``): the
+candidate-3 V* row for each (bucket, B), its templates by ``buckets.template`` at the limit and ``inner_m`` the inner
+session's log2 D, from ``vstar_c3.py`` and ``buckets.py`` in VSTAR_DIR: V*'s row scripts, another directory's, loaded
+from the path given.
 
 **The choice** (:func:`pick`): of the B whose inner session is in range (k_log ≤ 27), fits one node (peak ≤
 :data:`~unit_costs_prover.NODE_GIB`), has D within the fit's range (≤ 2^:data:`D_FIT_LOG`) and whose outer proof
@@ -52,9 +53,13 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from verity_flock import rec_residuals as RR
 from verity_flock import subcircuit_templates as TM
+from verity_flock.rec_algebra import Shape
+
 from . import unit_costs_padding as P
 from . import unit_costs_prover as U
+from .unit_costs import retree
 
 B_MENU = (1, 4, 16, 64, 256, 1024)
 #: the fit's largest D: 2^35 (a 4096-instance session)
@@ -156,8 +161,8 @@ def row_id(w: str, i: int, B: int) -> str:
 
 
 def proofs_rows(inv: Mapping[str, Any], pl: Sequence[Mapping[str, Any]], vstar: str | Path) -> list[dict[str, Any]]:
-    """Proofs' candidate-3 row for every (bucket, B), in the form proofs' ``buckets.py`` writes and circuits'
-    ``nonzero_cost.py --proofs-c3`` reads, from ``vstar_c3.py`` and ``buckets.py`` in ``vstar``."""
+    """The candidate-3 V* row for every (bucket, B), in the form ``buckets.py`` writes and ``nonzero_cost.py --proofs-c3``
+    reads, from ``vstar_c3.py`` and ``buckets.py`` in ``vstar``: another directory's scripts, loaded from that path."""
     sys.path.insert(0, str(vstar))
     try:
         V, BK = importlib.import_module("vstar_c3"), importlib.import_module("buckets")
@@ -194,7 +199,7 @@ TOTALS = ("sessions_mean", "sessions_public", "inner_h_mean", "inner_h_public", 
 SESSION = ("k_log", "inner_m", "inner_peak_gib", "inner_session_s")
 #: the inner session's reps, each checked by V* at the session's claims
 REPS = 2
-#: rows of V*'s GF(2^128) algebra per product (rec-reprice, 10,440,705 rows over 4,281 products; proofs' vstar_c3.py)
+#: rows of V*'s GF(2^128) algebra per product (rec-reprice, 10,440,705 rows over 4,281 products; ``vstar_c3.py``)
 ROWS_PER_PRODUCT = 10_440_705 / 4_281
 
 
@@ -256,9 +261,6 @@ def block_costs(outer: Mapping[str, Any]) -> dict[int, tuple[float, float]]:
 def rep_algebra(inner_m: int, k_log: int, claims: int) -> tuple[int, str | None]:
     """The inner session's rep algebra at its claims: its GF(2^128) products (``rec_algebra.structure``'s ``nv``), and
     why V* can't stage it (``rec_residuals.parts``' refusal), or None."""
-    from verity_flock import rec_residuals as RR
-    from verity_flock.rec_algebra import Shape
-
     S = RR.spec(Shape(inner_m, k_log, claims))
     try:
         RR.parts(S)
@@ -270,7 +272,7 @@ def rep_algebra(inner_m: int, k_log: int, claims: int) -> tuple[int, str | None]
 def inner_algebra(entries: Sequence[dict[str, Any]], blocks: Mapping[int, tuple[float, float]],
                   algebra: Callable[[int, int, int], tuple[int, str | None]] = rep_algebra) -> None:
     """Add V*'s check of the inner session's two reps' algebra, at the shape's claims, to each entry's outer proof: one
-    statement of :data:`REPS` x products x :data:`ROWS_PER_PRODUCT` rows, at circuits' size rule (2^max(22, ceil(log2
+    statement of :data:`REPS` x products x :data:`ROWS_PER_PRODUCT` rows, at a session's size rule (2^max(22, ceil(log2
     rows) + 2)) and priced at the input's one-block statement of that k_log; and V*'s refusal, if any. Reprices."""
     for e in entries:
         if e["claims"] is None or e["outer_session_s"] is None:
@@ -396,14 +398,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--out", required=True, help="directory for menu.json and menu.md (or proofs-rows/, or Pinned.lean)")
     ap.add_argument("--lean", nargs=2, metavar=("MENU_JSON", "SOURCE"),
                     help="write MENU_JSON's menus as the Lean module VStar.Menu.Pinned (Pinned.lean), citing SOURCE")
-    ap.add_argument("--outer", default=None, help="circuits' nonzero_cost.py --proofs-c3 output on the --rows rows")
+    ap.add_argument("--outer", default=None, help="nonzero_cost.py --proofs-c3's output on the --rows rows")
     ap.add_argument("--rows", default=None, metavar="VSTAR_DIR",
-                    help="write proofs-rows/ (buckets.json, k2.py, units.json) from proofs' vstar_c3.py and buckets.py")
+                    help="write proofs-rows/ (buckets.json, k2.py, units.json) from VSTAR_DIR's vstar_c3.py and buckets.py")
     ap.add_argument("--positions", default=None, metavar="ROWS_JSON",
                     help="the --rows output's buckets.json: each entry's positions, its row's instances_max")
     a = ap.parse_args(argv)
-    from .unit_costs import retree
-
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     if a.lean:
