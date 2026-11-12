@@ -254,3 +254,36 @@ Runs: `r20261112-221223-1e23` (#9501 at `6a535a510acc`) was running at my last l
 
 Least sure of: whether the harness's wording "in place of the calculator's default" should change once the default is the same δ (proofs' text; I did not touch it). Not looked at: #9467's whole diff, only its three files' names, its `MARKS` and the pinned lines.
 
+[2026-11-12T23:04Z] 00163befa1c9
+ONSITEMAIN, Thu 12 Nov 3:04 PM PST.
+
+**D2, the third way: restated in scratch, one commit, in no cut. Three statements changed; old and new below. No lemma needed a hypothesis on the schedule.** [ran: the edit and the commit `515306585d3` on `scratch/onsitemain-port-rows`; the tries of `Warden.lean`, `Tap.lean` and the area's root at that head, `r20261112-230308-6fc7`, launched once at 3:03 PM PST, running. Nothing is shown until it ends.]
+
+**What went and what moved**
+- Gone: `tailPads` and `wireFrames`. `main`'s `laneFrames` is untouched, in its file.
+- `laneWire`, `WireFormat` and `wireCode` move from `Definitions/NetworkCertifier/Warden.lean` and `Tap.lean` to `Definitions/NetworkCertifier/RecordRows.lean`, beside `laneFrames`, because `laneFrames` is defined there and `Tap.lean` does not import it. So `Definitions/NetworkCertifier/Tap.lean` is `main`'s text again and C no longer touches it. `Proofs/NetworkCertifier/Warden.lean` and `Proofs/NetworkCertifier/Tap.lean` each gain one import line, of `Definitions.NetworkCertifier.RecordRows`. The other way to place them was to move `laneFrames` up into `Warden.lean` unchanged; I did not, to leave `main`'s file as it is.
+
+**The three statements, old and new**
+
+1. `laneWire` (a definition).
+   Old: `(s.span c).flatMap fun b => (wireFrames s v c b).map (b, ·)`, with `wireFrames s v c b = (if s.adm c ≤ b ∧ b < s.adm c + s.D then List.replicate s.r .pad else []) ++ ((v c).filter fun x => x.1 == b).map Prod.snd ++ List.replicate (tailPads s c b) .pad`.
+   New: `(s.span c).flatMap fun b => (laneFrames s v c b).map (b, ·)`, `laneFrames` being `main`'s: the same without the last term.
+2. `filter_laneWire`.
+   Old: `b ∈ s.span c → (laneWire s v c).filter (fun x => x.1 == b) = (wireFrames s v c b).map (b, ·)`.
+   New: the same with `laneFrames` for `wireFrames`.
+3. `wireFrames_cell`, now `laneFrames_cell`.
+   Old: `j < s.cells c → (wireFrames s (certifierCode s a) c (s.bucket c j))[j % s.r]? = ((certifierCode s a c)[j]?).map Prod.snd`.
+   New: the same with `laneFrames` for `wireFrames`. Its proof loses the step past the tail.
+
+**Unchanged in text, changed in what they say, through `laneWire`**: `WireFormat.read_record`, `wireCode`, `wire_frames`, `wire_frames_read`, `wire_data_read`. Each now speaks of a wire with no frame after a lane's last cell.
+
+**What "a lane's own last cell" turned out to be** [read: every use of `tailPads` on the onsite line at `00d79b22e4d2`]: no lemma there names it. `tailPads` is used in `laneFrames`, in `laneLoad`, and in proofs that show it zero or unfold it. So nothing needed that cell named another way; the only things that spoke of it were the two definitions, and they are gone.
+
+**What the third way costs, in one sentence for C's body.** With `cells` counting a lane through its last bucket, the model lets the code put data, the end or a fail cell in the slots after a lane's true last cell, where the device sends only padding; every lemma here is over every arrival, so they cover more than the device does, never less, and what the record is shown to hold is unchanged. A lemma tying the two descriptions (the onsite wire at a schedule of the true cells equals this one at the schedule rounded up, when the data and its end fit the true cells) is not written and nothing reads one.
+
+**Not done under this, and it is not tail padding**: the rows format still has no instance of `WireFormat`. The onsite line reads every frame back (`wireOfRows`, its `read`, and a `Fits` that also keeps the admission padding inside the period), where `main` reads the lanes' cells (`lanesOfRows`). Those three stay "beside" if you want the rows format shown to hold the wire: three definitions and one proof, none of them a copy of a tail-padding pair. I have not written them. Say if C should carry them or stop at the format.
+
+**One duplicate I left**: `laneFrames_cell`'s proof is the same argument `main`'s `lanesOfRows_bucketFrames` makes inline. Making `main`'s proof call the lemma is a change to a proof of `main`'s, so I did not.
+
+C stays in scratch. Least sure of: that the root builds with `Proofs/NetworkCertifier/Warden.lean` importing the rows' definitions (no cycle by my reading of the import lines; the try says).
+
