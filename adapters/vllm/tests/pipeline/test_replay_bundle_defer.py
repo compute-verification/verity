@@ -78,6 +78,21 @@ def test_a_planned_replay_defers_to_a_slim_bundle_of_the_reads_it_made(tmp_path:
     assert deferred_full == deferred.replace(str(site.out), str(full.out))
 
 
+@pytest.mark.parametrize("planned", [{}, {"replay": None}, {"replay": {}}])
+def test_a_plan_with_no_replay_of_its_own_defers_to_a_slim_bundle_that_names_no_pick(tmp_path: Path, logged: Lines,
+                                                                                    planned: dict[str, Any]) -> None:
+    """A plan may hold no `replay` (absent, null or empty): the slim bundle then says its picks and what it left unresolved as
+    unknown."""
+    site = Site(tmp_path)
+    assert site.defer(plan=lambda: planned | {"linkage": {"pairs": 0}})
+    slim = site.deferred[1]["slim"]
+    assert list(slim) == ["bytes", "picked", "unresolved_n", "unresolved", "linkage", "plan_s"]
+    assert {k: v for k, v in slim.items() if k != "plan_s"} == {"bytes": 0, "picked": None, "unresolved_n": None, "unresolved": None,
+                                                                "linkage": {"pairs": 0}}
+    assert re.fullmatch(r"\[delta\] REPLAY BUNDLE \(pair 1\): slim -- None picks \+ linkage read 0 MiB of the store in [0-9.e-]+ s "
+                        r"\(unresolved None\)", logged()[0]), logged()[0]
+
+
 def test_a_plan_that_fails_defers_nothing_and_the_replay_runs_in_process(tmp_path: Path, logged: Lines) -> None:
     site = Site(tmp_path)
 
