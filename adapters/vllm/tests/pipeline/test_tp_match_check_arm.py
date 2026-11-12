@@ -1,7 +1,8 @@
 """`verity_vllm.pipeline.tp.match`'s check arm where its other tests do not go: the tokens part against a control arm, a recorder
-file that is missing, a rank Build of another rank or world or with a link that names the wrong number of peers, a step whose
-collectives are not the Build's signature, stored tensors that the recorder's rows do not count or key, and a command line
-that does not give two rank Builds in one spelling. Then the Match record a TP Commit reads from the run (`match_record`)."""
+file that is missing, a rank Build of another rank or world, with a link that names the wrong number of peers or with no links
+at all, a capture that names no first forward for a request, a step whose collectives are not the Build's signature, stored
+tensors that the recorder's rows do not count or key, and a command line that does not give two rank Builds in one spelling.
+Then the Match record a TP Commit reads from the run (`match_record`)."""
 from __future__ import annotations
 
 import hashlib
