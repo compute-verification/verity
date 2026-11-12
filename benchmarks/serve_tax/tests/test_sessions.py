@@ -176,7 +176,7 @@ def result(completed: int, duration: float, tok: float, good: float | None, fail
             "total_token_throughput": tok + 500.0, "median_ttft_ms": 400.0, "p99_itl_ms": 70.0}
 
 
-def test_a_pass_of_a_sessions_load_is_one_client_a_user_and_its_rates_are_the_users_sum(tmp_path: Path, monkeypatch):
+def test_a_pass_of_a_sessions_load_is_one_client_a_user_and_its_rates_are_over_the_pass_seconds(tmp_path: Path, monkeypatch):
     (tmp_path / "tmp").mkdir()
     monkeypatch.setattr(S.tempfile, "tempdir", str(tmp_path / "tmp"))
     whole = S.write_trace(tmp_path / "agentic.trace.jsonl", S.session_lines(corpus(tmp_path), 2, 3, 400))
@@ -213,19 +213,28 @@ def test_a_pass_of_a_sessions_load_is_one_client_a_user_and_its_rates_are_the_us
     assert each == [users["u0"], users["u1"]] and r == S.merged(each) and (d / "user-1" / "bench.log").exists()
     assert "a served answer" not in "".join(f.read_text() for f in d.rglob("*") if f.is_file())
     assert (r["users"], r["completed"], r["failed"], r["duration"], r["total_output_tokens"]) == (2, 5, 1, 80.0, 10000)
-    # a user's rate is over its own time, and the pass's is their sum
-    assert (r["output_throughput"], r["total_token_throughput"]) == (150.0, 1150.0)
-    assert r["request_throughput"] == pytest.approx(3 / 60 + 2 / 80) and r["request_goodput"] == pytest.approx(3 / 60 + 1 / 80)
+    # the pass's rates are over its seconds, the longest user's: 10,000 output and 5,000 prompt tokens, 5 requests
+    # and 4 within the SLO in 80 s. The users' own rates summed (one ended after 60 s) and their seconds are beside
+    assert (r["output_throughput"], r["total_token_throughput"]) == (125.0, 187.5)
+    assert (r["request_throughput"], r["request_goodput"], r["met"]) == (5 / 80, 4 / 80, 4)
+    assert (r["users_output_throughput"], r["users_duration"]) == (150.0, 140.0)
     # the times are over every user's requests: first tokens after 0.4 s (three) and 0.8 s; 20, 20, 20 and 40 ms a token
     assert (r["median_ttft_ms"], r["p90_ttft_ms"]) == (pytest.approx(400.0), pytest.approx(800.0))
     assert (r["median_tpot_ms"], r["p90_tpot_ms"], r["p99_tpot_ms"]) == tuple(map(pytest.approx, (20.0, 34.0, 39.4)))
     b = S.bench_metrics(r)
-    assert (b["sent"], b["ok"], b["met"], b["output_tok_per_s"], b["prompt_tok_per_s"]) == (6, 5, 4, 150.0, 1000.0)
+    assert (b["sent"], b["ok"], b["met"], b["output_tok_per_s"], b["prompt_tok_per_s"]) == (6, 5, 4, 125.0, 62.5)
+    assert (b["users_output_tok_per_s"], b["users_s"]) == (150.0, 140.0) and "users_s" not in S.bench_metrics(users["u0"])
     assert b["ttft_p50_s"] == pytest.approx(0.4) and b["tpot_p90_s"] == pytest.approx(0.034)
     assert b["itl_p99_s"] is None and b["slo_attained"] == pytest.approx(4 / 6)
     # a result that is not the detailed one gives no time, and one with no goodput no count within the SLO
     bare = S.merged([result(3, 60.0, 100.0, None), users["u1"]])
     assert bare["met"] is None and "p90_tpot_ms" not in bare and "tpot_p90_s" not in S.bench_metrics(bare)
+    # where the clients kept each request's start, the pass's seconds are from the first send of any user to the last
+    # answer of any: the user that took 80 s sent first and was answered last 79.5 s later, the other began 0.5 s
+    # after it; the users' own seconds are summed as they are
+    timed = S.merged([users["u0"] | {"start_times": [1000.5, 1020.0, 1040.0]}, users["u1"] | {"start_times": [1000.0, 1078.7]}])
+    assert timed["duration"] == pytest.approx(79.5) and timed["output_throughput"] == pytest.approx(10000 / 79.5)
+    assert (timed["users_output_throughput"], timed["users_duration"]) == (150.0, 140.0)
     # one user's client that fails fails the pass
     with pytest.raises(RuntimeError, match="exited 1"):
         S.drive_bench(8000, GLM, Path("/ck"), S.LOADS[S.AGENTIC], 2, "x", tmp_path / "bad", dataset=whole, prompts=3,
@@ -281,11 +290,11 @@ PLAN = {"requests": 96, "prompt_tokens": 8000000, "repeated_tokens": 7600000, "s
 def served(name: str, rates: list[float], load: str = S.AGENTIC, cached: float = 0.94, ok: int = 96, plan: dict = PLAN) -> dict:
     """An arm's metrics with a sessions load served by four users, a rep each rate, in thousands of output tokens a
     second, each rep with the share of its prompt tokens the prefix cache served, 52,000 prompt and output tokens a
-    second, 25 ms a token at the P90, and half its draft tokens accepted."""
+    second, 25 ms a token at the P90, 2,000 engine steps and half its draft tokens accepted."""
     reps = [{"rep": i + 1, "rate": None, "concurrency": 4, "sent": 96, "ok": ok, "met": ok, "goodput_req_per_s": 0.5,
              "req_per_s": 0.5, "output_tok_per_s": 1000 * r, "prompt_tok_per_s": 50000.0, "output_tokens": 60000,
              "prompt_tokens": 8000000, "prompt_cached_share": cached, "total_tok_per_s": 52000.0, "tpot_p90_s": 0.025,
-             "draft_accepted_share": 0.5, "accepted_per_draft": 2.5} for i, r in enumerate(rates)]
+             "steps": 2000, "draft_accepted_share": 0.5, "accepted_per_draft": 2.5} for i, r in enumerate(rates)]
     return {"arm": name, "parent": S.ARMS[name].parent, "what": name, "run_id": "r-1", "commit": "c" * 40,
             "vllm": "0.1+gd9105ea8", "model_id": "glm53", "slo": {"ttft_s": 2.0, "tpot_s": 0.08},
             "loads": {S.pass_name(load, 4): reps}, "planned": {load: plan}}
@@ -301,7 +310,8 @@ def arms() -> list[dict]:
 def test_the_cost_on_a_sessions_load_is_over_stock_at_the_same_settings_with_its_noise_floor():
     r = S.session_cost(arms(), "prod-record", "prod")
     ratios = sorted(2.0 / x - 1 for x in OURS)
-    # one server lifetime an arm: the cost is the mean over its passes, with no interval over lifetimes, so no verdict
+    # one server lifetime an arm: the cost is ours's seconds for its passes over stock's, less one (stock's passes
+    # took the same time each, so the mean of the passes' ratios), with no interval over lifetimes, so no verdict
     assert r["value"] == round(100 * sum(ratios) / 6, 2) == 0.5 and r["ci95"] is None and r["lifetimes"] == 1
     assert (r["target"], r["verdict"], r["same_work"]) == (1.0, "cannot tell", True)
     assert all(S.session_cost(arms(), "prod-record", "prod", target=t)["verdict"] == "cannot tell" for t in (0.25, 5.0))
@@ -318,14 +328,15 @@ def test_the_cost_on_a_sessions_load_is_over_stock_at_the_same_settings_with_its
     stock = r["sides"]["reference"]
     assert stock["served_all"] and stock["output_tok_per_s"] == pytest.approx(2000.0)
     # beside the rate: tokens a second a GPU of the model's eight, a user's tokens a second at the P90 time a token,
-    # and what the engine's drafts gave
+    # the engine steps a pass took and what the engine's drafts gave
     assert (stock["tok_per_s_a_gpu"], stock["user_tok_per_s_p90"]) == (6500.0, pytest.approx(40.0)) and r["gpus"] == 8
-    assert (stock["draft_accepted_share"], stock["tokens_per_draft"]) == (50.0, 3.5)
+    assert (stock["steps"], stock["draft_accepted_share"], stock["tokens_per_draft"]) == (2000, 50.0, 3.5)
     text = S.session_text(r)
     assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% of stock's serving "
                                     "compute over 1 server lifetime an arm, 4 users; target 1%: cannot tell")
-    assert ("  the cost is the mean of the lifetimes' costs, a lifetime's the mean over the passes both arms counted in "
-            "it; one lifetime an arm gives no interval and so no verdict\n"
+    assert ("  the cost is the mean of the lifetimes' costs, a lifetime's being prod-record's seconds for the passes "
+            "both arms counted in it over prod's, less one, a pass's seconds from its users' first send to the last "
+            "one's last answer; one lifetime an arm gives no interval and so no verdict\n"
             "  passes taken as independent: 0.50% [0.40%, 0.60%], 6 reps, the median over them with its interval; in no "
             "verdict\n"
             "  the spread of the cost (standard deviations): not measured between lifetimes, 0.07 points between a "
@@ -334,8 +345,8 @@ def test_the_cost_on_a_sessions_load_is_over_stock_at_the_same_settings_with_its
             "its interval\n") in text
     assert "95.00% of them planned to repeat" in text and "differs from" not in text
     assert ("  prod: 2,000.0 output tokens a second (6,500.0 prompt and output tokens a second a GPU), 40.0 output tokens "
-            "a second a user at the P90 time a token, 94.00% of its prompt tokens from its prefix cache, 50.00% of its "
-            "draft tokens accepted, 3.50 tokens a draft, every request served\n") in text
+            "a second a user at the P90 time a token, 94.00% of its prompt tokens from its prefix cache, 2,000 engine "
+            "steps a pass, 50.00% of its draft tokens accepted, 3.50 tokens a draft, every request served\n") in text
     # with no second lifetime the floor is not measured, and the cost of the second lifetime itself has none
     alone = S.session_cost(arms()[:2], "prod-record", "prod")
     assert alone["noise_floor"] is None and alone["value"] == 0.5 and "noise floor: not measured" in S.session_text(alone)
@@ -346,9 +357,45 @@ def test_the_cost_on_a_sessions_load_is_over_stock_at_the_same_settings_with_its
     assert few["ci95"] is None and few["passes"] == {"value": 0.5, "ci95": None, "reps": 3} and few["verdict"] == "cannot tell"
 
 
+def test_a_sessions_cost_has_the_other_readings_of_its_passes_beside_and_in_no_verdict():
+    # a pass of ours takes 1% longer by its rate; its GPUs were busy 2% longer, its users' seconds sum to 3% more,
+    # and its users' own rates sum to the same as stock's
+    ref, ours = served("prod", [2.0] * 3), served("prod-record", [2.0 / 1.01] * 3)
+    for arm, busy, seconds in ((ref, 800.0, 300.0), (ours, 816.0, 309.0)):
+        for rep in arm["loads"]["agentic@4"]:
+            rep |= {"busy_gpu_s": busy, "users_s": seconds, "users_output_tok_per_s": 2100.0}
+    r = S.session_cost([ref, ours], "prod-record", "prod")
+    assert r["value"] == 1.0 and r["readings"] == {"busy_gpu_s": 2.0, "users_s": 3.0, "users_rates": 0.0}
+    assert ("  other readings of the same passes, in no verdict: 2.00% by the GPUs' busy seconds, 3.00% by the users' "
+            "seconds summed, 0.00% by the users' own rates summed\n") in S.session_text(r)
+    # a reading a pass lacks is not printed, and passes with none have no such line
+    del ours["loads"]["agentic@4"][1]["users_s"]
+    r = S.session_cost([ref, ours], "prod-record", "prod")
+    assert r["readings"] == {"busy_gpu_s": 2.0, "users_s": None, "users_rates": 0.0}
+    assert "in no verdict: 2.00% by the GPUs' busy seconds, 0.00% by the users' own rates summed\n" in S.session_text(r)
+    bare = S.session_cost(arms(), "prod-record", "prod")
+    assert set(bare["readings"].values()) == {None} and "other readings" not in S.session_text(bare)
+
+
+def test_an_arms_sessions_pass_is_read_from_its_users_own_results(tmp_path: Path):
+    d = tmp_path / "prod"
+    rep = d / "agentic@2" / "rep-1"
+    users = [result(3, 60.0, 100.0, 3.0), result(2, 80.0, 50.0, 1.0)]
+    for j, u in enumerate(users):
+        (rep / f"user-{j}").mkdir(parents=True)
+        (rep / f"user-{j}" / S.RESULT).write_text(json.dumps(u))
+    # the pass's own file as a job that summed its users' rates left it
+    (rep / S.RESULT).write_text(json.dumps(S.merged(users) | {"output_throughput": 150.0}))
+    (rep / "meta.json").write_text(json.dumps({"rate": None, "concurrency": 2, "unfinished": 0}))
+    (d / "meta.json").write_text(json.dumps({"arm": "prod", "model_id": "glm53", "rates": {},
+                                             "passes": {"agentic@2": {"load": "agentic", "concurrency": 2}}}))
+    (one,) = S.arm_metrics(d)["loads"]["agentic@2"]
+    assert (one["output_tok_per_s"], one["users_output_tok_per_s"], one["users_s"]) == (125.0, 150.0, 140.0)
+
+
 def test_a_cost_over_lifetimes_is_the_mean_of_theirs_with_students_t_over_them():
     # three pairs of lifetimes of two passes each: ours costs 0.4%, 0.5% and 0.6% in them, a pass 0.1 points either side
-    pairs = [[(1 + c + d, 1.0) for d in (-0.001, 0.001)] for c in (0.004, 0.005, 0.006)]
+    pairs = [[(1.0, 1 / (1 + c + d)) for d in (-0.001, 0.001)] for c in (0.004, 0.005, 0.006)]
     r = S.over_lifetimes(pairs)
     assert r["value"] == pytest.approx(0.005) and r["each"] == pytest.approx([0.004, 0.005, 0.006])
     assert r["between"] == pytest.approx(0.001) and r["within"] == pytest.approx(0.001 * math.sqrt(2))
@@ -358,6 +405,9 @@ def test_a_cost_over_lifetimes_is_the_mean_of_theirs_with_students_t_over_them()
     one = S.over_lifetimes(pairs[:1])
     assert one["value"] == pytest.approx(0.004) and "ci95" not in one and "between" not in one and "within" in one
     assert "within" not in S.over_lifetimes([p[:1] for p in pairs])
+    # a pair's cost is the arm's seconds for its passes over the reference's, not the mean of the passes' ratios (0
+    # and 0.5): two passes of 300 tokens each take 3 s and 1 s under stock's rates and 3 s and 1.5 s under ours's
+    assert S.over_lifetimes([[(100.0, 100.0), (300.0, 200.0)]])["each"] == pytest.approx([4.5 / 4 - 1])
     # no pair, a pair with no pass, or a pass a side has no rate in: no value
     assert S.over_lifetimes([]) == S.over_lifetimes([[]]) == S.over_lifetimes([[(1.0, 0.0)]]) == {"value": None}
     # degrees of freedom the table lacks read the entry below them, a little wide, as the table's means do
@@ -375,13 +425,20 @@ def test_a_sessions_cost_has_no_verdict_where_the_sides_did_not_do_the_same_work
     short = S.session_cost([ref, served("prod-record", OURS, ok=95)], "prod-record", "prod")
     assert not short["sides"]["arm"]["served_all"] and short["verdict"] == "cannot tell"
     assert "3.50 tokens a draft, NOT every request served" in S.session_text(short)
+    # nor where a rep of one side served another count of output tokens; the token ids are not compared
+    fewer = served("prod-record", OURS)
+    fewer["loads"]["agentic@4"][0]["output_tokens"] -= 1
+    r = S.session_cost([ref, fewer], "prod-record", "prod")
+    assert (r["same_work"], r["verdict"]) == (False, "cannot tell")
+    assert ("  the two sides did not do the same work (a request unserved, another count of output tokens, or their "
+            "prefix caches served different tokens in a rep): no verdict\n") in S.session_text(r)
     # an engine that drafts nothing, and a pass without the client's per-request record, say so and give no figure
     plain = [served(n, x) for n, x in (("prod", [2.0] * 6), ("prod-record", OURS))]
     for a in plain:
         for rep in a["loads"]["agentic@4"]:
             del rep["draft_accepted_share"], rep["accepted_per_draft"], rep["tpot_p90_s"]
     text = S.session_text(S.session_cost(plain, "prod-record", "prod"))
-    assert "a GPU), 94.00% of its prompt tokens from its prefix cache, no drafts, every request served" in text
+    assert "a GPU), 94.00% of its prompt tokens from its prefix cache, 2,000 engine steps a pass, no drafts, every request served" in text
     # a cost is over stock from the same environment
     with pytest.raises(SystemExit, match=r"different builds of vLLM \(prod: 0.1\+gd9105ea8, prod-record: 0.2\)"):
         S.session_cost([ref, served("prod-record", OURS) | {"vllm": "0.2"}], "prod-record", "prod")
@@ -445,7 +502,7 @@ def test_a_cost_over_server_lifetimes_pairs_the_same_pass_of_the_same_lifetime_a
     text = S.session_text(r)
     assert text.splitlines()[0] == ("serving cost on load agentic: prod-record over prod: 0.50% [0.50%, 0.50%] of stock's "
                                     "serving compute over 2 server lifetimes an arm, 4 users; target 1%: meets")
-    assert ("it; its interval is Student's t over the lifetimes, and the verdict is its upper end against the target\n"
+    assert ("last answer; its interval is Student's t over the lifetimes, and the verdict is its upper end against the target\n"
             "  passes taken as independent: 0.50% [0.50%, 0.50%], 6 reps, the median over them with its interval; in no "
             "verdict\n"
             "  by lifetime: 0.50% (3 reps), 0.50% (3 reps); the first pass of each lifetime, its warm-up, served and "

@@ -44,9 +44,13 @@
 # and so on ("prod prod-record" three times: prod, prod-record, prod-record, prod, prod, prod-record), so that a slow
 # change of the node over the job falls on both arms alike; lifetime K of an arm is OUT/<arm>.K, and the cost pairs
 # pass R of lifetime K of its two arms (serve_tax.lifetimes), its noise floor stock's own lifetimes where no twin of
-# stock is served. A cost's interval is over the lifetimes an arm, so its verdict needs two at least. LEAVE_OUT=N leaves each lifetime's first N passes, its warm-up, out of every figure: they are served
-# and recorded like the rest, and the table and the cost say how many were left out. A replay names the lifetime it
-# replays (REPLAY_FROM=OUT/<arm>.K).
+# stock is served. TURNED=1 begins with ARMS's order turned round ("prod prod-record" twice: prod-record, prod, prod,
+# prod-record), so the last arm named is served first. A cost's interval is over the lifetimes an arm, so its verdict
+# needs two at least. LEAVE_OUT=N leaves each lifetime's first N passes, its warm-up, out of every figure: they are served
+# and recorded like the rest, and the table and the cost say how many were left out. WARM_S is the seconds of the
+# warm-up load every lifetime begins with (20; a short pass of vLLM's client under it), and WARM_S=0 sends none: a
+# pass LEAVE_OUT leaves out warms the server as it does. A replay names the lifetime it replays
+# (REPLAY_FROM=OUT/<arm>.K).
 # The number is not given without the row on a repeated prefix under it, which is load prefix's, served in a job of its
 # own (--loads prefix --arms "compiled no-prefix-cache two-stage": its cost is the row alone) and joined with WITH.
 # PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
@@ -117,6 +121,8 @@ export CLIENT ${MODEL_ID:+MODEL_ID} ${REPS:+REPS} ${DATASETS:+DATASETS}
 [[ "${LIFETIMES:-1}" =~ ^[1-9][0-9]*$ ]] || { echo "serve-tax: LIFETIMES=$LIFETIMES: how many times the arms are served, 1 or more"; exit 2; }
 { [[ "${LEAVE_OUT:-0}" =~ ^[0-9]+$ ]] && [ "${LEAVE_OUT:-0}" -lt "${REPS:-3}" ]; } \
   || { echo "serve-tax: LEAVE_OUT=$LEAVE_OUT: the passes each lifetime leaves out, fewer than its REPS=${REPS:-3}"; exit 2; }
+[[ "${TURNED:-0}" =~ ^[01]$ ]] || { echo "serve-tax: TURNED=$TURNED: 1 begins with the arms' order turned round, 0 with the order named"; exit 2; }
+[[ "${WARM_S:-0}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "serve-tax: WARM_S=$WARM_S: the warm-up's seconds, 0 for none"; exit 2; }
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
@@ -210,11 +216,13 @@ if [ "${1:-}" = leased ]; then
   [ -n "${NUM_GPU_BLOCKS:-}" ] && count+=(--num-gpu-blocks "$NUM_GPU_BLOCKS")
   [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
   [ -n "${EDGES_EVERY_S:-}" ] && count+=(--edges-every-s "$EDGES_EVERY_S" ${SAVE_KV:+--save-kv "$SAVE_KV"} --kv-copy "${KV_COPY:-all}")
+  [ -n "${WARM_S:-}" ] && count+=(--warm-s "$WARM_S")
   # the server lifetimes in order: the arms as named, then turned round, and so on (LIFETIMES), so that two arms'
-  # lifetimes of one number are neighbours in time; with one lifetime an arm's directory is its name
+  # lifetimes of one number are neighbours in time, or the turned order first (TURNED=1); with one lifetime an arm's
+  # directory is its name
   order=()
   for k in $(seq "${LIFETIMES:-1}"); do
-    names=(${ARMS:-}); [ $((k % 2)) = 0 ] && names=($(printf '%s\n' "${names[@]}" | tac))
+    names=(${ARMS:-}); [ $(((k + ${TURNED:-0}) % 2)) = 0 ] && names=($(printf '%s\n' "${names[@]}" | tac))
     for arm in "${names[@]}"; do order+=("$arm:$k"); done
   done
   last=; to_serve=${#order[@]}

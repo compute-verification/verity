@@ -1988,13 +1988,44 @@ def test_only_an_arm_that_loads_a_plugin_has_this_tree_on_its_servers_path(tmp_p
     assert not S.same_engine("compiled", "canonical-topk") and not S.same_engine("boundary-rows", "two-stage")
 
 
-def run_sh(*flags: str, **env: str) -> tuple[int, str]:
-    """run.sh's flags, read before it asks for the research run it needs: what it refuses, and its exit code."""
+def bash(argv: list[str], env: dict[str, str]) -> tuple[int, str]:
+    """What bash prints for ``argv`` under ``env`` alone, and its exit code."""
     import subprocess
 
-    p = subprocess.run(["bash", str(S.HERE / "run.sh"), *flags], capture_output=True, text=True,
-                       env={"PATH": S.os.environ["PATH"], **env})
+    p = subprocess.run(["bash", *argv], capture_output=True, text=True, env={"PATH": S.os.environ["PATH"], **env})
     return p.returncode, p.stdout + p.stderr
+
+
+def run_sh(*flags: str, **env: str) -> tuple[int, str]:
+    """run.sh's flags, read before it asks for the research run it needs: what it refuses, and its exit code."""
+    return bash([str(S.HERE / "run.sh"), *flags], env)
+
+
+def served_order(arms: str, **env: str) -> list[str]:
+    """The server lifetimes run.sh serves, in order, each ARM:K: its own lines that make the order, run by bash."""
+    lines = (S.HERE / "run.sh").read_text().splitlines()
+    first = lines.index("  order=()")
+    loop = "\n".join(lines[first:lines.index("  done", first) + 1])
+    rc, out = bash(["-c", loop + '\necho "${order[@]}"'], {"ARMS": arms, **env})
+    assert rc == 0, out
+    return out.split()
+
+
+def test_run_sh_serves_the_arms_lifetimes_in_the_order_named_then_turned_round_or_the_turned_order_first():
+    assert served_order("prod prod-record") == ["prod:1", "prod-record:1"]
+    assert served_order("prod prod-record", LIFETIMES="3") == ["prod:1", "prod-record:1", "prod-record:2", "prod:2",
+                                                               "prod:3", "prod-record:3"]
+    # TURNED=1: the last arm named is served first, and the lifetimes of one number are still neighbours
+    assert served_order("prod prod-record", LIFETIMES="2", TURNED="1") == ["prod-record:1", "prod:1", "prod:2", "prod-record:2"]
+    assert served_order("prod prod-record", TURNED="1") == ["prod-record:1", "prod:1"]
+    # both are read before the run, as is the warm-up's seconds, which reach every arm where they are given
+    assert run_sh("--model", "glm53", TURNED="2") == (
+        2, "serve-tax: TURNED=2: 1 begins with the arms' order turned round, 0 with the order named\n")
+    assert run_sh("--model", "glm53", WARM_S="none") == (2, "serve-tax: WARM_S=none: the warm-up's seconds, 0 for none\n")
+    rc, out = run_sh("--model", "glm53", "--arms", "prod prod-record", LIFETIMES="2", LEAVE_OUT="1", TURNED="1", WARM_S="0")
+    assert rc != 0 and "run this under research run" in out
+    sh = (S.HERE / "run.sh").read_text()
+    assert '[ -n "${WARM_S:-}" ] && count+=(--warm-s "$WARM_S")' in sh and sh.count('"${count[@]}"') == 1
 
 
 def test_run_sh_takes_the_serving_costs_flags_and_refuses_before_it_holds_anything():

@@ -308,26 +308,33 @@ context of 262,144 tokens (`serve_tax.AGENTX_256K`), the recipe's limit on these
 that context, so no session of it is cut by ours. The load is closed-loop. Its rung is its users (`--loads
 agentic=4`), each a client of its own with one request in flight that sends its sessions' turns in order, each once
 the turn before has ended, so no turn arrives before the prompt it repeats is computed; `PASS_PROMPTS=agentic=N` is
-the turns each user sends in a pass. A pass's rate is the sum of its users' rates (`serve_tax.merged`). Its users'
-sessions must fit the engine's KV pool together, or the prefix cache evicts what a later turn repeats: `agentic-256k`
-sends 12 turns a user where the others send 24, since four users' sessions of it at 24 turns pass the KV cache the
+the turns each user sends in a pass. A pass's rate is its tokens over its seconds, from its users' first send to the
+last one's last answer (`serve_tax.merged`): every arm serves the same requests and as many output tokens, so the
+cost is ours's seconds for them over stock's, less one. The users end at different times, so the sum of each user's
+own rate is another figure, which counts a user that ended early as if it served the whole pass; it, the users'
+seconds summed and the GPUs' busy seconds are printed beside the cost as other readings of the same passes, in no
+verdict. Its users' sessions must fit the engine's KV pool together, or the prefix cache evicts what a later turn
+repeats: `agentic-256k` sends 12 turns a user where the others send 24, since four users' sessions of it at 24 turns pass the KV cache the
 recipe's server has on eight of these cards. Sessions loads share a job's servers (`--loads agentic=4,agentic-256k`),
 which no other load joins, and the job has a cost of each: `cost` prints the first's and then the others', each
 written beside the first's as `serving_cost.<load>.{json,txt}`.
 
 `cost` on such a load prints `serve_tax.session_cost`: the arm's cost over its stock arm, whose unit is a server
-lifetime. A lifetime's cost is the mean over the passes both arms counted in it, the cost is the mean of the
-lifetimes' costs, and its 95% interval is Student's t over the lifetimes an arm. The verdict against `--target` or
+lifetime. A lifetime's cost is the arm's seconds for the passes both arms counted in it, summed, over stock's, less
+one; the cost is the mean of the lifetimes' costs, and its 95% interval is Student's t over the lifetimes an arm. The verdict against `--target` or
 `serve_tax.SESSION_TARGET` reads that interval's upper end alone: "meets" where it is under the target. One lifetime
 an arm has no such interval, and its verdict is "cannot tell". Beside the cost and in no verdict it prints the cost
 over the passes taken as independent (the median over them with its interval, too narrow where the lifetimes' costs
 spread more than a lifetime's passes do), the spread between lifetimes and between a lifetime's passes, and the noise
 floor, stock over stock a lifetime apart, saying so where the floor's own interval leaves out zero. It says the share
 of prompt tokens the load plans to repeat beside the share each side's prefix cache served, and gives no verdict where
-a side left a request unserved or the two caches served different shares in a rep: the sides then did not do the same
-work. Beside each side's output tokens a second it prints its prompt and output tokens a second a GPU, the output
-tokens a second a user gets at the P90 time a token, and the share of its draft tokens the model accepted with the
-tokens a draft gave (the engine's own counters).
+a side left a request unserved, the sides served different counts of output tokens in a rep or the two caches served
+different shares in it: the sides then did not do the same work. The same work is the same requests and as many
+tokens, not the same token ids: two passes of the same prompts can serve other tokens, sampled or greedy. Beside each
+side's output tokens a second it prints its prompt and output tokens a second a GPU, the output tokens a second a
+user gets at the P90 time a token, the engine steps a pass took, and the share of its draft tokens the model accepted
+with the tokens a draft gave (the engine's own counters), so a reader sees whether a cost came with more steps or
+fewer accepted drafts; no figure is adjusted for either.
 
 ~~~text
 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record prod-again" --loads agentic=4 --reps 6
@@ -336,15 +343,17 @@ bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record prod-aga
 A node drifts over a job's hours, and the passes of one server lifetime share whatever that server had of its own.
 `LIFETIMES=L` serves the arms `L` times, each time a server of its own, in the arms' order and then that order turned
 round, and so on, so that the two arms' lifetimes of one number are neighbours in time and the order's effect falls on
-both alike. `LEAVE_OUT=N` leaves each lifetime's first `N` passes out of every figure: a lifetime's first pass after
-its warm-up is still warming (compiled graphs, the prefix cache's first fill), so it is served and recorded like the
-rest and not counted, and the table and the cost say how many were left out. The cost then pairs pass `r` of lifetime
+both alike; `TURNED=1` begins with the order turned round, so the last arm named, ours, is served first. `LEAVE_OUT=N`
+leaves each lifetime's first `N` passes out of every figure: a lifetime's first pass after its warm-up is still
+warming (compiled graphs, the prefix cache's first fill), so it is served and recorded like the rest and not counted,
+and the table and the cost say how many were left out. `WARM_S=0` sends no warm-up before a lifetime's passes: a pass
+that is left out warms the server as the warm-up does, which then only adds to the lifetime's time. The cost then pairs pass `r` of lifetime
 `k` of its two arms (`serve_tax.lifetimes`), prints each lifetime's own cost under the cost over all of them, and
 takes its noise floor from stock's own lifetimes, each second one over the one before it, where no twin of stock was
 served. Two lifetimes an arm are the fewest that give the cost an interval, and so a verdict.
 
 ~~~text
-LIFETIMES=6 LEAVE_OUT=1 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record" --loads agentic=4 --reps 6
+LIFETIMES=6 LEAVE_OUT=1 WARM_S=0 bash benchmarks/serve_tax/run.sh --model glm53 --arms "prod prod-record" --loads agentic=4 --reps 6
 ~~~
 
 ## Running it
