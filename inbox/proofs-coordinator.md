@@ -83212,3 +83212,256 @@ Mailbox read 10:23Z: its last section is still yours of 07:59Z. Not marked; noth
   - [run] Locally on the merged tree, of the two test modules, only `test_plancheck.py -k served_cap_is_held` (1 passed, 09:26Z); the rest ran in `b8e5`.
   - [derived] No other agent has red-teamed the two statements: compiled, not proved.
 - **Close: none owed.** `Refs PRF-580` stays open for the planner's pull request, which waits for this to land.
+
+## FIXEDCOST, Thu 12 Nov 10:26Z: PRF-589: the job is written as one command, not launched: the head at a quarter statement (64 blocks) and at the full one, at one prover and at four, on one card of node A in 65 card-minutes, nothing staged; the quarter statement can be proved from the staged statement by naming 64 units; the kept run's own timers say its 2.856 s a statement is the host building the witness (2.755 s) plus 0.05 s, so I expect a quarter statement near 0.75 s where today's split says 2.238 s
+
+Tags: [run] a command I ran, with its run id; [read] a file or a run's output I read now, with its place; [relayed]
+another lane's statement I did not check; [derived] my arithmetic, with its steps; [guess]. Times are from `date -u`.
+Mailbox read at 10:24Z: newest section yours of 10:13Z, which this entry answers with the 09:34Z one. Nothing here runs
+on the served engine: every timing is the proof server proving a staged statement of the 64-key head block on an H200
+of node A, or the Lean verifier checking kept sessions on a CPU machine. I launched nothing on a GPU.
+
+### 0. What changed in my earlier entries
+
+1. **My 07:31Z "0.6 to 0.9 s of the head's 3.57 s session" is a share of one session's own seconds, not of the 2.856
+   GPU-seconds a statement that the cost model prices.** It is `e2e_s − witness_s` of the kept run's later sessions:
+   median 0.818 s, quartiles 0.756 and 0.893, least 0.688 [derived from run `r20261111-015333-38d6`, section 1]. In
+   the back-to-back run a session's two repetitions on the card run beside the next session's witness build, so they
+   are not in the 2.856 at all: the seconds between successive sessions are that session's witness build plus 0.047 s
+   (median; quartiles 0.029 and 0.083) [derived, section 1]. So the repricing that carried my figure as 0.6 to 0.9 s
+   of 2.856 s carried another quantity; in the unit it prices, the part outside the witness build is about 0.05 s.
+2. **The one pass in the form that splits nothing takes the head's later-session check to 0.85 of the fold alone, not
+   0.81:** 31.83 and 32.25 s against 38.04 and 37.83 s, two rounds [run `r20261112-093040-3adb`, exit 0]; the first
+   form's 0.81 was on another machine and a base 4 s higher. Book 0.85 on the head. MoE is now at or under the fold
+   alone (medians of three: 10.90 against 11.43 s; 13.63 against 14.28 s in the default allocator setting) [run
+   `r20261112-093040-7ece`, exit 0], where the first form cost 0.2 s; GEMM is 4.011 against 4.019 s [run
+   `r20261112-093040-17ab`, exit 0]. So the head I stand behind is the form that splits nothing (section 4).
+
+### 1. The reading, so a reader can check it
+
+**The kept row's driver, and how I know.** [read: run `r20261111-015333-38d6`'s record: `job.json` and
+`inputs/steady.sh`, `out/job.log`, `out/rate/rate.json`]
+- The run's command is `exec bash "$RESEARCH_RUN_DIR/inputs/steady.sh"` (kernels' script) at source `c6cadd0e325f`;
+  its line 241 runs `benchmarks/one_stage/server_rate.py --bin B --staged Z --types NAME --provers K --out R --device D
+  --sessions S --warm W --ahead 2`. `rate.json` says: one prover, 1 warm and 120 timed sessions, two sessions verified
+  ahead, 121 accepted, 0 refused; 118 sessions in a window of 336.96 s, 0.3502 statements a second, which is the
+  2.8555 GPU-seconds a statement. Card 6, CPUs 72 to 81, the staged statement
+  `/dev/shm/proofs-prf502-row1-4b31e7caba011398` copied to the run's scratch, binary sha256 `8cadd0871696…`.
+- Switches: neither the script nor its log sets an `FC_` variable; the driver itself sets `FC_FIREWALL=0` and
+  `FC_PHASE_TIMES=1` and unsets `FC_HOST_WITNESS` (`server_rate.py:213`). Every session's own line says
+  `front_ahead: true`, `verify_ahead: 2`.
+
+**The timers** [read: `verity/ml/flock/live/src/bin/flock-circuit.rs` at `c6cadd0e325f`, the lines named; the medians
+are over the run's 118 sessions after its third, from `out/rate/…-k1/sessions.jsonl`, derived]:
+
+| timer | what it brackets | median (least; quartiles), s |
+|---|---|---|
+| `e2e_s` (4050 to 4616) | from before `Register` to the end of the second repetition; the proofs' sending and the verdict come after it | 3.569 (3.033; 3.503, 3.664) |
+| `witness_s` (4186 to 4198; `witness`, 1056, and `pin_rows`, 3986) | the device witness's inputs built on the host for the one table: each block's rows and hash slots, every unit's input words, packed; then the rows copied to page-locked memory | 2.755 (2.301; 2.673, 2.821) |
+| `device_wait_s` (4237) | the wait for the session before to end its repetitions | 0.000 (most 0.562) |
+| `prove_s[0]`, `prove_s[1]` (4584) | each repetition on the card, from its start to its last coin, the hiding commitment's time with the first | 0.451, 0.315; together 0.774 |
+| `wait_e2e_s` (4617) | the waits on the verifier's coins inside `e2e_s`, 329 calls; they fall inside the repetitions | 0.185 |
+| `wait_s` (4667), `tp_s` (4684) | the same waits to the session's end, and the time from `Hello` to the verdict | 2.500, 3.347 |
+| `e2e_s − witness_s` | everything of a session that is not the witness build | **0.818 (0.688; 0.756, 0.893)** |
+| from one session's `Hello` to the next one's | the back-to-back run's seconds a statement | 2.819 (mean 2.856) |
+| that, less the session's `witness_s` | the rest of a session's front: `Register`, its statement from the cache, `Hello` | **0.047 (quartiles 0.029, 0.083)** |
+
+- The device's own phases, from the last six sessions the kept log holds: 0.375 s in the first repetition and 0.266 s
+  in the second (zerocheck 0.096 and 0.059, lincheck 0.077 and 0.078, the witness on the device 0.068 and 0.067, the
+  commitment's encoding 0.067 in the first only). The card was busy 18.61% of the window [read: `rate.json`].
+- Why the seconds a statement are the witness build: "the next session's front starts once this one's reps do" (line
+  6919), and a session's repetitions wait only for the session before (`Turn`, 3931). The front takes 2.8 s and the
+  repetitions 0.774 s, so the repetitions are always done first (`device_wait_s` 0) and the front sets the pace. [read]
+
+**What is timed and what is argued.**
+- Timed: every figure in the table, at 256 blocks only. No table of another size was ever timed for the head; the
+  count worker's 10:00Z entry reaches the same from the cost model's side (the 71.15% is a computed proportion).
+- Argued, from the code, not timed: that the witness build is a block's cost. Every step of `witness` is a loop over
+  the table's blocks or its units (lines 1067, 1084, 1097) and the rows it copies are the table's. That is why I
+  called everything else, the 0.6 to 0.9 s, the most that could be fixed in a session.
+- Not shown by anything: that the 0.818 s is itself fixed (the repetitions run over a table of 2^(27 + 8) bits and
+  shrink with it), and that the build has no fixed part. Against my reading: the two block types of the head's size
+  that have a two-size timing, on an earlier driver, came out 61% and 66% fixed [read: `breakeven/reprice.py`
+  `SERVER_FIT`; relayed: the count worker's table].
+- What each reading says a quarter statement costs at one prover, back to back [derived; T_full 2.8555]:
+
+| reading | a 64-block statement, GPU-s | fixed by the two-point rule |
+|---|---|---|
+| today's split (71.15% fixed) | 2.238 | 2.032 |
+| the share of the two timed types of the head's size (61%, 66%) | 2.02 to 2.13 | 1.74 to 1.88 |
+| the kept run's timers, the build a block's cost: the larger of the front (0.047 + 2.755 / 4 = 0.736) and the repetitions (at most 0.774) | 0.74 to 0.77 | 0.03 to 0.08 |
+| no fixed part at all | 0.714 | 0 |
+
+  A build with a fixed part F gives 0.047 + F + (2.755 − F) / 4. The run tells 0.75 from 2.2 at sight.
+
+### 2. The job, as a command (written, not launched)
+
+**Files** (notes, synced at `b1aa4ef100`), under `lanes/proofs/20261112T0450Z-fixedcost/prf589/`: `launch.sh` (sha256
+`5ee68c58dd41…`), `k_hook.sh` (`3701ff5a5803…`), `read.py` (`eaddb25e2463…`). The hook and the reader ran here against
+stand-ins of the driver and against `38d6`'s own session file (the reader gives its 2.8556); no prover ran.
+
+**The command.** On a VM that has `research` and the proofs notes:
+
+```
+git -C /agent/repos/verity worktree add --detach /tmp/prf589-src c6cadd0e325f
+cd ~/.research/notes/lanes/proofs/20261112T0450Z-fixedcost/prf589
+SRC=/tmp/prf589-src CARD=6 CORES=72-81 ROW_OPEN="2026-11-12 15:45" ROW_END="2026-11-12 17:15" bash launch.sh
+```
+
+`CARD`, `CORES` and the two times are the slot's (the kept row's card 6 and CPUs 72 to 81 if the slot has them; any
+H200 of node A with its NUMA node's ten cores otherwise; 15:45Z to 17:15Z is kernels' Thursday slot as you give it).
+`DRY=1` prints what it runs and launches nothing; with those values [run here, `DRY=1`]:
+
+```
+research run --as proofs --on vy-spot-glm53 --project verity --source SRC --cwd source --campaign exfiltration-under-300gb
+  --send NOTES/20261111T0805Z-headprof/kernels/fused.sh --send NOTES/20261112T0450Z-fixedcost/prf589/k_hook.sh
+  --send NOTES/20261111T0805Z-headprof/kernels/slim_logs.py
+  --env ALONE=0 --env CHAIN_DIR=/workspace/jobs/proofs-headprof/chain --env CPUS=72-81 --env DATA=/dev/shm/proofs-headprof
+  --env END=1794503700 --env EXPECT_PIN=4b31e7caba011398 --env FLOCK_WORK=/workspace/jobs/proofs-headprof --env GPU_ON=6
+  --env LEASE_MEM_GB=400 --env LEASE_MIN=65 --env LEASE_WHO=proofs-prf589 --env MIN_SESSIONS=32 --env N=full
+  --env NAME=SparseMlaHeadBlock_v2_NVIS_64_FIRST_false --env NEED_MIN=50 --env OPEN=1794498300 --env OTHER_CPUS=0-71,82-95
+  --env PROVERS=1,4 --env RUN_CPUS=72-81 --env SESSIONS=48 --env SLEEP_CPU=81
+  --env STAGED=/dev/shm/proofs-prf502-row1-4b31e7caba011398 --env STAGED_NAMED_BY_PIN=1
+  --env TYPE=SparseMlaHeadBlock_v2_NVIS_64_FIRST_false --env WARM=1
+  --no-sampler --store-read --custody-ttl 9h --timeout T -- taskset -c 81 bash -c 'exec bash "$RESEARCH_RUN_DIR/inputs/fused.sh"'
+```
+
+`fused.sh` is kernels' script as the head-profile kit holds it, checked against the kit's hashes before the launch; it
+takes the card's lease and kernels' lock on node A as the kept rows did. Inside the lease, for K = 1 and then K = 4
+provers on the card (`B` the prover's binary, `Z` the run's copy of the staged statement, `D` the card):
+
+```
+# fused.sh's own step: the full statement on the kept row's driver, with its counts but 48 timed sessions
+python benchmarks/one_stage/server_rate.py --bin B --staged Z --types SparseMlaHeadBlock_v2_NVIS_64_FIRST_false \
+    --provers K --out R --device D --sessions 48 --warm 1 --ahead 2
+# the hook: a quarter statement, then the full one, on the driver that can name fewer units
+python benchmarks/one_stage/session_split.py --bin B --stage Z/…/c256/stage --out S --device D --draws 64 \
+    --rounds 48/K --provers K --ahead 2 --outstanding 4K --deadline T
+python benchmarks/one_stage/session_split.py … --draws 256 --rounds 48/K --provers K --ahead 2 --outstanding 4K --deadline T
+# once, at one prover, each session by itself: the parts at three sizes, with the witness build's own parts printed
+FC_WITNESS_TIMES=1 python benchmarks/one_stage/session_split.py … --draws 64,128,256 --rounds 8 --provers 1 \
+    --ahead 0 --outstanding 1 --deadline T
+```
+
+**1. The point.** [read: both drivers at `c6cadd0e325f`]
+- `server_rate.py` cannot time a quarter statement: its sample names every unit (line 205) and it has no option for
+  fewer. `session_split.py`, in the same directory, is the tree's driver for that. It makes the same `ProofServer`
+  call with the same environment (its lines 113 to 114 against `server_rate.py`'s 213 to 214), submits with the same
+  count outstanding when given `--ahead 2 --outstanding 4K` (`server_rate.py:207`: K × (ahead + 2)), and counts the
+  same way: each session's filing by its verifier, the first and last K filings left out.
+- So the run holds the full statement three times over: on the kept row's driver (does today's card repeat 2.8555),
+  on `session_split.py` (do the two drivers agree at 256 blocks), and both beside the quarter statement on the one
+  driver that gives both points of the rule.
+- **The quarter statement needs nothing staged.** A session proves the units its sample names: the verifier's check
+  takes a subset of k of the population's units (`unit_draw::check`, `lib.rs:494`), and the prover builds the k-block
+  statement from the registered one, sharing its circuit (`Instances::drawn`, `circuit.rs:1895`; `Stmt::drawn`,
+  `circuit.rs:2952`), a table of 2^(27 + 6) bits at 64 blocks against 2^(27 + 8). The head's statement is not held
+  at 256 blocks by its form [read; not run: I have not seen the head proved at 64 blocks].
+- If the prover or its verifier refuses the 64-unit sample all the same, the step is void and prints why, and the
+  nearest honest pair is the head staged at 64 units and timed by the same `session_split.py` call beside the full
+  one. Staging the full statement took 4,298.7 s and 202.64 GB at its peak [read: `38d6`'s `rate.json`, `stage`]; a
+  quarter of that is my [guess] for 64 units.
+
+**2. Four provers.** The same three steps at `--provers 4` (16 outstanding), in the same run after the one-prover
+steps. GPU-seconds a statement is one over the card's statements a second, all four provers together, as the kept
+rows count it.
+
+**3. What it needs.**
+- **Card:** one H200 of node A, where the staged statement is; ten cores of its NUMA node.
+- **Card-minutes: 65, the lease.** The steps sum to about 52 minutes [derived]: copying and hashing the statement
+  0.6 (35 s in `38d6`'s log); at one prover a server start is 221 s (`ready_s`) and a first session 26 s, so the own
+  step is 221 + 48 × 2.86 = 358 s, the quarter at most 221 + 48 × 2.24 = 329 s, the full 384 s; at four provers a
+  start is about 400 s (the head-profile worker's four-prover step took 583 s for 76 sessions at 2.42 s [relayed]),
+  so the own step is 525 s, the quarter at most 490 s, the full 515 s; the sessions by themselves 406 s. `fused.sh`
+  keeps the lease's last five minutes clear. Each step starts only if it fits, in the order above, so a shorter slot
+  loses the last steps first: the four timings you name are done by minute 36, the sessions by themselves by 43.
+- **GPU memory:** 37,563 MiB at one prover [read: `38d6`]; 132.6 GB at four [relayed: the head-profile worker's row]
+  of the card's 150.75 GB. A smaller table takes no more [guess: the server holds the registered circuit either way].
+- **Host:** ten cores; 43.16 GiB for the prover and 26.59 GiB for its verifier at one prover [read], 166.9 and 105.6
+  GiB at four [relayed]; the lease asks 400 GB. The run's copy of the statement is 12 GB in `/dev/shm`.
+- **Inputs:** the staged statement at `/dev/shm/proofs-prf502-row1-4b31e7caba011398` on node A (pin
+  `4b31e7caba011398`; there at 10:12Z: `circuit.txt` 12,191,652,715 bytes, 915 GB free in `/dev/shm`) [read]; the same
+  files are in the store under `art:80b3775089ed687375f049a303695dae974ff5426dcb7941a35a476241477ad5`,
+  `out/staged/proofs-prf502-row1-4b31e7caba011398`, should the directory be gone. Source `c6cadd0e325f`, the kept
+  row's. The prover's binary is kept on the node by its sources' hash, `bin-32df0a15951c921b-g1-sm90`, so nothing is
+  built: proofs' copy under `/workspace/jobs/proofs-headprof` is another build of the same sources (sha256
+  `7350f82ecf41…`); the kept row's very build (`8cadd0871696…`) is kernels', under `/workspace/jobs/kernels-ksteady`,
+  and `FLOCK_WORK=/workspace/jobs/kernels-ksteady` takes it if kernels run the job [read at 10:13Z].
+- **`--declared-output`: none needed.** Everything the run keeps is written under its `out/` (`fused.sh`'s `O=$OUT`),
+  which custody uploads whole; scratch is under `/dev/shm/proofs-headprof`, outside the run's directory, and is
+  removed at exit. A few MB: each step's `split.json`, `sessions.jsonl`, `device.tsv` and its logs without their long
+  lists.
+- **No test and no clock in one.** The job runs no suite and adds no test. Its clocks are the prover's own timers,
+  the drivers' monotonic clock and each session's filing time, as in the kept row.
+- **What it leaves on the node:** the run's record and nothing else. The staged directory is read, never written; the
+  kept binary is reused; a step that is stopped has its processes ended by pid.
+
+**4. What you will read.** `python3 read.py OUT` on the run's `out/` prints, for K = 1 and K = 4 (the format, from
+the stand-in run here):
+
+```
+K=1 prover(s) on the card
+  own       2.8556 GPU-s a statement over 118 gaps; a gap's quartiles 2.668 2.792 2.934, least 1.054, most 6.108
+  line-256  … GPU-s a statement over 46 gaps; a gap's quartiles …
+  line-64   … GPU-s a statement over 46 gaps; a gap's quartiles …
+  split     T_full … (line-256), T_q …: a block … s, fixed … s a statement, fixed share of a full statement …
+  drivers   line-256 over own … (1.000: the two drivers agree at the full statement)
+  alone     each session by itself, one prover: medians by blocks, then each part's fit fixed + a block
+```
+
+- The `own` line above is real: it is `38d6`'s session file through the reader. The split is by your rule,
+  m = (T_full − T_q) / 192 and f = (4 T_q − T_full) / 3, with both points from `session_split.py`.
+- The spread is each timing's gaps between successive filings (46 at one prover, 40 at four). A void or stopped step
+  is named as such and never filled in.
+- At four provers I have no reading to offer: the cores were full there (9.92 of 10 busy) [relayed], so the pace is
+  the host's and the quarter statement may or may not scale. That is what the step is for.
+
+### 3. Who runs it
+
+- **Not me:** the launch names node A and takes a card.
+- Neither branch you name holds the driver. `cursor/proofs-keptverify-604f` adds the verifier's side and
+  `cursor/proofs-headprof-2b18` changes the prover's hiding code; the driver is the tree's own (`server_rate.py`,
+  `session_split.py`) at `c6cadd0e325f`.
+- What a runner needs beyond the tree is the node A launcher: kernels' `fused.sh` and its hashes, the lock, the lease
+  and the supervisor's pinning. That is the head-profile kit, `lanes/proofs/20261111T0805Z-headprof/`, which
+  `launch.sh` reads. **HEADPROF** ran that kit's launcher on node A on Wednesday (`r20261111-102210-ee70` among its runs) [relayed], so I
+  name it; kernels can run
+  the same command in their own slot with `FLOCK_WORK=/workspace/jobs/kernels-ksteady`, which also gives the kept
+  row's own binary. Either way the command is the one above and the reader is `read.py`.
+
+### 4. The one pass: where it stands (PRF-587)
+
+- Head `b2744360ec` on `cursor/proofs-fixedcost-46fc`: the form that splits nothing (`d603004787`) and one comment
+  reworded for the ratchet gate, which passes [run here: `ratchet_gate.py origin/main HEAD`]. The Lean tries are exit
+  0: the four changed files at `d603004787` (`r20261112-093040-c357`, `-e747`, `-ec33`, `r20261112-092956-7c62`) and
+  the reworded file at the head (`r20261112-095826-4373`).
+- **The walk you asked for, and a baseline beside it** [run `r20261112-095826-8ac3` and `r20261112-101215-3614`, on
+  scratch trees never pushed]: with `Flock.Zk.verifyOnePass` as a fifth entry the walk reaches the 176 constants of
+  `verifier.allow` and two more, `UInt64.complement` and `UInt64.sub`. With `Flock.Zk.verify`, the call `main`'s
+  executable makes today, as the fifth entry instead, it reaches the same 178. So the one pass reaches no compiled
+  constant that today's call does not; the two are SHA-512's own (`Base/Hash.lean` 52, 124), which the lock's four
+  entries reach only through their hash parameter.
+- **Both walks fail the same rule, so `verifyOnePass` cannot be a fifth entry as it stands:** "reach
+  `Flock.Sha512.hash` outside the hash parameter, by `Flock.Zk.verify -> Flock.Zk.verifyRep -> Flock.Zk.verifyInner
+  -> Flock.Sha512.hash`". The entries are the forms that take the hash as a parameter; `verifyOnePass`, like
+  `Zk.verify`, is at SHA-512. An entry would have to be its hash-parameter form, which I have not written. Yours and
+  lean's to settle; the pull request's first paragraph will say it.
+- The timed sessions end in the verifier's refusal for a session without `--program`, which it reaches only when
+  every check has passed (`ProvedScope.NO_PROGRAM`); the verdict's bytes are the same before and after in every call
+  [run: `3adb`, `7ece`, `17ab`]. That is the second worker's method, which I took whole.
+- Out: the changed suites at `b2744360ec`, `r20261112-095831-b0e2` (60 suites, quick tier). The records run at the
+  first form (`r20261112-091237-69ef`, `de31e0151b`) is past the verifier's package, the certifier's and `security`
+  with exit 0 and no record kept as changed, and is on `security/Properties`; the same run at the head is launched
+  and waits for a slot (its id in my next entry). The pull request opens when `b0e2` is in.
+
+### For Daniel
+
+- For the head block, the proof server has been timed at one table size only. So no timing says how its 2.86
+  GPU-seconds a statement divide into a part every statement pays and a part each block pays. The cost model's 71%
+  fixed is a proportion computed from other block types.
+- The one run we have says where its seconds go: 2.76 of them are the host building the witness, and the card's own
+  work (0.77 s) overlaps the next statement's build. If the build is a block's cost, as the code reads, almost
+  nothing is fixed, and the 291 GB figure that rests on lowering fixed seconds is not reachable that way. That is
+  argued, not timed.
+- One job on one card for about an hour settles it: the head at a quarter of a statement beside the full one, at one
+  prover and at four. It is written and waits for card time. Nothing here runs on the served engine.
