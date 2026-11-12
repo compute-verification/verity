@@ -553,6 +553,7 @@
     {"file": "tests/pipeline/test_serve_seal.py", "kind": "attr-defined", "symbol": "test_the_served_target_carries_the_int8_scope_its_layers_ran", "detail": ""},
     {"file": "tests/pipeline/test_serve_seal.py", "kind": "name-defined", "symbol": "test_a_steps_stream_starts_with_its_input_ids_then_positions_padded_to_the_token_budget.Model", "detail": ""},
     {"file": "tests/pipeline/test_serving_rows_experts.py", "kind": "var-annotated", "symbol": "build", "detail": "", "count": 2},
+    {"file": "tests/pipeline/test_serving_rows_splits.py", "kind": "var-annotated", "symbol": "test_the_parts_read_the_twin_s_partials_and_lse_whose_combine_is_the_served_row", "detail": ""},
     {"file": "tests/pipeline/test_serving_view.py", "kind": "index", "symbol": "test_co_scheduled_requests_of_one_program_keep_their_own_leaves", "detail": ""},
     {"file": "tests/pipeline/test_serving_view.py", "kind": "var-annotated", "symbol": "_tp", "detail": "", "count": 2},
     {"file": "tests/pipeline/test_source_identity.py", "kind": "arg-type", "symbol": "_from_harness_tool", "detail": ""},

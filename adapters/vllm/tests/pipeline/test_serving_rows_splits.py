@@ -26,11 +26,12 @@ from dataclasses import replace
 
 import numpy as np
 import pytest
-from verity.circuits.codec import descriptor_id
-from verity.circuits.defs import bind
-from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity_flock.class_statement import UnitStager
 from verity.commitments.windows import rows as CS
 from verity.commitments.windows import wiring as WI
+from verity_vllm.pipeline import chain_rows as CH
+from verity_vllm.pipeline import chunk_rows as CR
+from verity_vllm.pipeline import serving_rows as SRW
 from verity.definitions import boolean as BB
 from verity.definitions.numerics import sparse_mla_split_twins as TW
 from verity.definitions.registry import boolean_sparse_mla as BM
@@ -38,14 +39,13 @@ from verity.definitions.registry import boolean_sparse_mla_split as BX
 from verity.definitions.registry import hopper
 from verity.definitions.registry import sparse_mla as M
 from verity.definitions.registry import sparse_mla_split as W
-from verity.protocols.spot.verifier.one_stage import draw as D
-from verity_flock.class_statement import UnitStager
-
-from verity_vllm.pipeline import chain_rows as CH
-from verity_vllm.pipeline import chunk_rows as CR
-from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
+
+from verity.protocols.spot.verifier.one_stage import draw as D
+from verity.circuits.codec import descriptor_id
+from verity.circuits.defs import bind
+from verity.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 
 FA3 = {"DOT": hopper.HopperBF16WgmmaDot16, "INV": hopper.Fa3InvSum}
 BOOL = {"DOT": BX.SPARSE_MLA_GLM53["DOT"], "INV": BX.SPARSE_MLA_GLM53["INV"]}
@@ -162,7 +162,7 @@ def stager(t: str) -> UnitStager:
     return st
 
 
-def units(ms, tmpls, places: dict[str, list[int]] = PLACES, NH: int = int(TOY["NH"]), rows: int = 1) -> dict[tuple, int]:
+def units(ms, tmpls, places: dict[str, list[int]] = PLACES, NH: int = TOY["NH"], rows: int = 1) -> dict[tuple, int]:
     """The global unit of each (row, head, place) in its head's chain: a template's units row by row, then head, then its
     places."""
     out: dict[tuple, int] = {}
