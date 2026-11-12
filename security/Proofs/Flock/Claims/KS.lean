@@ -171,6 +171,7 @@ public import Proofs.Flock.Claims.KS.ZkTauSlot
 public import Proofs.Flock.Claims.KS.ZkUntrim
 public import Proofs.Flock.Claims.KS.Extend
 public import Proofs.Flock.Claims.KS.ZkExtend
+public import Proofs.Flock.Claims.KS.ZkTableAt
 public import Proofs.Flock.Claims.KS.PlainUntrim
 public import Proofs.Flock.Claims.KS.ZkOuter
 public import Proofs.Flock.Claims.KS.PlainAccPrR
@@ -551,8 +552,10 @@ deployed masked verifier is KS from `ZkLiveAccWJ` where some run accepts and `Ex
 (`FlockDeploy.KS.zk_KS_of_tableBoundJR`, `FlockDeploy.KS.zk_KS_of_liveAccWJ`). Every table's bound counted per
 round is a bound at each table, so the extractor at one table of a session (`Flock.EAt`), whose waits stop at
 `k_j = ⌈4·N_j/e⌉` accepted reruns with `N_j` that table's word's length alone, is KS at that table's own relation, at
-the tables' errors summed (`TableAt`: `Claims.Flock.oneWait_le_at`, `Claims.Flock.KSAt_of_tableBoundJR`). At a masked
-statement in scope table
+the tables' errors summed (`TableAt`: `Claims.Flock.oneWait_le_at`, `Claims.Flock.KSAt_of_tableBoundJR`), and at an
+error for each table from each table's bound at it (`Claims.Flock.TableBoundAtR`,
+`Claims.Flock.KSAt_of_tableBoundAtR`); the deployed masked verifier is, with no premise, at the tables' errors summed
+(`ZkTableAt`: `FlockDeploy.KS.zk_KSAt_untrim`). At a masked statement in scope table
 `j`'s word has level 0's `2^logLen` columns (`ZkXferW`: `FlockDeploy.KS.zkLevel0_d_eq`,
 `FlockDeploy.KS.wordLenJ_zkTabs`), so the live sessions' bound at the deployed decoders right at the witness-lane
 verdict (`FlockDeploy.KS.ZkXferWJ`) gives `ZkLiveAccWJ` (`FlockDeploy.KS.zkLiveAccWJ_of_xferWJ`): with `ExtendJ`,
