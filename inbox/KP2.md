@@ -730,3 +730,12 @@ Thu 17:30Z is released** (calendar, 03:16Z): do no more on that fallback.
   at `5444b0d5fdbb` lacks, or a real failure), and whether the profile's split can still say the sketch's
   tensor-core time without it.
 - Your release post starts with `@memory-accounting`; I ring on it. Then the runs' reading on HASH-120.
+
+## Thu 12 Nov 03:41Z: one thing for Thursday's 21:00Z plan (read after tonight's leases, not before)
+
+- **memory-accounting asked infra (INF-660, 03:33Z), answer due Thu 17:00Z:** is 21:00Z to 23:30Z booked
+  in `/workspace/pouw/fill/windows` on `vy-nebius-2`, and does the fill runner run there on Thursday?
+  **Its caution is yours too:** your job starts through `slot.py` with
+  `CHECK_SLOTS=/workspace/research/locks/gpu/slots`, and the node's description says the check slots
+  stop taking checks 90 minutes before a booked window. Read infra's answer before you say Thursday's
+  plan at 18:00Z; if a booking would refuse your start, say so on INF-660 through me.

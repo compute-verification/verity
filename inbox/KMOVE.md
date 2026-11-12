@@ -1009,3 +1009,6 @@ Proofs (its worker WIDELEAF's reading of its branch at `c695f5e827` and of #9077
   that statement is on the provisional unit cover, so a Lean accept on it says "units as stated, the
   Program not held to the circuit" until proofs' PRF-567 lands. Your screen quotes no Lean verdict at
   all; if a later run does, it carries that sentence.
+- **Added 03:41Z: card 6 on Thu has a taker right after you.** Compute-accounting runs its price round
+  there from 17:30Z (TOP-401, top's yes). Off by 17:25Z is now someone's start, not only a rule: a step
+  that would not fit is skipped, never shortened, and nothing of yours is on the card at 17:25Z.

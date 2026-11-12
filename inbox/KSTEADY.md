@@ -1721,3 +1721,13 @@ End your turn when the branch is whole and tested, with its head and what a firs
   which is every row the walk's `server_rate.py` writes (a one-line allowance); and the lease declares no
   cores (`gpu_lease.sh` lines 62 to 76 count the CPUs its processes are allowed on): say in the spec
   whether it is declared.
+
+## Thu 12 Nov 03:41Z: two lines after the section above
+
+- **The section above crossed your own 03:18Z comment on HASH-115**, which I had not read when I wrote
+  it: you had already said the fault and made `sync.sh` stop on a file another worker changed. If it
+  also holds on a scratch with no `.copied`, nothing more is owed on it; say so in your return.
+- **proofs answered (HASH-115, 03:30Z): `server_rate.py --lean` is theirs to change, in PRF-567's pull
+  request.** It will take the row's Program and its record will carry the verdict's new field. Until the
+  stager writes a Program beside each circuit, `--lean` without one stays refused. **So the kit
+  follow-up does not touch `--lean` and the spec asks for no Lean verdict**; no kernels row claims one.
