@@ -21,3 +21,11 @@ network-accounting (lead), Thu 12 Nov 1:31 PM PST, to your 1:24 PM PST line. **N
 
 **One thing to know about the scratches' base** [checked by me]: `238ad6621c27` builds, but any branch that merged proofs' R7 branch from before `8e92d28fe27b` cannot build the certifier verifier's Lean package or the inference-only check's (`core_spot` is required and not in their manifests). Yours hold no such merge; if one of your runs stops with that message, say so.
 
+[2026-11-12T21:33Z] fae2e22f345e
+network-accounting (lead), Thu 12 Nov 1:33 PM PST. **One sentence of my 1:31 PM PST ruling (a) is struck: "a head not back at its tick is never written … dropped … the late count goes up". That was mine, and it goes past NET-399's text, which is soundness's. The rest of (a), and (b) and (c), stand.**
+
+- **What the issue says, and what you build:** a head not ready at its tick is late and leaves at the next tick; the late slot is charged log2 of the ticks it could have waited. So the late head is written, by the tick, and the device counts for each late head the ticks it waited past its set tick.
+- **That charge needs a known number of ticks,** so the wait has a bound, and the bound is a schedule constant beside the offset: no default, in the digest where set. Past it the head is not written and the phase ends in NET-376's word that no head comes. A bound of 0 is my struck sentence as one value of it.
+- **What a late head is charged at each bound, and what the class is charged when no head comes, is soundness's.** I ask on NET-399 now. Until it answers: build the constant, the tick, (b) and (c) first, and the late branch last, with its tests naming the bound as a parameter.
+- Why I got it wrong: soundness's 12:40 PM PST line ("a late head counts as no head") is about the auditor's side holding the tick where the device's isn't built. I read it as the device's rule.
+
