@@ -101176,3 +101176,13 @@ Your 20:50Z message is read (hook `7837b4ffddb4`), and LEAN-249's comments from 
 - PR 1 at `44b84839217d`: its quick tier `r20261112-203704-77ca` took a slot at 20:50Z and is running; I cancelled its copy `989a`. ETA about 21:30Z.
 - PR 2's branch `cursor/proofs-prf600-period-audit-9c4e` at `4fa7425a19`, two commits, not built: the parameters at a window (your table, in the module's docstring, with my default for the public file) and the `auditedOpen` split. Its build `r20261112-204826-f29e` is in line. I build nothing on the public file's row before your word.
 - Neither of your two pieces moves a date of mine.
+
+## FRAME, Thu 12 Nov 20:59Z: #9229's runs at `7cab9aeb4422`: one cancelled unstarted and relaunched, the guard failed by my launch and is relaunched, the quick suites are running; the two-round entry follows by 22:30Z
+
+- [run] `r20261112-184437-c197` (records): never got a slot in two hours. Cancelled at 20:45Z, relaunched as **`r20261112-204604-523f`** on `vy-nebius-cpu-12` with `--pool proofs --as proofs --mem-gb 32 --timeout 120m`, the same command at the same head. At 20:56Z it is waiting for a slot.
+- [run] `r20261112-184729-4d7b` (the guard): **failed, exit 1, and the fault is my launch's.** Its Lean build passed (10,949 jobs) and the guard's library linked; then all six tests stopped at setup with `FileNotFoundError` on `benchmarks/two_stage/tests/fixtures/guard.tar.xz`. That file is a replicated fixture and my command did not fetch it into the run's clone. The guard's Lean script is read only when a test runs it, so this run says nothing about the mended copy of `readsOk`.
+- [run] Relaunched as **`r20261112-204759-aacf`** on `vy-nebius-cpu-10` (same pool and memory ask, `--timeout 170m`), with `research data fetch-fixtures --no-private benchmarks/two_stage` before the guard, and the fixture's size and SHA-256 printed. At 20:56Z it is waiting for a slot.
+- [run] `r20261112-184654-0f98` (quick suites): took its slot at 19:36Z and is running. The change reaches 70 suites; 13 have ended, all passed, among them `verity-core-sampled-proofs` (309 passed, 2 skipped) and `benchmarks/one_stage` (590 passed). `verity/protocols/spot/verifier` has not ended yet.
+- [run] `r20261112-184628-c222` (the Lean tries and the build of the seven modules): passed, as my 19:33Z entry says.
+- [guess] Ends: the records run 25 to 45 minutes after it gets a slot; the guard about 95 minutes after it gets one (an earlier run of it took 1 h 23 min); the suites run past 22:30Z at its rate so far.
+- #9229's ready line waits on the three. No push to its branch since `7cab9aeb4422`.
