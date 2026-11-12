@@ -121,7 +121,6 @@
     {"file": "tests/program/test_harden_guards.py", "kind": "SIM115", "symbol": "test_G5_live_constructions_differing_in_M_are_distinct_but_not_distinguishable_at_reuse", "detail": "Use a context manager for opening files"},
     {"file": "tests/program/test_harden_guards_of_record.py", "kind": "SIM115", "symbol": "test_G4b_mechanism_string_has_one_source", "detail": "Use a context manager for opening files"},
     {"file": "tests/program/test_lifted_r17.py", "kind": "SIM115", "symbol": "test_a2_declared_lag_of_row_reads_the_builds_declaration_through_the_same_rule", "detail": "Use a context manager for opening files"},
-    {"file": "tests/program/test_moe_pad_stage2.py", "kind": "E741", "symbol": "<module>", "detail": "Ambiguous variable name: `I`"},
     {"file": "tests/program/test_norm_chain.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/test_norm_chain.py", "kind": "I001", "symbol": "test_kinds_registered_in_the_pinned_vocabulary_only", "detail": "Import block is un-sorted or un-formatted"},
     {"file": "tests/program/test_scalar_tensor_mul.py", "kind": "I001", "symbol": "<module>", "detail": "Import block is un-sorted or un-formatted"},
