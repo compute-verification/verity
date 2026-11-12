@@ -553,7 +553,6 @@ class TargetProfile:
         p = torch.cuda.get_device_properties(device)
         return cls.default().with_overrides(compute_capability=(int(p.major), int(p.minor)), num_sms=int(p.multi_processor_count))
 
-
     @classmethod
     def from_gpu_document(cls, doc: Any) -> TargetProfile | None:
         """[X-01] The SAME device query as a capture recorded it (`RunHeader.profile["gpu"]` from `verity_vllm.engine.engine_profile.gpu_info`,
@@ -599,7 +598,6 @@ class TargetProfile:
         if fav is not None and int(fav) != tp.effective_flash_attn_version():
             tp = tp.with_overrides(flash_attn_version=int(fav))
         return tp
-
 
     @property
     def capability_str(self) -> str:
@@ -676,7 +674,6 @@ def profile_mismatches(profile: TargetProfile, applied: dict) -> list[str]:
         if got != profile.moe_experts_class():
             bad.append(f"moe_backend declared {profile.moe_backend!r} ({profile.moe_experts_class()}), applied {got!r}")
     return bad
-
 
 
 # -- the artifact wrapper --------------------------------------------------------------------------------------------------
