@@ -97833,3 +97833,43 @@ not mediated, two guards, the premised row's frozen JSON). They read `.egress` n
 
 I write one line with the root's verdict when it is in. Then the three additions, each its own commit, and the two
 lists on a branch of mine, as your 19:26Z section orders.
+
+## PERIODREAD, Thu 12 Nov 19:40Z: READY #9416 at `76aaa72e7799`: on three real one-member audits the case names its challenger and the compiled check answers past "no challenger" (`3849`); none is accepted; the head merges `main` with #9362 in it
+
+Mailbox read at `52e37590b5` (nothing new since your 19:06Z section). I can pause.
+
+**Ready line: #9416 at `76aaa72e7799c78dd43a96f617aab4fb66758430`**, https://github.com/compute-verification/verity/pull/9416, unmarked, `Lane proofs`.
+
+- **The head moved** from `4f9e065fa33a` because #9362 landed and touches the same two files. The new head merges `main` `0e8d16c3b8be`; the merge was clean and my change is the same +19 −12 and +72 −2 [run: `git diff --numstat origin/main...HEAD`].
+- **Merge-tree** of the head against `main` `0e8d16c3b8be` and against #9199's head `7a528d6b1c01`: each exit 0, no conflict [run]. #9362's branch is gone from the remote: it is merged and its head is in `main` [run: `gh pr view 9362`, `git merge-base --is-ancestor`].
+- **On the merged head**: `test_a5_case_v2.py` 20 passed, `test_served_integrity.py` 39 passed [run: on this VM]. So part 1's key check and this writer are in one tree and their tests pass. No audit has been run with both.
+- **The quick tier on the merged head is `r20261112-193808-c71f`**, in line for a slot. Before the merge it passed at `4f9e065fa33a` (`1608`). If `c71f` fails I say so at once.
+
+### What the compiled check answers on a real case [run: `r20261112-185813-3849`, exit 0, 3 passed in 625 s, at `4f9e065fa33a`]
+
+Three audits of a window of one `--zk` member, on the benchmark's small test model with `--challenger local`. Not a served run. Each accepted in Python and wrote `case-v2.json`; then `sampled-proofs-one-stage-zk check` ran on that file.
+
+| audit | the case names | compiled check |
+|---|---|---|
+| `subset:1`, 2 units, the run's small key | challenger (`draw`, key at W 4, H 5), the window's root, the coins' evidence | `reject`: "params: the challenger's key is not at the deployed LMS parameters (W = 1, H = 20)" |
+| `subset:1`, 2 units, `--deployed-key` | the same, key at W 1, H 20 | `reject`: "proofs: session …'s coins are not the challenger's: its coin tree is none the challenger's release log shows it sampled" |
+| `stratified:1`, 1 unit, `--deployed-key` | the same | the same `proofs:` refusal |
+
+- **As read beforehand.** Before the change each answered "the parameters name no challenger" [run: `974c`]. Under a deployed-size key the check now passes the steps that read the sample's coins and the log's order, and stops at the session's coin tree: the one proof session ran on a challenger of the verifier's own.
+- **No v2 accept exists on `main` for any registration, after this change either.** The body says so in its first line of that section, and says what an accept needs (the one-member relay without the closing round).
+- The body is updated with this table [run: `research queue edit 9416`].
+
+### PR 1
+
+- Branch `cursor/proofs-prf600-period-ledger-3b1f` is now at `3b3ae8b023d1` (two small commits since my 19:23Z entry: the piece is served from the pieces' table, so the lock's exemption of the difftest's entry point stays true as written; and one type annotation). Still not compiled: its build and difftest `r20261112-193141-2687` and its quick tier `r20261112-193837-0e33` are in line.
+
+### Not established
+
+- **No audit with #9362 and #9416 together**, only their tests on the merged tree.
+- **The probe is before the merge.** Its commit is `4f9e065fa33a`; `main`'s changes to `a5.py` since are #9362's own (the audit's record of whether a case was written), not the case's content [read: the diff].
+- **A tied audit and a served window** were not run with this change.
+
+### State
+
+- Runs in line: `c71f` (quick tier, #9416), `2687` (PR 1 build and difftest, about 10 minutes once it has a slot), `0e33` (PR 1 quick tier).
+- From you: the mark on #9416; and still your word, if any, on the clock (my 19:23Z entry).
