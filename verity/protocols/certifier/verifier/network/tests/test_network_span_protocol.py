@@ -9,6 +9,7 @@ mirror's own run everywhere."""
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import random
@@ -21,8 +22,8 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from period_case import _key, schedule_json
-from span_case import ACCEPT, EDGE, EXPECT, MUTATIONS, REASONS, REJECT, _Leaves, build, reference
-from verity.protocols.certifier.verifier import span
+from span_case import ACCEPT, EDGE, EXPECT, MUTATIONS, REASONS, REGISTERED_REASONS, REJECT, _Leaves, build, reference
+from verity.protocols.certifier.verifier import registered, span
 from verity.protocols.certifier.verifier.certificate import Certificate, CertifiedMark, Direction, Issuer
 
 LEAN = Path(__file__).resolve().parents[2] / "lean"
@@ -32,7 +33,7 @@ TAGS: dict[str, str] = {}
 SEEN: Counter = Counter()
 
 #: The changes sampled more often than the rest: the honest spans, the only accepted ones.
-WEIGHTS = {"honest": 6, "far": 2, "edge": 2}
+WEIGHTS = {"honest": 6, "far": 2, "edge": 2, "registered": 3}
 
 #: The schedule of the Lean's `#guard`s (`guardSchedule`): D = 8, r = 2, T = 16 and 17 egress cells a response.
 GUARD = span.Schedule(cell_bytes=256, slots=2, bucket_ms=100, delay=8, lanes=16, queue=64, window=16,
@@ -40,6 +41,16 @@ GUARD = span.Schedule(cell_bytes=256, slots=2, bucket_ms=100, delay=8, lanes=16,
 #: The parameters of the Lean's `#guard`s (`guardParams`): the link `eth0` under `GUARD`, a zero key and session.
 GUARD_PARAMS = {"key": "00" * 24, "link": "eth0", "lms": {"H": 1, "N": 8, "W": 8, "toy": True},
                 "schedule": schedule_json(GUARD), "session": "00" * 32}
+#: The registered hardware of the Lean's `#guard`s (`guardSite`): `eth0` joins the host `node0` and the network
+#: certifier `cert0`, which registers the parameters' key, and `out0` is the certifier's other half, to the outside.
+GUARD_SITE = {
+    "links": [{"beta": 100, "ends": ["node0", "cert0"], "id": "eth0", "latency": 1},
+              {"beta": 100, "ends": ["cert0", "outside"], "id": "out0", "latency": 1}],
+    "locs": [{"bytes": 0, "id": "node0", "key": "", "kind": "host", "owner": "prover", "parent": None, "sheet": "",
+              "tier": None},
+             {"bytes": 0, "id": "cert0", "key": "00" * 24, "kind": "certifier", "owner": "auditor", "parent": None,
+              "sheet": "", "tier": None}],
+    "sheets": []}
 #: The SHA-512 of `guard_mark(5, 1)`'s certificate's bytes, which the Lean's `#guard` holds too.
 GUARD_START = ("37ccc33e0f5191d268bc91c122be57358555be87a54a8b0fa8384ca157a82be17d31e4d6bae5b7c54bc387c9e7d6f8d0"
                "00111046dd3372fafaef4af0455cfe69")
@@ -110,6 +121,14 @@ def test_each_rejection_has_its_own_reason(server):
             whats[(m, next((w for w, _ in span.records("") if f"the {w} certificate" in reason), None))] += 1
     for m in both:
         assert all(whats[(m, w)] for w, _ in span.records("")), whats
+    # a refusal of the parameters by the registered hardware names what is public there: the link, the site's network
+    # certifiers' links, the certifier and its registered key
+    for m, why in REGISTERED_REASONS.items():
+        for n in range(6):
+            case = build(m, n)
+            assert why in reference(case)["reason"], (m, n, reference(case))
+            verdict, out = D.replay(PORT, case, server)
+            assert verdict == REJECT and why in json.loads(out)["reason"], (m, n, out)
 
 
 @lean
@@ -156,6 +175,31 @@ def test_every_change_reaches_its_verdict_in_the_mirror():
             out = reference(case)
             assert out["verdict"] == verdict, (m, n, out)
             assert m not in REASONS or REASONS[m][1] in out["reason"] and not numbered(out["reason"], case), (m, n, out)
+            assert m not in REGISTERED_REASONS or REGISTERED_REASONS[m] in out["reason"], (m, n, out)
+
+
+def test_the_registered_hardware_in_the_parameters():
+    """With the site and the head, the parameters hold what the registered hardware states of the link and the key,
+    as the Lean's `#guard`s have it, and the count is the one without them; a site without a head, a head without a
+    site, a certifier that registers another key, the certifier's other half and a site that is none are refused."""
+    with_site = GUARD_PARAMS | {"head": "h", "site": GUARD_SITE}
+    assert span.params(with_site).registered == registered.Registered(
+        head="h", link="eth0", host="node0", certifier="cert0", key="00" * 24, beta=100)
+    assert span.params(GUARD_PARAMS).registered is None
+    assert dataclasses.replace(span.params(with_site), registered=None) == span.params(GUARD_PARAMS)
+    other_key = GUARD_SITE | {"locs": [GUARD_SITE["locs"][0], GUARD_SITE["locs"][1] | {"key": "aa" * 24}]}
+    for bad, why in [({"site": GUARD_SITE}, "or with the registered hardware"), ({"head": "h"}, "the keys must be"),
+                     ({"head": "h", "site": other_key}, "is not network certifier cert0's registered key"),
+                     ({"head": "h", "site": GUARD_SITE, "link": "out0"}, "it joins certifier cert0 and the outside"),
+                     ({"head": "h", "site": GUARD_SITE, "link": "eth1"}, "no link of the registered hardware"),
+                     ({"head": "h", "site": []}, "the site"), ({"head": 0, "site": GUARD_SITE}, "head")]:
+        with pytest.raises(span.Refused, match=why):
+            span.params(GUARD_PARAMS | bad)
+    for n in range(4):
+        case = build("registered", n)
+        bare = case | {"params": {k: v for k, v in case["params"].items() if k not in ("head", "site")}}
+        out = reference(case)
+        assert out["verdict"] == ACCEPT and out == reference(bare), (n, out)
 
 
 def test_the_tail_is_the_execution_phases_a_held_response_leaves_in():

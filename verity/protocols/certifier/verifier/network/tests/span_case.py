@@ -17,7 +17,8 @@ and the end's at most two later, and signs each execution phase of the span and 
 the responses' record's and the fails record's, each over a sampled digest (the count opens no record), and its egress
 cells' head (`WR.Cells.commit` and `WR.registration`). `far` puts the span at the last execution phases a
 certificate can name, and `edge` puts it under the schedule `EDGE`, whose tail is one execution phase and no bucket
-less.
+less. `registered` gives the parameters the registered hardware (`site`): the site of a registration log's view, in
+which the link joins a host and a network certifier that registers the key, and the head of the log it was read at.
 
 This is test-side Python (it imports `verity_difftest`, which the certifier's package may not), so it lives beside
 the count's difftest (`test_network_span_protocol.py`)."""
@@ -33,6 +34,7 @@ import verity_difftest as D
 from period_case import KEYS, _cert_json, _flip, _key, _small_schedule, schedule_json
 from verity_difftest import protocol as P
 from verity.commitments.crypto import lms
+from verity.protocols.certifier.verifier import registered as R
 from verity.protocols.certifier.verifier import span
 from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.certificate import (DIGEST_BYTES, SALT_BYTES, Certificate, CertifiedMark,
@@ -56,7 +58,11 @@ LAST = (1 << 64) - 1
 LINKS = ("eth0", "rack/out", "a b", "l", "x" * 40, "r\u00e9seau/0", "\u7ebf\u8def-1", "\U0001f517", "a\tb\x7f")
 
 EXPECT = {
-    "honest": ACCEPT, "far": ACCEPT, "edge": ACCEPT,
+    "honest": ACCEPT, "far": ACCEPT, "edge": ACCEPT, "registered": ACCEPT,
+    # the registered hardware in the parameters: a site in which the link is none, or joins something else than a
+    # network certifier and a host; whose certifier registers another key, or one not in lower-case hex; a site
+    # without a head or a head without a site; and a site that is not one a registration log's view writes
+    "site-link": REJECT, "site-key": REJECT, "site-alone": REJECT, "site-form": REJECT,
     # a mark: on another link name, an ingress certificate, under another key, under the key's identifier with other
     # one-time keys, in another session, not opened by its salt and message, its signature or its execution phase
     # changed; and the two marks out of order
@@ -152,6 +158,37 @@ def _schedule(r: random.Random) -> Schedule:
         s = _small_schedule(r, False, r.random() < 0.25)
         if span.tail(s) <= TAIL:
             return s
+
+
+#: What the registered hardware's refusals of the parameters say, in Lean and in the mirror, by the change each is
+#: aimed at (`NetworkCheck.Registered`).
+REGISTERED_REASONS = {"site-link": "the network certifiers' links there are [", "site-key": "network certifier cert0"}
+
+
+def site(r: random.Random, link: str, key: str, elsewhere: str,
+         joins: tuple[str, str] | None = ("node0", "cert0")) -> dict:
+    """The site of a registration log's view, as the Site's JSON writes it: the host `node0` behind the network
+    certifier `cert0`, which registers `key` and splits the host's uplink in the link `link` and its other half, to the
+    outside; a second host behind a second certifier, on the link `elsewhere`; a link between the two hosts and the
+    second host's bare uplink. `joins`: what the link `link` joins in place of the host and its certifier, or None for
+    a site with no such link."""
+    def loc(i: str, kind: str, **more: Any) -> dict:
+        return {"bytes": 0, "id": i, "key": "", "kind": kind, "owner": "prover", "parent": "site0", "sheet": "",
+                "tier": None} | more
+
+    def joined(i: str, a: str, b: str, beta: int) -> dict:
+        return {"beta": beta, "ends": [a, b] if r.random() < 0.5 else [b, a], "id": i, "latency": r.randint(0, 3)}
+
+    locs = [loc("site0", "site", parent=None), loc("node0", "host"), loc("gpu0", "device", parent="node0", sheet="s"),
+            loc("hbm0", "memory", parent="gpu0", tier="hbm", bytes=1 << 30),
+            loc("cert0", "certifier", owner="auditor", key=key), loc("node1", "host"),
+            loc("cert1", "certifier", owner="auditor", key=r.randbytes(24).hex())]
+    links = [joined("out0", "cert0", R.OUTSIDE, 100), joined(elsewhere, "cert1", "node1", 40),
+             joined("out1", "cert1", R.OUTSIDE, 40), joined("hh0", "node0", "node1", 400),
+             joined("bare0", "node1", R.OUTSIDE, 10)]
+    if joins is not None:
+        links.insert(r.randrange(len(links) + 1), joined(link, *joins, r.randint(1, 1000)))
+    return {"links": links, "locs": locs, "sheets": []}
 
 
 def _other_schedule(r: random.Random, s: Schedule) -> Schedule:
@@ -321,6 +358,18 @@ def build(m: str, seed: int) -> dict:
     params = {"key": lms.public_key(key).hex(), "link": link, "lms": {"H": H, "N": N, "W": W, "toy": toy},
               "schedule": schedule_json(_other_schedule(r, sched) if m == "schedule" else sched),
               "session": session.hex()}
+    if m in ("registered", "site-link", "site-key", "site-alone", "site-form"):
+        registered_key = params["key"]
+        if m == "site-key":
+            registered_key = r.choice([lms.public_key(_key(i, 1)).hex(), registered_key.upper(), registered_key[:-2],
+                                       registered_key + "0", ""])
+        joins = r.choice([None, ("cert0", R.OUTSIDE), ("node0", "node1"), ("node0", R.OUTSIDE), ("cert0", "cert1"),
+                          ("cert0", "node9")]) if m == "site-link" else ("node0", "cert0")
+        params |= {"head": r.randbytes(DIGEST_BYTES).hex(), "site": site(r, link, registered_key, elsewhere, joins)}
+        if m == "site-alone":
+            del params[r.choice(["head", "site"])]
+        elif m == "site-form":
+            params = r.choice(_bad_sites(params))
     e_json = {"phases": phases}
     c_bytes, e_bytes = b"".join(span.mark_bytes(x) for x in marks), D.canonical(e_json).encode()
     if m == "params":
@@ -334,6 +383,25 @@ def build(m: str, seed: int) -> dict:
         case = r.choice([case | {"commitment": case["commitment"].upper()}, case | {"evidence": case["evidence"] + "0"},
                          case | {"commitment": 0}, {x: v for x, v in case.items() if x != "params"}, [case]])
     return case
+
+
+def _bad_sites(p: dict) -> list[dict]:
+    """Parameters whose site is not one a registration log's view writes, or whose head is not a string."""
+    s = p["site"]
+
+    def first(of: str, **changes: Any) -> dict:
+        return p | {"site": s | {of: [s[of][0] | changes, *s[of][1:]]}}
+
+    return [p | {"site": []}, p | {"site": {x: v for x, v in s.items() if x != "sheets"}}, p | {"site": s | {"x": []}},
+            p | {"site": s | {"sheets": {}}}, p | {"site": s | {"locs": {}}}, p | {"site": s | {"links": None}},
+            p | {"head": 5}, p | {"head": None},
+            first("locs", kind="router"), first("locs", owner="vendor"), first("locs", tier="tape"),
+            first("locs", parent=0), first("locs", bytes=-1), first("locs", key=None), first("locs", id=7),
+            p | {"site": s | {"locs": [{x: v for x, v in s["locs"][0].items() if x != "tier"}, *s["locs"][1:]]}},
+            first("links", ends=["node0"]), first("links", ends=["node0", "cert0", "node1"]),
+            first("links", ends=["node0", 1]), first("links", beta=-1), first("links", latency="1"),
+            first("links", id=None),
+            p | {"site": s | {"links": [{x: v for x, v in s["links"][0].items() if x != "latency"}, *s["links"][1:]]}}]
 
 
 def _without(j: dict, n: int) -> dict:

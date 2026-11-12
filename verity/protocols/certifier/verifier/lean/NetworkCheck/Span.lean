@@ -1,8 +1,10 @@
 module
 
 public import NetworkCheck.Period
+public import NetworkCheck.Registered
 public import Identity.Domains
 meta import NetworkCheck.Period
+meta import NetworkCheck.Registered
 meta import Identity.Domains
 
 /-!
@@ -30,6 +32,12 @@ the execution phase. The mark and its salt are witness; the certificate is a sig
 the network certifier's LMS key and its parameters, the certifier session's id (32 bytes), the link, its name held to
 what the period's check holds it to, at most 65,535 UTF-8 bytes, and the schedule, as the period's check reads it (its
 `scheduleOf`).
+
+They may hold the registered hardware too, two more keys that come together: `"site"`, the site of a registration
+log's view (`Registered.siteOf`), and `"head"`, the head of the log it was read at, a string the count carries and
+doesn't read. The link and the key are then read off the site (`Registered.registered`): the link is one of the site's
+that joins a network certifier and a host, and the key, as its lower-case hex, is the key that certifier registered. A
+refusal there is a refusal of the parameters. Nothing here holds the site to an accepted log: its caller does.
 
 **Commitment**: the two marks, the start's then the end's, each
 
@@ -127,6 +135,8 @@ structure Params where
   schedule : Schedule
   /-- The schedule's digest (`Schedule.digest`), which each execution phase's egress cells' head names. -/
   scheduleDigest : ByteArray
+  /-- What the registered hardware states of the link and the key, when the parameters hold the site. -/
+  registered : Option Registered := none
 
 /-- A mark as the network certifier hands it back (`certificate.CertifiedMark`): its certificate, the certificate's
 bytes as the commitment holds them, the salt and the 64 bytes marked. -/
@@ -169,21 +179,43 @@ def keyed (j : Json) (want : List String) (ctx : String) : V Unit :=
   | .obj kvs => if kvs.keys == want then pure () else throw s!"{ctx}: the keys must be {want}, not {kvs.keys}"
   | _ => throw s!"{ctx}: not an object"
 
+/-- The parameters' keys. -/
+def paramsKeys : List String := ["key", "link", "lms", "schedule", "session"]
+
+/-- The parameters' keys with the registered hardware: `head` and `site` come together. -/
+def registeredKeys : List String := ["head", "key", "link", "lms", "schedule", "session", "site"]
+
+/-- Whether the parameters hold the registered hardware; neither list of keys is a refusal. -/
+def holdsSite (j : Json) : V Bool :=
+  match j with
+  | .obj kvs =>
+    if kvs.keys == paramsKeys then pure false
+    else if kvs.keys == registeredKeys then pure true
+    else throw s!"the object: the keys must be {paramsKeys}, or with the registered hardware {registeredKeys}, not \
+      {kvs.keys}"
+  | _ => throw "the object: not an object"
+
 def paramsOf (j : Json) : V Params := do
-  keyed j ["key", "link", "lms", "schedule", "session"] "the object"
+  let site ← holdsSite j
   let link ← Flock.J.str j "link" "the object"
   unless link.toUTF8.size < 2 ^ 16 do throw "link: a name is at most 65,535 UTF-8 bytes"
   let l ← Flock.J.get j "lms" "the object"
   keyed l ["H", "N", "W", "toy"] "lms"
   let lms ← Lms.Params.make (← Flock.J.nat l "N" "lms") (← Flock.J.nat l "W" "lms") (← Flock.J.nat l "H" "lms")
     (← Flock.J.bool l "toy" "lms")
-  let key ← Flock.unhex (← Flock.J.str j "key" "the object")
+  let keyHex ← Flock.J.str j "key" "the object"
+  let key ← Flock.unhex keyHex
   unless key.size = 16 + lms.N do throw s!"key: an LMS public key is {16 + lms.N} bytes, not {key.size}"
   let session ← Flock.unhex (← Flock.J.str j "session" "the object")
   unless session.size = sessionBytes do
     throw s!"session: a certifier session id is {sessionBytes} bytes, not {session.size}"
   let schedule ← scheduleOf (← Flock.J.get j "schedule" "the object")
-  pure { link, lms, key, session, schedule, scheduleDigest := ← schedule.digest }
+  let registered ← if site then do
+      let head ← Flock.J.str j "head" "the object"
+      let S ← Registered.siteOf (← Flock.J.get j "site" "the object")
+      some <$> Registered.registered S head link keyHex
+    else pure none
+  pure { link, lms, key, session, schedule, scheduleDigest := ← schedule.digest, registered }
 
 namespace Read
 
@@ -441,6 +473,28 @@ def guardMark (phase fill : UInt8) : ByteArray :=
     ⟨Array.replicate 64 3⟩, ⟨Array.replicate 64 6⟩, some (4 * 1572864))
 #guard (namedOf guardParams (guardMark 7 1 ++ guardMark 5 4)).map (·.egressBits) == some none
 #guard (namedOf guardParams (guardMark 5 1)).isNone && (namedOf "{}" (guardMark 5 1 ++ guardMark 7 4)).isNone
+/-- The registered hardware of the `#guard`s: the link `eth0` joins the host `node0` and the network certifier `cert0`,
+which registers `key`, and `out0` is the certifier's other half, to the outside. -/
+def guardSite (key : String) : Json :=
+  Core.Site.toJson ⟨[],
+    [{ id := "node0", kind := .host }, { id := "cert0", kind := .certifier, owner := .auditor, key }],
+    [{ id := "eth0", ends := ("node0", "cert0"), β := 100, latency := 1 },
+     { id := "out0", ends := ("cert0", Core.Site.outside), β := 100, latency := 1 }]⟩
+
+/-- `guardParams`, read with more keys or other values. -/
+def guardParamsWith (more : List (String × Json)) : V Params := do
+  paramsOf (more.foldl (fun j (k, v) => j.setObjVal! k v) (← Core.canonicalJson guardParams.toUTF8))
+
+-- the registered hardware in the parameters: the link and the key are read off the site, and the head is carried
+#guard ((guardParamsWith [("head", .str "h"), ("site", guardSite ("".pushn '0' 48))]).toOption.bind (·.registered)) ==
+  some ⟨"h", "eth0", "node0", "cert0", "".pushn '0' 48, 100⟩
+-- without it the parameters hold none, and the site and the head come together
+#guard ((guardParamsWith []).toOption.map (·.registered)) == some none
+#guard !(guardParamsWith [("site", guardSite ("".pushn '0' 48))]).isOk && !(guardParamsWith [("head", .str "h")]).isOk
+-- refused with the parameters: a certifier that registers another key, the certifier's other half, no site
+#guard !(guardParamsWith [("head", .str "h"), ("site", guardSite ("".pushn 'a' 48))]).isOk
+#guard !(guardParamsWith [("head", .str "h"), ("link", .str "out0"), ("site", guardSite ("".pushn '0' 48))]).isOk
+#guard !(guardParamsWith [("head", .str "h"), ("site", .arr #[])]).isOk
 -- a certificate's bytes are read exactly: one byte more or one fewer in their length is refused
 #guard (Read.certificateOfBytes ((guardMark 5 1).extract 4 111)).isOk &&
   !(Read.certificateOfBytes ((guardMark 5 1).extract 4 112)).isOk &&

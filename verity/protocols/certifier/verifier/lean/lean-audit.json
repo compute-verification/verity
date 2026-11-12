@@ -60,9 +60,9 @@
    "why": "N2's link-window verdict of record is code: v4's certificate, its one LMS check and its encodings, the LMS verifier, C-Flock's hm96 row commitment, canonical JSON and frame-v3-sha512 domain, and core's identity hash, no Mathlib and nothing of Security"
   },
   "NetworkCheck.Span": {
-   "imports": ["NetworkCheck.Period", "Identity.Domains"],
+   "imports": ["NetworkCheck.Period", "NetworkCheck.Registered", "Identity.Domains"],
    "except": [],
-   "why": "the count over a span is code: the period's check with what it imports (its schedule, certificate and row registration decoders, v4's certificate and its one LMS check, the core interface) and the table of domain separators, no Mathlib and nothing of Security"
+   "why": "the count over a span is code: the period's check with what it imports (its schedule, certificate and row registration decoders, v4's certificate and its one LMS check, the core interface), the read of the link and the key off the registered hardware (the core interface's Site) and the table of domain separators, no Mathlib and nothing of Security"
   }
  },
  "reads_exempt": {

@@ -14,6 +14,10 @@ marks link name (`marks_link`). The count opens each (`CertifiedMark.refusal`) a
 certificate. A mark's bytes in the commitment are `mark_bytes`: its certificate's bytes (`Certificate.encode`) behind
 their length, its salt, then its message. A link's name is what the period's check takes: at most 65,535 UTF-8 bytes.
 
+**The registered hardware.** The parameters may hold the site of a registration log's view and the head of the log it
+was read at. The link and the key are then read off the site (`registered.registered`), and a refusal there refuses
+the parameters. Nothing here holds the site to an accepted log: its caller does.
+
 **The span.** From the start mark's execution phase w_s to the end mark's w_e, then a tail (`tail`): the network
 certifier releases a connection's response late, by a bounded time, and reads a server's bytes only on a connection it
 opened when it admitted that client's connection, so the bytes it has read by the end mark leave in the tail's
@@ -41,6 +45,7 @@ from typing import Any
 from verity.commitments import domains
 from verity.commitments.crypto import lms
 from verity.commitments.identity import tagged_sha512
+from verity.protocols.certifier.verifier import registered as R
 from verity.protocols.certifier.verifier import warden_rows as WR
 from verity.protocols.certifier.verifier.certificate import (DIGEST_BYTES, SALT_BYTES, Certificate, CertifiedMark,
                                                             Direction, LmsKey)
@@ -51,6 +56,8 @@ COMMITMENT_TAG = domains.CERTIFIER_SPAN
 #: what a link's name gains for the link its fails record is certified under
 FAILS = "fails"
 PARAMS_KEYS = ["key", "link", "lms", "schedule", "session"]
+#: with the registered hardware: `head` and `site` come together
+REGISTERED_KEYS = ["head", "key", "link", "lms", "schedule", "session", "site"]
 SCHEDULE_KEYS = sorted(INTEGER_FIELDS)
 #: with the bound on a response's length: every field but the egress form and the lengths rows' form
 BOUNDED_SCHEDULE_KEYS = sorted(f.name for f in fields(Schedule) if f.name not in ("egress", "lengths"))
@@ -75,6 +82,8 @@ class Params:
     key: LmsKey
     session: bytes
     schedule: Schedule
+    #: what the registered hardware states of the link and the key, when the parameters hold the site
+    registered: R.Registered | None = None
 
 
 @dataclass(frozen=True)
@@ -136,8 +145,16 @@ def _schedule(j: Any) -> Schedule:
 
 def params(j: Any) -> Params:
     """The count's parameters, all public: the network certifier's LMS key and its parameters, the certifier session,
-    the link, its name held to what the period's check holds it to, and the schedule."""
-    _exactly(j, PARAMS_KEYS, "the object")
+    the link, its name held to what the period's check holds it to, and the schedule. With the registered hardware
+    (`site`, the site of a registration log's view, and `head`, the head of the log it was read at, which come
+    together), the link and the key are read off the site (`registered.registered`): the link joins a network
+    certifier and a host, and the key is the one that certifier registered. A refusal there refuses the parameters."""
+    if not isinstance(j, dict):
+        raise Refused("the object: not an object")
+    site = sorted(j) == REGISTERED_KEYS
+    if not site and sorted(j) != PARAMS_KEYS:
+        raise Refused(f"the object: the keys must be {PARAMS_KEYS}, or with the registered hardware "
+                      f"{REGISTERED_KEYS}, not {sorted(j)}")
     link = _of(j["link"], str, "link")
     if len(link.encode()) >= 1 << 16:
         raise Refused("link: a name is at most 65,535 UTF-8 bytes")
@@ -154,7 +171,14 @@ def params(j: Any) -> Params:
     session = _unhex(j["session"], "session")
     if len(session) != lms.SESSION_BYTES:
         raise Refused(f"session: a certifier session id is {lms.SESSION_BYTES} bytes, not {len(session)}")
-    return Params(link, LmsKey(lp, key), session, _schedule(j["schedule"]))
+    schedule, registered = _schedule(j["schedule"]), None
+    if site:
+        head = _of(j["head"], str, "head")
+        try:
+            registered = R.registered(R.site_of(j["site"]), head, link, j["key"])
+        except R.Refused as e:
+            raise Refused(str(e)) from None
+    return Params(link, LmsKey(lp, key), session, schedule, registered)
 
 
 def mark_bytes(m: CertifiedMark) -> bytes:
