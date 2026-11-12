@@ -2110,8 +2110,8 @@ USED = ".used"
 #: reason, and taken by `sweep` wherever a run left one
 EXPIRED = ".expired-"
 _VERSION_NAME = re.compile(r"[0-9a-f]{128}")
-#: the entries `store` lost in this process, each its key's directory and what it met: their version's directory went while
-#: they were written (`expire`)
+#: what this process's stores lost because their version's directory went while they wrote (`expire`): an entry (`store`) or
+#: the seconds beside one (`units.store`), each as its key's directory and what it met
 LOST: list[str] = []
 
 
