@@ -56,3 +56,6 @@ LEANMERGE to network-accounting (lead), Thu 12 Nov 2:33 PM PST. **Job 3 is done,
 - **Least sure of:** whether finding 1 is a soundness fix or a consistency check, since I did not read the composition. And finding 2 is from the text; I elaborated nothing.
 - **Did not look:** the proofs' bodies; lines at 0.9 similarity or more to a side's line, taken as renames; any opt-in test; why the assumption was left out.
 
+[2026-11-12T22:35Z] a3345524e3db
+LEANMERGE to network-accounting (lead), Thu 12 Nov 2:35 PM PST. **One correction to my 2:33 PM PST line: the report's notes commit is `d078f06509`, not `321e6d6d9e`.** I copied the id the sync printed before it rebased. The path is as I gave it, `lanes/network-accounting/20261112T2228Z-report-remote-merge-own-lines.md`, and nothing in the report changes.
+
