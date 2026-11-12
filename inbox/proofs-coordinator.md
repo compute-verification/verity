@@ -73097,3 +73097,63 @@ Tags: [run] a run's log or a command now, [read] a file read this session, [rela
 - **Line 10.** `benchmarks/spot_figures/tests/test_headline.py`: `test_the_sparse_mla_blocks_count_glm53_s_heads` (line 31), `test_the_head_count_is_read_not_written` (line 41, the combine at three heads, the whole row at one), and line 222, which picks `SparseMlaSplitPart_v1{T=64,` from the strata for the steady-state test; `test_breakeven.py:56` picks the same, slow [read]. The workload card's values are pinned in `test_total_cost.py`, `test_figure1.py`, `test_figures23.py` and `test_binding.py`, 57 values in all [relayed: the 03:21Z entry on #9112]. `benchmarks/one_stage/tests/test_block_census.py:78-87` holds the units a chain row gives [read]. `benchmarks/harness/tests/test_exfiltration.py` lines 272 to 349 hold the family at 52.29%, 52.33% and 53.39%, line 26 `YEAR_GB = 14239.837095861332`, on the fixtures `benchmarks/harness/tests/fixtures/exfiltration/` (three runs' rows and `records.json`), and it reads the tree's planner for the requests, so it moves with the card [read]. Owners [run: `research msg owners`]: proofs for the cards, `headline.py`, `reprice.py`, `sweep.py`, `levers.py`, `total_cost.py`, their tests, `block_census.py` and `server_rate.py`; the benchmarks lane for `benchmarks/harness/verity_bench/exfiltration.py`, `prove.py` and their tests and fixtures; circuits for `benchmarks/served_units/stage.py` and the registry; vLLM for `serving_templates.py`; top for `fixtures/artifacts.json`, if the card's generator or the 128k plan's files come in as fixtures.
 
 **5. What I wait on.** The two runs of section 2 (`r20261112-054432-2199`, `r20261112-054456-59f3`) [run]. #8370 on `main`: then the merge and the two phrases [read]. #9123 on `main`: then line 61 of `a5_sparse_mla.py` and the audit run again [read]. Your word on three things: the bold sentence in the body (section 1), the RMSNorm entry in the planner's card (section 2), and whether the two additions to the paragraph stay (section 1) [read]. Then the ready line; I do not mark [read]. A fresh worker [read]: the branch at `7e45b9061c0e`, the notes' `tools/headsplit/` (this entry as `recon/entry-brief.md`, the job scripts `sizes/sizes_job.sh`, `card/card_job.sh`, `final/suites_job.sh`, `final/cc_job.sh`, the body as `pr-body-edit5.md`) and the checkpoint note of this hour.
+
+## GATHER, Thu 12 Nov 05:56Z: #9092 landed at 05:22Z and #9075 is pushed at `8189d2a7fd12` with the record's sizes (each of the 20 templates 5.81 MB, past 4 MiB, the list 16 entries to 15); its quick tier `9201` and circuit-check `c5e9` wait for check slots, so the ready line is not yet
+
+The mailbox is 135 lines, its newest section your 04:19Z [run: `git show origin/cursor/proofs-inbox:inbox/<my id>.md`, 05:54Z].
+
+**1. What happened, in order.**
+
+- #9092 merged at 05:22:41Z, and `main` is `d6075b75d289` [run: `gh pr view 9092 --json state,mergedAt`; `git fetch origin main`, 05:37Z and again 05:54Z].
+- I merged `main` at `d6075b75d289` into `6ef9e427d69b` (finding 1's test on `c0d7c3ace97f`) with no conflict: commit `2c90804c7151` [run: `git merge origin/main`, my VM, 05:38Z]. #9092's head was never merged into the branch.
+- The record's job ran at that commit: `r20261112-053834-a32d` on vy-nebius-cpu-1, in its own clone with 16 GB, exit 0: "92 measured, 30 kept, 0 failed; 50 of 122 past 4,194,304 bytes" [run: `research fetch r20261112-053834-a32d --all`, its `out/update.log`].
+- I committed the record it wrote and the list's edit as `8189d2a7fd12`, hooks on, and pushed the branch once, a fast-forward from `c0d7c3ace97f` [run: `git push origin cursor/proofs-gather-4931`, 05:50Z; `git ls-remote` gives `8189d2a7fd12`].
+- Nothing else rides along: against `main` the pull request is its 14 files and the description sizes' two [run: `git diff --stat d6075b75d289 8189d2a7fd12`, 16 files].
+
+**2. The new file's sizes.**
+
+| Template | Description, bytes | Its largest Definition, bytes |
+|---|---|---|
+| `GreedyChunk_v2{N=7744,OFF=0}` | 5,805,949 | 4,875,078 |
+| the 16 chunks with no carry | 5,806,864 to 5,806,991 | 4,875,718 to 4,875,720 |
+| `GreedyChunk_v2{N=7744,OFF=61952}` and `OFF=123904` (the two with a carry) | 5,807,394 and 5,807,401 | 4,876,129 and 4,876,130 |
+| `GreedyCombine_v2{V=154880,N=7744}` | 5,823,721 | 4,890,401 |
+
+- These are the record's entries [run: `r20261112-053834-a32d`'s `out/description_sizes.json`, which is the committed file], and they are byte for byte what I measured ahead on my VM at 04:19Z [run: the two JSON files compared on each of the 20 templates' bytes and largest Definition, my VM, 05:55Z: all equal].
+- All 20 are past `SIZE` (4,194,304 bytes), so the answer to circuits' question is no: 20 units a select does not bring the greedy select under the size. A chunk is 5.81 MB where `main`'s is 12.32 MB, and the combine 5.82 MB where `main`'s is 5.58 MB [run: the record; read: `main`'s record for the three `_v1` entries].
+- The record went from 105 entries to 122: the 20 in, the three `_v1` out, and no other template's bytes or largest Definition moved [run: a comparison of `main`'s record with the run's, my VM]. 92 entries now cite `a32d` and 30 the run they cited before, since `update` measures again every template recorded at most the size [read: `description_sizes.py`'s `update`].
+- The list (`adapters/vllm/tests/tools/allowlists/description_sizes.json`) has `GreedyChunk_v2{N=7744,OFF=*}` and `GreedyCombine_v2{V=154880,N=7744}` in place of the three `_v1` entries, 16 entries to 15, as circuits' 02:24Z step 3 asks [read: the commit]. Their `removed_by` reads "no one yet (the chunks as Calls of one body, CIR-215)" and "no one yet (CIR-215)": circuits may want other words there [guess].
+- The test's four read-only cases pass on the new files (the record has exactly the served templates, the list is well formed, every template past the size is listed, every entry is still served and past it) [run: `pytest adapters/vllm/tests/tools/test_description_sizes.py -k 'record_has or well_formed or is_listed or still_served'`, my VM, 05:49Z: 4 passed]. Its rebuild of each template recorded under the size runs in the quick tier.
+
+**3. The two runs the ready line waits on.**
+
+| Run | Machine | What | State at 05:54Z | When [guess] |
+|---|---|---|---|---|
+| `r20261112-055045-9201` | vy-nebius-cpu-6 | `suites.py --changed d6075b75d289 --quick` at `8189d2a7fd12` | in the check line since 05:51Z, one check ahead | about 07:05Z: `9e35`, the same tier one head earlier, took 58 minutes in its slot |
+| `r20261112-055113-c5e9` | vy-nebius-cpu-1 | circuit-check under the default budgets at `8189d2a7fd12`: the sidecar, `GreedySelect_v1{V=154880,N=7744}`, `TokenSelect_v1{V=154880}`, `TokenSelect_v1{V=200}` | in the check line since 05:52Z, ten checks ahead | about 07:00Z, most of it the line |
+
+- [run: `research fetch` and `research inspect` of each, 05:54Z.]
+- **No circuit-check target of this pull request changed in the merge.** Between `be9a3d566905` and `d6075b75d289`, the Python that changed under `verity/` and `tools/verity/circuit_check/` is the DSA norm's registry files, `bf16_gemm_check.py`, the certifier's response tie and content rows, PoUW's verifier and SPOT's challenger: none is the greedy Definitions, the ops they call, the lowering or the evaluator [run: `git diff --name-only be9a3d566905 d6075b75d289 -- verity tools/verity/circuit_check`, 14 `.py` files]. So `c5e9` runs this pull request's own targets again at the head you will mark, and circuits' `b35b` (the 20 units lowered whole, at `c0d7c3ace97f`) is not run again [derived: no input of it moved].
+
+**4. #9075's body is current for `8189d2a7fd12`** (22,583 bytes; copy `/opt/cursor/artifacts/shapeA/pr-9075-body.md`) [run: `research queue edit 9075 --body-file`, 05:53Z].
+
+- It has the new head and what came after `c0d7c3ace97f`, a section "Description sizes" with the table above, circuits' two findings under its terms, and rows for `a32d`, `9201` and `c5e9`. The last two rows say "not ended when this was written", and I put their results in when they end.
+- It names the circuit-check suite in words. My commit hook refuses that suite's package name, since a configured secret's value is a substring of it, so my entries and bodies do not write it [run: the hook's refusal of my 04:23Z entry's first commit].
+
+**5. #9128 does not hold #9075's mark.** #9075's head now contains #9128's head `6ef9e427d69b`. The queue takes a pull request that contains an unmarked one of the same owner as carrying its change, and does not wait for it [read: `Queue._carried` in `tools/research/src/research/queue.py`: "the same owner rebuilt it as p … so a lane that rebuilds a PR needn't drop the superseded one by hand"]. Not run: the mark's preflight will say.
+
+**6. State of the three pull requests** [run: `research queue status`, 05:53Z; `gh pr view`].
+
+- #9121: open, marked at `0174e36bdc31`, admitted, not landed.
+- #9075: open, not marked, at `8189d2a7fd12`.
+- #9128: open, not marked, superseded (its title says so).
+
+**Runs since my 04:23Z entry.**
+
+| Run | Head | What | Exit |
+|---|---|---|---|
+| `r20261112-053834-a32d` | `2c90804c7151` | `description_sizes.py update -j 8` | 0: 92 measured, 30 kept, none failed |
+| `r20261112-055045-9201` | `8189d2a7fd12` | the quick tier | waiting for a slot |
+| `r20261112-055113-c5e9` | `8189d2a7fd12` | circuit-check, default budgets | waiting for a slot |
+
+**Not done.** #9075's ready line: it waits on `9201` and `c5e9`. I end my turn here on those two runs; resume me at about 07:05Z, or when `9201` ends.
