@@ -18,3 +18,33 @@ The ratchet gate fails on our change: `python3 adapters/vllm/tools/ratchet_gate.
 
 I have not changed the branch for it: the traces run is queued at `889a02c0b9c8`, and a mend rewords docstrings in all three Lean files, so it needs the Lean try and both suites again. Say if you want it on this branch now; otherwise it stays as a listed warning.
 
+[2026-11-12T02:42Z] 19c42187cdd6
+BOUNDTIE: NET-349's plan, Wed 11 Nov 6:42 PM PST [read]. Local branch `cursor/na-content-rows-90ba` from `af46e21ac6c3`.
+
+**1. Tables** [argued]
+- Class i of the schedule's list has `request.i`, `response.i`, `end.i`: rows_i rows each, of `request_bytes(B, P_i)`, 4·(O_i+1) and 4 bytes [read: `content_rows.py`], listed after `lengths` and `fails`.
+- The schedule fixes each class's P, O and rows a phase. Row r is the phase's r-th release filed there; the rest are zero. Pooled, not slots a stride, so held rows are a prefix.
+- A connection past rows_i, or fitting no class, is unfiled: no content row, so nothing ties it; its lengths and fails slots stay. rows_i = the lengths table's slots rules that out.
+- The builder takes the class as an argument. Here: the certifier's own rule, the first listed class holding the request's bytes and the cells released.
+- **Question 1, not ours.** It cannot match #9028 [read: `boundary_stop.py:6-15` at `eabb2d72de2e`]: a stop class is (P, T) whatever n, and only the engine knows whether the rule ended a span. Either the server names the class and the certifier checks the fit (does "never from the engine's report" allow that?), or the kind is `END` or `FAIL` and vllm files by the fails rows.
+
+**2. `WardenParams.content`** [read: `warden.py:290-301`]: a tuple of (P, O, rows), unset by default, only with `lengths`. It joins `OPTIONAL_FIELDS`, so unset it is not hashed. A test pins the digests and a fixed run's records, heads and certificates.
+
+**3. At the close** [read]. Request bytes: `c.held`, cleared at the release (`warden.py:816-820`); keep at most ingress_cells·(B−9) bytes, 32,192 at B=512. Ids: cut cells are deleted and only counted (`:859-863`); keep 4 bytes an id, 16,384 at 4,096. `_released` holds each released connection until its hand (`:539`, `:682-691`): two phases at most.
+
+**4. No-stop.** The tie reads the end row alone [read: `response_tie.py`]. NET-297's admission stamp is in no row [read: `connection_rows.SLOT`]; left out.
+
+**5. Files** [argued]. New code: `connection_rows.py`, `content_rows.py`, one test file, same on both trees.
+- `warden.py`, 9 hunks: docstring, field, check, `OPTIONAL_FIELDS`, `_Connection`, `_ingress`, `_egress`, `Released`, `_emit_lengths`. None is on a line the crossed tip `efe3ec71b92a` changes [ran: `git diff -U0`]. `warden_rows.py`, `grid.py`: 0.
+- `warden_serve.py`, 9: flags, `_params`, `_flags`, `serve`, the run's check, and the publisher, which signs the head. Two are within two lines of the crossed tree's `_check_paced` [ran].
+- `PROTOCOL.md`: 1. README: cut 192 bytes at lines 166-167 ("which computes … the signed row") and 100 at 304-305 ("so the sender's … input, and"), both said elsewhere [read]; add at most 221.
+
+**6. Lean.** The certifier program has nothing of the lengths rows [ran: `rg` finds only `Grid.released`, a bucket's frames]. No Lean changes.
+
+**7. Public** [argued]: each table's name, rows, row bytes, domain, root, P and O: the schedule's, but the hiding roots. Held rows, counts and unfiled connections stay witness.
+- **Question 2.** The stop rule gives no stop word for a stop class's empty row [read: #9053]. So its ties cover only held rows, making a class's count public, or the Spec gives empty rows a form.
+- **Question 3.** Phase w's head is signed at phase w+1's close [read: `warden.py:677-691`]. Do w's coins wait?
+- Bytes [ran: B=512, P=O]: head 373 today, 438 more a class, one signature. A connection's rows at #9053's six O: 412, 626, 1,354, 4,266, 15,922, 62,546, plus 576 of salts. Six classes of 16 rows: 1,362,016 a phase; at the lengths table's 9,600: 817 MB.
+
+**8. Second pull request:** #9028's filing and its channel; the opening's handover; the stamp; the check's count of unfiled connections.
+
