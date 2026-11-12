@@ -948,11 +948,11 @@ def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = 
     its public ``body`` (`Committed.public_body`): each port whose table is one row per instance, instance i's row i, as rows
     of the value `own_value` names, its own tree, whose root and domain the registration holds (``frame_v3``'s), row i at
     position i with its path; and each port of ``held`` (`held_ports`: a wired port with no tree of its own, its table its
-    writer's output rows, whole), as rows of its writer's port's value, each instance at the row its ref names. A statement
-    checked against registered reads must have every port registered (`Flock.Registered.checkComplete`); these are the
-    reads of the ports its registered values' reads leave, which the verifier makes at the registration's roots
-    (`own_reads`). A port of another table layout gets none: its readers' positions are the prover's refs. Refused where a
-    port's rows don't make its ``frame_v3`` root."""
+    writer's output rows, whole), as rows of its writer's port's value, table row t at position t with its path (each
+    instance reads the row its ref names). A statement checked against registered reads must have every port registered
+    (`Flock.Registered.checkComplete`); these are the reads of the ports its registered values' reads leave, which the
+    verifier makes at the registration's roots (`own_reads`). A port of another table layout gets none: its readers'
+    positions are the prover's refs. Refused where a port's rows don't make its ``frame_v3`` root."""
     shared = mem.get("shared_rows")
     if not shared:
         return {}
@@ -974,9 +974,8 @@ def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = 
         lv = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bc), fv["schemas"][p]) for i, bc in enumerate(bcs)])
         if dom.domain_id.hex() != fv["domain_ids"][p] or lv[-1][0].hex() != fv["roots"][p]:
             raise ValueError(f"{mem['name']} {p}: its rows' tree is not its frame_v3 root")
-        reads = [int(x) for x in refs[:, j]]
-        out[p] = {"value": own_value(held.get(p, f"{mem['name']}/{p}")), "positions": reads,
-                  "paths": [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in reads]}
+        out[p] = {"value": own_value(held.get(p, f"{mem['name']}/{p}")), "positions": list(range(rows)),
+                  "paths": [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in range(rows)]}
     return out
 
 
