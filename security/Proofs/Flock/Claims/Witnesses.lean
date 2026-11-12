@@ -18,6 +18,7 @@ public import Proofs.Flock.Claims.Witnesses.SamplingTwoRankin
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoReg
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegMiss
 public import Proofs.Flock.Claims.Witnesses.SamplingTwoRegX
+public import Proofs.Flock.Claims.Witnesses.SamplingTwoFirstHit
 public import Proofs.Flock.Claims.Witnesses.Encodings
 public import Proofs.Flock.Claims.Witnesses.EncodingsGeneric
 public import Proofs.Flock.Claims.Witnesses.ZKOutLeak
