@@ -156,8 +156,8 @@ def render(card: dict | str) -> str:
         return f"{factor(sms)} * {factor(number(card['rate'][r]))} * {tick}"
 
     count = whole(sms, "sm.count")
-    size = [("reg", f"{count} * ({whole(number(store['reg']), 'store.reg')} + "
-                    f"{whole(number(store['reg_extra']), 'store.reg_extra')})"),
+    size = [("reg", (f"{count} * ({whole(number(store['reg']), 'store.reg')} + "
+                     f"{whole(number(store['reg_extra']), 'store.reg_extra')})")),
             ("smem", f"{count} * {whole(number(store['smem']) / WORD, 'store.smem in words')}"),
             *((s, over(s, Fraction(WORD), f"store.{s} in words")) for s in ("l2", "dram"))]
     weights = fields["weight"]

@@ -143,8 +143,8 @@ def test_a_changed_number_is_a_disagreement() -> None:
     text = (ROOT / card["lean"]).read_text(encoding="utf-8")
     assert disagreements(card, text) == []
     faster = text.replace("188 * 1024 * clock", "188 * 1025 * clock")
-    assert disagreements(card, faster) == [f"ρ tensor: Lean 188 * 1025 * clock = {188 * 1025 * 2430 * 10 ** 6}, "
-                                         f"card file {188 * 1024 * 2430 * 10 ** 6}"]
+    assert disagreements(card, faster) == [(f"ρ tensor: Lean 188 * 1025 * clock = {188 * 1025 * 2430 * 10 ** 6}, "
+                                          f"card file {188 * 1024 * 2430 * 10 ** 6}")]
     default = text.replace("    | _ => 1\n", "    | _ => 2\n")
     assert sorted(m.split(":")[0] for m in disagreements(card, default)) == [
         f"weight {f}" for f in ("b1", "e2m1", "e4m3", "e5m2", "s8", "u8")]
@@ -161,8 +161,8 @@ def test_the_tensor_runs_at_its_own_clock_where_the_card_has_one() -> None:
     assert card_table(text)[0] == table(card)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1830 * 10 ** 6}
     assert table(card)[1]["ρ"]["tensor"] == 132 * 4096 * 1830 * 10 ** 6
     at_sm = text.replace("132 * 4096 * tensorClock", "132 * 4096 * clock")
-    assert disagreements(card, at_sm) == [f"ρ tensor: Lean 132 * 4096 * clock = {132 * 4096 * 1980 * 10 ** 6}, "
-                                          f"card file {132 * 4096 * 1830 * 10 ** 6}"]
+    assert disagreements(card, at_sm) == [(f"ρ tensor: Lean 132 * 4096 * clock = {132 * 4096 * 1980 * 10 ** 6}, "
+                                           f"card file {132 * 4096 * 1830 * 10 ** 6}")]
     untimed = copy.deepcopy(card)
     del untimed["clock"]["tensor"]
     assert table(untimed)[0] == {"clock": 1980 * 10 ** 6, "tensorClock": 1980 * 10 ** 6}
