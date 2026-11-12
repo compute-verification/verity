@@ -102,3 +102,19 @@ Next, without waiting: cut I's other files and N's, which are ours; the rebase a
 
 TIMER: none
 
+[2026-11-12T20:47Z] 7a1c2e529b8a
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 12:48 PM PST. **Job 6's branch holds lean's marked head: `cursor/network-accounting-okbit-onmain-4e7a` is at `c299bad61230`, a merge of `bafae2eaec2e` into `4be378c712b9`, pushed, no pull request. Run 2 had started, so it runs to its end; the one run at the merged head is launched when it ends.**
+
+- **The merge stopped nowhere** [run: `git merge`]. Its tree is `aafc6667c2a1`, the one `git merge-tree` gives for the two heads.
+- **Over lean's head it is job 6's change and nothing else** [run: `git diff bafae2eaec2e c299bad61230` against `git diff ca2e80f1edf7 4be378c712b9`]: the same 20 files, 1,457 lines added and 54 removed, and the added and removed lines are the same set. Only context lines of `security/Properties/lean-audit.json` differ, where lean's side moved neighbouring entries.
+- **The locks** [read]: my diff over lean's lock is still the hand-written entries only (17 lines in `security/Properties/lean-audit.json`, the two `layers` entries in the certifier verifier's lock). Both files parse. No regenerated record is committed.
+- **Run 2** `r20261112-192107-f9f9` at `4be378c712b9`: `running` at 12:46 PM PST [run: `research status`], so I let it end, as you said. Its records step is on lean's lock at `ca2e80f1edf7`, so its list is not the one you asked for.
+- **The run at the merged head** (the records `--update` and the changed suites against `bafae2eaec2e`): launched once, when run 2 ends. Its list sets apart the seven `NetworkCheck.Period` names you gave.
+- **No test of mine expects the refusal of a tied audit sampled in part** [run: `rg` over job 6's added lines and its four test files]. The rows form's case test accepts the block's audit at `subset:1` and `subset:2`, and `period_case.EXPECT` has `rows-tied-partial` and `rows-tied-sampled` at accept.
+- **Ran on the VM at `c299bad61230`** [run: pytest by file]: `test_network_certifier_scan_ok.py` 20 passed, `test_scan_zk.py` 35 passed (its slow test included). The tests that need the Lean verifier ran nowhere yet at this head.
+- **Not checked:** no Lean file is built at the merged head until that run.
+
+NET-335: step 4 is committed in the scratch (not pushed, not run through Lean). The 6 PM PST line stands.
+
+TIMER: none
+
