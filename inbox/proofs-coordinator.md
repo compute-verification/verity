@@ -79569,3 +79569,91 @@ My 08:27Z entry promised one entry when the three had ended. I write two of them
 **Standing.** My head is `6160c59e6c22`, pushed, unchanged; #9108's head is `8428b506e6b9` at 08:42Z; the mailbox's newest section is 08:05Z at 08:42Z [read]. No records run is out. I launch it at `6160c59e6c22` on your line that `00fa` passed. My VM was reset before this turn; I restored my tools from the lane's notes and fetched the runs again.
 
 Evidence: `/opt/cursor/artifacts/widezk-importers-builds.log` (each package's `lean-build:` lines of `8a03`, `bae3`'s output and its one error), `widezk-importers-6160c59e6c.json` (the 69 by package).
+
+## WIRED, Thu 12 Nov 08:52Z: #8940 is on `main`; #9043's new head is `8209970890da`, not marked, three runs out; #9215 is open, unmarked, for the three conditions' functions; none of my heads stops against lean's tip beyond `main`'s own files
+
+Your 08:43Z section is read and done as below. `main` is `19fb19a21e40`. [run: `git fetch`, 08:52Z]
+
+**1. #9043 first.** Head `8209970890da` on `cursor/proofs-wired-7ac3`, pushed 08:41Z, a fast-forward of
+`972a687a0583`. Not marked. [run: `git push`, `git ls-remote`; `research queue status` 08:38Z]
+
+- What the head is: `972a687a0583`; then the branch I prepared ahead (`cursor/proofs-wired-b8f4` at `a1c76b378b49`),
+  which merges #8940's head and restates three files for it in `335e4e4c2d` (`AddressesAt.lean`, `WireMap.lean`,
+  `WiredAt.lean`, 17 lines added and 14 removed: the second stage's coins are a `Stage h`, a checked run is a
+  `CheckedRun h.stage`); then a merge of `main` at `19fb19a21e40`. Both merges are clean. [run: `git merge`]
+- Against `main`: the same 8 files, 2,104 lines added and 2 changed. No statement and no lock changes. [run:
+  `git diff --stat origin/main HEAD`]
+- The cap: `Proofs/Flock` 270 modules and 2,272 declarations, `main`'s 265 and 2,130 raised by its own 5 and 142.
+  `main`'s cap has not moved. [run: `git show …:tools/verity/lean/unread-caps.json`]
+- Local, at the head: the unread gate exits 0 and leaves the count to the Lean check; the retired-terms, Lean bar,
+  Lean packages, vocabulary and repository tests give 94 passed. [run]
+- **One red, known:** `ratchet_gate.py origin/main HEAD` fails on the allowlist's two lines, 7 mentions of `main`'s
+  own `SpotFlock.secondDraw` (4 in `AddressesAt.lean`, 3 in `WireMap.lean`). It is the allowlist you ruled on Wed
+  20:18Z, unchanged since `972a687a0583`; the step is off the gate and warns (`drive.toml`, `policy.toml`). [run; read]
+- The three restated files compiled on Wed over #8940's older head (run `r20261111-211913-1865`, exit 0 on all
+  three). `main` has moved under them since, so I do not carry that over. [run, from my Wed entry; derived]
+- **Out at `8209970890da`**, launched 08:41Z and 08:42Z, all three running at 08:51Z: [run: `research status`]
+  - `r20261112-084126-12f1`: the one-file tries of the five files, each with `--siblings`.
+  - `r20261112-084216-f9a3`: the quick suites, `suites.py --changed 19fb19a21e40 --quick`.
+  - `r20261112-084241-b4cd`: the records run, `lean_changed.py --records security/Proofs --update`.
+  - Expected about 10:15Z. [guess: on Wed `WireMap.lean` and `WiredAt.lean` took about 31 minutes each once
+    their imports were built, and `12f1` is at step 9,527 of 10,957 of that build]
+
+**2. The three conditions: merged, rerun, opened.**
+
+- `main` is merged once into `cursor/proofs-wired-deciders-3b9e`: head `cc4dca9fe32f`, no conflict. [run]
+- The three Lean files and the `second_wires` difftest are rerun on that head: `r20261112-084825-db7a`, waiting for
+  a slot at 08:51Z, expected about 09:45Z. [run; guess: `WiresDecided.lean` took 24 and 27 minutes before]
+- **The pull request is [#9215](https://github.com/compute-verification/verity/pull/9215)**, unmarked, with
+  `Lane proofs`, head `205129204ded` on `cursor/proofs-wired-deciders-ef61`. [run: `research queue open`, 08:49Z]
+- **It is opened from the six files' own branch, not from `3b9e`.** With #8940 on `main`, `3b9e` still differs
+  from `main` in 30 files, and 23 of them are pull request 2's and 3's: the restated guarantees, the lock's lines for
+  them, and the copies of FRAME's files. `WiresDecided.lean` cannot come without them: it imports `WiresMove.lean`,
+  which reads `WiredCode` (pull request 3's) and `WireMapRewires` (pull request 2's). So #9215 holds what stands
+  on `main` alone, 7 files, 639 lines added and 2 changed, and `WiresDecided.lean` stays on `3b9e` until pull
+  request 3 is on `main`. If you want `3b9e` opened as it is, say so and I open it. [run: `git diff`; read: the
+  imports]
+- #9215's seven files: `Spot/SecondWires.lean`, `Spot.lean` (one import), `Spot/DifftestMain.lean`,
+  `second_wires.py`, the difftest, the suite's `pyproject.toml` line, and one line of the verifier package's lock,
+  the reason under `exempt` for `Spot.DifftestMain`, which said the entry point serves `Spot.Pieces.table` alone.
+  The first six are byte for byte `3b9e`'s. No record. [run]
+- The verifier package and what it reads are the same on `cc4dca9fe32f` and `205129204ded`, bar that lock line, so
+  `db7a`'s two verifier files and its difftest are #9215's too. [run: `git diff --stat` between the two heads]
+- Its body says, first paragraph, that no check calls these, and under "What it does not do" that the proof is not
+  in it: elaborated on a branch, no axiom beyond the three, not replayed by a full Lean check, read by nobody but me.
+- `research queue open` warned that PRF-571 has no label naming a goal. I named PRF-571 because its "Done when" has
+  the three conditions in the check; the label is yours to set, or `research queue link 9215 --issue PRF-528`. [run]
+- Also out for #9215, on its head before the merge of `main` (`55ef724d1f02`; the merge is clean): [run]
+  - `r20261112-082513-fd7c`, the quick suites (`--changed 1a3eadc9c5b4 --quick`, 59 suites): 33 passed and 1
+    cached at 08:51Z, none failed.
+  - `r20261112-082545-4204`, the records run of `verity/protocols/spot/verifier/lean`: that package's audit
+    passes (5,661 declarations in 51 modules, 0 guarantees, `check.py` exit 0 in 63 s, without the kernel replay);
+    `security` and `security/Properties`, each with `security/Proofs`, are still to go.
+- Local on #9215 before the merge: the no-growth lints pass, the public boundary gains no edge, the unread gate
+  exits 0, eight whole-tree test files give 145 passed. [run]
+
+**3. Against lean's tip `a88eee998fa2`.** [run: `git merge-tree --write-tree --name-only`, 08:50Z, each head's
+list compared with `main`'s]
+
+- #9043 `8209970890da`, #9215 `205129204ded` and `3b9e` `cc4dca9fe32f`: each exits 1 and stops in **no file beyond
+  `main`'s**.
+- `main` `19fb19a21e40` stops in 12 files by my run, where you count 14.
+
+**4. The three statements I would have a second reader read first.** [read: the two files]
+
+- `Spot.SecondWires.covers` with `writes` (`Spot/SecondWires.lean`). It is not the condition's own text: it
+  lists the bits a writer's file writes on a port once and marks them. The question for a reader is whether "every
+  bit under the reader port's `bits` is marked" is the condition, and that it refuses when either circuit file is
+  missing (`wiresWideAt`'s last case).
+- `SpotFlock.wiresMove_of_decided` (`SpotFlock/WiresDecided.lean`). Its hypothesis is `decided` at
+  `partsAt h …`, `circuitsOf h` and `ownOf h st rec second c₀`. The question is whether those are what the run's
+  check would hand the function at its call, since a theorem about the function at other arguments says nothing
+  about the check.
+- `Spot.SecondWires.rowsUnderAt`. A wire whose port has no rows passes it, as it passes the condition's own text
+  (`rowsUnder` in `WiresTie.lean`); what refuses that wire is `wiresCheckedAt`, which the theorem takes beside it.
+  A reader should confirm that this is so in `SecondStage.wiresOk`. I have not. [guess for the last sentence's claim]
+
+**What I wait for:** `12f1`, `f9a3` and `b4cd` for #9043's ready line, about 10:15Z; `db7a`, `fd7c` and `4204`
+for #9215's. Pull request 2 after #9043 is marked; not started.
+
+Mailbox read 08:52Z: 132 lines, your 08:43Z section the newest.
