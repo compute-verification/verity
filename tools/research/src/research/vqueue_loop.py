@@ -303,6 +303,8 @@ FAILED_FIELDS = frozenset(f.name for f in fields(Failed))
 #: the PRs judged at once (`World._judge`): a merge onto `main` takes seconds in drive's clone, and a moved `main` judges every
 #: ready PR again
 JOBS = 8
+#: what `World.ready` judged of each open head on `main`, in the loop's cache, for the next tick's process (`--once`)
+JUDGED_CACHE = "judged.json"
 #: the most failures of a step off the gate a ring quotes (`Loop._off_gate`)
 OFF_SAID = 10
 #: the old heads mapped across `main`'s moves at once, each in a job the end of a tick detaches and no tick waits on
@@ -888,8 +890,8 @@ class _Clone(Queue):
 class World:
     """What the loop reads and changes: git in the clone and on origin, graph2, the labels, the PRs and the merge thread.  Each
     effect is one method, so a test fakes what it doesn't run for real.  With ``labels_at`` (a new `StoreLabels`), each tick
-    reads the labels afresh (`_relabel`).  ``cache`` is where it keeps the heads' own changes and the issuer's keys, not in
-    drive's files.  ``on`` names the machines the run beside each check takes, in place of drive.toml's `on`."""
+    reads the labels afresh (`_relabel`).  ``cache`` is where it keeps the heads' own changes, what `ready` judged of them on
+    `main` (`JUDGED_CACHE`) and the issuer's keys, not in drive's files.  ``on`` names the machines the run beside each check takes, in place of drive.toml's `on`."""
 
     def __init__(self, q: Queue, labels, tasks: Executor, *, graph2: tuple[str, ...] = (), priority_file: Path | None = None,
                  post: Callable[[str, tuple[str, ...]], bool] | None = None, now: Callable[[], float] = time.time,
@@ -912,6 +914,8 @@ class World:
         self.keys = cache / "issuer-keys.json" if cache is not None else None
         #: the moves regenerated on candidates of the `main` they landed on, as `Queue._made` holds them (`_keep_moves`)
         self._made_at = cache / "moves-made.json" if cache is not None else None
+        #: `JUDGED_CACHE` (`_take_judged`, `_keep_judged`): the text last read or written, and the code and git that judge
+        self._judged_at, self._judged_text, self._judging = (cache / JUDGED_CACHE if cache is not None else None), None, ""
         if cache is not None:
             cache.mkdir(parents=True, exist_ok=True)
             q._kept_at, q._mapped_at = cache / "own-changes.json", cache / "mapped-changes.json"
@@ -1013,6 +1017,15 @@ class World:
     def _ancestor(self, a: str, b: str) -> bool:
         return not _git(self.repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
 
+    def _below(self, shas: Iterable[str], b: str) -> set[str]:
+        """Those of ``shas``, full commit ids in the clone, that are ``b`` or below it (`_ancestor` of each), by one walk: what
+        they hold that ``b`` doesn't, which lists each of them that isn't."""
+        if not (shas := list(dict.fromkeys(shas))):
+            return set()
+        r = subprocess.run(["git", "rev-list", "--stdin", f"^{b}"], cwd=self.repo, check=True,
+                           input="".join(f"{s}\n" for s in shas), capture_output=True, text=True)
+        return set(shas) - set(r.stdout.split())
+
     def ready(self, main: str) -> list[Ready]:
         """The open PRs drive would land from `next` now, as `vqueue.Ready`: a move PR with a land verdict, or, while drive.toml's
         `lowrisk_lane` is on, on its mark alone once its move is certified on `main` (`_uncertified`, `_off_mark`), never under
@@ -1022,17 +1035,20 @@ class World:
         an untaken PR whose head it holds; those others than their owners took go to `pulled`."""
         q, labels = self.q, self.labels
         prs = [p for p in self.open().values() if p.base == "main"]
-        if missing := [p for p in prs if p.head in self._missing(p.head for p in prs)]:
+        absent = self._missing(p.head for p in prs)
+        if missing := [p for p in prs if p.head in absent]:
             q._remote(self.repo, *QUIET, "fetch", "-q", "--no-tags", "--no-write-fetch-head", "origin",
                       *(f"+refs/pull/{p.number}/head:{NS}/pr/{p.number}" for p in missing))
-        gone = self._missing(p.head for p in prs)
+        gone = self._missing(p.head for p in missing)
+        below = self._below((p.head for p in prs if p.head not in gone), main)
         left = {p.number: (p.head, "its head can't be fetched" if p.head in gone else "its head is on `main`")
-                for p in prs if p.head in gone or self._ancestor(p.head, main)}
+                for p in prs if p.head in gone or p.head in below}
         if any(p.move and p.number not in left for p in prs):
             landed_heads = queue_log(self.repo, main)[0]
             left.update((p.number, (p.head, "its move, regenerated from its head, is on `main`")) for p in prs
                         if p.move and p.number not in left and p.head in landed_heads)
         prs = [p for p in prs if p.number not in left]
+        self._take_judged(main)
         labels.prefetch([(p.number, p.head) for p in prs])
         old = _git(self.repo, "rev-parse", "-q", "--verify", f"{CHECKED}^{{commit}}", check=False).stdout.strip()
         entries = q.entries(prs, state := q.load_state(), base=main, landed=main, queued=main, open_numbers=set(self.open()),
@@ -1090,6 +1106,7 @@ class World:
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
                 chosen = {n: (files[n], *j)
                           for n, j in zip(took, pool.map(lambda n: self._judge(main, entries[n].pr.head, cfg), took))}
+        self._keep_judged(main)
         # a land verdict covers its PR's own change: a PR holding the head of an admitted PR that isn't taken (no land verdict
         # there, or held) would carry that change unreviewed, unless the head landed on `checked` under drive's rules
         while out := {n: a for n in chosen for a in entries[n].after if a in entries and entries[a].state == "ready"
@@ -1329,6 +1346,62 @@ class World:
                                  and any(f.endswith(LEAN_SOURCES) for f in self._changed(main, head)),
                                  merged_tree(self.repo, main, head, config=config)[0] is None)
         return self._judged[key]
+
+    def _judging_key(self) -> str:
+        """What decides `_changed`, `_lacks`, `_judge` and `Queue.own_change` of a head on a `main` beyond the two commits: this
+        package's code (the merge drivers' command among it) and the clone's git."""
+        if not self._judging:
+            h = hashlib.sha512(_out(self.repo, "--version").encode())
+            for f in sorted(Path(__file__).parent.glob("*.py")):
+                h.update(f"{f.name}\0{len(b := f.read_bytes())}\0".encode() + b)
+            self._judging = h.hexdigest()
+        return self._judging
+
+    def _take_judged(self, main: str) -> None:
+        """What the tick before judged of each head on ``main`` (`_keep_judged`), read once a process: nothing from a cache of
+        another `main`, code or git (`_judging_key`), or one that doesn't parse."""
+        if self._judged_at is None or self._judged_text is not None:
+            return
+        self._judged_text = ""
+        if not self._judged_at.is_file():
+            return
+        try:
+            doc = json.loads(text := self._judged_at.read_text())
+            if doc["main"] != main or doc["judging"] != self._judging_key():
+                return
+            files = {(h, main): frozenset(v) for h, v in doc["files"].items()}
+            judged = {(h, main): (bool(lean), bool(conflict)) for h, (lean, conflict) in doc["judged"].items()}
+            lacked = {(h, main): [(m, at, names) for m, at, names in v] for h, v in doc["lacked"].items()}
+            own = {(self.q.base, h): v for h, v in doc["own"].items()} if self._main == main else {}
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            self.log(f"research queue vqueue: {self._judged_at} can't be read ({type(e).__name__}: {e}): this tick judges "
+                     "every head afresh")
+            return
+        self._judged_text = text
+        for mine, got in ((self._files, files), (self._judged, judged), (self._lacked, lacked), (self.q._own, own)):
+            mine.update({k: v for k, v in got.items() if k not in mine})
+
+    def _keep_judged(self, main: str) -> None:
+        """What this tick judged of each open PR's head on ``main``, kept whole in the loop's cache (`JUDGED_CACHE`) for the next
+        tick's process, under the code and git that judged it (`_judging_key`); with the own change on ``main`` of each head the
+        labels read, older heads among them (`Queue.own_change`, on the landing branch as fetched)."""
+        if self._judged_at is None:
+            return
+        heads = {p.head for p in self.open().values()}
+
+        def kept(got: dict) -> dict:
+            return {h: v for (h, m), v in sorted(got.items()) if m == main and h in heads}
+
+        base = self.q.base if self._main == main else None
+        doc = {"main": main, "judging": self._judging_key(), "files": {h: sorted(v) for h, v in kept(self._files).items()},
+               "judged": {h: list(v) for h, v in kept(self._judged).items()},
+               "lacked": {h: [list(x) for x in v] for h, v in kept(self._lacked).items()},
+               "own": {h: v for (b, h), v in sorted(self.q._own.items()) if b == base}}
+        if (text := json.dumps(doc, sort_keys=True) + "\n") != self._judged_text:
+            tmp = self._judged_at.with_name(f"{self._judged_at.name}.{os.getpid()}.tmp")
+            tmp.write_text(text)
+            tmp.replace(self._judged_at)
+            self._judged_text = text
 
     def pins(self, sha: str, targets: Iterable[str]) -> dict[str, list[str]]:
         """The circuit-check sidecars' pins files in ``sha``'s tree (`*.circuit-check.json`) that pin each of ``targets``, a
