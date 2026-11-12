@@ -493,7 +493,7 @@ def bind_check() -> dict[str, Any]:
         if st["RATIO"] == 128:
             targets[f"Dsv4ShortContextTopK_v1{{TOPK={st['TOPK']},RATIO=128}}"] = \
                 lambda k=st["TOPK"]: bind(I.Dsv4ShortContextTopK, TOPK=k, RATIO=128)
-    out = {}
+    out: dict[str, bool | str] = {}
     for name, make in targets.items():
         try:
             out[name] = bool(make().signature())
