@@ -161,7 +161,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `Harm`), the compiled layer (`Extraction`) and composition (`Circuit`); `Audit/Flock*.lean` instantiate them for Flock.
   The two-stage design's certificate is `Claims.SamplingGeneric.compilerKSTwo` (`Claims.SamplingTwo`). The challenger's
   coins are the named assumption `Assumptions.UniformRandomBytes`.
-- **The executable sample** is the Lean verifier's `verity/protocols/flock/verifier/Flock/Draw.lean` (`flock-verify draw`): the
+- **The executable sample** is the Lean verifier's `verity/commitments/lean/Commitments/Draw.lean` (`flock-verify draw`): the
   samplers, the strata and sizes, the sample object and its checks U1 to U3. Soundness's `ExecDraw.lean`,
   `ExecStratified.lean` and `ExecDrawOS.lean` prove that its samples accept incorrect proof blocks no more often than the
   modelled sampling designs do, and `Audit/FlockWork.lean` that its sizes are the model's.
@@ -204,6 +204,10 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   what the session proved, and hands its verdict to v1's `checkAt` at those coins.
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Onsite and remote read v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuse v1.
+  A window of several members has a per-member form of `proofs` (the parameters' `members`, the evidence's
+  `statements`; `one_stage.proofs.members_v2` writes it), which the audit parses and refuses. The executable's
+  `members PARAMS EVIDENCE` (`Spot/MembersParse.lean`, `proofs.members_parsed`) prints what its parsers read of the two
+  files, with the words `parsed, not checked` and no verdict.
 - **The challenger** (`challenger`, Lean of record `Spot/Challenger.lean`): every protocol's live coins, by
   label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
   machine only through that machine's certifier coin link (`verity/composite/device/live_challenger/auditor.py`, the coins' path).

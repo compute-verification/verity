@@ -2,7 +2,9 @@
 
 A stale path in one of these doesn't fail anything by itself: a `merge_requires` prefix or a queue grant that matches no file
 stops requiring its step or its grant, a Tool's closure glob that matches nothing leaves its identity weaker, and the queue
-skips a Lean build whose package isn't there. So a directory move that misses one fails here instead.
+skips a Lean build whose package isn't there. So a directory move that misses one fails here instead. Nor does a file a Lean
+audit reads (`lean_audit.inputs`) that the queue's loop doesn't count as a Lean input (`vqueue_slim.lean_inputs`): a candidate
+changing only it takes its base's verdict on lean-audit, so that fails here too.
 
 Paths resolve against `git ls-files`: a tracked file, or a directory holding one. What a gate names that is never tracked
 (build output, a file a shipped tree is given, a directory of entry files that holds none yet) is in `EXEMPT` with its
@@ -134,6 +136,86 @@ def test_the_queues_lean_builds_are_lake_packages_here():
 
     assert queue.LEAN_BUILDS
     assert not (bad := [d for d in queue.LEAN_BUILDS if f"{d}/lakefile.toml" not in tracked()]), bad
+
+
+#: the files the test names first: every file `lean_audit.inputs` declares on `main` that `vqueue_slim.LEAN_INPUTS`' globs and
+#: directories don't cover, the task graph's contract, which it names, and files of the Lean packages that only their
+#: directories cover (a module's `include_str` target, check scripts, difftest vectors and the scripts that write them)
+NON_LEAN_READS = (
+    "tools/verity/graph/verity_graph/contract.py",
+    "verity/commitments/lms/lean/scripts/difftest_vectors.py",
+    "verity/commitments/lms/lean/scripts/sign_vectors.py",
+    "verity/commitments/randomness/__init__.py",
+    "verity/commitments/randomness/tests/vectors.json",
+    "verity/commitments/randomness/tests/vectors.py",
+    "verity/protocols/certifier/device/lean/scripts/difftest_vectors.py",
+    "verity/protocols/certifier/device/lean/scripts/issuer_vectors.py",
+    "verity/protocols/certifier/device/program/lean/scripts/charge_vectors.py",
+    "verity/protocols/certifier/device/program/lean/scripts/difftest_vectors.py",
+    "verity/protocols/certifier/device/program/lean/scripts/window_vectors.py",
+    "verity/protocols/certifier/verifier/lean/scripts/difftest_vectors.py",
+    "verity/protocols/inference_only/verifier/nci/lean/scripts/baseline_difftest_vectors.py",
+    "verity/protocols/inference_only/verifier/nci/lean/scripts/count_difftest_vectors.py",
+    "verity/protocols/inference_only/verifier/nci/lean/scripts/desc_difftest_vectors.py",
+    "verity/protocols/inference_only/verifier/nci/lean/scripts/desc_fuzz_programs.py",
+    "verity/protocols/inference_only/verifier/nci/lean/scripts/desc_liveness_vectors.py",
+    "verity/protocols/inference_only/verifier/nci/lean/scripts/difftest_vectors.py",
+    "verity/protocols/inference_only/verifier/nci/lean/scripts/mistyped_vectors.py",
+    "verity/protocols/inference_only/verifier/nci/lean/scripts/nci_reference.py",
+    "verity/protocols/poub/verifier/lean/tests/ra_cases.py",
+    "verity/protocols/poub/verifier/lean/tests/replay.py",
+    "verity/protocols/pous/device/lean/tests/mc_cases.py",
+    "verity/protocols/pous/device/lean/tests/wipe_cases.py",
+    "verity/protocols/pous/device/lean/tests/wipe_protocol_case.py",
+    "verity/protocols/pous/device/lean/verdict.py",
+    "verity/protocols/pous/device/lean/wipe_verdict.py",
+    "verity/protocols/pous/lean/TRUSTED.sha256",
+    "verity/protocols/pous/lean/check.sh",
+    "verity/protocols/pous/lean/grade.sh",
+    "verity/protocols/pous/verifier/check/interop.py",
+    "verity/protocols/pous/verifier/check/scripts/difftest_vectors.py",
+    "verity/protocols/pous/verifier/check/timed_audit.py",
+    "verity/protocols/pouw/verifier/lean/check/models.json",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_check_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_credit_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_live_verified_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_opening_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_pass_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_period_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_rounds_cases.py",
+    "verity/protocols/pouw/verifier/lean/check/tests/pouw_verified_cases.py",
+    "verity/protocols/pouw/verifier/lean/commit/tests/difftest_vectors.py",
+    "verity/protocols/recursion/verifier/firewall/tests/_release.py",
+    "verity/protocols/recursion/verifier/firewall/tests/fixtures/release-e2e.jsonl",
+    "verity/protocols/recursion/verifier/firewall/tests/fixtures/release-index.jsonl.gz",
+    "verity/protocols/recursion/verifier/firewall/tests/fixtures/release-outer.jsonl.gz",
+    "verity/protocols/recursion/verifier/vstar_cli/tests/recursive_data.json",
+    "verity/protocols/recursion/verifier/vstar_cli/tests/settings.py",
+    "verity/protocols/remote/verifier/composition/tests/periods.py",
+    "verity/protocols/remote/verifier/composition/tests/reference.py",
+    "verity/protocols/spot/verifier/lean/tests/fixtures/inner-trees-served/coin_tree.json",
+    "verity/protocols/spot/verifier/lean/tests/fixtures/inner-trees-served/public.json.gz",
+    "verity/protocols/spot/verifier/lean/tests/fixtures/inner-trees-served/releases.jsonl",
+    "verity/protocols/spot/verifier/lean/tests/plan_of_record.json",
+    "verity/protocols/spot/verifier/lean/tests/settings.py",
+)
+
+
+def test_every_file_a_lean_audit_reads_is_a_lean_input_of_the_queues_loop():
+    """The queue's loop lets a candidate built on another in flight take that one's verdict on lean-audit unless a member
+    changes a Lean input of its tree (`vqueue_slim.lean_inputs`), so a change to a file an audit reads that they miss would
+    land on a verdict that never read it: every file `lean_audit.inputs` declares here is one, `NON_LEAN_READS` first."""
+    from research.vqueue import meets
+    from research.vqueue_slim import lean_inputs
+
+    audit = _module("gate_paths_lean_audit", ROOT / "tools" / "verity" / "lean" / "lean_audit.py")
+    files = sorted(tracked())
+    declared = {f for p in audit.packages(files) for f in audit.inputs(p, files)}
+    assert not (gone := [f for f in NON_LEAN_READS if f not in declared]), (
+        f"no audit here declares these, so they are no case of this test: drop them from NON_LEAN_READS: {gone}")
+    inputs = lean_inputs(files)
+    out = [f for f in (*NON_LEAN_READS, *sorted(declared.difference(NON_LEAN_READS))) if not meets((f,), inputs)]
+    assert not out, f"files an audit reads that no Lean input of the queue's loop covers (`vqueue_slim.lean_inputs`): {out}"
 
 
 def _path_tokens(argv: list[str]) -> list[str]:

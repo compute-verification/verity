@@ -129,7 +129,27 @@ def _list(j: Any, what: str) -> list[Any]:
     return j
 
 
-_RATIONAL = re.compile(r"(0|[1-9][0-9]*)(/[1-9][0-9]*)?")
+_RATIONAL = re.compile(r"(0|[1-9][0-9]*)(?:/([1-9][0-9]*))?")
+_SHORT = 512
+"""A count of decimal digits Python's `int` and `str` convert under every setting of the interpreter's limit on integer
+strings. Past that limit they refuse a number Lean's `Nat` reads, so a longer one is converted in pieces this short."""
+
+
+def _nat_of(s: str) -> int:
+    """The natural number the ASCII decimal digits `s` write, at any length."""
+    if len(s) <= _SHORT:
+        return int(s)
+    k = len(s) // 2
+    return _nat_of(s[:-k]) * 10 ** k + _nat_of(s[-k:])
+
+
+def _nat_str(n: int) -> str:
+    """A natural number's decimal digits, at any length."""
+    if n < 10 ** _SHORT:
+        return str(n)
+    k = n.bit_length() * 3 // 20  # about half of n's digits, a bit being log10(2) = 0.301 of one
+    high, low = divmod(n, 10 ** k)
+    return _nat_str(high) + _nat_str(low).zfill(k)
 
 
 def _rat(v: Any, what: str) -> Fraction:
@@ -140,10 +160,20 @@ def _rat(v: Any, what: str) -> Fraction:
 
 def _rat_json(v: Any, what: str) -> Fraction:
     """A nonnegative rational as the JSON writes it: the string `n` or `n/d` in lowest terms, Lean's `toString` of a
-    `Rat`, so one rational has one encoding."""
-    if not isinstance(v, str) or not _RATIONAL.fullmatch(v) or str(q := Fraction(v)) != v:
-        raise Malformed(f"{what}: {v!r} is not a rational's string n or n/d in lowest terms")
-    return q
+    `Rat`, so one rational has one encoding. It reads the strings `Core.Ratio.ofString` reads, of any length: `n` and
+    `d` in ASCII digits with no leading zero, `d` at least 2 and coprime to `n`."""
+    m = _RATIONAL.fullmatch(v) if isinstance(v, str) else None
+    if m is not None:
+        n, d = _nat_of(m[1]), _nat_of(m[2] or "1")
+        if m[2] is None or (d > 1 and math.gcd(n, d) == 1):
+            return Fraction(n, d)
+    raise Malformed(f"{what}: {v!r} is not a rational's string n or n/d in lowest terms")
+
+
+def _rat_str(q: Fraction) -> str:
+    """A nonnegative rational's one encoding, which `_rat_json` reads back."""
+    n = _nat_str(q.numerator)
+    return n if q.denominator == 1 else f"{n}/{_nat_str(q.denominator)}"
 
 
 def within_tolerance(tau: Fraction, e: Fraction, x: Fraction) -> bool:
@@ -195,8 +225,8 @@ class DeviceFigures:
         return DeviceFigures(self.sku, max(self.clock, e.clock), tuple(map(max, self.peak_rate, e.peak_rate)))
 
     def to_json(self) -> dict[str, Any]:
-        return {"clock": str(self.clock), "peak_rate": {c: str(r) for c, r in zip(OPERAND_CLASSES, self.peak_rate)},
-                "sku": self.sku}
+        return {"clock": _rat_str(self.clock),
+                "peak_rate": {c: _rat_str(r) for c, r in zip(OPERAND_CLASSES, self.peak_rate)}, "sku": self.sku}
 
     @classmethod
     def of_json(cls, j: Any) -> DeviceFigures:
@@ -442,7 +472,7 @@ class Auditor:
 
     def to_json(self) -> dict[str, Any]:
         return {"keys": [{"id": d, "key": k} for d, k in self.keys], "sheets": [k.to_json() for k in self.sheets],
-                "tolerance": str(self.tolerance)}
+                "tolerance": _rat_str(self.tolerance)}
 
     @classmethod
     def of_json(cls, j: Any) -> Auditor:
