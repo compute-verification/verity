@@ -97,8 +97,8 @@ OWN_CAPS = {
 #: `Device.cap` are terms of their own)
 PEARL_CAP = re.compile(r"(?<!\w)CAPS?(?!\w)")
 #: hypothesis's own ``draw`` in a module importing it: a composite strategy's first parameter, through its body, and the
-#: data object's ``data.draw(``, as code; a comment, a string (a ``"draw"`` key), a longer name, an attribute
-#: (``challenger.draw``) and the other forms (``draws``, ``drawn``) aren't
+#: data object's ``data.draw(``, as code where the file is Python; a comment or a string there, a ``"draw"`` key anywhere, a
+#: longer name, an attribute (``challenger.draw``) and the other forms (``draws``, ``drawn``) aren't
 HYPOTHESIS = re.compile(r"^[ \t]*(?:from|import)[ \t]+hypothesis\b", re.M)
 COMPOSITE = re.compile(r"^([ \t]*)@(?:\w+\.)*composite\b.*\n(?:\1@.*\n)*\1(?:async[ \t]+)?def[ \t]+\w+[ \t]*\(\s*draw\b",
                        re.M)
@@ -256,7 +256,7 @@ def sites_of(text: str, by: dict[str, list[Term]], path: str = "") -> list[tuple
     if len(low) != len(text):                           # a character whose lower case is longer: lower it alone
         low = "".join(c if len(c.lower()) != 1 else c.lower() for c in text)
     hits = sorted(((s, e, t) for t in candidates for s, e in t.matches(text, low)), key=lambda h: (h[0], -h[1]))
-    draws, caps = hypothesis_draws(text), path.startswith(tuple(OWN_CAPS))
+    draws, caps = hypothesis_draws(text, path), path.startswith(tuple(OWN_CAPS))
     out, end, line, at = [], -1, 1, 0
     for s, e, t in hits:
         if s < end or text[s:e] == "draw" and s in draws or kept(text, s, e, caps):
@@ -284,9 +284,11 @@ def kept(text: str, s: int, e: int, own_caps: bool = False) -> bool:
     return any(m.start() <= s - a < m.end() for m in OTHER_SENSES.finditer(text[a:e + 40]))
 
 
-def hypothesis_draws(text: str) -> frozenset[int]:
-    """Where ``text`` says hypothesis's own ``draw`` (``HYPOTHESIS``): the start of each.  A composite's body runs to the
-    first line after its header, not blank, a comment or a closing bracket, indented no deeper than its decorator."""
+def hypothesis_draws(text: str, path: str = "") -> frozenset[int]:
+    """Where ``text``, at ``path``, says hypothesis's own ``draw`` (``HYPOTHESIS``): the start of each.  A composite's body
+    runs to the first line after its header, not blank, a comment or a closing bracket, indented no deeper than its
+    decorator.  In a Python file only code counts; any other file's text has no code to tell from prose, so every bare
+    ``draw`` in the body counts."""
     if "draw" not in text or not HYPOTHESIS.search(text):
         return frozenset()
     out = {m.end() - len("draw(") for m in DATA_DRAW.finditer(text)}
@@ -294,17 +296,23 @@ def hypothesis_draws(text: str) -> frozenset[int]:
         after = text.find("\n", m.end()) + 1 or len(text)
         end = next((n.start() for n in LINE.finditer(text, after) if len(n.group(1)) <= len(m.group(1))), len(text))
         out |= {d.start() for d in BARE_DRAW.finditer(text, m.end() - len("draw"), end)}
-    return frozenset(out) & code_names(text, "draw") if out else frozenset()
+    if not out or not path.endswith(PY):
+        return frozenset(out)
+    return frozenset(out) & code_names(text, "draw", path)
 
 
-def code_names(text: str, name: str) -> frozenset[int]:
-    """Where ``text``, read as Python, says ``name`` as code, outside comments and strings: the start of each. Text that
-    doesn't read as Python raises ``tokenize``'s error."""
+def code_names(text: str, name: str, path: str) -> frozenset[int]:
+    """Where ``text``, the Python file ``path``, says ``name`` as code, outside comments and strings: the start of each.
+    Raises ``ValueError`` naming ``path`` where the text doesn't tokenize."""
     starts = [0]
     for line in text.split("\n"):
         starts.append(starts[-1] + len(line) + 1)
-    return frozenset(starts[t.start[0] - 1] + t.start[1] for t in tokenize.generate_tokens(io.StringIO(text).readline)
-                     if t.type == tokenize.NAME and t.string == name)
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, SyntaxError) as e:
+        raise ValueError(f"{path}: doesn't tokenize as Python ({e}), so the retired-terms lint can't tell hypothesis's "
+                         f"`draw` from prose in it. Fix the file's syntax.") from e
+    return frozenset(starts[t.start[0] - 1] + t.start[1] for t in tokens if t.type == tokenize.NAME and t.string == name)
 
 
 def sites(text: str, path: str) -> list[tuple[int, str]]:
@@ -419,7 +427,8 @@ SENSES_EXAMPLE = """# Glossary
 
 
 def said(text: str, path: str = "") -> list[tuple[int, str]]:
-    """(line, the old name) of each site of ``SENSES_EXAMPLE``'s terms in ``text``, at ``path``."""
+    """(line, the old name) of each site of ``SENSES_EXAMPLE``'s terms in ``text``, at ``path``; the default path isn't a
+    Python file's, so hypothesis's ``draw`` is found by the rule for text that isn't Python."""
     by: dict[str, list[Term]] = {}
     for t in terms_of(SENSES_EXAMPLE):
         for a in t.anchors:
@@ -468,12 +477,34 @@ def test_hypothesis_s_draw_is_another_sense_and_the_sample_beside_it_is_not() ->
 
 
 def test_a_draw_in_a_comment_or_string_of_a_composite_body_is_still_the_sample() -> None:
-    """Only code is hypothesis's: the word in a comment or a docstring inside a composite's body is prose."""
+    """In a Python file only code is hypothesis's: the word in a comment or a docstring inside a composite's body is
+    prose."""
     text = ('from hypothesis import strategies as st\n\n\n@st.composite\ndef units(draw):\n'
             '    """Each unit we draw, one by one."""\n'
             '    k = draw(st.integers(0, 3))  # draw the count, then the units\n'
             '    return [draw(st.just(i)) for i in range(k)]  # draw\n')
-    assert said(text) == [(6, "draw"), (7, "draw"), (8, "draw")]
+    assert said(text, "verity/protocols/spot/tests/test_units.py") == [(6, "draw"), (7, "draw"), (8, "draw")]
+
+
+def test_a_composite_shown_in_markdown_keeps_every_bare_draw_of_its_body() -> None:
+    """A file that isn't Python is never read as Python, so an example in Markdown with prose after it (an apostrophe,
+    which doesn't tokenize) doesn't stop the scan. In its body every bare ``draw`` is kept, the comment's too: this is the
+    rule before the code-only one, on purpose, since such a text has no code to tell from prose."""
+    text = ("# Units\n\n```python\nfrom hypothesis import strategies as st\n\n\n@st.composite\ndef units(draw):\n"
+            "    k = draw(st.integers(0, 3))  # draw the count\n    return [draw(st.just(i)) for i in range(k)]\n```\n\n"
+            "It's the sample that counts past the example: one draw.\n")
+    assert said(text, "verity/protocols/spot/README.md") == [(13, "draw")]
+
+
+def test_a_python_file_that_doesn_t_tokenize_stops_the_scan_naming_itself() -> None:
+    path = "verity/protocols/spot/tests/test_broken.py"
+    text = 'from hypothesis import given, strategies as st\n\n\n@given(st.data())\ndef test_it(data):\n    data.draw(st.just("x))\n'
+    try:
+        said(text, path)
+    except ValueError as e:
+        assert path in str(e) and "Fix the file's syntax" in str(e), e
+    else:
+        raise AssertionError(f"{path} doesn't tokenize, and the scan read it anyway")
 
 
 def test_the_stacking_property_s_caps_and_nvidia_smi_s_compute_cap_are_other_senses_and_a_cap_beside_them_is_not() -> None:
