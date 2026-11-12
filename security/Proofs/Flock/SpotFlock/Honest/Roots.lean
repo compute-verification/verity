@@ -24,9 +24,10 @@ such gate is committed by its proof block and round 2 reads each registered valu
 
 So no registered read is ever missing at a needed gate's port, and the interior arm never applies.
 
-The statement is about the second try's tree, whose interior registration registers no value; at a design whose
-interior registers one (the first try's `logits`), `registeredEntry_none` fails and so does this proof. It is at one
-key for the run: one `Held`, one stage.
+That the interior registers no value is not a premise here: it follows from round 2's `second-inputs` at `R`'s
+links. So the run this is true of has the second try's shape, an interior registration with no value; the first
+try's, whose interior registers `logits`, round 2 refuses at this instance. It is at one key for the run: one `Held`,
+one stage.
 
 Taken as hypotheses: `NeededBits` (being proved on its own) and `PortsMember`, the statement of the address facts'
 `CheckedRun.ports_member` (not yet on this file's base).
