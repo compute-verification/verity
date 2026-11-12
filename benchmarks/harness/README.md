@@ -6,7 +6,7 @@ integration owns the engine pin (`config.VLLM`), the hooks (`adapters/vllm/verit
 interface (`adapters/vllm/verity_vllm/protocols/interface.py`), and the harness uses those like any other caller. This
 file is the harness's contract: how a point is timed and what a result says. In order: the commands, specs, arms, how a
 point is timed, metrics, results, dispatch and resume, a steady-state spec (the second schema `plan`, `run` and `check`
-take), settings, and the two tables `served-table` and `breakdown` render.
+take), settings, the two tables `served-table` and `breakdown` render, and the kit benchmarks' runners share.
 `benchmarks/harness/tests/test_bench.py::test_the_readme_states_the_contract_the_code_keeps` fails when the code drifts from it.
 
 ## Commands
@@ -331,6 +331,28 @@ to it: the top-up's contention, `(audit-spans − audit-spans-no-topup) − (pla
 per output token, since the top-up runs beside the step and is in no span; each decode part and the prefill steps from
 the top-up-off spans arms; and the time outside every span. The credited lines' difference, spans off, is beside it as
 the audit's cost (the marks are in the spans arms' time). Then each spans arm's step by part, decode and prefill apart.
+
+## The kit
+
+`verity_bench.kit` holds what benchmarks' runners share, whatever they measure: four calls, each written once, on the
+standard library and `verity_bench.settings` alone, so a runner imports it without vLLM or torch.
+
+- **`kit.lease(gpus, minutes)`:** the `gpu-lease` argv a job's command follows: the wait for its GPUs, held for its bound.
+- **`kit.host_stamp()`:** where a number was measured, as one dict: `card`, each GPU's `uuid` with its SM and memory
+  clocks (`sm_mhz`, `mem_mhz`), `driver`, `cuda`, `node` and `commit`. The GPUs are the job's lease's, else every GPU of
+  the host. With no GPU, `card` is `none` and `why` says how it knows.
+- **`kit.paired(arm, stock, confidence=0.95)`:** an arm's cost over stock's from matched repetitions: the median `ratio`
+  of the reps' ratios, `gamma` (the ratio less one), `n`, and the overhead's interval from the ratios' order statistics,
+  exact sign-test bounds on the median, under its level's key (`ci95`; None when `n` reps can't bound the median: under
+  six at 0.95), with its `half_width` as a share of the ratio.
+- **`kit.writer(out).measurement(name, value, unit, interval=None, target=None, verdict=None, inputs=())`:** appends one
+  measurement to `out/result.json`, a `research/result/v0.1` result: `value`, `unit`, `commit` and `run`, with its 95%
+  interval (`ci95`), its `target`, the `verdict` of its check against that target, the `inputs` it was computed from,
+  by name, and the `host` stamp. `out` is a job's `$OUT`, or the run's directory, where the measurements are the run's own.
+
+A measurement is a number, and its verdict is its target check ("within target"). Nothing under `benchmarks/` writes a
+verdict of record or a seal, so the writer refuses a value that isn't a number, a verdict with no target, and a verdict in
+a verifier's or a seal's words (accept, reject, pass, fail, seal). A result holds one run's measurements, one a name.
 
 ## Out of scope here
 

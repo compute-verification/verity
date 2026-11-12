@@ -62,6 +62,8 @@ integration's public interfaces. A spec in `benchmarks/specs/` names a preset, i
 points, each with an identity. `verity-bench run SPEC` records one run per point without a passing run, `check` passes
 only when every point has one, `compare` and `table` accept results only when their identities agree, and
 `served-table` and `breakdown` render from the evidence store. It also holds the code behind `verity bench overhead`.
+The harness's kit (`harness/verity_bench/kit.py`) holds what runners share, each written once: the GPU lease, the host
+stamp, the paired ratio and the result's writer, which records measurements and refuses a verdict of record.
 `benchmarks/harness/README.md` is its contract: how a point is timed and what a result says.
 
 ## What a benchmark may import and write
@@ -116,7 +118,7 @@ What the protocols cost: measured on served inference, and bounded on training.
 
 | Directory | What it measures | Status |
 | --- | --- | --- |
-| `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, and the served table of each protocol's overhead | maintained |
+| `harness/` | `verity-bench`: specs, recorded runs, sweeps and results for an arm against stock vLLM, the served table of each protocol's overhead, and the kit runners share (`verity_bench/kit.py`) | maintained |
 | `specs/` | the harness's specs and sweeps, one TOML file each | maintained |
 | `overhead/` | `verity bench overhead`, the one front door for overhead: a card's operating points C and L, a scheme's γ over stock at them in busy SM-time, and the table of γ from labelled runs of record | maintained |
 | `served_commit/` | what the Commit, every value of every step committed, adds to served vLLM: throughput, time to first token and per-token latency | maintained |
