@@ -31,8 +31,11 @@ A record the watch marks `quiet` (a run its own lane cancelled, a worker relaunc
 agent it placed nowhere and rang infra for already) is posted with no handle and rings no one. Each line posted is kept by its sha256 beside the offset (`sent_path`, 3 days), so a restart, or an offset lost or
 reset, never posts it again.
 A failure the watch acted on (`FAIL`: held, stalled, held unread, crashed, idle after
-its run ended, relaunched) leads with the record's `owner` and rings its inbox: top's for a coordinator, the launcher's handle for a
-worker. Several workers of one parent that stopped together come as one `workers_failed`, posted and rung once to the lane's handle
+its run ended, relaunched), or a dropped message, leads with the record's `owner` and rings its inbox: top's for a
+coordinator, the launcher's handle for a worker. A dropped message's sentence says only what its record holds (`dropped`):
+that the agent's conversation ended on a message it wrote nothing after, or that the API gave no conversation and this is
+unchecked, and that Cursor shows it in ERROR only where the record's `status` is. Several workers of one parent that
+stopped together come as one `workers_failed`, posted and rung once to the lane's handle
 with each worker named, and the wake-up it says it set. A handle renamed in the registry ("renamed from @OLD") is rung by its new
 name. The pod frees held runs whether or not this runs; this relay stops with the pod, and resumes from the offset it last
 posted.
@@ -78,8 +81,7 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
                           "a person (send it a message)",
        "long_call": "has had a tool call running since {since} (45+ min); not cancelled",
        "crashed": "ended in ERROR; the watch {action}",
-       "dropped": "got a message at {since} that never became a run (its last run ended at {ended}); Cursor shows it in "
-                  "ERROR: resume it, or relaunch it fresh",
+       "dropped": "last changed at {since}, and no run followed the one that ended at {ended}",
        "erroring": "ended in ERROR again after {restarts} restarts in a row: left for a person (relaunch it, or report it to Cursor)",
        "stuck": "has a run in {status} since {since} ({minutes} min), nothing streamed or started behind it; not cancelled",
        "cancel_refused": "was held since {since} ({minutes} min), and the API refused to cancel it (409) and still reads it "
@@ -214,6 +216,21 @@ def placed(rec: dict) -> str:
             f"lane's, tell @{UNROUTED})." if (how := found(rec)) else "")
 
 
+def dropped(rec: dict) -> str:
+    """A `dropped` record's sentence, each clause one the record holds: its times; that its conversation ended on a
+    message with nothing of the agent's after it (`unanswered`), or that the API gave none, unreadable or empty, for
+    `unread_minutes`, or that it wasn't read at all (neither: the times alone, which a turn a Task resume ran gives
+    too); and ERROR only where its `status`, the platform's at that sweep, is."""
+    times = SAY["dropped"].format(**rec) + ("; Cursor shows it in ERROR" if rec.get("status") == "ERROR" else "")
+    if rec.get("unanswered"):
+        return (f"has a message it never answered: its conversation ends on it, with nothing of its own after; it {times}. "
+                "Resume it, or relaunch it fresh")
+    why = (f"the API gave no conversation for it for {rec['unread_minutes']} min" if rec.get("unread_minutes") is not None
+           else "its conversation wasn't read")
+    return (f"{times}; {why}, so whether a message went unanswered is unchecked. Look at it: resume it, or relaunch it "
+            "fresh, if one did")
+
+
 def woke(rec: dict) -> str:
     """The wake-up a worker says it set, as the watch read it from its conversation."""
     if not rec.get("wake"):
@@ -256,6 +273,8 @@ def text(rec: dict) -> str:
         who = f" <@{human['slack_user']}>" if human and human.get("slack_user") else ""
         down = ", ".join(f"@{h}" for h in rec.get("handles") or [])
         return f"{lead.rstrip()}{who} *Agent watch, outage:* {SAY['outage'].format(**{**rec, 'handles': down})}."
+    if rec.get("kind") == "dropped":
+        line = dropped(rec)
     if rec.get("kind") == "silent":
         again = " Second window: the last ring until it shows activity." if rec.get("window") == 2 else ""
         if rec.get("role") == "coordinator":
