@@ -16,6 +16,10 @@
 #   SMALL_ARGS="--inline --units 20 --v 2560" runs the class inlined as the greedy select in 20 units
 #   (GreedySelect_v1{V, N=V / 20}: 20 templates, one unit of each a token), which round 2 derives its wires and its
 #   return link from: `second` runs it linked, and exit 0 is the first line's, as for the class of whole instances
+#   SMALL_GPU=1 builds flock-circuit with its device prover (the node's CUDA toolkit: CUDA_TK, else /usr/local/cuda-13.3,
+#   else the newest /usr/local/cuda-13*) and hands `second` the cards this run holds as --devices, so its sessions prove
+#   on them: the indices in CUDA_VISIBLE_DEVICES, which a lease sets (research run --on NODE --gpus 1, or gpu-lease 1
+#   --wait -- around the script). Exit 8 without them: the script takes no card nobody handed it
 # On a challenger host's gate, from one of its peers: G="--challenger gate:USER@HOST --peer NODE --challenger-key
 # RECORD --ssh-key KEY" as both SMALL_FIRST and SMALL_SECOND (the last --challenger given is the one taken), and
 # SMALL_ARGS="--serve NONCE" with a nonce no run has used: the gate opens a run's root once, ever.
@@ -34,7 +38,19 @@ uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/
 LP=$!
 mkdir -p "$O/m0-build"
 FW=${SMALL_FLOCK_WORK:-$W}
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=0 bash verity/protocols/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
+GPU=0; DEVICES=()
+if [ -n "${SMALL_GPU:-}" ]; then
+  [ -n "${CUDA_VISIBLE_DEVICES:-}" ] || { echo "SMALL_GPU=1: no card is this run's (CUDA_VISIBLE_DEVICES is empty):" \
+    "launch it with research run --gpus 1, or under gpu-lease 1 --wait --" >&2; exit 8; }
+  TK=${CUDA_TK:-/usr/local/cuda-13.3}
+  [ -x "$TK/bin/nvcc" ] || { TK=$(ls -d /usr/local/cuda-13*/bin/nvcc 2>/dev/null | sort -V | tail -1) || true; TK=${TK%/bin/nvcc}; }
+  [ -n "$TK" ] || { echo "SMALL_GPU=1: no CUDA 13 toolkit under /usr/local (CUDA_TK names one)" >&2; exit 8; }
+  # a toolkit named here is the node's own: the build installs none, and the prover finds its runtime beside it
+  export CUDA_TK=$TK LD_LIBRARY_PATH=$TK/lib64:${LD_LIBRARY_PATH:-}
+  GPU=1; DEVICES=(--devices "$CUDA_VISIBLE_DEVICES")
+  echo "cards $CUDA_VISIBLE_DEVICES (${GPU_LEASE_UUID:-outside a lease}), toolkit $TK" | tee -a "$O/machine.txt"
+fi
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$FW MODE=build GPU=$GPU bash verity/protocols/flock/pod/60-circuit.sh > "$O/m0-build/build.log" 2>&1 \
   || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$FW/flock-gpu-link/flock/target/release/flock-circuit
 wait $LP || { tail -40 "$O/build-lean.log"; exit 7; }
@@ -64,7 +80,7 @@ rc=0
 # shellcheck disable=SC2086
 "${PY[@]}" benchmarks/one_stage/two_stage.py second --stage1 "$W/first/$(basename "$CLASS")/stage1.json" --boundary "$CLASS" \
   --capture "$W/serve/capture" --challenger local --main "$O/main.txt" --m0-pythonpath "$M0PATH" --bin "$BIN" --lean "$LEAN" \
-  --out "$W/second" "${UNLINKED[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
+  --out "$W/second" "${UNLINKED[@]}" "${DEVICES[@]}" ${SMALL_SECOND:-} > "$O/second.log" 2>&1 || rc=$?
 grep '^TWO ' "$O/second.log" || tail -30 "$O/second.log"
 echo "second rc=$rc" | tee -a "$O/machine.txt"
 RECORDS=(-type f ! -name circuit.txt ! -name 'inst-*' ! -name 'm*-inst-*' ! -name '*-private.bin' ! -name index.json
