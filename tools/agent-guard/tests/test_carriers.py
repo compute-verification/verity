@@ -112,6 +112,9 @@ def test_the_build_rule_is_about_where_a_build_runs_so_a_scratch_copy_is_no_exce
     "bash -o pipefail -c 'lake build'",
     "env -S 'lake build'",
     "echo x | xargs -n 1 -I{} lake build",
+    "echo x | xargs -i ps aux",                        # -e, -i and -l take a value only in their own word
+    "echo x | xargs -l printenv",
+    "echo x | xargs -e lake build",
 ])
 def test_nested_and_spelled_out_forms_are_read_too(ask, command):
     assert ask(command)["permission"] == "deny", command
@@ -163,6 +166,9 @@ def hook():
     (["env", "-u", "X", "A=1", "make", "-j"], ["A=1 make -j"]),
     (["env"], []),
     (["xargs", "-0", "-n", "1", "rm"], ["rm"]),
+    (["xargs", "-i", "env"], ["env"]),
+    (["xargs", "-l", "-e", "env"], ["env"]),
+    (["xargs", "-i{}", "-E", "END", "echo", "{}"], ["echo '{}'"]),
     (["watch", "-n", "2", "ls", "-l"], ["ls -l"]),
 ])
 def test_carried_reads_each_carrier(hook, words, texts):

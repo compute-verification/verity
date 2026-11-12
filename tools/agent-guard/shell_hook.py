@@ -354,21 +354,23 @@ TMUX_BARE = {n for n in TMUX_CARRIERS if "-" in n} | {"neww", "splitw", "respawn
 TMUX_ENTER, TMUX_BLANK = {"Enter", "C-m", "C-j", "KPEnter", "^M", "^J"}, {"Space", "Tab"}
 TMUX_KEY = re.compile(r"([CMS]-)+\S+|\^.|Escape|BTab|BSpace|Up|Down|Left|Right|Home|End|IC|DC|PageUp|PgUp|PageDown|PgDn|NPage|"
                       r"PPage|F\d+|KP\w+")
-XARGS_VALUED = set("adEeIiLlnPs")
+#: xargs: its options that take a value in their word or the next, and those that take one only in their word (`-i{}`)
+XARGS_VALUED, XARGS_STUCK = set("adEILnPs"), set("eil")
 SHELL_CODE = re.compile(r"-[a-zA-Z]*c[a-zA-Z]*")
 
 
-def options_end(args: list[str], valued: str | set[str]) -> tuple[int, dict[str, str]]:
-    """Where `args`'s single-letter options end (past a `--`), and the value each valued one took."""
+def options_end(args: list[str], valued: str | set[str], stuck: str | set[str] = "") -> tuple[int, dict[str, str]]:
+    """Where `args`'s single-letter options end (past a `--`), and the value each valued one took: a `valued` one the rest of
+    its word or the next word, a `stuck` one only the rest of its word."""
     i, given = 0, {}
     while i < len(args) and args[i].startswith("-") and len(args[i]) > 1:
         a, i = args[i], i + 1
         if a == "--":
             break
         for at, letter in enumerate(a[1:], 2):
-            if letter in valued:
-                given[letter] = a[at:] or (args[i] if i < len(args) else "")
-                i += not a[at:]
+            if letter in valued or letter in stuck:
+                given[letter] = a[at:] or (args[i] if i < len(args) and letter in valued else "")
+                i += not a[at:] and letter in valued
                 break
             given.setdefault(letter, "")
     return i, given
@@ -434,7 +436,7 @@ def carried(words: list[str]) -> list[str]:
         assignments = [a for a in args[:len(args) - len(run)] if "=" in a and not a.startswith("-")]
         return [shlex.join(assignments + run)] if run else []
     if name == "xargs":
-        i, _ = options_end([a for a in args if not a.startswith("--")], XARGS_VALUED)
+        i, _ = options_end([a for a in args if not a.startswith("--")], XARGS_VALUED, XARGS_STUCK)
         rest = [a for a in args if not a.startswith("--")][i:]
         return [shlex.join(rest)] if rest else []
     if name == "eval":
