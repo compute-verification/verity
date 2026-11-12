@@ -72,7 +72,7 @@ theorem inferenceOnlySound (k : Verity.Registration.Composite) : V.InferenceOnly
   intro θ F c σ
   calc Game.prob (fun o => V.Verdict k .inferenceOnly o ∧ ¬ V.Holds k θ F c σ .inferenceOnly o) (V.game θ F c) σ
       ≤ Game.prob (fun _ => False) (V.game θ F c) σ :=
-        Game.prob_mono (fun o ⟨⟨-, hsame, -⟩, hfail⟩ => hfail fun _ _ _ hc => policyHeld_of_same hsame hc) _ σ
+        Game.prob_mono (fun _ ⟨⟨_, hsame, _⟩, hfail⟩ => hfail fun _ _ _ hc => policyHeld_of_same hsame hc) _ σ
     _ = 0 := Game.prob_false _ σ
     _ ≤ V.error .inferenceOnly θ F c σ := zero_le _
 
