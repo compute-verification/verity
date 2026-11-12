@@ -1,21 +1,24 @@
 """Network certificates (record v2 on SHA-512): the layout restated from PROTOCOL.md, the frame tree, what the digest
 and the signed message bind, the signer's refusal failing closed, and the certified audit's verdicts against the raw
-audit's on every scenario of the audit and commitment tests."""
+audit's on every scenario of the audit and commitment tests. The mark certificate: what it signs, each refusal of
+its opening by name, and the issuer signing none when its signer refuses or its coins repeat."""
 
 import hashlib
 import itertools
 import shutil
 import struct
+from dataclasses import replace
 
 import pytest
 
+from verity.commitments import domains
 from verity.commitments.identity import tagged_sha512
 from verity.commitments.crypto import lms
 from verity.protocols.certifier.verifier.audit import Audit
 from verity.protocols.certifier.verifier.certificate import (
-    STATUS_CODES, Certificate, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead, certificate_digest,
-    certificate_message, depth, empty, frames_root, open_frame, parameters_digest, real_frames, record_head,
-    verify_frame)
+    MARK_TAG, STATUS_CODES, Certificate, CertifiedMark, CertifiedRecord, Direction, Issuer, LmsSigner, RecordHead,
+    certificate_digest, certificate_message, depth, empty, frames_root, mark_digest, marks_link, open_frame,
+    parameters_digest, real_frames, record_head, verify_frame)
 from verity.protocols.certifier.verifier.commitment import commit
 from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, Reason, Record, Status, Certifier, fill
 from verity.protocols.certifier.verifier.schedule import ClockSync, run_shaper
@@ -441,3 +444,108 @@ def test_certificate_message_binds_key_session_link_direction_window_and_digest(
     for n in (31, 33):
         with pytest.raises(ValueError, match="session id is 32 bytes"):
             certificate_message(b"I" * 16, bytes(n), "l", EGRESS, 0, d)
+
+
+MARK, OTHER_MARK = hashlib.sha512(b"a mark").digest(), hashlib.sha512(b"another mark").digest()
+
+
+def fresh_coins():
+    """Coins that never repeat: the i-th salt is 64 bytes of i, from 1."""
+    salts = itertools.count(1)
+    return lambda n: bytes([next(salts)]) * n
+
+
+def test_a_mark_is_signed_salted_under_its_own_tag_on_the_marks_link_name(tmp_path):
+    """A mark certificate signs SHA-512("verity-network-certifier/mark/v1" ‖ salt_c ‖ mark) under 64 bytes of the
+    certifier's own coins, as an egress certificate on `<link>-marks` at the execution phase its caller gave, over the
+    message every certificate signs, with one leaf. Its opening holds, and its execution phase is the certificate's.
+    One mark certified twice is signed under two salts and two digests, and both openings hold."""
+    signer = signers.signer(tmp_path)
+    key = signer.public_key()
+    issuer = Issuer(signer, SESSION, coins=fresh_coins())
+    m = issuer.mark("responses", 5, MARK)
+    c = m.certificate
+    assert (m.mark, m.salt, m.window) == (MARK, b"\x01" * 64, 5)
+    assert (c.key_id, c.link, c.direction, c.window) == (key.key_id, "responses-marks", EGRESS, 5)
+    assert marks_link("responses") == "responses-marks"
+    assert MARK_TAG == domains.CERTIFIER_MARK.encode() == b"verity-network-certifier/mark/v1"
+    assert c.digest == mark_digest(m.salt, MARK) == hashlib.sha512(MARK_TAG + m.salt + MARK).digest()
+    assert c.digest not in (MARK, certificate_digest(m.salt, MARK))
+    assert c.message(SESSION) == lms.certificate_message(key.key_id, SESSION, "responses-marks", "egress", 5, c.digest)
+    assert c.verify(key, SESSION) and m.refusal(key, SESSION, "responses") is None
+    assert m.verify(key, SESSION, "responses")
+    assert signers.used(signer) == [0] and issuer.refused == [] and issuer.mark_salts == {m.salt}
+    again = issuer.mark("responses", 9, MARK)
+    assert again.salt != m.salt and again.certificate.digest != c.digest and again.window == 9
+    assert again.verify(key, SESSION, "responses") and signers.used(signer) == [0, 1]
+
+
+def test_a_mark_certificate_is_refused_by_name(tmp_path):
+    """A mark certificate's opening is refused with why: another mark, another salt or an altered digest (`opening`);
+    read as another link's mark, or a certificate on the link's own name (`link`); an ingress certificate (`egress`);
+    another key's (`key`); and a certificate relabelled to another link name or another execution phase, another
+    session's and a forged signature (`signature`). A record's salted digest signed on the marks' link name opens as
+    no mark."""
+    signer = signers.signer(tmp_path)
+    key = signer.public_key()
+    issuer = Issuer(signer, SESSION, coins=fresh_coins())
+    m = issuer.mark("responses", 5, MARK)
+    c = m.certificate
+
+    def refusal(opening, link="responses", session=SESSION, key=key):
+        return opening.refusal(key, session, link)
+
+    assert refusal(m) is None
+    assert refusal(replace(m, mark=OTHER_MARK)) == "opening"
+    assert refusal(replace(m, salt=b"\x02" * 64)) == "opening"
+    assert refusal(replace(m, certificate=replace(c, digest=mark_digest(m.salt, OTHER_MARK)))) == "opening"
+    assert refusal(m, link="requests") == "link"
+    assert refusal(replace(m, certificate=replace(c, link="requests-marks")), link="requests") == "signature"
+    assert refusal(replace(m, certificate=replace(c, window=6))) == "signature"
+    assert refusal(m, session=OTHER_SESSION) == "signature" and refusal(m, session=bytes(31)) == "signature"
+    assert refusal(replace(m, certificate=replace(c, signature=bytes(len(c.signature))))) == "signature"
+    assert not replace(m, mark=OTHER_MARK).verify(key, SESSION, "responses")
+    (tmp_path / "stranger").mkdir()
+    stranger = signers.signer(tmp_path / "stranger", seed=b"other")
+    foreign = Issuer(stranger, SESSION, coins=fresh_coins()).mark("responses", 5, MARK)
+    assert refusal(m, key=stranger.public_key()) == "key" and refusal(foreign) == "key"
+    assert refusal(foreign, key=stranger.public_key()) is None
+    salt = b"\x09" * 64
+    digest = mark_digest(salt, MARK)
+    unmarked = CertifiedMark(MARK, salt, issuer.sign("responses", EGRESS, 5, digest))
+    ingress = CertifiedMark(MARK, salt, issuer.sign("responses-marks", INGRESS, 5, digest))
+    record = CertifiedMark(MARK, salt, issuer.sign("responses-marks", EGRESS, 5, certificate_digest(salt, MARK)))
+    assert all(x.certificate.verify(key, SESSION) for x in (unmarked, ingress, record))
+    assert [refusal(x) for x in (unmarked, ingress, record)] == ["link", "egress", "opening"]
+    for other in ({"mark": MARK[:-1]}, {"salt": m.salt + b"\0"}):
+        with pytest.raises(ValueError, match="64 bytes"):
+            replace(m, **other)
+
+
+def test_the_issuer_signs_no_mark_when_its_signer_refuses_or_its_coins_repeat(tmp_path):
+    """A signer whose leaf state is behind refuses: the issuer signs nothing, lists the marks' link name at the
+    execution phase in `refused` and takes no salt, so the same coins certify the mark once the state is current.
+    Coins that then give that salt again sign no second mark, and a mark or coins of another length sign none: no
+    refusal spends a leaf."""
+    signer = signers.signer(tmp_path)
+    key = signer.public_key()
+    old, current = tmp_path / "old-state.json", tmp_path / "current-state.json"
+    shutil.copy(signer.state, old)
+    issuer = Issuer(signer, SESSION, coins=lambda n: b"\x5a" * n)
+    assert issuer.sign("responses", EGRESS, 0, bytes(64)) is not None
+    shutil.copy(signer.state, current)
+    shutil.copy(old, signer.state)
+    assert issuer.mark("responses", 5, MARK) is None
+    assert issuer.refused == [("responses-marks", EGRESS, 5)] and issuer.mark_salts == set()
+    assert signers.used(signer) == [0]
+    shutil.copy(current, signer.state)
+    m = issuer.mark("responses", 5, MARK)
+    assert m.salt == b"\x5a" * 64 and m.verify(key, SESSION, "responses") and signers.used(signer) == [0, 1]
+    with pytest.raises(ValueError, match="gave an earlier mark certificate's salt again"):
+        issuer.mark("responses", 6, OTHER_MARK)
+    with pytest.raises(ValueError, match="a mark is 64 bytes"):
+        Issuer(signer, SESSION, coins=fresh_coins()).mark("responses", 6, MARK[:-1])
+    with pytest.raises(ValueError, match="gave 63 bytes for a 64-byte salt"):
+        Issuer(signer, SESSION, coins=lambda n: bytes(n - 1)).mark("responses", 6, MARK)
+    assert signers.used(signer) == [0, 1] and issuer.refused == [("responses-marks", EGRESS, 5)]
+    assert issuer.mark_salts == {m.salt}
