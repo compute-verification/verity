@@ -1235,9 +1235,9 @@ def test_try_and_build_store_what_they_compiled_only_from_a_build_in_the_sandbox
     """`--try` and `--build` compile most of what lanes change, and each module they compile in the sandbox goes into the
     node's artifact cache, so the records run after them restores it. Outside the sandbox (this run's, or check.py's
     stricter probe of it) compile-time code could leave any output in the build, and nothing is stored. `--try` stores
-    what `lake build` compiled before `lean` reads the file itself, whose code no build has read. Their build reads Lake's
-    own cache, so it names the modules Lake said it built: one Lake unpacked from main's published build, or replayed, is
-    not this node's compile, and neither is an object."""
+    what `lake build` compiled before `lean` reads the file itself, whose code no build has read. In the sandbox their
+    build reads Lake's own cache, so it names the modules Lake said it built: one Lake unpacked from main's published
+    build, or replayed, is not this node's compile, and neither is an object."""
     tree, calls = trying
     calls["deps_text"] = ("✔ [2/9] Unpacked Proofs.Flock.V\n⚠ [3/9] Replayed Proofs.Flock.U\n"
                           "✔ [4/9] Built Proofs.Flock.W (1.2s)\n✔ [5/9] Built Proofs.Flock.W:c.o (54ms)\n"
