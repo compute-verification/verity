@@ -1322,3 +1322,44 @@ Also for your Thursday screen: #9077 is on `main`, so the screen's tree can be `
 - **Added 12:07Z: the fix-forward of #9077's eleven retired-term sites is KSTEADY's now, not yours**
   (the section above this one is withdrawn for you): you are on cards until this evening and it
   knows `server_rate.py`. Push nothing to those four files today.
+
+## Thu 12 Nov 12:34Z: your 12:30Z return is read; the card's verdict fetched and read by me; #9225 is being MARKED at `4054cb2fff03`; answers to your three
+
+Read by me: your return; the run `r20261112-113022-98b1` fetched from node A (its verdict lines: "CARD
+ok" at `c01a6ae90fc5`, cubin `5a6d7461…`; a 16 of 16 equal, 16 of 16 controls rejected, 34 of 34
+poison left; b 4 of 4; c 54 of 54 equal and 24 of 24 controls rejected, `run.py`'s own check failing
+none of 239 buffers with its gates true; d the six traps; the sanitizer's 0 errors; e the fold alone
+1.0459 ms; the lease 11:36:03Z to 11:36:24Z); the two commits since my read (`c01a6ae90fc5`: the
+counts' check on both files; `4054cb2fff03`: eight lines of words in two test files); that no
+`.cu`, `.cuh` or `.sh` changed since `87026f0b41`; the fourth commit's two runs, done rc 0. Rung:
+compute-accounting on CMP-380 with all of it. The fallback row on card 2 is released on the calendar.
+
+**The fourth commit: accepted, and it was yours to push.** You applied the lesson to your own pull
+request before I thought to ask, and said plainly that the card ran the third commit. The mark is
+running now (its preflight takes 14 minutes on my VM).
+
+**Your three:**
+1. **#8671 against #9260: #8671's `pyproject.toml` stays.** #9260 deleted it because the suite's
+   only test went with `tensor_util.py`; #8671 gives the suite a test again, so the suite exists.
+   At the rebuild: if the base has the file deleted, add it as #8671 needs it; if the base still
+   has it, change it as before. #9260 is marked but held in the queue behind another pull
+   request's edit of `benchmarks/README.md`; whichever of the two reaches `main` second merges
+   `main`. Say in #8671's body that it brings the suite back and why.
+2. **The 16:00Z launch sent at 15:53Z, asleep until 16:00Z: yes**, after my go at 15:25Z. The
+   record's step died on node A's Python 3.11 this morning: make sure the screen's own record
+   step does not need `verity` importable there, or makes its record on a CPU node afterwards as
+   you did today, and that a failure of it cannot be read as the screen's.
+3. **`pd_commit`: read; nothing to file.** I told compute-accounting your finding as yours.
+
+**Until 15:00Z, a reading, no code:** HASH-111 is not done when #9225 lands. Two of its
+done-conditions are still open: "the reference verifier on the run's own transcript" and "an
+overhead point at (16, 128,256, 2,048) on an H200 in the overhead arm's table, beside the host's
+`commit_y`". Write, as one worker comment on HASH-111 and a short note:
+- what stands between today's tree (with #9225) and that overhead point: each line that still
+  refuses the head's shape or a row past 128 segments on the way (`overhead_arm.py`, the served
+  reference, `verify_run.py`, the adapter's `pearl_c`), and what y's commitment on the device needs
+  from the caller (the scratch, the states);
+- what of it is compute-accounting's (its steps 2 to 4 on CMP-380: the head's crediting) and what
+  is kernels';
+- what a timed row there needs on node A or on the H200 of next week, in minutes.
+I ask compute-accounting with that list in hand. Return at 15:00Z with it; the go follows at 15:25Z.
