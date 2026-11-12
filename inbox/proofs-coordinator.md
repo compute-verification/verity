@@ -109301,3 +109301,51 @@ Not established
 - `acceptedTwo_of_check`, and the statements at `form := true`. Until TWOLEG's commit is on my base, every statement is at the default form and holds of nothing.
 - FRAME's five clauses (`two`, `sessionOk`, `pinOk`, rounds, `recordsOk`) as lemmas from `Registration.check`. They are premises today.
 - That a replayed earlier-period signature is excluded: it counts as a forgery and is not covered.
+
+## GATHER, Thu 12 Nov 23:37Z: the second try's branch holds the serve's branch head and serving's joined logits port; its four test files passed on the node
+
+**The second try's branch: `cursor/proofs-gather-second-try-5a28`, head `957d763fb52498aa1e2f1b4410b50ad32f0b80a7`** (two merges past `875bc94850`, no driver file changed). [run: `git push`, 23:34Z] It now holds the serve's branch at `e30d38036c11` and the interior side's joined head `69f108cd8c5a`. [run: `research fetch r20261112-231032-92eb --all --on vy-nebius-2`, 23:31Z] The third part of its first rehearsal, the four test files at `875bc94850`, passed: 55 of 55 in 478 s, so all three parts of `92eb` ended exit 0. [run: `research fetch`, 23:34Z] My three runs on vy-nebius-2 have not started: `7b1c` and `9585` have waited 9 minutes with 22 and 24 runs ahead, `0d43` (launched 23:32Z) has 35 ahead. On cpu-12 `b876` (Friday's shape) is in its stand-in serve and `8cac` took a slot at 23:25Z; on cpu-10 `9e10` took one at 23:33Z.
+
+### 1. What moved in the second try's branch
+
+- [run: `git merge e30d38036c11`, 23:27Z] **`5b218887de`: the serve's branch head.** Three files stopped, nine places, every one where this branch's `--logits` of the stand-in serve met the serve's branch's `--tables`. I kept both everywhere:
+  - `benchmarks/one_stage/two_stage_small.py`, seven places: the module's docstring holds both paragraphs and one usage line (`[--stop | --tables] [--logits]`); the import names `boundary_logits` and `boundary_tables`; `layout` and `serve` take `logits` and then `tables` after `stop` (every caller but one passes them by name, and that one stops at `units`); `serve` refuses `--tables` beside `--stop` as the serve does (`BR.TABLES_UNDER_A_RULE`); `BR.commit` gets `tables=` and `logits=`; the command line has both flags.
+  - `benchmarks/one_stage/two_stage_small.sh`, one place: the header's comment, both sentences kept.
+  - `benchmarks/one_stage/tests/test_two_stage_second.py`, one place: the docstring of the test of a class whose record does not commit the select's inputs, which the serve's branch runs twice now (alone, and beside history tables). On this branch that class is refused by `second-inputs`, so the docstring says that for both cases, and I changed one line git had merged without stopping: the refused value's name is `<block>/logits` beside tables, not `logits`. [derived: from the same test's line that expects the interior to register `<block>/logits`] That line has not run yet: the test starts the Lean verifier's build, so it runs in `0d43`, not on my VM.
+- **One case added to my test** (`test_a_class_whose_record_commits_the_selects_inputs_registers_no_value_and_round_2_has_no_code`): `beside-tables`, a class that commits its history tables beside the select's inputs, where the record names the return and the inputs by the replay block (`<block>/o0`, `<block>/logits`). [run on my VM, 23:29Z: `logits-port-probe.py /tmp/gather/t2 tables`, the same steps without a prover] The design holds 20 inputs at `<block>/logits`, no link, the interior registers no value, round 2 is `{"ok": true, "codes": []}`, the read at the interior's own port is refused by `second-read`, and an altered kept row is refused by name. With a prover and the Lean verifier it runs in `0d43`.
+- [run: `git merge 69f108cd8c5a`, 23:33Z] **`957d763fb5`: the interior side's joined head.** One line of `adapters/vllm/tests/pipeline/test_interior_inputs.py` (it names the class's prompt size); the serve side's lint fix `8b1835d85f` was in `875bc94850` already. [run on my VM, 23:34Z] That file's five tests pass.
+- [run on my VM, 23:30Z, `/tmp/gather/t2` at `5b218887de`] The three tests of `test_two_stage_second.py` that start no stream pass; the file collects 17 tests; `ruff check` of the two Python files is clean; the probe gives a clean round 2 and an empty interior registration in all three shapes (alone, under a stop rule, beside tables).
+- [run: `git fetch`, 23:33Z] The other heads: the serve's branch `e30d38036c11` and its logits side `8b1835d85f27` unchanged; STOPDRIVER's branch still `ddcd46b4919c`, not merged (no "ready" line yet); `main` `7e70df68bd18`, not merged.
+
+### 2. `92eb`, the second try's first rehearsal, whole
+
+[run: `research fetch r20261112-231032-92eb --all --on vy-nebius-2`, 23:31Z; `out/rc.txt`, `out/pytest.log`]
+
+| Part | What | Result |
+|---|---|---|
+| 1 | V = 2,560, 20 units, 6 spans of 4 tokens, `--logits` | exit 0 (in my 23:26Z entry) |
+| 2 | the same under a stop rule | exit 0 (in my 23:26Z entry) |
+| 3 | `test_two_stage_second.py`, `test_two_stage_driver.py`, `test_interior_inputs.py`, `test_boundary_logits.py` | 55 passed in 477.63 s |
+
+[run: `job-memory.py` on its `resources.jsonl`] The job's peak memory over all three parts: 18.8 GiB (PSS) at 23:18:52Z, in part 1's `second`; I asked 24 GB.
+
+### 3. Runs
+
+[run: `research fetch` of each, 23:34Z]
+
+| Run | What | Head | Where | State |
+|---|---|---|---|---|
+| `r20261112-214729-b876` | first try at Friday's shape: V = 154,880, 8 spans, stop rule T = 64, `rate:2/8`, k = 1 | `bdf9fd1086` | cpu-12, slot p1, 96 GB | running since 23:07:37Z; builds ended 23:13Z; in the stand-in serve |
+| `r20261112-215935-8cac` | first try, V = 154,880, 6 spans of 4 tokens, second stage at k = 3 | `bdf9fd1086` | cpu-12, slot p2, 96 GB | running since 23:25:20Z |
+| `r20261112-214205-9e10` | the two-stage toy | `bdf9fd1086` | cpu-10, slot p0, 48 GB | running since 23:33:20Z |
+| `r20261112-232549-7b1c` | first try's new head: plain; `--tables`; every span sampled under a stop rule; three test files | `496aa18354` | vy-nebius-2, 24 GB | waiting, 22 ahead |
+| `r20261112-232611-9585` | second try: every span sampled under a stop rule at V = 2,560; then V = 154,880 with `--logits` | `875bc94850` | vy-nebius-2, 72 GB | waiting, 24 ahead |
+| `r20261112-233242-0d43` | second try: `--tables --logits` at V = 2,560; `test_two_stage_second.py` | `5b218887de` | vy-nebius-2, 24 GB | waiting, 35 ahead |
+
+- [derived: `evaluate-probe-154880.log`, 2.5 to 3.0 s a token on my VM] **Why `b876` shows nothing yet.** The stand-in serve takes each id from the Definition by the reference evaluator, about 2.7 s a token at V = 154,880, so up to 512 tokens take about 23 minutes: that is the stand-in's cost, not the audit's, and I leave it out of the estimate. [guess] `first` starts at about 23:40Z and `second` ends between 00:30Z and 01:00Z; in the two earlier runs at this vocabulary (12 tokens served, 4 units a template) `second` took 41 and 45 minutes and peaked at 57.4 and 49.3 GiB.
+- `9585` and `0d43` run at `875bc94850` and `5b218887de`; the head differs from them by tests and the stand-in serve only, so I do not relaunch them.
+
+### 4. Not done, and next
+
+- Not run with a prover yet: an early-stopped span in the replay sample (`7b1c` and `9585`, every span sampled); the second try at V = 154,880 (`9585`); tables beside the select's inputs (`0d43`).
+- Next: `b876` at 00:30Z, and with it the estimate; VLLM-300 at 01:00Z for the small serve's result and serving's confirmed head; STOPDRIVER's branch when it says ready; #9480's body for the head `496aa18354`.
