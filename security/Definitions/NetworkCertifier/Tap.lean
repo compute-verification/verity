@@ -45,4 +45,20 @@ def recordingCode {κ Cell Ob : Type} (f : RecordFormat κ Cell Ob) (s : Certifi
     (κ → List (ℕ × CellView Cell)) × Ob :=
   (certifierCode s arr, f.record s arr (certifierCode s arr))
 
+/-- **A record format of the wire**: as `RecordFormat`, but what reads back from the record on a schedule the format
+holds is every frame that crossed the wire on each connection, padding included, in its bucket (`laneWire` of the
+code's cells), not the lanes' cells alone. -/
+structure WireFormat (κ Cell Ob : Type) where
+  record : CertifierSchedule κ → (κ → Arrivals Cell) → (κ → List (ℕ × CellView Cell)) → Ob
+  read : CertifierSchedule κ → Ob → κ → List (ℕ × CellView Cell)
+  fits : CertifierSchedule κ → Prop
+  read_record : ∀ s, fits s → ∀ a, read s (record s a (certifierCode s a)) = laneWire s (certifierCode s a)
+
+/-- **The tap's code, on the wire**: on schedule `s` and the arrivals `arr c` of each connection `c` on the server's
+uplink, the frames the client receives (`laneWire` of the code's cells, `certifierCode`) and the record of them
+(`f.record`), from one run. -/
+def wireCode {κ Cell Ob : Type} (f : WireFormat κ Cell Ob) (s : CertifierSchedule κ) (arr : κ → Arrivals Cell) :
+    (κ → List (ℕ × CellView Cell)) × Ob :=
+  (laneWire s (certifierCode s arr), f.record s arr (certifierCode s arr))
+
 end NetTiming

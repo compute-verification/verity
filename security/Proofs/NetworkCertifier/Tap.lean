@@ -18,6 +18,10 @@ record the same run writes (`certifier_cells_read`): what the certifier saw is w
 lane sends before its fail cell is in the record, as that cell's data in its bucket (`certifier_data_read`). The rest of the
 server's bytes, after the fail cell or past the lane's end, reach neither the client nor the record, so the record
 does not fix the whole stream the server sent.
+
+Under a record format of the wire (`WireFormat`), the same three hold of the frames, padding included: the frames the
+client receives are the code's cells' on the wire (`wire_frames`), they read back from the record (`wire_frames_read`),
+and a data cell before the fail cell is the `(j mod r)`-th of its connection's frames in its bucket (`wire_data_read`).
 -/
 
 @[expose] public section
@@ -53,6 +57,39 @@ theorem certifier_data_read (f : RecordFormat κ Cell Ob) (arr : Srv → κ → 
     (hf : ∀ i, failCell s (arr σ) c = some i → j < i) :
     (f.read s (run tap (s, σ)).2 c)[j]? = some (s.bucket c j, .data (arr σ c).stream[j]) := by
   rw [← certifier_cells_read f arr tap run htrust s hfit σ, certifier_cells f arr tap run htrust s σ, certifierCode_eq]
+  simp only [clientView, List.getElem?_map, List.getElem?_range hj, Option.map_some, cellView_of_lt _ hf,
+    streamCell, hd, ↓reduceDIte]
+
+/-- The frames the trusted tap sends, under a record format of the wire, are those of the warden's code's cells,
+padding included. -/
+theorem wire_frames (f : WireFormat κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
+    (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => wireCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
+    (σ : Srv) : (run tap (s, σ)).1 = laneWire s (certifierCode s (arr σ)) := by
+  rw [htrust (s, σ)]
+  rfl
+
+/-- **What the certifier saw is what crossed the wire**: on a schedule the record format holds, the frames the trusted
+tap sends read back from the record its same run writes. -/
+theorem wire_frames_read (f : WireFormat κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
+    (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => wireCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
+    (hfit : f.fits s) (σ : Srv) : (run tap (s, σ)).1 = f.read s (run tap (s, σ)).2 := by
+  rw [htrust (s, σ)]
+  exact (f.read_record s hfit (arr σ)).symm
+
+/-- **The data reaching the tap is in its record of the wire, up to the fail cell**: on a schedule the record format
+holds, cell `j` of connection `c`'s stream, when its lane has cell `j` and no fail cell at or before it, is in the
+record as that cell's data, the `(j mod r)`-th of the connection's frames in its bucket. -/
+theorem wire_data_read (f : WireFormat κ Cell Ob) (arr : Srv → κ → Arrivals Cell) (tap : Dev)
+    (run : Dev → CertifierSchedule κ × Srv → (κ → List (ℕ × CellView Cell)) × Ob)
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => wireCode f p.1 (arr p.2)) (s : CertifierSchedule κ)
+    (hfit : f.fits s) (σ : Srv) (c : κ) {j : ℕ} (hj : j < s.cells c) (hd : j < (arr σ c).stream.length)
+    (hf : ∀ i, failCell s (arr σ) c = some i → j < i) :
+    ((f.read s (run tap (s, σ)).2 c).filter fun x => x.1 == s.bucket c j)[j % s.r]? =
+      some (s.bucket c j, .data (arr σ c).stream[j]) := by
+  rw [← wire_frames_read f arr tap run htrust s hfit σ, wire_frames f arr tap run htrust s σ,
+    filter_laneWire s _ c (bucket_mem_span s c hj), List.getElem?_map, wireFrames_cell s _ c hj, certifierCode_eq]
   simp only [clientView, List.getElem?_map, List.getElem?_range hj, Option.map_some, cellView_of_lt _ hf,
     streamCell, hd, ↓reduceDIte]
 
