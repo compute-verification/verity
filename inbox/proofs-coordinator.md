@@ -105529,3 +105529,28 @@ The eight proposed branch names, on the issue that holds the map, when the coord
 - RUNCOINS hasn't confirmed the function's name, and FRAME hasn't confirmed that L3 is the one accept lemma.
 - The earlier-period signature hole (soundness's 22:00Z finding) is open in this leg as in the one-stage leg, until the key pins on Tue 17 Nov.
 - The sizes are guesses: B1 7,300 to 15,100 lines, B2 1,000 to 2,000 plus the move, the instance 1,500 to 3,000, and mine 1,200 to 2,400 (the form 700 to 1,000, its twin and difftest 550 to 950, `Refused` 150 to 400, `heldOf` 100 to 300).
+
+## PERIODREAD, Thu 12 Nov 22:28Z: your 22:22Z rulings are taken; the two device statements have the hole soundness found wherever the history holds one play's ledger lines, and the period's check makes it the normal case, not a strategy's choice
+
+Mailbox read at `0b285b5c90` (your 22:22Z). **I can pause now.**
+
+**Your point 6: yes, the same hole, and wider here.** [read, derived]
+- **The statements themselves** quantify over every history `dev`, as `DrawnByDevice` does, and end in the same `Break dev p.key p.label {ledger}`. The finder calls a verifying signature a forgery when its message is not among `signedBy dev pk` (`security/Properties/Challenger.lean:344-347`), and for my `coins`, which hold the ledger alone, the signatures it checks are the ledger's lines' (`:170-176`; no session record or close is in them, so an earlier run's record does not reach these two statements).
+- **At the deployed history the hole is there.** `Device.dev` gives the history's ledger as the setup's (`security/Proofs/Properties/Verity/Sampled/Device.lean:475`), and a deployment's setup holds the lines of one play: the ledger's reserve and open and the period's open, then the end and the period's close (`:1107`, with `ledger_le` at `:1095` bounding them a play). Every other line of the ledger is one that history did not sign.
+- **The period's check does not exclude it; it makes it certain.** `Spot.Period.read` passes only a ledger that `checked` passes, and `verifyLedger` holds each entry's number to its place and its `prev` to the line before, from the first line (`Spot/ChallengerSession.lean:561`). So an accepted ledger holds every line from the device's first, and a monitoring period of N windows holds the lines of N plays at least. At a one-play history each of the others is a genuine signature the finder reports as a forgery: `Break` holds, and both statements say nothing. A strategy does not have to add anything; an honest ledger past the key's first session is enough.
+- **What closes it** is what you describe for Tue 17 Nov: a history that holds the device's whole ledger under the key, from its first line (and, for the audits' half, every run of the period, since the period's evidence holds one session's record and close per window). `Numbered` is then a fact of that whole ledger. I wrote this limit into the module's docstring: the statements say something of a device only at a history that holds its whole ledger under the key.
+- **Not established:** I read `Device.dev` and `setupAt`, not every theorem that instantiates them.
+
+**For ADDRROW (your point 2), what I read on `shared_rows`:**
+- One-stage v2 holds a public file to the registration by `OneStageZk.publicHeld` (`Spot/OneStageZk.lean:347-352`): the header's scheme, `frame_v3` roots, domain ids, instances and `units.indices`. Neither `OneStage.lean` nor `OneStageZk.lean` reads `shared_rows` [run: `rg`, no match].
+- The only Lean I found that holds shared-row tables to registered reads is the two-stage second stage (`Spot/SecondStage.lean:930-936`, its statement at `:1419-1426`), which one-stage v2 does not call. So the period's check refuses a header that names `shared_rows` (`Spot/PeriodAudit.lean:253`). I did not read Flock's verifier for where a ref into a shared table is resolved.
+
+**Done on your rulings:**
+- **A24, both forms, are in PR 3** (`cursor/proofs-prf600-period-statements-e2a7` at `d3825441e7cf`), in a module of their own, `security/Properties/Spot/PeriodLedger.lean`, with `Numbered` a hypothesis of `LedgerOfDevice` alone and the sentence you asked for in its docstring. No lock entry reads `Numbered`; there is no lock entry at all yet.
+- PR 2's three points stand as built (`names` for `shared_rows`, `members`, no executable). The executable `sampled-proofs-period` and its `exempt` line go in PR 3 with the first lock entry.
+
+**Runs:**
+- PR 3's statements and a probe of the proofs' tactics: `809e` cancelled by me after 14 minutes in line (its head was superseded); relaunched on cpu-8 at 22:27Z, id in my next entry. Nothing of PR 3 has elaborated in the tree yet (the scratch forms of A24 did, `2e77`).
+- PR 1's last 8 suites `r20261112-215441-6715`: holds a slot, running. PR 2's quick tier `r20261112-221328-8e84`: in line on cpu-10, 3 ahead at 22:25Z.
+
+**Not established:** as above; and nothing is proved.
