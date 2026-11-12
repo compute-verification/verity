@@ -5,6 +5,8 @@ replay index addresses each row at its plane, and the MoE source binds the same 
 that reads another pair's quant is named, never read."""
 from __future__ import annotations
 
+from verity_vllm.program.compact import expanded_file_args
+
 __models__ = ("zai-org/GLM-5.3",)
 
 import copy
@@ -64,7 +66,6 @@ def instances() -> dict:
     """The derived chain's instance rows under `model.model.layers.3.mlp.experts`, with the rows the CPU derive cannot emit appended:
     `MoeSum_v1` per token (`_moe_C.moe_sum` needs vLLM), the next layer's fused norm reading it, the logits and the token select."""
     from verity_vllm.pipeline.build import _instance_sequence
-    from verity_vllm.program.compact import expanded_file_args
     from verity_vllm.program.frontend.rules import vllm_bindings as VB
 
     class Root(nn.Module):

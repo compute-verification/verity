@@ -6,10 +6,10 @@ import copy
 import gzip
 import json
 
-from verity_vllm.pipeline import program_graph as PG
-from verity_vllm.pipeline import vu_export as VX
 from tests.check.test_sampled_replay import H, I, _program
 from tests.pipeline.test_vu_export import _export, _world
+from verity_vllm.pipeline import program_graph as PG
+from verity_vllm.pipeline import vu_export as VX
 
 
 def _write(doc: dict, path) -> str:
@@ -138,7 +138,8 @@ def test_catalog_deduplicates_specializations_across_rows(tmp_path):
     assert ix and all(set(e["rows"]) == {"rowA", "rowB"} for e in ix.values())
     shards = {}
     for p in (tmp_path / "graphs" / "definitions").glob("*.json.gz"):
-        shards.update(json.loads(gzip.open(p, "rt").read()))
+        with gzip.open(p, "rt") as f:
+            shards.update(json.load(f))
     assert len(shards) == len({e["digest"] for e in ix.values()})
     assert all(PG.definition_digest({k: x for k, x in v["definition"].items() if k != "fold"}) == h for h, v in shards.items())
     ops = json.loads((tmp_path / "graphs" / "rowA.ops.json").read_text())["ops"]

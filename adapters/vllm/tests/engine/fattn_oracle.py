@@ -43,7 +43,7 @@ def fixed_point_a(s_q: np.float32, s_k: np.float32, scale: float) -> int:
 def softmax_row(S: np.ndarray, pos: int, A: int) -> dict:
     """fattn_ref.check's softmax of one query column's S over keys 0..pos."""
     m = int(S[: pos + 1].max())
-    dd = (m - S[: pos + 1]).astype(np.uint64)
+    dd: np.ndarray = (m - S[: pos + 1]).astype(np.uint64)
     t = np.minimum((dd * np.uint64(A)) >> np.uint64(32), 255).astype(np.int64)
     e = LUT[t]
     L = int(e.sum())
