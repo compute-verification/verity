@@ -24,7 +24,7 @@ every module it was built against, whatever the sources say now. A tree keeps th
 and Lake rebuilds only what a target imports, so a product can be of a source that has changed since (names moved out
 of a module nothing imports now), or of one that is gone (`lean_changed.sync` unlinks a source and leaves `.lake`, since
 Lake replays the product when a branch brings the source back). The stub must load neither: beside the module the names
-moved into, the old product declares them a second time, a clash that is in no source (INF-667). So a module counts as
+moved into, the old product declares them a second time, a clash that is in no source. So a module counts as
 built (`plan`) only when every `.olean` a stub loads for it is of its source as it is: its own and that of every module
 it imports, directly or through others, in its package or in any package its package requires by path (`workspace`).
 Each of those has its `.olean` and the trace Lake wrote for it, that trace says the module is of the source as it is now
