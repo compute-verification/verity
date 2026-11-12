@@ -199,6 +199,13 @@ def test_a_replay_runs_under_the_served_arms_other_plugins_and_environment(tmp_p
         env, ours = loaded[-1]
         assert env is under and R.S.entry_points(ours) == ["verity_dsa_topk = dsa_topk:register"]   # loaded once before the engine
     assert R.served_under("prod-record", site, private)["VERITY_DSA_TOPK_LOG"] == f"{private}/topk-log"
+    # a job that already runs the replay under the arm's environment is left as it is, its plugins seen to load there
+    monkeypatch.setenv("VERITY_DSA_TOPK", "canonical")
+    monkeypatch.setenv("VERITY_DSA_TOPK_LOG", "the job's own")
+    n = len(loaded)
+    assert R.served_under("prod-record", site, private) == {} and len(loaded) == n + 1
+    assert loaded[-1][0]["VERITY_DSA_TOPK_LOG"] == "the job's own" and R.S.entry_points(loaded[-1][1]) == ["verity_dsa_topk = dsa_topk:register"]
+    monkeypatch.delenv("VERITY_DSA_TOPK")
     n = len(loaded)
     for arm in ("prod", "prod-again", "record", "compiled", "no such arm", None):                   # stock, or the record alone
         assert R.served_under(arm, site, None) == {}

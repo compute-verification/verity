@@ -120,12 +120,17 @@ def served_under(arm: str | None, site: Path, private: Path | None) -> dict[str,
     in ``site`` and on the path of every process, and the arm's environment, as its server had them
     (`serve_tax.server_env`), each plugin loaded once first (`serve_tax.check_plugins`). Not `servetax_plugin`'s
     changes, which record: the replay keeps its own trace. What the arm keeps on the node goes under ``private``, and
-    is not kept without one. Empty for an arm with no such plugin, and for one `serve_tax` doesn't define."""
+    is not kept without one. Empty for an arm with no such plugin, for one `serve_tax` doesn't define, and where the
+    job's own environment already sets what the arm's does (a job that runs the replay under the arm's environment
+    itself, which is left as it is once the plugins are seen to load in it)."""
     served = S.ARMS.get(arm or "")
     if served is None or not served.general:
         return {}
-    env = {k: v for k, v in served.env.items() if private is not None or S.PRIVATE not in v}
-    ours = S.replace(served, plugin=(), tick=False, rows={}, env=env)
+    fixed = {k: v for k, v in served.env.items() if S.PRIVATE not in v}
+    ours = S.replace(served, plugin=(), tick=False, rows={}, env=fixed if private is None else served.env)
+    if fixed and all(os.environ.get(k) == v for k, v in fixed.items()):
+        S.check_plugins(dict(os.environ), ours)
+        return {}
     under = S.server_env(ours, site, S.plugin_site(site, ours), None, 0.0, 0.0, private=private)
     S.check_plugins(under, ours)
     return under
@@ -322,6 +327,8 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     meta = json.loads((a.arm_dir / "meta.json").read_text())
     under = served_under(meta.get("arm"), a.out / ".site", a.private)
+    served = S.ARMS.get(meta.get("arm") or "")
+    served = served if served is not None and served.general else None
     if under:           # before vLLM is imported: every process it starts inherits the path and the environment
         os.environ.clear()
         os.environ.update(under)
@@ -333,8 +340,8 @@ def main(argv: list[str] | None = None) -> int:
     got = replay(w, checkpoint, a.eager, a.logprobs, a.tp, capture)
     out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "served_run_id": meta.get("run_id"),
            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
-           "served_under": {"plugins": [entry for entry, _ in S.ARMS[meta["arm"]].general],
-                            "env": {k: v for k, v in S.ARMS[meta["arm"]].env.items() if S.PRIVATE not in v}} if under else None,
+           "served_under": {"plugins": [entry for entry, _ in served.general], "by": "the replay" if under else "the job",
+                            "env": {k: os.environ.get(k) for k, v in served.env.items() if S.PRIVATE not in v}} if served else None,
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
            "served_window_s": w["served_s"], "replay_wall_s": got["wall_s"], "replay_over_served": got["wall_s"] / w["served_s"],
            "engine_ready_s": got["ready_s"], **compare(w, got)}
