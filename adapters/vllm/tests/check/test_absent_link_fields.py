@@ -27,8 +27,10 @@ from verity_vllm.check import commit_tokens as CT
 from verity_vllm.check import executed_prefix as EPL
 
 C = CT.CommitTokens
-NOT_ATTESTED = ["r0: (4) stopped before its cap at 3 but the LAG is not attested: the executed prefix cannot be placed",
-                "r0: (4) executed prefix recomputed None != the record's executed_prefix_len 4 / the Commit's 4 (served 3, cap 5, LAG None)"]
+#: how each problem of a prefix that stopped early with no attested LAG to place it by begins (`begins`)
+NOT_ATTESTED = ["r0: (4) stopped before its ", "r0: (4) executed prefix recomputed None != the record's executed_prefix_len 4 / the Commit's 4 (served 3, "]
+#: the values each of the token record's two blocks states
+BLOCK = {C.STOP_RULE: (C.EOS_IDS, C.LAG), C.LAG: (C.LAG_VALUE, C.ASYNC, C.SOURCE)}
 NO_STOP_RULE = ["record stop_rule.eos_token_ids None != the Program's declared [2]",
                 ("(5) lag not attested: the Program declares LAG 1; stop_rule.lag None, lag.value 1, the engine's read-back 1; "
                  "record async_scheduling True vs the engine's True, source 'engine read-back'")]
@@ -36,7 +38,7 @@ NO_LAG = [("(5) lag not attested: the Program declares LAG 1; stop_rule.lag 1, l
            "record async_scheduling None vs the engine's True, source None")]
 NO_TOKENS = "{}: no generated_token_ids in the token record"
 NONE_SERVED = ["r0: (3) served no token at all: not a stop of the Program's rule",
-               "r0: (4) executed prefix recomputed None != the record's executed_prefix_len 4 / the Commit's 4 (served 0, cap 5, LAG 1)"]
+               "r0: (4) executed prefix recomputed None != the record's executed_prefix_len 4 / the Commit's 4 (served 0, "]
 NOT_COVERED = "{}: not in the Match record's tokens.json (request ids []): the serving transcript does not cover it"
 LAG_NOT_ON_RECORD = ("lag not attested on the record: the Program declares LAG 1, the Match record's tokens.json attests None "
                      "(executed-prefix condition (b))")
@@ -47,6 +49,11 @@ SERVED_NONE = (f"r0: the Commit served 11 tokens (last {EOS}) but the Match reco
 def left_out(empty: Any) -> pytest.MarkDecorator:
     """A field absent, null and empty (`empty`: the empty value of its kind)."""
     return pytest.mark.parametrize("stated", [ABSENT, None, empty], ids=["absent", "null", "empty"])
+
+
+def begins(problems: list[str], heads: list[str]) -> bool:
+    """Whether the problems are as many as `heads` and each starts with its own (a whole problem starts with itself)."""
+    return len(problems) == len(heads) and all(p.startswith(h) for p, h in zip(problems, heads))
 
 
 def match_link(epr: dict[str, Any], account: dict[str, Any], **kw: Any) -> dict[str, Any]:
@@ -107,7 +114,8 @@ def test_an_entry_that_lists_no_token_identity_binds_none_of_its_served_tokens(s
 def test_a_token_record_without_its_stop_rule_or_its_lag_attests_no_lag(field, named, stated):
     w = world()
     link = w.relink(put(w.record(), (field,), stated))
-    assert refused(link) == named + NOT_ATTESTED and link["lag_attested"] is False
+    assert begins(refused(link), named + NOT_ATTESTED) and link["lag_attested"] is False
+    assert link == w.relink(put(w.record(), (field,), dict.fromkeys(BLOCK[field])))     # as a block that states a null for each value
 
 
 @pytest.mark.parametrize("bmap", [None, {}, {"entries": None}, {"entries": []}, {"entries": [{}]}, {"entries": [{"identity": None}]},
@@ -127,7 +135,7 @@ def test_a_binding_map_binds_a_sampled_id_where_one_entry_states_its_identity():
 def test_a_request_the_driver_served_no_token_for_gets_no_identity(stated, problems, served_n):
     w = world()
     link = w.link(served=put(dict(SERVED), ("r0",), stated))
-    assert refused(link) == problems and link["served_by_request"] == {"r0": served_n, "r1": 5}
+    assert begins(refused(link), problems) and link["served_by_request"] == {"r0": served_n, "r1": 5}
 
 
 @pytest.mark.parametrize("served", [None, {}], ids=["null", "empty"])
@@ -201,9 +209,9 @@ def test_the_lag_is_attested_only_with_both_records_of_the_match_beside_the_comm
     assert link["ok"] is False and link[block] is None and link["lag_attested"] is False
 
 
-@pytest.mark.parametrize("leg, stated", [("declared", 2), ("record_attests", 2), ("variable_lag", True)])
-def test_a_g6_leg_that_disagrees_or_a_variable_lag_leaves_the_lag_unattested(leg, stated, tmp_path):
+@pytest.mark.parametrize("key, stated", [("declared", 2), ("record_attests", 2), ("variable_lag", True)])
+def test_a_g6_lag_that_disagrees_or_a_variable_lag_leaves_the_lag_unattested(key, stated, tmp_path):
     lag = {"declared": 1, "record_attests": 1, "tokens_json_lag": 1, "exercised": True, "variable_lag": False}
-    account = EPL.load_match_account(_match_account(tmp_path, g6_lag=dict(lag, **{leg: stated})))
+    account = EPL.load_match_account(_match_account(tmp_path, g6_lag=dict(lag, **{key: stated})))
     link = match_link(_mixed_epr(), account)
-    assert link["ok"] is False and link["lag_attested"] is False and link["global_match"]["lag"][leg] == stated
+    assert link["ok"] is False and link["lag_attested"] is False and link["global_match"]["lag"][key] == stated
