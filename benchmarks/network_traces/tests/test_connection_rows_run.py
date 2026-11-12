@@ -90,16 +90,16 @@ def test_the_request_words_are_a_schedule_flag_rehearse_passes_to_serve():
     reads the same schedule. Without the flag the schedule is the one it was, and the flag without the response
     cap, under form 1 or without content rows is refused by the schedule, which says what it needs."""
     pairs = ["--lengths", "2", "--content", *(",".join(map(str, c[:2])) for c in CLASSES)]
-    capped = ["--max-tokens-cap", "8"]
-    got = schedule_of(REHEARSE + SCHEDULE + capped + pairs + ["--request-words"])
+    bound = ["--max-tokens-cap", "8"]
+    got = schedule_of(REHEARSE + SCHEDULE + bound + pairs + ["--request-words"])
     assert got == WORDED and got.digest not in (ENDS.digest, dataclasses.replace(ENDS, max_tokens_cap=8).digest)
     assert crr.flags_of(got) == [*pairs, "--request-words"]
-    assert schedule_of(SERVE + SCHEDULE + capped + crr.flags_of(got)) == got
-    without = schedule_of(REHEARSE + SCHEDULE + capped + pairs)
+    assert schedule_of(SERVE + SCHEDULE + bound + crr.flags_of(got)) == got
+    without = schedule_of(REHEARSE + SCHEDULE + bound + pairs)
     assert without == dataclasses.replace(ENDS, max_tokens_cap=8) and without.request_words is None
     assert crr.flags_of(without) == pairs and schedule_of(REHEARSE + SCHEDULE + pairs) == ENDS
     rows = ["--lengths", "1", "--content", *(",".join(map(str, c)) for c in CLASSES)]
-    for bad in (pairs, capped + rows, capped + ["--lengths", "2"], capped):
+    for bad in (pairs, bound + rows, bound + ["--lengths", "2"], bound):
         with pytest.raises(ValueError, match="a schedule with request words has content rows under the lengths rows' "
                                              "form 2 and a response cap"):
             schedule_of(REHEARSE + SCHEDULE + bad + ["--request-words"])
@@ -314,7 +314,7 @@ def test_a_run_with_request_words_keeps_each_classes_words_table_and_the_check_h
     """The six connections at a schedule with request words, inline and in the publisher process: each execution
     phase's line lists a fourth table a class, `words.i`, after the class's other three and at their count, with a
     salt a row, and its rows are what the network certifier reads of each request the records hold: the `max_tokens`
-    it was sent with, an `ignore_eos` of 0 and its prompt's ids. The check accepts the run, and refuses a words
+    it was sent with and the count of its prompt's ids, two u32. The check accepts the run, and refuses a words
     table's root that isn't the records', by its execution phase."""
     out = tmp_path / "run"
     device, requests = served(out, tmp_path / "key", process=process, params=WORDED)
@@ -322,7 +322,7 @@ def test_a_run_with_request_words_keeps_each_classes_words_table_and_the_check_h
     assert phases_of(out, WORDED) == [(w, "registration") for w in range(4)]
     records = ws.read_records(out, WORDED)
     held = CR.of_records(WORDED, records["requests"], records["responses"])
-    words = {request: (8, 0, len(prompt)) for request, prompt in zip(requests, PROMPTS)}
+    words = {request: (8, len(prompt)) for request, prompt in zip(requests, PROMPTS)}
     seen = 0
     for w, (doc, salts) in enumerate(crr.read(out, WORDED)):
         releases = [r for stride in held[w] for r in stride]
@@ -334,7 +334,7 @@ def test_a_run_with_request_words_keeps_each_classes_words_table_and_the_check_h
             name = CT.words_name(i)
             assert name == f"words.{i}" == list(entries)[2 + 4 * i + 3]
             assert entries[name]["rows"] == entries[CT.names(i)[2]]["rows"] == filed.count(i) == len(salts[name])
-            assert entries[name]["words"] == 6
+            assert entries[name]["words"] == 4
             assert [CT.words_of(row) for row in laid[name]] == [words[r.request] for r, f in zip(releases, filed)
                                                                 if f == i]
             seen += len(laid[name])
@@ -657,7 +657,7 @@ def test_the_cost_with_request_words_hands_canonical_id_requests_and_lays_each_c
     R, load = worded.phase_releases, crr.loaded(worded, "rows")
     assert load == crr.loaded(small, "rows") == [(CT.request_room(512, 128), 8)] * R
     request = crr._request(worded, 5, *load[0])
-    assert (len(request), CT.request_words(request, 512)) == (load[0][0], (8, 0, 128))
+    assert (len(request), CT.request_words(request, 512)) == (load[0][0], (8, 128))
     assert crr._request(small, 5, *load[0]) == bytes([6]) * load[0][0]
     out = tmp_path / "cost.json"
     assert crr.main([*argv[:1], "--out", str(out), *argv[3:], "--request-words", "--load", "rows", "--phases", "2",

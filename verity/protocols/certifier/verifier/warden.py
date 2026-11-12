@@ -123,8 +123,8 @@ three more tables a class under the same head. Under form 2 those tables hold a 
 no other, at most `WardenParams.phase_releases`, a bound on an execution phase's releases. The hand copies an
 execution phase's ids and makes nothing else: the tables are laid, committed and signed by whoever takes the hand,
 never on the tick. A schedule with **request words** (`WardenParams.request_words`, none by default, with content
-rows under form 2 and a response cap only) has a fourth table a class, of three words of each released request: its
-`max_tokens`, its `ignore_eos` and the count of its prompt's ids, read from the request's bytes in the hand
+rows under form 2 and a response cap only) has a fourth table a class, of two words of each released request: its
+`max_tokens` and the count of its prompt's ids, read from the request's bytes in the hand
 (`content_rows.request_words`) by the form every cell of a released request was held to at ingress, and from nothing
 more of the device or of a server.
 Both are read off its own cells and nothing the server says. It keeps them from the release to the hand that carries

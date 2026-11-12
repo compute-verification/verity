@@ -35,8 +35,8 @@ each is of the class's rows, the held ones first and zero rows after them. Under
 rows and no other, so a class's tables have one count of rows, the execution phase's releases filed in it, at most
 R = `WardenParams.phase_releases`, and none where none is filed; a hand that files more than R in a class is
 refused (`content_rows.tables`). In a schedule with request words a class has a fourth table, `words.i`: at row r
-the three words the network certifier reads from the request of `request.i`'s row r (`content_rows.request_words`:
-its `max_tokens`, its `ignore_eos` and the count of its prompt's ids). `tables` is the filing rule's one caller.
+the two words the network certifier reads from the request of `request.i`'s row r (`content_rows.request_words`:
+its `max_tokens` and the count of its prompt's ids). `tables` is the filing rule's one caller.
 They rest on `trusted-host` as the lengths and fails tables do.
 
 **A row's slots** (`check_slots`): the lengths row's proof block returns the whole row after its two words, and a

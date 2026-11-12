@@ -20,7 +20,7 @@ signed head"): nothing here commits or signs.
 **The words row** of a released connection, in a schedule with request words (`WardenParams.request_words`, which
 a schedule has only with content rows under the lengths rows' form 2 and a response cap):
 
-- `words`: u32 `max_tokens` ‖ u32 `ignore_eos` ‖ u32 the count of the prompt's ids, 12 bytes (`WORDS_ROW`).
+- `words`: u32 `max_tokens` ‖ u32 the count of the prompt's ids, 8 bytes (`WORDS_ROW`).
 
 **A request's words** (`request_words`) are the network certifier's own reading of the request's bytes as it cut
 them, and of nothing a server or a prover says. This is the one statement of the rule:
@@ -34,11 +34,16 @@ them, and of nothing a server or a prover says. This is the one statement of the
   characters after the key `{"max_tokens":`, which the reading holds to that place
   (`active.id_request_max_tokens`). Every released request has it, so the rule has no default to apply. It is the
   number the device reads at ingress under the response cap and holds the response to, so it is at most the cap.
-- `ignore_eos` is 0. The reading holds every byte of the request's head outside its fields' values to the
-  canonical id request's, whose keys are `max_tokens`, `temperature`, `top_p`, `seed`, `stop`, `stream`, `model`,
-  `user` and `prompt`; a value is a number or a name without a quote or a backslash; and after the head come
-  prompt ids, spaces and `]}` alone. So no released request has an `ignore_eos` key, or any other.
-- The count of the prompt's ids is the cells' prompt fields, one id each, at least 1.
+- The count of the prompt's ids is the cells' prompt fields, one id each, at least 1. It is at most its class's P:
+  a canonical id request's length is a function of its prompt's count and B alone and grows with the count, and a
+  release is filed only in a class whose `request_room`, the length at P ids, holds its request (`tables` refuses
+  any other).
+- The row holds no `ignore_eos`, and no released request has one. The reading holds every byte of the request's
+  head outside its fields' values to the canonical id request's, whose keys are `max_tokens`, `temperature`,
+  `top_p`, `seed`, `stop`, `stream`, `model`, `user` and `prompt`; a value is a number or a name without a quote
+  or a backslash; and after the head come prompt ids, spaces and `]}` alone. So a released request has no
+  `ignore_eos` key, or any other: a proof block that reads the table takes `ignore_eos` as the constant 0, a
+  registered value of its Definition, and never as a column.
 
 **A row's size is its class's**, so which class a connection is in is the one thing its rows' sizes say. A class
 is a size of prompt ids P and a size of ids released O, each a power of two of at least `MIN_SIZE`:
@@ -48,7 +53,7 @@ is a size of prompt ids P and a size of ids released O, each a power of two of a
   (`request_bytes`): the canonical id request of P ids in the schedule's B-byte cells (`active.id_request` at offset
   0), whose length is a function of P and B alone and grows with P (`request_room`);
 - an end row is 4 bytes (`END_BYTES`);
-- a words row is 12 bytes (`WORDS_BYTES`), whatever the class.
+- a words row is 8 bytes (`WORDS_BYTES`), whatever the class.
 
 **A response row's ids** (`check_ids`): the response tie's proof block
 (`verity.protocols.certifier.prover.response_tie`) returns the whole row after its verdict, and a proof block's
@@ -58,8 +63,7 @@ among them, is no response row's (`response_of` refuses it).
 
 A decoder (`request_of`, `response_of`, `end_of`, `words_of`) gives back what its encoder was given and refuses,
 naming the field, bytes that are not a row of the form: another size, a count past the row, anything past the
-count, an end row whose class is neither 0 nor 1, a words row whose `ignore_eos` is neither 0 nor 1 or whose
-prompt has no id.
+count, an end row whose class is neither 0 nor 1, a words row whose prompt has no id.
 
 **The classes** (`classes`): a schedule lists its classes in order. A class is its place in the list: two classes
 may have the same sizes, and class i's tables are `request.i`, `response.i` and `end.i`, i from 0 (`names`), and in
@@ -92,8 +96,10 @@ more than O, is refused, never cut short.
 - In a schedule with request words a class's words table holds, at row r, the words of the request of its request
   table's row r. A release filed in a class whose request `request_words` doesn't read is refused, naming the
   release: it is no release of the network certifier's under the schedule. Neither is one whose `max_tokens` is
-  past the schedule's response cap or whose ids are more than its `max_tokens`, which is refused the same way: in
-  every table laid, a words row's `max_tokens` is at most the cap and at least its response row's count.
+  past the schedule's `max_tokens_cap` or whose ids are more than its `max_tokens`, which is refused the same way.
+  These are the builder's own checks of what the device already holds: in every table laid, a words row's
+  `max_tokens` is at most the schedule's and at least its response row's count, and its count of prompt ids is at
+  most its class's P.
 
 **The filing** (`file`): a release's class is the first the schedule lists that holds it. The rule reads the
 release as the network certifier cut it and nothing a server says. It has one caller, `connection_rows.tables`, and
@@ -131,8 +137,8 @@ END_SLOT = struct.Struct("<HH")
 END_BYTES = END_SLOT.size
 #: how a connection ended, an end row's class: in its `END`, or in a `FAIL`
 ENDED, FAILED = 0, 1
-#: a words row: u32 max_tokens ‖ u32 ignore_eos ‖ u32 the count of the prompt's ids
-WORDS_ROW = struct.Struct("<III")
+#: a words row: u32 max_tokens ‖ u32 the count of the prompt's ids
+WORDS_ROW = struct.Struct("<II")
 WORDS_BYTES = WORDS_ROW.size
 #: a count no response row has, since a row's count is at most its ids: what the response tie's proof block returns
 #: as the count of a row it refuses
@@ -254,11 +260,10 @@ def end_of(row: bytes) -> tuple[bool, int]:
     return cls == FAILED, at
 
 
-def request_words(request: bytes, B: int) -> tuple[int, int, int]:
+def request_words(request: bytes, B: int) -> tuple[int, int]:
     """A released request's words (the module docstring's "A request's words"), read from its bytes as the network
-    certifier cut them in B-byte cells: its `max_tokens`, its `ignore_eos`, which is 0, and the count of its
-    prompt's ids. ValueError for bytes the network certifier releases as no request: ones whose cells don't read as
-    a canonical id request's."""
+    certifier cut them in B-byte cells: its `max_tokens` and the count of its prompt's ids. ValueError for bytes
+    the network certifier releases as no request: ones whose cells don't read as a canonical id request's."""
     if not isinstance(request, (bytes, bytearray)) or not request:
         raise ValueError("a released request has a byte")
     lay = io_request.layout(B)
@@ -274,30 +279,28 @@ def request_words(request: bytes, B: int) -> tuple[int, int, int]:
     max_tokens = id_request_max_tokens(bytes(request[:lay.room]))
     if max_tokens is None:  # no first cell that reads is without it
         raise ValueError("the request's first cell has no max_tokens at its place")
-    return max_tokens, 0, prompt
+    return max_tokens, prompt
 
 
-def words_row(max_tokens: int, ignore_eos: int, prompt: int) -> bytes:
-    """The words row of a request of these three words (`request_words`). ValueError for a `max_tokens` that is no
-    u32, an `ignore_eos` that is neither 0 nor 1, or a count of prompt ids that is no u32 of at least 1."""
-    if any(type(x) is not int for x in (max_tokens, ignore_eos, prompt)) or not 0 <= max_tokens < 1 << 32 or \
-            ignore_eos not in (0, 1) or not 1 <= prompt < 1 << 32:
-        raise ValueError(f"a words row is a u32 max_tokens, an ignore_eos of 0 or 1 and a u32 of at least 1 prompt "
-                         f"id, not {max_tokens!r}, {ignore_eos!r}, {prompt!r}")
-    return WORDS_ROW.pack(max_tokens, ignore_eos, prompt)
+def words_row(max_tokens: int, prompt: int) -> bytes:
+    """The words row of a request of these two words (`request_words`). ValueError for a `max_tokens` that is no
+    u32, or a count of prompt ids that is no u32 of at least 1."""
+    if type(max_tokens) is not int or type(prompt) is not int or not 0 <= max_tokens < 1 << 32 or \
+            not 1 <= prompt < 1 << 32:
+        raise ValueError(f"a words row is a u32 max_tokens and a u32 of at least 1 prompt id, not {max_tokens!r}, "
+                         f"{prompt!r}")
+    return WORDS_ROW.pack(max_tokens, prompt)
 
 
-def words_of(row: bytes) -> tuple[int, int, int]:
-    """A words row's reading: the request's `max_tokens`, its `ignore_eos` and the count of its prompt's ids.
-    ValueError naming how the bytes are no words row."""
+def words_of(row: bytes) -> tuple[int, int]:
+    """A words row's reading: the request's `max_tokens` and the count of its prompt's ids. ValueError naming how
+    the bytes are no words row."""
     if len(row) != WORDS_BYTES:
         raise ValueError(f"a words row is {WORDS_BYTES} bytes, not {len(row)}")
-    max_tokens, ignore_eos, prompt = WORDS_ROW.unpack(row)
-    if ignore_eos not in (0, 1):
-        raise ValueError(f"the words row's ignore_eos is {ignore_eos}, not 0 or 1")
+    max_tokens, prompt = WORDS_ROW.unpack(row)
     if not prompt:
         raise ValueError("the words row's prompt has no id")
-    return max_tokens, ignore_eos, prompt
+    return max_tokens, prompt
 
 
 def empty_rows(B: int, P: int, O: int) -> tuple[bytes, bytes, bytes]:
@@ -439,7 +442,7 @@ def tables(params: WardenParams, released: Sequence[Released],
         raise ValueError(f"a class, or None, a release: {len(filing)} for {len(released)} releases")
     B, last, listed = params.cell_bytes, -1, sized(params)
     filed: list[list[Released]] = [[] for _ in listed]
-    words: dict[int, tuple[int, int, int]] = {}
+    words: dict[int, tuple[int, int]] = {}
     for r, i in zip(released, filing):
         if r.order <= last:
             raise ValueError(f"the releases are in release order, and {r.order} follows {last}")
@@ -468,12 +471,12 @@ def tables(params: WardenParams, released: Sequence[Released],
             except ValueError as e:
                 raise ValueError(f"release {r.order}, filed in class {i}, has a request without words: "
                                  f"{e}") from None
-            asked, cap = words[r.order][0], params.max_tokens_cap
-            if asked > cap or r.outputs > asked:
+            asked, most = words[r.order][0], params.max_tokens_cap
+            if asked > most or r.outputs > asked:
                 raise ValueError(f"release {r.order}, filed in class {i}, has a max_tokens of {asked} and "
-                                 f"{r.outputs} ids under a response cap of {cap}: the network certifier releases "
-                                 f"no request whose max_tokens is past the cap and no id past a request's "
-                                 f"max_tokens")
+                                 f"{r.outputs} ids where the schedule's max_tokens_cap is {most}: the network "
+                                 f"certifier releases no request whose max_tokens is past it and no id past a "
+                                 f"request's max_tokens")
     out: dict[str, list[bytes]] = {}
     for i, ((P, O, rows), mine) in enumerate(zip(listed, filed)):
         made = ([request_row(r.request, B, P) for r in mine], [response_row(ids_of(r.ids), O) for r in mine],
