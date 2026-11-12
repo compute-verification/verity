@@ -70,7 +70,8 @@ peaks, which decide which targets run beside which, never what a check computes,
 `cli.heavy`) and `SHARD` (which targets a shard checks and how
 shards' records are joined).  Beside them the key holds the interpreter and its optimization level, the platform, the request (the target, its options, whether the partition invariant applies to it, as the catalog resolved it, and for
 a Definition the digest of every primitive and specialization it reaches, each by its descriptor id and canonical descriptor
-entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment; the task list's, whose build finds the sidecars
+entry, `descriptor`) and the ``VERITY_*`` / ``CIRCUIT_CHECK_*`` environment, less the variables no check or build reads
+(`UNKEYED`, `UNKEYED_PREFIXES`); the task list's, whose build finds the sidecars
 itself, also the modules the registries import for having one (`registries`).  Each target's check runs with a memo of its
 own, so no result an earlier target computed stands in for its reads.
 
@@ -2098,9 +2099,16 @@ def version() -> str:
         _INTERNAL.pop()
 
 
-#: variables of the keyed prefixes that say where test results are kept, not what a check computes: a check slot sets its own
-#: `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in another
-UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S"})
+#: variables of the keyed prefixes that no check or build reads, so no key holds them.  Where test results are kept: a check
+#: slot sets its own `VERITY_TEST_CACHE` (`tools/verity/check/slot.py`), which would keep one slot's reports from counting in
+#: another.  Where this package's suite reads and lists the catalog bindings' records (its ``tests/conftest.py``), and which of
+#: its tests run (a ``skipif``): with them keyed, a record the suite's session has built would never count in `check`'s
+#: circuit-check, nor that one's in the session
+UNKEYED = frozenset({"VERITY_TEST_CACHE", "VERITY_TEST_CACHE_MIN_S", "CIRCUIT_CHECK_RECORDS", "CIRCUIT_CHECK_RECORDS_MANIFEST",
+                     "VERITY_CIRCUIT_CHECK_SLOW"})
+#: the suite runner's own variables (tools/verity/check/suites.py and its guard set them for a suite's tests and every Python
+#: they start): how a suite runs, which only the runner and tests read
+UNKEYED_PREFIXES = ("VERITY_SUITE_",)
 
 
 def key(request: dict) -> dict:
@@ -2116,7 +2124,8 @@ def key(request: dict) -> dict:
         _INTERNAL.pop()
     k = {"schema": SCHEMA, "version": version(), "request": request, "python": python, "optimize": sys.flags.optimize,
          "platform": plat, "environment": {k: v for k, v in sorted(os.environ.items())
-                                           if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED}}
+                                           if k.startswith(("VERITY_", "CIRCUIT_CHECK_")) and k not in UNKEYED
+                                           and not k.startswith(UNKEYED_PREFIXES)}}
     target = request.get("target")
     if isinstance(target, (list, tuple)) and list(target[:1]) == ["task-list"]:
         # the list's build found the sidecars itself (`sidecars.discover`), reading nothing a recording holds
@@ -2600,19 +2609,24 @@ def _fresh(root: Path, p: Path, kind: str | None) -> bool:
     return _MEMO[k]
 
 
-def read(p: Path) -> dict:
+def read(p: Path, named: bool = False) -> dict:
     """The entry at ``p``: its key, its reads by kind as `store` was handed them, and its report; OSError or ValueError when it
-    can't be read."""
+    can't be read, and with ``named`` when its bytes are not those its name digests (`store` names an entry by them, so one
+    copied here cut short or changed is no entry)."""
     with internal():
-        e = json.loads(Path(p).read_text())
+        data = Path(p).read_bytes()
+    if named and hashlib.sha512(data).hexdigest() != Path(p).stem:
+        raise ValueError(f"{p}: its bytes are not the entry its name digests")
+    e = json.loads(data)
     try:
         return {"key": e["key"], "reads": _expand(Path(p), e), "report": e["report"]}
     except (KeyError, TypeError, IndexError, AttributeError) as x:
         raise ValueError(f"{p}: no entry it can read ({type(x).__name__}: {x})") from None
 
 
-def held(paths: Iterable[Path]) -> int:
-    """The bytes the entries at ``paths`` take with the records they are read with, each once: what a copy of them copies."""
+def closure(paths: Iterable[Path]) -> set[Path]:
+    """The entries at ``paths`` with the records they are read with (each one's ``needs``, and those records'), each once and
+    normalized: what a copy of them copies."""
     files: set[Path] = set()
     todo = [Path(p) for p in paths]
     with internal():
@@ -2622,6 +2636,13 @@ def held(paths: Iterable[Path]) -> int:
             files.add(p)
             if isinstance(got := json.loads(p.read_bytes()), dict) and isinstance(needs := got.get("needs"), list):
                 todo += [p.parent / n for n in needs if isinstance(n, str)]
+    return files
+
+
+def held(paths: Iterable[Path]) -> int:
+    """The bytes the entries at ``paths`` take with the records they are read with, each once (`closure`)."""
+    files = closure(paths)
+    with internal():
         return sum(p.stat().st_size for p in files)
 
 
@@ -2916,6 +2937,6 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     return eid
 
 
-__all__ = ["PINS", "READS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "held", "internal", "key",
+__all__ = ["PINS", "READS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "closure", "held", "internal", "key",
            "lookup", "modules_since", "pin_files", "probed", "produced", "read", "recorded_pins", "recording", "registries", "seen",
            "seen_all", "store", "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "unread", "untraced", "version", "warm"]
