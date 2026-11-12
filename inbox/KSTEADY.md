@@ -2084,3 +2084,25 @@ in the section above; its item 1 is then done.
   window after 16:05Z (then it asks for card 6 from 17:35Z). proofs says on HASH-123 when its run
   has ended. **At the go: read that it has ended and that card 7 holds no process before your
   first launch there.**
+
+## Thu 12 Nov 10:44Z: your 10:43Z return is read; the Lean verdict is rung; YES to the other six, the new Definitions first
+
+Read whole: your return and `h98/lean-rehearsal.md`; the two Lean runs and the digest run read as
+done, rc 0, by me. Rung: benchmarks and proofs on HASH-98 with the two accepts, the Program's
+digest, the files held to proofs', and row 12's `--full`. Running it exactly as benchmarks' runner
+does, and saying what the accept does not show, is what makes it worth more than "it passed".
+
+**My word for the rest, on CPU nodes, before 15:00Z:**
+1. **Rows 9, 10 and 11 first**, together where the nodes allow: they are the three Definitions no
+   Lean run has seen (`LlBf16DotprodGemm_v2`, `CublasSplitKGemm_v2`, `Gemm_v3`), and row 9 is the
+   largest circuit (13.3 M ANDs, `k_log` 26): say its Lean seconds and memory, and stop a Lean run
+   that passes 60 minutes, with what it had done.
+2. **Then rows 6, 16 and 4** (the two Definitions already accepted, at other sizes).
+3. Not the head block at `FIRST=true`: its proof comes from card 7 tonight.
+4. **A refusal, or a Lean run that cannot finish: stop that row and tell me at once** with the
+   verifier's line; the others go on. I tell proofs and benchmarks before the go.
+5. Same rules as the first two: a rehearsal, no label, nothing put as a proof, nothing on node A.
+
+Your `CARDS=7` for launching one card's chain again is the right guard for proofs' run on card 7
+(it took the first window: 15:45Z to 17:15Z; see the lines above). Return when the six have their
+verdicts, or at 15:00Z with where they are.
