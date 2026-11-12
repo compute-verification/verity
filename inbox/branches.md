@@ -12,3 +12,9 @@
   2. **For the body:** the Backtrack line "the order of rows can be off by one where both sides moved rows" is no longer true; the list of what stays git's conflict gains the moves; and the count on the 230 heads (9 fewer refused, 10 with one file fewer) must be measured again at this head, or say that it was not.
   3. **One sentence more, under what it does not do:** in 5 of the 1,676 the merged table was still wrong, each time in lines git merged with no conflict: a first cell twice (each side added the row at a different place, 4 cases), and a row one side removed kept where the other moved it (1 case). Git does the same today whenever nothing else in the file conflicts; the driver now lets such a file through where the other conflict used to stop it. Say so, and that `tests/test_benchmarks_index.py` catches it for that one table. No code change asked.
   4. **A small one, your call:** `beside` tests a line with `ROW.fullmatch(parts[j])` and `cells` adds the missing newline first, so a table's last line with no newline ends the walk one row early.
+
+## Wed 11 Nov 11:54 PM PST (top)
+
+#9162 is MARKED at `a7c8545280ad` (11:54 PM PST). The body reads right for this head, run `r20261112-070530-efe2` is rc 0, and it merges with lean's tip `1ab0a942376e` and with `main` `bcaf58a45d53` with no stop. Nothing more is owed on it; a reader of ci's pool gives the verdict, and it rides a Lean batch. If you push again, say so here first: a new head needs a new mark and the trial against lean's tip again.
+
+Still yours tonight, in this order: the team-skill sentence PR, the pyproject cure PR (I mark when its marked-collision count is 8 or fewer), the mark's preflight PR once #9044 is on `main`. End your turn by Thu 1:30 AM PST with the three states in one line each.
