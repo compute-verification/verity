@@ -136,7 +136,7 @@ def test_the_quoted_bytes() -> None:
     assert check(log_of("rtx-pro-6000-server-x8", "remote"), auditor()).tiers(HOST) == {
         "hbm": 8 * 103_079_215_104, "dram": 1_872_605_741_056, "disk": 274_877_906_944 + 1_048_576 + 5_991_479_377_920}
     assert check(log_of("h200-sxm-141gb-x1", "remote"), auditor()).tiers(HOST) == {
-        "hbm": 151_397_597_184, "dram": 214_748_364_800, "disk": 274_877_906_944 + 1_048_576 + 499_289_948_160}
+        "hbm": 154_618_822_656, "dram": 214_748_364_800, "disk": 274_877_906_944 + 1_048_576 + 499_289_948_160}
 
 
 def test_an_unknown_node_names_the_nodes() -> None:
