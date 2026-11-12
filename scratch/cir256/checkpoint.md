@@ -1,0 +1,1 @@
+2026-11-12T12:26Z SESSIONREC: read the brief's list, units.py, conftest.py, cache.py's key/store, cli.py's records/run, check.py's env, the guard; no code yet; writing comment A (interface, questions 1-3) next.
