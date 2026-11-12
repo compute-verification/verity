@@ -37,8 +37,9 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import price_twins as P
-from verity.protocols.pouw.verifier import serving
 from verity_config.settings import of
+
+from verity.protocols.pouw.verifier import serving
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
