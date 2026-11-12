@@ -31,6 +31,9 @@ saved words without one:
            Writes `<out>/glm53_flashmla_fp8_capture.json` and prints, per case and in total, the words compared and the words
            that differ; exit 1 unless every check held and no word differs.
 
+No stage catches a failure: a launch or a comparison that does not finish is its own traceback and non-zero exit, and it
+leaves no `capture/launch.json` (launch) and no record (compare).  A missing listing alone is recorded, as `sass.ok` false.
+
 The cases.  `dT`: T decode tokens, one query row a request (a third of them requests of 2048 rows or more), each with the 2048
 rows its request's indexer would name (all of them, in a random order, then -1, when the request has fewer), at every T where
 the planner's cut of the 32 blocks changes
@@ -474,11 +477,7 @@ def build_cache(lay: dict[str, Any], dev: str, doc: dict[str, Any]):
 
     host = host_cache(lay)
     cache_t = torch.from_numpy(host).to(dev)
-    try:
-        rec = write_cache(cache_t, lay, dev)
-    except Exception as e:  # noqa: BLE001
-        cache_t = torch.from_numpy(host).to(dev)
-        rec = {"by": "numpy", "error": D._error(e)}
+    rec = write_cache(cache_t, lay, dev)
     cache = cache_t.cpu().numpy()
     flat, hflat = cache.reshape(-1, ROW_BYTES), host.reshape(-1, ROW_BYTES)
     mine = np.zeros(flat.shape[0], dtype=bool)
@@ -490,7 +489,7 @@ def build_cache(lay: dict[str, Any], dev: str, doc: dict[str, Any]):
     rec.update(rows_changed=int(changed[mine].sum()), other_rows_changed=int(changed[~mine].sum()),
                rows_at_the_floor_scale=int(np.any(scale == 0x00800000, axis=1).sum()),
                distinct_scale_exponents=int(np.unique(scale >> 23).size))
-    rec["ok"] = rec["by"] != "numpy" and rec["rows_changed"] == rec["rows"] and rec["other_rows_changed"] == 0
+    rec["ok"] = rec["rows_changed"] == rec["rows"] and rec["other_rows_changed"] == 0
     doc["write"] = rec
     return cache_t, cache
 
@@ -545,12 +544,6 @@ def launch_case(case: str, lay: dict[str, Any], ctx: dict[str, Any], outdir: Pat
         torch.cuda.synchronize()
         return buf, ret, lse, m
 
-    def check(fn) -> Any:
-        try:
-            return fn()
-        except Exception as e:  # noqa: BLE001
-            return D._error(e)[:400]
-
     def rerun() -> dict[str, bool]:
         b1, r1, l1, m1 = direct(D.SENTINELS[0])
         b2, _, _, _ = direct(D.SENTINELS[1])
@@ -569,28 +562,28 @@ def launch_case(case: str, lay: dict[str, Any], ctx: dict[str, Any], outdir: Pat
         return bool(tsm.shape[0] == want.shape[0] and np.array_equal(tsm[:, :7], want) and ns.tolist() == list(want_ns))
 
     parts = T.num_sm_parts(H_Q, s_q=t)
-    again = check(rerun)
+    again = rerun()
     rec = {"case": case, "tokens": t, "num_sm_parts": parts, "num_splits": ns.tolist(),
            "call": {k: (list(v.shape) if hasattr(v, "shape") else v) for k, v in kw.items() if k != "tile_scheduler_metadata"},
            "call_dtypes": {k: str(v.dtype) for k, v in kw.items() if hasattr(v, "dtype")}, "lse_shape": list(raw_lse.shape),
-           "splits": check(lambda: list(T.request_splits([T.SchedMeta(*(int(v) for v in m[:7])) for m in tsm],
-                                                         [int(v) for v in ns], 0, TOPK // BN))),
+           "splits": list(T.request_splits([T.SchedMeta(*(int(v) for v in m[:7])) for m in tsm], [int(v) for v in ns], 0,
+                                           TOPK // BN)),
            "checks": {
                "one_call": len(calls) == 1 and not calls[0][0]["args"],
-               "arguments": check(lambda: sorted(kw) == sorted(["q", "k_cache", "block_table", "head_dim_v", "cache_seqlens",
-                                                                "tile_scheduler_metadata", "is_fp8_kvcache", "indices", "softmax_scale"])
-                                  and kw["head_dim_v"] == DV and kw["softmax_scale"] == SCALE and kw["is_fp8_kvcache"] is True
-                                  and list(kw["q"].shape) == [1, t, H_Q, DK] and list(kw["indices"].shape) == [1, t, TOPK]
-                                  and list(kw["k_cache"].shape) == [lay["blocks"], PBS, 1, ROW_BYTES]
-                                  and kw["k_cache"].dtype == torch.uint8),
-               "pad_heads_zero": check(lambda: same(kw["q"][0, :, :NH], q)
-                                       and not bool(kw["q"][0, :, NH:].contiguous().view(torch.int16).any().item())),
+               "arguments": bool(sorted(kw) == sorted(["q", "k_cache", "block_table", "head_dim_v", "cache_seqlens",
+                                                       "tile_scheduler_metadata", "is_fp8_kvcache", "indices", "softmax_scale"])
+                                 and kw["head_dim_v"] == DV and kw["softmax_scale"] == SCALE and kw["is_fp8_kvcache"] is True
+                                 and list(kw["q"].shape) == [1, t, H_Q, DK] and list(kw["indices"].shape) == [1, t, TOPK]
+                                 and list(kw["k_cache"].shape) == [lay["blocks"], PBS, 1, ROW_BYTES]
+                                 and kw["k_cache"].dtype == torch.uint8),
+               "pad_heads_zero": same(kw["q"][0, :, :NH], q)
+                                 and not bool(kw["q"][0, :, NH:].contiguous().view(torch.int16).any().item()),
                "indices": bool(np.array_equal(gidx, global_indices(lay, o))),
-               "returned": check(lambda: lse_ret is None and same(out, raw[0, :, :NH]) and list(raw.shape) == [1, t, H_Q, DV]),
-               **(again if isinstance(again, dict) else {"rerun": again}),
-               "sink_ninf": check(sink_ninf),
+               "returned": lse_ret is None and same(out, raw[0, :, :NH]) and list(raw.shape) == [1, t, H_Q, DV],
+               **again,
+               "sink_ninf": sink_ninf(),
                "sched_shape": tuple(tsm.shape) == (parts, 8) and tuple(ns.shape) == (2,),
-               "sched": check(planner)}}
+               "sched": planner()}}
     torch.cuda.empty_cache()
     return rec
 
@@ -625,58 +618,47 @@ def launch(out: str, quick: bool, min_driver: int, want_cc: str, want_sms: int) 
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
+    # a launch that does not finish leaves no launch record: nothing catches a failure, which is this process's traceback
+    (outdir / "launch.json").unlink(missing_ok=True)
     doc: dict[str, Any] = {"schema": SCHEMA, "argv": sys.argv, "quick": quick, "environment": G._environment(),
                            "gpu_lease_uuid": os.environ.get("GPU_LEASE_UUID"), "gate": C.gate(min_driver, want_cc, want_sms),
-                           "errors": {}, "launches": [], "cases": case_names(quick)}
+                           "launches": [], "cases": case_names(quick)}
     print(f"[glm53-flashmla-fp8] gate {json.dumps(doc['gate'])}", flush=True)
     if not doc["gate"]["ok"]:
         (outdir / "launch.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
         print("GLM53-FLASHMLA-FP8 GATE-FAIL", flush=True)
         raise SystemExit(3)
 
-    def step(name: str, fn):
-        try:
-            return fn()
-        except Exception as e:  # noqa: BLE001
-            doc["errors"][name] = D._error(e)
-            print(f"[glm53-flashmla-fp8] {name} ERROR {doc['errors'][name][:900]}", flush=True)
-            return None
-
     dev = "cuda"
     lay = layout(quick)
     with set_current_vllm_config(VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))):
-        doc["selection"] = step("selection", selection) or {"ok": False}
+        doc["selection"] = selection()
         print(f"[glm53-flashmla-fp8] selection {json.dumps(doc['selection'])[:1500]}", flush=True)
-        doc["stack"] = step("stack", D.stack) or {}
-        built = step("cache", lambda: build_cache(lay, dev, doc))
-        if built is not None:
-            cache_t, cache = built
-            np.save(outdir / "cache.npy", cache)
-            for k in ("lens", "table", "numpy"):
-                np.save(outdir / f"layout_{k}.npy", lay[k])
-            print(f"[glm53-flashmla-fp8] cache blocks={lay['blocks']} requests={len(lay['lens'])} write={json.dumps(doc['write'])[:900]}",
-                  flush=True)
-            from vllm.v1.attention.backends.mla import flashmla_sparse as FS
+        doc["stack"] = D.stack()
+        cache_t, cache = build_cache(lay, dev, doc)
+        np.save(outdir / "cache.npy", cache)
+        for k in ("lens", "table", "numpy"):
+            np.save(outdir / f"layout_{k}.npy", lay[k])
+        print(f"[glm53-flashmla-fp8] cache blocks={lay['blocks']} requests={len(lay['lens'])} write={json.dumps(doc['write'])[:900]}",
+              flush=True)
+        from vllm.v1.attention.backends.mla import flashmla_sparse as FS
 
-            stub = types.SimpleNamespace(dcp_world_size=1, need_to_return_lse_for_decode=False, softmax_scale=SCALE,
-                                         fp8_decode_padded_heads=FS.FlashMLASparseImpl._compute_fp8_decode_padded_heads(NH))
-            stub._fp8_flash_mla_kernel = types.MethodType(FS.FlashMLASparseImpl._fp8_flash_mla_kernel, stub)
-            ctx = {"dev": dev, "cache": cache_t, "stub": stub, "block_table": torch.from_numpy(lay["table"]).to(dev),
-                   "topk_tokens": torch.full((1,), TOPK, dtype=torch.int32, device=dev),
-                   "max_model_len": torch.full((1,), 1 << 20, dtype=torch.int32, device=dev),
-                   "dummy_block_table": torch.empty((1, 1), dtype=torch.int32, device=dev)}
-            for case in doc["cases"]:
-                r = step(f"launch/{case}", lambda case=case: launch_case(case, lay, ctx, outdir))
-                if r is not None:
-                    doc["launches"].append(r)
-                    print(f"[glm53-flashmla-fp8] launch {case:10s} T={r['tokens']} parts={r['num_sm_parts']} splits={r['splits']} "
-                          f"{json.dumps(r['checks'])}", flush=True)
-            doc["readback"] = step("readback", lambda: readback(lay, ctx, outdir)) or {}
-            print(f"[glm53-flashmla-fp8] readback {json.dumps(doc['readback'])}", flush=True)
-    doc.setdefault("selection", {"ok": False})
+        stub = types.SimpleNamespace(dcp_world_size=1, need_to_return_lse_for_decode=False, softmax_scale=SCALE,
+                                     fp8_decode_padded_heads=FS.FlashMLASparseImpl._compute_fp8_decode_padded_heads(NH))
+        stub._fp8_flash_mla_kernel = types.MethodType(FS.FlashMLASparseImpl._fp8_flash_mla_kernel, stub)
+        ctx = {"dev": dev, "cache": cache_t, "stub": stub, "block_table": torch.from_numpy(lay["table"]).to(dev),
+               "topk_tokens": torch.full((1,), TOPK, dtype=torch.int32, device=dev),
+               "max_model_len": torch.full((1,), 1 << 20, dtype=torch.int32, device=dev),
+               "dummy_block_table": torch.empty((1, 1), dtype=torch.int32, device=dev)}
+        for case in doc["cases"]:
+            r = launch_case(case, lay, ctx, outdir)
+            doc["launches"].append(r)
+            print(f"[glm53-flashmla-fp8] launch {case:10s} T={r['tokens']} parts={r['num_sm_parts']} splits={r['splits']} "
+                  f"{json.dumps(r['checks'])}", flush=True)
+        doc["readback"] = readback(lay, ctx, outdir)
+        print(f"[glm53-flashmla-fp8] readback {json.dumps(doc['readback'])}", flush=True)
     (outdir / "launch.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
-    print(f"[glm53-flashmla-fp8] launch done: {len(doc['launches'])} of {len(doc['cases'])} cases, errors={sorted(doc['errors'])}",
-          flush=True)
+    print(f"[glm53-flashmla-fp8] launch done: {len(doc['launches'])} of {len(doc['cases'])} cases", flush=True)
     return doc
 
 
@@ -690,30 +672,27 @@ def compare_tokens(job: dict[str, Any]) -> dict[str, Any]:
     pad head 8's words."""
     rec = {"case": job["case"], "words": 0, "differ": 0, "twin_words": 0, "twin_differ": 0, "pad_words": 0, "pad_differ": 0,
            "first": None}
-    try:
-        outdir = Path(job["dir"])
-        a, cache = _case(outdir, job["case"]), np.load(outdir / "cache.npy", mmap_mode="r")
-        metas = [T.SchedMeta(*(int(v) for v in m)) for m in np.asarray(a["metas"])]
-        splits = T.request_splits(metas, [int(v) for v in np.asarray(a["num_splits"])], 0, TOPK // BN)
-        for t in range(*job["tokens"]):
-            g = np.asarray(a["gidx"][t])
-            q = np.zeros((NH + 1, DK), dtype=np.uint16)
-            q[:NH] = a["q"][t]
-            y = V.decode(q, *rows_at(cache, g), g, SPLITS=splits, QT=QT, BN=BN, DV=DV, SCALE=SCALE)
-            got = np.asarray(a["out"][t], dtype=np.uint16)
-            bad = np.argwhere(y != got[:NH + 1])
-            pad = int((got[NH + 1:] != got[NH]).sum())
-            rec["twin_words"] += int(y.size)
-            rec["twin_differ"] += int(bad.shape[0])
-            rec["pad_words"] += int(got[NH + 1:].size)
-            rec["pad_differ"] += pad
-            if bad.shape[0] and rec["first"] is None:
-                h, i = (int(v) for v in bad[0])
-                rec["first"] = {"token": t, "head": h, "word": i, "twin": int(y[h, i]), "kernel": int(got[h, i]),
-                                "splits": list(splits)}
-        rec["words"], rec["differ"] = rec["twin_words"] + rec["pad_words"], rec["twin_differ"] + rec["pad_differ"]
-    except Exception as e:  # noqa: BLE001
-        rec["error"] = D._error(e)
+    outdir = Path(job["dir"])
+    a, cache = _case(outdir, job["case"]), np.load(outdir / "cache.npy", mmap_mode="r")
+    metas = [T.SchedMeta(*(int(v) for v in m)) for m in np.asarray(a["metas"])]
+    splits = T.request_splits(metas, [int(v) for v in np.asarray(a["num_splits"])], 0, TOPK // BN)
+    for t in range(*job["tokens"]):
+        g = np.asarray(a["gidx"][t])
+        q = np.zeros((NH + 1, DK), dtype=np.uint16)
+        q[:NH] = a["q"][t]
+        y = V.decode(q, *rows_at(cache, g), g, SPLITS=splits, QT=QT, BN=BN, DV=DV, SCALE=SCALE)
+        got = np.asarray(a["out"][t], dtype=np.uint16)
+        bad = np.argwhere(y != got[:NH + 1])
+        pad = int((got[NH + 1:] != got[NH]).sum())
+        rec["twin_words"] += int(y.size)
+        rec["twin_differ"] += int(bad.shape[0])
+        rec["pad_words"] += int(got[NH + 1:].size)
+        rec["pad_differ"] += pad
+        if bad.shape[0] and rec["first"] is None:
+            h, i = (int(v) for v in bad[0])
+            rec["first"] = {"token": t, "head": h, "word": i, "twin": int(y[h, i]), "kernel": int(got[h, i]),
+                            "splits": list(splits)}
+    rec["words"], rec["differ"] = rec["twin_words"] + rec["pad_words"], rec["twin_differ"] + rec["pad_differ"]
     return rec
 
 
@@ -729,28 +708,25 @@ def definition_token(job: dict[str, Any]) -> dict[str, Any]:
     reference evaluator: on the captured queries, the cache rows the token's indices name (any row for an index of -1) and
     the indices."""
     rec = {"case": job["case"], "token": job["token"], "words": 0, "differ": 0, "first": None}
-    try:
-        from verity.circuits.defs import bind
-        from verity.circuits.evaluation import evaluate
-        from verity.definitions.registry import flashmla_dsv32 as R
+    from verity.circuits.defs import bind
+    from verity.circuits.evaluation import evaluate
+    from verity.definitions.registry import flashmla_dsv32 as R
 
-        outdir, t = Path(job["dir"]), job["token"]
-        a, cache = _case(outdir, job["case"]), np.load(outdir / "cache.npy", mmap_mode="r")
-        metas = [T.SchedMeta(*(int(v) for v in m)) for m in np.asarray(a["metas"])]
-        splits = T.request_splits(metas, [int(v) for v in np.asarray(a["num_splits"])], 0, TOPK // BN)
-        target = bind(R.FlashMlaV32Decode, NH=NH, SPLITS=splits, DN=DN, DR=DR, QT=QT, BN=BN, DOT=R.FLASHMLA_GLM53["DOT"], SCALE=SCALE)
-        g = np.asarray(a["gidx"][t])
-        nope, scale, rope = rows_at(cache, g)
-        y = np.asarray(evaluate(target, np.asarray(a["q"][t], dtype=np.uint16).reshape(-1), nope.reshape(-1), scale.reshape(-1),
-                                rope.reshape(-1), g.astype(np.int64).astype(U32)), dtype=np.uint16).reshape(NH, DV)
-        got = np.asarray(a["out"][t][:NH], dtype=np.uint16)
-        bad = np.argwhere(y != got)
-        rec.update(target=target.id, words=int(y.size), differ=int(bad.shape[0]))
-        if bad.shape[0]:
-            h, i = (int(v) for v in bad[0])
-            rec["first"] = {"token": t, "head": h, "word": i, "definition": int(y[h, i]), "kernel": int(got[h, i])}
-    except Exception as e:  # noqa: BLE001
-        rec["error"] = D._error(e)
+    outdir, t = Path(job["dir"]), job["token"]
+    a, cache = _case(outdir, job["case"]), np.load(outdir / "cache.npy", mmap_mode="r")
+    metas = [T.SchedMeta(*(int(v) for v in m)) for m in np.asarray(a["metas"])]
+    splits = T.request_splits(metas, [int(v) for v in np.asarray(a["num_splits"])], 0, TOPK // BN)
+    target = bind(R.FlashMlaV32Decode, NH=NH, SPLITS=splits, DN=DN, DR=DR, QT=QT, BN=BN, DOT=R.FLASHMLA_GLM53["DOT"], SCALE=SCALE)
+    g = np.asarray(a["gidx"][t])
+    nope, scale, rope = rows_at(cache, g)
+    y = np.asarray(evaluate(target, np.asarray(a["q"][t], dtype=np.uint16).reshape(-1), nope.reshape(-1), scale.reshape(-1),
+                            rope.reshape(-1), g.astype(np.int64).astype(U32)), dtype=np.uint16).reshape(NH, DV)
+    got = np.asarray(a["out"][t][:NH], dtype=np.uint16)
+    bad = np.argwhere(y != got)
+    rec.update(target=target.id, words=int(y.size), differ=int(bad.shape[0]))
+    if bad.shape[0]:
+        h, i = (int(v) for v in bad[0])
+        rec["first"] = {"token": t, "head": h, "word": i, "definition": int(y[h, i]), "kernel": int(got[h, i])}
     return rec
 
 
@@ -828,14 +804,16 @@ def compare_probes(outdir: Path, cases: list[str]) -> dict[str, Any]:
 
 def compare(out: str, workers: int, definition: int = 0) -> dict[str, Any]:
     root, outdir = Path(out), Path(out) / "capture"
+    # a comparison that does not finish leaves no record: a worker's failure is raised here, with its traceback
+    (root / RECORD).unlink(missing_ok=True)
     doc = json.loads((outdir / "launch.json").read_text())
     try:
         s = json.loads((root / "sass" / "index.json").read_text())
         doc["sass"] = {"ok": s["ok"], "instance": s["instance"], "library": s["library"],
                        "kept": [{k: e.get(k) for k in ("file", "arch", "image", "function", "instructions", "sha256", "fp_ops")}
                                 for e in s["kept"]]}
-    except Exception as e:  # noqa: BLE001
-        doc["sass"] = {"ok": False, "error": D._error(e)}
+    except (OSError, ValueError, KeyError) as e:  # no listing, or not one `sass` finished: the record says so and is not ok
+        doc["sass"] = {"ok": False, "error": f"{type(e).__name__}: {e}"}
     done = [x["case"] for x in doc["launches"]]
     jobs = [{"dir": str(outdir), "case": x["case"], "tokens": [lo, min(x["tokens"], lo + JOB_TOKENS)]}
             for x in doc["launches"] for lo in range(0, x["tokens"], JOB_TOKENS)]
@@ -846,8 +824,6 @@ def compare(out: str, workers: int, definition: int = 0) -> dict[str, Any]:
     with ProcessPoolExecutor(max_workers=max(workers, 1), mp_context=multiprocessing.get_context("spawn")) as ex:
         for res in (ex.map(compare_tokens, jobs) if workers else map(compare_tokens, jobs)):
             agg = comps[res["case"]]
-            if "error" in res:
-                doc["errors"].setdefault(f"compare/{res['case']}", res["error"])
             for k in keys:
                 agg[k] += res[k]
             agg["first"] = agg["first"] or res["first"]
@@ -856,9 +832,6 @@ def compare(out: str, workers: int, definition: int = 0) -> dict[str, Any]:
         print(f"[glm53-flashmla-fp8] holding {len(djobs)} tokens to FlashMlaV32Decode_v1's evaluator", flush=True)
         held: dict[str, Any] = {"asked": definition, "tokens": 0, "words": 0, "differ": 0, "targets": [], "cases": {}, "first": None}
         for res in (ex.map(definition_token, djobs) if workers else map(definition_token, djobs)):
-            if "error" in res:
-                doc["errors"].setdefault(f"definition/{res['case']}/{res['token']}", res["error"])
-                continue
             c = held["cases"].setdefault(res["case"], {"tokens": [], "words": 0, "differ": 0})
             c["tokens"].append(res["token"])
             for d in (held, c):
@@ -873,18 +846,15 @@ def compare(out: str, workers: int, definition: int = 0) -> dict[str, Any]:
     doc["definition"] = held
     doc["comparisons"] = list(comps.values())
     doc["totals"] = {k: sum(c[k] for c in comps.values()) for k in keys}
-    try:
-        doc["reads"] = compare_probes(outdir, [c for c in ("probe", "probesplit") if c in done])
-    except Exception as e:  # noqa: BLE001
-        doc["errors"]["probes"] = D._error(e)
-        doc["reads"] = {}
+    doc["reads"] = compare_probes(outdir, [c for c in ("probe", "probesplit") if c in done])
     launches_ok = {x["case"]: all(v is True for v in x["checks"].values()) for x in doc["launches"]}
     for c in doc["comparisons"]:
         c["launch_ok"] = launches_ok[c["case"]]
         print(f"[glm53-flashmla-fp8] case {c['case']:10s} words={c['words']} differ={c['differ']} (twin {c['twin_words']}/"
               f"{c['twin_differ']}, pad heads {c['pad_words']}/{c['pad_differ']}) launch_ok={c['launch_ok']} "
               f"first={json.dumps(c['first'])}", flush=True)
-    ok = bool(doc["gate"]["ok"] and not doc["errors"] and doc["selection"].get("ok") is True and doc["sass"].get("ok") is True
+    # `errors`: a launch file written when a failed step was recorded there instead of raised
+    ok = bool(doc["gate"]["ok"] and not doc.get("errors") and doc["selection"].get("ok") is True and doc["sass"].get("ok") is True
               and doc.get("write", {}).get("ok") is True and done == doc["cases"] and all(launches_ok.values())
               and doc.get("readback", {}).get("rerun") is True and doc["totals"]["words"] > 0 and doc["totals"]["differ"] == 0
               and held["differ"] == 0 and (definition == 0 or held["words"] > 0))
@@ -903,7 +873,7 @@ def compare(out: str, workers: int, definition: int = 0) -> dict[str, Any]:
           f"differ={held['differ']} first={json.dumps(held['first'])}", flush=True)
     print(f"GLM53-FLASHMLA-FP8 {'HOLDS' if ok else 'FAILS'} {doc['digest']} words={doc['totals']['words']} "
           f"differ={doc['totals']['differ']} cases={len(done)}/{len(doc['cases'])} launches_failing="
-          f"{[c for c, v in launches_ok.items() if not v]} errors={sorted(doc['errors'])}", flush=True)
+          f"{[c for c, v in launches_ok.items() if not v]}", flush=True)
     return doc
 
 
@@ -924,8 +894,8 @@ def main(argv: list[str] | None = None) -> int:
     if a.stage == "sass":
         return 0 if sass(a.out)["ok"] else 1
     if a.stage == "launch":
-        doc = launch(a.out, a.quick, a.min_driver, a.want_cc, a.want_sms)
-        return 0 if not doc["errors"] and len(doc["launches"]) == len(doc["cases"]) else 1
+        launch(a.out, a.quick, a.min_driver, a.want_cc, a.want_sms)
+        return 0
     return 0 if compare(a.out, a.workers, a.definition)["ok"] else 1
 
 

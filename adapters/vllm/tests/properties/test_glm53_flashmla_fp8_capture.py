@@ -56,7 +56,7 @@ def _fabricate(root, lay, cases: dict[str, dict[str, np.ndarray]], topk: int) ->
     np.save(d / "readback" / "rows.npy", np.concatenate([X.dense_rows(nope, scale), rope], axis=1))
     np.save(d / "readback" / "blocks.npy", np.array(blocks, dtype=np.int32))
     (d / "launch.json").write_text(json.dumps({
-        "schema": X.SCHEMA, "gate": {"ok": True}, "errors": {}, "selection": {"ok": True}, "write": {"ok": True},
+        "schema": X.SCHEMA, "gate": {"ok": True}, "selection": {"ok": True}, "write": {"ok": True},
         "readback": {"rerun": True}, "cases": list(cases), "launches": launches}))
     (root / "sass").mkdir()
     (root / "sass" / "index.json").write_text(json.dumps({"ok": True, "instance": ["000.sm_90a.sass.gz"], "library": {}, "kept": []}))
@@ -229,7 +229,7 @@ def test_the_comparison_takes_the_kernel_words(made) -> None:
     d = made / "capture"
     job = {"dir": str(d), "case": "d3", "tokens": [0, 3]}
     r = X.compare_tokens(job)
-    assert "error" not in r and r["differ"] == 0 and r["words"] == 3 * X.H_Q * X.DV and r["twin_words"] == 3 * (X.NH + 1) * X.DV
+    assert r["differ"] == 0 and r["words"] == 3 * X.H_Q * X.DV and r["twin_words"] == 3 * (X.NH + 1) * X.DV
     out = np.load(d / "d3" / "out.npy")
     good = out.copy()
     try:
@@ -269,7 +269,7 @@ def test_the_definitions_evaluator_takes_the_kernel_words(made) -> None:
         r = X.definition_token({"dir": str(d), "case": "d3", "token": FLIP[0]})
     finally:
         np.save(d / "d3" / "out.npy", good)
-    assert "error" not in r and (r["words"], r["differ"]) == (X.NH * X.DV, 1)
+    assert (r["words"], r["differ"]) == (X.NH * X.DV, 1)
     assert r["target"].startswith("FlashMlaV32Decode_v1{NH=8,SPLITS=(0,1,2),DN=512,DR=64,QT=128,BN=64,")
     assert r["first"] == {"token": FLIP[0], "head": FLIP[1], "word": FLIP[2], "definition": int(good[FLIP]),
                           "kernel": int(good[FLIP]) ^ 1}
@@ -301,6 +301,10 @@ def test_the_record_holds_only_when_no_word_differs(made, capsys) -> None:
             launch.write_text(json.dumps(bad))
             assert not X.compare(str(made), 0)["ok"], path
         bad = json.loads(good)
+        bad["errors"] = {"stack": "boom"}
+        launch.write_text(json.dumps(bad))
+        assert not X.compare(str(made), 0)["ok"]
+        bad = json.loads(good)
         bad["launches"][0]["checks"]["rerun"] = "error"
         launch.write_text(json.dumps(bad))
         assert not X.compare(str(made), 0)["ok"]
@@ -311,18 +315,29 @@ def test_the_record_holds_only_when_no_word_differs(made, capsys) -> None:
     finally:
         launch.write_text(good)
     assert "FAILS" in capsys.readouterr().out
+    index = made / "sass" / "index.json"
+    listing = index.read_text()
+    try:
+        index.unlink()
+        none = X.compare(str(made), 0)
+        assert not none["ok"] and none["sass"]["ok"] is False and none["sass"]["error"].startswith("FileNotFoundError")
+        index.write_text(json.dumps({"ok": False, "instance": [], "library": {}, "kept": []}))
+        assert not X.compare(str(made), 0)["ok"]
+    finally:
+        index.write_text(listing)
     assert doc["definition"] == {"asked": 0, "tokens": 0, "words": 0, "differ": 0, "targets": [], "cases": {}, "first": None}
 
 
 def test_the_record_counts_the_tokens_held_to_the_definition(made, monkeypatch) -> None:
     """`compare`'s count of the tokens held to the Definition, the evaluator stood in for: one token a case, a word that
-    differs fails the record, and so does an evaluation that raised or none at all."""
+    differs fails the record, and so does none at all; an evaluation that raises is raised, and leaves no record."""
     def stub(differ: int, error: bool = False):
         def run(job):
-            r = {"case": job["case"], "token": job["token"], "words": X.NH * X.DV, "differ": differ if job["case"] == "d3" else 0,
-                 "first": {"token": job["token"], "head": 2, "word": 9, "definition": 5, "kernel": 4} if differ else None,
-                 "target": "FlashMlaV32Decode_v1{...}"}
-            return {**r, "error": "boom"} if error and job["case"] == "probe" else r
+            if error and job["case"] == "probe":
+                raise RuntimeError("boom")
+            return {"case": job["case"], "token": job["token"], "words": X.NH * X.DV, "differ": differ if job["case"] == "d3" else 0,
+                    "first": {"token": job["token"], "head": 2, "word": 9, "definition": 5, "kernel": 4} if differ else None,
+                    "target": "FlashMlaV32Decode_v1{...}"}
         return run
 
     monkeypatch.setattr(X, "definition_token", stub(0))
@@ -336,7 +351,9 @@ def test_the_record_counts_the_tokens_held_to_the_definition(made, monkeypatch) 
     assert not doc["ok"] and doc["totals"]["differ"] == 0 and doc["definition"]["differ"] == 1
     assert doc["definition"]["first"] == {"case": "d3", "token": 0, "head": 2, "word": 9, "definition": 5, "kernel": 4}
     monkeypatch.setattr(X, "definition_token", stub(0, error=True))
-    doc = X.compare(str(made), 0, definition=1)
-    assert not doc["ok"] and doc["errors"] == {"definition/probe/0": "boom"} and doc["definition"]["tokens"] == 1
+    assert (made / X.RECORD).exists()
+    with pytest.raises(RuntimeError, match="boom"):
+        X.compare(str(made), 0, definition=1)
+    assert not (made / X.RECORD).exists()
     monkeypatch.setattr(X, "definition_tokens", lambda tokens, n, whole: [])
     assert not X.compare(str(made), 0, definition=1)["ok"]
