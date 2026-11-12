@@ -77043,3 +77043,31 @@ Checked at `origin/main` `d6075b75d289`; owners from `research msg owners --dry-
 A caution for whoever pastes it, from section 1: a comment in a Lean file can still fail a suite where a fixture pins the file's digest. The six pins of `tools/verity/check/pins.py` record 89 paths: none of the twelve is among them, and of my five only `PlanDraw.lean` is [read: each pin's `recorded`, run here on `main`]. So I expect none of the twelve to trip a pin [derived]; a test's own fixture can still read a file in a way no pin lists, which only its suite tells.
 
 Checkpoint: waiting on `35b1` and `a2db`; next entry at their verdicts, or by 08:45Z with their state.
+
+## SESSREAD, Thu 12 Nov 07:48Z: #9173 is ready to mark at `b58c5f59ae01`: the records are regenerated and committed, the records run, the try and both suites runs passed, and the head merges with lean's branch and with `main`, no file named
+
+Mailbox read 07:48Z: no section after 07:17Z [read].
+
+**The ready line:** `research queue ready 9173 --mark --by proofs`. I did not mark. [derived: every check you named has a verdict at this head, below]
+
+- **Head** `b58c5f59ae01fcc4aa63e7faa0ede84a8cae2317` on `cursor/proofs-requests-c632`, three commits on `d6075b75d289`: the Lean with the two hand edits of the lock (`ab9ff6ab3e`), the planner's wording (`93922d4416e7`), the records (`b58c5f59ae01`). #9173 is open, unmarked, no label, its body replaced at 07:46Z (11,560 bytes) and ending `Refs PRF-580`. [run: `git log`, `gh pr view 9173`, `research queue edit`]
+- **Records run `r20261112-064930-f83d`** (`lean_changed.py --records security --update`, `--cwd clone`, at `93922d4416e7`): done, exit 0, SUCCESS. Its verdict for each package it reached: `security/Proofs` PASS (195580 declarations in 3889 modules, axioms `propext`, `Classical.choice`, `Quot.sound`); `security` PASS (27217 declarations in 722 modules, 1120 guarantees), record regenerated; `security/Properties` FAIL first, "every failure is a record difference", then `check.py --update` on it: PASS (3093 declarations in 94 modules, 465 guarantees), record regenerated. A `lean-fast/v1` result: no kernel replay, no tests. [run: its fetched log]
+- **The records commit** is the run's bytes: sha256 `7b5cb2d7…` (`security/lean-audit.json`) and `0d0791ac…` (`security/Properties/lean-audit.json`), equal to its outcome line's. Eight lines move. In `security`: the `unfolded_hash` of `Claims.Sampling.admissibleTwo_rankin_patterns` (its `type_hash` stays), the digest of `reads["Definitions.Claims.SamplingTwoRankin"]` and `AdmissibleTwoRankinPatterns`' hash, and two lines of `shape.inline["NetTiming.SecurityProofs.PooledLeakAccepted"]` the tool wrote in the other order, their text the same. In `security/Properties`: the digest of `domain["Properties.Spot.RequestsCover"]`, the digest of `reads["Properties.Spot.TwoStageCheck"]` and `RequestsCover`'s hash. My hand edits are in the regenerated records as I wrote them: the `why`, the `witnesses` entry naming `rankinTwo_honest`, and no record of `rankinTwoPatterns_honest` (1120 guarantees). [run: `sha256sum`, `git diff`, a key-by-key comparison of the two JSON files]
+- **Try `r20261112-064532-1b54`** of `security/Proofs/Properties/Spot/TwoStageCheck.lean`, whose imports are the other four changed Lean files: done, exit 0 in 1199 s; none of its 32 theorems uses an axiom beyond the three. [run: its fetched log]
+- **Suites `r20261112-065220-79a3`**, `suites.py --changed d6075b75d289 --quick` at `93922d4416e7`: exit 0, "60 suites: 60 passed (3 cached), 0 failed"; `verity/protocols/spot/verifier` 856 passed with its two changed test modules run whole, `benchmarks/spot_figures` 217 passed, `repository` 310 passed. [run: its fetched log]
+- **Suites `r20261112-072910-e76f`**, `suites.py --changed 93922d4416e7 --quick` at `b58c5f59ae01`, the nine suites the records commit touches: exit 0, "9 suites: 9 passed (0 cached), 0 failed", `repository` among them. [run: its fetched log]
+- **Lean's request:** `git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-landing-fc8d HEAD` at `b58c5f59ae01` against `1ab0a942376e` (fetched 07:46Z): exit 0, it printed only the tree `5bb763f38cf9`, no file named. [run]
+- **`main`** is at `bcaf58a45d53` (fetched 07:46Z). Since `d6075b75d289` it changed neither lock, none of the five Lean files and no reader of the two deleted names; the same `merge-tree` against `origin/main` exits 0, no file named. I did not merge `main` in: no run above is at a merged head. [run: `git diff --stat`, `git grep`, `git merge-tree`]
+- **Ratchet gate** `d6075b75d289..b58c5f59ae01`: 1 change, 0 failed. [run]
+- **Compiled, not proved.** No kernel replay by `check.py` has run at this head, and no other agent has red-teamed the two statements. The body says so. [derived]
+
+**What turned out different from your list:**
+
+- Five Lean files, not six: `security/Proofs/Flock/SamplingGeneric.lean:110` needed no edit. [read]
+- `rankinTwoPatterns_honest` is deleted with two hand edits of the lock, as your 07:17Z section confirms; the body's notice says the `witnesses` entry names `rankinTwo_honest` and that one record is gone. [read]
+- `twoStageCheckPatternsSound`'s own record does not move: `RequestsCover` is a `domain` premise read by name, so only that premise's digest and the module's `reads` entry move. That entry is one for the module, shared by nine guarantees (`twoStageCheckPatternsSound`, `twoStageCheckServedSound`, `twoStageCheckSound`, each with `_honest` and `_nontrivial`); the run's first pass names all nine, its `--update` pass names the two that read `RequestsCover`. [run: the records run's log]
+- No pinned string broke: the Python is reworded, the two tests change by a docstring each, and no other copy of the old message is in the tree. [run: `rg`; the suites above]
+
+**Checkpoint for the 12:00Z entry** (the two things PRF-580 leaves open): the F = 2 calculation is done, and a one-file try for the first question, `r20261112-074115-0a8e`, ended exit 0 in 148 s with no axiom beyond the three. The entry follows this one. No run of mine is out. [run]
+
+Tags: [run] a command run now or a run's fetched log, with its id; [read] a place read now; [derived] reasoned, not compiled.
