@@ -19,8 +19,8 @@ Statements only: definitions, no proofs.
   (`wiredOk`).
 * `rowsUnder`, `namesOnce`, `wiresWide`: three conditions the check of the wires does not decide today, each on
   what the verifier holds and none on a unit of a batch.
-* `SecondWiresMove`: at a registration whose descriptor is in the two-stage scope (`descOk`), what the check accepts
-  under the three conditions has a gate for every wired source bit to go to (`wiresMove`).
+* `SecondWiresMove`: at a registration whose two-stage design evaluates (`two`), what the check accepts under the
+  three conditions has a gate for every wired source bit to go to (`wiresMove`). Proved in `WiresMove`.
 
 The check of the wires does not decide `wiresMove h`, which stays a hypothesis of the tie until the check decides the
 three conditions. It places each reader's units in its rows (`SecondStage.fits`) and holds the rows a replay block to
@@ -95,13 +95,14 @@ def circuitsOf (h : Held) : Array (String × _root_.Flock.Circuit) :=
   ((List.range h.ms.length).map fun t => (h.names.getD t "", (h.ms.getD t default).1)).toArray
 
 /-- **What the check of the wires accepts, under the three conditions, moves every wired source bit**: at a
-registration whose descriptor is in the two-stage scope (`descOk`: the replay layout fits and fills the members'
-files), where round 2's check of the wires passes, each run's last row is one of its replay block's rows
-(`rowsUnder`), each name is one template's (`namesOnce`) and each reader's port is no wider than what its writer
-writes (`wiresWide`), every source bit at a port a wire names and no link names has a gate to go to (`wiresMove`). -/
+registration whose two-stage design evaluates (`two`: every proof block is in a replay block, and the replay layout
+gives each replay block's units room in the members' files), where round 2's check of the wires passes, each run's
+last row is one of its replay block's rows (`rowsUnder`), each name is one template's (`namesOnce`) and each
+reader's port is no wider than what its writer writes (`wiresWide`), every source bit at a port a wire names and no
+link names has a gate to go to (`wiresMove`). -/
 def SecondWiresMove : Prop :=
-  ∀ (h : Held) (st : Roots) (rec draw : Lean.Json) (c₀ : FlockDeploy.Coin),
-    descOk h = true → wiresCheckedAt h st rec draw c₀ = true →
+  ∀ (h : Held) (s : AuditStatement) (st : Roots) (rec draw : Lean.Json) (c₀ : FlockDeploy.Coin),
+    (two h s).isSome → wiresCheckedAt h st rec draw c₀ = true →
     rowsUnder (ownOf h st rec draw c₀) = true → namesOnce (partsAt h (h.reg.sample (src c₀)).size) = true →
     wiresWide (circuitsOf h) (ownOf h st rec draw c₀) = true →
       wiresMove h = true
