@@ -23,7 +23,8 @@ product with a block's elements, computed exactly on the tensor cores.
   two values leave its inner product guessable with probability up to `C(u, ⌊u/2⌋)/2^u ≈ √(2/(π u))`, and no more.
 
 Each takes no hypothesis: a condition on its inputs (the vectors differ) is part of the event it bounds, and the bounds
-on the data and the chain's length are in their types. The proofs are in `Security/Proofs/Accounting/Tag/`.
+on the data and the chain's length are in their types. The theorems are in `security/Proofs/Accounting/Sketch.lean`, on
+the lemmas of `security/Proofs/Accounting/Tag/`.
 -/
 
 @[expose] public section
