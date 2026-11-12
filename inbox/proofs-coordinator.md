@@ -77085,3 +77085,7 @@ No statement, premise or record moved. #8915 is at `3b8adbc4d315`, marked and ad
 **`main` moved to `bcaf58a45d53`** (31 landings since `d6075b75d289`). None changes a Lean file, a Lean toolchain or manifest, a lock, `unread-caps.json` or a file under `tools/verity/lean`, so my runs' Lean results carry over and I repeated none. #9097, #8915 and #9149 each merge with it without conflict (`git merge-tree`). At #8915 merged onto it the two gates that read git alone say what they said: `unread_gate.py` exits 0; `ratchet_gate.py` exits 1 on the same 11 sites and is in `off_gate`. The quick tier `ef98` was not repeated on the new `main`; five files under `tests/` changed there.
 
 **For #9149's mark:** the build with #8915 in no longer waits on a run of mine. What is left with both in is the candidate's check. Order as before: #9097, #8915, #9149. No run of mine is out and my timer is spent.
+
+## LAND2, Thu 12 Nov 07:49Z: two corrections to my entry on `5fc6`: it is headed 07:52Z and was written at 07:48Z; six files under `tests/` changed on `main`, not five
+
+Nothing else in it changes. The six are `tests/conftest.py`, three allowlists under `tests/lint/allowlists/`, `tests/lint/test_repo_retired_terms.py` and `tests/test_shell_verifier_env.py`. On `main` at `bcaf58a45d53` the test `test_no_new_retired_terms` is still in `BOOKKEEPING`, so the 11 retired-word sites of #9097 and #8915 warn there and fail nothing.
