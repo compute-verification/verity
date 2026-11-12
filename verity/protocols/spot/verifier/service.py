@@ -2087,8 +2087,9 @@ class Stream:
         `population-order`, and each history table `history` names being a port of the boundary registration's record
         at the root and domain it computed for it (`tables_served`: `interior-table`). Its receipt follows the log as a
         registration's does, and it is logged; it reads no clock.
-        It names no links, wires or rows: the verifier derives them from the replay block's Definition
-        (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`).
+        It names no links, wires or rows, nor what the block returns: the verifier derives them from the replay
+        block's Definition (`second_stage.replay_links`, `second_stage.replay_wires`, `second_stage.replay_rows`,
+        `second_stage.replay_returns`).
         Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
         `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
@@ -2465,7 +2466,8 @@ class Stream:
                      A.session_registered(verdicts), SS.verified_of(verdicts),
                      tuple((t, h) for t, _c, h, _r in named), tuple((t, r) for t, _c, _h, r in named),
                      wires=SS.replay_wires(e.program, descriptor_id(self.replay)),
-                     rows=SS.replay_rows(e.program, descriptor_id(self.replay)))
+                     rows=SS.replay_rows(e.program, descriptor_id(self.replay)),
+                     returns=SS.replay_returns(e.program, descriptor_id(self.replay), reg.record))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements), SS.interior_reads(own, statements or ()))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)

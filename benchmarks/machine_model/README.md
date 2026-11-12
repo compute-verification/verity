@@ -26,7 +26,8 @@ MMA forms, the table route, the headline's designs, the attack families, the dev
 
 ## Interface
 
-What code outside this directory uses, and may. The rest is the model's own and changes with it.
+What code outside this directory uses, and may; each module below lists it in its `__all__`. The rest is the model's
+own and changes with it.
 
 - **The command** `machine-model` ("Commands").
 - **`verity_machine_model.model`**, the data as objects: `DATA` (this `data/`), `device(name)` and `devices()`,
@@ -44,6 +45,12 @@ What code outside this directory uses, and may. The rest is the model's own and 
   `lines(s, peaks)`.
 - **`data/` by path**, for a probe or a calculator that reads one file without the package: `census/`, `rows.csv`,
   `floors.csv`, `table.toml`, `citations.toml`, `designs.toml`, `cover/` and `devices/sm_NN/` ("Layout").
+
+What it uses: scipy (pinned: a vector's margin is read at the vertex its LP solver returns) and numpy; a device's card
+file through `verity.hardware.cards`, imported only where a ceiling is read (`model.card`, the card table, the opcode
+table), so only `theta`, `cover` and `render`'s `theta` section need `verity`; and nothing else of the workspace. A
+design's perplexity arm and a sheet's Lean module are named in the data by path and never read by a computation. It
+measures nothing: no command starts a process, reads the environment or the network, or needs a GPU.
 
 ## Commands
 
@@ -76,6 +83,10 @@ uv run machine-model cover [--holes|--check]   # the opcode table
 
 `--device sm_NN` reads `data/devices/sm_NN/` ("Devices"); `--data DIR` reads any data directory. `solve` exits 1 when
 the vector fails its check or doesn't reproduce a published number.
+
+Every command prints to standard output and writes no file, `sheet --lean` included (it prints the Lean module), with
+one exception: `adopt` rewrites, in the data directory it is given, the census files of the epochs it touches and
+`rows.csv` ("Adopt a probe's census").
 
 ## Layout
 
@@ -127,7 +138,7 @@ the vector fails its check or doesn't reproduce a published number.
 - `model`: reading a data directory: `model() -> Model`, `rows()`, `census(m, epoch) -> Census`, `measured_cost(c)`,
   `vector(name) -> Vector`, `vectors()`, `attacks(m, epoch)`, `floors()`, and `device(name)` / `devices()` for the
   device directories.
-- `lp`: the price LP (Charnes–Cooper; stage 1 U/F_low, stage 2 τ): `solve(...) -> Solution`, `price`, `cost`.
+- `lp`: the price LP (Charnes–Cooper; the first solve U/F_low, the second τ): `solve(...) -> Solution`, `price`, `cost`.
 - `attacks`: `x_of` (an attack's X, its price over its tensor time), `cheapest`, `margin`, `check` (every price at or
   below measured cost, ρ, every credit, every attack at X ≥ x_min), `under_floor` and `priced` (the claims).
 - `resolve`: `resolve(name) -> Resolved`, a named vector re-solved: `tau`, `uf_low`, `margin`, the cheapest attacks,
@@ -157,7 +168,7 @@ An *epoch* is a state of the census and the attacks, named after the vector that
 attack holds from its `since` epoch (empty: the first) through its `until` epoch (empty: the last), so every vector
 re-solves on the data it was published on while new measurements land beside it. An epoch's census lines are a file of
 their own, so the census grows by a file an epoch, and the tests keep every file under a quarter of the repository's 256
-KiB cap. A class's measured cost at an epoch is the largest of its census lines there. A kind with no coefficient on a
+KiB limit. A class's measured cost at an epoch is the largest of its census lines there. A kind with no coefficient on a
 vector's rows is refused, and the check fails on it.
 
 A *row* is a ceiling of the card: one class's rate, a port, or a joint frontier (a facet) of two or more classes. Π is a
