@@ -162,6 +162,7 @@
   "Proofs.Properties.Verity.Sampled.MemberForm",
   "Proofs.Properties.Verity.Recursive.Audit",
   "Proofs.Properties.Verity.Subprotocols",
+  "Proofs.Properties.Verity.InferenceOnly",
   "Proofs.Properties.Verity.Coupling",
   "Proofs.Properties.Flock.Nets"
  ],

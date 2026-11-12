@@ -3613,7 +3613,9 @@
   "Firewall.Record",
   "Firewall.Release",
   "Properties.Challenger",
-  "Properties.Verity.Idle"
+  "Properties.Verity.Idle",
+  "Properties.Remote",
+  "Properties.Nci"
  ],
  "claims": {
   "modules": ["Definitions.Claims", "Definitions.Core.Interaction", "Definitions.Pous.Claims"],
