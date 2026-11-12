@@ -67,7 +67,9 @@ Open premises (`open`):
 - **Lean here**: `lean/` is the Lake package `network_check`, whose library `NetworkCheck` the
   packages at `../device/lean`, `../../onsite/verifier` and `security/Properties` require by path. Its executables:
   - `network-check`, `network-records` and `network-period`, each `id | check PARAMS COMMITMENT EVIDENCE | serve`: the
-    core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`;
+    core protocols `verity/network-certificate/v4`, `verity/network-records/v3` and `verity/certifier/v0`. The public
+    tree has no `network-period`: it runs the period check, which reads the inference-only policy's layout check, which
+    is withheld;
   - `network-records verdicts`, the process `lean_audit` starts and `service` asks (`VERITY_NETWORK_RECORDS_EXE` names
     a built one); `benchmarks/network_e2e` and `benchmarks/network_traces` build and run it;
   - `network-check-difftest INSTANCES PYTHON N`.

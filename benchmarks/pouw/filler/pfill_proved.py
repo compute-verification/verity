@@ -38,13 +38,14 @@ two folds) carry ", fold provisional" in their status.
   python3 benchmarks/pouw/filler/pfill_proved.py OUT_DIR [--json]
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scoring as S
 from pfill_arm import fold_share, fold_status, products_per_slot, theorem_k_setting
 
@@ -106,7 +107,7 @@ def readings(out: Path) -> dict:
     return res
 
 
-def main(argv=None) -> int:
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("out", type=Path)
     ap.add_argument("--json", action="store_true")
