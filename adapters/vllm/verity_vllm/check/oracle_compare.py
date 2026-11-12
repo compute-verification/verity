@@ -34,7 +34,9 @@ import hashlib
 import json
 import os
 from collections import Counter, defaultdict
-from typing import Any, Callable
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 
 # re-exported: the engine-layer tp worker may import this module but not commit/ (tests/lint P9)
 from verity_vllm.commit.opened import ORDINAL_SEP, OPENED_METHOD, OpenedReader, OpeningNotVerified, meta_by_name  # noqa: F401  -- re-exported
@@ -63,7 +65,6 @@ def _contiguous(shape, strides) -> bool:
     return True
 
 
-
 def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
     """The facts that tie an oracle to a Match record: sha256 of match/fold_summary.json, of match/instances.jsonl, of the
     RunHeader line (line 1 of capture/log.jsonl.gz, the created_utc carrier); a missing file is named None (never a placeholder digest),
@@ -71,7 +72,7 @@ def oracle_tie_facts(match_dir: str) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key, rel in (("fold_summary_sha256", "fold_summary.json"), ("instances_sha256", "instances.jsonl")):
         pth = os.path.join(match_dir, rel)
-        out[key] = hashlib.sha256(open(pth, "rb").read()).hexdigest() if os.path.exists(pth) else None
+        out[key] = hashlib.sha256(Path(pth).read_bytes()).hexdigest() if os.path.exists(pth) else None
     lg = os.path.join(match_dir, "capture", "log.jsonl.gz")
     out["run_header_sha256"] = None
     if os.path.exists(lg):
@@ -95,7 +96,7 @@ class MatchOracle:
         for p in (self.snap_path, self.inst_path, self.log_path):
             if not os.path.exists(p):
                 raise FileNotFoundError(f"match oracle: {p} missing (Match stage of this attempt did not write it)")
-        snap = json.load(open(self.snap_path))
+        snap = json.loads(Path(self.snap_path).read_text())
         self.snapshot_steps: set[int] = {int(s) for s in snap.get("steps") or []}
         # (event, alloc) -> [entries]; an entry = spanned storage bytes [byte_offset, byte_offset+nbytes) of one alloc, copied right after the call
         self._snap: dict[tuple[int, int], list[dict]] = defaultdict(list)
@@ -155,12 +156,12 @@ class MatchOracle:
         self._outs_by_step: dict[int, dict[int, list[tuple[int, int, dict]]]] = {}
         self._families_at: dict[tuple[int, str], frozenset[str]] = {}
         tok = os.path.join(cap, "tokens.json")
-        self.tokens_sha256 = hashlib.sha256(open(tok, "rb").read()).hexdigest() if os.path.exists(tok) else None
+        self.tokens_sha256 = hashlib.sha256(Path(tok).read_bytes()).hexdigest() if os.path.exists(tok) else None
         # the ids of every row of every step: prompt ids + generated ids per request (tokens.json) at the StepStart rows' (request, position)
         # -- the runner's ids buffer is a Root of the capture (prompt_token roots), so it is never in a snapshot; this IS its value record
         self.tokens: dict[str, tuple[list[int], list[int]]] = {}
         if os.path.exists(tok):
-            for r in (json.load(open(tok)).get("requests") or []):
+            for r in (json.loads(Path(tok).read_text()).get("requests") or []):
                 self.tokens[str(r.get("request_id"))] = ([int(x) for x in r.get("prompt_token_ids") or []], [int(x) for x in r.get("generated_token_ids") or []])
 
     # ------------------------------------------------------------------ provenance
@@ -208,7 +209,7 @@ class MatchOracle:
     def _file(self, rel: str) -> bytes:
         b = self._files.get(rel)
         if b is None:
-            b = open(os.path.join(self.dir, "capture", rel), "rb").read()
+            b = Path(os.path.join(self.dir, "capture", rel)).read_bytes()
             if len(self._files) > 64:
                 self._files.clear()
             self._files[rel] = b
