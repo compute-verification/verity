@@ -2,7 +2,7 @@
 (`TP2CaptureWorkerExtension.tp2_commit_finalize`, with `_commit_timing`).  The rank fixes its run root once, takes its
 committer off the engine and answers the root with the run's counts, its coverage declaration and where the Commit spent its
 time.  A run of record is also bound, attributed, compared with the Match capture and replayed; a warm-up is none of these.
-A field the committer did not state reads as none: no errors, no collector.  CPU-only: the committer is the production host
+A field the committer did not state reads as none: no errors, no collector.  CPU-only: the committer is the library's host
 committer over `tests.check.opened`'s steps, wrapped so `finalize` hands the commitment the test made, and the rank's
 binding, attribution and replay are stand-ins that say what they were given."""
 from __future__ import annotations
