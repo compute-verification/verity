@@ -8,6 +8,7 @@ import importlib.util
 import io
 import json
 import os
+import random
 import sys
 import tarfile
 import types
@@ -479,6 +480,32 @@ def test_a_recorded_check_sends_the_newest_recorded_checks_packs_as_urls_and_fet
     assert len(nows) == 1 and nows[0] > 1.7e9, "the cutoff is counted back from the time of day, not from a monotonic clock"
     assert "sending presigned URLs for the verdict packs of 2 recorded checks (0 MiB): r-new, r-old" in capsys.readouterr().out
     assert check.verdict_url_file(tmp_path / "none", _Store(tmp_path, {"r-none": None}, signs=True)) is None
+
+
+def test_a_launch_sends_the_packs_of_the_runs_train_carry_from_names_first_held_to_no_gather_bytes(tmp_path, monkeypatch,
+                                                                                                     capsys):
+    """The verified queue names the shards a rebuilt candidate replaces (`TRAIN_CARRY_FROM`): their packs, the passes it
+    reuses whatever the newest checks' selection holds, come first, both of each (the passes stored and those reused), and
+    one too big for `GATHER_BYTES` is sent all the same; one named that published no pack is printed, and a pack sent as
+    named isn't sent again as one of the newest."""
+    check = _load("check")
+    big = random.Random(0).randbytes(8192).hex()
+    packs = _packs(tmp_path, monkeypatch, {"new": {"tests/k1.json": "new"}, "big": {"tests/k2.json": big},
+                                           "used": {"tests/k4.json": "reused"}, "old": {"tests/k3.json": "3"}})
+    store = _Store(tmp_path, {"r-new": packs["new"], "r-big": packs["big"], "r-none": None, "r-old": packs["old"]}, signs=True,
+                   reused={"r-big": packs["used"]})
+    monkeypatch.setattr(check.COMMON, "recent", lambda now: "r20261108-120000")
+    monkeypatch.setattr(check, "GATHER_BYTES", packs["new"].stat().st_size + packs["old"].stat().st_size)
+    newest = [p["run"] for p in json.loads(check.verdict_url_file(tmp_path, store).read_text())]
+    assert newest == ["r-new", "r-old"], "the big pack is passed over by its size where nothing names it"
+    monkeypatch.setenv("TRAIN_CARRY_FROM", "r-big,r-none,r-old")
+    got = json.loads(check.verdict_url_file(tmp_path, store).read_text())
+    assert [(p["run"], p["sha256"]) for p in got] == [("r-big", _sha(packs["big"])), ("r-big", _sha(packs["used"])),
+                                                      ("r-old", _sha(packs["old"])), ("r-new", _sha(packs["new"]))]
+    assert ("check: verdicts: 3 packs of the 2 runs TRAIN_CARRY_FROM names that published one, held to no GATHER_BYTES: "
+            "r-big, r-old; none of r-none") in capsys.readouterr().out
+    monkeypatch.setenv("TRAIN_CARRY_FROM", "")
+    assert [p["run"] for p in json.loads(check.verdict_url_file(tmp_path, store).read_text())] == newest
 
 
 def test_a_launch_lists_the_attempts_started_since_before_the_longest_recorded_check_could(monkeypatch):
