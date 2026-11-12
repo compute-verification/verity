@@ -95727,3 +95727,42 @@ Python and Lean:
 - **So `716bd4cad467`, `ceffc70c0052` and the use of `b7fb9c30eab1` and `fed2063c5d79` on this `main` are still not tried by me.** Lean's own check on its head is the other try of the first and third [guess: I have not read its runs].
 
 Branches: `cursor/proofs-landing-closes-99d1` at `ceffc70c005281a7800ab13636ecc2ccec83e23f`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none.
+
+## FRAME, Thu 12 Nov 18:51Z: #9229 has a new head, `7cab9aeb4422`, pushed and unmarked (CROSSCLOSE: its row is to be read again); `main` `30d6fcc92ff7` is in, the stop closed with both clauses; the merge showed a fault of #9229's own, mended; four runs wait for slots; NOT a ready line yet; #9357's body has no `Lane` line
+
+**The head.** `cursor/proofs-frame-names-3b1e` is at `7cab9aeb44229bd32c7ec8379b47b7fb08bc5602` [run: `git fetch` after the push, 18:48Z]. Two commits over `9e075516baff`, no rebase, no force:
+
+- `0c0cd09b5577`: `main` `30d6fcc92ff7` merged in. One stop, `security/Proofs/Flock/SpotFlock/Code.lean`, as CROSSCLOSE read it [run: `git merge`].
+- `7cab9aeb4422`: one mend the merge showed me, in `benchmarks/two_stage/tests/TwoGuard.lean` (3 lines added, 1 removed). See "A fault of #9229's own" below.
+
+It still holds #9176's head `99f2f3ba2cf1`, which is not on `main`, and lands after it [run: `git merge-base --is-ancestor`].
+
+**The stop** (`Code.lean:53-59`). Both clauses kept, in the order `stmtOk` runs them (`:562-569`, `readsOk` `:522-528`): the statement decodes and its partition and design evaluate; the two records name their registrations' names (`recordsOk`); each template's statement sets up (`sessionOk`); round 1's record lists the sample in order (`interiorOrderOk`) and registers no value of a name the statement's record has (`namesOk`); round 2's statement check; `pinOk`. Each line of the closed text is one side's line, none reworded: #9208's four, then #9229's two [run: the closing script asserts it]. I read the sentence whole against the merged file and it is true of it [read]. Against `main`, `Code.lean` and `Pin.lean` now differ by exactly #9229's own lines: 12 and 3 [run: `git diff --stat`].
+
+**What else of #9208's meets #9229** [read, each; the build is the runs below]:
+
+1. **`stmtOk`'s conjuncts.** #9208 put `recordsOk` fourth, before the templates' loop; #9229 put `namesOk` second in `readsOk`. Different definitions, so git merged both. The proofs that take `stmtOk` apart by position are #9208's and already count its conjunct (`Facts.lean:343`, `Sessions.lean:194`, `:208`). Those that take `readsOk` apart are in files `main` did not touch and take it as #9229 left it (`EntriesAt.lean:511`, `Cap.lean:186`, `Opens.lean:288`); `Pin.lean:185` unfolds both forms whole. `stmtOkHash` and `readsOkHash` in `Pin.lean` have both conjuncts too.
+2. **In meaning, #9208 changes what #9229's conjunct can refuse.** With `recordsOk` in, round 1's record must register exactly `h.interiorNames.values` and the statement's record must name exactly `h.boundaryNames`. So where `recordsOk` passes, `namesOk` passes exactly when no name in `h.interiorNames.values` is in `h.boundaryNames.ports` or `h.boundaryNames.values` [derived: from `recordOk` `:207`, `namesAt` `:190`, `Record.byPort`, `SecondStage.registeredEntry` and `namesOk`; no Lean lemma says it]. The prover can no longer make `namesOk` fail by what it registers. It now refuses every run of a registration whose own held names cross. It is not redundant: `Held` carries no condition that the names are apart, and the lemmas downstream take the fact from `readsOk`. No sentence of #9229's is made false by it.
+3. **The lock.** Against `main`'s, the merged `security/lean-audit.json` differs in 9 keys, all under `reads`, none a guarantee's record, an assumption or a `deployed` entry [run: a key-by-key comparison]. #9229's own: the hash of `SpotFlock.readsOk`, `Spot.SecondStage.namesOk` read for the first time, and two module digests. #9176's: `SpotFlock.codesOk`, `SpotFlock.ownOf`, `Spot.SecondStage.Own`, `Own.fixed`, `Own.supplied`. No other lock differs from `main`'s. The merge driver wrote a digest for `Proofs.Flock.SpotFlock.Code` that is neither side's; whether it is the one the records run writes is that run's to say.
+4. **One sentence of #9208's that I left alone** (`Code.lean:89-92`): "of its outcome step nothing". `Run.run` makes round 2's statement check in its outcome step (`Run.lean:35-42`), and `readsOk` makes three parts of that check (`interiorOrderOk`, `namesOk`, `SecondStage.stmtCodes`). It was already so on `main` for two of the three, it says less than the code does, never more, and it is not #9229's sentence. If you want it mended here, the text is "and of its outcome step only round 2's statement check, as far as `readsOk` makes it".
+
+**A fault of #9229's own, found now and mended.** `TwoGuard.lean` keeps a copy of `readsOk` at the coins' bytes (`readsOkAt`, `:59`), held equal to it by `rfl` (`readsOk_eq`, `:67`), which `stmtOk_split` rests on. #9229 added the names conjunct to `readsOk` and not to the copy. So since #9229's first commit the guard's script could not elaborate at its head [derived: `rfl` between a four-part and a three-part conjunction; I never ran it there]. No check caught it: the guard's test is opt-in (`VERITY_TWO_STAGE_GUARD`), skipped in every suite run, so my runs at `9e075516baff` passed without it. #9208 rewrote the same script on `main` (the names, the stage's coins); our side never touched the file, so git had nothing to stop at. The mend adds the conjunct to the copy and a line to `diag`. The honest run of the toy registers no value in its interior record [derived: `test_guard.py`'s `registered` sets the interior's values to one name it adds itself], so I expect the guard to pass it [guess, until `4d7b` ends].
+
+**The mark and the review.** The change's own diff is not the old one, with or without the mend: patch-id `721993938afa` at the old head, `c10c83b297c2` at the merge alone, `348897b00df6` at the new head [run: `git patch-id --verbatim` of each diff from its merge base]. So by the team skill it needs a new mark and a new review.
+
+**Runs at `7cab9aeb4422`, all four waiting for a slot at 18:50Z** [run: `research status --refresh`]:
+
+| run | what | machine |
+|---|---|---|
+| `r20261112-184437-c197` | records, `lean_changed.py --records security/Proofs --update` | cpu-3 |
+| `r20261112-184628-c222` | Lean tries of `Code.lean` and `Pin.lean`, then a build of the five files that take the checks apart | cpu-7 |
+| `r20261112-184654-0f98` | `suites.py --changed 30d6fcc92ff7 --quick`: the suites the merged change reaches over `main` | cpu-1 |
+| `r20261112-184729-4d7b` | the guard, `guard_node.py --pytest`: the script elaborates and its six tests | cpu-6 |
+
+The launcher's own estimate was a start 14 to 19 minutes after each launch. If they start by 19:05Z I expect the try by 19:20Z and the rest by 19:50Z [guess]. The ready line follows them.
+
+**`main` moved again**, to `0582899c4392`, 17 landings: none touches a file of this change, and no Lean file, lakefile or lock moved. The new head merges onto it with exit 0 [run: `git diff --name-only`, `git merge-tree`, 18:49Z]. I did not merge it in.
+
+**#9357.** Its body has no `Lane` line: the queue's pattern (`LANE_RE`, a line starting `Lane NAME`) matches nothing in it; the only "lane" is mid-sentence on line 34. It ends `Refs PRF-528` and `Goal proofs/weight-security-bridge` [run: `gh pr view`, the pattern applied]. The fix is its author's: `Lane proofs` as a line of the body, by `research queue edit 9357 --body-file`. It is a draft at `bb527fd2e2d2`, and its body says no second reader has read the diff from `ecbbaca17b69` [run]. The entry on the three mended texts is not in this file yet [run: the headings, 18:49Z]; I read them at that head when it is.
+
+I wrote nothing to Linear or Slack, and pushed only to `cursor/proofs-frame-names-3b1e`. The pull request's body still describes the old head; I update it with the ready line.
