@@ -16,9 +16,9 @@ adaptive prover.
 `short_sessions` is PoUB's too (`remote_bandwidth.monitoring`). The periods and δs are the reporting grid's
 (`verity.protocols.reporting`).
 
-A wipe signed `UNCOUNTED` is vacuous until a network certifier counts its egress: `counted` recomputes its bound from a
-covered `wipe-egress/v1` record's `egress_mib` (`wipe_period.certify`, on the session's parameters in the answer's
-profile). Nothing here checks that record's certificates or that its window is the wipe's session.
+A wipe signed `UNCOUNTED` stays vacuous: `counted` refuses every `wipe-egress/v1` record (`REFUSED`), because the memory
+challenger signs its session's times on its monotonic clock and a record's window (`t0_unix_ns`, `t1_unix_ns`) is real
+time handed to the record's writer, so nothing signed says a record covers the wipe's session.
 
 Both statements leave out (`EXCEPT`) each wipe's PRF advantage, δ_net and the egress count's premises, which are named
 assumptions, not numbers, and what the wipe's own bound doesn't cover (`wipe_period.uncertified` of the answer's
@@ -33,11 +33,10 @@ import sys
 from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from verity.protocols.reporting import DELTAS, PERIODS
 
-from . import streamed_wipe as sw
 from . import wipe_period
 
 FORMAT = "verity/wipe-monitoring-period/v1"
@@ -49,6 +48,12 @@ HBM = "gpu-hbm"
 EXCEPT = ("each wipe's PRF advantage (its labels' and coins' PRF, a named assumption), δ_net (the network certifier's "
           "error in the egress count) and the egress count's premises (every link leaving the node counted, its window "
           "the wipe's session), with the guarantee's own (every tier declared, no side channel), over the period's wipes")
+REFUSED = (f"the {EGRESS} record is refused. The memory challenger signs its session's times on its monotonic clock "
+           "(CLOCK_MONOTONIC ns, from an unspecified start). The record's window (t0_unix_ns, t1_unix_ns) is real time "
+           "(Unix ns), handed to the record's writer. So nothing signed says the record covers this wipe's session, and "
+           "comparing the two would compare two clocks. A wipe signed UNCOUNTED stays uncounted until the memory "
+           "challenger signs its session's real-time window: until then give no record (no --egress, egress=None), and "
+           "the table is the wipe's as it was signed")
 
 
 def short_sessions(t: int, p: Fraction, delta: Fraction) -> tuple[int, Fraction]:
@@ -76,25 +81,10 @@ def per_wipe(t: int, eps: Fraction) -> dict[str, Any]:
     return {"except_with": f"T·eps = {float(t * eps):.3g}"}
 
 
-def params_of(profile: Mapping[str, Any]) -> sw.WipeParams:
-    """The session's parameters, as the answer's profile (`wipe_period.profile`) gives them."""
-    return sw.WipeParams(int(profile["labels"]), int(profile["k"]), int(profile["batch"]), int(profile["limit_ns"]),
-                         tuple((str(t), int(b)) for t, b in profile["tiers"]))
-
-
-def counted(answer: Mapping[str, Any], egress: Mapping[str, Any]) -> dict[str, Any]:
-    """`answer`, a wipe signed `UNCOUNTED`, with `wipe_period.certify(p, egress_mib)` for its outputs, `egress` a covered
-    `wipe-egress/v1` record."""
-    if egress.get("format") != EGRESS or not egress.get("covered"):
-        raise ValueError(f"the egress record is not a covered {EGRESS} record: {egress.get('format')}, "
-                         f"covered {egress.get('covered')}, why {egress.get('why')}")
-    public, p = answer["public"], params_of(answer["profile"])
-    if public["egress_mib"] != sw.EGRESS_MAX_UNITS:
-        raise ValueError(f"the wipe's egress was counted when it was signed ({public['egress_mib']} MiB): an egress "
-                         "record replaces only an UNCOUNTED one")
-    if wipe_period.certify(p, public["egress_mib"]) != public:
-        raise ValueError("the answer's profile doesn't give its outputs: certify(p, egress_mib) differs from its public")
-    return dict(answer) | {"public": wipe_period.certify(p, int(egress["egress_mib"]))}
+def counted(answer: Mapping[str, Any], egress: Mapping[str, Any]) -> NoReturn:
+    """Refused (`REFUSED`) for every `answer` and every `egress` record, a covered one over the session's own real-time
+    window included: no record's count replaces the bound of a wipe signed `UNCOUNTED`."""
+    raise ValueError(REFUSED)
 
 
 def memory(profile: Mapping[str, Any]) -> dict[str, Any]:
@@ -118,8 +108,8 @@ def each(public: Mapping[str, Any]) -> dict[str, Any]:
 def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, *,
           egress: Mapping[str, Any] | None = None, deployment: str | None = None) -> dict[str, Any]:
     """The monitoring-period result of one wipe's answer (`wipe_period.answer`'s) when every one of `machines` is wiped
-    as this one was every `cadence_s` seconds; `egress`, a `wipe-egress/v1` record, counts an `UNCOUNTED` wipe's egress
-    (`counted`)."""
+    as this one was every `cadence_s` seconds; `egress`, a `wipe-egress/v1` record, is refused for an accepted wipe
+    (`counted`), since nothing signed ties its window to the wipe's session."""
     head = {"format": FORMAT, "deployment": {"id": deployment, "machines": machines, "cadence_s": cadence_s},
             "deltas": [str(d) for d in DELTAS], "statement": STATEMENT, "verdict": answer.get("verdict"),
             "egress": None if egress is None else {k: egress.get(k) for k in ("link", "egress_bits", "egress_mib",
@@ -128,7 +118,7 @@ def table(answer: Mapping[str, Any], machines: int, cadence_s: int = CADENCE_S, 
         return head | {"each": None, "memory": None, "periods": None,
                        "why": f"the wipe wasn't accepted ({answer.get('reason')}), so it certifies nothing to pool"}
     if egress is not None:
-        answer = counted(answer, egress)
+        counted(answer, egress)
     where = answer["profile"].get("placement")
     leaves = [EXCEPT, *([] if where is None else wipe_period.uncertified(where, None))]
     head |= {"each": each(answer["public"]), "memory": memory(answer["profile"]), "leaves_out": leaves}
@@ -157,7 +147,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("answer", type=Path, help="the wipe's answer, or a leg's wipe.json carrying it")
     ap.add_argument("--machines", type=int, required=True)
     ap.add_argument("--cadence-s", type=int, default=CADENCE_S, help="seconds between one machine's wipes")
-    ap.add_argument("--egress", type=Path, default=None, help=f"a {EGRESS} record counting an UNCOUNTED wipe's egress")
+    ap.add_argument("--egress", type=Path, default=None,
+                    help=f"a {EGRESS} record: refused for an accepted wipe, with the reason")
     ap.add_argument("--deployment", default=None, help="the deployment's name, recorded beside its numbers")
     ap.add_argument("--out", type=Path, default=None)
     a = ap.parse_args(argv)
@@ -171,7 +162,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
-__all__ = ["CADENCE_S", "EGRESS", "EXCEPT", "FORMAT", "HBM", "STATEMENT", "counted", "each", "main", "memory", "params_of",
+__all__ = ["CADENCE_S", "EGRESS", "EXCEPT", "FORMAT", "HBM", "REFUSED", "STATEMENT", "counted", "each", "main", "memory",
            "per_wipe", "pooled_step", "short_sessions", "table"]
 
 if __name__ == "__main__":
