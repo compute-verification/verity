@@ -3651,13 +3651,16 @@ fn with_gpu_src<R>(st: &Stmt, wt: &WitData, f: impl FnOnce(flock_live::gpu_circu
 #[cfg(feature = "gpu")]
 /// A rep's buckets: the device's phases (`t.`), and the host's around it (`h.`: setup, staging the device's inputs, decoding and
 /// serializing the proof), which with `t.total` make up the rep's wall time; and where the units came from: the host
-/// (`host_units`), or the device's level walk (`unit_walk`) or its unit kernel (neither).
+/// (`host_units`), or the device's level walk (`unit_walk`; `unit_cut`: by the unit's cut schedule) or its unit kernel
+/// (neither).
 fn gpu_buckets(st: &Stmt, wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused: bool, native_sha: bool) -> Value {
     json!({"t.witness": ph[0], "t.witness_comp": wph[0], "t.witness_units": wph[1], "t.encoding_commitment": ph[1], "t.link": ph[2],
            "t.zerocheck": ph[3], "t.lincheck": ph[4], "t.ring_switch": ph[5], "t.ligerito": ph[6], "t.total": ph[7],
            "t.arithmetic": ph[3] + ph[4] + ph[5] + ph[6], "h.setup": hph[0], "h.stage": hph[1], "h.decode": hph[2],
            "device_witness": !matches!(wt, WitData::Host(..)), "host_units": matches!(wt, WitData::Dev(_, _, i) if i.is_empty()),
            "unit_walk": matches!(wt, WitData::Dev(_, _, i) if !i.is_empty()) && flock_live::gpu_circuit::unit_walk(st),
+           "unit_cut": matches!(wt, WitData::Dev(_, _, i) if !i.is_empty()) && flock_live::gpu_circuit::unit_walk(st)
+               && flock_live::gpu_circuit::unit_cut(st).is_some(),
            "rep_reused": reused, "native_sha": native_sha,
            "host_slots": match wt { WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) => h.layout(), WitData::Host(..) => "none" },
            "hm96_native": matches!(wt, WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) if !h.hm96_rows.is_empty())})
