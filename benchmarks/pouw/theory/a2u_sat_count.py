@@ -9,11 +9,8 @@ import argparse
 import collections
 import json
 import re
-import sys
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from cpw_sass_count import CC_ARCH, parse  # noqa: E402
+from cpw_sass_count import CC_ARCH, parse
 
 KERNEL = re.compile(r"^([slu]|o\d|tu?)_(\d+)_(\d+)(?:_(\d+))?$")
 
@@ -38,7 +35,9 @@ def count(path: str) -> dict[str, dict[str, dict]]:
 
 def device(path: str) -> tuple[str | None, dict[str, list[float]]]:
     arch, rows = None, collections.defaultdict(list)
-    for line in open(path, encoding="utf-8"):
+    with open(path, encoding="utf-8") as f:
+        lines = f.readlines()
+    for line in lines:
         m = re.match(r"device cc=(\S+)", line)
         if m:
             arch = CC_ARCH.get(m.group(1))
