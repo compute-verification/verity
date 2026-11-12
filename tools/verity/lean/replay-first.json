@@ -1,22 +1,22 @@
 {
-  "schema": "lean-replay-first/v1",
-  "packages": {
-    "security/Proofs": [
-      {
-        "module": "Proofs.Properties.Pouw.PearlPlus.Noise.Gram",
-        "threads": 4,
-        "why": "Each of its theorems is one kernel computation over a whole test vector, which holds its memory until it ends. The replay gives every declaration a task of its own, so at the replay's threads it would hold all of them at once; at these threads it holds no more than the rest of the replay does."
-      },
-      {
-        "module": "Proofs.Properties.Pouw.PearlPlus.Noise.Fa",
-        "threads": 8,
-        "why": "As Noise.Gram: each theorem is one kernel computation over a whole test vector."
-      },
-      {
-        "module": "Proofs.Properties.Pouw.PearlPlus.Noise.Fb",
-        "threads": 8,
-        "why": "As Noise.Gram: each theorem is one kernel computation over a whole test vector."
-      }
-    ]
-  }
+ "schema": "lean-replay-first/v1",
+ "packages": {
+  "security/Proofs": [
+   {
+    "module": "Proofs.Properties.Pouw.PearlPlus.Noise.Gram",
+    "threads": 4,
+    "why": "Each of its theorems is one kernel computation over four rows of the test noise's G, whose state the kernel holds until it ends. The file checks them one after another; the replay checks each declaration as a task of its own, so in the whole replay they are held side by side. In a step of its own at most `threads` of them are."
+   },
+   {
+    "module": "Proofs.Properties.Pouw.PearlPlus.Noise.Fa",
+    "threads": 8,
+    "why": "As Noise.Gram: each of its theorems is one kernel computation over sixteen noise lines of the test noise's F_A."
+   },
+   {
+    "module": "Proofs.Properties.Pouw.PearlPlus.Noise.Fb",
+    "threads": 8,
+    "why": "As Noise.Gram: each of its theorems is one kernel computation over sixteen noise lines of the test noise's F_B."
+   }
+  ]
+ }
 }

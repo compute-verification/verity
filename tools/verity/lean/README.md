@@ -252,6 +252,8 @@ The auditor:
   replay and its cache, the report.
 - `Facts.lean`: the facts `check.py` judges, from the `.olean` files as data; the canonical texts the hashes are of.
 - `Replay.lean`: the kernel replay of a package's declarations, and of its import closure.
+- `replay-first.json`: the modules a package's replay checks first, each in a step of its own at its stated threads
+  (`replay_first`).
 - `Graph.lean`: the import graph of some modules, from their `.olean` headers.
 - `Unread.lean`: what each declaration mentions, for `unread.py` and the audit.
 - `sandbox.sh`: the build sandbox. `setup.sh`: Lean and a package's dependencies on a Linux machine.
