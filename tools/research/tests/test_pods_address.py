@@ -129,28 +129,34 @@ def test_every_call_sent_to_runpod_is_one_log_line_with_the_counts_left(wire, mo
 
 def test_the_api_key_is_in_no_log_line_no_message_and_no_error(wire, monkeypatch, capsys):
     """REST's header and the GraphQL request's URL hold the key. It is written nowhere: not when RunPod's answer repeats the
-    request, not when a failure's own text holds the URL, and not when the command line holds the key."""
+    request, not when a failure's own text holds the URL or the header, and not when the command line holds the key."""
     url = f"https://api.invalid/graphql?api_key={KEY}"
     echo = {"error": f"refused {url} with Authorization: Bearer {KEY}"}
     struck = json.dumps(echo).replace(KEY, "<the API key>")
     monkeypatch.setattr("sys.argv", ["/opt/venv/bin/research", KEY, "pods"])
     invalid = http.client.InvalidURL(f"URL can't contain control characters. '/graphql?api_key={KEY} ' (found at least ' ')")
+    no_ascii = UnicodeEncodeError("ascii", f"POST /graphql?api_key={KEY}\u00e9 HTTP/1.1", 39, 40, "ordinal not in range(128)")
     said = []
-    for failure in ((429, echo, {}), (200, {"errors": [echo]}, GRAPHQL_LEFT), invalid, http.client.IncompleteRead(KEY.encode()),
-                    urllib.error.URLError(f"unreachable: {url}")):
+    for failure in ((429, echo, {}), (200, {"errors": [echo]}, GRAPHQL_LEFT), invalid, no_ascii,
+                    http.client.IncompleteRead(KEY.encode()), urllib.error.URLError(f"unreachable: {url}")):
         wire.rest += [(429, echo, REST_SPENT)]
         wire.graphql += [failure]
         with pytest.raises(runpod.PodError) as both:
             runpod.get(POD)
         said.append(str(both.value).removeprefix(f"GET /pods/{POD} -> HTTP 429: {struck}; "))
-    assert said == [f"GraphQL -> HTTP 429: {struck}", f"GraphQL: [{struck}]",
-                    "GraphQL: the RunPod config's API URL or key holds a character no request can carry", "GraphQL: IncompleteRead",
-                    "GraphQL: URLError: unreachable: https://api.invalid/graphql?api_key=<the API key>"]
+    no_request = "the RunPod config's API URL or key holds a character no request can carry"
+    assert said == [f"GraphQL -> HTTP 429: {struck}", f"GraphQL: [{struck}]", f"GraphQL: {no_request}", f"GraphQL: {no_request}",
+                    "GraphQL: IncompleteRead", "GraphQL: URLError: unreachable: https://api.invalid/graphql?api_key=<the API key>"]
     wire.graphql += [invalid]
-    with pytest.raises(runpod.PodError, match="^GraphQL: the RunPod config's API URL or key holds") as balance:
+    with pytest.raises(runpod.PodError) as balance:
         runpod._graphql("{ myself { clientBalance } }")         # the balance read's callers print what it raises
-    written = "\n".join([*said, str(balance.value), *log_lines(), *capsys.readouterr()])
-    assert KEY not in written and len(log_lines()) == 11 and {ln.split()[-2] for ln in log_lines()} == {"by=research"}
+    wire.rest += [ValueError(f"Invalid header value b'Bearer {KEY}\\n'")]
+    with pytest.raises(runpod.PodError) as header:
+        runpod._request("GET", "/pods")
+    assert [str(balance.value), str(header.value)] == [
+        f"GraphQL: {no_request}", "GET /pods: the RunPod config's API key holds a character no request can carry"]
+    written = "\n".join([*said, str(balance.value), str(header.value), *log_lines(), *capsys.readouterr()])
+    assert KEY not in written and len(log_lines()) == 14 and {ln.split()[-2] for ln in log_lines()} == {"by=research"}
 
 
 def test_the_log_starts_again_past_its_size_and_a_log_that_cannot_be_written_fails_no_call(wire, monkeypatch, tmp_path, capsys):

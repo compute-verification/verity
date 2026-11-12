@@ -198,6 +198,9 @@ def _request(method: str, path: str, body: dict[str, Any] | None = None) -> Any:
         detail = error.read().decode(errors="replace").replace(cfg["apikey"], "<the API key>")[:500]
         what = "not found (terminated, or never existed)" if error.code == 404 else detail
         raise PodError(f"{method} {path} -> HTTP {error.code}: {what}", code=error.code, pod_id=pod_id) from None
+    except ValueError:                          # its text quotes the header it could not send, which holds the key
+        _note_call("rest", method, path, None, None)
+        raise PodError(f"{method} {path}: the RunPod config's API key holds a character no request can carry", pod_id=pod_id) from None
     except (urllib.error.URLError, TimeoutError, OSError) as error:
         _note_call("rest", method, path, None, None)
         raise PodError(f"{method} {path}: {type(error).__name__}: {getattr(error, 'reason', None) or error}", pod_id=pod_id) from None
@@ -222,7 +225,7 @@ def _graphql(query: str) -> Any:
     except urllib.error.HTTPError as error:
         _note_call("graphql", "POST", what, error.code, error.headers)
         raise
-    except http.client.InvalidURL:              # its text quotes the request's target, which holds the key
+    except (http.client.InvalidURL, UnicodeError):      # its text quotes the request's target, which holds the key
         _note_call("graphql", "POST", what, None, None)
         raise PodError("GraphQL: the RunPod config's API URL or key holds a character no request can carry") from None
     except (urllib.error.URLError, TimeoutError, OSError, http.client.HTTPException):
