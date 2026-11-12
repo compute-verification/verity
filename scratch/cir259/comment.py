@@ -59,6 +59,10 @@ def lean(r) -> str:
     L = r.get("lean") or {}
     say = lambda k: (L.get(k) or {}).get("says")
     prog = "the verifier's program is not the one the partition object names"
+    if not L:
+        b = r["circuit_bytes"]
+        return (f"Lean not run: its circuit.txt is {b / 2**30:.1f} GB, and my job held a check to six times that, "
+                f"{b * 6 // 2**30 + 4} GB, over its memory")
     held, ks, v = say("B.statement.held"), say("B.ks-form"), say("B.verify.held")
     od, vd, np = say("B.statement.other-def"), say("B.verify.other-def"), say("B.verify.no-program")
     if (held == "ok, units derived" and ks == "KS-FORM ok" and v == "accepted" and od and prog in od and vd and prog in vd
@@ -85,8 +89,9 @@ def row(part, run, tag, spec):
     name = f"`{spec}`, which is `{r['definition']}`" if spec else f"`census:{r['definition']}`"
     peak = max((v.get("peak_gb") or 0) for v in (r.get("lean") or {"x": {}}).values())
     part = f"`{part}`" if " " not in part else part
+    most = f"; Lean at most {peak:.1f} GB" if r.get("lean") else ""
     return (f"| {part} | {name} | {r['n']} | {r['ands']:,}, {r['k_log']} | {secs(r['stage_wall'])} at {r['stage_peak_gb']:.1f} GB"
-            f" | {lean(r)}; Lean at most {peak:.1f} GB [run: {r['run']}] |")
+            f" | {lean(r)}{most} [run: {r['run']}] |")
 
 
 print("| `PARTS` type | staged with `--bind` as | N | ANDs, `k_log` | staging | Lean verifier, with its partition object and Program |")
