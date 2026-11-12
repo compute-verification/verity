@@ -524,6 +524,29 @@ def test_records_priced_two_ways_give_no_p_and_no_s_and_the_reason_names_both_wa
     assert f"attack 0/final: version 0, {said} by the assumed dtypes (its op log names none), 2 of 2" in G.text(plain)
 
 
+def test_a_record_that_names_a_dtype_in_some_rows_and_none_in_others_is_refused():
+    """A log with rows of both kinds would be counted two ways, the rows that name a dtype in it and the rest by the
+    assumed ones, and neither line a record's pricing is said by would be true of it. No job writes one, so the
+    grade refuses it where it reads the record, naming the record and how many rows of each kind it has, under
+    `--as-if-assumed` too, which would leave the dtypes out and hide it. A record of one kind is read."""
+    attack, ref = [job([OVER, UNDER], 0), job([OVER, UNDER], 1), traced([OVER, UNDER])], [job([UNDER])]
+    both = named(attack[2])
+    log = both["record"]["structures"]["a"]["log"]
+    rows = len(log)
+    assert rows > 2 and (G.dtype_rows(both["record"]), G.dtype_rows(attack[2]["record"])) == ((rows, 0), (0, rows))
+    log[:2] = [row[:6] for row in log[:2]]
+    assert G.dtype_rows(both["record"]) == (rows - 2, 2) and G.names_dtypes(both["record"]) is False
+    refused = (rf"^grade: the record at seed 0, search names a dtype in {rows - 2} of its op log's rows and none in "
+               r"2: .*one record two ways\. No job writes such a log: .*Count the config again with a job of this "
+               r"version$")
+    with pytest.raises(ValueError, match=refused):
+        G.checkpoints(both, "s")
+    for as_if in (False, True):
+        with pytest.raises(ValueError, match=refused):
+            graded([*attack[:2], both], ref, as_if_assumed=as_if)
+    assert G.checkpoints(named(attack[2]), "s") and G.checkpoints(attack[2], "s")
+
+
 def test_as_if_assumed_counts_every_record_by_the_assumed_dtypes_and_says_so_on_every_line(tmp_path, capsys):
     """`--as-if-assumed` on records of both kinds: every figure is the one the same records give with no dtype in
     their op logs, rows of one op and shapes in two dtypes one row. The result is under its own schema, says what it

@@ -24,7 +24,8 @@ no job writes): the grade never reads it and passes it on, beside each record it
   least). C and H are read on one split (`basis`): the final set where the attack and the honest config each have a
   final record, else the search split, and the block says which;
 - **one pricing** (`pricing`): a record whose op log names each op's dtype is counted in those dtypes, and one whose
-  log names none by the assumed ones (`gates.ASSUMED`), which the block says of each record. Records of both kinds
+  log names none by the assumed ones (`gates.ASSUMED`), which the block says of each record. A record whose log
+  names a dtype in some rows and none in others is refused (`one_pricing`). Records of both kinds
   give no p and no S, since C over H would then compare counts priced two ways; the reason names the two ways out
   (`MIXED`): the records without dtypes counted again by a job of this version, or `--as-if-assumed`, which counts
   every record by the assumed dtypes whatever its log names (`without_dtypes`), labels every line it prints as-if
@@ -207,12 +208,32 @@ def macs_log(record: dict, through: int | None) -> dict:
     return {"by": by, "ops": ops}
 
 
+def dtype_rows(record: dict) -> tuple[int, int]:
+    """How many rows of the record's op log name their op's dtype, and how many name none."""
+    named = [len(row) > 6 for s in record["structures"].values() for row in s.get("log", [])]
+    return sum(named), len(named) - sum(named)
+
+
 def names_dtypes(record: dict) -> bool | None:
     """Whether the record's op log names each op's dtype, so its count is priced in them: True where every row
-    does, False where one doesn't (`gates.of_log` then prices that row by the assumed dtype), None for a record
-    with no row."""
-    rows = [row for s in record["structures"].values() for row in s.get("log", [])]
-    return all(len(row) > 6 for row in rows) if rows else None
+    does, False where none does (`gates.of_log` then prices each row by the assumed dtype), None for a record with
+    no row. A log with rows of both kinds is refused where the record is read (`one_pricing`)."""
+    named, bare = dtype_rows(record)
+    return not bare if named or bare else None
+
+
+def one_pricing(run: dict) -> None:
+    """Refuse a job (`run`: its `seed`, its `split` and its `record`) whose op log names a dtype in some rows and none
+    in others: `gates.of_log` would count the first in the dtypes they name and the rest by the assumed ones, one
+    record two ways, and nothing `PRICED` says would be true of it. No job writes such a log: the counter names every
+    row's dtype, a record written before rows did names none, and neither rewrite of a record makes one of both."""
+    named, bare = dtype_rows(run["record"])
+    if named and bare:
+        raise ValueError(
+            f"grade: the record at seed {run['seed']}, {run['split']} names a dtype in {named:,} of its op log's rows "
+            f"and none in {bare:,}: the first would be counted in the dtypes they name and the rest by the assumed "
+            f"ones, one record two ways. No job writes such a log: one of this version names every row's dtype, and "
+            f"a record written before rows did names none. Count the config again with a job of this version")
 
 
 def without_dtypes(record: dict) -> dict:
@@ -262,11 +283,13 @@ def counted(row: dict) -> float | None:
 def checkpoints(run: dict, start: str) -> list[dict]:
     """A job's checkpoints by step (`run`: its `seed`, its `split` and its `record`): each one's loss, the start's
     loss on the job's split and its counted |C| in gates (`counted`), or why it has none. A job from another start, or
-    scored on another split than its place says, is refused, and so is one whose op log names an op in a dtype no
-    Definition prices (`gates.Unpriced`), or names a GEMM float32 while the record states the TF32 switch on
-    (`gates.exact_under_tf32`): the exact product's price is not that job's."""
+    scored on another split than its place says, is refused, and so is one whose op log names a dtype in some rows
+    and none in others (`one_pricing`), names an op in a dtype no Definition prices (`gates.Unpriced`), or names a
+    GEMM float32 while the record states the TF32 switch on (`gates.exact_under_tf32`): the exact product's price is
+    not that job's."""
     where = f"seed {run['seed']}, {run['split']}"
     out = []
+    one_pricing(run)
     exact = gates.exact_under_tf32(run["record"])
     if exact:
         raise ValueError(f"grade: the record at {where} states torch's TF32 switch on, and its op log names GEMM ops "
@@ -559,6 +582,7 @@ def grade(config: dict, starts: dict, runs: list[dict], honest: list[dict],
     me, hon = config["name"], config["honest"]
 
     def job(r: dict) -> dict:
+        one_pricing(r)  # as it was read: with its dtypes left out, a log of both kinds of row is one of none
         counted_as = r | {"record": without_dtypes(r["record"])} if as_if_assumed else r
         return counted_as | {"checkpoints": checkpoints(counted_as, config["start"]),
                              "dtypes": names_dtypes(r["record"]), "as_if": as_if_assumed}

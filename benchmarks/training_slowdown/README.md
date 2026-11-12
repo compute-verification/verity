@@ -376,7 +376,9 @@ trace failed and the same job: the step was not refused, the process that traced
 
 A record is counted in the dtypes its op log names. One whose log names none is counted by the assumed dtypes
 (`gates.ASSUMED`: products and forward or backward elementwise ops in bf16, optimizer and decomposition ops in
-float32), and the block says of each record which it was and the device it ran on. Records of both kinds give no p
+float32), and the block says of each record which it was and the device it ran on. A record whose log names a dtype
+in some rows and none in others is refused, with how many rows of each kind it has: no job writes one, and it would
+be counted two ways. Records of both kinds give no p
 and no S, since C over H would compare a count in one pricing with a count in the other; the reason names the
 records and the two ways out. One is to count the configs whose records name no dtype again, with a job of this
 version. The other is `--as-if-assumed`, which counts every record by the assumed dtypes whatever its log names: its
