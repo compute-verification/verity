@@ -206,7 +206,7 @@ def _family(model_type: str | None, repo: str) -> dict[str, Any] | None:
         return None
     others = sorted({c["repo"] for c in checkpoints() if c["repo"] != repo and c.get("role") and _model_type(c["role"]) == model_type})
     groups = fam.get("params")
-    params = sum(len(v) for v in groups.values() if isinstance(v, dict)) if groups else 0
+    params = sum(len(v) for _, v in groups.items() if isinstance(v, dict)) if groups else 0
     return {"model_type": model_type, "arch": fam["arch"], "facts": len(fam["facts"]), "params": params, "rules": fam["rules"],
             "shared_with": others}
 
