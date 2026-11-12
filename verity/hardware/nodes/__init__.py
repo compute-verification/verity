@@ -7,18 +7,19 @@ A node is a host and the GPUs it carries. Its file names the GPU card and how ma
 at, in ``B/s``, a ceiling), and the interfaces that carry traffic off the node, one table each (``interface.NAME``:
 its ``rate``, the line rate each way in ``bit/s``). A card's own memory is its card's ``store.dram``, whole, and no
 clock or peak of a card is here: those are the cards'. Every number is an entry ``{value, unit, mark, source}`` under
-the cards' rules (``verity.hardware.cards``), and a leaf or an interface with no read on record has no table.
+the cards' rules (``verity.hardware.cards``), and a leaf or an interface with no read on record has no table. A kind
+is the card and its count, never a host's name, and a file names no machine, no address and no provider: whoever
+registers a node gives its host's id (``verity.hardware.site.Registration.node_entry``, which gives no entry of a file
+with no ``dram`` or no ``disk`` leaf, and registers each interface as a boundary link that no certifier splits).
+Stdlib and the cards only.
 
 **A leaf's rate** is the tightest bound on record that holds whatever the node runs. The DRAM leaf's is the host
 card's ``memory.bandwidth_max``, the server's channels. A disk's is its own interface's where the disk states one (a
 drive of the server's own: its link's lanes at their rate, less the coding), and else the host card's
 ``disk.read_max``, the lanes into the server's sockets, which every byte of a disk enters by. That figure of the host
 card bounds the host's disks together too, so ``leaves`` gives it beside each leaf's own, once a tier: a reader that
-adds the leaves' rates of a tier takes the smaller of the sum and the tier's. A provider's limit on a disk and a
-measured rate are no ceiling, and neither is a leaf's rate. A kind is the card and its count, never a host's name, and a file names
-no machine, no address and no provider: whoever registers a node gives its host's id
-(``verity.hardware.site.Registration.node_entry``, which gives no entry of a file with no ``dram`` or no ``disk``
-leaf, and registers each interface as a boundary link that no certifier splits). Stdlib and the cards only.
+adds the leaves' rates of a tier takes the smaller of the sum and the tier's. Neither a limit a provider sets on a
+disk nor a measured rate is a ceiling, so neither is a leaf's rate.
 
 ~~~python
 from verity.hardware import cards, nodes
@@ -116,7 +117,8 @@ def leaves(node: Mapping[str, Any], host: str, card: Mapping[str, Any] | None = 
     its tier's exactly: DRAM has no interface narrower than the server's channels."""
     try:
         card = cards.load(node["host"]["sku"]) if card is None else card
-        stated = [(name, leaf["tier"], leaf["bytes"], leaf.get("rate")) for name, leaf in node.get("memory", {}).items()]
+        stated = [(name, leaf["tier"], leaf["bytes"], leaf.get("rate"))
+                  for name, leaf in node.get("memory", {}).items()]
         together = {tier: _ceiling(card[table][key], f"the host card's {table}.{key}")
                     for tier, (table, key) in TIER.items()}
     except (AttributeError, KeyError, TypeError) as e:
