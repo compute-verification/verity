@@ -94772,3 +94772,105 @@ All of this is against one trial, not pushed: lean's head `238ad6621c27` merged 
 - `r20261112-171809-f6bf` (the closed merge at `main` `4520abe708b0`): 115 of 125 passed, 0 failed.
 
 Branches: `cursor/proofs-landing-closes-99d1` at `ceffc70c005281a7800ab13636ecc2ccec83e23f`; `cursor/proofs-cross-main-closes-51ee` at `199bb09f8a3c7ebe62f69cf155b43151c4e8ef05`. Open choices for you: none of mine. For you to pass on if you wish: #9229 and #9091 each need `main` taken by their workers.
+
+## REFUSE, Thu 12 Nov 18:25Z: PRF-504 checkpoint: network's finding holds on `main`; the change moves three definitions under `reads` in two locks and, as I read the lock, no guarantee's own record; `AcceptMeans` says one thing more through `publicOf`, written up below; one sentence of the brief is inexact for `["prog"]`
+
+Nothing is written, pushed or launched for PRF-504 yet. My mailbox holds no section after 16:30Z [read, 18:25Z].
+
+**What is in the files** (`main` `30d6fcc92ff7`, fetched 18:17Z)
+
+- [read] `verity/protocols/spot/verifier/lean/Spot/OneStage.lean` names neither `rests_on_period_check` nor
+  `tiedThrough`. `Public` (117-121) is `drawn`, `proved`, `bound`, `perTemplate`; `check` builds it at 535-536;
+  `publicJson` (561-566) writes four keys. `Spot/Pieces.lean` 235-238 writes the list in the registration piece.
+- [read] Two places build a `Public`: `OneStage.check` and `Properties.Spot.publicOf`
+  (`security/Properties/Spot.lean:403`). No other Lean names `perTemplate` or `Public.mk`.
+- [read] Five protocols write their answer with `OneStage.publicJson` on `check`'s outcome: `Spot.OneStage.protocol`,
+  `Spot.OneStageZk`'s, `VStarRecursive.Sampled` and `VStarRecursive.Protocol`, and `CoreRemote`. All five answers gain
+  the key where a tied name is let through; none changes where none is.
+- [read] Python that writes a one-stage answer's `public`: the difftest's reference (`test_difftest.py:745`, held to
+  the Lean), `benchmarks/one_stage/replay.py:608`, `benchmarks/one_stage/served_integrity.py:96` and network's
+  `scan_zk.window_answer` (1470, which writes the list today). `replay.py`'s and `served_integrity`'s params never
+  carry `tied` (`replay.params`, 506-514), so their answers have no list to carry.
+- [read] A commit of our lane that never landed did this at the paths before the layout: `0b5884f4c687` (Tue 10 Nov,
+  `cursor/proofs-accountd-prf504-on-6a92`), four files, +56 -14. I redo it by hand at today's paths on a branch of
+  mine and push nothing there.
+
+**The statement question (your step 2's stop): my read is that it does not apply, and here is the write-up for you to judge**
+
+- [read] `Properties.Spot.AcceptMeans` (`security/Properties/Spot.lean:423`) ends
+  `pub = publicOf p e law d n ∧ prof = profileOf p c e d n`. Its own text does not change.
+- [derived] `publicOf` has to change with `Public`: left at the new field's default it would say an acceptance
+  publishes no tied name, and `acceptMeans` would be false wherever R8 lets one through. So it gains one field:
+  `tied := Registration.tiedThrough p.verifier`. What `AcceptMeans` then says that it does not say today: an
+  acceptance publishes exactly the tied names R8 let through. It says nothing less than today.
+- [read] The lock's record of `Properties.Spot.acceptMeans` (`security/Properties/lean-audit.json`) is its signature,
+  `type_hash` `b7d2aff59405`, `unfolded_hash` `c0eec71a7f30` and premises (open: `Properties.Spot.ExpectsV2`);
+  `unwitnessed` lists it by the same two hashes.
+- [derived, from `tools/verity/lean/Facts.lean`'s `canonText` and `readCanon`: a hash names the constants a term
+  uses and puts only matchers and nested proofs in place] neither hash moves: the statement, unfolded once, names
+  `OneStage.check`, `Public` and `publicOf` and holds none of their bodies. The same for
+  `Properties.Spot.bernoulliBounds`, which reads `pub.bound`.
+- [derived; the records run settles it] What regenerates is under `reads`: in `security/Properties/lean-audit.json`,
+  `Spot.OneStage.Public`, `Spot.OneStage.check`, `Spot.OneStage.publicJson` (and module `Spot.OneStage`'s digest)
+  and `Properties.Spot.publicOf` (and module `Properties.Spot`'s digest); in `security/lean-audit.json`, the first
+  three and that module's digest. Of the tree's 41 locks no other names any of them.
+- [read] `check.py`'s review prints "each changed guarantee before and after, and each changed definition a guarantee
+  reads", and the landing message lists changed definitions as well as guarantees. So these four definitions will be
+  listed when it lands, whoever sends what.
+- **What I do:** I go on to the branch and the records run, since nothing lands without your mark. I open no pull
+  request if the run's review prints any guarantee as changed, or any record beyond the ones above: then I stop and
+  write. If you count `publicOf`'s change as the statement's own, tell me in my mailbox and I hold the open.
+
+`publicOf`, before and after (the body's last line and one field; lean's branch changes `d`'s type on the first line):
+
+~~~lean
+    perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
+      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none }
+-- after
+      (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none,
+    tied := Registration.tiedThrough p.verifier }
+~~~
+
+**Which listed statements read `Public` or `publicJson`**
+
+- [read] The lock holds each read definition once and no longer says which guarantee reads it. By name in the
+  properties tree: `Properties.Spot.AcceptMeans`, `BernoulliBounds` and `publicOf`
+  (`security/Properties/Spot.lean`), `security/Properties/Spot/Tables.lean:39`, and through `Spot.OneStage.protocol`,
+  whose `publicJson` field is `publicJson`, `Properties/Remote.lean:143` and `Properties/Challenger.lean:444`.
+- The list by guarantee comes from the records run's facts (each guarantee's reads); it goes in the ready line.
+
+**One sentence of the brief that I read otherwise**
+
+- The brief: "with `["prog"]` or nothing tied the bytes are what they are today". [derived] For `["prog"]` let
+  through that is not so on the Lean side: its answer gains `"rests_on_period_check": ["prog"]`, where today it has no
+  key. That is what Python's `window_answer` writes today and what the issue asks ("absent means none in both
+  languages", the `need` taking absent or exactly `["prog"]`). The bytes stay as today only where nothing is let
+  through: no `tied`, or tied names no two proof blocks share. I build it so: the key exactly when the list is not empty.
+
+**Against lean's branch** (`f3ffe4e2bbcb`; its merge base with `main` is `87fec6c6491b`, so it does not hold `main`'s tip)
+
+- [read] It inserts `ranOut` in `OneStage.lean` between `coinsWhy` and `checkAt`, changes the first line of
+  `publicOf` and of `profileOf`, inserts `_ran_out` after the difftest's `check`, and in `replay.py` changes the
+  last line of `python()`'s `R.check` call.
+- [guess] My edits can stay at least one unchanged line away from each of those; `git merge-tree` on the head says.
+  It is one more reason to leave `replay.py` alone.
+
+**Plan, in order**
+
+1. Branch `cursor/proofs-prf504-tied-<4 hex>` from `origin/main`. Lean: `Public` gains `tied`, `check` sets it,
+   `publicJson` writes the key when it is not empty; `publicOf` gains the field; docstrings that say what an
+   acceptance publishes. The proof of `acceptMeans_iff` closes its last step by `rfl` and should stand as written
+   [guess; the build says].
+2. The difftest: its reference `check` carries the list; a program of two parameters `prog` and `state`, each read by
+   two proof blocks; three cases held Lean to Python through the `sampled-proofs-one-stage` port: both tied (the list
+   `["prog", "state"]` in both answers), only `prog` shared and tied (`["prog"]`), nothing tied (no key, the bytes of
+   today). The Python half I run on the VM by name; the Lean half runs in the suites run.
+3. Two runs through `research run --on auto --as proofs`: the records, `lean_changed.py --records
+   verity/protocols/spot/verifier/lean --update` (it audits that package, then the three whose records read its build:
+   the network certifier's verifier, `security` and `security/Properties`, with `security/Proofs` built for them),
+   with `--cwd clone` as `tools/verity/lean/README.md` writes the fast path and as my `e39d` ran; and
+   `suites.py --changed origin/main --quick` with `--cwd source`. The records run is the fast path: no kernel replay.
+4. Commit the records, `git merge-tree` against `main` and against lean's branch less `main`'s own stops, a close if
+   one is owed, then `research queue open` unmarked and the ready line.
+
+**Not established:** that the build passes; which records the run regenerates; whether the head merges with lean's branch.
