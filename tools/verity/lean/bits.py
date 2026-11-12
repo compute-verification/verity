@@ -7,10 +7,11 @@ PKG is a Lake package with a `lean-audit.json` (a path from the repository's roo
 number is evaluated at, in the columns: the guarantee, its owner, whether its statement bounds a probability, the error
 term, the point and the budget, the bits (−log₂ of the error term there), the source of the number and the row.
 
-A number has one of three sources, strongest first (the README's "Bits"): `proved`, a Lean row at one point and budget,
-which the locks hold none of yet; `computed`, an evaluator in Lean with a soundness property, none yet either; and
-`mirrored`, a Python mirror of one error term (`bits_mirror.py`), printed only while its pins hold. Lines with no number
-come first, then `mirrored`, then ascending bits. A mirrored line's row names the Lean instance, when one is, that bounds
+A number has one of three sources, strongest first (the README, under its commands): `proved`, a Lean row at one point
+and budget, which the locks hold none of yet; `computed`, an evaluator in Lean with a soundness property, none yet either;
+and `mirrored`, a Python mirror of one error term (`bits_mirror.py`), printed only while its pins hold. A mirror evaluates
+one term of a bound (the error column names it), so the guarantee's security in bits is at most the printed figure. Lines
+with no number come first, then `mirrored`, then ascending bits. A mirrored line's row names the Lean instance, when one is, that bounds
 the mirrored expression at that point: `tests/test_bits.py` holds the printed figure under it.
 
 What the locks give is exact: the guarantees, their owners, their hashes. Whether a statement bounds a probability, and

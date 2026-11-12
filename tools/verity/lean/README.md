@@ -69,7 +69,8 @@ that the guarantee's bound at one point and budget is at most a stated figure, w
 reads; no lock holds a row yet. `computed`: an evaluator written in Lean, with a property that it bounds the error term,
 run at a point; none is built yet. `mirrored`: a Python restatement of one error term (`bits_mirror.py`), printed only
 while the hashes it pins in the locks hold, and held under a `norm_num` instance where one exists
-(`tests/test_bits.py`); this is the one built today. Whether a statement bounds a probability, and its error term,
+(`tests/test_bits.py`); this is the one built today. A mirror evaluates one term of a bound, so the guarantee's
+security in bits is at most the printed figure. Whether a statement bounds a probability, and its error term,
 are read from its text and marked `~`; the rest comes from the locks.
 `check.py` exits 0 when every package passes, 1 when one fails, and 2 on a usage error or a refusal.
 
