@@ -25,6 +25,8 @@ import pytest
 
 from tests.lint.vllm_surface import SURFACE
 
+__all__ = ["FakeVllm", "Module", "Unset", "install"]
+
 LIST = "tests/lint/vllm_surface.py"
 
 

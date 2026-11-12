@@ -12,6 +12,9 @@ from __future__ import annotations
 
 from .. import resolver
 
+#: what a test outside this harness may read; the harness reads a check's `NAME`, `applies`, `expected` and `actual` off the module
+__all__ = ["DEFAULT_QUERY"]
+
 NAME = "attempt_provenance"
 TIER = "T0"
 STRENGTH = "strong"
