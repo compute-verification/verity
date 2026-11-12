@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Verity.Sampled.Instance
 public import Lms.Sign
-public import Flock.JsonParse
+public import Base.JsonParse
 
 /-!
 # The live challenger as deployed: a deployment that holds a key, draws its coins and keeps the ledger
@@ -46,6 +46,7 @@ challenger on its auditor host, each field what the host's code does:
 
 namespace Verity.Sampled.LiveDevice
 
+open scoped ENNReal
 open Lean (Json)
 open Spot Spot.Challenger
 open Verity.Sampled.Device (RunSetup Deployment pubOf)
