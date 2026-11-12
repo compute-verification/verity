@@ -577,7 +577,9 @@ noncomputable def macsAt (passes : List Pass) (ε : ℝ) : ℝ := atBy (fun r =>
 /-- **The wrong share counts the untied cells**: a run whose wrong share is at most ε has at most n(ε) untied credited
 cells. Every untied credited cell is a credited cell of a tile its table does not tie, whose ticket counts in the wrong
 share, and the fill bounds the credited cells of tiles of that share. No probability: it is about the run's passes and
-table alone. -/
+table alone, and it needs no premise that the run is held to W. The tile a credited cell lies in is tile `x` of its
+record, whose id is the record's offset plus `x` (`Pass.tile?`'s numbering), and every tile has a width `n > 0`, so
+its ticket is its cells at `cellTicket`. -/
 def UntiedCellsAtMost : Prop :=
   ∀ (R : Run) (ε : ℝ), R.wrongShare ≤ ε → (R.untiedCredited.card : ℝ) ≤ cellsAt R.passes ε
 
