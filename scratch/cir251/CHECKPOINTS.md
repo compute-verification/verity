@@ -1,2 +1,3 @@
 - 2026-11-12T17:49Z resume 2: merging origin/main 15662e7c40 into A (b5edda0392), then B; part 2 runs to follow.
 - 2026-11-12T18:13Z A at 4176404df6 (suites ae82), B at cc269e5261 (suites 372b); scratch merge with CIR-265 3b2b4c2566 (d93f, 66d6); part 2: shards 52f6 6bd2 75a6 6059, opt-in 66fd, caps 35e4.
+- 2026-11-12T18:59Z shards relaunched without --records-manifest (23b5 2b58 1932 1d95; 52f6/6059 failed rc 2 on it, 6bd2/75a6 cancelled); caps 35e4 passed, staging at the caps 481a; long_row tests and pin at A c97c.
