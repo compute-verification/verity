@@ -5,9 +5,15 @@ whole audit's, which `benchmarks/one_stage` runs."""
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 
+import pytest
+
 from verity.protocols.spot.verifier.one_stage import members as M, proofs as PF
+
+#: slow: the first of them builds the executable
+pytestmark = [pytest.mark.slow, pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")]
 
 
 def test_the_refusals_run_answers_a_reason_under_its_own_name_and_exits_1():
