@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-
 from verity_machine_model import skip as K
 from verity_machine_model.eps import design
 from verity_machine_model.model import device
