@@ -176,7 +176,7 @@ def resolve_placement(cell: Cell) -> dict[str, Any]:
     """Both pods' identity from the RunPod API (machine id, public IP) and the address the prover will reach the verifier at."""
     try:
         prover, verifier = PL.from_runpod(cell.prover), PL.from_runpod(cell.verifier or "")
-    except Exception as e:  # noqa: BLE001  (no API, no key, an unknown pod: the separation cannot be shown)
+    except Exception as e:  # no API, no key, an unknown pod: the separation cannot be shown
         raise NotSupported(f"the pods' machine identity is unavailable ({type(e).__name__}: {e}); pass it with --placement FILE") from e
     return {"prover": prover, "verifier": verifier, "link": PL.link_to(cell.verifier_addr or "")}
 
@@ -192,7 +192,7 @@ def probe_pods(cell: Cell) -> dict[str, Any]:
     try:
         p = PL.remote_probe(cell.prover, cell.verifier_addr)
         v = PL.remote_probe(cell.verifier or "")
-    except Exception as e:  # noqa: BLE001  (no ssh, no pod: the exception cannot be shown)
+    except Exception as e:  # no ssh, no pod: the exception cannot be shown
         raise NotSupported(f"the pods share a public IP and could not be probed ({type(e).__name__}: {e})") from e
     plan = cell.placement
     return {"prover": PL.merge(plan.get("prover"), {k: x for k, x in p.items() if k != "link"}),

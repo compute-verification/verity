@@ -13,7 +13,7 @@ import pytest
 from verity_numerical.bench import cell as C
 from verity_numerical.bench import placement as PL
 
-from test_cell import BF16, FLOCK, SEPARATE, _cell, _doc, _real_runs  # noqa: E402
+from test_cell import BF16, FLOCK, SEPARATE, _cell, _doc, _real_runs
 
 REMOTE_PROBE = PL.remote_probe
 
@@ -271,7 +271,11 @@ def test_s4_a_shared_ip_needs_a_tcp_connect_rtt_on_the_links_route(over):
 
 
 def test_s4_the_sessions_rtt_does_not_stand_in_for_the_tcp_connects(tmp_path, probes):
-    slow_session = lambda d: [m.update(value=5.0) for m in d["measurements"] if m["name"] == "net.rtt_ms"]
+    def slow_session(d):
+        for m in d["measurements"]:
+            if m["name"] == "net.rtt_ms":
+                m.update(value=5.0)
+
     fast = {"link": {**PROBES["vy-flock-h100"]["link"], "rtt": {**RTT, "median_ms": 0.03, "min_ms": 0.02}}}
     p, v = _nat_runs(tmp_path, fast, mutate=slow_session)
     res = C.register(_nat_cell(), str(p), str(v), tmp_path / "work", dry_run=True)

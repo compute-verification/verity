@@ -142,7 +142,9 @@ def structured_cases() -> list[Case]:
 
     out = []
     xs = list(BF16_WORDS.values())
-    neg = lambda w: w ^ 0x8000
+    def neg(w: int) -> int:
+        return w ^ 0x8000
+
     one, minus_one = BF16_WORDS["1"], BF16_WORDS["-1"]
     zero = [0] * 16
     for acc in FP32_WORDS.values():
@@ -232,7 +234,7 @@ def boundary_groups() -> list[tuple[str, list[Gfloat]]]:
     """Named ``group_sum`` inputs at the edges: maximal shifts, truncation to zero, exact cancellation, near overflow, subnormal
     accumulators, the all-zero group, the single-term group."""
 
-    p = lambda sign, e, sig: Gfloat(sign, e, sig)
+    p = Gfloat
     top = 65025 << 9  # 255 * 255 << 9: the largest product significand
     groups = [
         ("all zero", [p(False, E_ZERO, 0)] * 9),
