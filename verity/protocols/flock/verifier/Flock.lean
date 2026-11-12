@@ -30,6 +30,7 @@ public import Flock.Verify
 public import Flock.ZkProof
 public import Flock.ZkLigerito
 public import Flock.Zk
+public import Flock.ZkOnePass
 public import Flock.WideLeaf
 public import Flock.With.Hashes
 public import Flock.With.Transcript

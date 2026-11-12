@@ -215,6 +215,59 @@ def foldRows (m : Sparse) (e : Array F128) : Nat → Nat → Array F128 → Arra
 /-- `Xᵀ e`: `out[c] = Σ_{i : c ∈ row i} e[i]` for `c < width`. -/
 def foldT (m : Sparse) (e : Array F128) : Array F128 := m.foldRows e (min m.rows e.size) 0 (Array.replicate m.width 0)
 
+/-- `foldRow` is a fold over the row's entries in order. -/
+theorem foldRow_eq_range' (m : Sparse) (i : Nat) (ei : F128) (fuel t : Nat) (acc : Array F128) :
+    m.foldRow i ei fuel t acc = (List.range' t fuel).foldl (fun a u => a.modify (m.col i u) (· + ei)) acc := by
+  induction fuel generalizing t acc with
+  | zero => rfl
+  | succ k ih => rw [foldRow, ih, List.range'_succ, List.foldl_cons]
+
+/-- A whole row's `foldRow` is a fold over `row`. -/
+theorem foldRow_eq_row (m : Sparse) (i : Nat) (ei : F128) (acc : Array F128) :
+    m.foldRow i ei m.len[i]! 0 acc = (m.row i).foldl (fun a c => a.modify c (· + ei)) acc := by
+  rw [foldRow_eq_range', row, ← Array.foldl_toList, Array.toList_map, List.foldl_map, Array.toList_range,
+    List.range_eq_range']
+  have hl : m.len[i]! = m.len.getD i 0 := by rw [Array.getElem!_eq_getD]; rfl
+  have hc : ∀ u, m.col i u = rd32 m.data (m.start.getD i 0 + 4 * u) := fun u => by rw [col, Array.getElem!_eq_getD]; rfl
+  simp only [hl, hc]
+
+/-- `v + ⟨lo, hi⟩` (`addCell_eq`), as a call that owns `v`: compiled, the sum is written into `v`'s own cell when nothing
+else holds it, and `Array.modify` hands the call a cell it has taken out of the array. Written in the loop (`· + ei`) the
+compiled code tests the cell while the array still holds it, and every entry allocates a new one. -/
+@[noinline] def addCell (lo hi : UInt64) (v : F128) : F128 := ⟨v.lo ^^^ lo, v.hi ^^^ hi⟩
+
+theorem addCell_eq (ei v : F128) : addCell ei.lo ei.hi v = v + ei := rfl
+
+/-- `foldRows` (`foldRows_eq_fast`), each row's entries read in place (`rowFold`) and each added into its column's own
+cell (`addCell`): a column's cell is allocated once, when the column is first reached, and no entry after that allocates. -/
+def foldRowsFast (m : Sparse) (e : Array F128) : Nat → Nat → Array F128 → Array F128
+  | 0, _, acc => acc
+  | fuel + 1, i, acc =>
+    let ei := e[i]!
+    foldRowsFast m e fuel (i + 1)
+      (if ei.isZero then acc else
+        let lo := ei.lo
+        let hi := ei.hi
+        m.rowFold i (fun a c => a.modify c (addCell lo hi)) acc)
+
+theorem foldRows_eq_fast (m : Sparse) (e : Array F128) (fuel i : Nat) (acc : Array F128) :
+    m.foldRows e fuel i acc = m.foldRowsFast e fuel i acc := by
+  induction fuel generalizing i acc with
+  | zero => rfl
+  | succ k ih =>
+    rw [foldRows, foldRowsFast, ih]
+    simp only [rowFold_eq, foldRow_eq_row]
+    rfl
+
+/-- `foldT` on `foldRowsFast`. -/
+def foldTFast (m : Sparse) (e : Array F128) : Array F128 :=
+  m.foldRowsFast e (min m.rows e.size) 0 (Array.replicate m.width 0)
+
+/-- Compiled code runs the fast fold; the kernel and every proof see `foldT`. -/
+@[csimp] theorem foldT_eq_fast : @foldT = @foldTFast := by
+  funext m e
+  rw [foldT, foldTFast, foldRows_eq_fast]
+
 /-- `Mat(X)` of the circuit digest (`Flock.Statement`), appended to `buf`, flushing into `h` every 64 KiB. -/
 def absorbMat (m : Sparse) (rows : Nat) (h0 : Blake3.Hasher) (buf0 : ByteArray) : Blake3.Hasher × ByteArray := Id.run do
   let mut h := h0
