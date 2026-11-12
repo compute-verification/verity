@@ -1122,3 +1122,19 @@ accepted a wide-leaf session of your prover with its Program at m = 25 on a merg
 itself starts at m = 32. And for a templated statement over several tables the prover's repetition
 domain and the Lean's differ (`flock-circuit-tmpl/…` against `flock-circuit/…`, on `main` for
 fast100 too): proofs files it; do not change it.
+
+## Thu 12 Nov 07:03Z: for Thursday AFTER your screen (17:30Z on): #8671 is rebuilt on lean's merge head; not before
+
+**vllm answered (HASH-61, 07:01Z): #8671 still waits for `remote`, which reaches `main` through lean's
+merge (LEAN-249); lean makes that merge today at 12:00Z and it lands early Fri.** Do NOT rebuild #8671
+on `main`: a change to `int8_fused` landing first is one more thing for lean's merge to close.
+
+- **After your screen on Thursday:** rebuild #8671 (`cursor/kernels-exactlin-one-kernel-7c3e`,
+  `a4b42d12aa8a`, HASH-61: `exactlin`'s gate and overhead arms run the served int8 kernels, the copy
+  deleted) on the merge's head, `cursor/lean-remote-merge-fc8d` or the crossed head lean names on
+  LEAN-249; run the suites it touches there; post the rebuilt head on VLLM-264 for vllm's read (a
+  worker comment, and tell me: I ring). It stays a draft, unmarked; I mark it the hour lean's merge
+  is on `main` and vllm has read it.
+- **Why Thursday:** it is the last of kernels' branches not across the move, and that goal is due
+  Thu 6 PM PST (Fri 02:00Z): rebuilt, its tests passing, a draft as it was, is that goal done.
+- If lean's merge head does not exist by 17:30Z, say so and do HASH-111 instead; I ask lean.
