@@ -41,6 +41,7 @@ from verity_vllm.acquire.sources.hidden_source import (
     fa3_tile,
     mat_total_words,
 )
+from verity_vllm.pipeline.telemetry import admission as plan
 
 SCHEMA = "verity-sweep/admission/f-da-15/v1"
 LEVELS_FACTOR = 1.25          # raw x1.25 for the merkle levels pinned beside the raw bytes
@@ -179,7 +180,6 @@ def committer_resident(workload: dict[str, Any], host_cap_bytes: int | None, *, 
     """What the Commit holds beside the pinned pool at its peak, from the row planner's commit stage (`telemetry.admission.predict`):
     the C2 Programs and match oracle, the leaf digests, the binding index, the forked replay workers, the serving base and the margins.
     #23 B64 Llama: pool 183,694 MiB + resident 122,745 MiB; the pool alone fit the 239,372 MiB limit and the run OOM'd at it."""
-    from verity_vllm.pipeline.telemetry import admission as plan
     cfg = plan.row_config_from_workload(workload, pairs=max(1, int(pairs)), replay_workers=replay_workers, host_limit_bytes=host_cap_bytes)
     cfg.host_cpus = os.cpu_count() or cfg.host_cpus
     commit = plan.predict(cfg)["commit"]
