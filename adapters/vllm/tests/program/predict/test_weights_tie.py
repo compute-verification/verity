@@ -26,6 +26,7 @@ from verity_vllm.program.predict import weights_tie as WT
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.protocols.pouw.h1 import registered as H1R
 
+from verity.protocols.spot.verifier import service as SV
 from verity.protocols.spot.verifier.one_stage import draw as D
 from verity.protocols.spot.verifier.one_stage import registered as G
 from verity.protocols.spot.verifier.one_stage import registration as R
@@ -35,7 +36,8 @@ from verity.commitments.gates.sha512 import IV
 from verity.commitments.windows import interface as IF
 from verity.commitments.windows import rows as CS
 
-LAW, CAP = D.parse_design("work:1"), 16
+#: the tie's rule, the rate its records audit states to its stream, and the sampling design it names over TINY's tie
+LAW, DESIGN, CAP = "work-rate:1/613", D.parse_design("work:1"), 16
 EMBED = "model.embed_tokens.weight"
 
 
@@ -59,7 +61,7 @@ def _unopened(win: IF.Window, c: CS.Committed, d: Path, pins: dict[str, dict]) -
     """Lean's registered reads of the written window ``d`` on the host (`Flock.Registered.checkPort`), from its records
     and the verifier's ``pins`` alone: each member's ports, ``(member, port)``, whose table rows' ``b || c`` don't open
     the pinned root at their stated positions."""
-    mine, doc = IF.of_records(d, LAW, IF.resolve)
+    mine, doc = IF.of_records(d, DESIGN, IF.resolve)
     files = IF.registered_reads(doc, mine, pins, registered=G)
     assert set(files) == {m.key for m in mine.members}
     written, bad = json.loads((d / "window.json").read_text()), set()
@@ -154,8 +156,15 @@ def test_the_honest_registration_is_accepted(x, tmp_path):
     assert {p: roots[p] for p in registration["values"]} == WW.WeightsRegistration.of(registration, "r").roots
     record = WW.weights_record(reg, d, man, grain=GRAIN)
     want = WT.audit_inputs(registration, record, t, LAW, CAP)
-    mine, _doc = IF.of_records(tmp_path / "w", LAW, IF.resolve)
+    mine, _doc = IF.of_records(tmp_path / "w", DESIGN, IF.resolve)
     assert rec["window"]["circuit"] == want["circuit"] and mine.run == want["run"]
+    # the window registers the design its rule names over the verifier's own window of it, as the audit's stream derives it
+    ids = [descriptor_id(fn) for fn, _ in win.circuit.templates]
+    assert SV.params_law(LAW, mine.program, mine.query, mine.work_table) == \
+        (DESIGN, {tid: {"work": 1, "floor": 1} for tid in ids}) == ({k: rec["law"][k] for k in DESIGN}, mine.work_table)
+    for fixed in ("work:1", "subset:1", "stratified:1"):
+        with pytest.raises(ValueError, match="a fixed count"):
+            t.window(fixed, CAP)
     pins = _pins(want)
     assert set(roots) == set(pins) and {p: roots[p] for p in pins} == {p: e["root"] for p, e in pins.items()}
     assert _unopened(win, c, tmp_path / "w", pins) == set()
@@ -230,7 +239,7 @@ def test_the_command_pins_only_on_an_accepting_audit(x, tmp_path, capsys):
     reg, (d, man) = S._registered(), x
     (tmp_path / "phi.json").write_text(json.dumps(reg.phi.to_json()))
     common = ["--phi", str(tmp_path / "phi.json"), "--checkpoint-dir", d, "--manifest", man,
-              "--grain", f"{GRAIN.gemm_words},{GRAIN.rows},{GRAIN.select}", "--law", "work:1", "--cap", str(CAP)]
+              "--grain", f"{GRAIN.gemm_words},{GRAIN.rows},{GRAIN.select}", "--law", LAW, "--cap", str(CAP)]
     path, key = tmp_path / "registration.json", tmp_path / "key"
     with pytest.raises(SystemExit) as e:
         cli.main(["weights-tie", "commit", *common, "--key-file", str(key), "--registration-out", str(path),

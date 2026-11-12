@@ -16,7 +16,7 @@ over the field's bytes to the verifier's SHA-512 of them. An embedding's table (
 table (`interface.Table`), its rows ``hm96-sha512/row-seg/v1`` leaves its reads open as such (`interface.seg_ports`); a
 template's port has one row schema, so a table's own chain hashes `TABLE_TAG` before the field's bytes, and its rows pend an
 odd count of bytes where a shard's (after a header safetensors aligns to 8 bytes) and every other chain's pend an even
-count: they are templates of their own. Under a ``work`` law with every unit in the output class (`Tie.outputs`), every unit is proved.
+count: they are templates of their own. Under a work rate with every unit in the output class (`Tie.outputs`), every unit is proved.
 
 A field the weights record holds to an analytic table (the rotary table, `window_weights`) is no checkpoint bytes: the tie
 reads none of it and names its parameters unrooted, as a registration of no served table does. A registration that roots
@@ -31,7 +31,7 @@ parameter holds, a checkpoint not of record or of another model, and a template 
 another parameter's.
 
     verity-vllm weights-tie commit --phi PHI --checkpoint-dir X [--manifest M] --key-file K --registration-out REG \\
-        --out DIR [--law work:1] [--cap 16] [--run-id ID] [--grain 512,9,64] [--served-dir Y --served-manifest MY [--forge-digest]]
+        --out DIR [--law work-rate:1/613] [--cap 16] [--run-id ID] [--grain 512,9,64] [--served-dir Y --served-manifest MY [--forge-digest]]
     verity-vllm weights-tie verify --phi PHI --checkpoint-dir X [--manifest M] --registration REG --out DIR [--law ...] \\
         [--cap ...] [--run-id ...] [--grain ...]
     verity-vllm weights-tie pins --phi PHI --checkpoint-dir X [--manifest M] --registration REG --summary SUMMARY --out PINS \\
@@ -56,7 +56,8 @@ from typing import Any
 
 import numpy as np
 
-from verity.protocols.spot.verifier.one_stage import draw as D, registered as G, registration as R
+from verity.protocols.spot.verifier import service as S
+from verity.protocols.spot.verifier.one_stage import registered as G, registration as R
 from verity.commitments.gates import sha512_stream as SS
 from verity.commitments.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR
@@ -196,13 +197,17 @@ class Tie:
                           registered=IF.Registered(params, tables, reads=tuple(IF.coalesce(reads))),
                           order=IF.ordered({IF.descriptor_id(fn): n for fn, n in templates}, wires, starts) if wires else None)
 
-    def window(self, law: dict[str, Any], cap: int, values: dict[str, G.Registered] | None = None) -> IF.Window:
-        """The tie's window under ``law`` in members of at most ``cap`` units, ``values`` the committed weights (the
-        committer's; none for the verifier's empty window), and its supplied values (`supplied_values`). Under a ``work``
-        law every template is credited alike (work 1)."""
+    def window(self, law: str, cap: int, values: dict[str, G.Registered] | None = None) -> IF.Window:
+        """The tie's window in members of at most ``cap`` units, ``values`` the committed weights (the committer's; none
+        for the verifier's empty window), and its supplied values (`supplied_values`). ``law`` is the rate the records
+        audit of the window states to its stream as its rule, and the window's sampling design and work table are the
+        ones that rate names over the tie's circuit (`service.params_law`), which the stream holds its registration to;
+        a fixed count is refused by name (`service.Law`). Under a work rate every template is credited alike (work 1)."""
         c = self.circuit()
-        table = {tid: 1 for tid in c.ids} if law.get("law") == "work" else None
-        win = IF.Window(c, self.run, law, cap, registered=values, work_table=table)
+        S.Law(law)
+        program, query = c.program()
+        design, table = S.params_law(law, program, query, {tid: 1 for tid in c.ids} if law.startswith("work-rate:") else None)
+        win = IF.Window(c, self.run, dict(design), cap, registered=values, work_table=table)
         win.registered = {**(values or {}), **self.supplied_values(win.window.partition_digest)}
         return win
 
@@ -212,7 +217,7 @@ class Tie:
         return {n: G.Registered.commit(program, n, [row], G.supplied_salts(program, n, 1), schema=G.SCHEMA_V2)
                 for c in self.chains for n, row in c.supplied().items()}
 
-    def digest(self, law: dict[str, Any], cap: int) -> str:
+    def digest(self, law: str, cap: int) -> str:
         """The SHA-512 of the tie's circuit record, the one the verifier holds the window's registration to."""
         return hashlib.sha512(IF.circuit_bytes(self.window(law, cap).circuit_record())).hexdigest()
 
@@ -328,7 +333,7 @@ def tie(registered: Any, checkpoint_dir: str, checkpoints_manifest: str | None =
                {p: dict(e) for p, e in sorted(entries.items())}, WW._unrooted(rec, of, entries), tuple(chains), run_id)
 
 
-def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifest: str | None = None, *, law: dict[str, Any],
+def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifest: str | None = None, *, law: str,
            cap: int, run_id: str = "", served: dict[str, np.ndarray] | None = None, grain: Grain = _GRAIN,
            kv_cache_dtype: str = "auto", forge_digest: bool = False) -> tuple[dict[str, Any], Tie, IF.Window]:
     """The committer's weights registration of X under its 32-byte ``key`` (`records.weights_registration`: each rooted
@@ -348,7 +353,7 @@ def commit(registered: Any, key: bytes, checkpoint_dir: str, checkpoints_manifes
     return registration, t, win
 
 
-def audit_inputs(registration: Any, record: dict[str, Any], t: Tie, law: dict[str, Any], cap: int) -> dict[str, Any]:
+def audit_inputs(registration: Any, record: dict[str, Any], t: Tie, law: str, cap: int) -> dict[str, Any]:
     """What the verifier hands the records audit of the committer's tie window: ``registered``, its ``--registered`` file
     (the registration's entries, held to the verifier's weights record's shapes by `window_weights.registration_pins`,
     and the tie's supplied values under the window's partition digest); ``outputs``, every unit; ``circuit`` and ``run``,
@@ -364,7 +369,7 @@ def audit_inputs(registration: Any, record: dict[str, Any], t: Tie, law: dict[st
                            {"program": win.window.partition_digest, "values": supplied}]}
 
 
-def checked_pins(registration: Any, record: dict[str, Any], t: Tie, summary: dict[str, Any], law: dict[str, Any],
+def checked_pins(registration: Any, record: dict[str, Any], t: Tie, summary: dict[str, Any], law: str,
                  cap: int) -> dict[str, str]:
     """The verifier's pins of the registration's roots (`window_weights.registration_pins`), only once the records audit
     of its tie window accepted it: refused (ValueError) unless ``summary`` (``records_audit.py audit``'s ``summary.json``)
@@ -411,7 +416,9 @@ class Checkpoint:
     default_seed: int = option("--default-seed", type=int, default=7)
     checkpoint_dir: str = option("--checkpoint-dir", help="checkpoint X's safetensors shards and config.json")
     manifest: str | None = option("--manifest", default=None, help="the checkpoints manifest pinning X (default the repository's)")
-    law: str = option("--law", default="work:1")
+    law: str = option("--law", default="work-rate:1/613", help="the rate the records audit of the tie window states as its "
+                      "stream's rule, the window made under the sampling design it names over the tie's circuit (default: "
+                      "one unit a template of TINY's tie; every unit is proved as the output class either way)")
     cap: int = option("--cap", type=int, default=16)
     run_id: str = option("--run-id", default="")
     grain: str | None = option("--grain", default=None, help="gemm_words,rows,select (default the window grain's)")
@@ -458,7 +465,7 @@ def main(a: CommitOptions | VerifyOptions | PinsOptions) -> int:
     x = a.x
     manifest = x.manifest or str(CHECKPOINTS)
     grain = Grain(*(int(g) for g in x.grain.split(","))) if x.grain else _GRAIN
-    registered, law = _registered(x.phi, x.default_seed), D.parse_design(x.law)
+    registered, law = _registered(x.phi, x.default_seed), x.law
     if isinstance(a, CommitOptions):
         served = WW.record_words(registered, a.served_dir, a.served_manifest) if a.served_dir else None
         registration, t, win = commit(registered, _key(a.key_file), x.checkpoint_dir, manifest, law=law, cap=x.cap,
