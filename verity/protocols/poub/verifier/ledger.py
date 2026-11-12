@@ -512,5 +512,5 @@ def declared(record: audit.Record, node: Node, *,
                     gamma(record, node, node.read_bytes_per_s, wrong=once), memory(record, node))
 
 
-__all__ = ["DELTA_PARTS", "FORMS", "Node", "PRF_CLAIM", "REJECTION_LOG2", "SNAPSHOT", "TIME_HELD", "binding_over",
-           "hiding_over", "window_receipts"]
+__all__ = ["DELTA_FORM", "DELTA_PARTS", "FORMS", "NAMED_TERMS", "Node", "PRF_CLAIM", "REJECTION_LOG2", "SNAPSHOT",
+           "TIME_HELD", "Tier", "binding_over", "hiding_over", "window_receipts"]
