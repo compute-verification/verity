@@ -209,8 +209,10 @@ def served_phi(meta: Mapping[str, Any], hf_config: Mapping[str, Any], rank: int 
     the cache, and no request Program states it. A launch of such a checkpoint that names the bf16 cache keeps that arg in φ."""
     tp, engine = engine_of(meta, rank)
     if (cache := checkpoint_kv_cache(hf_config)) is not None:
-        stated = ((meta.get("engine_record") or {}).get("engine_kwargs") or {}).get("kv_cache_dtype") or "auto"
-        if stated == "auto":
+        rec = meta.get("engine_record")
+        kw = None if rec is None else rec.get("engine_kwargs")
+        stated = None if kw is None else kw.get("kv_cache_dtype")
+        if stated is None or stated == "auto":
             raise ValueError(f"the checkpoint's quantization_config turns a {cache} KV cache on at kv_cache_dtype auto (a modelopt "
                              "checkpoint that names a KV cache scheme): a request Program models the cache of a launch at "
                              f"{' or '.join(STATED_KV_CACHE)} and no quantized one, so the compile of this launch would be "
