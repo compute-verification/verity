@@ -2,21 +2,25 @@
 views the protocols read. It mirrors the spec's `Verity.Site` (`security/Definitions/Core/Site.lean`): its sheets, locations,
 links and log, `Site.ofLog`, and `Registration.Entry.refusal`, check for check and in the same order.
 
-The Site is a tree of locations, each with its owner: the site at the root, its hosts, a host's devices, memory leaves
-by tier and bytes under a device or a host, and at the site the auditor's devices, its network certifiers and memory
-challengers (`PARENTS`). Links join two ends, each a location or `OUTSIDE`, with a capacity `beta` in bits a second
-each way and a latency in the site's units of time (`LINKS`). A boundary link no certifier splits may say why none does
-(`unmediated`), and a link states no capacity only where it does; a site is mediated when no link says so
-(`Site.mediated`). A network certifier is the leaf that splits an uplink: one link from a host to it, one from it to the
-outside. Hosts carry no compute: a device names its sheet by digest. A sheet (`Sheet`), a card, is
-the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the SKU, the tensor clock and the peak
-rate of each operand class) and its memory figures (bits from device memory to the chip a tick, bits of on-chip state and
-bytes of device memory). The auditor's data sheets, public and looked up by SKU, are sheets too, whose figures are its
-estimate of the SKU's (`Auditor.estimate`); they come from the card files (`verity/hardware/cards/<sku>.toml`):
-`Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it. A node's entry comes from its files too:
-`Registration.node_entry` reads a node file's table (`verity.hardware.nodes.load(kind)`), its GPU card's and the
-file's ways out (`verity.hardware.nodes.ways_out`), and registers each way out, an interface or the storage path, as
-a boundary link that no certifier splits.
+The Site is a tree of locations, each with its owner: the site at the root, stating the site's unit of time
+(`Site.time_unit`), its hosts, a host's devices, memory leaves by tier and bytes under a device or a host, and at the
+site the auditor's devices, its network certifiers and memory challengers (`PARENTS`), each with its key, the key's
+scheme (`SCHEMES`) and how far its clock may drift. A host states its on-chip state and the rate its leaves of a tier
+share, and a leaf under a host the rate it is read at. Links join two ends, each a location or `OUTSIDE`, with a
+capacity `beta` in bits a second each way and a latency in the site's units of time (`LINKS`). A boundary link no
+certifier splits may say why none does (`unmediated`), and a link states no capacity only where it does; a site is
+mediated when no link says so (`Site.mediated`). A network certifier is the leaf that splits an uplink: one link from
+a host to it, one from it to the outside. Hosts carry no compute: a device names its sheet by digest. A sheet
+(`Sheet`), a card, is the figures the prover states for an SKU: its compute figures (`DeviceFigures`: the SKU, the
+tensor clock and the peak rate of each operand class) and its memory figures (bits read from or written to device
+memory a second, bits of on-chip state and bytes of device memory). The auditor's data sheets, public and looked up
+by SKU, are sheets too, whose figures are its estimate of the SKU's (`Auditor.estimate`); they come from the card files
+(`verity/hardware/cards/<sku>.toml`): `Sheet.of_file` reads one as `verity.hardware.cards.load(sku)` returns it. The
+auditor's figures for each host and each leaf under one (`HostFigures`, `MemoryFigures`) come from the node files:
+`node_figures` reads a node file's table (`verity.hardware.nodes.load(kind)`), its host card's, its leaves
+(`verity.hardware.nodes.leaves`) and its ways out (`verity.hardware.nodes.ways_out`). `Registration.node_entry` reads
+the same and its GPU card's, states those figures on the node's locations, and registers each way out, an interface or
+the storage path, as a boundary link that no certifier splits.
 
 The log (`Registration`) is append-only: each site entry adds sheets, locations and links and names the head of the log
 before it (`Entry.previous`), the digest of its last entry or, for an empty log, its composite's genesis. `Site.of_log`
@@ -71,6 +75,9 @@ PARENTS: dict[str, tuple[str | None, ...]] = {
 LINKS = (("host", "host"), ("host", "outside"), ("certifier", "host"), ("certifier", "outside"), ("challenger", "host"))
 """The pairs of kinds a link may join, in either order."""
 AUDITOR_KINDS = ("certifier", "challenger")
+SCHEMES = ("lms-sha512/n64-w1-h20/v0", "hss-lms-sha512/n64-w1-h20/n64-w1-h20/v0")
+"""The signature schemes a registered key may be of: one LMS key that signs, and a root LMS key that certifies the
+keys that sign."""
 OPERAND_CLASSES = ("uniform-s8", "uniform-s2", "uniform-u2", "uniform-u4", "zero")
 """The operand classes of a tensor-core MAC (`OperandClass`, in kebab case): int8 operands drawn uniformly over
 [-128, 127], [-2, 1], [0, 3] and [0, 15], and the one value 0."""
@@ -79,6 +86,8 @@ REFUSALS = ("previous", "duplicate-id", "unknown-ref", "kind", "sheet-digest", "
 """The checks `check_registration` makes, in the order it makes them."""
 TICK = Fraction(1, 10 ** 9)
 """A tick, in seconds: a nanosecond."""
+TIME_UNIT = Fraction(1, 10 ** 9)
+"""The unit of time `Registration.node_entry` gives a site it adds, in seconds: a nanosecond."""
 NO_LINE_RATE = "no line rate stated"
 """Why no certifier splits a node's interface that reads no line rate: `Registration.node_entry`'s `unmediated`."""
 STORAGE_PATH = "storage path"
@@ -210,6 +219,116 @@ def _way(way: Any, host: str) -> tuple[str, int | None, bool]:
     return name, bw, split
 
 
+def _leaf(leaf: Any, host: str) -> tuple[str, str, int, int]:
+    """A memory leaf of host `host`'s as `verity.hardware.nodes.leaves` gives it: its id under the host, its tier, its
+    bytes and the most it is read back at, in whole bits a second."""
+    try:
+        name, tier, size, bw = leaf
+    except (TypeError, ValueError):
+        raise Malformed(f"a leaf is its id, its tier, its bytes and its bits a second, not {leaf!r}") from None
+    if (not isinstance(name, str) or not name.startswith(f"{host}/") or tier not in TIERS or isinstance(size, bool)
+            or not isinstance(size, int) or isinstance(bw, bool) or not isinstance(bw, int) or bw <= 0):
+        raise Malformed(f"a leaf of {host}: {leaf!r}; its id is {host}/NAME, its tier one of {list(TIERS)}, its bytes "
+                        "a whole number, and its rate a whole number of bits a second above 0")
+    return name, tier, size, bw
+
+
+@dataclass(frozen=True)
+class _Node:
+    """What a node's files register as one host: its devices' SKU and count, its leaves (each id, tier, bytes and
+    bits a second), the rate each tier's leaves share, its ways out (each id, bits a second or None, and whether a
+    certifier may split it) and its host's on-chip state in bits."""
+
+    sku: str
+    count: int
+    leaves: list[tuple[str, str, int, int]]
+    shared: tuple[tuple[str, int], ...]
+    ways: list[tuple[str, int | None, bool]]
+    chip: int
+
+    @classmethod
+    def read(cls, node: Mapping[str, Any], host_card: Mapping[str, Any], host: str, ways: Any, leaves: Any) -> _Node:
+        """The node file's table, its host card's, and its ways out and leaves as `verity.hardware.nodes` reads them,
+        held to the file: the ways each by name and in order, with a rate exactly where the file states one, and the
+        leaves each by name, tier and bytes, in the file's order. Refused where the file states no `dram` or no `disk`
+        leaf, or no interface."""
+        try:
+            sku, count = node["device"]["sku"], _whole(node["device"]["count"], "a node's device.count")
+            stated_leaves = [(f"{host}/{name}", leaf["tier"], _whole(leaf["bytes"], f"a node's memory.{name}.bytes"))
+                             for name, leaf in node.get("memory", {}).items()]
+            stated = [(f"{host}/{name}", True, "rate" in port.keys())
+                      for name, port in node.get("interface", {}).items()]
+            stated += [(f"{host}/storage", False, True)] if "storage" in node else []
+            host_sku = node["host"]["sku"]
+        except (AttributeError, KeyError, TypeError) as e:
+            raise Malformed(f"a node file's table: {e!r}; it has device.sku, device.count, host.sku, for each "
+                            "memory.NAME a tier and bytes, and for each interface.NAME a table") from None
+        try:
+            out = [_way(way, host) for way in ways]
+        except TypeError:
+            raise Malformed(f"`ways` is {ways!r}; give the node file's ways out, "
+                            "`verity.hardware.nodes.ways_out(node, host)`") from None
+        given = [(name, split, bw is not None) for name, bw, split in out]
+        if given != stated:
+            raise Malformed(f"the ways out given are {given}, and the node file states {stated} under host {host!r} "
+                            "(each interface, then its storage path, with whether a certifier may split it and "
+                            "whether it has a rate); give `verity.hardware.nodes.ways_out(node, host)`")
+        try:
+            each, together = leaves
+            each, together = list(each), dict(together)
+        except (TypeError, ValueError):
+            raise Malformed(f"`leaves` is {leaves!r}; give the node file's leaves and the rate each tier's share, "
+                            "`verity.hardware.nodes.leaves(node, host)`") from None
+        each = [_leaf(leaf, host) for leaf in each]
+        if [leaf[:3] for leaf in each] != stated_leaves:
+            raise Malformed(f"the leaves given are {[leaf[:3] for leaf in each]}, and the node file states "
+                            f"{stated_leaves} under host {host!r} (each id, tier and bytes); give "
+                            "`verity.hardware.nodes.leaves(node, host)`")
+        shared = tuple((t, together[t]) for t in TIERS if t in together)
+        if (len(shared) != len(together) or
+                not all(isinstance(bw, int) and not isinstance(bw, bool) and bw > 0 for _, bw in shared)):
+            raise Malformed(f"the tiers' shared rates given are {together!r}; each is a tier's, a whole number of bits "
+                            "a second above 0; give `verity.hardware.nodes.leaves(node, host)`")
+        unread = [tier for tier in ("dram", "disk") if all(t != tier for _, t, _ in stated_leaves)]
+        if unread:
+            raise Malformed(f"the node file states no {' and no '.join(unread)} leaf of its host's, so its entry would "
+                            "understate the node's memory; read them on a node of its kind (`lsmem -b --summary=only; "
+                            "lsblk -b -d -n -o NAME,SIZE,TYPE` under `research run --on NODE`) and state each as a "
+                            "memory.NAME table: the memory the host is given, and every block device")
+        if not any(split for _, _, split in out):
+            raise Malformed("the node file states no interface, so its entry would not say how the node reaches the "
+                            "outside; read the node's interfaces on a node of its kind (`ip route; ip -6 route; "
+                            "ethtool IF` under `research run --on NODE`) and state each one the routes name as an "
+                            "interface.NAME table: its rate, or where it reads none its driver and what was read")
+        try:
+            card_sku, chip = host_card["sku"], 8 * _whole(host_card["store"]["chip"], "a host card's store.chip")
+        except (KeyError, TypeError):
+            raise Malformed("the host card given has no sku or no store.chip; give the card the node file names "
+                            f"by host.sku, `verity.hardware.cards.load({host_sku!r})`") from None
+        if card_sku != host_sku:
+            raise Malformed(f"the node's host is {host_sku!r}, and the host card given is {card_sku!r}'s")
+        return cls(sku, count, each, shared, out, chip)
+
+    def figures(self, host: str) -> tuple[tuple[tuple[str, MemoryFigures], ...], HostFigures]:
+        """The auditor's figures for the node's leaves and for its host."""
+        return (tuple((i, MemoryFigures(host, bw, size)) for i, _, size, bw in self.leaves),
+                HostFigures(self.chip, ((self.sku, self.count),), self.shared,
+                            tuple((i, bw) for i, bw, _ in self.ways)))
+
+
+def node_figures(node: Mapping[str, Any], host_card: Mapping[str, Any], host: str, *, ways: Any,
+                 leaves: Any) -> tuple[tuple[tuple[str, MemoryFigures], ...], HostFigures]:
+    """**The auditor's figures for a node registered as host `host`** (`Auditor.memory` and one of `Auditor.hosts`),
+    from a node file's table (`verity.hardware.nodes.load(kind)`), its host card's table (`verity.hardware.cards.load`
+    of its `host.sku`), its ways out (`verity.hardware.nodes.ways_out(node, host)`) and its leaves
+    (`verity.hardware.nodes.leaves(node, host)`). Each leaf's figures: the host, its bits a second and its bytes. The
+    host's: its on-chip state in bits, eight times the host card's `store.chip`; its cards, the file's `device.sku` at
+    its `device.count`; for each tier, the bits a second its leaves share; and its ways out, each by its link's id at
+    its bits a second, or None where its file states none. `Registration.node_entry` states the same figures on the
+    node's locations, which `check` holds to these."""
+    return _Node.read(node, host_card, host, ways, leaves).figures(host)
+
+
 def within_tolerance(tau: Fraction, e: Fraction, x: Fraction) -> bool:
     """`x` is within relative tolerance `tau` of `e`, in both directions (`WithinTolerance`): `(1 - tau)·e ≤ x ≤
     (1 + tau)·e`, with `1 - tau` truncated at 0, so a tolerance of 1 or more sets no lower bound."""
@@ -285,8 +404,8 @@ class DeviceEstimate:
 @dataclass(frozen=True)
 class Sheet:
     """A sheet, a card: the figures the prover states for an SKU. Its compute figures (`figures`), and its memory
-    figures in the device model's terms at a tick: bits from device memory to the chip (`bw`), bits of on-chip state
-    (`chip`) and bytes of device memory (`mem`). A device names its sheet by digest. The auditor's data sheet for an SKU
+    figures in the device model's terms: bits read from or written to device memory a second (`bw`), bits of on-chip
+    state (`chip`) and bytes of device memory (`mem`). A device names its sheet by digest. The auditor's data sheet for an SKU
     is a sheet too, whose figures are its estimate of the SKU's."""
 
     figures: DeviceFigures
@@ -306,11 +425,11 @@ class Sheet:
         return self.figures.sku
 
     @classmethod
-    def of_file(cls, card: Mapping[str, Any], tick: Fraction = TICK) -> Sheet:
+    def of_file(cls, card: Mapping[str, Any]) -> Sheet:
         """The sheet a card file gives (`verity.hardware.cards.load(sku)`'s table). Its figures: the SKU, the SM clock in Hz,
         and as every operand class's peak rate the card's s8 MACs a SM-clock (`rate.tensor`; every class is int8) over
-        its SMs at that clock. Its memory figures at ticks of `tick` seconds, as `Accel.Card.toDevice` reads the card:
-        the bandwidth a ceiling rounded up, and the stores' sizes exact."""
+        its SMs at that clock. Its memory figures as `Accel.Card.toDevice` reads the card: the bandwidth in bits a
+        second, a ceiling rounded up, and the stores' sizes exact."""
         def v(entry: Mapping[str, Any]) -> Fraction:
             return Fraction(str(entry["value"]))
 
@@ -321,7 +440,7 @@ class Sheet:
             raise Malformed(f"card {card['sku']}: its stores' bits and device memory's bytes are whole")
         clock = v(card["clock"]["sm"]) * 10 ** 6
         figures = DeviceFigures(_str(card["sku"], "sku"), clock, sms * v(card["rate"]["tensor"]) * clock)
-        return cls(figures, math.ceil(8 * v(card["memory"]["bandwidth"]) * tick), int(chip), int(mem))
+        return cls(figures, math.ceil(8 * v(card["memory"]["bandwidth"])), int(chip), int(mem))
 
     def to_json(self) -> dict[str, Any]:
         return {"bw": self.bw, "chip": self.chip, "figures": self.figures.to_json(), "mem": self.mem}
@@ -336,10 +455,49 @@ class Sheet:
         return tagged(SHEET, self.to_json())
 
 
+def _pairs(v: Any, what: str) -> list[tuple[Any, Any]]:
+    """`v` as a list of pairs, or `Malformed`."""
+    if isinstance(v, (str, Mapping)) or not isinstance(v, Iterable):
+        raise Malformed(f"{what}: {v!r} is not a list of pairs")
+    v = list(v)
+    if not all(isinstance(p, (tuple, list)) and len(p) == 2 for p in v):
+        raise Malformed(f"{what}: {v!r} is not a list of pairs")
+    return [(a, b) for a, b in v]
+
+
+def _shared(v: Any, what: str) -> tuple[tuple[str, int], ...]:
+    """A list of a tier and a rate in bits a second, each: the rates a host's leaves of a tier share."""
+    return tuple((_one_of(t, TIERS, f"{what}'s tier"), _nat(bw, f"{what}'s rate")) for t, bw in _pairs(v, what))
+
+
+def _shared_json(shared: Sequence[tuple[str, int]]) -> list[dict[str, Any]]:
+    return [{"bw": bw, "tier": t} for t, bw in shared]
+
+
+def _shared_of(j: Any, what: str) -> tuple[tuple[str, int], ...]:
+    return tuple((s["tier"], s["bw"]) for s in (_exactly(s, ("bw", "tier"), what) for s in _list(j, what)))
+
+
+def _opt(v: Any, read: Any, what: str) -> Any:
+    return None if v is None else read(v, what)
+
+
 @dataclass(frozen=True)
 class Loc:
     """A location and its owner. A device names its sheet's digest, a memory leaf its tier and bytes, the auditor's
-    devices their keys; a field the location's kind doesn't use is ignored."""
+    devices their keys; a field the location's kind doesn't use is ignored.
+
+    `bw` is the bits a second read from or written to a memory leaf directly under a host, and None on every other
+    location: a memory leaf under a device reads at its device's sheet's `bw` (`Site.read_rate`). A disk leaf's `bw`
+    bounds the bytes that come off the disk, not a read the host returns from memory, so a read rate over a host's
+    disk leaves counts the host's DRAM tier's rate beside them, once. `chip` is a host's on-chip state in bits, as a
+    sheet's is, and None on every other location. `shared` is, for a tier, the bits a second read from or written to a
+    host's leaves of that tier together, where one ceiling holds them all; empty on every other location. `key` is the
+    public key one of the auditor's devices is registered under, and `scheme` the id of the signature scheme that key
+    is of (`SCHEMES`), which says how many levels of keys stand under it; both empty on every other location. `drift`
+    is how far the clock of one of the auditor's devices may run from real time, as a share of it; None on every other
+    location, and a device that states none times nothing. `time_unit` is the site's unit of time in seconds, on a
+    location of kind `site` and None on every other (`Site.time_unit`)."""
 
     id: str
     kind: str
@@ -349,6 +507,12 @@ class Loc:
     tier: str | None = None
     bytes: int = 0
     key: str = ""
+    scheme: str = ""
+    bw: int | None = None
+    chip: int | None = None
+    shared: tuple[tuple[str, int], ...] = ()
+    drift: Fraction | None = None
+    time_unit: Fraction | None = None
 
     def __post_init__(self) -> None:
         _str(self.id, "a location's id")
@@ -361,15 +525,63 @@ class Loc:
             _one_of(self.tier, TIERS, f"{self.id}'s tier")
         _nat(self.bytes, f"{self.id}'s bytes")
         _str(self.key, f"{self.id}'s key")
+        _str(self.scheme, f"{self.id}'s scheme")
+        _opt(self.bw, _nat, f"{self.id}'s bw")
+        _opt(self.chip, _nat, f"{self.id}'s chip")
+        object.__setattr__(self, "shared", _shared(self.shared, f"{self.id}'s shared"))
+        object.__setattr__(self, "drift", _opt(self.drift, _rat, f"{self.id}'s drift"))
+        object.__setattr__(self, "time_unit", _opt(self.time_unit, _rat, f"{self.id}'s time unit"))
 
     def to_json(self) -> dict[str, Any]:
-        return {"bytes": self.bytes, "id": self.id, "key": self.key, "kind": self.kind, "owner": self.owner,
-                "parent": self.parent, "sheet": self.sheet, "tier": self.tier}
+        return {"bw": self.bw, "bytes": self.bytes, "chip": self.chip,
+                "drift": None if self.drift is None else _rat_str(self.drift), "id": self.id, "key": self.key,
+                "kind": self.kind, "owner": self.owner, "parent": self.parent, "scheme": self.scheme,
+                "shared": _shared_json(self.shared), "sheet": self.sheet, "tier": self.tier,
+                "time_unit": None if self.time_unit is None else _rat_str(self.time_unit)}
 
     @classmethod
     def of_json(cls, j: Any) -> Loc:
-        j = _exactly(j, ("bytes", "id", "key", "kind", "owner", "parent", "sheet", "tier"), "a location")
-        return cls(j["id"], j["kind"], j["parent"], j["owner"], j["sheet"], j["tier"], j["bytes"], j["key"])
+        j = _exactly(j, ("bw", "bytes", "chip", "drift", "id", "key", "kind", "owner", "parent", "scheme", "shared",
+                         "sheet", "tier", "time_unit"), "a location")
+        return cls(j["id"], j["kind"], j["parent"], j["owner"], j["sheet"], j["tier"], j["bytes"], j["key"],
+                   j["scheme"], j["bw"], j["chip"], _shared_of(j["shared"], "a shared rate"),
+                   _opt(j["drift"], _rat_json, "a location's drift"),
+                   _opt(j["time_unit"], _rat_json, "a location's time unit"))
+
+
+@dataclass(frozen=True)
+class MemoryFigures:
+    """The auditor's figures for one memory leaf directly under a host: the host it is under, the bits a second read
+    from or written to it, and the bytes it holds."""
+
+    host: str
+    bw: int
+    bytes: int
+
+    def __post_init__(self) -> None:
+        _str(self.host, "a memory leaf's host")
+        _nat(self.bw, "a memory leaf's bw")
+        _nat(self.bytes, "a memory leaf's bytes")
+
+
+@dataclass(frozen=True)
+class HostFigures:
+    """The auditor's figures for one host: its on-chip state in bits, the cards it carries, each SKU with its count,
+    for a tier the bits a second its leaves of that tier read or write together, and the ways traffic leaves it, each
+    by its link's id with the bits a second it carries each way, or None where it states none."""
+
+    chip: int
+    cards: tuple[tuple[str, int], ...] = ()
+    shared: tuple[tuple[str, int], ...] = ()
+    ways: tuple[tuple[str, int | None], ...] = ()
+
+    def __post_init__(self) -> None:
+        _nat(self.chip, "a host's chip")
+        object.__setattr__(self, "cards", tuple((_str(s, "a card's sku"), _nat(n, "a card's count"))
+                                                for s, n in _pairs(self.cards, "a host's cards")))
+        object.__setattr__(self, "shared", _shared(self.shared, "a host's shared"))
+        object.__setattr__(self, "ways", tuple((_str(i, "a way's id"), _opt(b, _nat, "a way's beta"))
+                                               for i, b in _pairs(self.ways, "a host's ways")))
 
 
 @dataclass(frozen=True)
@@ -471,17 +683,22 @@ class Registration:
         return Entry(self.head, tuple(sheets), tuple(locs), tuple(links))
 
     def node_entry(self, node: Mapping[str, Any], card: Mapping[str, Any], host: str, site: str = "site",
-                   certifier: tuple[str, str] | None = None, *,
-                   ways: Iterable[tuple[str, int | None, bool]]) -> Entry:
+                   certifier: tuple[str, str, str] | None = None, *, host_card: Mapping[str, Any],
+                   ways: Iterable[tuple[str, int | None, bool]], leaves: Any,
+                   time_unit: Fraction = TIME_UNIT) -> Entry:
         """**A node's entry**, following this log's head: what a node file's table (`verity.hardware.nodes.load(kind)`),
-        the table of the GPU card it names (`verity.hardware.cards.load(sku)`) and the file's ways out
-        (`ways`: `verity.hardware.nodes.ways_out(node, host)`, the one reader of their rates) register as host `host`
-        at site `site`. It adds the sheet `Sheet.of_file` gives the card and the site's location, each only where the
-        log has none; the host; the node's `device.count` devices `host/gpuI`, each naming the sheet, with one `hbm`
-        leaf `host/gpuI/hbm` holding the sheet's device memory, whole; for each `memory.NAME` of the file a leaf
-        `host/NAME` under the host, at the tier and bytes it states, in the file's order; and for each way out a link
-        under the way's id from the host to the outside, at the way's bits a second, and latency 0. The file names no
-        host, so the caller gives its id, and every id under it starts with that.
+        the tables of the GPU card and the host card it names (`verity.hardware.cards.load(sku)` each), the file's ways
+        out (`ways`: `verity.hardware.nodes.ways_out(node, host)`, the one reader of their rates) and its leaves
+        (`leaves`: `verity.hardware.nodes.leaves(node, host)`, the one reader of theirs) register as host `host` at site
+        `site`. It adds the sheet `Sheet.of_file` gives the card, and the site's location at the unit of time
+        `time_unit` in seconds, each only where the log has none; the host, stating its figures (`node_figures`): its
+        on-chip state in bits and the rate each tier's leaves share; the node's `device.count` devices `host/gpuI`, each
+        naming the sheet, with one `hbm` leaf `host/gpuI/hbm` holding the sheet's device memory, whole; for each
+        `memory.NAME` of the file a leaf `host/NAME` under the host, at the tier and bytes it states and its rate in
+        bits a second, in the file's order; and for each way out a link under the way's id from the host to the
+        outside, at the way's bits a second, and latency 0. The file names no host, so the caller gives its id, and
+        every id under it starts with that. The auditor's figures for the node are `node_figures` of the same tables,
+        so `check` takes the entry against an auditor that holds them.
 
         A way out is an interface of the file's (`host/NAME`) or its storage path (`host/storage`: what the disks
         that are not the server's own carry off the node, at the rate that bounds the node's disks together). Its link
@@ -490,80 +707,51 @@ class Registration:
         way's kind): an interface that reads no line rate, whose link states no capacity (`NO_LINE_RATE`), and the
         storage path, which no certifier can sit on (`STORAGE_PATH`). A site with either is not mediated, and `onsite`
         takes their reasons. An interface with a rate says none, so `onsite` refuses it by `uncertified` until a
-        certifier splits it. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, with a rate exactly
-        where its table states one, then the storage path's, with its rate, exactly where the file has a `storage`
-        table. The rates' values are the caller's, read by `ways_out`.
+        certifier splits it. `ways` is held to the file: an entry for each `interface.NAME`, in the file's order, with
+        a rate exactly where its table states one, then the storage path's, with its rate, exactly where the file has a
+        `storage` table. `leaves` is held to it too: each `memory.NAME` by id, tier and bytes, in the file's order. The
+        rates' values are the caller's, read by `ways_out` and `leaves`.
 
         **An entry always registers a link out.** A file that states no interface is refused: its entry would not say
         how the node reaches the outside.
 
-        `certifier` is the id and the key of a network certifier of the auditor's that stands in front of the node
-        without splitting its interface (a process on another machine, say). It adds the certifier under the site and
-        the two links of a certified way out, host to certifier (`host/ID`) and certifier to outside (`ID/outside`),
-        each at the interfaces' rates summed, beside the ways' own links, which stay. The storage path's rate is not
-        in that sum and no certifier is linked to the path: a certifier's links say nothing of it. A certifier on a
-        node none of whose interfaces has a rate is refused, since its links would have none. A certifier splits one
-        host's way out, so each node names its own, and the key is the one the auditor holds for the id or `owner`
-        refuses the entry. None of the auditor's other devices is added.
+        `certifier` is the id, the key and the key's scheme of a network certifier of the auditor's that stands in
+        front of the node without splitting its interface (a process on another machine, say). It adds the certifier
+        under the site, stating no drift, and the two links of a certified way out, host to certifier (`host/ID`) and
+        certifier to outside (`ID/outside`), each at the interfaces' rates summed, beside the ways' own links, which
+        stay. The storage path's rate is not in that sum and no certifier is linked to the path: a certifier's links
+        say nothing of it. A certifier on a node none of whose interfaces has a rate is refused, since its links would
+        have none. A certifier splits one host's way out, so each node names its own, and the key and scheme are the
+        ones the auditor holds for the id or `owner` refuses the entry. None of the auditor's other devices is added.
 
         A file that states no `dram` leaf or no `disk` leaf is refused: its entry would pass `check` for `remote` with
         a host that holds less memory than the node has, and whatever reads the site would take the node for smaller
         than it is."""
-        try:
-            sku, count = node["device"]["sku"], _whole(node["device"]["count"], "a node's device.count")
-            leaves = [(name, leaf["tier"], _whole(leaf["bytes"], f"a node's memory.{name}.bytes"))
-                      for name, leaf in node.get("memory", {}).items()]
-            stated = [(f"{host}/{name}", True, "rate" in port.keys())
-                      for name, port in node.get("interface", {}).items()]
-            stated += [(f"{host}/storage", False, True)] if "storage" in node else []
-        except (AttributeError, KeyError, TypeError) as e:
-            raise Malformed(f"a node file's table: {e!r}; it has device.sku, device.count, for each memory.NAME a "
-                            "tier and bytes, and for each interface.NAME a table") from None
-        try:
-            out = [_way(way, host) for way in ways]
-        except TypeError:
-            raise Malformed(f"`ways` is {ways!r}; give the node file's ways out, "
-                            "`verity.hardware.nodes.ways_out(node, host)`") from None
-        given = [(name, split, bw is not None) for name, bw, split in out]
-        if given != stated:
-            raise Malformed(f"the ways out given are {given}, and the node file states {stated} under host {host!r} "
-                            "(each interface, then its storage path, with whether a certifier may split it and "
-                            "whether it has a rate); give `verity.hardware.nodes.ways_out(node, host)`")
-        unread = [tier for tier in ("dram", "disk") if all(t != tier for _, t, _ in leaves)]
-        if unread:
-            raise Malformed(f"the node file states no {' and no '.join(unread)} leaf of its host's, so its entry would "
-                            "understate the node's memory; read them on a node of its kind (`lsmem -b --summary=only; "
-                            "lsblk -b -d -n -o NAME,SIZE,TYPE` under `research run --on NODE`) and state each as a "
-                            "memory.NAME table: the memory the host is given, and every block device")
-        if not any(split for _, _, split in out):
-            raise Malformed("the node file states no interface, so its entry would not say how the node reaches the "
-                            "outside; read the node's interfaces on a node of its kind (`ip route; ip -6 route; "
-                            "ethtool IF` under `research run --on NODE`) and state each one the routes name as an "
-                            "interface.NAME table: its rate, or where it reads none its driver and what was read")
-        rates = [bw for _, bw, split in out if split and bw is not None]
+        n = _Node.read(node, host_card, host, ways, leaves)
+        rates = [bw for _, bw, split in n.ways if split and bw is not None]
         if certifier is not None and not rates:
-            raise Malformed(f"no interface the node file states has a rate ({[name for name, _, split in out if split]})"
+            raise Malformed(f"no interface the node file states has a rate ({[i for i, _, split in n.ways if split]})"
                             ", so a network certifier's links would have none: an interface that reads no line rate "
                             "takes no certifier. Register the node without one")
         sheet = Sheet.of_file(card)
-        if sheet.sku != sku:
-            raise Malformed(f"the node's devices are {sku!r}, and the card given is {sheet.sku!r}'s")
+        if sheet.sku != n.sku:
+            raise Malformed(f"the node's devices are {n.sku!r}, and the card given is {sheet.sku!r}'s")
         before, digest = Site.of_log(self), sheet.digest()
-        locs = [] if before.known(site) else [Loc(site, "site")]
-        locs.append(Loc(host, "host", site))
-        for gpu in (f"{host}/gpu{i}" for i in range(count)):
+        locs = [] if before.known(site) else [Loc(site, "site", time_unit=time_unit)]
+        locs.append(Loc(host, "host", site, chip=n.chip, shared=n.shared))
+        for gpu in (f"{host}/gpu{i}" for i in range(n.count)):
             locs += [Loc(gpu, "device", host, sheet=digest),
                      Loc(f"{gpu}/hbm", "memory", gpu, tier="hbm", bytes=sheet.mem)]
-        locs += [Loc(f"{host}/{name}", "memory", host, tier=tier, bytes=n) for name, tier, n in leaves]
-        links = [Link(name, (host, OUTSIDE), bw, 0, STORAGE_PATH if not split else None if bw else NO_LINE_RATE)
-                 for name, bw, split in out]
+        locs += [Loc(i, "memory", host, tier=tier, bytes=size, bw=bw) for i, tier, size, bw in n.leaves]
+        links = [Link(i, (host, OUTSIDE), bw, 0, STORAGE_PATH if not split else None if bw else NO_LINE_RATE)
+                 for i, bw, split in n.ways]
         if certifier is not None:
-            try:
-                device, key = certifier
-            except (TypeError, ValueError):
-                raise Malformed(f"`certifier` is a network certifier's id and its key, not {certifier!r}") from None
+            if not (isinstance(certifier, (tuple, list)) and len(certifier) == 3):
+                raise Malformed(f"`certifier` is a network certifier's id, its key and the key's scheme, not "
+                                f"{certifier!r}")
+            device, key, scheme = certifier
             beta = sum(rates)
-            locs.append(Loc(device, "certifier", site, "auditor", key=key))
+            locs.append(Loc(device, "certifier", site, "auditor", key=key, scheme=scheme))
             links += [Link(f"{host}/{device}", (host, device), beta, 0),
                       Link(f"{device}/{OUTSIDE}", (device, OUTSIDE), beta, 0)]
         return self.entry(() if any(k.digest() == digest for k in before.sheets) else (sheet,), locs, links)
@@ -577,26 +765,54 @@ class Registration:
         return cls(j["composite"], tuple(Entry.of_json(e) for e in _list(j["entries"], "entries")))
 
 
+def _lookup(pairs: Iterable[tuple[str, Any]], i: str) -> Any:
+    """The value under `i` in a list of pairs: the first (Lean's `List.lookup`), or None."""
+    return next((v for k, v in pairs if k == i), None)
+
+
 @dataclass(frozen=True)
 class Auditor:
     """What the auditor brings to the check: its data sheet for each SKU, public, whose figures are its estimate of the
-    SKU's; the relative tolerance registration allows around an estimate; and the key of each of its own devices."""
+    SKU's; the relative tolerance registration allows around an estimate; the key of each of its own devices and the
+    scheme it is of, by the device's id (`keys`, each `(id, key, scheme)`); its figures for each memory leaf directly
+    under a host, by the leaf's id (`memory`); its figures for each host, by the host's id (`hosts`); and how far each
+    of its own devices' clocks may run from real time, by the device's id (`drift`). The first under an SKU or an id
+    is the one the check reads. That these figures are the hardware is a public input: no check holds it and no
+    premise says it, and a result is over the registered hardware."""
 
     sheets: tuple[Sheet, ...] = ()
     tolerance: Fraction = Fraction(0)
-    keys: tuple[tuple[str, str], ...] = ()
+    keys: tuple[tuple[str, str, str], ...] = ()
+    memory: tuple[tuple[str, MemoryFigures], ...] = ()
+    hosts: tuple[tuple[str, HostFigures], ...] = ()
+    drift: tuple[tuple[str, Fraction], ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "sheets", tuple(self.sheets))
         object.__setattr__(self, "tolerance", _rat(self.tolerance, "the auditor's tolerance"))
-        object.__setattr__(self, "keys", tuple((_str(d, "a device"), _str(k, "a key")) for d, k in self.keys))
+        keys = list(self.keys)
+        if not all(isinstance(k, (tuple, list)) and len(k) == 3 for k in keys):
+            raise Malformed(f"the auditor's keys: {keys!r}; each is a device's id, its key and the key's scheme")
+        object.__setattr__(self, "keys", tuple((_str(d, "a device"), _str(k, "a key"), _str(c, "a scheme"))
+                                               for d, k, c in keys))
+        for f, cls in (("memory", MemoryFigures), ("hosts", HostFigures)):
+            pairs = tuple((_str(i, f"an id of the auditor's {f}"), v) for i, v in _pairs(getattr(self, f), f))
+            if not all(isinstance(v, cls) for _, v in pairs):
+                raise Malformed(f"the auditor's {f}: each is an id and its {cls.__name__}")
+            object.__setattr__(self, f, pairs)
+        object.__setattr__(self, "drift", tuple((_str(i, "a device"), _rat(q, f"{i}'s drift"))
+                                                for i, q in _pairs(self.drift, "the auditor's drift")))
 
     @classmethod
     def of_files(cls, cards: Iterable[Mapping[str, Any]], tolerance: Fraction = Fraction(0),
-                 keys: Mapping[str, str] | None = None, tick: Fraction = TICK) -> Auditor:
+                 keys: Mapping[str, tuple[str, str]] | None = None, *,
+                 memory: Iterable[tuple[str, MemoryFigures]] = (), hosts: Iterable[tuple[str, HostFigures]] = (),
+                 drift: Iterable[tuple[str, Fraction]] = ()) -> Auditor:
         """The auditor whose data sheets come from these card files (`verity.hardware.cards.load(sku)` each), at this
-        tolerance, and its devices' keys."""
-        return cls(tuple(Sheet.of_file(c, tick) for c in cards), tolerance, tuple((keys or {}).items()))
+        tolerance, with its devices' keys, each a key and its scheme by the device's id, and these figures
+        (`Registration.node_figures` gives a node's)."""
+        return cls(tuple(Sheet.of_file(c) for c in cards), tolerance,
+                   tuple((d, k, c) for d, (k, c) in (keys or {}).items()), tuple(memory), tuple(hosts), tuple(drift))
 
     def sheet(self, sku: str) -> Sheet | None:
         """The data sheet for `sku`: the first under it."""
@@ -608,18 +824,43 @@ class Auditor:
 
     def key(self, i: str) -> str | None:
         """The key of the auditor's device `i`: the first under it."""
-        return next((k for d, k in self.keys if d == i), None)
+        return next((k for d, k, _ in self.keys if d == i), None)
+
+    def scheme(self, i: str) -> str | None:
+        """The scheme of the key of the auditor's device `i`: the first key's under it."""
+        return next((c for d, _, c in self.keys if d == i), None)
 
     def to_json(self) -> dict[str, Any]:
-        return {"keys": [{"id": d, "key": k} for d, k in self.keys], "sheets": [k.to_json() for k in self.sheets],
-                "tolerance": _rat_str(self.tolerance)}
+        return {"drift": [{"drift": _rat_str(q), "id": i} for i, q in self.drift],
+                "hosts": [{"cards": [{"count": n, "sku": sku} for sku, n in h.cards], "chip": h.chip, "id": i,
+                           "shared": _shared_json(h.shared), "ways": [{"beta": b, "id": w} for w, b in h.ways]}
+                          for i, h in self.hosts],
+                "keys": [{"id": d, "key": k, "scheme": c} for d, k, c in self.keys],
+                "memory": [{"bw": m.bw, "bytes": m.bytes, "host": m.host, "id": i} for i, m in self.memory],
+                "sheets": [k.to_json() for k in self.sheets], "tolerance": _rat_str(self.tolerance)}
 
     @classmethod
     def of_json(cls, j: Any) -> Auditor:
-        j = _exactly(j, ("keys", "sheets", "tolerance"), "the auditor")
-        keys = [_exactly(k, ("id", "key"), "a key") for k in _list(j["keys"], "keys")]
+        j = _exactly(j, ("drift", "hosts", "keys", "memory", "sheets", "tolerance"), "the auditor")
+        drift = [_exactly(d, ("drift", "id"), "a device's drift") for d in _list(j["drift"], "drift")]
+        keys = [_exactly(k, ("id", "key", "scheme"), "a key") for k in _list(j["keys"], "keys")]
+        memory = [_exactly(m, ("bw", "bytes", "host", "id"), "a memory leaf's figures")
+                  for m in _list(j["memory"], "memory")]
+        hosts = [_exactly(h, ("cards", "chip", "id", "shared", "ways"), "a host's figures")
+                 for h in _list(j["hosts"], "hosts")]
+
+        def host(h: Mapping[str, Any]) -> HostFigures:
+            cards = [_exactly(k, ("count", "sku"), "a host's card") for k in _list(h["cards"], "a host's cards")]
+            ways = [_exactly(w, ("beta", "id"), "a host's way out") for w in _list(h["ways"], "a host's ways")]
+            return HostFigures(h["chip"], tuple((k["sku"], k["count"]) for k in cards),
+                               _shared_of(h["shared"], "a shared rate"), tuple((w["id"], w["beta"]) for w in ways))
+
         return cls(tuple(Sheet.of_json(k) for k in _list(j["sheets"], "sheets")),
-                   _rat_json(j["tolerance"], "the auditor's tolerance"), tuple((k["id"], k["key"]) for k in keys))
+                   _rat_json(j["tolerance"], "the auditor's tolerance"),
+                   tuple((k["id"], k["key"], k["scheme"]) for k in keys),
+                   tuple((m["id"], MemoryFigures(m["host"], m["bw"], m["bytes"])) for m in memory),
+                   tuple((h["id"], host(h)) for h in hosts),
+                   tuple((d["id"], _rat_json(d["drift"], "a device's drift")) for d in drift))
 
 
 @dataclass(frozen=True)
@@ -726,8 +967,8 @@ class Site:
     def device(self, d: str, auditor: Auditor, tick: Fraction = TICK, cuda: int = 0, oracle: int = 0,
                cap: Mapping[str, int] | None = None) -> dict[str, Any] | None:
         """**Device `d`'s model** (`Accounting.Device`, `Site.device`), read off its sheet `k` and the auditor's sheet
-        `a` for `k`'s SKU: `k`'s on-chip state (`chip`) and memory bandwidth (`bw`), `k`'s device memory in bits (`mem`),
-        and as its tensor-core MACs a tick (`rate["tc"]`) the highest peak rate of the figures the bound reads
+        `a` for `k`'s SKU: `k`'s on-chip state (`chip`), `k`'s memory bandwidth in bits a tick, rounded up (`bw`), `k`'s
+        device memory in bits (`mem`), and as its tensor-core MACs a tick (`rate["tc"]`) the highest peak rate of the figures the bound reads
         (`DeviceFigures.bounding`: class by class, the larger of `k`'s and `a`'s estimate's) over a tick of `tick`
         seconds, rounded up. No sheet states a device's CUDA-core ops or oracle queries a tick, or its side channels'
         capacities (`cap`), so they are parameters. None when `d` names no registered sheet or the auditor has none for
@@ -737,7 +978,7 @@ class Site:
         if k is None or a is None:
             return None
         f = k.figures.bounding(auditor.estimate(a))
-        return {"bw": k.bw, "cap": dict(cap or {}), "chip": k.chip, "mem": 8 * k.mem,
+        return {"bw": math.ceil(tick * k.bw), "cap": dict(cap or {}), "chip": k.chip, "mem": 8 * k.mem,
                 "rate": {"cuda": cuda, "oracle": oracle, "tc": math.ceil(tick * max(f.peak_rate))}}
 
     def host(self, i: str) -> str | None:

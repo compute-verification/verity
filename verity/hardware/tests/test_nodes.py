@@ -20,14 +20,16 @@ import pytest
 from verity.errors import InvalidArtifact
 from verity.hardware import cards, nodes
 from verity.hardware.cards import MARKS
-from verity.hardware.site import (NO_LINE_RATE, OUTSIDE, STORAGE_PATH, TIERS, Auditor, Entry, Link, Loc, Malformed,
-                                  Refused, Registration, Sheet, check, refusal)
+from verity.hardware.site import (NO_LINE_RATE, OUTSIDE, SCHEMES, STORAGE_PATH, TIERS, Auditor, Entry, Link, Loc,
+                                  Malformed, Refused, Registration, Sheet, check, refusal)
 
 HOST = "host0"
 """The id a test registers a node's host under: a node file names none."""
 CHALLENGER = "challenger0"
-CERTIFIER = ("certifier0", "dummy-certifier0-key")
-"""A network certifier's id and key, as whoever registers a node gives them: a node file names neither."""
+SCHEME = SCHEMES[0]
+CERTIFIER = ("certifier0", "dummy-certifier0-key", SCHEME)
+"""A network certifier's id, key and the key's scheme, as whoever registers a node gives them: a node file names
+none of them."""
 READ = [kind for kind in nodes.kinds()
         if {"dram", "disk"} <= {leaf["tier"] for leaf in nodes.load(kind).get("memory", {}).values()}]
 """The nodes whose file states the host's DRAM and a disk: the ones an entry can be built of."""
@@ -52,21 +54,23 @@ def entries(table: dict, at: str = "") -> dict[str, dict]:
 
 
 def auditor(**keys: str) -> Auditor:
-    """The auditor whose data sheets are the GPU card files', with these keys of its own devices."""
-    return Auditor.of_files(map(cards.load, cards.skus("gpu")), keys=keys)
+    """The auditor whose data sheets are the GPU card files', with these keys of its own devices, each of `SCHEME`."""
+    return Auditor.of_files(map(cards.load, cards.skus("gpu")), keys={i: (k, SCHEME) for i, k in keys.items()})
 
 
-def log_of(kind: str, composite: str, certifier: tuple[str, str] | None = None) -> Registration:
+def log_of(kind: str, composite: str, certifier: tuple[str, str, str] | None = None) -> Registration:
     """The composite's log of one entry, the node's, with this network certifier standing in front of the node."""
     node = nodes.load(kind)
     log = Registration(composite)
     return log.append(log.node_entry(node, cards.load(node["device"]["sku"]), HOST, certifier=certifier,
-                                     ways=nodes.ways_out(node, HOST)))
+                                     host_card=cards.load(node["host"]["sku"]), ways=nodes.ways_out(node, HOST),
+                                     leaves=nodes.leaves(node, HOST)))
 
 
 def reached(entry: Entry) -> Entry:
     """`entry` with a memory challenger of the auditor's linked to the host."""
-    return replace(entry, locs=(*entry.locs, Loc(CHALLENGER, "challenger", "site", "auditor", key="dummy-key")),
+    return replace(entry, locs=(*entry.locs, Loc(CHALLENGER, "challenger", "site", "auditor", key="dummy-key",
+                                                         scheme=SCHEME)),
                    links=(*entry.links, Link(f"{CHALLENGER}-link", (CHALLENGER, HOST), 1, 1)))
 
 
@@ -212,13 +216,13 @@ def test_a_certifier_links_to_one_host_and_the_outside(kind: str) -> None:
     beta = sum(way.bw for way in nodes.ways_out(nodes.load(kind), HOST) if way.split)
     assert entry.links[-2:] == (Link(f"{HOST}/{cert}", (HOST, cert), beta, 0),
                                 Link(f"{cert}/{OUTSIDE}", (cert, OUTSIDE), beta, 0))
-    assert check(log, auditor(**dict([CERTIFIER]))).far(cert) == [HOST, OUTSIDE]
+    assert check(log, auditor(**{CERTIFIER[0]: CERTIFIER[1]})).far(cert) == [HOST, OUTSIDE]
     assert [k.id for k in entry.links if cert in k.ends] == [f"{HOST}/{cert}", f"{cert}/{OUTSIDE}"]
     blind = replace(entry, links=entry.links[:-1])
     second = replace(entry, locs=(*entry.locs, Loc("host1", "host", "site")),
                      links=(*entry.links, Link(f"host1/{cert}", ("host1", cert), beta, 0)))
     for e in (blind, second):
-        assert refusal(Registration("remote"), e, auditor(**dict([CERTIFIER]))) == "kind"
+        assert refusal(Registration("remote"), e, auditor(**{CERTIFIER[0]: CERTIFIER[1]})) == "kind"
 
 
 @pytest.mark.parametrize("kind", WIRED)
@@ -228,7 +232,7 @@ def test_only_onsites_uncertified_refuses_a_host_with_a_bare_link_beside_its_cer
     it accepts the eight-card node, storage path and all, since that link says why no certifier splits it: a
     certifier on the interface does not mediate the disks, so the site is not mediated. Without the path's link too,
     it is."""
-    keys = {CHALLENGER: "dummy-key", **dict([CERTIFIER])}
+    keys = {CHALLENGER: "dummy-key", **{CERTIFIER[0]: CERTIFIER[1]}}
     ports = [f"{HOST}/{name}" for name in nodes.load(kind)["interface"]]
     site = check(log_of(kind, "remote", CERTIFIER), auditor(**keys))
     assert [(k.id, site.certified(k)) for k in site.boundary(HOST)] == [
@@ -250,7 +254,7 @@ def test_a_certifiers_key_is_the_one_the_auditor_holds_for_its_id(kind: str, hel
     with pytest.raises(Refused) as refused:
         check(log, auditor(**held))
     assert refused.value.name == "owner" and CERTIFIER[0] in refused.value.detail
-    assert check(log, auditor(**dict([CERTIFIER]))).registered(CERTIFIER[0])
+    assert check(log, auditor(**{CERTIFIER[0]: CERTIFIER[1]})).registered(CERTIFIER[0])
 
 
 def test_the_quoted_bytes() -> None:
@@ -400,7 +404,7 @@ DRAM = '[memory.dram]\ntier = "dram"\nbytes = { value = 1, unit = "B", mark = "m
 
 @pytest.mark.parametrize(("leaves", "refusal"), [
     ("", "no dram and no disk leaf.*lsmem -b --summary=only; lsblk -b -d -n -o NAME,SIZE"),
-    (DRAM, "no disk leaf"),
+    (DRAM + 'rate = { value = 6.144e11, unit = "B/s", mark = "ceiling", source = "s" }\n', "no disk leaf"),
 ])
 @pytest.mark.parametrize("composite", ["remote", "onsite"])
 def test_a_node_file_without_its_hosts_memory_gives_no_entry(tmp_path, monkeypatch, composite: str, leaves: str,

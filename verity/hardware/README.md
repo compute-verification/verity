@@ -183,15 +183,19 @@ is so of an interface and not of the storage path. The interfaces come first, in
 states neither a rate nor its read, a storage path that does not name disk leaves of the file's, each once, and a
 leaf or an interface named `storage`.
 
-`Registration.node_entry(node, card, host, ways=nodes.ways_out(node, host))`, in the Site
-(`site/__init__.py`), gives the entry a node file's table, its GPU card's table and its ways out register, under the
-host id its caller passes: the card's sheet, the site, the host, each device `host/gpuI` with one `hbm` leaf at the
-sheet's device memory, the host's leaves `host/NAME`, and for each way out a link under its id from the host to the
-outside. The sheet is built from the card file when the entry is, so no digest is kept in the tree.
+`Registration.node_entry(node, card, host, host_card=..., ways=nodes.ways_out(node, host),
+leaves=nodes.leaves(node, host))`, in the Site (`site/__init__.py`), gives the entry a node file's table, its GPU
+card's and host card's tables, its ways out and its leaves register, under the host id its caller passes: the card's
+sheet, the site at its unit of time, the host with its on-chip state in bits (eight times the host card's
+`store.chip`) and the rate each tier's leaves share, each device `host/gpuI` with one `hbm` leaf at the sheet's device
+memory, the host's leaves `host/NAME` at their rates, and for each way out a link under its id from the host to the
+outside. `node_figures` of the same tables gives the auditor's figures for the host and its leaves, which the Site's
+check holds the entry's to. The sheet is built from the card file when the entry is, so no digest is kept in the tree.
 It refuses a file with no `dram` leaf or no `disk` leaf: an entry of it would pass the Site's check and state a host
 with less memory than the node has. Its message gives the commands that read both on the node. The Site imports
-neither the cards nor the node files, so its caller hands it the ways out, and it holds them to the file's tables:
-each by name and in order, with a rate exactly where the file states one. A rate's value is `ways_out`'s reading.
+neither the cards nor the node files, so its caller hands it the ways out and the leaves, and it holds them to the
+file's tables: each way by name and in order, with a rate exactly where the file states one, and each leaf by name,
+tier and bytes. A rate's value is `ways_out`'s or `leaves`' reading.
 
 A way out's link is a boundary link that no certifier splits, at its rate in bits a second. That is what is so of a
 node none of whose ways out the auditor's hardware sits on. Two kinds of way say why no certifier splits them
@@ -212,12 +216,15 @@ how the node reaches the outside. Each message says what to read or state.
 
 ~~~python
 from verity.hardware import cards, nodes
-from verity.hardware.site import Auditor, Registration, check
+from verity.hardware.site import Auditor, Registration, check, node_figures
 node = nodes.load("rtx-pro-6000-server-x8")
 gpu = cards.load(node["device"]["sku"])
 log = Registration("remote")
-entry = log.node_entry(node, gpu, host="node0", ways=nodes.ways_out(node, "node0"))
-site = check(log.append(entry), Auditor.of_files([gpu]))
+host = cards.load(node["host"]["sku"])
+ways, leaves = nodes.ways_out(node, "node0"), nodes.leaves(node, "node0")
+entry = log.node_entry(node, gpu, "node0", host_card=host, ways=ways, leaves=leaves)
+memory, figures = node_figures(node, host, "node0", ways=ways, leaves=leaves)
+site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("node0", figures)]))
 ~~~
 
 `remote` accepts each node's log against the auditor the GPU card files give, and neither site is mediated. `onsite`

@@ -33,12 +33,15 @@ the one that bounds the node's disks together, ``leaves``'s for ``disk``. A serv
 
 ~~~python
 from verity.hardware import cards, nodes
-from verity.hardware.site import Auditor, Registration, check
+from verity.hardware.site import Auditor, Registration, check, node_figures
 node = nodes.load("rtx-pro-6000-server-x8")
 gpu = cards.load(node["device"]["sku"])
 log = Registration("remote")
-entry = log.node_entry(node, gpu, host="node0", ways=nodes.ways_out(node, "node0"))
-site = check(log.append(entry), Auditor.of_files([gpu]))
+host = cards.load(node["host"]["sku"])
+ways, leaves = nodes.ways_out(node, "node0"), nodes.leaves(node, "node0")
+entry = log.node_entry(node, gpu, "node0", host_card=host, ways=ways, leaves=leaves)
+memory, figures = node_figures(node, host, "node0", ways=ways, leaves=leaves)
+site = check(log.append(entry), Auditor.of_files([gpu], memory=memory, hosts=[("node0", figures)]))
 site.units                          # ('node0/gpu0', ..., 'node0/gpu7')
 site.tiers("node0")                 # {'hbm': 824633720832, 'dram': 1872605741056, 'disk': 6266358333440}
 [(k.id, k.beta) for k in site.boundary("node0")]   # [('node0/eth0', 400000000000), ('node0/storage', 5584738461544)]
