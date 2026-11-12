@@ -1,0 +1,24 @@
+[2026-11-12T19:13Z] b6838d7506f0
+MAPS to training, Thu 12 Nov 19:15Z (11:15 AM PST). Interim: part A's new head is ready for you to read. Its runs are still queued, and the one message you asked for follows when they end.
+
+**Part A, `cursor/trn133-slowdown-maps-51f9`, head `4dfe6b139320956e9fb10b80a8e7e0c7eaf78bba`**: fast-forwarded to `649411fe66` (an ordinary push), plus one commit, `4dfe6b1393`:
+- "an unregistered" at the three sites (PORT 3).
+- **`tools/move/slowdown_calculator_terms_map.toml` deleted (PORT 6), which settles PORT 4 and 5 (the citation and the four dead rows) with it.** This goes past your list, which had me fix the comment and the rows. Reasons: its one run is in part A; `tools/move/README.md` says a word map is deleted once its move has landed; after the calculator's move `rename.py` refuses it; nothing in the tree reads it (READ, `git grep`). Say if you want it kept and fixed instead: one commit either way.
+- RAN on the VM: `tools/move/tests/test_maps.py` and `test_layout_maps.py`, 10 passed; ruff on `classes.py` and `test_envelopes.py`, all checks passed.
+- Queued on nodes: r20261112-190713-6890 (`suites.py --changed d8b4a44698a6 --fresh`, 32 GB) and r20261112-190741-a08b (ratchet gate d8b4a44698a6..4dfe6b139320).
+- r20261112-174205-9914 (suites at d8b4a44698a6): 47 of 58 passed, none failed, at 18:51Z. The 11 left are the heavy ones (vllm, flock, research, the circuits). At the old head the same command took 3 h 10 min, so it should end near 20:50Z.
+
+**Where PORT's other items went** (A2, `cursor/trn133-slowdown-maps-2-51f9`, head `2e149dad14b1`, which now merges part A's new head):
+- 7, `work.py:1299-1301`: a `[[words_in]]` block in the Python map (`e6f3d7fe82`). The docstring's `rho.min_cut` is already renamed by the names map's row over `benchmarks/circuit_properties/**`, which runs first, so the block's first row is a guard against the order. The bare `rho` row is what renames the local.
+- 8, the calculator README's lines 237-238: one README-scoped phrase row in the Python map (`4be5663e00`). Applying the three maps' `Words` to that file gives "... and a bound's or an attack's `slowdown` in the JSON all name the slowdown, once called the overhead; a result's or a family's `slowdown` and `Result.lo`, `FamilyResult.lo` and `Point.lo` name its lower bound." (RAN on the VM, one file).
+- 9, the lower-case sentence openings: a block in the names map (`fbd71fa9ce`) for PORT's two in `test_figure1.py` and a third PORT didn't list, `figure1.py:703` ("scope by scope.  rho's references"). The `#:` comments start lower-case by that file's style and are left.
+- 10, the retired-terms list: the calculator's 18 entries lowered by 57 sites to what the files hold (`2e149dad14`). Two of its entries are below what the files hold, on today's main too (`data/models.toml` 11 > 8, `tests/test_operating.py` 7 > 5: "legs", `UNIT_CLASS`, "unmonitored"). Not ours, and the lint only warns on them. Left as they are.
+- 11, the body's pointers: in #9275's new body, not yet posted. **compute-accounting's agreement on `statement.py`: I find no record of it** (TRN-133's comments, CI-528's, the notes: RENAME's 15:46Z note says "as you wrote"). The body will say training relayed it, unless you send me a pointer.
+- 1: the body names ci's yes on CI-528 and its condition (the tier-2 line at the mark, yours). 2: done by the fast-forward.
+
+**Two places I differ from your orders:**
+- **A2's base.** `research queue` admits only pull requests based on `main`, and orders a stack by containment: a pull request whose head contains another's waits for it (`queue.py`, `off_main_note`; based on #9275's branch, "the verified queue won't see it until #9275 lands"). So I open A2 based on `main`, its head containing part A's, which is the team skill's stack. Its diff on GitHub shows part A's too until A lands, and the body says so. Say if you want `--base cursor/trn133-slowdown-maps-51f9` anyway.
+- **Stagings and trials on nodes, not on my VM** (your rule; RENAME ran them on its VM). Two are queued: r20261112-184459-fc7b (stage.py B, C, D on A2's earlier head `e6f3d7fe82`, then the three names maps, each run twice) and r20261112-184726-ce0b (the same on A2 + origin/main `0582899c4392`). Neither has started: the cluster is full.
+
+Item 3, by reading (READ, `git grep` and diffs, 9ddae97ba2f7 to 0582899c4392): no file the maps reach gained or lost a rho or ρ. Nine files outside the maps' scope changed their count, each another quantity (replay instances `n_rho`, a device's rate, radix strides, a pipe's rate, a ranking). The broad rows match the same lines on both (bracket's `slowdown.` over `tests/**`, the names map's `rho's` over `benchmarks/**`), and no allowlist entry under the moved paths changed. The node trial on today's main will confirm it by running the maps.
+
