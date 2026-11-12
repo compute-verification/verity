@@ -58,10 +58,11 @@ phases are not public, and a reason is part of an answer.
    marks link name, is an egress certificate, is the key's, signs `markDigest` of its salt and its mark, and its
    signature verifies in the certifier session.
 2. The marks are in order: w_s ≤ w_e, the execution phases their certificates name.
-3. The span's tail is `tail` execution phases. The network certifier holds a connection's response before it releases
-   it: its cell i leaves D + ⌊i / r⌋ buckets after its admission, and it has at most `egress_cells` cells, so the bytes
-   the network certifier holds at the end mark have left D + ⌊(egress_cells − 1) / r⌋ buckets after the end mark's
-   execution phase at the latest. The start needs no tail.
+3. The span's tail is `tail` execution phases. The network certifier releases a connection's response late: its cell
+   i leaves D + ⌊i / r⌋ buckets after its admission, and it has at most `egress_cells` cells. It reads a server's bytes
+   only on a connection it opened when it admitted that client's connection, so the bytes it has read by the end mark
+   leave in cells of connections admitted by then, the last of them D + ⌊(egress_cells − 1) / r⌋ buckets after the end
+   mark's execution phase at the latest. The start needs no tail.
 4. The evidence shows each execution phase from w_s to w_e + tail once, in order: one outside them, one shown twice
    and a missing one each reject.
 5. Each execution phase's two certificates are egress certificates on their link names at that execution phase and
@@ -249,9 +250,9 @@ def evidenceOf (b : ByteArray) : V Evidence := do
 
 /-- The span's tail in execution phases, ⌈(D + ⌊(egress_cells − 1) / r⌋) / T⌉. A connection's egress cell i leaves in
 bucket s + D + ⌊i / r⌋, s its admission's bucket, and it has at most `egress_cells` cells, so its last cell leaves at
-most D + ⌊(egress_cells − 1) / r⌋ buckets after s. A connection the network certifier holds bytes of at the end mark was
-admitted in the end mark's execution phase at the latest, so its cells have left that many buckets after that
-execution phase's last, T buckets an execution phase. A schedule's `egress_cells` is at least 1 (`scheduleOf`). -/
+most D + ⌊(egress_cells − 1) / r⌋ buckets after s. A connection admitted by the end mark was admitted in the end mark's
+execution phase at the latest, so its cells have left that many buckets after that execution phase's last, T buckets
+an execution phase. A schedule's `egress_cells` is at least 1 (`scheduleOf`). -/
 def tail (s : Schedule) : Nat :=
   (s.delay + (s.egressCells - 1) / s.slots + s.window - 1) / s.window
 

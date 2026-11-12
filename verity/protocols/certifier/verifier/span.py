@@ -15,8 +15,9 @@ certificate. A mark's bytes in the commitment are `mark_bytes`: its certificate'
 their length, its salt, then its message. A link's name is what the period's check takes: at most 65,535 UTF-8 bytes.
 
 **The span.** From the start mark's execution phase w_s to the end mark's w_e, then a tail (`tail`): the network
-certifier holds a connection's response for a bounded time before it releases it, so bytes it held at the end mark
-leave in the tail's execution phases. The count is `phases = w_e + tail − w_s + 1` execution phases, each at the
+certifier releases a connection's response late, by a bounded time, and reads a server's bytes only on a connection it
+opened when it admitted that client's connection, so the bytes it has read by the end mark leave in the tail's
+execution phases at the latest. The count is `phases = w_e + tail − w_s + 1` execution phases, each at the
 schedule's capacity (`capacity_bits`): every cell of both egress records, the responses' and the fails', which both
 leave on the link. A certificate hides its record, so the count takes each certified record as full; it is certified
 only when complete, so nothing left outside its cells. What of the count is public is `public`'s to say: the two
@@ -236,16 +237,17 @@ def evidence(j: Any) -> list[Phase]:
         _exactly(x, PHASE_KEYS, ctx)
         certificates = tuple(_json_certificate(c, f"{ctx}.certificates")
                              for c in _of(x["certificates"], list, f"{ctx}.certificates"))
-        out.append(Phase(_nat(x["phase"], f"{ctx}.phase"), certificates, _rows(x["registration"], f"{ctx}.registration")))
+        out.append(Phase(_nat(x["phase"], f"{ctx}.phase"), certificates,
+                         _rows(x["registration"], f"{ctx}.registration")))
     return out
 
 
 def tail(s: Schedule) -> int:
-    """The span's tail in execution phases, ⌈(D + ⌊(egress_cells − 1) / r⌋) / T⌉. A connection's egress cell i leaves in
-    bucket s + D + ⌊i / r⌋, s its admission's bucket, and it has at most egress_cells cells, so its last cell leaves at
-    most D + ⌊(egress_cells − 1) / r⌋ buckets after s. A connection the network certifier holds bytes of at the end mark
-    was admitted in the end mark's execution phase at the latest, so its cells have left that many buckets after that
-    execution phase's last, T buckets an execution phase."""
+    """The span's tail in execution phases, ⌈(D + ⌊(egress_cells − 1) / r⌋) / T⌉. A connection's egress cell i leaves
+    in bucket s + D + ⌊i / r⌋, s its admission's bucket, and it has at most egress_cells cells, so its last cell leaves
+    at most D + ⌊(egress_cells − 1) / r⌋ buckets after s. A connection admitted by the end mark was admitted in the end
+    mark's execution phase at the latest, so its cells have left that many buckets after that execution phase's last,
+    T buckets an execution phase."""
     buckets = s.delay + (s.egress_cells - 1) // s.slots
     return -(-buckets // s.window)
 
