@@ -74,17 +74,24 @@ field's name:
   `max_tokens`), a run on the same path with that one thing changed.
 - `run`: the id of the run that produced the verdict.
 - `verifier`: `{"module": ..., "commit": ...}`, the verifier that checked it and the commit it ran at.
-- `verdict`: `accept` (accepted and complete), `not complete` (accepted, which moves no figure) or `refuse`.
+- `verdict`: `accept` (accepted and complete), `not complete` (accepted, which moves no figure), `refuse`, or
+  `withheld`: the verifier held back its last accept itself because the form it would accept is not yet proved (every
+  sampled proof accepted, every check before the sample held, every tampered input refused). `withheld` is neither an
+  accept nor a refusal.
 - `proved_by`: null until a Lean proof covers that verifier, then the Lean guarantee's name.
-- `open`: while `proved_by` is null, what that proof waits on.
+- `open`: while `proved_by` is null, and on every `withheld` verdict, what stands between the verdict and proved,
+  stated in words (`the two-round form's soundness is not proved`). A record whose `open` names an issue's id is
+  refused: the print carries no issue id, and the issue goes on the board.
 
 The class is complete when every piece's honest run is `accept`, and a changed id and a changed `max_tokens` are each
 refused, on a piece, by the verifier that accepted that piece's honest run, and no control is accepted. Then the
 output count's 0 is marked `run, not proved`, printed "run (Python verifier, not proved)" with each verdict's run and
-verifier and counted apart from measured, and the class prints as `complete (run, not proved: OPEN open; Python
-verifier for PIECES)`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
+verifier and counted apart from measured, and the class prints as `complete (run, not proved: OPEN; Python verifier
+for PIECES)`, OPEN being each unproved piece's `open`. Only where every piece's record names its `proved_by` is it `measured`; the command takes that
 from the field, never from a flag or a name. Short of complete, the inputs print as with no verdicts and the output
-count's line names what is missing. With no run carrying the record the print is as it was before the command read
+count's line names what is missing; a `withheld` piece or control prints as `withheld: OPEN`, and a withheld control
+is not refused. A control on a withheld piece refused by that piece's verifier (the same module and commit) counts as
+refused. With no run carrying the record the print is as it was before the command read
 any.
 
 ## The share of compute
