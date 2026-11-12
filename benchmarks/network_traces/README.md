@@ -132,11 +132,13 @@ on the developer's node, so `trusted-host` is assumed with the auditor's devices
 whose rows count each Commit period's requests, steps and outputs and its advice's bits, stays beside the fetch, and so
 does the rest of the chain's out/ but what `PUBLIC` names (the report's verdicts and ε at δ, and the scan's answers):
 report.md, the report's other keys and the steps' summaries count the window's requests and outputs and the advice's
-bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory. Split in two around V3c
-(`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on V3c's committed window
-(`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and its `period` runs the
-consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample of V3c's; each step
-releases through its own hold.
+bits. The leak guard (`--public`) moves any file the piece doesn't declare out of its directory. `kind_scan.py DIR`
+reads a piece's files field by field and reports each one that is of none of the four public kinds and no certificate of
+the network certifier's; `--received OUT` does so for what a verifier on another machine reads of a served run's OUT.
+Split in two around V3c (`CERTIFIER_CHAIN_CMD` and `CERTIFIER_PERIOD_CMD`), its `chain` runs the chain with the scan on
+V3c's committed window (`scan_zk.py --v3c`: its scan state and slot entries are the scan's state and prog trees), and
+its `period` runs the consistency check on the rows case whose one compute audit is V3c's `period.json`, at any sample
+of V3c's; each step releases through its own hold.
 
 ## A cheating server
 
