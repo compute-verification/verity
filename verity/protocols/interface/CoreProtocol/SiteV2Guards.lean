@@ -43,7 +43,8 @@ private def entry (xs : List Loc) : Entry := { locs := [root, host, gpu] ++ xs }
 #guard [dram (some 6554), hbm none].all fun x => (Loc.ofJson x.toJson).toOption == some x
 #guard (dram (some 6554)).toJson.compress ==
   "{\"bw\":6554,\"bytes\":2147483648,\"chip\":null,\"drift\":null,\"id\":\"dram0\",\"key\":\"\",\"kind\":\"memory\",\"owner\":\"prover\"," ++
-  "\"parent\":\"node0\",\"scheme\":\"\",\"shared\":[],\"sheet\":\"\",\"tier\":\"dram\",\"time_unit\":null}"
+  "\"parent\":\"node0\",\"scheme\":\"\",\"shared\":[],\"sheet\":\"\",\"tier\":\"dram\",\"time_unit\":null," ++
+  "\"timebase\":null}"
 private def auditorJson : Json :=
   Json.mkObj [("drift", .arr #[Json.mkObj [("drift", "3/5000"), ("id", "cert0")]]),
     ("hosts", .arr #[Json.mkObj [("cards", .arr #[Json.mkObj [("count", (8 : Nat)), ("sku", "k")]]),
@@ -53,7 +54,8 @@ private def auditorJson : Json :=
         Json.mkObj [("beta", Json.null), ("id", "node0/eth1")]])]]),
     ("keys", .arr #[Json.mkObj [("id", "cert0"), ("key", "k0"), ("scheme", "lms-sha512/n64-w1-h20/v0")]]),
     ("memory", .arr #[Json.mkObj [("bw", (6554 : Nat)), ("bytes", (2147483648 : Nat)), ("host", "node0"),
-      ("id", "dram0")]]), ("sheets", .arr #[]), ("tolerance", "0")]
+      ("id", "dram0")]]), ("sheets", .arr #[]),
+    ("timebases", .arr #[Json.mkObj [("id", "vm0"), ("sku", "tb0")]]), ("tolerance", "0")]
 #guard ((Registration.Auditor.ofJson auditorJson).toOption.map fun A => (A.memory, A.hosts)) ==
   some ([("dram0", ⟨"node0", 6554, 2147483648⟩)],
     [("node0", ⟨8002732032, [("k", 8)], [(.disk, 50)], [("node0/eth0", some 400000000000), ("node0/eth1", none)]⟩)])
@@ -61,6 +63,7 @@ private def auditorJson : Json :=
   some (some "k0", some "lms-sha512/n64-w1-h20/v0", none)
 #guard ((Registration.Auditor.ofJson auditorJson).toOption.map fun A => A.drift.map fun d => (d.1, toString d.2.1)) ==
   some [("cert0", "3/5000")]
+#guard ((Registration.Auditor.ofJson auditorJson).toOption.map fun A => A.timebases) == some [("vm0", "tb0")]
 -- the read rate of a host's leaf alone; with a device's leaf whose sheet is not registered there is none
 #guard (⟨[], (entry [dram (some 6554), hbm none]).locs, []⟩ : Site).readRate (fun _ => "s") ["dram0"] == some 6554
 #guard (⟨[], (entry [dram (some 6554), hbm none]).locs, []⟩ : Site).readRate (fun _ => "s") ["dram0", "hbm0"] == none
@@ -182,7 +185,8 @@ private def keyed (drift : List (String × Figure)) (scheme : String := root2) :
 #guard [root, host].all fun x => (Loc.ofJson x.toJson).toOption == some x
 #guard root.toJson.compress ==
   "{\"bw\":null,\"bytes\":0,\"chip\":null,\"drift\":null,\"id\":\"site0\",\"key\":\"\",\"kind\":\"site\",\"owner\":\"prover\"," ++
-  "\"parent\":null,\"scheme\":\"\",\"shared\":[],\"sheet\":\"\",\"tier\":null,\"time_unit\":\"1/1000000000\"}"
+  "\"parent\":null,\"scheme\":\"\",\"shared\":[],\"sheet\":\"\",\"tier\":null,\"time_unit\":\"1/1000000000\"," ++
+  "\"timebase\":null}"
 #guard [bare none, bare (some "a stand-in"), unrated (some "a stand-in")].all fun k =>
   (Link.ofJson k.toJson).toOption == some k
 #guard (unrated (some "a stand-in")).toJson.compress ==
@@ -193,7 +197,8 @@ private def keyed (drift : List (String × Figure)) (scheme : String := root2) :
 -- an auditor's host: at the site, the auditor's own, with its key; a certifier or a challenger may be in it; it is
 -- under no host of the prover's, holds no device and no memory leaf, and no link ends at it
 private def vm (parent : String := "site0") : Loc :=
-  { id := "vm0", kind := .auditorHost, parent := some parent, owner := .auditor, key := "k1", scheme := root2 }
+  { id := "vm0", kind := .auditorHost, parent := some parent, owner := .auditor, key := "k1", scheme := root2,
+    timebase := some "tb0" }
 private def inVm : Loc := { cert none with parent := some "vm0" }
 private def uplinks : List Link :=
   [{ id := "up0", ends := ("node0", "cert0"), β := some 1, latency := 0 },
@@ -208,11 +213,19 @@ private def toVm : Link := { id := "l0", ends := ("node0", "vm0"), β := some 1,
 #guard !decide (Entry.Kinds empty { locs := [root, host, vm], links := [toVm] })
 private def vmKeyed : Registration.Auditor :=
   { keyed [] with key := fun i => if i == "vm0" then some "k1" else (keyed []).key i,
-                  scheme := fun i => if i == "vm0" then some root2 else (keyed []).scheme i }
+                  scheme := fun i => if i == "vm0" then some root2 else (keyed []).scheme i,
+                  timebases := [("vm0", "tb0")] }
 #guard decide (Entry.Owners vmKeyed { locs := [root, vm, inVm] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with owner := .prover }] })
 #guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with key := "k9" }] })
 #guard !decide (Entry.Owners (keyed []) { locs := [root, vm] })
+-- its time base: an auditor's host states the auditor's for it, held as its key is; refused with none, with another,
+-- or where the auditor has none for the host; no other location states one, the auditor's device in the host neither
+#guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with timebase := none }] })
+#guard !decide (Entry.Owners vmKeyed { locs := [root, { vm with timebase := some "tb1" }] })
+#guard !decide (Entry.Owners { vmKeyed with timebases := [] } { locs := [root, vm] })
+#guard !decide (Entry.Owners vmKeyed { locs := [root, vm, { inVm with timebase := some "tb0" }] })
+#guard !decide (Entry.Owners vmKeyed { locs := [root, { host with timebase := some "tb0" }] })
 -- it states no on-chip bytes and no unit of time, and the auditor's inventory holds nothing of it
 #guard decide (Entry.Chips auditor { locs := [root, host, vm] })
 #guard !decide (Entry.Chips auditor { locs := [root, host, { vm with chip := some 1 }] })
@@ -221,6 +234,7 @@ private def vmKeyed : Registration.Auditor :=
 -- the hosts its links end at
 #guard (Loc.ofJson vm.toJson).toOption == some vm
 #guard (vm.toJson.getObjValAs? String "kind").toOption == some "auditor-host"
+#guard (vm.toJson.getObjValAs? String "timebase").toOption == some "tb0"
 #guard (⟨[], [root, host, gpu, vm, inVm], uplinks⟩ : Site).host "cert0" == none
 #guard (⟨[], [root, host, gpu, vm, inVm], uplinks⟩ : Site).host "vm0" == none
 #guard (⟨[], [root, host, gpu, vm, inVm], uplinks⟩ : Site).host "gpu0" == some "node0"
