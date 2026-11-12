@@ -23,13 +23,19 @@ GIT = shutil.which("git")
 
 #: `python3.12 -m research data export ...` in the stubbed tests: one JSON line per call, and nothing sent anywhere
 STUB = """
-import hashlib, json, os, subprocess, sys
+import fcntl, hashlib, json, os, subprocess, sys
 from pathlib import Path
 argv = sys.argv[1:]
 repo = Path(argv[argv.index("--repo") + 1])
 files = sorted(str(p.relative_to(repo)) for p in repo.rglob("*") if p.is_file() and ".git" not in p.relative_to(repo).parts)
 head = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-call = {"argv": argv, "cwd": os.getcwd(), "pythonpath": os.environ.get("PYTHONPATH"),
+with open(PASS_LOCK, "a") as f:        # as the queue's loop takes the pass lock: free, or held by the pass this export is of
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_free = True
+    except BlockingIOError:
+        lock_free = False
+call = {"argv": argv, "cwd": os.getcwd(), "pythonpath": os.environ.get("PYTHONPATH"), "lock_free": lock_free,
         "bucket_sha256": hashlib.sha256(os.environ.get("RESEARCH_EXPORT_BUCKET", "").encode()).hexdigest(),
         "repo": str(repo), "head": head, "files": files,
         "registry": json.loads((repo / "fixtures" / "artifacts.json").read_text())}
@@ -78,7 +84,8 @@ class Pod:
         self.deploy(SCRIPT.read_text())
         shutil.copy(HELPER, self.data / "fixtures_export.py")
         stub = tmp / "stub_export.py"
-        stub.write_text(STUB.replace("CALLS", repr(str(self.calls_file))))
+        self.pass_lock = self.root / "fixtures-export-pass.lock"
+        stub.write_text(STUB.replace("CALLS", repr(str(self.calls_file))).replace("PASS_LOCK", repr(str(self.pass_lock))))
         route = "" if real else f'[ "$1 $2 $3 $4" = "-m research data export" ] && exec "{sys.executable}" "{stub}" "$@"\n'
         self.shim("python3.12", f'#!/bin/sh\n{route}exec "{sys.executable}" "$@"\n')
         self.shim("sleep", '#!/bin/sh\nkill "$PPID"\n')        # the loop's sleep ends the loop: one pass, and no test waits
@@ -154,6 +161,17 @@ class Pod:
     def calls(self) -> list[dict]:
         return [json.loads(line) for line in self.calls_file.read_text().splitlines()] if self.calls_file.exists() else []
 
+    def lock(self):
+        """The pass lock taken as the queue's loop takes it for its export, without waiting: the open file that holds it, to
+        close, or None while a pass holds it."""
+        f = open(self.pass_lock, "a")
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            f.close()
+            return None
+        return f
+
     def pr_calls(self) -> list[dict]:
         """The exports run for a pull request's head: every call but main's, which reads the clone itself."""
         return [c for c in self.calls() if c["repo"] != str(self.clone)]
@@ -219,10 +237,11 @@ def test_neither_the_script_nor_its_helper_reads_the_clones_last_fetch():
 
 
 def test_what_the_queues_loop_takes_from_the_script_is_as_it_takes_it(pod):
-    """The queue's loop runs an export of its own on the pod with three things of this script's. The bucket: it reads the
+    """The queue's loop runs an export of its own on the pod with four things of this script's. The bucket: it reads the
     name from the deployed script's text, so the script holds one line of that form, and what the loop reads there is what
-    the script's own exports are given. The export store's path. And the clone's checkout, whose `research` it runs: main's
-    after a pass and after a one-off."""
+    the script's own exports are given. The export store's path. The clone's checkout, whose `research` it runs: main's
+    after a pass and after a one-off. And the pass lock, which it holds while its export runs: main's export and a
+    one-off's each run with that lock held, and it is free once they end."""
     pod.commit("main", {REGISTRY: A})
     pod.pr(7, {REGISTRY: A | C})
     assert pod.run("once").returncode == 0 and pod.run("pr", "7").returncode == 0
@@ -238,6 +257,11 @@ def test_what_the_queues_loop_takes_from_the_script_is_as_it_takes_it(pod):
     script = text_of(SCRIPT)
     assert "\nREPO=/data/infra/fixtures-export-repo\n" in script and "\nSTORE=/data/infra/fixtures-export-store\n" in script
     assert pod.clean() and (pod.clone / "tools" / "research" / "src").is_dir()
+    assert script.count(") 8> /root/fixtures-export-pass.lock\n") == 1, "the lock's path, which the queue's loop names"
+    assert [c["lock_free"] for c in pod.calls()] == [False, False], "each export ran inside its pass's lock"
+    free = pod.lock()
+    assert free is not None, "no pass is left holding the lock"
+    free.close()
 
 
 def test_a_dry_pass_passes_the_dry_run_on_and_leaves_mains_checkout_as_it_is(pod):
@@ -315,19 +339,18 @@ def test_a_head_whose_new_entries_lead_out_of_its_worktree_is_refused_whole(pod)
 
 
 def test_a_one_off_waits_for_the_pass_that_holds_the_lock(pod):
-    """While something holds the pass lock, as a pass of the loop does, `pr N` says that it waits and starts no export;
-    once the lock is free it runs."""
+    """While something holds the pass lock, as a pass of the loop does and as the queue's loop does for its export, `pr N`
+    says that it waits and starts no export; once the lock is free it runs."""
     pod.commit("main", {REGISTRY: A})
     assert pod.run("once").returncode == 0
     pod.pr(7, {REGISTRY: A | C})
-    held = os.open(pod.root / "fixtures-export-pass.lock", os.O_WRONLY | os.O_CREAT)
-    fcntl.flock(held, fcntl.LOCK_EX)
+    held = pod.lock()
     with subprocess.Popen([str(pod.script), "pr", "7"], env=pod.env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as p:
         try:
             first = p.stdout.readline()
             waited = "waiting for the pass that holds" in first and pod.pr_calls() == []
         finally:
-            os.close(held)                                  # the lock is free
+            held.close()                                    # the lock is free
         rest = p.stdout.read()
     assert waited and p.returncode == 0 and len(pod.pr_calls()) == 1, first + rest
 

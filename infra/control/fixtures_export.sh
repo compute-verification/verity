@@ -10,9 +10,9 @@
 # agent_watch.sh and store_gc.sh read, and a pull request's in a worktree of its own. So no other fetch into the clone
 # changes what a pass reads. r2.env's key reads the private store and writes the public bucket; it goes only into the
 # environment.
-# The queue's loop runs its own export with three things of this script's, so none of them changes alone (the README's
-# Fixture export): the one line below that names the bucket, the clone's checkout, which is main's between passes, and the
-# export store's path.
+# The queue's loop runs its own export with four things of this script's, so none of them changes alone (the README's
+# Fixture export): the one line below that names the bucket, the clone's checkout, which is main's between passes, the
+# export store's path, and the pass lock, which it holds while its export runs.
 #   fixtures_export.sh                    the loop, one copy, which post_start.sh starts
 #   fixtures_export.sh once [--dry-run]   one pass in the foreground; --dry-run sends nothing and leaves main's checkout as it is
 #   fixtures_export.sh pr N [--dry-run]   pull request N's new ids, marked or not: by hand, when a lane asks (the README)
@@ -26,7 +26,8 @@ export GIT_CONFIG_COUNT=2 GIT_CONFIG_KEY_0=url.https://github.com/compute-verifi
   GIT_CONFIG_VALUE_1='!/data/infra/gh_app_token.sh git'
 export GIT_TERMINAL_PROMPT=0 LC_ALL=C.UTF-8
 
-# One pass at a time over the clone and the export store, whoever starts it: the loop's, a `once` and a `pr N` wait here.
+# One pass at a time over the clone and the export store, whoever starts it: the loop's, a `once` and a `pr N` wait here,
+# and the queue's loop takes the same lock for its export, by this path.
 pass() (
   flock -n 8 || { echo "waiting for the pass that holds /root/fixtures-export-pass.lock"; flock 8; } || exit 1
   "$@"

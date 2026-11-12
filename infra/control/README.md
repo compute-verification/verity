@@ -217,14 +217,17 @@ new fetched fixtures are the queue's loop's to export: where it builds a candida
 (`tools/research/src/research/vqueue_loop.py`), so they are public before the candidate's check fetches them. That is
 the only export of a marked pull request's fixtures before it lands.
 
-The queue's loop runs its export with three things of this script's, so none of them changes alone
+The queue's loop runs its export with four things of this script's, so none of them changes alone
 (`infra/ops/tests/test_fixtures_export.py` holds them):
 
 - **the bucket**, whose name it reads from `/data/infra/fixtures_export.sh`: the script has exactly one line of the form
   `RESEARCH_EXPORT_BUCKET=NAME`;
 - **the clone's checkout**, `/data/infra/fixtures-export-repo`, whose `tools/research/src` it runs: main's between
   passes, and a `pr N` reads a worktree of its own and leaves it alone;
-- **the export store**, `/data/infra/fixtures-export-store`, with its record of what landed.
+- **the export store**, `/data/infra/fixtures-export-store`, with its record of what landed;
+- **the pass lock**, `/root/fixtures-export-pass.lock`, which it holds while its export runs: every pass of the script
+  holds it from before its fetch until its export ends, so the queue's export runs neither while a pass checks the clone
+  out nor while one rewrites the record of what landed.
 
 Every commit a pass reads is named by a ref only the script writes (`refs/export/main`, and `refs/export/once/N` while a
 `pr N` runs), so a fetch of anything else into the clone changes nothing a pass reads.
@@ -239,7 +242,8 @@ is refused whole. The export sends an id once its bytes hash to it and checks no
 export: with `--dry-run`, `pr N` names the ids and sends nothing, so read them first.
 
 `fixtures_export.sh once [--dry-run]` is one pass in the foreground. The loop's passes, a `once` and a `pr N` take turns
-over the clone and the store, each waiting for the one in progress.
+over the clone and the store, each waiting for the one in progress; the queue's export waits for the same lock, so a
+pass that runs long holds it up.
 
 ~~~sh
 $CP "/data/infra/fixtures_export.sh pr N --dry-run"     # N's new ids, and how many objects the export would send
