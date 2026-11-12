@@ -128,7 +128,8 @@ def interior_values(member: CS.Member) -> tuple[tuple[str, str], ...]:
 class Rule:
     """A class's two-stage rule: the first stage's law over its spans (``replay``, a rate law ``rate:NUM/DEN[:T]``), the
     proof blocks ``k`` the second stage samples of each check template in each sampled span (one count for every
-    template, or ``{descriptor id: k_t}``, `service.TwoStage.k`), the interior values the replay side commits, the proof deadline, and the replay block's parameters the interior registration registers as values
+    template, or ``{descriptor id: k_t}``, `service.TwoStage.k`), the interior values the replay side commits, the
+    proof deadline, and the replay block's parameters the interior registration registers as values
     (``span_values``: as round 2 names them, each ``(name, rows a sampled span, leaf type)``, the stream's per-span
     values, `interior_rows.span_values`: those the verifier supplies and those the replay gives). A fixed count
     ``subset:Q`` is refused: the serve sizes a class's N, and Q/N falls as it pads N."""
