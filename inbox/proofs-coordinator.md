@@ -74045,3 +74045,31 @@ Read on `main` at `d6075b75d289bcca363087683fb62774c5c2829b`, fetched at 06:10Z 
 6. **One configuration requires the other.** `core_onsite` requires `core_remote` (`onsite/verifier/lakefile.toml:71-72`), because onsite's ties reuse remote's (`onsite/verifier/CoreOnsite.lean:82`, `Core.Remote.windows`) [read]. The boundary line allows it. It fixes the order: remote's directory moves before onsite's, or both in one map [derived].
 
 Not checked: I ran no mover and no `move_check.py`, so every "pure" above is from the tools' docstrings.
+
+## HEADSPLIT, Thu 12 Nov 06:15Z: the three body edits are made (five lines of #9087's body; the head is unchanged at `7e45b9061c0e`); I wait on two runs, #8370 and #9123
+
+**1. The bold sentence, narrowed** [run: `research queue edit 9087`, 06:13Z; the body read back equals the file sent, and its diff against the body before is five lines, 29, 52, 78, 80 and 113, the places below and no other]:
+
+- "**On `total_cost.py`'s line for the short request, the change is worth 6% to 7%, not more than half.**" [run]
+- "Why so little: on that line the head's key blocks take a tenth of the proving." [run]
+
+**2. The RMSNorm entry stays, and the body says which Definitions it is** [run]: "The rebuilt planner's card also carries the layer's RMSNorm in its two stages as `main`'s adapter serves it, which is not this change's: of the 134 new Definitions those are two, `RmsNormMnnvlSumSq_v1{N=6144,…}` and `RmsNormMnnvlApply_v1{G=192,SHOT=1}`, in place of one of the 75 gone, `RmsNormMnnvl_v1{N=6144,…}`; the other 132 are this change's (65 scores units, 65 values units, `SparseMlaSplitEnd_v1{DV=64,…}`, `SparseMlaHeadEnd_v1{DV=64,…}`)." It replaces the sentence the body already had on it under "What was run", so the body says it once [run]. The names and counts are the difference of the card's `definitions` between `main` `d6075b75d289` and the head [run].
+
+**3. Both additions, each one sentence** [run]:
+
+- "- **The first row's GB do not compare with the driver's**: its 10% is the replays and proofs alone and its GB are not scaled."
+- "The figure quoted for this change before, 4,183 GB falling to 1,528 GB, is a third model's, not on `main`, and nothing in this pull request reproduces it."
+
+What left the body with them, all still in my 04:56Z entry's table [read]: line (A″)'s serving tax of 2.0%; the driver's 10% as the total with 5.5% for the replays and proofs, its 28,000 bits a request and its GB times 1.05; the third model's description (the 128k workload with fused MoE layers and the program's file read once, the key blocks 92% of the proving); and "In all three models the bound falls by 0.7 to 0.9 of that share".
+
+**4. The body read against your rule, that nothing reads as a statement about the driver's rows or the 128k workload unless a row shows it.** I changed nothing else, and three places are yours to rule on [read]. The heading "Why, and what the tree's cost model says it is worth" stands over both tables and is in the singular [read]. "In the tree's cost model no budget near 10% of compute brings this line under 300 GB" names its line [read]. Item 3's sentence gives four pairs for the driver and the table has rows for two: "with neither" (7,725.0 → 6,857.3 GB) and "fused MoE layers alone" (2,109.8 → 1,264.9 GB) are in the sentence, with ‡ and their run `r20261112-044242-ce04`, and in no row; say if they become two rows or go [read].
+
+**5. PRF-576** is read: mine once #9087's ready line is written, after the census of record's workload card (PRF-577) [relayed]. `Refs PRF-576` is nowhere in #9087; its body still ends `Refs CIR-241` [run].
+
+**6. What I wait on** [run, 06:14Z]:
+
+- `r20261112-054432-2199` (the suites the change from `d6075b75d289` touches, at `7e45b9061c0e`; vy-nebius-cpu-4): running, on its slot since 05:50Z; about 07:15Z [guess: the vLLM suite alone took 57 min in the run at `65ecd910b07a`].
+- `r20261112-054456-59f3` (circuit-check of the four sparse-attention sidecars, at `7e45b9061c0e`; vy-nebius-cpu-1): still waiting, one check ahead of it in line; about 07:30Z if it takes its slot by 06:45Z [guess].
+- #8370, open at `90fba48da931`: then the merge and the two phrases [run; read].
+- #9123, open at `5e2cc72dc29b`: then line 61 of `a5_sparse_mla.py` and the audit run again [run; read].
+- After any merge the head moves, so the changed suites and circuit-check run once more at that head before the ready line [read]. I do not mark.
