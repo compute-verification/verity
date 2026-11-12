@@ -1021,6 +1021,7 @@
     {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "union-attr", "symbol": "CompiledKernelCheck._link_step", "detail": ""},
     {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "union-attr", "symbol": "CompiledKernelCheck._weights", "detail": "", "count": 20},
     {"file": "verity_vllm/check/replay/compiled_kernel_check.py", "kind": "var-annotated", "symbol": "CompiledKernelCheck._check_launch", "detail": ""},
+    {"file": "verity_vllm/check/replay/definitions.py", "kind": "return-value", "symbol": "_differs", "detail": ""},
     {"file": "verity_vllm/check/replay/driver.py", "kind": "attr-defined", "symbol": "_parallel_replay", "detail": ""},
     {"file": "verity_vllm/check/replay/fork.py", "kind": "attr-defined", "symbol": "dead_worker", "detail": ""},
     {"file": "verity_vllm/check/replay/fork.py", "kind": "attr-defined", "symbol": "fork_pool", "detail": ""},

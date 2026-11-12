@@ -26,8 +26,6 @@ from collections.abc import Iterable
 from types import SimpleNamespace
 from typing import Any
 
-__all__ = ["of_record"]
-
 SHOWN = 5
 #: family -> why its row kernel is not its Definition in this tree ([] when it is), checked once a process
 _KERNEL_CHECKS: dict[str, list[str]] = {}
@@ -153,7 +151,7 @@ def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list
 
     # encode_program reads a program's root, fn and annotations: here the specialization alone, in the Build's schema
     mine = encode_program(SimpleNamespace(root=fn, fn=fn, annotations={}), desc["schema"])
-    out: list[str] = []
+    out = []
     for g in mine["definitions"]:
         if g not in seen:
             if g not in desc["definitions"]:
@@ -162,7 +160,6 @@ def _differs(desc: dict[str, Any], fn: Any, seen: dict[str, str | None]) -> list
                 seen[g] = f"{g} is not the Definition the Build bound (entry {ours[:16]}, the Build's {theirs[:16]})"
             else:
                 seen[g] = None
-        why = seen[g]
-        if why:
-            out.append(why)
+        if seen[g]:
+            out.append(seen[g])
     return out
