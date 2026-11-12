@@ -30,16 +30,17 @@ regenerate the values to answer a challenge; the bytes are reported as `values_r
 
 from __future__ import annotations
 
-import hashlib
-import math
-import json
-import re
-import queue
 import ctypes
 import gc
+import hashlib
+import json
+import math
 import os
+import queue
+import re
 import threading
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -49,13 +50,18 @@ except ImportError:                      # the offline core (tests, CPU cross-ch
     torch = None  # type: ignore[assignment]
 
 from verity_vllm import settings
+from verity_vllm.acquire.committer_api import (
+    Opening,
+    RunCommitment,
+    StepCommitment,
+    declaration,
+)
 from verity_vllm.commit import step_rows
+from verity_vllm.commit.committer import weights_rows
 from verity_vllm.commit.committer.input_classes import TOKEN_IDS_INPUT, weights_class
 from verity_vllm.commit.committer.pinned_pool import PINNED_EXACT, PinnedPool
-from verity_vllm.commit.committer import weights_rows
 from verity_vllm.commit.committer.window_views import WindowViews, _StepJob
 from verity_vllm.commit.native_ranges import DROPPED, NativeRangeOpenings, open_levels
-from verity_vllm.acquire.committer_api import Opening, RunCommitment, StepCommitment, declaration
 from verity_vllm.engine import hooks
 from verity_vllm.engine.profiles import layer_classes as LC
 from verity_vllm.pipeline.spans import Spans
@@ -207,11 +213,9 @@ TP_PARTIAL_RE = re.compile(r"/(part|shard)_rank\d+$")   # <module path>/part_ran
 CALL_DEPENDENT_RE = re.compile(r"/(all_reduce|x_q|x_s)$")   # bound only on the calls whose token count takes that path; the manifest requires them
 
 
-def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int]:
+def tp_partials_bad(man: dict[str, Any], names: Counter[str]) -> dict[str, int]:
     """TP rank-local collective inputs: exactly one `tp/<site>/{part,shard}_rank<r>` per expected site, none from elsewhere
     (`NativeHostCommitter.identity_check`'s per-step TP rule over the step's tensor names)."""
-    from collections import Counter
-
     tp_bad: dict[str, int] = {}
     tp_sites = man.get("tp_sites")                                    # none for a run with no TP source: left out, null or empty
     tp_counts = Counter(n.rsplit("/", 1)[0] for n in names.elements() if TP_PARTIAL_RE.search(n))
@@ -227,7 +231,7 @@ def tp_partials_bad(man: dict[str, Any], names: "Counter[str]") -> dict[str, int
     return tp_bad
 
 
-def hazard_of_record(name: str, HAZARD_LEAVES: "tuple[str, ...] | frozenset[str] | set[str]") -> bool:
+def hazard_of_record(name: str, HAZARD_LEAVES: tuple[str, ...] | frozenset[str] | set[str]) -> bool:
     """v1's in-place HAZARD decision for one acquired tensor name (`<module path>/<slot>`, a tap plane or a TP partial): snapshot at the hook
     (True) or batch at step end (False).  Encodes vLLM's aliasing by leaf name (`NativeHostCommitter.HAZARD_LEAVES` + the two name rules) --
     a by-name lifetime table, owned HERE; `verity_vllm.acquire.plan` names it as a RESIDUAL through this one
@@ -240,9 +244,7 @@ def hazard_of_record(name: str, HAZARD_LEAVES: "tuple[str, ...] | frozenset[str]
     leaf = base.rsplit(".", 1)[-1]
     if leaf in HAZARD_LEAVES or "embed" in leaf:                 # the caller's table (NativeHostCommitter.HAZARD_LEAVES of record); named so the by-name lint sees the rule
         return True
-    if idx == "1" and "norm" in leaf.lower():
-        return True
-    return False
+    return idx == "1" and "norm" in leaf.lower()
 
 
 FAMILY_RULES = (   # (substring of the tensor name -> value family) for the footprint profile; first match wins
@@ -323,7 +325,7 @@ class _Footprint:
             self._f.flush()
 
     @staticmethod
-    def families(metas: list["TensorMeta"]) -> dict[str, dict[str, int]]:
+    def families(metas: list[TensorMeta]) -> dict[str, dict[str, int]]:
         out: dict[str, dict[str, int]] = {}
         for m in metas:
             d = out.setdefault(value_family(m.name), {"bytes": 0, "tensors": 0})
@@ -372,7 +374,12 @@ def schedule_stream_bound(asz: dict[str, Any], reqs: list[dict[str, Any]], sampl
     for a known workload this is the stream of record: per step, and the hidden family's share (the bytes `--retain-exclude fa3_hidden_m1`
     leaves on the device).  Conservative where vLLM's actual packing is unknown: a step with prefill AND decode sequences pads every
     sequence of its hidden launch to the step's longest query (the FA3 varlen slab); chunked prefill is not modelled (one step per prompt)."""
-    from verity_vllm.acquire.sources.hidden_source import mat_total_words, CHUNK_WORDS, fa2_kblock_n, fa3_tile
+    from verity_vllm.acquire.sources.hidden_source import (
+        CHUNK_WORDS,
+        fa2_kblock_n,
+        fa3_tile,
+        mat_total_words,
+    )
 
     md = asz.get("model")                 # a step bound without its model: one head of 64, one layer, no hidden-value rows
     if not md:
@@ -642,7 +649,12 @@ def step_bound_bytes(model: Any, modules: list[tuple[str, Any]], envelope: dict[
     # FA2: the M1 stream is arithmetic in the kernel tile (kBlockN, head_dim) -- 128/64 for hd 64, 64/hd otherwise (num_splits==1 kernel).
     # FA3: under FA3 (attn_backend "fa3") the slab is (sequence, KV head) and the rows are PackGQA-packed (M = seqlen_q * g); the tile
     # is tile_size_fwd_sm90's (hd 64: 192x128 prefill / 64x192 one-warpgroup decode; hd 128: 128x128 / 64x128) -- hidden_source.fa3_tile.
-    from verity_vllm.acquire.sources.hidden_source import mat_total_words, CHUNK_WORDS, fa2_kblock_n, fa3_tile
+    from verity_vllm.acquire.sources.hidden_source import (
+        CHUNK_WORDS,
+        fa2_kblock_n,
+        fa3_tile,
+        mat_total_words,
+    )
     g = max(1, heads // kv_heads)
     fa3 = attn_backend == "fa3"
 
@@ -1766,7 +1778,6 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         duplicates another keeps its count and FAILS (1) or (4).  With a route source (`acquire.sources.route_source`: the capture map's
         model), the names the map lists are held to the map's names for the step's routes (`routes_bad`) instead of (1) and (4), and (1)
         covers the hooked modules the map has no entry for.  -> `RunCommitment.extra['identity_check']`."""
-        from collections import Counter
 
         from verity_vllm.acquire import fa2_plane_classes as FP
         man = manifest or self.expected_manifest()
@@ -1940,7 +1951,7 @@ class NativeHostCommitter(WindowViews, NativeRangeOpenings):
         lo = index * self.chunk
         return self._block_holds(blk, lo, lo + self.chunk)
 
-    def open(self, sample: list[tuple[int, int]], *, values_from: "NativeHostCommitter | None" = None,
+    def open(self, sample: list[tuple[int, int]], *, values_from: NativeHostCommitter | None = None,
              paths_from_replay: bool = False) -> list[Opening]:
         """Openings for (step, leaf) positions.  The value bytes come from this committer's retained copy (device or host), or -- when the raw
         copy was released / never kept (`retain=none`), or the leaf lies in a range that was not retained (retain=sample; retain=host with
