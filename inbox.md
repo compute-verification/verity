@@ -119,3 +119,108 @@ The 9:55 AM files are kept beside them as `prev-0955/`.
 
 The port's recount follows in the next message.
 
+[2026-11-12T18:37Z] 62105ff8546c
+# NET-327: the recount on lean's branch, and the cuts (ONSITEMAIN, Thu 12 Nov 10:40 AM PST)
+
+Marks: [ran] a script of mine on the agent VM; [read] git's output at the named commit; [derived]. No run launched.
+
+## The one thing to know first
+
+**By file, almost nothing of staging is on lean's branch or in an open pull request of ours.** Of the 262 files
+staging changes, lean's branch (`238ad6621c27`) has staging's change in 6. In 33 more staging changed wording only.
+The other 223 hold code the branch lacks: 113 where only staging changed a declaration, 110 where both sides did.
+Our open pull requests touch 29 of the 262 and hold staging's own declarations in three files only, all #9319's (the
+pool). What reached `main` since Tuesday reached it rewritten, in other files or under other names (#9350's pooled
+form, #9333's and #9378's rows), and a count by file does not see that. [ran]
+
+## How it was crossed
+
+- `restack.py` as a command cannot cross staging: its first step merges each move's base into the branch, and
+  staging is 5,290 commits from `main` with over 150 merge bases (the remote side). [read] I ran its second step
+  alone (`run_script`: the move's base's own script at the root of a scratch worktree) for each of the 21 moves
+  lean's branch has and staging lacks, on staging `00d79b22e4d2` and on its base `700a981f5d90`, with no merge. [ran,
+  826 s a tree] Results, local refs only: `refs/scratch/onsitemain/staging-crossed` `9f4ad72cccb3`,
+  `refs/scratch/onsitemain/base-crossed` `573de5fc6f1b`.
+- Three departures from the moves' own lines, each mine: `--no-lock` on every layout move; `rename.py`'s refusal of
+  a map's rows that match no tracked file turned into a report (72 rows, files `main` has and the side lacks; none
+  is one of the 262); and 46 rows added to `layout_one_map.toml` for the side's files under a retired path, each
+  placed where lean's branch has the file. Two have no place on lean's branch:
+  `verity/core/protocols/certifier/scan_service.py`, staging's own, which I put beside `tie_service.py` at
+  `verity/protocols/certifier/verifier/scan_service.py`; and `pous/period_reports.py`, not staging's.
+- The check on the crossing: for 89 of the 262 files the crossed base is byte for byte lean's branch. [ran]
+- The count: `git diff` of the two crossed trees gives the 262 (Tuesday's 261: 255 found by rename, 6 deleted by
+  staging and found by path, 1 new: research's `moves.json`). Each is compared with lean's branch by text
+  (`git merge-file`) and, for `.lean` and `.py`, by declaration with Tuesday's script, comments, docstrings and
+  string literals left out. The sort is by text, not by meaning.
+
+## The count, by item
+
+| item | files | branch has | wording only | only staging changed | both changed | touched by an open PR of ours |
+|---|---|---|---|---|---|---|
+| 1 the period check | 11 | 0 | 0 | 5 | 6 | 3 (job 6) |
+| 2 a5, the v2 case, the record | 30 | 0 | 2 | 12 | 16 | 6 (#9319, #9305, #9329) |
+| 3 the service | 4 | 0 | 0 | 2 | 2 | 0 |
+| 4 the ingress tie | 19 | 0 | 0 | 15 | 4 | 2 (#9333, #9369, #9378, job 6: prose) |
+| 5 the rows audit, its caller and test | 14 | 0 | 2 | 10 | 2 | 1 (job 6: a root's prose) |
+| 5 the drivers, other | 64 | 0 | 12 | 34 | 18 | 6 (#9329, #9369, job 6, prose) |
+| 6 the composites | 24 | 1 | 2 | 7 | 14 | 1 (#9333, #9378: `test_run.py`) |
+| 7 Security | 70 | 4 | 6 | 18 | 42 | 6 (#9350, job 6) |
+| the certifier's other files, under no item | 24 | 0 | 9 | 10 | 5 | 4 (#9333, #9369, #9378, job 6) |
+| other (`moves.json`, a file both deleted) | 2 | 1 | 0 | 0 | 1 | 0 |
+| all | 262 | 6 | 33 | 113 | 110 | 29 |
+
+What the open pull requests hold of staging's declarations the branch lacks [ran: each head against staging's
+crossed file, a rename counted as none]:
+- #9319: `a5.py` 17 of 41, `tests/test_a5_lean_pool.py` 18 of 19, `a0.py` 2 of 4.
+- job 6 (`cursor/network-accounting-okbit-constant-4e7a`): 1 of 40 in `Proofs/Properties/NetworkPeriod.lean`, 0 in
+  `Period.lean` (of 69), `period_case.py` (of 75), the protocol test (of 21), `Properties/NetworkPeriod.lean` (of
+  24). It changes the same four files item 1's cut changes. It sits on lean's old tip `f3837f57d113`, one of the
+  heads that never land.
+- #9350: none of staging's files; `PooledLeakRegistered` is in its own files. `PeriodLeakRegistered`,
+  `RowsStateHeld`, `KSWired`, `RemoteNetwork`, `kind_scan` and `rows_audit_case` are named on staging and in no
+  `.lean` or `.py` of lean's branch, `main`, #9350 or job 6. [read: `git grep -lw`]
+- #9305, #9329, #9333, #9369, #9378: 0 of staging's declarations in every file they share with it.
+- NET-379's branch is #9378 (`cursor/na-held-rows-5b2e`), cut on #9333's head.
+
+## The cuts
+
+Order as I would build them. "Shown by" is one `research run` each unless it says otherwise.
+
+| cut | files | rests on | whose yes | shown by |
+|---|---|---|---|---|
+| **A. The rows audit's Lean** | 6 and two locks: the certifier program's `NetworkCertifier/Rows.lean` (new) and its root; the verifier's `NetworkCheck/RowsAudit.lean`, `RowsMain.lean` (new), its root, `lakefile.toml` (the `network-rows` executable); the two packages' `lean-audit.json` | item 5: the rows audit comes on top | ours | the two packages built with `network-rows` linked, and their Lean check |
+| **B. Its caller and test** | 6: `warden_chain.py` (`RECORD`, `deployment_of`, `own_record`, `rows_audit_case`) and its test; `certifier_piece.py` (`ROWS`, `rows_check`, `lean_exe` by name, `--rows`, step 1's call) and the three rows tests of its test; `scan_period.py` (`lean_check`'s two lines); the suite's `pyproject.toml` (the built executable as an input) | item 5 | ours | the suite's rows tests on the built executable: the honest run accepted; cells cut, clocked or ordered otherwise refused |
+| **C. Item 7, the tap and the warden** | 4: `Definitions/NetworkCertifier/{Warden,Tap}.lean`, `Proofs/NetworkCertifier/{Warden,Tap}.lean`. Only staging changed a declaration in them and they read no file both sides changed | item 7: beside `main`'s | ours | `verity lean try` on the four with `--siblings` |
+| **D. Item 7, the rows' format** | 2: `Definitions/NetworkCertifier/RecordRows.lean` (10 new declarations), `Proofs/NetworkCertifier/RecordRows.lean` (22). `fxQueueSched` keeps `main`'s place and value; staging's value differs (`![5, 1, 2]` against `![6, 2, 2]`) | item 7; **one point to rule: staging's proofs at `main`'s fixture value, or a second fixture beside it** | ours, and yours on the fixture | `verity lean try` on the two |
+| **E. Item 7, the wired form's statements** | 9: `Definitions/Claims/Sampling.lean` gains six declarations (`BlockCheck`, `correctOk`, `IncorrectBy`, `incorrectBy`, `RBy`, `KSBy`); ours: `SampledAudit.lean` (the boundary gates and wires), `SampledCharge.lean` (`freeInputs`), `Period.lean` (`WindowGoodReg`, `RegOpensAt`), `PeriodConditions.lean` (five conditions), and `Guarantees/{Period,SampledAudit,SampledCharge}.lean`, where each onsite guarantee becomes a new one beside `main`'s; `Flock/Guarantees/SamplingClaims.lean` | item 7: `main`'s statements stand, the onsite ones beside | lean for `Claims/Sampling.lean` and `SamplingClaims.lean`; **yours for the four new guarantees' names** (staging reuses `PeriodLeakAccepted`, `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`) | the definitions package built and its Lean check |
+| **F. Item 7, the proofs that are ours** | 20: nine new (`Wires`, `KSWired`, `ReadFree`, `WiredNet`, `WiredRead`, `WiredToys`, `NoWires`, `KsToy`, `PeriodReg`) and eleven both changed (`Period`, `PeriodWitnesses`, `SampledAuditAccepted`, `SampledAuditInstance`, `SampledCharge`, `SampledLeak`, `SampledLeakReg`, `SampledLeakRegPlain`, `TapRows`, `Witnesses`, `WitnessToys`); the new instances go to `Definitions/NetworkCertifier/Witness.lean`. Staging's ten declarations in proofs' `KS.lean` go to a file of ours, since `KS.lean` gains no line | item 7; after E | ours; proofs reads what leaves `KS.lean` | the proofs package's NetworkCertifier area built, replayed, and its lock by `--update` |
+| **G. Item 7, the rest** | 30, not ours: lean 26 (`Properties/NetworkPeriod*.lean`, `Proofs/Properties/*`, `Verity/{Game,Idle,Soundness,Subprotocols}`, the roots, `lakefile.toml`, the locks), proofs 2, memory-accounting 1, and the pin. The third instance of the soundness theorem is not ported | item 7, item 6 | lean, proofs, memory-accounting | the Lean check, whole |
+| **H. Item 1, the period check's own change** | 11: `Period.lean` (69 declarations, 9 both changed), `Circuit.lean` (new), `RecordsMain.lean`, `period_case.py`, the protocol test, the package's README and `pyproject.toml`, two manifests, the lock; with it `scan_period.rows_case` and Security's two `NetworkPeriod` files | item 1: one change of its own, with NET-325 and NET-328 | ours; lean for Security's two; **order with job 6, which changes four of the same files** | the period suite and the package's Lean check |
+| **I. Item 5, the kind scan** | `kind_scan.py` and its test (new); with it `attacks.py`, `scan_tie.py`, `network_sim/onsite.py`, each new with its test | item 5: the kind scan on top | ours | each suite's new tests |
+| **J. Item 5, the run class and the rest of the drivers** | about 40: `chain_record.py` and `.sh`, `scan_zk.py`, `negatives.py`, `n2_zk.py`, `compile_slice_zk.py`, `leak_bounds.py`, the rest of `certifier_piece.py` (the front, the auditor's record's gate, the relay), their tests, the READMEs. `main`'s count of unchecked inputs stands | item 5 | ours; top for `tests/test_retired_terms.py` | `benchmarks/network_traces`' suite |
+| **K. Item 5, the serving driver** | `served_session.py` and its test | item 5; **waits for vllm's answer** | vllm, ours | not built |
+| **L. Item 6, two development executables** | `CoreRemoteNetwork.lean`, `CoreRemoteNetworkNoPouw.lean`, their two mains, the lakefile and the lock; and the removal: neither is in `composites` (`config.py`, `Site.lean`, `site/__init__.py`, the site difftest, `composite.py`, `test_run.py`, `test_site.py`). They read `Period.lean`, so after H or on `main`'s `Period` | item 6 | soundness, proofs | the package built, both executables linked |
+| **M. Item 3, the scan's service** | `scan_service.py` and its test (new), calling `main`'s `Stream`; nothing of `spot/verifier/service.py` | item 3 | ours; **the file's place is my row, not the layout's** | its test |
+| **N. The certifier's other files** | 15 with code: `warden.py`, `ingress_scan.py`, `service.py`, `standin.py`, `domains.py`, `Identity/Domains.lean`, tests; after #9333, #9369 and #9378, which change `warden.py`, `active.py` and the two prose files | none of the seven: Tuesday's clean files | ours | the certifier's suite |
+| not cut | item 4's 19 files (staging deletes the tie's service and driver; `tie_service.py` stays; `scan_tie.py` is in I); item 2's 30 (out; the record and the site's registration read its case); 33 files of wording only | items 4 and 2 | | |
+
+Every body carries: a record written from `main` is not of record for sampled proofs on a window of several
+members, and every window of the onsite demo has several; `main`'s verifier refuses that form until proofs proves it.
+
+## What I build next, without waiting
+
+A, then B, then C, in scratch branches on lean's branch at `238ad6621c27`, taken once more at lean's ready line.
+Nothing pushed to an open pull request's branch; no pull request opened.
+
+## Least sure of
+
+- **The sort is by text.** A declaration lean's merge rewrote by hand counts as lacking where staging's differs by
+  more than a rename. The count of "both changed" is an upper bound on what needs a decision.
+- **Cut B's size.** Staging's `certifier_piece.py` changes 35 declarations and the rows audit is a few of them; step
+  1 of the piece reads the auditor's record on staging. I carry `own_record` and `deployment_of` with it and leave
+  the record's gate (`held`, `--certifier-key`) to J. If that split does not hold when built, I say so.
+- **E's shape.** "Beside" for a guarantee both sides state under one name means a new name. I have not tried whether
+  staging's proofs go through with `main`'s `WindowsPlaced`.
+- Where I did not look: whether any cut builds; #9375's own diff against `main`; proofs', vllm's and soundness' files
+  beyond their counts.
+
