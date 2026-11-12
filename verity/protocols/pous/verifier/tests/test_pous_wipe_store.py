@@ -20,11 +20,11 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-import pytest
-
-from pous_fakes import Clock
 import pous_test_signer as ts
+import pytest
 import wipe_side
+from pous_fakes import Clock
+
 from verity.configuration.deploy.stream import Side
 from verity.protocols.pous.device import memory_challenger as mc
 from verity.protocols.pous.verifier import streamed_wipe as sw
@@ -248,9 +248,9 @@ def test_a_periods_wipe_on_a_gpu_declares_its_driver_reserve(tmp_path, monkeypat
     assert [u for u in record["placement"]["undeclared_tiers"] if u["tier"] == "gpu-hbm"] == []
     reserve = [g for g in record["uncertified"] if "driver reserves" in g]
     assert reserve == ([] if nvml else [
-        f"tier gpu-hbm: the memory NVIDIA H200's driver reserves is undeclared: the tier is CUDA's total ({cuda} bytes), "
-        f"which leaves it out, since NVML gave none ({store['nvml_error']}); the fill doesn't cover it and M doesn't "
-        "count it"])
+        (f"tier gpu-hbm: the memory NVIDIA H200's driver reserves is undeclared: the tier is CUDA's total ({cuda} "
+         f"bytes), which leaves it out, since NVML gave none ({store['nvml_error']}); the fill doesn't cover it and M "
+         "doesn't count it")])
     assert W.summary(record)["uncertified"] == record["uncertified"]
 
 
