@@ -85159,3 +85159,68 @@ Tags: [run] a run or command of mine read now; [read] a place I read now; [relay
 **For the table** (modeled, each line):
 - The program's read, timed at 609.3 and 692.0 s of one core on today's served sparse-attention program, is charged only where every session is a fresh verifier process, as on `main` today. There the best designed configuration is 3,720.7 to 4,016.0 GB (5,163.5 at the 1,006 s the model held) and the partition `main` defines is 9,060.1 to 9,757.0 GB (12,656.5 at 1,006), for a datacenter's 600 s.
 - 933.8, 710.8 and 683.5 GB are rows with a kept verifier process, which is on a branch and not on `main`, and they charge no read of the program. They stay if each kept process serves at least about 1,180 to 1,340, 96 to 109 and 145 to 165 sessions before it ends (a day or more of one core for the first, about an hour for the other two). How many processes a datacenter's audit keeps, and for how long, is not built and not in the model.
+
+## MEMBERS, Thu 12 Nov 11:20Z: NET-352's five asks and NET-329's ask 4, each with where the Lean holds it today and what PRF-585 or PRF-586 should do
+
+Clock read: 11:20Z. Read first: network-accounting's comments on NET-352 of 09:41Z and 09:50Z (and 10:14Z) and on NET-329 of 10:53Z, in Linear, read only. Nothing here is built except item 1's clause. Line numbers of `Spot/OneStageZk.lean` are `main`'s at `33faab2be81c` (the same at `33866d93e66e`, and for 941 to 1056 the same on lean's landing tip `f3837f57d113`). Tags: [run], [read], [relayed], [derived], [guess].
+
+**In one line each**
+1. `audit_record`: the Lean record check does not hold it, v2's per-member run does, and the clause is now a theorem in PRF-585 (`membersRun_proved`).
+2. One rule for PRF-586: a member's port names its tree by the record's own name for it, and must be the record's entry; a value the record does not name refuses.
+3. A root nobody reads: refused today, read or not; accepted after PRF-586, and the guarantee says nothing of its tree.
+4. `link-points`: a stratum need not be one member. The refusal fires only where a member's fewest and most sampled blocks fall in different classes of the count; the proof reads the class and nothing else of the count. Three ways, costed below.
+5. `classHeld`: their reading of the rule is right; PRF-585 does not change it; PRF-586 should make it a consequence of rule 2.
+6. NET-329's ask 4: one statement a member, so $e_i$ is a sum over the members; PRF-586 does not change that; "one for the registration" is not a form the Lean has for four templates.
+
+**1. `audit_record`.** As in my 11:17Z entry, section 4; one cite there is off by one (`OneStage.verdictOf` is `Spot/OneStage.lean` 462-471).
+- Not held by the record check [read]: `Spot/Record.lean` `checks` 110-140 takes `provedUnits` and the verdicts as two inputs, as `audit.py` does.
+- Held by v2's per-member run [read]: its verdicts are its own (`checkMembersAt`, 1249-1258), and `provedHeld` (617-619, called in `runMembers` 1162-1171) holds the accepted sessions' units, sorted, to `proved_units`, which `Record.checks`' `proved` holds to the sample.
+- **PRF-585:** done, `membersRun_proved` at `0429a81f9848`: `membersRun … = .ok r → r.all = true → r.proved.qsort (· < ·) = e.base.provedUnits` [run: try `r20261112-110340-92ce`]. **PRF-586:** nothing.
+
+**2. One rule for every port a member's file names.**
+- **Today, their read is right for all three** [read]. No Lean compares a member's registered file with the record's `roots`:
+  - a registration's own root: the form refuses the registration itself (`rootStep`, 963-973: a root that is no member's);
+  - a member's own rows, and another member's: read as `committed/<member>/<port>` (`rows.py` `own_value`, 927-931), a name the record does not hold, so nothing compares it. The verifier's file gets the record's root because Python's writer copies it (`rows.py` `own_reads`, 966-996, line 992), not because the check holds it.
+- **What the Lean does hold today** [read]:
+  - two members' ports of one value are one tree (`classHeld`, 1024-1056), sampled or not;
+  - a value the record lists in `registered` is opened by the accepting sessions at the record's root (`Spot/Record.lean` `checks` 129-139, on `sessionRegistered` 85-97), so only through sampled members;
+  - a read named as a root's port is refused unless `registered` lists it (`ownRegistered`, 99-101). That is why `own_value` avoids the port's name.
+- **The rule PRF-586 should state** [derived]: *every port of every member's registered file, sampled or not, names by its `value` a tree the registration names, and is that tree's entry.*
+  - `value` is a port of the record's `roots` (the registration's own, this member's `<member>/<port>`, another member's): the port's root, leaves and domain are that root's.
+  - else `value` is a value of the record's `registered`: the port's root, leaves, row width, leaf width and domain are that entry's. This half is written: `entryDiff?` on `cursor/proofs-v2-members-held-9810` (`01d759cdbb4d`, 1105-1135).
+  - else the member is refused: it reads a tree the registration does not hold.
+- **In the code:** `classHeld ms rec` over the record's roots and entries, in `membersStructure`; and v1's record check on the form's verdicts takes off a read of a port at its own root (`Record.lessOwnReads`, 368-370, which the two-stage record already uses at 376-378), so a sampled member's read of a port at another root still fails `registered`.
+- **What it moves for network-accounting:** value = the port's name for all three kinds. `own_value` returns the port, not `committed/<port>`. Their reading of the naming rule stands for an own root.
+- **PRF-585:** nothing; it reads every member's circuit and public files and compares no registered file with the record. **PRF-586:** the rule above, with its statement in PRF-371's guarantee first.
+- Not read: how a root's entry would state a row width. A record's root holds port, root, leaves and domain only, so for a root the width stays the reader's, bound by the opening.
+
+**3. A root nobody reads.**
+- **Today: refused** [read]. `rootStep` (963-973) refuses any root that is no member's, read or not: "the registration's root scan/state is no member's". So the per-member Lean form refuses the stand-in block round's registration as it stands. (The form accepts nothing yet in any case.)
+- **After PRF-586: accepted** [derived]. `scan/state` reads as no member's port, so it is the registration's own; `rootsOf` gives it to no member, and rule 2 compares a root only where some member's file names it. The registration's digest fixes it, no session opens it, and the guarantee says nothing of its tree. PRF-586's statement should say that in words, so an unread root is not taken for an audited one.
+- They need not drop it from the stand-in for PRF-586's sake.
+
+**4. `link-points` over a sampled group.**
+- **Where** [read]: the clause is not on `main`. It is on lean's landing tip: `Spot/LinkPoints.lean` (136 lines; `ended`, `bounds`, `refused`) and `Registration.linkRefused` (514-519, added to `check` at 614 and 688). The guarantee's side is on `main`: `JointAuditV5.hcls` (`security/Proofs/Flock/EndToEnd/Joint/V5/Statement.lean` 199-201) and `hcls_of_bounds` (`Member.lean` 145-161).
+- **What the proof reads of the count** [read]: only its class, `mPtsOf g c = PT_LOCAL + max 3 ⌈log₂ ⌈c/g⌉⌉` (`Soundness/Discharge/Exec/Pts.lean` 33), the number of points the session's link is opened at, `g` the circuit's units a proof block. It is a type index of a member's session (`Session.lean` 33-36, `TabZK 𝔽 mPts`), so a member's model is at one class (`MemberV5.OneClass`, `Statement.lean` 117). Which units and how many, inside a class, the proof does not read: `ε_ks,m` and `ε_bind,m` are averages over the member's part of the sample (`JointAuditV5.design`, 272-274).
+- **So a stratum need not be one member** [derived]. The classes are: up to $8g$ units, then $(8g, 16g]$, $(16g, 32g]$ and so on. A member is refused only where its fewest and most sampled blocks fall in two of them. A member holding at most $8g$ units is never refused, whatever the split.
+- **Their count checks** [derived, from `strataEnded` and `nbl`]: 31 ingress units over two members of 15 and 16, $g = 1$: the member of 16 is refused for 9 to 23 sampled, the member of 15 for 9 to 24.
+- **Three ways, and what each costs:**
+  - *Keep the rule and keep each member in one class*: members of at most $8g$ units, by a finer split or a larger `vus_per_block` (at 2, a member of 16 is one class). No Lean. Cost: more members, each a statement and a session when sampled, or bigger proof blocks. It does not scale: a large member's range crosses classes at any real sampling rate.
+  - *A stratum a member*: one member a template over the group, so its count is the stratum's $k$ at every sample. No Lean. Cost: one larger statement for the template, which is also NET-366's second target [relayed: NET-329, 10:41Z].
+  - *The form takes a range*: the guarantee is stated a class at a time. The sample is drawn before any session, so a member's class is a function of the sample; split the sample's coins by it, apply the member's theorem in each class, and `ε_m` becomes the worst class's, not a sum [derived, not written]. Cost: `Statement.lean` (`MemberV5`'s fields at one `mPts`, `OneClass`, `hcls`), `Session.lean` 122, `Member.lean`, `Bound.lean`, and the records of `JointSampledV5`, `JointShareV5` and `JointHorizonV5`, whose statements change (a notice to Daniel). The registration's `link-points` then holds only that some sample ends. No verifier or prover change: a session's setup already takes its points from its own count. Soundness's to rule; I have not sized the proof.
+- **PRF-585 and PRF-586:** neither touches it.
+
+**5. `classHeld` and the scan's rounds.**
+- **The rule is as they read it** [read]: over every member of the parameters, sampled or not, two ports of one `value` must agree in root, leaves, row width, domain and leaf schema (`classPort` 1033-1040, `Flock.RecVStar.portDiff?` 868-878 without the reads), else "members A and B read the registered value V as two".
+- **What I could and could not find of "one value name"** [read, `benchmarks/network_traces/scan_zk.py` and `rows.py`]: the scan's own trees are one value name a kind (`VALUES`, 268: `verity/certifier/scan-{state,prog,view}/v1`), so two lanes' `prog` trees read under one name are refused. A member's other ports are `committed/<prefix>/<port>`, the prefix its name, or on `main` `<template id>/c0` for every member of the slot entries' template (989), so those members' `o0` collide; the landing tip names the lane (`c<lane>`, 1187). The certifier's rows are `<link>/<direction>/<window>`, one name a tree. I did not find a single name shared by every member's own rows; their worker's line would settle it.
+- **PRF-585 does not change the rule** (`classHeld` runs as before, in `membersStructure`). **PRF-586 should subsume it**: under rule 2 a value is the record's name of one tree, so two ports of one value are both the record's entry and cannot differ. Their 45 lines are needed under either rule.
+
+**6. NET-329, ask 4: one statement a member, or one for the registration?**
+- **What PRF-371 builds today** [read]: one statement a sampled member, one session each (`Spot/OneStageZk.lean` 56-91, `membersHeld` 898). A statement is one template's instances at one table (`inputsOf`, 431-433: `count := 1`).
+- **The guarantee's term is a sum over the members** [read]: `JointAuditV5.eps = ∑ k, (ε_ks,k + ε_bind,k)` (`Statement.lean` 281-282), read by `JointSampledV5` (295-306) and, over a period, `JointHorizonV5` (400). A member with no block in the sample adds nothing to its binding term and the empty sample's knowledge term (39-41).
+- **So for a scan of four members $e_i$ is a sum of four terms** [derived]: 2 bits more than one term where the four are equal. Against the sizes their table asks of a phase ($2^{-32.2}$ to $2^{-63.4}$ at a period's $2^{-20}$), 2 bits.
+- **PRF-586 changes nothing here**: it lets the registration hold a root that is no member's; the statements and sessions are still one a member.
+- **"One for the registration" is not a form the Lean has for the scan** [read]: its four templates are four circuit files, and a session is one table. If a session of several tables over different templates existed, its knowledge term would be the largest over its tables, not a sum (`ksAvgStrictZ`, `Soundness/Discharge/ZkLink/StrictZ.lean` 184-187) [read of the definition; no such form is stated for different templates].
+- The sum has a second lever, item 4's "a stratum a member": fewer members, fewer terms.
+
+**Not established:** nothing of items 2 to 6 is compiled or run; item 4's per-class argument is a sketch; item 5's "one value name" is not located; PRF-586 is unwritten, and its rule is soundness's to accept.
