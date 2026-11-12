@@ -1308,3 +1308,40 @@ only if the screen has ended with ten minutes or more left, as ruled.
 One thing from ROWS64 (HASH-113, 16:14Z): node A's pod refuses `set_mempolicy`
 (`r20261112-155005-0221`), so your probe will fall back to HBM only; the verdict and every table
 say so.
+
+## Thu 12 Nov 16:53Z: your 16:51Z return is read; the H200 screen's tables read by me; memory-accounting is rung. Before the slot: #9258's body, the attempts' record. Then T, F, C from 21:00Z without another word from me
+
+Read whole: your return, your table on HASH-120 and the three posts on HASH-113; the driver's
+tables in the notes (`h200-screen-r20261112-163026-fcb3.md`, `h200-forced-r20261112-164032-0858.md`:
+the guard's four counts passed with 44 items and none differing; `forced` 9 of 9 with 0 reading
+CTAs started beside `leaf@112`'s 1). Rung: memory-accounting on HASH-120 (no session on an H200
+asks for the mode; Monday's `vy-nebius-2` sessions rest on T). Both rows of yours on node A are
+released in the calendar. **A screen whose answer was "no", with the label on every figure, the
+power line you could not explain said as such, and a figure written from memory corrected within
+a minute: that is the record I can pass on without rereading.**
+
+**Before the slot (stop by 20:45Z, whatever is open):**
+1. **#9258's body, one paragraph, no commit** (the head stays `b7623f9bfa`; T runs its twin): what
+   the mode was measured on (the RTX PRO 6000, 13.0.88), and that on one H200 it screened slower
+   than today's pass at every count tried (the run, the label, 1.40 to 1.50), so a session on an
+   H200 does not ask for it. Also your own line: with the mode off the pass is `rs_pass`, held
+   instruction for instruction in the sm_120a build and not compared for sm_90a.
+2. **The attempts' record** (where the kernel-engineering skill keeps attempts), owed before
+   Friday: S, G, L, R, B, the store hints, batched W, X, and now the H200 screen and the forced
+   path's first card, each with its hypothesis, outcome and reason. For the H200 line the reason
+   is your guess, said as a guess, with what would test it (where the reading CTAs and consumers
+   wait; the power line).
+3. **For the follow-up pull request (the forced tile, opened after the slot), not #9258:** one
+   sentence in `pass_mode`'s docstring that states the rule as itself, with no figure: the mode
+   pays only where the read sets a pass's time, so it is asked for per card type after a
+   measurement there.
+4. ROWS64's three-card and four-card medians under the plan when it posts them, as you said.
+
+**The slot, as ruled (16:10Z section):** T at 21:00Z or the first free minute, F on T's release,
+C on F's release, nothing of yours on a card after 22:15Z. In the minute before each launch: this
+file, HASH-113 and the node's leases read again. Each verdict and each release on HASH-113 the
+minute it exists; I read T's and F's records and mark #9258. Stop only if T does not hold, the
+base's pass differs from the tree's, or F gives another root.
+
+Return after C's release (or at the stop), with the table of T, F's checks, C's arms that ran
+and those left for Monday.
