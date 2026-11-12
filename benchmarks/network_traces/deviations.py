@@ -47,6 +47,8 @@ bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothi
   table, a class a row: what is changed, the check that refuses it, the refusal's own words, the bits planted, read
   right and charged, and the try's seconds end to end; `rows.json` holds the rows. It exits 0 when every class did
   what its row's check says: honest accepted, and each other class refused by that check or not shown to the client.
+  It exits 1 when a class didn't, and 2 when none didn't and a row is shown neither way: the tie it aims at wasn't
+  run (no ``--ids`` yet), or its deviation changed no response.
 - A try's request i is named ``<class>-<tag>-<i>`` (its `user`), the tag ``--tag`` or a random one a command: the
   server's record names a request by its `user`, so one record over every try, and over what the server served before
   them, holds each of a try's requests once, and ``--ids`` reads the right row.
@@ -57,7 +59,7 @@ bits, and the jitter, 0 at a jitter bound of 1; a refused class is charged nothi
   its response as the class says, as the front's bytes arrive; every other connection it relays byte for byte. Once it
   listens it writes ``{"listening": [HOST, PORT]}`` on stdout. ``--log`` gets one JSON line an id request when its
   connection ends: its release number, the bits it planted, the bytes it read and sent. It holds no id.
-- `table` reads the tries already in a directory again and prints the table.
+- `table` reads the tries already in a directory again and prints the table, with `try`'s exit code.
 """
 from __future__ import annotations
 
@@ -618,7 +620,7 @@ def main(argv=None) -> int:
     print(table(rows))
     if seconds:
         print(f"{len(seconds)} tries in {sum(seconds.values()):.1f} s")
-    return 0 if all(r["ok"] is not False for r in rows) else 1
+    return 1 if any(r["ok"] is False for r in rows) else 2 if any(r["ok"] is None for r in rows) else 0
 
 
 if __name__ == "__main__":

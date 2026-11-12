@@ -186,7 +186,8 @@ and against a served front, whose `HOST:PORT` is the value of an environment var
   over every try, and over what it served before them, holds each request once. `table --out DIR --ids FILE` reads
   the tries again once the server's record is there.
 - The command exits 0 when honest was accepted and each other class was refused by its check, or wasn't shown to the
-  client. `table --out DIR` prints the table of the tries in a directory again.
+  client; 1 when a class did otherwise; and 2 when none did and a row is shown neither way, as `tokens` and `length`
+  are until the tie has the server's record. `table --out DIR` prints the table of the tries in a directory again.
 
 ## The chain's run of record
 

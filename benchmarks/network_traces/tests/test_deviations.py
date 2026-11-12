@@ -164,6 +164,10 @@ def test_the_tie_is_not_run_without_the_commits_ids_and_the_row_says_so(tmp_path
     row = dv.row("tokens", tmp_path / "tokens", None)
     assert (row["tie"], row["ok"]) == (dv.NOT_RUN, None) and "--ids" in row["words"]
     assert row["charged"] == "nothing, and the tie that refuses it wasn't run"
+    table = ["table", "--out", str(tmp_path), "--class", "tokens"]
+    assert dv.main(table) == 2 and dv.main([*table, "--stand-in"]) == 0
+    rows = json.loads((tmp_path / "rows.json").read_text())
+    assert [(r["class"], r["tie"], r["ok"]) for r in rows] == [("tokens", "refused", True)]
     assert "not shown either way" in dv.table([row])
 
 
