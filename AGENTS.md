@@ -65,17 +65,21 @@ what the layout's design has and the tree does not.
   exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
   (its `infra/`) and its `.cursor`, nothing else.
 
-Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). Its units keep the names they
-had before the layout, in two sets: `core.*`, the verifiers' side, trusted code, and `ml.*`, the provers' side and
-the Python that mirrors the Lean for speed; `PLACE` says where each unit's files are. A verifier imports no ml
-code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into ml that `CORE_ML_EDGES` lists,
-and the units it reads are on the soundness path: `ml.circuits` (`verity/circuits/`), `ml.commitments`
-(`verity/commitments/`), `ml.crypto` (its `crypto/`) and `ml.randomness` (its `randomness/`) (`SOUNDNESS_PATH`, which
-only shrinks; `PLACE` gives the first two a few files outside those directories too); core reaches neither the catalog
-(`ml.circuits.ops`, `ml.circuits.silicon`: `verity/definitions/ops/` and `silicon/`) nor the kernels. The rest can't
-affect soundness. ml never imports core (`ML_IMPORTS_CORE` names the exceptions). Inside `verity` each unit imports only
-what `ALLOWED` lists, and `verity` imports no other distribution of the workspace. Nothing outside `infra/` imports it
-(`INFRA_IMPORTERS`), and nothing under `verity/` imports an adapter (`KNOWN` in `tests/test_integration_boundaries.py`).
+Dependencies point inward, and the import order is one listing, `tests/import_order.toml`, which
+`tests/test_boundaries.py` holds the tree to; every list of either only shrinks. A file loads only what its own row of
+the listing or an earlier row holds, in Python and in Lean, but for the ties the listing names by file. No file under
+a `verifier/` loads one under a `prover/`. Until its protocol's verifier is Lean, a Python verifier and each device
+load and reach only the places the listing's `trusted` entry froze for them, and outside the verifiers and the devices
+only the files its `loaded_by` names load one. What they load and reach is on the soundness path, which only shrinks:
+`verity/circuits`, `verity/commitments`, `verity/configuration`, `verity/hardware`, `verity/protocols/spot` and the
+protocols' own `verity/protocols/pous`, `verity/protocols/poub`, `verity/protocols/pouw` and
+`verity/protocols/certifier`; of `verity/definitions` SPOT's verifier loads the library
+(`verity/definitions/circuits/library.py`), the certifier's the census (`census.py` beside it) and none anything else,
+and none reaches the catalog (`verity/definitions/ops/` and `silicon/`) or the kernels. The rest can't affect
+soundness. A directory under `verity/` with an import root of its own is a distribution the listing names with its
+owner: `verity` loads none of them by name (a load by file is read only into `benchmarks/`) and imports no other
+distribution of the workspace. `infra/` is the last row, so nothing outside it loads it but a listed tie, and nothing
+under `verity/` imports an adapter (`KNOWN` in `tests/test_integration_boundaries.py`).
 A Lean package requires Flock's verifier only while `REQUIRES_FLOCK_VERIFIER` lists it, and the three base packages
 require nothing above them (`BASE_LEAN`).
 `benchmarks/` is measurement only: nothing outside it imports its code, by package name or by a path put on `sys.path`
@@ -172,7 +176,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   plan.
 - **Lean is the definition and the verifier.** The provers' Python (the `ml.*` units) mirrors it for the prover's
   speed, held to it by difftest. Each protocol switches by the friction skill's switching ruling; until then its
-  Python verifier and the ml units it reads stay on `SOUNDNESS_PATH`, and no core → ml edge is added.
+  Python verifier and what it loads stay on the soundness path (the listing's `trusted` entries), which gains no load.
 - **Soundness and zero knowledge in Lean; completeness may be Python.** What a guarantee says about a cheating
   prover is proved in Lean or rests on an auditor-trusted device; that honest serving passes may be checked in Python.
 - **That a circuit computes what the model computes is completeness, never proved.** It decides only whether

@@ -210,7 +210,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 `periods.py` prints Markdown as `run.py` does and, with `--out DIR`, writes `periods.md` and `periods.json` there.
 Neither writes a file unless told where.
 
-This package has an import root of its own (`SEPARATE` in `tests/test_boundaries.py`). A loader puts this directory on
+This package has an import root of its own (`distribution` in `tests/import_order.toml`). A loader puts this directory on
 `sys.path` and imports `rho`, and one that needs a number of the registry reads its file under `data/` by path. Either
 way its suite names what it reads here among its `inputs`, so this lists every loader:
 
