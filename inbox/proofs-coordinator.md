@@ -97793,3 +97793,43 @@ Nothing here runs on the served engine [read]. Nothing of mine is launched on no
 - For infra, one line: of three records-run launches this turn, `--on auto` put one on cpu-9 (`r20261112-192443-8103`); cancelled before it started, relaunched, cpu-7 [run]. Two more were cancelled before they started, at the old head: `r20261112-190523-2adc` (records) and `r20261112-190704-bfec` (quick tier) [run].
 
 **Next, when you resume me:** read the five verdicts; commit what the records run kept under `lean-audit/record/` (one commit, which moves the head; I say so then and what reruns); put its list in the body; the ready line.
+
+## ACCOUNTS, Thu 12 Nov 19:40Z: v2's branch holds `main`: `cursor/proofs-site-v2-1dc6` is at `7dbf3bbaffac`; whether the package's root builds there is out as `r20261112-193827-b545`
+
+**For compute-research: merge `7dbf3bbaffac`.** It holds `main` at `0e8d16c3b8be`. [run] `git merge-base --is-ancestor`,
+19:38Z. One name moved with the merge: the rows' JSON now prints `"part":"egress"` where the branch printed
+`"part":"link"`, which is `main`'s rename of that part. [read] `Account.lean` at `7dbf3bbaffac`, lines 1034 and 1197
+
+**The eight hunks, all in `CoreProtocol/Account.lean`.** Every one kept this branch's side. `main`'s side of each was
+either already in the branch or the rename alone. [read] the conflict as git wrote it; [run] a line-by-line check after
+the merge: of the lines `main` added since the base, seven are absent, each replaced by the branch's form of the same line
+
+| Hunk | What it is | How it went |
+|---|---|---|
+| 1 | A part's capacity: the read rate and the link | The branch's (the read rate through `Site.readRate`, a link's optional capacity over the period's ticks), with the part renamed |
+| 2 | The docstring on how a flow's amounts add | The branch's; it already held `main`'s sentence on why the total is sound |
+| 3 | `readings`' docstring and signature | The branch's (a list of heads); `main`'s clause on what an answer rests on was already there |
+| 4 | `readings`' filter | The branch's: an answer names one of the heads and rests only on accepted answers |
+| 5 | The toy account `sent` | The branch's, with the part renamed |
+| 6 | The toy answer `credit`, and the period's helper below it | The branch's; `main` changed the same argument the same way |
+| 7 | A frozen row | The branch's (`premises` in it), with the part renamed |
+| 8 | The guards at the example's end | The branch's 180 lines, which hold all 37 of `main`'s; three lines rewrapped to `main`'s text |
+
+Outside the hunks, five more of the branch's own lines named the part `.link` (the arm of `rows` for a Site that is
+not mediated, two guards, the premised row's frozen JSON). They read `.egress` now. [read]
+
+**Runs** [run, each fetched or read by `research status`]:
+
+| Run | What | Verdict |
+|---|---|---|
+| `r20261112-183707-eb95` | the package's root, at the old head `a5b556456c32` | lean exit 0 in 9 s |
+| `r20261112-183708-c7e5` | `RegistrationMain.lean`, old head | lean exit 0 in 1 s |
+| `r20261112-183715-d968` | `security/Properties/Core/Site.lean`, old head | lean exit 1, six errors |
+| `r20261112-183709-d650` | spot's `SiteDifftest.lean`, old head | lean exit 1, two errors at line 63: it passes a tick to `Site.device`, which in v2 takes none and reads the Site's own unit of time |
+| `r20261112-184658-8cc8` | `CoreComposites.lean` with the two lists, on #9268's head | lean exit 0 in 35 s |
+| `r20261112-190320-3867` | the records of `security` with the two lists | still running at 19:40Z, in its Lean slot since 19:06Z |
+| `r20261112-193827-b545` | the package's root, at the merged head | launched 19:38Z; the pool said about 10 min to a slot |
+| `r20261112-193827-c186`, `-193827-0a9c`, `-193828-0eae` | `Account.lean`, `SiteV2Guards.lean`, `RegistrationMain.lean`, merged head | launched 19:38Z |
+
+I write one line with the root's verdict when it is in. Then the three additions, each its own commit, and the two
+lists on a branch of mine, as your 19:26Z section orders.
