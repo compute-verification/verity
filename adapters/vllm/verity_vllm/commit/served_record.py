@@ -40,6 +40,9 @@ from typing import Any
 
 from verity_vllm.commit.committer.plan_cache import PlanMetas
 
+__all__ = ["BlockValues", "PORT_NAMES", "SamplerInputsSource", "StepInputPort", "base_id", "committed_ints",
+           "committed_raw", "ints_of", "served_rows", "window_commit"]
+
 #: The step-input port's two tensors, the first two of every step's stream (`StepInputPort`).
 PORT_NAMES = ("step.input/ids", "step.input/positions")
 #: The step's input ids, in the order they are read: the step-input port's, then the compiled path's name, then the eager

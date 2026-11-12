@@ -24,6 +24,8 @@ import torch
 from verity_vllm.commit.committer.host_retention import _HostRanges
 from verity_vllm.commit.native_ranges import DROPPED
 
+__all__ = ["release"]
+
 
 class DevicePoolFull(RuntimeError):
     """A take the open window's own bytes leave no room for: no release can come before the window closes."""

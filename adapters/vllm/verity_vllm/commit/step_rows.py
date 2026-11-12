@@ -55,8 +55,8 @@ from verity.commitments.rowleaf import (
 from verity.commitments.scheme import DIGEST_BYTES
 from verity.errors import InvalidArtifact
 
-__all__ = ["DOMAIN_TAG", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG", "binding",
-           "domain", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "names_digest", "path", "program_field", "range_shape",
+__all__ = ["DOMAIN_TAG", "ID_BYTES", "INST", "KEY", "KEY_BYTES", "NAME", "OWNER", "ROOT_BYTES", "ROW_BYTES", "SALT_BYTES", "SCHEMA", "WEIGHTS_TAG",
+           "binding", "domain", "hiding_leaf", "keyed_tensor_root", "leaf", "levels", "names_digest", "path", "program_field", "range_shape",
            "row_prefix", "run_root", "salt",
            "step_root", "t_nibbles", "t_table", "tensor_hs", "tensor_key", "tensor_root", "weights_domain", "weights_root", "weights_tree"]
 
