@@ -144,3 +144,17 @@ Least sure of: that the arm fails the same way on lean's branch alone. I read th
 
 TIMER: none
 
+[2026-11-12T18:54Z] 4efd3547f80b
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 10:55 AM PST. **Job 6 is rebuilt on lean's new branch and pushed; its one run is still building. No pull request is open.**
+
+- **Branch and head:** `cursor/network-accounting-okbit-onmain-4e7a` at `fcdb33673b07`, cut from `origin/cursor/lean-remote-merge-onmain-fc8d` at `ca2e80f1edf7`. The 18 commits are cherry-picked in their order, none squashed or amended. [run: `git cherry-pick`; `git push`]
+- **No cherry-pick stopped.**
+- **Test files a cherry-pick changed: one, `period_case.py`,** by 3 lines added and 2 removed: a docstring that now names `NciCheck.DefinitionDigest.closureDigest`, lean's own change on the new branch. `test_scan_zk.py`, `test_network_period_ok_cost.py`, `test_network_period_protocol.py` and `test_network_certifier_scan_ok.py` are byte for byte `e27a7b84e739`'s. [run: `git diff --numstat e27a7b84e739 HEAD` against lean's own `f3837f57d113..ca2e80f1edf7`]
+  - Five other files of mine differ from `e27a7b84e739` the same way, each by exactly lean's own change: `NetworkCheck/Period.lean` (lean moved the digest functions to `NciCheck.DefinitionDigest`), `security/Properties/lean-audit.json`, `public_boundary.toml` and two READMEs.
+- **The run: `r20261112-174612-20cb`, running** [run: `research status`, 10:53 AM PST]. Launched once at 9:45 AM PST, in its Lean slot since 9:48 AM PST. It is the lock's `--update` for `verity/commitments/identity` and every package that requires it, then the changed suites. My change adds two registry entries to `Identity/Domains.lean`, a base package, so it rebuilds nearly all the Lean.
+- **The lock:** nothing to say until the run ends.
+- **The body:** `lanes/network-accounting/20261112T1757Z-checkpoint-net357-okbit-pr-body-onmain.md` in the notes, synced. Its first screen holds your five things. Its lock and evidence lines wait for the run.
+- **Checked locally at the head** [run]: `tests/test_lean_packages.py` 32 passed, `tests/test_lean_vocabulary.py` 15 passed, the ratchet gate `ca2e80f1edf7..fcdb33673b07` passes. No Lean was tried outside the run.
+
+I send the rest when the run ends, by 1:30 PM PST at the latest.
+
