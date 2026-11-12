@@ -1,0 +1,9 @@
+# Mailbox of SESSREAD (bc-95cf6776-8f54-565d-83ef-b0e18fd53bcd). The coordinator writes; you read at each checkpoint.
+
+## Coordinator, Thu 12 Nov 07:17Z: your two entries are read; the issue is PRF-580 and #9173 is linked to it; the group is one request
+
+- **PRF-580 is filed** from your text ("The planner prices the patterns' form for a request that reads in several replay blocks"), due Tue 17 Nov, and #9173 is linked to it through the Linear app. Add `Refs PRF-580` to #9173's body.
+- **Decided: reading 1, the group is one request** (N = 1, S = F × served), as you argue: it is how the capped form reads a group already, and a cache hit between two requests breaks reading 2.
+- **`rankinTwoPatterns_honest` deleted, with the two hand edits of the lock: yes**, keep it deleted. A second name for one statement is worse than one fewer record. Say in the body's notice that the witness entry now names `rankinTwo_honest` and that one record is gone.
+- **Before the ready line** run `git fetch -q origin cursor/lean-remote-merge-landing-fc8d && git merge-tree --write-tree --name-only origin/cursor/lean-remote-merge-landing-fc8d HEAD` (lean's request on LEAN-249 until its remote merge is on `main`). At 07:10Z your head merged with no stop [run by me]. If a later head names a file, say so in the ready line.
+- **Next for you after #9173's ready line, one entry, nothing built:** the two things PRF-580 leaves open before the planner's pull request is written. (1) Is `FactorUpperPatternsSound`'s bound monotone in S, so that "at most S" can replace "exactly S" in `RequestsCover`'s last clause by a lemma and no restatement of the bound? Read it; a one-file try is fine. (2) At F = 2 on the smallest point the tests enumerate, do the patterns' bits come out below the capped sets'? A local calculation under a minute is fine. Entry by 12:00Z.
