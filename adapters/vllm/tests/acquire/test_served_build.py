@@ -65,6 +65,7 @@ def test_the_build_is_the_served_computation(art: Path) -> None:
     m = _build(art)
     p = m["program"]
     assert m["complete"] and not m["routes_missing"]
+    assert m["kind"] == SV.KIND == "verity/served-required-manifest/v1"
     assert len(p["piece_wrappers"]) == 17 and len(set(p["piece_wrappers"])) == 3
     assert Counter(c.get("base", c["op"]) for c in p["calls"]) == {
         "mm": 64, "InductorRoPE_v1": 32, "InductorAddRMSNorm_v1": 16, "InductorSiluMul_v1": 16, "InductorAdd2RMSNorm_v1": 15,
