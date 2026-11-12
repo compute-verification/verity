@@ -266,6 +266,21 @@ def test_the_wide_leaf_is_carried_by_both_sides_or_by_neither(binary, tmp_path):
         assert [a[0] for a in sides] == ["serve", "prove"]
 
 
+def test_the_callers_challenger_flags_end_every_verifiers_line_and_no_provers(binary, tmp_path):
+    """``tree_from``: the flags of the challenger session the caller holds end the verifier's command line and reach no
+    prover's, on either statement version; the server starts no challenger of its own, and refuses to be given both."""
+    flags = ["--tree-from", "127.0.0.1:9", "--tree-secret-file", str(tmp_path / "secret")]
+    for wide in (True, False):
+        with ProofServer(binary, tmp_path / f"ps-{wide}", verify_ahead=0, wide_leaf=wide, tree_from=flags) as ps:
+            r = record(ps.submit(statement(tmp_path, "ab" * 64), draw([1]), "s").result())
+        sides = (r["argv"], r["proved"]["argv"])
+        assert sides[0][-len(flags):] == flags and not set(flags) & set(sides[1])
+        assert [a.count("--wide-leaf") for a in sides] == [int(wide)] * 2 and all("--zk" in a for a in sides)
+        assert ps.challengers == {}
+    with pytest.raises(ValueError, match="not both"):
+        ProofServer(binary, tmp_path / "both", challenger=True, tree_from=flags)
+
+
 def test_a_templated_statements_unit_reaches_its_verifier_and_its_provers_line(binary, tmp_path):
     """A templated statement's verifier loads its circuit with the unit (`--tmpl-unit`) and the prover's line names it
     (``tmpl_unit``); a flat statement on the same server names none."""
