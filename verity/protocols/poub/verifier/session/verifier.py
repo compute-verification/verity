@@ -1093,7 +1093,10 @@ class Verifier:
             _, _, stamp = self.expect("pong")
             rtts.append(stamp - t0)
         rtts.sort()
-        at = lambda q: rtts[min(n - 1, int(q * n))]
+
+        def at(q: float) -> int:
+            return rtts[min(n - 1, int(q * n))]
+
         return {"n": n, "min_ns": rtts[0], "median_ns": rtts[n // 2], "max_ns": rtts[-1], "p50": at(0.5),
                 "p99": at(0.99), "p999": at(0.999), "max": rtts[-1]}
 
