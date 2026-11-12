@@ -164,30 +164,51 @@ charges. The dry run, against the stand-in id endpoint:
 
     uv run benchmarks/network_traces/deviations.py try --stand-in --out DIR
 
-and against a served front, whose `HOST:PORT` is the value of an environment variable the command names:
+Against a served front, whose `HOST:PORT` is the value of an environment variable the command names:
 
     FRONT=HOST:PORT uv run benchmarks/network_traces/deviations.py try --front-env FRONT --out DIR \
-        [--ids REQUESTS.jsonl] [--cell-bytes B] [-- --window T --delay D ...]
+        [--cell-bytes B] [--tail S] [-- --window T --delay D ...]
 
-- The six classes (`--class`, by default all, each one try): `honest`, the control; `tokens`, a planted bit in each
-  output id; `length`, a response's last id event dropped to set its count's parity; `bucket`, a response held
-  `--hold-ms`; `fail`, a response withheld; `extra`, bytes out of the id form after the trailer.
+And against a served front that listens on its own node's loopback, as a `research run` job on a node that holds a
+tunnel key to it (`deviations.sh`: one ssh forward, then the tries, then a guard that fails the job if anything it
+keeps holds an address):
+
+    PEER=USER@HOST PORT=P KEY=FILE bash benchmarks/network_traces/deviations.sh [TRY-FLAG ...] [-- REHEARSE-FLAG ...]
+
+Then the table again, once the server's record of the tries' sampled ids is there:
+
+    uv run benchmarks/network_traces/deviations.py table --out DIR --ids REQUESTS.jsonl
+
+- The six classes (`--class`, by default all, each one try, in this order): `honest`, the control; `tokens`, a
+  planted bit in each output id; `length`, a response's last id event dropped to set its count's parity; `fail`, a
+  response withheld; `extra`, bytes out of the id form after the trailer; `bucket`, a response held `--hold-ms`, a bit
+  a connection over `--bucket-requests` connections. When honest is refused no other class is tried.
 - A try is the deviating process, then `warden_serve.py rehearse --ids` through it: a key, the traffic, the relay,
   its client and its offline check, on the host's clock. The flags after `--` are the rehearsal's own, the schedule's
-  among them; `--cell-bytes` is the relay's B, which fixes an id event's size.
+  among them; `--cell-bytes` is the relay's B, which fixes an id event's size. `--tail` covers a connection admitted
+  at the last request's time: the schedule's delay and its cells.
 - The front's address has no default. Only the deviating process reads it, from its environment, and nothing a try
   writes holds it: the relay's upstream is the deviating process on the loopback.
-- The relay's check refuses `fail`, `extra` and a `bucket` hold past a cell's deadline, in its audit's words. `tokens`
-  and `length` leave id-form cells, which the relay's check accepts; the I/O tie's content refuses them
-  (`io_tie.cells_match` on each bucket of the egress record). The tie needs the Commit's sampled ids of each request:
-  `--ids`, the server's record by request `user`, or under `--stand-in` the stand-in's own. Without them the tie isn't
-  run and the row says so. Its map is the certified placement, a stand-in for the advice's.
-- A try names its request i `CLASS-TAG-i` (`--tag`, by default a random one a command), so one record of the server
-  over every try, and over what it served before them, holds each request once. `table --out DIR --ids FILE` reads
-  the tries again once the server's record is there.
+- A try keeps `DIR/CLASS.json`: the schedule, the check's verdict and its words, each connection's request name,
+  release number, cells' kinds, the ids it was sent and the bits planted on it, the egress record's cells, and the
+  size and SHA-256 of every file of its run directory. The run directory, with the relay's records and their salts,
+  is under `--scratch`, by default a temporary directory that is removed. The table is made from `DIR` alone.
+- The relay's check refuses `fail`, `extra` and a `bucket` hold past a cell's deadline, in its audit's words; a
+  shorter hold is accepted and isn't seen at the client's bucket. `tokens` and `length` leave id-form cells, which the
+  relay's check accepts; the I/O tie's content refuses them (`io_tie.cells_match` on each bucket of the egress
+  record). Its map is the certified placement, a stand-in for the advice's.
+- The tie needs the Commit's sampled ids of each request: `--ids`, the server's record, or under `--stand-in` the
+  stand-in's own. Without them the tie isn't run and the row says so. A line of `--ids` is a request's `output_ids`
+  under its `user`, or under its `id` `verity-RUN-N`, the name the certified tick gives a request: the certifier's
+  run id and the request's release number. A try also names its request i `CLASS-TAG-i` (`--tag`, by default a random
+  one a command). Either way one record of the server over every try, and over what it served before them, holds
+  each request once.
+- A refusal counts only where it is the deviation's: the tie refuses exactly the ids the planted bits changed or the
+  connections whose last event was dropped, and the relay failed exactly the connections withheld or held. A row
+  refused for anything else didn't do what its check says.
 - The command exits 0 when honest was accepted and each other class was refused by its check, or wasn't shown to the
-  client; 1 when a class did otherwise; and 2 when none did and a row is shown neither way, as `tokens` and `length`
-  are until the tie has the server's record. `table --out DIR` prints the table of the tries in a directory again.
+  client; 1 when a class did otherwise, or honest was refused; and 2 when none did and a row is shown neither way, as
+  `tokens` and `length` are until the tie has the server's record.
 
 ## The chain's run of record
 
