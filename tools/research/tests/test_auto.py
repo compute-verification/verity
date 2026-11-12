@@ -707,6 +707,21 @@ def _suites_repo(tmp_path: Path) -> Path:
     return repo
 
 
+def test_a_named_suites_run_lasts_the_bound_its_workers_stretch(tmp_path):
+    """A suite measured on 5 workers (`timeout_workers`) run on 3 has suites.py's bound stretched to 5/3 of its timeout_s; the run
+    sized for it lasts that, not the 14,400 s that would kill it first."""
+    from research import suite_size
+
+    repo = _auto_repo(tmp_path)
+    (repo / "a").mkdir()
+    (repo / "a" / "pyproject.toml").write_text('[project]\nname = "a"\n[tool.pytest.ini_options]\n[tool.verity.tests]\n'
+                                               "parallel = true\ntimeout_s = 14400\ntimeout_workers = 5\n")
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True)
+    run = [suite_size.SUITES_PY, "a", "--jobs"]
+    assert suite_size.size(repo, [*run, "3"], None)["max_s"] == 24000 + suite_size.SYNC_S
+    assert suite_size.size(repo, [*run, "8"], None)["max_s"] == 14400 + suite_size.SYNC_S
+
+
 def test_a_run_of_many_suites_is_placed_and_counted_in_a_line_by_what_it_reserves(tmp_path, monkeypatch, capsys):
     """A run of many suites holds half of what it plans on in a pool's slot, so half is what a place for it takes of the
     machine's free memory, and what it takes from the runs behind it while it waits in a line. Counted by the whole figure,
