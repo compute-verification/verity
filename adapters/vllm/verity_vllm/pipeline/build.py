@@ -23,30 +23,17 @@ import time
 import traceback
 from dataclasses import dataclass
 
-from verity.definitions.boolean import write_word
-
 from verity_vllm.config import RowConfig, option, workload_arg, workload_file
-from verity_vllm.engine import env as engine_env
-from verity_vllm.engine import hooks
+from verity_vllm.engine import env as engine_env, hooks
 from verity_vllm.pipeline import launch_context as LC
-from verity_vllm.pipeline.build_instances import (  # noqa: F401 (read through here)
-    INSTANCES_GZ_LEVEL,
-    _instance_rows,
-    _instance_sequence,
-    _write_instances,
-    _write_instances_file,
-    write_instances,
-)
-from verity_vllm.pipeline.tp.links import (  # noqa: F401 (read through here)
-    module_in_model_vocabulary,
-    read_tp_links,
-    same_module_path,
-    write_tp_links,
-)
+from verity.definitions.boolean import write_word
 from verity_vllm.program.frontend.boolean import derived
 from verity_vllm.program.frontend.inputs_trace import InputsTrace
 from verity_vllm.program.frontend.seed_rule import rid_entry
 from verity_vllm.program.prune import BATCHED, registered_form
+from verity_vllm.pipeline.build_instances import (INSTANCES_GZ_LEVEL, _instance_rows, _instance_sequence,  # noqa: F401 (read through here)
+                                                 _write_instances, _write_instances_file, write_instances)
+from verity_vllm.pipeline.tp.links import module_in_model_vocabulary, read_tp_links, same_module_path, write_tp_links  # noqa: F401 (read through here)
 
 
 def _spec_histogram(program) -> dict[str, int]:
@@ -156,10 +143,7 @@ def sampler_geometry(sampling: dict, target, LP: int | None = None, T: int | Non
     (`topp_geometry.registered_splits`, from the target's SM count, never hard-coded; `engine.topp_pin`),
     so the Program takes S as a per-event constant (`Const32[S]`, the select's 6th operand) and reads no live row count; the Match
     holds every launch's S to it."""
-    from verity.definitions.registry.topp_geometry import (
-        SPLIT_MAX_BATCH,
-        registered_splits,
-    )
+    from verity.definitions.registry.topp_geometry import SPLIT_MAX_BATCH, registered_splits
     kind = sampling.get("kind")
     if kind != "stochastic":
         return None
@@ -237,8 +221,7 @@ def sampling_policy(arg: str | None, workload: str | None) -> dict:
         return _norm({"temperature": float(m.group(1)), "top_p": float(m.group(2)), "top_k": int(m.group(3) or 0)}, s)
 
     def _from_manifest(path: str) -> dict:
-        with open(path) as f:
-            w = json.load(f)
+        w = json.load(open(path))
         sw = w.get("sweep") or {}
         if sw.get("sampling") is not None:
             pol = _norm(dict(sw.get("sampling_params") or {}), sw["sampling"]) if sw["sampling"] != "greedy" else {"kind": "greedy"}
@@ -270,9 +253,7 @@ def sampling_policy(arg: str | None, workload: str | None) -> dict:
     pol = dict(pol_w if pol_w is not None else (pol_a if pol_a is not None else {"kind": "greedy"}))
     pol["source"] = "workload" if pol_w is not None else ("arg" if pol_a is not None else "default")
     if workload:
-        with open(workload) as f:
-            requests = json.load(f).get("requests", [])
-        pol.update(workload=workload, **rid_entry(pol, requests))
+        pol.update(workload=workload, **rid_entry(pol, json.load(open(workload)).get("requests", [])))
     return pol
 
 
@@ -280,12 +261,8 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
                              launch: dict | None = None) -> dict:
     """The facts READ BACK from the environment/model/export that the Program's Definition selection rests on — the conditions under
     which the artifact may be reused (`target_profile.check_reuse`). Every value is observed, none is a literal."""
+    from verity_vllm.program.frontend.rules.vllm_bindings import GEMM_PINS, RMS_PINS, tuned_gemm_table_sha256
     from verity_vllm.program.frontend.gemm_targets import try_gemm_target_for
-    from verity_vllm.program.frontend.rules.vllm_bindings import (
-        GEMM_PINS,
-        RMS_PINS,
-        tuned_gemm_table_sha256,
-    )
     # the registered GEMM specialization the construction pinned (verity_vllm.program.frontend.gemm_targets, selected by the target's
     # capability + the arch family vLLM applied): its key and k16 step are conditions of reuse; None (with the refusal) when unregistered.
     gt, gt_refusal = try_gemm_target_for(profile.compute_capability, applied.get("tuned_gemm_arch_family"))
@@ -301,7 +278,7 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
     samp = {k: v for k, v in (sampling or {"kind": "greedy"}).items() if k not in ("source", "workload", "label")}
     cond = {"numerics_profile": profile.numerics_profile, "attention_impl": impls, "attention_backend": backs, "vllm_flash_attn_version": favs,
             # the sampler the Program binds is an applicability condition: a greedy artifact is not reusable for a stochastic row
-            "sampler": samp, "token_select": SAMPLERS_BOUND.get(samp.get("kind", "")),
+            "sampler": samp, "token_select": SAMPLERS_BOUND.get(samp.get("kind")),
             "fused_add_rms_norm_dispatch": (export_facts or {}).get("fused_add_rms_norm_dispatch"),
             "vllm_version": applied.get("vllm_version"), "torch_version": applied.get("torch_version"), "triton_version": applied.get("triton_version"),
             "tuned_gemm_arch_family": applied.get("tuned_gemm_arch_family"), "tuned_gemm_table_sha256": tuned_gemm_table_sha256(),
@@ -328,8 +305,11 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
 
 
 def _cuda_available() -> bool:
-    import torch
-    return bool(torch.cuda.is_available())
+    try:
+        import torch
+        return bool(torch.cuda.is_available())
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
@@ -371,9 +351,8 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                  # co-scheduled sequence (frontend.targets.parse_launch_context).  FA3's tile rule reads it; None = own rows (B1 semantics, digests unchanged)
                  "launch_context": launch, **({"stop": stop} if stop is not None else {}), **({"form": BATCHED} if batched else {})}
     try:
-        with open("EXPORT.json") as f:
-            res["code_rev"] = json.load(f)
-    except (OSError, ValueError):   # no EXPORT.json here, or not JSON: the tree is no export
+        res["code_rev"] = json.load(open("EXPORT.json"))
+    except Exception:  # noqa: BLE001
         res["code_rev"] = None
     # the profile's environment is applied BEFORE vLLM is imported (vllm_meta's setdefaults are the fallback for callers without a profile)
     engine_env.apply_target(target.env())
@@ -426,34 +405,15 @@ class _Refused(Exception):
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0,
                dead_free: bool = False, stop: dict | None = None, batched: bool = False) -> None:
-    from verity_vllm.program.frontend.target_profile import (
-        applied_kernels,
-        profile_mismatches,
-    )
+    from verity_vllm.program.frontend.target_profile import ArtifactIdentity, applied_kernels, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
-        import torch
-
-        from verity_vllm.program.frontend import loader_parity
-        from verity_vllm.program.frontend import vllm_meta as vm
-        from verity_vllm.program.frontend.derive import derive_report
-        from verity_vllm.program.frontend.export_compat import (
-            apply_target_profile,
-            host_facts,
-            read_back_applied,
-        )
-        from verity_vllm.program.frontend.rules.vllm_bindings import (
-            VLLM_BINDING_RULES,
-            clear_observations,
-            declared_derived_accounting,
-            observe_allreduce_settings,
-            observe_attention_impls,
-            observe_batched_form,
-            observe_export_facts,
-            observe_launch_context,
-            observe_target_profile,
-            vllm_ruleset,
-        )
+        from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
+        from verity_vllm.program.frontend.export_compat import apply_target_profile, host_facts, read_back_applied
         from verity_vllm.program.frontend.triton_capture import TritonLaunchLog
+        import torch
+        from verity_vllm.program.frontend.derive import derive_report
+        from verity_vllm.program.frontend.rules.vllm_bindings import (VLLM_BINDING_RULES, vllm_ruleset, observe_attention_impls, observe_export_facts, observe_batched_form,
+                                                            observe_target_profile, declared_derived_accounting, clear_observations, observe_allreduce_settings, observe_launch_context)
         clear_observations()
         observe_target_profile(target)
         observe_launch_context(launch)
@@ -472,13 +432,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             bus = None
             if tp > 1:
                 # rank `rank` of `tp`: vLLM's TP group := TPStub (shard sizes + collectives -> CollectiveBus) for instantiation, export and derive
+                from verity_vllm.program.frontend.export_ops import CollectiveBus, bind_vocab_parallel_embeddings, tp_group_override
                 from verity.definitions.registry.tp_allreduce import settings_of
-
-                from verity_vllm.program.frontend.export_ops import (
-                    CollectiveBus,
-                    bind_vocab_parallel_embeddings,
-                    tp_group_override,
-                )
                 env_now = engine_env.snapshot()
                 allreduce_settings = settings_of(cfg.parallel_config.disable_custom_all_reduce, env_now)
                 observe_allreduce_settings(allreduce_settings)
@@ -540,7 +495,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             applied_export: dict = {}
             ep = vm.export_module(mod, inputs, cfg, ntok, intercept_triton=intercept, launch_log=log, profile=target, applied_out=applied_export)
             res["export"] = {"secs": round(time.time() - t0, 2), "n_nodes": len(list(ep.graph.nodes)), "op_histogram": vm.op_histogram(ep),
-                             "triton_kernels": sorted({x["kernel"] for x in log.launches}), "n_triton_launches": len(log.launches)}
+                             "triton_kernels": sorted({l["kernel"] for l in log.launches}), "n_triton_launches": len(log.launches)}
             res["export_facts"] = vm.export_facts(res["export"]["op_histogram"], res["export"]["triton_kernels"])
             observe_export_facts(res["export_facts"])
             # READ BACK inside the export context: an export-phase value that diverged from the declared one (a second capability
@@ -571,13 +526,10 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
         res["bindings_rules"] = [r.info.to_json() for r in VLLM_BINDING_RULES]
         res["ok"] = rep.ok
         if not rep.ok:
-            if rep.unsupported is None:
-                raise RuntimeError("the derive made no Program and named nothing it does not support")
             res["unsupported"] = rep.unsupported.to_json()
             res["rules_applied_before_refusal"] = rep.provenance.get("rules_applied_before_refusal")
             res["n_applications_before_refusal"] = len(rep.provenance.get("applications_before_refusal", []))
-            with open(os.path.join(out, "derive-report.json"), "w") as f:
-                json.dump(rep.provenance, f, indent=1, default=str)
+            json.dump(rep.provenance, open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
         else:
             # the model's path INSIDE the traced wrapper, by object identity (`WithPeers.inner` -> wrapper `.model`):
             # the derive's module paths are the wrapper's `named_modules()` vocabulary, the recorder's are `model.named_modules()`;
@@ -586,12 +538,10 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             write = functools.partial(_write_program, target=target, applied=applied, sampling=sampling, launch=launch, tp=tp, model_root=model_root)
             pre = copy.deepcopy(res) if emit is not None else None      # rank r's `res` before its writer: the template's, at rank r
             write(out, res, rep, rank=rank)
-            if emit is not None and pre is not None:
+            if emit is not None:
                 from verity_vllm.pipeline.tp import emit_ranks
-                from verity_vllm.program.frontend.export_ops import (
-                    rank_embedding_shards,
-                )
-                del rep                                                    # the template's descriptor and correspondence: freed
+                from verity_vllm.program.frontend.export_ops import rank_embedding_shards
+                rep = None                                                 # the template's descriptor and correspondence: freed
                 emit_ranks.emit(emit, out, pre, session[0] if session else None, shards=lambda r: rank_embedding_shards(model, r),
                                 context=lambda: _derive_context(vm, cfg, ntok, target, model, apply_target=True),
                                 post=derived if target.ir == "boolean" else None, write=write)
@@ -601,11 +551,8 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
                    model_root: str | None) -> None:
     """A successful derive's files under `out` (descriptor, derive report, instances, tp_links, artifact) and its `res` fields."""
     from verity.circuits.codec import canonical_json, encode_program
-
-    from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS
-    from verity_vllm.correspondence.runtime import correspondence_digest
-    from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES
-    from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
+    from verity_vllm.correspondence.runtime import NAMESPACE as CORR_NS, correspondence_digest
+    from verity_vllm.program.frontend.rules.vllm_bindings import VLLM_BINDING_RULES, kv_prefix as KP
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity
     program, supplied = rep.program, ({"supplied": s} if (s := rep.provenance.get("supplied")) else {})   # a registered_values derive's
     supplied |= {"ir": ir} if (ir := rep.provenance.get("ir")) else {}   # ir=boolean: the word root and digest the bits were lifted from
@@ -638,11 +585,8 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["mutation_effects"] = rep.provenance["mutation_effects"]
     res["kv_rewrites"] = len(rep.provenance.get("kv_rewrites") or []) if isinstance(rep.provenance, dict) else None
     if (pfx := KP.layout_of(rep.provenance)) is not None:   # the cached prefix's input and layer order, for Match
-        with open(os.path.join(out, "prefix_cache.json"), "w") as f:
-            json.dump(pfx, f, indent=1)
-        res["prefix"] = pfx
-    with open(os.path.join(out, "derive-report.json"), "w") as f:
-        json.dump(rep.to_json(), f, indent=1, default=str)
+        res["prefix"] = json.dump(pfx, open(os.path.join(out, "prefix_cache.json"), "w"), indent=1) or pfx
+    json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
     write_instances(out, program, digest, corr_digest, supplied, checks=rep.provenance.get("checks"))
     if res.get("wrapper") == "request":
         from verity_vllm.pipeline.memory_map import census_entry
@@ -653,19 +597,14 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     res["artifact"] = art.to_json()
     # beside program_digest, NOT inside the identity: the correspondence is data about the Program, not part of it
     res["artifact"]["correspondence_digest"] = corr_digest
-    with open(os.path.join(out, "artifact.json"), "w") as f:
-        json.dump(res["artifact"], f, indent=1, sort_keys=True)
+    json.dump(res["artifact"], open(os.path.join(out, "artifact.json"), "w"), indent=1, sort_keys=True)
 
 
 @contextlib.contextmanager
 def _derive_context(vm, cfg, ntok: int, target, model, *, apply_target: bool = False):
     """The contexts the derive runs in; `apply_target`: with the declared target applied again (a relabel, after the construction's)."""
     import torch
-
-    from verity_vllm.program.frontend.export_compat import (
-        apply_target_profile,
-        export_compat,
-    )
+    from verity_vllm.program.frontend.export_compat import apply_target_profile, export_compat
     from verity_vllm.program.frontend.triton_capture import intercept_triton_launches
     with contextlib.ExitStack() as st:
         if apply_target:
@@ -684,6 +623,7 @@ def _count(xs) -> dict:
 def _sharded_param_summary(model) -> dict:
     """The rank's parameter shapes AS INSTANTIATED at this rank (the sharded weight inputs the Program commits to), keyed by the
     vLLM layer class: `{class: {shape: count}}` — the independent check that the shard shapes match the engine worker's loaded shards."""
+    import torch
     by_cls: dict = {}
     n_params = n_elems = 0
     for name, m in model.named_modules():
@@ -703,8 +643,7 @@ def _finish(out: str, res: dict, t_start: float) -> dict:
     import resource
     res["wall_secs_total"] = round(time.time() - t_start, 2)
     res["max_rss_mb"] = round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0, 1)  # Linux: KB
-    with open(os.path.join(out, "result.json"), "w") as f:
-        json.dump(res, f, indent=1, default=str)
+    json.dump(res, open(os.path.join(out, "result.json"), "w"), indent=1, default=str)
     _write_manifest(out, res)
     return res
 
@@ -713,8 +652,10 @@ def _write_manifest(out: str, res: dict) -> None:
     """`construction_manifest.json`: what the construction read (inputs trace summary), which rules fired, the declared
     facts it relied on, wall/RSS, and the program identity — for the independent validator."""
     tr = {}
-    with contextlib.suppress(OSError, ValueError), open(os.path.join(out, "inputs.json")) as f:   # none written, or not JSON
-        tr = json.load(f)
+    try:
+        tr = json.load(open(os.path.join(out, "inputs.json")))
+    except Exception:  # noqa: BLE001
+        pass
     m = {"schema": "cb-a/construction_manifest/v3", "utc": res.get("utc"), "wrapper": res.get("wrapper"),
          # `sampling` is the row's declared policy (manifest / --sampling / default-by-omission), never a literal
          "structural_inputs": {"LP": res.get("LP"), "T": res.get("T"), "M": res.get("M"), "pos0": res.get("pos0"), "eos": res.get("eos"),
@@ -749,8 +690,7 @@ def _write_manifest(out: str, res: dict) -> None:
                    "artifact.json (verity/aot-artifact/v1: identity + construction_version + target_profile + applicability + program_digest)"]}
     if res.get("relabeled_from"):
         m["relabeled_from"] = res["relabeled_from"]
-    with open(os.path.join(out, "construction_manifest.json"), "w") as f:
-        json.dump(m, f, indent=1, default=str)
+    json.dump(m, open(os.path.join(out, "construction_manifest.json"), "w"), indent=1, default=str)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -814,14 +754,13 @@ def _stop_arg(text: str | None) -> dict | None:
 
 
 def main(a: Options) -> int:
-    # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
-    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune
+    from verity_vllm.pipeline.gc_tuning import tune as _gc_tune   # process-level cyclic-GC thresholds; content-neutral (VERITY_GC_THRESHOLDS)
     _gc_tune()
     try:
-        from verity_vllm.engine.profiles.devices import device_name
-        from verity_vllm.pipeline.tp.emit_ranks import parse_ranks
         from verity_vllm.program.frontend.target_profile import parse_target_arg
         from verity_vllm.program.frontend.targets import parse_launch_context
+        from verity_vllm.pipeline.tp.emit_ranks import parse_ranks
+        from verity_vllm.engine.profiles.devices import device_name
         emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
         named = device_name(a.workload)
         if a.device_name and named and a.device_name != named:
@@ -834,8 +773,7 @@ def main(a: Options) -> int:
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)
-        with open(os.path.join(a.out, "result.json"), "w") as f:
-            json.dump({"ok": False, "exception": type(e).__name__, "message": str(e)[:4000], "traceback_tail": tb[-6000:]}, f, indent=1)
+        json.dump({"ok": False, "exception": type(e).__name__, "message": str(e)[:4000], "traceback_tail": tb[-6000:]}, open(os.path.join(a.out, "result.json"), "w"), indent=1)
         print(f"[derive_step] CRASH {type(e).__name__}: {str(e)[:800]}", file=sys.stderr)
         print(tb[-3000:], file=sys.stderr)
         return 2

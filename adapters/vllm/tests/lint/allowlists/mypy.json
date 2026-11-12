@@ -3149,6 +3149,11 @@
     {"file": "verity_vllm/records/commit_binding.py", "kind": "arg-type", "symbol": "_by_request", "detail": ""},
     {"file": "verity_vllm/records/global_match.py", "kind": "arg-type", "symbol": "GlobalMatch.of", "detail": ""},
     {"file": "verity_vllm/records/global_match.py", "kind": "arg-type", "symbol": "MatchCheck.of", "detail": ""},
-    {"file": "verity_vllm/target_family.py", "kind": "return-value", "symbol": "device_cc", "detail": ""}
+    {"file": "verity_vllm/target_family.py", "kind": "return-value", "symbol": "device_cc", "detail": ""},
+    {"file": "verity_vllm/pipeline/build.py", "kind": "arg-type", "symbol": "_construct", "detail": ""},
+    {"file": "verity_vllm/pipeline/build.py", "kind": "arg-type", "symbol": "applicability_conditions", "detail": ""},
+    {"file": "verity_vllm/pipeline/build.py", "kind": "assignment", "symbol": "_construct", "detail": ""},
+    {"file": "verity_vllm/pipeline/build.py", "kind": "func-returns-value", "symbol": "_write_program", "detail": ""},
+    {"file": "verity_vllm/pipeline/build.py", "kind": "union-attr", "symbol": "_construct", "detail": ""}
   ]
 }
