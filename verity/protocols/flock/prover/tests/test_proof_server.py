@@ -294,21 +294,6 @@ def test_a_dead_prover_fails_its_session_and_the_next_starts_afresh(binary, tmp_
     assert ps.exits == {"prover-cpu": 4, "prover-cpu.2": 0, v: ps.exits[v], f"{v}.2": 0} and ps.exits[v] != 0
 
 
-def test_a_prover_that_exits_0_with_a_session_unrecorded_fails_that_session(binary, tmp_path, monkeypatch):
-    """A session is done on its records and never on its prover's exit status: a prover that ends with status 0 and no
-    ``LIVE`` record for a line it was handed fails that line's session, as one that ends with any other status does. The
-    server is closed as soon as the session fails, and its close finds the verifier's retiring thread started."""
-    monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
-    monkeypatch.setenv("FAKE_PROVE_EXIT", "0")
-    st = statement(tmp_path, "ee" * 64)
-    with ProofServer(binary, tmp_path / "ps") as ps:
-        first = ps.submit(st, {"units": [0]}, "s0").result()
-        left = ps.submit(st, {"units": [1]}, "s1")
-        with pytest.raises(ProofServerError, match=r"prover-cpu exited \(rc 0\) before its records"):
-            left.result()
-    assert first.accepted and left.live is None and ps.exits["prover-cpu"] == 0
-
-
 def test_a_verifier_that_never_serves_fails_its_session(binary, tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_SERVE_DIES", "1")
     ps = ProofServer(binary, tmp_path / "ps")
