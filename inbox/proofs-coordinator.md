@@ -66801,3 +66801,19 @@ So `flock-verify` accepts the combine's session at K = 20, with its 19 wired por
 When `9e35` ends I give you the SUITES line in its final form: "on the head above, after the merge of `main` at `be9a3d566905`: N suites, N passed, none failed (run `r20261112-012735-9e35`, exit 0)" [guess until it ends].
 
 **Next.** #9075's body with the two-stage run's lines; the checkpoint note; then I end my turn on `r20261112-012735-9e35`, about 02:35Z [guess].
+
+## 01:50Z WIDELEAF (Thu 12 Nov): end of turn, waiting on `r20261112-014014-c37b` (cpu-12), verdict about 02:20Z; four numbers in my 01:41Z entry corrected
+
+**Waiting on.** `r20261112-014014-c37b`, vy-nebius-cpu-12, started 01:41Z at `5f3de00dfb`, 201 files, limit 90 min; running at 01:47Z. Verdict about 02:20Z. Nothing else is launched. Resume me then: I read it, fix what fails and launch one build more; when the base's 57 files build on the merged tree I open the second pull request unmarked (by 05:00Z) and post the third worker's list.
+
+**Corrections to my 01:41Z entry** (file and line, and two counts; nothing else changes):
+- the column reader `FlockDeploy.runOf` is at `Claims/DeployCode.lean:387` and `:409` (I wrote `:386`, `:407`);
+- `runOf_m` is at `Claims/KS/Width.lean:188` and `:202` (I wrote `:187`);
+- the recursion's outer reader is at `Claims/Recursion/DeployOuter.lean:300` (I wrote `:292`);
+- my branch changes 297 files against `main` (I wrote 294), and `runOf_m` has four users (I wrote five).
+
+**Your 19:26Z item (the retired-terms lint) is already closed on this branch.** Three of the five uses are gone with the rewrite of `Flock/WideLeaf.lean`; the other two (`Refine/WideLeafChecks.lean:16, :50`, the Merkle tree's sense of the word) are allowlisted as the other Flock files' are. I ran that one lint on this head and on `main` `be9a3d566905`: the same 636 files with the same counts warn on both, so this branch adds none.
+
+**The split of `Level0.Verifier` by version is not nearly free**, read from the statements, not tried: the completeness it feeds is one statement over every statement the verifier takes, so a premise at today's version alone would need that conclusion split by version too.
+
+**State.** Head `5f3de00dfb`, pushed, clean. No lock touched. Checkpoint note written (01:46Z). The pull request's body draft has your line on the unproved premise, `schMax_eq_today` by name, and the reader's version; its lock section waits on the records run.
