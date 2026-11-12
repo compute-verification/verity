@@ -403,7 +403,6 @@
     {"file": "verity_vllm/observe/fold/profiles/gen_shared_moe_patterns.py", "kind": "override", "symbol": "MoEFusedSharedExpertsFp8._gate", "detail": "", "count": 2},
     {"file": "verity_vllm/observe/fold/profiles/generic.py", "kind": "attr-defined", "symbol": "make_module", "detail": "", "count": 24},
     {"file": "verity_vllm/observe/fold/profiles/generic.py", "kind": "no-redef", "symbol": "make_weight_field.weight_field", "detail": ""},
-    {"file": "verity_vllm/observe/triton_adapter.py", "kind": "attr-defined", "symbol": "install", "detail": ""},
     {"file": "verity_vllm/pipeline/admission_bound.py", "kind": "operator", "symbol": "admission", "detail": "", "count": 2},
     {"file": "verity_vllm/pipeline/advice.py", "kind": "arg-type", "symbol": "_sources", "detail": ""},
     {"file": "verity_vllm/pipeline/advice.py", "kind": "arg-type", "symbol": "from_trace", "detail": ""},
