@@ -439,6 +439,76 @@ theorem encRow_words {k : ℕ} {w : ℕ → ℕ} (hw : ∀ l < k, (wordQ (w l)).
     exact ⟨h32, by rw [hx]; rfl⟩
   · exact ⟨by norm_num, by rw [Freeze.wordQ_zero]; rfl⟩
 
+/-- **`ρ·α ≤ 113`** on a row of finite words whose `ρ` is finite: `ρ ≥ 0`, `α ≥ 0`, and `α` is `448/d` for a `d` at
+least `s + 4ρ` up to three roundings, where `s ≥ 0`. -/
+theorem rho_alpha_le (hA : Pc8OpsAgree ops) {k : ℕ} {x : ℕ → ℕ} (hx : ∀ l, x l < 2 ^ 32 ∧ (wordQ (x l)).isSome)
+    {r a : ℚ} (hr : wordQ (rowRho ops .id x k) = some r) (ha : wordQ (alpha8 ops x k) = some a) :
+    0 ≤ r ∧ 0 ≤ a ∧ r * a ≤ 113 := by
+  have hρ32 : rowRho ops .id x k < 2 ^ 32 := eval_lt32 .sqrt rfl _
+  have hr0 : 0 ≤ r :=
+    sqrtWord_nonneg (a := Prim.eval ops .div [sumSq ops .id x (k / 8), f32Word ((k / 8 : ℕ) : ℚ)]) hr
+  obtain ⟨hs31, hsS⟩ := rowMax_word hA (fun l => (hx l).2) (k - 1)
+  obtain ⟨sv, hsv⟩ := Option.isSome_iff_exists.1 hsS
+  have hsv0 : 0 ≤ sv := wordQ_nonneg hs31 hsv
+  obtain ⟨-, a', ha', ha0, hinf, hfin⟩ := alpha_spec hA (t := Prim.eval ops .add [rowMax ops .fabs x (k - 1),
+    Prim.eval ops .mul [0x40800000, rowRho ops .id x k]]) (eval_lt32 .add rfl _) wordQ_c448 (by norm_num)
+    (by norm_num) (by norm_num)
+  change wordQ (alpha8 ops x k) = some a' at ha'
+  obtain rfl : a = a' := Option.some.inj (ha.symm.trans ha')
+  refine ⟨hr0, ha0, ?_⟩
+  rcases hr0.eq_or_lt with h0 | hrpos
+  · rw [← h0, zero_mul]; norm_num
+  by_cases htinf : Prim.eval ops .add [rowMax ops .fabs x (k - 1),
+      Prim.eval ops .mul [0x40800000, rowRho ops .id x k]] = 0x7F800000
+  · rw [hinf htinf, mul_zero]; norm_num
+  obtain ⟨-, dv, hdv32, hdt, herrα⟩ := hfin htinf
+  have h4r : (0 : ℚ) < 4 * r := by linarith
+  have hm4 : Prim.eval ops .mul [0x40800000, rowRho ops .id x k] = f32Word (4 * r) :=
+    hA.mul 0x40800000 (rowRho ops .id x k) 4 r (by norm_num) hρ32 wordQ_c4 hr (fun h => absurd h h4r.ne')
+  rw [hm4] at htinf hdt
+  rcases hq4 : wordQ (f32Word (4 * r)) with _ | m4v
+  · refine absurd ?_ htinf
+    change f32Add (rowMax ops .fabs x (k - 1)) (f32Word (4 * r)) % 2 ^ 32 = 0x7F800000
+    rw [f32Word_pos_inf h4r hq4, f32Add_pinf hsv]
+    all_goals norm_num
+  have herr4 := f32Word_err h4r.ne' hq4
+  rw [abs_of_pos h4r] at herr4
+  have hE := two_zpow_pos (-150)
+  have hE2 : (2 : ℚ) ^ (-149 : ℤ) = 2 * 2 ^ (-150 : ℤ) := by norm_num
+  have hr149 := wordQ_pos_ge hr hrpos
+  have hm4pos : 0 < m4v := by
+    have := (abs_le.1 herr4).1
+    rw [hE2] at hr149
+    generalize (2 : ℚ) ^ (-150 : ℤ) = E at this hr149 hE
+    linarith
+  have hsum : 0 < sv + m4v := by linarith
+  obtain ⟨nz, hadd⟩ := f32Add_fin hsv hq4
+  have htw : Prim.eval ops .add [rowMax ops .fabs x (k - 1), f32Word (4 * r)] = f32Word (sv + m4v) := by
+    change f32Add (rowMax ops .fabs x (k - 1)) (f32Word (4 * r)) % 2 ^ 32 = _
+    have := f32Word_lt31 hsum.le
+    rw [hadd, rnWord, ite_eq_right hsum.ne', Nat.mod_eq_of_lt (by omega)]
+  rw [htw] at htinf hdt
+  rcases hqt : wordQ (f32Word (sv + m4v)) with _ | tv
+  · exact absurd (f32Word_pos_inf hsum hqt) htinf
+  have herrt := f32Word_err hsum.ne' hqt
+  rw [abs_of_pos hsum] at herrt
+  have htv := hdt tv hqt
+  have hE32 : (2 : ℚ) ^ (-150 : ℤ) ≤ 2 ^ (-32 : ℤ) / 1000000 := by norm_num
+  have hrle : r ≤ dv * (1 / 4 + 1 / 1048576) := by
+    have h1 := (abs_le.1 herr4).1
+    have h2 := (abs_le.1 herrt).1
+    generalize (2 : ℚ) ^ (-150 : ℤ) = E at h1 h2 hE hE32
+    generalize (2 : ℚ) ^ (-32 : ℤ) = D at hE32 hdv32
+    linarith
+  have hdv0 : 0 < dv := lt_of_lt_of_le (two_zpow_pos _) hdv32
+  have hale : a ≤ 448 / dv * (1 + 1 / 16777216) := by
+    have := (abs_le.1 herrα).2
+    linarith
+  calc r * a ≤ (dv * (1 / 4 + 1 / 1048576)) * (448 / dv * (1 + 1 / 16777216)) :=
+        mul_le_mul hrle hale ha0 (by positivity)
+    _ = (1 / 4 + 1 / 1048576) * (1 + 1 / 16777216) * 448 := by field_simp
+    _ ≤ 113 := by norm_num
+
 /-- **`Stats8OK` by magnitudes**: on a row of finite words whose `ρ` is finite and whose floor `F32Fma(ρ, α, −1)` is at
 least `0`, `α` and `β` are step words and `β > 0`. -/
 theorem stats8OK_of_rho (hA : Pc8OpsAgree ops) {k : ℕ} {w : ℕ → ℕ} (hw : ∀ l < k, (wordQ (w l)).isSome)
@@ -451,17 +521,13 @@ theorem stats8OK_of_rho (hA : Pc8OpsAgree ops) {k : ℕ} {w : ℕ → ℕ} (hw :
   generalize encRow k (rowQ k w) = x at hx hρ hfl ⊢
   obtain ⟨r, hr⟩ := Option.isSome_iff_exists.1 hρ
   have hρ32 : rowRho ops .id x k < 2 ^ 32 := eval_lt32 .sqrt rfl _
-  have hr0 : 0 ≤ r :=
-    sqrtWord_nonneg (a := Prim.eval ops .div [sumSq ops .id x (k / 8), f32Word ((k / 8 : ℕ) : ℚ)]) hr
-  obtain ⟨hs31, hsS⟩ := rowMax_word hA (fun l => (hx l).2) (k - 1)
-  obtain ⟨sv, hsv⟩ := Option.isSome_iff_exists.1 hsS
-  have hsv0 : 0 ≤ sv := wordQ_nonneg hs31 hsv
-  obtain ⟨hαS, a, ha, ha0, hinf, hfin⟩ := alpha_spec hA (t := Prim.eval ops .add [rowMax ops .fabs x (k - 1),
+  obtain ⟨hαS, a, ha, -, -, -⟩ := alpha_spec hA (t := Prim.eval ops .add [rowMax ops .fabs x (k - 1),
     Prim.eval ops .mul [0x40800000, rowRho ops .id x k]]) (eval_lt32 .add rfl _) wordQ_c448 (by norm_num)
     (by norm_num) (by norm_num)
   change StepWord (alpha8 ops x k) at hαS
   change wordQ (alpha8 ops x k) = some a at ha
   have hα32 : alpha8 ops x k < 2 ^ 32 := hαS.1
+  obtain ⟨hr0, ha0, hbd⟩ := rho_alpha_le hA hx hr ha
   have hra0 : 0 ≤ r * a := mul_nonneg hr0 ha0
   have h127 : (114 : ℚ) ≤ 2 ^ 127 := by norm_num
   have key : |r * a - 1| < 2 ^ 127 → 1 / 2 ≤ r * a := fun hv => by
@@ -472,59 +538,6 @@ theorem stats8OK_of_rho (hA : Pc8OpsAgree ops) {k : ℕ} {w : ℕ → ℕ} (hw :
     rw [abs_of_neg (by linarith : r * a - 1 < 0)] at herr
     have := (abs_le.1 herr).2
     linarith
-  have hbd : r * a ≤ 113 := by
-    rcases hr0.eq_or_lt with h0 | hrpos
-    · rw [← h0, zero_mul]; norm_num
-    by_cases htinf : Prim.eval ops .add [rowMax ops .fabs x (k - 1),
-        Prim.eval ops .mul [0x40800000, rowRho ops .id x k]] = 0x7F800000
-    · rw [hinf htinf, mul_zero]; norm_num
-    obtain ⟨-, dv, hdv32, hdt, herrα⟩ := hfin htinf
-    have h4r : (0 : ℚ) < 4 * r := by linarith
-    have hm4 : Prim.eval ops .mul [0x40800000, rowRho ops .id x k] = f32Word (4 * r) :=
-      hA.mul 0x40800000 (rowRho ops .id x k) 4 r (by norm_num) hρ32 wordQ_c4 hr (fun h => absurd h h4r.ne')
-    rw [hm4] at htinf hdt
-    rcases hq4 : wordQ (f32Word (4 * r)) with _ | m4v
-    · refine absurd ?_ htinf
-      change f32Add (rowMax ops .fabs x (k - 1)) (f32Word (4 * r)) % 2 ^ 32 = 0x7F800000
-      rw [f32Word_pos_inf h4r hq4, f32Add_pinf hsv]
-      all_goals norm_num
-    have herr4 := f32Word_err h4r.ne' hq4
-    rw [abs_of_pos h4r] at herr4
-    have hE := two_zpow_pos (-150)
-    have hE2 : (2 : ℚ) ^ (-149 : ℤ) = 2 * 2 ^ (-150 : ℤ) := by norm_num
-    have hr149 := wordQ_pos_ge hr hrpos
-    have hm4pos : 0 < m4v := by
-      have := (abs_le.1 herr4).1
-      rw [hE2] at hr149
-      generalize (2 : ℚ) ^ (-150 : ℤ) = E at this hr149 hE
-      linarith
-    have hsum : 0 < sv + m4v := by linarith
-    obtain ⟨nz, hadd⟩ := f32Add_fin hsv hq4
-    have htw : Prim.eval ops .add [rowMax ops .fabs x (k - 1), f32Word (4 * r)] = f32Word (sv + m4v) := by
-      change f32Add (rowMax ops .fabs x (k - 1)) (f32Word (4 * r)) % 2 ^ 32 = _
-      have := f32Word_lt31 hsum.le
-      rw [hadd, rnWord, ite_eq_right hsum.ne', Nat.mod_eq_of_lt (by omega)]
-    rw [htw] at htinf hdt
-    rcases hqt : wordQ (f32Word (sv + m4v)) with _ | tv
-    · exact absurd (f32Word_pos_inf hsum hqt) htinf
-    have herrt := f32Word_err hsum.ne' hqt
-    rw [abs_of_pos hsum] at herrt
-    have htv := hdt tv hqt
-    have hE32 : (2 : ℚ) ^ (-150 : ℤ) ≤ 2 ^ (-32 : ℤ) / 1000000 := by norm_num
-    have hrle : r ≤ dv * (1 / 4 + 1 / 1048576) := by
-      have h1 := (abs_le.1 herr4).1
-      have h2 := (abs_le.1 herrt).1
-      generalize (2 : ℚ) ^ (-150 : ℤ) = E at h1 h2 hE hE32
-      generalize (2 : ℚ) ^ (-32 : ℤ) = D at hE32 hdv32
-      linarith
-    have hdv0 : 0 < dv := lt_of_lt_of_le (two_zpow_pos _) hdv32
-    have hale : a ≤ 448 / dv * (1 + 1 / 16777216) := by
-      have := (abs_le.1 herrα).2
-      linarith
-    calc r * a ≤ (dv * (1 / 4 + 1 / 1048576)) * (448 / dv * (1 + 1 / 16777216)) :=
-          mul_le_mul hrle hale ha0 (by positivity)
-      _ = (1 / 4 + 1 / 1048576) * (1 + 1 / 16777216) * 448 := by field_simp
-      _ ≤ 113 := by norm_num
   have hra : 1 / 2 ≤ r * a := key (abs_lt.2 ⟨by linarith, by linarith⟩)
   obtain ⟨hmb31, v1, hv1, herr1, -⟩ := mul_pos_val hA hρ32 hα32 hr ha
     (le_trans (by norm_num) hra) (by linarith)

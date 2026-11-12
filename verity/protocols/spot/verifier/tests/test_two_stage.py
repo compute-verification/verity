@@ -839,7 +839,7 @@ def test_the_rule_and_the_spec_state_one_form():
         with pytest.raises(ValueError, match=match):
             S.TwoStage(*bad)
     for retired in (RULE.to_json(), {"rule": "two-stage", "replay": "subset:4", "check": "all"}, "two-stage:subset:4"):
-        with pytest.raises(ValueError, match="a selection rule is All, Law, Sequential or TwoStage"):
+        with pytest.raises(ValueError, match="a selection rule is All, Law or TwoStage"):
             _spec(selection=retired)
     with pytest.raises(ValueError, match="interior values"):
         _spec(values=VALUES[:2])

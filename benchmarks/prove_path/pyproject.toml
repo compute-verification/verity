@@ -14,15 +14,22 @@ untraced = [
 ]
 # `adapters/vllm`: advice_windows, the TP serving rows and the stand-in TP Commit the tests build; `benchmarks/one_stage`:
 # a5, which prove_path imports; `verity`: what both import; `verity_numerical.bench`'s input sets and templates, which a5
-# imports; `leak_scan.py`: the received-pieces scan served_tie_zk and served_statics_zk import.
+# imports; `leak_scan.py`: the received-pieces scan served_tie_zk and served_statics_zk import; scan_zk (with
+# warden_zk, which it imports), whose --v3c reads the scan state window-commit opens for it (`scan_state_opening`); of
+# `research`, what the served compiler's identity imports (`code_identity`: `research_tools` and `source_identity`);
+# `deployments.json`: the census's reference deployment window_cost (and one_stage's block record) read.
 inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network_traces/leak_scan.py",
+          "benchmarks/network_traces/scan_zk.py", "benchmarks/network_traces/warden_zk.py",
+          "tools/research/src/research/__init__.py", "tools/research/src/research/pythonpath.py",
+          "tools/research/src/research/store", "tools/research/src/research/telemetry",
+          "benchmarks/census/deployments.json",
           "benchmarks/numerical/python/verity_numerical/__init__.py",
           "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
           "verity/protocols/flock/prover/python/verity_flock/input_sets.py",
           "verity/protocols/flock/prover/python/verity_flock/subcircuit_templates.py",
           # the network certifier's run the certifier piece kept, which window-commit's scan reads (`kept_scan`):
           # certifier_piece and warden_chain, what they import, and the site.json and host.json that served_session and
-          # auditor read on import
+          # auditor read on import; and serve.py, which the challenger's ledgers test_records_audit signs with auditor read
           "benchmarks/network_traces/certifier_piece.py", "benchmarks/network_traces/served_session.py",
           "benchmarks/network_traces/warden_chain.py", "benchmarks/network_traces/certifier_serve.py",
           "benchmarks/network_traces/warden_serve.py", "benchmarks/network_traces/active_replay.py",
@@ -30,7 +37,12 @@ inputs = ["verity", "adapters/vllm", "benchmarks/one_stage", "benchmarks/network
           "benchmarks/network_traces/covert.py", "benchmarks/network_traces/replay.py",
           "benchmarks/network_traces/load_relay.py", "benchmarks/network_traces/stall_probe.py",
           "benchmarks/network_traces/site.json", "verity/composite/device/live_challenger/auditor.py",
-          "verity/composite/device/live_challenger/host.json"]
+          "verity/composite/device/live_challenger/host.json", "verity/composite/device/live_challenger/serve.py",
+          # Pearl+'s verdict, whose W check (`verify_run.tie`) test_pearltie runs on its toy's passes: verify_run, what it
+          # imports, and the settings registry it loads (`verity_config.settings.of`, which finds it beside pouw's pyproject)
+          "benchmarks/pouw/pearl_c_vllm/verify_run.py", "benchmarks/pouw/pearl_c_vllm/fast_tile.py",
+          "verity/protocols/pouw/clear", "benchmarks/pouw/settings.py", "benchmarks/pouw/pyproject.toml",
+          "verity/configuration/config/verity_config"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.

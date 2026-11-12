@@ -524,23 +524,23 @@ theorem mem_filesUnits {ns : Array ℕ} {u v : ℕ} :
     v ∈ filesUnits ms ns u ↔ ∃ t, t < ms.length ∧ ∃ p, p < ns.getD t 0 ∧ unitBase ms t + (u * ns.getD t 0 + p) = v := by
   simp [filesUnits, filesBlockOf]
 
-theorem blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.Layout) :
+theorem blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.SlotOrder) :
     (filesReplay ms ns l).blocks = l.blocks.toList.map (filesBlock ms ns) := by
-  simp [filesReplay, Partition.blocks, Spot.Slots.Layout.blocks, List.map_flatten, Function.comp_def]
+  simp [filesReplay, Partition.blocks, Spot.Slots.SlotOrder.blocks, List.map_flatten, Function.comp_def]
 
-theorem length_blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.Layout) :
+theorem length_blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.SlotOrder) :
     (filesReplay ms ns l).blocks.length = l.blocks.size := by
   simp [blocks_filesReplay]
 
 /-- Slot `ρ`'s proof blocks in the members' replay partition: its request's (`filesUnits`); none for an input slot or
 past the layout. -/
-def slotFiles (ns : Array ℕ) (l : Spot.Slots.Layout) (ρ : ℕ) : List ℕ :=
+def slotFiles (ns : Array ℕ) (l : Spot.Slots.SlotOrder) (ρ : ℕ) : List ℕ :=
   match (l.blocks[ρ]?).bind (·.unit) with
   | some u => filesUnits ms ns u
   | none => []
 
 /-- **Slot `ρ`'s block is its proof blocks' gates together.** -/
-theorem getElem?_blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.Layout) {ρ : ℕ}
+theorem getElem?_blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.SlotOrder) {ρ : ℕ}
     (hρ : ρ < (filesReplay ms ns l).blocks.length) :
     (filesReplay ms ns l).blocks[ρ]? =
       some ((slotFiles ms ns l ρ).flatMap fun w => (membersPart ms).blocks.getD w []) := by
@@ -551,13 +551,13 @@ theorem getElem?_blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.Layout) {ρ
 
 /-- **The replay layout fits the members' files**: each request slot `ρ` is unit `ρ`, and each member `t` has room for
 its `n_t` units, `ρ·n_t` to `(ρ + 1)·n_t`. -/
-def FilesFit (ns : Array ℕ) (l : Spot.Slots.Layout) : Prop :=
+def FilesFit (ns : Array ℕ) (l : Spot.Slots.SlotOrder) : Prop :=
   ∀ ρ b, l.blocks[ρ]? = some b → ∀ u, b.unit = some u →
     u = ρ ∧ ∀ t (ht : t < ms.length), (ρ + 1) * ns.getD t 0 ≤ ms[t].2.size
 
 section files
 
-variable {ns : Array ℕ} {l : Spot.Slots.Layout}
+variable {ns : Array ℕ} {l : Spot.Slots.SlotOrder}
 
 /-- A proof block of slot `ρ` is member `t`'s unit `ρ·n_t + p`, with room for it. -/
 theorem exists_of_mem_slotFiles (hfit : FilesFit ms ns l) {ρ w : ℕ} (hw : w ∈ slotFiles ms ns l ρ) :

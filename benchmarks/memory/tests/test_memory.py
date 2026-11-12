@@ -1,6 +1,7 @@
 """`verity bench memory` (`run.py`): the number is the γ at the specification's rate that an accepted session's
 verifier recorded, printed as text and as one line of JSON; a session that wasn't accepted, or a run with no verifier's
-record, prints no number and exits 1. The three ways in share that printer: a recorded run, the loopback (which says
+record, prints no number and exits 1. The number is printed with its error, the ledger's declared one, and a session
+whose error is 1 or more prints "no bound at this period" with it and no number. The three ways in share that printer: a recorded run, the loopback (which says
 it certifies nothing) and the node run (a gate run of one honest session, read from its fire run). The two references
 are read from their runs, and one that can't be read never takes the number down. Under a research run an accepted
 session's amounts are also written through the harness kit's writer, and what is printed stays the same to the byte.
@@ -23,6 +24,7 @@ sys.path.insert(0, str(ROOT))
 
 from benchmarks.memory import run as M  # noqa: E402
 from benchmarks.remote_session import summary  # noqa: E402
+from verity.protocols import reporting  # noqa: E402
 
 RUN, FIRE, PROVER = "r20000101-000000-aaaa", "r20000101-000001-bbbb", "r20000101-000002-cccc"
 POUS, WIPE = "r20000101-000003-dddd", "r20000101-000004-eeee"
@@ -109,7 +111,7 @@ def store(tmp_path: Path, monkeypatch) -> FakeStore:
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(M.kit, "host_stamp", lambda: dict(STAMP))
     s = FakeStore(tmp_path / "store")
-    s.add(POUS, {"out/summary.json": {"certificate": {"certified": True, "s_bits": 6 * 8 * GIB},
+    s.add(POUS, {"out/summary.json": {"certificate": {"certified": True, "s_bits": 6 * 8 * GIB, "eps": "1/100"},
                                       "held": {"total_bytes": 8 * GIB, "device": "CARD A"}}})
     s.add(WIPE, sku="CARD B")
     s.labels[WIPE, "label"] = "full-fill wipe certified: foreign <= 8,589,934,592 bits (1.0737 GB) at eps 2^-128, M = 8,589,934,592 B"
@@ -139,14 +141,46 @@ def test_an_accepted_session_prints_its_gamma_at_the_data_sheets_rate_as_text_an
     text, doc, _ = printed(capsys)
     assert text[0] == ("memory: 0.156 of the node's memory read rate is left uncertified by this session, at the data "
                        "sheet's read bandwidth (2.0000 TB/s); its error reads δ + Σ_t adv_t (SHA-512 stream as PRF: "
-                       "not priced, not assumed), δ in the verifier's ledger")
+                       "not priced, not assumed), and the verifier's record holds no δ for it")
     assert text[1] == (f"  session 0 of {RUN}, commit {COMMIT}: accepted by the Lean verifier, its verifier not on the "
                        f"auditor's verifier host")
     assert text[2] == "  store: 1.07 GB, 0.125 of the node's 8.59 GB of GPU memory, bound to no checkpoint"
     assert list(doc)[:4] == ["value", "unit", "commit", "run"]
     assert (doc["value"], doc["unit"], doc["commit"], doc["run"]) == (0.15625, M.UNIT, COMMIT, RUN)
-    assert doc["loopback"] is False and doc["host_run"] is None
+    assert doc["loopback"] is False and doc["host_run"] is None and doc["error"] is None and doc["no_bound"] is None
     assert not any("loopback" in line or "certifies nothing" in line for line in text)
+
+
+def test_the_number_is_printed_with_the_error_its_ledger_declares(store, capsys):
+    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session(), error=4.654e-10))})
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    assert text[0].startswith("memory: 0.250 of the node's memory read rate is left uncertified by this session")
+    assert text[0].endswith("not priced, not assumed), δ = 4.65e-10 in the verifier's ledger")
+    assert (doc["value"], doc["error"], doc["no_bound"]) == (0.25, 4.654e-10, None)
+
+
+@pytest.mark.parametrize("error", [1.0, 38.7])
+def test_a_session_whose_error_is_1_or_more_prints_no_bound_and_no_number(store, capsys, monkeypatch, tmp_path, error):
+    """A δ of 1 or more bounds nothing, so no share is printed with it, in the text or in the document, and no amount
+    is written that would read as verified or free: the capacities and the error are."""
+    store.add(RUN, {"out/verifier.json": a_record(with_amounts(a_session(), error=error))})
+    held = a_run(monkeypatch, tmp_path)
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    why = f"{reporting.NO_BOUND}: the row's error, {error:.4g}, is 1 or more"
+    assert reporting.NO_BOUND == "no bound at this period"
+    assert text[0] == (f"memory: {why}: this session certifies no share of the node's memory read rate, at the data "
+                       f"sheet's read bandwidth (2.0000 TB/s); its error reads {M.ERROR_FORM}, δ = {error:.3g} in the "
+                       f"verifier's ledger")
+    assert "0.250" not in text[0] and (doc["value"], doc["error"], doc["no_bound"]) == (None, error, why)
+    got = written(held)
+    assert {n: m["value"] for n, m in got.items()} == {
+        "metric": None, "verified": None, "capacity at spec": 8e12, "free at spec": None,
+        "capacity at measured": 6.4e12, "free at measured": None, "error": error}
+    assert {n: m.get("why") for n, m in got.items()} == {
+        "metric": why, "verified": why, "capacity at spec": None, "free at spec": why,
+        "capacity at measured": None, "free at measured": why, "error": None}
 
 
 def test_the_number_is_the_session_harnesss_gamma_spec_of_the_same_records(tmp_path):
@@ -271,10 +305,13 @@ def test_the_references_are_read_from_their_runs_with_date_and_card(store, capsy
     store.add(RUN, {"out/verifier.json": a_record(a_session())})
     assert bench(store, "--from", RUN) == 0
     text, doc, _ = printed(capsys)
-    assert text[3] == f"  beside it, PoUS state bound: 0.750 (6.44 GB of 8.59 GB; {POUS}, 2000-01-02, CARD A)"
-    assert text[4] == f"  beside it, wipe residue: 0.125 (1.07 GB of 8.59 GB; {WIPE}, 2000-01-02, CARD B)"
-    assert [(r["name"], r["value"], r["run"], r["date"], r["card"]) for r in doc["beside"]] == [
-        ("PoUS state bound", 0.75, POUS, "2000-01-02", "CARD A"), ("wipe residue", 0.125, WIPE, "2000-01-02", "CARD B")]
+    assert text[3] == (f"  beside it, PoUS state bound: 0.750 (6.44 GB of 8.59 GB; error 0.01; {POUS}, 2000-01-02, "
+                       f"CARD A)")
+    assert text[4] == (f"  beside it, wipe residue: 0.125 (1.07 GB of 8.59 GB; error 2.94e-39; {WIPE}, 2000-01-02, "
+                       f"CARD B)")
+    assert [(r["name"], r["value"], r["error"], r["run"], r["date"], r["card"]) for r in doc["beside"]] == [
+        ("PoUS state bound", 0.75, 0.01, POUS, "2000-01-02", "CARD A"),
+        ("wipe residue", 0.125, 2.0 ** -128, WIPE, "2000-01-02", "CARD B")]
     assert all(s in doc["beside"][0]["unit"] for s in ("S0 = floor(rho*|C|)", "not the device memory credited"))
 
 
@@ -287,6 +324,20 @@ def test_a_reference_that_cannot_be_read_says_why_and_the_number_still_prints(st
     assert doc["value"] == 0.25 and [r["value"] for r in doc["beside"]] == [None, None]
     assert text[3] == f"  beside it, PoUS state bound: not read ({POUS}'s record certifies nothing)"
     assert text[4] == f"  beside it, wipe residue: not read ({WIPE}'s label doesn't state a residue: 'a wipe, no bound stated')"
+
+
+def test_a_reference_states_no_number_where_its_error_is_1_or_more_and_says_where_its_record_holds_none(store, capsys):
+    store.add(RUN, {"out/verifier.json": a_record(a_session(gamma=0.25))})
+    store.add(POUS, {"out/summary.json": {"certificate": {"certified": True, "s_bits": 6 * 8 * GIB, "eps": "3/2"},
+                                          "held": {"total_bytes": 8 * GIB, "device": "CARD A"}}})
+    store.labels[WIPE, "label"] = "full-fill wipe certified: foreign <= 8,589,934,592 bits, M = 8,589,934,592 B"
+    assert bench(store, "--from", RUN) == 0
+    text, doc, _ = printed(capsys)
+    why = f"{reporting.NO_BOUND}: the row's error, 1.5, is 1 or more"
+    assert text[3] == f"  beside it, PoUS state bound: {why} ({POUS}, 2000-01-02, CARD A)"
+    assert text[4] == (f"  beside it, wipe residue: 0.125 (1.07 GB of 8.59 GB; no error in its record; {WIPE}, "
+                       f"2000-01-02, CARD B)")
+    assert [(r["value"], r["error"], r.get("no_bound")) for r in doc["beside"]] == [(None, 1.5, why), (0.125, None, None)]
 
 
 def test_a_store_that_cannot_be_opened_for_the_references_leaves_the_loopbacks_number(store, capsys, monkeypatch):
@@ -603,8 +654,8 @@ def test_under_a_research_run_an_accepted_session_also_writes_its_amounts_and_pr
     doc = json.loads(line)
     assert (held / "out" / "memory.json").read_text() == line + "\n"
     assert sorted(p.name for p in (held / "out").iterdir()) == ["memory.json"]
-    assert list(doc) == ["value", "unit", "commit", "run", "loopback", "host_run", "session", "verdict",
-                         "rate_bytes_per_s", "store_bytes", "node_gpu_bytes", "model", "beside"]
+    assert list(doc) == ["value", "unit", "commit", "run", "loopback", "host_run", "no_bound", "session", "verdict",
+                         "error", "rate_bytes_per_s", "store_bytes", "node_gpu_bytes", "model", "beside"]
     got = written(held)
     assert list(got) == SHARED
     assert {n: m["value"] for n, m in got.items()} == {

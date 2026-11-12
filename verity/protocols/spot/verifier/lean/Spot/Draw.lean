@@ -249,10 +249,13 @@ def checkProvedFull (draw : Json) (provedUnits : Array Json) (instances : Json) 
 def checkProved (draw : Json) (provedUnits : Array Json) (instances : Json) : Array String :=
   (checkProvedFull draw provedUnits instances).codes
 
-/-- `src`'s bytes handed out in order, `need` at a time (`OwnRandomness.read`); an error when fewer are left. -/
+/-- The refusal of a sample whose source runs out before it ends (`coins.RAN_OUT`). -/
+def RAN_OUT : String := "the randomness source ran out"
+
+/-- `src`'s bytes handed out in order, `need` at a time (`OwnRandomness.read`); `RAN_OUT` when fewer are left. -/
 def take (src : ByteArray) (need : Nat) : StateT Nat (Except String) ByteArray := do
   let at_ ← get
-  if src.size < at_ + need then throw "the randomness source ran out"
+  if src.size < at_ + need then throw RAN_OUT
   set (at_ + need)
   return src.extract at_ (at_ + need)
 
@@ -302,5 +305,12 @@ def drawFirstRead (law : Json) (population : Nat) (src : ByteArray) : Except Str
 /-- `drawFirstRead`'s sample. -/
 def drawFirst (law : Json) (population : Nat) (src : ByteArray) : Except String Json :=
   (·.1) <$> drawFirstRead law population src
+
+/-- Whether a sample that gave `r` ran out of its source (`RAN_OUT`): false when it drew, its refusal when it refused
+otherwise (`coins.ran_out`). -/
+def ranOutOf {α : Type} (r : Except String α) : Except String Bool :=
+  match r with
+  | .ok _ => pure false
+  | .error e => if e == RAN_OUT then pure true else throw e
 
 end Spot.Draw

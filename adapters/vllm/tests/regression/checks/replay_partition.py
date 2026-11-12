@@ -132,6 +132,8 @@ def recompute(sr: dict, programs: dict[str, dict], program_dirs: dict[str, str] 
 
 
 def actual(row: resolver.Row) -> dict:
+    if kept := resolver.kept_on_the_node(row, "commit/sampled_replay_p0.json"):
+        return kept
     cand = row.candidate("commit/sampled_replay_p0.json")
     if cand is not None:
         sr = _body(json.load(open(cand)))

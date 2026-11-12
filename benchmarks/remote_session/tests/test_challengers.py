@@ -42,7 +42,7 @@ from verity.protocols.poub.verifier.session import wire  # noqa: E402
 from test_remote_bandwidth import SCHEDULE, drive, finish, params, store  # noqa: E402,F401
 from test_session import run as run_sessions  # noqa: E402
 from verity.protocols.certifier.verifier import certificate as cert  # noqa: E402
-from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, Record, fill  # noqa: E402
+from verity.protocols.certifier.verifier.grid import COMPLETE, GridParams, BlockGrid, fill  # noqa: E402
 from verity.protocols.poub.verifier import coins  # noqa: E402
 from verity.protocols.spot.device.challenger import NO_MAIN, NO_PINS, CoinError, pin_line, pins_seal  # noqa: E402
 from verity.commitments.crypto import lms  # noqa: E402
@@ -698,8 +698,9 @@ def boundary(d: Path, let_in: dict[str, list[bytes]], *, links: tuple[str, ...] 
     key = certifier_key()
     issuer = cert.Issuer(cert.LmsSigner.create(key, d / "signer.json"), CERTIFIER_SESSION, coins=lambda n: b"\x07" * n)
     T, r = BOUNDARY_GRID.buckets, BOUNDARY_GRID.allocation
-    records = [issuer.certify(Record(link, 0, fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
-                                     COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
+    records = [issuer.certify(BlockGrid(link, 0,
+                                        fill(frames, [max(0, min(r, len(frames) - r * t)) for t in range(T)], r),
+                                        COMPLETE), cert.Direction.INGRESS, BOUNDARY_GRID,
                               cert.parameters_digest(BOUNDARY_GRID)) for link, frames in let_in.items()]
     public = lms.public_key(key)
     (d / "boundary.json").write_text(json.dumps({
@@ -939,6 +940,41 @@ def test_no_error_the_auditors_line_renders_comes_without_the_prf_term_it_leaves
     for error in (e, out["T=1s"]["error"], credit["error"]):
         assert error["total"] > 0 and error["named_terms"] == al.ledger.NAMED_TERMS
     assert out["T=60s"]["error"]["sessions"] == [] and out["T=60s"]["error"]["total"] == 0.0
+    assert "no_bound" not in out["T=1s"] and "no_bound" not in credit
+
+
+def test_a_line_whose_credited_sessions_errors_sum_to_1_or_more_holds_no_share_and_says_no_bound():
+    """A line's error is its credited sessions' summed. Two sessions at 0.6 each sum to 1.2, which bounds nothing: the
+    line at their T holds no share, in the document or the table, and says why with the sum; each session alone, under
+    1, keeps its own credit, and one whose own error is 1 or more prints none either."""
+    def error(total: Fraction) -> dict:
+        return {"total": float(total), "exact": {"total": al.line.text(total)}}
+
+    held = {f: {**dict.fromkeys(al.SHARES, 0.5), "exact": dict.fromkeys(al.SHARES, "1/2")} for f in al.line.FORMS}
+    rows = [{"k": k, "T": t, "shares_auditor_clock": held, "error": error(e), "credit": {"ok": True, "zero": []}}
+            for k, t, e in ((0, "T=1s", Fraction(3, 5)), (1, "T=1s", Fraction(3, 5)), (2, "T=60s", Fraction(3, 5)),
+                            (3, "T=600s", Fraction(3, 2)))]
+    out, credit = al.credited_line(rows)
+    summed = {"T=1s": 1.2, "T=600s": 1.5}
+    why = {t: f"no bound at this period: the row's error, {e}, is 1 or more" for t, e in summed.items()}
+    for t in why:
+        assert out[t]["no_bound"] == why[t] and "zero" not in out[t] and out[t]["error"]["total"] == summed[t]
+        assert all(out[t][f] == {**dict.fromkeys(al.SHARES, 0.0), "exact": dict.fromkeys(al.SHARES, "0")}
+                   for f in al.line.FORMS)
+    assert out["T=1s"]["credited_sessions"] == [0, 1] and out["T=600s"]["credited_sessions"] == [3]
+    assert "no_bound" not in out["T=60s"] and out["T=60s"][al.line.TIME_HELD]["time"] == 0.5
+    assert credit["no_bound"] == why and credit["summary"] == "the line credits session(s) 0, 1, 2, 3" + "".join(
+        f"; the line at {t} holds no share: {w}" for t, w in why.items())
+    cells = " | ".join(["-"] * len(al.CHECKS))
+    text = al.table({"sessions": [{**r, "credit": {"ok": True}} for r in rows], "line": out, "credit": credit,
+                     "line_by": "python", "conditional_on": {},
+                     "boundary": {"checked": False, "reason": "off by default (--boundary)"}}).splitlines()
+    assert f"| 3 | T=600s | {cells} | credited: {why['T=600s']} |" in text
+    assert f"| 0 | T=1s | {cells} | credited: weights 50.0000% / 50.0000%, filler 50.0000% / 50.0000% |" in text
+    lines = {t: next(x for x in text if x.startswith(f"line {t}:")) for t in out}
+    assert lines["T=1s"].startswith(f"line T=1s: credited [0, 1], {why['T=1s']}: the line holds no share, error ")
+    assert ", δ = 1.2 (2^0.26): " in lines["T=1s"] and "%" not in lines["T=1s"] and "%" not in lines["T=600s"]
+    assert "no bound" not in lines["T=60s"] and "weights 50.0000% / 50.0000%" in lines["T=60s"]
 
 
 # Gate runs 8 and 9's accepted sessions (their verifier.json): (passes, the memory line's δ every form records, the

@@ -43,15 +43,20 @@ verity bench memory --loopback                both processes on this machine, on
 
 It prints the number as text, then one line of JSON whose first keys are `value`, `unit`, `commit` and `run`, and exits
 0. A session that wasn't accepted, or a run that left no verifier's record, prints no number and exits 1; a command
-line or a run that can't be read exits 2. The text's first line says how the number's error reads: δ + Σ_t adv_t
-(SHA-512 stream as PRF: not priced, not assumed), δ the session's in its verifier's ledger. The result's `error`,
-below, says the same words in its unit, that number the δ.
+line or a run that can't be read exits 2. The text's first line prints the number's error and says how it reads:
+δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed), δ the session's in its verifier's ledger, the declared
+error the result's `error`, below, holds, with the same words in its unit; the JSON holds it under `error`. A session
+whose error is 1 or more bounds nothing: the first line prints "no bound at this period" with the error in place of
+the number, and the JSON's `value` is null with those words under `no_bound` (the rule and the words are
+`verity/protocols/reporting.py`'s, one for every row's error).
 
 Beside the number it prints two references, each read from its run in the store with the run's date and card: the
 state bound of a PoUS session over its card's memory (its record's `s_bits`, S₀ = ⌊ρ·|C|⌋: a lower bound on the
 device's memory, its on-chip state and a round of side-channel traffic together, not the device memory credited), and
-the share a wipe left foreign at most (the bound its run's label states). A reference that can't be read prints its
-reason in place of a number, and the session's number still prints.
+the share a wipe left foreign at most (the bound its run's label states). Each prints the error its record states
+(the PoUS certificate's `eps`, the `eps` in the wipe's label), and one whose error is 1 or more prints no number, by
+the same rule. A reference that can't be read prints its reason in place of a number, and the session's number still
+prints.
 
 Under `research run`, an accepted session of a node run or of `--from` also writes the run's result,
 `$RESEARCH_RUN_DIR/result.json`, where `research` reads a run's result, through the harness kit's writer
@@ -65,8 +70,9 @@ capacity but for the float's last place); and `error` (the probability the verif
 by window as the share is: the record's declared error, which adds the sketch's term and the sample's rejection and
 binding terms to the ledger's own and holds no PRF advantage; no rate is in it, so it is one number for both
 readings). A capacity's rate is the verifier's own figure for the node (`timing.py`), not the registered hardware's,
-and its unit says so. At a share of 1 or more, verified is 0 and free the whole capacity. An amount whose keys the
-record doesn't hold as numbers is left out of the result. The two references are other runs' numbers and are not in
+and its unit says so. At a share of 1 or more, verified is 0 and free the whole capacity. At an error of 1 or more,
+`metric`, `verified` and each `free` are written with no value and the reason as their `why`; the capacities and the
+error are written as ever. An amount whose keys the record doesn't hold as numbers is left out of the result. The two references are other runs' numbers and are not in
 it; a loopback writes none, since it certifies nothing, and a session that wasn't accepted writes none, as it prints
 no number. A result holds one measurement a name, so a run that prints a second session keeps its first one's result
 and says so on stderr.

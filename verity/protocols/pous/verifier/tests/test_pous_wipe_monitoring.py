@@ -1,8 +1,10 @@
 """`wipe_monitoring`: one accepted wipe over a week, a month and a year of a deployment. The pooled count is the least M
 with C(T, M)·p^M within δ, against hand counts at small T; an HBM-only wipe's table names its tier and device, every wipe
-meeting its bound except with T·eps; every number that is short by a wipe's PRF advantage says so beside it, in the
+meeting its bound except with T·eps; a period's row carries that sum and, where it is 1 or more, prints "no bound at
+this period" and neither statement; every number that is short by a wipe's PRF advantage says so beside it, in the
 same closing words, and no number moved for it; the cadence is a parameter; an uncounted wipe stays vacuous, since every
-egress record is refused, a covered one over the session's own real-time window too; a rejected wipe pools nothing."""
+egress record is refused, a covered one over the session's own real-time window too; a rejected wipe pools nothing; the
+periods are the reporting grid's `PERIODS`."""
 
 from __future__ import annotations
 
@@ -76,6 +78,7 @@ def test_an_hbm_only_wipe_over_a_week_a_month_and_a_year(counted):
         row = r["periods"][name]
         t = 3 * days
         assert (row["wipes"], row["wipes_per_machine"]) == (t, days)
+        assert row["error"] == float(t * W.EPS) and "no_bound" not in row
         for d in reporting.DELTAS:
             assert row[str(d)]["failing_at_most"] == 0 and row[str(d)]["meeting_at_least"] == t
         assert row["per_wipe"]["except_with"] == f"T·eps = {float(t * W.EPS):.3g}, plus {SUM}"
@@ -87,6 +90,10 @@ def test_the_cadence_is_a_parameter(counted):
     assert [half[n]["wipes"] for n in ("week", "month", "year")] == [28, 120, 1460]
     rare = WM.table(counted, 2, 30 * 86400)["periods"]
     assert "doesn't fit a week" in rare["week"]["why"] and rare["month"]["wipes"] == 2
+
+
+def test_the_periods_are_the_reporting_grids():
+    assert WM.PERIODS is reporting.PERIODS
 
 
 def test_the_table_pools_at_the_answers_eps(counted):
@@ -108,9 +115,10 @@ FIXED = {"verdict": "accept",
 """One accepted wipe's answer, its numbers set by hand: at eps = 1/100 no number of its table rounds to 0."""
 NUMBERS = {"week": (14, "0.14", {"1/100": ("0.0091", 1, 13), "1/1000000": ("2e-07", 4, 10)}),
            "month": (60, "0.6", {"1/100": ("0.00488", 3, 57), "1/1000000": ("2.56e-07", 7, 53)}),
-           "year": (730, "7.3", {"1/100": ("0.00636", 21, 709), "1/1000000": ("7e-07", 28, 702)})}
+           "year": (730, "7.3", None)}
 """`FIXED`'s table over 2 machines as it was before any number carried the PRF's words. Per period: its wipes, T·eps,
-and at each δ the bound, the wipes failing at most and the wipes meeting at least."""
+and at each δ the bound, the wipes failing at most and the wipes meeting at least; None where T·eps is 1 or more, so
+the row states neither."""
 
 
 def test_except_names_the_labels_and_the_coins_prf_advantage_not_priced_and_not_assumed():
@@ -138,7 +146,12 @@ def test_every_number_short_by_the_prf_advantage_says_so_beside_it_and_no_number
     assert r["leaves_out"] == [WM.EXCEPT] and set(r["periods"]) == set(NUMBERS)
     for name, (wipes, t_eps, steps) in NUMBERS.items():
         row = r["periods"][name]
-        assert row["wipes"] == wipes and row["per_wipe"] == {"except_with": f"T·eps = {t_eps}, plus {SUM}"}
+        assert row["wipes"] == wipes and f"{row['error']:.3g}" == t_eps
+        if steps is None:
+            assert row == {"seconds": 365 * 86400, "wipes": wipes, "wipes_per_machine": 365, "error": 7.3,
+                           "no_bound": f"{reporting.NO_BOUND}: the row's error, {t_eps}, is 1 or more"}
+            continue
+        assert row["per_wipe"] == {"except_with": f"T·eps = {t_eps}, plus {SUM}"} and "no_bound" not in row
         for delta, (bound, failing, meeting) in steps.items():
             assert row[delta] == {"bound": bound, "failing_at_most": failing, "meeting_at_least": meeting,
                                   "statement": WM.STATEMENT["name"],

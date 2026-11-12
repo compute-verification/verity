@@ -57,7 +57,7 @@ opened like any other, but not credited.
 | \(\mu_{\text{timing}}\) | \(1 - \sum_t U^{c}_t b / (R\Sigma)\), \(U^{c}_t\) window \(t\)'s credited receipts: the span the credited receipts don't fill (the gap \(g\) after each pass, the session's two ends, blocks a plan leaves out, post-seed blocks without a verdict) | the record |
 | \(\mu_{\text{sample}}\) | \(\sum_t m^*_t\, b / (R\Sigma)\) read per window (`GammaTerms.sample`), or the pooled bound's wrong receipts \(\cdot\, b / (R\Sigma)\) read over the horizon (`GammaTerms.horizon`, §10) | the record's profiles, at \(\delta + \sum_t \mathrm{adv}_t\) (SHA-512 stream as PRF: not priced, not assumed) |
 | \(\mu_{\text{chip}}\) | \(\sum_t P_t S_{\text{chip}} / (R\Sigma)\): each pass, what is held on chip needn't be read again | \(S_{\text{chip}}\), measured |
-| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2` (`SLACK_LOG2`, 67: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-50}\) up to \(2^{17}\) passes, more than an hour of the node's 41.2 ms passes over gate runs 8 and 9's 532.6 GB store); 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | `Bandwidth.Guarantees.AuditRO`, proved for one pass; the ledger applies it per pass (§8, "Lean") |
+| \(\lambda\) | AuditRO's slack: per pass of \(k\) receipts (every certified one, in either reading), `named_bits(k)`, a whole number of bits at least \(\log_2(q^k/k!) \ge \log_2 C(q, k)\) at \(q = 2^{64}\) (`queries_log2`), and `slack_log2` (`SLACK_LOG2`, 67: the failure probability's \(2^{-\text{slack}}\) a pass, below, adds at most \(2^{-50}\) up to \(2^{17}\) passes, more than an hour of the node's 41.2 ms passes over gate runs 8 and 9's 532.6 GB store); 0.116% at the node's 192.6M 4 KiB blocks a pass over every tier (37.9 bits a block), more than \(\mu_{\text{sample}}\) | `Accounting.Guarantees.Remote.AuditRO`, proved for one pass; the ledger applies it per pass (§8, "Lean") |
 | \(\mu_{\text{rebuild}}\) | \(C_{\text{sq}} b / (E_{\text{sq}} R)\): blocks re-encoded from their payloads in place of reads, each at least the record's codec's \(E_{\text{sq}}\) squarings (`Codec.encode_squarings`: 98,016 at p1024/k3/masked, 65,344 at k = 2, 65,152 at p512/k2) at the node's stated ceiling of \(C_{\text{sq}}\) squarings a second at that width (`Rebuild`) | the record's codec, and assumption 5 stated per width (`WorkHardness(p, k)`) |
 | \(\mu_{\text{host}}\) | the host tier's own shortfall, and host DRAM bandwidth PCIe can't carry | a model, measured capacities |
 | \(\mu_{\text{link}}\) | under a registration that binds \(z\) only (0 otherwise): relays that meet \(z\) and a copy of the block over a link (§4) | a model |
@@ -577,8 +577,8 @@ default, and a registration names 64 to use it.
 
 What each kind rests on:
 
-- **block-sha512** needs only the random oracle. A correct receipt is a query at the block's bytes after the seed,
-  so it bounds the reads by AuditRO (`Bandwidth.Guarantees.AuditRO`, applied per pass), with λ's slack. It assumes
+- **block-sha512** needs only the random oracle. A correct receipt is a query at the block's bytes after the seed, so it
+  bounds the reads by AuditRO (`Accounting.Guarantees.Remote.AuditRO`, applied per pass), with λ's slack. It assumes
   nothing about the device: the prover may hold any function of the store.
 - **sketch-sha512** also rests on `RateAuditSketch` (proved). The random oracle takes a
   correct receipt to a correct \(\sigma_j\). `RateAuditSketch` takes a correct \(\sigma_j\) to the block's 128
@@ -1018,20 +1018,24 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   guarantee assumes, so they have no numeric value: the ledger names them by their claim (prf/sha-512,
   `ledger.PRF_CLAIM`), puts them in no δ, and each form's record carries them beside its δ (`ledger.NAMED_TERMS`).
 
-  Every form, the link-charged one included, is conditional on `NoOutsideCompute`, statement C in full: no device
-  outside the node computes on a registered block or a receipt during the session. Identity is only its links clause:
-  a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the receipts, sends no
-  block over the links, so neither Identity nor the links' charge sees it, and only C excludes it. The line's statement
-  takes C as a premise (`LineHeld`, `LineHeldIdentity`, beside `SketchBoundAt`, the receipts' sketch wherever
-  computed, which `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
-  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins), and the line of record says it is
-  conditional on it (`auditor_line.json`'s `conditional_on`, `credit.md`; the `memory-line-of-record` label names the
-  field's names, and `research data label` holds it to the file) until certifiers cover the gate node's boundary
-  (`certifier-coverage`) and certify that nothing but the verifier's messages entered the node over the credited span.
-  `auditor_line.py --boundary`, off by default, refuses a session's credit when the certifiers' records of the boundary
-  links over its span show other ingress. `auditor_line.py --lockdown`, infra's record of the provider's lockdown of
-  the gate node, grounds C for a session whose signed span lies inside an applied interval: the line is then
-  conditional on `ProviderLockdown` (`trusted-host`), which names what the lockdown doesn't close, in C's place.
+  Statement C in full is that no device outside the node computes for it during the session. Identity is only its
+  links clause: a relay prover, a thin node forwarding each coin to a helper that holds the store and computes the
+  receipts, sends no block over the links, so neither Identity nor the links' charge sees it, and only C excludes it.
+  The line's statement (`LineHeld`) assumes nothing of the prover here: it reads C from what the network certifiers
+  observe. Its event is that the certifiers counted no ingress into the node over the credited passes and yet the
+  passes read fewer bits than the line credits, and its error carries δ_net, the certifiers' miscount
+  (`IngressCounted`, `trusted-host`), beside `SketchBoundAt` (the receipts' sketch wherever computed, which
+  `SketchBoundDeployed` gives at the sketch's δs on the line's trace read on the sketch outcomes and
+  `Accounting.Guarantees.Remote.SketchBoundLine` carries to the line's coins). `Covered` (`certifier-coverage`) is
+  the deployment's half: every uplink of the prover's server passes through an active certifier, so an outside device
+  computing for the node sends its result over a counted link. Memory held follows from the bits read under the
+  device model (`heldAt_of_read`). `auditor_line.py --boundary`, off by default, refuses a session's credit when the
+  certifiers' records of the boundary links over its span show other ingress; without it the line of record says it
+  is conditional on C, under the label vocabulary's name `NoOutsideCompute` (`auditor_line.json`'s `conditional_on`,
+  `credit.md`; the `memory-line-of-record` label names the field's names, and `research data label` holds it to the
+  file). `auditor_line.py --lockdown`, infra's record of the provider's lockdown of the gate node, grounds C for a
+  session whose signed span lies inside an applied interval: the line is then conditional on `ProviderLockdown`
+  (`trusted-host`), that label's name for what the lockdown doesn't close, in C's place.
 
 \(R\), \(S_{\text{chip}}\), the squaring ceiling, the disks' and links' ceilings and the bursts are the verifier's: the
 node's stated or measured capacities, protocol structure, never the prover's report (§1).
@@ -1164,9 +1168,11 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   (`AuditRun.scheduled`, a `Scheduled` verdict carrying the cap; `GammaTerms.steering` is the cap). `ledger` credits
   nothing after the seed without a `Scheduled` of the same session. So a credited plan is the verifier's own function
   of a schedule of at most \(a\) bits, and a plan that follows a coin at that schedule is refused: the `a` of the
-  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, under
-  `Properties.RemoteAudit.ScheduleLayoutGap`), never the coins' bits for free. The cap, not the published schedule's
-  own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a schedule's length can follow
+  stacked guarantee's `SteeredLayout` premise is the cap plus one (`Properties.RemoteAudit.steered_of_checked`, at the
+  verifier's own layout, `Properties.RemoteAudit.sessionLayout`: the positions of the plan the pass sent, where it
+  checks each opened block, `CodeLayoutTiles` and `OpensAtPosition`), never the coins' bits for free. The cap, not
+  the published schedule's own bits, is what is credited: `SteeredLayout` takes one \(a\) at every coin, and a
+  schedule's length can follow
   the coins. A prover that publishes a 200-bit schedule on most coins and a 300-bit one where it steers takes up to
   \(2^{200} + 2^{300}\) layouts, so only \(a = 301\) holds of it, and its 200-bit sessions credited at 200 would
   understate `RegisteredCircuitRequirement`'s \(\delta\), which grows as \(2^a\), by \(2^{100}\) (red team).
@@ -1340,7 +1346,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 - **Lean.** A session's published `q_bytes` is its receipts less a bound on the wrong ones that covers
   `Accounting.Guarantees.Remote.PooledSample`'s on its record (`RemoteAudit.Protocol.certify`,
   `Properties.RemoteAudit.PooledCovers`). Its `eps` is that statement's δ and term per sampled receipt; the statement's
-  PRF advantages (`prf/sha-512`) and its receipts' binding term are not in `eps`. γ's other terms are the ledger's
+  PRF advantages (`prf/sha-512`) and its receipts' binding term are not in `eps`, and neither is the sketch's term
+  \(\delta_s\) (§4), which a sketch-receipt session's error is mostly made of: a monitoring period's table
+  (`monitoring.py`) reads the session's whole error from the ledger, sums it over the period's sessions and states no
+  bytes where the sum is 1 or more. γ's other terms are the ledger's
   arithmetic, which no Lean property covers. The statements γ is modelled on are the lock's `deployed` entries,
   `RemoteSessionConservationSketchDeployed` (sketch receipts, provers that keep sectors verbatim) and
   `RemoteSessionConservationDeployed` (whole-block receipts). `RemoteSessionRunConservation` is the whole-block
@@ -1349,9 +1358,10 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   be an instance. The one deployed statement on a paced session's record is the memory line's,
   `Properties.RemoteAudit.Line.LineHeld`. The conservation statements' openings are
   `Accounting.Guarantees.RateWindowSample`, a window's pooled sample over its passes' receipts, and `RateSessionSample`,
-  the horizon and every window at once, both from `PooledSampling`, the causal horizon bound. They take windows of
-  one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ in \(U_t\), and its samples are
-  distinct, which only lowers the chance that they all pass. `pooled` applies the same argument at each window's own
+  the monitoring period and every window at once, both from `PooledSampling`, the causal bound over the monitoring
+  period. They take windows of one size, \(M = P \cdot N\), and samples with replacement. The record's windows differ
+  in \(U_t\), and its samples are distinct, which only lowers the chance that they all pass. `pooled` applies the same
+  argument at each window's own
   size: `Accounting.Guarantees.Remote.PooledSample` states it on the deployed sample (`Accounting.Remote.Draw`: `Key.subset`
   on the first SHA-512 blocks a window's coin gives, released after its roots, the sampler exact on each sample's first
   word and its fallbacks free), for windows the prover sizes after the earlier windows' coins, each below
@@ -1621,8 +1631,8 @@ squarings. The fixture kernels build against comes from the serving loop over th
 pinned there by its SHA-512):
 a pinned seed, the sign rows, every block's \(\pi\), every unit's \(\sigma\) and \(y\).
 
-**Openings** (`p2.Opening`, `p2.Session.verify`). An opening of unit \(g\) is its four blocks, each with its path to
-`vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
+**Openings** (`p2.Opening`, `audit.AuditRun.verify` over the P2 codec). An opening of unit \(g\) is its four
+blocks, each with its path to `vk`'s root, and the receipt leaf with its salt and path. The verifier checks the leaf on the pass's root, each block on
 `vk` under PoUS's leaf (`pous.verifier.leaf_hash`, `payload-path` if one fails; in the Lean, PoUS's own leaf and
 path check, `PousCheck.Merkle`), and \(y_g\) recomputed from the four blocks (`p2.check`). It decodes nothing: `vk`'s leaves are of the `C*` the verifier decoded to the committed `W`, so a block on its
 path is `C*`'s block, by SHA-512's collision resistance. A P2 store is fixed at setup, so a session over it appends
@@ -1632,10 +1642,13 @@ nothing (`append`).
 it holds the registration file's bytes (its digest recomputed from its fields, a stated `digest` refused unless it is
 theirs) and reads the prover's request and each root and openings line as sent, a line out of form rejecting the
 session `malformed` at the window filling. Its bookkeeping is §4–§6's over the U units, and its openings are checked
-as above, on the registered vk root. `p2.Session` runs beside it as a veto: where the two differ the session is
-rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
+as above, on the registered vk root. `audit.AuditRun` over the P2 codec runs beside it as a veto: where the two
+differ the session is rejected `disagreement`. The session's parameters (W, the passes a window, s, T and A) are the auditor's
 (`p2_party.SESSION`), never the prover's: the request restates them, and the veto refuses one that carries other
-values, by name, before the first coin; the Lean reads them from the request.
+values, by name, before the first coin, and so does the Lean, naming each in `p2_party.params_of`'s words
+(`P2Session.heldTo`). The process holds its pinned `P2Session.SESSION` unless the auditor's party names a toy's
+(`p2_hold`'s `session`), and the session's core case (`p2_case.py`), whose request no digest binds, is replayed under
+`SESSION` alone (`P2Protocol.replay`), so a toy party's case is refused there.
 
 **What it rests on, and what is open.**
 
@@ -1649,7 +1662,7 @@ values, by name, before the first coin; the Lean reads them from the request.
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
 - No property in `security/Properties/Accounting/Remote` states yet what the Lean accepts of a P2 session; the difftest
-  (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
+  (`lean/tests/test_p2.py`'s `p2_session`) holds `audit.AuditRun` over the P2 codec to it.
 - Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
   (§8).
 

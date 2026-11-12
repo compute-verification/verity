@@ -44,3 +44,5 @@ default (`ROLE=both` runs the two on one machine, a test of the scripts that aud
 `LineHeldIdentity` state that line holds, with the named assumption `NoOutsideCompute` among their premises. The
 line's error reads δ + Σ_t adv_t (SHA-512 stream as PRF: not priced, not assumed): the table prints it in those words
 (`ledger.DELTA_FORM`) with δ's number after them, and every error of the document names the term (`NAMED_TERMS`).
+A line's δ is its credited sessions' summed; where that is 1 or more the line holds no share and says "no bound at
+this period" with the sum (`verity/protocols/reporting.py`'s rule for every row's error).

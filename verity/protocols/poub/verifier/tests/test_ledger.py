@@ -15,7 +15,7 @@ import pytest
 from remote_bandwidth_fakes import Clock, Entropy
 from test_remote_bandwidth import A, N, SCHEDULE, challenger, drive, finish, params, partial, store  # noqa: F401
 from verity import claims
-from verity.protocols.poub.verifier import audit, codec, ledger, line, receipts, timing
+from verity.protocols.poub.verifier import audit, codec, ledger, line, monitoring, period, receipts, timing
 from verity.protocols.poub.verifier.audit import AuditRun, Pace
 
 PASS_NS, DOWN_NS, UP_NS = 300, 20, 30
@@ -166,6 +166,28 @@ def test_gamma_is_the_ledger_at_both_r_and_per_window(store) -> None:
                                                               want.error_horizon + sk + d.total)
     assert out.to_json()["gamma"]["spec"]["gamma"] == out.spec.gamma
     assert out.to_json()["gamma"]["spec"]["error"]["draw"] == d.to_json()
+
+
+def test_a_periods_table_reads_the_sessions_error_from_its_declared_outputs(store) -> None:
+    """`monitoring.table` takes a session's whole error from the ledger's declared outputs, the horizon's: what the
+    answer's `eps` holds (the pooled bound's δ and the rejection) with the passes' slack, the receipts' binding term
+    and the sketch's term, which `eps` leaves out."""
+    s, prover, passes, clock = drive(store, params(delta=float(period.DELTA)), SCHEDULE)
+    assert all(v.accepted for v in finish(s, prover, passes, clock))
+    r, n = s.record(), node(squarings=1e9)
+    public, profile = period.certified(r)
+    out = ledger.declared(r, n)
+    error = monitoring.ledger_error(out.to_json())
+    assert error == out.spec.to_json()["error"] == monitoring.ledger_error({"declared": out.to_json()})
+    table = monitoring.table({"verdict": "accept", "public": public, "profile": profile}, error, 1, 600)
+    eps, sk = Fraction(public["eps"]), ledger.sketch(r, n)
+    assert eps == period.DELTA + Fraction(len(r.windows) * r.samples, 2 ** 64) and sk > 0
+    assert table["observed"]["error"] == out.spec.error_horizon > float(eps)
+    assert out.spec.error_horizon == pytest.approx(
+        float(eps) + r.passes * 2.0 ** -audit.SLACK_LOG2 + ledger.binding(r, n) + sk, rel=1e-12)
+    assert table["observed"]["error_terms"]["sketch"] == sk
+    week = table["periods"]["week"]
+    assert week["error"] == float(1008 * Fraction(out.spec.error_horizon)) and week["q_bytes"] == 1008 * public["q_bytes"]
 
 
 def test_a_paced_session_reads_gamma_per_fixed_window(k1) -> None:

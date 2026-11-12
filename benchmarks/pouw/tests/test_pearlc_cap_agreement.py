@@ -1,8 +1,9 @@
 """The hidden cap (`circuit.cap`'s `Pc8TileCap` at `cap.row_rho`'s ρr, the template `cap.served` serves) and the clear
 path's (`clear_work.cap_failure`) on the same tile of the H100 record: one verdict on every tile, accepted and refused,
-under -h3's per-row cap (4ρ at its census k = 256, ρ at k = 1,024) and -h0's tile cap alone.  The clear forming term is
-`pearl_c_debit.forming_elements`'s stub (0), so the tiles here have no salt-dead elements and no atom block that every
-word of a row flags, where the circuit's forming term is 0 too."""
+under -h3's per-row cap (4ρ at its census k = 256, ρ at k = 1,024) and -h0's tile cap alone.  The clear path's forming
+term (`pearl_c_debit.forming_elements`) reads each row's forming, here α = β = 1 and x = 0, which has no salt-dead
+element, and the tiles have no atom block that every word of a row flags, so it is 0, as the circuit's is on no
+salt-dead bits."""
 from __future__ import annotations
 
 import itertools
@@ -30,12 +31,13 @@ H3, H0 = C.PearlC(forming="v1", device=H100, hashing="h3"), C.PearlC(forming="v1
 #: at k = 256 and 1,392 at k = 1,024, so a row's cap at k = 256 is 16.8 at ρ = 1/400 and 67.2 at 4ρ, and 55.68 at ρ at
 #: k = 1,024; the tile's is 134.4 at k = 256
 N, TILE = 6144, (8, 16)
+ONE = 0x3F800000
 
 
 def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]:
     """(the hidden verdict, the clear verdict, the clear reason) on the first unflagged random tile on which `T.flag_words`
-    flags the words of ``at`` and no other (zeroing an atom can flag a later one of its word), every row credited but
-    ``voluntary``."""
+    flags the words of ``at`` and no other (zeroing an atom can flag a later one of its word), the hidden cap's credited
+    rows the record's (`UnitRecord.credited`: a ``voluntary`` row's band of 64 has none, so the tile has none)."""
     tm, tn = TILE
     d = scheme.device
     want = [0] * tm
@@ -46,15 +48,17 @@ def _verdicts(scheme, k: int, at, voluntary=()) -> tuple[bool, bool, str | None]
         T.flag_words(ac, bc, at)
         if T._row_flags(d.name, ac, bc) == want:
             break
-    ok = [i not in voluntary for i in range(tm)]
+    record = UnitRecord(Matmul(0, Shape(tm, k, N), 0), tm, k, voluntary_a=tuple(voluntary))
+    tile = Tile(tuple(range(tm)), tuple(range(tn)))
+    credited = set(record.credited(tile)[0])
+    ok = [i in credited for i in range(tm)]
     pa, pb = T._peel_rows(k, TILE)
     cert = [cap.certificates(ac[i], bc[j], d.name) for i in range(tm) for j in range(tn)]
     flat = lambda rows: [x for r in rows for x in r]  # noqa: E731
     hidden = evaluate(cap.templates(k, d.name, TILE, N, row_rho=cap.row_rho(scheme, k))["tile"], flat(ac), flat(bc),
                       flat(pa), flat(pb), [int(o) for o in ok], [0] * (tm * k // 32), flat(cert))[-1]
-    record = UnitRecord(Matmul(0, Shape(tm, k, N), 0), tm, k, voluntary_a=tuple(voluntary))
-    reason = CW.cap_failure(scheme, record, Tile(tuple(range(tm)), tuple(range(tn))), SimpleNamespace(
-        a=SimpleNamespace(codes=ac), b=SimpleNamespace(codes=bc)))
+    reason = CW.cap_failure(scheme, record, tile, SimpleNamespace(
+        a=SimpleNamespace(codes=ac, alpha=[ONE] * tm, x=[[0] * k] * tm, beta=[ONE] * tm), b=SimpleNamespace(codes=bc)))
     return bool(hidden), reason is None, reason
 
 

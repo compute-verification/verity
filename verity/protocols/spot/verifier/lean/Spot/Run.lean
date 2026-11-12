@@ -54,6 +54,7 @@ module
 public import Spot.OneStage
 public import Spot.Select
 public import Spot.Slots
+public import Spot.PopOrder
 public import Spot.Service
 public import Spot.ChallengerCoins
 public import Spot.SecondStage

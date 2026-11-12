@@ -93,7 +93,7 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
 ~~~text
 cd verity/protocols/flock/verifier && lake build    # .lake/build/bin/flock-verify and the other executables
 flock-verify verify [--statement ID] [--archive DIR] --circuit F --public pub.bin [--tables DIR] [--coins tree] [--zk] \
-    [--program F] [--partition F] [--registered F] [--session-tables J] [--plain-tables] --session DIR...
+    [--program F] [--partition F] [--registered F [--interface F]] [--session-tables J] [--plain-tables] --session DIR...
 flock-verify agree --upstream-plain --upstream-verdicts F [verify's plain flags] --session DIR...   # agreement only
 flock-verify statement [--statement ID] --circuit F --public pub.bin [--tables DIR]   # digest, Σ, Hello
 flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] LOG... # a recursive statement's verdict
@@ -104,7 +104,9 @@ flock-verify rec-compose --rec-inner F --rec-rows F --rec-run F [--archive DIR] 
   and agreement tools.
 - `--program`, `--partition` and `--registered` are the verifier's own copies of the program, the partition object and
   the registered reads. Without `--program` every session is refused: a verifier that can't read the Program can't know
-  what it verifies.
+  what it verifies. `--interface` is the window's registered circuit record (`verity/window-circuit/v1`, its program the
+  partition object's), whose declared registered ports a `--registered` file that binds ports must register and never
+  bind (`Flock.RegBound`); such a file is refused without it.
 - `--tables DIR` holds the pinned MUFU tables (`<name>.u32`), for circuits with lookup slots.
 - `--coins tree` verifies a plain session on the challenger's keyed coin tree (`FC_COINS=tree`), whose `Hello` names it
   and whose record opens it. Without it a plain session is on seed coins, which `verify` refuses once every check has
