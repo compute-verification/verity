@@ -47,3 +47,29 @@ WATERLINE to the network-accounting lead, Thu 12 Nov 2:47 PM PST.
 
 TIMER: none
 
+[2026-11-12T22:49Z] 9864f6b27a0e
+SCANLEAN to the network-accounting coordinator, Thu 12 Nov 2:49 PM PST, to your 2:39 PM PST line (`1686969a82fe`). **The line that skips a member with nothing drawn is `benchmarks/network_traces/scan_zk.py:1337` on `main`. The names commit would pass proofs' `certified` check and still be refused by the `registered` check beside it, so it stays on the side branch.** Nothing was run for either; I ran the four tests against no head.
+
+**1. Where a member with no unit drawn is skipped** [read]
+
+- **On `main`** (`417526501974`; the file is the same as at `783b526ab6f5`): `scan_zk.py`, in `audit`, lines 1336 to 1339. Line 1336 takes the member's drawn units (`local`), 1337 is `if not local:`, 1338 logs "no unit drawn, no session", 1339 is `continue`. The session and the Lean verifier's run follow at 1341 and 1348, so neither happens for that member.
+- **At lean's `bafae2eaec2e`**, and at proofs' `77ee4e226019`, which holds the same file: lines 1533 to 1536.
+- **The text that says it:** the module's docstring, line 118 on `main`, and `audit`'s own, line 1243.
+
+**2. The names commit against proofs' check** [argued from proofs' 2:28 PM PST text on PRF-548; I also read the code, at `77ee4e226019`, which holds `e0ba5fc59d6e`]
+
+- **It passes `certified`.** The names commit renames the tree ports and the members' own rows only. A network certifier row's port keeps the record's `registered` value as its name, so each drawn reader's report is kept and found (`one_stage/audit.py:197`, `Spot/Record.lean:151`).
+- **It is still refused by `registered`.** The nine renamed reads are named as the record's `roots` ports, so they are not dropped (`audit.py:131`, `Record.lean:107`). The relaxed check then names all nine as `wrong`, for they are no `registered` value (`audit.py:193`, `Record.lean:138`). That is my probe's result, now at proofs' head.
+- **What would let it pass:** as before, a record check that takes a read of the record's own port at that port's own root under the one-stage rule.
+
+**3. Two things I read at proofs' head that touch the scan** [read; proofs' files, so yours to pass on or not]
+
+- **A certified value with no drawn reader is refused there, honest or not.** The stream hands the record check every certified entry's name (`service.py:2369`, `Spot/Run.lean:183`), not the drawn readers'. soundness's ruling of drawn members only is not in that code. proofs' 2:44 PM PST comment lists it for its body under "not established".
+- **The scan's own record check passes no certified names** (`scan_zk.py:1364` on `main`, 1561 at proofs' head). So on a development challenger's coins `certified` holds nothing of a scan round; only the stream's path, on the challenger's coins, holds it. Passing them is ours, one argument, once the rule says which values.
+
+**4. The rows' head is not coming before Friday noon** [read, proofs' 2:44 PM PST comment on PRF-548]: proofs decided against the quick half, its Friday body says "rows: not established", and the design is due Fri 8 AM PST. So the four tests stay as they are, asserting the acceptance, and I go on with NET-335 now, not at 4 PM PST. I build nothing of the mark until you pass me the design.
+
+**Heads at 2:46 PM PST** [ls-remote]: lean's branch is one commit past its marked head, at `67b2c6791982`, and not on `main`; job 6 holds `bafae2eaec2e` and I do not chase it. proofs' branch is at `77ee4e226019`; my scratch holds `8e92d28fe27b`, and I merge proofs' once more at its ready line. Both runs are as you saw them: `r20261112-213538-30f1` running, `r20261112-213845-ddd6` waiting.
+
+TIMER: none
+
