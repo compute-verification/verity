@@ -26,6 +26,7 @@ than it removes; a moved one is kept; only comments count; a new copy of a line 
 (a revert, a pure move the base's move_check certifies), and its command line."""
 from __future__ import annotations
 
+import fcntl
 import importlib.util
 import json
 import os
@@ -637,6 +638,55 @@ def test_a_worktree_that_leaves_files_behind_decides_no_verdict(linted, monkeypa
     monkeypatch.setattr(G.tempfile, "_rmtree", stubborn, raising=False)
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
+
+
+def _turn_is_free(turn: Path) -> bool:
+    """whether whoever asks for the repository's worktree turn now, without waiting, gets it"""
+    with open(turn, "a") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return False
+    return True
+
+
+def test_a_worktree_is_added_and_removed_only_in_the_repositorys_turn(linted, monkeypatch, tmp_path):
+    """git keeps no lock on a repository's worktrees, so of two processes that add and remove one at once the add can fail
+    ("could not create directory of '.git/worktrees/tree'") and the gate exit 2 with no verdict.  Each `git worktree` command
+    the gate runs, the ``prune`` after a remove git refuses too, holds the lock on ``ratchet-gate-turn`` in the repository's
+    common git directory, from a linked checkout as from the first: whoever else asks for it meanwhile is refused, and gets
+    it once the gate is done."""
+    linted.commit("fixes a.py and retires its entry", {"adapters/vllm/verity_vllm/a.py": "A = 'ok'\n",
+                                                       P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
+    turn, linked = linted.root / ".git" / "ratchet-gate-turn", tmp_path / "linked"
+    linted.git("worktree", "add", "-q", "--detach", str(linked), "pr")
+    monkeypatch.setenv("RATCHET_GATE_CACHE", "")
+    seen, run = [], subprocess.run
+
+    def watched(args, *a, **k):
+        if list(args[:2]) == ["git", "worktree"]:
+            seen.append((args[2], _turn_is_free(turn)))
+            if args[2] == "remove":
+                return subprocess.CompletedProcess(args, 1)
+        return run(args, *a, **k)
+
+    monkeypatch.setattr(G.subprocess, "run", watched)
+    for checkout in (linted.root, linked):
+        monkeypatch.chdir(checkout)
+        [c] = G.gate("main", "pr")["changes"]
+        assert (c["verdict"], c["lints"]) == ("passed", ["p01_core"])
+    assert seen == [("add", False), ("remove", False), ("prune", False)] * 2 and _turn_is_free(turn)
+    assert len(linted.git("worktree", "list").splitlines()) == 2
+
+
+def test_with_no_turn_the_gate_cannot_judge_and_names_the_file(linted, capsys):
+    """A turn the gate can't take (here a directory sits where its file goes) is exit 2 naming the file, as a git error is:
+    not a traceback, whose exit 1 would read as a failure that names no change."""
+    linted.commit("fixes a.py and retires its entry", {"adapters/vllm/verity_vllm/a.py": "A = 'ok'\n",
+                                                       P01: _allowlist(_entry("verity_vllm/b.py", "B"))})
+    (linted.root / ".git" / "ratchet-gate-turn").mkdir()
+    assert G.main(["main", "pr"]) == 2
+    assert "no turn at the repository's worktrees (.git/ratchet-gate-turn: " in capsys.readouterr().err
 
 
 def test_a_retired_entry_passes_once_the_base_lint_agrees_it_is_gone(linted):
