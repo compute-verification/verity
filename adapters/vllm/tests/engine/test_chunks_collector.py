@@ -3,8 +3,11 @@ each request's new tokens and, with a scheduler, each request's computed and pro
 scheduler are stand-ins: no vLLM."""
 from __future__ import annotations
 
+import logging
 from types import SimpleNamespace as NS
 from typing import Any
+
+import pytest
 
 from verity_vllm.engine import chunks
 
@@ -23,13 +26,19 @@ def test_each_iteration_keeps_whether_it_returned_outputs_and_each_requests_new_
     assert c.computed == [] and c.errors == [] and c.source == "outputs"
 
 
-def test_an_output_with_no_token_ids_counts_no_new_tokens_for_its_request() -> None:
+def test_an_output_with_no_token_ids_counts_no_new_tokens_for_its_request_and_says_so_at_debug(caplog: pytest.LogCaptureFixture) -> None:
     c = chunks.Collector()
-    c.on_step([NS(request_id="empty", outputs=[]), NS(request_id="none", outputs=None), NS(request_id="bare"), _out("a", 2),
-               NS(request_id="odd", outputs=[NS(token_ids=None)])])
-    assert c.nonempty == [True] and c.new_tokens == [{"a": 2}] and c.errors == []
-    c.on_step([_out("empty", 4), _out("a", 2)])
-    assert c.new_tokens[1] == {"empty": 4, "a": 0}, "nothing was counted for the first before"
+    with caplog.at_level(logging.DEBUG, logger="verity_vllm"):
+        c.on_step([_out("a", 1)])
+        c.on_step([NS(request_id="empty", outputs=[]), NS(request_id="none", outputs=None), NS(request_id="bare"), _out("a", 2),
+                   NS(request_id="odd", outputs=[NS(token_ids=None)])])
+        c.on_step([_out("empty", 4), _out("a", 2)])
+    assert c.nonempty == [True, True, True] and c.new_tokens == [{"a": 1}, {"a": 1}, {"empty": 4, "a": 0}] and c.errors == []
+    mine = [r for r in caplog.records if r.name == "verity_vllm.engine.chunks"]
+    said = [r.getMessage() for r in mine]
+    assert len(said) == 4 and {r.levelno for r in mine} == {logging.DEBUG}
+    assert all(line.startswith("iteration 1: an output with no token ids counts no new tokens: ") for line in said)
+    assert [line.rsplit(": ", 1)[1].split("(")[0] for line in said] == ["IndexError", "TypeError", "AttributeError", "TypeError"]
 
 
 def test_with_a_scheduler_each_iteration_keeps_each_requests_computed_and_prompt_tokens() -> None:
