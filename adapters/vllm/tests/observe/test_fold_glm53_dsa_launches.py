@@ -1,5 +1,8 @@
 """GLM-5.3's DSA indexer launches in a multi-request step, folded as vLLM d9105ea80 issues them on cc 9.0 (`sparse_attn_indexer`):
 
+* the fused-q launch is held to its pinned source, geometry and constexprs, then to its RoPE pointers, the step's positions and its
+  bf16 head rows; an indexer layer's index-Q is held to its pointers, dimensions, shapes and scales, and an IndexShare layer to its
+  dummy dimensions; the launch folds as one RoPE row a head and, on an indexer layer, one index-Q row a token;
 * the leading one-row requests are decodes and every request after them a prefill (`split_decodes_and_prefills`, threshold 1);
 * each prefill chunk gathers its requests' keys, then DeepGEMM fills an invisible ``[align(rows, 4), width]`` f32 allocation whose row of
   request j holds its logits from column ``cu_j``; the decodes' paged logits ``[rows, width]`` come after, from column 0;
@@ -26,7 +29,10 @@ from verity_vllm.observe.events import (
 from verity_vllm.observe.fold.patterns import dsa as D
 from verity_vllm.observe.fold.profiles import profile_for_case
 from verity_vllm.observe.fold.resolver import (
+    Compute,
+    Gather,
     Group,
+    PerRow,
     StepContext,
     Transparent,
     Unsupported,
@@ -162,6 +168,83 @@ def test_each_top_k_writes_the_rows_of_its_launch():
                 [view(31018, (1, 288), strides=(512, 1)), view(3, (1, 1), "int32"), view(TOPK_ALLOC, (1, 2048), "int32", offset=12 * 2048),
                  view(4, (1048576,), "uint8"), 2048, 20])
     assert isinstance(D.DsaTopK().match(off, ctx), Unsupported)
+
+
+Q_PINS = {"NUM_Q_HEADS": 8, "Q_PE_HALF_ROT_DIM": 32, "QL_NOPE_DIM": 512, "QL_NOPE_BLOCK": 512, "INDEX_ROPE_INTERLEAVE": True,
+          "QUANTIZE_MQA": False}
+Q_OFF_PIN = "fused-q source or launch geometry differs from the recorded GLM-5.3 pin"
+
+
+def _q(rows=2, indexer=True, consts=None, warps=1, fn="vllm.models.glm." + D.Q_KERNEL, **args):
+    """The fused-q launch over `rows` rows, of an indexer layer (which also rotates and quantizes its index-Q) or of an IndexShare
+    layer; `args` replaces bound arguments by name."""
+    bound = {"q_pe_ptr": view(60, (rows, 8, 64), "bfloat16"), "q_pe_out_ptr": view(61, (rows, 8, 64), "bfloat16"),
+             "q_pe_cos_sin_ptr": view(62, (4096, 64), "bfloat16"), "pos_ptr": view(63, (rows,), "int64"),
+             "ql_nope_ptr": view(64, (rows, 8, 512), "bfloat16")}
+    dims = {"HAS_INDEXER": False, "NUM_INDEX_Q_HEADS": 1, "INDEX_Q_HEAD_DIM": 1}
+    if indexer:
+        bound.update({"index_q_ptr": view(65, (rows, 32, 128), "bfloat16"), "index_q_cos_sin_ptr": view(66, (4096, 64), "bfloat16"),
+                      "index_weights_ptr": view(67, (rows, 32), "bfloat16"), "index_q_fp8_ptr": view(68, (rows, 32, 128), "float8_e4m3fn"),
+                      "index_weights_out_ptr": view(69, (rows, 32)), "index_weights_softmax_scale": 128 ** -0.5,
+                      "index_weights_head_scale": 32 ** -0.5})
+        dims = {"HAS_INDEXER": True, "NUM_INDEX_Q_HEADS": 32, "INDEX_Q_HEAD_DIM": 128, "INDEX_Q_HALF_ROT_DIM": 32}
+    bound.update(args)
+    consts = {**Q_PINS, **dims, **(consts or {})}
+    return build_trees([TritonLaunch(21, None, 0, "forward", fn, D.Q_SRC_SHA, {**bound, **consts}, consts, [rows], warps, 3, 7, LAYER)])[0][0]
+
+
+def test_a_fused_q_of_an_indexer_layer_is_one_rope_row_a_head_and_one_index_q_row_a_token():
+    ctx = _ctx([("a", [5]), ("b", [9])])
+    assert D.DsaQ().match(_q(fn="vllm.models.glm.another_kernel"), ctx) is None, "another kernel is not this pattern's"
+    r = D.DsaQ().match(_q(), ctx)
+    assert isinstance(r, Group) and (r.consumed, r.hint, r.pattern) == ((21,), LAYER, "dsa.fused_q")
+    rope, index_q = r.parts
+    assert isinstance(rope, Compute) and (spec_label(rope.spec), rope.rows, rope.consumed) == ("RoPEHeadGptJ_v2{D=64}", 16, (21,))
+    assert rope.operands == (PerRow(view(60, (16, 64), "bfloat16")), Gather(view(62, (4096, 64), "bfloat16"), (5,) * 8 + (9,) * 8))
+    assert rope.outputs == (PerRow(view(61, (16, 64), "bfloat16")),) and rope.attribution == (("a", 5),) * 8 + (("b", 9),) * 8
+    assert (rope.hint, rope.kernels, rope.roots) == (f"{LAYER}/q_pe", (D.Q_KERNEL,), (None, None))
+    assert isinstance(index_q, Compute) and (spec_label(index_q.spec), index_q.rows) == ("DsaIndexerQ_v1{H=32,D=128,ROPE=64}", 2)
+    assert index_q.operands == (PerRow(view(65, (2, 32, 128), "bfloat16")), Gather(view(66, (4096, 64), "bfloat16"), (5, 9)),
+                                PerRow(view(67, (2, 32), "bfloat16")))
+    assert index_q.outputs == (PerRow(view(68, (2, 32, 128), "float8_e4m3fn")), PerRow(view(69, (2, 32))))
+    assert (index_q.consumed, index_q.hint) == ((), f"{LAYER}/indexer_q")
+    state = D._state(ctx)["modules"][LAYER]
+    assert (state["q_rope"], state["q_v"]) == (view(61, (2, 8, 64), "bfloat16"), view(64, (2, 8, 512), "bfloat16"))
+    assert (state["index_q"], state["index_weights"]) == (view(68, (2, 32, 128), "float8_e4m3fn"), view(69, (2, 32)))
+    assert (state["mqa_after"], state["mqa_launches"]) == (21, [[0, 1], []])
+
+
+def test_a_fused_q_of_an_index_share_layer_is_the_rope_rows_alone():
+    ctx = _ctx([("a", [5]), ("b", [9])])
+    before = dict(D._state(ctx)["modules"][LAYER])
+    r = D.DsaQ().match(_q(indexer=False), ctx)
+    assert isinstance(r, Group) and [spec_label(p.spec) for p in r.parts if isinstance(p, Compute)] == ["RoPEHeadGptJ_v2{D=64}"]
+    state = D._state(ctx)["modules"][LAYER]
+    assert (state["q_rope"], state["q_v"]) == (view(61, (2, 8, 64), "bfloat16"), view(64, (2, 8, 512), "bfloat16"))
+    assert {k: state[k] for k in before} == before, "an IndexShare layer leaves the indexer's state as it was"
+    dims = D.DsaQ().match(_q(indexer=False, consts={"NUM_INDEX_Q_HEADS": 32}), ctx)
+    assert isinstance(dims, Unsupported) and dims.reason == "IndexShare layer has unexpected dummy index-Q dimensions"
+
+
+@pytest.mark.parametrize("kw,reason,detail", [
+    ({"warps": 8}, Q_OFF_PIN, {"src_sha": D.Q_SRC_SHA, "num_warps": 8, "num_stages": 3}),
+    ({"consts": {"QUANTIZE_MQA": True}}, "fused-q constexprs differ from the recorded GLM-5.3 pin", {"mismatches": {"QUANTIZE_MQA": (True, False)}}),
+    ({"q_pe_out_ptr": None}, "fused-q RoPE pointers are not bound", {}),
+    ({"pos_ptr": 3}, "positions argument is not a tensor view", {"positions": "3"}),
+    ({"q_pe_cos_sin_ptr": view(62, (4096, 32), "bfloat16")}, "fused-q RoPE views differ from bf16 [M,8,64]",
+     {"cs": repr(view(62, (4096, 32), "bfloat16"))}),
+    ({"q_pe_ptr": view(60, (2, 8, 64), "bfloat16", strides=(1024, 64, 1))}, "fused-q RoPE views do not flatten to [M*8, 64] head rows",
+     {"q": repr(view(60, (2, 8, 64), "bfloat16", strides=(1024, 64, 1)))}),
+    ({"index_weights_out_ptr": None}, "indexer-layer fused-q pointers are not bound", {}),
+    ({"consts": {"INDEX_Q_HEAD_DIM": 64}}, "index-Q dimensions differ from the recorded GLM-5.3 pin", {}),
+    ({"index_weights_ptr": view(67, (2, 16), "bfloat16")}, "index-Q views have the wrong shape",
+     {"weights": repr(view(67, (2, 16), "bfloat16"))}),
+    ({"index_weights_head_scale": 0.5}, "index-Q scales differ from D^-0.5 and H^-0.5", {"softmax_scale": 128 ** -0.5, "head_scale": 0.5}),
+], ids=["warps", "constexpr", "rope-pointer", "positions", "rope-views", "head-rows", "index-pointer", "index-dims", "index-shapes", "scales"])
+def test_a_fused_q_off_its_pins_or_its_views_is_refused_with_what_differs(kw, reason, detail):
+    off = D.DsaQ().match(_q(**kw), _ctx([("a", [5]), ("b", [9])]))
+    assert isinstance(off, Unsupported) and off.reason == reason
+    assert {k: off.detail[k] for k in detail} == detail
 
 
 SHARE_PINS = {"BLOCK_SIZE": 64, "BLOCK_STRIDE_ROWS": 64, "BLOCK_N": 2048, "HAS_PREFILL": False, "COUNT_VALID": True, "SINGLE_TILE": True,
