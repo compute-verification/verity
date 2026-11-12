@@ -31,6 +31,7 @@ public import Proofs.NetworkCertifier.Accepted
 public import Proofs.NetworkCertifier.Causal
 public import Proofs.NetworkCertifier.Tap
 public import Proofs.NetworkCertifier.RecordRows
+public import Proofs.NetworkCertifier.RecordRowsRead
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.WitnessToys
 public import Proofs.NetworkCertifier.CountWitnesses
