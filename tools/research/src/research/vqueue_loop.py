@@ -410,11 +410,13 @@ class Shadow:
     a followed check graph2 no longer runs or is read once more); an enqueue, a rerun or a cancel of the check forgets it
     (`forget`).  `save` keeps those this tick read or used."""
 
-    def __init__(self, path: Path, now: Callable[[], float], read_s: float = G2_READ_S):
+    def __init__(self, path: Path, now: Callable[[], float], read_s: float = G2_READ_S,
+                 log: Callable[[str], None] = print):
         self.path, self.now, self.read_s, self.used, self.hits = path, now, read_s, set(), 0
         try:
             got = json.loads(path.read_text()) if path.is_file() else {}
-        except (OSError, ValueError):
+        except (OSError, ValueError) as e:
+            log(f"research queue vqueue: {path} can't be read ({type(e).__name__}: {e}), so every reading is read afresh")
             got = {}
         self.docs: dict[str, dict] = got if isinstance(got, dict) else {}
 
@@ -1742,8 +1744,8 @@ class World:
         rc, tail, text = end
         try:
             got = json.loads(text) if text is not None else None
-        except ValueError:
-            got = None
+        except ValueError as e:
+            return {"done": False, "error": f"exited {rc}, its result unreadable ({e}): {tail}"[-600:]}
         return got if isinstance(got, dict) else {"done": False, "error": f"exited {rc} with no result: {tail}"[-600:]}
 
     def withdraw(self, number: int, head: str, why: str) -> PR:
@@ -2200,7 +2202,8 @@ class Loop:
         self.graph2_shadow = graph2_shadow or gate != CHECK_GATE
         self.now, self.out, self.state, self.tree_ejects, self.records = now, out, state, tree_ejects, records
         self.after, self.clock, self.peak, self.timing, self.steps = after, clock, peak, timing, Steps(clock, peak)
-        self.reads = Shadow(self.log_path.parent / G2_READS, now, g2_read_s) if gate == CHECK_GATE and graph2_shadow else None
+        self.reads = Shadow(self.log_path.parent / G2_READS, now, g2_read_s, out) \
+            if gate == CHECK_GATE and graph2_shadow else None
         if world is not None:
             world.reads = self.reads
         self.g2_fresh = self.fresh_left = g2_fresh
