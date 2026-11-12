@@ -3,7 +3,10 @@ and ledger and the verifier host's status, and refuses (exit 3, the reason in pr
 period, a period of the lane still open, a host pinned elsewhere or busy, and, before any request, a CIRCUIT that isn't COMMIT's
 and a COMMIT off origin/main's first-parent line (or no line to check it on). A host pinned elsewhere on that line is
 told to rerun at its pin; one pinned off it, to repin. Under DRY=1 nothing reaches ssh. The gates are a stub ssh on
-PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent."""
+PATH; COMMIT is the head of a throwaway repository whose bare origin's main holds it and its parent.
+
+`gate.sh host`: the run it asks the verifier host for is PACED's paced sessions, or with SESSIONS that many sessions of
+one coin a window, and never both: every verb refuses both forms at once, and `form` does nothing else."""
 from __future__ import annotations
 
 import hashlib
@@ -194,3 +197,66 @@ def test_fire_goes_on_for_a_lease_begun_by_lease_by(tmp_path):
     p, calls = fire(tmp_path, held("2026-10-24T12:45:02Z"), "2026-10-24T13:15Z")
     assert re.search(r"^\S+Z leased$", p.stdout, re.M) and "nothing opened" not in p.stdout, p.stdout
     assert len(calls) == 1 and "gpu-lease status" in calls[0]
+
+
+FORM = ("PACED", "PACE_PASS_MS", "SESSIONS", "WINDOWS", "WINDOW_MS", "SAMPLES")
+REQUEST = ("MODEL", "ENGINES", "ARENA_BLOCKS", "PORT", "MINUTES", "JITTER_MS", "QUANTILE", "PROVER_NODE", "AUDITOR")
+PACED = ("--paced 1:60000:33273:2 1:60000:33273:2 1:1000:2773:7 1:1000:2773:7 --pace-pass-ms 85 --minutes 30 "
+         "--jitter-ms 50 --quantile max --model QWEN25_32B_BF16 --engines 8 --arena-blocks 16252928")
+
+
+def host(tmp_path: Path, verb: str = "host", **form: str) -> tuple[subprocess.CompletedProcess, list[str] | None]:
+    """gate.sh VERB under DRY=1 with these of FORM's variables and no other: its result, and the requests it would
+    have sent, each without its time and its host (None when it wrote no gate.requests). `form` gets no OUT."""
+    out = tmp_path / "out"
+    out.mkdir()
+    env = {k: v for k, v in os.environ.items() if k not in FORM + REQUEST + ("OUT",)}
+    env |= {"DRY": "1", "PERIOD": "ma-remote-coins-9", "PIN": PIN, "GATE_KEY": str(tmp_path / "key"),
+            "COMMIT": "0" * 40, **form}
+    if verb != "form":
+        env["OUT"] = str(out)
+    p = subprocess.run(["bash", str(GATE), verb], cwd=tmp_path, env=env, capture_output=True, text=True)
+    sent = out / "gate.requests"
+    return p, [line.split(" ", 2)[2] for line in sent.read_text().splitlines()] if sent.exists() else None
+
+
+@pytest.mark.parametrize("form, want", [
+    ({}, PACED),
+    ({"PACED": "64:60000:33273:7", "PACE_PASS_MS": "46"},
+     "--paced 64:60000:33273:7 --pace-pass-ms 46 --minutes 30 --jitter-ms 50 --quantile max --model QWEN25_32B_BF16 "
+     "--engines 8 --arena-blocks 16252928"),
+    ({"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"},
+     "--sessions 1 --windows 7 --window-ms 60000 --samples 33273 --minutes 30 --jitter-ms 50 --quantile max "
+     "--model QWEN25_32B_BF16 --engines 8 --arena-blocks 16252928"),
+    ({"SESSIONS": "2"},
+     "--sessions 2 --minutes 30 --jitter-ms 50 --quantile max --model QWEN25_32B_BF16 --engines 8 "
+     "--arena-blocks 16252928"),
+], ids=["default", "paced", "one-coin-a-window", "sessions-alone"])
+def test_the_hosts_run_is_asked_for_paced_sessions_or_with_sessions_for_one_coin_a_window(tmp_path, form, want):
+    """The request names one form: PACED's words at PACE_PASS_MS, by default the four paced sessions, or SESSIONS
+    sessions with the WINDOWS, WINDOW_MS and SAMPLES that are set and nothing of a pace."""
+    p, sent = host(tmp_path, **form)
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert sent == [f"run --peer vy-nebius-2 --port 7951 --period ma-remote-coins-9 --pin {PIN} {want}"]
+
+
+@pytest.mark.parametrize("verb", ["host", "probe", "fire", "form"])
+@pytest.mark.parametrize("form, why", [
+    ({"SESSIONS": "1", "PACED": "1:1000:2773:7"}, "the host's run takes one form, so unset SESSIONS or both of the others"),
+    ({"SESSIONS": "1", "PACE_PASS_MS": "85"}, "the host's run takes one form, so unset SESSIONS or both of the others"),
+    ({"WINDOWS": "7"}, "SESSIONS is unset: set it, or unset them for PACED's sessions"),
+    ({"WINDOW_MS": "60000", "SAMPLES": "33273"}, "SESSIONS is unset: set it, or unset them for PACED's sessions"),
+], ids=["sessions-and-paced", "sessions-and-a-pace", "windows-alone", "a-window-alone"])
+def test_both_forms_at_once_or_a_window_without_sessions_is_refused_before_any_request(tmp_path, verb, form, why):
+    p, sent = host(tmp_path, verb, **form)
+    assert p.returncode == 2 and why in p.stdout, p.stdout + p.stderr
+    assert sent is None
+
+
+@pytest.mark.parametrize("form", [{}, {"PACED": "1:1000:2773:7", "PACE_PASS_MS": "46"}, {"SESSIONS": "1"},
+                                  {"SESSIONS": "1", "WINDOWS": "7", "WINDOW_MS": "60000", "SAMPLES": "33273"}],
+                         ids=["default", "paced", "sessions-alone", "one-coin-a-window"])
+def test_form_passes_one_form_and_writes_and_asks_nothing(tmp_path, form):
+    p, sent = host(tmp_path, "form", **form)
+    assert (p.returncode, p.stdout, p.stderr, sent) == (0, "", "", None)
+    assert list((tmp_path / "out").iterdir()) == []

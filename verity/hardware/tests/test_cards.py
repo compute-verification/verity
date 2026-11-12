@@ -4,6 +4,7 @@ others."""
 from __future__ import annotations
 
 import copy
+import math
 import re
 from fractions import Fraction
 
@@ -79,6 +80,31 @@ def test_derived_gpu_numbers(sku: str) -> None:
                                                * value(card, "memory.bus") / 8)
 
 
+@pytest.mark.parametrize("sku", skus("gpu"))
+def test_the_extra_registers_cover_the_resident_warps(sku: str) -> None:
+    """`sm.warps` is the most warps resident on an SM, and `store.reg_extra` holds at least their uniform registers (63
+    a warp) and their predicates (7 bits a thread at 32 threads a warp, and 7 bits a warp), in 32-bit words."""
+    card = load(sku)
+    warps = value(card, "sm.warps")
+    assert value(card, "store.reg_extra") >= 63 * warps + 7 * warps + math.ceil(7 * warps / 32)
+
+
+@pytest.mark.parametrize("sku", skus("gpu"))
+def test_shared_memory_alone_is_part_of_its_pool(sku: str) -> None:
+    """`store.smem_carveout` is the most of `store.smem`, the pool of L1 and shared memory, that a kernel can make
+    shared memory, so it is no larger than the pool."""
+    card = load(sku)
+    assert 0 < value(card, "store.smem_carveout") <= value(card, "store.smem")
+
+
+@pytest.mark.parametrize("sku", skus("gpu"))
+def test_an_add_in_a_loop_costs_no_less_than_the_add_alone(sku: str) -> None:
+    """`price.fp32_loop` is an FP32 add's price in a timed loop, so it is at least the add's price at the card's
+    ceilings: a SM-clock's tensor units over the adds it issues, 32 lanes a warp instruction."""
+    card = load(sku)
+    assert value(card, "price.fp32_loop") >= value(card, "rate.tensor") / (32 * value(card, "rate.issue"))
+
+
 @pytest.mark.parametrize("sku", skus("host"))
 def test_derived_host_numbers(sku: str) -> None:
     """A host's ops are its cores' AMX MACs at their clocks, two ops a MAC; its DRAM's bandwidth is its channels'
@@ -94,6 +120,15 @@ def test_derived_host_numbers(sku: str) -> None:
     per_socket = value(card, "store.l3") + value(card, "store.uncore")
     per_core = sum(value(card, f"store.{k}") for k in ("l2", "l1d", "l1i", "core"))
     assert value(card, "store.chip") == sockets * per_socket + sockets * cores * per_core
+
+
+@pytest.mark.parametrize("sku", skus("host"))
+def test_a_vm_gives_a_gpu_no_more_cores_than_the_server_has(sku: str) -> None:
+    """`cpu.vm_cores`, the cores a GPU that a node's VM gives, is a measured share of the server's cores, so it is a
+    measurement and no larger than them."""
+    card = load(sku)
+    assert card["cpu"]["vm_cores"]["mark"] == "measurement"
+    assert 0 < value(card, "cpu.vm_cores") <= value(card, "cpu.sockets") * value(card, "cpu.cores")
 
 
 def test_the_quoted_numbers() -> None:

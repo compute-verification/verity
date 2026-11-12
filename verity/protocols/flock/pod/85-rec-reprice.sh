@@ -100,7 +100,7 @@
 #              (core-firewall session, built beside flock-verify) and writes out/oprove/release.json, each part's release
 #              time against when the Lean loop decided it (rec_inner.py release-report), failing unless every part left)
 #      RELEASE_WINDOWS_S=lead=1500,L0=2800,L=900,alg=900,cap=120,other=900 (each part's window by its class, seconds; lead is
-#              added to the first's)  RELEASE_BUDGET= (the stream's failure budget; empty: none)
+#              added to the first's)  RELEASE_BUDGET= (the stream's failure budget, at least 1: RELEASE=1 needs it)
 #      REC_LINKS=0 (build, vstage; 1: the inner population wired, rec_reprice.py stage-chain: its N units in a chain, each
 #              cut wire a link the inner statement carries, META links, checked by serve, replay and statement against the
 #              verifier's links file stage/links.json; vstage then stages V*'s link part over it, rec_vstage stage-links:
@@ -164,13 +164,12 @@ PCPU=$(echo $CPUS | cut -d, -f1-$PC); VCPU=$(echo $CPUS | cut -d, -f$((PC + 1))-
 KEY=$(cat verity/protocols/flock/pod/20-gpu-link.sh verity/protocols/flock/pod/60-circuit.sh verity/protocols/flock/prover/*.patch verity/protocols/flock/prover/cuda_*_patch.py \
   $(find verity/protocols/flock/prover/cuda verity/protocols/flock/prover/live -type f ! -name '*.md' | LC_ALL=C sort) | sha256sum | cut -c1-16)
 BIN=$W/bin-$KEY-g$GPU-sm$SM; B=$BIN/flock-circuit; F=$FW/flock-gpu-link/flock
-LSHA=$(cd verity/protocols/flock/verifier && find . -name .lake -prune -o -type f -print | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+LSHA=$(python3 verity/protocols/flock/pod/lake_closure.py key verity/protocols/flock/verifier)
 LEAN_BIN=$L/lean-$LSHA/flock-verify
 # the Lean frame a firewalled prover (MODES=ZK server) releases through, built beside flock-verify
 export FC_FIREWALL_LEAN=$L/lean-$LSHA/flock-firewall
 # the release side's Lean session loop (RELEASE=1: prove --firewall-state), keyed by its package's sources and those it requires
-CSHA=$(find verity/protocols/flock/verifier verity/protocols/recursion/verifier/firewall verity/protocols/interface verity/difftest/lean -name .lake -prune -o -type f -print \
-  | LC_ALL=C sort | xargs sha256sum | sha256sum | cut -c1-16)
+CSHA=$(python3 verity/protocols/flock/pod/lake_closure.py key verity/protocols/recursion/verifier/firewall)
 export FC_CORE_FIREWALL=$L/corefw-$CSHA/core-firewall
 FWS=$DD/fw RELEASE=${RELEASE:-0}
 FSHA=$( (echo $LSHA; cat verity/protocols/flock/prover/tests/lean/InnerFold.lean) | sha256sum | cut -c1-16)
@@ -337,7 +336,7 @@ proxied() {
     rm -rf $FWS; mkdir -p $FWS
     rel=(--firewall $FWS $(python3 -c 'import json, sys; r = json.load(open(sys.argv[1]))
 print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str, r["windows_ms"])))' $DD/release.json) \
-      ${RELEASE_BUDGET:+--budget $RELEASE_BUDGET})
+      --budget $RELEASE_BUDGET)
   fi
   taskset -c $VCPU python3 -m verity_flock.rec_live --listen 127.0.0.1:0 --out $DD/inner --sessions $NS --schedule $O/inner/schedule.json \
     --draw $DD/stage/draw.json --coin-tree "${src[@]}" --lean $FC_FIREWALL_LEAN "${rel[@]}" > $O/inner/proxy/proxy.log 2>&1 &
@@ -520,9 +519,9 @@ lean_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/lean.lock; flock 9
     if [ ! -x $LEAN_BIN ] || [ ! -x $FC_FIREWALL_LEAN ]; then
-      rm -rf $L/lean-src && mkdir -p $L/lean-src && cp -r verity/protocols/flock/verifier/. $L/lean-src/ \
-        && (cd $L/lean-src && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
-        && cp $L/lean-src/.lake/build/bin/flock-verify $L/lean-src/.lake/build/bin/flock-firewall $L/lean-$LSHA/
+      rm -rf $L/lean-src && LEAN_SRC=$(python3 verity/protocols/flock/pod/lake_closure.py copy verity/protocols/flock/verifier $L/lean-src) \
+        && (cd $LEAN_SRC && lake build flock-verify flock-firewall) && mkdir -p $L/lean-$LSHA \
+        && cp $LEAN_SRC/.lake/build/bin/flock-verify $LEAN_SRC/.lake/build/bin/flock-firewall $L/lean-$LSHA/
     fi
   )
 }
@@ -537,10 +536,9 @@ corefw_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/corefw.lock; flock 9
     if [ ! -x $FC_CORE_FIREWALL ]; then
-      C=$L/corefw-src; rm -rf $C && mkdir -p $C/protocols/flock $C/protocols/recursion/verifier $C/difftest \
-        && cp -r verity/protocols/flock/verifier $C/protocols/flock/ && cp -r verity/protocols/recursion/verifier/firewall $C/protocols/recursion/verifier/ && cp -r verity/protocols/interface $C/protocols/ \
-        && cp -r verity/difftest/lean $C/difftest/ && (cd $C/protocols/recursion/verifier/firewall && lake build core-firewall) \
-        && mkdir -p $L/corefw-$CSHA && cp $C/protocols/recursion/verifier/firewall/.lake/build/bin/core-firewall $FC_CORE_FIREWALL
+      C=$L/corefw-src; rm -rf $C && C=$(python3 verity/protocols/flock/pod/lake_closure.py copy verity/protocols/recursion/verifier/firewall $C) \
+        && (cd $C && lake build core-firewall) \
+        && mkdir -p $L/corefw-$CSHA && cp $C/.lake/build/bin/core-firewall $FC_CORE_FIREWALL
     fi
   )
 }
@@ -554,7 +552,7 @@ fold_build() {
     command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
     exec 9>$L/fold.lock; flock 9
     if [ ! -x $FOLD_BIN ]; then
-      C=$L/fold-src; rm -rf $C && mkdir -p $C && cp -r verity/protocols/flock/verifier/. $C/ && cp verity/protocols/flock/prover/tests/lean/InnerFold.lean $C/ \
+      C=$L/fold-src; rm -rf $C && C=$(python3 verity/protocols/flock/pod/lake_closure.py copy verity/protocols/flock/verifier $C) && cp verity/protocols/flock/prover/tests/lean/InnerFold.lean $C/ \
         && printf '\n[[lean_exe]]\nname = "inner-fold"\nroot = "InnerFold"\n' >> $C/lakefile.toml \
         && (cd $C && lake build inner-fold) && mkdir -p $L/fold-$FSHA && cp $C/.lake/build/bin/inner-fold $FOLD_BIN
     fi
@@ -683,6 +681,7 @@ inner)
   if [ $RELEASE = 1 ]; then
     [ $NS = 1 ] || { echo "REFUSED: RELEASE=1: one inner session opens the one recursive session (WARM=0 RUNS=1), not $NS"; exit 2; }
     [ -z "${LEVELS:-}" ] || { echo "REFUSED: RELEASE=1 with LEVELS=$LEVELS: a part left out is the recursive session's stop"; exit 2; }
+    [ -n "${RELEASE_BUDGET:-}" ] || { echo "REFUSED: RELEASE=1 needs RELEASE_BUDGET, the stream's failure budget, at least 1: rec_live opens no recursive session on a ZK server without one"; exit 2; }
     corefw_build > $O/inner/build-corefw.log 2>&1 || { tail -20 $O/inner/build-corefw.log; exit 1; }
     $LEAN_BIN rec-inner --circuit $D/circuit.txt --public $D/pub-$N.bin --partition $D/partition.json --program $D/program.json \
       > $O/inner/rec-inner.json 2> $O/inner/rec-inner.err || { tail -5 $O/inner/rec-inner.err; exit 1; }

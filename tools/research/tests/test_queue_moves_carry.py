@@ -447,7 +447,7 @@ def test_a_moves_script_runs_in_a_directory_of_its_own_under_merged_root_and_one
     assert _git(q.workdir, "worktree", "list", "--porcelain").count("worktree ") == 1
 
     copied: list[tuple[str, bool]] = []
-    monkeypatch.setattr(Q, "mapped_change", lambda repo, h, onto, moves, restack: copied.append(
+    monkeypatch.setattr(Q, "mapped_change", lambda repo, h, onto, moves, restack, env=None: copied.append(
         (str(restack), (restack / "restack.py").is_file())) or ("p", ""))
     assert Q.map_one(q.workdir, head, head, []) == ("p", "") and not any(scratch.iterdir())
     assert copied[0][0].startswith(f"{scratch}/{Q.MERGED_PREFIX}{os.getpid()}-") and copied[0][1]
@@ -517,6 +517,29 @@ def test_a_head_marked_alone_runs_no_script_so_its_code_forges_no_mapping_that_c
     q.work_out_mapped()
     assert not (Path(_git(q.workdir, "rev-parse", "--absolute-git-dir")) / "mapped-changes.d").exists()
     assert _kept(labels, 1, h2) == (False, []) and q.mapped_change(h0, h2) not in (None, target)
+
+
+def test_a_head_based_after_a_move_that_isnt_the_last_is_mapped_across_the_rest_as_a_crossing_naming_them_carries_it(world):
+    """#1 is based on a commit `main` took after the first move's base, before that move landed: `restack.py` refuses to carry
+    it across that move (`based-after`), so its owner names the move after it (`--move-commit`).  The mapping skips the first
+    move as that crossing does and maps #1 across the second, so the crossed head keeps the old head's mark and verdict."""
+    first = _move(world)
+    _push_main(world, other := world.change({"c.txt": "c landed meanwhile\n"}))
+    world.gh.put(1, old := world.change({"new_proto/extra.py": "X = 1\n"}), ready=False)
+    _mark(world, 1, old)
+    tree = _git(world.dev, "merge-tree", "--write-tree", other, first)
+    _push_main(world, _git(world.dev, "commit-tree", tree, "-p", other, "-p", first, "-m", "Queue: #9 the move"))
+    onto = _land(world, second := _move(world, LIB))
+    r = subprocess.run([sys.executable, str(ROOT / "tools/move/restack.py"), old, "--move-commit", second, "--onto",
+                        "origin/main", "--json"], cwd=world.dev, env=ENV, capture_output=True, text=True)
+    (got,) = json.loads(r.stdout)
+    assert got["status"] == "clean", got
+    _git(world.dev, "push", "-q", "origin", f"{(new := got['result'])}:refs/heads/crossed")
+    world.gh.put(1, new, ready=False)
+    q = _queue(world)
+    assert [m for m, _ in Q.moves_between(q.workdir, onto, old)] == [first, second]
+    assert _git(q.workdir, "show", f"{new}:lib/new_proto/extra.py") == "X = 1" and q.own_change(new) != q.own_change(old)
+    assert _kept(StoreLabels(world.store, change=q.own_change, moved=q.mapped_change), 1, new) == (True, [("land", "reviewer")])
 
 
 def test_a_head_based_after_the_moves_base_maps_to_none_as_restack_refuses_it(world):
