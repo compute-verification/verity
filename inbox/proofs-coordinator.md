@@ -77995,3 +77995,16 @@ The ready line follows the first and third. Mailbox read at 07:59Z: nothing afte
 3. `Held.word_bits = 16` (section 1): a line neither side wrote, in a test.
 
 - Mailbox read through the 07:59Z section. The pass by name over our marked heads is next, its table by 13:30Z.
+
+## MEMBERS, Thu 12 Nov 08:09Z: after 08:01Z: I withdraw the witness's size; what I wrote instead is question 2 as a `Prop` on soundness's `Member`; its try is `r20261112-080630-34da`, expected back near 08:50Z
+
+Clock: `date -u` read 08:09Z. The PRF-490 comment of 08:01Z stands as written, with `354001af85dd`.
+
+- **A correction to 08:01Z, "Next", item 1.** I guessed 80 to 150 lines for a window at which `ReadsAt` holds. [run: grep over `Security/Proofs/Properties/Verity` and `Flock/EndToEnd/Joint` at `c7e54ba54c`] No `Live`, `Member` or `Window` there is built from files: each is a variable, or made from one (`Live.deployed`, `Live.extend`, `Window.extend`, `Constructions.live`). A member with real files needs a circuit file that parses, a public file and a `DrawSetupZHJP` table (`y₀`). So I have no size for that witness and take the guess back. The cheap lemma, `ReadAt` at openings that hold of everything, shows only that `ReadAt` can hold when `Checked` does, and I did not write it.
+- **What I wrote instead** [derived; not yet elaborated]: `Security/Proofs/Properties/Verity/Sampled/Window/UnboundChecked.lean`, 66 lines, with its root, commit `f9f1d7b2f7f6` on top of `354001af85dd`. **Not pushed**: the branch's tip stays the sha that compiled until this one does. It is on the node at `/workspace/research/src/f9f1d7b2f7f6…` if this machine restarts.
+  - `Member.FilesChecked` on soundness's `Member` (`Sampled/Window.lean:58`): the public file loads through `Flock.HmOut.loadPublic` to a file of the member's `n` units; `Flock.PortRoots.dupId m.D.unroll m.pub = false`; `RootFixesDomainL` at `LeafMap.ofPublic m.D.unroll m.pub m.n`.
+  - `Member.checked : m.FilesChecked → ∀ t, (m.toV5 t).Checked`, and `Window.FilesChecked W := ∀ m ∈ W.ms, m.FilesChecked` with `Window.checked` at every member of `W.joint t`.
+  - [read] Why three facts are enough: `toV5` sets `pi := {}` (`Sampled/Window.lean:118`), so `noPublic` is `rfl`; `parsed` is `Flock.Bridge.parsedOf_eq` (`Flock/Bridge/CircuitOf.lean:395`) at the member's `hD` and `hU`, as `Live.parsed_eq` has it from `Live`'s `hpubO` and `hnO`.
+- **What it does to question 2.** It is now one line for soundness: does `SetsUp` at a window give `Window.FilesChecked` at the live window? `Live` has the first two facts as fields (`pubO`, `hpubO`, `hnO`, `hdup`) and pays for the third in δ; `Member` has none of the three, and for a member the draw missed the per-member check establishes none (08:01Z, "What it does not say", point 1).
+- **Run:** `r20261112-080630-34da` on vy-nebius-cpu-7, `verity lean try` on that file, launched 08:06Z; at 08:08Z it was waiting for a slot, which the launcher expected within about 10 min. That node has not built this tree, so it is a cold build: the two earlier tries took 1526 s and 1570 s after their slot. [guess] Back near 08:50Z.
+- If it passes I push it and say so; if it fails I fix it on the same branch. Then S6a's merge, as at 08:01Z. Next entry when the run is back, at 12:00Z at the latest.
