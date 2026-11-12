@@ -164,7 +164,8 @@ def defer(out: Path, pair: int, com: Any, rc: Any, args: Any, *, tl: Any, arm: s
                 tl.end("validate.replay_bundle", pair=pair, ok=False)
                 logger.warning("[delta] REPLAY BUNDLE (pair %s): no plan (%.300r); the C2 replay runs in this process", pair, e)
                 return False
-            sr_p, read = planned.get("replay") or {}, t.nbytes()
+            replay, read = planned.get("replay"), t.nbytes()
+            sr_p: dict[str, Any] = {} if replay is None else replay  # a plan with no replay of its own: its picks are unknown
             slim = {"bytes": read, "picked": sr_p.get("picked"), "unresolved_n": sr_p.get("unresolved_n"), "unresolved": sr_p.get("unresolved"),
                     "linkage": planned.get("linkage"), "plan_s": round(time.perf_counter() - t0, 3)}
             logger.info("[delta] REPLAY BUNDLE (pair %s): slim -- %s picks + linkage read %s MiB of the store in %s s (unresolved %s)", pair,
@@ -213,13 +214,21 @@ def pending_verdict(commit: dict, tokens_equal: bool | None, *, min_openings: in
 
 
 def awaits_replay(c: dict) -> bool:
-    return c.get("commit_pass") is None and (c.get("sampled_replay") or {}).get("grade") == "deferred"
+    """Whether a run's Commit record has no pass yet and its sampled replay is the deferred one (`deferred_records`)."""
+    sr = c.get("sampled_replay")
+    return c.get("commit_pass") is None and sr is not None and sr.get("grade") == "deferred"
+
+
+def commit_of(row: dict) -> dict:
+    """A run's Commit record; an empty one for a row that holds none, which neither passed nor awaits a replay."""
+    commit = row.get("commit")
+    return {} if commit is None else commit
 
 
 def pass_of(rows: list[dict]) -> bool | None:
     """The Commit's X-03 pass over its instrumented runs: True when every one passed, None when none failed and some await their
     deferred replay, else False."""
-    inst = [r.get("commit") or {} for r in rows if r["arm"] != "control"]
+    inst = [commit_of(r) for r in rows if r["arm"] != "control"]
     if inst and all(bool(c.get("commit_pass")) for c in inst):
         return True
     if inst and all(bool(c.get("commit_pass")) or awaits_replay(c) for c in inst):
@@ -235,7 +244,7 @@ def seal_all(out: Path, deferred: dict[int, dict], rows: list[dict], verdict: di
     bundles = []
     for p, ctx in deferred.items():
         row = next((rw for rw in rows if rw["pair"] == p and rw["arm"] != "control"), None)
-        if row is None or not awaits_replay(row.get("commit") or {}):
+        if row is None or not awaits_replay(commit_of(row)):
             discard(out, p)
             continue
         hashed = ctx.pop(HASHED, None)

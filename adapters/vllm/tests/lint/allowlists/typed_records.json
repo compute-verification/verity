@@ -188,7 +188,6 @@
     {"file": "verity_vllm/pipeline/program_graph.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/pipeline/release_json.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-sweep/release/v1"},
     {"file": "verity_vllm/pipeline/replay_bundle.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-vllm/replay-bundle/v1"},
-    {"file": "verity_vllm/pipeline/replay_bundle.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 4},
     {"file": "verity_vllm/pipeline/report.py", "kind": "schema-literal", "symbol": "<module>", "detail": "verity-gen/card/v1"},
     {"file": "verity_vllm/pipeline/report.py", "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": 85},
     {"file": "verity_vllm/pipeline/research.py", "kind": "schema-literal", "symbol": "_row_json", "detail": "verity-sweep/row-v2/v1"},
