@@ -1,6 +1,7 @@
 """onsite-record: the onsite demo's record of one served run (``record/onsite.json``, `FORMAT`): every verdict its run of
-record needs, the network certifier's bound term by term, and that bound over each monitoring period for the serving
-node, a datacenter and the world. It reads only the run's public $OUT and decides nothing:
+record needs, the network certifier's K term by term, on one-stage answers the driver verified and the period's check
+read as given, and that K over each monitoring period for the serving node, a datacenter and the world. It reads only
+the run's public $OUT and decides nothing:
 
     python benchmarks/one_stage/onsite_record.py OUT [--window-steps S --max-tokens M] [--advice-charge FILE]
         [--certifier-key RECORD --site-registration FILE] [--inference-only-case-policy FILE]
@@ -130,24 +131,28 @@ composite has it, PoUW's from their rows (their answers' integrity-profile δ), 
 (`NO_NCI_DELTA`). ``stated`` sums the δs the run states, a lower bound on the error, which is ``vacuous`` at 1 or
 more; the rest is ``unvalued`` (`COMPOSITE_UNVALUED`).
 
-**The bound** is the network certifier's accepted answer's public in its rows form: K and each of its terms in the
+**K** (the record's ``bound``) is the network certifier's accepted answer's public in its rows form, on one-stage
+answers the driver verified; the check read them as given (`GIVEN`). The record calls it no bound, and ``answers``
+(`ANSWERS`) stands beside K wherever the record or one of its lines states it: here, in the figure of record, over its
+periods, and in the ``ONSITE`` and ``ONSITE-BESIDE`` lines. It holds K and each of its terms in the
 notation table's symbols (`TERMS`, `PHASE_TERMS`), each naming the public fields it sums (``lean``): k_sched
 (``schedules``), k_fail (``cells``) and, for each execution phase j of the certification period (the code's link-window,
 the public's ``scans[j]``), ℓ_{a,j} (``free``), k_{skip,j} (``faulty_sets``, ``faulty_bits`` and ``faulty_entries``) and
-the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, by which `NetTiming.Guarantees.PeriodLeakAccepted` bounds what the serving node
-sends past its committed program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets
-of τ (the certifier's case's ``schedule``). ``delta_net`` gives it term by term, each with its source: the answer's
+the jitter T_j·log2 d_jit, T_j the phase's buckets (``jitter``). They sum to K, the count
+`NetTiming.Guarantees.PeriodLeakAccepted` states (``statement``) of what the serving node sends past its committed
+program except with δ_net over ``period_s`` seconds, the run's m execution phases of T buckets of τ (the certifier's
+case's ``schedule``); no Lean statement covers a K whose answers the check read as given. ``delta_net`` gives it term by term, each with its source: the answer's
 ``eps``, only its δ part (m · δ and each charged audit's δ, `EPS`), and m times each phase's knowledge, binding and
 collision errors ε_ks, ε_bind and ε_tap (`ERRORS`), which no check computes, so δ_net has no number here (`UNVALUED`);
 ``delta`` splits eps into the scans' δ and the charged audits', with eps a phase and each charged audit's reading at
 δ_i where the public lists it (``charged_audits``; `DELTA`: what sets each, and what a smaller one costs); ``skip`` is
 k_{skip,j} each phase with its slot entries, every one of a tied audit drawn in part with a bound of at least one
 incorrect proof block (`SKIP`, and what drawing it whole costs).
-K is that statement's count as proved, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
+K is that statement's count, a known overcount (``notes``, `OVERCOUNT`); ``connections`` is how many
 connections k_sched and k_fail count, every one the schedule can carry (`CONNECTIONS`), its ``error`` where the case's
 caps aren't those; and ``verdict_line`` is the run's published line of the network certifier's verdict (`LINE` in
-verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is the bound's
-``error``. ``of_record`` is the figure of record (`OPEN`): that K only where the verdict's public holds every check the
+verdicts.txt), None where it has none. A public whose terms don't sum to K, or that isn't the rows form, is its
+``error``. ``of_record`` is the figure of record (`OPEN`), on the same answers (``answers``): that K only where the verdict's public holds every check the
 tight ℓ_{a,j} rests on (``held``, `CHECKS`) and none of its premises is open (``premises``, `DISCHARGE`: each of
 `PREMISES` discharged by theorems in Security's locks, each at the statement `DISCHARGES` pins, taking no named
 assumption but a standing one (`STANDING`) or one its pin names and no premise that is open, or, where a guarantee it
@@ -160,9 +165,9 @@ it, only how it tightens (``tight``, `TIGHT`), conditional on the coins and on e
 tied to a phase's scan: stateFree, its free inputs with its reads of the scan's state held, only where RowsStateHeld is
 in the lock at the statement and definitions `STATE_PINS` pins, so that its proof stands over the entry a window's
 activations commit, else free; where it is free and a tied audit's parameters state a circuit record, there is no
-figure (`STATE_UNCOVERED`). Beside the bound, ``advice_charge``: the served run's
+figure (`STATE_UNCOVERED`). Beside K, ``advice_charge``: the served run's
 realized advice charge stays out of the record (`ADVICE`, which says what hides it and what doesn't yet); ``charged`` is
-ℓ_{a,j} as the bound charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
+ℓ_{a,j} as K charges each execution phase, with its share of K and its source (`CHARGED`: the tied compute
 audits' unregistered inputs, read off the period's parameters, with no advice length and no cap in them); ``cap`` is
 each audit's ℓ_a, the cap of the advice the run registered (its published advice registration's, `REGISTRATION`), stated
 as a cap and in no term of K (`CAP`), and the figure of record's ``missing`` where the run published none; and
@@ -172,7 +177,7 @@ clock; ``phases`` says where those phases start, `TEST_PHASES`), measured on a t
 (`advice_charge.py`'s record, ``--advice-charge``) and labelled as
 that run's, never a figure of this one. ``tree`` is the commit the run served from (machine.txt's), None where machine.txt names none.
 
-**Periods**, of the figure of record: the run's own certification period (``run``), proved, and each monitoring period
+**Periods**, of the figure of record and on its answers (``answers``): the run's own certification period (``run``), proved, and each monitoring period
 of `leak_bounds.PERIODS` for the serving node, the census's reference datacenter and the world, conditional on the coins
 and each open premise of `UNCHARGED` while they are open (``conditional_on``). A node's cell is proved where the run's
 period covers the monitoring period's seconds (its m execution phases), and otherwise scaled from the run to the period; a
@@ -278,6 +283,11 @@ ADVICE = ("not in this record: the realized advice length |a_j| is a value. The 
           "the compiler's cap in its place (`served_verdicts.py public_registration`), but each window's advice is "
           "committed and compiled at its own length, so |a_j| is hidden only once it is padded to ℓ_a before it is "
           "committed; the bound's ℓ_{a,j} holds no advice length (`CHARGED`)")
+#: beside K wherever the record or one of its lines states it
+ANSWERS = "answers read as given"
+GIVEN = ("K, on one-stage answers the driver verified; the check read them as given: the period's check, which states "
+         "K, verified none of them, and no Lean statement covers a K read so. It is a labelled number and no bound: "
+         f"{ANSWERS!r} stands beside it wherever it is stated (answers)")
 OVERCOUNT = ("a known overcount, proved and larger than necessary: k_sched and k_fail charge every connection the "
              "schedule can carry (`Schedule.caps`), whatever the traffic, and each connection's cell count twice, in "
              "k_sched (its lane's length, #S_s ≤ ∏_c (cap_c + 1)) and in k_fail (its fail cell's position), which in a "
@@ -831,7 +841,8 @@ DISCHARGE = ("the tight K's premises (`PREMISES`), each open until every theorem
 #: why a guarantee of `RESTS_ON` is open at a statement other than the one it names
 RESTATED = ("its statement in the lock isn't the one whose hypotheses and antecedents `RESTS_ON` names: read them again, "
             "name each in its takes, and pin the lock's digest")
-OPEN = ("the figure of record: K as the period's check states it, the tight form, only where its Lean verdict performed "
+OPEN = ("the figure of record, on answers read as given like its K (`GIVEN`): K as the period's check states it, the "
+        "tight form, only where its Lean verdict performed "
         "every check of `CHECKS` (the public's held), no premise of it is open (`DISCHARGE`) and the run's COINS line "
         "names the live challenger (`COINS`). While any is open it is K plus ℓ_a + 1 bits for each audit tied to each "
         "execution phase's scan, beside that phase's ℓ_{a,j}: an advice of at most ℓ_a bits (`CAP`) is one of fewer "
@@ -971,7 +982,7 @@ BESIDE_IS = ("each run's figures from its own record, beside the others', each l
              "(`SERVING`), ℓ_a, its composite of record by id (`WITHOUT_POUW`) and the verified compute it credits, "
              "none (`NO_COMPUTE_CLAIM`), what its figures are conditional on "
              "(`COINS`), what it doesn't claim (`DAY`, `POUW`) and the drawn members it doesn't credit (`CREDIT`): its "
-             "figure of record, what is open under it, "
+             "figure of record beside the answers it is on (`ANSWERS`), what is open under it, "
              "each period's cells (bits and share of the weights), and sampled proofs' guarantee per window and "
              "pooled (`SAMPLED`). No figure is carried from one run's settings to another's")
 UNLABELLED = ("states no serving settings, which label its figures beside another run's: write it again from its OUT "
@@ -1153,7 +1164,8 @@ def sampled_verdict(found: Found, refused: Refused, composite: str, rows: Mappin
 
 
 def bound(public: Mapping[str, Any]) -> dict[str, Any]:
-    """K and its terms (module docstring) from a rows-form public; ValueError naming why for any other. m is its scans'
+    """K and its terms (module docstring) from a rows-form public, with what K is on (`ANSWERS`, `GIVEN`); ValueError
+    naming why for any other. m is its scans'
     count, held to its ``windows`` where the public keeps it (a run's published form drops it)."""
     if not isinstance(public, Mapping) or not isinstance(public.get("scans"), list):
         raise ValueError("not NetworkCheck.Period's rows form, whose public has scans: the demo's network verdict is "
@@ -1186,7 +1198,8 @@ def bound(public: Mapping[str, Any]) -> dict[str, Any]:
     sources = [EPS, *ERRORS.values()]
     skip = {"is": SKIP, "bits_per_phase": [t["bits"] for t in terms if t["symbol"] == "k_{skip,j}"],
             "entries_per_phase": [int(s["faulty_entries"]) for s in public["scans"]]}
-    return {"statement": LB.STATEMENTS["per_period"], "K": K, "phases": m, "notes": [OVERCOUNT], "terms": terms,
+    return {"statement": LB.STATEMENTS["per_period"], "K": K, "answers": ANSWERS, "is": GIVEN, "phases": m,
+            "notes": [OVERCOUNT], "terms": terms,
             "delta_net": {"terms": [t | s for t, s in zip(delta_net(eps, m), sources)], "note": UNVALUED},
             "delta": {"scan": str(scan), "charged": str(eps - m * scan), "eps_per_phase": str(eps / m), "is": DELTA,
                       "charged_audits": {"missing": NO_READINGS} if readings is None else readings},
@@ -1931,14 +1944,15 @@ def of_record(public: Mapping[str, Any], ell: Sequence[int], K: int, prem: Mappi
               conditional: Sequence[str] = ()) -> dict[str, Any]:
     """The figure of record (`OPEN`) from the period's public, the audits' caps ``ell``, the tight K's premises
     ``prem`` (`premises`) and the conditions no charge covers (``conditional``: live-coins while the coins are open,
-    `COINS`): ``K``, the checks the public holds, what is open (those checks, the premises and the conditions), the
+    `COINS`): ``K``, beside it the answers it is on (`ANSWERS`), the checks the public holds, what is open (those checks, the premises and the conditions), the
     advice ℓ_a + 1 charges, summed over each phase's tied audits (the public's ``scans[j].tied``, else every audit:
     `TIED_ALL`), and ``conditional_on``, the conditions, where any is open."""
     held = [c for c in CHECKS if c in (public.get("held") or ())]
     open_ = [c for c in CHECKS if c not in held] + list(prem["open"]) + [c for c in conditional if c not in prem["open"]]
     tied = [s.get("tied") for s in public["scans"]]
     per = [sum(ell[int(i)] + 1 for i in (t if t is not None else range(len(ell)))) for t in tied]
-    return {"K": K + (sum(per) if open_ else 0), "held": held, "open": open_, "is": OPEN, "premises": prem,
+    return {"K": K + (sum(per) if open_ else 0), "answers": ANSWERS, "held": held, "open": open_, "is": OPEN,
+            "premises": prem,
             "advice": {"bits_per_phase": per,
                        "tied": "scans[j].tied" if all(t is not None for t in tied) else TIED_ALL}} | (
         {"tight": TIGHT} if open_ else {}) | ({"conditional_on": list(conditional)} if conditional else {})
@@ -2162,7 +2176,8 @@ def record(out: Path, advice_charge: Path | None = None, copy: str | None = None
         why = b["of_record"].get("error") or b["of_record"]["missing"]
         return rec | {"periods": {"missing": f"no figure of record: {why}"}}
     eps, m, K = eps_of(b), b["phases"], b["of_record"]["K"]
-    rec["periods"] = ({"conditional_on": cond} if cond else {}) | periods(K, eps, m, phase_s, connections, capacity)
+    rec["periods"] = {"answers": ANSWERS} | ({"conditional_on": cond} if cond else {}) | periods(
+        K, eps, m, phase_s, connections, capacity)
     rec["periods"]["eps"] = pooled_eps(b["delta"], m, rec["periods"])
     return rec
 
@@ -2174,7 +2189,8 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     `NO_COMPUTE_CLAIM`), and what every figure is conditional on
     (`COINS`; open for a record that read no coins), what is open in Lean (`MEMBER_OPEN`), what the record doesn't
     claim (`DAY`, `POUW`), the drawn members it
-    doesn't credit (`CREDIT`), K of record and what is open under it, its δ_net's terms, eps's split and connections,
+    doesn't credit (`CREDIT`), K of record with the answers it is on (``answers``, `ANSWERS`: beside K wherever the line
+    states one, None where it states none) and what is open under it, its δ_net's terms, eps's split and connections,
     the tied audits the period reads and eps per window and pooled over each monitoring period (`pooled_eps`), the
     composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window and pooled
     (`guarantee`), and the measured advice charge's test run."""
@@ -2191,7 +2207,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             "open_in_lean": [MEMBER_OPEN],
             "not_claimed": [DAY_OPEN] * (rec.get("one_program_a_day") or {"open": True})["open"] + [POUW_OPEN],
             "not_credited": rec["of_record"].get("not_credited", []),
-            "K": fig.get("K"), "open": fig.get("open"),
+            "K": fig.get("K"), "answers": None if fig.get("K") is None else ANSWERS, "open": fig.get("open"),
             "delta_net": None if "delta_net" not in b else delta_net(eps_of(b), b["phases"]),
             "delta": None if "delta" not in b else {k: b["delta"][k] for k in ("scan", "charged")},
             "eps_pooled": None if "eps" not in p else {
@@ -2223,11 +2239,12 @@ def guarantee(g: Mapping[str, Any] | None) -> Any:
 
 def cells(p: Mapping[str, Any] | None) -> Any:
     """``p`` (`periods`) as each cell's bits, share and how, the run's own period's with its phases and its figure over
-    one; ``p`` as it is where it holds no figure (its ``missing`` or ``error``, or None)."""
+    one, under the answers they are on (`ANSWERS`); ``p`` as it is where it holds no figure (its ``missing`` or
+    ``error``, or None)."""
     if not isinstance(p, Mapping) or "run" not in p:
         return p
     run = p["run"]
-    return ({"conditional_on": p["conditional_on"]} if "conditional_on" in p else {}) | {
+    return {"answers": ANSWERS} | ({"conditional_on": p["conditional_on"]} if "conditional_on" in p else {}) | {
         "run": {"bits": run["bits"], "share": run["share"], "phases": run["phases"],
                 "per_phase": run["per_phase"]["bits"]},
         **{name: {where: {k: p[name][where][k] for k in ("bits", "share", "how")}
@@ -2250,7 +2267,8 @@ def beside(paths: Sequence[Path]) -> dict[str, Any]:
                      "ell_a": (rec["advice_charge"].get("cap") or {}).get("ell_a"), "of_record": line["of_record"],
                      **{k: line[k] for k in ("composite", "verified_compute", "compute")},
                      "conditional_on": line["conditional_on"], "not_claimed": line["not_claimed"],
-                     "not_credited": line["not_credited"], "K": line["K"], "open": line["open"],
+                     "not_credited": line["not_credited"], "K": line["K"], "answers": line["answers"],
+                     "open": line["open"],
                      "periods": cells(rec.get("periods")), "sampled_proofs": line["sampled_proofs"]})
     return {"format": BESIDE, "is": BESIDE_IS, "runs": runs}
 
@@ -2320,7 +2338,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         a.to.write_text(json.dumps(doc, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
         print("ONSITE-BESIDE " + json.dumps([{k: r[k] for k in ("run", "serving", "ell_a", "composite",
                                                                  "verified_compute", "compute", "conditional_on",
-                                                                 "not_claimed", "not_credited", "K", "open")}
+                                                                 "not_claimed", "not_credited", "K", "answers",
+                                                                 "open")}
                                              for r in doc["runs"]], sort_keys=True, ensure_ascii=False), flush=True)
         return 0
     if a.out is None:

@@ -291,13 +291,16 @@ negatives.
   node, a datacenter's and the world's links (each link's at δ / links, summed), with its share of their proof blocks at
   a window an execution phase; a law other than a k-subset has no pooled figure, and a draw of several members
   (stratified:1, H1_TIE's default) is named refused, since it writes no sampled-proofs case. Beside them are the network
-  certifier's bound term by term in the notation table's symbols, with its overcount, the seconds it covers, the
+  certifier's K term by term in the notation table's symbols, on one-stage answers the driver verified; the check read
+  them as given, so the record calls K no bound and states "answers read as given" beside it wherever it or one of its
+  lines states K (the record's `bound` and its figure of record, its periods, the `ONSITE` and `ONSITE-BESIDE` lines),
+  with its overcount, the seconds it covers, the
   connections it counts and δ_net term by term with each term's source (the check's `eps`, only its δ part, and each
   phase's knowledge, binding and collision errors, which no check computes), `eps` split into the scans' δ and the
   charged tied audits' with what sets each and what a smaller one costs, k_{skip,j}'s slot entries (every one of a tied
   audit sampled in part; sampled whole, it adds none and proves each of its proof blocks), the composite of record's
   error as the sum of its subprotocols' errors (four, or three without PoUW's), each δ with where the
-  run states it and the terms no check computes named, and that bound over the
+  run states it and the terms no check computes named, and that K over the
   run's own certification period (proved) and each monitoring period for the node (proved where the run's period
   covers it, else scaled), the census's reference datacenter and the world (scaled), each scaled cell naming its rule,
   whose sources the record states, beside its figure over one execution phase, and its share of one copy of the
@@ -329,7 +332,7 @@ negatives.
   the tied compute audits' free inputs (no advice length and no cap is in them), beside it ℓ_a, the cap of the advice
   the run registered (its published `registration.json`'s compiler `cap_bits`), as a cap, in no term of K, and
   `--advice-charge` states a test
-  run's measurement beside the bound as that run's. It lists the re-proof inputs, what a later re-proof of the sampled
+  run's measurement beside K as that run's. It lists the re-proof inputs, what a later re-proof of the sampled
   units with each wire read inside its session needs (the committed values and openings of every sampled unit and of
   the units that write what it reads, the registration, the draw and its receipt, and the public files), by
   where each is and whether the run wrote each public one, and how each must be kept: past the week after the run,

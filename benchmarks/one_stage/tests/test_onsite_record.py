@@ -533,7 +533,25 @@ def test_a_rehearsal_records_each_missing_part_with_its_why_and_no_figure(tmp_pa
                                                   "from": f"{OR.EPS['source']}: its eps (`EPS`)"}
     assert "window" not in rec and rec["tree"] is None
     line = capsys.readouterr().out.strip()
-    assert line.startswith("ONSITE ") and json.loads(line[7:])["K"] is None
+    assert line.startswith("ONSITE ") and json.loads(line[7:])["K"] is None and json.loads(line[7:])["answers"] is None
+
+
+def test_wherever_K_is_stated_the_answers_it_is_on_stand_beside_it_and_nothing_calls_it_a_bound(tmp_path, capsys):
+    """K is on one-stage answers the driver verified, which the period's check read as given: the record's K, its
+    figure of record, its periods and its line each state that beside the number, and the record's own account of K
+    doesn't call it a bound."""
+    out = accepted(tmp_path)
+    assert main([str(out)]) == 0
+    rec, line = json.loads((out / "record" / "onsite.json").read_text()), json.loads(capsys.readouterr().out.strip()[7:])
+    b = rec["bound"]
+    assert OR.ANSWERS == "answers read as given"
+    assert OR.GIVEN.startswith("K, on one-stage answers the driver verified; the check read them as given")
+    assert (b["K"], b["answers"], b["is"]) == (K, OR.ANSWERS, OR.GIVEN)
+    assert (b["of_record"]["K"], b["of_record"]["answers"]) == (KR, OR.ANSWERS) and "`GIVEN`" in OR.OPEN
+    assert rec["periods"]["answers"] == OR.ANSWERS and OR.cells(rec["periods"])["answers"] == OR.ANSWERS
+    assert (line["K"], line["answers"]) == (KR, OR.ANSWERS)
+    assert "no bound" in OR.GIVEN and "The bound" not in OR.__doc__
+    assert "certifier's bound" not in OR.__doc__.split("\n\n")[0]
 
 
 def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_connections(tmp_path):
@@ -558,7 +576,8 @@ def test_an_accepted_rows_form_answer_is_K_term_by_term_with_its_overcount_and_c
     assert rec["advice_charge"]["charged"] == {"is": OR.CHARGED, "bits_per_phase": [9088], "share": 9088 / K,
                                                "lean": "scans[j].free"}
     assert "no cap and no advice length" in OR.CHARGED and "audits[].free" in OR.CHARGED
-    assert b["of_record"] == {"K": KR, "held": [], "open": ["free", "circuit"], "is": OR.OPEN, "premises": discharged(),
+    assert b["of_record"] == {"K": KR, "answers": OR.ANSWERS, "held": [], "open": ["free", "circuit"], "is": OR.OPEN,
+                              "premises": discharged(),
                               "advice": {"bits_per_phase": [2 ** 23 + 1], "tied": OR.TIED_ALL}, "tight": OR.TIGHT,
                               "state_charge": FREE_CHARGE}
     assert b["skip"] == {"is": OR.SKIP, "bits_per_phase": [0], "entries_per_phase": [0]}
@@ -3201,8 +3220,8 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
     runs = doc["runs"]
     assert [(r["record"], r["run"], r["tree"], r["serving"], r["ell_a"]) for r in runs] == [
         (str(p), "toy-run", TREE, {"window_steps": s, "max_tokens": m}, [cap]) for p, (s, m, cap) in zip(paths, SETTINGS)]
-    assert [(r["of_record"], r["conditional_on"], r["not_claimed"], r["not_credited"], r["K"], r["open"])
-            for r in runs] == [(True, [], [OR.DAY_OPEN, OR.POUW_OPEN], [], K + cap + 1, ["free", "circuit"])
+    assert [(r["of_record"], r["conditional_on"], r["not_claimed"], r["not_credited"], r["K"], r["answers"], r["open"])
+            for r in runs] == [(True, [], [OR.DAY_OPEN, OR.POUW_OPEN], [], K + cap + 1, OR.ANSWERS, ["free", "circuit"])
                                for _, _, cap in SETTINGS]
     for p, r in zip(paths, runs):
         rec = json.loads(p.read_text())
@@ -3213,13 +3232,14 @@ def test_runs_at_two_serving_settings_go_beside_each_other_each_figure_labelled_
                    for n in LB.PERIODS for w in ("node", "datacenter", "world"))
         assert r["sampled_proofs"] == OR.guarantee(rec["sampled_proofs"]) and "year" in r["sampled_proofs"]["pooled"]
         assert "conditional_on" not in r["periods"] and not {"K_tight", "periods_tight"} & set(r)
+        assert r["periods"]["answers"] == OR.ANSWERS
     assert runs[1]["periods"]["run"]["bits"] - runs[0]["periods"]["run"]["bits"] == 7432 - 1328
     said = (OR.ONSITE, "none", f"no verified compute is credited: {OR.ONSITE}'s verdict is no compute claim")
     assert [(r["composite"], r["verified_compute"], r["compute"]) for r in runs] == [said] * len(SETTINGS)
     line = capsys.readouterr().out.strip()
     assert line.startswith("ONSITE-BESIDE ") and [
-        (x["serving"], x["K"], x["composite"], x["verified_compute"], x["compute"]) for x in json.loads(line[14:])] == [
-        (r["serving"], r["K"], *said) for r in runs]
+        (x["serving"], x["K"], x["answers"], x["composite"], x["verified_compute"], x["compute"])
+        for x in json.loads(line[14:])] == [(r["serving"], r["K"], OR.ANSWERS, *said) for r in runs]
 
 
 def test_beside_refuses_by_path_a_record_of_another_format_or_one_stating_no_serving_settings(tmp_path, capsys):
