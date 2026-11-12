@@ -100545,3 +100545,27 @@ For the table: R7 `cursor/proofs-r7-certified-b6a0` at `8e92d28fe27b` (lean's `b
 
 - Records `r20261112-192648-5007`, at `93e3682cad88`: running. It has reached `security`, found its records differ and is updating them, as expected of this change [run: its stdout]. Guess: by 21:30Z [guess].
 - Quick tier `r20261112-201719-1258`, at `f31e7d81d46e`, proofs pool: running, 21 suites passed so far and none failed [run]. Guess: by 21:10Z [guess].
+
+## PROVED, Thu 12 Nov 20:43Z: started; the list of what stands between an accept and "fully proved" is being read from `main` at `5f0c008aa040`; nothing is found yet
+
+"Fully proved" here means: the program that says "accept" at the end of an audit is the Lean verifier (the verifier written in Lean and compiled), and the theorem recorded for it covers the exact form it accepted, with nothing left as a promise to prove later. This entry only says that the reading has started and in what order. No finding yet.
+
+Clock: `date -u` read 20:42Z before writing. Tags: [run] a command of this hour (git, unless a run id is given); [read] file and line; [derived]; [relayed]; [guess].
+
+**Who and where.**
+
+- Agent id `bc-4b8ffcc1-9356-5f7b-b50a-3d23ba13adf4` [run: the `run-info` tool]. Mailbox `inbox/bc-4b8ffcc1-9356-5f7b-b50a-3d23ba13adf4.md` on `cursor/proofs-inbox`: read at `f1ae2b6d3e64`, the file does not exist yet [run].
+- `main` is `5f0c008aa040` and my checkout booted on it; `AGENTS.md` and the lean-proofs and team skills are `main`'s, reread [run]. I write no code branch; my one worktree is this branch's, for entries only.
+- Heads fetched at 20:41Z [run]: `cursor/soundness-multileg-8fb2` `3e26cac7596a`; `cursor/proofs-r7-certified-b6a0` `8e92d28fe27b`; `cursor/verity-proofs-84b5` `d68ca1504cc3`.
+
+**Plan, five lines.**
+
+1. Form A first, from `main`: the statement of `Verity.Sampled.remote_soundness_deployedReady`, its six premises one at a time (what each says, where a proof of it would go, what exists), the lock's entry for it (`frozen`, `excepted`, `open`, `trust_gap`), and whether the onsite twin is on `main`.
+2. The Python-decided places on today's audit path (the two-stage driver's round 2 and outcome, the stop audit, the stream's records, the period's check, the certified read R7), each with whether a Lean twin exists and who holds it. Lines 1 and 2 are the 22:40Z first cut.
+3. Form B from the four MEMBERS entries (05:46Z, 08:01Z, 13:28Z, 19:19Z) and soundness's branch, cited and not redone; then Form C from PRF-419, `Spot/SecondStage.lean`, `second_stage.py`, the three two-round guarantees in the locks, and the STOPS 20:17Z entry.
+4. The named assumptions from the locks by name, the `frozen` and `excepted` entries that touch these theorems, and the accepted forms with no theorem; a Lean probe (`#print axioms` of the deployed theorems) through `research run` only if the lock's record does not already say it.
+5. By Fri 03:00Z the whole table and the two answers (earliest audit meeting clauses 1 to 4 and 6; the longest chain that cannot run side by side); by Fri 17:00Z the corrections and a date.
+
+**Not established.** Everything: no statement is read against the tree yet.
+
+**To post.** Nothing.
