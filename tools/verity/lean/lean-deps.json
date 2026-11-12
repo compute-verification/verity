@@ -998,21 +998,21 @@
      ]
     }
    },
-   "package": "Security/Proofs",
+   "package": "security/Proofs",
    "run": "r20261109-085053-7da3",
    "sha256": "aedf257805547d2a4e8cc2622b2e56e197401ecf651853d811652383a88f4144"
   },
   "b1165c982ecc8513e0f275bce78d3576af827ded264b289dbd0d7c21b9d07636": {
    "bytes": 701923302,
    "modules": {},
-   "package": "Security",
+   "package": "security",
    "run": "r20261109-085053-7da3",
    "sha256": "3dfb49097ecc5abb184236b9864f78ac689a2c9082bc4107d923c2ce75a5d1cc"
   },
   "e97572211b80db22d24a548e6d145f1a07160cc234124da2ecb4ccfc74779c76": {
    "bytes": 701928438,
    "modules": {},
-   "package": "Security/Properties",
+   "package": "security/Properties",
    "run": "r20261109-085053-7da3",
    "sha256": "db0ad6a18eef846c12d111560718f6e2c75b04e94d2e5a0333f9cac3fa04fa4d"
   }

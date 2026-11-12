@@ -1,7 +1,7 @@
 """Data products on property/v1's pass: the gate model's nonlinear units read on Programs, and the honest int8
 Definitions' census with them.
 
-The gate model (`Security/Definitions/Accounting/Gates/Model.lean`, `dataProducts`, `nonlinear`) frees only linear maps
+The gate model (`security/Definitions/Accounting/Gates/Model.lean`, `dataProducts`, `nonlinear`) frees only linear maps
 whose coefficients are fixed before the run's coins: constants, registered values (the pre-committed weights),
 additions and wiring. Every s8-family lane whose two multiplicands both depend on a run input is a *data product*, one
 unit whatever their width or range: an exact product of two data values is a universal gate (an AND of two bits is one,

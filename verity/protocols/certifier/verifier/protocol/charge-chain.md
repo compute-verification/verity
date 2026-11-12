@@ -180,7 +180,7 @@ widens with the slots before it, and the build is linear in N + H + O + L.
 **The bound.** The proof block's charge is `code_v1`'s length for the whole window, its segment and its tail, so "The bound"
 (PROTOCOL.md) covers every advice v1 window, not just decisions-only ones: `encode` is injective on the values and its
 strings are prefix-free. The sampled leak bound takes the count this gives, at most `2^c` advice values charged `c` or less, as its
-premise (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`). It rests on two facts:
+premise (`hAs` in `security/Definitions/NetworkCertifier/Guarantees/SampledCharge.lean`). It rests on two facts:
 - *Each count's code is prefix-free under a public prior.* The prior is the registered table, fixed before the session.
   The ideal length of v is ℓ(v) = −log2(f_j / T) + log2 m_j. Here m_j is n_j when n_j ≤ 2^16, and
   (⌊(n_j − 1) / 2^15⌋ + 1) · 2^15 ≥ n_j for the two chunks. So
@@ -203,7 +203,7 @@ premise (`hAs` in `Security/Definitions/NetworkCertifier/Guarantees/SampledCharg
   before the advice, so each term's 2^(bitlen(m) + 1) values each take exactly bitlen(m) + 1 bits: appended after the
   segment, the tail keeps the window's code prefix-free and its Kraft sum unchanged.
 
-The Lean definitions (`Security/Definitions/NetworkCertifier/WindowCharge.lean`) mirror `reference_window` one for one,
+The Lean definitions (`security/Definitions/NetworkCertifier/WindowCharge.lean`) mirror `reference_window` one for one,
 and the window difftest holds them to it: the certifier program's `NetworkCertifier.WindowCharge`, proved equal to them
 (`CodeChargesWhole`), gives what `reference_window` gives on 4,000 instances (`device/program/lean/scripts/window_vectors.py`), among
 them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, which it refuses.

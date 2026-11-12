@@ -47,7 +47,7 @@ def test_reach_at_sequence_threads_kimi_k2():
     assert token == pytest.approx(31.7e9, rel=0.01) and n_star == pytest.approx(87.6e9, rel=2e-3)
     assert token < n_star <= token + (reached - a) * layers * expert
     assert (S, fewest) == (4096, 30) and fewest <= reached
-    entry = json.loads((ROOT / "Security" / "lean-audit.json").read_text())["shape"]["conjectures"]
+    entry = json.loads((ROOT / "security" / "lean-audit.json").read_text())["shape"]["conjectures"]
     test = f"verity/protocols/inference_only/nci/tests/{Path(__file__).name}::test_reach_at_sequence_threads_kimi_k2"
     for name in ("Nci.Assumptions.Reach", "Nci.Assumptions.ReachSlots"):
         assert entry[name] | {"why": ""} == {"status": "open", "test": test, "why": ""}
