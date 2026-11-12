@@ -29,12 +29,11 @@ from pathlib import Path
 from types import ModuleType
 from typing import Any
 
+# a sibling, not a package member: its readers put this directory on sys.path, as running this file does
+import receipt_folds as F
+
 HERE = Path(__file__).resolve().parent
 VECTORS = HERE / "vectors.json"
-_spec = importlib.util.spec_from_file_location("receipt_folds", HERE / "receipt_folds.py")
-F = sys.modules.setdefault("receipt_folds", importlib.util.module_from_spec(_spec))
-if not hasattr(F, "FOLDS"):
-    _spec.loader.exec_module(F)
 
 M32 = F.M32
 SCHEMA = "pouw-receipts/v1"

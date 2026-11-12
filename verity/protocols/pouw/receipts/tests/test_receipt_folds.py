@@ -6,16 +6,14 @@ import hashlib
 import importlib.util
 import random
 import shutil
-import sys
 from pathlib import Path
 
 import pytest
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent))
+import receipt_conform as C
+import receipt_folds as F
 
-import receipt_conform as C  # noqa: E402
-import receipt_folds as F  # noqa: E402
+HERE = Path(__file__).resolve().parent
 
 #: the sha256 of the r9 folds' reference twin, receipt_folds_r9.py
 P2FF_SHA256 = "c5a3424f90850ca818eff182f43132ae72cf21aadcaacb99758ca454932f5bb4"
