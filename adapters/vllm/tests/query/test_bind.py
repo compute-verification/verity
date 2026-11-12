@@ -173,7 +173,8 @@ def test_a_row_holds_its_keys_fields_itself_or_under_identity():
     flat = row(LIN, "out")
     want = Binder([flat]).rows
     assert want and Binder([{"identity": flat}]).rows == want, "the fields under `identity` read as the row's own"
-    for empty in (None, {}, [], 0, "", False):
+    empties: tuple[object, ...] = (None, {}, [], 0, "", False)
+    for empty in empties:
         assert Binder([{**flat, "identity": empty}]).rows == want, "an empty `identity` adds nothing"
     with pytest.raises(TypeError, match="is not a mapping"):
         Binder([{**flat, "identity": ["x"]}])
