@@ -312,21 +312,19 @@ def test_a_deadline_never_read_that_cannot_be_read_ends_the_machine_only_once_th
     assert loop.tick(NOW + 900) == f"terminated {POD}", "a deadline nobody can read does not hold the machine for ever"
 
 
-def test_extend_writes_nothing_when_it_cannot_read_the_lease_or_the_deadline(tmp_path):
+def test_extend_says_which_file_it_cannot_read_and_extends_nothing_against_such_a_deadline(tmp_path):
     env = lease_env(tmp_path, LEASE_NOW=str(NOW))
     lease, deadline = tmp_path / "lease" / "lease", tmp_path / "deadline"
-    unreadable(lease)
-    r = lease_sh(env, "extend", "3600", "run-r1")
-    assert r.returncode == 1 and r.stdout == "" and f"cannot read {lease} (" in r.stderr and "nothing extended" in r.stderr
-    assert list(lease.iterdir()) == [], "a lease it cannot read may be longer: it is not replaced"
-    lease.rmdir()
-    assert lease_sh(env, "extend", "3600", "create").returncode == 0
+    assert lease_sh(env, "extend", "3600", "create").stderr == ""
     unreadable(deadline)
     r = lease_sh(env, "extend", "86400", "run-r1")
-    assert r.returncode == 1 and r.stdout == "" and f"cannot read {deadline} (" in r.stderr and "nothing extended" in r.stderr
+    assert r.returncode == 0 and r.stdout.split()[::2] == [str(NOW + 3600), "create"], "the lease line as it stands"
+    assert f"lease: cannot read {deadline} (" in r.stderr and r.stderr.rstrip().endswith("so nothing is extended"), r.stderr
     assert lease.read_text().split()[::2] == [str(NOW + 3600), "create"], "nothing goes past a deadline it cannot read"
     deadline.rmdir()
     assert lease_sh(env, "extend", "86400", "run-r1").stdout.split()[::2] == [str(NOW + 86400), "run-r1"]
+    unreadable(lease)
+    assert lease_sh(env, "extend", "60", "x").stderr.startswith(f"lease: cannot read {lease} (")
 
 
 def test_the_loop_terminates_with_the_pod_key_over_graphql_and_says_when_it_cannot(tmp_path):

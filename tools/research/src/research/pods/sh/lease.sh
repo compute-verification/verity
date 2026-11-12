@@ -23,7 +23,8 @@
 # A read error is neither a missing file nor an expiry.  A lease or deadline file that is there and cannot be read (lease_first's
 # exit 2) is logged every tick, and the loop keeps what it last read of that file: the expiry, the deadline.  With nothing read to
 # keep (no expiry since the loop started, a deadline it never read) the loop ends the machine once that has lasted LEASE_GRACE_S, so
-# no fault carries a machine past its lease for ever.  `extend` writes nothing when it cannot read one of the two, and exits 1.
+# no fault carries a machine past its lease for ever.  `extend` has nothing it last read: it says the error on stderr and takes a
+# lease it cannot read as missing (it writes a new one) and a deadline it cannot read as a deadline of 0 (it extends nothing).
 # What the loop decides on (the two files, the pod's id and key, the tool that terminates) opens no other path: no redirect to
 # the null device, which a machine can lose.
 #
@@ -138,12 +139,15 @@ lease_extend() {
   case $secs in ''|*[!0-9]*) echo "lease: extend wants whole seconds, got '$secs'" >&2; return 2;; esac
   want=$(( $(lease_now) + secs ))
   cur=$(lease_read); st=$?
-  if [ "$st" = 2 ]; then echo "lease: cannot read $LEASE_FILE ($cur): nothing extended" >&2; return 1; fi
+  if [ "$st" = 2 ]; then echo "lease: cannot read $LEASE_FILE ($cur): taken as missing" >&2; fi
   [ "$st" = 0 ] || cur=${RESEARCH_LEASE_EXPIRES:-0}
   case $cur in ''|*[!0-9]*) cur=0;; esac
   cap=$(lease_cap); st=$?
-  if [ "$st" = 2 ]; then echo "lease: cannot read $LEASE_DEADLINE_FILE ($cap): nothing extended" >&2; return 1; fi
-  if [ "$st" = 0 ]; then
+  if [ "$st" = 2 ]; then
+    echo "lease: cannot read $LEASE_DEADLINE_FILE ($cap): taken as a deadline of 0, so nothing is extended" >&2
+    cap=$(( 0 - LEASE_DEADLINE_MARGIN_S ))
+  fi
+  if [ "$st" != 1 ]; then
     if [ "$cur" -gt "$cap" ]; then cur=0; want=$cap; fi
     if [ "$want" -ge "$cap" ]; then want=$cap; by="$by(clamped-to-deadline)"; fi
   fi
