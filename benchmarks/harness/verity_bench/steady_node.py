@@ -13,9 +13,10 @@ the `research run` that `steady_plan` launches through one of the node's GPU slo
    It refuses a statement whose circuit isn't the row's `pin` or whose units aren't its `n`.
 2. **One lease of one card** (the harness kit's, `kit.lease`: `gpu-lease 1 --wait --max-min M`), asked of the cards on
    the NUMA node of the run's CPUs where the node says which they are (`cards_near`: a slot gives a run its CPUs and
-   no card), and inside it the timed step (this module again, with `--inside`): it reads the card and the driver's version from the kit's host
-   stamp (`kit.host_stamp`, the lease's card) and the toolkit's from the node's nvcc, and refuses a card or a version
-   that isn't the spec's; records what else is on the node (`steady.card_file`) before and after;
+   no card) and declaring no cores (`lease_argv`), and inside it the timed step (this module again, with `--inside`):
+   it reads the card and the driver's version from the kit's host stamp (`kit.host_stamp`, the lease's card) and the
+   toolkit's from the node's nvcc, and refuses a card or a version that isn't the spec's; records what else is on the
+   node (`steady.card_file`) before and after;
    runs `benchmarks/one_stage/server_rate.py` at the point's load (`steady_spec.timed_sessions`); and keeps the row,
    with the versions it read (`steady_spec.VERSIONS`) and the period its sessions were sized by (`steady.PERIOD`, which
    `level` reads), and the sessions' record under `out/rate/`.
@@ -260,7 +261,9 @@ def lease_argv(spec: steady_spec.SteadySpec, inside: Sequence[str], on: Sequence
     """The timed step under the kit's lease (`kit.lease`) of one card for the spec's bound, with what a point's lease
     says beside it, before the command: the cards it may be (`on`, gpu-lease's `--on`: `cards_near`), preemptible, as a
     guest's GPU job must be (a preempted point has no passing run, so the next `run` launches it again), and the host
-    memory the spec admits."""
+    memory the spec admits. It declares no cores (gpu-lease's `--cores`): the run is pinned to its slot's, by which
+    gpu-lease counts a lease that declares none, and whether the machine throttled them while the row ran is the
+    row's check `no_throttling`."""
 
     minutes = spec.admission.max_minutes
     if minutes is None:

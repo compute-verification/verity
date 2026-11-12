@@ -6,6 +6,9 @@ id = "glm53-flock-steady-head-block-h200"
 # whose GPU slots each give a run ten cores.
 workload = "glm53"
 card = "h200"
+# The cores of the GPU slot a point is launched through, which pins the run to them. A point's lease declares no cores
+# to gpu-lease (no `--cores`): gpu-lease counts a lease that declares none by the CPUs its processes may run on, the
+# slot's, and whether the machine throttled them while a row ran is its check `no_throttling`.
 cores = 10
 sessions = 120
 ahead = 2

@@ -280,7 +280,9 @@ the node's disk. A point whose row names its statement in the store is launched 
 2. takes one lease of one card for the spec's `max_minutes`, the kit's (`kit.lease`), preemptible and with the spec's
    `mem_gb`. A slot gives a run its CPUs and no card, so the lease is asked of the cards on the NUMA node of the run's
    CPUs (gpu-lease's `--on`) where the node says which those are, and of any card where it doesn't; `out/point.json`
-   says which (`lease_on`). Inside the lease it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and
+   says which (`lease_on`). The lease declares no cores (gpu-lease's `--cores`): gpu-lease counts a lease that declares
+   none by the CPUs its processes may run on, which are the slot's, and the check `no_throttling` says whether the
+   machine throttled them while the row ran. Inside the lease it reads the kit's host stamp (`kit.host_stamp`, the leased card's) and
    the toolkit's version from the node's nvcc, refuses a card that isn't the spec's or a driver or toolkit version
    that isn't, records what else is on the node before and after the provers run (`steady.card_file`), and times the
    row;
