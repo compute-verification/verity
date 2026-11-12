@@ -1,11 +1,11 @@
 """A served run's files as one case of the record form, and the reference's verdict on it.
 
-The form (`NciCheck.Record`) reads an instance (the Program's text, the circuit record's text, Γ, α and the pins) and
-the trusted input (the deployment's registration log and the digest of the run's own record); its count
-(`NciCheck.RecordCount`) reads the count's limits beside them. A served run writes each as a file. This reads those
+The form (the Lean's `Record`) reads an instance (the Program's text, the circuit record's text, Γ, α and the pins)
+and the trusted input (the deployment's registration log and the digest of the run's own record); its count
+(`RecordCount`) reads the count's limits beside them. A served run writes each as a file. This reads those
 files as they are and writes the case, ``NAME.case.json`` (a line of the record difftest's cases, which
-``lake exe nci-record-check`` reads), and the reference's two verdicts on it, ``NAME.reference.json``:
-``{"check", "count"}``, `nci_record_reference.check_detail` and `count`, what `nci-record-check` prints.
+``lake exe inference-only-record-check`` reads), and the reference's two verdicts on it, ``NAME.reference.json``:
+``{"check", "count"}``, `nci_record_reference.check_detail` and `count`, what `inference-only-record-check` prints.
 
     python served_record_case.py --program P --record C --log FIRST ... RUN --limits L --out DIR --name NAME
         [--count B] [--unregister smallest|largest|PARAMETER] [--drop registered.KEY] [--no-pins] [--case-only]

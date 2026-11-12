@@ -1,4 +1,4 @@
-"""`nci-record-check`, the record form (`NciCheck.Record`, `NciCheck.RecordCount`) on one case, and
+"""`inference-only-record-check`, the record form (the Lean's `Record` and `RecordCount`) on one case, and
 `verity/protocols/inference_only/verifier/nci/lean/scripts/served_record_case.py`, which writes that case from a
 served run's files with the reference's verdicts on it.
 
@@ -161,11 +161,11 @@ def test_form_only_is_the_whole_references_verdict_and_walks_no_leaf(shaped, mon
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_compiled_command_gives_the_references_verdicts(shaped, tmp_path):
-    """`lake exe nci-record-check` on the script's cases, as written and with each option, and on the shaped
+    """`lake exe inference-only-record-check` on the script's cases, as written and with each option, and on the shaped
     refusals of `leaf-widths` and `own-rows`: its two lines are the reference's verdicts on every field."""
     import verity_difftest as D
 
-    exe = D.build(LEAN, "nci-record-check")
+    exe = D.build(LEAN, "inference-only-record-check")
     args = _files(shaped[SERVED]["case"], tmp_path / "run")
     cases = {}
     for name, more in (("served", ()), ("less-smallest", ("--unregister", "smallest")), ("no-pins", ("--no-pins",)),
