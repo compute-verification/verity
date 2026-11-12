@@ -77,6 +77,7 @@ class Trace:
     output_t: list[list[float]] | None = None
     releases: Releases | None = None
     passed: list[int] | None = None  # the empty schedules each request arrived after at its step (`replay`'s `passed`)
+    emitted: list[dict[int, int]] | None = None  # the tokens each step's requests emitted, where the trace records them
 
     def first_scheduled(self) -> list[int]:
         first = [-1] * len(self.requests)
@@ -91,8 +92,18 @@ class Trace:
 
     def kept_steps(self) -> list[list[int]]:
         """Each request's kept outputs as the steps that emitted them: a row emits when it reaches the request's frontier
-        (its prompt and the outputs kept so far), up to its output length."""
+        (its prompt and the outputs kept so far), up to its output length. With a draft a row emits its token and the
+        drafts it kept, at positions that depend on the rows before it, so the steps are read from the trace's own
+        count of what each emitted."""
         kept: list[list[int]] = [[] for _ in self.requests]
+        if self.engine.num_speculative_tokens:
+            if self.emitted is None:
+                raise ValueError("with a draft, the steps a request's outputs left in are the trace's `emitted`, which "
+                                 "this trace does not record")
+            for s, em in enumerate(self.emitted):
+                for i, k in em.items():
+                    kept[i].extend([s] * k)
+            return kept
         for s, st in enumerate(self.steps):
             for i, start, n in st.rows:
                 if start + n == self.requests[i].prompt_len + len(kept[i]) and len(kept[i]) < self.requests[i].output_len:
@@ -194,6 +205,7 @@ def load_step_trace(records: Iterable[dict[str, Any]], *, tokens: dict[str, Sequ
 
     return Trace(engine=engine, ids=ids, requests=requests, before_step=[int(a["before_step"]) for a in arrivals], steps=steps,
                  passed=[int(a.get("after_empty") or 0) for a in arrivals],
+                 emitted=[{index[a]: int(k) for a, k in (r.get("emitted") or {}).items()} for r in steps_recs],
                  emits=[bool(r.get("emitted")) for r in steps_recs],
                  ingress_t=[at(a, "ingress_t", -ingress_lag_s) for a in arrivals],
                  release_t=[at(r, "release_t", release_lag_s) for r in steps_recs], header=recs[0])

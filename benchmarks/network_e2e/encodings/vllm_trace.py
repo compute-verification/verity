@@ -123,7 +123,6 @@ def make_scheduler(engine: Engine, model: str) -> Any:
         # records as the scheduler holds them
         spec = SpeculativeConfig(model="ngram", num_speculative_tokens=engine.num_speculative_tokens)
         spec.method = "mtp"
-        spec.disable_eagle_block_drop = not engine.eagle_block_drop
         vllm_config.speculative_config = spec
     register_all_kvcache_specs(vllm_config)
     cls = AsyncScheduler if engine.async_scheduling else Scheduler
@@ -294,17 +293,20 @@ def run(engine: Engine, jobs: Sequence[Job], *, model: str, timing: StepTime = S
 
 def workload(n: int, *, rate: float, prompt: tuple[int, int], output: tuple[int, int], max_tokens: int | None = None,
              p_eos: float = 0.8, shared_prefix: int = 0, vocab: int = 50, ingress_delay: tuple[float, float] = (0.003, 0.03),
-             fifo: bool = True, seed: int = 0) -> list[Job]:
+             fifo: bool = True, one_token: float = 0.0, seed: int = 0) -> list[Job]:
     """`n` Poisson arrivals at `rate` per second, prompt and output lengths uniform in their ranges; a fraction `p_eos` stop on
     EOS before `max_tokens` (default: the output range's top). With `shared_prefix` > 0 every prompt starts with the same
     tokens, over a small vocabulary, so prefix caching has hits. Each request reaches the engine `ingress_delay` after the
-    ingress certifier saw it; `fifo` keeps the certified order the engine's (a frontend that reorders makes `fifo` False)."""
+    ingress certifier saw it; `fifo` keeps the certified order the engine's (a frontend that reorders makes `fifo` False).
+    A fraction `one_token` of the prompts are one token: a request whose first row is a decode row."""
     rng = random.Random(seed)
     t, jobs, seen = 0.0, [], float("-inf")
     system = [3 + rng.randrange(vocab) for _ in range(shared_prefix)]
     for _ in range(n):
         t += rng.expovariate(rate)
         P = rng.randint(*prompt)
+        if one_token and rng.random() < one_token:
+            P = 1
         mt = max_tokens or output[1]
         out = rng.randint(*output)
         stop_at = min(out, mt) - 1 if rng.random() < p_eos and out < mt else None
@@ -361,36 +363,73 @@ CASES: dict[str, tuple[Engine, dict[str, Any]]] = {
                                   enable_prefix_caching=True, async_scheduling=True),
                            dict(n=60, rate=50.0, prompt=(40, 300), output=(5, 150), shared_prefix=64, vocab=4)),
 }
-# with a draft of K = 1, 3 and 5 tokens, sync and async, with and without prefix caching: a token budget under the running
-# rows' (a row's drafts are cut, and a request is left out of a step), a KV pool under the requests' blocks and their
-# lookahead (preemption), prompts from one token (a new decode row, padded) and prompts whose output runs into the context
-# limit
-CASES |= {
-    f"{'async' if asy else 'sync'}-draft{k}{'-prefix-cache' if cache else ''}": (
-        DraftEngine(max_num_seqs=12, max_num_batched_tokens=48, max_model_len=160, num_gpu_blocks=72,
-                    enable_prefix_caching=cache, async_scheduling=asy, num_speculative_tokens=k),
-        dict(n=40, rate=60.0, prompt=(1, 120), output=(1, 60), **(dict(shared_prefix=48, vocab=4) if cache else {})))
+# with a draft of K = 1, 3 and 5 tokens, sync and async, with and without prefix caching: a KV pool under the requests'
+# blocks and their lookahead (preemption), one-token prompts (a new decode row, padded) and prompts whose output runs
+# into the context limit (a row's drafts are cut there)
+_DRAFT = dict(n=40, prompt=(1, 120), one_token=0.25)
+_SHARED = dict(shared_prefix=48, vocab=4)
+
+
+def _draft(k: int, asy: bool, cache: bool = False, *, seqs: int = 16, budget: int = 96, blocks: int | None = None) -> DraftEngine:
+    return DraftEngine(max_num_seqs=seqs, max_num_batched_tokens=budget, max_model_len=160,
+                       num_gpu_blocks=blocks or (40 if cache else 48), enable_prefix_caching=cache, async_scheduling=asy,
+                       num_speculative_tokens=k)
+
+
+CASES |= {f"{'async' if asy else 'sync'}-draft{k}{'-prefix-cache' if cache else ''}": (
+    _draft(k, asy, cache), _DRAFT | dict(rate=60.0, output=(1, 60)) | (_SHARED if cache else {}))
     for k in (1, 3, 5) for asy in (False, True) for cache in (False, True)}
+# a token budget under the running rows' (the budget cuts a row's drafts, and leaves a request out of a step); and a
+# light load of short outputs, where the engine goes quiet and a request arrives after a schedule with no tokens
+CASES |= {
+    "sync-draft1-tight": (_draft(1, False, seqs=16, budget=9, blocks=40), _DRAFT | dict(rate=60.0, output=(1, 60))),
+    "sync-draft5-tight": (_draft(5, False, budget=32), _DRAFT | dict(rate=60.0, output=(1, 60))),
+    "async-draft3-prefix-cache-tight": (_draft(3, True, True, budget=32, blocks=48),
+                                        _DRAFT | dict(rate=60.0, output=(1, 60)) | _SHARED),
+    "async-draft1-light": (_draft(1, True, seqs=4, budget=48, blocks=72), _DRAFT | dict(rate=10.0, output=(1, 12))),
+    "async-draft5-prefix-cache-light": (_draft(5, True, True, seqs=4, budget=48, blocks=72),
+                                        _DRAFT | dict(rate=10.0, output=(1, 12)) | _SHARED),
+}
+
+
+def exercised(t: Any) -> dict[str, Any]:
+    """What a trace (`replay.Trace`) with a draft exercises of the scheduler's draft rules: its rows that carried drafts
+    (`rows_with_drafts`); a new or resumed request's, which are padding (`padded`); the rows of a request that held K
+    drafts, its last row having emitted, and carried fewer, because the row ends at the context limit (`cut_context`) or
+    because the step's budget ran out (`cut_budget`); how often a row kept each count (`kept`); and the requests added
+    after a schedule with no tokens (`after_empty`), those of them added while an earlier request still had a row to
+    come (`after_empty_busy`)."""
+    K, L = t.engine.num_speculative_tokens, t.engine.max_model_len
+    out = {"rows_with_drafts": 0, "padded": 0, "cut_context": 0, "cut_budget": 0}
+    emitted: dict[int, bool] = {}
+    last = [-1] * len(t.requests)
+    for k, s in enumerate(t.steps):
+        for i, start, n in s.rows:
+            d = s.drafts.get(i, 0)
+            out["rows_with_drafts"] += d > 0
+            if i in s.new or i in s.resumed:
+                out["padded"] += d > 0
+            elif emitted.get(i) and d < K:
+                out["cut_context" if start + n == L - 1 else "cut_budget"] += 1
+            emitted[i], last[i] = bool(t.emitted[k].get(i)), k
+    kept = [k for q in t.requests for k in q.kept or ()]
+    late = [i for i, p in enumerate(t.passed or ()) if p]
+    return out | {"kept": {str(k): kept.count(k) for k in range(K + 1)}, "after_empty": len(late),
+                  "after_empty_busy": sum(any(last[j] >= t.before_step[i] for j in range(i)) for i in late)}
 
 
 def check(recs: Sequence[dict[str, Any]], tokens: dict[str, Sequence[int]] | None = None) -> dict[str, Any]:
     """The replay against a trace of this module: whether its steps are the trace's (`match`: every step's rows in order
     and, with a draft, the drafts each row carried; else `first_mismatch` with both sides' rows, or `refused`), and what
-    the trace exercises."""
+    the trace exercises (`exercised`)."""
     t = _replay.load_step_trace(recs, tokens=tokens)
-    K = t.engine.num_speculative_tokens
     steps = [r for r in recs if r["kind"] == "step"]
-    rows = [(r, i, n) for r in steps for i, _, n in r["rows"]]
     out: dict[str, Any] = {
         "steps": len(steps), "requests": len(t.requests), "preemptions": sum(len(r["preempted"]) for r in steps),
-        "cache_hits": sum(len(r["cache_hit"]) for r in steps), "after_empty": sum(1 for p in t.passed or () if p),
+        "cache_hits": sum(len(r["cache_hit"]) for r in steps),
         "finish": {f: sum(q["reason"] == f for r in steps for q in r["finished"].values()) for f in ("stop", "length")}}
-    if K:
-        drafts = [d for r in steps for d in r["drafts"].values()]
-        kept = [k for q in t.requests for k in q.kept or ()]
-        out |= {"rows_with_drafts": len(drafts), "rows_with_fewer_drafts": sum(d < K for d in drafts),
-                "padded_new_rows": sum(i in r["drafts"] and (i in r["new"] or i in r["resumed"]) for r, i, _ in rows),
-                "kept": {str(k): kept.count(k) for k in range(K + 1)}}
+    if t.engine.num_speculative_tokens:
+        out |= exercised(t)
     try:
         rp = _replay.replay(t.engine, t.requests, admit=t.before_step, passed=t.passed)
     except (ValueError, RuntimeError, AssertionError) as e:
@@ -413,6 +452,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     ap.add_argument("out", type=Path, help="directory to write <case>.jsonl (and <case>.tokens.json with prefix caching) into")
     ap.add_argument("--model", default="facebook/opt-125m")
     ap.add_argument("--case", action="append", choices=sorted(CASES))
+    ap.add_argument("--draft", action="store_true", help="the cases with a draft")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--requests", type=int, help="override each case's request count")
     ap.add_argument("--accept", type=float, default=0.7, help="with a draft, the probability each draft is kept")
@@ -421,7 +461,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     a = ap.parse_args(argv)
     a.out.mkdir(parents=True, exist_ok=True)
     checks = {}
-    for name in a.case or sorted(CASES):
+    for name in a.case or sorted(n for n in CASES if not a.draft or CASES[n][0].num_speculative_tokens):
         engine, kw = CASES[name]
         jobs = workload(seed=a.seed, **(kw | ({"n": a.requests} if a.requests else {})))
         recs = run(engine, jobs, model=a.model, accept=a.accept, seed=a.seed)
