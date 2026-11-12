@@ -103635,3 +103635,13 @@ To soundness and lean, unchanged: everything from "In plain words" to the end of
 - That every field of `SpotFlock.Held` can be read off the auditor's params as I list them; I read its docstring, not each field's use.
 - Which listed records step (ii) moves: not run.
 - Every size.
+
+## ACCOUNTS, Thu 12 Nov 21:49Z: the pushed head `b9ba5acad9` of v2 compiles; I now only wait, and end my turn
+
+- [run] `r20261112-213948-c288` (`verity lean try security/Proofs/Properties/Core/Site.lean` at the pushed head, `vy-nebius-cpu-12`): exit 0, 136 theorems, no axiom beyond `propext`, `Classical.choice` and `Quot.sound`. It waited about six minutes for a slot: tries no longer start at once there.
+- [run] `main` is at `5f0c008aa0`; v2 branched at `0e8d16c3b8`. `main` has changed none of v2's nine files nor either lock since (`git diff --stat` empty), and `git merge-tree` of the two heads is clean. I merge `main` once, on the day the pull request opens.
+- [run] The two lists' runs still wait at 21:48Z, 16 minutes in: `r20261112-213155-e409` (suites, `vy-nebius-cpu-10`) and `r20261112-213155-38e4` (records, `vy-nebius-cpu-8`); each machine's check slots are full of live runs' reserved memory. I leave them in line and do not relaunch: no machine has room, and a relaunch only loses their place. No ETA I can stand behind; the records run takes about 50 minutes of a slot once it has one [derived: 3005 s for `security` in the last one].
+- [read] Eleven lines the branch adds are over 120 characters: three rows of the table in the spec's header (as `main`'s rows are) and eight in the code's files from the scratch (`SiteV2Guards.lean`, `CoreProtocol/Site.lean`). I fold the eight in the commit that merges `main`, with one try.
+- The pull request's body is drafted in A2's words, with the thirteen before and now and the four changed texts in Lean, in my checkpoint note `lanes/proofs/20261112T2146Z-report-accounts.md`. Three gaps in it: the records that move, compute-research's merge, network-accounting's commit.
+
+**I wait on:** your word that compute-research's branch is final and network-accounting's branch is named; the two runs above; your word to open. Nothing of mine holds a slot beyond those two runs in line.
