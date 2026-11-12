@@ -161,3 +161,20 @@ def test_max_model_len_is_the_schedulers_where_its_scheduler_config_no_longer_ho
     sched.vllm_config = SimpleNamespace(model_config=SimpleNamespace(max_model_len=1024))
     del sched.scheduler_config.max_model_len
     assert ST.scheduler_config(sched)["max_model_len"] == 1024
+
+
+def test_the_header_holds_the_speculative_settings_an_engine_was_built_with():
+    """A replay's engine takes them as its ``speculative_config``; an engine without a draft has no such entry."""
+    sched = SimpleNamespace(scheduler_config=SimpleNamespace(max_num_batched_tokens=2048, max_num_seqs=4),
+                            cache_config=SimpleNamespace(block_size=16, num_gpu_blocks=100), max_model_len=512,
+                            vllm_config=SimpleNamespace(speculative_config=None))
+    assert "speculative" not in ST.scheduler_config(sched)
+    sched.vllm_config.speculative_config = SimpleNamespace(
+        method="mtp", num_speculative_tokens=3, model="/a/checkpoint", draft_sample_method="greedy",
+        rejection_sample_method="synthetic", synthetic_acceptance_rates=[0.8, 0.6, 0.4], synthetic_acceptance_length=None,
+        index_share_for_mtp_iteration=None, num_speculative_tokens_per_batch_size=[(1, 8, 3)], disable_eagle_block_drop=False,
+        draft_model_config=object())
+    assert ST.scheduler_config(sched)["speculative"] == {
+        "method": "mtp", "num_speculative_tokens": 3, "num_speculative_tokens_per_batch_size": [[1, 8, 3]],
+        "draft_sample_method": "greedy", "rejection_sample_method": "synthetic", "synthetic_acceptance_rates": [0.8, 0.6, 0.4],
+        "disable_eagle_block_drop": False}

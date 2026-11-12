@@ -44,6 +44,12 @@ FINISH = {0: "stop", 1: "length", 2: "abort", 3: "error", 4: "repetition"}
 #: the sampling parameters a request carries into the engine core, as `SamplingParams` names them
 SAMPLING = ("temperature", "top_p", "top_k", "min_p", "seed", "max_tokens", "min_tokens", "presence_penalty", "frequency_penalty",
             "repetition_penalty", "stop_token_ids", "stop", "ignore_eos", "logit_bias", "n")
+#: the speculative decoding an engine is built with, as vLLM's ``SpeculativeConfig`` names it: the settings that decide which
+#: draft tokens a step verifies and which it accepts. The draft model's path is the engine's own, so it is left out.
+SPECULATIVE = ("method", "num_speculative_tokens", "num_speculative_tokens_per_batch_size", "draft_sample_method",
+               "rejection_sample_method", "synthetic_acceptance_rates", "index_share_for_mtp_iteration", "parallel_drafting",
+               "disable_padded_drafter_batch", "disable_eagle_block_drop", "use_local_argmax_reduction",
+               "enable_adaptive_verification")
 
 
 def _plain(v: Any) -> Any:
@@ -58,7 +64,9 @@ def _plain(v: Any) -> Any:
 
 def scheduler_config(sched: Any) -> dict[str, Any]:
     """What of the scheduler's configuration decides its schedules (``max_model_len`` the scheduler's own where its
-    scheduler config no longer holds it, as in vLLM 0.11 on)."""
+    scheduler config no longer holds it, as in vLLM 0.11 on), and under speculative decoding its ``speculative``
+    settings (`SPECULATIVE`, those that are set): an engine built with them as its ``speculative_config`` drafts and
+    accepts as this one does."""
     sc = getattr(sched, "scheduler_config", None)
     cc = getattr(sched, "cache_config", None)
     pick = lambda o, names: {n: _plain(getattr(o, n)) for n in names if o is not None and hasattr(o, n)}   # noqa: E731
@@ -71,6 +79,9 @@ def scheduler_config(sched: Any) -> dict[str, Any]:
         n = getattr(sched, "max_model_len", None) or getattr(mc, "max_model_len", None)
         if n is not None:
             out["max_model_len"] = int(n)
+    spec = getattr(getattr(sched, "vllm_config", None), "speculative_config", None)
+    if spec is not None:
+        out["speculative"] = {n: v for n, v in pick(spec, SPECULATIVE).items() if v is not None}
     return out
 
 
