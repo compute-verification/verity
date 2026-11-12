@@ -144,6 +144,15 @@ def test_a_compare_record_that_lists_no_request_has_no_links_for_the_rank(tmp_pa
     assert FM.links_for_rank(1, tmp_path / "build", compare, ["d1"]) is None
 
 
+@pytest.mark.parametrize("text", ["{", "[1]", '{"world": Infinity, "links": []}', '{"rank": -Infinity, "links": []}',
+                                  '{"links": [{"k": 0, "peer_rank": Infinity}]}', '{"links": [{"k": Infinity}]}'],
+                         ids=["not JSON", "a list", "an infinite world", "an infinite rank", "an infinite peer rank", "an infinite collective"])
+def test_a_links_file_that_is_not_one_leaves_the_rank_without_links(tmp_path, text):
+    (tmp_path / "build").mkdir()
+    (tmp_path / "build" / "tp_links.json").write_text(text)
+    assert FM.links_for_rank(1, tmp_path / "build", {}, []) is None
+
+
 # the cross-rank check's record
 
 def test_an_input_the_cross_rank_check_was_not_given_fails_it_by_name_beside_what_it_failed_itself():

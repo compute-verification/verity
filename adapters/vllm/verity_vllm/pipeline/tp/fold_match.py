@@ -87,10 +87,11 @@ def _listed(doc: dict, name: str) -> list:
 
 def _load_links(p: Path) -> dict | None:
     """a rank's tp_links.json through `read_tp_links` (v1 -> v2 in memory; every link carries `peers` and `module`, the
-    recorder-vocabulary module path from the derive's recorded model root); None when the file is missing or is not one."""
+    recorder-vocabulary module path from the derive's recorded model root); None when the file is missing or is not one (one that
+    counts a world, a rank or a collective with an infinite number is not)."""
     try:
         return read_tp_links(str(p))
-    except (OSError, ValueError, TypeError, AttributeError):
+    except (OSError, ValueError, TypeError, AttributeError, OverflowError):
         return None
 
 
