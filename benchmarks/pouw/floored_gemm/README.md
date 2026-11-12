@@ -61,6 +61,7 @@ check; `DIFF_TRIALS` sets its trials), and writes `regs.txt` (ptxas's register a
 |---|---|
 | `fgemm.cu` | the kernels and their driver: `fgemm gate`, `fgemm bench`, `fgemm one` |
 | `ref.py` | the CPU reference of the gate: `python3 ref.py DIR` recomputes every output and receipt of a dump |
+| `derive.py` | the duo receipts of one 128 x 128 tile under `ref.py`'s keys, which the edited GEMMs' references share |
 | `sass_mix.py` | `python3 sass_mix.py DUMP`: opcode counts a kernel of a `cuobjdump -sass` dump, as JSON |
 | `table.py`, `tb_table.py` | `python3 table.py BENCH.jsonl [RUN_OUT_DIR]`: a run's tables as Markdown |
 | `diff.py` | `python3 diff.py [--trials N] [--seed S] [--json OUT]`: on the CPU, how often a tensor-core receipt is unchanged when one or two accumulator words are off by a fixed difference |
@@ -68,7 +69,8 @@ check; `DIFF_TRIALS` sets its trials), and writes `regs.txt` (ptxas's register a
 ## What other code reads
 
 Later kernels are built on this one: `masked_gemm/mgemm.cu` includes `fgemm.cu`. Their CPU references import `ref.py`
-(the names in its `__all__`: the duo keys and rotations, `mix32`, and the tensor-core receipts), as do
-`e2e_slice/derive.py` and `edited_gemm/egemm_ref.py`; `tb_table.py` imports `table.py`'s `LINEAR` and `ncu_tensor`.
+(the names in its `__all__`: the duo keys and rotations, `mix32`, and the tensor-core receipts), as do `derive.py` and
+`edited_gemm/egemm_ref.py`. Four references of `edited_gemm/` and `benchmarks/pouw/tests/test_segment_h1.py` import
+`derive.py`'s `tile_receipts` and the tile's shape. `tb_table.py` imports `table.py`'s `LINEAR` and `ncu_tensor`.
 The Python here starts no process and touches no GPU: only the two job scripts do. Its tests are
 `benchmarks/pouw/tests/test_floored_gemm_table.py` and `test_floored_gemm_scripts.py`.
