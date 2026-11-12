@@ -109570,3 +109570,61 @@ In plain words: since the plan went in, two things are written and neither is ch
 - That the rehearsal holds with no leaf layer: no run of it has started.
 - That the four suites pass on the tree with the `rows.py` change.
 - Circuits' list and date: not with me; the plan's two fields stay open until you relay them.
+
+## SESSIONCOINS, Thu 12 Nov 23:46Z: both statements and their proofs are written, plus `located_own` (each session's coins are its own record's); nothing has compiled yet, because a Lean slot kept my second try waiting 13 minutes
+
+**In plain words.** Everything piece E owes is now written in one file, without `sorry`; none of it has compiled. The statements' round reads no coin (`stmtReadsNone`). The coin the check reads for a session's round is the device's release for that round (`coinsRead_sessions`). It rests on two premises from other pieces, named below. The substance is `located_own`. In the log the check read, each release the session-round locator puts on round `j` of session `t` is an opening of session `t`'s own tree, with the coins session `t`'s record gives that round. It follows from the members' check through the order lemmas already on main. That one lemma covers every session, not only the first. One change to TWOLEG's statement is needed: `CoinsRead` as stated asks for an equality that is false at sessions' rounds. The implication form is what `projection_of` uses, and it is what I prove.
+
+**Branch.** `cursor/proofs-sessioncoins-e4a0` at `64be229ba8`, merged with TWOLEG's `b04e0a9fd9` [run: `git push`]. My mailbox does not exist yet (read at 23:45Z) [run].
+
+**What is written**, all in `security/Proofs/Properties/Verity/SampledTwo/SessionCoins.lean` (780 lines, a root on its own line in `security/Proofs/lakefile.toml`) [read]:
+- `stmtReadsNone A C S dev : StmtReadsNone A (formReading A C S dev)`, at any case, sessions' reading and device. It holds because `readsAt` leaves out round `stage + 1`.
+- The sessions' reading `withCoins A C tab dev Ms`. It keeps MESSAGES's `stmts` and `msg` and sets `coin` and `agree`. Session `t`'s coin at round `j` is `dev` at the log the check read (`interiorRead`), where every release the locator puts on that round shows its coins. Otherwise it is none.
+- `coinsRead_sessions : CoinsReadSessions`. Wherever the check read a coin for a session's round, `formReading`'s `dev` there is that coin. It is proved from two premises:
+  - `DevLocal`: `dev` at a session's round reads only the releases the locator puts there.
+  - `InteriorLogged`: the read log is the play's log after releases that neither sample nor open a coin tree, each read release being the device's (`Read.Of`). On one window those releases are none; on two, they are the first session's.
+- The session-round locator (`sessLoc`, `locOf`). It reads only frames. The tree's session is its place among the trees the log opens, in first-opened order. The round is the stream's slot (`slotStream`, one-stage v2's layout) at the count of the stream's earlier openings.
+- `located_own A C tab : MembersAccepted C → LocatedOwn A C tab`. It is proved from the members' check through `Verity.Sampled.MemberForm.members_read` and `Verity.Sampled.readLog_round`:
+  - every tree the read opens is a session's;
+  - the trees first open in the sessions' order, so the tree the locator counts `t`-th is session `t`'s;
+  - the read's round number is the count of earlier openings;
+  - `Lines.openCoins` finds session `t`'s own record, because no tree is two sessions'.
+
+**Runs** (vy-nebius-2, pool `proofs`, 12 GB) [run]:
+- `r20261112-232248-7c2d` at `4710dad775` (the statements only): waited 8 minutes for a slot, then I cancelled it as superseded.
+- `r20261112-233110-5638` at `f1d058eb69` (`coinsRead_sessions`): waited 13 minutes for a slot (over ten), then I cancelled it as superseded.
+- `r20261112-234440-6c1f` at `64be229ba8` (everything, `--siblings`): launched 23:44Z, waiting for a slot.
+
+Other workers report 11 to 24 checks ahead of theirs [relayed: MAJORITY, CUT, NEEDEDBITS, STOPS entries]. My ETA for a first verdict is between 00:40Z and 01:30Z [guess]. The signatures may elaborate after the 01:12Z owed hour for that reason alone.
+
+**STOP RULE.** Nothing. I changed no listed guarantee or lock, did not wire the form into `Sampled.lean` and did not turn on the accept. I touched only my new file and its root line [read].
+
+**NEEDS.**
+- TWOLEG: change `CoinsRead` to the implication form, `∀ c, Rd.coin o i = some c → Rd.dev o.log i = some c` (my `CoinsReadSome`).
+  - Why: the equality fails at a session's round where the evidence shows an opening without its coins. A record lacking that round gives the read `[]`, so the coin read is none while the device's release is some.
+  - `projection_of` only uses `CoinsRead` where the read coin is some [read: `Projection.lean` at `b04e0a9fd9`]. Until TWOLEG changes it, I prove `CoinsReadSome` and take the change as a hypothesis.
+- COINMAP or ASSEMBLY: at sessions' rounds, take the coin map's `Locate` to be my `locOf A tab`, ignoring the bytes; your `Locate` is a parameter, so this costs nothing. That gives `LocatesSessions`. From it and your `dev` I will prove `DevLocal` and, at my `agree`, your `AgreeCovers` at sessions' rounds, once `CoinMap.lean` compiles. Until then I don't import it [derived].
+- CUT: `InteriorLogged C Good` from `LogIsDevice`. The read is your `secondRead` at the case's sessions' records, and the releases before it are the first session's, which open no coin tree of the second's [derived].
+- TWOLEG or ACCEPTS: `MembersAccepted C`. On a play the form accepts, it needs:
+  - `coinTreesOf` reads the interior's lines as trees;
+  - `readLog` reads them as the interior read, at records whose JSON is `sessionRecords`'s;
+  - `membersTreeReason` accepts.
+
+  `Steps.lean`'s `inputAt_ok` gives `membersRun … = .ok r`; the rest is unfolding `membersRun` [read, not yet tried].
+- MESSAGES: `withCoins` keeps your `stmts` and `msg` and replaces only `coin` and `agree`. Tell me if your assembly builds the `SessionReading` some other way.
+- `tab t`, session `t`'s table name, is a parameter. Whoever matches the flattened statements' session `t` to template `t` fixes it (MESSAGES or ACCEPTS).
+
+**To post.** Nothing.
+
+**Files, lines, theorems left, hour** [derived]:
+- One file, 780 lines.
+- To compile: `stmtReadsNone`, `coinsRead_sessions` and `located_own`.
+- Left after that:
+  - `located_one`, at most one release per session round. It is about 80 lines and optional for the projection.
+  - `DevLocal` and `AgreeCovers` at sessions' rounds, which wait on COINMAP's file compiling.
+- Expected hour for "compiled": the first verdict's hour plus one or two fix rounds, so about 03:00Z to 04:00Z if the line moves as now [guess].
+
+**Not established.**
+- That any of it elaborates; nothing has compiled [run].
+- `InteriorLogged`, `MembersAccepted`, `DevLocal` and `LocatesSessions` are premises, not proved here.
+- The earlier-signature hole: nothing here reads a signature. `InteriorLogged` comes from CUT's `LogIsDevice`, whose forger term carries the hole at a one-play history. The file's docstring says so.
