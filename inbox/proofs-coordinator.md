@@ -94953,3 +94953,80 @@ which runs `research run --as proofs --on vy-spot-glm53 --project verity --sourc
 | `r20261112-110333-4c33` | this morning's timing run | rc 0 (read again for parts 2 and 5) |
 
 **Open, and the line that stops each.** The timing run: not launched, waiting on your go. The rehearsal's `research run` record: `r20261112-182152-9090` has no slot yet. The walk cell: `ls /workspace/jobs/proofs-headprof/flock-circuit/` shows no binary from `f9fc32ff3f`. The split with the walk: no 64-block cell in anyone's row. No mark, no Linear, no Slack.
+
+## PROGHELD, Thu 12 Nov 18:32Z: the six comments. Three `slip:` texts; PRF-565, PRF-571 and PRF-580 each stay In Progress with one piece named; none is Done
+
+- **How to read this.** Each fence holds the exact text to post, with its word count [run `wc -w`]. Every fact inside a text is marked read or relayed; the bullets under a fence say where, and are not for posting. I ran only `git`, `gh`, read-only Linear queries and `research data show`: no build, no Lean, no suite. I posted nothing. `origin/main` is `30d6fcc92ff7` [run `git rev-parse origin/main` after a fetch, 18:25Z].
+- **Why the three slips still show, though two carry a `slip:` comment from 15:42Z.** The audit counts a `slip:` comment only when it is at or after the date's last move (`tools/research/src/research/linear.py:733` on `main`) [read]. PRF-282's comment is 0.9 s before its date edit (15:42:03.041Z against 15:42:03.934Z), PRF-410's 0.5 s before (15:42:27.438Z against 15:42:27.982Z), and PRF-310 has no `slip:` comment [run: the audit's own query, read-only]. A text posted now is after each move and clears it [derived]. The body must begin with `slip`; only an `@sender: ` may come before it (`SLIP_RE.match`, lines 61 to 64) [read]. Next time: move the date first, comment second.
+- **The three landed ones** clear on any comment made after 17:03Z (`linear.py:587`) [read]. State for all three: **In Progress**.
+
+**1. PRF-282, slip (118 words)**
+
+~~~text
+slip: dates in order: 29 Oct, 30 Oct, 2 Nov, 17 Nov, 6 Nov (earlier), 7 Nov, 13 Nov, 20 Nov [read: Linear history]. What missed each [read: comments here]. 29 Oct: the knowledge-soundness pieces were unfinished. 30 Oct: their marks slipped behind lock regenerations. 2 Nov: the ZK proof needed two more weeks. 6 Nov: `main` had not moved. 7 Nov: PRF-310 remained. 13 Nov: item 3 had no worker, ZK work parked since Daniel's 7 Nov ruling. Items 1, 2 and 4 hold [relayed: 8 Nov comment]. Item 3 does not: `SessionLoopZKDeployed`'s trust gap lists four open premises, dated 30 Nov [read: lock, `main` `30d6fcc92ff7`]. 20 Nov needs a worker to discharge them; none is named.
+~~~
+
+- **Dates** [run: Linear's history of the date]: 29 Oct (set 28 Oct 12:53Z), 30 Oct (29 Oct 18:49Z), 2 Nov (30 Oct 21:34Z), 17 Nov (30 Oct 21:46Z), 6 Nov (3 Nov 00:16Z, earlier), 7 Nov (6 Nov 00:45Z), 13 Nov (7 Nov 00:48Z), 20 Nov (12 Nov 15:42Z). Six moves later.
+- **Causes** [read: its comments of 30 Oct 22:15Z, 6 Nov 00:38Z, 7 Nov 00:48Z and 01:14Z, 8 Nov 00:19Z, 12 Nov 15:42Z]. The comments disagree on 2 Nov: the one written at the move gives the ZK proof's two weeks; those of 6 and 7 Nov give "main didn't move from Sun 1 Nov". The text takes the first.
+- **Your sentence on Daniel's SPOT goals.** The history names his 7 Nov ruling (the SPOT post claims no zero knowledge, recursion is a separate post) and his 9 Nov order (the check and the layout first). It names neither the 10% goal nor GLM-5.3, so the text says only the ruling [read].
+- **On `main`** [read: `security/lean-audit.json`]. Item 2: `RecursiveKSDeployed` and `RecursiveAuditC3` are listed; the first has a trust gap of three (`Claims.Flock.ListWithin`, `Claims.Hm96Hiding`, `RecDeploy.DenseAt`). Item 3: the four premises are `SwCausalOn`, `FillRoundEq`, `LiveRoundEq` and `LoopInnerRound0`, each `open` under LEAN-186. Items 1 and 4 rest on the 8 Nov 12:38Z comment alone [relayed]; I did not check the figures.
+- **The lock and the issue disagree by ten days:** the premises are due 30 Nov there, the issue 20 Nov [read].
+
+**2. PRF-310, slip (115 words)**
+
+~~~text
+slip: dates in order: 13 Nov, 6 Nov (earlier), 13 Nov, 20 Nov [read: Linear history]. What missed 6 Nov: the honest-worker proof (#7123) was on `checked`, but the any-worker lemmas (NET-170 to NET-173) and the stop leak (NET-169) were open [read: 7 Nov comment]. What missed 13 Nov: no cause recorded here; PRF-282's 12 Nov comment says no worker is on it [read]. The plan this issue asked for was delivered 30 Oct [read]. Its outcome is not: #7123, #7109 and #7390 are on `main`, but `SessionLoopZKDeployed`'s trust gap still lists `LiveRoundEq`, `FillRoundEq`, `LoopInnerRound0` and `SwCausalOn`, open and dated 30 Nov [read: lock, `main` `30d6fcc92ff7`]. 20 Nov needs them discharged. No worker is named.
+~~~
+
+- **Dates** [run]: 13 Nov (set 30 Oct), 6 Nov (4 Nov, earlier), 13 Nov (7 Nov 00:48Z), 20 Nov (12 Nov 15:42:05Z). Two moves later.
+- **Its done-conditions.** The description's three items are a plan, which its comments of 30 Oct 21:45Z and 22:15Z call delivered; since then it carries PRF-282's step 10, so the text judges that [read].
+- **The second move's cause.** The 14:39Z comment here lists what is left and gives no cause, and it does not begin with `slip` [read].
+- **For you, not in the text: NET-170 to NET-173 and NET-175 look closable.** Each is Todo, due 13 Nov, and each one's last comment (8 Nov 02:33Z) says "Left: #7390 lands on main" [read: Linear, 18:26Z]. #7390 merged 9 Nov 07:34Z [run `gh pr view 7390`], and `main` has `liveRoundEqOwn_vsOf`, `liveSchedOwn_ofLoopLink`, `liveInnerOwn_withInner`, `takesVals_vsOf` and `swCausal_oneTape_vsOf` under `security/Proofs/Flock/SessionLoop/` [run `git grep`]. So "item 3 still waits on NET-170 to NET-173" (PRF-282, 15:42Z) is true of their Linear state only. I did not check their done-conditions past those names. They are network-accounting's to close.
+
+**3. PRF-410, slip (116 words)**
+
+~~~text
+slip: dates in order: 6 Nov, 13 Nov, 12 Nov (earlier), 20 Nov [read: Linear history]. What missed 6 Nov: the dated plan never came and its worker FLASHPROVE was idle; no further cause is recorded [read: 7 and 8 Nov comments]. What missed 12 Nov: FLASHPROVE was not resumed, every worker of proofs being on the binding error and the exfiltration bound Daniel set on 11 Nov [read: 12 Nov comment]. The done-condition, a dated plan here repriced against PRF-408 and PRF-409, does not hold [read]. `main` has no Lin code; #7375 is open, untouched since 5 Nov [read: gh, `main` `30d6fcc92ff7`]. 20 Nov needs a worker to write the plan; none is on it.
+~~~
+
+- **Dates** [run]: 6 Nov, 13 Nov (7 Nov 00:48Z), 12 Nov (8 Nov 12:42Z, earlier), 20 Nov (12 Nov 15:42:27Z). Two moves later.
+- **Done-condition** [read: the description]: "a dated plan for these PRs is a comment here, repriced against the replay-block cut (PRF-408/409)". None of its six comments is a plan. PRF-408 and PRF-409 are Done [read: Linear].
+- **#7375** is open, not a draft, at `584cc2ae0912`, last updated 5 Nov 02:53Z; its 20 files are under `verity/ml/lin/`, and `main` has no path or package of that name [run `gh pr view 7375`, `git ls-tree`, `git grep verity_lin`].
+- **Parking.** The 12 Nov comment says you put parking to Daniel that day. `research msg ask-daniel pages` lists no card naming Lin or this issue [run]; the pages' comments I cannot read (HTTP 403). The text leaves parking out.
+- **Your sentence on Daniel's SPOT goals** is supported here, and the text uses the comment's own words: the binding error and the exfiltration bound he set on 11 Nov.
+
+**4. PRF-565: state In Progress (105 words)**
+
+~~~text
+Not done: one piece is left, the list form. On `main`: #9081 (merged 17:03Z, `74a8e3f964da`) and the piece `across`, held to the Python on twelve written cases in `benchmarks/one_stage/tests/test_stop_audit.py` [read: `main` `30d6fcc92ff7`]. Shown: the rehearsal `r20261112-054001-82ad`, exit 0 at `ad9af609f4ee`, the head before ci merged `main` in [read: the store]; it accepted and refused the three wrong responses, on rows a fixture wrote [relayed: STOPDRIVER, 07:20Z]. Left: `acrossAll` with its difftest. It left #9081 whole on the second reader's word (`99ff4197a4`) and returns with its first caller, a tie's record, once MEM-279 says how ties go [read: the 05:12Z comment]. No worker is on it.
+~~~
+
+- **#9081 on `main`: holds.** Merged 17:03:07Z, merge commit `74a8e3f964da`, merged head `d4d1481014f5` [run `gh pr view 9081`, `git merge-base --is-ancestor`].
+- **`across`: holds, if twelve written cases are its difftest.** `Spot/Pieces.lean:605`, `Spot/RecordAcross.lean:203`; the test is `test_lean_and_the_python_agree_on_each_case_of_a_read_across_streams` (`test_stop_audit.py:230`), no input drawn [read].
+- **`acrossAll`: does not hold.** `git grep 'acrossAll\|across_all' origin/main -- verity benchmarks security` finds nothing [run]. `99ff4197a4` removed it and is in `main`'s history [run].
+- **One run: holds on the worker's word.** `r20261112-054001-82ad`, rc 0, clean at `ad9af609f4ee`, an ancestor of the merged head [run `research data show`, `git merge-base`]. Its verdicts are STOPDRIVER's 07:20Z entry: accept true, the three refused, `accept_is_not_complete` true [relayed]. I found no run at the merged head.
+- **The other way, yours to choose:** amend the done-condition so the list form goes to its first caller's issue, then Done. MEM-279 is In Progress; PRF-574 (Backlog) is the follow-up on `across`'s one caller [read: Linear]. Its date is Fri 13 Nov, so `overdue` fires from Sat 14 Nov 00:00Z [derived: "due before today (UTC)"]. STOPDRIVER is on PRF-598 [relayed].
+
+**5. PRF-571: state In Progress (112 words)**
+
+~~~text
+Not done: #9215 was the first piece, and no done-condition holds on `main` yet. On `main`: the three conditions as functions (`Spot.SecondWires`: `rowsUnder`, `namesOnce`, `wiresWide`, `decided`) with a Python mirror and a difftest; no check calls them [read: `main` `30d6fcc92ff7`]. Left: (1) `SecondWiresMove` on `main`. Its proof, `secondWiresMove`, compiles on `cursor/proofs-wired-deciders-3b9e` (`cc4dca9fe32f`), with no pull request; it imports #9357's files and lands after it [read: the branch; relayed: WIRED, 06:18Z]. (2) The conditions asked by `V h`. (3) Both guarantees' records without `WiresMove`: `main`'s do not name it yet, since the restatement that lists it `open` under this issue is #9357, a draft [read: both locks]. No worker is named for (2).
+~~~
+
+- **Your reading is confirmed, with one correction: `SecondWiresMove` is proved, on a branch.** `cursor/proofs-wired-deciders-3b9e` at `cc4dca9fe32f` has `WiresTie.lean:103 def SecondWiresMove`, `WiresMove.lean:367 theorem secondWiresMove : SecondWiresMove` (no hypothesis) and `WiresDecided.lean:219 wiresMove_of_decided`; the three files hold no `sorry`, `native_decide` or `axiom` [run `git grep` at that head]. No pull request has that head [run `gh pr list --head`]. WIRED's 06:18Z entry: try `4302` exit 0, the three standard axioms [relayed]. That is a compile; I know of no Lean check on it. The issue's description still says "none is proved".
+- **Asked by `V h`: no.** On `main` only `Spot.DifftestMain` serves `Spot.SecondWires.piece`; the mirror is `second_wires.py`, the test `tests/test_second_wires_difftest.py` [run `git grep`].
+- **The records.** `main`'s `SpotKSTwo` and `SpotExfilTwo` take `SpotFlock.Addresses` open and do not name `WiresMove`. #9357's lock (a draft, `bb527fd2e2d2`) lists `SpotFlock.WiresMove` open under PRF-571, due 30 Nov, in both [run: both locks parsed]. So "gone from the records" can only be judged once #9357 is on `main`.
+- **Worker.** WIRED is on #9357 [relayed: WIRED, 16:35Z]; the description names WIRED for this issue after that.
+
+**6. PRF-580: state In Progress (115 words)**
+
+~~~text
+Not done: pull request 1 of 2 is on `main`, #9173 (merged 17:03Z, `4520abe708b0`) [read]. Pull request 2, the planner prices it, is not started: both refusals stand (`optimize.py:1203`, `plancheck.py:113`), `benchmarks/spot_figures/README.md:332` still says the form "needs the planner changed", and no pull request is open for it [read: `main` `30d6fcc92ff7`, gh]. Two points are open before it is written. First, `Patterns.lean`'s proof at a threshold, so the clause reads "at most S"; the lemma is on `cursor/proofs-pattern-threshold-3e7b`, with no pull request. Second, whether the patterns' bits beat the capped sets' above F = 1; at F = 2 they are equal on the tests' smallest points [relayed: SESSREAD, 07:51Z and 08:38Z]. No worker is named.
+~~~
+
+- **Your reading is confirmed.** #9173 merged 17:03:07Z, merge commit `4520abe708b0` [run `gh pr view 9173`].
+- **Done-condition** [read: the description]: `two_stage_exfil(…, union=True, fanout=f)` returns a figure for f > 1 that Lean certifies, and the README's sentence is gone. Neither holds: `optimize.py:1203` reads `if not fanout >= 1 or (union and fanout > 1):`, `plancheck.py:113` the same test, and README line 332 is unchanged [read: `main`].
+- **The lemma's branch** is at `f5f7899d8298` with no pull request, and `main` has no `TwoRankinThreshold` [run `git ls-remote`, `gh pr list --head`, `git grep`]. No open pull request is titled for the planner's change [run `gh pr list --search`].
+- **Worker.** SESSREAD's last entry here is 10:23Z; nobody is named for pull request 2. Its date is Tue 17 Nov [read].
+
+**Not established:** the figures of PRF-282's item 4; whether NET-170 to NET-173 and NET-175 meet their own done-conditions; MEM-279's ruling on ties (I searched its comments, I did not read them all); Daniel's answer on parking Lin; that `secondWiresMove` passes the Lean check.
