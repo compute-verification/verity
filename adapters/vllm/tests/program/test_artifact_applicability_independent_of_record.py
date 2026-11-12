@@ -1,5 +1,5 @@
-"""`test_artifact_applicability_independent`'s static check on the reference construction hosts' recorded manifests (`out/gen`,
-written on GPU hosts, which no tracked file holds). Skipped where they are absent.
+"""`test_artifact_applicability_independent`'s static check on the manifests the GPU hosts recorded (`out/gen`,
+which no tracked file holds). Skipped where they are absent.
 """
 from __future__ import annotations
 
