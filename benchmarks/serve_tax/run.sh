@@ -94,7 +94,8 @@
 # that client keeps none). The replay of an arm that served on the canonical top-k loads that plugin too, and keeps its
 # counters in PRIVATE/replay-<mode> where PRIVATE is set. Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
 # checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b and
-# qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be d9105ea80, the integration's pin.
+# qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be SERVE_VLLM: d9105ea80, the integration's
+# pin, unless set.
 set -uo pipefail
 while [ $# -gt 0 ] && [ "$1" != leased ]; do
   flag=$1; shift
@@ -131,7 +132,19 @@ export CLIENT ${MODEL_ID:+MODEL_ID} ${REPS:+REPS} ${DATASETS:+DATASETS}
 [[ "${DRAIN_S:-600}" =~ ^[0-9]+(\.[0-9]+)?$ ]] || { echo "serve-tax: DRAIN_S=$DRAIN_S: the seconds the corpus client waits for answers after a load's last arrival"; exit 2; }
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-[ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
+# SERVE_VLLM: the vLLM build to serve on, one of the adapter's engine.stock.BUILDS. The pin's environment is the node's
+# own; another build's is ops/vllm_env.sh's, which installs it beside the pin's the first time, before any GPU is held
+SERVE_VLLM=${SERVE_VLLM:-d9105ea80}
+if [ "$SERVE_VLLM" = d9105ea80 ]; then
+  [ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else a pod's
+else
+  venv=$(SERVE_VLLM=$SERVE_VLLM OUT= bash "$here/../../adapters/vllm/verity_vllm/ops/vllm_env.sh" | tail -n 1)
+  [ -n "$venv" ] || { echo "serve-tax: no environment for SERVE_VLLM=$SERVE_VLLM"; exit 2; }
+  # what this build compiles (vLLM's graphs, DeepGEMM and autotune files, FlashInfer's JIT, Triton) goes to caches of its
+  # own under its environment: the node's, which the pin's engines read, get no file from it
+  export VLLM_CACHE_ROOT=$venv/cache/vllm FLASHINFER_WORKSPACE_BASE=$venv/cache TRTLLM_DG_CACHE_DIR=$venv/cache/tensorrt_llm \
+    TRITON_CACHE_DIR=$venv/cache/triton
+fi
 VENV=${VENV:-$venv}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
@@ -169,15 +182,17 @@ export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0
 replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY_FROM:-}${RESTORE_FROM:-}" ] && replay_only=1
 [ -f "$C4" ] || [ $replay_only = 1 ] || [ -n "$PLAN_FILE" ] || [ "$CLIENT" = vllm-bench ] || { echo "serve-tax: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 [ -d "$CK" ] || { echo "serve-tax: no checkpoint at $CK"; exit 2; }
-v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
-case $v in *+gd9105ea8*) ;; *) echo "serve-tax: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
+v=$("$PY" -c 'from vllm._version import __commit_id__ as c; print(c.removeprefix("g"))') || exit 2
+[ "$v" = "$SERVE_VLLM" ] || { echo "serve-tax: $VENV holds vLLM $v, not SERVE_VLLM=$SERVE_VLLM"; exit 2; }
 mkdir -p "$OUT"
+[ ! -f "$VENV/freeze.txt" ] || cp "$VENV/freeze.txt" "$OUT/vllm_env.freeze.txt"   # ops/vllm_env.sh's: what it installed
 
-# FlashInfer's caches every engine reads, by their files' digests: its JIT GEMMs (~/.tensorrt_llm/cache) and vLLM's
-# autotune file per config hash (VLLM_CACHE_ROOT's flashinfer_autotune_cache), which the arms share, as they share the hash
+# FlashInfer's caches every engine reads, by their files' digests: its JIT GEMMs (TRTLLM_DG_CACHE_DIR, else
+# ~/.tensorrt_llm/cache) and vLLM's autotune file per config hash (VLLM_CACHE_ROOT's flashinfer_autotune_cache), which the
+# arms share, as they share the hash
 fi_cache() {
   local kv c
-  for kv in "tensorrt_llm_cache:$HOME/.tensorrt_llm/cache" \
+  for kv in "tensorrt_llm_cache:${TRTLLM_DG_CACHE_DIR:-$HOME/.tensorrt_llm/cache}" \
             "autotune_cache:${VLLM_CACHE_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/vllm}/flashinfer_autotune_cache"; do
     c=${kv#*:}
     if [ -d "$c" ]; then
@@ -308,8 +323,8 @@ export PLAN DOCS WINDOW_S KV_WINDOW_S KV_DIR
 # LDCONFIG=1: the linker cache refreshed first, so libnvrtc and the rest resolve to the toolkit the node's dev packages
 # were installed for, the same for every engine of the job
 [ "${LDCONFIG:-0}" = 1 ] && ldconfig
-for k in FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK MAX_MODEL_LEN PUBLISHED_FRONTEND \
-    PUBLISHED_ARGS PLAN_FILE; do
+for k in SERVE_VLLM VLLM_CACHE_ROOT FLASHINFER VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK MAX_MODEL_LEN \
+    PUBLISHED_FRONTEND PUBLISHED_ARGS PLAN_FILE; do
   echo "$k=${!k-unset}"; done > "$OUT/engine_env.txt"
 { command -v nvcc && nvcc --version | tail -1
   echo "has_flashinfer=$("$PY" -c 'from vllm.utils.flashinfer import has_flashinfer; print(has_flashinfer())')"

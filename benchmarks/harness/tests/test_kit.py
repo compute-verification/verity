@@ -441,3 +441,127 @@ def test_overhead_paired_is_the_kits_by_overheads_name_until_serving_cost_names_
     arm, stock = [2.0, 2.1, 1.9] * 7, [1.0] * 21
     assert overhead.paired(arm, stock) == kit.paired(arm, stock)
     assert overhead.paired.__module__ == "verity_bench.overhead"
+
+
+# ---- the fingerprint and the files ---------------------------------------------------------------------------------------
+
+#: PoUW's own writer of a run's whole result, whose keys and shapes the kit's three calls write
+RUN_RESULT = Path(__file__).resolve().parents[3] / "benchmarks/pouw/run_result.py"
+
+
+def _run_result():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("pouw_run_result", RUN_RESULT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("sha", [SHA, None])
+def test_the_fingerprint_and_the_files_are_the_keys_and_shapes_pouws_own_writer_writes(tmp_path, no_gpu, monkeypatch, sha):
+    """For the same gates, numbers and record, the kit's result holds the keys `run_result.write` writes, each the same
+    value; the kit's measurements hold more than its name, value and unit, and those three are the same. `research` takes
+    both, and reads the same fingerprint and files from each."""
+
+    from research import result as research_result
+
+    if sha is None:
+        monkeypatch.delenv("RESEARCH_SOURCE_SHA")
+    run_dir = tmp_path / "run"
+    out = run_dir / "out"
+    out.mkdir(parents=True)
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    _run_result().write(out, True, "a benchmark", "4 of 4 gates hold", [("gamma", 0.5, "ratio"), ("wall", 1.5, "s")])
+    theirs = _result(run_dir)
+    (run_dir / kit.RESULT).unlink()
+    w = kit.writer(out)
+    assert w.fingerprint() == {"source_sha": sha}
+    assert w.measurement_file("out") == "out"
+    w.validation("passed", "a benchmark", "4 of 4 gates hold", ["out"])
+    w.measurement("gamma", 0.5, "ratio")
+    kit.writer(run_dir).measurement("wall", 1.5, "s")
+    ours = _result(run_dir)
+    assert ours.keys() == theirs.keys() and {k: ours[k] for k in ours if k != "measurements"} == {
+        k: theirs[k] for k in theirs if k != "measurements"}
+    assert [{k: m[k] for k in ("name", "value", "unit")} for m in ours["measurements"]] == theirs["measurements"]
+    for doc in (ours, theirs):
+        check = research_result.check_doc(run_dir, doc, RUN)
+        assert check.valid and check.errors == [] and check.artifacts_missing == []
+        assert check.fingerprint == {"source_sha": sha} and check.validation_status == "passed"
+
+
+def test_each_writer_of_a_run_adds_to_its_fingerprint_and_its_files_which_research_takes(tmp_path, no_gpu, monkeypatch):
+    from research import result as research_result
+
+    run_dir = tmp_path / "run"
+    (run_dir / "out" / "proofs").mkdir(parents=True)
+    (run_dir / "out" / "bench.json").write_text("{}")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(run_dir))
+    first, second = kit.writer(run_dir / "out"), kit.writer(tmp_path / "elsewhere")
+    first.measurement("wall", 1.5, "s")
+    assert first.artifact("./out/proofs/") == "out/proofs"
+    assert second.fingerprint(script="checks.py", args=["--k", "256"]) == {"source_sha": SHA, "script": "checks.py",
+                                                                           "args": ["--k", "256"]}
+    assert first.measurement_file("out/bench.json") == "out/bench.json"
+    assert first.fingerprint(mutations_run=3)["mutations_run"] == 3
+    doc = _result(run_dir)
+    assert list(doc) == ["schema", "run_id", "measurements", "workload_fingerprint", *kit.FILES]
+    assert doc["workload_fingerprint"] == {"source_sha": SHA, "script": "checks.py", "args": ["--k", "256"],
+                                           "mutations_run": 3}
+    assert (doc["measurement_files"], doc["artifacts"]) == (["out/bench.json"], ["out/proofs"])
+    check = research_result.check(run_dir, RUN)
+    assert check.valid and check.errors == [] and check.artifacts_missing == [] and check.doc == doc
+    # into a result the run wrote itself, beside what it already holds
+    envelope = {"schema": kit.RESULT_SCHEMA, "run_id": RUN, "workload_fingerprint": {"door": "run"},
+                "measurement_files": ["out/bench.json"]}
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    (tmp_path / kit.RESULT).write_text(json.dumps(envelope))
+    kit.writer(tmp_path).artifact("out/proofs")
+    assert _result(tmp_path) == envelope | {"workload_fingerprint": {"door": "run", "source_sha": SHA},
+                                            "measurements": [], "artifacts": ["out/proofs"]}
+
+
+def test_the_writer_refuses_a_file_outside_the_result_or_named_twice_and_a_fingerprint_it_cant_hold(tmp_path, no_gpu):
+    w = kit.writer(tmp_path)
+    w.measurement_file("out/bench.json")
+    w.fingerprint(script="run.py")
+    before = (tmp_path / kit.RESULT).read_bytes()
+    for name in (w.measurement_file, w.artifact):
+        for rel in (3, None, "", "/abs/bench.json", "../bench.json", "out/../../bench.json", Path("out/x.json"), b"x"):
+            with pytest.raises(ValueError, match="are paths relative to .* and inside it, each a string"):
+                name(rel)
+        for again in ("out/bench.json", "./out/bench.json", "out//bench.json"):
+            with pytest.raises(ValueError, match="already names out/bench.json: a file is named once"):
+                name(again)
+    with pytest.raises(ValueError, match="source_sha is the commit research run shipped"):
+        w.fingerprint(source_sha="d" * 40)
+    with pytest.raises(ValueError, match="already holds script: a fingerprint holds each once"):
+        kit.writer(tmp_path).fingerprint(mode="fast", script="other.py")
+    for value in (object(), math.nan, {1, 2}, b"bytes"):
+        with pytest.raises(ValueError, match="fingerprint's mode is a JSON value"):
+            w.fingerprint(mode=value)
+    assert (tmp_path / kit.RESULT).read_bytes() == before
+    for i, (key, held) in enumerate((("workload_fingerprint", ["run.py"]), ("measurement_files", "out/bench.json"),
+                                     ("artifacts", [3]))):
+        other = tmp_path / str(i)
+        other.mkdir()
+        text = json.dumps({"schema": kit.RESULT_SCHEMA, "run_id": RUN, key: held})
+        (other / kit.RESULT).write_text(text)
+        for call in (lambda: kit.writer(other).fingerprint(), lambda: kit.writer(other).artifact("x")):
+            with pytest.raises(ValueError, match=f"{key} (isn't an object|aren't a list of paths)"):
+                call()
+        assert (other / kit.RESULT).read_text() == text
+
+
+def test_a_result_that_names_no_fingerprint_and_no_file_is_written_byte_for_byte_as_it_was(tmp_path, no_gpu):
+    w, stamp = kit.writer(tmp_path), kit.host_stamp()
+    w.validation("passed", "a benchmark", "4 of 4 gates hold", ["out/gates.json"])
+    w.measurement("wall", 1.5, "s")
+    text = (tmp_path / kit.RESULT).read_text()
+    assert text == json.dumps({"schema": kit.RESULT_SCHEMA, "run_id": RUN, "measurements": [
+        {"name": "wall", "value": 1.5, "unit": "s", "commit": SHA, "run": RUN, "ci95": None, "target": None,
+         "verdict": None, "inputs": [], "host": stamp}], "validation": {
+        "status": "passed", "checker": "a benchmark", "detail": "4 of 4 gates hold", "evidence": ["out/gates.json"]}},
+        indent=1) + "\n"
+    assert not {"workload_fingerprint", *kit.FILES} & json.loads(text).keys()
