@@ -178,7 +178,6 @@ def select_cuda_platform(world: int = 1, device_name: str | None = None) -> str:
 def read_back_applied() -> dict:
     """What the pinned vLLM answers RIGHT NOW for the target facts the construction consults — the manifest's `target.applied` block
     is this record, taken inside `apply_target_profile`, never a literal. Absent answers are recorded as None (a mismatch)."""
-    import importlib
     out: dict = {"compute_capability": None, "num_sms": None, "batch_invariant": None, "vllm_version": None, "torch_version": torch.__version__,
                  "triton_version": None, "tuned_gemm_arch_family": None}
     try:
