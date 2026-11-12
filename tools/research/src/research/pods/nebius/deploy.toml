@@ -26,7 +26,7 @@ record = "/workspace/research/deploy/record.jsonl"
 managed = [
   "/workspace/verity-guest/bin/*", "/workspace/verity-guest/*.sh", "/workspace/verity-guest/*.py",
   "/workspace/pouw/infra/bin/*", "/usr/local/bin/vy-*", "/usr/local/bin/gpu-lease*", "/usr/local/sbin/vy-*", "/usr/local/lib/vy-lockout/*",
-  "/usr/local/lib/vy-monitoring/research/*",
+  "/usr/local/lib/vy-monitoring/research/*", "/usr/local/lib/vy-monitoring/tool_rules.py",
   "/etc/systemd/system/vy-*", "/home/research/.config/systemd/user/*.service", "/home/research/.config/systemd/user/*.timer",
   "/etc/vy/env/*", "/etc/systemd/system/*.d/*vy*", "/etc/systemd/system.control/*/*",
 ]
@@ -343,6 +343,13 @@ owner = "infra"
 path = "/usr/local/lib/vy-monitoring/slot_only.py"
 src = "tools/research/src/research/pods/nebius/slot_only.py"
 nodes = ["vy-nebius-cpu-1", "vy-nebius-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
+owner = "infra"
+
+# ---- what a shipped research package must do before a node runs it (research.remote's launch-request reads it fresh: nothing to restart)
+[[file]]
+path = "/usr/local/lib/vy-monitoring/tool_rules.py"
+src = "tools/research/src/research/pods/nebius/tool_rules.py"
+nodes = ["vy-nebius-1", "vy-nebius-2", "vy-nebius-cpu-1", "vy-challenger-1", "vy-auditor-1", "vy-auditor-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5", "vy-nebius-cpu-6"]
 owner = "infra"
 
 # ---- node 1 (and cpu-4/5, its replacement): a research run that did not come through a check slot runs at nice 19, so the train

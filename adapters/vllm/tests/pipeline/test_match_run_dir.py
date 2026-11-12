@@ -1,7 +1,8 @@
 """A `match --run-dir` re-run (`verity_vllm.pipeline.match`) takes what its run.json records: the tier-b steps of a `--full-replay`
 run among them, which no flag sets.  Its CPU phase with every stage skipped still writes the run's manifest, its spec and the
-realized shape of its capture.  What the driver says of a run goes to the log: a stage's command and status, the realized shape, and
-each record it could not write."""
+realized shape of its capture.  What the driver says of a run goes to the log: a stage's command and status, and each record it
+could not write.  The phase's last word on the realized shape, the shape or that it was not written, is a line on stderr as it is
+written, which a pod's script shows."""
 from __future__ import annotations
 
 import json
@@ -108,7 +109,8 @@ def _one_request_run(tmp_path, monkeypatch):
     return run
 
 
-def test_a_stage_that_runs_is_logged_with_its_command_and_then_its_status(tmp_path, monkeypatch, caplog):
+def test_a_stage_that_runs_is_logged_with_its_command_and_then_its_status(tmp_path, monkeypatch, caplog, capsys):
+    """The phase's last line, the realized shape, is on stderr as it is written, with no head before `[realized]`."""
     run = _one_request_run(tmp_path, monkeypatch)
     cmd = [sys.executable, "-c", "pass"]
     planned = RC.Plan.cmd
@@ -118,15 +120,17 @@ def test_a_stage_that_runs_is_logged_with_its_command_and_then_its_status(tmp_pa
     assert (resolve["status"], resolve["cmd"], resolve["returncode"]) == ("ok", shlex.join(cmd), 0)
     said = _said(caplog)
     spec = json.loads((run / "spec.json").read_text())
-    assert said == [f"[spec] written digest={spec['digest'][:12]}", f"[resolve] {shlex.join(cmd)}", f"[resolve] ok in {resolve['seconds']} s",
-                    "[realized] prompt_lens=[5] n_generated=[4] steps capture/control=4/None max_concurrent=1"]
+    assert said == [f"[spec] written digest={spec['digest'][:12]}", f"[resolve] {shlex.join(cmd)}", f"[resolve] ok in {resolve['seconds']} s"]
     assert _said(caplog, "INFO") == said
+    printed = capsys.readouterr()
+    assert printed.out == ""
+    assert printed.err == "[realized] prompt_lens=[5] n_generated=[4] steps capture/control=4/None max_concurrent=1\n"
 
 
-def test_a_record_that_cannot_be_written_is_a_warning_each_time_and_the_phase_ends_on_its_stages(tmp_path, monkeypatch, caplog):
+def test_a_record_that_cannot_be_written_is_a_warning_each_time_and_the_phase_ends_on_its_stages(tmp_path, monkeypatch, caplog, capsys):
     """The run's spec, its realized shape and its experiment index inform a reader and gate nothing: a failure to write one is
-    logged where it happened (the realized shape is written at the phase's start, before the gates and at its end), and the
-    phase's exit code is still its stages' verdict."""
+    said where it happened (the realized shape is written at the phase's start, before the gates and at its end, and the end's
+    failure is on stderr as it is written), and the phase's exit code is still its stages' verdict."""
     run = _one_request_run(tmp_path, monkeypatch)
 
     def no_room(*args, **kw):
@@ -138,7 +142,9 @@ def test_a_record_that_cannot_be_written_is_a_warning_each_time_and_the_phase_en
     monkeypatch.setattr(RC, "gates_stage", lambda plan, a: gates)
     assert cli.main(["match", "--run-dir", str(run), "--phase", "cpu", "--skip", ",".join(s for s in CPU_STAGES if s != "gates")]) == 0
     assert _said(caplog) == _said(caplog, "WARNING") == [
-        "[spec] not written: OSError: no room", *["[realized] not written: OSError: no room"] * 3, "[experiment] not written: OSError: no room"]
+        "[spec] not written: OSError: no room", *["[realized] not written: OSError: no room"] * 2, "[experiment] not written: OSError: no room"]
+    printed = capsys.readouterr()
+    assert (printed.out, printed.err) == ("", "[realized] not written: OSError: no room\n")
     assert not (run / "spec.json").exists() and "realized" not in json.loads((run / "run.json").read_text())
     monkeypatch.setattr(RC, "gates_stage", lambda plan, a: {**gates, "status": "failed"})
     assert cli.main(["match", "--run-dir", str(run), "--phase", "cpu", "--skip", ",".join(s for s in CPU_STAGES if s != "gates")]) == 1

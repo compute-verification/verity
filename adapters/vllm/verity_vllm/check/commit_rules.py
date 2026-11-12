@@ -6,7 +6,9 @@ sides.  The required classes close that gap: every required class must be declar
 every declared class that binds leaves (`bound-as-leaf` / `registered-input`) must have `tensors > 0`."""
 from __future__ import annotations
 
-from typing import Any, Mapping
+import json
+from collections.abc import Mapping
+from typing import Any
 
 from verity_vllm.check.codes import VerificationCode as VC
 from verity_vllm.check.result import (
@@ -19,6 +21,9 @@ from verity_vllm.check.result import (
 )
 from verity_vllm.records.commit_binding import CommitBinding
 from verity_vllm.records.fields import RecordError
+
+__all__ = ["HIDDEN_CLASS_BY_FA", "REQUIRED_CLASSES_DEFAULT", "class_coverage", "hidden_classes_required",
+           "required_classes_default"]
 
 BINDING = "the run's Commit block"
 
@@ -47,8 +52,6 @@ def hidden_classes_required(manifest: Mapping[str, Any] | None) -> bool | None:
 
 
 def json_short(v: dict, n: int = 160) -> str:
-    import json
-
     return json.dumps({k: x for k, x in v.items() if x and k != "step"}, default=str)[:n]
 
 
@@ -280,6 +283,7 @@ def rule_collector_errors(commit: dict, ctx: dict) -> CheckResult:
     if errs_n is None:
         errs_n = 0
     failure = ex.get("collector_failure")
+    diffs: list[dict[str, Any]]
     if failure:
         out, diffs, reason = FAIL, [{"name": "collector_failure", "first": str(failure)[:200]}], f"collector failed: {str(failure)[:200]}"
     elif _int(errs_n) > 0:

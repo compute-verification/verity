@@ -18,7 +18,7 @@ from verity_vllm.program import compact as K
 L, C_ROWS, RL, LP = 2, 2, 4, 3                # layers, cached rows, KVH*D, the warm request's prompt rows
 ATT = f"Attention_v3{{T={LP},NH=1,KVH=1,D={RL}}}"
 WNAME = "model.layers.0.self_attn.qkv_proj.weight"
-LAYERS = [f"model.layers.{l}.self_attn.attn" for l in range(L)]
+LAYERS = [f"model.layers.{layer}.self_attn.attn" for layer in range(L)]
 
 
 def _finish(P: C.RootView, inst: list[dict], compact: bool) -> C.RootView:
@@ -59,9 +59,10 @@ def warm_program(tmp_path, compact: bool = False, layers: list[str] = LAYERS) ->
     P = _blank("derived", {0: ("Input32_v1", LP), 1: ("Input16_v1", 2 * L * C_ROWS * RL), 2: ("Input16_v1", RL)})
     P.tok_node, P.weight_fields = 0, {2: WNAME}
     inst, k = [], 3
-    for l in range(L):
+    for layer in range(L):
         inst += _rows(k, 0, C_ROWS)
-        plane = lambda kv: (2 * l + kv) * C_ROWS * RL   # noqa: E731
+        def plane(kv, layer=layer):
+            return (2 * layer + kv) * C_ROWS * RL
         inst.append(_attention(k + 3, k, ([("n", 1, plane(0), plane(0) + C_ROWS * RL), ("n", k + 1, 0, RL)],
                                           [("n", 1, plane(1), plane(1) + C_ROWS * RL), ("n", k + 2, 0, RL)])))
         k += 4
@@ -81,32 +82,32 @@ def _meta(k: int, request: str, position: int, hint: str) -> dict:
     return row
 
 
-def fold(compact: bool = False, read_row=lambda l, j: (l, j)) -> tuple[C.RootView, list[int]]:
+def fold(compact: bool = False, read_row=lambda layer, j: (layer, j)) -> tuple[C.RootView, list[int]]:
     """The batch: r0 computes rows 0..C-1 of every layer, r1 (warm) computes row C and reads r0's rows as its first C rows.
-    `read_row(l, j)` is the (layer, position) of r0's row r1 reads as its row j of layer l.  Returns the fold and r1's instances."""
+    `read_row(layer, j)` is the (layer, position) of r0's row r1 reads as its row j of that layer.  Returns the fold and r1's instances."""
     F = _blank("fold", {0: ("Input32_v1", LP), 1: ("Input32_v1", LP), 2: ("Input16_v1", RL)})
     F.tok_node, F.weight_fields = 0, {}
     F.oracle_wmap, F._wlos, F.oracle_wmap_overlaps, F.input_base = [(0, RL, WNAME)], [0], [], {}
     F.n_input_nodes = 3
     inst, meta, k = [], [], 3
     r0 = {}
-    for l in range(L):
+    for layer in range(L):
         for j in range(C_ROWS):
             rows = _rows(k, 0, j)
             inst += rows
-            meta += [_meta(r["k"], "r0", j, f"model.layers.{l}.self_attn.qkv_proj/{WNAME}") for r in rows]
-            r0[(l, j)] = k
+            meta += [_meta(r["k"], "r0", j, f"model.layers.{layer}.self_attn.qkv_proj/{WNAME}") for r in rows]
+            r0[(layer, j)] = k
             k += 3
     mine = []
-    for l in range(L):
+    for layer in range(L):
         rows = _rows(k, 1, C_ROWS)
-        cached = [r0[read_row(l, j)] for j in range(C_ROWS)]
+        cached = [r0[read_row(layer, j)] for j in range(C_ROWS)]
         att = _attention(k + 3, k, ([("n", p + 1, 0, RL) for p in cached] + [("n", k + 1, 0, RL)],
                                     [("n", p + 2, 0, RL) for p in cached] + [("n", k + 2, 0, RL)]))
         for r in rows + [att]:
             mine.append(len(inst))
             inst.append(r)
-            meta.append(_meta(r["k"], "r1", C_ROWS, LAYERS[l] + "/attn" if r is att else f"model.layers.{l}.self_attn.qkv_proj/{WNAME}"))
+            meta.append(_meta(r["k"], "r1", C_ROWS, LAYERS[layer] + "/attn" if r is att else f"model.layers.{layer}.self_attn.qkv_proj/{WNAME}"))
         k += 4
     mine.append(len(inst))
     inst.append(_select(k, k - 1))
@@ -117,7 +118,7 @@ def fold(compact: bool = False, read_row=lambda l, j: (l, j)) -> tuple[C.RootVie
 
 def warm_projection(compact: bool = False, cached: int = C_ROWS, **kw) -> BD.Projection:
     F, mine = fold(compact, **kw)
-    P = BD.Projection(F, "oracle[r1]", mine, tok_node=1, weights_node=2)
+    P = BD.Projection(F, "oracle[r1]", mine, tok_node=1, weights_node=2, seed_node=None)
     P.cached_rows = cached
     return P
 
@@ -129,12 +130,12 @@ def _att(P: C.RootView, layer: int) -> int:
 @pytest.mark.parametrize("compact", [False, True])
 def test_the_cached_rows_compare_as_the_prefix_input_on_both_sides(tmp_path, compact):
     A, P = warm_program(tmp_path, compact), warm_projection(compact)
-    for l in range(L):
+    for layer in range(L):
         for kv in (0, 1):
-            want = [("PFX", l, kv, 0, C_ROWS * RL), ("N", 0, 4 * l + 1 + kv, 0, RL)]
+            want = [("PFX", layer, kv, 0, C_ROWS * RL), ("N", 0, 4 * layer + 1 + kv, 0, RL)]
             for Q in (A, P):
-                got = Q.canon(_att(Q, l))[1 + kv]
-                assert (K.expand_mixed(got) if compact else got) == want, (Q.label, l, kv, got)
+                got = Q.canon(_att(Q, layer))[1 + kv]
+                assert (K.expand_mixed(got) if compact else got) == want, (Q.label, layer, kv, got)
     res = C.compare_steps(A, P)
     assert res["totals"].get("operands_different", 0) == 0 and res["canonical_sha256"]["equal"], res["steps"][0].get("wiring")
     assert not P.xreq
@@ -155,8 +156,8 @@ def test_g5_reads_the_hit_the_engine_served_against_the_declared_one(tmp_path, c
 
 @pytest.mark.parametrize("compact", [False, True])
 @pytest.mark.parametrize("name, kw", [
-    ("rows_swapped", {"read_row": lambda l, j: (l, C_ROWS - 1 - j)}),   # row j read from the producer's other position
-    ("other_layer", {"read_row": lambda l, j: (1 - l, j)}),             # layer l's rows read from the other layer
+    ("rows_swapped", {"read_row": lambda layer, j: (layer, C_ROWS - 1 - j)}),   # row j read from the producer's other position
+    ("other_layer", {"read_row": lambda layer, j: (1 - layer, j)}),             # a layer's rows read from the other layer
     ("not_served", {"cached": 0}),                                     # the engine scheduled the request from row 0
     ("served_fewer", {"cached": 1}),                                   # one row fewer than the reads
 ])
@@ -180,7 +181,7 @@ def test_the_fold_rows_global_match_loads_keep_what_a_link_reads(tmp_path):
     from tests.check import test_global_match as T
     _gp, oracle = T.assemble([T.R0, T.R1_LATE], tmp_path)
     rows = C.load_oracle(oracle, "oracle").oracle_rows
-    assert all(PX.FOLD_META <= r.keys() for r in rows) and any(r["position"] for r in rows)
+    assert all(r.keys() >= PX.FOLD_META for r in rows) and any(r["position"] for r in rows)
 
 
 def test_the_served_rows_are_the_first_scheduled_position_under_prefix_caching_only():

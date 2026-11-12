@@ -14,6 +14,8 @@ Form (B) compares the Match record's dispatcher-level module outputs and has NO 
 output), never a PLANE-FED one, whose planes neither form value-checks: that FAILs by name whatever (B) says (C1 + C3 hold on them)."""
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from verity_vllm.check.c2_rules import (
@@ -27,10 +29,10 @@ def _bnd(n_req):
     return {"context": {"ok": True}, "coverage": {"ok": True, "expected_n": 1, "bound_n": 1, "missing_n": 0}, "openings_population": {"skipped": "test", "unbound_n": 0}, "population": {"requests": n_req}}
 
 
-BASE = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
-        "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
-        "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
-        "weights_pin": {"result": True, "compared": 98, "mismatched": [], "missing": []}}
+BASE: dict[str, Any] = {"extra": {"expected_tensors": 3, "committed_tensors": 3, "errors_n": 0}, "openings": {"n": 64, "verified": 64},
+                        "value_correspondence": {"method": "sampled-exact-replay(complete) + boundary-linkage", "result": True},
+                        "boundary_linkage": {"result": True, "pairs": 6, "linked": 6, "unlinked_n": 0},
+                        "weights_pin": {"result": True, "compared": 98, "mismatched": [], "missing": []}}
 
 K_06G = "fed by interior producer(s) without an evaluator (Gemm_v2 (model.layers.*.self_attn.qkv_proj)): composition not possible in this replay (MAN-06g, v2)"
 K_06F = "fed by moe_block_stream planes (SiluMul_v1@experts): row -> plane mapping not in this replay (MAN-06f, v2)"
