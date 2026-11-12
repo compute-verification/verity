@@ -132,6 +132,8 @@ def test_the_engines_sampling_is_the_profiles_then_the_headers_workloads_then_th
         assert CARD.engine_args_of(_run(tmp_path / f"h{i}", header={"profile": no_sampling, **workload}))["sampling"] is None, workload
     of_workload = CARD.engine_args_of(_run(tmp_path / "hw", header={"profile": no_sampling, "workload": {"sampling": {"top_k": 1}}}))
     assert of_workload["sampling"] == {"top_k": 1}
+    both = CARD.engine_args_of(_run(tmp_path / "hb", header={"profile": PROFILE, "workload": {"sampling": {"top_k": 1}}}))
+    assert both["sampling"] == {"temperature": 0.0}
     for i, workload in enumerate(_left_out("workload")):
         run = _run(tmp_path / f"c{i}", {"census/census.json": {"env_flags": {"E": "2"}, **workload}}, header={"profile": no_sampling})
         got = CARD.engine_args_of(run)
@@ -217,6 +219,7 @@ def test_the_vu_partition_row_prints_n_a_for_what_g8s_detail_leaves_out():
         "bad, 3 sets, max w_out 99/64; codes ['A', 'B', 'C', 'D'], 2 violators, 1 unsupported, status partial, binding mismatch FAIL")
     assert text("fail", {**whole, "verdict_status": "ok"}) == "ok, 3 sets, max w_out 16/64 FAIL"
     assert text("fail", {**whole, "verdict_status": "stale"}) == "ok, 3 sets, max w_out 16/64; status stale FAIL"
+    assert text("fail", {**whole, "status": "partial", "verdict_status": "stale"}) == "ok, 3 sets, max w_out 16/64; status partial FAIL"
     assert text("skipped") == "skipped (no query-use document)" and text("error", reason="e" * 90) == f"error ({'e' * 80})"
     assert CARD.vu_partition_text({}) == "n/a (record predates G8)"
 
@@ -289,6 +292,10 @@ def test_the_counts_of_a_run_read_each_block_its_documents_state(tmp_path):
     assert (got["operand_provenance"], got["sampled_vus"]) == ("1 reads, 1 mismatches FAIL", "k=None x None strata, seed None FAIL")
     assert [got[k] for k in ("protected_files_modified", "existing_primitives_modified", "new_root_classes", "new_allowlist_entries",
                              "golden_digest_changes", "new_patterns", "new_definitions")] == [1, 0, 3, 0, 2, 1, 0]
+    # a sealed provenance that lists none of its seven kinds counts zero of each, the root policy's new classes not read
+    got = CARD.counts_of(_run(tmp_path / "s", files), {}, {"sealed_by": "verifier"})
+    assert [got[k] for k in ("protected_files_modified", "existing_primitives_modified", "new_root_classes", "new_allowlist_entries",
+                             "golden_digest_changes", "new_patterns", "new_definitions")] == [0, 0, 0, 0, 0, 0, 0]
     files["replay_a.json"] = {"coverage": {"s1": 1}, "vu_population": {"status": "ok", "count": 1, "instances": 1, "oversize_instances": 0,
                                                                      "instances_without_units": 0}}
     got = CARD.counts_of(_run(tmp_path / "c", files), {}, None)
