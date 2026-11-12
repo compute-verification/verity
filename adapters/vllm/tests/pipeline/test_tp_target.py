@@ -64,8 +64,7 @@ class _LLM:
 @pytest.fixture
 def stand_ins(monkeypatch):
     """The drivers' engine-side calls stood in, and the target's environment knobs restored after the test; ``use(llm, target)``
-    returns the profiles the Commit's guard was given.  Inductor's config is unloaded for the test: another test in the same worker
-    may have imported it before the engine's pin, which `engine.env.require_inductor` refuses."""
+    returns the profiles the Commit's guard was given."""
     from verity_vllm import protocols as PO
     from verity_vllm.engine import engine_profile as prof
     from verity_vllm.engine import handle
@@ -82,7 +81,6 @@ def stand_ins(monkeypatch):
         vllm = ModuleType("vllm")
         vllm.LLM = llm
         monkeypatch.setitem(sys.modules, "vllm", vllm)
-        monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
         for owner, name, value in [(prof, "apply_env", lambda: {"VLLM_BATCH_INVARIANT": "1"}), (prof, "checkpoint_for", lambda case, path: {"repo": "org/model"}),
                                    (prof, "engine_kwargs", lambda cp, **kw: dict(kw)), (handle, "model_runner", lambda llm: 1 / 0),
                                    (va, "load_workload", lambda path, max_tokens: json.loads(json.dumps(WORKLOAD))),

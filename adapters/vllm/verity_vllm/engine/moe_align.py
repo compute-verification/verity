@@ -135,7 +135,8 @@ class _Launch:
     signature, then the integers, then the constexprs."""
 
     def __init__(self, fn: Any, fast: bool) -> None:
-        self.fn, self.fast, self.compiled = fn, fast, {}
+        self.fn, self.fast = fn, fast
+        self.compiled: dict[tuple, Any] = {}
 
     def __call__(self, grid: tuple[int, ...], tensors: tuple, ints: tuple, consts: dict, num_warps: int) -> None:
         key = (tuple(consts.values()), num_warps, tensors[0].device.index,

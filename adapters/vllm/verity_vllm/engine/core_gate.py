@@ -229,7 +229,9 @@ class EngineCoreGate:
                 st.calls += bool(core.batch_queue)
                 with patched(core.scheduler, "has_requests", lambda: False):
                     return orig(core)
-            drained = Drained(st.since, st.drained_t, st.calls)
+            since, drained_t = st.since, st.drained_t
+            assert since is not None and drained_t is not None, "an edge is due and nothing is in flight: both clocks were read"
+            drained = Drained(since, drained_t, st.calls)
             st.since = st.drained_t = None
             for e in due:
                 e.take(core, drained)

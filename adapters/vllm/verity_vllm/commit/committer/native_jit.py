@@ -30,6 +30,8 @@ from verity.definitions.kernels import ROW_COMMIT, SHA512
 
 from verity_vllm.log import init_logger
 
+__all__ = ["CUDA_CFLAGS"]
+
 logger = init_logger(__name__)
 
 HERE = os.path.dirname(os.path.abspath(__file__))

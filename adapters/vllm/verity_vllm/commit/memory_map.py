@@ -32,6 +32,8 @@ from verity.definitions.circuits.requirement import from_census
 
 from verity_vllm.query.required import SAMPLING_EVENTS
 
+__all__ = ["census_of", "rows", "rows_doc"]
+
 #: an attention Call's cached K and V parameters
 KV = ("kc", "vc")
 #: the Definitions, by name, whose cached parameter is one plane of MLA latent rows (FA3's sparse MLA, each version)

@@ -43,7 +43,6 @@ from verity.definitions.registry import (
     attention_vocab,
     b1,
     fp8,
-    fp8_moe,
     fp8_vocab,
     nvfp4,
 )
@@ -52,9 +51,7 @@ from verity.definitions.registry import dense as DN
 from verity.definitions.registry import fa2_check_inf as F2
 from verity.definitions.registry import fa2_softcap as F2S
 from verity.definitions.registry import fa3_check_inf as F3
-from verity.definitions.registry import fp8_moe_experts as X
 from verity.definitions.registry import gemm_bias as GB
-from verity.definitions.registry import moe as MOE
 from verity.definitions.registry import prims as P
 from verity.definitions.registry import value_inputs as VI
 from verity.definitions.registry.hopper import Fa3InvSum
@@ -183,6 +180,7 @@ def gemm_bias_spec(profile, K: int, N: int):
 def moe_expert_gemm_spec(profile, E: int, K: int, N: int, *, routed: bool):
     """The registered Definition of one (token, slot) pair of a `fused_moe_kernel` launch on the declared target: the w13 launch
     (`routed` False) or the w2 launch with the routed weight."""
+    from verity.definitions.registry import moe as MOE
     dot = moe_expert_dot(profile)
     if dot is None:
         return bind(MOE.MoeExpertGemmW if routed else MOE.MoeExpertGemm, E=int(E), K=int(K), N=int(N))
@@ -222,6 +220,7 @@ def moe_expert_fp8_launch_dot(profile, bm: int, bn: int, warps: int, swap: bool)
     target_dot = moe_expert_fp8_dot(profile)
     if profile.batch_invariant or tuple(profile.compute_capability) != (9, 0):
         return target_dot
+    from verity.definitions.registry import fp8_moe
     dot = fp8_moe.sm90_dot(int(bm), int(bn), int(warps), bool(swap))
     if dot not in FP8_DOTS.values():
         raise UnregisteredTarget(f"block-FP8 fused-MoE tile {bm}x{bn}, {warps} warps, SWAP_AB={swap}: "
@@ -255,6 +254,7 @@ def moe_expert_fp8_gemm_spec(profile, E: int, K: int, N: int, G: int, KB: int, S
                              routed: bool):
     """The registered Definition of one (token, slot) pair of a block-FP8 `fused_moe_kernel` launch on the declared target:
     `MoeExpertFp8Gemm(W)_v1{E,K,N,G,KB,SWAP,DOT}`, the w13 launch (`routed` False) or the w2 launch with the routed weight."""
+    from verity.definitions.registry import fp8_moe_experts as X
     return bind(X.MoeExpertFp8GemmW if routed else X.MoeExpertFp8Gemm, E=int(E), K=int(K), N=int(N), G=int(G), KB=int(KB),
                 SWAP=bool(SWAP), DOT=moe_expert_fp8_launch_dot(profile, BM, BN, WARPS, SWAP))
 
@@ -683,4 +683,5 @@ __all__ = ["TARGETS", "DOTS", "FP8_DOTS", "FP4_DOTS", "UnregisteredTarget", "tar
            "moe_expert_fp8_gemm_spec", "gemm_bias_dot", "gemm_bias_spec", "tuned_gemm_table",
            "check_flash_attn_registered", "fa3_kblock_n", "fa3_tile_m", "fa3_check_inf", "fa3_masked_from", "fa2_check_inf", "fa2_masked_from", "attention_geometry", "uses_accepted_kinds", "gemm_spec",
            "scaled_mm_fp8_spec", "fp8_block_dot", "scaled_mm_fp8_block_spec", "nvfp4_quant_spec", "nvfp4_gemm_spec", "rmsnorm_spec", "rmsnorm_value_spec", "rmsnorm_fused_spec", "attention_spec", "describe",
-           "LaunchContextConflict", "LaunchContextInvalid", "parse_launch_context", "launch_seqlen_q", "launch_sequences", "launch_tokens", "launch_keys"]
+           "LaunchContextConflict", "LaunchContextInvalid", "parse_launch_context", "launch_seqlen_q", "launch_sequences", "launch_tokens", "launch_keys",
+           "moe_fp8_tuned_tile_refusal", "graph_launch", "launch_graph", "softcapped"]
