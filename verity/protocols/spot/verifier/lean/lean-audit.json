@@ -4,7 +4,7 @@
  "exempt": {
   "Spot.Main": "the sampled-proofs-one-stage executable's entry point, one line; its command is Core.Protocol.main over Spot.OneStage.protocol, audited under Spot",
   "Spot.DifftestMain": "the sampled-proofs-difftest executable's entry point, one line; it serves Spot.Pieces.table, audited under Spot",
-  "Spot.ZkMain": "the sampled-proofs-one-stage-zk executable's entry point, one line; its command is Spot.OneStageZk.membersMain, audited under Spot",
+  "Spot.ZkMain": "the sampled-proofs-one-stage-zk executable's entry point, one line; its command is Spot.OneStageZk.refusalMain, audited under Spot",
   "Spot.VerifierMain": "the sampled-proofs-verifier executable's entry point, one line; it serves Spot.Pieces.verifier, audited under Spot",
   "Spot.SiteDifftestMain": "the site-difftest executable's entry point, one line; it serves Spot.SiteDifftest.table, audited under Spot",
   "Spot.PlanCheckMain": "the sampled-proofs-plancheck executable's entry point: it reads JSON lines into Spot.PlanCheck's designs and answers leakBound and checkWork, audited under Spot"
