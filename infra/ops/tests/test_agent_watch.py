@@ -4378,7 +4378,7 @@ class FakeLinear:
 
 def swarm(tmp_path, name="CIR-7 INTEGRATOR", linear=..., **entry):
     """A swarm of the circuits lane: its integrator (W1_, as `integrator` makes it, its last turn ended well) registered
-    by its lead as taking hand-ins on CIR-7, and Linear holding that issue with no comment yet."""
+    by its lead as taking hand-ins on the issue it is named after, and Linear holding that issue with no comment yet."""
     lin = FakeLinear(CIR_7={})
     api, clock, w = integrator(tmp_path, v0="FINISHED", name=name, linear=lin if linear is ... else linear)
     lin.clock = clock
