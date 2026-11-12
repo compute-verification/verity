@@ -204,12 +204,13 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
     pool, pool_rule = predicted_pool_bytes(raw, hidden, retain=retain, levels_factor=levels_factor, windowed=windowed, bounded=bounded,
                                            retain_exclude=retain_exclude)
     predicted = pool + int((resident or {}).get("bytes") or 0)
+    envp = int(envelope_bound_bytes * levels_factor) if envelope_bound_bytes else None
     rec = {"schema": SCHEMA, "retain": retain, "domain": "--retain host: the whole run's raw bytes pinned on host (a non-host retention is recorded, never refused)",
            "scheduled_raw_bytes": raw, "scheduled_hidden_bytes": hidden, "levels_factor": levels_factor, "predicted_host_bytes": predicted, "pool_bytes": pool, "resident": resident,
            "pool_rule": pool_rule,
            "staging": {"windowed": bool(windowed), "bounded": bool(bounded), "retain_exclude": sorted(retain_exclude or ())},
            "host_cap_bytes": host_cap_bytes, "envelope_retained_bytes_bound": envelope_bound_bytes,
-           "envelope_predicted_host_bytes": (int(envelope_bound_bytes * levels_factor) if envelope_bound_bytes else None),
+           "envelope_predicted_host_bytes": envp,
            "would_exceed_by_bytes": (max(0, predicted - host_cap_bytes) if host_cap_bytes is not None else None),
            "scheduled": {k: v for k, v in sched.items() if k != "per_step"}, "peak_steps": sorted(sched["per_step"], key=lambda x: -x["bytes"])[:8]}
     if retain != "host" or bounded:
@@ -226,7 +227,6 @@ def admission(sizing: dict[str, Any], requests: list[dict[str, Any]], host_cap_b
                                         f"container memory limit {host_cap_bytes >> 20} MiB by {(predicted - host_cap_bytes) >> 20} MiB -- not launched unchanged; "
                                         f"the change that admits it is a larger container or a non-host retention, never a smaller check"))
     else:
-        envp = rec["envelope_predicted_host_bytes"]
         env_note = (f"envelope bound {envp >> 20} MiB was {'over' if envp > host_cap_bytes else 'under'} it" if envp else "no envelope bound on this record")
         rec.update(admitted=True, why=f"predicted host {predicted >> 20} MiB (pool {pool >> 20} MiB = raw {raw >> 20} MiB x{levels_factor}; resident "
                                       f"{(predicted - pool) >> 20} MiB) fits the container limit "
