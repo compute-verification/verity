@@ -191,6 +191,7 @@ theorem runOf_eq {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} {
     ∃ st extras, sts[0]? = some st ∧ (Setup.ofCircuit st).extra lv.points = .ok extras ∧
       rr = { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
              hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf zk (Setup.ofCircuit st),
+             wideLeaf := zk && (Setup.ofCircuit st).wideLeaf,
              reps := [(lv.streams.getD 0 #[], f.proofs.getD 0 ByteArray.empty),
                       (lv.streams.getD 1 #[], f.proofs.getD 1 ByteArray.empty)] } := by
   unfold runOf at hr

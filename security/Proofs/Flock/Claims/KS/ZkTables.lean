@@ -200,7 +200,7 @@ theorem acc_colsJ {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : C
   unfold cols at hu
   split at hu
   · rename_i rr hrr
-    obtain ⟨f', s', spec', sts', st, hf', hs', hst, hm⟩ := runOf_m hrr
+    obtain ⟨f', s', spec', sts', st, hf', hs', hst, hm, hw⟩ := runOf_m hrr
     rw [hf] at hf'
     cases hf'
     rw [hx, hs] at hs'
@@ -211,7 +211,7 @@ theorem acc_colsJ {zk : Bool} {H : Claims.Msg → Claims.Msg} {Ω : Type} {P : C
     · simp only [Bool.false_eq_true, ↓reduceIte] at hp ⊢
       rw [plainRunCols_width hp, hm]
     · simp only [↓reduceIte] at hp ⊢
-      rw [zkRunCols_width hp, hm]
+      rw [zkRunCols_width hp, hm, hw rfl]
   · simp [Claims.Flock.lookCol] at hu
 
 end Gen
@@ -261,6 +261,7 @@ theorem runOf_eqJ {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} 
     ∃ st extras, sts[j]? = some st ∧ (Setup.ofCircuit st).extra lv.points = .ok extras ∧
       rr = { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
              hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf zk (Setup.ofCircuit st),
+             wideLeaf := zk && (Setup.ofCircuit st).wideLeaf,
              reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                       (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] } := by
   unfold runOf at hr
@@ -288,6 +289,7 @@ theorem runOf_eqJ {zk : Bool} {seen : Claims.Seen} {f : Final} {x : Claims.Msg} 
     ∃ st extras, sts[j]? = some st ∧ (Setup.ofCircuit st).extra lv.points = .ok extras ∧
       rr = { m := (Setup.ofCircuit st).m, kLog := (Setup.ofCircuit st).kLog, claims := 2 + extras.size,
              hashLen := (Setup.ofCircuit st).merkle.digestLen, saltLen := saltLenOf zk (Setup.ofCircuit st),
+             wideLeaf := zk && (Setup.ofCircuit st).wideLeaf,
              reps := [(lv.streams.getD (2 * j) #[], f.proofs.getD (2 * j) ByteArray.empty),
                       (lv.streams.getD (2 * j + 1) #[], f.proofs.getD (2 * j + 1) ByteArray.empty)] } :=
   Gen.runOf_eqJ (S := S₀) (zk := zk) (seen := seen) (f := f) (x := x) (s := s) (spec := spec) (sts := sts) (lv := lv)
