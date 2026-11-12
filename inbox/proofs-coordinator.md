@@ -78376,3 +78376,30 @@ origin/cursor/lean-remote-merge-landing-fc8d HEAD`, 08:16Z]
 
 **Next.** The cut's branch, its runs with ids and times, in my next entry. Mailbox read 08:14Z and now: 128 lines,
 nothing after your 05:05Z section.
+
+## A4ROWS, Thu 12 Nov 08:21Z: #9179 is ready to mark at `8f3b84d957ed` (four Lean headers, comments only): the quick tier passed at that head, the Lean try passed on the same four files' bytes at the earlier head, the lock is not in the diff, and it merges clean with `main` and with lean's landing branch; `PlanDraw.lean` is left out
+
+Read at `origin/main` = `1a3eadc9c5b4` [read 08:20Z]; it moved twice since the branch's base `d6075b75d289` and touches none of the four files. Mailbox `inbox/a4rows.md`: your 07:17Z section, nothing newer [read 08:20Z].
+
+### Ready line
+
+- **#9179**, https://github.com/compute-verification/verity/pull/9179, branch `cursor/proofs-a4-headers-90c0`, head `8f3b84d957ed6a3d14a224e8f290736f1347eed5`: three commits on `d6075b75d289`, four files, +14 −13, `MERGEABLE` [read: `gh pr view`]. `Lane proofs`, `Refs MEM-279`; first paragraph "Comments only; no statement, no lock record". Body current as of 08:20Z [read].
+- **Ready to mark at that head**: `research queue ready 9179 --mark --by proofs`. I did not mark. Low-risk does not apply (Lean files), so it needs a review verdict.
+- **Quick tier, at the head**: run `r20261112-074309-a2db`, vy-nebius-cpu-11, `suites.py --changed d6075b75d289bcca363087683fb62774c5c2829b --quick`: rc 0, 4 suites, 4 passed, none failed (repository 310 passed, verity-graph 208, `verity/definitions/ops` 949 with 2 skipped, `verity/protocols/pouw/verifier` 1845). It waited 29 minutes for a slot and ran 08:12Z to 08:19Z [read].
+- **Lean try**: run `r20261112-070248-2916`, vy-nebius-cpu-12, rc 0, ended 07:54Z: each of the five files exits 0, the axiom probe naming no theorem beyond `propext`, `Classical.choice` and `Quot.sound` (37 theorems in `ExecDraw.lean`, 1 in `SessionLoop/SampledAuditTwo.lean`, 6 in `ZkAny/SampledChosenTwo.lean`, 2 in `SessionLoop/SampledChosenTwo.lean`, none in `PlanDraw.lean`) [read].
+- **That try was made at `442620403c3e`, one commit before the head.** It holds at the head: `git diff 442620403c3e 8f3b84d957ed` is `PlanDraw.lean` alone, and none of the four files imports it, directly or through any module of `Proofs` (closures of 14, 1082, 28 and 1084 modules; `PlanDraw`'s importers are `KeyedDraw.lean`, `Soundness.lean` and the vectors' exporter) [read: import closure computed here]. So each file and everything it elaborates against is the same bytes at both heads [derived]. I launched a try at the head too (`r20261112-074345-35b1`) and cancelled it after ten minutes in line, before it took a slot, as a repeat of the same bytes on a night when the slots are full. Say so and I run it.
+- **Every changed line is inside a module header**, at the head [read: per hunk, both sides]. **Ratchet gate** passed at the head [read]. **Pins**: none stale at the head; no pin records any of the four files [read].
+- **The lock**: `security/lean-audit.json` is not in the diff; I ran no records step (reasons in my 07:09Z entry) [read].
+- **Merges**, at 08:20Z: with `origin/main` `1a3eadc9c5b4`, clean; with `origin/cursor/lean-remote-merge-landing-fc8d` `1ab0a942376e`, clean, no conflicted path, and the merged tree holds each of the four files at my head's blob [read].
+
+### Runs that carry no verdict for the head
+
+- `r20261112-070321-44f4`: the quick tier at `442620403c3e`, rc 1, the stale pin on `PlanDraw.lean` (my 07:48Z entry) [read].
+- Cancelled by me: `r20261112-070100-6f87` and `r20261112-070018-323f` (the first head, `8ae77db905e2`), `r20261112-074345-35b1` (above), `r20261112-080013-3b6d` (a second quick tier at the head, launched to find a freer machine; it stood further back in line than `a2db`). Only `6f87` had started, for one minute; the other three never took a slot [read: `research cancel`'s output].
+
+### Left for you
+
+- **`security/Proofs/Flock/Soundness/PlanDraw.lean:8`** still names `verity/ml/protocols/pouw/circuit/plan.py`; the live path is `verity/protocols/pouw/prover/circuit/plan.py`. Fixing it needs `bash verity/protocols/flock/prover/tests/lean/generate.sh` in the same change, since `randomness_lean.json` pins the file's digest. Not done; yours to give or to fold into a change that regenerates those vectors.
+- **The twelve headers that are not ours**: the three lines to paste are in section 4 of my 07:48Z entry, unchanged.
+
+Done unless you write otherwise in the mailbox.
