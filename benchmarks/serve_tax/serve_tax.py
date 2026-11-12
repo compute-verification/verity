@@ -2241,7 +2241,7 @@ NO_ARM = (
     "the sparse attention kernel at one split (VERITY_SPARSE_MLA_NUM_SPLITS=1)",
     "the fixed expert alignment on the Marlin MoE path (verity_moe_align)",
     "the committing endpoint (verity-vllm serve-openai) and all it turns on: its engine profile, the Commit, the seal, "
-    "exact int8, proof of useful work, proof of useful space, the memory audit, the network certifier in front",
+    "exact int8, proof of useful work, proof of useful space, the memory audit, the network certifier in front of it",
 )
 
 

@@ -36,6 +36,13 @@
 # WITH="OUT_DIR ..." adds earlier jobs' arms to the cost: a load they served and this job didn't joins the number.
 # The number is not given without the row on a repeated prefix under it, which is load prefix's, served in a job of its
 # own (--loads prefix --arms "compiled no-prefix-cache two-stage": its cost is the row alone) and joined with WITH.
+# An arm behind the network certifier (tick-certifier) is served by two commands, and this script is the node's:
+#   ARMS=tick-certifier SIDE=server LOADS=chat=RUNG TICK_MS=SAT,FREE [FRONT=PORT] [CELLS=NAME=N,...] [STOP_AT=TIME]
+#     bash benchmarks/serve_tax/run.sh --model glm53
+# starts the arm's engine and the id front before it on loopback port FRONT and holds them until the certifier's run
+# has ended or STOP_AT (serve_tax.certified_server); OUT/tick-certifier/server.json is its record, and it has no table
+# and no cost. The other command runs where the certifier does, a host that reaches FRONT and is never this node:
+# serve_tax.py run --arm tick-certifier --side client, with the same LOADS and CELLS. Its directory is the arm's.
 # PRIVATE is where the arms keep what never leaves the node, each in PRIVATE/<arm>: a boundary commitment's classes, whose
 # files hold the requests' tokens and the salts (OUT keeps each class's public commit.json, a line of
 # <arm>/server/boundary.PID.jsonl), the history tables and the top-k's counters. It is a directory outside every run's.
@@ -226,7 +233,8 @@ if [ "${1:-}" = leased ]; then
     echo "== $arm $(date -u +%FT%TZ)"
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" "${load[@]}" --reps "$reps" ${STOP_AT:+--stop-at "$STOP_AT"} \
       --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" \
-      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$arm"} --out "$OUT/$arm" || rc=1
+      ${BOUNDARY_ROWS:+--boundary-rows "$BOUNDARY_ROWS"} ${PRIVATE:+--private "$PRIVATE/$arm"} \
+      ${SIDE:+--side "$SIDE"} ${FRONT:+--front "$FRONT"} ${CELLS:+--cells "$CELLS"} --out "$OUT/$arm" || rc=1
     echo "after $arm: $(fi_cache)" >> "$OUT/engine_env.txt"
     echo "== $arm done $(date -u +%FT%TZ): $reps reps, $((($(date +%s) - t_leased) / 60)) min since the GPUs were held" | tee -a "$OUT/arms.txt"
     last=$arm; to_serve=$((to_serve - 1))

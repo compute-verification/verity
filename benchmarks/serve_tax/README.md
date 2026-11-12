@@ -26,6 +26,7 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `canonical-topk` | the canonical DSA top-k: `benchmarks/dsa_topk`'s plugin loaded and `VERITY_DSA_TOPK=canonical`, its counters kept on the node | `compiled` |
 | `two-stage` | the two-stage serve's launch line: `boundary-rows` with the canonical top-k and one attention layer's history tables in the boundary commitment (`serve_tax.TABLES`), built on rank 0 and kept in a private directory on the node (`servetax_plugin`), and prefix caching off, which the tables need | `boundary-rows` |
 | `two-stage-tick` | the two-stage serve's launch line admitting on the certified tick: `two-stage`'s data with the tick on, served by the corpus's client | `two-stage` |
+| `tick-certifier` | `tick` with the network certifier itself in front, sent by vLLM's client through a shim to the certifier's cells (`cell_shim`); served by two commands, the engine's on the node and the certifier's on another host (below) | `tick` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
@@ -227,7 +228,11 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   tick and the edge snapshot, which need the corpus's client, and turns on four changes GLM-5.3's target has no
   part for (the step record, prefix caching off, the two-stage boundary commitment, the history tables), so its
   cost against the model's target is not comparable. `two-stage-tick` is that line with the tick on, and no cost
-  here is of it: vLLM's own client can't drive a tick arm. A target given with `--target` has no parts.
+  here is of it: vLLM's own client can't drive a tick arm whose certifier the corpus's client stands in for.
+  `tick-certifier` is the tick arm vLLM's client does drive, through the network certifier itself, and its cost is
+  not comparable either: the certifier in front is a change the target has no part for, and the certifier's
+  schedule, not the engine, bounds the tokens a second it serves (below). A target given with `--target` has no
+  parts.
 - **Stock has vLLM's prefix cache on,** its default at the pin for a model that generates text, and so does
   `boundary-rows`: a request's boundary is its own prompt ids and the ids it was served, whichever KV pages its
   prefill read. `two-stage` turns it off: a history table holds its request's latent rows from position 0, and a
@@ -251,8 +256,32 @@ research run --on NODE --source . --cwd source -- bash benchmarks/serve_tax/run.
   tables on a tree whose boundary commitment builds none commits without them, and the line says the cost is without
   them.
 - **What it leaves out.** `serve_tax.NO_ARM` lists what a served engine of ours changes that no arm turns on; the output
-  prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's, fed by the
+  prints it under the number, which counts none of it. The arms that need the corpus's client (the tick's fed by the
   stand-in certifier, and the restore arms' seeded sampling) aren't served by vLLM's.
+- **The arm behind the network certifier,** `tick-certifier`, is the tick arm with the certifier itself in front
+  (`benchmarks/network_traces/warden_serve.py`, with its watermark), so vLLM's client can send it: the client posts
+  to a shim (`cell_shim`) that speaks the certifier's cells, the certifier releases each request to the id front
+  (`verity-vllm ids-front`) before the engine and feeds the certified tick, and each answer leaves as ids on the
+  certifier's schedule. Two commands serve it, because the certifier never runs on the node it certifies: `run --arm
+  tick-certifier --side server` on the node starts the engine and the id front and holds them until the certifier's
+  run has ended, and `--side client` on the certifier's host starts the certifier and the shim, sends vLLM's
+  client's passes at the shim, and reads the certifier's offline check on the shim's record of every connection.
+  Three things differ from the other arms, each recorded:
+  - *The schedule paces every answer* (`serve_tax.CELLS`, changed by `--cells`): one id leaves a connection each
+    bucket, the first a fixed delay after its admission, and a lane holds one connection, so the arm serves at most
+    its lanes' ids a second whatever its engine does (`certifier.ceiling_tok_per_s` in its `meta.json`). Its cost
+    over stock is the schedule's and the engine's together, not GPU time a token: the output says so under the
+    number, the verdict is `not comparable`, and the client's TTFT and ITL are the schedule's.
+  - *Every request is decoded to its `max_tokens`* (the plugin's `to_length`), since the certifier takes
+    `/v1/completions` requests of ids and passes no `ignore_eos`; `certifier.short` counts the answers that were not.
+  - *The engine empties its own prefix cache* before a request that finds it long empty (the plugin's `idle_reset`),
+    since the tick's server answers no route but its own and the client's side waits `serve_tax.IDLE_S` before each
+    pass; the server's record holds each reset, and each rep's `schedule.prompt_tokens_cached` shows what was reused.
+
+  It serves the loads of a pinned dataset file (`chat`); `long` is random tokens the client aligns with the server's
+  tokenizer, which the certifier's front doesn't serve. The client's side takes the certifier's windows
+  (`--certifier-windows`), which are fixed when it starts: it sends no pass that would not end inside them, and the
+  server's side ends when the certifier's watermark does.
 
 It writes `serving_cost.txt`, whose first line is the number with its label, interval, target and verdict and whose
 next lines are the row on a repeated prefix, and `serving_cost.json`, one object whose first keys are `value`, `unit`,
@@ -289,7 +318,20 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
 `MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
 The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
-and refuse a tree without them. A saturated load keeps a connection open for every request queued in the server, so the
+and refuse a tree without them. `tick-certifier` is two jobs, the node's first (`run.sh`'s header) and the certifier's
+host's once the node's engine is up, on a host that reaches the node's id front at `--front`:
+
+~~~text
+research run --on NODE --source . --cwd source --env MODEL_ID=glm53 --env ARMS=tick-certifier --env SIDE=server \
+  --env LOADS=chat=RUNG --env TICK_MS=SAT,FREE --env STOP_AT=TIME -- bash benchmarks/serve_tax/run.sh
+python benchmarks/serve_tax/serve_tax.py run --arm tick-certifier --side client --model-id glm53 --client vllm-bench \
+  --checkpoint TOKENIZER_DIR --dataset chat=SHAREGPT.json --loads chat=RUNG --pass-prompts chat=4x --reps 3 \
+  --certifier-windows N --front PORT --out OUT/tick-certifier
+~~~
+
+The client's side needs the pinned vLLM for its client, the checkpoint's tokenizer files (no weights) and the load's
+dataset file, and no GPU. `serve_tax.py cost STOCK_OUT/compiled OUT/tick-certifier --arm tick-certifier` then prints
+its cost over a stock job's passes at the same rung and prompts. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
 
 On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b`, the last two read from their pinned
