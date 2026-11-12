@@ -14,7 +14,7 @@ wrapped where its module holds it, skipped where it is absent): per pass, each p
 trees' seconds on the GPU (CUDA events around `served_y.y_tree`, read at the run's end), the writer threads' seconds, and
 /proc/meminfo's Dirty and Writeback at each pass end, with the ending thread's and the process's CPU seconds and the wall
 clock there (``main_cpu_s``, ``process_cpu_s``, ``wall_s``: a step's main-thread CPU against its wall time).  It writes the parts by pass, with served.json's ``step_s`` beside
-them, to ``--profile``.  ``--seed S`` draws the epoch's coins and the hm96 salt key from ``random.Random(S)`` (two serves of
+them, to ``--profile``.  ``--seed S`` takes the epoch's coins and the hm96 salt key from ``random.Random(S)`` (two serves of
 one load then retain the same bytes, so two trees' retention paths compare file by file); ``--wait-ends`` completes each
 step's retained pass in its step (`PassEnds.retain_behind` off).
 
