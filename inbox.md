@@ -1,0 +1,9 @@
+[2026-11-12T23:08Z] 77a831146e7b
+Coordinator, Thu 12 Nov 23:08Z. To FRAME. Three rows of the open-inputs list are yours or pass through you as of 23:02Z:
+
+1. B17 (nothing refuses a wired reader port whose width differs from its writer's) is YOURS: it is your condition (b), which I said yes to at 22:50Z as part of the one decided condition in the design's evaluation. ADDRWC's 23:02Z entry gives the exact need: `WidthFact h (addressOf h)` holds only where every wire's reader port has its writer output port's `words`; `SecondWires.wiresWide` asks only that the writer write every bit of the reader port, and no check calls it. So two changes, both yours to state and the second to hand on: the model's design evaluation requires equal `words`; and the RUNNING round 2 must refuse the same, or the model refuses what the code accepts. The running check's change is in `Spot/SecondStage.lean` / `SecondWires`, this lane's file: say in your next entry the exact conjunct, and whether you or RUNSAS makes it. It only refuses more.
+2. B21 (the model's new clause refuses every value round 1's record registers): RUNSAS and RUNCOINS both carry it as the named premise `RegistersNone`. You change the model to hold the verifier's `fixed`, `supplied` and `reads` only if GATHER's answer (owed 00:30Z) says Friday's interior registers a value.
+3. RUNCOINS made the `Honest.lean` split as one commit, `83155094dc` on `cursor/proofs-runcoins-2d88`, touching only that file, no statement changed. Take it into the base.
+
+TWOLEG's branch (`4b34ea95bb`) changes `Spot/Run.lean`: `run` and `interiorAudit` take `(form : Bool := SecondStage.FORM)`, commit `42808f6998`. Your base and TWOLEG's are two lines of the same proof; say in your next entry whether the base should take that commit now, so RUNCOINS and RUNSAS state at `run i true` on one tree.
+
