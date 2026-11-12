@@ -971,7 +971,7 @@ def _served(monkeypatch, out, check, inline: bool, stop: BS.Stop | None) -> list
     try:
         for w, requests in enumerate(WINDOWS):
             for name, prompt, n in requests:
-                sched.add_request(Request(f"{name}{w}", [1 + w] * prompt, n))
+                sched.add_request(Request(f"{name}{w}", [1 + w] * prompt, n, ignore_eos=False))
             _step(sched, {f"{name}{w}": ([20 + w] * n, "length") for name, _prompt, n in requests})
             assert bw.window == w + 1
     finally:
@@ -1010,8 +1010,9 @@ def test_a_class_commits_byte_for_byte_what_a_layout_built_for_its_window_alone_
     lines = _served(monkeypatch, tmp_path / "served", check, inline, stop)
     classes: dict[tuple[int, int, int, bool], list[BR.Span]] = {}
     for w, requests in enumerate(WINDOWS):
-        spans = [BR.Span(f"{name}{w}", (1 + w,) * p, BR.sampling_of(Request("", [], n).sampling_params), (20 + w,) * n,
-                         "length") for name, p, n in requests]
+        sampling = [BR.sampling_of(Request("", [], n, ignore_eos=False).sampling_params) for _, _, n in requests]
+        spans = [BR.Span(f"{name}{w}", (1 + w,) * p, s, (20 + w,) * n, "length")
+                 for (name, p, n), s in zip(requests, sampling)]
         classes |= {(w, *k): mine for k, mine in BS.filed(spans, stop).items()}
     assert [(x["window"], x["prompt"], x["outputs"]) for x, _ in lines] == [k[:3] for k in classes]
     for (line, _), ((w, p, o, held), mine) in zip(lines, classes.items()):
