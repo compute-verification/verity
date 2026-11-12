@@ -33,8 +33,9 @@
       cross-stream-order   Lean's verdict on the read across the two streams (`across`: the Lean verifier's piece
                            ``across``, `Record.across`), never ``stage1.json``'s ``order``: the stop record's
                            ``previous`` is a record of the boundary stream's log, and the challenger's signed log
-                           shows the boundary registration's coins before the stop registration's, each in a
-                           family of its own, and the stop sample read the stop stream's family whole
+                           shows a coin released after the boundary registration before any released after the
+                           stop registration, and the stop sample read whole the stop stream's family of coins,
+                           every one of them released after the stop registration
       boundary-audit       the boundary stream's outcome on that record (``--boundary-outcome``, a record of that
                            stream's `Stream.records`): null when none is handed; refused when it is not that
                            registration's accept, or Lean's verdict on its audit record refuses it; null, with
