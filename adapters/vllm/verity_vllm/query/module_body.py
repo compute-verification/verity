@@ -147,6 +147,6 @@ def boundary_without_literals(P: ProgramView, Q: Partition, literals: frozenset[
     return Boundary(frozenset(produced_in), produced_in, _ReadBy(P, Q, literals), units, owner)
 
 
-def module_body_boundary(P: ProgramView, correspondence: Correspondence, literals: frozenset[int] | None = None) -> Boundary:
+def module_body_boundary(P: ProgramView, correspondence: Correspondence) -> Boundary:
     """The boundary of `module_body_partition(P, correspondence)`: the crossing Values of the module-body partition minus the literals."""
-    return boundary_without_literals(P, module_body_partition(P, correspondence), literal_calls(P) if literals is None else literals)
+    return boundary_without_literals(P, module_body_partition(P, correspondence), literal_calls(P))
