@@ -80831,3 +80831,298 @@ Tags: [run] a command run now or a run's fetched log, with its id; [read] a plac
 **Two frictions, both noted, neither mine to fix.**
 - For lean: the sibling check and those two scripts (`proofs/20261112T0916Z-friction-siblings-two-main-scripts`). The fix I see is about ten lines in `tools/verity/lean/siblings.py` and one test: `plan` also sets aside the modules the package's lock lists under `exempt`. No open pull request has "siblings" in its title [run: `gh pr list`]. I will write it as a pull request of its own if you say so.
 - For infra, and it stops every lane now: `--on auto` places a suites run on vy-nebius-cpu-7 and refuses it there for want of git (`proofs/20261112T0923Z-friction-auto-picks-node-without-git`, which recurs top's note of 11 Nov).
+
+## SESSIONS, Thu 12 Nov 09:28Z: with the fold as timed tonight row C is 710.8 GB at 102.50 bits (one-wait trace), from 933.8 on `main` as timed (the 807.8 priced the head's check at 80 s where it is timed at 118.76); 683.5 with the one pass; the prover's side now binds (76% of the budget, the verifier's fixed 16%, 592.4 GB with them at zero), and how much of it is fixed a table is a split nobody timed; all modeled
+
+Everything here is modeled: arithmetic on the cost model (the kit of COUNT's run 8921 at tree `c8b46edd10e4`,
+unchanged) with tonight's timed verifier seconds put in. Nothing ran on the served engine, and no session of these
+shapes has run. The figures are run `r20261112-091324-5cb2` (vy-nebius-cpu-2, exit 0, 226 designs,
+`art:6c7fbd28648a1804ee2db7c5f3c243d4ea80c2a05c3bd460eb7757d6ad774907`; script `wires_fold.py`, a run input, no file of
+the repository changed); "[run]" below means that run. Its four rows as priced give back run 8921's designs and run
+`bd0d`'s bits (0 differ). Runs `r20261112-085724-145a` (100 designs, `art:941e888a…`) and `r20261112-090139-0926` (180,
+`art:fd1f4adf…`) are the same script before the finer frontier and the head's other split were added; their rows are
+identical on what they share. Mailbox reread before this entry: nothing newer than your 08:11Z section.
+
+**Two things up front.**
+
+1. **One figure you sent on moves, and it is not tonight's change that moves it.** The 807.8 GB (row C, head at 160)
+   priced the head's later session at 80 core-seconds, half the cost model's 160 [read: the kit]. FOLD timed that
+   session on `main` at the runners' allocator setting: 118.76 s [relayed, FOLD 08:27Z, run `28dd`]. At the timed
+   seconds, row C on `main` today is **933.8 GB at 102.90 bits** (one-wait trace), not 807.8 [run]. With the fold it
+   is 710.8.
+2. **The prover's "fixed seconds of a table" at the head, which item 3 turns on, is a split I could not trace to a
+   timing.** The kit's cells hold 2.031 of a full head table's 2.856 GPU-seconds as fixed [read]. FIXEDCOST's reading of
+   the kept proof server's timers puts 0.6 to 0.9 s of the head's 3.57 s session there [relayed, 07:31Z]. Tonight's
+   point is the same under both (every table is full). What a lever is worth is not. Item 3 gives both.
+
+### For Daniel
+
+- All of this is a model's arithmetic with tonight's timings put in. Nothing here was measured on the serving engine.
+- Tonight the verifier's check of the largest block type was timed: 119 seconds on `main`, 39 seconds with a faster
+  inner loop that is not on `main` yet (3.05 times). The 808 GB given earlier assumed 80 seconds for that check. At
+  the timed 119 seconds it is 934 GB.
+- What the faster check is worth: 934 GB becomes 711 GB, still at 100 bits or more (102.5 with the one-wait change to
+  the proof). One more change, designed and not built, would make it 684 GB.
+- What is still between 711 GB and 300 GB is the prover's work on the largest block type, not the verifier's check.
+  After tonight's change the verifier's fixed seconds are 16% of the audit's compute and the prover's seconds 76%.
+  With the verifier's fixed seconds at zero the bound is still 592 GB.
+- How much of the prover's seconds a table could shed is not known. The model books 2.0 of the 2.9 GPU-seconds of a
+  table of the largest block type as spent whatever the table holds. A reading of the proof server's own timers
+  tonight puts most of them on the proof blocks instead. I could not trace the model's 2.0 to a timing.
+- If the model's split is right: under 300 GB needs those fixed prover seconds at about a twentieth of today's (0.1
+  GPU-seconds) together with the verifier's check at 1 to 2 seconds (39 tonight). With the prover's fixed seconds at
+  zero the bound is 386 GB, and with both sides' at zero 273 GB.
+- If the other reading is right: with every fixed second on both sides at zero the bound is still 423 to 444 GB, and
+  what is left is proving each proof block faster.
+- The timing that decides between the two is the proof server, kept up between sessions, at two table sizes of the
+  largest block type. It has been timed at full tables only.
+- Larger tables: the proof system's tables stop at 2^35 bits because its list of parameters stops there, not because
+  of its field or its code. If a table held eight times the proof blocks at the same fixed seconds, the bound would be
+  329 GB under the model's split and 456 to 480 GB under the other, and it would keep 100 bits only with the
+  wide-leaves change as well.
+
+### 1. Rows B and C at one table a session, repriced [run; modeled]
+
+**Which seconds (a) were** [read: the kit's `count_fixed.parts`, the pricing run's rows, `total_cost.verifier_seconds`
+at `benchmarks/spot_figures/total_cost.py:300-316`, the `verifier_cost` card]. A block type's "own Lean seconds" v is
+a fresh process's read of its circuit file plus its session, in core-seconds; row B charges v every session, row C a
+type's first session v and each later one 0.5 v.
+
+| block type | (a) v, row B a session | (a) row C, a later session | how v was set |
+|---|---|---|---|
+| head: each of the 130 scores and values units of the best designed configuration | 160 (287.5 in the other variant) | 80.0 (143.75) | 160 is the head block's session alone, 287.5 its read 127.6 plus its session 159.9, FIXEDCOST's timings of the head block as COUNT's kit took them [relayed]; every unit is charged the whole head block's |
+| MoE (`Fused[EmbeddingRead_v1{V=256,H=3072} + MoeExpertFp8BlockGemm_v4{K=6144…`) | 38.92 | 19.46 | the card's timing of that type, or its family's line (I did not check which) |
+| GEMM K=512 (`BatchedGemm_v1{B=1,K=512,N=1,…}`) | 60.56 | 30.28 | not a timing of it: the median of the card's timed types, which the cost model gives every type without one |
+| the other 126 | 5.9 to 368.2 | half | 32 at the card's own timing or their family's line; 94 at the median 60.56 |
+
+**(a'), (b), (c): the timed seconds** [relayed: FOLD 08:22Z and 08:27Z, runs `28dd` (head), `c560` (MoE), `c19c` (GEMM);
+FIXEDCOST 08:32Z for the one pass, which is not built]. A type's seconds are a read r and a later session's line w
+(the setup at its sample and the check), one pinned core, `MIMALLOC_PURGE_DELAY=-1`. Row B is r + w every session
+(a kept process that reads the circuit file again); row C is r + w once a type, then w.
+
+| | (a') `main` tonight: r, w | (b) the fold: r, w | (c) with the one pass: w |
+|---|---|---|---|
+| head | 105.6, 118.76 | 103.1, 38.89 | 31.7 |
+| MoE | 19.5, 20.19 | 19.0, 11.838 | 10.9 |
+| GEMM K=512 | 2.60, 3.650 | 2.59, 3.202 | 3.17 |
+| a type nobody timed | r = w = 0.5 v | r = 0.5 v, w by the rule | w by the rule |
+| one statement of every type, later sessions, core-seconds [run] | 19,490 | 6,951 | 5,803 |
+
+(As priced, the same sum is 14,476.) "Head at 160" keeps the kit's convention that the head's read is not counted;
+"head at 287.5" counts it (105.6 or 103.1 s here). Under row C the two differ only in a type's first session, so
+(a'), (b), (c) come out the same at both.
+
+**The rule for the types nobody timed: the line through the timed three** [derived]. Such a type's later session
+today is x = 0.5 v, and after the change it is the piecewise-linear line through the three timed (before, after) pairs
+(3.650 to 3.202, 20.19 to 11.838, 118.76 to 38.89), from the origin, continued past the head's at the last slope. So
+30.28 becomes 14.61 and 184.1 becomes 56.82 [run]. It says the gain grows with a statement's seconds, as it does over
+the three timed. Bracket: every such type at the least timed gain (the GEMM's 0.877) and at the most (the head's
+0.327). A second bracket: the 94 types at the median take the GEMM K=512's timed seconds, since that type is one of
+them and its timed read and session (6.25 s) are a tenth of the median.
+
+| head | row | pricing | GB | K | sampled proof blocks | sessions (one table each) | bits, one-wait trace | bits, all changes |
+|---|---|---|---|---|---|---|---|---|
+| 160 | B | (a) as priced at 08:33Z | 1,045.4 | 17 | 1,063,205,806 | 877,309 | 103.06 | 107.06 |
+| 160 | B | (a') `main` as timed tonight | 935.3 | 19 | 1,188,288,842 | 980,536 | 102.90 | 106.90 |
+| 160 | B | (b) the fold as timed | 740.5 | 24 | 1,500,996,432 | 1,238,548 | 102.56 | 106.56 |
+| 160 | B | (c) the fold with the one pass | 710.8 | 25 | 1,563,537,950 | 1,290,145 | 102.50 | 106.50 |
+| 160 | C | (a) as priced at 08:33Z | 807.8 | 22 | 1,375,913,396 | 1,135,341 | 102.69 | 106.69 |
+| 160 | C | (a') `main` as timed tonight | 933.8 | 38 | 1,188,291,426 | 980,563 | 102.90 | 106.90 |
+| 160 | C | **(b) the fold as timed** | **710.8** | 25 | 1,563,537,950 | 1,290,145 | 102.50 | 106.50 |
+| 160 | C | (c) the fold with the one pass | 683.5 | 26 | 1,626,079,468 | 1,341,762 | 102.45 | 106.45 |
+| 287.5 | B | (a) as priced at 08:33Z | 1,367.0 | 13 | 813,039,734 | 670,907 | 103.45 | 107.45 |
+| 287.5 | B | (a') `main` as timed tonight | 1,267.3 | 28 | 875,583,156 | 722,543 | 103.34 | 107.34 |
+| 287.5 | B | (b) the fold as timed | 987.3 | 18 | 1,125,747,324 | 928,932 | 102.98 | 106.98 |
+| 287.5 | B | (c) the fold with the one pass | 987.3 | 18 | 1,125,747,324 | 928,932 | 102.98 | 106.98 |
+| 287.5 | C | (a) as priced at 08:33Z | 987.3 | 18 | 1,125,747,324 | 928,932 | 102.98 | 106.98 |
+| 287.5 | C | (a') `main` as timed tonight | 933.8 | 38 | 1,188,291,426 | 980,563 | 102.90 | 106.90 |
+| 287.5 | C | (b) the fold as timed | 710.8 | 25 | 1,563,537,950 | 1,290,145 | 102.50 | 106.50 |
+| 287.5 | C | (c) the fold with the one pass | 683.5 | 26 | 1,626,079,468 | 1,341,762 | 102.45 | 106.45 |
+
+- **The rule does not matter** [run]. Row C, (b): the line 710.8, least gain 710.8, most gain 683.5, the median's
+  types at the GEMM's seconds 710.8. Row C, (c): 683.5 on all four. Row B at 160: (b) 740.5 on all four; (c) 710.8,
+  740.5, 710.8, 710.8. Row B at 287.5: 987.3 or 985.7 on all. The reason: the head's units are 13.6 of the verifier's
+  15.9 points of the budget at (b), and they are timed.
+- **The GB moves in steps.** Every design here takes the same 62.5 million proof blocks from each sampled replay
+  block (half that in the designs with K 38, 36 and 28), so the bound is about 17,770 GB over K and the bits fall with
+  K alone [derived from the rows]. One step of K near 25 is 27 to 30 GB. Rows B (b) and (c) at 287.5 are the same
+  987.3 for that reason.
+- Row B at 287.5 gains less from the fold (1,267.3 to 987.3) and nothing from the one pass: its session is the read
+  plus the check, 103.1 + 38.89 s, and the read is untouched.
+- Every design is past the release log on `main`: (b) row C writes at least 224,485,237 lines of session coins against
+  8,388,608 [run]. Needs of the 710.8: the six of my 08:33Z entry, and #9209 (open, unmarked, its recorded check not
+  back [relayed]); the 683.5 also needs the one pass, which is not built.
+
+### 2. Tonight's point on the 06:02Z grid, in seconds [run; modeled]
+
+Row C, best designed configuration, one table a session; GB. Every cell has 100 bits or more with the one-wait trace
+(the least is 101.12, at 273.4 GB; with all changes 105.12), so the GB is also the GB at 100 bits or more.
+
+**What the prover's axis is, since it is not the 3.58 s.** The cost model prices a table in GPU-seconds, not in the
+kept proof server's end-to-end seconds: a full head table 2.856 (the pricing run's row; run `38d6`, whose later
+sessions take 3.58 s end to end, has 2.8555 GPU-seconds a statement [relayed, FIXEDCOST 05:25Z]), MoE 2.371 (run
+`0dcd`: 2.3708, 4.71 s), GEMM K=512 0.744 (run `fe31` has 1.4096 and 2.77 s; I did not trace the difference). The
+kit's cells split each into a part **fixed** a table and a part its blocks' own: head 2.031 and 0.824, MoE 0.721 and
+1.650, GEMM 0.007 and 0.737 [read: the kit's cells, by probe]. The columns multiply the fixed part only. Nothing in
+the model lets a full head table cost under 0.824, so "0.05 of 3.58 s" is not a cell of it. MoE's split is a
+two-point fit of an earlier driver at full and a quarter of a statement, scaled to the server's sessions [read:
+`benchmarks/spot_figures/breakeven/reprice.py:150-169` at the kit's tree]. **The head's split I could not trace to a
+timing**: the pricing run's flags for it are `warm-prover`, `warm-noserver`, `head-flat` [read: its rows], and in the
+plan's own dump the head's stratum is `priced: computed`, the cost model's rule for a type its card did not time
+[read: `plan_inputs.json`; `benchmarks/spot_figures/total_cost.py:355-357`]. In the best designed configuration each
+head unit's table is priced at the head block's (2.856, of which 2.031 fixed, for 44 of the 130 unit types; 0.80 to
+1.91 fixed for the rest).
+
+| the verifier's later session, s: head / MoE / GEMM | prover's fixed as modeled | 0.5 of it | 0.1 | 0.05 | none |
+|---|---|---|---|---|---|
+| a full head table, GPU-seconds (end to end in proportion, s [guess]) | 2.856 (3.58) | 1.840 (2.31) | 1.027 (1.29) | 0.926 (1.16) | 0.824 (1.03) |
+| a full MoE table, the same | 2.371 (4.71) | 2.011 (3.99) | 1.722 (3.42) | 1.686 (3.35) | 1.650 (3.28) |
+| as priced at 08:33Z: 80.0 / 19.46 / 30.28 | 807.8 | 658.2 | 538.5 | 522.7 | 507.7 |
+| today's on `main`, as timed: 118.76 / 20.19 / 3.650 | 933.8 | 772.7 | 634.7 | 634.7 | 612.8 |
+| the fold, as timed: 38.89 / 11.84 / 3.202 | **710.8 (tonight, timed)** | 538.5 | 423.1 | 403.9 | 386.3 |
+| the fold with the one pass (not built): 31.7 / 10.9 / 3.17 | 683.5 | 522.7 | 403.9 | 386.3 | 370.2 |
+| 0.1 of today's: 11.88 / 2.02 / 0.37 | 612.8 | 467.7 | 335.3 | 323.1 | 306.4 |
+| 0.05 of today's: 5.94 / 1.01 / 0.18 | 592.4 | 444.3 | 323.1 | 306.4 | 291.3 |
+| 0.01 of today's: 1.19 / 0.20 / 0.04 | 592.4 | 433.4 | 306.4 | **291.3 (nearest under 300)** | 277.7 |
+| none | 592.4 | 423.1 | 306.4 | 291.3 | 273.4 |
+
+- **Three cells of your axes are under 300 GB**: 0.05 of today's verifier with none of the prover's fixed (291.3),
+  0.01 with 0.05 (291.3), 0.01 with none (277.7). I mark 0.01 with 0.05 as nearest: of the three it leaves the most
+  fixed seconds in place. It is the 06:02Z grid's "0.01 and 0.05", now in seconds.
+  The whole table is on the kit's split of a head table; on the other reading (item 3) no cell of it is under 300.
+- **That cell in seconds.** The verifier: the head's later session at **1.19 s** (118.76 on `main`, 38.89 tonight, so
+  33 times less than tonight's); MoE's 0.20 s (11.84 tonight); the GEMM's 0.04 s (3.20). The prover: the head table's
+  fixed part at **0.10 GPU-seconds** (2.031 today), so a full head table at **0.93 GPU-seconds** against 2.856
+  [derived]; if the end-to-end seconds move in proportion, a later session of the kept proof server at about 1.16 s
+  against 3.58 [guess]. MoE's fixed part 0.036 (0.721 today), a full table 1.686 against 2.371.
+- **A finer frontier** (the same run; rows the verifier's share of today's with the head's later session in s, columns
+  the prover's share of its fixed part with the head's in GPU-seconds; under 300 in bold):
+
+| verifier | 0.3 (0.609) | 0.2 (0.406) | 0.1 (0.203) | 0.07 (0.142) | 0.05 (0.102) | 0.03 (0.061) | 0.02 (0.041) | 0.01 (0.020) |
+|---|---|---|---|---|---|---|---|---|
+| the fold, as timed (38.89) | 480.3 | 455.7 | 423.1 | 413.3 | 403.9 | 394.9 | 394.9 | 394.9 |
+| with the one pass (31.7) | 467.7 | 433.4 | 403.9 | 394.9 | 386.3 | 378.1 | 378.1 | 370.2 |
+| 0.2 (23.75) | 433.4 | 403.9 | 370.2 | 362.7 | 355.4 | 348.5 | 348.5 | 341.8 |
+| 0.1 (11.88) | 403.9 | 370.2 | 335.3 | 329.1 | 323.1 | 317.3 | 311.8 | 311.8 |
+| 0.07 (8.31) | 386.3 | 355.4 | 329.1 | 317.3 | 311.8 | 306.4 | 301.2 | 301.2 |
+| 0.05 (5.94) | 386.3 | 355.4 | 323.1 | 311.8 | 306.4 | 301.2 | **296.2** | **296.2** |
+| 0.03 (3.56) | 378.1 | 348.5 | 317.3 | 306.4 | 301.2 | **291.3** | **291.3** | **286.6** |
+| 0.02 (2.38) | 370.2 | 341.8 | 311.8 | 301.2 | **296.2** | **291.3** | **286.6** | **282.1** |
+| 0.01 (1.19) | 370.2 | 341.8 | 306.4 | 301.2 | **291.3** | **286.6** | **282.1** | **282.1** |
+| none | 362.7 | 335.3 | 306.4 | **296.2** | **291.3** | **282.1** | **282.1** | **277.7** |
+
+  The least demanding cells under 300: the head's check at 2.38 s with the prover's fixed part at 0.10 GPU-seconds
+  (296.2); 5.94 s with 0.041 (296.2); no verifier seconds with 0.142 (296.2). Put together: a head table's fixed
+  seconds, both sides at the model's 81.8 core-seconds a GPU-second, at about 0.11 to 0.14 GPU-seconds, where tonight's
+  are 2.51 (2.031 the prover's, 0.475 the verifier's 38.89 s) [derived]. About a twentieth.
+- With the prover's fixed part as modeled, no verifier seconds get under 592.4, as at 06:02Z.
+
+### 3. Which side binds at tonight's point [run; modeled]
+
+Shares of the audit's budget in GPU-seconds, row C. The planner's K is a whole number, so a few points stay unspent.
+
+| | prover's fixed | verifier's fixed | the proof blocks' own proving | replay | unspent | GB |
+|---|---|---|---|---|---|---|
+| (a') `main` as timed | 32.3% | 35.0% | 25.7% | 6.8% | 0.2% | 933.8 |
+| (b) the fold | 42.4% | 15.9% | 33.8% | 4.5% | 3.4% | 710.8 |
+| (c) with the one pass | 44.1% | 13.6% | 35.2% | 4.7% | 2.4% | 683.5 |
+| (b), a head table 0.25 fixed in place of the kit's 0.71 | 22.1% | 15.9% | 54.1% | 4.5% | 3.4% | 710.8 |
+| (b), a head table 0.17 fixed | 18.6% | 15.9% | 57.6% | 4.5% | 3.4% | 710.8 |
+
+- **After the fold the verifier's fixed seconds are the smallest of the three, whatever the split**: 15.9% at (b),
+  13.6% at (c), against 35.0% on `main`. **With them at zero and the prover's as modeled the bound is 592.4 GB** (K 30;
+  the same from (b) and (c), and under either split). The verifier's whole remaining lever is 118 GB from 710.8.
+- **The prover's side binds: 76.2% of the budget at (b)**, its fixed seconds and the blocks' own proving together
+  (79.3% at (c)). The head's units are most of it: 31.3 of the 42.4 points of fixed, 832,571 of the 1,290,145
+  sessions.
+- **The other way round, the prover's fixed seconds at zero with the verifier's as timed: 386.3 GB at (b), 370.2 at
+  (c)** (K 46, 48), on the kit's split. Both sides at zero: 273.4. So on the kit's split the prover's fixed seconds
+  are worth 324 GB from 710.8 and the verifier's 118.
+- **On FIXEDCOST's reading of the head's session that lever is much smaller**. That reading: 77% of the
+  head's 3.57 s is the witness, at 10.8 ms a block, and what a session pays whatever its table holds is at most 0.6 to
+  0.9 s [relayed, 07:31Z], so 0.17 to 0.25 of a head table is fixed, not 0.71. Then at (b) the prover's fixed seconds
+  are 18.6 to 22.1% and the blocks' own proving 57.6 to 54.1%. The prover's fixed at zero gives 555.3 to 538.5 GB,
+  both sides at zero 444.3 to 423.1, and no cell of item 2's grid is under 300 (0.05 of today's verifier with none of
+  the prover's fixed: 467.7 to 433.4). Tonight's 710.8 is the same under both, since every table of every design is
+  full (0.999 to 1.000 [run]).
+- The model has no verifier seconds that scale with gates: a check is all fixed seconds of its table. So "the work
+  that scales with gates" is the proving column alone, and the checking of the blocks is inside the verifier's fixed.
+- **All of this is with the circuit file kept (row C).** In row B with the head's read counted, the verifier's fixed
+  is 40.6% against the prover's 30.6% at (b), 987.3 GB, and the prover's fixed at zero gives 683.5 (658.2 at (c)).
+  There the read binds: 103.1 s a session against the check's 38.89. With the head's read not counted, row B gives
+  423.1 and 403.9 at the prover's zero.
+- **Which lever next: the kernel lanes', on the head, and first the timing that says which lever it is.** The kept
+  proof server at two table sizes of the head (and of one head unit) splits a table's seconds into fixed and the
+  blocks' own; FIXEDCOST named the runner at 05:25Z (`benchmarks/one_stage/server_rate.py`) and said it has no such
+  run [relayed]. If the fixed part is near the kit's 2.0 GPU-seconds, the lever is the table's fixed seconds and under
+  300 GB is on the grid. If it is near 0.5 to 0.7, the lever is the head's witness a block and no fixed-seconds lever
+  on either side gets under 423 GB. The verifier's next lever is worth at most 118 GB at row C either way.
+- One more unmeasured input, for the same lane: each head unit's table is priced at the whole head block's seconds on
+  both sides; no unit's own statement has been timed in the Lean verifier [read: the kit; HEADPROF timed the prover's
+  two units, 14:19Z Wed, relayed].
+
+### 4. More proof blocks a table: where the limit lives, and what 2, 4, 8 times would give
+
+**Where** [read, `main` at `19fb19a21e`]: `verity/protocols/flock/verifier/Flock/Schedule.lean:50-52`. `fast100 m`
+returns no schedule when `m < 22 || m > 35`, m the log2 of a table's bits. **What sets it**: the schedule is a list
+of parameters by m (the levels, level 0's lanes, each level's columns, rate and queries: `:48`, `:53-65`), written out
+as 14 rows in `security/Definitions/Flock/Accounting/Schedule.lean:78-94`, and the list ends at 35. Everything reads
+that list and refuses past it: `Flock/Zk.lean:40-47` (level 0's query count by m), `Flock/Statement.lean:241`,
+`Flock/HmRow.lean:1587`, `:2408`, `:2565`, `Flock/ProgramRead.lean:333`, `Flock/With/Setup.lean:859`, `:1082`,
+`Flock/WideLeaf.lean:20-26` (the wide-leaf schedule, also to 35), the prover's `MAX_M = 35`
+(`verity/protocols/flock/prover/live/src/pure_block.rs:393-394`, "the Fast100 schedule's reach"), and the proofs, by
+cases on those rows (`security/Proofs/Flock/VBridge/Family/Structure.lean:55`, `SpotFlock/Facts.lean:218-220`).
+**It is neither the field nor the code's rate**: the field is GF(2^128) (`verity/protocols/flock/prover/live/PROTOCOL.md:25`) and level 0 is
+rate 1/2 at every m, its codeword 2^23 symbols at m = 35. The block's own limit, 2^27 bits
+(`Flock/Statement.lean:120`), is separate and not in the way here. I did not read what a table of 2^36 bits or more
+would need of the device's memory.
+
+Row C, head at 160, a table of 2, 4, 8 times the proof blocks **at the same fixed seconds a table** (your premise; a
+guess, nothing shows a table of that size costs the same) [run; modeled]. For the bits a larger table is given a
+level 0 of 2, 4, 8 times the lines, the schedule's pattern continued (a schedule that does not exist [guess]); the
+all-changes column keeps 2^19, as the wide-leaf schedule does.
+
+| pricing | a table of | GB | K | sampled proof blocks | sessions | bits, one-wait trace | bits, all changes | least GB at 100 bits, one-wait trace only |
+|---|---|---|---|---|---|---|---|---|
+| (a) as priced at 08:33Z | 2 times | 555.3 | 32 | 2,001,328,576 | 825,748 | 101.15 | 106.15 | the same |
+| | 4 times | 413.3 | 43 | 2,689,285,274 | 554,847 | 99.72 | 105.72 | 507.7 |
+| | 8 times | 341.8 | 52 | 3,252,158,936 | 335,525 | 98.45 | 105.45 | 1,045.4 |
+| (b) the fold as timed | 2 times | 480.3 | 37 | 2,314,036,166 | 954,758 | 100.94 | 105.94 | the same |
+| | 4 times | 378.1 | 47 | 2,939,451,346 | 606,430 | 99.59 | 105.59 | 507.7 |
+| | 8 times | 329.1 | 54 | 3,377,241,972 | 348,436 | 98.39 | 105.39 | 1,045.4 |
+| (c) the fold with the one pass | 2 times | 480.3 | 37 | 2,314,036,166 | 954,758 | 100.94 | 105.94 | the same |
+| | 4 times | 378.1 | 47 | 2,939,451,346 | 606,430 | 99.59 | 105.59 | 507.7 |
+| | 8 times | 323.1 | 55 | 3,439,783,490 | 354,891 | 98.37 | 105.37 | 1,045.4 |
+
+- Eight times the proof blocks a table does not reach 300 GB (329.1, 323.1). (a)'s 413.3 at 4 times is COUNT's 06:02Z
+  figure [read].
+- On the other split of a head table (0.25 or 0.17 fixed) the same rows at (b) are 555.3 or 573.3 at 2 times, 493.6
+  or 507.7 at 4 times, 455.7 or 480.3 at 8 times: a larger table saves only fixed seconds.
+- **Past 2 times, a larger table loses its gain to the bits unless the wide level-0 leaves land too**: each doubling
+  of level 0 is one bit, so at 4 and 8 times the one-wait trace alone holds 100 bits only at 507.7 and 1,045.4 GB.
+  With all changes the bits stay at 105.4 to 105.9.
+
+### 5. Two sentences for Daniel
+
+1. The faster check, 3.05 times on the largest block type, timed tonight and not yet on `main`, is worth 223 GB in the
+   model: 934 GB becomes 711 GB at 100 bits or more, and 684 GB with the one-pass change that is not built.
+2. Between 711 GB and 300 GB is the prover's work on the largest block type (76% of the audit's compute against the
+   verifier's 16%; with the verifier's fixed seconds at zero the bound is still 592 GB), and whether a twentieth of
+   the prover's fixed seconds a table gets under 300 GB, as the model's own split says, or only faster proving of each
+   proof block does, waits on timing the proof server at two table sizes.
+
+### What I did not do
+
+- No run on the served engine, no session of these shapes, no timing of my own: every second above is relayed from
+  FOLD's and FIXEDCOST's entries or read from the kit, and every GB is the planner's on them.
+- I did not wait for FOLD's lever 4 on the head, as told. The 0.1-of-today's row (the head's check at 11.88 s) is
+  where a lever of that size would sit: 612.8 GB at the prover's as modeled.
+- I did not trace the GEMM K=512's 0.744 GPU-seconds in the pricing run against run `fe31`'s 1.4096 (0.3% of the
+  sessions at (b)), nor how the pricing run's flags produce the head's split.
+- One thing in the way, for infra through you: `research run --on auto` chose vy-nebius-cpu-7 twice while I waited
+  (launched 09:22Z and 09:23Z by my clock reads) and it refused both, first "the machine has no git" with a source
+  archive mismatch, then `PermissionError: [Errno 13] Permission denied: '/dev/null'` (`r20261112-092328-9813`).
+  Nothing of mine ran there.
+
+Artifacts: `/opt/cursor/artifacts/sessions-fold/` (`send/` the run's inputs, `5cb2/out/sessions_fold.json` and
+`wires_fold.txt`, `0926/out/`, `145a/out/`). Note: `lanes/proofs/20261112T0904Z-report-wires-fold-priced.md`.
