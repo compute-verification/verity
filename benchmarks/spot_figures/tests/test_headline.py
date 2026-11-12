@@ -3,6 +3,7 @@ request count and split, and leaves the planner as it found it; the figure reads
 import json
 from math import isclose
 
+import cards
 import pytest
 
 from breakeven import headline as H
@@ -110,8 +111,10 @@ def test_the_figure_reads_the_10_percent_point():
 @pytest.mark.slow
 def test_a_planner_row_describes_itself_and_restores_the_planner():
     """One row on the planner (about 6 s): its split is its own bound's plan, its requests its line's (not the
-    census's), its heads eight, and every name and table the row's path set is as it was after it. Catches a planner
-    change that renames or rebinds what the driver sets, which the plain dicts above can't."""
+    census's), its heads eight, its verification phase a datacenter's window with a whole count of its replay blocks
+    sampled, a cut block's table as many of its pieces as the cut makes of one block, and every name and table the
+    row's path set is as it was after it; a beta that pays for no sampled replay block of the phase is refused.
+    Catches a planner change that renames or rebinds what the driver sets, which the plain dicts above can't."""
     P = H.planner()
     names = [(P.reprice, "apply_server"), (P.reprice, "K_MAX"), (P.sweep, "make_line"), (P.f1, "model"),
              (P.tc, "two_stage_design")]
@@ -125,6 +128,17 @@ def test_a_planner_row_describes_itself_and_restores_the_planner():
     assert isclose(got["requests"], p["replay_sample"] / p["q"], rel_tol=1e-9)
     assert got["requests"] < got["census_scope"]["requests"]
     assert got["total"] == got["serve"] + got["edge"] + got["beta"] + got["compile"] + got["pool"]
+    phase = got["verification_phase"]
+    assert phase["name"] == "datacenter" and phase["machines"] > 1 and phase["seconds"] == H.RUN_S
+    assert isinstance(phase["sampled"], int) and 1 <= phase["sampled"] <= phase["replay_blocks"]
+    assert p["replay_sample"] == pytest.approx(phase["sampled"] * got["requests"] / phase["replay_blocks"])
+    assert phase["sessions"] > len(p["cells"]) and phase["limit"]
+    measured = {b["block"]: b for b in cards.load("proof_overhead", "GLM-5.3")["value"]["blocks"]}
+    cut = [c for c in p["cells"] if c.get("split") and c["block"] in measured]
+    assert cut and all(c["table"] == c["split"] * P.tc.table_blocks(measured[c["block"]]["k_log"]) for c in cut)
+    with pytest.raises(ValueError, match="pays for no sampled replay block"):
+        H.run(H.spec_of("(i) honest", "world year", 1e-6), P=P)
+    assert [getattr(o, n) for o, n in names] == before
 
 
 QUANT = "Fp8GroupQuantUe8m0_v1{K=2048,G=128}"

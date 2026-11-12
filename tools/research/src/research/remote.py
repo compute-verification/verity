@@ -188,6 +188,7 @@ AUDITOR_FILE = "/etc/vy/auditor"              # present: an auditor host, which 
 GUARD_SCRIPT = Path(__file__).resolve().parent / "pods" / "sh" / "pod_guard.sh"
 POD_TARGET_RETRIES = 6           # extra GET /pods/{id} reads when a RUNNING pod answers without an ssh mapping
 POD_TARGET_RETRY_S = 2.0
+_TOLD_KEPT: set[str] = set()     # the pods this process has said it reaches at a kept address because RunPod can't be asked
 PREFLIGHT_TIMEOUT_S = 180
 PREFLIGHT_TAIL = 40              # lines of the preflight's stdout and stderr kept in its report
 
@@ -309,21 +310,39 @@ def ssh_host_target(machine: dict[str, Any]) -> dict[str, Any]:
 
 
 def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
-    """host/port/user/rate for a runpod machine (read-only API call; not RUNNING -> refused) or an ssh one (`ssh_host_target`)."""
+    """host/port/user/rate for a runpod machine or an ssh one (`ssh_host_target`).  A runpod machine's is the one last read from
+    RunPod (`runpod.kept_address`, with the rate and the time it was read, marked `kept`) while that read is under
+    `runpod.ADDRESS_TTL_S` old and the host there proves the host key recorded for the address (`runpod.kept_stands`: ssh to it is
+    then strict about that key); else RunPod is asked (read-only; not RUNNING -> refused) and its answer returned unmarked, to be
+    dialled as RunPod's word always was, and kept if the host there proves a key (`runpod.keep_address`).  When RunPod can't be
+    asked, the kept address stands on the same proof, said in one line, and without it the machine is refused."""
     if machine.get("provider") == "ssh":
         return ssh_host_target(machine)
     if machine.get("provider") != "runpod":
         raise Refused(f"provider {machine.get('provider')!r} not supported (runpod or ssh)")
     from .pods import runpod
 
-    who = f"pod {machine['pod_id']} (machine {machine.get('name') or '?'})"
+    pod_id = machine["pod_id"]
+    who = f"pod {pod_id} (machine {machine.get('name') or '?'})"
+    kept, age_s = runpod.kept_address(pod_id) or (None, 0.0)
+    asked = kept is not None and age_s < runpod.ADDRESS_TTL_S           # whether the host at the kept address was asked for its key
+    if asked and runpod.kept_stands(pod_id, kept):
+        return kept
     try:
-        pod = runpod.get(machine["pod_id"])
+        pod = runpod.get(pod_id)
     except runpod.PodError as e:                # a dead / terminated pod, no API config, no network: a refusal with the pod's name, not a SystemExit
         if e.code == 404:
+            runpod.forget_address(pod_id)
             raise Refused(f"{who} no longer exists on runpod (HTTP 404: terminated?); no implicit provisioning") from None
+        if kept and not asked and runpod.kept_stands(pod_id, kept):
+            if pod_id not in _TOLD_KEPT:
+                _TOLD_KEPT.add(pod_id)
+                print(f"research: {who}: runpod API unavailable ({str(e)[:200]}); using its address as read "
+                      f"{kept.get('rate_observed_utc') or '?'}, where the host holds the key recorded for it", file=sys.stderr)
+            return kept
         raise Refused(f"{who}: runpod API unavailable: {e}") from None
     if not pod or (pod.get("desiredStatus") or "").upper() != "RUNNING":
+        runpod.forget_address(pod_id)
         raise Refused(f"{who} is {pod.get('desiredStatus') if pod else 'not found'}; no implicit provisioning")
     tgt = runpod.ssh_target(pod)
     # The REST API intermittently answers a RUNNING pod's GET with publicIp="" / portMappings=None (alternating answers within
@@ -337,8 +356,10 @@ def pod_target(machine: dict[str, Any]) -> dict[str, Any]:
         tgt = runpod.ssh_target(pod)
     if tgt is None:
         raise Refused(f"{who} has no ssh port mapped yet")
-    return {"host": tgt[0], "port": tgt[1], "user": "root", "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
-            "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
+    target = {"host": tgt[0], "port": tgt[1], "user": "root", "pod_name": pod.get("name"), "cost_per_hr": pod.get("costPerHr"),
+              "rate_observed_utc": utc_now_ms(), "gpu": (pod.get("machine") or {}).get("gpuTypeId")}
+    runpod.keep_address(pod_id, target)
+    return target
 
 
 def ssh_argv(host: str, port: int, *, user: str = "root", connect_timeout: int = 15) -> list[str]:
