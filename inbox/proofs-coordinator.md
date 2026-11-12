@@ -80271,3 +80271,25 @@ Mailbox read: 27 sections, the last 08:34Z, read at 09:09Z. Tags as before.
 - [run: `research queue edit 9108`] Still opens "Not ready: do not mark". It now says the mend builds, what `00fa`'s exit 1 was and that the list was my mistake, and that the records run is the first build of the root with this change in.
 
 Mailbox read at 09:14Z: the newest section is yours of 08:05Z [read]. My VM was reset before this turn; restored from the lane's notes.
+
+## REFUSE, Thu 12 Nov 09:16Z: the try on lean's merge is launched, run `r20261112-091325-9eb8` (scratch branch `cursor/proofs-scratch-refuse-on-merge-4063` at `7f4de5fc7679`), not started; none of #9091's three runs has started either (suites 1 check ahead, evaluation 4, records 5); the head `d8afb6b2724c` does not conflict with `main`; nothing to mark yet
+
+**The try.**
+
+- [read: `git log -1`, `git ls-remote`] Scratch commit `7f4de5fc7679`: lean's merge tip `f3837f57d113` with #9091's head `d8afb6b2724c` merged in, pushed as `cursor/proofs-scratch-refuse-on-merge-4063`. No pull request, no mark.
+- [read: the merge] It stopped in 13 files. The pin `verity/protocols/pous/lean/TRUSTED.sha256` is the file at `01dea4d2566f`; `pins.py --stale` prints nothing on the tree. The other 12 are the files `main` itself stops in, and I left each as lean's tip has it, whole: they are not mine to close.
+- [read: a script over the tree's imports, resolving a module name to every file whose path ends in it, so it lists more than Lean reads] Two of the 12 are Lean, `NetworkCheck/Period.lean` and `PouwCheck/Difftest.lean`; neither is in the import closure of `Properties/Spot/SecondRefused.lean`, and `--try` builds only that closure (`lake build +MODULE:deps`). So the verdict does not read how the 12 are resolved.
+- [read: the same script and `git rev-parse`] In that closure git joined four files from both sides with no stop: `Claims/Sampling.lean`, `SpotFlock/Code.lean`, `SpotFlock/Facts.lean`, `Spot/Run.lean`. If the try fails in one of those and not in my three modules, it is `main` against lean's line, and I say which module.
+- [read: `research inspect`, 09:16Z] Run `r20261112-091325-9eb8` on vy-nebius-cpu-1, `lean_changed.py --try security/Proofs/Properties/Spot/SecondRefused.lean`, source `7f4de5fc7679`: waiting for a slot since 09:13Z, not started. [read: the launcher's line] "It should start in about 4 min"; the slot gives it 60 min from the start. [guess] It ends between 09:40Z and 10:20Z. If the 60 min run out in the imports' build, there is no verdict and I launch it once more on the same node's tree, which keeps what it built.
+
+**#9091's three runs, at `d8afb6b2724c`, on vy-nebius-cpu-13** [read: `research inspect`, 09:16Z].
+
+- `r20261112-084251-07a8` (suites): not started, 1 check ahead (3 at 08:57Z). [guess: the line moved two places in the 27 min I watched it; the same command took 30 min in `69f0`] Ends about 10:00Z.
+- `r20261112-084251-a4c0` (evaluation): not started, 4 ahead (6 at 08:57Z). [guess: 51 min in `b35f`] Ends about 11:00Z.
+- `r20261112-084251-6346` (records): not started, 5 ahead (7 at 08:57Z). [guess] Starts about 10:20Z; I have never run this package's records run, so its end is between 10:40Z and its budget, 12:20Z.
+
+**The head against `main`.** [read: `git fetch`, then `git merge-tree --write-tree --name-only origin/main HEAD`, 09:15Z] `main` is still `19fb19a21e40`, an ancestor of the head; the command exits 0 and names no file. No second merge. [read: your `comm -23` against lean's new tip `f3837f57d113`] Beyond `main`'s stops, still the pin alone (13 against 12).
+
+**The body** [read: `research queue edit`'s reply, 09:15Z]: figures still marked as computed at `979ebf0a18`; the line on the try now names its run and scratch commit; the merge-tree line names lean's new tip. Title unchanged.
+
+**Next.** Resume me when one ends. For the try I report lean's exit, the axiom probe's last line, and the module if a dependency fails.
