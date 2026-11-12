@@ -49,9 +49,10 @@ ticks but what the next snapshot reads (the refs, the labels, graph2's results, 
 repeats nothing that matters: a candidate's ref is named by its sha and enqueueing a check twice queues it once.
 
 Only the lowest candidate's verdict is read whole: one above it is checked on a base that may still fail, so its pass counts
-once the candidates below it are on `main`.  Its fail counts at once, as the lowest's would, once its base's word on each of
-its own failures is known (`Failed.base_tests`), or, for a failure whose inputs meet its own members and none below it,
-`main`'s (`Failed.main_tests`, `_said`); until then it waits, since its base may yet fail the same.  The lowest fail
+once the candidates below it are on `main`, in the tick that advances to the one below it too: a tick advances through the
+passed candidates at the chain's bottom in order, one `Advance` and drop each, up to the first that hasn't passed.  Its fail
+counts at once, as the lowest's would, once its base's word on each of its own failures is known (`Failed.base_tests`), or,
+for a failure whose inputs meet its own members and none below it, `main`'s (`Failed.main_tests`, `_said`); until then it waits, since its base may yet fail the same.  The lowest fail
 on the chain is the one read, and nothing is built on a candidate that failed.  A fail is read as soon as a gating task has
 failed, while others still run (not `Verdict.ended`), unless each of its failures is inherited.  Bisecting keeps no state of
 its own: a suspect's `cap` (half the suspects of the newest failed outcome it was in) bounds the batches it goes into until
@@ -335,7 +336,8 @@ BASE_DROPPED = "its base was dropped"
 
 def decide(s: Snapshot) -> list[Action]:
     """The actions ``s`` calls for, in the order they are applied: the drops of the candidates off main's chain, what the
-    lowest candidate's verdict calls for, what the lowest fail above it calls for (as the lowest's fail would, once its base's
+    lowest candidate's verdict calls for (a pass advances `main` through it and each passed candidate above it in turn, up to
+    the first that hasn't passed), what the lowest fail above it calls for (as the lowest's fail would, once its base's
     word on each of its own failures is known, or `main`'s where only its own members meet the failure: `_said`; until then
     nothing, and nothing is built above it), what each staged batch's records run calls for, the rebuilds of what a red or a
     leave dropped (`_restack`), then the tick's builds on the chain's top: a Lean batch while none is staged (`_next`), and,
@@ -356,8 +358,9 @@ def decide(s: Snapshot) -> list[Action]:
     head a pass outcome holds: it is on `main`.  A staged batch (`Candidate.waits`) is off the chain and has no verdict to read:
     what its records run calls for (`_first`), and nothing is built on it.  Once its run passed it goes onto the chain's top
     (`Commit`) as soon as the chain has room, in a tick that rebuilds nothing, and the tick's builds go on it there
-    (`Build.after`), as the next tick's would; one whose member isn't marked at the head it was staged at goes only onto its
-    own base, as built, and is dropped, built again without that member, when that is no longer the top.  Beside a staged
+    (`Build.after`), as the next tick's would; one whose member isn't marked at the head it was staged at, or isn't taken
+    there (its drop names why: `_untaken`), goes only onto its own base, as built, and is dropped, built again without that
+    member, when that is no longer the top.  Beside a staged
     batch, one kept or the one this tick stages, the tick's other batch takes no Lean PR, so one is staged at a time, nor a
     PR changing a Lean input (`Ready.lean_input`), so its records carry onto the top it goes onto, nor a lone PR set aside
     (`_aside`), which goes behind it as behind any PR waiting.
@@ -381,10 +384,11 @@ def decide(s: Snapshot) -> list[Action]:
             acts.append(Ring(c1.sha, f"{c1.sha[:12]}'s verdict is fail but names no failed task: nothing is blamed or dropped "
                                      "until it names one"))
         elif reading == PASS:
-            acts += _red(c1, _outcomes(s, acts))
-            acts += [Advance(c1.sha), Drop(c1.sha, ON_MAIN, _passed(c1))]
-            main, landed, chain = c1.sha, landed | set(c1.members), chain[1:]
-            hold = _moving(c1, built)
+            while chain and _reading(chain[0].verdict) == PASS:
+                c, chain = chain[0], chain[1:]
+                acts += _red(c, _outcomes(s, acts))
+                acts += [Advance(c.sha), Drop(c.sha, ON_MAIN, _passed(c))]
+                main, landed, hold = c.sha, landed | set(c.members), hold or _moving(c, built)
         elif reading == FAIL and (rerun := _rerun(c1, built)) is not None:
             acts.append(rerun)
         elif reading == FAIL or (reading == INFRA and s.tree_ejects and _tree(c1.verdict)):
@@ -412,8 +416,10 @@ def decide(s: Snapshot) -> list[Action]:
             if not told:
                 acts.append(Ring(c1.sha, _owner_why(c1), m))
             if aside:
+                why = _untaken(c1, m, s) if gone else None
                 acts.append(Drop(c1.sha, f"{_ring_why(c1)}, with only #{m} merged"
-                                         + (f", which isn't marked at {c1.heads[0][:12]} now" if gone else "")
+                                         + (f", which isn't taken at {c1.heads[0][:12]} now ({why})" if why else
+                                            f", which isn't marked at {c1.heads[0][:12]} now" if gone else "")
                                          + ": it goes behind the PRs waiting, and nobody is ejected for it",
                                  Outcome(c1.members, c1.heads, INFRA, c1.members, c1.base)))
                 acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
@@ -463,8 +469,10 @@ def decide(s: Snapshot) -> list[Action]:
                 acts.append(Commit(c.sha, base, s.depth - len(chain)))
                 chain, after = [*chain, c], c.sha
             else:
-                acts.append(Drop(c.sha, f"#{gone} isn't marked at the head it was staged at, so it isn't merged again onto "
-                                        f"{base[:12]}, main's chain's top now: its other members are built again"))
+                cause = (f"#{gone} isn't taken at the head it was staged at ({why})" if (why := _untaken(c, gone, s))
+                         else f"#{gone} isn't marked at the head it was staged at")
+                acts.append(Drop(c.sha, f"{cause}, so it isn't merged again onto {base[:12]}, main's chain's top now: its "
+                                        "other members are built again"))
                 kept += _restack(s, ready, chain, [c], landed | ejected | out, main, acts, kept)
                 base = chain[-1].sha if chain else main
             flying = {m for d in chain for m in d.members if m in built}
@@ -508,6 +516,15 @@ def _aside(members: tuple[int, ...], ready: dict[int, Ready], outcomes: list[Out
 def _unmarked(c: Candidate, ready: dict[int, Ready]) -> int | None:
     """The first member of ``c`` not marked ready at the head it was built at, None when none is."""
     return next((m for m, h in zip(c.members, c.heads) if m not in ready or ready[m].head != h), None)
+
+
+def _untaken(c: Candidate, m: int, s: Snapshot) -> str | None:
+    """Why the loop doesn't take member ``m`` of ``c`` at the head ``c`` holds it at, where `Snapshot.left` gives a cause
+    there other than its mark (a move `main` landed that it lacks, `queue.lacked_moves`); None when its mark is withdrawn or
+    missing there, or its head moved."""
+    head = c.heads[c.members.index(m)]
+    why = next((w for n, h, w in s.left if n == m and h == head), None)
+    return None if why is None or why.startswith(("it isn't marked", "its ready mark")) else why
 
 
 def meets(files: Iterable[str], inputs: Iterable[str]) -> bool:

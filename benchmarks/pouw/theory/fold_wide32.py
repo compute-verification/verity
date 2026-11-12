@@ -36,16 +36,15 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exact_kit"))
-
-import fold_opt_fx as fx  # noqa: E402
-from exact_kit.checks import Checks  # noqa: E402
+import fold_opt_fx as fx
+from exact_kit.checks import Checks
 
 W = 32
 NPT = 2
 MASK = (1 << W) - 1
 COUNT = {"ctl": "found", "sel": "sel", "le2": "le2"}
+#: An input's name to its value at each point.
+Cols = dict[str, list[int]]
 PARTS = ((1, "a last IADD.64", ("ctl_add64_pre", "ctl_add64_live", "ctl_mnmx_first")),
          (2, "a last IMNMX.64 or SEL.64 over a second-instruction word", ("ctl_mnmx_last", "sel_pair")),
          (3, "a last IMAD.WIDE with p or q a second-instruction word", ("ctl_lop3_imad", "ctl_wide_leahi", "ctl_lea_maj")),
@@ -54,12 +53,12 @@ PARTS = ((1, "a last IADD.64", ("ctl_add64_pre", "ctl_add64_live", "ctl_mnmx_fir
          (6, "IADD.64 and IMNMX.64 before the last instruction", ("ctl_add64_first", "ctl_mnmx_first")))
 
 
-def points(seed: int):
+def points(seed: int) -> list[list[int]]:
     g = fx.lcg(seed)
     return [[next(g) for _ in range(NPT)] for _ in range(3)]
 
 
-def fx1_case(seed: int = 0xBEEF):
+def fx1_case(seed: int = 0xBEEF) -> tuple[Cols, list[int], list[int], int]:
     """fx1's ten inputs at two points and its (y', z') there."""
     y, z, w = points(seed)
     a, kx, r, m1 = fx.key_mul(0, 0), fx.key_xor(0, 0), fx.rot_of(0), fx.key_mul(1, 0)
@@ -70,7 +69,7 @@ def fx1_case(seed: int = 0xBEEF):
     return ins, yp, zp, r
 
 
-def sel_pair(cols):
+def sel_pair(cols: Cols) -> tuple[list[int], list[int]]:
     """A SEL.64 target over two points: two pairs of words, one reading a second instruction's word (v2 = IMAD(v1, m1, z)
     after v1 = LOP3 0x96(y, w, kx)), taking one pair at point 0 and the other at point 1, where no IMNMX.64 form does."""
     y, z, w, kx, a, m1 = (cols[k] for k in ("y", "z", "w", "kx", "a", "m1"))
@@ -92,7 +91,7 @@ def sel_pair(cols):
     raise AssertionError("no SEL.64 control over these words")
 
 
-def mnmx_first(cols):
+def mnmx_first(cols: Cols) -> tuple[list[int], list[int]]:
     """`wide3_controls`' ctl_mnmx_first (IMNMX.64 first, a LEA of its low word, IADD.64 last), over two pairs of inputs
     the IMNMX.64 picks differently at the two points: at two points the original's can pick one pair at both, and then
     its words are inputs and no IMNMX.64 is needed."""
@@ -109,7 +108,7 @@ def mnmx_first(cols):
     raise AssertionError("no IMNMX.64 over these inputs picks differently at the two points")
 
 
-def controls(cols):
+def controls(cols: Cols) -> dict[str, tuple[list[int], list[int]]]:
     jobs = {k: v for k, v in fx.wide3_controls(W, cols).items() if k != "sel_free"}
     jobs["sel_pair"] = sel_pair(cols)
     jobs["ctl_mnmx_first"] = mnmx_first(cols)
